@@ -75,7 +75,7 @@ func (m *SecretManager) GetKeystore() *keystore.Keystore {
 // InitAppSettings creates secrets on first boot and validates them on later boots.
 func (m *SecretManager) InitAppSettings() error {
 	var exists bool
-	err := m.db.QueryRow(
+	err := m.db.QueryRowWithRetry(
 		"SELECT EXISTS(SELECT 1 FROM documents WHERE collection = 'settings' AND id = 'app_settings')",
 	).Scan(&exists)
 	if err != nil {
@@ -97,7 +97,7 @@ func (m *SecretManager) InitAppSettings() error {
 
 func (m *SecretManager) cleanupStaleAppSettings() error {
 	var dataJSON string
-	err := m.db.QueryRow(
+	err := m.db.QueryRowWithRetry(
 		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'app_settings'",
 	).Scan(&dataJSON)
 	if err != nil {
@@ -129,7 +129,7 @@ func (m *SecretManager) cleanupStaleAppSettings() error {
 		return err
 	}
 
-	_, err = m.db.Exec(
+	_, err = m.db.ExecWithRetry(
 		"UPDATE documents SET data = ?, updated_at = ? WHERE collection = 'settings' AND id = 'app_settings'",
 		string(newData), sqliteutil.NowTimestamp(),
 	)
@@ -191,7 +191,7 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 	}
 
 	nowStr := sqliteutil.FormatTimestamp(now)
-	_, err = m.db.Exec(
+	_, err = m.db.ExecWithRetry(
 		`INSERT INTO documents (collection, id, data, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?)`,
 		"settings", "app_settings", string(dataJSON), nowStr, nowStr,
@@ -353,7 +353,7 @@ func (m *SecretManager) warmAppSettingsCache(dataJSON string, now time.Time) {
 	cacheKey := "g8e:cache:doc:settings:app_settings"
 	cacheTTL := 3600
 	nowStr := sqliteutil.FormatTimestamp(now)
-	_, err := m.db.Exec(
+	_, err := m.db.ExecWithRetry(
 		`INSERT INTO kv_store (key, value, created_at, expires_at)
 		 VALUES (?, ?, ?, ?)`,
 		cacheKey, dataJSON, nowStr, sqliteutil.FormatTimestamp(now.Add(time.Duration(cacheTTL)*time.Second)),
@@ -414,7 +414,7 @@ func (m *SecretManager) GetActuatorKey() (ed25519.PrivateKey, string, error) {
 	priv := ed25519.NewKeyFromSeed(seed)
 
 	var dataJSON string
-	if err := m.db.QueryRow(
+	if err := m.db.QueryRowWithRetry(
 		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'app_settings'",
 	).Scan(&dataJSON); err != nil {
 		return nil, "", fmt.Errorf("failed to query app_settings document: %w", err)

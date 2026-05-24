@@ -34,7 +34,9 @@ import (
 type contextKey string
 
 const (
-	userIDKey contextKey = "user_id"
+	userIDKey    contextKey = "user_id"
+	appIDKey     contextKey = "app_id"
+	appPolicyKey contextKey = "app_policy"
 )
 
 // AuthError represents a structured authentication error.
@@ -403,13 +405,45 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			// If no session ID is provided, we check if the certificate belongs to a trusted system app.
 			// Note: /_query requires operator session authentication - no app bypass allowed.
 			// SPIFFE ID format: protocol.WorkloadIdentity.AppSPIFFEID()
-			// Allow any app workload with a valid app SPIFFE ID (not just g8ee)
 			if len(r.TLS.PeerCertificates) > 0 {
 				cert := r.TLS.PeerCertificates[0]
 				for _, uri := range cert.URIs {
-					// Check if this is an app workload (spiffe://g8e.local/app/*)
-					if strings.HasPrefix(uri.String(), "spiffe://"+protocol.TrustDomain+"/app/") {
-						next.ServeHTTP(w, r)
+					uriStr := uri.String()
+					if strings.HasPrefix(uriStr, "spiffe://"+protocol.TrustDomain+"/app/") {
+						// g8ee is a native platform component, it bypasses the external AppPolicy check
+						if uriStr == "spiffe://"+protocol.TrustDomain+"/app/g8ee" {
+							next.ServeHTTP(w, r)
+							return
+						}
+
+						// For external apps, verify an explicit AppPolicy exists and applies to this path
+						appID := uriStr
+						doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+						if err != nil || doc == nil {
+							s.logger.Warn("App policy not found (deny-all default)", "app_id", appID)
+							s.responder.Error(w, http.StatusForbidden, "app policy not found")
+							return
+						}
+
+						var policy models.AppPolicy
+						data, _ := json.Marshal(doc.Data)
+						if err := json.Unmarshal(data, &policy); err != nil {
+							s.logger.Error("Failed to parse app policy", "app_id", appID, "error", err)
+							s.responder.Error(w, http.StatusInternalServerError, "invalid app policy")
+							return
+						}
+
+						// The /_query and /api/governance/envelope endpoints require a human operator session
+						// External apps cannot use the direct query or envelope endpoints directly.
+						if strings.HasPrefix(r.URL.Path, "/_query") || strings.HasPrefix(r.URL.Path, "/api/governance/envelope") {
+							s.responder.Error(w, http.StatusForbidden, "external apps cannot access privileged endpoints")
+							return
+						}
+
+						// Stamp context with app identity for downstream MCP/A2A endpoints
+						ctx := context.WithValue(r.Context(), appIDKey, appID)
+						ctx = context.WithValue(ctx, appPolicyKey, &policy)
+						next.ServeHTTP(w, r.WithContext(ctx))
 						return
 					}
 				}

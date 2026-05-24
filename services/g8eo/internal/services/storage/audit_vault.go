@@ -462,7 +462,7 @@ func (avs *AuditVaultService) GetSession(id string) (*OperatorSession, error) {
 	}
 
 	query := `SELECT id, title, created_at, user_identity FROM sessions WHERE id = ?`
-	row := avs.db.QueryRow(query, id)
+	row := avs.db.QueryRowWithRetry(query, id)
 
 	var session OperatorSession
 	var title, userIdentity sql.NullString
@@ -515,86 +515,73 @@ func (avs *AuditVaultService) RecordEvents(events []*Event) error {
 	avs.muWrites.Add(1)
 	defer avs.muWrites.Done()
 
-	tx, err := avs.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to start batch transaction: %w", err)
-	}
+	return avs.db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+		query := `
+		INSERT INTO events (
+			operator_session_id, timestamp, type, content_text,
+			command_raw, command_exit_code, command_stdout, command_stderr,
+			execution_duration_ms, stored_locally, stdout_truncated, stderr_truncated, encrypted
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`
 
-	query := `
-	INSERT INTO events (
-		operator_session_id, timestamp, type, content_text,
-		command_raw, command_exit_code, command_stdout, command_stderr,
-		execution_duration_ms, stored_locally, stdout_truncated, stderr_truncated, encrypted
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
-
-	stmt, err := tx.Prepare(query)
-	if err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("failed to prepare batch statement: %w", err)
-	}
-	defer stmt.Close()
-
-	for _, event := range events {
-		if err := avs.requireExistingSessionTx(tx, event); err != nil {
-			_ = tx.Rollback()
-			return err
-		}
-
-		stdout, stdoutTruncated := avs.truncateOutput(event.CommandStdout)
-		stderr, stderrTruncated := avs.truncateOutput(event.CommandStderr)
-
-		encrypted := avs.IsEncryptionEnabled()
-		encryptedFlag := 0
-		if encrypted {
-			encryptedFlag = 1
-		}
-
-		contentTextBytes, err := avs.encryptContent(event.ContentText)
+		stmt, err := tx.Prepare(query)
 		if err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("failed to encrypt content_text: %w", err)
+			return fmt.Errorf("failed to prepare batch statement: %w", err)
+		}
+		defer stmt.Close()
+
+		for _, event := range events {
+			if err := avs.requireExistingSessionTx(tx, event); err != nil {
+				return err
+			}
+
+			stdout, stdoutTruncated := avs.truncateOutput(event.CommandStdout)
+			stderr, stderrTruncated := avs.truncateOutput(event.CommandStderr)
+
+			encrypted := avs.IsEncryptionEnabled()
+			encryptedFlag := 0
+			if encrypted {
+				encryptedFlag = 1
+			}
+
+			contentTextBytes, err := avs.encryptContent(event.ContentText)
+			if err != nil {
+				return fmt.Errorf("failed to encrypt content_text: %w", err)
+			}
+
+			stdoutBytes, err := avs.encryptContent(stdout)
+			if err != nil {
+				return fmt.Errorf("failed to encrypt stdout: %w", err)
+			}
+
+			stderrBytes, err := avs.encryptContent(stderr)
+			if err != nil {
+				return fmt.Errorf("failed to encrypt stderr: %w", err)
+			}
+
+			_, err = stmt.Exec(
+				event.OperatorSessionID,
+				sqliteutil.FormatTimestamp(event.Timestamp),
+				event.Type,
+				contentTextBytes,
+				event.CommandRaw,
+				event.CommandExitCode,
+				stdoutBytes,
+				stderrBytes,
+				event.ExecutionDurationMs,
+				true, // stored_locally
+				stdoutTruncated,
+				stderrTruncated,
+				encryptedFlag,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to execute batch statement: %w", err)
+			}
 		}
 
-		stdoutBytes, err := avs.encryptContent(stdout)
-		if err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("failed to encrypt stdout: %w", err)
-		}
-
-		stderrBytes, err := avs.encryptContent(stderr)
-		if err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("failed to encrypt stderr: %w", err)
-		}
-
-		_, err = stmt.Exec(
-			event.OperatorSessionID,
-			sqliteutil.FormatTimestamp(event.Timestamp),
-			event.Type,
-			contentTextBytes,
-			event.CommandRaw,
-			event.CommandExitCode,
-			stdoutBytes,
-			stderrBytes,
-			event.ExecutionDurationMs,
-			true, // stored_locally
-			stdoutTruncated,
-			stderrTruncated,
-			encryptedFlag,
-		)
-		if err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("failed to execute batch statement: %w", err)
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit batch transaction: %w", err)
-	}
-
-	avs.logger.Info("Batch of events recorded", "count", len(events))
-	return nil
+		avs.logger.Info("Batch of events recorded", "count", len(events))
+		return nil
+	})
 }
 
 // ChaosEvent represents a chaos test event
@@ -623,7 +610,7 @@ func (avs *AuditVaultService) RecordChaosEvent(event *ChaosEvent) (int64, error)
 	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	result, err := avs.db.Exec(query,
+	result, err := avs.db.ExecWithRetry(query,
 		event.OperatorSessionID,
 		sqliteutil.FormatTimestamp(event.Timestamp),
 		event.ChaosID,
@@ -655,47 +642,38 @@ func (avs *AuditVaultService) RecordChaosEvents(events []*ChaosEvent) error {
 		return nil
 	}
 
-	tx, err := avs.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
-	}
+	return avs.db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+		query := `
+		INSERT INTO chaos_events (
+			operator_session_id, timestamp, chaos_id, category, outcome,
+			content_text, command_raw, transaction_hash
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		`
 
-	query := `
-	INSERT INTO chaos_events (
-		operator_session_id, timestamp, chaos_id, category, outcome,
-		content_text, command_raw, transaction_hash
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`
-
-	stmt, err := tx.Prepare(query)
-	if err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("failed to prepare statement: %w", err)
-	}
-	defer stmt.Close()
-
-	for _, event := range events {
-		_, err := stmt.Exec(
-			event.OperatorSessionID,
-			sqliteutil.FormatTimestamp(event.Timestamp),
-			event.ChaosID,
-			event.Category,
-			event.Outcome,
-			event.ContentText,
-			event.CommandRaw,
-			event.TransactionHash,
-		)
+		stmt, err := tx.Prepare(query)
 		if err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("failed to record chaos event: %w", err)
+			return fmt.Errorf("failed to prepare statement: %w", err)
 		}
-	}
+		defer stmt.Close()
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
+		for _, event := range events {
+			_, err := stmt.Exec(
+				event.OperatorSessionID,
+				sqliteutil.FormatTimestamp(event.Timestamp),
+				event.ChaosID,
+				event.Category,
+				event.Outcome,
+				event.ContentText,
+				event.CommandRaw,
+				event.TransactionHash,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to record chaos event: %w", err)
+			}
+		}
 
-	return nil
+		return nil
+	})
 }
 
 // RecordEvent records an event in the audit log
@@ -708,86 +686,79 @@ func (avs *AuditVaultService) RecordEvent(event *Event) (int64, error) {
 	avs.muWrites.Add(1)
 	defer avs.muWrites.Done()
 
-	tx, err := avs.db.Begin()
-	if err != nil {
-		return 0, fmt.Errorf("failed to start transaction: %w", err)
-	}
+	var eventID int64
+	err := avs.db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+		if err := avs.requireExistingSessionTx(tx, event); err != nil {
+			return err
+		}
 
-	if err := avs.requireExistingSessionTx(tx, event); err != nil {
-		_ = tx.Rollback()
-		return 0, err
-	}
+		stdout, stdoutTruncated := avs.truncateOutput(event.CommandStdout)
+		stderr, stderrTruncated := avs.truncateOutput(event.CommandStderr)
 
-	stdout, stdoutTruncated := avs.truncateOutput(event.CommandStdout)
-	stderr, stderrTruncated := avs.truncateOutput(event.CommandStderr)
+		encrypted := avs.IsEncryptionEnabled()
 
-	encrypted := avs.IsEncryptionEnabled()
+		contentTextBytes, err := avs.encryptContent(event.ContentText)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt content_text: %w", err)
+		}
 
-	contentTextBytes, err := avs.encryptContent(event.ContentText)
-	if err != nil {
-		_ = tx.Rollback()
-		return 0, fmt.Errorf("failed to encrypt content_text: %w", err)
-	}
+		stdoutBytes, err := avs.encryptContent(stdout)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt stdout: %w", err)
+		}
 
-	stdoutBytes, err := avs.encryptContent(stdout)
-	if err != nil {
-		_ = tx.Rollback()
-		return 0, fmt.Errorf("failed to encrypt stdout: %w", err)
-	}
+		stderrBytes, err := avs.encryptContent(stderr)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt stderr: %w", err)
+		}
 
-	stderrBytes, err := avs.encryptContent(stderr)
-	if err != nil {
-		_ = tx.Rollback()
-		return 0, fmt.Errorf("failed to encrypt stderr: %w", err)
-	}
+		query := `
+		INSERT INTO events (
+			operator_session_id, timestamp, type, content_text,
+			command_raw, command_exit_code, command_stdout, command_stderr,
+			execution_duration_ms, stored_locally, stdout_truncated, stderr_truncated, encrypted
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`
 
-	query := `
-	INSERT INTO events (
-		operator_session_id, timestamp, type, content_text,
-		command_raw, command_exit_code, command_stdout, command_stderr,
-		execution_duration_ms, stored_locally, stdout_truncated, stderr_truncated, encrypted
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
+		encryptedFlag := 0
+		if encrypted {
+			encryptedFlag = 1
+		}
 
-	encryptedFlag := 0
-	if encrypted {
-		encryptedFlag = 1
-	}
+		result, err := tx.Exec(query,
+			event.OperatorSessionID,
+			sqliteutil.FormatTimestamp(event.Timestamp),
+			event.Type,
+			contentTextBytes,
+			event.CommandRaw,
+			event.CommandExitCode,
+			stdoutBytes,
+			stderrBytes,
+			event.ExecutionDurationMs,
+			true, // stored_locally
+			stdoutTruncated,
+			stderrTruncated,
+			encryptedFlag,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to record event: %w", err)
+		}
 
-	result, err := tx.Exec(query,
-		event.OperatorSessionID,
-		sqliteutil.FormatTimestamp(event.Timestamp),
-		event.Type,
-		contentTextBytes,
-		event.CommandRaw,
-		event.CommandExitCode,
-		stdoutBytes,
-		stderrBytes,
-		event.ExecutionDurationMs,
-		true, // stored_locally
-		stdoutTruncated,
-		stderrTruncated,
-		encryptedFlag,
-	)
-	if err != nil {
-		_ = tx.Rollback()
-		return 0, fmt.Errorf("failed to record event: %w", err)
-	}
+		id, _ := result.LastInsertId()
+		eventID = id
 
-	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("failed to commit transaction: %w", err)
-	}
+		avs.logger.Info("Event recorded",
+			"event_id", eventID,
+			"type", event.Type,
+			"operator_session_id", event.OperatorSessionID,
+			"stdout_truncated", stdoutTruncated,
+			"stderr_truncated", stderrTruncated,
+			"encrypted", encrypted)
 
-	eventID, _ := result.LastInsertId()
-	avs.logger.Info("Event recorded",
-		"event_id", eventID,
-		"type", event.Type,
-		"operator_session_id", event.OperatorSessionID,
-		"stdout_truncated", stdoutTruncated,
-		"stderr_truncated", stderrTruncated,
-		"encrypted", encrypted)
+		return nil
+	})
 
-	return eventID, nil
+	return eventID, err
 }
 
 // RecordActionReceipt records a signed ActionReceipt in the audit vault.
@@ -816,7 +787,7 @@ func (avs *AuditVaultService) RecordActionReceipt(record *models.ActionReceiptRe
 		timestamp = excluded.timestamp
 	`
 
-	_, err := avs.db.Exec(query,
+	_, err := avs.db.ExecWithRetry(query,
 		record.TransactionID,
 		record.TransactionHash,
 		record.OperatorID,
@@ -861,7 +832,7 @@ func (avs *AuditVaultService) GetActionReceipt(transactionID string) (*models.Ac
 	var r models.ActionReceiptRecord
 	var executedAtMs int64
 	var timestampStr string
-	err := avs.db.QueryRow(query, transactionID).Scan(
+	err := avs.db.QueryRowWithRetry(query, transactionID).Scan(
 		&r.TransactionID, &r.TransactionHash, &r.OperatorID, &r.OperatorSessionID,
 		&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
 		&r.StateRootBefore, &r.StateRootAfter, &executedAtMs,
@@ -1136,7 +1107,7 @@ func (avs *AuditVaultService) RecordFileMutation(mutation *FileMutationLog) erro
 	) VALUES (?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := avs.db.Exec(query,
+	_, err := avs.db.ExecWithRetry(query,
 		mutation.EventID,
 		mutation.Filepath,
 		string(mutation.Operation),
@@ -1168,7 +1139,7 @@ func (avs *AuditVaultService) GetFileMutations(eventID int64) ([]*FileMutationLo
 	WHERE event_id = ?
 	`
 
-	rows, err := avs.db.Query(query, eventID)
+	rows, err := avs.db.QueryWithRetry(query, eventID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query file mutations: %w", err)
 	}
@@ -1247,7 +1218,7 @@ func auditVaultPrune(config *AuditVaultConfig) sqliteutil.PruneFunc {
 		cutoff := sqliteutil.FormatTimestamp(time.Now().AddDate(0, 0, -config.RetentionDays))
 
 		// 1. Delete file mutations for old events first (satisfy FK constraints)
-		_, err := db.Exec(`
+		_, err := db.ExecWithRetry(`
 			DELETE FROM file_mutation_log
 			WHERE event_id IN (SELECT id FROM events WHERE timestamp < ?)
 		`, cutoff)
@@ -1256,7 +1227,7 @@ func auditVaultPrune(config *AuditVaultConfig) sqliteutil.PruneFunc {
 		}
 
 		// 2. Delete events older than retention period
-		result, err := db.Exec("DELETE FROM events WHERE timestamp < ?", cutoff)
+		result, err := db.ExecWithRetry("DELETE FROM events WHERE timestamp < ?", cutoff)
 		if err != nil {
 			logger.Error("Failed to prune old events", string(constants.ConnectionStateError), err)
 			return
@@ -1268,7 +1239,7 @@ func auditVaultPrune(config *AuditVaultConfig) sqliteutil.PruneFunc {
 		}
 
 		// 3. Delete receipts older than retention period
-		result, err = db.Exec("DELETE FROM receipts WHERE timestamp < ?", cutoff)
+		result, err = db.ExecWithRetry("DELETE FROM receipts WHERE timestamp < ?", cutoff)
 		if err != nil {
 			logger.Error("Failed to prune old receipts", string(constants.ConnectionStateError), err)
 		} else {
@@ -1279,7 +1250,7 @@ func auditVaultPrune(config *AuditVaultConfig) sqliteutil.PruneFunc {
 		}
 
 		// 4. Delete sessions that no longer have any events or receipts
-		_, err = db.Exec(`
+		_, err = db.ExecWithRetry(`
 			DELETE FROM sessions
 			WHERE id NOT IN (SELECT DISTINCT operator_session_id FROM events WHERE operator_session_id IS NOT NULL)
 			AND id NOT IN (SELECT DISTINCT operator_session_id FROM receipts WHERE operator_session_id IS NOT NULL)

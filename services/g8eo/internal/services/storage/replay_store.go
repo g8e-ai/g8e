@@ -14,7 +14,6 @@
 package storage
 
 import (
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"time"
@@ -25,12 +24,12 @@ import (
 
 // SQLReplayStore provides nonce replay protection using SQLite.
 type SQLReplayStore struct {
-	db     *sql.DB
+	db     *sqliteutil.DB
 	logger *slog.Logger
 }
 
 // NewSQLReplayStore creates a new replay store backed by SQLite.
-func NewSQLReplayStore(db *sql.DB, logger *slog.Logger) (*SQLReplayStore, error) {
+func NewSQLReplayStore(db *sqliteutil.DB, logger *slog.Logger) (*SQLReplayStore, error) {
 	rs := &SQLReplayStore{
 		db:     db,
 		logger: logger,

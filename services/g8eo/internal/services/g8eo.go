@@ -236,7 +236,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if vs.localStore == nil {
 		return fmt.Errorf("local store is required for replay protection initialization")
 	}
-	replayStore, err := storage.NewSQLReplayStore(vs.localStore.GetDB().DB, vs.logger)
+	replayStore, err := storage.NewSQLReplayStore(vs.localStore.GetDB(), vs.logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize replay store (required for transaction verification): %w", err)
 	}

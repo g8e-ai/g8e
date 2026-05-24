@@ -14,13 +14,10 @@
 package gateway
 
 import (
-	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -188,29 +185,16 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 				assert.NotEmpty(t, resp.AppCert)
 				assert.NotEmpty(t, resp.CertChain)
 				assert.NotEmpty(t, resp.AppID)
-				assert.NotEmpty(t, resp.L2SignerID)
-				assert.Equal(t, resp.AppID, resp.L2SignerID)
+				assert.Empty(t, resp.L2SignerID) // Now identity-only by default
 
-				// Verify the L2 signer was registered
+				// Verify the L2 signer was NOT registered automatically
 				signerDoc, err := db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), resp.AppID)
 				require.NoError(t, err)
-				require.NotNil(t, signerDoc)
+				require.Nil(t, signerDoc)
 
-				// Marshal the entire document data to JSON for unmarshaling
-				signerJSON, err := json.Marshal(signerDoc.ForWire())
-				require.NoError(t, err)
-
-				var signer models.TrustedSigner
-				err = json.Unmarshal(signerJSON, &signer)
-				require.NoError(t, err)
-				assert.Equal(t, resp.AppID, signer.ID)
-				assert.True(t, signer.Enabled)
-				assert.WithinDuration(t, time.Now().UTC(), signer.AddedAt, 5*time.Second)
-
-				// Verify the L2 private key was stored
-				privKey, err := pki.secretManager.GetServicePrivateKey(resp.AppID)
-				require.NoError(t, err)
-				assert.NotEmpty(t, privKey)
+				// Verify no L2 private key was stored
+				_, err = pki.secretManager.GetServicePrivateKey(resp.AppID)
+				require.Error(t, err)
 			}
 
 			// Run teardown if provided
