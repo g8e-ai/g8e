@@ -87,10 +87,15 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 			}
 		}
 
-		// For app workloads (e.g., g8ee), verify the app SPIFFE ID matches operator_id
-		if envelope.SourceComponent == "g8ee" && envelope.OperatorID != "" {
-			if wid.MatchesApp(spiffeID, envelope.OperatorID) {
-				return nil
+		// For app workloads, verify the app SPIFFE ID matches operator_id
+		// This applies to any app component (g8ee or future BYO apps)
+		if envelope.SourceComponent != "" && envelope.OperatorID != "" {
+			// Check if this is an app component (not CLI or other sources)
+			// CLI components use session-based auth, apps use operator_id-based auth
+			if envelope.SourceComponent != "cli" {
+				if wid.MatchesApp(spiffeID, envelope.OperatorID) {
+					return nil
+				}
 			}
 		}
 	}

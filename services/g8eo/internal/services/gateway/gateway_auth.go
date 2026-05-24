@@ -403,11 +403,12 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			// If no session ID is provided, we check if the certificate belongs to a trusted system app.
 			// Note: /_query requires operator session authentication - no app bypass allowed.
 			// SPIFFE ID format: protocol.WorkloadIdentity.AppSPIFFEID()
+			// Allow any app workload with a valid app SPIFFE ID (not just g8ee)
 			if len(r.TLS.PeerCertificates) > 0 {
-				wid := protocol.NewWorkloadIdentity()
 				cert := r.TLS.PeerCertificates[0]
 				for _, uri := range cert.URIs {
-					if wid.MatchesApp(uri.String(), marshaler.Status(constants.ComponentNameG8EE)) {
+					// Check if this is an app workload (spiffe://g8e.local/app/*)
+					if strings.HasPrefix(uri.String(), "spiffe://"+protocol.TrustDomain+"/app/") {
 						next.ServeHTTP(w, r)
 						return
 					}

@@ -125,28 +125,8 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.execution = execution.NewExecutionService(vs.config, vs.logger)
 	vs.fileEdit = execution.NewFileEditService(vs.config, vs.logger)
 
-	// Initialize Data Services - mandatory for replay protection
-	if !vs.config.LocalStoreEnabled {
-		return fmt.Errorf("local storage must be enabled for replay protection - set LocalStorageEnabled=true")
-	}
-
-	localStoreConfig := &storage.LocalStoreConfig{
-		DBPath:               vs.config.LocalStoreDBPath,
-		MaxDBSizeMB:          vs.config.LocalStoreMaxSizeMB,
-		RetentionDays:        vs.config.LocalStoreRetentionDays,
-		PruneIntervalMinutes: 60,
-		Enabled:              true,
-	}
-	vs.localStore, err = storage.NewLocalStoreService(localStoreConfig, vs.logger)
-	if err != nil {
-		return fmt.Errorf("failed to initialize local store (required for replay protection): %w", err)
-	}
-	if vs.localStore == nil {
-		return fmt.Errorf("local store is required but was not initialized")
-	}
-	vs.logger.Info("Local store initialized (AI-accessible)")
-
 	// Initialize SecretManager for loading signing keys (Actuator and Tribunal)
+	// This must be initialized before LocalStore to provide keystore for encrypted token storage
 	secretsDir := filepath.Join(vs.config.WorkDir, ".g8e", "secrets")
 
 	// Initialize GatewayDBService for canonical state root calculation
@@ -167,6 +147,27 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize app settings: %w", err)
 	}
 	vs.logger.Info("Secret manager initialized")
+
+	// Initialize Data Services - mandatory for replay protection
+	if !vs.config.LocalStoreEnabled {
+		return fmt.Errorf("local storage must be enabled for replay protection - set LocalStorageEnabled=true")
+	}
+
+	localStoreConfig := &storage.LocalStoreConfig{
+		DBPath:               vs.config.LocalStoreDBPath,
+		MaxDBSizeMB:          vs.config.LocalStoreMaxSizeMB,
+		RetentionDays:        vs.config.LocalStoreRetentionDays,
+		PruneIntervalMinutes: 60,
+		Enabled:              true,
+	}
+	vs.localStore, err = storage.NewLocalStoreService(localStoreConfig, vs.logger, vs.secretManager.GetKeystore())
+	if err != nil {
+		return fmt.Errorf("failed to initialize local store (required for replay protection): %w", err)
+	}
+	if vs.localStore == nil {
+		return fmt.Errorf("local store is required but was not initialized")
+	}
+	vs.logger.Info("Local store initialized (AI-accessible, encryption enabled)")
 
 	rawVaultConfig := &storage.RawVaultConfig{
 		DBPath:               filepath.Join(vs.config.WorkDir, ".g8e", "raw_vault.db"),

@@ -266,8 +266,8 @@ _log ""
 	return res
 }
 
-// G8eDeployScript returns a POSIX shell script that deploys the operator binary on any Linux system.
-func G8eDeployScript(host string, httpsPort int, httpPort int) string {
+// DeployScript returns a POSIX shell script that deploys the operator binary on any Linux system.
+func DeployScript(host string, httpsPort int, httpPort int) string {
 	host = sanitizeHost(host)
 	httpPortSuffix := ""
 	if httpPort != 80 {

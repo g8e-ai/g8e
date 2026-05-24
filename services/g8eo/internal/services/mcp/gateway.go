@@ -67,6 +67,8 @@ type GatewayService struct {
 	dbService         interface {
 		GetField(collection, id, fieldPath string) (interface{}, error)
 	}
+	sessionValidator SessionValidator
+	auditLogger      AuditLogger
 
 	// Circuit breaker state
 	mu               sync.RWMutex
@@ -77,6 +79,16 @@ type GatewayService struct {
 	maxFailures      int
 
 	maxPayloadBytes int64
+}
+
+// SessionValidator validates operator sessions for L3 authorization
+type SessionValidator interface {
+	ValidateSession(operatorSessionID string) (bool, error)
+}
+
+// AuditLogger logs field read operations to the audit vault
+type AuditLogger interface {
+	LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value interface{}) error
 }
 
 // Dependencies groups all dependencies for NewGatewayService to reduce constructor bloat.
@@ -148,6 +160,16 @@ func (g *GatewayService) SetDBService(dbService interface {
 	GetField(collection, id, fieldPath string) (interface{}, error)
 }) {
 	g.dbService = dbService
+}
+
+// SetSessionValidator sets the L3 session validator for field read operations
+func (g *GatewayService) SetSessionValidator(validator SessionValidator) {
+	g.sessionValidator = validator
+}
+
+// SetAuditLogger sets the audit logger for field read operations
+func (g *GatewayService) SetAuditLogger(logger AuditLogger) {
+	g.auditLogger = logger
 }
 
 func (g *GatewayService) isCircuitOpen() bool {
@@ -505,6 +527,17 @@ func (g *GatewayService) handleReadField(ctx context.Context, arguments json.Raw
 		return nil, fmt.Errorf("field path validation failed: %w", err)
 	}
 
+	// L3: Validate operator session
+	if g.sessionValidator != nil {
+		valid, err := g.sessionValidator.ValidateSession(req.OperatorSessionID)
+		if err != nil {
+			return nil, fmt.Errorf("session validation failed: %w", err)
+		}
+		if !valid {
+			return nil, errors.New("operator session is invalid or expired")
+		}
+	}
+
 	// Extract field value from database
 	value, err := g.dbService.GetField(req.Collection, req.DocumentID, req.FieldPath)
 	if err != nil {
@@ -516,8 +549,12 @@ func (g *GatewayService) handleReadField(ctx context.Context, arguments json.Raw
 		return nil, fmt.Errorf("field value contains forbidden patterns: %w", err)
 	}
 
-	// TODO: L3 session validation (operator_session_id)
-	// TODO: Audit vault logging
+	// Audit vault logging
+	if g.auditLogger != nil {
+		if err := g.auditLogger.LogFieldRead(req.OperatorSessionID, req.Collection, req.DocumentID, req.FieldPath, value); err != nil {
+			g.logger.Warn("Failed to log field read to audit vault", "error", err, "collection", req.Collection, "field_path", req.FieldPath)
+		}
+	}
 
 	return CallToolResult{
 		Content: []TextContent{

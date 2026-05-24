@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/keystore"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 )
 
@@ -84,16 +85,17 @@ type FileDiffRecord struct {
 
 // LocalStoreService provides local SQLite storage for command execution results.
 type LocalStoreService struct {
-	db     *sqliteutil.DB
-	config *LocalStoreConfig
-	logger *slog.Logger
-	pruner *sqliteutil.Pruner
+	db       *sqliteutil.DB
+	config   *LocalStoreConfig
+	logger   *slog.Logger
+	pruner   *sqliteutil.Pruner
+	keystore *keystore.Keystore
 
 	wg sync.WaitGroup
 }
 
 // NewLocalStoreService creates a new local storage service.
-func NewLocalStoreService(config *LocalStoreConfig, logger *slog.Logger) (*LocalStoreService, error) {
+func NewLocalStoreService(config *LocalStoreConfig, logger *slog.Logger, ks *keystore.Keystore) (*LocalStoreService, error) {
 	if config == nil {
 		config = DefaultLocalStoreConfig()
 	}
@@ -115,16 +117,17 @@ func NewLocalStoreService(config *LocalStoreConfig, logger *slog.Logger) (*Local
 	}
 
 	ls := &LocalStoreService{
-		config: config,
-		logger: logger,
-		db:     db,
+		config:   config,
+		logger:   logger,
+		db:       db,
+		keystore: ks,
 	}
 
 	interval := time.Duration(config.PruneIntervalMinutes) * time.Minute
 	ls.pruner = sqliteutil.NewPruner(db, logger, interval, localStorePrune(config))
 	ls.pruner.Start()
 
-	ls.logger.Info("Local storage initialized", "db_path", config.DBPath)
+	ls.logger.Info("Local storage initialized", "db_path", config.DBPath, "encryption_enabled", ks != nil)
 	return ls, nil
 }
 
@@ -478,6 +481,7 @@ func (ls *LocalStoreService) Wait() {
 }
 
 // KVSet sets a key-value pair with an optional TTL (in seconds).
+// If a keystore is configured, the value is encrypted at rest using AES-256-GCM.
 func (ls *LocalStoreService) KVSet(key, value string, ttlSeconds int) error {
 	if ls == nil || ls.db == nil {
 		return nil
@@ -491,17 +495,27 @@ func (ls *LocalStoreService) KVSet(key, value string, ttlSeconds int) error {
 		expiresAt = &ts
 	}
 
+	valueToStore := value
+	if ls.keystore != nil {
+		encrypted, err := ls.keystore.Encrypt(value)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt value for key %s: %w", key, err)
+		}
+		valueToStore = encrypted
+	}
+
 	query := `
 	INSERT INTO kv (key, value, expires_at) VALUES (?, ?, ?)
 	ON CONFLICT(key) DO UPDATE SET
 		value = excluded.value,
 		expires_at = excluded.expires_at
 	`
-	_, err := ls.db.Exec(query, key, value, expiresAt)
+	_, err := ls.db.Exec(query, key, valueToStore, expiresAt)
 	return err
 }
 
 // KVGet retrieves a value by key, honoring TTL.
+// If a keystore is configured, the value is decrypted using AES-256-GCM.
 func (ls *LocalStoreService) KVGet(key string) (string, bool) {
 	if ls == nil || ls.db == nil {
 		return "", false
@@ -517,6 +531,16 @@ func (ls *LocalStoreService) KVGet(key string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
+
+	if ls.keystore != nil {
+		decrypted, err := ls.keystore.Decrypt(value)
+		if err != nil {
+			ls.logger.Error("Failed to decrypt value for key", "key", key, "error", err)
+			return "", false
+		}
+		return decrypted, true
+	}
+
 	return value, true
 }
 

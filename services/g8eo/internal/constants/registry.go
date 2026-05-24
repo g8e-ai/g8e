@@ -525,32 +525,6 @@ func Registry() Snapshot {
 			"SourceUserTerminal": {Value: "g8e.v1.source.user.terminal", GoConst: "EventSourceUserTerminal", PythonConst: "SOURCE_USER_TERMINAL"},
 		},
 		Status: StatusSnapshot{
-			OperatorStatus: map[string]Entry{
-				"active": {Value: "active", GoConst: "OperatorStatusActive", PythonConst: "ACTIVE"},
-				"available": {Value: "available", GoConst: "OperatorStatusAvailable", PythonConst: "AVAILABLE"},
-				"bound": {Value: "bound", GoConst: "OperatorStatusBound", PythonConst: "BOUND"},
-				"offline": {Value: "offline", GoConst: "OperatorStatusOffline", PythonConst: "OFFLINE"},
-				"stale": {Value: "stale", GoConst: "OperatorStatusStale", PythonConst: "STALE"},
-				"stopped": {Value: "stopped", GoConst: "OperatorStatusStopped", PythonConst: "STOPPED"},
-				"terminated": {Value: "terminated", GoConst: "OperatorStatusTerminated", PythonConst: "TERMINATED"},
-				"unavailable": {Value: "unavailable", GoConst: "OperatorStatusUnavailable", PythonConst: "UNAVAILABLE"},
-			},
-			AttachmentType: map[string]Entry{
-				"image": {Value: "image", GoConst: "AttachmentTypeImage", PythonConst: "IMAGE"},
-				"other": {Value: "other", GoConst: "AttachmentTypeOther", PythonConst: "OTHER"},
-				"pdf": {Value: "pdf", GoConst: "AttachmentTypePdf", PythonConst: "PDF"},
-				"text": {Value: "text", GoConst: "AttachmentTypeText", PythonConst: "TEXT"},
-			},
-			UserStatus: map[string]Entry{
-				"active": {Value: "active", GoConst: "UserStatusActive", PythonConst: "ACTIVE"},
-				"disabled": {Value: "disabled", GoConst: "UserStatusDisabled", PythonConst: "DISABLED"},
-			},
-			TribunalOutcome: map[string]Entry{
-				"consensus": {Value: "consensus", GoConst: "TribunalOutcomeConsensus", PythonConst: "CONSENSUS"},
-				"consensus_failed": {Value: "consensus_failed", GoConst: "TribunalOutcomeConsensusFailed", PythonConst: "CONSENSUS_FAILED"},
-				"verification_failed": {Value: "verification_failed", GoConst: "TribunalOutcomeVerificationFailed", PythonConst: "VERIFICATION_FAILED"},
-				"verified": {Value: "verified", GoConst: "TribunalOutcomeVerified", PythonConst: "VERIFIED"},
-			},
 			ExecutionStatus: map[string]Entry{
 				"cancel_requested": {Value: "cancel_requested", GoConst: "ExecutionStatusCancelRequested", PythonConst: "CANCEL_REQUESTED"},
 				"cancelled": {Value: "cancelled", GoConst: "ExecutionStatusCancelled", PythonConst: "CANCELLED"},
@@ -562,11 +536,15 @@ func Registry() Snapshot {
 				"pending": {Value: "pending", GoConst: "ExecutionStatusPending", PythonConst: "PENDING"},
 				"timeout": {Value: "timeout", GoConst: "ExecutionStatusTimeout", PythonConst: "TIMEOUT"},
 			},
-			UserRole: map[string]Entry{
-				"admin": {Value: "admin", GoConst: "UserRoleAdmin", PythonConst: "ADMIN"},
-				"operator": {Value: "operator", GoConst: "UserRoleOperator", PythonConst: "OPERATOR"},
-				"superadmin": {Value: "superadmin", GoConst: "UserRoleSuperadmin", PythonConst: "SUPERADMIN"},
-				"user": {Value: "user", GoConst: "UserRoleUser", PythonConst: "USER"},
+			OperatorStatus: map[string]Entry{
+				"active": {Value: "active", GoConst: "OperatorStatusActive", PythonConst: "ACTIVE"},
+				"available": {Value: "available", GoConst: "OperatorStatusAvailable", PythonConst: "AVAILABLE"},
+				"bound": {Value: "bound", GoConst: "OperatorStatusBound", PythonConst: "BOUND"},
+				"offline": {Value: "offline", GoConst: "OperatorStatusOffline", PythonConst: "OFFLINE"},
+				"stale": {Value: "stale", GoConst: "OperatorStatusStale", PythonConst: "STALE"},
+				"stopped": {Value: "stopped", GoConst: "OperatorStatusStopped", PythonConst: "STOPPED"},
+				"terminated": {Value: "terminated", GoConst: "OperatorStatusTerminated", PythonConst: "TERMINATED"},
+				"unavailable": {Value: "unavailable", GoConst: "OperatorStatusUnavailable", PythonConst: "UNAVAILABLE"},
 			},
 			ApprovalErrorType: map[string]Entry{
 				"approval.exception": {Value: "approval.exception", GoConst: "ApprovalErrorTypeApprovalException", PythonConst: "APPROVAL_EXCEPTION"},
@@ -574,6 +552,28 @@ func Registry() Snapshot {
 				"approval.timeout": {Value: "approval.timeout", GoConst: "ApprovalErrorTypeApprovalTimeout", PythonConst: "APPROVAL_TIMEOUT"},
 				"intent.approval.exception": {Value: "intent.approval.exception", GoConst: "ApprovalErrorTypeIntentApprovalException", PythonConst: "INTENT_APPROVAL_EXCEPTION"},
 				"invalid.intent": {Value: "invalid.intent", GoConst: "ApprovalErrorTypeInvalidIntent", PythonConst: "INVALID_INTENT"},
+			},
+			TribunalOutcome: map[string]Entry{
+				"consensus": {Value: "consensus", GoConst: "TribunalOutcomeConsensus", PythonConst: "CONSENSUS"},
+				"consensus_failed": {Value: "consensus_failed", GoConst: "TribunalOutcomeConsensusFailed", PythonConst: "CONSENSUS_FAILED"},
+				"verification_failed": {Value: "verification_failed", GoConst: "TribunalOutcomeVerificationFailed", PythonConst: "VERIFICATION_FAILED"},
+				"verified": {Value: "verified", GoConst: "TribunalOutcomeVerified", PythonConst: "VERIFIED"},
+			},
+			UserStatus: map[string]Entry{
+				"active": {Value: "active", GoConst: "UserStatusActive", PythonConst: "ACTIVE"},
+				"disabled": {Value: "disabled", GoConst: "UserStatusDisabled", PythonConst: "DISABLED"},
+			},
+			AttachmentType: map[string]Entry{
+				"image": {Value: "image", GoConst: "AttachmentTypeImage", PythonConst: "IMAGE"},
+				"other": {Value: "other", GoConst: "AttachmentTypeOther", PythonConst: "OTHER"},
+				"pdf": {Value: "pdf", GoConst: "AttachmentTypePdf", PythonConst: "PDF"},
+				"text": {Value: "text", GoConst: "AttachmentTypeText", PythonConst: "TEXT"},
+			},
+			UserRole: map[string]Entry{
+				"admin": {Value: "admin", GoConst: "UserRoleAdmin", PythonConst: "ADMIN"},
+				"operator": {Value: "operator", GoConst: "UserRoleOperator", PythonConst: "OPERATOR"},
+				"superadmin": {Value: "superadmin", GoConst: "UserRoleSuperadmin", PythonConst: "SUPERADMIN"},
+				"user": {Value: "user", GoConst: "UserRoleUser", PythonConst: "USER"},
 			},
 		},
 		Senders: map[string]Entry{

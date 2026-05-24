@@ -75,6 +75,7 @@ func (rs *SQLReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (b
 // ReserveNonce atomically reserves a nonce for early replay protection.
 // Returns true if the nonce was already reserved/used (replay detected).
 // If not used, it reserves the nonce and returns false.
+// Uses SQLite's UNIQUE constraint on nonce column for atomic replay detection.
 // Fail-closed: any SQLite error during cleanup or reservation returns an error.
 func (rs *SQLReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
 	// First, clean up expired nonces - fail-closed on cleanup errors
@@ -84,35 +85,27 @@ func (rs *SQLReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool,
 		return false, fmt.Errorf("nonce cleanup failed: %w", err)
 	}
 
-	// Check if nonce exists in any state (reserved or used)
-	var existingStatus string
-	err := rs.db.QueryRow(
-		"SELECT status FROM nonce_usage WHERE nonce = ?",
-		nonce,
-	).Scan(&existingStatus)
-
-	if err == nil {
-		// Nonce already exists - replay detected
-		rs.logger.Warn("Nonce replay detected", "nonce", nonce, "status", existingStatus)
-		return true, nil
-	}
-
-	if err != sql.ErrNoRows {
-		// Unexpected error - fail-closed
-		rs.logger.Error("Failed to check nonce - replay protection unavailable",
-			"nonce", nonce, string(constants.ConnectionStateError), err)
-		return false, fmt.Errorf("failed to check nonce: %w", err)
-	}
-
-	// Nonce doesn't exist, insert it as reserved
+	// Attempt atomic insert - UNIQUE constraint violation indicates replay
 	reservedAt := sqliteutil.FormatTimestamp(time.Now().UTC())
 	expiresAtStr := sqliteutil.FormatTimestamp(expiresAt.UTC())
 
-	_, err = rs.db.Exec(
+	_, err := rs.db.Exec(
 		"INSERT INTO nonce_usage (nonce, reserved_at, expires_at, status) VALUES (?, ?, ?, 'reserved')",
 		nonce, reservedAt, expiresAtStr,
 	)
 	if err != nil {
+		// Check if this is a UNIQUE constraint violation (replay detected)
+		// SQLite returns "UNIQUE constraint failed: nonce_usage.nonce"
+		if err.Error() == "UNIQUE constraint failed: nonce_usage.nonce" ||
+			err.Error() == "constraint failed" {
+			// Replay detected - fetch existing status for logging
+			var existingStatus string
+			_ = rs.db.QueryRow("SELECT status FROM nonce_usage WHERE nonce = ?", nonce).Scan(&existingStatus)
+			rs.logger.Warn("Nonce replay detected (atomic constraint)", "nonce", nonce, "status", existingStatus)
+			return true, nil
+		}
+
+		// Other error - fail-closed
 		rs.logger.Error("Failed to reserve nonce - replay protection unavailable",
 			"nonce", nonce, string(constants.ConnectionStateError), err)
 		return false, fmt.Errorf("failed to reserve nonce: %w", err)
