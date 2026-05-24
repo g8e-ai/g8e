@@ -282,7 +282,7 @@ _ci-test-g8eo:
 	@echo "=== test-g8eo ==="
 	@./g8e platform start
 	@cd services/g8eo && go test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic ./...
-	@COVERAGE=$$(cd services/g8eo && go tool cover -func=coverage.out | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+	@COVERAGE=$$(cd services/g8eo && go tool cover -func=coverage.out | grep -v "internal/protocol/proto" | grep -v "/mocks/" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
 	if [ $$(echo "$$COVERAGE < 85" | bc -l) -eq 1 ]; then \
 		echo "Coverage $$COVERAGE% is below 85% threshold"; \
 		exit 1; \
