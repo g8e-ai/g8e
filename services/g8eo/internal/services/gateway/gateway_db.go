@@ -562,6 +562,39 @@ func (s *GatewayDBService) DocGet(collection, id string) (*models.Document, erro
 	return scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr)
 }
 
+// DocCreate creates a document only if it does not already exist. data must be valid JSON.
+// Timestamps are managed by the service - created_at is set once on insert.
+func (s *GatewayDBService) DocCreate(collection, id string, data json.RawMessage) error {
+	var userDoc map[string]json.RawMessage
+	if err := json.Unmarshal(data, &userDoc); err != nil {
+		return fmt.Errorf("failed to unmarshal document: %w", err)
+	}
+	if userDoc == nil {
+		userDoc = make(map[string]json.RawMessage)
+	}
+	delete(userDoc, "id")
+	delete(userDoc, "created_at")
+	delete(userDoc, "updated_at")
+
+	dataJSON, err := json.Marshal(userDoc)
+	if err != nil {
+		return fmt.Errorf("failed to marshal document: %w", err)
+	}
+
+	now := time.Now().UTC()
+	nowStr := sqliteutil.FormatTimestamp(now)
+
+	_, err = s.db.Exec(
+		`INSERT INTO documents (collection, id, data, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?)`,
+		collection, id, string(dataJSON), nowStr, nowStr,
+	)
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		return fmt.Errorf("document already exists")
+	}
+	return err
+}
+
 // DocSet creates or replaces a document. data must be valid JSON.
 // Timestamps are managed by the service - created_at is set once on insert and
 // never overwritten. updated_at is refreshed on every upsert.

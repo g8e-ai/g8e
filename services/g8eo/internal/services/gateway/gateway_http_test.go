@@ -36,6 +36,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/responder"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/keystore"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/mcp"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -61,7 +62,20 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	pubsub := NewPubSubBroker(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+	// Initialize SecretManager with test backend for keystore operations
+	backend, err := keystore.NewTestBackend()
+	require.NoError(t, err)
+	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+	require.NoError(t, ks.EnsurePermissions())
+	sm := &SecretManager{
+		db:         db.db,
+		secretsDir: t.TempDir(),
+		logger:     logger,
+		keystore:   ks,
+	}
+
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
 	err = pki.EnsurePKI(nil)
 	require.NoError(t, err)
@@ -106,6 +120,7 @@ func setupTestGatewayService(t *testing.T) (*GatewayService, *config.Config) {
 
 	// Create a real DB service for the tests to use
 	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
 	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
@@ -118,10 +133,67 @@ func setupTestGatewayService(t *testing.T) (*GatewayService, *config.Config) {
 	pubsub := NewPubSubBroker(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
+	// Reset test storage before creating keystore (similar to keystore_test.go pattern)
+	keystore.ResetTestStorage()
+
+	// Initialize SecretManager with test backend for complete test environment
+	// Use separate temp dir for keystore to avoid conflicts with secretsDir
+	keystoreDir := t.TempDir()
+	backend, err := keystore.NewTestBackend()
+	require.NoError(t, err)
+	ks, err := keystore.NewWithBackend(keystoreDir, logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+	require.NoError(t, ks.EnsurePermissions())
+	sm := &SecretManager{
+		db:         db.db,
+		secretsDir: secretsDir,
+		logger:     logger,
+		keystore:   ks,
+	}
+
+	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
+	err = pki.EnsurePKI(nil)
+	require.NoError(t, err)
+
+	// Build all services with the initialized PKI
+	userSvc := NewUserService(db, logger)
+	resp := responder.New(logger)
+	auth := NewAuthService(db, pki, logger, userSvc, resp, secretsDir)
+	sessionSvc := NewSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
+	apiKeySvc := NewApiKeyService(db, logger)
+	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
+		Logger:          logger,
+		Responder:       resp,
+		SuspendedStore:  db,
+		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+	})
+
 	cfg.Gateway.BootstrapPort = constants.Ports.OperatorBootstrapHttps
 
-	ls, err := newGatewayServiceFromComponents(cfg, logger, db, pubsub)
-	require.NoError(t, err)
+	// Build GatewayService directly with initialized components
+	ls := &GatewayService{
+		cfg:        cfg,
+		logger:     logger,
+		db:         db,
+		pubsub:     pubsub,
+		auth:       auth,
+		pki:        pki,
+		reg:        reg,
+		passkey:    passkey,
+		userSvc:    userSvc,
+		sessionSvc: sessionSvc,
+		apiKeySvc:  apiKeySvc,
+		mcpGateway: mcpGateway,
+		responder:  resp,
+	}
+
+	if err := ls.initHandlersAndServers(); err != nil {
+		require.NoError(t, err)
+	}
+
 	return ls, cfg
 }
 

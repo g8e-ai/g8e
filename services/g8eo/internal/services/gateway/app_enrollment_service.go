@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -97,16 +98,7 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 		return &AppEnrollResponse{Success: false, Error: "app_name must contain only alphanumeric characters, hyphens, and underscores"}, nil
 	}
 
-	// Check if app name already exists (uniqueness validation)
 	appID := s.generateAppID(sanitizedName)
-	existingSigner, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
-	if err != nil {
-		s.logger.Error("Failed to check for existing app signer", "app_id", appID, "error", err)
-		return &AppEnrollResponse{Success: false, Error: "failed to validate app name uniqueness"}, nil
-	}
-	if existingSigner != nil {
-		return &AppEnrollResponse{Success: false, Error: "app_name already registered"}, nil
-	}
 
 	// Validate CSR format
 	block, _ := pem.Decode([]byte(req.CSR))
@@ -132,18 +124,7 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 		return &AppEnrollResponse{Success: false, Error: "failed to generate L2 signing key"}, nil
 	}
 
-	// Store L2 private key in SecretManager
-	// The app ID is used as the service name for key storage
-	if s.pki.secretManager == nil {
-		return &AppEnrollResponse{Success: false, Error: "secret manager not available"}, nil
-	}
-	l2PrivDER := l2Priv.Seed()
-	if err := s.pki.secretManager.StoreServicePrivateKey(appID, l2PrivDER); err != nil {
-		s.logger.Error("Failed to store L2 private key", "app_id", appID, "error", err)
-		return &AppEnrollResponse{Success: false, Error: "failed to store L2 signing key"}, nil
-	}
-
-	// Add public key to TrustedSigner collection
+	// Add public key to TrustedSigner collection using atomic creation
 	trustedSigner := models.TrustedSigner{
 		ID:        appID,
 		PublicKey: hex.EncodeToString(l2Pub),
@@ -152,15 +133,29 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 	}
 	signerBytes, err := json.Marshal(trustedSigner)
 	if err != nil {
-		// Rollback: delete private key
-		_ = s.pki.secretManager.DeleteServicePrivateKey(appID)
 		return &AppEnrollResponse{Success: false, Error: "failed to marshal signer data"}, nil
 	}
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionTrustedSigners), appID, signerBytes); err != nil {
+	if err := s.db.DocCreate(marshaler.CollectionName(constants.CollectionTrustedSigners), appID, signerBytes); err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return &AppEnrollResponse{Success: false, Error: "app_name already registered"}, nil
+		}
 		s.logger.Error("Failed to store L2 signer", "app_id", appID, "error", err)
-		// Rollback: delete private key
-		_ = s.pki.secretManager.DeleteServicePrivateKey(appID)
 		return &AppEnrollResponse{Success: false, Error: "failed to register L2 signer"}, nil
+	}
+
+	// Store L2 private key in SecretManager
+	// The app ID is used as the service name for key storage
+	if s.pki.secretManager == nil {
+		// Rollback: delete signer
+		_, _ = s.db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
+		return &AppEnrollResponse{Success: false, Error: "secret manager not available"}, nil
+	}
+	l2PrivDER := l2Priv.Seed()
+	if err := s.pki.secretManager.StoreServicePrivateKey(appID, l2PrivDER); err != nil {
+		s.logger.Error("Failed to store L2 private key", "app_id", appID, "error", err)
+		// Rollback: delete signer
+		_, _ = s.db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
+		return &AppEnrollResponse{Success: false, Error: fmt.Sprintf("failed to store L2 signing key: %v", err)}, nil
 	}
 
 	// Sign the CSR with the operator intermediate CA

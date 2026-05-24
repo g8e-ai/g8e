@@ -507,7 +507,10 @@ func (m *SecretManager) GetNotaryKey() (string, error) {
 // StoreServicePrivateKey stores a service or app certificate private key in the keystore.
 // name should be the service/app identifier (e.g., "operator-gateway", "g8ee").
 func (m *SecretManager) StoreServicePrivateKey(name string, keyDER []byte) error {
-	keystoreName := fmt.Sprintf("service_%s_key", name)
+	// Use SHA-256 hash for keystore key names to guarantee filesystem safety
+	// and avoid issues with special characters in SPIFFE IDs.
+	hash := sha256.Sum256([]byte(name))
+	keystoreName := fmt.Sprintf("service_%x_key", hash)
 	plaintext := hex.EncodeToString(keyDER)
 	return m.keystore.EncryptSecret(keystoreName, plaintext)
 }
@@ -515,7 +518,8 @@ func (m *SecretManager) StoreServicePrivateKey(name string, keyDER []byte) error
 // GetServicePrivateKey retrieves a service or app certificate private key from the keystore.
 // name should be the service/app identifier (e.g., "operator-gateway", "g8ee").
 func (m *SecretManager) GetServicePrivateKey(name string) ([]byte, error) {
-	keystoreName := fmt.Sprintf("service_%s_key", name)
+	hash := sha256.Sum256([]byte(name))
+	keystoreName := fmt.Sprintf("service_%x_key", hash)
 	plaintext, err := m.keystore.DecryptSecret(keystoreName)
 	if err != nil {
 		return nil, err
@@ -526,7 +530,8 @@ func (m *SecretManager) GetServicePrivateKey(name string) ([]byte, error) {
 // DeleteServicePrivateKey deletes a service or app certificate private key from the keystore.
 // name should be the service/app identifier (e.g., "operator-gateway", "g8ee").
 func (m *SecretManager) DeleteServicePrivateKey(name string) error {
-	keystoreName := fmt.Sprintf("service_%s_key", name)
+	hash := sha256.Sum256([]byte(name))
+	keystoreName := fmt.Sprintf("service_%x_key", hash)
 	return m.keystore.DeleteSecret(keystoreName)
 }
 
