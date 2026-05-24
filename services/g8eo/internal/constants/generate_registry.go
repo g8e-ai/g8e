@@ -27,9 +27,9 @@ import (
 
 // JSONEntry represents a constant entry from JSON files
 type JSONEntry struct {
-	Value       string `json:"value"`
-	GoConst     string `json:"_go_const"`
-	PythonConst string `json:"_python_const"`
+	Value       interface{} `json:"value"`
+	GoConst     string      `json:"_go_const"`
+	PythonConst string      `json:"_python_const"`
 }
 
 // NestedStatusEntry represents the nested structure of status.json
@@ -162,7 +162,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Successfully generated registry.go from JSON source files\n")
+	// Generate status.go content from status.json
+	statusOutput := generateStatusConstants(allData.Status)
+
+	// Write to status_generated.go
+	statusPath := filepath.Join(constantsDir, "status_generated.go")
+	if err := os.WriteFile(statusPath, []byte(statusOutput), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing status_generated.go: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Successfully generated registry.go and status_generated.go from JSON source files\n")
 }
 
 func generateRegistry(data JSONFile) string {
@@ -248,7 +258,7 @@ func generateRegistry(data JSONFile) string {
 		for _, key := range keys {
 			entry := data.Collections[key]
 			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-				key, entry.Value, entry.GoConst, entry.PythonConst))
+				key, valueToString(entry.Value), entry.GoConst, entry.PythonConst))
 		}
 		sb.WriteString("\t\t},\n")
 	}
@@ -260,7 +270,7 @@ func generateRegistry(data JSONFile) string {
 		for _, key := range keys {
 			entry := data.Channels[key]
 			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-				key, entry.Value, entry.GoConst, entry.PythonConst))
+				key, valueToString(entry.Value), entry.GoConst, entry.PythonConst))
 		}
 		sb.WriteString("\t\t},\n")
 	}
@@ -273,7 +283,7 @@ func generateRegistry(data JSONFile) string {
 		for _, key := range keys {
 			entry := data.DocumentIds[key]
 			sb.WriteString(fmt.Sprintf("\t\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-				key, entry.Value, entry.GoConst, entry.PythonConst))
+				key, valueToString(entry.Value), entry.GoConst, entry.PythonConst))
 		}
 		sb.WriteString("\t\t\t},\n")
 		sb.WriteString("\t\t},\n")
@@ -286,7 +296,7 @@ func generateRegistry(data JSONFile) string {
 		for _, key := range keys {
 			entry := data.Headers[key]
 			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-				key, entry.Value, entry.GoConst, entry.PythonConst))
+				key, valueToString(entry.Value), entry.GoConst, entry.PythonConst))
 		}
 		sb.WriteString("\t\t},\n")
 	}
@@ -298,7 +308,7 @@ func generateRegistry(data JSONFile) string {
 		for _, key := range keys {
 			entry := data.Intents[key]
 			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-				key, entry.Value, entry.GoConst, entry.PythonConst))
+				key, valueToString(entry.Value), entry.GoConst, entry.PythonConst))
 		}
 		sb.WriteString("\t\t},\n")
 	}
@@ -312,11 +322,11 @@ func generateRegistry(data JSONFile) string {
 		sessionType := make(map[string]string)
 		for key, entry := range data.KVKeys {
 			if key == "cache.prefix" {
-				cachePrefix = entry.Value
+				cachePrefix = valueToString(entry.Value)
 			} else if strings.HasPrefix(key, "key.schema.") {
-				keySchema[strings.TrimPrefix(key, "key.schema.")] = entry.Value
+				keySchema[strings.TrimPrefix(key, "key.schema.")] = valueToString(entry.Value)
 			} else if strings.HasPrefix(key, "session.type.") {
-				sessionType[strings.TrimPrefix(key, "session.type.")] = entry.Value
+				sessionType[strings.TrimPrefix(key, "session.type.")] = valueToString(entry.Value)
 			}
 		}
 		sb.WriteString(fmt.Sprintf("\t\t\tCachePrefix: \"%s\",\n", cachePrefix))
@@ -371,7 +381,7 @@ func generateRegistry(data JSONFile) string {
 			for _, key := range keys {
 				entry := entries[key]
 				sb.WriteString(fmt.Sprintf("\t\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-					key, entry.Value, entry.GoConst, entry.PythonConst))
+					key, valueToString(entry.Value), entry.GoConst, entry.PythonConst))
 			}
 			sb.WriteString("\t\t\t},\n")
 		}
@@ -485,4 +495,223 @@ func sortedIntKeys(m map[string]int) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func generateStatusConstants(status map[string]map[string]JSONEntry) string {
+	var sb strings.Builder
+
+	sb.WriteString("// Copyright (c) 2026 Lateralus Labs, LLC.\n")
+	sb.WriteString("// Licensed under the Apache License, Version 2.0 (the \"License\");\n")
+	sb.WriteString("// you may not use this file except in compliance with the License.\n")
+	sb.WriteString("// You may obtain a copy of the License at\n")
+	sb.WriteString("//\n")
+	sb.WriteString("//     http://www.apache.org/licenses/LICENSE-2.0\n")
+	sb.WriteString("//\n")
+	sb.WriteString("// Unless required by applicable law or agreed to in writing, software\n")
+	sb.WriteString("// distributed under the License is distributed on an \"AS IS\" BASIS,\n")
+	sb.WriteString("// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n")
+	sb.WriteString("// See the License for the specific language governing permissions and\n")
+	sb.WriteString("// limitations under the License.\n")
+	sb.WriteString("\n")
+	sb.WriteString("package constants\n")
+	sb.WriteString("\n")
+	sb.WriteString("import \"fmt\"\n")
+	sb.WriteString("\n")
+	sb.WriteString("// Code generated by generate_registry.go. DO NOT EDIT.\n")
+	sb.WriteString("// Source: protocol/constants/status.json\n")
+	sb.WriteString("// To regenerate: go run ./internal/constants/generate_registry.go\n")
+	sb.WriteString("\n")
+
+	// Group constants by their type prefix to emit type definitions
+	// Type names are derived from the JSON category name (e.g., "user_role" -> "UserRole")
+	typeGroups := make(map[string][]struct {
+		constName string
+		value     string
+		category  string
+		isNumeric bool
+	})
+
+	for category, entries := range status {
+		// Convert category name to PascalCase type name (e.g., "user_role" -> "UserRole")
+		typeName := categoryToTypeName(category)
+		for _, entry := range entries {
+			if entry.GoConst == "" {
+				continue
+			}
+			// Check if the value is numeric
+			isNumeric := isNumericValue(entry.Value)
+			typeGroups[typeName] = append(typeGroups[typeName], struct {
+				constName string
+				value     string
+				category  string
+				isNumeric bool
+			}{
+				constName: entry.GoConst,
+				value:     valueToString(entry.Value),
+				category:  category,
+				isNumeric: isNumeric,
+			})
+		}
+	}
+
+	// Emit type definitions and constants
+	for typeName, consts := range typeGroups {
+		// Determine if this is a numeric type based on the first constant
+		typeKind := "string"
+		if len(consts) > 0 && consts[0].isNumeric {
+			typeKind = "int"
+		}
+
+		// Emit type definition
+		sb.WriteString(fmt.Sprintf("// %s is a typed %s for %s.\n", typeName, typeKind, toSnakeCase(typeName)))
+		sb.WriteString(fmt.Sprintf("type %s %s\n\n", typeName, typeKind))
+
+		// Emit const block
+		sb.WriteString("const (\n")
+		for _, c := range consts {
+			if c.isNumeric {
+				sb.WriteString(fmt.Sprintf("\t%s %s = %s\n", c.constName, typeName, c.value))
+			} else {
+				sb.WriteString(fmt.Sprintf("\t%s %s = %s\n", c.constName, typeName, formatGoValue(c.value)))
+			}
+		}
+		sb.WriteString(")\n\n")
+	}
+
+	// Emit AllActionTypes() and ValidateAllActionTypes() for action_type category
+	if actionTypes, ok := status["action_type"]; ok {
+		sb.WriteString("// AllActionTypes returns the complete list of defined action types.\n")
+		sb.WriteString("// This is the single source of truth for valid action types in the system.\n")
+		sb.WriteString("// Any new action type must be added to the constants above and will automatically\n")
+		sb.WriteString("// be included in this list.\n")
+		sb.WriteString("func AllActionTypes() []ActionType {\n")
+		sb.WriteString("\treturn []ActionType{\n")
+		keys := sortedKeys(actionTypes)
+		for _, key := range keys {
+			entry := actionTypes[key]
+			if entry.GoConst != "" {
+				sb.WriteString(fmt.Sprintf("\t\t%s,\n", entry.GoConst))
+			}
+		}
+		sb.WriteString("\t}\n")
+		sb.WriteString("}\n\n")
+
+		sb.WriteString("// ValidateAllActionTypes checks that AllActionTypes() includes all defined ActionType constants.\n")
+		sb.WriteString("// This is a compile-time invariant check to prevent action type drift.\n")
+		sb.WriteString("func ValidateAllActionTypes() error {\n")
+		sb.WriteString("\tallTypes := AllActionTypes()\n")
+		sb.WriteString("\ttypeMap := make(map[ActionType]bool)\n")
+		sb.WriteString("\tfor _, t := range allTypes {\n")
+		sb.WriteString("\t\ttypeMap[t] = true\n")
+		sb.WriteString("\t}\n")
+		sb.WriteString("\n")
+		sb.WriteString("\t// All defined constants must be in the list\n")
+		sb.WriteString("\trequiredTypes := []ActionType{\n")
+		for _, key := range keys {
+			entry := actionTypes[key]
+			if entry.GoConst != "" {
+				sb.WriteString(fmt.Sprintf("\t\t%s,\n", entry.GoConst))
+			}
+		}
+		sb.WriteString("\t}\n")
+		sb.WriteString("\n")
+		sb.WriteString("\tfor _, t := range requiredTypes {\n")
+		sb.WriteString("\t\tif !typeMap[t] {\n")
+		sb.WriteString("\t\t\treturn fmt.Errorf(\"action type %s is missing from AllActionTypes()\", t)\n")
+		sb.WriteString("\t\t}\n")
+		sb.WriteString("\t}\n")
+		sb.WriteString("\n")
+		sb.WriteString("\treturn nil\n")
+		sb.WriteString("}\n\n")
+
+		sb.WriteString("// init validates action type SSOT at package load time.\n")
+		sb.WriteString("func init() {\n")
+		sb.WriteString("\tif err := ValidateAllActionTypes(); err != nil {\n")
+		sb.WriteString("\t\tpanic(fmt.Sprintf(\"action type SSOT validation failed: %v\", err))\n")
+		sb.WriteString("\t}\n")
+		sb.WriteString("}\n")
+	}
+
+	return sb.String()
+}
+
+func categoryToTypeName(category string) string {
+	// Convert snake_case category name to PascalCase type name
+	// e.g., "user_role" -> "UserRole", "approval.error.type" -> "ApprovalErrorType"
+	parts := strings.Split(category, ".")
+	var result []rune
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		// Convert snake_case to PascalCase within each part
+		// e.g., "user_role" -> "UserRole"
+		subParts := strings.Split(part, "_")
+		for _, subPart := range subParts {
+			if subPart == "" {
+				continue
+			}
+			// Capitalize first letter of each sub-part
+			result = append(result, []rune(strings.ToUpper(string(subPart[0])))...)
+			result = append(result, []rune(subPart[1:])...)
+		}
+	}
+	return string(result)
+}
+
+func isNumericValue(v interface{}) bool {
+	switch val := v.(type) {
+	case int, int64, float64:
+		return true
+	case string:
+		// Try to parse as int
+		if _, err := fmt.Sscanf(val, "%d", new(int)); err == nil {
+			return true
+		}
+		// Try to parse as float
+		if _, err := fmt.Sscanf(val, "%f", new(float64)); err == nil {
+			return true
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+func toSnakeCase(s string) string {
+	var result []rune
+	for i, r := range s {
+		if i > 0 && r >= 'A' && r <= 'Z' {
+			result = append(result, '_')
+		}
+		result = append(result, r)
+	}
+	return strings.ToLower(string(result))
+}
+
+func valueToString(v interface{}) string {
+	switch val := v.(type) {
+	case string:
+		return val
+	case int, int64, float64:
+		return fmt.Sprintf("%v", val)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+func formatGoValue(v string) string {
+	// If the value is a number, return it without quotes
+	// If it's a string, return it with quotes
+	if v == "" {
+		return `""`
+	}
+	// Check if it's a numeric string
+	if _, err := fmt.Sscanf(v, "%d", new(int)); err == nil {
+		return v
+	}
+	if _, err := fmt.Sscanf(v, "%f", new(float64)); err == nil {
+		return v
+	}
+	return fmt.Sprintf(`"%s"`, v)
 }
