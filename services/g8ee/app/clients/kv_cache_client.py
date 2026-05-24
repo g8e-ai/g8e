@@ -32,12 +32,11 @@ from app.models.settings import GatewaySettings, TLSConfig
 from app.services.infra.settings_service import SettingsService
 from app.utils.aiohttp_session import create_kv_http_session
 from app.constants import (
+    AUTHORIZATION,
     ComponentName,
     ErrorCode,
-    OPERATOR_API_KEY_HEADER,
     HTTP_CONTENT_TYPE_HEADER,
-    HTTP_AUTHORIZATION_HEADER,
-    HTTP_BEARER_PREFIX,
+    OPERATOR_API_KEY,
 )
 from app.errors import NetworkError
 
@@ -91,9 +90,9 @@ class KVCacheClient:
         headers = {HTTP_CONTENT_TYPE_HEADER: "application/json"}
         # Priority: operator_session_id > operator_api_key
         if self._operator_session_id:
-            headers[HTTP_AUTHORIZATION_HEADER] = f"{HTTP_BEARER_PREFIX}{self._operator_session_id}"
+            headers[AUTHORIZATION] = f"Bearer {self._operator_session_id}"
         elif self._operator_api_key:
-            headers[OPERATOR_API_KEY_HEADER] = self._operator_api_key
+            headers[OPERATOR_API_KEY] = self._operator_api_key
 
         self._session = create_kv_http_session(
             self._session,

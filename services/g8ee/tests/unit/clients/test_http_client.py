@@ -35,12 +35,12 @@ from app.clients.http_client import (
     get_service_client,
 )
 from app.constants import (
+    API_KEY,
     CASE_ID,
     DEFAULT_HTTP_CLIENT_TIMEOUT as DEFAULT_TIMEOUT,
     DEFAULT_MAX_RETRIES,
     DEFAULT_RETRY_BACKOFF_FACTOR,
     EXECUTION_ID,
-    HTTP_API_KEY_HEADER,
     INVESTIGATION_ID,
     TASK_ID,
     CircuitBreakerState,
@@ -370,7 +370,7 @@ class TestG8eHTTPClientPrepareRequest:
 
     async def test_prepare_request_api_key_set_in_header(self, authed_client):
         _url, headers, _trace, _ctx = await authed_client._prepare_request("GET", "/api/health", headers={}, context=None)
-        assert headers[HTTP_API_KEY_HEADER] == "test-api-key"
+        assert headers[API_KEY] == "test-api-key"
 
     async def test_prepare_request_joins_base_url_with_path(self, client):
         url, _headers, _trace, _ctx = await client._prepare_request("GET", "/api/health", headers={}, context=None)

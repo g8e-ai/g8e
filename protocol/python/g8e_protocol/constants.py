@@ -290,9 +290,6 @@ HTTP_ACCESS_CONTROL_ALLOW_CREDENTIALS = HEADERS.get("http.access-control-allow-c
 HTTP_ACCESS_CONTROL_ALLOW_ORIGIN = HEADERS.get("http.access-control-allow-origin", "Access-Control-Allow-Origin")
 HTTP_ACCESS_CONTROL_REQUEST_HEADERS = HEADERS.get("http.access-control-req-headers", "Access-Control-Request-Headers")
 HTTP_ACCESS_CONTROL_REQUEST_METHOD = HEADERS.get("http.access-control-req-method", "Access-Control-Request-Method")
-HTTP_API_KEY_HEADER = HEADERS.get("http.api-key", "X-API-Key")
-HTTP_AUTHORIZATION_HEADER = HEADERS.get("http.authorization", "Authorization")
-HTTP_BEARER_PREFIX = "Bearer"
 HTTP_CACHE_CONTROL_HEADER = HEADERS.get("http.cache-control", "Cache-Control")
 HTTP_CONTENT_LANGUAGE_HEADER = HEADERS.get("http.content-language", "Content-Language")
 HTTP_CONTENT_TYPE_HEADER = HEADERS.get("http.content-type", "Content-Type")
@@ -310,7 +307,6 @@ HTTP_WEB_SESSION_ID_HEADER = HEADERS.get("x-g8e.web-session-id", "X-G8E-Web-Sess
 HTTP_CLI_SESSION_ID_HEADER = HEADERS.get("http.x-session-id", "X-G8E-CLI-Session-ID")
 HTTP_OPERATOR_SESSION_ID_HEADER = HEADERS.get("x-g8e.operator-session-id", "X-G8E-Operator-Session-ID")
 HTTP_OPERATOR_ID_HEADER = HEADERS.get("x-g8e.operator-id", "X-G8E-Operator-ID")
-HTTP_OPERATOR_API_KEY_HEADER = HEADERS.get("x-g8e.operator-api-key", "X-G8E-Operator-API-Key")
 HTTP_SYSTEM_FINGERPRINT_HEADER = HEADERS.get("x-g8e.system-fingerprint", "X-G8E-System-Fingerprint")
 
 # Context Headers - derived from headers.json

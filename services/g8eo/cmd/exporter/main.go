@@ -408,28 +408,37 @@ func main() {
 			// Convert category to PascalCase class name
 			// Category names are in snake_case (e.g., "action_status", "ai_task_id")
 			// Keep acronyms fully capitalized (e.g., "ai_source" → "AISource", "api_key_status" → "APIKeyStatus")
-			acronyms := map[string]bool{
-				"ai":   true,
-				"api":  true,
-				"cli":  true,
-				"kv":   true,
-				"llm":  true,
-				"ssh":  true,
-				"tcp":  true,
-				"udp":  true,
-				"g8e":  true,
-				"g8ee": true,
-				"g8eo": true,
-			}
-			classParts := strings.Split(category, "_")
+			// Special cases: "llm_models" → "LLMs", "g8e_action_type" → "G8eActionType", "g8e_availability" → "G8eAvailability"
 			var className string
-			for _, part := range classParts {
-				if len(part) > 0 {
-					// If the part is a known acronym, keep it fully capitalized
-					if acronyms[strings.ToLower(part)] {
-						className += strings.ToUpper(part)
-					} else {
-						className += strings.ToUpper(string(part[0])) + part[1:]
+			if category == "llm_models" {
+				className = "LLMs"
+			} else if category == "g8e_action_type" {
+				className = "G8eActionType"
+			} else if category == "g8e_availability" {
+				className = "G8eAvailability"
+			} else {
+				acronyms := map[string]bool{
+					"ai":   true,
+					"api":  true,
+					"cli":  true,
+					"kv":   true,
+					"llm":  true,
+					"ssh":  true,
+					"tcp":  true,
+					"udp":  true,
+					"g8e":  true,
+					"g8ee": true,
+					"g8eo": true,
+				}
+				classParts := strings.Split(category, "_")
+				for _, part := range classParts {
+					if len(part) > 0 {
+						// If the part is a known acronym, keep it fully capitalized
+						if acronyms[strings.ToLower(part)] {
+							className += strings.ToUpper(part)
+						} else {
+							className += strings.ToUpper(string(part[0])) + part[1:]
+						}
 					}
 				}
 			}

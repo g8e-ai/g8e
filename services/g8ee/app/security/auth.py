@@ -18,8 +18,7 @@ from typing import TYPE_CHECKING
 from fastapi import Request
 
 from app.constants import (
-    HTTP_AUTHORIZATION_HEADER,
-    HTTP_BEARER_PREFIX,
+    AUTHORIZATION,
     PROXY_ORGANIZATION_ID_HEADER,
     PROXY_USER_EMAIL_HEADER,
     PROXY_USER_ID_HEADER,

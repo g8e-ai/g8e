@@ -33,7 +33,7 @@ from app.utils.envelope_builder import build_uap_envelope_json
 from app.models.pubsub_messages import G8eMessage
 from app.models.settings import GatewaySettings, TLSConfig
 from app.services.infra.settings_service import SettingsService
-from app.constants import HTTP_AUTHORIZATION_HEADER, HTTP_BEARER_PREFIX
+from app.constants import AUTHORIZATION
 from app.errors import NetworkError, ValidationError, ErrorCode
 from app.utils.aiohttp_session import create_component_http_session
 
@@ -88,7 +88,7 @@ class GovernanceClient:
     async def _get_http_session(self) -> aiohttp.ClientSession:
         headers = {}
         if self._operator_session_id:
-            headers[HTTP_AUTHORIZATION_HEADER] = f"{HTTP_BEARER_PREFIX}{self._operator_session_id}"
+            headers[AUTHORIZATION] = f"Bearer {self._operator_session_id}"
 
         if not hasattr(self, "_session") or self._session is None:
             self._session = create_component_http_session(

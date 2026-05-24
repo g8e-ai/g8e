@@ -41,12 +41,11 @@ from typing import Optional
 import httpx
 
 from g8e_protocol.constants import (
-    HTTP_AUTHORIZATION_HEADER,
-    HTTP_BEARER_PREFIX,
     HTTP_CONTENT_TYPE_HEADER,
     HTTP_CLI_SESSION_ID_HEADER,
     ComponentName,
 )
+from g8e_protocol.headers import AUTHORIZATION
 from g8e_protocol.generated_paths import PathConstants, PortConstants
 from g8e_protocol.models import RequestContext, BoundOperator
 
@@ -181,7 +180,7 @@ class AuthContext:
         }
         if self.operator_session_id:
             # Gateway uses Authorization: Bearer <token>.
-            headers[HTTP_AUTHORIZATION_HEADER] = f"{HTTP_BEARER_PREFIX} {self.operator_session_id}"
+            headers[AUTHORIZATION] = f"Bearer {self.operator_session_id}"
         
         if self.cli_session_id:
             headers[HTTP_CLI_SESSION_ID_HEADER] = self.cli_session_id
