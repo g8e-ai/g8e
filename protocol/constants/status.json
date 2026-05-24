@@ -854,11 +854,6 @@
         "_python_const": "CLIENT",
         "value": "client"
       },
-      "g8ee": {
-        "_go_const": "ComponentNameG8EE",
-        "_python_const": "G8EE",
-        "value": "g8ee"
-      },
       "g8eo": {
         "_go_const": "ComponentNameG8EO",
         "_python_const": "G8EO",

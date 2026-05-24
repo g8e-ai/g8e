@@ -27,7 +27,7 @@ The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In th
 In an air-gapped deployment, the platform requires a local "Hub" for persistence and messaging. This is provided by running the Governance Gateway (`g8eg` / `g8e.gateway` binary) in **Gateway mode** (--doctrine, --consensus, or --notary). In this mode, the Governance Gateway acts as the platform's central persistence and messaging backbone rather than an outbound execution agent.
 
 ### Architecture & Ports
-The Governance Gateway in Gateway mode exposes four logical surfaces. Defaults are sourced from `services/g8eo/internal/constants/paths.go`. The TLS surfaces multiplex onto a single port when configured equal; Bootstrap must remain on its own port to be served as plain HTTP.
+The Governance Gateway in Gateway mode exposes four logical surfaces. Defaults are sourced from `internal/constants/paths.go`. The TLS surfaces multiplex onto a single port when configured equal; Bootstrap must remain on its own port to be served as plain HTTP.
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
@@ -56,7 +56,7 @@ To execute mutations on the local air-gapped host, a **Governed Operator (`g8eo`
 
 ## Local LLM Inference
 
-For air-gapped reasoning, g8e supports external local inference via the `g8ee` (g8e-Compliant Agentic Ensemble) component's `LlamaCppProvider`.
+For air-gapped reasoning, g8e supports external local inference via g8e-compatible agentic ensembles' `LlamaCppProvider`.
 
 - **Ensemble:** HTTP client to external `llama.cpp` server via OpenAI-compatible API.
 - **Default Model:** `Gemma 4 E2B` (optimized for local reasoning).
@@ -77,11 +77,11 @@ For air-gapped reasoning, g8e supports external local inference via the `g8ee` (
 **Direct Dependency Invariant:** All package manifests must reflect only direct imports. Transitive dependencies are not explicitly listed. This invariant is enforced by header comments in `services/g8ee/requirements.txt` and auditable via `./g8e test g8ee`.
 
 **Gateway (Go):**
-- 100% vendored in `services/g8eo/vendor/`.
-- Build tools declared in `services/g8eo/go.mod` (protoc-gen-go, protoc-gen-go-grpc).
+- 100% vendored in `vendor/`.
+- Build tools declared in `go.mod` (protoc-gen-go, protoc-gen-go-grpc).
 - Protocol generation uses local `buf` and `protoc` (no remote BSR dependency).
 
-**Python Runtime (**g8e Agentic Ensemble**):**
+**Python Runtime (g8e-compatible agentic ensembles):**
 - Direct dependencies frozen in `services/g8ee/requirements.txt`.
 - Categories: web framework (fastapi, uvicorn), LLM providers (google-genai, anthropic, openai), protocol (protobuf, grpcio), storage (sqlalchemy, alembic), utilities (tenacity, python-dateutil).
 - No vendoring; use pre-staged virtual environment or Docker image.
@@ -92,7 +92,7 @@ For air-gapped reasoning, g8e supports external local inference via the `g8ee` (
 
 **Evals Suite:**
 - Dependencies in `evals/pyproject.toml` (pytest, httpx, pydantic).
-- Separate from runtime **agentic ensemble** dependencies.
+- Separate from runtime agentic ensemble dependencies.
 
 **Build-Time Tools:**
 - `buf` (Buf CLI) for protobuf schema management.
@@ -123,6 +123,6 @@ For air-gapped reasoning, g8e supports external local inference via the `g8ee` (
 ## Security Invariants
 
 1. **No Outbound Dialing:** In Gateway mode, the Governance Gateway (`g8eg`) is forbidden from initiating connections to any address outside the local platform.
-2. **Mutual Trust:** All internal traffic between the Governance Gateway, the **agentic ensemble**, and the Operator is encrypted using the Operator's internal CA.
+2. **Mutual Trust:** All internal traffic between the Governance Gateway, agentic ensembles, and the Operator is encrypted using the Operator's internal CA.
 3. **Data Sovereignty:** All audit logs, chat history, and telemetry remain strictly on the host's filesystem in the `.g8e` directory.
 4. **Fail-Closed Privacy:** If a component requires an external resource that is unavailable, it must fail with a clear error rather than attempting a fallback to insecure or public endpoints.

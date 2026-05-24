@@ -1,6 +1,6 @@
 # Quickstart
 
-**Prerequisites:** Go 1.26+ (required) · Python 3.14+ (optional, only for the reference g8ee Ensemble)
+**Prerequisites:** Go 1.26+ (required) · Python 3.14+ (optional, only for g8e-compatible agentic ensembles)
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
@@ -8,8 +8,8 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 # Start the mandatory Operator gateway
 ./g8e platform start
 
-# (Optional) Start the reference g8e-Compliant Agentic Ensemble
-./g8e apps start g8ee
+# (Optional) Start a g8e-compatible agentic ensemble
+./g8e apps start <app-name>
 ```
 
 1. **Bootstrap** — follow the CLI to initialize the Operator and generate a device-link token.

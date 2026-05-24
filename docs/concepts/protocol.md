@@ -10,7 +10,7 @@ The **g8e Protocol** is a governance and compliance standard. It ingests payload
 
 Rather than competing with tool-calling standards, g8e functions as a secure perimeter. It treats standard JSON-RPC tools as unverified payloads (the "what") and wraps them in a strict, canonical `GovernanceEnvelope` (the "how").
 
-The protocol is the only mandatory layer of g8e. Any conforming implementation - Local Operator, Remote Operator, client, or BYO frontend - interoperates by speaking this contract. The reference Local Operator (`g8eg`), Remote Operator (`g8eo`), and the reference **g8e Agentic Ensemble** (`g8ee`) are interchangeable with anything that produces and verifies the same envelopes.
+The protocol is the only mandatory layer of g8e. Any conforming implementation - Local Operator, Remote Operator, client, or BYO frontend - interoperates by speaking this contract. The reference Local Operator (`g8eg`), Remote Operator (`g8eo`), and g8e-compatible agentic ensembles are interchangeable with anything that produces and verifies the same envelopes.
 
 ---
 
@@ -40,7 +40,7 @@ The protocol is the only mandatory layer of g8e. Any conforming implementation -
 
 ## The Players
 
-The system utilizes specialized AI agents defined in `services/g8eo/internal/constants/agents.go`, each with a distinct lens and responsibility within the co-validated infrastructure.
+The system utilizes specialized AI agents defined in `internal/constants/agents.go`, each with a distinct lens and responsibility within the co-validated infrastructure.
 
 | Player | Role | ID | Lens / Capability |
 |---|---|---|---|
@@ -68,7 +68,7 @@ The `GovernanceEnvelope` is the single canonical container for every g8e mutatio
 | Field | Purpose |
 |---|---|
 | `id` | Transaction identifier; must match `transaction_hash`. |
-| `event_type` | Canonical event name from `services/g8eo/internal/constants/events.go`. |
+| `event_type` | Canonical event name from `internal/constants/events.go`. |
 | `payload` | Base64-encoded binary protobuf message - the **sole authority for execution**. |
 | `intent_data` | `google.protobuf.Struct` view for visibility/audit. Never used as a fallback for execution. |
 | `transaction_hash` | SHA-256 over: `action_type | target_resource | payload_base64 | state_root | nonce | expires_at | intent_data`. |
@@ -117,7 +117,7 @@ Static, deterministic checks enforced before any code executes.
 
 - **Forbidden patterns** - Custom protobuf field option `(g8e.common.v1.forbidden_patterns)` is reflected at runtime to scan typed payloads (e.g., `command` field) for `sudo`, `su`, `rm -rf /`, etc.
 - **Sentinel pre-execution analysis** - Regex matching against threat doctrines (reverse shells, privilege escalation, exfiltration).
-- **Allow/deny lists** - Per-host policy in `services/g8eo/internal/constants/` and per-user `command_validation` settings.
+- **Allow/deny lists** - Per-host policy in `internal/constants/` and per-user `command_validation` settings.
 
 #### Doctrine Storage
 
@@ -204,7 +204,7 @@ A cryptographic proof that an independent ensemble agreed on the instruction.
 - **Mechanism** - Ed25519 signature over `transaction_hash | decision`.
 - **Trust** - The Governed Operator maintains an Operator-owned `SignerStore`; missing or unknown keys cause rejection.
 - **Producer** - Any conforming Quorum (L2Consensus) producer (the bundled **agentic ensemble**, a BYO multi-agent system, or a single signer for low-stakes flows).
-- **Reference agentic ensemble producer** - The **agentic ensemble** (`g8ee`) runs its own internal Byzantine cascade upstream of the Quorum (L2Consensus) signature: Triage → Dash/Sage (intent articulation) → 5-member Tribunal generation → R1 vote → optional R2 anonymized peer review → Actuator risk analysis (Two-Strike Circuit Breaker) → Auditor verification + Merkle reputation commitment. The Ensemble signs only after Auditor passes. The Gateway gateway and operator do not assume any of this; they re-run every gate below independently. See [g8ee Governance & Safety](../concepts/g8ee.md) and [position paper §2.3](../concepts/position_paper.md).
+- **Reference agentic ensemble producer** - g8e-compatible agentic ensembles run their own internal Byzantine cascade upstream of the Quorum (L2Consensus) signature: Triage → Dash/Sage (intent articulation) → 5-member Tribunal generation → R1 vote → optional R2 anonymized peer review → Actuator risk analysis (Two-Strike Circuit Breaker) → Auditor verification + Merkle reputation commitment. The ensemble signs only after Auditor passes. The Gateway gateway and operator do not assume any of this; they re-run every gate below independently. See [position paper §2.3](../concepts/position_paper.md).
 
 ### Notary (L3Notary): Authorization (Human)
 
@@ -263,16 +263,16 @@ g8e.v1.<domain>.<resource>[.<sub-resource>...].<action>
 
 Canonical truth lives in:
 
-- `@/home/bob/g8e/services/g8eo/internal/constants/events.go` - string names
-- `@/home/bob/g8e/protocol/proto/` - typed payload schemas
-- `@/home/bob/g8e/services/g8eo/internal/constants/channels.go` - pub/sub channel prefixes
+- `internal/constants/events.go` - string names
+- `protocol/proto/` - typed payload schemas
+- `internal/constants/channels.go` - pub/sub channel prefixes
 
 ### Adding a new event
 
-1. Add the string to `services/g8eo/internal/constants/events.go`.
+1. Add the string to `internal/constants/events.go`.
 2. Define a typed payload in `protocol/proto/`.
-3. If it is a mutation, add an action-type mapping in `services/g8eo/internal/mappings/action_types.go`.
-4. Register a handler in `services/g8eo/internal/services/pubsub/pubsub_commands.go`.
+3. If it is a mutation, add an action-type mapping in `internal/mappings/action_types.go`.
+4. Register a handler in `internal/services/pubsub/pubsub_commands.go`.
 
 ---
 
@@ -379,11 +379,11 @@ Agent performance is tracked via an EMA scalar `[0.0, 1.0]` in the `reputation_s
 | Concern | Authoritative file |
 |---|---|
 | Protobuf schemas | `@/home/bob/g8e/protocol/proto/` |
-| Event registry | `@/home/bob/g8e/services/g8eo/internal/constants/events.go` |
-| Channel prefixes | `@/home/bob/g8e/services/g8eo/internal/constants/channels.go` |
-| Envelope types (Go) | `@/home/bob/g8e/services/g8eo/pkg/uap/types.go` |
-| Verification logic | `@/home/bob/g8e/services/g8eo/internal/services/governance/transaction_verifier.go` |
-| Audit storage | `@/home/bob/g8e/services/g8eo/internal/services/storage/audit_vault.go` |
+| Event registry | `internal/constants/events.go` |
+| Channel prefixes | `internal/constants/channels.go` |
+| Envelope types (Go) | `pkg/uap/types.go` |
+| Verification logic | `internal/services/governance/transaction_verifier.go` |
+| Audit storage | `internal/services/storage/audit_vault.go` |
 | Workload identity | `@/home/bob/g8e/protocol/workload_identity.go` |
 
-For the reference Remote Operator implementation see [Operator](./operator.md). For the reference **g8e Agentic Ensemble** application see [g8e Agentic Ensemble](./g8ee.md). For Hub/data-backplane behavior see [Local Operator (g8eg)](./g8eg.md).
+For the reference Remote Operator implementation see [Operator](./operator.md). For g8e-compatible agentic ensembles see [g8e-Compatible Applications](./g8e-compatible-apps.md). For Hub/data-backplane behavior see [Local Operator (g8eg)](./g8eg.md).

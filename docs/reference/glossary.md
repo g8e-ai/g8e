@@ -139,7 +139,7 @@ A security strategy that implements multiple layers of protection to ensure the 
 
 A pre-authorized deployment method for installing Operators on one or many systems from a single token. Users generate a Device Link from the Operator Panel with configurable `max_uses` (1–10,000, default 1) and expiry (1 minute to 7 days, default 1 hour). The token (`dlk_` prefix) is distributed via Ansible, SSH, or configuration management as `g8e.operator --device-token dlk_xxx`. Each system auto-registers: the platform claims an existing AVAILABLE Operator slot for that user, or creates one on demand if none exist. No browser approval required - the link itself is the authorization. Operator slots are the accounting unit - each registered device consumes one slot.
 
-**Authority Split:**  is authoritative for device link documents (usage tracking, exhaustion checking, claims management); g8ee is authoritative for operator documents (slot management, lifecycle operations).
+**Authority Split:**  is authoritative for device link documents (usage tracking, exhaustion checking, claims management); g8e-compatible agentic ensembles are authoritative for operator documents (slot management, lifecycle operations).
 
 ---
 
@@ -151,7 +151,7 @@ The protection of data stored on disk using AES-256-GCM encryption. Applied to t
 
 ## Environment
 
-The runtime context of the system where an Operator is running, as reported by the Operator via heartbeat telemetry. Captured in `HeartbeatEnvironment` and includes: current working directory (`pwd`), locale (`lang`), timezone, terminal type (`term`), container detection (`is_container`, `container_runtime`, `container_signals`), and init system (`init_system`). Used by g8ee to provide the AI with accurate context about the Operator's execution environment.
+The runtime context of the system where an Operator is running, as reported by the Operator via heartbeat telemetry. Captured in `HeartbeatEnvironment` and includes: current working directory (`pwd`), locale (`lang`), timezone, terminal type (`term`), container detection (`is_container`, `container_runtime`, `container_signals`), and init system (`init_system`). Used by g8e-compatible agentic ensembles to provide the AI with accurate context about the Operator's execution environment.
 
 ---
 
@@ -173,9 +173,9 @@ The platform name. g8e is an open-source, air-gapped capable AI governance platf
 
 ---
 
-## g8e Agentic Ensemble (g8ee)
+## g8e-Compatible Agentic Ensemble
 
-The reference **g8e-compliant agentic ensemble** with LLM provider abstraction supporting OpenAI, Anthropic, Gemini, and Ollama providers. Processes natural language requests, reasons about system state, generates commands, and manages investigations. Implements the tool calling loop for Operator interactions and the Intent-Based Policy System for Cloud Operators.
+An agentic ensemble that implements the g8e protocol, with LLM provider abstraction supporting OpenAI, Anthropic, Gemini, and Ollama providers. Processes natural language requests, reasons about system state, generates commands, and manages investigations. Implements the tool calling loop for Operator interactions and the Intent-Based Policy System for Cloud Operators.
 
 ---
 

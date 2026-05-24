@@ -63,8 +63,8 @@ This codemap traces the complete lifecycle of a mutation request from envelope s
 3. Dispatch to verification gauntlet
 
 **Key Components**:
-- `services/g8eo/internal/services/pubsub/pubsub_commands.go` - Dispatch logic
-- `services/g8eo/pkg/uap/` - UAP envelope handling
+- `internal/services/pubsub/pubsub_commands.go` - Dispatch logic
+- `pkg/uap/` - UAP envelope handling
 - Wire format: canonical protojson JSON (not binary protobuf)
 
 ### Phase 2: Transaction Verification
@@ -101,8 +101,8 @@ This codemap traces the complete lifecycle of a mutation request from envelope s
    - Support for external app policy L3 bypass (auto-approve intents)
 
 **Key Components**:
-- `services/g8eo/internal/services/governance/transaction_verifier.go` - Verification logic
-- `services/g8eo/internal/services/storage/replay_store.go` - Nonce replay protection
+- `internal/services/governance/transaction_verifier.go` - Verification logic
+- `internal/services/storage/replay_store.go` - Nonce replay protection
 - `protocol/constants/status.json` - Action type definitions and mutation flags
 - `protocol/proto/common.proto` - GovernanceEnvelope schema with L1 field options
 - Governance postures: doctrine, consensus, notary (configurable)
@@ -122,8 +122,8 @@ This codemap traces the complete lifecycle of a mutation request from envelope s
 8. Return signed ActionReceipt
 
 **Key Components**:
-- `services/g8eo/internal/services/governance/actuator.go` - Execution boundary
-- `services/g8eo/internal/services/execution/` - Execution handlers (command, file edit, fs operations)
+- `internal/services/governance/actuator.go` - Execution boundary
+- `internal/services/execution/` - Execution handlers (command, file edit, fs operations)
 - `protocol/proto/operator.proto` - ActionReceipt schema
 - Fail-closed invariant: no execution without signed receipt
 
@@ -140,8 +140,8 @@ This codemap traces the complete lifecycle of a mutation request from envelope s
 4. Store tamper-evident history with commit hashes
 
 **Key Components**:
-- `services/g8eo/internal/services/storage/audit_vault.go` - SQLite vault
-- `services/g8eo/internal/services/storage/ledger.go` - Git ledger (go-git)
+- `internal/services/storage/audit_vault.go` - SQLite vault
+- `internal/services/storage/ledger.go` - Git ledger (go-git)
 - `.g8e/audit/` - SQLite database location
 - `.g8e/ledger/.git` - Git repository location
 - Fail-closed: reject events with unknown sessions, never auto-create sessions

@@ -15,7 +15,7 @@ The unified `g8eo` binary is the primary operational interface for the g8e platf
 g8e avoids container-orchestration complexity by running directly on the host. There are two distinct tiers:
 
 1. **Gateway (mandatory)** - The `g8eo` binary in Gateway mode (--doctrine, --consensus, or --notary). Owns persistence, PKI, pub/sub, and governance enforcement.
-2. **Application Layer (optional)** - The reference **g8e Agentic Ensemble** (`g8ee`) that consume the public protocol. Run as managed host processes.
+2. **Application Layer (optional)** - g8e-compatible agentic ensembles that consume the public protocol. Run as managed host processes.
 
 ### The Unified `g8eo` Binary
 
@@ -39,7 +39,7 @@ Orchestrates the Gateway lifecycle via native Go process management.
 
 | Command | Purpose |
 |---|---|
-| `start [-a\|--g8ee\|--with-g8ee]` | Start Operator Gateway mode; optional apps require explicit opt-in. |
+| `start [-a\|--with-apps]` | Start Operator Gateway mode; optional apps require explicit opt-in. |
 | `stop` | Stop Operator Gateway mode and any optional app processes. |
 | `restart` | Restart with the same flags. |
 | `status` | Gateway health first, optional app status separately. |

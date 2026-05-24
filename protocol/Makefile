@@ -44,8 +44,6 @@ vet:
 lint:
 	@if command -v golangci-lint >/dev/null; then \
 		golangci-lint run; \
-	elif [ -f "../services/g8eo/bin/golangci-lint" ]; then \
-		../services/g8eo/bin/golangci-lint run; \
 	else \
 		echo "golangci-lint not found"; \
 		exit 1; \

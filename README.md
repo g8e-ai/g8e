@@ -86,7 +86,7 @@ A producer forms intent and reaches consensus; the Operator pulls the envelope o
 sequenceDiagram
     autonumber
     participant Principal as Principal<br/>(Human / AI Agent)
-    participant Ensemble as Producer<br/>(g8ee Ensemble / BYO / MCP client)
+    participant Ensemble as Producer<br/>(g8e-compatible agentic ensemble / BYO / MCP client)
     participant Gateway as Governance Gateway<br/>(g8eg)
     participant Operator as Governed Operator<br/>(g8eo)
 
@@ -183,12 +183,13 @@ The outbound-only Operator architecture enables governed execution on hosts that
 
 g8e ships a full reference stack, but the protocol is the only mandatory part — any conforming producer can emit a valid envelope.
 
-- **Ensemble (`g8ee`)** — optional reference g8e-Compliant Agentic Ensemble. A ReAct loop over an agent hierarchy: **Triage/Dash** (routing + fast path), **Sage** (reasoner; proposes but cannot execute), a five-seat **Tribunal** (k-of-n consensus), **Warden** (heuristic circuit breaker), **Auditor** (history grounding + signs L2), and **Nemesis** (embedded adversary; recorded, never executed).
 - **Gateway (`g8eg`)** — reference policy decision point: admission APIs, mTLS/PKI, replay protection, state-root distribution, fan-out to Operators.
 - **Operator (`g8eo`)** — reference enforcement point and sovereign boundary: local audit authority, Sentinel scrubber, Actuator, MCP server. The 4MB binary.
 
+**g8e-compatible agentic ensembles** are optional producers that implement the protocol to emit signed envelopes with L2 consensus evidence.
+
 **Code pointers:**
-`protocol/proto/*.proto` · `services/g8eo/internal/services/governance/` · `services/g8eo/internal/services/storage/audit_vault.go`
+`protocol/proto/*.proto` · `internal/services/governance/` · `internal/services/storage/audit_vault.go`
 
 ---
 
@@ -212,8 +213,8 @@ g8e is built to run entirely inside your perimeter. The Operator has no inbound 
 - **[Position Paper](docs/concepts/position_paper.md)** — the full design rationale, threat model, and BFT analysis.
 - **[Protocol](docs/concepts/protocol.md)** — wire format, transaction hash, and the Doctrine / Quorum / Notary definitions.
 - **[Operator (g8eo)](docs/concepts/operator.md)** — execution boundary, gateway modes, and host storage.
-- **[Ensemble (g8ee)](docs/concepts/g8ee.md)** — reference g8e-Compliant Agentic Ensemble and agentic orchestration.
 - **[Gateway (g8eg)](docs/concepts/g8eg.md)** — Governance Gateway architecture and modes.
+- **[g8e-Compatible Applications](docs/concepts/g8e-compatible-apps.md)** — how to build conforming producers and consumers.
 - **[Guides](docs/guides/)** — operational guides for testing, evals, demos, and troubleshooting.
 - **[Reference](docs/reference/)** — glossary, constants, and protocol references.
 - **[Contributing](CONTRIBUTING.md)** — build instructions, testing workflows, and standards.

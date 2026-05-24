@@ -28,7 +28,7 @@ The g8e platform is built on the g8e Protocol as Gateway. Conforming gateway and
 - **Protocol (Gateway)**: The wire contract, schemas, and L1Doctrine/L2Consensus/L3Notary verification rules. Mandatory and immutable for any client or implementation.
 - **Governance Gateway (`g8eg`)**: Built as `g8e.gateway` and run in **Gateway mode** (--doctrine, --consensus, or --notary). It acts as the platform's backbone - protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority.
 - **Governed Operator (`g8eo`)**: Built as `g8e.operator` and run in **Standard Mode** or **MCP Mode** (`--mcp-serve`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease.
-- **Reference Application Layer (Optional)**: Reference components like the **g8e Agentic Ensemble** (`g8ee`) consume the public Gateway/Operator protocol surface. They have no privileged Gateway responsibilities and no private access channels.
+- **Reference Application Layer (Optional)**: Reference components like g8e-compatible agentic ensembles consume the public Gateway/Operator protocol surface. They have no privileged Gateway responsibilities and no private access channels.
 
 ```mermaid
 flowchart TD
@@ -47,10 +47,10 @@ flowchart TD
     end
 
     subgraph Apps ["Reference Application Layer"]
-        g8ee["g8e Agentic Ensemble"]
+        ensemble["g8e-compatible agentic ensemble"]
     end
 
-    g8ee -. "mTLS UAP JSON" .-> listen
+    ensemble -. "mTLS UAP JSON" .-> listen
 
     subgraph EP_A ["Managed Host A"]
         g8eoA["Reference Operator (g8eo)"] --- LFAA_A["LFAA Ledger & Vault"]
@@ -88,7 +88,7 @@ By passing --doctrine, --consensus, or --notary, the binary transforms into the 
 
 The Governance Gateway (`g8eg`) exposes four logical protocol surfaces. Operators may bind each surface to its own TCP port or collapse multiple surfaces onto a single shared port. The Gateway automatically detects port overlaps and promotes the shared gateway to a **Multiplexed Handler** with **Optional mTLS**.
 
-Default ports are sourced from `services/g8eo/internal/constants/paths.go`:
+Default ports are sourced from `internal/constants/paths.go`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
@@ -297,16 +297,16 @@ The Hub keeps an authoritative encrypted audit vault keyed by `transaction_hash`
 
 | Concern | File |
 |---|---|
-| Listen mode entry | `services/g8eo/cmd/g8eo/main.go` |
-| Coordination Store | `services/g8eo/internal/services/storage/` |
-| Pub/Sub broker | `services/g8eo/internal/services/pubsub/` |
-| State Root provider | `services/g8eo/internal/services/listen/listen_db.go` |
-| Nonce / replay store | `services/g8eo/internal/services/storage/replay_store.go` |
-| PKI / CertStore | `services/g8eo/internal/services/listen/listen_certs.go` |
-| Secret Manager | `services/g8eo/internal/services/listen/secret_manager.go` |
-| Audit Vault | `services/g8eo/internal/services/storage/audit_vault.go` |
+| Listen mode entry | `cmd/g8eo/main.go` |
+| Coordination Store | `internal/services/storage/` |
+| Pub/Sub broker | `internal/services/pubsub/` |
+| State Root provider | `internal/services/listen/listen_db.go` |
+| Nonce / replay store | `internal/services/storage/replay_store.go` |
+| PKI / CertStore | `internal/services/listen/listen_certs.go` |
+| Secret Manager | `internal/services/listen/secret_manager.go` |
+| Audit Vault | `internal/services/storage/audit_vault.go` |
 | Workload identity | `protocol/workload_identity.go` |
-| Collections registry | `services/g8eo/internal/constants/collections.go` |
+| Collections registry | `internal/constants/collections.go` |
 
 ---
 
@@ -329,4 +329,4 @@ The Hub keeps an authoritative encrypted audit vault keyed by `transaction_hash`
 
 - [**g8e Protocol**](./protocol.md) - The wire contract and governance hierarchy.
 - [**g8eo Operator**](./operator.md) - Sovereign host-side execution agent and MCP server.
-- [**g8ee Ensemble**](./g8ee.md) - Reference **g8e-compliant agentic ensemble** application.
+- [**g8e-Compatible Applications**](../concepts/g8e-compatible-apps.md) - Building conforming producers and consumers.

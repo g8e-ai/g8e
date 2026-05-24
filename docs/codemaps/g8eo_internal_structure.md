@@ -5,60 +5,58 @@
 g8eo is the Go-based Governed Operator - the sovereign execution boundary and protocol substrate. It operates in multiple modes: outbound operator mode (executes mutations on local host), gateway mode (platform persistence and messaging backbone), MCP serve mode (protocol translation gateway), and OpenClaw node host mode. All modes enforce the L1/L2/L3 governance gauntlet and maintain local-first audit architecture.
 
 ```text
-services/g8eo/
-├── cmd/                         # Binary entry points
-│   ├── g8eo/                    # Main Operator binary (multi-mode)
-│   ├── chaos_tester/            # Chaos testing tool
-│   ├── exporter/                # Audit export tool
-│   └── uap-ping/                # UAP protocol ping utility
-│
-├── internal/                    # Private implementation (not exported)
-│   ├── certs/                   # Certificate management and trust bundle loading
-│   ├── cli/                     # Platform CLI subcommands
-│   │   ├── api/                 # API client for Operator communication
-│   │   ├── auth/                # Authentication client
-│   │   ├── cmd/                 # CLI command handlers (platform, apps, auth, data, test, evals, security, setup, vars)
-│   │   ├── config/              # CLI configuration
-│   │   └── platform/            # Platform process management
-│   ├── cmd/                     # Stream command handling (subprocess, SSH)
-│   ├── config/                  # Configuration loading and validation
-│   ├── constants/               # Operator-specific constants (agents, API paths, auth, events)
-│   ├── contracts/               # Protocol contract tests
-│   ├── httpclient/              # HTTP client for outbound connections
-│   ├── interfaces/              # Interface definitions
-│   ├── marshaler/               # Envelope marshaling/unmarshaling
-│   ├── models/                  # Operator-specific data models
-│   ├── protocol/                # Protocol integration layer
-│   │   └── proto/               # Generated protobuf code (from protocol/proto/)
-│   ├── responder/               # Response handling
-│   ├── security/                # Cryptographic operations (Ed25519)
-│   ├── services/                # Core service layer
-│   │   ├── auth/                # Bootstrap service for device-link enrollment
-│   │   ├── execution/           # Command execution, file edit, fs operations
-│   │   ├── gateway/             # Gateway mode: platform persistence, PKI, auth, pub/sub broker
-│   │   ├── governance/          # L1/L2/L3 verification (TransactionVerifier, Tribunal, Actuator)
-│   │   ├── keystore/            # Platform-specific key storage (Darwin Keychain, Linux file backend)
-│   │   ├── mcp/                 # MCP gateway for protocol translation (MCP/A2A)
-│   │   ├── openclaw/            # OpenClaw node host service
-│   │   ├── pubsub/              # Pub/sub command channel, results streaming, loopback
-│   │   ├── sentinel/            # PII/secret scrubbing and output projection
-│   │   ├── sqliteutil/          # SQLite utilities and migrations
-│   │   ├── storage/             # Audit vault (SQLite+Git), ledger, local store, replay store
-│   │   ├── system/              # System operations (git resolution, port checking)
-│   │   └── vault/               # Vault operations (encryption, DEK management)
-│   └── testutil/                # Test utilities and fixtures
-│
-├── pkg/                         # Public packages
-│   └── uap/                     # Universal Access Protocol utilities
-│
-├── tests/                       # Integration and end-to-end tests
-│   ├── byo_client_test.go       # BYO client integration tests
-│   ├── mcp_gateway_test.go      # MCP gateway tests
-│   └── mcp_real_operator_test.go # Real Operator MCP tests
-│
-├── tools/                       # Vendored build tools and dependencies
-├── Makefile                     # Build targets
-└── go.mod                       # Go module definition
+cmd/                           # Binary entry points
+├── g8eo/                        # Main Operator binary (multi-mode)
+├── chaos_tester/                # Chaos testing tool
+├── exporter/                    # Audit export tool
+└── uap-ping/                    # UAP protocol ping utility
+
+internal/                       # Private implementation (not exported)
+├── certs/                      # Certificate management and trust bundle loading
+├── cli/                        # Platform CLI subcommands
+│   ├── api/                    # API client for Operator communication
+│   ├── auth/                   # Authentication client
+│   ├── cmd/                    # CLI command handlers (platform, apps, auth, data, test, evals, security, setup, vars)
+│   ├── config/                 # CLI configuration
+│   └── platform/               # Platform process management
+├── cmd/                        # Stream command handling (subprocess, SSH)
+├── config/                     # Configuration loading and validation
+├── constants/                  # Operator-specific constants (agents, API paths, auth, events)
+├── contracts/                  # Protocol contract tests
+├── httpclient/                 # HTTP client for outbound connections
+├── interfaces/                 # Interface definitions
+├── marshaler/                  # Envelope marshaling/unmarshaling
+├── models/                     # Operator-specific data models
+├── protocol/                   # Protocol integration layer
+│   └── proto/                  # Generated protobuf code (from protocol/proto/)
+├── responder/                  # Response handling
+├── security/                   # Cryptographic operations (Ed25519)
+├── services/                   # Core service layer
+│   ├── auth/                   # Bootstrap service for device-link enrollment
+│   ├── execution/              # Command execution, file edit, fs operations
+│   ├── gateway/                # Gateway mode: platform persistence, PKI, auth, pub/sub broker
+│   ├── governance/             # L1/L2/L3 verification (TransactionVerifier, Tribunal, Actuator)
+│   ├── keystore/               # Platform-specific key storage (Darwin Keychain, Linux file backend)
+│   ├── mcp/                    # MCP gateway for protocol translation (MCP/A2A)
+│   ├── openclaw/               # OpenClaw node host service
+│   ├── pubsub/                 # Pub/sub command channel, results streaming, loopback
+│   ├── sentinel/               # PII/secret scrubbing and output projection
+│   ├── sqliteutil/             # SQLite utilities and migrations
+│   ├── storage/                # Audit vault (SQLite+Git), ledger, local store, replay store
+│   ├── system/                 # System operations (git resolution, port checking)
+│   └── vault/                  # Vault operations (encryption, DEK management)
+└── testutil/                   # Test utilities and fixtures
+
+pkg/                            # Public packages
+└── uap/                        # Universal Access Protocol utilities
+
+test/                           # Integration and end-to-end tests
+├── byo_client_test.go          # BYO client integration tests
+├── mcp_gateway_test.go         # MCP gateway tests
+└── mcp_real_operator_test.go  # Real Operator MCP tests
+
+Makefile                        # Build targets
+go.mod                          # Go module definition
 ```
 
 ## Core Service Layer Breakdown
@@ -191,7 +189,7 @@ services/g8eo/
   - **CLI subcommands**: `platform`, `apps`, `auth`, `data`, `test`, `evals`, `security`, `setup`, `vars`
   - **Vault management**: `--rekey-vault`, `--verify-vault`, `--reset-vault`
   - **Stream mode**: `stream` subprocess for approval UI
-- **Output**: `build/linux-amd64/g8e` (binary name is `g8e`, not `g8e.operator`)
+- **Output**: `bin/g8e` (binary name is `g8e`, not `g8e.operator`)
 
 ### Supporting Tools
 - **chaos_tester**: Chaos and fault injection testing

@@ -9,7 +9,7 @@ The `g8e` CLI is the primary interface for platform management.
 ```
 g8e is a zero-trust execution substrate for agentic infrastructure.
 The CLI manages the Governance Gateway (g8eg), Governed Operator (g8eo),
-and optional application-layer adapters (g8ee).
+and optional application-layer adapters.
 
 Usage:
   g8e [command]

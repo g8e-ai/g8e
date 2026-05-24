@@ -18,8 +18,8 @@ evals/
 │   ├── harness.py                # Task / Response / Score / SUTConfig
 │   ├── transport.py              # AuthContext: mTLS + cookie + headers
 │   ├── sut/
-│   │   ├── g8ee_chat.py          # G8eeChatSUT - drives /api/internal/chat
-│   │   └── wire.py               # Typed SSE wire envelopes (parity with g8ee)
+│   │   ├── chat_sut.py           # ChatSUT - drives /api/internal/chat
+│   │   └── wire.py               # Typed SSE wire envelopes (parity with agentic ensembles)
 │   ├── agent_trail_renderer.py   # Live per-event CLI rendering
 │   ├── receipts/
 │   │   ├── collector.py          # Poll Operator /api/audit/receipts by tx_id
@@ -36,8 +36,8 @@ evals/
 
 ## Per-Task Data Flow
 
-1. `G8eeChatSUT.get_answer(task)` snapshots the Operator's SSE cursor (`GET /api/internal/sse/events?since_id=0`) so only events from this turn are consumed.
-2. SUT POSTs `/api/internal/chat` on g8ee with `resource_creation.create_case=true` and per-role provider/model/api-key overrides from `SUTConfig`. g8ee creates a fresh case+investigation and runs the chat pipeline as a background task.
+1. `ChatSUT.get_answer(task)` snapshots the Operator's SSE cursor (`GET /api/internal/sse/events?since_id=0`) so only events from this turn are consumed.
+2. SUT POSTs `/api/internal/chat` on the agentic ensemble with `resource_creation.create_case=true` and per-role provider/model/api-key overrides from `SUTConfig`. The ensemble creates a fresh case+investigation and runs the chat pipeline as a background task.
 3. SUT polls `GET /api/internal/sse/events?since_id=<cursor>` every `poll_interval_s` (default 0.25s), accumulating `AgentTrailEvent` rows filtered by `investigation_id` until a terminal event or `idle_timeout_s`.
 4. `text.chunk` payloads concatenate into the final `answer` string.
 5. The trail is scanned for `g8e.v1.ai.governance.Actuator.receipt.signed`. If present, its `transaction_hash` becomes the Gateway `transaction_id` and `ReceiptCollector` polls `/api/audit/receipts?tx_id=...` for the signed `ActionReceipt`.
@@ -47,7 +47,7 @@ evals/
 
 ## Receipt Semantics
 
-The Operator's audit vault keys ActionReceipts by **UAP envelope `transaction_hash`**, not by g8ee `investigation_id`.
+The Operator's audit vault keys ActionReceipts by **UAP envelope `transaction_hash`**, not by agentic ensemble `investigation_id`.
 
 | Outcome | `transaction_id` | `binding` |
 |---|---|---|
@@ -56,7 +56,7 @@ The Operator's audit vault keys ActionReceipts by **UAP envelope `transaction_ha
 | Pipeline failed (`iteration.failed`, dead-lettered) | Gateway hash if any | `UNBOUND` |
 | Idle timeout, no terminal event | Gateway hash if any | `UNBOUND` |
 
-Regression coverage: `evals/tests/test_g8ee_chat_sut.py` pins `_extract_Gateway_transaction_id` so investigation IDs are never promoted to Gateway transaction IDs.
+Regression coverage: `evals/tests/test_chat_sut.py` pins `_extract_Gateway_transaction_id` so investigation IDs are never promoted to Gateway transaction IDs.
 
 ---
 
@@ -64,7 +64,7 @@ Regression coverage: `evals/tests/test_g8ee_chat_sut.py` pins `_extract_Gateway_
 
 `g8e_evals.receipts.verify.verify_receipt_signature(receipt, Actuator_pub)` performs offline Ed25519 verification:
 
-- Loads the Actuator public key from `${G8E_PKI_DIR:-.g8e/pki}/Actuator_pub.pem` (exported by Listen Mode startup in `services/g8eo/cmd/g8eo/main.go`).
+- Loads the Actuator public key from `${G8E_PKI_DIR:-.g8e/pki}/Actuator_pub.pem` (exported by Listen Mode startup in `cmd/g8eo/main.go`).
 - Verifies the signature over `transaction_hash + "|true"` with the receipt's declared `key_id` matching the Actuator key id.
 
 Inline verification runs during `bench`. To re-verify a saved report directory offline:
@@ -79,12 +79,12 @@ Inline verification runs during `bench`. To re-verify a saved report directory o
 
 The harness is fail-closed without canonical mTLS + session credentials:
 
-1. `./g8e platform start` - Operator + g8ee.
+1. `./g8e platform start` - Operator.
 2. `./g8e login` - mints client cert/key, captures session id, exports the env vars the evals harness uses:
    - `G8E_OPERATOR_SESSION_ID`, `G8E_USER_ID`
    - `G8E_CLI_CERT`, `G8E_CLI_KEY`, `G8E_TRUST_BUNDLE`
-   - `G8E_G8EE_URL`, `G8E_OPERATOR_URL`, `G8E_PKI_DIR`
-3. **LLM API keys** must be available to g8ee for any provider you select. The chat request body forwards `llm_<role>_provider`, `llm_<role>_model`, `llm_<role>_api_key`, and `llm_<role>_endpoint` for `primary`, `assistant`, and `lite`. The CLI performs a pre-flight check against `GET /api/internal/settings/user`; missing keys abort the run before any tasks post.
+   - `G8E_APP_URL`, `G8E_OPERATOR_URL`, `G8E_PKI_DIR`
+3. **LLM API keys** must be available to the agentic ensemble for any provider you select. The chat request body forwards `llm_<role>_provider`, `llm_<role>_model`, `llm_<role>_api_key`, and `llm_<role>_endpoint` for `primary`, `assistant`, and `lite`. The CLI performs a pre-flight check against `GET /api/internal/settings/user`; missing keys abort the run before any tasks post.
 
 ---
 

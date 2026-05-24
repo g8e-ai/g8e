@@ -30,7 +30,7 @@ jobs:
       if: matrix.language == 'go'
       uses: actions/setup-go@v6
       with:
-        go-version-file: services/g8eo/go.mod
+        go-version-file: go.mod
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
@@ -51,13 +51,8 @@ jobs:
     - name: Build Go
       if: matrix.language == 'go'
       run: |
-        cd services/g8eo
         make build
         go test -run=^$ ./...
-        cd tools
-        go build ./...
-        cd ../../../protocol
-        go build ./...
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4

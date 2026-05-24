@@ -66,8 +66,8 @@ protocol/
 └── workload_identity.go         # Workload identity utilities
 
 # Generated outputs (not in protocol/)
-services/g8eo/internal/protocol/proto/  # Generated Go protobuf code
-services/g8eo/protocol/python/g8e_protocol/  # Generated Python constants
+protocol/proto/  # Generated Go protobuf code
+protocol/python/g8e_protocol/  # Generated Python constants
 docs/reference/api/                 # Generated API documentation
 ```
 
@@ -123,9 +123,9 @@ docs/reference/api/                 # Generated API documentation
 ### `buf.gen.yaml` (root)
 - **Purpose**: Buf generation configuration
 - **Plugins**:
-  - `protoc-gen-go` (local): Generates Go code to `services/g8eo/internal/protocol/proto/`
+  - `protoc-gen-go` (local): Generates Go code to `protocol/proto/`
   - `protoc-gen-doc` (local): Generates Markdown documentation to `docs/reference/api/`
-- **Note**: Python constants are generated separately via Go exporter in `services/g8eo/cmd/exporter`
+- **Note**: Python constants are generated separately via Go exporter in `cmd/exporter`
 
 ## Governance Constants (`constants/`)
 
@@ -165,7 +165,7 @@ docs/reference/api/                 # Generated API documentation
 - **Contents**:
   - Gateway API paths
   - Operator API paths
-  - g8ee (Engine) API paths
+  - g8e-compatible agentic ensemble API paths
   - Internal admin paths
   - Path constants with Go and Python enum generation
 
@@ -229,7 +229,7 @@ docs/reference/api/                 # Generated API documentation
 
 ## Generated Python Bindings
 
-### Location: `services/g8eo/protocol/python/g8e_protocol/`
+### Location: `protocol/python/g8e_protocol/`
 - **Purpose**: Python package for protocol constant consumption
 - **Contents**:
   - `channels.py` - Pub/sub channel constants
@@ -244,13 +244,13 @@ docs/reference/api/                 # Generated API documentation
   - `senders.py` - Sender identifier constants
   - `status.py` - Status code constants
   - `generated_paths.py` - Generated path mappings
-- **Generation**: Exported from Go constants via `services/g8eo/cmd/exporter`
-- **Usage**: Imported by g8ee and other Python services
+- **Generation**: Exported from Go constants via `cmd/exporter`
+- **Usage**: Imported by g8e-compatible agentic ensembles and other Python services
 
 ### Note on Protobuf Python Generation
 - Python protobuf code is NOT currently generated from .proto files
 - Python services use JSON wire format (protojson) directly
-- Only Go protobuf code is generated to `services/g8eo/internal/protocol/proto/`
+- Only Go protobuf code is generated to `protocol/proto/`
 
 ## Test Fixtures (`test-fixtures/`)
 - **Purpose**: Canonical test data for protocol compliance
@@ -283,16 +283,16 @@ make lint               # Run golangci-lint
 ### Generation Process
 1. **Protobuf Generation** (`make proto`):
    - Run `buf generate protocol/proto` with root `buf.gen.yaml`
-   - Generate Go code to `services/g8eo/internal/protocol/proto/`
+   - Generate Go code to `protocol/proto/`
    - Generate Markdown docs to `docs/reference/api/`
 
 2. **Constants Generation** (`make constants`):
-   - Run Go generator in `services/g8eo/internal/constants/generate_registry.go`
-   - Export constants to JSON and Python via `services/g8eo/cmd/exporter`
-   - Generate Python constants to `services/g8eo/protocol/python/g8e_protocol/`
+   - Run Go generator in `internal/constants/generate_registry.go`
+   - Export constants to JSON and Python via `cmd/exporter`
+   - Generate Python constants to `protocol/python/g8e_protocol/`
 
 3. **Validation**:
-   - Contract tests in `services/g8eo/internal/contracts/`
+   - Contract tests in `internal/contracts/`
    - Protocol tests via `make test` in protocol/ directory
 
 ## Protocol Invariants
@@ -342,16 +342,16 @@ Execution complete → ActionReceipt formation → execution metadata
 
 ### g8eo (Operator)
 - **Consumes**: `proto/` (Go generated code)
-- **Location**: `services/g8eo/internal/protocol/proto/`
+- **Location**: `protocol/proto/`
 - **Usage**: Envelope verification, receipt generation, audit events, MCP/A2A dispatch
 
 ### g8eg (Gateway)
 - **Consumes**: `proto/` (Go generated code)
-- **Location**: `services/g8eo/internal/protocol/proto/` (shared with g8eo)
+- **Location**: `protocol/proto/` (shared with g8eo)
 - **Usage**: Envelope admission, signature verification, state distribution, L2 consensus
 
-### g8ee (Engine)
-- **Consumes**: Python constants from `services/g8eo/protocol/python/g8e_protocol/`
+### g8e-Compatible Agentic Ensembles
+- **Consumes**: Python constants from `protocol/python/g8e_protocol/`
 - **Location**: Imported via `g8e_protocol` package
 - **Usage**: Event type constants, collection names, API paths, headers
 - **Wire Format**: Uses protojson directly (no Python protobuf generation)
@@ -366,7 +366,7 @@ Execution complete → ActionReceipt formation → execution metadata
 
 ### Protocol Contract Tests
 - **Purpose**: Verify protocol compliance across services
-- **Location**: `services/g8eo/internal/contracts/`
+- **Location**: `internal/contracts/`
 - **Coverage**:
   - Envelope serialization/deserialization
   - Signature verification
@@ -387,5 +387,5 @@ Execution complete → ActionReceipt formation → execution metadata
 5. **Generated code**: Go code generated from protobuf; Python constants exported from Go
 6. **No backward compatibility**: Breaking changes require migration (per user directive)
 7. **Local generation**: No BSR remote plugins; local-only generation
-8. **Python constants path**: Generated to `services/g8eo/protocol/python/g8e_protocol/`, not `protocol/python/`
+8. **Python constants path**: Generated to `protocol/python/g8e_protocol/`
 9. **Build orchestration**: Proto generation via root Makefile, not protocol/Makefile
