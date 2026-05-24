@@ -310,6 +310,10 @@ _ci-apps-g8ee:
 # =============================================================================
 # SERVICE DISPATCH
 # =============================================================================
+.PHONY: build
+build: build-g8eo build-cli
+	@echo "All builds complete."
+
 .PHONY: build-cli
 build-cli:
 	@echo "Building unified g8eo binary (includes CLI commands)..."

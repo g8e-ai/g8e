@@ -984,7 +984,7 @@ func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 
 		receipt, err := g.envProc.ProcessEnvelope(ctx, uapBytes)
 		if err != nil {
-			if errors.Is(err, governance.ErrL3ProofMissing) {
+			if errors.Is(err, governance.ErrL3ProofMissing) || errors.Is(err, governance.ErrL3ProofInvalid) {
 				userID := r.Header.Get(constants.HeaderUserID)
 				operatorID := r.Header.Get(constants.HeaderOperatorID)
 

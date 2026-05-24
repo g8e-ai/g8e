@@ -14,6 +14,7 @@
 package system
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -42,7 +43,11 @@ func TestResolveProjectRootConsistency(t *testing.T) {
 
 	// Test from scripts
 	t.Run("from scripts", func(t *testing.T) {
-		t.Chdir(filepath.Join(expectedRoot, "scripts"))
+		scriptsPath := filepath.Join(expectedRoot, "scripts")
+		if _, err := os.Stat(scriptsPath); os.IsNotExist(err) {
+			t.Skip("scripts directory does not exist, skipping test")
+		}
+		t.Chdir(scriptsPath)
 		rootFromScripts := ResolveProjectRoot()
 		if rootFromScripts != expectedRoot {
 			t.Errorf("ResolveProjectRoot from scripts: got %s, want %s", rootFromScripts, expectedRoot)
