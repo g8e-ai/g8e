@@ -79,6 +79,7 @@ nav:
       - Operator: concepts/operator.md
       - Governance Gateway: concepts/g8eg.md
       - Agentic Ensemble: concepts/g8ee.md
+      - g8e-Compatible Apps: concepts/g8e-compatible-apps.md
   - Guides:
       - Quickstart: quickstart/index.md
       - Air Gap: guides/air_gap.md
