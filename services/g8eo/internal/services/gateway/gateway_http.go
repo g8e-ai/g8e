@@ -1481,8 +1481,9 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	cert := r.TLS.PeerCertificates[0]
 	isAppWorkload := false
 	for _, uri := range cert.URIs {
-		// Check if this is an app workload (spiffe://g8e.local/app/*)
-		if strings.HasPrefix(uri.String(), "spiffe://"+protocol.TrustDomain+"/app/") {
+		// Only g8ee is authorized to push SSE events, as it acts as the centralized event broker
+		// between LLM generations and the end user.
+		if uri.String() == "spiffe://"+protocol.TrustDomain+"/app/g8ee" {
 			isAppWorkload = true
 			break
 		}
