@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/stretchr/testify/assert"
 )
@@ -121,5 +122,66 @@ func TestTerminalOutput(t *testing.T) {
 		assert.Equal(t, 2, len(output.LastLines))
 		assert.False(t, output.TruncatedStdout)
 		assert.Equal(t, 2, output.TotalOriginalLines)
+	})
+}
+
+func TestExecutionSystemInfo(t *testing.T) {
+	t.Run("creates valid system info", func(t *testing.T) {
+		info := &ExecutionSystemInfo{
+			Hostname:     "test-host",
+			OS:           constants.PlatformLinux,
+			Architecture: "amd64",
+			NumCPU:       4,
+			GoVersion:    "go1.21.0",
+			CurrentUser:  "testuser",
+			LoadAverage:  []float64{0.5, 0.6, 0.7},
+			Memory: &MemoryInfo{
+				MemTotal:     8589934592,
+				MemFree:      4294967296,
+				MemAvailable: 6442450944,
+				Buffers:      268435456,
+				Cached:       1073741824,
+				SwapTotal:    2147483648,
+				SwapFree:     2147483648,
+			},
+		}
+
+		assert.Equal(t, "test-host", info.Hostname)
+		assert.Equal(t, constants.PlatformLinux, info.OS)
+		assert.Equal(t, 4, info.NumCPU)
+		assert.Len(t, info.LoadAverage, 3)
+		assert.NotNil(t, info.Memory)
+	})
+}
+
+func TestMemoryInfo(t *testing.T) {
+	t.Run("creates valid memory info", func(t *testing.T) {
+		info := &MemoryInfo{
+			MemTotal:     8589934592,
+			MemFree:      4294967296,
+			MemAvailable: 6442450944,
+			Buffers:      268435456,
+			Cached:       1073741824,
+			SwapTotal:    2147483648,
+			SwapFree:     2147483648,
+		}
+
+		assert.Equal(t, int64(8589934592), info.MemTotal)
+		assert.Equal(t, int64(4294967296), info.MemFree)
+		assert.Equal(t, int64(6442450944), info.MemAvailable)
+	})
+}
+
+func TestExecutionEnvironmentInfo(t *testing.T) {
+	t.Run("creates valid environment info", func(t *testing.T) {
+		info := &ExecutionEnvironmentInfo{
+			ComponentName: constants.ComponentNameG8EO,
+			ProjectID:     "test-project",
+			MaxMemoryMB:   2048,
+		}
+
+		assert.Equal(t, constants.ComponentNameG8EO, info.ComponentName)
+		assert.Equal(t, "test-project", info.ProjectID)
+		assert.Equal(t, 2048, info.MaxMemoryMB)
 	})
 }
