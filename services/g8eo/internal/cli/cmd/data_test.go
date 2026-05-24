@@ -137,7 +137,7 @@ func TestDataDeviceLinksListCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
+		assert.Contains(t, err.Error(), "not authenticated")
 	})
 
 	t.Run("list fails without user-id or email", func(t *testing.T) {
@@ -348,7 +348,7 @@ func TestDataStoreCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
+		assert.Contains(t, err.Error(), "not authenticated")
 	})
 
 	t.Run("store fails without collection", func(t *testing.T) {
@@ -402,7 +402,7 @@ func TestDataAuditCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
+		assert.Contains(t, err.Error(), "not authenticated")
 	})
 
 	t.Run("audit fails without operator-session-id when env not set", func(t *testing.T) {
