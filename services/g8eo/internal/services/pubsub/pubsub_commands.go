@@ -99,7 +99,6 @@ type CommandServiceConfig struct {
 	PubSubClient      PubSubClient
 	ResultsService    ResultsPublisher
 	LocalStore        *storage.LocalStoreService
-	RawVault          *storage.RawVaultService
 	AuditVault        *storage.AuditVaultService
 	Ledger            *storage.LedgerService
 	HistoryHandler    *storage.HistoryHandler
@@ -152,17 +151,16 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	rs.commands = NewCommandService(c.Config, c.Logger, c.Execution)
 	rs.commands.results = c.ResultsService
 	rs.commands.sentinel = c.Sentinel
-	rs.commands.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Sentinel, c.RawVault, c.LocalStore)
+	rs.commands.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Sentinel, c.LocalStore)
 	rs.commands.auditVault = c.AuditVault
 	rs.commands.localStore = c.LocalStore
-	rs.commands.rawVault = c.RawVault
 	rs.commands.ledger = c.Ledger
 	rs.commands.historyHandler = c.HistoryHandler
 
 	rs.fileOps = NewFileOpsService(c.Config, c.Logger, c.FileEdit, client)
 	rs.fileOps.results = c.ResultsService
 	rs.fileOps.sentinel = c.Sentinel
-	rs.fileOps.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Sentinel, c.RawVault, c.LocalStore)
+	rs.fileOps.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Sentinel, c.LocalStore)
 	rs.fileOps.auditVault = c.AuditVault
 	rs.fileOps.ledger = c.Ledger
 
@@ -173,7 +171,6 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 	rs.history = NewHistoryService(c.Config, c.Logger, client)
 	rs.history.localStore = c.LocalStore
-	rs.history.rawVault = c.RawVault
 	rs.history.historyHandler = c.HistoryHandler
 
 	rs.mcpGateway = c.MCPGateway

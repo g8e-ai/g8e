@@ -21,7 +21,6 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
@@ -34,7 +33,6 @@ type HistoryService struct {
 	logger         *slog.Logger
 	client         PubSubClient
 	localStore     *storage.LocalStoreService
-	rawVault       *storage.RawVaultService
 	historyHandler *storage.HistoryHandler
 }
 
@@ -47,7 +45,7 @@ func NewHistoryService(cfg *config.Config, logger *slog.Logger, client PubSubCli
 	}
 }
 
-// HandleFetchLogsRequest processes a fetch logs request, routing to raw or scrubbed vault.
+// HandleFetchLogsRequest processes a fetch logs request from the consolidated execution vault.
 func (hs *HistoryService) HandleFetchLogsRequest(ctx context.Context, msg PubSubCommandMessage) {
 	var protoFetch operatorv1.FetchLogsRequested
 	if err := proto.Unmarshal(msg.Payload, &protoFetch); err != nil {
@@ -63,103 +61,49 @@ func (hs *HistoryService) HandleFetchLogsRequest(ctx context.Context, msg PubSub
 		return
 	}
 
-	vaultMode := constants.VaultMode(protoFetch.SentinelMode)
-	if vaultMode == "" {
-		vaultMode = constants.VaultModeRaw
-	}
+	hs.logger.Info("Fetch logs requested (Consolidated Execution Vault, via Protobuf)",
+		"execution_id", executionID)
 
-	hs.logger.Info("Fetch logs requested (Dual-Vault, via Protobuf)",
-		"execution_id", executionID,
-		"sentinel_mode", vaultMode)
-
-	if vaultMode == constants.VaultModeScrubbed {
-		hs.handleFetchFromScrubbedVault(ctx, msg, executionID)
-	} else {
-		hs.handleFetchFromRawVault(ctx, msg, executionID)
-	}
+	hs.handleFetchFromConsolidatedVault(ctx, msg, executionID)
 }
 
-func (hs *HistoryService) handleFetchFromRawVault(ctx context.Context, msg PubSubCommandMessage, executionID string) {
-	if hs.rawVault == nil || !hs.rawVault.IsEnabled() {
-		hs.logger.Warn("Raw vault not available, falling back to scrubbed vault")
-		hs.handleFetchFromScrubbedVault(ctx, msg, executionID)
-		return
-	}
-
-	record, err := hs.rawVault.GetRawExecution(executionID)
-	if err != nil {
-		hs.logger.Error("Failed to retrieve execution from raw vault", string(constants.ConnectionStateError), err)
-		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, fmt.Sprintf("failed to retrieve execution: %v", err))
-		return
-	}
-
-	if record == nil {
-		hs.logger.Warn("Execution not found in raw vault", "execution_id", executionID)
-		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "execution not found in raw vault")
-		return
-	}
-
-	hs.publishFetchLogsResultFromRaw(ctx, msg, record)
-}
-
-func (hs *HistoryService) handleFetchFromScrubbedVault(ctx context.Context, msg PubSubCommandMessage, executionID string) {
+func (hs *HistoryService) handleFetchFromConsolidatedVault(ctx context.Context, msg PubSubCommandMessage, executionID string) {
 	if hs.localStore == nil || !hs.localStore.IsEnabled() {
-		hs.logger.Warn("Scrubbed vault not available for fetch logs request")
-		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "scrubbed vault is not enabled on this operator")
+		hs.logger.Warn("Consolidated execution vault not available")
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "consolidated execution vault is not enabled on this operator")
 		return
 	}
 
 	record, err := hs.localStore.GetExecution(executionID)
 	if err != nil {
-		hs.logger.Error("Failed to retrieve execution from scrubbed vault", string(constants.ConnectionStateError), err)
+		hs.logger.Error("Failed to retrieve execution from consolidated vault", string(constants.ConnectionStateError), err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, fmt.Sprintf("failed to retrieve execution: %v", err))
 		return
 	}
 
 	if record == nil {
-		hs.logger.Warn("Execution not found in scrubbed vault", "execution_id", executionID)
-		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "execution not found in scrubbed vault")
+		hs.logger.Warn("Execution not found in consolidated vault", "execution_id", executionID)
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "execution not found in consolidated vault")
 		return
 	}
 
 	hs.publishFetchLogsResult(ctx, msg, record)
 }
 
-func (hs *HistoryService) publishFetchLogsResultFromRaw(ctx context.Context, msg PubSubCommandMessage, record *storage.RawExecutionRecord) {
-	publishLFAATypedResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Completed,
-		&operatorv1.FetchLogsResult{
-			ExecutionId:  record.ID,
-			Command:      record.Command,
-			ReturnCode:   int32(*record.ExitCode), //nolint:gosec // exit codes are 0-255
-			DurationMs:   record.DurationMs,
-			Stdout:       string(record.StdoutCompressed),
-			Stderr:       string(record.StderrCompressed),
-			StdoutSize:   int32(record.StdoutSize), //nolint:gosec // bounded by storage limits
-			StderrSize:   int32(record.StderrSize), //nolint:gosec // bounded by storage limits
-			Timestamp:    record.TimestampUTC.Format(time.RFC3339Nano),
-			SentinelMode: marshaler.Status(constants.VaultModeRaw),
-		})
-	hs.logger.Info("Fetch logs result transmitted (Raw Vault)",
-		"execution_id", record.ID,
-		"stdout_size", record.StdoutSize,
-		"stderr_size", record.StderrSize)
-}
-
 func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg PubSubCommandMessage, record *storage.ExecutionRecord) {
 	publishLFAATypedResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Completed,
 		&operatorv1.FetchLogsResult{
-			ExecutionId:  record.ID,
-			Command:      record.Command,
-			ReturnCode:   int32(*record.ExitCode), //nolint:gosec // exit codes are 0-255
-			DurationMs:   record.DurationMs,
-			Stdout:       string(record.StdoutCompressed),
-			Stderr:       string(record.StderrCompressed),
-			StdoutSize:   int32(record.StdoutSize), //nolint:gosec // bounded by storage limits
-			StderrSize:   int32(record.StderrSize), //nolint:gosec // bounded by storage limits
-			Timestamp:    record.TimestampUTC.Format(time.RFC3339Nano),
-			SentinelMode: marshaler.Status(constants.VaultModeScrubbed),
+			ExecutionId: record.ID,
+			Command:     record.Command,
+			ReturnCode:  int32(*record.ExitCode), //nolint:gosec // exit codes are 0-255
+			DurationMs:  record.DurationMs,
+			Stdout:      string(record.StdoutCompressed),
+			Stderr:      string(record.StderrCompressed),
+			StdoutSize:  int32(record.StdoutSize), //nolint:gosec // bounded by storage limits
+			StderrSize:  int32(record.StderrSize), //nolint:gosec // bounded by storage limits
+			Timestamp:   record.TimestampUTC.Format(time.RFC3339Nano),
 		})
-	hs.logger.Info("Fetch logs result transmitted",
+	hs.logger.Info("Fetch logs result transmitted (Consolidated Execution Vault)",
 		"execution_id", record.ID,
 		"stdout_size", record.StdoutSize,
 		"stderr_size", record.StderrSize)

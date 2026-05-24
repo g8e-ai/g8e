@@ -45,7 +45,6 @@ type G8eoService struct {
 	pubSubCommands *pubsub.PubSubCommandService
 	pubSubResults  *pubsub.PubSubResultsService
 	localStore     *storage.LocalStoreService
-	rawVault       *storage.RawVaultService
 	gatewayDB      *gateway.GatewayDBService
 
 	pubSubClient pubsub.PubSubClient
@@ -160,30 +159,14 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		PruneIntervalMinutes: 60,
 		Enabled:              true,
 	}
-	vs.localStore, err = storage.NewLocalStoreService(localStoreConfig, vs.logger, vs.secretManager.GetKeystore())
+	vs.localStore, err = storage.NewLocalStoreService(localStoreConfig, vs.logger, nil)
 	if err != nil {
 		return fmt.Errorf("failed to initialize local store (required for replay protection): %w", err)
 	}
 	if vs.localStore == nil {
 		return fmt.Errorf("local store is required but was not initialized")
 	}
-	vs.logger.Info("Local store initialized (AI-accessible, encryption enabled)")
-
-	rawVaultConfig := &storage.RawVaultConfig{
-		DBPath:               filepath.Join(vs.config.WorkDir, ".g8e", "raw_vault.db"),
-		MaxDBSizeMB:          2048,
-		RetentionDays:        30,
-		PruneIntervalMinutes: 60,
-		Enabled:              true,
-	}
-	vs.rawVault, err = storage.NewRawVaultService(rawVaultConfig, vs.logger)
-	if err != nil {
-		return fmt.Errorf("failed to initialize raw vault: %w", err)
-	}
-	if vs.rawVault == nil {
-		return fmt.Errorf("raw vault is required but was not initialized")
-	}
-	vs.logger.Info("Raw vault initialized (customer data store)")
+	vs.logger.Info("Local store initialized (consolidated execution vault, encryption enabled)")
 
 	vs.logger.Info("Initializing Local-First Audit Architecture (LFAA)...")
 
@@ -294,7 +277,6 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		PubSubClient:       vs.pubSubClient,
 		ResultsService:     vs.pubSubResults,
 		LocalStore:         vs.localStore,
-		RawVault:           vs.rawVault,
 		AuditVault:         vs.auditVault,
 		Ledger:             vs.ledger,
 		HistoryHandler:     vs.historyHandler,
@@ -392,12 +374,6 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 	if vs.localStore != nil {
 		if err := vs.localStore.Close(); err != nil {
 			vs.logger.Error("Failed to close local store", string(constants.ConnectionStateError), err)
-		}
-	}
-
-	if vs.rawVault != nil {
-		if err := vs.rawVault.Close(); err != nil {
-			vs.logger.Error("Failed to close raw vault", string(constants.ConnectionStateError), err)
 		}
 	}
 

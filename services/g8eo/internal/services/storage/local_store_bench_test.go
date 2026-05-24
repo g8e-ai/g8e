@@ -47,7 +47,7 @@ func BenchmarkLocalStore_Streaming(b *testing.B) {
 	config.DBPath = filepath.Join(tempDir, "bench_streaming.db")
 	config.Enabled = true
 
-	ls, err := NewLocalStoreService(config, logger, ks)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	if err != nil {
 		b.Fatalf("Failed to create local store: %v", err)
 	}
@@ -137,7 +137,7 @@ func BenchmarkLocalStore_Streaming_Parallel(b *testing.B) {
 	config.DBPath = filepath.Join(tempDir, "bench_streaming_parallel.db")
 	config.Enabled = true
 
-	ls, err := NewLocalStoreService(config, logger, ks)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	if err != nil {
 		b.Fatalf("Failed to create local store: %v", err)
 	}

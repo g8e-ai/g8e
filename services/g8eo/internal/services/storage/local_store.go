@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/keystore"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/vault"
 )
 
 // LocalStoreConfig holds configuration for the local storage service.
@@ -84,18 +84,21 @@ type FileDiffRecord struct {
 }
 
 // LocalStoreService provides local SQLite storage for command execution results.
+// This is the consolidated execution vault - all data encrypted at rest when configured.
+// Customer read path: decrypt → return full data
+// AI read path: decrypt → Sentinel scrub → return redacted data
 type LocalStoreService struct {
-	db       *sqliteutil.DB
-	config   *LocalStoreConfig
-	logger   *slog.Logger
-	pruner   *sqliteutil.Pruner
-	keystore *keystore.Keystore
+	db     *sqliteutil.DB
+	config *LocalStoreConfig
+	logger *slog.Logger
+	pruner *sqliteutil.Pruner
+	vault  *vault.Vault
 
 	wg sync.WaitGroup
 }
 
 // NewLocalStoreService creates a new local storage service.
-func NewLocalStoreService(config *LocalStoreConfig, logger *slog.Logger, ks *keystore.Keystore) (*LocalStoreService, error) {
+func NewLocalStoreService(config *LocalStoreConfig, logger *slog.Logger, v *vault.Vault) (*LocalStoreService, error) {
 	if config == nil {
 		config = DefaultLocalStoreConfig()
 	}
@@ -117,17 +120,20 @@ func NewLocalStoreService(config *LocalStoreConfig, logger *slog.Logger, ks *key
 	}
 
 	ls := &LocalStoreService{
-		config:   config,
-		logger:   logger,
-		db:       db,
-		keystore: ks,
+		config: config,
+		logger: logger,
+		db:     db,
+		vault:  v,
 	}
 
 	interval := time.Duration(config.PruneIntervalMinutes) * time.Minute
 	ls.pruner = sqliteutil.NewPruner(db, logger, interval, localStorePrune(config))
 	ls.pruner.Start()
 
-	ls.logger.Info("Local storage initialized", "db_path", config.DBPath, "encryption_enabled", ks != nil)
+	encryptionEnabled := ls.vault != nil && ls.vault.IsUnlocked()
+	ls.logger.Info("Local storage initialized (consolidated execution vault)",
+		"db_path", config.DBPath,
+		"encryption_enabled", encryptionEnabled)
 	return ls, nil
 }
 
@@ -219,6 +225,7 @@ var localStoreMigrations = []sqliteutil.Migration{
 }
 
 // StoreExecution stores a command execution result locally.
+// Content is encrypted at rest if an encryption vault is configured.
 func (ls *LocalStoreService) StoreExecution(record *ExecutionRecord) error {
 	if ls == nil || ls.db == nil {
 		return nil
@@ -229,7 +236,11 @@ func (ls *LocalStoreService) StoreExecution(record *ExecutionRecord) error {
 	var stdoutHash, stderrHash string
 
 	if len(record.StdoutCompressed) > 0 {
-		compressed, err := sqliteutil.Compress(record.StdoutCompressed)
+		stdoutBytes, err := ls.encryptContent(string(record.StdoutCompressed))
+		if err != nil {
+			return fmt.Errorf("failed to encrypt stdout: %w", err)
+		}
+		compressed, err := sqliteutil.Compress(stdoutBytes)
 		if err != nil {
 			return fmt.Errorf("failed to compress stdout: %w", err)
 		}
@@ -238,7 +249,11 @@ func (ls *LocalStoreService) StoreExecution(record *ExecutionRecord) error {
 	}
 
 	if len(record.StderrCompressed) > 0 {
-		compressed, err := sqliteutil.Compress(record.StderrCompressed)
+		stderrBytes, err := ls.encryptContent(string(record.StderrCompressed))
+		if err != nil {
+			return fmt.Errorf("failed to encrypt stderr: %w", err)
+		}
+		compressed, err := sqliteutil.Compress(stderrBytes)
 		if err != nil {
 			return fmt.Errorf("failed to compress stderr: %w", err)
 		}
@@ -352,7 +367,12 @@ func (ls *LocalStoreService) GetExecution(executionID string) (*ExecutionRecord,
 		if err != nil {
 			ls.logger.Warn("Failed to decompress stdout", string(constants.ConnectionStateError), err)
 		} else {
-			record.StdoutCompressed = decompressed
+			decrypted, err := ls.decryptContent(decompressed)
+			if err != nil {
+				ls.logger.Warn("Failed to decrypt stdout", string(constants.ConnectionStateError), err)
+			} else {
+				record.StdoutCompressed = []byte(decrypted)
+			}
 		}
 	}
 
@@ -361,7 +381,12 @@ func (ls *LocalStoreService) GetExecution(executionID string) (*ExecutionRecord,
 		if err != nil {
 			ls.logger.Warn("Failed to decompress stderr", string(constants.ConnectionStateError), err)
 		} else {
-			record.StderrCompressed = decompressed
+			decrypted, err := ls.decryptContent(decompressed)
+			if err != nil {
+				ls.logger.Warn("Failed to decrypt stderr", string(constants.ConnectionStateError), err)
+			} else {
+				record.StderrCompressed = []byte(decrypted)
+			}
 		}
 	}
 
@@ -475,13 +500,52 @@ func (ls *LocalStoreService) IsEnabled() bool {
 	return ls != nil && ls.db != nil
 }
 
+// IsEncryptionEnabled returns whether content encryption is enabled
+func (ls *LocalStoreService) IsEncryptionEnabled() bool {
+	return ls != nil && ls.vault != nil && ls.vault.IsUnlocked()
+}
+
+// encryptContent encrypts content if encryption is enabled, otherwise returns original
+func (ls *LocalStoreService) encryptContent(content string) ([]byte, error) {
+	if content == "" {
+		return nil, nil
+	}
+
+	if ls.vault != nil && ls.vault.IsUnlocked() {
+		encrypted, err := ls.vault.Encrypt([]byte(content))
+		if err != nil {
+			return nil, fmt.Errorf("failed to encrypt content: %w", err)
+		}
+		return encrypted, nil
+	}
+
+	return []byte(content), nil
+}
+
+// decryptContent decrypts content if encryption is enabled, otherwise returns original
+func (ls *LocalStoreService) decryptContent(data []byte) (string, error) {
+	if len(data) == 0 {
+		return "", nil
+	}
+
+	if ls.vault != nil && ls.vault.IsUnlocked() {
+		decrypted, err := ls.vault.Decrypt(data)
+		if err != nil {
+			return "", fmt.Errorf("failed to decrypt content: %w", err)
+		}
+		return string(decrypted), nil
+	}
+
+	return string(data), nil
+}
+
 // Wait blocks until all local store background workers and writes have finished.
 func (ls *LocalStoreService) Wait() {
 	ls.wg.Wait()
 }
 
 // KVSet sets a key-value pair with an optional TTL (in seconds).
-// If a keystore is configured, the value is encrypted at rest using AES-256-GCM.
+// If a vault is configured, the value is encrypted at rest using AES-256-GCM.
 func (ls *LocalStoreService) KVSet(key, value string, ttlSeconds int) error {
 	if ls == nil || ls.db == nil {
 		return nil
@@ -496,12 +560,12 @@ func (ls *LocalStoreService) KVSet(key, value string, ttlSeconds int) error {
 	}
 
 	valueToStore := value
-	if ls.keystore != nil {
-		encrypted, err := ls.keystore.Encrypt(value)
+	if ls.vault != nil && ls.vault.IsUnlocked() {
+		encrypted, err := ls.vault.Encrypt([]byte(value))
 		if err != nil {
 			return fmt.Errorf("failed to encrypt value for key %s: %w", key, err)
 		}
-		valueToStore = encrypted
+		valueToStore = string(encrypted)
 	}
 
 	query := `
@@ -515,7 +579,7 @@ func (ls *LocalStoreService) KVSet(key, value string, ttlSeconds int) error {
 }
 
 // KVGet retrieves a value by key, honoring TTL.
-// If a keystore is configured, the value is decrypted using AES-256-GCM.
+// If a vault is configured, the value is decrypted using AES-256-GCM.
 func (ls *LocalStoreService) KVGet(key string) (string, bool) {
 	if ls == nil || ls.db == nil {
 		return "", false
@@ -532,13 +596,13 @@ func (ls *LocalStoreService) KVGet(key string) (string, bool) {
 		return "", false
 	}
 
-	if ls.keystore != nil {
-		decrypted, err := ls.keystore.Decrypt(value)
+	if ls.vault != nil && ls.vault.IsUnlocked() {
+		decrypted, err := ls.vault.Decrypt([]byte(value))
 		if err != nil {
 			ls.logger.Error("Failed to decrypt value for key", "key", key, "error", err)
 			return "", false
 		}
-		return decrypted, true
+		return string(decrypted), true
 	}
 
 	return value, true
@@ -592,7 +656,8 @@ func (ls *LocalStoreService) KVDelete(key string) error {
 	return err
 }
 
-// StoreFileDiff stores a Sentinel-scrubbed file diff in the scrubbed vault.
+// StoreFileDiff stores a file diff in the consolidated execution vault.
+// Content is encrypted at rest if an encryption vault is configured.
 func (ls *LocalStoreService) StoreFileDiff(record *FileDiffRecord) error {
 	if ls == nil || ls.db == nil {
 		return nil
@@ -604,7 +669,11 @@ func (ls *LocalStoreService) StoreFileDiff(record *FileDiffRecord) error {
 	var diffHash string
 
 	if len(record.DiffCompressed) > 0 {
-		compressed, err := sqliteutil.Compress(record.DiffCompressed)
+		diffBytes, err := ls.encryptContent(string(record.DiffCompressed))
+		if err != nil {
+			return fmt.Errorf("failed to encrypt file diff: %w", err)
+		}
+		compressed, err := sqliteutil.Compress(diffBytes)
 		if err != nil {
 			return fmt.Errorf("failed to compress file diff: %w", err)
 		}
@@ -710,7 +779,12 @@ func (ls *LocalStoreService) GetFileDiff(diffID string) (*FileDiffRecord, error)
 		if err != nil {
 			ls.logger.Warn("Failed to decompress file diff", string(constants.ConnectionStateError), err)
 		} else {
-			record.DiffCompressed = decompressed
+			decrypted, err := ls.decryptContent(decompressed)
+			if err != nil {
+				ls.logger.Warn("Failed to decrypt file diff", string(constants.ConnectionStateError), err)
+			} else {
+				record.DiffCompressed = []byte(decrypted)
+			}
 		}
 	}
 
