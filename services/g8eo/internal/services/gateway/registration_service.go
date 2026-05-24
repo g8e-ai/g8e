@@ -28,6 +28,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
@@ -48,8 +49,6 @@ const (
 	deviceLinkStatusExpired        = constants.DeviceLinkStatusExpired
 	deviceLinkStatusExhausted      = constants.DeviceLinkStatusExhausted
 	lockTTL                        = 10 * time.Second
-	lockMaxRetries                 = 30
-	lockRetryDelay                 = 50 * time.Millisecond
 
 	// Session binding KV prefixes
 	sessionWebBindPrefix      = "g8e:session:web:"
@@ -66,16 +65,18 @@ type RegistrationService struct {
 	logger     *slog.Logger
 	userSvc    *UserService
 	sessionSvc *SessionService
+	cfg        *config.GatewayConfig
 }
 
 // NewRegistrationService creates a new RegistrationService.
-func NewRegistrationService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, sessionSvc *SessionService) *RegistrationService {
+func NewRegistrationService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, sessionSvc *SessionService, cfg *config.GatewayConfig) *RegistrationService {
 	return &RegistrationService{
 		db:         db,
 		pki:        pki,
 		logger:     logger,
 		userSvc:    userSvc,
 		sessionSvc: sessionSvc,
+		cfg:        cfg,
 	}
 }
 
@@ -199,7 +200,9 @@ func (s *RegistrationService) fingerprintSetCount(token string) (int, error) {
 // acquireLock attempts to acquire a distributed lock with retry.
 func (s *RegistrationService) acquireLock(lockKey string) (bool, error) {
 	lockValue := uuid.NewString()
-	for attempt := 0; attempt < lockMaxRetries; attempt++ {
+	maxRetries := s.cfg.LockMaxRetries
+	retryDelay := s.cfg.LockRetryDelay
+	for attempt := 0; attempt < maxRetries; attempt++ {
 		// Try to set the lock key if it doesn't exist
 		_, found := s.db.KVGet(lockKey)
 		if !found {
@@ -208,7 +211,7 @@ func (s *RegistrationService) acquireLock(lockKey string) (bool, error) {
 			}
 		}
 		// Wait with exponential backoff
-		backoff := lockRetryDelay * time.Duration(attempt+1)
+		backoff := retryDelay * time.Duration(attempt+1)
 		time.Sleep(backoff)
 	}
 	return false, nil

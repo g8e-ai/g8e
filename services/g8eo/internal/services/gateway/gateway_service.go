@@ -102,7 +102,7 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 		return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
 	}
 
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
 
 	// Initialize passkey service for L3 brokerage
 	passkeyCfg := &PasskeyConfig{
@@ -153,7 +153,7 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 	res := responder.New(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, res, cfg.Gateway.SecretsDir)
 	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
 
 	// Initialize passkey service for L3 brokerage (test configuration)
 	passkeyCfg := &PasskeyConfig{

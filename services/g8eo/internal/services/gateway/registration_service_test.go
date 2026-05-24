@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
@@ -69,7 +70,11 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 
 	userSvc := NewUserService(db, logger)
 	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
+	gwCfg := &config.GatewayConfig{
+		LockMaxRetries: 30,
+		LockRetryDelay: 50 * time.Millisecond,
+	}
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, gwCfg)
 
 	token := "dlk_test_token_12345678901234567890"
 	userID := "user-1"
@@ -475,7 +480,11 @@ func TestRegistrationService_DeviceLinks(t *testing.T) {
 	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
+	gwCfg := &config.GatewayConfig{
+		LockMaxRetries: 30,
+		LockRetryDelay: 50 * time.Millisecond,
+	}
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, gwCfg)
 
 	resp, err := reg.CreateDeviceLink(models.CreateDeviceLinkRequest{
 		UserID:         "user-1",
@@ -517,7 +526,11 @@ func TestRegistrationService_CreateDeviceLinkRejectsWrongOperatorOwner(t *testin
 	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
+	gwCfg := &config.GatewayConfig{
+		LockMaxRetries: 30,
+		LockRetryDelay: 50 * time.Millisecond,
+	}
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, gwCfg)
 	op := &models.OperatorDocumentGo{
 		ID:        "op-1",
 		UserID:    "other-user",
@@ -565,7 +578,11 @@ func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
 	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
+	gwCfg := &config.GatewayConfig{
+		LockMaxRetries: 30,
+		LockRetryDelay: 50 * time.Millisecond,
+	}
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, gwCfg)
 
 	userID := "user-1"
 	opID := "op-1"
@@ -619,7 +636,11 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
+	gwCfg := &config.GatewayConfig{
+		LockMaxRetries: 30,
+		LockRetryDelay: 50 * time.Millisecond,
+	}
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, gwCfg)
 
 	userID := "user-1"
 
@@ -667,7 +688,11 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
+	gwCfg := &config.GatewayConfig{
+		LockMaxRetries: 30,
+		LockRetryDelay: 50 * time.Millisecond,
+	}
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, gwCfg)
 
 	userID := "user-1"
 	opID := "op-terminate-1"
@@ -750,7 +775,11 @@ func TestRegistrationService_Binding(t *testing.T) {
 	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
+	gwCfg := &config.GatewayConfig{
+		LockMaxRetries: 30,
+		LockRetryDelay: 50 * time.Millisecond,
+	}
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, gwCfg)
 
 	userID := "user-1"
 	sessionID := "sess-1"
@@ -858,7 +887,11 @@ func TestRegistration_SessionDocuments(t *testing.T) {
 
 	userSvc := NewUserService(db, logger)
 	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
+	gwCfg := &config.GatewayConfig{
+		LockMaxRetries: 30,
+		LockRetryDelay: 50 * time.Millisecond,
+	}
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, gwCfg)
 
 	token := "dlk_session_docs_test_12345678901"
 	userID := "user-session-test"
