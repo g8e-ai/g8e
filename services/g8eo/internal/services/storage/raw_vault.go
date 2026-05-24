@@ -580,40 +580,39 @@ func (rv *RawVaultService) GetRawFileDiffsBySession(operatorSessionID string, li
 		LIMIT ?
 	`
 
-	rows, err := rv.db.Query(query, operatorSessionID, limit)
+	type rawFileDiffRow struct {
+		record       RawFileDiffRecord
+		timestampStr string
+	}
+
+	rows, err := sqliteutil.MaterializeRows(rv.db, query, []interface{}{operatorSessionID, limit}, func(r *sql.Rows) (rawFileDiffRow, error) {
+		var row rawFileDiffRow
+		err := r.Scan(
+			&row.record.ID,
+			&row.timestampStr,
+			&row.record.FilePath,
+			&row.record.Operation,
+			&row.record.LedgerHashBefore,
+			&row.record.LedgerHashAfter,
+			&row.record.DiffStat,
+			&row.record.DiffHash,
+			&row.record.DiffSize,
+			&row.record.OperatorSessionID,
+			&row.record.UserID,
+			&row.record.CaseID,
+			&row.record.OperatorID,
+		)
+		return row, err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to query raw file diffs: %w", err)
 	}
-	defer rows.Close()
 
 	var records []*RawFileDiffRecord
-	for rows.Next() {
-		var record RawFileDiffRecord
-		var timestampStr string
-
-		err := rows.Scan(
-			&record.ID,
-			&timestampStr,
-			&record.FilePath,
-			&record.Operation,
-			&record.LedgerHashBefore,
-			&record.LedgerHashAfter,
-			&record.DiffStat,
-			&record.DiffHash,
-			&record.DiffSize,
-			&record.OperatorSessionID,
-			&record.UserID,
-			&record.CaseID,
-			&record.OperatorID,
-		)
-		if err != nil {
-			rv.logger.Warn("Failed to scan raw file diff row", string(constants.ConnectionStateError), err)
-			continue
-		}
-
-		record.TimestampUTC, _ = sqliteutil.ParseTimestamp(timestampStr)
-		records = append(records, &record)
+	for _, row := range rows {
+		row.record.TimestampUTC, _ = sqliteutil.ParseTimestamp(row.timestampStr)
+		records = append(records, &row.record)
 	}
 
-	return records, rows.Err()
+	return records, nil
 }
