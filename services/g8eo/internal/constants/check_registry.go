@@ -42,16 +42,17 @@ func main() {
 	// Only check files that should be exported to JSON/Python
 	// Internal-only files (status.go, platform.go, agents.go, timestamp.go, kv_keys.go) are excluded
 	// as they contain Go-specific enums, platform details, persona data, or internal KV schemas not needed downstream
+	// Generated files (registry.go, status_generated.go, headers_generated.go) are the source of truth
 	trackedFiles := map[string]bool{
-		"collections.go":  true,
-		"events.go":       true,
-		"headers.go":      true,
-		"channels.go":     true,
-		"intents.go":      true,
-		"document_ids.go": true,
-		"senders.go":      true,
-		"prompts.go":      true,
-		"pubsub.go":       true,
+		"collections.go":       true,
+		"events.go":            true,
+		"headers_generated.go": true,
+		"channels.go":          true,
+		"intents.go":           true,
+		"document_ids.go":      true,
+		"senders.go":           true,
+		"prompts.go":           true,
+		"pubsub.go":            true,
 	}
 
 	// Parse tracked constant files
