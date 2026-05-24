@@ -145,7 +145,7 @@ lint-no-bare-session-id:
 	@echo "Checking for bare session_id regression..."
 	@if grep -rE "\bsession_id\b" . \
 		--exclude-dir={.git,vendor,node_modules,.g8e,.ruff_cache,.venv,dist,build,__pycache__,.local.dev,.github} \
-		--exclude={*.pb.go,*_pb2.py,*_pb2_grpc.py,*.pyc,Makefile,*.sh,*.json} \
+		--exclude={*.pb.go,*_pb2.py,*_pb2_grpc.py,*.pyc,Makefile,*.json} \
 		-I; then \
 		echo "Error: Bare 'session_id' found. Use 'operator_session_id', 'cli_session_id', or 'web_session_id' instead."; \
 		exit 1; \

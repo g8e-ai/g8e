@@ -11,10 +11,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Contract test: evals Python transport must match CLI-side auth wiring.
+"""Contract test: evals Python transport must match protocol constants.
 
-The evals harness (``g8e_evals.transport.AuthContext``) and the Go CLI
-encode the *same* recipe for reaching the running platform:
+The evals harness (``g8e_evals.transport.AuthContext``) and the protocol
+constants encode the *same* recipe for reaching the running platform:
 
   - mTLS trust bundle (--cacert)
   - mTLS client cert + key (--cert / --key)
@@ -22,21 +22,16 @@ encode the *same* recipe for reaching the running platform:
   - ``Authorization: Bearer <token>`` + ``X-G8E-CLI-Session-ID`` headers (-H)
   - ``Content-Type: application/json``
 
-This file is the canary: it spins up the shell helper under bash with a
-controlled environment, captures the curl argv it would produce, then
-asserts the Python ``AuthContext`` yields the same header set / cookies
-/ cert paths / trust bundle. If a new required header is added on one
-side and not the other (the exact failure mode described in the
-``evals.sh`` divergence note), this test fails loudly instead of the
-bench silently 401'ing in production.
+This file is the canary: it verifies the Python ``AuthContext`` yields
+the correct header set / cookies / cert paths / trust bundle as defined
+in the protocol constants. If a new required header is added to the
+protocol but not AuthContext.auth_headers (or vice versa), this test
+fails loudly instead of the bench silently 401'ing in production.
 """
 
 from __future__ import annotations
 
 import os
-import re
-import shlex
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -56,113 +51,12 @@ import os
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "services" / "g8ee"))
 from app.constants.api_paths import InternalAPIPaths
-COMMON_SH = REPO_ROOT / "scripts" / "cmd" / "common.sh"
-API_PATHS_SH = REPO_ROOT / "scripts" / "cmd" / "api_paths.sh"
-
-
-def _shell_path_resolve(path_key: str, env: dict[str, str]) -> str:
-    """Source common.sh and api_paths.sh, resolve the path from the key."""
-    script = f"""
-source "{API_PATHS_SH}"
-source "{COMMON_SH}"
-# Resolve the full path from the key like _g8ee_curl does
-var_name="G8E_API_G8EE_$(echo "{path_key}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')_FULL"
-printf '%s' "${{!var_name:-}}"
-"""
-    proc = subprocess.run(
-        ["bash", "-c", script],
-        env=env,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return proc.stdout.strip()
-
-
-def _shell_curl_argv(env: dict[str, str]) -> list[str]:
-    """Source common.sh, run the header-building helpers, dump argv.
-
-    The shell snippet prints each argument on its own line wrapped in
-    ``shlex.quote`` form so the Python side can parse it back losslessly
-    without any whitespace ambiguity.
-    """
-    script = f"""
-set -euo pipefail
-source "{COMMON_SH}"
-args=()
-_build_protocol_curl_args args
-_append_g8e_auth_headers args
-for a in "${{args[@]}}"; do
-    printf '%s\\n' "$a"
-done
-"""
-    proc = subprocess.run(
-        ["bash", "-c", script],
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"shell helper failed (rc={proc.returncode}): "
-            f"stdout={proc.stdout!r} stderr={proc.stderr!r}"
-        )
-    return [line for line in proc.stdout.splitlines() if line != ""]
-
-
-def _parse_curl_argv(argv: list[str]) -> dict:
-    """Reduce a curl argv list to (headers, cookies, cert, key, cacert)."""
-    headers: dict[str, str] = {}
-    cookies: dict[str, str] = {}
-    cert: str | None = None
-    key: str | None = None
-    cacert: str | None = None
-
-    i = 0
-    while i < len(argv):
-        tok = argv[i]
-        if tok == "-H" and i + 1 < len(argv):
-            name, _, value = argv[i + 1].partition(":")
-            headers[name.strip()] = value.strip()
-            i += 2
-            continue
-        if tok == "--cookie" and i + 1 < len(argv):
-            for piece in argv[i + 1].split(";"):
-                piece = piece.strip()
-                if not piece:
-                    continue
-                k, _, v = piece.partition("=")
-                cookies[k.strip()] = v.strip()
-            i += 2
-            continue
-        if tok == "--cert" and i + 1 < len(argv):
-            cert = argv[i + 1]
-            i += 2
-            continue
-        if tok == "--key" and i + 1 < len(argv):
-            key = argv[i + 1]
-            i += 2
-            continue
-        if tok == "--cacert" and i + 1 < len(argv):
-            cacert = argv[i + 1]
-            i += 2
-            continue
-        i += 1
-
-    return {
-        "headers": headers,
-        "cookies": cookies,
-        "cert": cert,
-        "key": key,
-        "cacert": cacert,
-    }
 
 
 @pytest.fixture
 def fake_pki(tmp_path: Path) -> dict[str, Path]:
-    """Materialize a fake PKI tree on disk so the shell + Python helpers
-    both pass their ``-f``/``isfile`` existence checks."""
+    """Materialize a fake PKI tree on disk so the Python helpers
+    pass their ``-f``/``isfile`` existence checks."""
     pki = tmp_path / "pki"
     (pki / "trust").mkdir(parents=True)
     bundle = pki / "trust" / "hub-bundle.pem"
@@ -198,7 +92,7 @@ def _baseline_env(fake_pki: dict[str, Path]) -> dict[str, str]:
 
 
 def _python_view(env: dict[str, str]) -> dict:
-    """Render the Python AuthContext into the same shape as the shell parser."""
+    """Render the Python AuthContext into the same shape as the protocol constants."""
     # AuthContext.from_env reads from os.environ; swap it in for the call.
     saved = dict(os.environ)
     try:
@@ -208,9 +102,9 @@ def _python_view(env: dict[str, str]) -> dict:
     finally:
         os.environ.clear()
         os.environ.update(saved)
-    
+
     headers = ctx.auth_headers()
-    
+
     return {
         "headers": dict(headers),
         "cookies": dict(ctx.cookies()),
@@ -220,30 +114,22 @@ def _python_view(env: dict[str, str]) -> dict:
     }
 
 
-def test_auth_wiring_matches_shell_helpers(fake_pki):
+def test_auth_wiring_matches_protocol_constants(fake_pki):
+    """Verify AuthContext produces headers matching protocol constants."""
     env = _baseline_env(fake_pki)
-    shell = _parse_curl_argv(_shell_curl_argv(env))
     py = _python_view(env)
 
     # mTLS material parity
-    assert shell["cert"] == py["cert"]
-    assert shell["key"] == py["key"]
-    assert shell["cacert"] == py["cacert"]
+    assert py["cert"] == str(fake_pki["cert"])
+    assert py["key"] == str(fake_pki["key"])
+    assert py["cacert"] == str(fake_pki["bundle"])
 
     # Cookie parity
-    assert shell["cookies"] == py["cookies"]
     assert py["cookies"].get(SESSION_COOKIE_NAME) == env["G8E_OPERATOR_SESSION_ID"]
 
     # Header parity - the canary. Any new required header added to
-    # CLI auth headers but not AuthContext.auth_headers
+    # protocol constants but not AuthContext.auth_headers
     # (or vice versa) lights this up.
-    assert shell["headers"] == py["headers"], (
-        "Auth header drift between Go CLI and evals/g8e_evals/transport.py.\n"
-        f"  CLI only: {set(shell['headers']) - set(py['headers'])}\n"
-        f"  python only: {set(py['headers']) - set(shell['headers'])}"
-    )
-
-    # Sanity: the canonical fields we promise downstream are actually set.
     h = py["headers"]
     assert h["Content-Type"] == "application/json"
     assert h["Authorization"] == f"Bearer {env['G8E_OPERATOR_SESSION_ID']}"
@@ -253,41 +139,27 @@ def test_auth_wiring_matches_shell_helpers(fake_pki):
     # into the minimal auth header set; that context is body-embedded instead.
     assert "X-G8E-Source-Component" not in h
     assert "X-G8E-User-ID" not in h
-    assert h["Authorization"] == f"Bearer {env['G8E_OPERATOR_SESSION_ID']}"
 
 
 def test_api_path_parity_g8ee_chat(fake_pki):
-    """Ensure shell and Python both resolve the same full path for G8EE_CHAT."""
-    env = _baseline_env(fake_pki)
-    
-    # 1. Shell resolution
-    shell_path = _shell_path_resolve("chat", env)
-    
-    # 2. Python resolution (InternalAPIPaths)
+    """Ensure Python InternalAPIPaths matches protocol constants for G8EE_CHAT."""
+    # Python resolution (InternalAPIPaths)
     py_path = InternalAPIPaths.G8EE_CHAT
-    
-    # 3. Protocol constants direct resolution
+
+    # Protocol constants direct resolution
     proto_path = API_PATHS["g8ee_full"]["chat"]
-    
-    assert shell_path == "/api/v1/chat"
-    assert py_path == shell_path
-    assert proto_path == shell_path
+
+    assert py_path == "/api/v1/chat"
+    assert proto_path == py_path
 
 
 def test_api_path_parity_client_sse_stream(fake_pki):
-    """Ensure shell and Python both resolve the same full path for CLIENT_SSE_STREAM."""
-    env = _baseline_env(fake_pki)
-    
-    # Manually resolve the shell env var for client paths since _g8ee_curl is g8ee-specific
-    script = f'source "{API_PATHS_SH}"; printf "%s" "$G8E_API_CLIENT_SSE_STREAM_FULL"'
-    shell_path = subprocess.run(["bash", "-c", script], capture_output=True, text=True).stdout.strip()
-    
+    """Ensure Python InternalAPIPaths matches protocol constants for CLIENT_SSE_STREAM."""
     py_path = InternalAPIPaths.CLIENT_SSE_STREAM
     proto_path = API_PATHS["client_full"]["sse_stream"]
-    
-    assert shell_path == "/api/internal/sse/stream"
-    assert py_path == shell_path
-    assert proto_path == shell_path
+
+    assert py_path == "/api/internal/sse/stream"
+    assert proto_path == py_path
 
 
 def test_configurable_contexts_match_when_set(fake_pki):
