@@ -239,10 +239,29 @@ func TestValidateDeviceToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			if got := ValidateDeviceToken(tt.token); got != tt.want {
 				t.Errorf("ValidateDeviceToken(%q) = %v, want %v", tt.token, got, tt.want)
 			}
 		})
 	}
+}
+
+func TestAuthenticateWithDeviceToken(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	t.Run("invalid token format", func(t *testing.T) {
+		t.Parallel()
+		_, err := AuthenticateWithDeviceToken("bad-token", "localhost", logger, "")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid device token format")
+	})
+
+	t.Run("valid format but server unreachable", func(t *testing.T) {
+		t.Parallel()
+		validToken := "dlk_abcdefghijklmnopqrstuvwxyz012345"
+		_, err := AuthenticateWithDeviceToken(validToken, "localhost:9999", logger, "")
+		assert.Error(t, err)
+	})
 }

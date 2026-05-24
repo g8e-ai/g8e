@@ -114,6 +114,314 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *uap.UA
 	return env
 }
 
+func TestPubSubCommandService_handleCommandPayload(t *testing.T) {
+	t.Run("rejects oversized payload", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		largePayload := make([]byte, MaxPayloadSize+1)
+		f.Svc.handleCommandPayload(largePayload)
+		// Should log error and return without panic
+	})
+
+	t.Run("rejects non-JSON payload", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		binaryPayload := []byte{0x00, 0x01, 0x02}
+		f.Svc.handleCommandPayload(binaryPayload)
+		// Should log error and return without panic
+	})
+}
+
+func TestPubSubCommandService_handleUAPEnvelope(t *testing.T) {
+	t.Run("rejects envelope with missing payload", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		env := &uap.UAPEnvelope{
+			ProtocolVersion: "1.0",
+			Timestamp:       timestamppb.Now(),
+			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			ActionType:      string(constants.ActionTypeFsList),
+			TargetResource:  "localhost",
+			Payload:         nil,
+			StateMerkleRoot: "test-state-root",
+			Nonce:           "nonce-1",
+		}
+		f.Svc.handleUAPEnvelope(env)
+		// Should log error and return without panic
+	})
+
+	t.Run("rejects when Actuator missing", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		svc, err := NewPubSubCommandService(CommandServiceConfig{
+			Config:            cfg,
+			Logger:            testutil.NewTestLogger(),
+			PubSubClient:      NewMockOperatorPubSubClient(),
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+			SignerStore:       &governance.SimpleSignerStore{Signers: map[string]ed25519.PublicKey{}},
+		})
+		require.NoError(t, err)
+		svc.Actuator = nil
+
+		req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
+		payload, _ := proto.Marshal(req)
+		env := &uap.UAPEnvelope{
+			ProtocolVersion: "1.0",
+			Timestamp:       timestamppb.Now(),
+			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			ActionType:      string(constants.ActionTypeFsList),
+			TargetResource:  "localhost",
+			Payload:         payload,
+			StateMerkleRoot: "test-state-root",
+			Nonce:           "nonce-1",
+		}
+		svc.handleUAPEnvelope(env)
+		// Should log error and return without panic
+	})
+}
+
+func TestPubSubCommandService_dispatchCommand(t *testing.T) {
+	t.Run("warns on unknown event type", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		msg := PubSubCommandMessage{
+			EventType: "UNKNOWN_EVENT_TYPE",
+			ID:        "msg-1",
+		}
+		f.Svc.dispatchCommand(msg)
+		// Should log warning and return without panic
+	})
+}
+
+func TestPubSubCommandService_ExecuteVerifiedTransaction(t *testing.T) {
+	t.Parallel()
+	f := newPubsubFixture(t)
+
+	t.Run("rejects invalid cmdMsg type", func(t *testing.T) {
+		t.Parallel()
+		_, err := f.Svc.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Command.Requested, "invalid type")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid cmdMsg type")
+	})
+
+	t.Run("rejects when no handler registered", func(t *testing.T) {
+		t.Parallel()
+		msg := PubSubCommandMessage{
+			EventType: "NONEXISTENT_EVENT",
+			ID:        "msg-1",
+		}
+		_, err := f.Svc.ExecuteVerifiedTransaction(context.Background(), constants.EventType(msg.EventType), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no handler for event type")
+	})
+}
+
+func TestPubSubCommandService_handleMcpCallRequestSync(t *testing.T) {
+	t.Parallel()
+	f := newPubsubFixture(t)
+
+	t.Run("rejects when MCP gateway not configured", func(t *testing.T) {
+		t.Parallel()
+		f.Svc.mcpGateway = nil
+		msg := PubSubCommandMessage{
+			EventType: constants.Event.Operator.Mcp.CallRequested,
+			ID:        "msg-1",
+			Payload:   mustMarshalJSON(t, map[string]interface{}{"tool_name": "test"}),
+		}
+		_, err := f.Svc.handleMcpCallRequestSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "MCP gateway not configured")
+	})
+}
+
+func TestPubSubCommandService_handleA2aCallRequestSync(t *testing.T) {
+	t.Parallel()
+	f := newPubsubFixture(t)
+
+	t.Run("rejects when A2A gateway not configured", func(t *testing.T) {
+		t.Parallel()
+		f.Svc.mcpGateway = nil
+		msg := PubSubCommandMessage{
+			EventType: constants.Event.Operator.A2a.CallRequested,
+			ID:        "msg-1",
+			Payload:   mustMarshalJSON(t, map[string]interface{}{"skill_name": "test"}),
+		}
+		_, err := f.Svc.handleA2aCallRequestSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "A2A gateway not configured")
+	})
+
+	t.Run("rejects unmarshal error", func(t *testing.T) {
+		t.Parallel()
+		msg := PubSubCommandMessage{
+			EventType: constants.Event.Operator.A2a.CallRequested,
+			ID:        "msg-1",
+			Payload:   []byte("invalid json"),
+		}
+		_, err := f.Svc.handleA2aCallRequestSync(context.Background(), msg)
+		require.Error(t, err)
+	})
+}
+
+func TestPubSubCommandService_handleAppInvestigationCreatedSync(t *testing.T) {
+	t.Run("rejects when Actuator not configured", func(t *testing.T) {
+		f := newPubsubFixture(t)
+		f.Svc.Actuator = nil
+		msg := PubSubCommandMessage{
+			EventType: constants.EventAppInvestigationCreated,
+			ID:        "msg-1",
+			Payload:   mustMarshalJSON(t, map[string]string{"test": "data"}),
+		}
+		_, err := f.Svc.handleAppInvestigationCreatedSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Actuator or AuditStore not configured")
+	})
+
+	t.Run("rejects when AuditStore not configured", func(t *testing.T) {
+		f := newPubsubFixture(t)
+		f.Svc.Actuator = &governance.Actuator{}
+		f.Svc.Actuator.AuditStore = nil
+		msg := PubSubCommandMessage{
+			EventType: constants.EventAppInvestigationCreated,
+			ID:        "msg-1",
+			Payload:   mustMarshalJSON(t, map[string]string{"test": "data"}),
+		}
+		_, err := f.Svc.handleAppInvestigationCreatedSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Actuator or AuditStore not configured")
+	})
+}
+
+func TestPubSubCommandService_handleShutdownRequest(t *testing.T) {
+	t.Parallel()
+	f := newPubsubFixture(t)
+
+	t.Run("rejects unmarshal error", func(t *testing.T) {
+		t.Parallel()
+		msg := PubSubCommandMessage{
+			EventType: constants.Event.Operator.ShutdownRequested,
+			ID:        "msg-1",
+			Payload:   []byte("invalid json"),
+		}
+		f.Svc.handleShutdownRequest(msg)
+		// Should log error and return without panic
+	})
+
+	t.Run("rejects invalid payload type", func(t *testing.T) {
+		t.Parallel()
+		req := &operatorv1.FsListRequested{Path: "."}
+		payload, _ := proto.Marshal(req)
+		msg := PubSubCommandMessage{
+			EventType: constants.Event.Operator.ShutdownRequested,
+			ID:        "msg-1",
+			Payload:   payload,
+		}
+		f.Svc.handleShutdownRequest(msg)
+		// Should log error and return without panic
+	})
+
+	t.Run("handles shutdown with reason", func(t *testing.T) {
+		t.Parallel()
+		req := &operatorv1.ShutdownRequested{Reason: "test shutdown"}
+		payload, _ := proto.Marshal(req)
+		msg := PubSubCommandMessage{
+			EventType: constants.Event.Operator.ShutdownRequested,
+			ID:        "msg-1",
+			Payload:   payload,
+		}
+		// Drain channel in goroutine to prevent blocking
+		go func() {
+			<-f.Svc.ShutdownChan
+		}()
+		f.Svc.handleShutdownRequest(msg)
+	})
+
+	t.Run("handles shutdown without reason", func(t *testing.T) {
+		t.Parallel()
+		req := &operatorv1.ShutdownRequested{Reason: ""}
+		payload, _ := proto.Marshal(req)
+		msg := PubSubCommandMessage{
+			EventType: constants.Event.Operator.ShutdownRequested,
+			ID:        "msg-1",
+			Payload:   payload,
+		}
+		// Drain channel in goroutine to prevent blocking
+		go func() {
+			<-f.Svc.ShutdownChan
+		}()
+		f.Svc.handleShutdownRequest(msg)
+	})
+}
+
+func TestPubSubCommandService_handleEvalAnswerRequestSync(t *testing.T) {
+	t.Parallel()
+	f := newPubsubFixture(t)
+
+	t.Run("rejects unmarshal error", func(t *testing.T) {
+		t.Parallel()
+		msg := PubSubCommandMessage{
+			EventType: constants.Event.Operator.Eval.AnswerRequested,
+			ID:        "msg-1",
+			Payload:   []byte("invalid json"),
+		}
+		_, err := f.Svc.handleEvalAnswerRequestSync(context.Background(), msg)
+		require.Error(t, err)
+	})
+}
+
+func TestPubSubCommandService_Start(t *testing.T) {
+	t.Parallel()
+
+	t.Run("rejects start when already running", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		ctx := context.Background()
+		err := f.Svc.Start(ctx)
+		require.NoError(t, err)
+
+		err = f.Svc.Start(ctx)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "already running")
+
+		f.Svc.Stop()
+	})
+
+	t.Run("starts in gateway mode without pub/sub subscription", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		cfg.OperatorID = ""
+		cfg.OperatorSessionId = ""
+		svc, err := NewPubSubCommandService(CommandServiceConfig{
+			Config:            cfg,
+			Logger:            testutil.NewTestLogger(),
+			PubSubClient:      NewMockOperatorPubSubClient(),
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+		})
+		require.NoError(t, err)
+
+		err = svc.Start(context.Background())
+		require.NoError(t, err)
+		svc.Stop()
+	})
+}
+
+func TestPubSubCommandService_Stop(t *testing.T) {
+	t.Parallel()
+
+	t.Run("stops gracefully when not running", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		err := f.Svc.Stop()
+		require.NoError(t, err)
+	})
+}
+
 func TestPubSubCommandService_ProcessEnvelope(t *testing.T) {
 	t.Parallel()
 	f := newPubsubFixture(t)
@@ -158,4 +466,62 @@ func TestPubSubCommandService_ProcessEnvelope(t *testing.T) {
 		require.Equal(t, env.Id, receipt.TransactionId)
 		require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, receipt.Status)
 	})
+
+	t.Run("rejects empty payload", func(t *testing.T) {
+		t.Parallel()
+		_, err := f.Svc.ProcessEnvelope(context.Background(), []byte{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "empty payload")
+	})
+
+	t.Run("rejects oversized payload", func(t *testing.T) {
+		t.Parallel()
+		largePayload := make([]byte, MaxPayloadSize+1)
+		_, err := f.Svc.ProcessEnvelope(context.Background(), largePayload)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "exceeds")
+	})
+
+	t.Run("rejects invalid JSON envelope", func(t *testing.T) {
+		t.Parallel()
+		invalidJSON := []byte("{invalid json}")
+		_, err := f.Svc.ProcessEnvelope(context.Background(), invalidJSON)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid UAP JSON envelope")
+	})
+
+	t.Run("rejects when transaction verifier not configured", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		svc, err := NewPubSubCommandService(CommandServiceConfig{
+			Config:            cfg,
+			Logger:            testutil.NewTestLogger(),
+			PubSubClient:      NewMockOperatorPubSubClient(),
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+		})
+		require.NoError(t, err)
+		svc.transactionVerifier = nil
+
+		req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
+		payload, _ := proto.Marshal(req)
+		env := &uap.UAPEnvelope{
+			ProtocolVersion: "1.0",
+			Timestamp:       timestamppb.Now(),
+			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			ActionType:      string(constants.ActionTypeFsList),
+			TargetResource:  "localhost",
+			Payload:         payload,
+			StateMerkleRoot: "test-state-root",
+			Nonce:           "nonce-1",
+		}
+		uapBytes, _ := protojson.Marshal(env)
+
+		_, err = svc.ProcessEnvelope(context.Background(), uapBytes)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "transaction verifier not configured")
+	})
+
 }

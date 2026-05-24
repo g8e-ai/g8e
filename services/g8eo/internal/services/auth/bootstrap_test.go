@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/httpclient"
@@ -485,7 +486,7 @@ func TestSanitizeURL(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := SanitizeURL(tc.input)
 			assert.Contains(t, result, tc.contains)
 			if tc.excludes != "" {
@@ -584,5 +585,55 @@ func TestPerformanceMetrics(t *testing.T) {
 	t.Run("system.GetConnectivityStatus non-nil", func(t *testing.T) {
 		t.Parallel()
 		assert.NotNil(t, system.GetConnectivityStatus())
+	})
+}
+
+func TestSetHTTPClient(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+	svc, err := NewBootstrapService(cfg, logger)
+	require.NoError(t, err)
+
+	customClient := &http.Client{Timeout: 30 * time.Second}
+	svc.SetHTTPClient(customClient)
+
+	assert.Same(t, customClient, svc.httpClient)
+}
+
+func TestRebuildTransportWithOperatorCert(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+	svc, err := NewBootstrapService(cfg, logger)
+	require.NoError(t, err)
+
+	t.Run("invalid cert/key pair", func(t *testing.T) {
+		t.Parallel()
+		err := svc.rebuildTransportWithOperatorCert("invalid-cert", "invalid-key")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to parse per-operator cert+key")
+	})
+
+	t.Run("mismatched cert and key", func(t *testing.T) {
+		t.Parallel()
+		certPEM := "-----BEGIN CERTIFICATE-----\nMIIBkTCB+wIJAKHJgZ5Z2r7DMA0GCSqGSIb3DQEBCwUAMBExDzANBgNVBAMMBnRl\nc3RjYTAeFw0yNDAxMDEwMDAwMDBaFw0yNTAxMDEwMDAwMDBaMBExDzANBgNVBAMM\nBnRlc3RjYTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAu1sC2/vC1v5qXq2F\n5r9Y8q3X4v5X6Y7Z8a9b0c1d2e3f4g5h6i7j8k9l0m1n2o3p4q5r6s7t8u9v0w1x\n2y3z4CAwEAATANBgkqhkiG9w0BAQsFAAOBgQBRo5k5X2L8Y3Z4a5b6c7d8e9f0g1\nh2i3j4k5l6m7n8o9p0q1r2s3t4u5v6w7x8y9z0a1b2c3d4e5f6g7h8i9j0k1l2m3\n-----END CERTIFICATE-----"
+		keyPEM := "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIKZJrK2h5r9Y8q3X4v5X6Y7Z8a9b0c1d2e3f4g5h6i7j8k9l0m1n2o3\n-----END EC PRIVATE KEY-----"
+		err := svc.rebuildTransportWithOperatorCert(certPEM, keyPEM)
+		assert.Error(t, err)
+	})
+
+	t.Run("only cert provided", func(t *testing.T) {
+		t.Parallel()
+		certPEM := "-----BEGIN CERTIFICATE-----\nMIIBkTCB+wIJAKHJgZ5Z2r7DMA0GCSqGSIb3DQEBCwUAMBExDzANBgNVBAMMBnRl\nc3RjYTAeFw0yNDAxMDEwMDAwMDBaFw0yNTAxMDEwMDAwMDBaMBExDzANBgNVBAMM\nBnRlc3RjYTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAu1sC2/vC1v5qXq2F\n5r9Y8q3X4v5X6Y7Z8a9b0c1d2e3f4g5h6i7j8k9l0m1n2o3p4q5r6s7t8u9v0w1x\n2y3z4CAwEAATANBgkqhkiG9w0BAQsFAAOBgQBRo5k5X2L8Y3Z4a5b6c7d8e9f0g1\nh2i3j4k5l6m7n8o9p0q1r2s3t4u5v6w7x8y9z0a1b2c3d4e5f6g7h8i9j0k1l2m3\n-----END CERTIFICATE-----"
+		err := svc.rebuildTransportWithOperatorCert(certPEM, "")
+		assert.Error(t, err)
+	})
+
+	t.Run("only key provided", func(t *testing.T) {
+		t.Parallel()
+		keyPEM := "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIKZJrK2h5r9Y8q3X4v5X6Y7Z8a9b0c1d2e3f4g5h6i7j8k9l0m1n2o3\n-----END EC PRIVATE KEY-----"
+		err := svc.rebuildTransportWithOperatorCert("", keyPEM)
+		assert.Error(t, err)
 	})
 }
