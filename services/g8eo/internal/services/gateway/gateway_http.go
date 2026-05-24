@@ -1421,12 +1421,11 @@ func (h *HTTPHandler) handleTrustedSignerByID(w http.ResponseWriter, r *http.Req
 // L2 signer for an external app, enabling it to participate in consensus mode.
 func (h *HTTPHandler) handleAppPolicySigner(w http.ResponseWriter, r *http.Request) {
 	// Extract app_id from path: /api/admin/app-policies/{app_id}/signer
-	pathParts := strings.Split(r.URL.Path, "/")
-	if len(pathParts) < 6 {
-		h.responder.Error(w, http.StatusBadRequest, "invalid path")
-		return
-	}
-	appID := pathParts[5]
+	// Use TrimPrefix/TrimSuffix to handle SPIFFE IDs containing colons (e.g., spiffe://g8e.local/app/test)
+	appID := strings.TrimPrefix(r.URL.Path, "/api/admin/app-policies/")
+	appID = strings.TrimSuffix(appID, "/signer")
+	// Handle potential trailing slash
+	appID = strings.TrimSuffix(appID, "/")
 	if appID == "" {
 		h.responder.Error(w, http.StatusBadRequest, "app_id required")
 		return

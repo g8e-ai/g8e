@@ -14,10 +14,19 @@
 package gateway
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,7 +65,7 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 			},
 			wantSuccess: true,
 			teardown: func() {
-				// Clean up the enrolled app
+				// Clean up the enrolled app (identity-only, no signer to delete)
 				appID := "spiffe://g8e.local/app/test-mcp-client"
 				_, _ = db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
 				if pki.secretManager != nil {
@@ -185,9 +194,8 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 				assert.NotEmpty(t, resp.AppCert)
 				assert.NotEmpty(t, resp.CertChain)
 				assert.NotEmpty(t, resp.AppID)
-				assert.Empty(t, resp.L2SignerID) // Now identity-only by default
 
-				// Verify the L2 signer was NOT registered automatically
+				// Verify the L2 signer was NOT registered automatically (identity-only enrollment)
 				signerDoc, err := db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), resp.AppID)
 				require.NoError(t, err)
 				require.Nil(t, signerDoc)
@@ -293,5 +301,166 @@ func TestAppEnrollmentService_RollbackOnFailure(t *testing.T) {
 		// This test requires mocking PKI.SignCSR to fail
 		// For now, we'll skip this as it requires more complex test setup
 		t.Skip("requires PKI.SignCSR failure mock")
+	})
+}
+
+func TestHandleAppPolicySigner(t *testing.T) {
+	// Not running in parallel because setupTestGatewayService resets global keystore state
+	gateway, _ := setupTestGatewayService(t)
+	db := gateway.db
+	handler := gateway.handler
+
+	t.Run("reject signer registration without AppPolicy", func(t *testing.T) {
+		appID := "test-no-policy"
+		pubKeyHex := "a" + strings.Repeat("0", 63) // 64 hex chars = 32 bytes
+
+		// Create request
+		reqBody := map[string]string{"public_key_hex": pubKeyHex}
+		bodyBytes, _ := json.Marshal(reqBody)
+		req := &http.Request{
+			Method: http.MethodPost,
+			URL:    &url.URL{Path: "/api/admin/app-policies/" + appID + "/signer"},
+			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
+		}
+
+		// Create response recorder
+		w := httptest.NewRecorder()
+
+		// Call handler
+		handler.handleAppPolicySigner(w, req)
+
+		// Verify 403 Forbidden
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.Contains(t, w.Body.String(), "app policy not found")
+	})
+
+	t.Run("reject signer registration with invalid public key size", func(t *testing.T) {
+		appID := "test-invalid-key"
+
+		// Create AppPolicy first
+		policy := models.AppPolicy{
+			AppID:              appID,
+			AllowedCollections: []string{"test_collection"},
+			AllowedIntents:     []string{"read"},
+			CreatedAt:          time.Now().UTC(),
+			UpdatedAt:          time.Now().UTC(),
+		}
+		policyBytes, _ := json.Marshal(policy)
+		err := db.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, policyBytes)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), appID) })
+
+		// Invalid public key (odd number of hex chars = invalid hex)
+		pubKeyHex := "a" + strings.Repeat("0", 30) // 31 hex chars = invalid hex
+
+		reqBody := map[string]string{"public_key_hex": pubKeyHex}
+		bodyBytes, _ := json.Marshal(reqBody)
+		req := &http.Request{
+			Method: http.MethodPost,
+			URL:    &url.URL{Path: "/api/admin/app-policies/" + appID + "/signer"},
+			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
+		}
+
+		w := httptest.NewRecorder()
+		handler.handleAppPolicySigner(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid hex")
+	})
+
+	t.Run("successfully register signer with valid AppPolicy", func(t *testing.T) {
+		appID := "test-valid-signer"
+
+		// Create AppPolicy
+		policy := models.AppPolicy{
+			AppID:              appID,
+			AllowedCollections: []string{"test_collection"},
+			AllowedIntents:     []string{"read"},
+			CreatedAt:          time.Now().UTC(),
+			UpdatedAt:          time.Now().UTC(),
+		}
+		policyBytes, _ := json.Marshal(policy)
+		err := db.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, policyBytes)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), appID) })
+
+		// Valid Ed25519 public key (64 hex chars = 32 bytes)
+		pubKeyHex := strings.Repeat("0", 64)
+
+		reqBody := map[string]string{"public_key_hex": pubKeyHex}
+		bodyBytes, _ := json.Marshal(reqBody)
+		req := &http.Request{
+			Method: http.MethodPost,
+			URL:    &url.URL{Path: "/api/admin/app-policies/" + appID + "/signer"},
+			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
+		}
+
+		w := httptest.NewRecorder()
+		handler.handleAppPolicySigner(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		// Verify signer was registered
+		signerDoc, err := db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
+		require.NoError(t, err)
+		require.NotNil(t, signerDoc)
+		assert.Equal(t, appID, signerDoc.ID)
+
+		var signer models.TrustedSigner
+		signerData, _ := json.Marshal(signerDoc.Data)
+		err = json.Unmarshal(signerData, &signer)
+		require.NoError(t, err)
+		assert.Equal(t, pubKeyHex, signer.PublicKey)
+		assert.True(t, signer.Enabled)
+
+		t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID) })
+	})
+
+	t.Run("successfully register signer with SPIFFE ID containing colons", func(t *testing.T) {
+		appID := "spiffe://g8e.local/app/test-mcp-client"
+
+		// Create AppPolicy
+		policy := models.AppPolicy{
+			AppID:              appID,
+			AllowedCollections: []string{"test_collection"},
+			AllowedIntents:     []string{"read"},
+			CreatedAt:          time.Now().UTC(),
+			UpdatedAt:          time.Now().UTC(),
+		}
+		policyBytes, _ := json.Marshal(policy)
+		err := db.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, policyBytes)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), appID) })
+
+		// Valid Ed25519 public key (64 hex chars = 32 bytes)
+		pubKeyHex := strings.Repeat("a", 64)
+
+		reqBody := map[string]string{"public_key_hex": pubKeyHex}
+		bodyBytes, _ := json.Marshal(reqBody)
+		req := &http.Request{
+			Method: http.MethodPost,
+			URL:    &url.URL{Path: "/api/admin/app-policies/" + appID + "/signer"},
+			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
+		}
+
+		w := httptest.NewRecorder()
+		handler.handleAppPolicySigner(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		// Verify signer was registered with full SPIFFE ID
+		signerDoc, err := db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
+		require.NoError(t, err)
+		require.NotNil(t, signerDoc)
+		assert.Equal(t, appID, signerDoc.ID)
+
+		var signer models.TrustedSigner
+		signerData, _ := json.Marshal(signerDoc.Data)
+		err = json.Unmarshal(signerData, &signer)
+		require.NoError(t, err)
+		assert.Equal(t, pubKeyHex, signer.PublicKey)
+		assert.True(t, signer.Enabled)
+
+		t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID) })
 	})
 }
