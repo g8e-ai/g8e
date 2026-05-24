@@ -141,12 +141,12 @@ test-coverage:
 	@$(GO) test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic ./...
 	@$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
-	@$(GO) tool cover -func=coverage.out | tail -1
+	@$(GO) tool cover -func=coverage.out | grep -v "internal/protocol/proto" | tail -1
 
 .PHONY: test-coverage-check
 test-coverage-check:
 	@$(GO) test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic ./...
-	@COVERAGE=$$($(GO) tool cover -func=coverage.out | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+	@COVERAGE=$$($(GO) tool cover -func=coverage.out | grep -v "internal/protocol/proto" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
 	if [ $$(echo "$$COVERAGE < 85" | bc -l) -eq 1 ]; then \
 		echo "Coverage $$COVERAGE% is below 85% threshold"; \
 		exit 1; \

@@ -196,7 +196,7 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 		}
 	}
 
-	binPath := filepath.Join(pm.projectRoot, "services", "g8eo", "build", fmt.Sprintf("linux-%s", hostArch), "g8e.gateway")
+	binPath := filepath.Join(pm.projectRoot, "services", "g8eo", "build", fmt.Sprintf("linux-%s", hostArch), "g8e")
 	return binPath, nil
 }
 

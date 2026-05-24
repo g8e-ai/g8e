@@ -319,7 +319,7 @@ build: build-g8eo
 .PHONY: build-g8eo
 build-g8eo:
 	@$(MAKE) -C services/g8eo build
-	@cp services/g8eo/build/linux-amd64/g8e ./g8e
+	@ln -sf services/g8eo/build/linux-amd64/g8e ./g8e
 
 .PHONY: test-g8eo
 test-g8eo:
