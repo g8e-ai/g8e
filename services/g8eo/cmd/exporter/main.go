@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 )
@@ -81,8 +82,24 @@ func isUpper(r rune) bool {
 	return r >= 'A' && r <= 'Z'
 }
 
-// mergeMaps recursively merges existing map into new map, preserving hand-authored keys
-// Go SSOT takes precedence at each level
+// mergeMaps recursively merges hand-authored JSON into Go SSOT-generated data.
+//
+// Merge strategy:
+// - Go SSOT (newData) is the source of truth for all overlapping keys
+// - Hand-authored keys (existing) are preserved only when they don't conflict with Go SSOT
+// - For overlapping keys where both values are maps, perform recursive merge
+// - For overlapping keys where values are not both maps, Go SSOT value wins (hand-authored value is discarded)
+// - Keys present only in hand-authored data are preserved as-is
+//
+// This ensures that Go-generated constants remain authoritative while allowing
+// hand-authored extensions (e.g., documentation, custom fields) to coexist.
+//
+// Parameters:
+//   - newData: Go SSOT-generated map (source of truth)
+//   - existing: Hand-authored JSON map (extensions)
+//
+// Returns:
+//   - Merged map with Go SSOT values taking precedence over conflicts
 func mergeMaps(newData, existing map[string]interface{}) map[string]interface{} {
 	for key, existingValue := range existing {
 		if newValue, exists := newData[key]; exists {
@@ -177,6 +194,17 @@ func main() {
 			}
 		}
 
+		// Re-marshal with sorted keys for deterministic output
+		var unmarshaled map[string]interface{}
+		if err := json.Unmarshal(jsonData, &unmarshaled); err == nil {
+			sortedData := sortMapKeys(unmarshaled)
+			jsonData, err = json.MarshalIndent(sortedData, "", "  ")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error re-marshaling sorted %s: %v\n", filename, err)
+				os.Exit(1)
+			}
+		}
+
 		if err := os.WriteFile(path, jsonData, 0600); err != nil {
 			fmt.Fprintf(os.Stderr, "Error writing %s: %v\n", path, err)
 			os.Exit(1)
@@ -222,4 +250,23 @@ func main() {
 	emitJSON("api_paths.json", apiPathsFull, true)
 
 	fmt.Println("Constants exported successfully.")
+}
+
+// sortMapKeys recursively sorts map keys for deterministic JSON output
+func sortMapKeys(m map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v := m[k]
+		if nestedMap, ok := v.(map[string]interface{}); ok {
+			result[k] = sortMapKeys(nestedMap)
+		} else {
+			result[k] = v
+		}
+	}
+	return result
 }
