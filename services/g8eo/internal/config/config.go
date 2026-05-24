@@ -108,6 +108,10 @@ type GatewayConfig struct {
 	// Rate limiting
 	RateLimitRPS   float64 // Requests per second limit (default: 5)
 	RateLimitBurst int     // Burst size for rate limiter (default: 10)
+
+	// Distributed lock retry configuration
+	LockMaxRetries int           // Maximum retry attempts for distributed lock acquisition (default: 30)
+	LockRetryDelay time.Duration // Base delay for lock retry backoff (default: 50ms)
 }
 
 // OpenClawConfig holds configuration for --openclaw mode.
@@ -386,6 +390,10 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			// Rate limiting defaults
 			RateLimitRPS:   5.0, // 5 requests per second
 			RateLimitBurst: 10,  // Burst of 10
+
+			// Distributed lock retry defaults
+			LockMaxRetries: 30,                    // 30 retry attempts
+			LockRetryDelay: 50 * time.Millisecond, // 50ms base delay
 		},
 	}, nil
 }

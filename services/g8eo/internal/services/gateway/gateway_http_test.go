@@ -84,7 +84,7 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	resp := responder.New(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, resp, secretsDir)
 	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
 	apiKeySvc := NewApiKeyService(db, logger)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
@@ -161,7 +161,7 @@ func setupTestGatewayService(t *testing.T) (*GatewayService, *config.Config) {
 	resp := responder.New(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, resp, secretsDir)
 	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
 	apiKeySvc := NewApiKeyService(db, logger)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
