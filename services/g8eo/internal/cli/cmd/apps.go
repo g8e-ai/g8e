@@ -38,11 +38,14 @@ func appsCmd() *cobra.Command {
 
 func appsStartCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "start <app-name>",
+		Use:   "start [app-name]",
 		Short: "Start an optional application adapter",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			appName := args[0]
+			appName := "g8ee"
+			if len(args) > 0 {
+				appName = args[0]
+			}
 			if appName != "g8ee" {
 				return fmt.Errorf("unsupported app: %s (only g8ee is supported)", appName)
 			}

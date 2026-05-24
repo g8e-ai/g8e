@@ -142,6 +142,10 @@ func (pm *ProcessManager) stopProcess(pid int, name string) error {
 		return nil
 	}
 
+	if !pm.isProcessRunning(pid) {
+		return nil
+	}
+
 	process, err := os.FindProcess(pid)
 	if err != nil {
 		return fmt.Errorf("failed to find process: %w", err)

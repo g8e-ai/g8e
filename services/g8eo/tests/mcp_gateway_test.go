@@ -503,8 +503,13 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 	// 4. Test A2A Call (Suspends for L3, then Resume)
 	t.Run("a2a call", func(t *testing.T) {
 		callReq := map[string]interface{}{
-			"skill_name": "test-skill",
-			"payload":    map[string]string{"foo": "bar"},
+			"jsonrpc": "2.0",
+			"method":  "a2a/call",
+			"id":      1,
+			"params": map[string]interface{}{
+				"skill_name": "test-skill",
+				"payload":    map[string]string{"foo": "bar"},
+			},
 		}
 
 		reqBody, _ := json.Marshal(callReq)
@@ -514,17 +519,21 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
 		var a2aRes struct {
-			ID          string `json:"id"`
-			Status      string `json:"status"`
-			TxHash      string `json:"tx_hash"`
-			ApprovalURL string `json:"approval_url"`
-			Message     string `json:"message"`
+			JSONRPC string `json:"jsonrpc"`
+			ID      int    `json:"id"`
+			Result  struct {
+				ID          string `json:"id"`
+				Status      string `json:"status"`
+				TxHash      string `json:"tx_hash"`
+				ApprovalURL string `json:"approval_url"`
+				Message     string `json:"message"`
+			} `json:"result"`
 		}
 		err = json.NewDecoder(resp.Body).Decode(&a2aRes)
 		require.NoError(t, err)
 		// The L3 notary rejects, so the transaction should be suspended
-		require.Equal(t, "suspended", a2aRes.Status, "expected suspended status, got: %s", a2aRes.Status)
-		require.NotEmpty(t, a2aRes.ApprovalURL)
+		require.Equal(t, "suspended", a2aRes.Result.Status, "expected suspended status, got: %s", a2aRes.Result.Status)
+		require.NotEmpty(t, a2aRes.Result.ApprovalURL)
 	})
 }
 
