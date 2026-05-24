@@ -15,6 +15,7 @@ package testutil
 
 import (
 	"encoding/json"
+	"sync"
 	"time"
 
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
@@ -42,6 +43,7 @@ func (m *MockReplayStore) ReleaseNonce(nonce string) error {
 
 // StatefulMockReplayStore implements ReplayStore with nonce tracking.
 type StatefulMockReplayStore struct {
+	mu     sync.RWMutex
 	Nonces map[string]bool
 }
 
@@ -50,6 +52,8 @@ func NewStatefulMockReplayStore() *StatefulMockReplayStore {
 }
 
 func (m *StatefulMockReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.Nonces[nonce] {
 		return true, nil
 	}
@@ -58,6 +62,8 @@ func (m *StatefulMockReplayStore) CheckAndSetNonce(nonce string, expiresAt time.
 }
 
 func (m *StatefulMockReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.Nonces[nonce] {
 		return true, nil
 	}
@@ -71,7 +77,8 @@ func (m *StatefulMockReplayStore) FinalizeNonce(nonce string) error {
 }
 
 func (m *StatefulMockReplayStore) ReleaseNonce(nonce string) error {
-	// Release the nonce for retry
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	delete(m.Nonces, nonce)
 	return nil
 }
