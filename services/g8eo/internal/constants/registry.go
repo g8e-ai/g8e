@@ -66,6 +66,7 @@ func Registry() Snapshot {
 			"account_locks": {Value: "account_locks", GoConst: "CollectionAccountLocks", PythonConst: "ACCOUNT_LOCKS"},
 			"agent_activity_metadata": {Value: "agent_activity_metadata", GoConst: "CollectionAgentActivityMetadata", PythonConst: "AGENT_ACTIVITY_METADATA"},
 			"api_keys": {Value: "api_keys", GoConst: "CollectionAPIKeys", PythonConst: "API_KEYS"},
+			"app_policies": {Value: "app_policies", GoConst: "CollectionAppPolicies", PythonConst: "APP_POLICIES"},
 			"auth_admin_audit": {Value: "auth_admin_audit", GoConst: "CollectionAuthAdminAudit", PythonConst: "AUTH_ADMIN_AUDIT"},
 			"bound_sessions": {Value: "bound_sessions", GoConst: "CollectionBoundSessions", PythonConst: "BOUND_SESSIONS"},
 			"cases": {Value: "cases", GoConst: "CollectionCases", PythonConst: "CASES"},

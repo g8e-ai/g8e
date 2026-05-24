@@ -15,6 +15,11 @@
       "_python_const": "API_KEYS",
       "value": "api_keys"
     },
+    "app_policies": {
+      "_go_const": "CollectionAppPolicies",
+      "_python_const": "APP_POLICIES",
+      "value": "app_policies"
+    },
     "auth_admin_audit": {
       "_go_const": "CollectionAuthAdminAudit",
       "_python_const": "AUTH_ADMIN_AUDIT",
