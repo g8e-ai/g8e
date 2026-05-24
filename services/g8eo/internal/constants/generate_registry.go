@@ -153,6 +153,12 @@ func main() {
 		}
 	}
 
+	// Validate that all required fields are present
+	if err := validateRequiredFields(allData); err != nil {
+		fmt.Fprintf(os.Stderr, "Validation failed: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Generate registry.go content
 	output := generateRegistry(allData)
 
@@ -323,7 +329,9 @@ func generateRegistry(data JSONFile) string {
 		cachePrefix := ""
 		keySchema := make(map[string]string)
 		sessionType := make(map[string]string)
-		for key, entry := range data.KVKeys {
+		keys := sortedKeys(data.KVKeys)
+		for _, key := range keys {
+			entry := data.KVKeys[key]
 			if key == "cache.prefix" {
 				cachePrefix = valueToString(entry.Value)
 			} else if strings.HasPrefix(key, "key.schema.") {
@@ -334,12 +342,24 @@ func generateRegistry(data JSONFile) string {
 		}
 		sb.WriteString(fmt.Sprintf("\t\t\tCachePrefix: \"%s\",\n", cachePrefix))
 		sb.WriteString("\t\t\tKeySchema: map[string]string{\n")
-		for key, val := range keySchema {
+		keySchemaKeys := make([]string, 0, len(keySchema))
+		for key := range keySchema {
+			keySchemaKeys = append(keySchemaKeys, key)
+		}
+		sort.Strings(keySchemaKeys)
+		for _, key := range keySchemaKeys {
+			val := keySchema[key]
 			sb.WriteString(fmt.Sprintf("\t\t\t\t\"%s\": \"%s\",\n", key, val))
 		}
 		sb.WriteString("\t\t\t},\n")
 		sb.WriteString("\t\t\tSessionType: map[string]string{\n")
-		for key, val := range sessionType {
+		sessionTypeKeys := make([]string, 0, len(sessionType))
+		for key := range sessionType {
+			sessionTypeKeys = append(sessionTypeKeys, key)
+		}
+		sort.Strings(sessionTypeKeys)
+		for _, key := range sessionTypeKeys {
+			val := sessionType[key]
 			sb.WriteString(fmt.Sprintf("\t\t\t\t\"%s\": \"%s\",\n", key, val))
 		}
 		sb.WriteString("\t\t\t},\n")
@@ -363,7 +383,13 @@ func generateRegistry(data JSONFile) string {
 	// Status (nested structure - dynamic map)
 	if data.Status != nil {
 		sb.WriteString("\t\tStatus: StatusSnapshot{\n")
-		for category, entries := range data.Status {
+		categories := make([]string, 0, len(data.Status))
+		for category := range data.Status {
+			categories = append(categories, category)
+		}
+		sort.Strings(categories)
+		for _, category := range categories {
+			entries := data.Status[category]
 			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": map[string]Entry{\n", category))
 			keys := sortedKeys(entries)
 			for _, key := range keys {
@@ -519,7 +545,15 @@ func generateStatusConstants(status map[string]map[string]JSONEntry) string {
 		isNumeric bool
 	})
 
-	for category, entries := range status {
+	// Sort categories for deterministic iteration
+	categories := make([]string, 0, len(status))
+	for category := range status {
+		categories = append(categories, category)
+	}
+	sort.Strings(categories)
+
+	for _, category := range categories {
+		entries := status[category]
 		// Convert category name to PascalCase type name (e.g., "user_role" -> "UserRole")
 		typeName := categoryToTypeName(category)
 		for _, entry := range entries {
@@ -542,8 +576,20 @@ func generateStatusConstants(status map[string]map[string]JSONEntry) string {
 		}
 	}
 
-	// Emit type definitions and constants
-	for typeName, consts := range typeGroups {
+	// Emit type definitions and constants in sorted order for determinism
+	typeNames := make([]string, 0, len(typeGroups))
+	for typeName := range typeGroups {
+		typeNames = append(typeNames, typeName)
+	}
+	sort.Strings(typeNames)
+
+	for _, typeName := range typeNames {
+		consts := typeGroups[typeName]
+		// Sort constants by constName for determinism
+		sort.Slice(consts, func(i, j int) bool {
+			return consts[i].constName < consts[j].constName
+		})
+
 		// Determine if this is a numeric type based on the first constant
 		typeKind := "string"
 		if len(consts) > 0 && consts[0].isNumeric {
@@ -757,4 +803,146 @@ func formatGoValue(v string) string {
 		return v
 	}
 	return fmt.Sprintf(`"%s"`, v)
+}
+
+func validateRequiredFields(data JSONFile) error {
+	// Validate Collections
+	if data.Collections != nil {
+		for key, entry := range data.Collections {
+			if entry.GoConst == "" {
+				return fmt.Errorf("collections.%s: missing required field _go_const", key)
+			}
+			if entry.PythonConst == "" {
+				return fmt.Errorf("collections.%s: missing required field _python_const", key)
+			}
+		}
+	}
+
+	// Validate Events
+	if data.Events != nil {
+		for key, entry := range data.Events {
+			if entry.GoConst == "" {
+				return fmt.Errorf("events.%s: missing required field _go_const", key)
+			}
+			if entry.PythonConst == "" {
+				return fmt.Errorf("events.%s: missing required field _python_const", key)
+			}
+		}
+	}
+
+	// Validate Status (nested structure)
+	if data.Status != nil {
+		for category, entries := range data.Status {
+			for key, entry := range entries {
+				if entry.GoConst == "" {
+					return fmt.Errorf("status.%s.%s: missing required field _go_const", category, key)
+				}
+				if entry.PythonConst == "" {
+					return fmt.Errorf("status.%s.%s: missing required field _python_const", category, key)
+				}
+			}
+		}
+	}
+
+	// Validate Senders
+	if data.Senders != nil {
+		for key, entry := range data.Senders {
+			if entry.GoConst == "" {
+				return fmt.Errorf("senders.%s: missing required field _go_const", key)
+			}
+			if entry.PythonConst == "" {
+				return fmt.Errorf("senders.%s: missing required field _python_const", key)
+			}
+		}
+	}
+
+	// Validate Channels
+	if data.Channels != nil {
+		for key, entry := range data.Channels {
+			if entry.GoConst == "" {
+				return fmt.Errorf("channels.%s: missing required field _go_const", key)
+			}
+			if entry.PythonConst == "" {
+				return fmt.Errorf("channels.%s: missing required field _python_const", key)
+			}
+		}
+	}
+
+	// Validate Intents
+	if data.Intents != nil {
+		for key, entry := range data.Intents {
+			if entry.GoConst == "" {
+				return fmt.Errorf("intents.%s: missing required field _go_const", key)
+			}
+			if entry.PythonConst == "" {
+				return fmt.Errorf("intents.%s: missing required field _python_const", key)
+			}
+		}
+	}
+
+	// Validate Prompts
+	if data.Prompts != nil {
+		for key, entry := range data.Prompts {
+			if entry.GoConst == "" {
+				return fmt.Errorf("prompts.%s: missing required field _go_const", key)
+			}
+			if entry.PythonConst == "" {
+				return fmt.Errorf("prompts.%s: missing required field _python_const", key)
+			}
+		}
+	}
+
+	// Validate Headers
+	if data.Headers != nil {
+		for key, entry := range data.Headers {
+			if entry.GoConst == "" {
+				return fmt.Errorf("headers.%s: missing required field _go_const", key)
+			}
+			if entry.PythonConst == "" {
+				return fmt.Errorf("headers.%s: missing required field _python_const", key)
+			}
+		}
+	}
+
+	// Validate DocumentIds
+	if data.DocumentIds != nil {
+		for key, entry := range data.DocumentIds {
+			if entry.GoConst == "" {
+				return fmt.Errorf("document_ids.%s: missing required field _go_const", key)
+			}
+			if entry.PythonConst == "" {
+				return fmt.Errorf("document_ids.%s: missing required field _python_const", key)
+			}
+		}
+	}
+
+	// Validate Platform
+	if data.Platform != nil {
+		for key, entry := range data.Platform {
+			if entry.GoConst == "" {
+				return fmt.Errorf("platform.%s: missing required field _go_const", key)
+			}
+			if entry.PythonConst == "" {
+				return fmt.Errorf("platform.%s: missing required field _python_const", key)
+			}
+		}
+	}
+
+	// Validate PubSub
+	if data.PubSub != nil {
+		for key, entry := range data.PubSub {
+			if entry.GoConst == "" {
+				return fmt.Errorf("pubsub.%s: missing required field _go_const", key)
+			}
+			if entry.PythonConst == "" {
+				return fmt.Errorf("pubsub.%s: missing required field _python_const", key)
+			}
+		}
+	}
+
+	// KVKeys, Agents, and Timestamp are special cases that don't require _go_const/_python_const
+	// KVKeys uses nested structure with different field naming
+	// Agents and Timestamp are simple string maps
+
+	return nil
 }
