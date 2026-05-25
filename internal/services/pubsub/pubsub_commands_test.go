@@ -71,13 +71,13 @@ func TestNewPubSubCommandService_StartsWithoutTrustedSignersButRejectsL2(t *test
 		L3Notary:          &testutil.MockL3Notary{},
 	})
 	require.NoError(t, err)
-	require.NotNil(t, svc.transactionVerifier)
+	require.NotNil(t, svc.l4warden)
 
 	_, signerPriv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	env := unsignedSignerEnvelope(t, signerPriv)
 
-	_, err = svc.transactionVerifier.VerifyEnvelope(context.Background(), env)
+	_, err = svc.l4warden.VerifyEnvelope(context.Background(), env)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, governance.ErrL2KeyNotConfigured), "expected missing L2 key error, got %v", err)
 }
@@ -495,7 +495,7 @@ func TestPubSubCommandService_ProcessEnvelope(t *testing.T) {
 			L3Notary:          &testutil.MockL3Notary{},
 		})
 		require.NoError(t, err)
-		svc.transactionVerifier = nil
+		svc.l4warden = nil
 
 		req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
 		payload, _ := proto.Marshal(req)
