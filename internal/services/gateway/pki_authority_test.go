@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/protocol"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/g8e-ai/g8e/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

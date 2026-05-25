@@ -125,8 +125,8 @@ type ScrubbedResult struct {
 // - Rehydration: Restores sensitive data at execution boundary
 // - Token Persistence: Maintains {{UEI_N}} mappings across restarts
 type SovereigntyService struct {
-	config   *Config
-	logger   *slog.Logger
+	config    *Config
+	logger    *slog.Logger
 	scrubbers []Scrubber
 
 	// Tokenized context state for data sovereignty

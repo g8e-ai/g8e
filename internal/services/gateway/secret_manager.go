@@ -365,17 +365,6 @@ func (m *SecretManager) warmAppSettingsCache(dataJSON string, now time.Time) {
 	}
 }
 
-func (m *SecretManager) readRequiredSecretFile(name string) (string, error) {
-	value, err := m.keystore.DecryptSecret(name)
-	if err != nil {
-		return "", fmt.Errorf("bootstrap secret %s decryption failed: %w; delete and recreate runtime state", name, err)
-	}
-	if value == "" {
-		return "", fmt.Errorf("bootstrap secret %s is empty after decryption; delete and recreate runtime state", name)
-	}
-	return value, nil
-}
-
 func (m *SecretManager) generateSecureToken(bytes int) (string, error) {
 	tokenBytes, err := m.generateSecureTokenBytes(bytes)
 	if err != nil {

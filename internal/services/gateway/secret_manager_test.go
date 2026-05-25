@@ -265,8 +265,7 @@ func TestSecretManager_InitAppSettings_RejectsUncoordinatedSecretRotation(t *tes
 	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "session_encryption_key"), corruptedData, 0600))
 
 	sm2 := newTestSecretManager(t, db, secretsDir)
-	var err error
-	err = sm2.InitAppSettings()
+	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	// With encryption, file corruption causes digest mismatch
 	assert.Contains(t, err.Error(), "encrypted file digest")
@@ -296,8 +295,7 @@ func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *tes
 	require.NoError(t, os.Remove(filepath.Join(secretsDir, "session_encryption_key")))
 
 	sm2 := newTestSecretManager(t, db, secretsDir)
-	var err error
-	err = sm2.InitAppSettings()
+	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	// Missing file causes read error during validation
 	assert.Contains(t, err.Error(), "read encrypted secret file")
@@ -313,8 +311,7 @@ func TestSecretManager_InitAppSettings_FailsWhenDigestManifestMissing(t *testing
 	require.NoError(t, os.Remove(filepath.Join(secretsDir, BootstrapDigestManifestFile)))
 
 	sm2 := newTestSecretManager(t, db, secretsDir)
-	var err error
-	err = sm2.InitAppSettings()
+	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "bootstrap digest manifest")
 	assert.Contains(t, err.Error(), "is required")

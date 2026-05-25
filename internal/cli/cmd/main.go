@@ -46,7 +46,3 @@ The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
 		os.Exit(1)
 	}
 }
-
-func main() {
-	Execute()
-}

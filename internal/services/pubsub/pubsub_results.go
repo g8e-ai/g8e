@@ -24,9 +24,9 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-	storage "github.com/g8e-ai/g8e/internal/services/storage"
 )
 
 func (rr *PubSubResultsService) resultsChannel(operatorSessionID string) string {

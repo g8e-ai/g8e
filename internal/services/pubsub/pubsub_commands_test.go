@@ -211,7 +211,7 @@ func TestPubSubCommandService_ExecuteVerifiedTransaction(t *testing.T) {
 			EventType: "NONEXISTENT_EVENT",
 			ID:        "msg-1",
 		}
-		_, err := f.Svc.ExecuteVerifiedTransaction(context.Background(), constants.EventType(msg.EventType), msg)
+		_, err := f.Svc.ExecuteVerifiedTransaction(context.Background(), msg.EventType, msg)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no handler for event type")
 	})

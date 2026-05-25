@@ -148,7 +148,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 	env.TransactionHash = hash
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			KeyId:             "test-key",
+			KeyId:              "test-key",
 			ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true"))),
 		},
 	}

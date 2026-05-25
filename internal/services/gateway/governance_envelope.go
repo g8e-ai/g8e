@@ -20,8 +20,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/g8e-ai/g8e/protocol"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/protocol"
 )
 
 // SetEnvelopeProcessor wires the synchronous envelope-processing pipeline

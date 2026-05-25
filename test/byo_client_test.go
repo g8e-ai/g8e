@@ -295,8 +295,8 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
 			ConsensusSignature: hex.EncodeToString(signature),
-			AgentIds:          []string{signerName},
-			KeyId:             signerName,
+			AgentIds:           []string{signerName},
+			KeyId:              signerName,
 		},
 	}
 

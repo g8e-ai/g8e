@@ -35,9 +35,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/g8e-ai/g8e/protocol"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
+	"github.com/g8e-ai/g8e/protocol"
 )
 
 const (
@@ -818,67 +818,6 @@ func (pki *PKIAuthority) generateIntermediateCA(keyPath, certPath string, parent
 func (pki *PKIAuthority) ensureAppCerts() error {
 	// No first-class app certificates are generated at the protocol level.
 	// g8e-compatible agentic ensembles use the SignCSR API for certificate issuance.
-	return nil
-}
-
-func (pki *PKIAuthority) generateAppCert(app, certPath string) error {
-	if pki.hubCert == nil || pki.hubKey == nil {
-		return fmt.Errorf("hub CA not loaded")
-	}
-
-	priv, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
-	if err != nil {
-		return err
-	}
-
-	serial, err := randomSerial()
-	if err != nil {
-		return err
-	}
-	now := time.Now().UTC()
-	wid := protocol.NewWorkloadIdentity()
-	appURI, _ := wid.AppSPIFFEURL(app)
-	template := &x509.Certificate{
-		SerialNumber: serial,
-		Subject: pkix.Name{
-			CommonName:   app,
-			Organization: []string{"g8e"},
-		},
-		NotBefore:   now.Add(-1 * time.Minute),
-		NotAfter:    now.Add(time.Duration(serviceValidityDays) * 24 * time.Hour),
-		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
-		DNSNames:    []string{"localhost", "g8e.local", app},
-		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
-		URIs:        []*url.URL{appURI},
-	}
-
-	certDER, err := x509.CreateCertificate(rand.Reader, template, pki.hubCert, &priv.PublicKey, pki.hubKey)
-	if err != nil {
-		return err
-	}
-
-	if err := writePEMFile(certPath, "CERTIFICATE", certDER, 0644); err != nil {
-		return err
-	}
-
-	keyDER, err := x509.MarshalECPrivateKey(priv)
-	if err != nil {
-		return err
-	}
-	if pki.secretManager == nil {
-		return fmt.Errorf("SecretManager is required for app private key storage")
-	}
-	if err := pki.secretManager.StoreServicePrivateKey(app, keyDER); err != nil {
-		return fmt.Errorf("store %s private key in keystore: %w", app, err)
-	}
-
-	// Write private key to PKI directory for app consumption (e.g., g8ee uvicorn)
-	keyPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".key")
-	if err := writePEMFile(keyPath, "EC PRIVATE KEY", keyDER, 0600); err != nil {
-		return fmt.Errorf("write %s private key to PKI directory: %w", app, err)
-	}
-
 	return nil
 }
 

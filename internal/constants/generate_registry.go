@@ -91,7 +91,7 @@ func main() {
 	}
 
 	var allData JSONFile
-	for jsonFile, _ := range jsonFiles {
+	for jsonFile := range jsonFiles {
 		filePath := filepath.Join(protocolConstantsDir, jsonFile)
 		data, err := os.ReadFile(filePath)
 		if err != nil {

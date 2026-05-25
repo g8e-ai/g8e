@@ -26,8 +26,8 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/g8e-ai/g8e/internal/security"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 // FsListService handles file system listing operations using readdirplus-style metadata
@@ -218,7 +218,7 @@ func (s *FsListService) buildEntry(fi os.FileInfo, fullPath string) models.FsLis
 	if sys := fi.Sys(); sys != nil {
 		if stat, ok := sys.(*syscall.Stat_t); ok {
 			entry.Inode = stat.Ino
-			entry.Nlink = uint64(stat.Nlink)
+			entry.Nlink = stat.Nlink
 
 			// Get owner/group names
 			if owner := getUsername(stat.Uid); owner != "" {

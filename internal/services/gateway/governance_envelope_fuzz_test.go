@@ -51,13 +51,7 @@ func FuzzEnvelopeJSONParsing(f *testing.F) {
 			Action            string `json:"action"`
 			Payload           string `json:"payload"`
 		}
-		err := json.Unmarshal([]byte(data), &envelope)
-
-		// If decoding succeeded, validate the structure
-		if err == nil {
-			// All string fields should be valid UTF-8 (Go enforces this)
-			// No further validation needed - the processor will validate semantics
-		}
+		_ = json.Unmarshal([]byte(data), &envelope)
 	})
 }
 
@@ -85,12 +79,6 @@ func FuzzEnvelopeIdentityBinding(f *testing.F) {
 			OperatorID        string `json:"operator_id"`
 			SourceComponent   string `json:"source_component"`
 		}
-		err := json.Unmarshal([]byte(data), &envelope)
-
-		// If decoding succeeded, validate the structure
-		if err == nil {
-			// All string fields should be valid UTF-8 (Go enforces this)
-			// No further validation needed - the processor will validate semantics
-		}
+		_ = json.Unmarshal([]byte(data), &envelope)
 	})
 }

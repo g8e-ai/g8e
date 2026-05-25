@@ -257,6 +257,7 @@ func isBusyError(err error) bool {
 // Delay = baseDelay * 2^attempt + random jitter (0-25% of delay)
 func (db *DB) backoff(attempt int) {
 	baseDelay := time.Duration(db.config.RetryBaseDelayMs) * time.Millisecond
+	// #nosec G115 -- attempt is bounded by retry logic (max 10 attempts)
 	exponentialDelay := baseDelay * (1 << uint(attempt))
 
 	// Add jitter: 0-25% of the delay to spread out retry attempts

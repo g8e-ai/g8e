@@ -251,6 +251,7 @@ func RegisterDeviceLink(cfg *config.Config, token string, operatorCSR, cliCSR st
 // DownloadCA downloads the root CA from the discovery endpoint (plain HTTP)
 func DownloadCA(cfg *config.Config) ([]byte, error) {
 	url := fmt.Sprintf("%s/.well-known/g8e/pki/root.pem", cfg.OperatorDiscoveryURL())
+	// #nosec G107 -- url is constructed from validated config.OperatorDiscoveryURL()
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download CA from %s: %w", url, err)

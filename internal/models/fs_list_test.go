@@ -50,12 +50,12 @@ func TestFsListEntry(t *testing.T) {
 		target := "/path/to/target"
 
 		entry := &FsListEntry{
-			Name:    "file.txt",
-			Path:    "/tmp/file.txt",
-			IsDir:   false,
-			Size:    1024,
-			Mode:    "0644",
-			ModTime: 1234567890,
+			Name:          "file.txt",
+			Path:          "/tmp/file.txt",
+			IsDir:         false,
+			Size:          1024,
+			Mode:          "0644",
+			ModTime:       1234567890,
 			IsSymlink:     true,
 			SymlinkTarget: &target,
 			Owner:         &owner,

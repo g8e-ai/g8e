@@ -189,10 +189,10 @@ type A2ADownstreamRequest struct {
 
 // FieldReadRequest is the params for the "read_field" tool.
 type FieldReadRequest struct {
-	Collection         string `json:"collection"`
-	DocumentID         string `json:"document_id"`
-	FieldPath          string `json:"field_path"`
-	OperatorSessionID  string `json:"operator_session_id"`
+	Collection        string `json:"collection"`
+	DocumentID        string `json:"document_id"`
+	FieldPath         string `json:"field_path"`
+	OperatorSessionID string `json:"operator_session_id"`
 }
 
 // FieldReadResult is the result for the "read_field" tool.

@@ -286,7 +286,7 @@ func TestParseUserID_EnforcesInt32Bounds(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			assert.Equal(t, tc.expected, parseUserID(tc.value))
 		})
 	}

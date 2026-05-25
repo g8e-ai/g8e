@@ -28,8 +28,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 // fakeEnvelopeProcessor is a test double that returns predetermined results
@@ -119,7 +119,7 @@ func TestGovernanceEnvelope_VerificationErrors_Return403(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			proc := &fakeEnvelopeProcessor{err: tc.err}
 			h := newGovernanceEnvelopeHandler(t, proc)
 
