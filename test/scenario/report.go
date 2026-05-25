@@ -110,6 +110,7 @@ func AssertL2L3(t *testing.T, result Result, expected Outcome) {
 // GoldenDiff compares the receipt against the golden file.
 // Set G8E_UPDATE_GOLDEN=1 environment variable to refresh golden files.
 // Only compares deterministic fields (excludes timestamp, signer key, signature).
+// Golden files are only created for accepting scenarios (receipt != nil).
 func GoldenDiff(t *testing.T, s Scenario, mode Mode, receipt *operatorv1.ActionReceipt) {
 	if receipt == nil {
 		return
@@ -158,6 +159,48 @@ func GoldenDiff(t *testing.T, s Scenario, mode Mode, receipt *operatorv1.ActionR
 	if string(receiptJSON) != string(goldenJSON) {
 		t.Errorf("Golden mismatch for %s/%s\nGot:\n%s\n\nWant:\n%s", s.Name, mode, receiptJSON, goldenJSON)
 	}
+}
+
+// CheckGoldenFilesUpToDate verifies that all golden files are present and up to date.
+// This is intended for CI to ensure developers don't forget to update golden files.
+// Returns true if all golden files are up to date, false otherwise.
+func CheckGoldenFilesUpToDate(t *testing.T) bool {
+	scenarios, err := LoadFixtures()
+	if err != nil {
+		t.Fatalf("failed to load fixtures: %v", err)
+	}
+
+	modes := []Mode{ModeDoctrine, ModeConsensus, ModeNotary}
+	missingFiles := []string{}
+
+	for _, s := range scenarios {
+		for _, mode := range modes {
+			expected, ok := s.Expect[mode]
+			if !ok {
+				continue
+			}
+
+			// Only check golden files for accepting scenarios
+			if expected.Verdict != VerdictAccept {
+				continue
+			}
+
+			goldenPath := filepath.Join("golden", s.Name+"_"+mode.String()+".golden.json")
+			if _, err := os.Stat(goldenPath); os.IsNotExist(err) {
+				missingFiles = append(missingFiles, goldenPath)
+			}
+		}
+	}
+
+	if len(missingFiles) > 0 {
+		t.Errorf("Missing golden files (run with G8E_UPDATE_GOLDEN=1 to create):")
+		for _, path := range missingFiles {
+			t.Errorf("  - %s", path)
+		}
+		return false
+	}
+
+	return true
 }
 
 func containsSubstring(s, substr string) bool {

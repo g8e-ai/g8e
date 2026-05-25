@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-05-24
+Last Updated: 2026-05-25
 
 g8e tests run directly on the host using real infrastructure. The test environment is the production environment. If it does not work in tests, it will not work in production.
 
@@ -42,7 +42,15 @@ Validates the Operator and protocol enforcement (`GovernanceEnvelope`, 3-layer g
 ./g8e test scenario --run forge_signature
 ```
 
-Integration tests exercising end-to-end workflows: device-link enrollment, certificate issuance, governance envelope submission. Requires the Operator to be running.
+Integration tests exercising end-to-end governance workflows across doctrine, consensus, and notary modes. Tests cover L1/L2/L3 verification, transaction replay protection, state root validation, and receipt verification. Requires the Operator to be running.
+
+**Test Types**:
+- **Table-driven scenarios** - JSON fixtures in `test/scenario/fixtures/` covering security gates (bad integrity, hash mismatch, replay, stale state root, L2/L3 validation) and finance workflows
+- **Golden snapshots** - Deterministic receipt comparison excluding volatile fields (signature, timestamp, signer key). Run with `G8E_UPDATE_GOLDEN=1` to regenerate
+- **Property-based invariants** - Fuzz-style tests verifying core governance invariants (integrity + freshness + state + required-gates must all pass in order)
+- **Concurrency tests** - Double-submit replay detection using goroutines to verify TOCTOU resistance
+- **Negative controls** - Tests that intentionally flip expectations to prove the suite can detect failures
+- **Receipt verification** - Separate axis testing cryptographic receipt validation (signature verification, field tampering detection)
 
 ### Chaos Tests
 
@@ -93,6 +101,7 @@ This creates the first user and issues mTLS certificates for the Operator and CL
 - **Parallelism** - `-parallel 4` with `180s` timeout.
 - **Coverage** - `--coverage` generates reports.
 - **Concurrency** - Goroutines require explicit cancellation contexts and clear channel ownership.
+- **Integration tags** - Scenario tests require `-tags=integration` to access test fixtures and Operator gate infrastructure.
 
 ### Lints
 
