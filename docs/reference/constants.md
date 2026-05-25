@@ -2,7 +2,7 @@
 
 ## Single Source of Truth
 
-The g8e constants system maintains a Single Source of Truth (SSOT) in Go at `internal/constants/`. All cross-component constants (collections, events, channels, headers, etc.) are defined as Go constants and exported to JSON and Python via a generation pipeline.
+The g8e constants system maintains a Single Source of Truth (SSOT) in Go at `internal/constants/`. All cross-component constants (collections, events, channels, headers, etc.) are defined as Go constants and exported to JSON via a generation pipeline.
 
 ## Export Flow
 
@@ -10,8 +10,6 @@ The g8e constants system maintains a Single Source of Truth (SSOT) in Go at `int
 Go SSOT (internal/constants/*.go)
     ↓
 JSON Export (protocol/constants/*.json)
-    ↓
-Python Generated (protocol/python/g8e_protocol/generated_*.py)
 ```
 
 ### Step 1: Go Source Files
@@ -31,7 +29,6 @@ The `generate_registry.go` script reads Go source files and exports constants to
 
 - `value`: The constant value
 - `_go_const`: The Go constant name
-- `_python_const`: The Python constant name
 
 Example (`protocol/constants/collections.json`):
 ```json
@@ -39,22 +36,21 @@ Example (`protocol/constants/collections.json`):
   "collections": {
     "users": {
       "value": "users",
-      "_go_const": "CollectionUsers",
-      "_python_const": "USERS"
+      "_go_const": "CollectionUsers"
     }
   }
 }
 ```
 
-### Step 3: Python Generation
+### Step 3: Registry Generation
 
-The `g8e.exporter` binary (built from `cmd/exporter`) reads JSON files and generates Python modules in `protocol/python/g8e_protocol/generated_*.py`.
+The `generate_registry.go` script also generates Go registry files (`registry.go`, `status_generated.go`, `headers_generated.go`) that provide runtime access to the constants snapshot.
 
 ## Tracked vs Internal Files
 
 The registry tracking system distinguishes between exportable constants and internal-only constants:
 
-### Tracked Files (Exported to JSON/Python)
+### Tracked Files (Exported to JSON)
 
 - `collections.go` - Database collection names
 - `events.go` - Event type identifiers
@@ -91,9 +87,9 @@ make constants
 ```
 
 This command:
-1. Builds the `g8e.exporter` binary from `cmd/exporter`
-2. Runs the exporter to generate JSON files in `protocol/constants/`
-3. Generates Python modules in `protocol/python/g8e_protocol/generated_*.py`
+1. Runs `go run ./internal/constants/generate_registry.go` to generate Go registry files
+2. Builds the `g8e.exporter` binary from `cmd/exporter`
+3. Runs the exporter to generate JSON files in `protocol/constants/`
 
 ### Generate All Protocol Artifacts
 
@@ -134,7 +130,7 @@ The `trackedFiles` map in `check_registry.go` defines which files should be expo
 ## Adding New Constants
 
 1. **Add the constant** to the appropriate Go file in `internal/constants/`
-2. **Run `make constants`** to regenerate JSON and Python exports
+2. **Run `make constants`** to regenerate JSON exports and Go registry files
 3. **Run `check_registry.go`** to verify the constant is registered
 4. **Commit both** the Go source file and the generated files
 
@@ -147,6 +143,6 @@ The registry check is enforced in CI via the `registry-check` job in `.github/wo
 The constants pipeline generates the following artifacts:
 
 - JSON files in `protocol/constants/` - Canonical constant definitions
-- Python modules in `protocol/python/g8e_protocol/generated_*.py` - Python constant bindings
+- Go registry files in `internal/constants/` - Runtime access to constants snapshot (registry.go, status_generated.go, headers_generated.go)
 
-These generated files ensure consistency across the platform's Go and Python components.
+These generated files ensure consistency across the platform's Go components.

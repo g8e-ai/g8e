@@ -4,162 +4,183 @@ title: Scripts
 
 # g8e CLI
 
-Last Updated: 2026-05-23
+Last Updated: 2026-05-25
 
-The unified `g8eo` binary is the primary operational interface for the g8e platform. It serves dual purposes: daemon mode (Governance Gateway/Operator) and CLI mode (platform management). The platform enforces a **host-native** execution model with **ZERO shell scripts** for platform operations.
+The g8e CLI is the primary operational interface for the Governance Gateway (g8eg) and Governed Operator (g8eo). It is a statically compiled Go binary that manages platform lifecycle, authentication, data queries, and testing. The platform enforces a **host-native** execution model with **ZERO shell scripts** for platform operations.
 
 ---
 
 ## Architecture Overview
 
-g8e avoids container-orchestration complexity by running directly on the host. There are two distinct tiers:
+g8e runs directly on the host without container-orchestration complexity. The CLI serves dual purposes:
 
-1. **Gateway (mandatory)** - The `g8eo` binary in Gateway mode (--doctrine, --consensus, or --notary). Owns persistence, PKI, pub/sub, and governance enforcement.
-2. **Application Layer (optional)** - g8e-compatible agentic ensembles that consume the public protocol. Run as managed host processes.
-
-### The Unified `g8eo` Binary
-
-The `g8eo` binary is a statically compiled Go binary that serves dual purposes:
-
-- **Daemon mode**: Runs the Governance Gateway/Operator when invoked without subcommands
+- **Daemon mode**: Runs the Governance Gateway when invoked without subcommands
 - **CLI mode**: Manages platform lifecycle, auth, data, and tests when invoked with subcommands
 
-- **Host runtime state** - All runtime data lives at `./.g8e/`: `data/`, `pki/`, `secrets/`, `logs/`.
-- **Credentials** - Authenticated commands use `~/.g8e/credentials`.
+**Host runtime state** - All runtime data lives at `./.g8e/`: `data/`, `pki/`, `secrets/`, `logs/`.
+**Credentials** - Authenticated commands use `~/.g8e/credentials`.
 
-Running `./g8e` (a symlink to the g8eo binary) without arguments launches the Interactive Platform Manager. Direct command form: `./g8e <command> [subcommand] [options]`.
+Command form: `./g8e <command> [subcommand] [options]`.
 
 ---
 
-## Command Categories
+## Commands
 
-### Platform Management - `./g8e platform`
+### setup
 
-Orchestrates the Gateway lifecycle via native Go process management.
+Bootstrap platform dependencies and build services.
 
-| Command | Purpose |
+```bash
+./g8e setup
+```
+
+Checks for required dependencies (Go, Python), generates protocol artifacts, and builds services.
+
+---
+
+### platform
+
+Manage the Governance Gateway (g8eg) daemon lifecycle.
+
+| Subcommand | Purpose |
 |---|---|
-| `start [-a\|--with-apps]` | Start Operator Gateway mode; optional apps require explicit opt-in. |
-| `stop` | Stop Operator Gateway mode and any optional app processes. |
-| `restart` | Restart with the same flags. |
-| `status` | Gateway health first, optional app status separately. |
-| `wipe` | Clears app data via the Operator API. Preserves PKI, secrets, settings, and auth state. |
-| `reset` | Destructive: wipes data and bootstrap secrets. **Preserves PKI roots.** |
-| `clean` | Nuke all processes and the entire `.g8e/` runtime directory. |
-| `logs` | Stream aggregated logs from `./.g8e/logs/`. |
-| `settings` | Read or update platform configuration. |
+| `start` | Start the Governance Gateway |
+| `stop` | Stop the Governance Gateway |
+| `status` | Check Gateway health and status |
+| `restart` | Restart the Governance Gateway |
+| `logs` | View Gateway logs |
+| `settings` | Manage Gateway settings |
+| `reset` | Reset Gateway data and secrets (preserves CA) |
+| `clean` | Destructively remove all Gateway state |
 
-### Application Layer - `./g8e apps`
+**Examples:**
 
-Manages optional, opt-in adapters.
+```bash
+./g8e platform start
+./g8e platform status
+./g8e platform logs
+./g8e platform reset --force
+./g8e platform clean --force
+```
 
-| Command | Purpose |
+---
+
+### auth
+
+Authentication, session management, and PKI enrollment.
+
+| Subcommand | Purpose |
 |---|---|
-| `start [g8ee\|all]` | Start an optional app. |
-| `stop [g8ee\|all]` | Stop an optional app. |
-| `restart [g8ee\|all]` | Restart an optional app. |
-| `status` | App status alongside Gateway status. |
-| `build [g8ee\|all]` | Install native deps (e.g., Python venv). |
+| `bootstrap` | Bootstrap the platform with initial user and certificates |
+| `login` | Authenticate and save operator session |
+| `logout` | Clear local operator session and credentials |
 
-Apps are BYO clients with no Gateway responsibilities and no private coupling.
+**Examples:**
 
-### Operator Operations - `./g8e operator`
+```bash
+./g8e auth bootstrap
+./g8e auth login --count=1 --ttl=3600
+./g8e auth logout
+```
 
-Lifecycle for `g8eo` binaries and remote fleet deployment.
+The `bootstrap` command creates the first user and issues mTLS certificates for the Operator and CLI. It is only available over loopback when no users exist. The `login` command authenticates via device-link token and saves mTLS credentials to `~/.g8e/credentials`.
 
-| Command | Purpose |
+---
+
+### data
+
+Query local database collections, users, operators, and device-links over mTLS.
+
+| Subcommand | Purpose |
 |---|---|
-| `init` | Compile the operator for the local architecture. |
-| `build` / `build-all` | Cross-compile for amd64/arm64/386. UPX-compresses and syncs to the Hub blob store. |
-| `deploy <user@host>` | Fetch the signed binary from the local hub and SCP/SSH it to a remote host. |
-| `stream <host...>` | High-concurrency fleet-wide injection over SSH. |
-| `reauth` | Trigger re-authentication of a running operator process. |
-| `ssh-config` | Manage SSH identities for fleet operations. |
+| `users` | Manage user accounts |
+| `operators` | Manage operator instances |
+| `device-links` | Manage device-link tokens (list, create, delete) |
+| `settings` | Manage Gateway settings |
+| `store` | Manage document storage |
+| `audit` | Query audit vault (list, summary) |
 
-### Identity - `./g8e login` / `./g8e logout`
+**Examples:**
 
-`login` mints CLI cert + key, captures session id, and writes credentials to `~/.g8e/credentials`. `logout` clears local session and credentials.
+```bash
+./g8e data users
+./g8e data operators
+./g8e data device-links list --user-id=<id>
+./g8e data device-links create --user-id=<id> --count=1 --ttl=3600
+./g8e data device-links delete --token=<token> --user-id=<id>
+./g8e data settings
+./g8e data store --collection=<name> --document-id=<id>
+./g8e data audit list --operator-session-id=<id> --limit=100
+./g8e data audit summary
+```
 
-### Chat - `./g8e chat [prompt]`
+---
 
-Starts an interactive web session with the **g8e Agentic Ensemble**. Optional initial prompt.
+### test
 
-### Variables - `./g8e vars`
+Orchestrate unit, scenario, and chaos tests.
 
-| Command | Purpose |
+| Subcommand | Purpose |
 |---|---|
-| `list` / `ls` | List all g8e env vars and current values. |
-| `set <key> <value>` | Set a variable in `.g8e/.env`. |
-| `get <key>` | Display a variable. |
-| `unset <key>` | Remove a variable. |
+| `unit` | Run unit tests |
+| `integration` | Run integration tests |
+| `g8eo` | Run Gateway (g8eo) tests |
+| `ci` | Run CI test suite (g8eo) |
+| `chaos` | Run chaos engineering tests |
+| `scenario` | Run scenario integration tests |
 
-### Data & Security - `./g8e data` / `./g8e security`
+**Examples:**
 
-**`data`** - Native Go client for Gateway state over mTLS:
+```bash
+./g8e test unit --race --v
+./g8e test integration --run=<scenario>
+./g8e test g8eo --race --v --run=<test>
+./g8e test ci
+./g8e test chaos --count=100
+./g8e test scenario --run=<scenario>
+```
 
-- `users` - User and session management.
-- `operators` - Operator registration and slot management.
-- `store <collection> list|get` - Document store and KV queries.
-- `device-links` - Device-link token lifecycle.
-- `audit` - LFAA git-ledger and audit vault queries.
-- `settings` - Low-level platform configuration.
+The default `./g8e test` command runs all unit and integration tests.
 
-**`security`** - TLS and identity invariants:
+---
 
-- `validate` - PKI integrity and environment consistency.
-- `mtls-test` - Connectivity test for mTLS trust.
-- `passkeys` - WebAuthn/FIDO2 hardware-bound identity management.
-- `scan-licenses` - Dependency license compliance.
+### security
 
-### Testing - `./g8e test`
+Certificate/PKI validation, mTLS connectivity testing, and WebAuthn/Passkey registration.
 
-See [Tests](./tests.md). Native toolchains via the unified Go CLI.
-
-| Command | Purpose |
+| Subcommand | Purpose |
 |---|---|
-| `g8eo [path]` | Go Operator Gateway tests with race detection. **Default when no component is provided.** |
-| `g8ee [path]` | Optional **g8e-compliant agentic ensemble** tests with LLM provider support. |
-| `chaos [options]` | Resiliency testing via `chaos_tester` (e.g., `--count=100`). |
+| `validate` | Run security validation checks |
 
-### Evals - `./g8e evals`
+**Examples:**
 
-See [Evals](./evals.md).
+```bash
+./g8e security validate --pki-dir=.g8e/pki --secrets-dir=.g8e/secrets
+```
 
-| Command | Purpose |
+The `validate` command checks PKI directory structure, secrets directory, certificate validity, port availability, and TLS configuration.
+
+---
+
+### vars
+
+Environment variable configuration.
+
+| Subcommand | Purpose |
 |---|---|
-| `bench --suite <suite> --mode <baseline\|receipt>` | Run a benchmark suite. |
-| `verify-receipts <report-dir>` | Re-verify receipt signatures offline. |
-| `list` | List benchmark suites and bundled gold sets. |
+| `list` / `ls` | List all g8e environment variables |
+| `set <key> <value>` | Set a variable in `.g8e/.env` |
+| `get <key>` | Display the value of a specific variable |
+| `unset <key>` | Remove a variable from `.g8e/.env` |
 
-### Demo - `./g8e demo`
+**Examples:**
 
-See [Demos](./demos.md).
-
-| Command | Purpose |
-|---|---|
-| `deploy [-n <count>] -d <token>` | Start and authenticate a simulated fleet of N devices. |
-| `down` | Stop all simulation nodes. |
-| `status` | Container status and node counts. |
-| `clean` | Forcefully remove all demo artifacts. |
-| `profile [list\|switch]` | Manage demo scenarios. |
-| `shell <node>` | Drop into a simulation node's shell. |
-| `devices` / `broken` | List discovered or unhealthy devices. |
-| `operators` | Status of g8e operator processes in the fleet. |
-
-### LLM - `./g8e llm`
-
-| Command | Purpose |
-|---|---|
-| `setup` | Interactive provider configuration. |
-| `show` / `get` / `set` | View or update LLM variables. |
-| `restart` | Restart Ensemble to apply settings. |
-
-### Integrations - `./g8e mcp` / `./g8e search` / `./g8e ssh` / `./g8e aws`
-
-- `mcp` - Model Context Protocol integration (`config`, `test`, `status`).
-- `search` - Vertex AI Search configuration (`setup`, `disable`).
-- `ssh` - Manage host SSH key mounts.
-- `aws` - Manage AWS credential mounts.
+```bash
+./g8e vars list
+./g8e vars set G8E_LOG_LEVEL debug
+./g8e vars get G8E_LOG_LEVEL
+./g8e vars unset G8E_LOG_LEVEL
+```
 
 ---
 
@@ -181,4 +202,4 @@ See [Demos](./demos.md).
 
 For detailed help on any subcommand: `./g8e <command> --help`.
 
-See also: [Operator](../concepts/operator.md), [Governance Gateway (g8eg)](../concepts/g8eg.md), [Tests](./tests.md), [Evals](./evals.md).
+See also: [Operator](../architecture/operator.md), [Governance Gateway (g8eg)](../architecture/g8eg.md), [Tests](./tests.md).

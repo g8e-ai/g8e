@@ -8,7 +8,7 @@ This document defines the technical standards, architectural invariants, and con
 2. **3-layer governance bedrock.** Doctrine (L1Doctrine) hard gates (forbidden patterns) via protobuf reflection; Consensus (L2Consensus) multi-agent consensus with reputation staking; Notary (L3Notary) human-in-the-loop with hardware-bound WebAuthn proofs (auto-approval for benign diagnostics only after Doctrine (L1Doctrine)+Consensus (L2Consensus) pass).
 3. **Data sovereignty.** Raw command output and file contents stay on the Operator host, encrypted, and never persist platform-side. Platform state is host-native under `.g8e/`.
 4. **Security by structure.** All changes adhere to the Security Review Checklist. The Operator is the only execution boundary.
-5. **BYO Frontend.** The platform is UI-less by design. The **CLI (`./g8e`) is the default out-of-the-box UI**. The Operator provides a minimal bootstrap web interface, but primary interaction is via the CLI, BYO clients, or optional g8e-compatible agentic ensembles.
+5. **BYO Frontend.** The platform is UI-less by design. The **CLI (`./g8e`) is the default out-of-the-box UI**. The Operator provides a minimal bootstrap web interface, but primary interaction is via the CLI or BYO clients.
 
 ## Development Lifecycle
 
@@ -22,62 +22,38 @@ Run the interactive setup wizard:
 ./g8e setup
 ```
 
-The setup offers three modes:
-
-1. **Quick Start (Gateway Mode)** - Minimal setup for BYO clients and MCP/A2A translators
-   - Checks Go 1.26+
-   - Generates protocol artifacts
-   - Builds g8eg and g8eo services
-
-2. **Quick Start (Full Mode)** - Complete setup including optional agentic ensembles
-   - Checks Go 1.26+ and Python 3.14+
-   - Generates protocol artifacts
-   - Sets up Python venv and installs agentic ensemble dependencies
-   - Builds all services
-
-3. **Complete Developer Setup** - Automated full environment setup with verification
-   - Runs all dependency checks
-   - Installs Python 3.14 via pyenv if needed
-   - Generates protocol artifacts
-   - Sets up Python environment
-   - Builds all services
-   - Runs verification tests
+The setup checks for required Go development dependencies, generates protocol artifacts, and builds the `g8e` binary.
 
 **Manual setup requirements:**
 
-- **Go 1.26+** (required, for `g8eg`/`g8eo`). Configure GOPATH in your shell profile (`~/.bashrc` or `~/.zshrc`):
+- **Go 1.26+** (required). Configure GOPATH in your shell profile (`~/.bashrc` or `~/.zshrc`):
   ```bash
   export GOPATH=$HOME/go
   export PATH=$GOPATH/bin:$PATH
   ```
   Go tools installed via `go install` (e.g., golangci-lint, govulncheck) are placed in `$GOPATH/bin`.
-- **Python 3.14+** (only when developing optional g8e-compatible agentic ensembles). The setup script will offer to install Python 3.14 via pyenv if your system version is insufficient.
 
 ### Common Commands
 
 | Command | Purpose |
 |---|---|
 | `./g8e` | Interactive Platform Manager. |
-| `./g8e platform start` | Start the Governance Gateway (`g8eg`) only. |
-| `./g8e platform start --with-apps` | Gateway plus optional bundled adapters. |
-| `./g8e apps start <app-name>` | Start optional application-layer adapters. |
-| `./g8e platform status` | Gateway health first, optional app status separately. |
+| `./g8e platform start` | Start the Governance Gateway (`g8eg`). |
+| `./g8e platform status` | Get Gateway health and status. |
 | `./g8e login` | Authenticate the local CLI. |
-| `./g8e test <component>` | Host-native tests (default: g8eo). |
+| `./g8e test` | Run Go host-native tests. |
 
 ### CLI
 
-The unified `g8eo` binary is the single entry point for all platform operations. It serves dual purposes:
+The unified `g8e` binary is the single entry point for all platform operations. It serves dual purposes:
 - **Daemon mode**: Runs the Governance Gateway/Operator when invoked without subcommands
 - **CLI mode**: Manages platform lifecycle, auth, data, and tests when invoked with subcommands
 
 **CLI Subcommands:**
-- **Platform Management (`./g8e platform`)**: Orchestrates the mandatory Gateway lifecycle via native Go process management.
-- **Application Layer (`./g8e apps`)**: Manages optional, opt-in adapters (like `g8ee`) that extend the platform's capabilities.
+- **Platform Management (`./g8e platform`)**: Orchestrates the Gateway lifecycle via native Go process management.
 - **Auth & PKI (`./g8e auth`)**: Establishes identity, generates CSRs, and verifies certificate chains.
 - **Data & Admin (`./g8e data`)**: Administers the local substrate over mTLS (users, operators, device-links, settings).
-- **Test Orchestration (`./g8e test`)**: Orchestrates test execution suites.
-- **Evals (`./g8e evals`)**: Eval suite orchestrator.
+- **Test Orchestration (`./g8e test`)**: Orchestrates Go test execution suites.
 - **Security (`./g8e security`)**: Validation checks.
 - **Environment (`./g8e vars`)**: Environment variable management.
 
@@ -92,12 +68,11 @@ The unified `g8eo` binary is the single entry point for all platform operations.
 
 ## Architecture Philosophy
 
-g8e is split into the **Protocol (Gateway)**, the **Governance Gateway (g8eg)**, the **Governed Operator (g8eo)**, and an optional **Application Layer**.
+g8e is split into the **Protocol (Gateway)**, the **Governance Gateway (g8eg)**, and the **Governed Operator (g8eo)**.
 
 - **Protocol (Gateway)** - Shared `.proto` schemas plus the canonical-JSON wire contract; the source of truth for what every operator and client must honor.
 - **Governance Gateway (`g8eg`)** - The central, BFT-governed Policy Decision Point (PDP) running in Gateway mode (--doctrine, --consensus, or --notary). It provides the platform's central persistence, PKI, and protocol API (including a minimal bootstrap interface).
 - **Governed Operator (`g8eo`)** - The host-side Policy Execution Point (PEP) and MCP Server. It enforces protocol compliance, verifies Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) signatures, and executes transactions via the L5Actuator stage.
-- **Reference Application Layer (optional)** - Optional adapters like the **g8e Agentic Ensemble** (`g8ee`) that extend the platform's reasoning capabilities. All interaction flows through the CLI by default.
 - **Host-native execution** - Core components run as native processes.
 - **Zero-config discovery** - Services use a standardized local runtime directory (`.g8e/`) for discovery and configuration sharing.
 
@@ -106,15 +81,13 @@ g8e is split into the **Protocol (Gateway)**, the **Governance Gateway (g8eg)**,
 | Component | Role | Runtime | Build |
 |---|---|---|---|
 | Governance Gateway (`g8eg`) / Governed Operator (`g8eo`) | Central PDP (`g8eg`) and host-side PEP (`g8eo`) | Host Go binary (compiled from single Go Gateway codebase to both `g8e.gateway` and `g8e.operator`) | Native Go via `Makefile` |
-| g8e Agentic Ensemble (`g8ee`) | Optional **g8e-compliant agentic ensemble** adapter: AI Backend & Workflow Orchestration | Python 3.14 venv | `pip install` into project root `.venv` |
 
 ### Host-native Startup Lifecycle
 
 The `./g8e platform start` command manages the sequence:
 1. **Gateway binary check/build** → Governance Gateway (`g8eg`) starts in Gateway mode (--doctrine, --consensus, or --notary).
 2. **Root of trust generation** (first boot only) - ECDSA P-384 CA hierarchy, intermediate CAs, and trust bundles in `.g8e/pki/`; `session_encryption_key`, `Actuator_signing_key` in `.g8e/secrets/`.
-3. **Optional service initialization** - The **agentic ensemble** (`g8ee`) starts under its venv with mTLS + URI SAN identity.
-4. **Asynchronous convergence** - Services poll health endpoints (e.g., Ensemble polls the Governance Gateway's mTLS API at `https://localhost:<operator_http>/health`; default `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->`).
+3. **Asynchronous convergence** - Services and clients poll health endpoints.
 
 ## State & Data Strategy
 
@@ -157,13 +130,6 @@ AI agents tend to wrap poorly understood code in new abstractions. This is stric
 - **Testing**: Table-driven tests are the standard for unit testing. Use `testify/assert` for readability.
 - **Formatting**: Group imports into three blocks: standard library, external, and internal (`g8e/g8eo/...`).
 
-### Python (`g8ee`)
-- **Tooling**: `ruff` is the unified linter and formatter. `mypy --strict` is mandatory for type checking.
-- **Type Hints**: Mandatory for all function arguments and return types. No `Any`.
-- **Async Discipline**: Never perform blocking I/O inside an `async def` function. Use `anyio` or `asyncio` equivalents.
-- **Models**: All data structures must use Pydantic `G8eBaseModel` with `extra="forbid"`.
-- **Docstrings**: Use Google-style docstrings for non-trivial logic.
-
 ## Application Boundary and State Management
 
 1. **Single source of truth.** The `protocol/` directory is canonical for all wire-protocol values and cross-component document schemas.
@@ -178,11 +144,6 @@ AI agents tend to wrap poorly understood code in new abstractions. This is stric
 - **Concurrency** - Goroutines have explicit cancellation contexts and clear channel ownership.
 - **Protocol boundary** - Any capability needed by bundled apps or BYO clients is exposed through the public gateway protocol.
 - **Execution boundary** - Actuator is the sole circuit breaker before dispatch. Every accepted mutation emits a signed `ActionReceipt`.
-
-### g8e Agentic Ensemble (g8ee) (Python/FastAPI, **g8e-compliant agentic ensemble** adapter)
-- **Pydantic enforcement** - Domain objects extend `G8eBaseModel`. Pydantic enforces type checking and rejects extra fields.
-- **Async safety** - Avoid state-modifying `finally` blocks in async generators.
-- **Adapter boundary** - Must produce protocol-verifiable proposals and proofs.
 
 ## Testing
 
@@ -201,27 +162,6 @@ All substrate tests are orchestrated via the `./g8e` CLI. **Never call `go test`
 |---|---|---|---|
 | `./g8e test` | Host Go | `go test` | Default Gateway test run (g8eo) |
 | `./g8e test g8eo` | Host Go | `go test` | Operator listen mode, pub/sub |
-| `./g8e test g8ee` | Host venv | `pytest` | Optional g8ee app: Ensemble adapter, Ensemble reasoning |
-
-Note: The `./g8e test g8ee` command is specific to the optional g8ee Agentic Ensemble application. The substrate (g8eo) is tested entirely with Go.
-
-## Evals (AI Benchmarks)
-
-The evals harness drives the **optional g8ee Agentic Ensemble** chat pipeline end-to-end - Triage, Dash/Sage, Consensus stage, Auditor, L5Actuator - and fold the full agent trail into a per-task receipt. This is specific to the g8ee application, not the substrate.
-
-```bash
-# 1. Start the platform and login
-./g8e platform start
-./g8e login
-
-# 2. Run the evaluation benchmark
-./g8e evals bench --suite ifeval --model openai:gpt-4o
-
-# 3. Verify ActionReceipts offline
-./g8e evals verify-receipts reports/ifeval-<timestamp>/
-```
-
-`g8e_evals.receipts.verify.verify_receipt_signature` performs offline Ed25519 verification using the Actuator public key from `.g8e/pki/Actuator_pub.pem`.
 
 ## Documentation Guidelines
 
@@ -319,8 +259,6 @@ See `docs/reference/constants.md` for complete documentation of the constants pi
 | Constants registries | `internal/constants/` |
 | Constants documentation | `docs/reference/constants.md` |
 | Operator implementation | Root-level (cmd/, internal/, pkg/) |
-| g8e Agentic Ensemble implementation | `services/g8ee/` |
-| Evaluation harness | `evals/` |
 | CLI | Unified `g8e` binary (daemon + CLI modes) |
 
 ## Submitting a PR
