@@ -26,6 +26,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 type Client struct {
@@ -99,10 +100,10 @@ func (c *Client) DoRequest(method, path string, body interface{}) ([]byte, error
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	req.Header.Set("X-Operator-Session-ID", c.creds.OperatorSessionID)
-	req.Header.Set("X-CLI-Session-ID", c.creds.CLISessionID)
-	req.Header.Set("X-User-ID", c.creds.UserID)
-	req.Header.Set("X-Operator-ID", c.creds.OperatorID)
+	req.Header.Set(constants.HeaderOperatorSessionID, c.creds.OperatorSessionID)
+	req.Header.Set(constants.HeaderCLISessionID, c.creds.CLISessionID)
+	req.Header.Set(constants.HeaderUserID, c.creds.UserID)
+	req.Header.Set(constants.HeaderOperatorID, c.creds.OperatorID)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
