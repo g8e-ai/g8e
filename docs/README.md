@@ -41,5 +41,5 @@ Guides for setting up, testing, and contributing to the platform.
 Broad architectural context and platform thesis.
 
 - [**About g8e**](architecture/about.md) - Compact architecture framing.
-- [**Position Paper**](architecture/position_paper.md) - Thesis on BFT governance at the AI execution boundary.
+- [**Position Paper**](reference/position_paper.md) - Thesis on BFT governance at the AI execution boundary.
 - [**Glossary**](reference/glossary.md) - Canonical platform terminology.

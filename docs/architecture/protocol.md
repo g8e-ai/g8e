@@ -8,34 +8,34 @@ Last Updated: 2026-05-25
 
 ## 1. Introduction
 
-The **g8e Protocol** is a zero-trust execution substrate and compliance standard for agentic infrastructure. It ingests payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain) at the admission boundary and forces them through a fail-closed verification gauntlet: envelope integrity, typed-payload decoding, L1 forbidden patterns, hash binding, freshness (`expires_at` + nonce/replay), host state-root validation, L2 Consensus signature, and an L3 Authorization proof bound to the same hash.
+The **g8e Protocol** is a zero-trust execution substrate for agentic infrastructure. It defines a typed, signed, state-bound transaction envelope that admits payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain) through a fail-closed verification gauntlet.
 
-Rather than competing with tool-calling standards, the protocol wraps standard JSON-RPC tools as unverified payloads (the "what") inside a strict, canonical `GovernanceEnvelope` (the "how").
+The protocol wraps standard JSON-RPC tools as unverified payloads (the "what") inside a strict, canonical `GovernanceEnvelope` (the "how"). The envelope carries cryptographic proofs that must pass independent verification layers before any execution occurs.
 
 ### Core Invariants
 
 - **Canonical JSON Wire Format**: All client-facing surfaces (HTTP, WSS pub/sub, receipts, audit exports) carry the `GovernanceEnvelope` as canonical JSON (protojson). Binary protobuf is strictly reserved for internal storage.
 - **Hash-Based Signing**: A deterministic `transaction_hash` is computed from normalized envelope fields. The verifier enforces `id == transaction_hash == SHA256(canonical_fields)`.
 - **Fail-Closed Verification**: Any malformed envelope, expired transaction, reused nonce, stale state root, or missing proof is rejected immediately before execution.
-- **Body-Embedded Context**: Business and execution context (`web_session_id`, `cli_session_id`, `operator_session_id`, `user_id`) lives inside the envelope via a typed `RequestContext`.
+- **Body-Embedded Context**: Execution context (`web_session_id`, `cli_session_id`, `operator_session_id`, `user_id`) lives inside the envelope via a typed `RequestContext`.
 - **BFT State Binding**: Mutations carry a `state_merkle_root` that the Operator compares against its current host state.
-- **Operator Sovereignty**: No bundled component has privileged channels. The Operator (`g8eo`) is the only execution boundary, enforcing rules uniformly.
+- **Operator Sovereignty**: The Operator (`g8eo`) is the only execution boundary, enforcing rules uniformly. No component has privileged bypass channels.
 
-## 2. The Lifecycle/Pipeline
+## 2. Transaction Lifecycle
 
 The transaction lifecycle follows a strict sequence from intent to audited execution.
 
-### Request Phase (Client -> Gateway -> Operator)
+### Request Phase
 
-1. A client ecosystem generates a typed protobuf payload (e.g., `CommandRequested`).
+1. A client generates a typed protobuf payload (e.g., `CommandRequested`).
 2. The payload is embedded into a `GovernanceEnvelope` alongside `nonce`, `expires_at`, and `state_merkle_root`.
 3. An L2 Consensus producer computes the `transaction_hash` and attaches a signature.
 4. For mutations, an L3 Notary (human) signs the same hash via WebAuthn, unless auto-approval policy applies.
 5. The client submits the canonical-JSON envelope over mTLS to the Governance Gateway (`g8eg`), which validates and dispatches it to the target Operator (`g8eo`) over WSS.
 
-### Verification Phase (L4Warden)
+### Verification Phase
 
-The `L4Warden` operates as the primary validation gate, executing the following checks sequentially:
+The Operator executes the following checks sequentially before dispatch:
 
 1. **Integrity**: Enforces `id == transaction_hash == SHA256(canonical_fields)`.
 2. **Freshness**: Verifies `expires_at` and ensures the `nonce` is not in the replay store.
@@ -44,11 +44,11 @@ The `L4Warden` operates as the primary validation gate, executing the following 
 5. **L2 Consensus**: Verifies the Ed25519 signature against the Operator's trusted `SignerStore`.
 6. **L3 Posture**: Validates the WebAuthn proof or applies explicit auto-approval policy for the action.
 
-### Execution & Receipt Phase (L5Actuator)
+### Execution & Receipt Phase
 
-1. The `L5Actuator` signs an executing-state `ActionReceipt` and writes it to the fail-closed `AuditVault`.
-2. The typed payload is dispatched to its execution handler (e.g., shell executor, file edit handler).
-3. The `L5Actuator` updates the receipt with the final status (`COMPLETED` or `FAILED`), the post-state root, and a fresh signature.
+1. The Operator signs an executing-state `ActionReceipt` and writes it to the fail-closed `AuditVault`.
+2. The typed payload is dispatched to its execution handler.
+3. The Operator updates the receipt with the final status (`COMPLETED` or `FAILED`), the post-state root, and a fresh signature.
 4. The Operator publishes a result envelope carrying the typed result and signed receipt back to the Gateway.
 
 ## 3. Core Subsystems
@@ -68,20 +68,6 @@ The `GovernanceEnvelope` is the single canonical container for every mutation. T
 | `nonce` | Unique replay-protection token. |
 | `expires_at` | UTC timestamp after which the envelope is strictly void. |
 
-### The Players
-
-The system defines specialized AI agents and roles in `protocol/constants/agents.json`.
-
-| Role | Responsibility |
-|---|---|
-| **Triage** | Classifies complexity, intent, and user posture. Determines model tier and trajectory. |
-| **Sage** | Senior reasoning authority; plans investigations and articulates intent. |
-| **Dash** | Surgical responder; handles simple requests with minimum viable latency. |
-| **Consensus Members** | Ensemble including Axiom, Concord, Variance, Pragma, and Nemesis that convert intent into commands. |
-| **Auditor** | Final quality gate; verifies intent fidelity and disambiguates votes. |
-| **L5Actuator** | Orchestrates execution. Final execution boundary for all mutations. |
-| **User** | Human domain validator; provides hardware-bound signature to verify intent. |
-
 ### Session Separation
 
 The protocol enforces strict separation between session types to guarantee context integrity.
@@ -94,7 +80,7 @@ The protocol enforces strict separation between session types to guarantee conte
 
 ### JSON-RPC Error Mapping
 
-The Operator proxy exposes Gateway verification failures back to MCP/A2A clients via standardized JSON-RPC codes (defined in `internal/responder/responder.go`):
+The Operator exposes verification failures back to MCP/A2A clients via standardized JSON-RPC codes:
 
 | Code | Label | Meaning |
 |---|---|---|
@@ -117,14 +103,14 @@ Every mutation must pass three independent layers in order. A failure at any lay
 **1. L1 Doctrine: Technical Bedrock**
 Static, deterministic checks enforced before any code executes. Validated using doctrines sourced from `protocol/constants/doctrine/doctrine_registry.json`.
 - **Forbidden Patterns**: The custom protobuf field option `(g8e.common.v1.forbidden_patterns)` is reflected at runtime to scan typed payloads.
-- **Threat Detection**: Sentinel threat logic runs within L1 Doctrine to analyze command inputs for MITRE ATT&CK patterns, reverse shells, and injection vectors.
+- **Threat Detection**: Threat logic runs within L1 Doctrine to analyze command inputs for MITRE ATT&CK patterns, reverse shells, and injection vectors.
 - **Allow/Deny Lists**: Enforces per-host policy and user settings.
 
 **2. L2 Consensus: Distributed Agreement**
 A cryptographic proof that an independent ensemble agreed on the instruction.
 - An Ed25519 signature is generated over `transaction_hash | decision`.
 - Verified against the Operator-owned `SignerStore`.
-- The reference implementation runs a Byzantine cascade: Triage -> Dash/Sage -> 5-member Consensus generation -> Auditor verification -> Signature.
+- The consensus ensemble produces the signature; the protocol does not mandate a specific implementation.
 
 **3. L3 Notary: Human Authorization**
 Hardware-bound proof of human presence.
@@ -136,11 +122,11 @@ Hardware-bound proof of human presence.
 
 - **Multi-Ledger Architecture**: Each operator session owns an isolated, encrypted git repository (`.g8e/data/ledger/sessions/<id>/`). Every file mutation triggers a native Go `go-git` commit tracking the `LedgerHashBefore` and `LedgerHashAfter`.
 - **Fail-Closed Audit Vault**: The SQLite-backed `AuditVaultService` mandates valid session identifiers and rejects malformed events. If audit logging fails, execution is aborted.
-- **Sovereignty Boundary**: Output scrubbing is performed directly at the `L5Actuator` boundary to redact tokens, keys, and PII before any data leaves the host.
+- **Sovereignty Boundary**: Output scrubbing is performed at the execution boundary to redact tokens, keys, and PII before any data leaves the host.
 
 ---
 
-### Implementation Reference
+## 5. Implementation Reference
 
 | Concern | Authoritative file |
 |---|---|
@@ -148,7 +134,4 @@ Hardware-bound proof of human presence.
 | Event registry | `protocol/constants/events.json` |
 | Channel prefixes | `protocol/constants/channels.json` |
 | Envelope types | `pkg/uap/types.go` |
-| Warden logic | `internal/services/governance/l4_warden.go` |
-| Actuator logic | `internal/services/governance/l5_actuator.go` |
-| Audit storage | `internal/services/storage/audit_vault.go` |
-| Workload identity| `protocol/workload_identity.go` |
+| Workload identity | `protocol/workload_identity.go` |
