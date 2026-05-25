@@ -83,18 +83,21 @@ nav:
       - A2A Protocol: protocols/a2a/a2a.md
   - Guides:
       - Getting Started: guides/getting_started.md
+      - Build Gateway: guides/build_gateway.md
+      - Deploy Gateway: guides/deploy_gateway.md
+      - Build Operator: guides/build_operator.md
+      - Deploy Operator: guides/deploy_operator.md
+      - Build Apps: guides/build_apps.md
       - Air Gap: guides/air_gap.md
-      - g8e CLI: guides/g8e-cli.md
-      - Troubleshooting: guides/troubleshooting.md
-      - g8e-Compatible Apps: guides/g8e-compatible-apps.md
   - Reference:
       - API: reference/api/index.md
-      - CLI: guides/cli.md
       - Constants: reference/constants.md
       - Glossary: reference/glossary.md
-      - Tests: guides/tests.md
   - Developer:
-      - Developer Guidelines: guides/devs.md
+      - Developer Guidelines: devs/devs.md
+      - CLI Reference: devs/cli.md
+      - Testing: devs/tests.md
+      - Troubleshooting: devs/troubleshooting.md
       - Codemap: codemap.md
   - External:
       - A2A Protocol (JSON Schema): protocols/a2a/a2a.json
