@@ -996,8 +996,8 @@ func TestSovereigntyService_RehydrateText(t *testing.T) {
 
 	t.Run("rehydrates known token", func(t *testing.T) {
 		t.Parallel()
-		service.tokenMap["{{UEI_1}}"] = "secret-value"
-		result := service.RehydrateText("Command with {{UEI_1}}")
+		token := service.GetTokenForValue("secret-value")
+		result := service.RehydrateText("Command with " + token)
 		assert.Equal(t, "Command with secret-value", result)
 	})
 }
@@ -1017,8 +1017,8 @@ func TestSovereigntyService_RehydratePayload(t *testing.T) {
 
 	t.Run("non-JSON payload uses text rehydration", func(t *testing.T) {
 		t.Parallel()
-		service.tokenMap["{{UEI_1}}"] = "secret"
-		payload := []byte("Text with {{UEI_1}}")
+		token := service.GetTokenForValue("secret")
+		payload := []byte("Text with " + token)
 		result, err := service.RehydratePayload(payload)
 		assert.NoError(t, err)
 		assert.Equal(t, "Text with secret", string(result))
@@ -1026,8 +1026,8 @@ func TestSovereigntyService_RehydratePayload(t *testing.T) {
 
 	t.Run("JSON payload rehydrates recursively", func(t *testing.T) {
 		t.Parallel()
-		service.tokenMap["{{UEI_1}}"] = "secret"
-		payload := []byte(`{"key": "value {{UEI_1}}", "nested": {"data": "{{UEI_1}}"}}`)
+		token := service.GetTokenForValue("secret")
+		payload := []byte(`{"key": "value ` + token + `", "nested": {"data": "` + token + `"}}`)
 		result, err := service.RehydratePayload(payload)
 		assert.NoError(t, err)
 		// Parse the result to verify rehydration
