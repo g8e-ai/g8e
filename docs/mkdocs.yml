@@ -74,12 +74,13 @@ nav:
   - Home: index.md
   - Architecture:
       - About: architecture/about.md
-      - Position Paper: architecture/position_paper.md
+      - Position Paper: reference/position_paper.md
       - Operator: architecture/operator.md
       - Governance Gateway: architecture/gateway.md
   - Protocols:
-      - g8e Protocol: protocols/protocol.md
-      - MCP/A2A Gateway: protocols/mcp_a2a_gateway.md
+      - g8e Protocol: architecture/protocol.md
+      - MCP Protocol: protocols/mcp/mcp.md
+      - A2A Protocol: protocols/a2a/a2a.md
   - Guides:
       - Getting Started: guides/getting_started.md
       - Air Gap: guides/air_gap.md
@@ -96,5 +97,5 @@ nav:
       - Developer Guidelines: guides/devs.md
       - Codemap: codemap.md
   - External:
-      - A2A Protocol (JSON Schema): external/a2a.json
-      - A2A Protocol (Proto): external/a2a.proto
+      - A2A Protocol (JSON Schema): protocols/a2a/a2a.json
+      - A2A Protocol (Proto): protocols/a2a/a2a.proto
