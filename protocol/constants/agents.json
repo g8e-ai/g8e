@@ -1,21 +1,6 @@
 {
   "agents": {
     "AgentNameDash": "dash",
-    "AgentNameSage": "sage",
-    "TribunalAuditorReasonAuditorError": "auditor_error",
-    "TribunalAuditorReasonEmptyResponse": "empty_response",
-    "TribunalAuditorReasonNoValidRevision": "no_valid_revision",
-    "TribunalAuditorReasonOk": "ok",
-    "TribunalAuditorReasonRevisedFromDissent": "revised_from_dissent",
-    "TribunalAuditorReasonSwappedToDissenter": "swapped_to_dissenter",
-    "TribunalAuditorReasonWhitelistViolation": "whitelist_violation",
-    "TribunalMemberAxiom": "axiom",
-    "TribunalMemberConcord": "concord",
-    "TribunalMemberNemesis": "nemesis",
-    "TribunalMemberPragma": "pragma",
-    "TribunalMemberVariance": "variance",
-    "TribunalTieBreakReasonAlphabetical": "alphabetical",
-    "TribunalTieBreakReasonExcludedNemesis": "excluded_nemesis",
-    "TribunalTieBreakReasonShortest": "shortest"
+    "AgentNameSage": "sage"
   }
 }

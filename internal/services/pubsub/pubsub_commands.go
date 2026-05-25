@@ -571,7 +571,7 @@ func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []b
 	return receipt, execErr
 }
 
-// handleUAPEnvelope processes a UAPEnvelope using the TransactionVerifier, Tribunal and Actuator services.
+// handleUAPEnvelope processes a UAPEnvelope using the TransactionVerifier, Consensus and Actuator services.
 func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 	var verified *governance.VerifiedTransaction
 

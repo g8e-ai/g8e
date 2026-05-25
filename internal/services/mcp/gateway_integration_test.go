@@ -200,7 +200,7 @@ func TestGatewaySignedCanonicalizationIntegration(t *testing.T) {
 	require.Equal(t, canonical, canonical2, "Canonicalization should be deterministic")
 }
 
-// TestGatewaySignedFalseIntegration tests the Tribunal path where GatewaySigned=false
+// TestGatewaySignedFalseIntegration tests the Consensus path where GatewaySigned=false
 func TestGatewaySignedFalseIntegration(t *testing.T) {
 	t.Parallel()
 	processor := &fakeEnvelopeProcessor{
@@ -212,7 +212,7 @@ func TestGatewaySignedFalseIntegration(t *testing.T) {
 		},
 	}
 
-	// Simulate a Tribunal-signed envelope (not from MCP gateway)
+	// Simulate a Consensus-signed envelope (not from MCP gateway)
 	envelope := &commonv1.GovernanceEnvelope{
 		Id:              "tx-1",
 		TransactionHash: "hash-1",
@@ -220,8 +220,8 @@ func TestGatewaySignedFalseIntegration(t *testing.T) {
 		Governance: &commonv1.GovernanceMetadata{
 			GatewaySigned: false,
 			L2: &commonv1.L2Metadata{
-				ConsensusSignature: "tribunal-sig",
-				KeyId:              "tribunal-key",
+				ConsensusSignature: "consensus-sig",
+				KeyId:              "consensus-key",
 				AgentIds:           []string{"agent-1", "agent-2", "agent-3"},
 			},
 		},
@@ -237,5 +237,5 @@ func TestGatewaySignedFalseIntegration(t *testing.T) {
 	require.NotNil(t, receipt)
 
 	// Verify GatewaySigned is false
-	require.False(t, receipt.GatewaySigned, "Tribunal-signed transactions should have GatewaySigned=false")
+	require.False(t, receipt.GatewaySigned, "Consensus-signed transactions should have GatewaySigned=false")
 }

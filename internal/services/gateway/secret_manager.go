@@ -37,7 +37,7 @@ var requiredBootstrapSecrets = []string{
 	"actuator_signing_key",
 	"actuator_key_id",
 	"auditor_hmac_key",
-	"tribunal_signing_key",
+	"consensus_signing_key",
 }
 
 // SecretManager handles generation and validation of platform security secrets.
@@ -154,12 +154,12 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
 	ActuatorKeyID := hex.EncodeToString(ActuatorPub)
 
-	// Generate Tribunal signing key for L2 consensus
-	TribunalSeedBytes, err := m.generateSecureTokenBytes(ed25519.SeedSize)
+	// Generate consensus signing key for L2 consensus
+	ConsensusSeedBytes, err := m.generateSecureTokenBytes(ed25519.SeedSize)
 	if err != nil {
 		return err
 	}
-	TribunalSeed := hex.EncodeToString(TribunalSeedBytes)
+	ConsensusSeed := hex.EncodeToString(ConsensusSeedBytes)
 
 	sessionEncryptionKey, err := m.generateSecureToken(32)
 	if err != nil {
@@ -175,7 +175,7 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 		"actuator_signing_key":   ActuatorSeed, // Seed for ED25519
 		"actuator_key_id":        ActuatorKeyID,
 		"auditor_hmac_key":       auditorHMACKey,
-		"tribunal_signing_key":   TribunalSeed, // Seed for ED25519
+		"consensus_signing_key":  ConsensusSeed, // Seed for ED25519
 	}
 
 	platformSettings := models.SettingsDocument{}
@@ -460,24 +460,24 @@ func (m *SecretManager) GetCAPrivateKey(caType string) ([]byte, error) {
 	return hex.DecodeString(plaintext)
 }
 
-// StoreTribunalKey stores a Tribunal signing key in the keystore.
-func (m *SecretManager) StoreTribunalKey(seedHex string) error {
-	return m.keystore.EncryptSecret("tribunal_signing_key", seedHex)
+// StoreConsensusKey stores a consensus signing key in the keystore.
+func (m *SecretManager) StoreConsensusKey(seedHex string) error {
+	return m.keystore.EncryptSecret("consensus_signing_key", seedHex)
 }
 
-// GetTribunalKey retrieves the Tribunal's ED25519 signing key from the keystore.
-func (m *SecretManager) GetTribunalKey() (ed25519.PrivateKey, error) {
-	seedHex, err := m.keystore.DecryptSecret("tribunal_signing_key")
+// GetConsensusKey retrieves the consensus ED25519 signing key from the keystore.
+func (m *SecretManager) GetConsensusKey() (ed25519.PrivateKey, error) {
+	seedHex, err := m.keystore.DecryptSecret("consensus_signing_key")
 	if err != nil {
-		return nil, fmt.Errorf("decrypt tribunal_signing_key: %w", err)
+		return nil, fmt.Errorf("decrypt consensus_signing_key: %w", err)
 	}
 
 	seed, err := hex.DecodeString(seedHex)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode tribunal_signing_key: %w", err)
+		return nil, fmt.Errorf("failed to decode consensus_signing_key: %w", err)
 	}
 	if len(seed) != ed25519.SeedSize {
-		return nil, fmt.Errorf("tribunal_signing_key decoded to %d bytes; expected %d; delete and recreate runtime state", len(seed), ed25519.SeedSize)
+		return nil, fmt.Errorf("consensus_signing_key decoded to %d bytes; expected %d; delete and recreate runtime state", len(seed), ed25519.SeedSize)
 	}
 
 	return ed25519.NewKeyFromSeed(seed), nil

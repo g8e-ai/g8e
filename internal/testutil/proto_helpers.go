@@ -342,7 +342,7 @@ func MustMarshalUAPEnvelope(t *testing.T, messageID string, protocolVersion stri
 }
 
 // MustMarshalUAPEnvelopeWithVotes creates a UAPEnvelope JSON with pre-populated votes.
-func MustMarshalUAPEnvelopeWithVotes(t *testing.T, messageID string, protocolVersion string, senderID string, actionType string, targetResource string, dataFormat string, dataBlob string, requiredVotes int, agentIDs []string, tribunalSig string) []byte {
+func MustMarshalUAPEnvelopeWithVotes(t *testing.T, messageID string, protocolVersion string, senderID string, actionType string, targetResource string, dataFormat string, dataBlob string, requiredVotes int, agentIDs []string, consensusSig string) []byte {
 	t.Helper()
 	env := &uap.UAPEnvelope{
 		ProtocolVersion: protocolVersion,
@@ -355,7 +355,7 @@ func MustMarshalUAPEnvelopeWithVotes(t *testing.T, messageID string, protocolVer
 		Governance: &commonv1.GovernanceMetadata{
 			L2: &commonv1.L2Metadata{
 				AgentIds:           agentIDs,
-				ConsensusSignature: tribunalSig,
+				ConsensusSignature: consensusSig,
 			},
 		},
 	}
