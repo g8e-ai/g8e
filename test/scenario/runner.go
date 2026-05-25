@@ -28,36 +28,11 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/sentinel"
+	"github.com/g8e-ai/g8e/internal/services/system"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 )
-
-// Clock is an injectable time source for deterministic testing.
-type Clock interface {
-	Now() time.Time
-}
-
-// RealClock uses actual wall time.
-type RealClock struct{}
-
-func (c *RealClock) Now() time.Time {
-	return time.Now().UTC()
-}
-
-// FixedClock returns a fixed time for deterministic testing.
-type FixedClock struct {
-	fixed time.Time
-}
-
-func (c *FixedClock) Now() time.Time {
-	return c.fixed
-}
-
-// NewFixedClock creates a FixedClock set to the given time.
-func NewFixedClock(t time.Time) *FixedClock {
-	return &FixedClock{fixed: t}
-}
 
 // InMemoryReplayStore is an in-memory replay store for testing.
 type InMemoryReplayStore struct {
@@ -109,13 +84,13 @@ type Result struct {
 type OperatorGate struct {
 	verifier *governance.TransactionVerifier
 	actuator *governance.Actuator
-	clock    Clock
+	clock    system.Clock
 	mode     Mode
 	logger   *slog.Logger
 }
 
 // NewOperatorGate creates an OperatorGate for the given mode with injectable dependencies.
-func NewOperatorGate(mode Mode, clock Clock, stateRoot string, trustedSigners map[string]ed25519.PublicKey) (*OperatorGate, error) {
+func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSigners map[string]ed25519.PublicKey) (*OperatorGate, error) {
 	// Create a discard logger for testing to avoid nil pointer issues
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -156,6 +131,7 @@ func NewOperatorGate(mode Mode, clock Clock, stateRoot string, trustedSigners ma
 		sentinelInstance,
 		knownActionTypes,
 		string(mode),
+		clock,
 	)
 
 	// Create actuator

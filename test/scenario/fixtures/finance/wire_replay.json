@@ -3,9 +3,9 @@
   "vertical": "finance",
   "narrative": "Envelope with replayed nonce should be rejected",
   "intent": {
-    "id": "be4c863b0e2713908aa599a346802067ea4126b7746525227e834857e90b5b6e",
-    "timestamp": "2026-05-24T23:55:00.628303786Z",
-    "expiresAt": "2026-05-25T00:55:00.628304134Z",
+    "id": "b51482e781b6525854a4652594e9b75e926b485311812036e26a9036abd8f378",
+    "timestamp": "2026-05-24T12:00:00Z",
+    "expiresAt": "2026-05-24T13:00:00Z",
     "sourceComponent": "COMPONENT_CLIENT",
     "operatorId": "operator-1",
     "operatorSessionId": "operator-session-1",
@@ -14,20 +14,20 @@
     "targetResource": "localhost",
     "stateMerkleRoot": "abc123def456",
     "nonce": "nonce-replay-123",
-    "transactionHash": "be4c863b0e2713908aa599a346802067ea4126b7746525227e834857e90b5b6e",
+    "transactionHash": "b51482e781b6525854a4652594e9b75e926b485311812036e26a9036abd8f378",
     "protocolVersion": "1.0",
     "governance": {
       "l2": {
-        "tribunalSignature": "24a359bfcaa52ec51187bd1f06ed719f35406341ebf64203a5d363feeb93b86a056382eac2daefab934d7914a92fa19817c826aacc93eca869b9c43b71b51905",
-        "keyId": "28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747"
+        "tribunalSignature": "68c757ff1d0c37e2d972c41f12baba63973072b209d6cf58aafb1e8bc7775971c7f12c7740935823713027809cd19adfcdba1108151572ffb3ecd2891e900403",
+        "keyId": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
       }
     }
   },
   "evidence": {
     "l2_signature_present": true,
-    "l2_key_id": "28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747",
+    "l2_key_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd",
     "l3_proof_present": false,
-    "signer_id": "28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747"
+    "signer_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
   },
   "expect": {
     "doctrine": {

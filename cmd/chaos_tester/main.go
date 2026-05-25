@@ -462,6 +462,7 @@ func main() {
 		nil, // Sentinel not used in chaos tester
 		knownActionTypes,
 		"notary",
+		nil, // Clock defaults to RealClock
 	)
 
 	act := &governance.Actuator{

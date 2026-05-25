@@ -43,11 +43,12 @@ func main() {
 	fmt.Println(keyID1)
 	fmt.Println()
 
-	// Create a valid base envelope
+	// Create a valid base envelope with fixed time matching test clock
+	fixedTime := time.Date(2026, 5, 24, 12, 0, 0, 0, time.UTC)
 	baseEnv := &commonv1.GovernanceEnvelope{
 		ProtocolVersion:   "1.0",
-		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
+		Timestamp:         timestamppb.New(fixedTime),
+		ExpiresAt:         timestamppb.New(fixedTime.Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "operator-session-1",

@@ -15,6 +15,7 @@ package system
 
 import (
 	"strconv"
+	"time"
 )
 
 func StringPtr(s string) *string {
@@ -37,4 +38,30 @@ func IntPtrValue(ptr *int) string {
 		return "<nil>"
 	}
 	return strconv.Itoa(*ptr)
+}
+
+// Clock is an injectable time source for deterministic testing.
+type Clock interface {
+	Now() time.Time
+}
+
+// RealClock uses actual wall time.
+type RealClock struct{}
+
+func (c *RealClock) Now() time.Time {
+	return time.Now().UTC()
+}
+
+// FixedClock returns a fixed time for deterministic testing.
+type FixedClock struct {
+	fixed time.Time
+}
+
+func (c *FixedClock) Now() time.Time {
+	return c.fixed
+}
+
+// NewFixedClock creates a FixedClock set to the given time.
+func NewFixedClock(t time.Time) *FixedClock {
+	return &FixedClock{fixed: t}
 }

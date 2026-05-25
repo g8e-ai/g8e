@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/services/system"
 )
 
 var (
@@ -46,7 +48,7 @@ func TestMain(m *testing.M) {
 	for _, mode := range modes {
 		// Use a fixed clock for deterministic testing
 		fixedTime := time.Date(2026, 5, 24, 12, 0, 0, 0, time.UTC)
-		clock := NewFixedClock(fixedTime)
+		clock := system.NewFixedClock(fixedTime)
 
 		gate, err := NewOperatorGate(mode, clock, testStateRoot, testSigners)
 		if err != nil {
@@ -108,9 +110,9 @@ func generateTestSigners() map[string]ed25519.PublicKey {
 	signers := make(map[string]ed25519.PublicKey)
 
 	// Use the specific private key from generate_fixtures.go to ensure signature verification works
-	// PRIVATE_KEY_HEX: 52cf6e064db72446e85d898ad4c55c0b57d02dd52869a88d6139ab75ec7e8f5328adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747
-	// KEY_ID: 28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747
-	privKeyHex := "52cf6e064db72446e85d898ad4c55c0b57d02dd52869a88d6139ab75ec7e8f5328adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747"
+	// PRIVATE_KEY_HEX: c847d8625a1d1be737b8c86012ef1ceb7cfe1c2f5bed5115b90b490c55600502797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd
+	// KEY_ID: 797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd
+	privKeyHex := "c847d8625a1d1be737b8c86012ef1ceb7cfe1c2f5bed5115b90b490c55600502797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
 	privKeyBytes, err := hex.DecodeString(privKeyHex)
 	if err != nil {
 		panicf("failed to decode private key hex: %v", err)

@@ -25,9 +25,9 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/models"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/g8e-ai/g8e/pkg/uap"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -51,6 +51,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		nil,                        // Sentinel not used in tests
 		constants.AllActionTypes(), // Use SSOT for action types
 		"notary",
+		nil, // Clock defaults to RealClock
 	), privKey
 }
 
@@ -581,6 +582,7 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 		nil,
 		constants.AllActionTypes(),
 		"notary",
+		nil, // Clock defaults to RealClock
 	), privKey
 }
 
