@@ -8,7 +8,7 @@ Last Updated: 2026-05-18
 
 The `g8e` demo system provides a modular, sandboxed environment for evaluating AI operations against simulated edge fleets. It uses Docker containers to emulate lightweight edge devices, allowing you to test g8e's discovery, deployment, and remediation capabilities without physical hardware.
 
-The demo platform itself runs **host-native** (Operator + optional **g8e Agentic Ensemble**), while the simulated fleet runs in Docker.
+The demo platform itself runs **host-native** (Operator binary). The optional **g8ee Agentic Ensemble** can be deployed for agentic workflow demos, while the simulated fleet runs in Docker.
 
 ---
 

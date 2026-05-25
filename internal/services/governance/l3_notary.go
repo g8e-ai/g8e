@@ -21,6 +21,8 @@ import (
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
+//go:generate mockery --name L3Notary --output ./mocks --dir .
+
 // L3Notary provides L3 (Authorization) verification for human-in-the-loop approval.
 // L3 is the final gate that requires human presence before mutations execute.
 type L3Notary interface {

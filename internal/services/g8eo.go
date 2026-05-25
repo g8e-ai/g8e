@@ -30,7 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/gateway"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/internal/services/sentinel"
+	"github.com/g8e-ai/g8e/internal/services/sovereignty"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 )
 
@@ -53,8 +53,6 @@ type G8eoService struct {
 	ledger         *storage.LedgerService
 	historyHandler *storage.HistoryHandler
 
-	sentinel *sentinel.Sentinel
-
 	// P0 Transaction Gate infrastructure
 	replayStore governance.ReplayStore
 
@@ -64,15 +62,6 @@ type G8eoService struct {
 	running   bool
 	mu        sync.RWMutex
 	startTime time.Time
-}
-
-func ProductionSentinelConfig() *sentinel.SentinelConfig {
-	return &sentinel.SentinelConfig{
-		Enabled:         true,
-		StrictMode:      true,
-		SentinelEnabled: true,
-		MaxOutputLength: 4096,
-	}
 }
 
 // NewG8eoService creates a new Operator service in Outbound Mode.
@@ -268,6 +257,10 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 	vs.logger.Info("Trusted L2 signers loaded from filesystem", "directory", trustedSignersDir)
 
+	// Initialize SovereigntyService for data sovereignty (scrubbing/rehydration)
+	sovereigntyConfig := sovereignty.DefaultConfig()
+	sovereigntyService := sovereignty.NewSovereigntyService(sovereigntyConfig, vs.logger, vs.localStore)
+
 	// PubSubCommandService Construction
 	psConfig := pubsub.CommandServiceConfig{
 		Config:              vs.config,
@@ -280,7 +273,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		AuditVault:          vs.auditVault,
 		Ledger:              vs.ledger,
 		HistoryHandler:      vs.historyHandler,
-		Sentinel:            sentinel.NewSentinelWithStorage(ProductionSentinelConfig(), vs.logger, vs.localStore),
+		Sovereignty:         sovereigntyService,
 		ReplayStore:         vs.replayStore,
 		StateRootProvider:   stateRootProvider,
 		TransactionAudit:    transactionAudit,
@@ -296,12 +289,11 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize command service: %w", err)
 	}
-	vs.sentinel = psConfig.Sentinel
 
-	// Wire Sentinel into LocalStoreService for AI data sovereignty scrubbing
-	// This must happen after Sentinel is created to break circular dependency
-	vs.localStore.SetScrubber(vs.sentinel)
-	vs.logger.Info("Sentinel wired to LocalStoreService for AI data sovereignty")
+	// Wire SovereigntyService into LocalStoreService for AI data sovereignty scrubbing
+	// This must happen after SovereigntyService is created to break circular dependency
+	vs.localStore.SetScrubber(sovereigntyService)
+	vs.logger.Info("SovereigntyService wired to LocalStoreService for AI data sovereignty")
 
 	if err = vs.pubSubCommands.Start(vs.ctx); err != nil {
 		return fmt.Errorf("failed to start command service: %w", err)

@@ -48,7 +48,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key-id": pubKey}},
 		nil, // AppPolicyStore not used in tests
 		nil, // L3 verifier not needed for EVAL_ANSWER (non-mutation)
-		nil, // DoctrineValidator defaults to ProtoDoctrineValidator
+		nil, // doctrine defaults to L1Doctrine
 		[]constants.ActionType{constants.ActionTypeEvalAnswer},
 		"doctrine",
 		nil, // Clock defaults to RealClock

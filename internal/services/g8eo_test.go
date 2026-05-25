@@ -56,7 +56,6 @@ func TestNewG8eoService_InitialState(t *testing.T) {
 	assert.Nil(t, service.auditVault)
 	assert.Nil(t, service.ledger)
 	assert.Nil(t, service.historyHandler)
-	assert.Nil(t, service.sentinel)
 }
 
 func TestNewG8eoService_PreservesConfig(t *testing.T) {
@@ -104,16 +103,6 @@ func TestG8eoService_Start_AlreadyRunning(t *testing.T) {
 	err = service.Start(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already running")
-}
-
-func TestG8eoService_ProductionSentinelConfig(t *testing.T) {
-	t.Parallel()
-	cfg := ProductionSentinelConfig()
-
-	assert.True(t, cfg.Enabled, "production sentinel must be enabled")
-	assert.True(t, cfg.StrictMode, "production sentinel must use strict mode")
-	assert.True(t, cfg.SentinelEnabled, "production sentinel must have threat detection enabled")
-	assert.Equal(t, 4096, cfg.MaxOutputLength, "production sentinel max output length must be 4096")
 }
 
 func TestG8eoService_Stop(t *testing.T) {

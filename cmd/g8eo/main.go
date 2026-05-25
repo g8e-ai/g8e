@@ -46,7 +46,7 @@ import (
 	gateway "github.com/g8e-ai/g8e/internal/services/gateway"
 	openclaw "github.com/g8e-ai/g8e/internal/services/openclaw"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/internal/services/sentinel"
+	"github.com/g8e-ai/g8e/internal/services/sovereignty"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	vault "github.com/g8e-ai/g8e/internal/services/vault"
 )
@@ -696,7 +696,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		AuditVault:          nil, // Handled by Actuator direct audit
 		Ledger:              nil, // P1: Ledger in gateway mode
 		HistoryHandler:      nil, // P1: History in gateway mode
-		Sentinel:            sentinel.NewSentinel(services.ProductionSentinelConfig(), logger),
+		Sovereignty:         sovereignty.NewSovereigntyService(sovereignty.DefaultConfig(), logger, nil),
 		ReplayStore:         govDeps.ReplayStore,
 		StateRootProvider:   govDeps.StateRootProvider,
 		TransactionAudit:    govDeps.TransactionAudit,

@@ -195,17 +195,19 @@ g8e is designed to be a testing environment and production environment at the sa
 4. **mTLS by Default.** Most communication requires mTLS. The test runner handles certificate injection from `.g8e/pki`.
 
 ### Test Runners
-All tests are orchestrated via the `./g8e` CLI. **Never call `pytest` or `go test` directly.**
+All substrate tests are orchestrated via the `./g8e` CLI. **Never call `go test` directly for substrate tests.**
 
 | Command | Runner | Framework | Primary Use |
 |---|---|---|---|
 | `./g8e test` | Host Go | `go test` | Default Gateway test run (g8eo) |
 | `./g8e test g8eo` | Host Go | `go test` | Operator listen mode, pub/sub |
-| `./g8e test g8ee` | Host venv | `pytest` | Ensemble adapter, Ensemble reasoning |
+| `./g8e test g8ee` | Host venv | `pytest` | Optional g8ee app: Ensemble adapter, Ensemble reasoning |
+
+Note: The `./g8e test g8ee` command is specific to the optional g8ee Agentic Ensemble application. The substrate (g8eo) is tested entirely with Go.
 
 ## Evals (AI Benchmarks)
 
-The evals harness drives the **real g8e Agentic Ensemble** chat pipeline end-to-end** - Triage, Dash/Sage, Consensus stage, Auditor, L5Actuator - and fold the full agent trail into a per-task receipt.
+The evals harness drives the **optional g8ee Agentic Ensemble** chat pipeline end-to-end - Triage, Dash/Sage, Consensus stage, Auditor, L5Actuator - and fold the full agent trail into a per-task receipt. This is specific to the g8ee application, not the substrate.
 
 ```bash
 # 1. Start the platform and login

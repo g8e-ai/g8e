@@ -26,11 +26,11 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
-	"github.com/g8e-ai/g8e/internal/services/sentinel"
+	"github.com/g8e-ai/g8e/internal/services/sovereignty"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	system "github.com/g8e-ai/g8e/internal/services/system"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -42,7 +42,7 @@ type FileOpsService struct {
 	fsList      *execution.FsListService
 	fsGrep      *execution.FsGrepService
 	results     ResultsPublisher
-	sentinel    *sentinel.Sentinel
+	sovereignty *sovereignty.SovereigntyService
 	vaultWriter *VaultWriter
 	auditVault  *storage.AuditVaultService
 	ledger      *storage.LedgerService
@@ -89,64 +89,6 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 	}
 
 	var result *models.FileEditResult
-	if fs.sentinel != nil {
-		content := ""
-		if editReq.Content != nil {
-			content = *editReq.Content
-		}
-		analysis := fs.sentinel.AnalyzeFileEdit(editReq.FilePath, editReq.Operation, content)
-
-		if !analysis.Safe {
-			fs.logger.Error("SENTINEL BLOCKED: File operation failed pre-execution threat analysis",
-				"threat_level", analysis.ThreatLevel,
-				"risk_score", analysis.RiskScore,
-				"block_reason", analysis.BlockReason,
-				"threat_count", len(analysis.ThreatSignals),
-				"file_path_scrubbed", analysis.FilePath,
-				"operation", analysis.Operation,
-				"is_critical_file", analysis.IsCriticalSystemFile)
-
-			if fs.auditVault != nil && fs.auditVault.IsEnabled() {
-				exitCode := 126
-				if _, err := fs.auditVault.RecordEvent(&storage.Event{
-					OperatorSessionID: fs.config.OperatorSessionId,
-					Timestamp:         time.Now().UTC(),
-					Type:              constants.Event.Operator.FileEdit.Completed,
-					ContentText:       fmt.Sprintf("SENTINEL BLOCKED FILE OP: %s on %s - %s (threat_level=%s, risk_score=%d)", editReq.Operation, analysis.FilePath, analysis.BlockReason, analysis.ThreatLevel, analysis.RiskScore),
-					CommandRaw:        fmt.Sprintf("file_%s: %s", editReq.Operation, analysis.FilePath),
-					CommandExitCode:   &exitCode,
-					CommandStderr:     fmt.Sprintf("Blocked by sentinel.Sentinel: %s", analysis.BlockReason),
-				}); err != nil {
-					fs.logger.Warn("Failed to record sentinel blocked file op in audit vault", string(constants.ConnectionStateError), err)
-				}
-			}
-
-			if fs.results != nil {
-				protoResult := &operatorv1.FileEditResult{
-					ExecutionId:  editReq.ExecutionID,
-					Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-					FilePath:     editReq.FilePath,
-					Operation:    string(editReq.Operation),
-					ErrorMessage: fmt.Sprintf("File operation blocked by sentinel.Sentinel: %s", analysis.BlockReason),
-					ErrorType:    "sentinel_blocked",
-				}
-				if err := fs.results.PublishFileEditResult(ctx, protoResult, msg); err != nil {
-					fs.logger.Error("Failed to publish blocked file edit result", string(constants.ConnectionStateError), err)
-				}
-			}
-			return
-		}
-
-		if len(analysis.ThreatSignals) > 0 || analysis.IsCriticalSystemFile {
-			fs.logger.Warn("sentinel.Sentinel detected potential threats in file operation (allowing with review)",
-				"threat_level", analysis.ThreatLevel,
-				"risk_score", analysis.RiskScore,
-				"threat_count", len(analysis.ThreatSignals),
-				"is_critical_file", analysis.IsCriticalSystemFile,
-				"requires_approval", analysis.RequiresApproval)
-		}
-	}
-
 	result, err = fs.fileEdit.ExecuteFileEdit(ctx, editReq)
 	if err != nil {
 		result = &models.FileEditResult{
@@ -275,13 +217,13 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 		}
 	}
 
-	if fs.sentinel != nil && fs.sentinel.IsEnabled() {
+	if fs.sovereignty != nil && fs.sovereignty.IsEnabled() {
 		if result.Content != nil {
-			scrubbed := fs.sentinel.ScrubText(*result.Content)
+			scrubbed := fs.sovereignty.ScrubText(*result.Content)
 			result.Content = &scrubbed
 		}
 		if result.ErrorMessage != nil {
-			scrubbed := fs.sentinel.ScrubText(*result.ErrorMessage)
+			scrubbed := fs.sovereignty.ScrubText(*result.ErrorMessage)
 			result.ErrorMessage = &scrubbed
 		}
 	}
@@ -673,8 +615,8 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 	truncated := actualSize > readLimit
 	content := string(data)
 
-	if fs.sentinel != nil && fs.sentinel.IsEnabled() {
-		content = fs.sentinel.ScrubText(content)
+	if fs.sovereignty != nil && fs.sovereignty.IsEnabled() {
+		content = fs.sovereignty.ScrubText(content)
 	}
 
 	payload := &operatorv1.FsReadResult{

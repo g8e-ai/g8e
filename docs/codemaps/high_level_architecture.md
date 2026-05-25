@@ -138,7 +138,7 @@ g8e/
 1. **Protocol-first**: All wire formats and governance rules defined in `protocol/` only
 2. **Single binary**: One `g8e` binary operates in multiple modes based on flags
 3. **Mode-specific behavior**: Gateway mode includes PDP+execution; MCP serve enables BYO clients; OpenClaw enables external orchestration
-4. **Fail-closed**: All mutations must pass L1/L2/L3 before execution via TransactionVerifier
+4. **Fail-closed**: All mutations must pass L1Doctrine/L2Consensus/L3Notary before execution via L4Warden
 5. **Local audit**: Operator maintains tamper-evident audit vault on host (SQLite + Git-backed ledger via go-git)
 6. **BYO-capable**: Protocol supports any conforming producer via MCP/A2A/tool calls
 7. **Wire format**: Canonical JSON (protojson) for UniversalEnvelope on all client-facing surfaces; binary protobuf only for internal storage

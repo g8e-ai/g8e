@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/pkg/uap"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
@@ -29,16 +28,14 @@ import (
 // It receives UAP envelopes from agents and appends a cryptographic vote.
 type L2Consensus struct {
 	NodeID     string
-	Sentinel   *sentinel.Sentinel
 	Doctrine   *L1Doctrine
 	PrivateKey ed25519.PrivateKey
 }
 
 // NewL2Consensus creates a new L2 consensus engine.
-func NewL2Consensus(nodeID string, s *sentinel.Sentinel, d *L1Doctrine, pk ed25519.PrivateKey) *L2Consensus {
+func NewL2Consensus(nodeID string, d *L1Doctrine, pk ed25519.PrivateKey) *L2Consensus {
 	return &L2Consensus{
 		NodeID:     nodeID,
-		Sentinel:   s,
 		Doctrine:   d,
 		PrivateKey: pk,
 	}
@@ -111,13 +108,19 @@ func (t *L2Consensus) EvaluatePayload(env *uap.UAPEnvelope) error {
 	return nil
 }
 
-// RunMITREChecks leverages Sentinel to identify malicious activity patterns.
+// RunMITREChecks leverages L1Doctrine to identify malicious activity patterns.
 func (t *L2Consensus) RunMITREChecks(resource string, data string) bool {
-	if t.Sentinel == nil {
-		return false // Fail-closed: if Sentinel is missing, the payload is NOT safe.
+	if t.Doctrine == nil {
+		return false // Fail-closed: if Doctrine is missing, the payload is NOT safe.
 	}
-	analysis := t.Sentinel.AnalyzeCommand(data)
-	return analysis.Safe
+	signals := t.Doctrine.AnalyzeCommand(data)
+	// If any signal recommends blocking, the payload is not safe
+	for _, sig := range signals {
+		if sig.BlockRecommended {
+			return false
+		}
+	}
+	return true
 }
 
 // SignDecision creates a cryptographic signature of the decision.

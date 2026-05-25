@@ -117,16 +117,16 @@ func TestGovernanceFailClosed(t *testing.T) {
 	_, priv, _ := ed25519.GenerateKey(nil)
 	nodeID := "test-node-1"
 
-	t.Run("SentinelNil_FailClosed", func(t *testing.T) {
+	t.Run("DoctrineNil_FailClosed", func(t *testing.T) {
 		t.Parallel()
 		consensus := &L2Consensus{
 			NodeID:     nodeID,
 			PrivateKey: priv,
-			Sentinel:   nil, // explicitly nil
+			Doctrine:   nil, // explicitly nil
 		}
 		isSafe := consensus.RunMITREChecks("test", "echo 'hello'")
 		if isSafe {
-			t.Error("Expected fail-closed (Safe=false) when Sentinel is nil")
+			t.Error("Expected fail-closed (Safe=false) when Doctrine is nil")
 		}
 	})
 

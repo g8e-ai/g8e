@@ -6,7 +6,7 @@ title: Evals
 
 Last Updated: 2026-05-18
 
-The evals harness drives the **real g8e Agentic Ensemble** chat pipeline end-to-end** - Triage, Dash/Sage, Consensus stage, Auditor, L5Actuator - captures every agent stage emitted on the Operator's per-session SSE buffer, and folds the full agent trail into a per-task receipt for offline replay. This is the gold-standard evaluation path: the model under test exercises the same code paths a real user hits via `./g8e chat send`.
+The evals harness drives the **optional g8ee Agentic Ensemble** chat pipeline end-to-end - Triage, Dash/Sage, Consensus stage, Auditor, L5Actuator - captures every agent stage emitted on the Operator's per-session SSE buffer, and folds the full agent trail into a per-task receipt for offline replay. This is the gold-standard evaluation path for the g8ee application: the model under test exercises the same code paths a real user hits via `./g8e chat send`.
 
 ---
 
@@ -77,14 +77,17 @@ Inline verification runs during `bench`. To re-verify a saved report directory o
 
 ## Prerequisites
 
+The evals harness is specific to the optional g8ee Agentic Ensemble application. It requires the g8ee application to be running alongside the Operator.
+
 The harness is fail-closed without canonical mTLS + session credentials:
 
 1. `./g8e platform start` - Operator.
-2. `./g8e login` - mints client cert/key, captures session id, exports the env vars the evals harness uses:
+2. `./g8e apps start g8ee` - Start the optional g8ee Agentic Ensemble application.
+3. `./g8e login` - mints client cert/key, captures session id, exports the env vars the evals harness uses:
    - `G8E_OPERATOR_SESSION_ID`, `G8E_USER_ID`
    - `G8E_CLI_CERT`, `G8E_CLI_KEY`, `G8E_TRUST_BUNDLE`
    - `G8E_APP_URL`, `G8E_OPERATOR_URL`, `G8E_PKI_DIR`
-3. **LLM API keys** must be available to the agentic ensemble for any provider you select. The chat request body forwards `llm_<role>_provider`, `llm_<role>_model`, `llm_<role>_api_key`, and `llm_<role>_endpoint` for `primary`, `assistant`, and `lite`. The CLI performs a pre-flight check against `GET /api/internal/settings/user`; missing keys abort the run before any tasks post.
+4. **LLM API keys** must be available to the agentic ensemble for any provider you select. The chat request body forwards `llm_<role>_provider`, `llm_<role>_model`, `llm_<role>_api_key`, and `llm_<role>_endpoint` for `primary`, `assistant`, and `lite`. The CLI performs a pre-flight check against `GET /api/internal/settings/user`; missing keys abort the run before any tasks post.
 
 ---
 
@@ -169,4 +172,4 @@ Acceptable for v1; the long-term fix is to consume an Operator-native `text/even
 | All tasks `UNBOUND` with `answer-only turn` | Expected for IFEval-style prompts that never trigger a L5Actuator mutation. Receipt binding only occurs when the agent stack escalates a typed mutation through Consensus→L5Actuator. |
 | Receipt verification failure | Confirm `.g8e/pki/Actuator_pub.pem` was exported by the running Operator and `--operator-url` points at the same instance. |
 
-See also: [Protocol](../concepts/protocol.md), [Operator](../concepts/operator.md), [g8e Agentic Ensemble](../concepts/g8ee.md), [Tests](./tests.md).
+See also: [Protocol](../concepts/protocol.md), [Operator](../concepts/operator.md), [Tests](./tests.md).
