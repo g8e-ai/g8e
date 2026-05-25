@@ -955,8 +955,8 @@ func TestSignedEnvelopeL2Signature(t *testing.T) {
 		t.Errorf("L2 KeyId = %s, want %s", env.Governance.L2.KeyId, keyID)
 	}
 
-	if env.Governance.L2.TribunalSignature == "" {
-		t.Error("TribunalSignature is empty")
+	if env.Governance.L2.ConsensusSignature == "" {
+		t.Error("ConsensusSignature is empty")
 	}
 
 	if len(env.Governance.L2.AgentIds) == 0 {

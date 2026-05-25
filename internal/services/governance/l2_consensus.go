@@ -98,7 +98,7 @@ func (t *L2Consensus) EvaluatePayload(env *uap.UAPEnvelope) error {
 	if err != nil {
 		return fmt.Errorf("failed to sign decision: %w", err)
 	}
-	env.Governance.L2.TribunalSignature = sig
+	env.Governance.L2.ConsensusSignature = sig
 
 	if !isSafe {
 		env.Governance.L1.Validated = false

@@ -74,7 +74,7 @@ func main() {
 	baseEnv.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
 			KeyId:             keyID,
-			TribunalSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true"))),
+			ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true"))),
 		},
 	}
 

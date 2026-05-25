@@ -267,16 +267,16 @@ func (g *OperatorGate) normalizeEnvelope(envelope *commonv1.GovernanceEnvelope) 
 		correctSig := hex.EncodeToString(ed25519.Sign(privKey, []byte(correctHash+"|true")))
 
 		// If signature is empty, compute it
-		if envelope.Governance.L2.TribunalSignature == "" {
-			envelope.Governance.L2.TribunalSignature = correctSig
-		} else if envelope.Governance.L2.TribunalSignature == testPlaceholderBadSignature {
+		if envelope.Governance.L2.ConsensusSignature == "" {
+			envelope.Governance.L2.ConsensusSignature = correctSig
+		} else if envelope.Governance.L2.ConsensusSignature == testPlaceholderBadSignature {
 			// Keep the forged signature for l2_invalid test
 			// Recompute hash to match the forged signature content
 			envelope.Id = correctHash
 			envelope.TransactionHash = correctHash
 		} else if envelope.Governance.L2.KeyId == keyID {
 			// Signature is set with the test key_id - recompute to ensure correctness
-			envelope.Governance.L2.TribunalSignature = correctSig
+			envelope.Governance.L2.ConsensusSignature = correctSig
 		}
 		// else: signature is set with a different key_id (e.g., forge_signature fixture)
 		// - preserve it to test unknown signer rejection

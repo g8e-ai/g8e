@@ -200,7 +200,7 @@ func signedEnvelope(
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
 			KeyId:             keyID,
-			TribunalSignature: l2Sig,
+			ConsensusSignature: l2Sig,
 			AgentIds:          []string{"chaos-tribunal-agent"},
 		},
 	}

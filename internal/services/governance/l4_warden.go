@@ -611,7 +611,7 @@ func (tv *L4Warden) verifyL2Posture(envelope *uap.UAPEnvelope, computedHash stri
 	}
 
 	l2 := envelope.Governance.L2
-	if l2.TribunalSignature == "" {
+	if l2.ConsensusSignature == "" {
 		tv.logger.Error("L2 signature empty but required by posture", "posture", tv.posture.Name())
 		return false, ErrL2SignatureMissing
 	}
@@ -637,7 +637,7 @@ func (tv *L4Warden) verifyL2Posture(envelope *uap.UAPEnvelope, computedHash stri
 		return false, ErrL2KeyNotConfigured
 	}
 
-	if tv.verifyL2Signature(pubKey, l2.TribunalSignature, computedHash, true) {
+	if tv.verifyL2Signature(pubKey, l2.ConsensusSignature, computedHash, true) {
 		return true, nil
 	}
 

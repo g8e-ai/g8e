@@ -22,9 +22,9 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/pkg/uap"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-	"github.com/g8e-ai/g8e/pkg/uap"
 )
 
 // MustMarshalJSON marshals v to json.RawMessage, fatally failing the test on error.
@@ -354,8 +354,8 @@ func MustMarshalUAPEnvelopeWithVotes(t *testing.T, messageID string, protocolVer
 		Payload:         []byte(dataBlob),
 		Governance: &commonv1.GovernanceMetadata{
 			L2: &commonv1.L2Metadata{
-				AgentIds:          agentIDs,
-				TribunalSignature: tribunalSig,
+				AgentIds:           agentIDs,
+				ConsensusSignature: tribunalSig,
 			},
 		},
 	}

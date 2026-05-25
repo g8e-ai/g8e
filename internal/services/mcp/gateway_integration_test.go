@@ -220,7 +220,7 @@ func TestGatewaySignedFalseIntegration(t *testing.T) {
 		Governance: &commonv1.GovernanceMetadata{
 			GatewaySigned: false,
 			L2: &commonv1.L2Metadata{
-				TribunalSignature: "tribunal-sig",
+				ConsensusSignature: "tribunal-sig",
 				KeyId:             "tribunal-key",
 				AgentIds:          []string{"agent-1", "agent-2", "agent-3"},
 			},
