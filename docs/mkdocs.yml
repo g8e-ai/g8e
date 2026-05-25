@@ -76,24 +76,24 @@ nav:
       - About: architecture/about.md
       - Position Paper: architecture/position_paper.md
       - Operator: architecture/operator.md
-      - Governance Gateway: architecture/g8eg.md
+      - Governance Gateway: architecture/gateway.md
   - Protocols:
       - g8e Protocol: protocols/protocol.md
       - MCP/A2A Gateway: protocols/mcp_a2a_gateway.md
   - Guides:
-      - Quickstart: quickstart/index.md
+      - Getting Started: guides/getting_started.md
       - Air Gap: guides/air_gap.md
-      - Scripts: guides/scripts.md
-      - Testing: guides/tests.md
+      - g8e CLI: guides/g8e-cli.md
       - Troubleshooting: guides/troubleshooting.md
       - g8e-Compatible Apps: guides/g8e-compatible-apps.md
   - Reference:
       - API: reference/api/index.md
-      - CLI: reference/cli.md
+      - CLI: guides/cli.md
       - Constants: reference/constants.md
       - Glossary: reference/glossary.md
+      - Tests: guides/tests.md
   - Developer:
-      - Developer Guidelines: devs.md
+      - Developer Guidelines: guides/devs.md
       - Codemap: codemap.md
   - External:
       - A2A Protocol (JSON Schema): external/a2a.json

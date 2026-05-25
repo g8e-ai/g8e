@@ -13,7 +13,7 @@ g8e is a zero-trust execution protocol and outbound-only gateway that forces eve
 [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status)
 [![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/architecture/position_paper.md)
 
-[Quickstart](docs/quickstart/) · [How it works](#how-it-works) · [Self-hosting](#self-hosting--air-gap) · [Docs](#documentation) · [Paper](docs/architecture/position_paper.md)
+[Getting Started](docs/guides/getting_started.md) · [How it works](#how-it-works) · [Self-hosting](#self-hosting--air-gap) · [Docs](#documentation) · [Paper](docs/architecture/position_paper.md)
 
 </div>
 
@@ -209,11 +209,11 @@ g8e is built to run entirely inside your perimeter. The Operator has no inbound 
 
 ## Documentation
 
-- **[Quickstart](docs/quickstart/)** — get started with g8e in minutes using the unified CLI.
+- **[Getting Started](docs/guides/getting_started.md)** — get started with g8e in minutes using the unified CLI.
 - **[Position Paper](docs/architecture/position_paper.md)** — the full design rationale, threat model, and BFT analysis.
-- **[Protocol](docs/protocols/protocol.md)** — wire format, transaction hash, and the Doctrine / Consensus / Notary definitions.
+- **[Protocol](docs/architecture/protocol.md)** — wire format, transaction hash, and the Doctrine / Consensus / Notary definitions.
 - **[Operator (g8eo)](docs/architecture/operator.md)** — execution boundary, gateway modes, and host storage.
-- **[Gateway (g8eg)](docs/architecture/g8eg.md)** — Governance Gateway architecture and modes.
+- **[Gateway (g8eg)](docs/architecture/gateway.md)** — Governance Gateway architecture and modes.
 - **[g8e-Compatible Applications](docs/guides/g8e-compatible-apps.md)** — how to build conforming producers and consumers.
 - **[Guides](docs/guides/)** — operational guides for testing, evals, demos, and troubleshooting.
 - **[Reference](docs/reference/)** — glossary, constants, and protocol references.

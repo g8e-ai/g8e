@@ -109,7 +109,7 @@ func TestEventsDocsAlignment(t *testing.T) {
 		canonicalEvents[entry.Value] = true
 	}
 
-	// Note: events documentation is in docs/protocols/protocol.md
+	// Note: events documentation is in docs/architecture/protocol.md
 	// This test is a placeholder for verifying documented events match the registry.
 	// For now, we verify the protocol file is valid and contains events.
 	assert.NotEmpty(t, canonicalEvents, "events.json must contain event definitions")
@@ -135,10 +135,6 @@ func TestDocsNoStaleTerms(t *testing.T) {
 			return nil
 		}
 		if !strings.HasSuffix(path, ".md") {
-			return nil
-		}
-		// Skip embeddings.json (not markdown)
-		if strings.HasSuffix(path, "embeddings.json") {
 			return nil
 		}
 
