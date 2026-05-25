@@ -18,7 +18,7 @@
     "protocolVersion": "1.0",
     "governance": {
       "l2": {
-        "tribunalSignature": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        "consensusSignature": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
         "keyId": "2033b866aa250feeffd71b5065d534868fdd37fbf507accb01bdab7c36a11ffb"
       }
     }

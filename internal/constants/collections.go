@@ -36,7 +36,6 @@ const (
 	CollectionConsoleAudit          CollectionName = "console_audit"
 	CollectionBoundSessions         CollectionName = "bound_sessions"
 	CollectionPasskeyChallenges     CollectionName = "passkey_challenges"
-	CollectionTribunalCommands      CollectionName = "tribunal_commands"
 	CollectionAgentActivityMetadata CollectionName = "agent_activity_metadata"
 	CollectionReputationState       CollectionName = "reputation_state"
 	CollectionReputationCommitments CollectionName = "reputation_commitments"

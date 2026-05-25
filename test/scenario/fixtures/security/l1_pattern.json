@@ -18,7 +18,7 @@
     "protocolVersion": "1.0",
     "governance": {
       "l2": {
-        "tribunalSignature": "976b1d4879c1b8e491e3c8616555c359fe72a1a5cca5041d02336b38cda8f0469344213165ae76d64c2b2fa76a898c054f86d6dce89702aa4d96145a06e0fa0a",
+        "consensusSignature": "976b1d4879c1b8e491e3c8616555c359fe72a1a5cca5041d02336b38cda8f0469344213165ae76d64c2b2fa76a898c054f86d6dce89702aa4d96145a06e0fa0a",
         "keyId": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
       }
     }

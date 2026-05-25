@@ -86,7 +86,7 @@ L1 is foundationally active for every command, regardless of L2 consensus or L3 
 
 ## L2 Consensus
 
-The second layer of g8e governance. A multi-agent consensus system that produces and votes on command candidates. L2 ensures every command executed is the result of a rigorous consensus process backed by a single L2 Ed25519 signature over the transaction hash, rather than a single model's output. The signature is verified in the L4 Warden. The specific consensus implementation (e.g., Tribunal) is an application-layer concern, not a protocol requirement.
+The second layer of g8e governance. A multi-agent consensus system that produces and votes on command candidates. L2 ensures every command executed is the result of a rigorous consensus process backed by a single L2 Ed25519 signature over the transaction hash, rather than a single model's output. The signature is verified in the L4 Warden. Consensus implementations are application-layer concerns, not protocol requirements.
 
 ---
 

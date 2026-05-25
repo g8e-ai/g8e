@@ -829,51 +829,6 @@ const (
 	ToolScopeUniversal     ToolScope = "universal"
 )
 
-// TribunalAuditMode is a typed string for tribunal_audit_mode.
-type TribunalAuditMode string
-
-const (
-	TribunalAuditModeMajority  TribunalAuditMode = "majority"
-	TribunalAuditModeTied      TribunalAuditMode = "tied"
-	TribunalAuditModeUnanimous TribunalAuditMode = "unanimous"
-)
-
-// TribunalAuditStatus is a typed string for tribunal_audit_status.
-type TribunalAuditStatus string
-
-const (
-	TribunalAuditStatusOk      TribunalAuditStatus = "ok"
-	TribunalAuditStatusRevised TribunalAuditStatus = "revised"
-	TribunalAuditStatusSwap    TribunalAuditStatus = "swap"
-)
-
-// TribunalAuditorReason is a typed string for tribunal_auditor_reason.
-type TribunalAuditorReason string
-
-const (
-	TribunalAuditorReasonRevised TribunalAuditorReason = "revised"
-)
-
-// TribunalFallbackReason is a typed string for tribunal_fallback_reason.
-type TribunalFallbackReason string
-
-const (
-	TribunalFallbackReasonAllPassesFailed     TribunalFallbackReason = "all_passes_failed"
-	TribunalFallbackReasonDisabled            TribunalFallbackReason = "disabled"
-	TribunalFallbackReasonNoVoteWinner        TribunalFallbackReason = "no_vote_winner"
-	TribunalFallbackReasonProviderUnavailable TribunalFallbackReason = "provider_unavailable"
-)
-
-// TribunalOutcome is a typed string for tribunal_outcome.
-type TribunalOutcome string
-
-const (
-	TribunalOutcomeConsensus          TribunalOutcome = "consensus"
-	TribunalOutcomeConsensusFailed    TribunalOutcome = "consensus_failed"
-	TribunalOutcomeVerificationFailed TribunalOutcome = "verification_failed"
-	TribunalOutcomeVerified           TribunalOutcome = "verified"
-)
-
 // UserRole is a typed string for user_role.
 type UserRole string
 

@@ -11,7 +11,7 @@ The g8e Protocol substrate is composed of two logically distinct roles, both imp
 
 - **5-Layer Governance Bedrock**: Every transaction must pass through five mandatory, fail-closed layers:
     - **L1 Doctrine**: Technical bedrock (Hard Gates, threat detection).
-    - **L2 Consensus**: Tribunal verification (5 independent agents).
+    - **L2 Consensus**: Multi-agent verification (Ed25519 signatures from independent consensus agents).
     - **L3 Notary**: Human-in-the-loop authorization (WebAuthn/Passkey).
     - **L4 Warden**: Pre-dispatch verification gate (Hash, Expiry, Nonce, State Root).
     - **L5 Actuator**: Execution boundary (Single fail-closed dispatch path, signed ActionReceipts).
@@ -189,7 +189,7 @@ When a standard AI client (e.g., Claude, Cursor) requests a mutation, it typical
 | **Audit & Security** | `login_audit`, `auth_admin_audit`, `account_locks`, `console_audit`, `revoked_certificates` |
 | **Operators & Usage** | `operators`, `operator_usage` |
 | **Cases & Investigations** | `cases`, `investigations`, `tasks` |
-| **Governance & Reputation** | `consensus_commands`, `reputation_state`, `reputation_commitments`, `stake_resolutions` |
+| **Governance & Reputation** | `reputation_state`, `reputation_commitments`, `stake_resolutions` |
 | **AI & Context** | `memories`, `agent_activity_metadata` |
 | **Configuration** | `settings` |
 

@@ -14,4 +14,4 @@ plugins:
   - local: protoc-gen-doc
     out: docs/reference/api
     opt:
-      - markdown,index.md
+      - markdown,index.md,source_relative

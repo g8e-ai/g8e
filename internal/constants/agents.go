@@ -40,27 +40,3 @@ const (
 	AgentNameSage = "sage"
 	AgentNameDash = "dash"
 )
-
-const (
-	TribunalMemberAxiom    = "axiom"
-	TribunalMemberConcord  = "concord"
-	TribunalMemberVariance = "variance"
-	TribunalMemberPragma   = "pragma"
-	TribunalMemberNemesis  = "nemesis"
-)
-
-const (
-	TribunalAuditorReasonOk                 = "ok"
-	TribunalAuditorReasonEmptyResponse      = "empty_response"
-	TribunalAuditorReasonNoValidRevision    = "no_valid_revision"
-	TribunalAuditorReasonAuditorError       = "auditor_error"
-	TribunalAuditorReasonSwappedToDissenter = "swapped_to_dissenter"
-	TribunalAuditorReasonRevisedFromDissent = "revised_from_dissent"
-	TribunalAuditorReasonWhitelistViolation = "whitelist_violation"
-)
-
-const (
-	TribunalTieBreakReasonShortest        = "shortest"
-	TribunalTieBreakReasonExcludedNemesis = "excluded_nemesis"
-	TribunalTieBreakReasonAlphabetical    = "alphabetical"
-)
