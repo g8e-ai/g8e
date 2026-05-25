@@ -28,14 +28,122 @@ func testCmd() *cobra.Command {
 		Use:   "test",
 		Short: "Run test suites",
 		Long:  `Orchestrate test execution for g8eo (Gateway).`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			cmd.Println("Running all tests (unit + integration)...")
+			cmd.Println("\n=== Unit Tests ===")
+			goCmd := exec.Command("go", "test", "-race", "-timeout", "180s", "./...")
+			goCmd.Stdout = os.Stdout
+			goCmd.Stderr = os.Stderr
+			goCmd.Dir = cfg.ProjectRoot
+			if err := goCmd.Run(); err != nil {
+				return fmt.Errorf("unit tests failed: %w", err)
+			}
+
+			cmd.Println("\n=== Integration Tests ===")
+			integrationCmd := exec.Command("go", "test", "-tags=integration", "-v", "-run", "TestScenarios", "./test/scenario/...")
+			integrationCmd.Stdout = os.Stdout
+			integrationCmd.Stderr = os.Stderr
+			integrationCmd.Dir = cfg.ProjectRoot
+			if err := integrationCmd.Run(); err != nil {
+				return fmt.Errorf("integration tests failed: %w", err)
+			}
+
+			cmd.Println("\nAll tests passed")
+			return nil
+		},
 	}
 
 	cmd.AddCommand(
+		testUnitCmd(),
+		testIntegrationCmd(),
 		testG8eoCmd(),
 		testCICmd(),
 		testChaosCmd(),
 		testScenarioCmd(),
 	)
+
+	return cmd
+}
+
+func testUnitCmd() *cobra.Command {
+	var race bool
+	var verbose bool
+	var run string
+	var coverage bool
+
+	cmd := &cobra.Command{
+		Use:   "unit",
+		Short: "Run unit tests",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			var goArgs []string
+			goArgs = []string{"test", "-race", "-timeout", "180s", "./..."}
+
+			if run != "" {
+				goArgs = append(goArgs, "-run", run)
+			}
+			if verbose {
+				goArgs = append(goArgs, "-v")
+			}
+			if coverage {
+				goArgs = append(goArgs, "-coverprofile=coverage.out", "-covermode=atomic")
+			}
+
+			cmd.Printf("Running unit tests...\n")
+			goCmd := exec.Command("go", goArgs...)
+			goCmd.Stdout = os.Stdout
+			goCmd.Stderr = os.Stderr
+			goCmd.Dir = cfg.ProjectRoot
+			return goCmd.Run()
+		},
+	}
+
+	cmd.Flags().BoolVar(&race, "race", true, "Enable race detector")
+	cmd.Flags().BoolVar(&verbose, "v", false, "Verbose output")
+	cmd.Flags().StringVar(&run, "run", "", "Run specific test (regex)")
+	cmd.Flags().BoolVar(&coverage, "coverage", false, "Generate coverage report")
+
+	return cmd
+}
+
+func testIntegrationCmd() *cobra.Command {
+	var run string
+
+	cmd := &cobra.Command{
+		Use:   "integration",
+		Short: "Run integration tests",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			var goArgs []string
+			goArgs = []string{"test", "-tags=integration", "-v", "-run", "TestScenarios", "./test/scenario/..."}
+
+			if run != "" {
+				goArgs = append(goArgs, "-run", "TestScenarios/"+run)
+			}
+
+			cmd.Printf("Running integration tests...\n")
+			goCmd := exec.Command("go", goArgs...)
+			goCmd.Stdout = os.Stdout
+			goCmd.Stderr = os.Stderr
+			goCmd.Dir = cfg.ProjectRoot
+			return goCmd.Run()
+		},
+	}
+
+	cmd.Flags().StringVar(&run, "run", "", "Run specific scenario (e.g., forge_signature)")
 
 	return cmd
 }
