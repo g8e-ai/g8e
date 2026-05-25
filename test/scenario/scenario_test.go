@@ -132,6 +132,12 @@ func TestScenarios(t *testing.T) {
 	}
 }
 
+// TestGoldenFilesUpToDate verifies that all golden files are present for accepting scenarios.
+// This test is intended for CI to ensure developers don't forget to update golden files.
+func TestGoldenFilesUpToDate(t *testing.T) {
+	CheckGoldenFilesUpToDate(t)
+}
+
 // TestNegativeControls verifies the test suite can detect failures by intentionally
 // flipping expected verdicts. This is a negative control test - it passes when the
 // flipped expectations correctly cause assertion failures, proving the suite can go red.
