@@ -1,6 +1,6 @@
 # Security Policy
 
-**Project:** g8e — Byzantine Fault Tolerant Governance Protocol  
+**Project:** g8e — Byzantine Fault Tolerant Governance Substrate  
 **Maintained by:** [Lateralus Labs](https://lateraluslabs.com)
 
 ---
@@ -23,7 +23,7 @@ Report privately to: **security@lateraluslabs.com**
 Include as much of the following as you can:
 
 - Description of the vulnerability and its potential impact
-- Affected component(s): Protocol Gateway, Operator (`g8eo`), Engine (`g8ee`), Wire Contract
+- Affected component(s): Governance Gateway (PDP), g8e Operator (PEP), g8e Protocol (Common), Application Adapters (`g8ee`, `g8ed`)
 - Steps to reproduce or a minimal proof-of-concept
 - Your assessment of severity (Critical / High / Medium / Low)
 - Whether you believe the issue is currently being exploited
@@ -49,12 +49,11 @@ We will not pursue legal action against researchers acting in good faith under t
 
 ### In Scope
 
-- **Protocol Gateway** — GovernanceEnvelope parsing, transaction hash binding, L1/L2/L3 verification logic
-- **Operator (`g8eo`)** — execution boundary, Warden dispatcher, mTLS tunnel, LFAA audit vault, Sentinel scrubber
-- **Engine (`g8ee`)** — Tribunal consensus, agent hierarchy, agentic ReAct loop
-- **Wire Contract** — Protobuf schemas, canonical JSON serialization, envelope integrity
-- **Authentication** — WebAuthn/FIDO2 L3 flow, Ed25519 signature verification, replay protection
-- **CLI and bootstrap** — `g8e login`, device-link token generation, mTLS credential handling
+- **Governance Gateway (PDP)** — `GovernanceEnvelope` parsing, deterministic transaction hash binding, L1-L4 verification logic (Doctrine, Consensus, Notary, Warden)
+- **g8e Operator (PEP)** — execution boundary (L5 Actuator), mTLS tunnel, `AuditVaultService`, Sovereignty Boundary Plane (scrubbing)
+- **g8e Protocol** — Protobuf schemas (`common.proto`, `operator.proto`), canonical JSON (protojson) serialization, envelope integrity
+- **Authentication** — WebAuthn/FIDO2 L3 Notary flow, Ed25519 signature verification (L2 Consensus, L4 Warden, L5 Actuator), replay protection (Nonce)
+- **CLI and bootstrap** — `g8e login`, device-link token generation, mTLS credential and PKI handling
 
 ### Out of Scope
 
@@ -69,11 +68,12 @@ We will not pursue legal action against researchers acting in good faith under t
 
 The following are structural properties of g8e, provided to help researchers understand the intended security model:
 
-- **Fail-closed by design.** Any verification failure at the Operator boundary drops the payload and writes an audit record. There is no fallback execution path.
-- **Outbound-only Operator.** `g8eo` establishes connections outbound via reverse tunnel. It does not listen for inbound connections. There are no open ports on the managed host.
-- **No ambient execution authority.** No component holds standing permission to mutate state. Authority is granted per-transaction via the GovernanceEnvelope, verified independently at the Operator.
-- **Local audit sovereignty.** Raw forensic material never leaves the managed host. Sentinel scrubs all outbound data before delivery to AI systems or remote clients.
-- **mTLS everywhere.** All Operator-to-Gateway communication requires mutual TLS. Unauthenticated connections are rejected.
+- **Fail-closed by design.** Any verification failure at the L1-L4 layers (Doctrine, Consensus, Notary, Warden) drops the payload and writes an audit record. There is no fallback execution path.
+- **Sovereign Execution Boundary.** The `g8e Operator` (PEP) acts as the sovereign boundary. It refuses to mutate host reality unless a transaction carries a valid L2 signature (Tribunal consensus) and, where required, an L3 proof (Human-in-the-loop).
+- **No ambient execution authority.** No component holds standing permission to mutate state. Authority is granted strictly per-transaction via the `GovernanceEnvelope`, verified independently at the PEP.
+- **Local audit sovereignty.** Raw forensic material is stored locally in the `AuditVaultService`. The Sovereignty Boundary Plane scrubs all outbound data before delivery to remote clients or AI systems.
+- **mTLS everywhere.** All substrate communication (Operator-to-Gateway) requires mutual TLS. Unauthenticated or unverified connections are rejected.
+- **State & Replay Protection.** Transactions are bound to a `state_merkle_root`, protected by a unique `nonce`, and carry a temporal `expires_at` deadline.
 
 If your finding demonstrates a bypass of any of these properties, treat it as **Critical**.
 

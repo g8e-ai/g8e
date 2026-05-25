@@ -8,13 +8,12 @@ Last Updated: 2026-05-25
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
-The reference Operator is **`g8eo`** (built as the `g8e` binary). It functions as a sovereign, **Governed Operator** and **Model Context Protocol (MCP) Server**, serving as the Policy Execution Point (PEP). The Operator can run in three modes:
+The reference Operator is **`g8eo`** (built as the `g8e` binary). It functions as a sovereign, **Governed Operator** and **Model Context Protocol (MCP) Server**, serving as the Policy Execution Point (PEP). The exact same compiled Go codebase is used to power both sides of the governance boundary:
 
-- **Gateway Mode** (`--doctrine`, `--consensus`, `--notary`): Platform persistence with in-process pub/sub broker and execution gateway
-- **MCP Mode** (`--mcp-serve`): Stdio JSON-RPC proxy to the Operator's mTLS HTTP API
-- **OpenClaw Mode** (`--openclaw`): Connects to an OpenClaw Gateway as a node host
+- **Governance Gateway (PDP)**: When run in Gateway mode (`--doctrine`, `--consensus`, `--notary`), it acts as the central Policy Decision Point (PDP) with platform persistence and in-process pub/sub brokering.
+- **g8e Operator (PEP)**: When run as a host agent, it acts as the Policy Execution Point (PEP) and MCP server.
 
-> **One Codebase, Two Roles.** The exact same compiled Go codebase is used to power both sides of the governance boundary. When run in Gateway mode, it acts as the central Policy Decision Point (PDP) with in-process execution. This document focuses on the Governed Operator role.
+This document focuses on the **Governed Operator** (PEP) role.
 
 ---
 
@@ -26,30 +25,32 @@ The Operator is the only component capable of mutating the host. It executes rem
 
 ---
 
-## 2. The Lifecycle Pipeline
+## 2. The 5-Layer Governance Gauntlet
 
-When a command targets an Operator, it progresses through a strict, fail-closed pipeline:
+When a command targets an Operator, it progresses through a strict, fail-closed pipeline consisting of five distinct layers of verification and execution:
 
-### A. Translation & Interception (MCP/A2A Gateway)
-Standard AI clients (Cursor, Claude, or custom agents) speak JSON-RPC/HTTP tool calls. The Operator acts as an MCP/A2A universal protocol translator. In MCP mode (`--mcp-serve`), it exposes a stdio JSON-RPC interface that intercepts standard tool calls and forwards them to the Operator's mTLS HTTP API (`/api/mcp/v1/tools/list`, `/api/mcp/v1/tools/call`). The HTTP gateway then forces these requests into a canonical JSON (protojson) `GovernanceEnvelope`. This ensures that generic ecosystems can interact with the Operator without sacrificing the strict typed-payload governance required by the platform.
+### L1: Doctrine (Technical Bedrock)
+The **L1Doctrine** layer provides foundational hard gates. It utilizes Protobuf field-option extensions (`forbidden_patterns`) to block malicious strings and executes real-time MITRE ATT&CK heuristics to detect threats like reverse shells, privilege escalation, and destructive disk operations. L1 is the first line of defense and cannot be bypassed.
 
-### B. Ingress Defense (`L4Warden`)
-The Operator distrusts all inputs. Before any execution happens, the `L4Warden` serves as the singular verification gate, enforcing:
-1. **Integrity**: `id == transaction_hash == SHA256(canonical_fields)`. The wire format is canonical JSON, but the signature basis is always the deterministic transaction hash.
-2. **Freshness**: The `expires_at` timestamp is not passed, and the `nonce` is not in the replay store.
-3. **State Binding**: The `state_merkle_root` strictly matches the host's current local ledger root.
-4. **L1Doctrine (Hard Gates)**: Technical Bedrock threat detection rules out forbidden patterns and executes MITRE ATT&CK heuristics on the typed payload.
-5. **L2Consensus**: The 5-agent intent consensus signatures are verified against the Operator's locally trusted `SignerStore`.
-6. **L3Notary**: Authorization proofs (mTLS certificate fingerprints for CLI sessions, or WebAuthn proofs for web sessions) are validated.
+### L2: Consensus (Tribunal)
+The **L2Consensus** layer verifies the intent of the request via a Byzantine Fault Tolerant (BFT) quorum. It validates Ed25519 signatures from 5 independent reasoning agents against the Operator's locally trusted `SignerStore`. This ensures that no single upstream agent can unilaterally mutate the host.
 
-If any check fails, the transaction is rejected, a `BLOCKED` receipt is generated, and execution halts.
+### L3: Notary (Authorization)
+The **L3Notary** layer enforces human-in-the-loop authorization. For web-based sessions, it validates FIDO2/WebAuthn (Passkey) proofs. For CLI or BYO client sessions, it validates mTLS certificate fingerprints. Mutations are blocked until a valid L3 proof is presented, unless specifically exempted by an `AutoApprove` policy for benign diagnostic commands.
 
-### C. Execution Boundary (`L5Actuator`)
-The `L5Actuator` is the single execution boundary permitted to mutate host state. It uses a dual-receipt model to cryptographically record intent:
-1. **Pre-execution receipt**: Signs an `ActionReceipt` with status `EXECUTING` and commits it to the local Audit Vault. If this write fails, execution aborts.
-2. **Execution**: Dispatches the verified payload to the appropriate handler (e.g., shell, file edit).
-3. **Sovereignty Boundary**: The `SovereigntyService` processes the output to scrub sensitive PII, credentials, and connection strings before the data leaves the boundary.
-4. **Post-execution receipt**: Updates the receipt to `COMPLETED` or `FAILED`, captures the new `state_root_after`, signs the result, and publishes it back to the Gateway.
+### L4: Warden (Pre-dispatch Gate)
+The **L4Warden** is the final verification gate before execution. It enforces:
+1. **Integrity**: Validates that `id == transaction_hash == SHA256(canonical_fields)`. The wire format is canonical JSON (`protojson`), but the signing basis is a deterministic hash of normalized fields.
+2. **Freshness**: Enforces `expires_at` and checks for replay attacks via a local `ReplayStore`.
+3. **State Binding**: Validates that the `state_merkle_root` matches the host's current ledger root.
+4. **Quorum**: Confirms that L1, L2, and L3 proofs meet the current **Governance Posture** (`doctrine`, `consensus`, or `notary`).
+
+### L5: Actuator (Execution Boundary)
+The **L5Actuator** is the singular execution boundary permitted to mutate host state. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model**:
+1. **Pre-execution**: Signs an `ActionReceipt` with status `EXECUTING` and commits it to the local `AuditVaultService`.
+2. **Rehydration**: Restores sensitive data (PII, credentials) that was scrubbed upstream, using local tokens from the **Sovereignty Boundary Plane**.
+3. **Execution**: Dispatches to the handler and captures the output.
+4. **Post-execution**: Signs a final `ActionReceipt` with status `COMPLETED` or `FAILED`, captures the new `state_root_after`, and publishes the signed result back to the Gateway.
 
 ---
 
@@ -59,28 +60,26 @@ The `L5Actuator` is the single execution boundary permitted to mutate host state
 By exposing standard MCP and A2A interfaces (`--mcp-serve`), the Operator acts as the admission gate for BYO (Bring-Your-Own) AI clients. It isolates the complex requirements of the `GovernanceEnvelope` (such as transaction hashing and L2/L3 signature collection) behind a standardized tool-calling facade, mapping native JSON-RPC requests directly to governed `ActionType` mutations.
 
 ### Identity, PKI, and mTLS
-The Operator runs entirely over outbound mutual TLS (mTLS) over WSS. It establishes workload identity bound to SPIFFE-style URI SANs:
+The Operator establishes workload identity bound to SPIFFE-style URI SANs, strictly enforced over mutual TLS (mTLS):
 - **Operator Identity**: `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>`
 - **CLI/BYO Client**: `spiffe://g8e.local/cli/<user_id>/<cli_session_id>`
 - **App Workload**: `spiffe://g8e.local/app/<operator_id>`
 
-Revocation is strictly enforced on every handshake. The L5Actuator possesses a unique Ed25519 signing key used exclusively to sign `ActionReceipts`, ensuring that evals, external auditors, and the Gateway can cryptographically verify that the host itself completed the mutation.
+Revocation is checked on every handshake. Every `ActionReceipt` is signed by a host-unique Ed25519 key, providing a cryptographic proof of host execution.
 
-### Defense of Local Data (LFAA)
-The Local-First Audit Architecture (LFAA) guarantees that the host remains the authoritative source of truth.
-
-- **Audit Vault**: An append-only, encrypted SQLite log of every event and signed `ActionReceipt`. It is strictly fail-closed: events missing a valid `operator_session_id` are rejected outright.
-- **Scrubbed Vault**: Contains only sovereignty-scrubbed execution logs. **This is the only data AI ever reads.**
-- **Raw Vault**: Retains the unscrubbed forensic record. **Never readable by AI**; reserved strictly for customer security audits.
-- **Git-Backed Ledger**: Implements a two-phase commit (`LedgerHashBefore` / `LedgerHashAfter`) for file mutations using a native `go-git` implementation (avoiding slow, brittle shell process forking). Files are mirrored as encrypted blobs and can be restored to any prior state within the session.
+### Local-First Audit Architecture (LFAA)
+The host is the authoritative source of truth for all mutations.
+- **AuditVaultService**: An append-only SQLite log of every event and signed `ActionReceipt`. It is fail-closed: events missing a valid `operator_session_id` are rejected.
+- **Scrubbed vs. Raw Logs**: Sovereignty scrubbing separates logs into a **Scrubbed Vault** (safe for AI reading) and a **Raw Vault** (unscrubbed forensic record for human security audits).
+- **Git-Backed Ledger**: Implements a two-phase commit (`state_root_before` / `state_root_after`) for file mutations using native `go-git`. Files are mirrored and can be restored to any prior state.
 
 ---
 
 ## 4. Governance & Safety
 
-- **Sovereignty Boundary Plane**: Threat detection runs *before* execution (`L1Doctrine`), but data sovereignty runs *during* execution. The Sovereignty Boundary Plane rehydrates safe tokens for execution at the `L5Actuator` and aggressively scrubs the resulting outputs before publishing. Scrubbing tokens are persisted locally across restarts to prevent data leaks during crashes.
-- **Strict Canonical JSON**: While schemas are defined via Protobuf, the canonical wire format for the Operator's client-facing surfaces is strictly canonical JSON (`protojson`). This guarantees ecosystem compatibility without breaking determinism for the `transaction_hash`.
-- **No Backward Compatibility**: The Operator drops stale JSON formats, raw HMAC structures, and legacy relay fallbacks. A transaction either fully complies with the current strict 3-Layer governance protocol, or it is rejected. 
+- **Sovereignty Boundary Plane**: Data sovereignty is enforced at the boundary. Sensitive data is scrubbed before leaving the host and replaced with tokens (`{{UEI_N}}`). These tokens are rehydrated by the `L5Actuator` only at the moment of execution.
+- **Strict Canonical JSON**: While schemas are defined in Protobuf, the wire format for all client-facing surfaces is strictly canonical JSON (`protojson`) for maximum ecosystem compatibility.
+- **No Backward Compatibility**: The Operator enforces the current strict 3-Layer governance protocol. Legacy formats, HMAC fallbacks, and unsigned inputs are rejected. 
 
 ---
 
@@ -91,7 +90,9 @@ The Local-First Audit Architecture (LFAA) guarantees that the host remains the a
 | Ingress Verification (`L4Warden`) | `internal/services/governance/l4_warden.go` |
 | Execution Boundary (`L5Actuator`) | `internal/services/governance/l5_actuator.go` |
 | Sovereignty (Data Scrubbing) | `internal/services/sovereignty/boundary.go` |
-| Threat Detection (`L1Doctrine`) | `internal/services/governance/l1_doctrine.go` |
+| Technical Bedrock (`L1Doctrine`) | `internal/services/governance/l1_doctrine.go` |
+| Consensus (`L2Consensus`) | `internal/services/governance/l2_consensus.go` |
+| Notary (`L3Notary`) | `internal/services/governance/l3_notary.go` |
 | Local Audit Vault | `internal/services/storage/audit_vault.go` |
 | Native Git Ledger | `internal/services/storage/ledger.go` |
 | Operator Entrypoint | `cmd/g8eo/main.go` |
