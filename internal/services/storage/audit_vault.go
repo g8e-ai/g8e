@@ -434,24 +434,35 @@ var auditVaultMigrations = []sqliteutil.Migration{
 		CREATE INDEX IF NOT EXISTS idx_chaos_events_category ON chaos_events(category);
 		`,
 	},
+	{
+		Version:     4,
+		Description: "Add session_type column to sessions table with composite unique constraint",
+		SQL: `
+		ALTER TABLE sessions ADD COLUMN session_type TEXT NOT NULL DEFAULT 'operator';
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_id_type ON sessions(id, session_type);
+		`,
+	},
 }
 
 // CreateSession creates a new session in the audit log
-func (avs *AuditVaultService) CreateSession(id, title, userIdentity string) error {
+func (avs *AuditVaultService) CreateSession(id, sessionType, title, userIdentity string) error {
 	if avs == nil || avs.db == nil {
 		return nil
 	}
 	if id == "" || strings.TrimSpace(id) != id {
 		return ErrAuditSessionMissing
 	}
+	if sessionType == "" {
+		sessionType = "operator"
+	}
 
-	query := `INSERT INTO sessions (id, title, user_identity) VALUES (?, ?, ?)`
-	_, err := avs.db.ExecWithRetry(query, id, title, userIdentity)
+	query := `INSERT INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`
+	_, err := avs.db.ExecWithRetry(query, id, sessionType, title, userIdentity)
 	if err != nil {
 		return fmt.Errorf("failed to create operator session: %w", err)
 	}
 
-	avs.logger.Info("OperatorSession created", "operator_session_id", id, "title", title)
+	avs.logger.Info("OperatorSession created", "operator_session_id", id, "session_type", sessionType, "title", title)
 	return nil
 }
 

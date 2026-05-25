@@ -661,7 +661,7 @@ func TestLedgerService_MultiSessionConcurrency(t *testing.T) {
 			filePath := filepath.Join(tempDir, fmt.Sprintf("parallel_test_%d.txt", idx))
 
 			// Record session in DB first (required by AuditVaultService.RecordEvents check)
-			err := avs.CreateSession(sessionID, "Parallel Session", "parallel@test.local")
+			err := avs.CreateSession(sessionID, "operator", "Parallel Session", "parallel@test.local")
 			require.NoError(t, err)
 
 			// Start multi-phase operation

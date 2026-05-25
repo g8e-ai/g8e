@@ -7,7 +7,7 @@
     "expiresAt": "2026-05-25T13:00:00Z",
     "sourceComponent": "COMPONENT_CLIENT",
     "operatorId": "operator-1",
-    "operatorSessionId": "operator-session-1",
+    "operatorSessionId": "operator-session-gates-stale-unique-001",
     "payload": "CgZscyAtbAESCGV4ZWMtMTIzGgx0ZXN0IGNvbW1hbmQiBnN0cmljdCge",
     "actionType": "EXECUTE_BASH",
     "targetResource": "localhost",

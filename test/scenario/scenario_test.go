@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,7 +89,19 @@ func TestScenarios(t *testing.T) {
 	}
 
 	for _, s := range scenarios {
+		// Extract operator_session_id from the envelope for session cleanup
+		var envelope struct {
+			OperatorSessionID string `json:"operatorSessionId"`
+		}
+		if err := json.Unmarshal(s.Intent, &envelope); err != nil {
+			t.Fatalf("failed to parse operator_session_id from intent: %v", err)
+		}
+		if envelope.OperatorSessionID == "" {
+			envelope.OperatorSessionID = "test-scenario-session"
+		}
+
 		for _, mode := range []Mode{ModeDoctrine, ModeConsensus, ModeNotary} {
+			mode := mode // capture loop variable
 			t.Run(s.Name+"/"+mode.String(), func(t *testing.T) {
 				// Create a new gate with audit vault for this test
 				fixedTime := time.Date(2026, 5, 24, 12, 0, 0, 0, time.UTC)
@@ -101,19 +114,13 @@ func TestScenarios(t *testing.T) {
 
 				// Create a test session in the audit vault for receipt recording
 				// This is required because the receipts table has a foreign key constraint on sessions
+				// Use idempotent creation to handle duplicate session creation across modes
 				if gate.auditVault != nil {
-					// Extract operator_session_id from the envelope to create the matching session
-					var envelope struct {
-						OperatorSessionID string `json:"operatorSessionId"`
-					}
-					if err := json.Unmarshal(s.Intent, &envelope); err != nil {
-						t.Fatalf("failed to parse operator_session_id from intent: %v", err)
-					}
-					if envelope.OperatorSessionID == "" {
-						envelope.OperatorSessionID = "test-scenario-session"
-					}
-					if err := CreateTestSession(gate.auditVault, envelope.OperatorSessionID); err != nil {
-						t.Fatalf("failed to create test session: %v", err)
+					if err := CreateTestSession(gate.auditVault, envelope.OperatorSessionID, "operator"); err != nil {
+						// Ignore UNIQUE constraint errors - session already exists from previous mode
+						if !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+							t.Fatalf("failed to create test session: %v", err)
+						}
 					}
 				}
 

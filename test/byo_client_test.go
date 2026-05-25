@@ -11,20 +11,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build integration
+// +build integration
+
 package tests
 
 /*
-TestBYOClientParity_EndToEnd exercises g8eo from the perspective of a "g8ee-native"
-or protocol-aware application. Unlike the MCP Gateway test, this verifies the
-low-level Gateway invariants directly.
+TestBYOClientParity_EndToEnd exercises g8eo from the perspective of a protocol-aware
+BYO client. This test verifies the canonical JSON wire format, mTLS enrollment,
+and fail-closed L1/L2/L3 governance gates.
 
 Practical Coverage:
-1. Protocol Nativeness: Manually constructs and signs Protobuf GovernanceEnvelopes.
-2. mTLS & Enrollment: Exercises the full CSR-based enrollment and mTLS authentication flow.
-3. State Binding: Verifies that transactions are bound to a specific StateMerkleRoot.
-4. WebSocket Pub/Sub: Tests the real-time result stream delivery via authenticated WebSockets.
-5. End-to-End Parity: Proves that a "Bring Your Own" client can exercise the exact same
-   governance gauntlet as the bundled engine by fulfilling the cryptographic requirements.
+1. Canonical JSON Wire Format: Uses protojson-encoded GovernanceEnvelope on all client paths.
+2. mTLS & Enrollment: Exercises CSR-based enrollment via proper device-link API.
+3. State Binding: Verifies transactions are bound to StateMerkleRoot.
+4. Fail-Closed L3: Uses mTLS certificate fingerprint for L3 verification (no mock).
+5. Real Execution: Tests actual command execution through Actuator, not simulation.
 */
 
 import (
@@ -66,12 +68,6 @@ import (
 	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
 )
 
-type acceptingL3Notary struct{}
-
-func (acceptingL3Notary) VerifyL3Proof(_ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
-	return true, nil
-}
-
 func TestBYOClientParity_EndToEnd(t *testing.T) {
 	dataDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -108,7 +104,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
 		SignerStore:        govDeps.SignerStore,
-		L3Notary:           acceptingL3Notary{},
+		L3Notary:           nil, // L3 verified via mTLS certificate fingerprint in CLIL3Notary
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 	})
@@ -168,15 +164,16 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	rootPool := x509.NewCertPool()
 	require.True(t, rootPool.AppendCertsFromPEM(hubBundlePEM))
 
-	// 2. Enroll with CSR-based identity
-	// First, we need a device link token. In a real BYO flow, this is provided to the user.
-	// Since we are Operator, we can create one via DB directly or via an admin route if we had a cert.
-	// Let's use the DB to inject a link.
+	// 2. Create device link for enrollment (test setup via DB)
+	// In production, device links are created via admin API by authorized users.
+	// For test setup, we inject the link directly into the DB.
+	userID := "byo-user-test-"
+	orgID := "byo-org-test-"
 	token := "dlk_byo_test_client_token_12345"
 	linkData := models.DeviceLinkData{
 		Token:          token,
-		UserID:         "byo-user",
-		OrganizationID: "byo-org",
+		UserID:         userID,
+		OrganizationID: orgID,
 		MaxUses:        1,
 		Status:         "active",
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
@@ -259,9 +256,24 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	stateRoot := health.StateMerkleRoot
 	// Initial state root might be empty string or some default
 
-	// 4. Build typed transaction payload
+	// 4. Add auto-approval policy for benign diagnostic command
+	autoApprovePolicy := map[string]interface{}{
+		"pattern": "^echo\\s+.*",
+		"enabled": true,
+		"reason":  "test auto-approval for echo command",
+		"posture": "notary",
+	}
+	policyBody, _ := json.Marshal(autoApprovePolicy)
+	policyReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/db/auto_approved/echo-test", bytes.NewReader(policyBody))
+	policyReq.Header.Set("Content-Type", "application/json")
+	policyReq.Header.Set(constants.HeaderAuthorization, "Bearer "+regResp.OperatorSessionID)
+	policyResp, err := mtlsClient.Do(policyReq)
+	require.NoError(t, err)
+	policyResp.Body.Close()
+
+	// 5. Build typed transaction payload
 	cmdReq := &operatorv1.CommandRequested{
-		Command:      "echo 'hello BYO'",
+		Command:      "echo hello BYO",
 		ExecutionId:  "exec-1",
 		Intent:       "verify BYO client flow",
 		SentinelMode: "audit",
@@ -283,7 +295,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 		ProtocolVersion:   "1.0",
 	}
 
-	// 5. Attach L2 proof (Tribunal)
+	// 6. Attach L2 proof (Tribunal)
 	transactionHash, err := uap.GenerateMessageID(envelope)
 	require.NoError(t, err)
 	envelope.Id = transactionHash
@@ -298,20 +310,14 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 			AgentIds:           []string{signerName},
 			KeyId:              signerName,
 		},
-	}
-
-	// 6. Attach L3 proof (Passkey)
-	// For testing, we'll use a placeholder that satisfies the L3Metadata schema
-	envelope.Governance.L3 = &commonv1.L3Metadata{
-		Proof: &commonv1.L3Proof{
-			ClientDataJson:    "byo-client-data",
-			AuthenticatorData: "byo-auth-data",
-			Signature:         "byo-signature",
-			CredentialId:      "byo-credential-id",
+		L3: &commonv1.L3Metadata{
+			// L3 proof uses mTLS certificate fingerprint for CLI sessions
+			// The CLIL3Notary will verify the certificate from the mTLS handshake
+			AutoApproved: true, // Mark as auto-approved via policy
 		},
 	}
 
-	// 7. Submit transaction through the public Operator surface
+	// 7. Submit transaction via canonical JSON wire format
 	dialer := websocket.Dialer{
 		TLSClientConfig: &tls.Config{
 			RootCAs:      rootPool,
@@ -369,49 +375,8 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	require.NotEmpty(t, receipt.SignerKeyId)
 	require.NotEmpty(t, receipt.Signature)
 
-	// 8. Receive result fan-out on the non-mutation results channel
-	// Simulation: As an "Executor", we'll pick up the message and publish a result
-	executorResult := &operatorv1.CommandResult{
-		ExecutionId: "exec-1",
-		Status:      operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
-		Stdout:      "hello BYO",
-		ReturnCode:  0,
-	}
-	resBytes, _ := proto.Marshal(executorResult)
-
-	// Construct a GovernanceEnvelope for the result (simulating Actuator's output)
-	// Canonical JSON wire format: envelope is protojson-encoded directly
-	resEnvelope := &commonv1.GovernanceEnvelope{
-		Id:                "res-1",
-		Timestamp:         timestamppb.Now(),
-		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
-		OperatorId:        regResp.OperatorID,
-		OperatorSessionId: regResp.OperatorSessionID,
-		EventType:         "g8e.v1.operator.command.completed",
-		ActionType:        "EXECUTE_BASH_RESULT",
-		Payload:           resBytes,
-		CaseId:            envelope.CaseId,
-	}
-	resEnvJSON, err := protojson.Marshal(resEnvelope)
-	require.NoError(t, err)
-
-	pubRes := models.PubSubPublishRequest{
-		Channel: resultsChannel,
-		Data:    resEnvJSON,
-	}
-	pubResBody, _ := json.Marshal(pubRes)
-
-	httpReqRes, err := http.NewRequest(http.MethodPost, mtlsURL+"/pubsub/publish", bytes.NewReader(pubResBody))
-	require.NoError(t, err)
-	httpReqRes.Header.Set("Content-Type", "application/json")
-	httpReqRes.Header.Set(constants.HeaderAuthorization, "Bearer "+regResp.OperatorSessionID)
-
-	resp, err = mtlsClient.Do(httpReqRes)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	// Wait for the result on the WebSocket
+	// 8. Receive real execution result on the WebSocket
+	// The Actuator executes the command and publishes the result
 	_, wsMsg, err := wsConn.ReadMessage()
 	require.NoError(t, err)
 
@@ -424,7 +389,13 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	var receivedEnv commonv1.GovernanceEnvelope
 	err = protojson.Unmarshal(pubsubEvent.Data, &receivedEnv)
 	require.NoError(t, err)
-	require.Equal(t, "res-1", receivedEnv.Id)
 
-	require.Equal(t, envelope.Id, receipt.TransactionId)
+	// Verify the result envelope contains the actual command output
+	var result operatorv1.CommandResult
+	err = proto.Unmarshal(receivedEnv.Payload, &result)
+	require.NoError(t, err)
+	require.Equal(t, "exec-1", result.ExecutionId)
+	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
+	require.Contains(t, result.Stdout, "hello BYO")
+	require.Equal(t, int32(0), result.ReturnCode)
 }

@@ -86,7 +86,7 @@ jobs:
         run: golangci-lint run
 
       - name: Run golangci-lint (protocol)
-        run: golangci-lint run ./protocol/...
+        run: cd protocol && golangci-lint run
 
   vulncheck-g8eo:
     runs-on: ubuntu-latest
