@@ -143,7 +143,7 @@ func (x *L1Metadata) GetViolations() []string {
 	return nil
 }
 
-// Consensus (L2Consensus) Governance: Consensus (Tribunal)
+// Consensus (L2Consensus) Governance: Multi-agent consensus verification
 type L2Metadata struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -347,7 +347,7 @@ type GovernanceMetadata struct {
 	L1 *L1Metadata `protobuf:"bytes,1,opt,name=l1,proto3" json:"l1,omitempty"`
 	L2 *L2Metadata `protobuf:"bytes,2,opt,name=l2,proto3" json:"l2,omitempty"`
 	L3 *L3Metadata `protobuf:"bytes,3,opt,name=l3,proto3" json:"l3,omitempty"`
-	// Set to true if signed by the local gateway without full Tribunal consensus.
+	// Set to true if signed by the local gateway without full L2 consensus.
 	// This is used for single-agent MCP clients that bypass the L2 consensus layer.
 	GatewaySigned bool `protobuf:"varint,4,opt,name=gateway_signed,json=gatewaySigned,proto3" json:"gateway_signed,omitempty"`
 }

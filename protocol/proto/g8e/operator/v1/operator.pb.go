@@ -3681,10 +3681,10 @@ type ActionReceipt struct {
 	SignerKeyId string `protobuf:"bytes,8,opt,name=signer_key_id,json=signerKeyId,proto3" json:"signer_key_id,omitempty"`
 	// ED25519 signature over canonical serialization of fields 1-8
 	Signature string `protobuf:"bytes,9,opt,name=signature,proto3" json:"signature,omitempty"`
-	// Flag indicating if the transaction was signed by the local gateway without full Tribunal consensus.
+	// Flag indicating if the transaction was signed by the local gateway without full L2 consensus.
 	// This is used for single-agent MCP clients that bypass the L2 consensus layer.
 	GatewaySigned bool `protobuf:"varint,10,opt,name=gateway_signed,json=gatewaySigned,proto3" json:"gateway_signed,omitempty"`
-	// Status of L2 (Consensus/Tribunal) signature verification.
+	// Status of L2 (Consensus) signature verification.
 	// Distinguishes between "not required" vs "required but failed" for compliance.
 	L2Status L2Status `protobuf:"varint,11,opt,name=l2_status,json=l2Status,proto3,enum=g8e.operator.v1.L2Status" json:"l2_status,omitempty"`
 	// Status of L3 (Notary/Human) proof verification.
@@ -3824,7 +3824,7 @@ type CommitmentAttestation struct {
 	PriorCommitmentHash string `protobuf:"bytes,3,opt,name=prior_commitment_hash,json=priorCommitmentHash,proto3" json:"prior_commitment_hash,omitempty"`
 	// StateRootAtCommit is the Gateway's state root at the moment the
 	// Auditor signed this attestation. It is checked against the
-	// envelope.StateMerkleRoot the Tribunal/L2 signed over.
+	// envelope.StateMerkleRoot the L2 consensus signed over.
 	StateRootAtCommit string `protobuf:"bytes,4,opt,name=state_root_at_commit,json=stateRootAtCommit,proto3" json:"state_root_at_commit,omitempty"`
 	// L2SignatureDigest, WardenIntentSignatureDigest and
 	// HumanSignatureDigest are SHA-256 of the corresponding signatures,

@@ -243,7 +243,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to load Actuator signing key: %w", err)
 	}
-	consensusPriv, err := vs.secretManager.GetTribunalKey()
+	consensusPriv, err := vs.secretManager.GetConsensusKey()
 	if err != nil {
 		return fmt.Errorf("failed to load Consensus signing key: %w", err)
 	}

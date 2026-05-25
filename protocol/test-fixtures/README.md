@@ -52,10 +52,6 @@ Per-tool REQUESTED/STARTED/COMPLETED/FAILED events are emitted by individual too
 - `LLM_LIFECYCLE_STARTED` - LLM processing started
 - `LLM_LIFECYCLE_COMPLETED` - LLM processing completed
 
-### Tribunal Events
-
-- Tribunal-specific events for multi-model verification workflows
-
 ## Fixture Files
 
 - `sse-events.json` - Event payload fixtures for contract testing

@@ -665,7 +665,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		os.Exit(constants.ExitConfigError)
 	}
 
-	ConsensusPriv, err := sm.GetTribunalKey()
+	ConsensusPriv, err := sm.GetConsensusKey()
 	if err != nil {
 		logger.Error("Failed to load Consensus signing key - L2 consensus will fail", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)

@@ -484,11 +484,11 @@ message ActionReceipt {
   // ED25519 signature over canonical serialization of fields 1-8
   string signature = 9;
 
-  // Flag indicating if the transaction was signed by the local gateway without full Tribunal consensus.
+  // Flag indicating if the transaction was signed by the local gateway without full L2 consensus.
   // This is used for single-agent MCP clients that bypass the L2 consensus layer.
   bool gateway_signed = 10;
 
-  // Status of L2 (Consensus/Tribunal) signature verification.
+  // Status of L2 (Consensus) signature verification.
   // Distinguishes between "not required" vs "required but failed" for compliance.
   L2Status l2_status = 11;
 
@@ -513,7 +513,7 @@ message CommitmentAttestation {
 
   // StateRootAtCommit is the Gateway's state root at the moment the
   // Auditor signed this attestation. It is checked against the
-  // envelope.StateMerkleRoot the Tribunal/L2 signed over.
+  // envelope.StateMerkleRoot the L2 consensus signed over.
   string state_root_at_commit = 4;
 
   // L2SignatureDigest, WardenIntentSignatureDigest and

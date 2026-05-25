@@ -120,11 +120,6 @@
       "_python_const": "TASKS",
       "value": "tasks"
     },
-    "tribunal_commands": {
-      "_go_const": "CollectionTribunalCommands",
-      "_python_const": "TRIBUNAL_COMMANDS",
-      "value": "tribunal_commands"
-    },
     "trusted_signers": {
       "_go_const": "CollectionTrustedSigners",
       "_python_const": "TRUSTED_SIGNERS",

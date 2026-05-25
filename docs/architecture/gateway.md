@@ -115,8 +115,8 @@ Every transaction submitted to `POST /api/governance/envelope` must pass through
 ### L1 Doctrine (Hard Gates)
 The technical bedrock. Enforces forbidden patterns (e.g., `sudo`, `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.
 
-### L2 Consensus (Tribunal)
-A Byzantine Fault Tolerant consensus layer where 5 independent agents verify the intent and safety of the command. In Gateway mode, this can be configured to require Ed25519 signatures from trusted Tribunal members.
+### L2 Consensus
+A Byzantine Fault Tolerant consensus layer where independent agents verify the intent and safety of the command. In Gateway mode, this can be configured to require Ed25519 signatures from trusted consensus agents. The specific consensus implementation (e.g., Tribunal) is an application-layer concern.
 
 ### L3 Notary (Human Authorization)
 The human-in-the-loop layer. Requires a cryptographic proof of human intent.

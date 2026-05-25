@@ -78,7 +78,6 @@ protocol/
 │   ├── security_constraints.json
 │   ├── stake_resolution.json
 │   ├── tool_results.json
-│   ├── tribunal.json
 │   ├── user.json
 │   ├── user_settings.json
 │   └── errors.py
@@ -139,7 +138,7 @@ services/
 ├── governance/                     # L1-L5 verification gauntlet
 │   ├── processor.go                #   EnvelopeProcessor interface
 │   ├── l1_doctrine.go              #   L1: forbidden patterns, threat analysis
-│   ├── l2_consensus.go             #   L2: Ed25519 Tribunal signature verification
+│   ├── l2_consensus.go             #   L2: Ed25519 consensus signature verification
 │   ├── l3_notary.go                #   L3: L3Notary interface + outboundL3Notary (CLI approval)
 │   ├── l4_warden.go                #   L4: fail-closed verification gate
 │   ├── l5_actuator.go              #   L5: execution boundary, receipt signer

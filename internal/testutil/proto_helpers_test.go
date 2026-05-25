@@ -313,8 +313,8 @@ func TestMustMarshalUAPEnvelope(t *testing.T) {
 
 func TestMustMarshalUAPEnvelopeWithVotes(t *testing.T) {
 	agentIDs := []string{"agent-1", "agent-2", "agent-3"}
-	tribunalSig := "sig-abc123"
-	payload := MustMarshalUAPEnvelopeWithVotes(t, "msg-002", "v1.0", "operator-2", "execute", "/tmp", "json", "{}", 3, agentIDs, tribunalSig)
+	consensusSig := "sig-abc123"
+	payload := MustMarshalUAPEnvelopeWithVotes(t, "msg-002", "v1.0", "operator-2", "execute", "/tmp", "json", "{}", 3, agentIDs, consensusSig)
 	require.NotNil(t, payload)
 
 	env := &uap.UAPEnvelope{}
@@ -324,7 +324,7 @@ func TestMustMarshalUAPEnvelopeWithVotes(t *testing.T) {
 	require.NotNil(t, env.Governance)
 	require.NotNil(t, env.Governance.L2)
 	require.Equal(t, agentIDs, env.Governance.L2.AgentIds)
-	require.Equal(t, tribunalSig, env.Governance.L2.ConsensusSignature)
+	require.Equal(t, consensusSig, env.Governance.L2.ConsensusSignature)
 }
 
 func TestMustUnmarshalUAPEnvelope(t *testing.T) {

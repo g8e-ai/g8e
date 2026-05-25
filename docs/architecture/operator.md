@@ -32,8 +32,8 @@ When a command targets an Operator, it progresses through a strict, fail-closed 
 ### L1: Doctrine (Technical Bedrock)
 The **L1Doctrine** layer provides foundational hard gates. It utilizes Protobuf field-option extensions (`forbidden_patterns`) to block malicious strings and executes real-time MITRE ATT&CK heuristics to detect threats like reverse shells, privilege escalation, and destructive disk operations. L1 is the first line of defense and cannot be bypassed.
 
-### L2: Consensus (Tribunal)
-The **L2Consensus** layer verifies the intent of the request via a Byzantine Fault Tolerant (BFT) quorum. It validates Ed25519 signatures from 5 independent reasoning agents against the Operator's locally trusted `SignerStore`. This ensures that no single upstream agent can unilaterally mutate the host.
+### L2: Consensus
+The **L2Consensus** layer verifies the intent of the request via a Byzantine Fault Tolerant (BFT) quorum. It validates Ed25519 signatures from independent reasoning agents against the Operator's locally trusted `SignerStore`. This ensures that no single upstream agent can unilaterally mutate the host. The specific consensus implementation (e.g., Tribunal) is an application-layer concern.
 
 ### L3: Notary (Authorization)
 The **L3Notary** layer enforces human-in-the-loop authorization. For web-based sessions, it validates FIDO2/WebAuthn (Passkey) proofs. For CLI or BYO client sessions, it validates mTLS certificate fingerprints. Mutations are blocked until a valid L3 proof is presented, unless specifically exempted by an `AutoApprove` policy for benign diagnostic commands.
