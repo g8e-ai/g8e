@@ -200,11 +200,6 @@
       "_python_const": "X_PROXY_ORGANIZATION_ID",
       "value": "X-Proxy-Organization-Id"
     },
-    "XProxyUserEmail": {
-      "_go_const": "HeaderXProxyUserEmail",
-      "_python_const": "X_PROXY_USER_EMAIL",
-      "value": "X-Proxy-User-Email"
-    },
     "XProxyUserID": {
       "_go_const": "HeaderXProxyUserID",
       "_python_const": "X_PROXY_USER_ID",

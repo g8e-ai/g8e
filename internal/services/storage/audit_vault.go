@@ -306,8 +306,8 @@ func (avs *AuditVaultService) initGitRepo(path string) error {
 
 	_, err = w.Commit("Initial ledger commit", &git.CommitOptions{
 		Author: &object.Signature{
-			Name:  "g8e Operator",
-			Email: "operator@" + constants.DefaultEndpoint,
+			Name:  "g8e-operator",
+			Email: "g8e-operator@system",
 			When:  time.Now(),
 		},
 	})

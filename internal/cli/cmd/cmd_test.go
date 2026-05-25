@@ -274,11 +274,9 @@ func TestCommandFlagValidation(t *testing.T) {
 		cmd := loginCmd()
 		require.NotNil(t, cmd)
 
-		emailFlag := cmd.Flags().Lookup("email")
 		countFlag := cmd.Flags().Lookup("count")
 		ttlFlag := cmd.Flags().Lookup("ttl")
 
-		assert.NotNil(t, emailFlag, "auth login should have --email flag")
 		assert.NotNil(t, countFlag, "auth login should have --count flag")
 		assert.NotNil(t, ttlFlag, "auth login should have --ttl flag")
 	})

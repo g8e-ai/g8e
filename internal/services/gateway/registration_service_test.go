@@ -938,7 +938,7 @@ func TestRegistration_SessionDocuments(t *testing.T) {
 		require.NoError(t, err, "operator_sessions document must exist after registration")
 		require.NotNil(t, doc)
 
-		assert.Equal(t, "operator", docFieldString(t, doc, "session_type"), "session_type must be 'operator'")
+		assert.Equal(t, "cli", docFieldString(t, doc, "session_type"), "session_type must be 'cli' for CLI enrollment")
 		assert.Equal(t, userID, docFieldString(t, doc, "user_id"), "user_id must match")
 		assert.True(t, docFieldBool(t, doc, "is_active"), "is_active must be true")
 		assert.NotEmpty(t, docFieldString(t, doc, "absolute_expires_at"), "absolute_expires_at is required by g8ee OperatorSessionDocument")

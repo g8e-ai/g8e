@@ -54,13 +54,13 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"github.com/g8e-ai/g8e/internal/services"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/gateway"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
 type gatewayRejectingL3Notary struct{}
@@ -189,14 +189,14 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	ls.GetDB().DocSet("users", userID, userBytes)
 
-	// Register and get cert (bootstrap port serves plain HTTP for trust establishment)
-	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
+	// Register and get cert (public port serves TLS with device-link token auth)
+	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 	rootPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
 	hubPEM, _ := os.ReadFile(filepath.Join(pkiDir, "trust", "hub-bundle.pem"))
 	rootPool := x509.NewCertPool()
 	rootPool.AppendCertsFromPEM(rootPEM)
 	rootPool.AppendCertsFromPEM(hubPEM)
-	bootstrapClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
+	publicClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
 
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
 	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "mcp-test-client"}}
@@ -209,9 +209,9 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		Hostname:          "mcp-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, bootstrapURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
 	hReq.Header.Set(constants.HeaderDeviceToken, token)
-	hResp, err := bootstrapClient.Do(hReq)
+	hResp, err := publicClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, hResp.StatusCode)
 	var regResp models.OperatorRegistrationResponse
@@ -231,7 +231,6 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		},
 	}
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 
 	// Set public base URL for approval links
 	mcpGateway.SetPublicBaseURL(publicURL)
@@ -453,14 +452,14 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	ls.GetDB().DocSet("users", userID, userBytes)
 
-	// Register and get cert (bootstrap port serves plain HTTP for trust establishment)
-	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
+	// Register and get cert (public port serves TLS with device-link token auth)
+	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 	rootPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
 	hubPEM, _ := os.ReadFile(filepath.Join(pkiDir, "trust", "hub-bundle.pem"))
 	rootPool := x509.NewCertPool()
 	rootPool.AppendCertsFromPEM(rootPEM)
 	rootPool.AppendCertsFromPEM(hubPEM)
-	bootstrapClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
+	publicClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
 
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
 	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "a2a-test-client"}}
@@ -473,9 +472,9 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 		Hostname:          "a2a-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, bootstrapURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
 	hReq.Header.Set(constants.HeaderDeviceToken, token)
-	hResp, err := bootstrapClient.Do(hReq)
+	hResp, err := publicClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, hResp.StatusCode)
 	var regResp models.OperatorRegistrationResponse
@@ -495,7 +494,6 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 		},
 	}
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 
 	// Set public base URL for approval links
 	mcpGateway.SetPublicBaseURL(publicURL)
@@ -650,13 +648,13 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	require.NoError(t, err)
 	ls.GetDB().DocSet("users", userID, userBytes)
 
-	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
+	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 	rootPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
 	hubPEM, _ := os.ReadFile(filepath.Join(pkiDir, "trust", "hub-bundle.pem"))
 	rootPool := x509.NewCertPool()
 	rootPool.AppendCertsFromPEM(rootPEM)
 	rootPool.AppendCertsFromPEM(hubPEM)
-	bootstrapClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
+	publicClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
 
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
 	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "payload-test-client"}}
@@ -669,9 +667,9 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		Hostname:          "payload-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, bootstrapURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
 	hReq.Header.Set(constants.HeaderDeviceToken, token)
-	hResp, err := bootstrapClient.Do(hReq)
+	hResp, err := publicClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, hResp.StatusCode)
 	var regResp models.OperatorRegistrationResponse
@@ -690,7 +688,6 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		},
 	}
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 
 	// Set public base URL for approval links
 	mcpGateway.SetPublicBaseURL(publicURL)
@@ -995,13 +992,13 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	require.NoError(t, err)
 	ls.GetDB().DocSet("users", userID, userBytes)
 
-	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
+	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 	rootPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
 	hubPEM, _ := os.ReadFile(filepath.Join(pkiDir, "trust", "hub-bundle.pem"))
 	rootPool := x509.NewCertPool()
 	rootPool.AppendCertsFromPEM(rootPEM)
 	rootPool.AppendCertsFromPEM(hubPEM)
-	bootstrapClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
+	publicClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
 
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
 	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "error-test-client"}}
@@ -1014,9 +1011,9 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		Hostname:          "error-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, bootstrapURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
 	hReq.Header.Set(constants.HeaderDeviceToken, token)
-	hResp, err := bootstrapClient.Do(hReq)
+	hResp, err := publicClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, hResp.StatusCode)
 	var regResp models.OperatorRegistrationResponse

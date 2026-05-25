@@ -183,13 +183,6 @@ func (s *UserService) appendAdminAudit(entry models.AdminAuditEntry) error {
 	return s.db.DocSet(marshaler.CollectionName(constants.CollectionAuthAdminAudit), entry.ID, data)
 }
 
-// FindByEmail is removed as part of zero-PII architecture.
-// Users are identified solely by user ID, not email.
-// This method returns an error to prevent accidental use.
-func (s *UserService) FindByEmail(email string) (*models.User, error) {
-	return nil, fmt.Errorf("FindByEmail is not supported in zero-PII architecture. Use GetByID instead.")
-}
-
 // GetByID retrieves a user by ID.
 func (s *UserService) GetByID(userID string) (*models.User, error) {
 	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)

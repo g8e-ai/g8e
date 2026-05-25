@@ -82,7 +82,7 @@ func (s *SessionService) PersistSessions(cliSessionID, operatorSessionID, userID
 	sessionExpiry := time.Now().UTC().Add(24 * time.Hour)
 	operatorSessionDoc := map[string]interface{}{
 		"id":                  operatorSessionID,
-		"session_type":        string(constants.SessionTypeOperator),
+		"session_type":        string(constants.SessionTypeCLI),
 		"user_id":             userID,
 		"organization_id":     orgID,
 		"operator_id":         operatorID,

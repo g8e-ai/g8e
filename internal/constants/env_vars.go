@@ -89,7 +89,6 @@ var EnvVar = struct {
 	Username                   EnvVarKey
 	LogName                    EnvVarKey
 	OperatorID                 EnvVarKey
-	UserID                     EnvVarKey
 	CLISessionID               EnvVarKey
 	ProtocolDir                EnvVarKey
 	TestTmpDir                 EnvVarKey
@@ -184,7 +183,6 @@ var EnvVar = struct {
 	Username:                   "USERNAME",
 	LogName:                    "LOGNAME",
 	OperatorID:                 "G8E_OPERATOR_ID",
-	UserID:                     "G8E_USER_ID",
 	CLISessionID:               "G8E_CLI_SESSION_ID",
 	ProtocolDir:                "G8E_PROTOCOL_DIR",
 	TestTmpDir:                 "G8E_TEST_TMP_DIR",

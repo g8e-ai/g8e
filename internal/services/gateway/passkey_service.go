@@ -87,7 +87,7 @@ type ChallengeData struct {
 }
 
 // GenerateRegistrationChallenge creates a registration challenge for a user.
-func (s *PasskeyService) GenerateRegistrationChallenge(userID, email, userName string) (*protocol.CredentialCreation, error) {
+func (s *PasskeyService) GenerateRegistrationChallenge(userID, userName string) (*protocol.CredentialCreation, error) {
 	user, err := s.getUser(userID)
 	if err != nil {
 		return nil, err

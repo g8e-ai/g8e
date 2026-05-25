@@ -74,8 +74,6 @@ func TestBootstrapFlow(t *testing.T) {
 
 	// 2. Perform bootstrap
 	bootstrapBody := map[string]string{
-		"email":              "superadmin@g8e.local",
-		"name":               "Superadmin",
 		"csr_pem":            string(csrPEM),
 		"cli_csr_pem":        string(cliCsrPEM),
 		"system_fingerprint": "test-fingerprint",

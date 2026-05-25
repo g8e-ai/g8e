@@ -23,14 +23,14 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 )
 
 type User struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type Operator struct {
@@ -57,7 +57,7 @@ type QueryRequest struct {
 }
 
 type DeviceLinkCreateRequest struct {
-	Email      string `json:"email"`
+	UserID     string `json:"user_id"`
 	MaxUses    int    `json:"max_uses"`
 	TTLSeconds int    `json:"ttl_seconds"`
 }
@@ -122,7 +122,7 @@ func dataUsersCmd() *cobra.Command {
 			cmd.Printf("Users (%d total)\n", len(users))
 			cmd.Println(strings.Repeat("=", 110))
 			for _, user := range users {
-				cmd.Printf("  %s  %s  %s\n", user.ID, user.Email, user.Name)
+				cmd.Printf("  %s  %s\n", user.ID, user.Name)
 			}
 
 			return nil
@@ -185,19 +185,14 @@ func dataDeviceLinksCmd() *cobra.Command {
 
 func dataDeviceLinksListCmd() *cobra.Command {
 	var userID string
-	var email string
 
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List device-link tokens",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			queryUserID := userID
-			if queryUserID == "" && email == "" {
-				queryUserID = os.Getenv("G8E_USER_ID")
-			}
-
 			if queryUserID == "" {
-				return fmt.Errorf("not authenticated: provide --user-id, --email, or ensure G8E_USER_ID is set")
+				queryUserID = uuid.New().String()
 			}
 
 			cfg, err := config.Load("")
@@ -236,14 +231,13 @@ func dataDeviceLinksListCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&userID, "user-id", "", "User ID")
-	cmd.Flags().StringVar(&email, "email", "", "User email")
+	cmd.Flags().StringVar(&userID, "user-id", "", "User ID (auto-generated if not provided)")
 
 	return cmd
 }
 
 func dataDeviceLinksCreateCmd() *cobra.Command {
-	var email string
+	var userID string
 	var count int
 	var ttl int
 
@@ -256,8 +250,8 @@ func dataDeviceLinksCreateCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			if email == "" {
-				return fmt.Errorf("--email is required")
+			if userID == "" {
+				userID = uuid.New().String()
 			}
 
 			client, err := api.NewClient(cfg)
@@ -266,7 +260,7 @@ func dataDeviceLinksCreateCmd() *cobra.Command {
 			}
 
 			req := DeviceLinkCreateRequest{
-				Email:      email,
+				UserID:     userID,
 				MaxUses:    count,
 				TTLSeconds: ttl,
 			}
@@ -286,7 +280,7 @@ func dataDeviceLinksCreateCmd() *cobra.Command {
 			}
 
 			cmd.Printf("Device-link token created: %s\n", result.Token)
-			cmd.Printf("Email: %s\n", email)
+			cmd.Printf("User ID: %s\n", userID)
 			cmd.Printf("Max uses: %d\n", count)
 			cmd.Printf("TTL: %d seconds\n", ttl)
 
@@ -294,7 +288,7 @@ func dataDeviceLinksCreateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&email, "email", "", "Email address (required)")
+	cmd.Flags().StringVar(&userID, "user-id", "", "User ID (auto-generated if not provided)")
 	cmd.Flags().IntVar(&count, "count", 1, "Number of uses")
 	cmd.Flags().IntVar(&ttl, "ttl", 3600, "TTL in seconds")
 
@@ -319,11 +313,7 @@ func dataDeviceLinksDeleteCmd() *cobra.Command {
 			}
 
 			if userID == "" {
-				userID = os.Getenv("G8E_USER_ID")
-			}
-
-			if userID == "" {
-				return fmt.Errorf("--user-id is required or G8E_USER_ID must be set")
+				userID = uuid.New().String()
 			}
 
 			client, err := api.NewClient(cfg)
@@ -344,7 +334,7 @@ func dataDeviceLinksDeleteCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&token, "token", "", "Token to delete (required)")
-	cmd.Flags().StringVar(&userID, "user-id", "", "User ID")
+	cmd.Flags().StringVar(&userID, "user-id", "", "User ID (auto-generated if not provided)")
 
 	return cmd
 }

@@ -429,7 +429,49 @@ func TestConfig_OperatorHTTPURL(t *testing.T) {
 }
 
 func TestConfig_OperatorBootstrapURL(t *testing.T) {
-	t.Run("returns operator bootstrap HTTPS URL", func(t *testing.T) {
+	t.Run("returns operator bootstrap HTTPS URL (deprecated, delegates to OperatorPublicURL)", func(t *testing.T) {
+		config := &Config{
+			Paths: &PathsConfig{
+				Ports: struct {
+					OpenclawGateway        int `json:"openclaw_gateway"`
+					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
+					OperatorHTTPS          int `json:"operator_https"`
+					OperatorPublicHTTPS    int `json:"operator_public_https"`
+				}{
+					OperatorBootstrapHTTPS: 8441,
+					OperatorPublicHTTPS:    8442,
+				},
+			},
+		}
+
+		result := config.OperatorBootstrapURL()
+		assert.Equal(t, "https://localhost:8442", result)
+	})
+}
+
+func TestConfig_OperatorPublicURL(t *testing.T) {
+	t.Run("returns operator public TLS URL for device-link enrollment", func(t *testing.T) {
+		config := &Config{
+			Paths: &PathsConfig{
+				Ports: struct {
+					OpenclawGateway        int `json:"openclaw_gateway"`
+					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
+					OperatorHTTPS          int `json:"operator_https"`
+					OperatorPublicHTTPS    int `json:"operator_public_https"`
+				}{
+					OperatorBootstrapHTTPS: 8441,
+					OperatorPublicHTTPS:    8442,
+				},
+			},
+		}
+
+		result := config.OperatorPublicURL()
+		assert.Equal(t, "https://localhost:8442", result)
+	})
+}
+
+func TestConfig_OperatorDiscoveryURL(t *testing.T) {
+	t.Run("returns operator discovery URL for CA download over plain HTTP", func(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
@@ -443,8 +485,8 @@ func TestConfig_OperatorBootstrapURL(t *testing.T) {
 			},
 		}
 
-		result := config.OperatorBootstrapURL()
-		assert.Equal(t, "https://localhost:8441", result)
+		result := config.OperatorDiscoveryURL()
+		assert.Equal(t, "http://localhost:8441", result)
 	})
 }
 

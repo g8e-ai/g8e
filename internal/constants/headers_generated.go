@@ -58,7 +58,6 @@ const (
 	HeaderXForwardedHost = "X-Forwarded-Host" // #nosec G101 - constant string, not credential
 	HeaderXForwardedProto = "X-Forwarded-Proto" // #nosec G101 - constant string, not credential
 	HeaderXProxyOrganizationID = "X-Proxy-Organization-Id" // #nosec G101 - constant string, not credential
-	HeaderXProxyUserEmail = "X-Proxy-User-Email" // #nosec G101 - constant string, not credential
 	HeaderXProxyUserID = "X-Proxy-User-Id" // #nosec G101 - constant string, not credential
 	HeaderXRequestTimestamp = "X-Request-Timestamp" // #nosec G101 - constant string, not credential
 )
