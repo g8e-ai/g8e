@@ -235,10 +235,9 @@ func TestPubSubCommandService_handleMcpCallRequestSync(t *testing.T) {
 }
 
 func TestPubSubCommandService_handleA2aCallRequestSync(t *testing.T) {
-	f := newPubsubFixture(t)
-
 	t.Run("rejects when A2A gateway not configured", func(t *testing.T) {
 		t.Parallel()
+		f := newPubsubFixture(t)
 		f.Svc.mcpGateway = nil
 		msg := PubSubCommandMessage{
 			EventType: constants.Event.Operator.A2a.CallRequested,
@@ -252,6 +251,7 @@ func TestPubSubCommandService_handleA2aCallRequestSync(t *testing.T) {
 
 	t.Run("rejects unmarshal error", func(t *testing.T) {
 		t.Parallel()
+		f := newPubsubFixture(t)
 		msg := PubSubCommandMessage{
 			EventType: constants.Event.Operator.A2a.CallRequested,
 			ID:        "msg-1",
