@@ -275,215 +275,215 @@ docs-cli:
 	@mkdir -p bin
 	@go build -o bin/g8e ./cmd/g8e
 	@echo "Generating CLI reference documentation..."
-	@echo "# CLI Reference" > docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "This reference is auto-generated from the Cobra CLI help output." >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "## g8e Root Help" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "## setup" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e setup --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "## platform" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e platform --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### platform start" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e platform start --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### platform stop" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e platform stop --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### platform status" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e platform status --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### platform restart" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e platform restart --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### platform logs" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e platform logs --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### platform settings" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e platform settings --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### platform reset" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e platform reset --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### platform clean" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e platform clean --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "## auth" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e auth --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### auth bootstrap" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e auth bootstrap --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### auth login" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e auth login --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### auth logout" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e auth logout --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "## data" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e data --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### data users" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e data users --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### data operators" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e data operators --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### data device-links" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e data device-links --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "#### data device-links list" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e data device-links list --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "#### data device-links create" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e data device-links create --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "#### data device-links delete" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e data device-links delete --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### data settings" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e data settings --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### data store" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e data store --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### data audit" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e data audit --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "#### data audit list" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e data audit list --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "#### data audit summary" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e data audit summary --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "## test" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e test --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### test unit" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e test unit --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### test integration" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e test integration --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### test g8eo" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e test g8eo --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### test ci" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e test ci --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### test chaos" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e test chaos --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### test scenario" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e test scenario --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "## security" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e security --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### security validate" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e security validate --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "## vars" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e vars --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### vars list" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e vars list --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### vars set" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e vars set --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### vars get" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e vars get --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
-	@echo "### vars unset" >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@./bin/g8e vars unset --help >> docs/reference/cli.md
-	@echo "\`\`\`" >> docs/reference/cli.md
-	@echo "" >> docs/reference/cli.md
+	@echo "# CLI Reference" > docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "This reference is auto-generated from the Cobra CLI help output." >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "## g8e Root Help" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "## setup" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e setup --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "## platform" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e platform --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### platform start" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e platform start --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### platform stop" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e platform stop --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### platform status" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e platform status --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### platform restart" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e platform restart --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### platform logs" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e platform logs --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### platform settings" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e platform settings --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### platform reset" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e platform reset --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### platform clean" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e platform clean --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "## auth" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e auth --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### auth bootstrap" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e auth bootstrap --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### auth login" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e auth login --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### auth logout" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e auth logout --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "## data" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e data --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### data users" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e data users --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### data operators" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e data operators --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### data device-links" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e data device-links --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "#### data device-links list" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e data device-links list --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "#### data device-links create" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e data device-links create --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "#### data device-links delete" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e data device-links delete --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### data settings" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e data settings --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### data store" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e data store --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### data audit" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e data audit --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "#### data audit list" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e data audit list --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "#### data audit summary" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e data audit summary --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "## test" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e test --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### test unit" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e test unit --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### test integration" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e test integration --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### test g8eo" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e test g8eo --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### test ci" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e test ci --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### test chaos" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e test chaos --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### test scenario" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e test scenario --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "## security" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e security --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### security validate" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e security validate --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "## vars" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e vars --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### vars list" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e vars list --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### vars set" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e vars set --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### vars get" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e vars get --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
+	@echo "### vars unset" >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@./bin/g8e vars unset --help >> docs/guides/cli.md
+	@echo "\`\`\`" >> docs/guides/cli.md
+	@echo "" >> docs/guides/cli.md
 	@echo "CLI reference documentation generated successfully."
 
 .PHONY: docs-build

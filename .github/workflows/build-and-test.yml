@@ -204,11 +204,11 @@ jobs:
 
       - name: Check for CLI documentation drift
         run: |
-          CHANGES=$(git status --porcelain | grep -E "^\s*M.*docs/reference/cli\.md$" || true)
+          CHANGES=$(git status --porcelain | grep -E "^\s*M.*docs/guides/cli\.md$" || true)
           if [ -n "$CHANGES" ]; then
             echo "Error: CLI documentation is out of sync with CLI help output"
             echo "$CHANGES"
-            git diff docs/reference/cli.md
+            git diff docs/guides/cli.md
             exit 1
           fi
 

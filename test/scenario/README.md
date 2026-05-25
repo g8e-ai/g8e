@@ -125,7 +125,7 @@ The framework uses real SQLite databases (no mocks) to verify receipt persistenc
 - **Assertion**: `AssertPersistedReceipt()` verifies that accepting scenarios persist receipts and rejecting scenarios do not
 - **Integration**: The `OperatorGate` uses a real `TransactionAuditStore` backed by the test database
 
-This approach follows the "no mocks" principle from `docs/devs.md`, ensuring tests exercise the actual persistence path rather than mocked behavior.
+This approach follows the "no mocks" principle from `docs/guides/devs.md`, ensuring tests exercise the actual persistence path rather than mocked behavior.
 
 ## Current Scenarios
 

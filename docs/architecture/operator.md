@@ -91,4 +91,4 @@ The Local-First Audit Architecture (LFAA) guarantees that the host remains the a
 | Native Git Ledger | `internal/services/storage/ledger.go` |
 | MCP Proxy Entrypoint | `cmd/g8eo/main.go` |
 
-See also: [g8e Protocol](./protocol.md), [Governance Gateway (g8eg)](./g8eg.md).
+See also: [g8e Protocol](./protocol.md), [Governance Gateway (g8eg)](./gateway.md).

@@ -1,6 +1,42 @@
 # CLI Reference
 
-This reference is auto-generated from the Cobra CLI help output.
+This reference combines architectural guidance with auto-generated CLI help output.
+
+Last Updated: 2026-05-25
+
+## Architecture Overview
+
+The g8e CLI is the primary operational interface for the Governance Gateway (g8eg) and Governed Operator (g8eo). It is a statically compiled Go binary that manages platform lifecycle, authentication, data queries, and testing. The platform enforces a **host-native** execution model with **ZERO shell scripts** for platform operations.
+
+g8e runs directly on the host without container-orchestration complexity. The CLI serves dual purposes:
+
+- **Daemon mode**: Runs the Governance Gateway when invoked without subcommands
+- **CLI mode**: Manages platform lifecycle, auth, data, and tests when invoked with subcommands
+
+**Host runtime state** - All runtime data lives at `./.g8e/`: `data/`, `pki/`, `secrets/`, `logs/`.
+**Credentials** - Authenticated commands use `~/.g8e/credentials`.
+
+Command form: `./g8e <command> [subcommand] [options]`.
+
+## Zero Shell Scripts Policy
+
+**CRITICAL**: The platform uses ZERO shell scripts for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary (`./g8e`).
+
+**Permissible Shell Scripts:**
+- Vendor scripts (third-party Go vendor scripts in `vendor/` and `tools/vendor/`) - not g8e platform code
+
+## Technical Invariants
+
+1. **Zero Shell Scripts**: NO shell scripts are used for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary.
+2. **Service readiness** - The platform is not "ready" until the Gateway `/healthz` passes. The Go CLI blocks until this state.
+3. **Canonical wire format** - All client-facing interaction uses canonical JSON (protojson). Binary protobuf is reserved for internal storage.
+4. **Fail-closed execution** - The CLI must never mask failures or proceed with missing trust material. Missing trust bundles or secrets exit with an actionable error pointing at the platform Gateway.
+
+---
+
+## Auto-Generated CLI Help
+
+The following sections are auto-generated from the Cobra CLI help output.
 
 ## g8e Root Help
 ```
@@ -566,3 +602,6 @@ Flags:
   -h, --help   help for unset
 ```
 
+---
+
+See also: [Operator](../architecture/operator.md), [Governance Gateway (g8eg)](../architecture/gateway.md), [Tests](tests.md).

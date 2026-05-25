@@ -315,5 +315,5 @@ The Gateway implements a circuit breaker for downstream MCP/A2A servers:
 ## Related Documentation
 
 - [**g8e Protocol**](./protocol.md) - The wire contract and governance hierarchy
-- [**Operator (g8eo)**](../architecture/operator.md) - Operator architecture and gateway mode
+- [**Operator (g8eo)**](./operator.md) - Operator architecture and gateway mode
 - [**A2A Protocol**](./a2a.md) - A2A protocol specification
