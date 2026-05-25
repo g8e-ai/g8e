@@ -23,18 +23,6 @@ A set of rules that determines which users or systems can access specific resour
 
 ---
 
-## Anchored Operator Terminal
-
-The pinned terminal at the bottom of the chat interface in  for direct SSH-like command execution without AI involvement. Features command history (up/down arrows), collapsible view, real-time output via SSE, and displays AI-initiated events (approvals, execution results). Provides direct user input bypassing the AI while showing events routed from the AI execution flow.
-
----
-
-## Approval UI
-
-The interactive interface that presents proposed commands, file modifications, or permission requests to users for explicit consent. Shows the exact operation to be performed, its potential impact, and requires user confirmation before execution. Part of the Human-in-the-Loop security model.
-
----
-
 ## Audit Trail
 
 A chronological record of all actions performed within the g8e platform. Includes command executions, file modifications, permission changes, and user interactions. Stored locally in the Audit Vault on the Operator.
@@ -49,7 +37,7 @@ An embedded SQLite database (`./.g8e/data/g8e.db`) that stores all operator sess
 
 ## Auditor
 
-A verifier persona within the **agentic ensemble** Consensus stage (L2 Governance). The Auditor evaluates the consensus command winner against the original intent **after** the Actuator has cleared it for risk; if Actuator blocks, the Auditor never runs. The Auditor sees the request, operator context, and anonymized candidate clusters (not full conversation history). Verdicts are `ok`, `swap:<cluster_id>` to promote a dissenting cluster, or `revised:<command>`. On pass, the Auditor binds the verdict to a SHA-256 **Merkle Commitment** over the **Reputation Scoreboard**, chained via `prev_root` HMAC-SHA256 - a tamper-evident cryptographic chain of agent performance. Reputation-commitment failure is fatal: the verdict cannot proceed.
+The L2 Consensus verification stage that evaluates the consensus command winner against the original intent. The Auditor runs after the Actuator risk assessment clears the command. It verifies the request, operator context, and candidate clusters, producing verdicts of `ok`, `swap:<cluster_id>` to promote a dissenting cluster, or `revised:<command>`. On pass, the Auditor binds the verdict to a SHA-256 **Merkle Commitment** over the **Reputation Scoreboard**, chained via `prev_root` HMAC-SHA256 - a tamper-evident cryptographic chain of agent performance. Reputation-commitment failure is fatal: the verdict cannot proceed.
 
 ---
 
@@ -61,7 +49,7 @@ A cryptographic credential used to establish identity between components. Includ
 
 ## Auto-Approval
 
-A security mechanism in the **g8e Agentic Ensemble** that allows benign, read-only diagnostic commands (e.g., `uptime`, `df -h`, `ls`) to bypass manual human approval. Defined in `auto_approved.json`, these commands are still subjected to L1 and L2 governance. Auto-approval reduces click fatigue without sacrificing the technical or consensus safety gates.
+A security mechanism that allows benign, read-only diagnostic commands (e.g., `uptime`, `df -h`, `ls`) to bypass manual human approval. Defined in protocol constants, these commands are still subjected to L1 and L2 governance. Auto-approval reduces click fatigue without sacrificing the technical or consensus safety gates.
 
 ---
 
@@ -113,7 +101,7 @@ The set of standards and regulations that g8e adheres to, including NSA ZIG alig
 
 ## Coordination Store (SQLite)
 
-The embedded SQLite database used for durable storage of users, operators, investigations, chat history, and platform data. The Local Operator (`g8eg`) running in Gateway mode (--doctrine, --consensus, or --notary) is the single source of truth - a single SQLite database in WAL mode shared by all components via the Local Operator's document store, KV, and pub/sub APIs. The **g8e Agentic Ensemble** and client components are stateless with respect to persistence and access all data through the Local Operator's HTTP API.
+The embedded SQLite database used for durable storage of users, operators, investigations, chat history, and platform data. The Governance Gateway (`g8eg`) running in Gateway mode is the single source of truth - a single SQLite database in WAL mode shared by all components via the Gateway's document store, KV, and pub/sub APIs. BYO agentic clients and other components are stateless with respect to persistence and access all data through the Gateway's HTTP API.
 
 ---
 
@@ -139,7 +127,7 @@ A security strategy that implements multiple layers of protection to ensure the 
 
 A pre-authorized deployment method for installing Operators on one or many systems from a single token. Users generate a Device Link from the Operator Panel with configurable `max_uses` (1–10,000, default 1) and expiry (1 minute to 7 days, default 1 hour). The token (`dlk_` prefix) is distributed via Ansible, SSH, or configuration management as `g8e.operator --device-token dlk_xxx`. Each system auto-registers: the platform claims an existing AVAILABLE Operator slot for that user, or creates one on demand if none exist. No browser approval required - the link itself is the authorization. Operator slots are the accounting unit - each registered device consumes one slot.
 
-**Authority Split:**  is authoritative for device link documents (usage tracking, exhaustion checking, claims management); g8e-compatible agentic ensembles are authoritative for operator documents (slot management, lifecycle operations).
+**Authority Split:** The Governance Gateway (`g8eg`) is authoritative for device link documents (usage tracking, exhaustion checking, claims management); BYO agentic clients are authoritative for operator documents (slot management, lifecycle operations).
 
 ---
 
@@ -151,7 +139,7 @@ The protection of data stored on disk using AES-256-GCM encryption. Applied to t
 
 ## Environment
 
-The runtime context of the system where an Operator is running, as reported by the Operator via heartbeat telemetry. Captured in `HeartbeatEnvironment` and includes: current working directory (`pwd`), locale (`lang`), timezone, terminal type (`term`), container detection (`is_container`, `container_runtime`, `container_signals`), and init system (`init_system`). Used by g8e-compatible agentic ensembles to provide the AI with accurate context about the Operator's execution environment.
+The runtime context of the system where an Operator is running, as reported by the Operator via heartbeat telemetry. Captured in `HeartbeatEnvironment` and includes: current working directory (`pwd`), locale (`lang`), timezone, terminal type (`term`), container detection (`is_container`, `container_runtime`, `container_signals`), and init system (`init_system`). Used by BYO agentic clients to provide the AI with accurate context about the Operator's execution environment.
 
 ---
 
@@ -170,12 +158,6 @@ The security architecture aligned with Federal Risk and Authorization Management
 ## g8e
 
 The platform name. g8e is an open-source, air-gapped capable AI governance platform that connects Operators to an AI control plane capable of reasoning about system state, executing commands, analyzing results, and performing multi-step operational workflows through natural language.
-
----
-
-## g8e-Compatible Agentic Ensemble
-
-An agentic ensemble that implements the g8e protocol, with LLM provider abstraction supporting OpenAI, Anthropic, Gemini, and Ollama providers. Processes natural language requests, reasons about system state, generates commands, and manages investigations. Implements the tool calling loop for Operator interactions and the Intent-Based Policy System for Cloud Operators.
 
 ---
 
@@ -199,7 +181,7 @@ The comprehensive security model designed for organizations requiring regulatory
 
 ## g8e Sentinel
 
-A platform-wide, multi-layer security system that protects the user's remote system and data across both the Operator (`g8eo`) and the **g8e Agentic Ensemble** (`g8ee`). Sentinel stands guard on the Operator side with **pre-execution protection** (threat detectors across MITRE ATT&CK-mapped categories) and **egress data scrubbing** to ensure sensitive information never leaves the host. It adds another layer of defense on the **agentic ensemble** side with **ingress data scrubbing**, protecting Operator data with redundant patterns before it is transmitted to any model provider. Scrubbing patterns cover credentials (AWS keys, API tokens), PII (emails, phone numbers), network identifiers, and cloud resources, replacing sensitive values with safe placeholders like `[AWS_KEY]` or `[EMAIL]`. Sentinel also includes indirect prompt injection defense to detect command output attempting to manipulate AI behavior.
+A platform-wide, multi-layer security system that protects the user's remote system and data. Sentinel runs within the Operator (`g8eo`) as an inline parser under L1Doctrine within the L4Warden verification flow, providing **pre-execution protection** (threat detectors across MITRE ATT&CK-mapped categories) and **egress data scrubbing** to ensure sensitive information never leaves the host. Scrubbing patterns cover credentials (AWS keys, API tokens), PII (emails, phone numbers), network identifiers, and cloud resources, replacing sensitive values with safe placeholders like `[AWS_KEY]` or `[EMAIL]`. Sentinel also includes indirect prompt injection defense to detect command output attempting to manipulate AI behavior.
 
 ---
 
@@ -217,13 +199,13 @@ The compliance state where g8e architecture supports Healthcare Insurance Portab
 
 ## Human Oversight
 
-The requirement that all significant operations be reviewed and approved by authorized personnel. Implemented through the Approval UI, command approval workflow, and permission escalation controls.
+The requirement that all significant operations be reviewed and approved by authorized personnel. Implemented through command approval workflow and permission escalation controls.
 
 ---
 
 ## Human-in-the-Loop
 
-A security principle requiring explicit user approval before any state-changing operation executes. All destructive commands, file modifications, and permission escalations require user consent via the approval UI. Read-only operations execute automatically.
+A security principle requiring explicit user approval before any state-changing operation executes. All destructive commands, file modifications, and permission escalations require user consent. Read-only operations execute automatically.
 
 ---
 
@@ -247,7 +229,7 @@ A security mechanism that automatically terminates web sessions after 8 hours of
 
 ## Information Isolation Principle
 
-A load-bearing safety property in g8e's mechanism design where AI agents operate in a sealed, tiered information environment. Each agent (Triage, Sage, Consensus members, Auditor) has a quarantined view of the pipeline to prevent collusion and ensure honest participation.
+A load-bearing safety property in g8e's mechanism design where AI agents operate in a sealed, tiered information environment. Each agent has a quarantined view of the pipeline to prevent collusion and ensure honest participation.
 
 ---
 
@@ -271,7 +253,7 @@ The security framework that governs Cloud Operator for AWS permissions through p
 
 ## Interrogation Gate
 
-A safety mechanism in the **g8e Agentic Ensemble** that detects `<interrogation>` blocks in LLM responses. When a reasoning agent (Sage or Dash) determines it lacks sufficient information to proceed safely, it emits an interrogation block containing clarifying questions. The Interrogation Gate suppresses all tool/command execution for that turn and defers to the user for answers, ensuring the AI never "guesses" when intent is ambiguous.
+A safety mechanism that detects interrogation signals in AI responses. When a reasoning agent determines it lacks sufficient information to proceed safely, it emits an interrogation block containing clarifying questions. The Interrogation Gate suppresses all tool/command execution for that turn and defers to the user for answers, ensuring the AI never "guesses" when intent is ambiguous.
 
 ---
 
@@ -301,13 +283,13 @@ The first and foundation layer of g8e governance. It implements hard-coded techn
 
 ## L2 Consensus
 
-The second layer of g8e governance. A heterogeneous multi-model ensemble of 5 independent agents (Axiom, Concord, Variance, Pragma, Nemesis) that produces and votes on command candidates. The ordered cascade is: **Generation → Voting (R1) → [R2 anonymized peer review on consensus failure] → Actuator risk analysis → Auditor verification → Merkle commitment**. Actuator runs *before* Auditor; if Actuator classifies HIGH risk, Auditor never runs (first strike returns to Sage; second strike forces human intervention). Voting uses uniform 1-vote-per-member weighting with a minimum consensus of 2; tie-breaks apply in order shortest → exclude-Nemesis-cluster → round 2. Nemesis votes are *not* auto-discarded - they only lose tie-breaks. L2 ensures that every command executed is the result of a rigorous consensus process backed by a single L2 Ed25519 signature over the transaction hash, rather than a single model's output.
+The second layer of g8e governance. A heterogeneous multi-model system of 5 independent agents that produces and votes on command candidates. The ordered cascade is: **Generation → Voting (R1) → [R2 anonymized peer review on consensus failure] → Actuator risk analysis → Auditor verification → Merkle commitment**. Actuator runs *before* Auditor; if Actuator classifies HIGH risk, Auditor never runs (first strike returns to reasoning agent; second strike forces human intervention). Voting uses uniform 1-vote-per-member weighting with a minimum consensus of 2; tie-breaks apply in order shortest → exclude-dissent-cluster → round 2. Dissenting votes are *not* auto-discarded - they only lose tie-breaks. L2 ensures that every command executed is the result of a rigorous consensus process backed by a single L2 Ed25519 signature over the transaction hash, rather than a single model's output.
 
 ---
 
 ## L3 Authorization (Approval)
 
-The third layer of g8e governance, focusing on human oversight. By default, every state-changing command requires explicit user authorization via the **Approval UI**. Benign diagnostic commands may be covered by **Auto-Approval**, but L3 never bypasses the safety requirements of L1 or L2.
+The third layer of g8e governance, focusing on human oversight. By default, every state-changing command requires explicit user authorization. Benign diagnostic commands may be covered by **Auto-Approval**, but L3 never bypasses the safety requirements of L1 or L2.
 
 ---
 
@@ -361,10 +343,10 @@ A cryptographic artifact produced by the **Auditor** during the Consensus stage'
 
 ## Message Triage
 
-The classification of incoming user messages as "simple" or "complex" using a lightweight lite model. Triage acts as a gatekeeper, emitting structured metadata:
-- **Complexity**: Decides whether to route to Dash (Assistant) or Sage (Primary).
+The classification of incoming user messages by complexity, intent, and posture. Triage acts as a gatekeeper, emitting structured metadata:
+- **Complexity**: Determines routing complexity level.
 - **Intent**: Classifies the category of user intent (Action, Question, Unknown).
-- **Posture**: Assesses the user's state (Normal, Frustrated, etc.) to calibrate downstream agent behavior.
+- **Posture**: Assesses the user's state (Normal, Frustrated, etc.) to calibrate downstream behavior.
 
 ---
 
@@ -406,7 +388,7 @@ Compliance with the National Security Agency's Zero Trust Implementation Guideli
 
 ## Ollama (Remote)
 
-The remote LLM inference component. g8e supports any remote Ollama server reachable via its native `/api/chat` surface. Used as an LLM backend for g8ee.
+The remote LLM inference component. g8e supports any remote Ollama server reachable via its native `/api/chat` surface. BYO agentic clients may use Ollama as an LLM backend.
 
 ---
 
@@ -420,7 +402,7 @@ Operator command/result traffic follows the g8e protocol: canonical JSON `Govern
 
 ## Operator Panel
 
-The web UI component that displays all Operators belonging to a user, showing their status, hostname, and metrics. Users bind/unbind Operators to their web session through this panel.
+The UI component that displays all Operators belonging to a user, showing their status, hostname, and metrics. Users bind/unbind Operators to their session through this panel.
 
 ---
 
@@ -462,7 +444,7 @@ A server certificate embedded in the Operator binary at compile time. Prevents m
 
 ## ReAct
 
-A reasoning pattern used by the **g8e Agentic Ensemble** where the LLM cycles through Think → Act → Observe → Repeat. The AI generates a thought, executes an action, observes the result, and uses that observation to inform the next reasoning step. The Consensus stage refines command syntax within this loop without re-invoking the main LLM.
+A reasoning pattern where AI cycles through Think → Act → Observe → Repeat. The AI generates a thought, executes an action, observes the result, and uses that observation to inform the next reasoning step. The Consensus stage refines command syntax within this loop without re-invoking the main LLM.
 
 ---
 
@@ -486,7 +468,7 @@ Security mechanisms that prevent captured requests from being replayed by attack
 
 ## Reputation Staking
 
-The mechanism by which **agentic ensemble** Consensus agents earn or lose standing based on the quality of their contributions. Each agent is assigned a reputation scalar (0.0 to 1.0) on the **Reputation Scoreboard**. Scalars are updated via an Exponential Moving Average (EMA) based on consensus participation and the eventual success or failure of the commands they proposed. Agents can be "slashed" for proposing high-risk or failing commands.
+The mechanism by which L2 Consensus agents earn or lose standing based on the quality of their contributions. Each agent is assigned a reputation scalar (0.0 to 1.0) on the **Reputation Scoreboard**. Scalars are updated via an Exponential Moving Average (EMA) based on consensus participation and the eventual success or failure of the commands they proposed. Agents can be "slashed" for proposing high-risk or failing commands.
 
 ---
 
@@ -528,7 +510,7 @@ The ability to restore files to any previous state using the Ledger's git histor
 
 ## Tool Calling Loop
 
-The execution pattern used by g8ee where the AI generates tool calls to interact with Operators, receives results, and generates subsequent calls based on the outcomes.
+The execution pattern where BYO AI clients generate tool calls to interact with Operators via MCP or A2A protocols, receive results, and generate subsequent calls based on the outcomes. The Governed Operator exposes host tools as a Model Context Protocol (MCP) Server, enabling standard AI clients to execute commands through the governance envelope.
 
 ---
 
@@ -543,23 +525,14 @@ See **L2 Consensus**.
 The core trust model of g8e. Every component treats every other component as a potential adversary; no component holds implicit trust. The boundaries:
 
 - **The Principal (User)** does not trust any single AI provider/model (heterogeneous tiering across reasoning agents) or any host running an Operator (mTLS, fingerprinting, device-link tokens, slot accounting, key rotation, revocation).
-- **The Ensemble (g8ee)** does not trust the user (L1 forbidden patterns block dangerous instructions before any model sees them) or the Operator (Sentinel ingress scrubbing of PII/credentials, scoped sessions, mTLS).
+- **BYO Agentic Clients** do not trust the user (L1 forbidden patterns block dangerous instructions before any model sees them) or the Operator (Sentinel ingress scrubbing of PII/credentials, scoped sessions, mTLS).
 - **The Operator (g8eo)** does not trust the user or the AI (full fail-closed admission gauntlet on every inbound mutation: envelope integrity, typed payload, L1 reflected forbidden patterns, hash binding, freshness, state-root match, L2 trusted signer, L3 WebAuthn).
-- **The Ensemble's internal pipeline** does not trust itself (the Byzantine cascade in `services/g8ee/app/services/ai/generator.py` runs Triage → Dash/Sage → Consensus generation → voting → Actuator → Auditor before a command is even *eligible* for the protocol gauntlet).
-
-See `docs/concepts/position_paper.md` §2.1 and `docs/concepts/g8ee.md` "Governance & Safety - The Ensemble-Internal Byzantine Cascade".
 
 ---
 
 ## Trust Portal
 
 A host-local bootstrap interface served by the Operator on the bootstrap port (default 80) during initial setup. It provides trust scripts and PKI root certificates for device-link enrollment and establishing trust.
-
----
-
-## Unified Approval
-
-The batch execution approval dialog in  that allows a single user approval to cover commands across multiple Operators.
 
 ---
 
@@ -571,8 +544,8 @@ The Protobuf root container for cross-component operator protocol messages. It b
 
 ## Actuator
 
-A defensive coordination agent in the **g8e Agentic Ensemble** that performs pre-execution risk assessment (LOW/MEDIUM/HIGH) for the consensus winner. It enforces the **Two-Strike Circuit Breaker**:
-- **Strike 1**: If a command is classified as HIGH risk, the Actuator blocks execution and provides contextual feedback to the reasoning agent to suggest a safer alternative.
+The L2 Consensus risk assessment stage that performs pre-execution risk classification (LOW/MEDIUM/HIGH) for the consensus winner. It enforces the **Two-Strike Circuit Breaker**:
+- **Strike 1**: If a command is classified as HIGH risk, the Actuator blocks execution and provides contextual feedback to suggest a safer alternative.
 - **Strike 2**: If a second HIGH risk command is proposed in the same turn, the Actuator triggers an `AGENT_CONFLICT` error, halting the pipeline and requiring human intervention.
 Successful command execution resets the strike counter.
 

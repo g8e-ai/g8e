@@ -190,7 +190,7 @@ jobs:
       - name: Lint Markdown with markdownlint
         uses: articulate/actions-markdownlint@v1
         with:
-          config: .markdownlint.json
+          config: docs/.markdownlint.json
           ignore: node_modules
 
   docs-build:
@@ -201,6 +201,16 @@ jobs:
 
       - name: Build CLI reference
         run: make docs-cli
+
+      - name: Check for CLI documentation drift
+        run: |
+          CHANGES=$(git status --porcelain | grep -E "^\s*M.*docs/reference/cli\.md$" || true)
+          if [ -n "$CHANGES" ]; then
+            echo "Error: CLI documentation is out of sync with CLI help output"
+            echo "$CHANGES"
+            git diff docs/reference/cli.md
+            exit 1
+          fi
 
       - name: Build documentation
         run: make docs-build

@@ -56,9 +56,9 @@ To execute mutations on the local air-gapped host, a **Governed Operator (`g8eo`
 
 ## Local LLM Inference
 
-For air-gapped reasoning, g8e supports external local inference via g8e-compatible agentic ensembles' `LlamaCppProvider`.
+For air-gapped reasoning, g8e supports external local inference via BYO agentic clients using llama.cpp or other local LLM servers.
 
-- **Ensemble:** HTTP client to external `llama.cpp` server via OpenAI-compatible API.
+- **BYO Client:** HTTP client to external `llama.cpp` server via OpenAI-compatible API.
 - **Default Model:** `Gemma 4 E2B` (optimized for local reasoning).
 - **Interface:** Configured via `llamacpp_endpoint` setting (default: `http://localhost:11444`).
 - **Provisioning:** Model GGUF files must be pre-staged on the external llama.cpp server. The Ensemble does not download models; it is a client only.
@@ -74,17 +74,16 @@ For air-gapped reasoning, g8e supports external local inference via g8e-compatib
 
 ### Vendoring & Dependency Management
 
-**Direct Dependency Invariant:** All package manifests must reflect only direct imports. Transitive dependencies are not explicitly listed. This invariant is enforced by header comments in `services/g8ee/requirements.txt` and auditable via `./g8e test g8ee`.
+**Direct Dependency Invariant:** All package manifests must reflect only direct imports. Transitive dependencies are not explicitly listed.
 
 **Gateway (Go):**
 - 100% vendored in `vendor/`.
 - Build tools declared in `go.mod` (protoc-gen-go, protoc-gen-go-grpc).
 - Protocol generation uses local `buf` and `protoc` (no remote BSR dependency).
 
-**Python Runtime (g8e-compatible agentic ensembles):**
-- Direct dependencies frozen in `services/g8ee/requirements.txt`.
-- Categories: web framework (fastapi, uvicorn), LLM providers (google-genai, anthropic, openai), protocol (protobuf, grpcio), storage (sqlalchemy, alembic), utilities (tenacity, python-dateutil).
-- No vendoring; use pre-staged virtual environment or Docker image.
+**Python Runtime (BYO Agentic Clients):**
+- BYO agentic clients may use Python for LLM integration (fastapi, uvicorn, google-genai, anthropic, openai, protobuf, grpcio, sqlalchemy, alembic, tenacity, python-dateutil).
+- No vendoring; use pre-staged virtual environment or Docker image provided by the client.
 
 **Protocol Package:**
 - Python bindings in `protocol/python/g8e_protocol/` generated from `.proto` files.
@@ -123,6 +122,6 @@ For air-gapped reasoning, g8e supports external local inference via g8e-compatib
 ## Security Invariants
 
 1. **No Outbound Dialing:** In Gateway mode, the Governance Gateway (`g8eg`) is forbidden from initiating connections to any address outside the local platform.
-2. **Mutual Trust:** All internal traffic between the Governance Gateway, agentic ensembles, and the Operator is encrypted using the Operator's internal CA.
+2. **Mutual Trust:** All internal traffic between the Governance Gateway, BYO agentic clients, and the Operator is encrypted using the Operator's internal CA.
 3. **Data Sovereignty:** All audit logs, chat history, and telemetry remain strictly on the host's filesystem in the `.g8e` directory.
 4. **Fail-Closed Privacy:** If a component requires an external resource that is unavailable, it must fail with a clear error rather than attempting a fallback to insecure or public endpoints.

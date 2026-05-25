@@ -72,25 +72,21 @@ markdown_extensions:
 # Navigation
 nav:
   - Home: index.md
-  - Concepts:
-      - About: concepts/about.md
-      - Position Paper: concepts/position_paper.md
-      - Protocol: concepts/protocol.md
-      - Operator: concepts/operator.md
-      - Governance Gateway: concepts/g8eg.md
-      - g8e-Compatible Apps: concepts/g8e-compatible-apps.md
+  - Architecture:
+      - About: architecture/about.md
+      - Position Paper: architecture/position_paper.md
+      - Operator: architecture/operator.md
+      - Governance Gateway: architecture/g8eg.md
   - Protocols:
-      - MCP/A2A Gateway: protocols/mcp_gateway.md
-      - MCP Client (Satellite Operator): protocols/mcp_client.md
-      - A2A Protocol: protocols/a2a.md
+      - g8e Protocol: protocols/protocol.md
+      - MCP/A2A Gateway: protocols/mcp_a2a_gateway.md
   - Guides:
       - Quickstart: quickstart/index.md
       - Air Gap: guides/air_gap.md
-      - Demos: guides/demos.md
-      - Evals: guides/evals.md
       - Scripts: guides/scripts.md
       - Testing: guides/tests.md
       - Troubleshooting: guides/troubleshooting.md
+      - g8e-Compatible Apps: guides/g8e-compatible-apps.md
   - Reference:
       - API: reference/api/index.md
       - CLI: reference/cli.md
@@ -98,13 +94,7 @@ nav:
       - Glossary: reference/glossary.md
   - Developer:
       - Developer Guidelines: devs.md
-      - Codemaps:
-          - High-Level Architecture: codemaps/00_high_level_architecture.md
-          - g8e Internal Structure: codemaps/01_g8e_internal_structure.md
-          - g8e-Compatible Apps Internal Structure: codemaps/02_g8ee_internal_structure.md
-          - Protocol Layer: codemaps/03_protocol_layer.md
-          - Data Flow Lifecycle: codemaps/04_data_flow_lifecycle.md
+      - Codemap: codemap.md
   - External:
       - A2A Protocol (JSON Schema): external/a2a.json
       - A2A Protocol (Proto): external/a2a.proto
-      - Ollama API: external/ollama_api.md

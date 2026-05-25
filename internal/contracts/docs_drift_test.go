@@ -109,7 +109,7 @@ func TestEventsDocsAlignment(t *testing.T) {
 		canonicalEvents[entry.Value] = true
 	}
 
-	// Note: events documentation is in docs/concepts/protocol.md
+	// Note: events documentation is in docs/protocols/protocol.md
 	// This test is a placeholder for verifying documented events match the registry.
 	// For now, we verify the protocol file is valid and contains events.
 	assert.NotEmpty(t, canonicalEvents, "events.json must contain event definitions")

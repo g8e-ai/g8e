@@ -60,7 +60,7 @@ For air-gapped and sovereign setups, the Makefile is highly resilient:
 2. If Go is absent, it attempts to download the pre-compiled binary from Buf releases.
 3. If both are absent or if the network is offline, the build gracefully succeeds
    and utilizes the pre-generated protocol files already committed under
-   `services/g8ee/app/proto/` rather than failing the compilation.
+   `protocol/proto/` rather than failing the compilation.
 
 If you are modifying `.proto` files in an offline environment and need to recompile,
 ensure that `buf` is installed globally on your path.
@@ -153,9 +153,6 @@ them.
 ```bash
 ./g8e platform start
 ./g8e test g8eo
-
-./g8e platform start --with-apps
-./g8e test g8ee
 ```
 
 If a test failure mentions missing trust bundles or client certificates, confirm
