@@ -22,20 +22,16 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/governance/l1"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/pkg/uap"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 var (
@@ -47,9 +43,9 @@ var (
 	ErrTransactionReplay       = errors.New("TX_REPLAY: nonce already used")
 	ErrStateRootMissing        = errors.New("TX_STATE_MISSING: state_merkle_root required but missing")
 	ErrStateRootMismatch       = errors.New("TX_STATE_MISMATCH: state_merkle_root does not match current state")
-	ErrL2SignatureMissing      = errors.New("TX_QUORUM_L2_SIG_MISSING: Quorum (L2Consensus) tribunal_signature required but missing")
-	ErrL2SignatureInvalid      = errors.New("TX_QUORUM_L2_SIG_INVALID: Quorum (L2Consensus) tribunal_signature failed verification")
-	ErrL2KeyNotConfigured      = errors.New("TX_QUORUM_L2_KEY_MISSING: trusted Quorum (L2Consensus) signer key not configured")
+	ErrL2SignatureMissing      = errors.New("TX_QUORUM_L2_SIG_MISSING: Consensus (L2Consensus) tribunal_signature required but missing")
+	ErrL2SignatureInvalid      = errors.New("TX_QUORUM_L2_SIG_INVALID: Consensus (L2Consensus) tribunal_signature failed verification")
+	ErrL2KeyNotConfigured      = errors.New("TX_QUORUM_L2_KEY_MISSING: trusted Consensus (L2Consensus) signer key not configured")
 	ErrL3ProofMissing          = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3Notary) WebAuthn proof required but missing")
 	ErrL3ProofInvalid          = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3Notary) WebAuthn proof failed verification")
 	ErrL3NotaryNotConfigured   = errors.New("TX_NOTARY_L3_NOTARY_MISSING: Notary (L3Notary) required but not configured")
@@ -310,15 +306,15 @@ type VerifiedTransaction struct {
 	Posture        GovernancePosture
 }
 
-// TransactionVerifier performs all pre-dispatch verification checks.
-type TransactionVerifier struct {
+// L4Warden performs all pre-dispatch verification checks.
+type L4Warden struct {
 	logger            *slog.Logger
 	replayStore       ReplayStore
 	stateRootProvider StateRootProvider
 	signerStore       SignerStore
 	appPolicyStore    AppPolicyStore
 	l3Notary          L3Notary
-	doctrine          l1.DoctrineValidator
+	doctrine          *L1Doctrine
 	knownActionTypes  map[constants.ActionType]struct{}
 	posture           GovernancePosture // Governance posture: doctrine, consensus, or notary
 	clock             system.Clock      // Injectable time source for deterministic testing
@@ -326,19 +322,19 @@ type TransactionVerifier struct {
 	inFlight sync.Map // Concurrent-safe tracking of in-flight nonces
 }
 
-// NewTransactionVerifier creates a new transaction verifier.
-func NewTransactionVerifier(
+// NewL4Warden creates a new L4 Warden.
+func NewL4Warden(
 	logger *slog.Logger,
 	replayStore ReplayStore,
 	stateRootProvider StateRootProvider,
 	signerStore SignerStore,
 	appPolicyStore AppPolicyStore,
 	l3Notary L3Notary,
-	doctrine l1.DoctrineValidator,
+	doctrine *L1Doctrine,
 	knownActionTypes []constants.ActionType,
 	posture string,
 	clock system.Clock,
-) *TransactionVerifier {
+) *L4Warden {
 	knownActions := make(map[constants.ActionType]struct{})
 	for _, action := range knownActionTypes {
 		knownActions[action] = struct{}{}
@@ -351,10 +347,10 @@ func NewTransactionVerifier(
 
 	// Default to protobuf doctrine validator if not provided
 	if doctrine == nil {
-		doctrine = l1.NewProtoDoctrineValidator()
+		doctrine = NewL1Doctrine()
 	}
 
-	return &TransactionVerifier{
+	return &L4Warden{
 		logger:            logger,
 		replayStore:       replayStore,
 		stateRootProvider: stateRootProvider,
@@ -373,7 +369,7 @@ func NewTransactionVerifier(
 // 1. Stateless: Basic structural, hash, and L1 Doctrine checks that don't require external state.
 // 2. Stateful: Checks requiring external state (expiry, state root, and early nonce reservation).
 // 3. Posture: Governance posture-aware checks (L2 Consensus and L3 Notary proofs).
-func (tv *TransactionVerifier) VerifyEnvelope(ctx context.Context, envelope *uap.UAPEnvelope) (*VerifiedTransaction, error) {
+func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *uap.UAPEnvelope) (*VerifiedTransaction, error) {
 	if envelope == nil {
 		return nil, ErrInvalidEnvelope
 	}
@@ -478,7 +474,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(ctx context.Context, envelope *uap
 	}, nil
 }
 
-func (tv *TransactionVerifier) trackInFlight(nonce string) error {
+func (tv *L4Warden) trackInFlight(nonce string) error {
 	if nonce == "" {
 		return nil
 	}
@@ -490,7 +486,7 @@ func (tv *TransactionVerifier) trackInFlight(nonce string) error {
 	return nil
 }
 
-func (tv *TransactionVerifier) releaseInFlight(nonce string) {
+func (tv *L4Warden) releaseInFlight(nonce string) {
 	tv.inFlight.Delete(nonce)
 }
 
@@ -498,12 +494,12 @@ func (tv *TransactionVerifier) releaseInFlight(nonce string) {
 // Uses the strongly-typed intrinsic property from the action definition.
 // Mutation classification is defined in protocol/constants/status.json via the _mutation field.
 // Actions marked as mutations require L3 Notary (human-presence) verification.
-func (tv *TransactionVerifier) isMutation(actionType constants.ActionType) bool {
+func (tv *L4Warden) isMutation(actionType constants.ActionType) bool {
 	return constants.IsMutation(actionType)
 }
 
 // verifyStateless performs basic structural, hash, and L1 Doctrine checks.
-func (tv *TransactionVerifier) verifyStateless(envelope *uap.UAPEnvelope) (proto.Message, string, error) {
+func (tv *L4Warden) verifyStateless(envelope *uap.UAPEnvelope) (proto.Message, string, error) {
 	if envelope.Id == "" {
 		return nil, "", ErrTransactionIDMissing
 	}
@@ -526,7 +522,7 @@ func (tv *TransactionVerifier) verifyStateless(envelope *uap.UAPEnvelope) (proto
 
 	// INVESTIGATION_CREATE has no typed payload (returns nil), skip L1 validation
 	if decodedPayload != nil {
-		if violations := tv.validateL1Governance(decodedPayload); len(violations) > 0 {
+		if violations := tv.doctrine.ValidatePayload(decodedPayload); len(violations) > 0 {
 			tv.logger.Error("Doctrine (L1Doctrine) validation failed", "action_type", envelope.ActionType, "violations", violations)
 			return nil, "", fmt.Errorf("%w: %s", ErrL1ValidationFailed, strings.Join(violations, ", "))
 		}
@@ -559,7 +555,7 @@ func (tv *TransactionVerifier) verifyStateless(envelope *uap.UAPEnvelope) (proto
 }
 
 // verifyStateful checks state root. Nonce and expiry are checked earlier in VerifyEnvelope.
-func (tv *TransactionVerifier) verifyStateful(envelope *uap.UAPEnvelope) (time.Time, error) {
+func (tv *L4Warden) verifyStateful(envelope *uap.UAPEnvelope) (time.Time, error) {
 	if envelope.StateMerkleRoot == "" {
 		return time.Time{}, ErrStateRootRequired
 	}
@@ -590,7 +586,7 @@ func (tv *TransactionVerifier) verifyStateful(envelope *uap.UAPEnvelope) (time.T
 }
 
 // verifyPosture performs governance posture-aware checks for L2 and L3.
-func (tv *TransactionVerifier) verifyPosture(ctx context.Context, envelope *uap.UAPEnvelope, computedHash string) (bool, bool, error) {
+func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *uap.UAPEnvelope, computedHash string) (bool, bool, error) {
 	l2Valid, err := tv.verifyL2Posture(envelope, computedHash)
 	if err != nil {
 		return false, false, err
@@ -604,7 +600,7 @@ func (tv *TransactionVerifier) verifyPosture(ctx context.Context, envelope *uap.
 	return l2Valid, l3Valid, nil
 }
 
-func (tv *TransactionVerifier) verifyL2Posture(envelope *uap.UAPEnvelope, computedHash string) (bool, error) {
+func (tv *L4Warden) verifyL2Posture(envelope *uap.UAPEnvelope, computedHash string) (bool, error) {
 	if !tv.posture.RequiresL2Signature() {
 		return false, nil
 	}
@@ -637,7 +633,7 @@ func (tv *TransactionVerifier) verifyL2Posture(envelope *uap.UAPEnvelope, comput
 	}
 
 	if pubKey == nil {
-		tv.logger.Error("Quorum (L2Consensus) signer key not found in trusted signers", "key_id", l2.KeyId)
+		tv.logger.Error("Consensus (L2Consensus) signer key not found in trusted signers", "key_id", l2.KeyId)
 		return false, ErrL2KeyNotConfigured
 	}
 
@@ -649,7 +645,7 @@ func (tv *TransactionVerifier) verifyL2Posture(envelope *uap.UAPEnvelope, comput
 	return false, ErrL2SignatureInvalid
 }
 
-func (tv *TransactionVerifier) verifyL3Posture(ctx context.Context, envelope *uap.UAPEnvelope) (bool, error) {
+func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *uap.UAPEnvelope) (bool, error) {
 	actionType := constants.ActionType(envelope.ActionType)
 
 	// Check if this is an external app transaction that can bypass L3 via policy
@@ -709,7 +705,7 @@ func (tv *TransactionVerifier) verifyL3Posture(ctx context.Context, envelope *ua
 	return true, nil
 }
 
-func (tv *TransactionVerifier) decodePayloadForAction(actionType constants.ActionType, payload []byte) (proto.Message, error) {
+func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payload []byte) (proto.Message, error) {
 	var msg proto.Message
 	switch actionType {
 	case constants.ActionTypeExecuteBash:
@@ -768,48 +764,13 @@ func (tv *TransactionVerifier) decodePayloadForAction(actionType constants.Actio
 	return msg, nil
 }
 
-func (tv *TransactionVerifier) validateL1Governance(msg proto.Message) []string {
-	var violations []string
-	md := msg.ProtoReflect().Descriptor()
-	fields := md.Fields()
-
-	for i := 0; i < fields.Len(); i++ {
-		fd := fields.Get(i)
-		opts := fd.Options()
-		if opts == nil || !proto.HasExtension(opts, commonv1.E_ForbiddenPatterns) {
-			continue
-		}
-		patternsStr, ok := proto.GetExtension(opts, commonv1.E_ForbiddenPatterns).(string)
-		if !ok || patternsStr == "" {
-			continue
-		}
-		val := msg.ProtoReflect().Get(fd)
-		if fd.Kind() != protoreflect.StringKind {
-			continue
-		}
-		strVal := val.String()
-		for _, p := range strings.Split(patternsStr, ",") {
-			p = strings.TrimSpace(p)
-			if p == "" {
-				continue
-			}
-			matched, err := regexp.MatchString(p, strVal)
-			if err == nil && matched {
-				violations = append(violations, fmt.Sprintf("field %s violates pattern %s", fd.Name(), p))
-			}
-		}
-	}
-
-	return violations
-}
-
 // computeTransactionHash computes the canonical transaction hash.
-func (tv *TransactionVerifier) computeTransactionHash(envelope *uap.UAPEnvelope) (string, error) {
+func (tv *L4Warden) computeTransactionHash(envelope *uap.UAPEnvelope) (string, error) {
 	return uap.GenerateMessageID(envelope)
 }
 
 // verifyL2Signature verifies an L2 ED25519 signature.
-func (tv *TransactionVerifier) verifyL2Signature(pubKey ed25519.PublicKey, signature, messageID string, decision bool) bool {
+func (tv *L4Warden) verifyL2Signature(pubKey ed25519.PublicKey, signature, messageID string, decision bool) bool {
 	if signature == "" || signature == "UNSIGNED" {
 		return false
 	}
@@ -822,6 +783,11 @@ func (tv *TransactionVerifier) verifyL2Signature(pubKey ed25519.PublicKey, signa
 }
 
 // Posture returns the current governance posture.
-func (tv *TransactionVerifier) Posture() GovernancePosture {
+func (tv *L4Warden) Posture() GovernancePosture {
 	return tv.posture
+}
+
+// Doctrine returns the current L1 doctrine validator.
+func (tv *L4Warden) Doctrine() *L1Doctrine {
+	return tv.doctrine
 }

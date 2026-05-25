@@ -6,7 +6,7 @@ title: MCP/A2A Gateway
 
 Last Updated: 2026-05-24
 
-The Operator (g8eo) in gateway mode functions as a universal protocol translator gateway for Model Context Protocol (MCP) and Agent-to-Agent (A2A) protocols. It intercepts standard JSON-RPC tool calls (MCP) and HTTP/JSON requests (A2A) from AI clients, forces them through the g8e governance envelope, runs them through the 3-layer BFT verification gauntlet (L1/L2/L3), and then dispatches verified payloads to downstream MCP/A2A servers or to the in-process execution service for local execution.
+The Operator (g8eo) in gateway mode functions as a universal protocol translator gateway for Model Context Protocol (MCP) and Agent-to-Agent (A2A) protocols. It intercepts standard JSON-RPC tool calls (MCP) and HTTP/JSON requests (A2A) from AI clients, forces them through the g8e governance envelope, runs them through the 3-layer BFT verification gauntlet (L1Doctrine/L2Consensus/L3Notary), and then dispatches verified payloads to downstream MCP/A2A servers or to the in-process execution service for local execution.
 
 Gateway mode is the platform's central persistence and pub/sub broker. It runs the Operator binary with posture flags (`--doctrine`, `--consensus`, or `--notary`) to enable gateway mode. The MCP gateway is an in-process service within gateway mode, not a separate binary.
 
@@ -28,7 +28,7 @@ flowchart LR
         direction TB
         MCP["MCP/A2A Gateway"]
         Envelope["GovernanceEnvelope"]
-        Verify["L1/L2/L3 Verification"]
+        Verify["L1Doctrine/L2Consensus/L3Notary Verification"]
         Dispatch["Verified Dispatch"]
         PubSub["Pub/Sub Broker"]
         DB["SQLite DB"]
@@ -75,19 +75,19 @@ The Gateway wraps the raw protocol payload in a canonical JSON (protojson) `Gove
 - `MCP_PROMPT_GET`: Prompt template retrieval via `McpPromptGetRequested` proto payload
 - `A2A_CALL`: Agent skill invocation via `A2aCallRequested` proto payload
 
-The envelope includes timestamp, expiry, nonce, state root, and governance metadata. The Gateway signs the envelope with its local Ed25519 Actuator key when in gateway mode (single-agent bypass of full Tribunal consensus, indicated by `GatewaySigned: true` in governance metadata).
+The envelope includes timestamp, expiry, nonce, state root, and governance metadata. The Gateway signs the envelope with its local Ed25519 L5Actuator key when in gateway mode (single-agent bypass of full Consensus stage, indicated by `GatewaySigned: true` in governance metadata).
 
 ### 3. Verification Gates
 
 The envelope passes through the in-process `PubSubCommandService` which enforces the 3-layer governance hierarchy:
 
 - **L1 Doctrine**: Hard gates on forbidden patterns via protobuf field options and Sentinel scanning
-- **L2 Consensus**: Tribunal signature verification against trusted signers (or gateway-signed bypass in doctrine mode)
+- **L2 Consensus**: Consensus signature verification against trusted signers (or gateway-signed bypass in doctrine mode)
 - **L3 Notary**: Human authorization (WebAuthn) or mTLS certificate fingerprint verification via composite L3 verifier
 
 ### 4. Dispatch
 
-Verified envelopes are dispatched by the Warden to the appropriate downstream handler:
+Verified envelopes are dispatched by the L4Warden to the appropriate downstream handler:
 
 - **MCP servers**: Forwarded as MCP tool calls to configured downstream MCP server via HTTP proxy
 - **A2A agents**: Forwarded as A2A protocol messages to downstream A2A server via HTTP proxy
@@ -153,9 +153,9 @@ This ensures compatibility with JSON-based ecosystems (MCP, A2A, OpenAI, Anthrop
 - **Sentinel scanning**: Runtime scanning of field values for forbidden patterns (sudo, password, api_key, etc.)
 - **Field path validation**: Allowlist/denylist enforcement for `read_field` tool via `FieldPathRegistry`
 
-### L2 Consensus (Tribunal)
+### L2 Consensus
 
-- **Ed25519 signatures**: Tribunal agents sign envelopes with their private keys
+- **Ed25519 signatures**: Consensus agents sign envelopes with their private keys
 - **Signer verification**: Gateway verifies signatures against trusted signers in SQLite store
 - **Gateway bypass**: In doctrine mode, Gateway signs envelopes locally (single-agent consensus)
 - **Reputation staking**: Signers stake reputation on their decisions

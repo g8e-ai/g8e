@@ -28,7 +28,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/governance"
-	"github.com/g8e-ai/g8e/internal/services/governance/l2"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/sentinel"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
@@ -82,10 +81,10 @@ type PubSubCommandService struct {
 	reconnectBaseDelay time.Duration
 
 	// UAP governance services for Phase 3 integration
-	tribunal            *l2.Tribunal
-	Actuator            *governance.Actuator
-	transactionVerifier *governance.TransactionVerifier
-	signerStore         governance.SignerStore
+	consensus   *governance.L2Consensus
+	actuator    *governance.L5Actuator
+	l4warden    *governance.L4Warden
+	signerStore governance.SignerStore
 
 	// MCP gateway for protocol translation egress
 	mcpGateway *mcp.GatewayService
@@ -115,8 +114,8 @@ type CommandServiceConfig struct {
 	ActuatorSigningKey ed25519.PrivateKey
 	ActuatorKeyID      string
 
-	// Tribunal configuration
-	TribunalSigningKey ed25519.PrivateKey
+	// Consensus configuration
+	ConsensusSigningKey ed25519.PrivateKey
 
 	// MCP gateway for protocol translation egress
 	MCPGateway *mcp.GatewayService
@@ -207,15 +206,16 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 }
 
 func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, serviceCtx context.Context) {
-	// Initialize Tribunal with Sentinel for MITRE checks and private key for L2 signing
-	rs.tribunal = &l2.Tribunal{
-		NodeID:     c.Config.OperatorID,
-		Sentinel:   c.Sentinel,
-		PrivateKey: c.TribunalSigningKey,
-	}
+	// Initialize L2Consensus with Sentinel for MITRE checks and private key for L2 signing
+	rs.consensus = governance.NewL2Consensus(
+		c.Config.OperatorID,
+		c.Sentinel,
+		nil, // Doctrine will be updated below
+		c.ConsensusSigningKey,
+	)
 
-	// Initialize Actuator with trusted nodes and audit vault
-	rs.Actuator = &governance.Actuator{
+	// Initialize L5Actuator with trusted nodes and audit vault
+	rs.actuator = &governance.L5Actuator{
 		Logger:            c.Logger,
 		SignerStore:       rs.signerStore,
 		Execution:         c.Execution,
@@ -241,17 +241,23 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 	if posture == "" {
 		posture = "notary" // Default to notary for outbound mode since L3Notary is nil
 	}
-	rs.transactionVerifier = governance.NewTransactionVerifier(
+	rs.l4warden = governance.NewL4Warden(
 		c.Logger,
 		c.ReplayStore,
 		c.StateRootProvider,
 		rs.signerStore,
 		c.AppPolicyStore,
 		c.L3Notary,
+		nil, // DoctrineValidator defaults to L1Doctrine
 		knownActionTypes,
 		posture,
 		nil, // Clock defaults to RealClock
 	)
+
+	// Inject the concrete L1Doctrine and L2Consensus into each other if needed
+	if rs.l4warden != nil && rs.consensus != nil {
+		rs.consensus.Doctrine = rs.l4warden.Doctrine()
+	}
 
 	// Wire MCP gateway with dependencies if configured.
 	// MCPGateway is used as the egress dispatcher for protocol translation.
@@ -261,9 +267,9 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 	}
 
 	c.Logger.Info("UAP governance services initialized",
-		"tribunal_node_id", c.Config.OperatorID,
+		"consensus_node_id", c.Config.OperatorID,
 		"signer_store_configured", rs.signerStore != nil,
-		"transaction_verifier_enabled", rs.transactionVerifier != nil)
+		"transaction_verifier_enabled", rs.l4warden != nil)
 }
 
 func (rs *PubSubCommandService) buildHandlers() {
@@ -531,17 +537,17 @@ func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []b
 		return nil, fmt.Errorf("invalid UAP JSON envelope: %w", err)
 	}
 
-	if rs.transactionVerifier == nil {
+	if rs.l4warden == nil {
 		return nil, errors.New("transaction verifier not configured")
 	}
-	verified, err := rs.transactionVerifier.VerifyEnvelope(ctx, envelope)
+	verified, err := rs.l4warden.VerifyEnvelope(ctx, envelope)
 	if err != nil {
 		rs.logBlockedTransaction(envelope, err)
 		return nil, err
 	}
 
-	if rs.Actuator == nil {
-		return nil, errors.New("Actuator not configured")
+	if rs.actuator == nil {
+		return nil, errors.New("actuator not configured")
 	}
 
 	eventType := constants.MapActionTypeToEventType(verified.ActionType)
@@ -559,7 +565,7 @@ func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []b
 		Timestamp:         envelope.Timestamp.AsTime(),
 	}
 
-	receipt, execErr := rs.Actuator.Execute(ctx, verified, &cmdMsg)
+	receipt, execErr := rs.actuator.Execute(ctx, verified, &cmdMsg)
 	return receipt, execErr
 }
 
@@ -568,9 +574,9 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 	var verified *governance.VerifiedTransaction
 
 	// Strict transaction verification (P0: fail-closed gate before any dispatch)
-	if rs.transactionVerifier != nil {
+	if rs.l4warden != nil {
 		var err error
-		verified, err = rs.transactionVerifier.VerifyEnvelope(context.Background(), env)
+		verified, err = rs.l4warden.VerifyEnvelope(context.Background(), env)
 		if err != nil {
 			rs.logger.Error("Transaction verification failed - command rejected",
 				string(constants.ConnectionStateError), err,
@@ -581,8 +587,8 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 		}
 		rs.logger.Info("Transaction verification passed", "message_id", verified.Envelope.Id)
 	} else {
-		rs.logger.Error("FATAL: TransactionVerifier missing - command rejected", "message_id", env.Id)
-		rs.logBlockedTransaction(env, errors.New("TransactionVerifier not configured"))
+		rs.logger.Error("FATAL: L4Warden missing - command rejected", "message_id", env.Id)
+		rs.logBlockedTransaction(env, errors.New("L4Warden not configured"))
 		return
 	}
 
@@ -611,8 +617,8 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 	}
 
 	// Execute through Actuator (execution boundary)
-	if rs.Actuator != nil {
-		receipt, err := rs.Actuator.Execute(rs.ctx, verified, &cmdMsg)
+	if rs.actuator != nil {
+		receipt, err := rs.actuator.Execute(rs.ctx, verified, &cmdMsg)
 		if err != nil {
 			rs.logger.Error("Actuator execution failed",
 				string(constants.ConnectionStateError), err,
@@ -627,6 +633,21 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 		rs.logger.Error("FATAL: Actuator service missing - cannot execute", "message_id", env.Id)
 		return
 	}
+}
+
+// Actuator returns the current L5 actuator.
+func (rs *PubSubCommandService) Actuator() *governance.L5Actuator {
+	return rs.actuator
+}
+
+// SetActuator sets the L5 actuator (used for testing).
+func (rs *PubSubCommandService) SetActuator(a *governance.L5Actuator) {
+	rs.actuator = a
+}
+
+// SetL4Warden sets the L4 warden (used for testing).
+func (rs *PubSubCommandService) SetL4Warden(w *governance.L4Warden) {
+	rs.l4warden = w
 }
 
 func (rs *PubSubCommandService) dispatchCommand(cmdMsg PubSubCommandMessage) {
@@ -765,13 +786,13 @@ func (rs *PubSubCommandService) handleA2aCallRequestSync(ctx context.Context, ms
 func (rs *PubSubCommandService) handleAppInvestigationCreatedSync(ctx context.Context, msg PubSubCommandMessage) (string, error) {
 	rs.logger.Info("App investigation creation request received", "investigation_id", msg.ID)
 
-	if rs.Actuator == nil || rs.Actuator.AuditStore == nil {
-		return "", errors.New("Actuator or AuditStore not configured")
+	if rs.actuator == nil || rs.actuator.AuditStore == nil {
+		return "", errors.New("actuator or AuditStore not configured")
 	}
 
 	// DocSet expects collection, id, and data.
 	// For APP_INVESTIGATION_CREATED, the ID is the investigation ID from the envelope.
-	if err := rs.Actuator.AuditStore.DocSet(string(constants.CollectionInvestigations), msg.ID, msg.Payload); err != nil {
+	if err := rs.actuator.AuditStore.DocSet(string(constants.CollectionInvestigations), msg.ID, msg.Payload); err != nil {
 		rs.logger.Error("Failed to create investigation document", string(constants.ConnectionStateError), err, "investigation_id", msg.ID)
 		return "", fmt.Errorf("failed to create investigation document: %w", err)
 	}

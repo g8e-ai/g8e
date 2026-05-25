@@ -41,13 +41,14 @@ func TestEvalAnswerVerification(t *testing.T) {
 	}
 
 	// Create verifier with EVAL_ANSWER in known action types
-	verifier := NewTransactionVerifier(
+	verifier := NewL4Warden(
 		nil,
 		testutil.NewStatefulMockReplayStore(),
 		testutil.NewMockStateRootProvider("test-state-root-v1"),
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key-id": pubKey}},
 		nil, // AppPolicyStore not used in tests
 		nil, // L3 verifier not needed for EVAL_ANSWER (non-mutation)
+		nil, // DoctrineValidator defaults to ProtoDoctrineValidator
 		[]constants.ActionType{constants.ActionTypeEvalAnswer},
 		"doctrine",
 		nil, // Clock defaults to RealClock
@@ -129,9 +130,9 @@ func TestEvalAnswerVerification(t *testing.T) {
 		t.Errorf("Expected model openai:gpt-4, got %s", evalPayload.Model)
 	}
 
-	// 4. Execute through Actuator
+	// 4. Execute through L5Actuator
 	keyID := "test-key-id"
-	Actuator := &Actuator{
+	actuator := &L5Actuator{
 		Logger:            slog.Default(),
 		SignerStore:       &SimpleSignerStore{Signers: map[string]ed25519.PublicKey{keyID: pubKey}},
 		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root-v1"),
@@ -144,9 +145,9 @@ func TestEvalAnswerVerification(t *testing.T) {
 		KeyID:      keyID,
 	}
 
-	receipt, err := Actuator.Execute(context.Background(), verified, nil)
+	receipt, err := actuator.Execute(context.Background(), verified, nil)
 	if err != nil {
-		t.Fatalf("Actuator execution failed: %v", err)
+		t.Fatalf("L5Actuator execution failed: %v", err)
 	}
 
 	if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
@@ -170,7 +171,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 // and does not require L3 verification.
 func TestEvalAnswerIsNotMutation(t *testing.T) {
 	t.Parallel()
-	verifier := &TransactionVerifier{}
+	verifier := &L4Warden{}
 
 	if verifier.isMutation(constants.ActionTypeEvalAnswer) {
 		t.Error("EVAL_ANSWER should not be treated as a mutation")

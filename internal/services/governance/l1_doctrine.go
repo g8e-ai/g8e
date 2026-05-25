@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package l1
+package governance
 
 import (
 	"fmt"
@@ -24,30 +24,20 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// DoctrineValidator provides L1 (Technical Bedrock) validation.
+// L1Doctrine provides L1 (Technical Bedrock) validation.
 // L1 is the foundational hard gate that enforces forbidden patterns,
 // blacklist/whitelist rules, and intent validation.
-type DoctrineValidator interface {
-	// ValidatePayload checks a typed protobuf payload for L1 violations.
-	// Returns a list of violation descriptions (empty if valid).
-	ValidatePayload(msg proto.Message) []string
-
-	// ValidateIntent checks if a cloud intent is allowed by doctrine.
-	// Returns true if the intent is in the allowlist.
-	ValidateIntent(intent constants.CloudIntent) bool
-}
-
-// ProtoDoctrineValidator implements DoctrineValidator using protobuf field options.
+// It implements doctrine validation using protobuf field options.
 // It checks the (g8e.common.v1).forbidden_patterns extension on string fields.
-type ProtoDoctrineValidator struct{}
+type L1Doctrine struct{}
 
-// NewProtoDoctrineValidator creates a new protobuf-based doctrine validator.
-func NewProtoDoctrineValidator() *ProtoDoctrineValidator {
-	return &ProtoDoctrineValidator{}
+// NewL1Doctrine creates a new protobuf-based doctrine validator.
+func NewL1Doctrine() *L1Doctrine {
+	return &L1Doctrine{}
 }
 
 // ValidatePayload checks a typed protobuf payload for forbidden pattern violations.
-func (v *ProtoDoctrineValidator) ValidatePayload(msg proto.Message) []string {
+func (v *L1Doctrine) ValidatePayload(msg proto.Message) []string {
 	var violations []string
 	md := msg.ProtoReflect().Descriptor()
 	fields := md.Fields()
@@ -84,7 +74,7 @@ func (v *ProtoDoctrineValidator) ValidatePayload(msg proto.Message) []string {
 
 // ValidateIntent is a placeholder for intent-based doctrine validation.
 // This will be integrated with Sentinel's intent allowlist in a follow-up.
-func (v *ProtoDoctrineValidator) ValidateIntent(intent constants.CloudIntent) bool {
+func (v *L1Doctrine) ValidateIntent(intent constants.CloudIntent) bool {
 	// TODO: Integrate with Sentinel's intent validation
 	// For now, allow all intents - this is a temporary bridge
 	return true

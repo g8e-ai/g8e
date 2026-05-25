@@ -30,16 +30,16 @@ Both modes share the same fail-closed verification gauntlet and Actuator executi
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│              TRANSACTIONVERIFIER.VERIFYENVELOPE                       │
+│                  L4WARDEN.VERIFYENVELOPE                       │
 │  In-flight nonce tracking → Nonce reservation (SQLite)               │
 │  Stateless: hash, L1 doctrine, payload decode                        │
 │  Stateful: state root freshness                                       │
-│  Posture: L2/L3 based on governance posture (doctrine/consensus/notary)│
+│  Posture: L1/L2/L3 based on governance posture                        │
 └─────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    ACTUATOR.EXECUTE                                  │
+│                    L5ACTUATOR.EXECUTE                                  │
 │  Sign initial receipt → Log receipt (SQLite + console_audit)          │
 │  Sentinel payload rehydration (if available)                          │
 │  Execute handler (local or MCP/A2A egress)                           │
@@ -83,7 +83,7 @@ Both modes share the same fail-closed verification gauntlet and Actuator executi
 
 ### Phase 2: Transaction Verification
 
-**Entry Point**: `TransactionVerifier.VerifyEnvelope()`
+**Entry Point**: `L4Warden.VerifyEnvelope()`
 
 **Verification Stages**:
 
@@ -118,7 +118,7 @@ Both modes share the same fail-closed verification gauntlet and Actuator executi
    - Governance postures: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)
 
 **Key Components**:
-- `internal/services/governance/transaction_verifier.go` - Verification logic
+- `internal/services/governance/l4_warden.go` - Verification logic
 - `internal/services/storage/replay_store.go` - Nonce replay protection (SQLite)
 - `protocol/constants/status.json` - Action type definitions and mutation flags
 - `protocol/proto/common.proto` - GovernanceEnvelope schema with L1 field options
@@ -127,7 +127,7 @@ Both modes share the same fail-closed verification gauntlet and Actuator executi
 
 ### Phase 3: Actuator Execution
 
-**Entry Point**: `Actuator.Execute()`
+**Entry Point**: `L5Actuator.Execute()`
 
 **Process**:
 1. Prepare initial ActionReceipt with EXECUTING status
@@ -143,7 +143,7 @@ Both modes share the same fail-closed verification gauntlet and Actuator executi
 9. Return signed ActionReceipt (even on execution failure)
 
 **Key Components**:
-- `internal/services/governance/actuator.go` - Execution boundary
+- `internal/services/governance/l5_actuator.go` - Execution boundary
 - `internal/services/execution/` - Local execution handlers (command, file edit, fs operations)
 - `internal/services/pubsub/` - CommandService, FileOpsService, PortService, HistoryHandler
 - `internal/services/mcp/gateway.go` - MCP/A2A protocol translation egress
@@ -249,7 +249,7 @@ File mutation → LedgerFileWrite() → Session-scoped git staging
 
 ### Verification Failure
 ```
-TransactionVerifier.VerifyEnvelope() fails
+L4Warden.VerifyEnvelope() fails
 → Release nonce reservation (allows retry)
 → Return governance.ErrXxx sentinel error
 → Log blocked transaction to receipts table (BLOCKED status)
@@ -258,7 +258,7 @@ TransactionVerifier.VerifyEnvelope() fails
 
 ### Execution Failure
 ```
-Actuator.Execute() handler fails
+L5Actuator.Execute() handler fails
 → Update receipt with FAILED status
 → Sign final receipt
 → Log receipt to audit
@@ -268,7 +268,7 @@ Actuator.Execute() handler fails
 
 ### System Failure
 ```
-Actuator signing or audit logging fails
+L5Actuator signing or audit logging fails
 → Fail-closed: do not execute handler
 → Return error without receipt
 → Client receives verification error
@@ -281,7 +281,7 @@ Actuator signing or audit logging fails
 - In-flight nonce tracking: concurrent-safe sync.Map
 - Replay store: SQLite with atomic ReserveNonce/FinalizeNonce
 - Execution service: semaphore-based concurrency control
-- Actuator: sync.WaitGroup for graceful shutdown
+- L5Actuator: sync.WaitGroup for graceful shutdown
 - Audit vault writes: sync.WaitGroup for concurrent write safety
 
 ### Caching
@@ -301,9 +301,9 @@ Actuator signing or audit logging fails
 
 ### Trust Boundaries
 1. **Client → Operator**: mTLS authentication (Gateway mode HTTP/WebSocket, Outbound mode pub/sub)
-2. **Envelope → Verification**: Fail-closed TransactionVerifier with L1/L2/L3 gates
-3. **Verification → Actuator**: VerifiedTransaction with L2/L3 validity flags
-4. **Actuator → Execution**: Fail-closed receipt signing before execution
+2. **Envelope → Verification**: Fail-closed L4Warden with L1/L2/L3 gates
+3. **Verification → L5Actuator**: VerifiedTransaction with L2/L3 validity flags
+4. **L5Actuator → Execution**: Fail-closed receipt signing before execution
 5. **Execution → Audit**: SQLite + session-scoped Git ledger (host-local only)
 6. **Audit → Client**: Signed receipt as cryptographic proof
 7. **MCP/A2A Egress**: Downstream server dispatch via MCPGateway (Gateway mode only)

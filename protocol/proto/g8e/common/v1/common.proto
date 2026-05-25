@@ -41,7 +41,7 @@ message L1Metadata {
   repeated string violations = 2;
 }
 
-// Quorum (L2Consensus) Governance: Consensus (Tribunal)
+// Consensus (L2Consensus) Governance: Consensus (Tribunal)
 message L2Metadata {
   string tribunal_signature = 1; // ED25519 signature over transaction_hash|decision
   repeated string agent_ids = 2; // IDs of agents that voted

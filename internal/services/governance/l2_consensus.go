@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package l2
+package governance
 
 import (
 	"crypto/ed25519"
@@ -20,23 +20,32 @@ import (
 	"fmt"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/governance/l1"
 	"github.com/g8e-ai/g8e/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/pkg/uap"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
-// Tribunal is the internal consensus engine's evaluator.
+// L2Consensus is the internal consensus engine's evaluator.
 // It receives UAP envelopes from agents and appends a cryptographic vote.
-type Tribunal struct {
+type L2Consensus struct {
 	NodeID     string
 	Sentinel   *sentinel.Sentinel
-	Doctrine   l1.DoctrineValidator
+	Doctrine   *L1Doctrine
 	PrivateKey ed25519.PrivateKey
 }
 
-// EvaluatePayload represents the Tribunal's core loop.
-func (t *Tribunal) EvaluatePayload(env *uap.UAPEnvelope) error {
+// NewL2Consensus creates a new L2 consensus engine.
+func NewL2Consensus(nodeID string, s *sentinel.Sentinel, d *L1Doctrine, pk ed25519.PrivateKey) *L2Consensus {
+	return &L2Consensus{
+		NodeID:     nodeID,
+		Sentinel:   s,
+		Doctrine:   d,
+		PrivateKey: pk,
+	}
+}
+
+// EvaluatePayload represents the L2Consensus's core loop.
+func (t *L2Consensus) EvaluatePayload(env *uap.UAPEnvelope) error {
 	// 1. Verify Sender Hash
 	expectedHash, err := uap.GenerateMessageID(env)
 	if err != nil {
@@ -77,7 +86,7 @@ func (t *Tribunal) EvaluatePayload(env *uap.UAPEnvelope) error {
 		}
 	}
 
-	// 3. Append Vote (Quorum (L2))
+	// 3. Append Vote (Consensus (L2))
 	// Note: We are using GovernanceMetadata instead of ConsensusState
 	if env.Governance == nil {
 		env.Governance = &commonv1.GovernanceMetadata{
@@ -103,7 +112,7 @@ func (t *Tribunal) EvaluatePayload(env *uap.UAPEnvelope) error {
 }
 
 // RunMITREChecks leverages Sentinel to identify malicious activity patterns.
-func (t *Tribunal) RunMITREChecks(resource string, data string) bool {
+func (t *L2Consensus) RunMITREChecks(resource string, data string) bool {
 	if t.Sentinel == nil {
 		return false // Fail-closed: if Sentinel is missing, the payload is NOT safe.
 	}
@@ -112,9 +121,9 @@ func (t *Tribunal) RunMITREChecks(resource string, data string) bool {
 }
 
 // SignDecision creates a cryptographic signature of the decision.
-func (t *Tribunal) SignDecision(messageID string, isSafe bool) (string, error) {
+func (t *L2Consensus) SignDecision(messageID string, isSafe bool) (string, error) {
 	if t.PrivateKey == nil {
-		return "", errors.New("Tribunal private key missing - cannot sign governance votes")
+		return "", errors.New("L2Consensus private key missing - cannot sign governance votes")
 	}
 	// Sign the message ID and the decision
 	payload := fmt.Sprintf("%s|%v", messageID, isSafe)

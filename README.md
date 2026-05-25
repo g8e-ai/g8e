@@ -22,7 +22,7 @@ g8e is a zero-trust execution protocol and outbound-only gateway that forces eve
 <!-- ============================================================= -->
 <!-- INSERT: HERO DEMO (video or GIF) — this is the money shot.    -->
 <!-- Capture one governed mutation moving end to end:              -->
-<!--   intent (MCP/tool call) → Quorum co-sign → Notary tap →      -->
+<!--   intent (MCP/tool call) → Consensus co-sign → Notary tap →      -->
 <!--   Actuator executes → signed receipt in the audit log.        -->
 <!-- 10–20s, terminal + the WebAuthn prompt. Put it right here.    -->
 <!-- ============================================================= -->
@@ -49,9 +49,9 @@ transaction — and the host verifies that transaction before it executes.
 
 - **Outbound-only by design.** The Operator opens an mTLS reverse tunnel to the Gateway and listens on nothing. No inbound ports, NAT and firewall traversal for free, and zero remote attack surface on the one component that holds execution authority.
 - **One ~4MB binary, zero standing dependencies.** The reference Operator is a single statically compiled Go binary that serves dual purposes: daemon mode (Governance Gateway/Operator) and CLI mode (platform management). No runtime to patch, no interpreter to exploit, no package tree to audit. Air-gapped deployment is the normal case.
-- **Multi-model Byzantine consensus.** The consensus layer (Quorum) is provider-agnostic. Heterogeneous models — Anthropic, OpenAI, local — independently co-sign every mutation, so no single model's hallucination or poisoning gets through.
+- **Multi-model Byzantine consensus.** The consensus layer (Consensus) is provider-agnostic. Heterogeneous models — Anthropic, OpenAI, local — independently co-sign every mutation, so no single model's hallucination or poisoning gets through.
 - **Local-first audit with instant rollback.** Every decision, accepted or blocked, is written to a host-local vault *before* the side effect. A two-phase Git-backed commit architecture gives tamper-evident history and one-command rollback.
-- **Fail-closed, in order.** Doctrine → Quorum → Notary, enforced at the host boundary. Each layer has to pass before the next is even reached.
+- **Fail-closed, in order.** Doctrine → Consensus → Notary, enforced at the host boundary. Each layer has to pass before the next is even reached.
 - **Protocol-native.** MCP, A2A, and OpenAI-style tool calls all normalize into one signed envelope. The Operator is itself an MCP server.
 
 ---
@@ -63,7 +63,7 @@ Every mutation passes three layers in sequence at the host boundary. Each one pr
 | Layer | Name | Mechanism | What it proves |
 | :---: | --- | --- | --- |
 | **L1** | **Doctrine** | Static analysis / reflection | The action violates no hard technical policy or forbidden pattern. |
-| **L2** | **Quorum** | Ed25519 over k-of-n consensus | An independent, heterogeneous ensemble co-validated the intent. |
+| **L2** | **Consensus** | Ed25519 over k-of-n consensus | An independent, heterogeneous ensemble co-validated the intent. |
 | **L3** | **Notary** | WebAuthn / FIDO2 | A human authorized **this exact transaction**, using its hash as the challenge. |
 
 Before any of these run, the envelope is checked for integrity, typed-payload decode, hash binding (`id == SHA-256(canonical_fields)`), freshness (nonce + expiry), and state binding (expected Merkle root vs. current local root). Only a transaction that clears the whole chain reaches the **Actuator** — the single fail-closed dispatch path through which any change to the host has to pass.
@@ -91,13 +91,13 @@ sequenceDiagram
     participant Operator as Governed Operator<br/>(g8eo)
 
     Principal->>Ensemble: Submit intent (MCP / A2A / tool call)
-    Note over Ensemble: Reach Quorum (L2)<br/>Wrap in signed GovernanceEnvelope
+    Note over Ensemble: Reach Consensus (L2)<br/>Wrap in signed GovernanceEnvelope
     Ensemble->>Gateway: Submit envelope for admission
 
     Operator->>Gateway: Open outbound-only mTLS tunnel
     Operator->>Gateway: Fetch pending GovernanceEnvelope
 
-    Note over Operator: Run gauntlet — Doctrine, Quorum, Notary<br/>(fail-closed)<br/>Execute via Actuator<br/>Anchor to local audit vault
+    Note over Operator: Run gauntlet — Doctrine, Consensus, Notary<br/>(fail-closed)<br/>Execute via Actuator<br/>Anchor to local audit vault
 
     Operator->>Gateway: Push Sentinel-scrubbed signed receipt
     Gateway->>Principal: Return final safe output
@@ -114,7 +114,7 @@ graph TD
         Pre{"Envelope integrity<br/>+ typed payload<br/>+ hash + freshness"}
         State{"State root fresh?"}
         L1{"L1 · Doctrine<br/>Forbidden patterns?"}
-        L2{"L2 · Quorum<br/>Consensus signature?"}
+        L2{"L2 · Consensus<br/>Consensus signature?"}
         L3{"L3 · Notary<br/>Human authorization?"}
         Fail["Fail closed<br/>Typed rejection + audit entry"]
         Act["Actuator<br/>Execute + signed receipt"]
@@ -148,7 +148,7 @@ Every component distrusts every other. Execution authority is never ambient.
 
 | Actor | Distrusts | Enforced by |
 | --- | --- | --- |
-| **Principal** | Any single AI provider; any host | Heterogeneous Quorum; mTLS + device fingerprinting |
+| **Principal** | Any single AI provider; any host | Heterogeneous Consensus; mTLS + device fingerprinting |
 | **Gateway (g8eg)** | The producer and the client | Scoped sessions; replay protection; envelope verification |
 | **Operator (g8eo)** | User, AI, transport, and stale state | Doctrine + Notary gates; outbound-only mTLS; state-root binding |
 | **Output** | All downstream readers | Sentinel scrubs secrets, PII, and tokens before exposure |
@@ -211,7 +211,7 @@ g8e is built to run entirely inside your perimeter. The Operator has no inbound 
 
 - **[Quickstart](docs/quickstart/)** — get started with g8e in minutes using the unified CLI.
 - **[Position Paper](docs/concepts/position_paper.md)** — the full design rationale, threat model, and BFT analysis.
-- **[Protocol](docs/concepts/protocol.md)** — wire format, transaction hash, and the Doctrine / Quorum / Notary definitions.
+- **[Protocol](docs/concepts/protocol.md)** — wire format, transaction hash, and the Doctrine / Consensus / Notary definitions.
 - **[Operator (g8eo)](docs/concepts/operator.md)** — execution boundary, gateway modes, and host storage.
 - **[Gateway (g8eg)](docs/concepts/g8eg.md)** — Governance Gateway architecture and modes.
 - **[g8e-Compatible Applications](docs/concepts/g8e-compatible-apps.md)** — how to build conforming producers and consumers.

@@ -105,6 +105,9 @@ func (m *MockL3Notary) VerifyL3Proof(userID, transactionHash, cliSessionID strin
 	return true, nil
 }
 
+// L3Notary is now a unified interface in the governance package.
+// These mocks are kept here for internal testutil usage but implement the governance.L3Notary interface.
+
 // ConfigurableMockL3Notary implements L3Notary with configurable pass/fail behavior.
 type ConfigurableMockL3Notary struct {
 	ShouldPass bool

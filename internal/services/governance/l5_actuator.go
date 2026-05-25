@@ -31,15 +31,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/pkg/uap"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
-
-//go:generate mockery --name L3Notary --output ./mocks --dir .
-
-type L3Notary interface {
-	VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error)
-}
 
 //go:generate mockery --name ExecutionHandler --output ./mocks --dir .
 
@@ -55,8 +48,8 @@ type TransactionAuditStore interface {
 	DocSet(collection, id string, data json.RawMessage) error
 }
 
-// Actuator is the execution gateway. It is the final stop for all UAP envelopes.
-type Actuator struct {
+// L5Actuator is the execution gateway. It is the final stop for all UAP envelopes.
+type L5Actuator struct {
 	Logger            *slog.Logger
 	SignerStore       SignerStore
 	Execution         *execution.ExecutionService
@@ -69,7 +62,7 @@ type Actuator struct {
 	Sentinel          *sentinel.Sentinel
 	Posture           GovernancePosture
 
-	// Actuator's own signing identity for ActionReceipts
+	// L5Actuator's own signing identity for ActionReceipts
 	SigningKey ed25519.PrivateKey
 	KeyID      string
 
@@ -81,15 +74,15 @@ type Actuator struct {
 // signs and persists an ActionReceipt, and returns it.
 //
 // Fail-closed: if receipt signing or initial audit logging fails, the handler is NOT executed.
-func (w *Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg interface{}) (*operatorv1.ActionReceipt, error) {
+func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg interface{}) (*operatorv1.ActionReceipt, error) {
 	w.wg.Add(1)
 	defer w.wg.Done()
 
 	if w.ExecutionHandler == nil {
-		return nil, errors.New("Actuator ExecutionHandler not set")
+		return nil, errors.New("L5Actuator ExecutionHandler not set")
 	}
 	if len(w.SigningKey) == 0 {
-		return nil, errors.New("Actuator signing key missing - cannot execute mutations")
+		return nil, errors.New("L5Actuator signing key missing - cannot execute mutations")
 	}
 
 	stateBefore := ""
@@ -104,13 +97,13 @@ func (w *Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg 
 	// Map action type to event type for handler lookup
 	eventType := constants.MapActionTypeToEventType(vt.ActionType)
 
-	w.Logger.Info("Actuator preparing to execute transaction",
+	w.Logger.Info("L5Actuator preparing to execute transaction",
 		"message_id", vt.Envelope.Id,
 		"action_type", vt.ActionType,
 		"event_type", eventType)
 
 	// 1. Prepare initial receipt
-	// Receipt is signed by the Actuator (Authorized Dispatch) identity.
+	// Receipt is signed by the L5Actuator (Authorized Dispatch) identity.
 	gatewaySigned := false
 	if vt.Envelope.Governance != nil {
 		gatewaySigned = vt.Envelope.Governance.GatewaySigned
@@ -249,7 +242,7 @@ func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 	return payload, nil
 }
 
-func (w *Actuator) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
+func (w *L5Actuator) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 	if len(w.SigningKey) == 0 {
 		return "", errors.New("signing key missing")
 	}
@@ -265,7 +258,7 @@ func (w *Actuator) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 }
 
 // LogReceipt records the signed action receipt in the audit vault and console_audit.
-func (w *Actuator) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) error {
+func (w *L5Actuator) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) error {
 	docErr := w.logReceiptDocument(env, r)
 
 	if w.AuditVault == nil {
@@ -305,7 +298,7 @@ func (w *Actuator) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt)
 	return docErr
 }
 
-func (w *Actuator) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) error {
+func (w *L5Actuator) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) error {
 	if w.AuditStore == nil || env == nil {
 		return nil
 	}
@@ -348,6 +341,6 @@ func (w *Actuator) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.Action
 }
 
 // Wait blocks until all in-flight transactions have finished executing.
-func (w *Actuator) Wait() {
+func (w *L5Actuator) Wait() {
 	w.wg.Wait()
 }

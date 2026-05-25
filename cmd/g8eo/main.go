@@ -665,9 +665,9 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		os.Exit(constants.ExitConfigError)
 	}
 
-	TribunalPriv, err := sm.GetTribunalKey()
+	ConsensusPriv, err := sm.GetTribunalKey()
 	if err != nil {
-		logger.Error("Failed to load Tribunal signing key - L2 consensus will fail", string(constants.ConnectionStateError), err)
+		logger.Error("Failed to load Consensus signing key - L2 consensus will fail", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -686,27 +686,27 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	mcpSvc := svc.GetHTTPHandler().GetMCPGateway()
 
 	psConfig := pubsub.CommandServiceConfig{
-		Config:             cfg,
-		Logger:             logger,
-		Execution:          execSvc,
-		FileEdit:           fileSvc,
-		PubSubClient:       loopbackClient,
-		ResultsService:     nil, // Results handled via direct loopback publish if needed
-		LocalStore:         nil, // Not used in gateway mode
-		AuditVault:         nil, // Handled by Actuator direct audit
-		Ledger:             nil, // P1: Ledger in gateway mode
-		HistoryHandler:     nil, // P1: History in gateway mode
-		Sentinel:           sentinel.NewSentinel(services.ProductionSentinelConfig(), logger),
-		ReplayStore:        govDeps.ReplayStore,
-		StateRootProvider:  govDeps.StateRootProvider,
-		TransactionAudit:   govDeps.TransactionAudit,
-		SignerStore:        govDeps.SignerStore,
-		AppPolicyStore:     govDeps.AppPolicyStore,
-		L3Notary:           govDeps.L3Notary,
-		ActuatorSigningKey: ActuatorPriv,
-		ActuatorKeyID:      ActuatorKeyID,
-		TribunalSigningKey: TribunalPriv,
-		MCPGateway:         mcpSvc,
+		Config:              cfg,
+		Logger:              logger,
+		Execution:           execSvc,
+		FileEdit:            fileSvc,
+		PubSubClient:        loopbackClient,
+		ResultsService:      nil, // Results handled via direct loopback publish if needed
+		LocalStore:          nil, // Not used in gateway mode
+		AuditVault:          nil, // Handled by Actuator direct audit
+		Ledger:              nil, // P1: Ledger in gateway mode
+		HistoryHandler:      nil, // P1: History in gateway mode
+		Sentinel:            sentinel.NewSentinel(services.ProductionSentinelConfig(), logger),
+		ReplayStore:         govDeps.ReplayStore,
+		StateRootProvider:   govDeps.StateRootProvider,
+		TransactionAudit:    govDeps.TransactionAudit,
+		SignerStore:         govDeps.SignerStore,
+		AppPolicyStore:      govDeps.AppPolicyStore,
+		L3Notary:            govDeps.L3Notary,
+		ActuatorSigningKey:  ActuatorPriv,
+		ActuatorKeyID:       ActuatorKeyID,
+		ConsensusSigningKey: ConsensusPriv,
+		MCPGateway:          mcpSvc,
 	}
 
 	cmdSvc, err := pubsub.NewPubSubCommandService(psConfig)
@@ -758,9 +758,9 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	defer shutdownCancel()
 
 	if cmdSvc != nil {
-		if cmdSvc.Actuator != nil {
+		if cmdSvc.Actuator() != nil {
 			logger.Info("Waiting for in-flight transactions to drain...")
-			cmdSvc.Actuator.Wait()
+			cmdSvc.Actuator().Wait()
 		}
 		if err := cmdSvc.Stop(); err != nil {
 			logger.Error("Command service stop error", string(constants.ConnectionStateError), err)

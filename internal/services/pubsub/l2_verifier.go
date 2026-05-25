@@ -33,6 +33,6 @@ var (
 	ErrTransactionReplay    = errors.New("Protocol: transaction replay detected")
 )
 
-// L2Consensus and L3Notary verification for UAP JSON envelopes is handled by the Tribunal and Actuator services.
-// This file保留 error definitions for consistency but the actual verification logic
-// is in internal/services/governance/tribunal.go and actuator.go.
+// L2Consensus and L3Notary verification for UAP JSON envelopes is handled by the L2Consensus and L5Actuator services.
+// This file retains error definitions for consistency but the actual verification logic
+// is in internal/services/governance/l2_consensus.go and l5_actuator.go.

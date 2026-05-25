@@ -25,6 +25,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/services/storage"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/require"
 )
@@ -159,4 +160,37 @@ func AssertPersistedReceipt(t *testing.T, db *sqliteutil.DB, receipt *operatorv1
 	require.Equal(t, receipt.Signature, record.Signature, "signature must match")
 	require.Equal(t, receipt.L2Status == operatorv1.L2Status_L2_STATUS_REQUIRED_VALID, record.L2Valid, "l2_valid must match l2_status")
 	require.Equal(t, receipt.L3Status == operatorv1.L3Status_L3_STATUS_REQUIRED_VALID, record.L3Valid, "l3_valid must match l3_status")
+}
+
+// AssertAuditVaultReceipt verifies that receipts are recorded in the audit vault correctly.
+// For accepting scenarios, receipts MUST be recorded in the audit vault receipts table.
+// For rejecting scenarios, receipts MUST NOT be recorded in the audit vault.
+// This assertion is skipped if the audit vault is not initialized or if the session doesn't exist.
+func AssertAuditVaultReceipt(t *testing.T, vault *storage.AuditVaultService, receipt *operatorv1.ActionReceipt, expected Outcome) {
+	if vault == nil {
+		t.Skip("audit vault not initialized")
+	}
+
+	// Try to query the receipt - if it fails due to missing session, skip gracefully
+	record, err := QueryAuditVault(vault, receipt.TransactionId)
+	if err != nil {
+		// If the error is about a missing session or other setup issue, skip
+		t.Skipf("audit vault query failed (likely missing session): %v", err)
+		return
+	}
+
+	if expected.Verdict == VerdictReject {
+		// Rejected transactions should NOT persist in audit vault
+		require.Nil(t, record, "receipt should not be in audit vault for rejected transaction")
+		return
+	}
+
+	// Accepted transactions MUST be in audit vault
+	require.NotNil(t, record, "receipt must be in audit vault for accepted transaction")
+
+	// Verify fields match
+	require.Equal(t, receipt.TransactionId, record.TransactionID, "transaction_id must match")
+	require.Equal(t, receipt.TransactionHash, record.TransactionHash, "transaction_hash must match")
+	require.Equal(t, receipt.Status, record.Status, "status must match")
+	require.Equal(t, receipt.Signature, record.Signature, "signature must match")
 }

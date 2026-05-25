@@ -42,7 +42,7 @@ Validates the Operator and protocol enforcement (`GovernanceEnvelope`, 3-layer g
 ./g8e test scenario --run forge_signature
 ```
 
-Integration tests exercising end-to-end governance workflows across doctrine, consensus, and notary modes. Tests cover L1/L2/L3 verification, transaction replay protection, state root validation, and receipt verification. Requires the Operator to be running.
+Integration tests exercising end-to-end governance workflows across doctrine, consensus, and notary modes. Tests cover Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) verification, transaction replay protection, state root validation, and receipt verification. Requires the Operator to be running.
 
 **Test Types**:
 - **Table-driven scenarios** - JSON fixtures in `test/scenario/fixtures/` covering security gates (bad integrity, hash mismatch, replay, stale state root, L2/L3 validation) and finance workflows

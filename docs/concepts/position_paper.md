@@ -11,7 +11,7 @@
 
 The industry has spent two years standardizing how AI agents talk to tools. Function calling, the Model Context Protocol (MCP), agent-to-agent (A2A) messaging, and remote tool servers have made it routine to wire a model into a terminal, a cloud control plane, a CI/CD pipeline, or a production database. These protocols establish *capability*. None of them establish *authority*. A well-formed `tools/call` is a request to change something; it is not proof that the change is current, consensus-backed, authorized, bounded, or auditable at the point where it lands.
 
-g8e treats agentic execution as a Byzantine Fault Tolerance problem and supplies the layer the tool protocols leave out: a governed admission boundary at the host. Every mutation is carried as a canonical JSON `GovernanceEnvelope` — a typed payload, a deterministic transaction hash, a nonce and expiry, an expected state root, and evidence for three independent gates: **Doctrine** (deterministic technical policy), **Quorum** (multi-party consensus), and **Notary** (hardware-bound human authorization). A host-resident Operator verifies the envelope independently against local state, records every decision to a local audit vault, and executes only through the **Actuator**, a single fail-closed dispatch path. The Operator never accepts an inbound connection; it reaches the control plane over an outbound-only tunnel.
+g8e treats agentic execution as a Byzantine Fault Tolerance problem and supplies the layer the tool protocols leave out: a governed admission boundary at the host. Every mutation is carried as a canonical JSON `GovernanceEnvelope` — a typed payload, a deterministic transaction hash, a nonce and expiry, an expected state root, and evidence for three independent gates: **Doctrine (L1Doctrine)** (deterministic technical policy), **Consensus (L2Consensus)** (multi-party consensus), and **Notary (L3Notary)** (hardware-bound human authorization). A host-resident Operator verifies the envelope independently against local state, records every decision to a local audit vault, and executes only through the **L5Actuator**, a single fail-closed dispatch path. The Operator never accepts an inbound connection; it reaches the control plane over an outbound-only tunnel.
 
 The result composes two properties that usually trade against each other: interoperability and sovereignty. Open protocols stay useful at the edges. g8e owns the mutation boundary at the center. This paper describes the model, the verification gauntlet, the reference implementation, the threat model, and — deliberately — the things g8e does not claim to solve.
 
@@ -34,8 +34,8 @@ The missing layer is an admission boundary: a place where a proposed mutation mu
 **Contributions.** This paper makes four claims and describes the design behind each.
 
 1. **A transaction model for agentic mutation.** The `GovernanceEnvelope` makes governance metadata travel *with* execution intent, so verification is part of the transaction rather than an ambient property of the network (§4).
-2. **A deterministic admission gauntlet.** Three named gates — Doctrine (L1Doctrine), Quorum (L2Consensus), Notary (L3Notary) — reject malformed, stale, unsigned, replayed, mistyped, and locally unsafe instructions before any application code runs, fail-closed at every step (§5).
-3. **Consensus as an interchangeable proof layer.** Quorum (L2Consensus) is a verifiable-evidence requirement, not a particular multi-agent design, and its value is quantifiable and bounded (§6).
+2. **A deterministic admission gauntlet.** Three named gates — Doctrine (L1Doctrine), Consensus (L2Consensus), Notary (L3Notary) — reject malformed, stale, unsigned, replayed, mistyped, and locally unsafe instructions before any application code runs, fail-closed at every step (§5).
+3. **Consensus as an interchangeable proof layer.** Consensus (L2Consensus) is a verifiable-evidence requirement, not a particular multi-agent design, and its value is quantifiable and bounded (§6).
 4. **A sovereign, dependency-free execution boundary.** A single statically compiled Operator enforces the protocol on the host, keeps the authoritative audit record local, and reaches the control plane outbound-only — which makes air-gapped and isolated-perimeter deployment ordinary rather than exceptional (§7, §8).
 
 ---
@@ -67,7 +67,7 @@ Four roles cooperate.
 - **Principal** — the human or upstream agent requesting an outcome. For mutations, the authorization path terminates in hardware-backed human proof unless policy explicitly permits auto-approval after the deterministic and consensus gates pass.
 - **Protocol** — the `GovernanceEnvelope` schema, transaction-hash rules, state binding, proof model, and receipt semantics. This is the only mandatory component for interoperability; everything else is a reference implementation.
 - **Governance Gateway (`g8eg`)** — the reference policy decision point: admission APIs, mTLS identity and PKI, fan-out to Operators, replay protection, and state-root distribution.
-- **Governed Operator (`g8eo`)** — the reference policy enforcement point and sovereign execution boundary: local audit authority, output scrubber, Actuator, and itself an MCP server.
+- **Governed Operator (`g8eo`)** — the reference policy enforcement point and sovereign execution boundary: local audit authority, output scrubber, L5Actuator, and itself an MCP server.
 
 The mandatory invariant is narrow on purpose: *a state-changing action reaches the host only as a typed, signed, state-bound transaction, and the host verifies that transaction before it executes.* Everything in the rest of this paper is in service of that one sentence.
 
@@ -106,7 +106,7 @@ Any mutation of any bound field changes the identity, which invalidates every si
 | **Freshness** | `expires_at` and nonce | Replay-window storage |
 | **State root** | Expected Merkle root of target state at signing time | Local state-root comparison |
 | **Doctrine evidence** | Forbidden-pattern and policy status | Static analysis / reflection |
-| **Quorum evidence** | Consensus signature from a trusted producer | Ed25519 over the transaction |
+| **Consensus evidence** | Consensus signature from a trusted producer | Ed25519 over the transaction |
 | **Notary evidence** | Human-authorization proof, where required | WebAuthn/FIDO2, hash as challenge |
 
 A transaction either proves it is current, typed, fresh, consensus-backed, and authorized — or it is not a transaction, and the host treats it as noise.
@@ -123,22 +123,22 @@ The Gateway and Operator reject non-conforming transactions before any applicati
 4. **Freshness** — expiry valid; nonce unseen in the active replay window.
 5. **State binding** — `state_merkle_root` matches the current local root.
 6. **Doctrine (L1Doctrine)** — reflected forbidden-pattern checks, allow/deny policy, and output-scrubber analysis pass.
-7. **Quorum (L2Consensus)** — signer resolves to the trusted store and the Ed25519 signature verifies over the transaction.
-8. **Notary (L3Notary)** — WebAuthn proof validates for human-authorized mutations, or an explicit auto-approval policy applies after Doctrine (L1Doctrine) and Quorum (L2Consensus) pass.
+7. **Consensus (L2Consensus)** — signer resolves to the trusted store and the Ed25519 signature verifies over the transaction.
+8. **Notary (L3Notary)** — WebAuthn proof validates for human-authorized mutations, or an explicit auto-approval policy applies after Doctrine (L1Doctrine) and Consensus (L2Consensus) pass.
 
-Any failure produces a typed rejection and an audit record; the payload is dropped at the boundary and the Actuator is never reached. The default is closed. Auto-approval is not a fallback the system drifts into — it is a decision a human makes deliberately, in advance, for a scoped class of low-blast-radius actions, and it still requires Doctrine and Quorum to have passed.
+Any failure produces a typed rejection and an audit record; the payload is dropped at the boundary and the L5Actuator is never reached. The default is closed. Auto-approval is not a fallback the system drifts into — it is a decision a human makes deliberately, in advance, for a scoped class of low-blast-radius actions, and it still requires Doctrine and Consensus to have passed.
 
 > Ordering note: state binding before the policy gates is authoritative. Earlier reference diagrams that placed the state check last are superseded by this section.
 
 ---
 
-## 6. Quorum (L2Consensus): consensus as an infrastructure control
+## 6. Consensus (L2Consensus): consensus as an infrastructure control
 
 The case for treating execution as a Byzantine problem rests on one observation that is easy to state and easy to quantify: **single-model control is undiluted exposure.**
 
 Suppose a mutation is decided by one model, and on a given action that model produces a plausible but wrong — yet signable — output with probability *p*. Hallucination, a successful prompt injection delivered through retrieved content, drift, and silent degradation all live inside *p*. With one decision path, the probability that a bad action is admitted is exactly *p*. There is nothing to dilute it.
 
-Quorum requires *k* of *n* independent seats to sign before an action carries consensus evidence. For consensus to be *fabricated*, at least *k* seats must fail on the same action. Under independence:
+Consensus requires *k* of *n* independent seats to sign before an action carries consensus evidence. For consensus to be *fabricated*, at least *k* seats must fail on the same action. Under independence:
 
 $$P(\text{fabricated consensus}) \;\le\; \sum_{i=k}^{n} \binom{n}{i}\, p^{\,i}\,(1-p)^{\,n-i}$$
 
@@ -146,7 +146,7 @@ and because the seats must additionally agree on the *same* faulty action — no
 
 The honest part — the part that separates this from multi-model theater — is the independence assumption. The bound holds only to the degree the seats fail *independently*. Shared training corpora, a shared system prompt, and above all a prompt injection riding in shared retrieved context introduce correlation. As that correlation rises toward one, the *n* seats collapse into a single effective seat and the bound degrades back toward *p*. Voting over five instances of the same model with the same context buys almost nothing.
 
-This is precisely why the reference Quorum is heterogeneous by construction — different providers, different weights, different prompts, different tool policies across seats. Heterogeneity is not a marketing posture; it is the engineering mechanism for driving inter-seat correlation toward zero so the independence bound actually means something. Consensus is a variance-reduction mechanism, and its payoff is governed entirely by the independence of its inputs.
+This is precisely why the reference Consensus is heterogeneous by construction — different providers, different weights, different prompts, different tool policies across seats. Heterogeneity is not a marketing posture; it is the engineering mechanism for driving inter-seat correlation toward zero so the independence bound actually means something. Consensus is a variance-reduction mechanism, and its payoff is governed entirely by the independence of its inputs.
 
 The reference model adds structure beyond raw voting: separation of roles (intent articulation, candidate generation, adversarial review, risk analysis, and audit verification are distinct responsibilities), a standing adversarial seat (Nemesis) that performs structured fault injection with reputation consequences rather than advisory commentary, and tamper-evident reputation state that can weight or slash future seat influence. No model vendor is assumed available, honest, stable, or sufficient — including the one writing this paragraph.
 
@@ -158,7 +158,7 @@ The protocol is the product. The implementations are replaceable, and describing
 
 ### 7.1 g8e-Compatible Agentic Ensembles
 
-g8e-compatible agentic ensembles are producers of governed transactions, built as ReAct loops over a layered hierarchy: **Triage/Dash** for routing and fast-path responses that never touch the mutation boundary; **Sage** as primary reasoner, which stakes reputation on proposals but cannot execute; the **Tribunal**, a five-seat panel requiring threshold consensus (2/5 or 5/5 by policy); **Actuator**, a heuristic circuit breaker that rejects off-the-wall proposals before they spend consensus budget; **Auditor**, which reviews the full investigation history before signing; and **Nemesis**, the embedded adversary. Crucially, these ensembles have no private channel to the host. They produce the same envelope, subject to the same gauntlet, as any BYO agent, MCP client, or A2A client.
+g8e-compatible agentic ensembles are producers of governed transactions, built as ReAct loops over a layered hierarchy: **Triage/Dash** for routing and fast-path responses that never touch the mutation boundary; **Sage** as primary reasoner, which stakes reputation on proposals but cannot execute; the **Consensus** stage, a five-seat panel requiring threshold consensus (2/5 or 5/5 by policy); **Actuator**, a heuristic circuit breaker that rejects off-the-wall proposals before they spend consensus budget; **Auditor**, which reviews the full investigation history before signing; and **Nemesis**, the embedded adversary. Crucially, these ensembles have no private channel to the host. They produce the same envelope, subject to the same gauntlet, as any BYO agent, MCP client, or A2A client.
 
 ### 7.2 The Gateway (`g8eg`)
 
@@ -166,7 +166,7 @@ g8e-compatible agentic ensembles are producers of governed transactions, built a
 
 ### 7.3 The Operator (`g8eo`)
 
-`g8eo` is the enforcement point and sovereign boundary — local audit authority, output scrubber, Actuator, and MCP server — shipped as a single statically compiled Go binary of roughly four megabytes with **zero standing dependencies**. There is no runtime to patch, no interpreter to exploit, no package tree to audit. This is what makes air-gapped and isolated-perimeter deployment ordinary: the binary either runs or it does not, and nothing else has to be present for it to enforce the protocol.
+`g8eo` is the enforcement point and sovereign boundary — local audit authority, output scrubber, L5Actuator, and MCP server — shipped as a single statically compiled Go binary of roughly four megabytes with **zero standing dependencies**. There is no runtime to patch, no interpreter to exploit, no package tree to audit. This is what makes air-gapped and isolated-perimeter deployment ordinary: the binary either runs or it does not, and nothing else has to be present for it to enforce the protocol.
 
 ### 7.4 Transport: outbound-only, by inversion
 
@@ -180,7 +180,7 @@ The consequence is structural, not cosmetic. The most sensitive component in the
 
 In g8e, execution is conditional on auditability, and the record is written before the side effect rather than reconstructed after it. This is where g8e's execution-plane sovereignty meets the data-plane sovereignty the industry is already pursuing: raw data, raw outputs, and forensic context never leave the host. The output scrubber emits only safe projections to the model and to remote clients, while the authoritative material stays local under the customer's control.
 
-Before mutation, the Actuator writes a signed executing-state receipt to the host-local vault. After mutation, it signs the final status with the post-state root and result metadata. File mutations are captured in a per-session ledger with before-and-after content hashes, backed by a two-phase, Git-backed commit architecture that yields a tamper-evident history and instant rollback — the operational answer to "undo the change the agent should not have made."
+Before mutation, the L5Actuator writes a signed executing-state receipt to the host-local vault. After mutation, it signs the final status with the post-state root and result metadata. File mutations are captured in a per-session ledger with before-and-after content hashes, backed by a two-phase, Git-backed commit architecture that yields a tamper-evident history and instant rollback — the operational answer to "undo the change the agent should not have made."
 
 The vault retains, for every admission decision including the rejections:
 
@@ -214,14 +214,14 @@ Each adversary capability is answered by a specific, verifiable mechanism rather
 | Replay of a valid transaction | Nonce + expiry + replay window | 4 |
 | Action against stale host state | State Merkle-root binding | 5 |
 | Policy-violating / dangerous action | Doctrine + output scrubber | 6 |
-| Single-model failure / injection / collusion | Heterogeneous Quorum, Ed25519-signed | 7 |
+| Single-model failure / injection / collusion | Heterogeneous Consensus, Ed25519-signed | 7 |
 | Unauthorized mutation | Notary WebAuthn/FIDO2 proof | 8 |
 | Compromised transport | mTLS + envelope-level signatures | transport + 7 |
 | Application seeking a side channel | No private channel; same envelope for all producers | §3, §7.1 |
 | Secret / PII / credential exfiltration via output | Scrub before any external exposure | §8 |
 | Remote attack surface on the host | Outbound-only tunnel; zero inbound ports | §7.4 |
 
-The Operator's job is narrow and severe: reach the Actuator only when the transaction proves it is current, typed, fresh, consensus-backed, policy-compliant, and authorized — and otherwise fail closed and record why.
+The Operator's job is narrow and severe: reach the L5Actuator only when the transaction proves it is current, typed, fresh, consensus-backed, policy-compliant, and authorized — and otherwise fail closed and record why.
 
 ---
 
@@ -229,11 +229,11 @@ The Operator's job is narrow and severe: reach the Actuator only when the transa
 
 A governance layer that overclaims is worse than none, because it manufactures confidence in exactly the environments that can least afford it. g8e does not solve the following, and pretending otherwise would be the more dangerous error.
 
-- **It does not make a model correct.** Quorum reduces correlated single-model failure; it does not make the agreed action wise. A unanimous, well-formed, fully authorized mistake will execute.
+- **It does not make a model correct.** Consensus reduces correlated single-model failure; it does not make the agreed action wise. A unanimous, well-formed, fully authorized mistake will execute.
 - **It does not constrain a fully authorized human.** Notary proves deliberate human presence. It does not stop an authorized operator from approving harm they understand and choose.
 - **It does not defend its own TCB.** Compromise the Operator binary, the signing keys, or the vault storage at the host level and the guarantees dissolve. Build provenance and key custody are deployment responsibilities, not protocol features.
 - **It does not eliminate latency.** Consensus and human-presence checks cost round trips. This is a deliberate trade: the fast path handles trivial reads, and state-changing actions pay the full cost by design.
-- **It does not address model supply-chain provenance.** Quorum assumes the seats are not all compromised at the weight level simultaneously. Integrity of the model artifacts themselves is a separate, open problem.
+- **It does not address model supply-chain provenance.** Consensus assumes the seats are not all compromised at the weight level simultaneously. Integrity of the model artifacts themselves is a separate, open problem.
 - **Fail-closed is an availability trade.** A Gateway outage halts mutation. For environments where availability dominates integrity, this trade is explicit, not accidental — and for the environments g8e targets, it is the correct default.
 
 ---
@@ -264,7 +264,7 @@ There is a temptation to answer this with a human behind every action. It does n
 
 g8e resolves the tension by making authority *graduated and provable* rather than uniform and assumed. Deterministic policy and cryptographic consensus absorb the volume of routine actions cheaply. Hardware-bound human authorization is reserved for the actions whose blast radius actually warrants a person — and when a person signs, they sign *that exact transaction*, against verified-current state, with the whole decision recorded locally before anything happens. This is what makes human control economically tractable instead of ceremonial: you spend scarce human attention only where it changes the outcome, and you can prove afterward that you spent it.
 
-Open protocols carry capability. Heterogeneous agents produce evidence. Humans hold authority where it counts. The Operator verifies the transaction against local state, records the attempt, reaches the Actuator, and returns signed proof — and refuses, loudly and on the record, when the proof does not hold.
+Open protocols carry capability. Heterogeneous agents produce evidence. Humans hold authority where it counts. The Operator verifies the transaction against local state, records the attempt, reaches the L5Actuator, and returns signed proof — and refuses, loudly and on the record, when the proof does not hold.
 
 That is the minimum viable boundary for autonomous systems that are allowed to change reality. Everything above it can be as fast, as capable, and as experimental as the work demands, precisely because the boundary below it does not move.
 

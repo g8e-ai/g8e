@@ -20,14 +20,15 @@
 package commonv1
 
 import (
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
+
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	descriptorpb "google.golang.org/protobuf/types/descriptorpb"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
 )
 
 const (
@@ -143,7 +144,7 @@ func (x *L1Metadata) GetViolations() []string {
 	return nil
 }
 
-// Quorum (L2Consensus) Governance: Consensus (Tribunal)
+// Consensus (L2Consensus) Governance: Consensus (Tribunal)
 type L2Metadata struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	TribunalSignature string                 `protobuf:"bytes,1,opt,name=tribunal_signature,json=tribunalSignature,proto3" json:"tribunal_signature,omitempty"` // ED25519 signature over transaction_hash|decision

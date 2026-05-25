@@ -49,7 +49,7 @@ An embedded SQLite database (`./.g8e/data/g8e.db`) that stores all operator sess
 
 ## Auditor
 
-A verifier persona within the **agentic ensemble** Tribunal stage (L2 Governance). The Auditor evaluates the consensus command winner against the original intent **after** the Actuator has cleared it for risk; if Actuator blocks, the Auditor never runs. The Auditor sees the request, operator context, and anonymized candidate clusters (not full conversation history). Verdicts are `ok`, `swap:<cluster_id>` to promote a dissenting cluster, or `revised:<command>`. On pass, the Auditor binds the verdict to a SHA-256 **Merkle Commitment** over the **Reputation Scoreboard**, chained via `prev_root` HMAC-SHA256 - a tamper-evident cryptographic chain of agent performance. Reputation-commitment failure is fatal: the verdict cannot proceed.
+A verifier persona within the **agentic ensemble** Consensus stage (L2 Governance). The Auditor evaluates the consensus command winner against the original intent **after** the Actuator has cleared it for risk; if Actuator blocks, the Auditor never runs. The Auditor sees the request, operator context, and anonymized candidate clusters (not full conversation history). Verdicts are `ok`, `swap:<cluster_id>` to promote a dissenting cluster, or `revised:<command>`. On pass, the Auditor binds the verdict to a SHA-256 **Merkle Commitment** over the **Reputation Scoreboard**, chained via `prev_root` HMAC-SHA256 - a tamper-evident cryptographic chain of agent performance. Reputation-commitment failure is fatal: the verdict cannot proceed.
 
 ---
 
@@ -247,7 +247,7 @@ A security mechanism that automatically terminates web sessions after 8 hours of
 
 ## Information Isolation Principle
 
-A load-bearing safety property in g8e's mechanism design where AI agents operate in a sealed, tiered information environment. Each agent (Triage, Sage, Tribunal members, Auditor) has a quarantined view of the pipeline to prevent collusion and ensure honest participation.
+A load-bearing safety property in g8e's mechanism design where AI agents operate in a sealed, tiered information environment. Each agent (Triage, Sage, Consensus members, Auditor) has a quarantined view of the pipeline to prevent collusion and ensure honest participation.
 
 ---
 
@@ -299,7 +299,7 @@ The first and foundation layer of g8e governance. It implements hard-coded techn
 
 ---
 
-## L2 Consensus (Tribunal)
+## L2 Consensus
 
 The second layer of g8e governance. A heterogeneous multi-model ensemble of 5 independent agents (Axiom, Concord, Variance, Pragma, Nemesis) that produces and votes on command candidates. The ordered cascade is: **Generation → Voting (R1) → [R2 anonymized peer review on consensus failure] → Actuator risk analysis → Auditor verification → Merkle commitment**. Actuator runs *before* Auditor; if Actuator classifies HIGH risk, Auditor never runs (first strike returns to Sage; second strike forces human intervention). Voting uses uniform 1-vote-per-member weighting with a minimum consensus of 2; tie-breaks apply in order shortest → exclude-Nemesis-cluster → round 2. Nemesis votes are *not* auto-discarded - they only lose tie-breaks. L2 ensures that every command executed is the result of a rigorous consensus process backed by a single L2 Ed25519 signature over the transaction hash, rather than a single model's output.
 
@@ -355,7 +355,7 @@ Security measures that prevent attackers from intercepting or modifying communic
 
 ## Merkle Commitment
 
-A cryptographic artifact produced by the **Auditor** during the Tribunal's verification step. It is a SHA-256 Merkle root computed over the sorted (agent_id, scalar) leaves of the **Reputation Scoreboard**. Each commitment includes the `prev_root` of the previous commitment, forming a tamper-evident hash chain.
+A cryptographic artifact produced by the **Auditor** during the Consensus stage's verification step. It is a SHA-256 Merkle root computed over the sorted (agent_id, scalar) leaves of the **Reputation Scoreboard**. Each commitment includes the `prev_root` of the previous commitment, forming a tamper-evident hash chain.
 
 ---
 
@@ -462,7 +462,7 @@ A server certificate embedded in the Operator binary at compile time. Prevents m
 
 ## ReAct
 
-A reasoning pattern used by the **g8e Agentic Ensemble** where the LLM cycles through Think → Act → Observe → Repeat. The AI generates a thought, executes an action, observes the result, and uses that observation to inform the next reasoning step. The Tribunal refines command syntax within this loop without re-invoking the main LLM.
+A reasoning pattern used by the **g8e Agentic Ensemble** where the LLM cycles through Think → Act → Observe → Repeat. The AI generates a thought, executes an action, observes the result, and uses that observation to inform the next reasoning step. The Consensus stage refines command syntax within this loop without re-invoking the main LLM.
 
 ---
 
@@ -486,7 +486,7 @@ Security mechanisms that prevent captured requests from being replayed by attack
 
 ## Reputation Staking
 
-The mechanism by which **agentic ensemble** Tribunal agents earn or lose standing based on the quality of their contributions. Each agent is assigned a reputation scalar (0.0 to 1.0) on the **Reputation Scoreboard**. Scalars are updated via an Exponential Moving Average (EMA) based on consensus participation and the eventual success or failure of the commands they proposed. Agents can be "slashed" for proposing high-risk or failing commands.
+The mechanism by which **agentic ensemble** Consensus agents earn or lose standing based on the quality of their contributions. Each agent is assigned a reputation scalar (0.0 to 1.0) on the **Reputation Scoreboard**. Scalars are updated via an Exponential Moving Average (EMA) based on consensus participation and the eventual success or failure of the commands they proposed. Agents can be "slashed" for proposing high-risk or failing commands.
 
 ---
 
@@ -532,9 +532,9 @@ The execution pattern used by g8ee where the AI generates tool calls to interact
 
 ---
 
-## Tribunal
+## Consensus
 
-See **L2 Consensus (Tribunal)**.
+See **L2 Consensus**.
 
 ---
 
@@ -545,7 +545,7 @@ The core trust model of g8e. Every component treats every other component as a p
 - **The Principal (User)** does not trust any single AI provider/model (heterogeneous tiering across reasoning agents) or any host running an Operator (mTLS, fingerprinting, device-link tokens, slot accounting, key rotation, revocation).
 - **The Ensemble (g8ee)** does not trust the user (L1 forbidden patterns block dangerous instructions before any model sees them) or the Operator (Sentinel ingress scrubbing of PII/credentials, scoped sessions, mTLS).
 - **The Operator (g8eo)** does not trust the user or the AI (full fail-closed admission gauntlet on every inbound mutation: envelope integrity, typed payload, L1 reflected forbidden patterns, hash binding, freshness, state-root match, L2 trusted signer, L3 WebAuthn).
-- **The Ensemble's internal pipeline** does not trust itself (the Byzantine cascade in `services/g8ee/app/services/ai/generator.py` runs Triage → Dash/Sage → Tribunal generation → voting → Actuator → Auditor before a command is even *eligible* for the protocol gauntlet).
+- **The Ensemble's internal pipeline** does not trust itself (the Byzantine cascade in `services/g8ee/app/services/ai/generator.py` runs Triage → Dash/Sage → Consensus generation → voting → Actuator → Auditor before a command is even *eligible* for the protocol gauntlet).
 
 See `docs/concepts/position_paper.md` §2.1 and `docs/concepts/g8ee.md` "Governance & Safety - The Ensemble-Internal Byzantine Cascade".
 

@@ -33,7 +33,7 @@ internal/                       # Private implementation (not exported)
 │   ├── auth/                   # Bootstrap service for device-link enrollment
 │   ├── execution/              # Command execution, file edit, fs operations
 │   ├── gateway/                # Gateway mode: platform persistence, PKI, auth, pub/sub broker
-│   ├── governance/             # L1/L2/L3 verification (TransactionVerifier, Tribunal, Actuator)
+│   ├── governance/             # L1-L5 verification (L1Doctrine, L2Consensus, L3Notary, L4Warden, L5Actuator)
 │   ├── keystore/               # Platform-specific key storage (Darwin Keychain, Linux file backend)
 │   ├── mcp/                    # MCP gateway for protocol translation (MCP/A2A)
 │   ├── openclaw/               # OpenClaw node host service
@@ -66,17 +66,20 @@ go.mod                          # Go module definition
 ## Core Service Layer Breakdown
 
 ### `services/governance/`
-- **Purpose**: Implement the L1/L2/L3 verification gauntlet
+- **Purpose**: Implement the L1-L5 verification gauntlet
 - **Key Components**:
-  - `transaction_verifier.go` - TransactionVerifier: envelope integrity, hash binding, expiry, nonce/replay, state root, L1/L2/L3 verification
-  - `tribunal.go` - Tribunal: L2 consensus signature generation and verification
-  - `actuator.go` - Actuator: L3 authorization and signed receipt generation
-  - `processor.go` - EnvelopeProcessor interface for transaction gate
-- **Critical Path**: Every mutation MUST pass through TransactionVerifier before execution
+  - `l1_doctrine.go` - L1Doctrine: Technical Bedrock (Hard Gates)
+  - `l2_consensus.go` - L2Consensus: Consensus stage
+  - `l3_notary.go` - L3Notary: Notary Authorization (Human)
+  - `l4_warden.go` - L4Warden: Fail-closed verification gate
+  - `l5_actuator.go` - L5Actuator: Mutation execution boundary and receipt issuer
+- **Critical Path**: Every mutation MUST pass through L4Warden before execution
 - **Verification Layers**:
   - L1 (Doctrine): forbidden patterns, whitelist, blacklist via protobuf field options
-  - L2 (Consensus): Ed25519 tribunal signature verification
+  - L2 (Consensus): Ed25519 signature verification
   - L3 (Notary): WebAuthn/FIDO2 human approval (posture-dependent)
+  - L4 (Warden): Verification gate orchestrator
+  - L5 (Actuator): Execution boundary and receipt signer
 
 ### `services/execution/`
 - **Purpose**: Command execution and file operations
@@ -121,7 +124,7 @@ go.mod                          # Go module definition
   - `passkey_service.go` - PasskeyService: WebAuthn/FIDO2 passkey operations
   - `gateway_http.go` - HTTPHandler: HTTP routing and middleware
   - `gateway_pubsub.go` - PubSubBroker: in-memory pub/sub messaging
-  - `secret_manager.go` - SecretManager: signing key storage (Actuator, Tribunal)
+  - `secret_manager.go` - SecretManager: signing key storage (L5Actuator, Consensus)
   - `user_service.go` - UserService: user management
   - `session_service.go` - SessionService: session management
   - `api_key_service.go` - APIKeyService: API key management
@@ -219,7 +222,7 @@ go.mod                          # Go module definition
 - Located alongside source files (`*_test.go`)
 - Focus on individual service logic
 - Use `internal/testutil/` for fixtures
-- Key test suites: governance (transaction_verifier, tribunal, actuator), execution, storage (audit_vault, ledger), gateway, pubsub, sentinel
+- Key test suites: governance (l4_warden, l2_consensus, l5_actuator), execution, storage (audit_vault, ledger), gateway, pubsub, sentinel
 
 ### Integration Tests
 - **Path**: `tests/`
@@ -231,22 +234,22 @@ go.mod                          # Go module definition
 
 ### Outbound Operator Mode Mutation Flow
 ```text
-Platform (mTLS) → PubSubCommandService → TransactionVerifier (L1/L2/L3)
-→ ExecutionService (Actuator) → AuditVault (SQLite) → Ledger (Git commit)
+Platform (mTLS) → PubSubCommandService → L4Warden (L1-L3)
+→ L5Actuator → AuditVault (SQLite) → Ledger (Git commit)
 → PubSubResultsService (result streaming)
 ```
 
 ### Gateway Mode Mutation Flow
 ```text
 HTTP POST /api/governance/envelope → Gateway HTTP handler → EnvelopeProcessor
-→ TransactionVerifier (L1/L2/L3) → ExecutionService (Actuator)
+→ L4Warden (L1-L3) → L5Actuator
 → AuditVault → Ledger → Signed ActionReceipt response
 ```
 
 ### MCP Tool Call Flow
 ```text
 MCP Client (JSON-RPC) → MCP Gateway → GovernanceEnvelope formation
-→ TransactionVerifier → ExecutionService → MCP Gateway (egress dispatch)
+→ L4Warden → L5Actuator → MCP Gateway (egress dispatch)
 → Downstream MCP/A2A server → Result streaming → MCP Client
 ```
 
@@ -290,7 +293,7 @@ make version            # Show version info
 
 ## Key Invariants
 
-1. **Fail-closed execution**: Only verified transactions reach execution layer; TransactionVerifier rejects invalid envelopes before execution
+1. **Fail-closed execution**: Only verified transactions reach execution layer; L4Warden rejects invalid envelopes before execution
 2. **Protocol substrate**: All protobuf schemas from `protocol/proto/` (canonical protocol source of truth)
 3. **Local-first audit**: Audit vault and ledger are host-local only; session validation required for audit writes (fail-closed)
 4. **Wire format**: Canonical JSON (protojson) for UniversalEnvelope on all client-facing surfaces; binary protobuf only for internal storage
