@@ -4,130 +4,113 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-05-18
+Last Updated: 2026-05-24
 
-g8e is designed to be a **testing environment and a production environment at the same time**. We do not mock the world to make tests pass. If it does not work in the test environment, it will not work in production.
-
----
-
-## Core Engineering Principles
-
-- **Hermetic execution** - Tests run directly on the host via `./g8e test`. Go for the Gateway (`g8eg`/`g8eo`); repo-local Python for explicit agentic ensemble targets.
-- **Real infrastructure** - Gateway test runs begin with `./g8e platform start` (launching the `g8eg` Gateway). App-layer tests require explicit app startup via `./g8e apps start <app-name>`.
-- **No mocks policy** - Mocking internal services, database clients, or cross-component communication is prohibited. Integration tests use the real wire paths.
-- **mTLS by default** - Most internal and Gateway communication requires mTLS. The runner injects certs from `.g8e/pki` automatically when authenticated (`./g8e login`).
-- **Body-embedded context** - Business and session context is provided as a `RequestContext` in the request body. `X-G8E-*` context headers are not supported and are ignored by the Gateway.
-- **Real LLM calls** - AI integration tests use real provider APIs (Gemini, Anthropic, OpenAI, etc.). HTTP interception is not permitted for LLM clients.
-- **Reproduce first** - Always reproduce a bug with a failing test before generating a fix.
-- **Contract tests** - Enforce alignment between the Operator, optional adapters, and `protocol/` constants/models with typed protobuf assertions.
+g8e tests run directly on the host using real infrastructure. The test environment is the production environment. If it does not work in tests, it will not work in production.
 
 ---
 
-## Test Harness Architecture
+## Test Philosophy
 
-### 1. Gateway Tests (Protocol Path)
-
-```bash
-./g8e test            # default
-./g8e test g8eo
-./g8e test g8eo services/pubsub
-```
-
-Validates the Gateway components (`g8eg` and `g8eo`) and their protocol enforcement (`GovernanceEnvelope`, 3-layer governance, Audit Vault) without requiring Python or the agentic ensemble. Uses Gateway listen mode and unified command/result paths. Keeps the required platform boundary small and independently verifiable.
-
-### 2. App Adapter Tests
-
-```bash
-./g8e test <app-name> --e2e
-./g8e test <app-name> --pyright --ruff
-```
-
-Validates optional g8e-compatible agentic ensembles. Requires the relevant app adapter to be started explicitly. Verifies bundled clients without making them Gateway dependencies.
-
-### 3. Evals (Application-Layer Benchmark Path)
-
-```bash
-./g8e evals bench --suite ifeval
-```
-
-Evaluates AI agent reasoning and tool-calling accuracy using signed `ActionReceipts`. Uses a real Operator and produces verified audit references. Exercises the product exactly as a user would. Detailed in [Evals](./evals.md).
+- **Hermetic execution** - Tests run on the host via `./g8e test`. The Operator is a single binary combining Governance Gateway (Policy Decision Point) and Governance Operator (Policy Execution Point).
+- **Real infrastructure** - Tests use the actual SQLite database, PKI certificates, and pub/sub channels. Platform starts via `./g8e platform start`.
+- **No mocks** - Mocking internal services, database clients, or cross-component communication is prohibited. Integration tests use real wire paths.
+- **mTLS required** - Operator communication requires mTLS. Authentication via `./g8e login` issues certificates from `.g8e/pki`.
+- **Reproduce first** - Reproduce bugs with failing tests before fixes.
+- **Contract tests** - Enforce alignment between the Operator and `protocol/` constants/models with typed protobuf assertions.
 
 ---
 
-## Common Workflow
+## Test Harness
+
+### Operator Tests
 
 ```bash
-# 1. Start the Governance Gateway
+./g8e test            # runs all Go tests
+./g8e test g8eo       # explicit Operator test target
+./g8e test ci         # CI suite: Operator + scenario integration
+./g8e test chaos      # Chaos engineering tests
+./g8e test scenario   # Scenario integration tests
+```
+
+Validates the Operator and protocol enforcement (`GovernanceEnvelope`, 3-layer governance, Audit Vault). Tests cover pub/sub command dispatch, L1/L2/L3 verification, transaction replay protection, state root validation, and audit vault integrity.
+
+### Scenario Tests
+
+```bash
+./g8e test scenario
+./g8e test scenario --run forge_signature
+```
+
+Integration tests exercising end-to-end workflows: device-link enrollment, certificate issuance, governance envelope submission. Requires the Operator to be running.
+
+### Chaos Tests
+
+```bash
+./g8e test chaos --count 100
+```
+
+Chaos engineering tests firing random payloads at the Operator to verify fail-closed behavior and invariant enforcement.
+
+---
+
+## Workflow
+
+```bash
+# 1. Start the Operator
 ./g8e platform start
 
 # 2. Authenticate (required for mTLS tests)
 ./g8e login
 
-# 3. Run Gateway tests
+# 3. Run Operator tests
 ./g8e test
-./g8e test g8eo services/pubsub
+./g8e test g8eo
 
-# 4. Start optional apps only when testing app-layer adapters
-./g8e apps start <app-name>
-./g8e test <app-name> --pyright --ruff
+# 4. Run scenario integration tests
+./g8e test scenario
 ```
 
-### LLM & search configuration
+### First-time Setup
 
-When running AI-integrated tests, provider settings pass via env or flags:
+If no users exist, bootstrap the platform:
 
 ```bash
-./g8e test <app-name> -p anthropic -m claude-3-5-sonnet -k <api-key>
+./g8e platform start
+./g8e auth bootstrap
 ```
 
-Available flags: `-p` (provider), `-m` (primary model), `-a` (assistant model), `-l` (lite model), `-k` (api key), `-e` (endpoint).
+This creates the first user and issues mTLS certificates for the Operator and CLI.
 
 ---
 
-## Component Specifics
+## Test Implementation
 
-### Go (g8eg & g8eo)
+### Go (Operator)
 
-- **Tooling** - `gotestsum` if available for dots-style output.
-- **Race detection** - Always enabled via `-race`.
-- **Parallelism** - `-parallel 4` and a `180s` timeout by default.
-- **Coverage** - `--coverage` generates and displays reports.
-- **Concurrency invariants** - Goroutines must have explicit cancellation contexts and clear channel ownership. LFAA payloads must include an `execution_id`.
-
-### Python (g8e-compatible agentic ensembles)
-
-- **Type safety** - `--pyright` runs strict AST-level checking via `pyrightconfig.services.json`.
-- **Linting** - `--ruff` (and `--ruff-fix`) enforces project style.
-- **Parallelism** - `-j auto` or `-j <N>` runs pytest in parallel via `pytest-xdist`.
-- **Pydantic enforcement** - Domain objects extend `G8eBaseModel`. Extra fields are rejected.
+- **Tooling** - Standard `go test` with optional `gotestsum` for dots-style output.
+- **Race detection** - Enabled via `-race` in CI and by default in `./g8e test`.
+- **Parallelism** - `-parallel 4` with `180s` timeout.
+- **Coverage** - `--coverage` generates reports.
+- **Concurrency** - Goroutines require explicit cancellation contexts and clear channel ownership.
 
 ### Lints
 
-- **`make lint-no-bare-session-id`** - CI-enforced lint preventing bare `sessionid` in the codebase. Excludes vendor, generated files, `.local.dev`, `.github`, and the Makefile itself.
+- **`make lint-no-bare-session-id`** - CI-enforced lint preventing bare `session_id`. Excludes vendor, generated files, `.local.dev`, `.github`, and the Makefile.
+- **`make lint-no-hand-authored-events`** - Prevents hand-authored event type strings; requires constants from `protocol/constants/events.json`.
+- **`make validate-doctrines`** - Validates doctrine JSON schema against the governance policy model.
 
 ---
 
 ## Infrastructure Ports
 
-When debugging connectivity (defaults from `internal/constants/paths.go`):
+Defaults from `internal/constants/ports.go`:
 
-- `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->` - Gateway mTLS API / Pub/Sub / Public (multiplexed onto a single TLS gateway)
-- `<!-- g8e:port:operator_bootstrap -->8441<!-- /g8e:port -->` - Gateway Bootstrap (plain HTTP; isolated from TLS surfaces)
-- `<!-- g8e:port:app_http -->8443<!-- /g8e:port -->` - agentic ensemble adapter (HTTPS)
+- `8440` - Operator mTLS API and Pub/Sub
+- `8441` - Operator Bootstrap (plain HTTP; device-link enrollment)
+- `8442` - Operator Public TLS (browser/BYO bootstrap)
 
-All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NET_BIND_SERVICE` to the gateway binary or front it with an external port redirect.
-
----
-
-## Security & Audit
-
-The platform includes automated verification of its own security posture:
-
-```bash
-./g8e security validate      # Verifies mTLS integrity and volume permissions
-./g8e security mtls-test     # Tests connectivity between components
-./g8e security scan-licenses # Scans dependencies for compliance
-```
+All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NET_BIND_SERVICE` to the Operator binary or front with an external port redirect.
 
 ---
 
@@ -135,8 +118,11 @@ The platform includes automated verification of its own security posture:
 
 GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 
-- **`verify-proto`** - Generated Go and Python code is in sync with `.proto` definitions.
-- **`test-g8eo`** (blocking) - Installs Go, starts the platform, runs `./g8e test`.
-- **`apps`** (non-blocking, `continue-on-error: true`) - Installs Python, starts optional agentic ensembles, runs their suites.
-
-See also: [Evals](./evals.md), [Scripts](./scripts.md).
+- **`verify-proto`** - Generated Go and Python code sync with `.proto` definitions.
+- **`lint-g8eo`** - Runs `golangci-lint` on the Operator and protocol code.
+- **`vulncheck-g8eo`** - Scans Go dependencies for known vulnerabilities.
+- **`test-g8eo`** (blocking) - Installs Go, starts the platform, runs `./g8e test` with 85% coverage threshold.
+- **`test-scenarios`** - Runs scenario integration tests with `-tags=integration`.
+- **`constants-lint`** - Enforces use of constants instead of raw string literals.
+- **`docs-lint`** - Validates Markdown formatting with markdownlint.
+- **`docs-build`** - Builds CLI reference and documentation site.

@@ -36,6 +36,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func generateTestCert(t *testing.T) (certPEM, keyPEM []byte, privKey *ecdsa.PrivateKey) {
@@ -335,10 +336,10 @@ func TestDoRequest_Success(t *testing.T) {
 		assert.Equal(t, "POST", r.Method)
 		assert.Equal(t, "/api/test", r.URL.Path)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-		assert.Equal(t, "test-operator-session-id", r.Header.Get("X-Operator-Session-ID"))
-		assert.Equal(t, "test-cli-session-id", r.Header.Get("X-CLI-Session-ID"))
-		assert.Equal(t, "test-user-id", r.Header.Get("X-User-ID"))
-		assert.Equal(t, "test-operator-id", r.Header.Get("X-Operator-ID"))
+		assert.Equal(t, "test-operator-session-id", r.Header.Get(constants.HeaderOperatorSessionID))
+		assert.Equal(t, "test-cli-session-id", r.Header.Get(constants.HeaderCLISessionID))
+		assert.Equal(t, "test-user-id", r.Header.Get(constants.HeaderUserID))
+		assert.Equal(t, "test-operator-id", r.Header.Get(constants.HeaderOperatorID))
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -556,10 +557,10 @@ func TestDoRequest_HeadersSetCorrectly(t *testing.T) {
 	_, err := client.DoRequest("POST", "/api/test", map[string]string{"test": "data"})
 	require.NoError(t, err)
 
-	assert.Equal(t, "test-operator-session-id", receivedHeaders.Get("X-Operator-Session-ID"))
-	assert.Equal(t, "test-cli-session-id", receivedHeaders.Get("X-CLI-Session-ID"))
-	assert.Equal(t, "test-user-id", receivedHeaders.Get("X-User-ID"))
-	assert.Equal(t, "test-operator-id", receivedHeaders.Get("X-Operator-ID"))
+	assert.Equal(t, "test-operator-session-id", receivedHeaders.Get(constants.HeaderOperatorSessionID))
+	assert.Equal(t, "test-cli-session-id", receivedHeaders.Get(constants.HeaderCLISessionID))
+	assert.Equal(t, "test-user-id", receivedHeaders.Get(constants.HeaderUserID))
+	assert.Equal(t, "test-operator-id", receivedHeaders.Get(constants.HeaderOperatorID))
 	assert.Equal(t, "application/json", receivedHeaders.Get("Content-Type"))
 }
 
