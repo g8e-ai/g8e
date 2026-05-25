@@ -22,20 +22,13 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
-	"github.com/g8e-ai/g8e/internal/services/sentinel"
+	"github.com/g8e-ai/g8e/internal/services/sovereignty"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
-
-// sentinelVerdict carries the outcome of a pre-execution sentinel analysis.
-type sentinelVerdict struct {
-	blocked       bool
-	blockedResult *models.ExecutionResultsPayload
-	blockedEvent  *storage.Event
-}
 
 // StatusUpdateInterval is the interval between periodic status updates during long-running commands.
 const StatusUpdateInterval = 10 * time.Second
@@ -46,7 +39,7 @@ type CommandService struct {
 	logger         *slog.Logger
 	execution      *execution.ExecutionService
 	results        ResultsPublisher
-	sentinel       *sentinel.Sentinel
+	sovereignty    *sovereignty.SovereigntyService
 	vaultWriter    *VaultWriter
 	auditVault     *storage.AuditVaultService
 	localStore     *storage.LocalStoreService
@@ -91,9 +84,9 @@ func (cs *CommandService) SetHistoryHandler(h *storage.HistoryHandler) {
 	cs.historyHandler = h
 }
 
-// SetSentinel sets the sentinel for the CommandService.
-func (cs *CommandService) SetSentinel(s *sentinel.Sentinel) {
-	cs.sentinel = s
+// SetSovereignty sets the sovereignty service for the CommandService.
+func (cs *CommandService) SetSovereignty(s *sovereignty.SovereigntyService) {
+	cs.sovereignty = s
 }
 
 // HandleExecutionRequest processes an inbound command execution request.
@@ -133,27 +126,6 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 	execReq, err := payloadToExecutionRequest(msg)
 	if err != nil {
 		cs.logger.Error("Failed to create execution request", string(constants.ConnectionStateError), err)
-		return
-	}
-
-	if verdict := cs.runSentinelGuard(execReq); verdict.blocked {
-		if verdict.blockedEvent != nil && cs.auditVault != nil && cs.auditVault.IsEnabled() {
-			if _, err := cs.auditVault.RecordEvent(verdict.blockedEvent); err != nil {
-				cs.logger.Warn("Failed to record sentinel blocked event in audit vault", string(constants.ConnectionStateError), err)
-			}
-		}
-		if cs.results != nil {
-			protoResult := &operatorv1.CommandResult{
-				ExecutionId: verdict.blockedResult.ExecutionID,
-				Status:      verdict.blockedResult.Status,
-				Error:       *verdict.blockedResult.ErrorMessage,
-				Stderr:      verdict.blockedResult.Stderr,
-				ReturnCode:  int32(*verdict.blockedResult.ReturnCode), //nolint:gosec // exit codes are 0-255
-			}
-			if err := cs.results.PublishExecutionResult(ctx, protoResult, msg); err != nil {
-				cs.logger.Error("Failed to publish blocked result", string(constants.ConnectionStateError), err)
-			}
-		}
 		return
 	}
 
@@ -230,13 +202,13 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 		})
 	}
 
-	if cs.sentinel != nil && cs.sentinel.IsEnabled() {
-		cs.logger.Info("sentinel.Sentinel scrubbing execution output",
+	if cs.sovereignty != nil && cs.sovereignty.IsEnabled() {
+		cs.logger.Info("SovereigntyService scrubbing execution output",
 			"execution_id", result.ExecutionID,
 			"raw_stdout_size", rawStdoutSize,
 			"raw_stderr_size", rawStderrSize)
-		result.Stdout = cs.sentinel.ScrubText(result.Stdout)
-		result.Stderr = cs.sentinel.ScrubText(result.Stderr)
+		result.Stdout = cs.sovereignty.ScrubText(result.Stdout)
+		result.Stderr = cs.sovereignty.ScrubText(result.Stderr)
 	}
 
 	if cs.auditVault != nil && cs.auditVault.IsEnabled() {
@@ -286,99 +258,6 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 			cs.logger.Error("Failed to publish execution result", string(constants.ConnectionStateError), err)
 		}
 	}
-}
-
-// runSentinelGuard performs pre-execution threat analysis on the command.
-// Returns a sentinelVerdict - if blocked is true the caller must publish the blocked result
-// and audit event, then return without executing the command.
-func (cs *CommandService) runSentinelGuard(execReq *models.ExecutionRequestPayload) sentinelVerdict {
-	if cs.sentinel == nil {
-		return sentinelVerdict{}
-	}
-
-	fullCommand := cs.execution.BuildCommandString(execReq.Command, execReq.Args)
-	analysis := cs.sentinel.AnalyzeCommand(fullCommand)
-
-	if execReq.Intent != "" {
-		if !cs.sentinel.ValidateIntent(constants.CloudIntent(execReq.Intent)) {
-			cs.logger.Error("SENTINEL BLOCKED: Unauthorized intent requested",
-				string(constants.ApprovalTypeIntent), execReq.Intent,
-				"execution_id", execReq.ExecutionID)
-
-			exitCode := 126
-			return sentinelVerdict{
-				blocked: true,
-				blockedResult: &models.ExecutionResultsPayload{
-					ExecutionID:     execReq.ExecutionID,
-					CaseID:          execReq.CaseID,
-					TaskID:          execReq.TaskID,
-					InvestigationID: execReq.InvestigationID,
-					Command:         execReq.Command,
-					Args:            execReq.Args,
-					Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-					ReturnCode:      system.IntPtr(126),
-					Stderr:          fmt.Sprintf("SENTINEL BLOCKED: Unauthorized intent requested: %s", execReq.Intent),
-					ErrorMessage:    system.StringPtr(fmt.Sprintf("Command blocked by sentinel.Sentinel: Unauthorized intent: %s", execReq.Intent)),
-					ErrorType:       system.StringPtr("sentinel_blocked"),
-				},
-				blockedEvent: &storage.Event{
-					OperatorSessionID: cs.config.OperatorSessionId,
-					Timestamp:         time.Now().UTC(),
-					Type:              constants.Event.Operator.Audit.Command,
-					ContentText:       fmt.Sprintf("SENTINEL BLOCKED: Unauthorized intent requested: %s", execReq.Intent),
-					CommandRaw:        fullCommand,
-					CommandExitCode:   &exitCode,
-					CommandStderr:     fmt.Sprintf("Blocked by sentinel.Sentinel: Unauthorized intent requested: %s", execReq.Intent),
-				},
-			}
-		}
-	}
-
-	if !analysis.Safe {
-		cs.logger.Error("SENTINEL BLOCKED: Command failed pre-execution threat analysis",
-			"threat_level", analysis.ThreatLevel,
-			"risk_score", analysis.RiskScore,
-			"block_reason", analysis.BlockReason,
-			"threat_count", len(analysis.ThreatSignals),
-			"command_scrubbed", analysis.Command)
-
-		exitCode := 126
-		return sentinelVerdict{
-			blocked: true,
-			blockedResult: &models.ExecutionResultsPayload{
-				ExecutionID:     execReq.ExecutionID,
-				CaseID:          execReq.CaseID,
-				TaskID:          execReq.TaskID,
-				InvestigationID: execReq.InvestigationID,
-				Command:         execReq.Command,
-				Args:            execReq.Args,
-				Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-				ReturnCode:      system.IntPtr(126),
-				Stderr:          fmt.Sprintf("SENTINEL BLOCKED: %s", analysis.BlockReason),
-				ErrorMessage:    system.StringPtr(fmt.Sprintf("Command blocked by sentinel.Sentinel: %s", analysis.BlockReason)),
-				ErrorType:       system.StringPtr("sentinel_blocked"),
-			},
-			blockedEvent: &storage.Event{
-				OperatorSessionID: cs.config.OperatorSessionId,
-				Timestamp:         time.Now().UTC(),
-				Type:              constants.Event.Operator.Audit.Command,
-				ContentText:       fmt.Sprintf("SENTINEL BLOCKED: %s (threat_level=%s, risk_score=%d)", analysis.BlockReason, analysis.ThreatLevel, analysis.RiskScore),
-				CommandRaw:        analysis.Command,
-				CommandExitCode:   &exitCode,
-				CommandStderr:     fmt.Sprintf("Blocked by sentinel.Sentinel pre-execution analysis: %s", analysis.BlockReason),
-			},
-		}
-	}
-
-	if len(analysis.ThreatSignals) > 0 {
-		cs.logger.Warn("sentinel.Sentinel detected potential threats in command (allowing with review)",
-			"threat_level", analysis.ThreatLevel,
-			"risk_score", analysis.RiskScore,
-			"threat_count", len(analysis.ThreatSignals),
-			"requires_approval", analysis.RequiresApproval)
-	}
-
-	return sentinelVerdict{}
 }
 
 // runStatusTicker drives the periodic status update loop while a command executes.

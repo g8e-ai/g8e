@@ -12,7 +12,7 @@ The reference Go implementation of the g8e Protocol compiles from a single codeb
 - **Single Codebase, Two Roles**: The exact same Go codebase is compiled into the central Policy Decision Point (`g8e.gateway`) and host-level Policy Execution Point (`g8e.operator`). Behavior is activated via invocation flags (e.g. --doctrine, --consensus, --notary).
 - **mTLS-Everywhere**: All communication is outbound-only from the target operator and strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts.
 - **Local-First Audit (LFAA)**: The target host remains the source of truth for command history and file mutations, stored in a tamper-evident local ledger.
-- **UAP JSON-First (GovernanceEnvelope)**: Every mutation action is governed by a UAP JSON `GovernanceEnvelope`. This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
+- **Canonical JSON (GovernanceEnvelope)**: Every mutation action is governed by a canonical JSON `GovernanceEnvelope`. This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
 - **3-Layer Governance**: Hard gates at the bedrock (L1Doctrine), consensus in the middle (L2Consensus), and human authorization at the top (L3Notary).
 - **Transaction Invariants**: Every transaction is identified by a deterministic `transaction_hash` computed from its content. The envelope `id` must match this hash for the transaction to be valid.
 - **Protocol vs Implementation**: The protocol is the Gateway. The reference Governance Gateway (`g8eg`) and Governed Operator (`g8eo`) implement the protocol's core invariants, while application layers consume their public interfaces.
@@ -50,7 +50,7 @@ flowchart TD
         ensemble["g8e-compatible agentic ensemble"]
     end
 
-    ensemble -. "mTLS UAP JSON" .-> listen
+    ensemble -. "mTLS canonical JSON" .-> listen
 
     subgraph EP_A ["Managed Host A"]
         g8eoA["Reference Operator (g8eo)"] --- LFAA_A["LFAA Ledger & Vault"]
@@ -60,8 +60,8 @@ flowchart TD
         g8eoB["Reference Operator (g8eo)"] --- LFAA_B["LFAA Ledger & Vault"]
     end
 
-    g8eoA -- "mTLS WSS (UAP JSON)" --> listen
-    g8eoB -- "mTLS WSS (UAP JSON)" --> listen
+    g8eoA -- "mTLS WSS (canonical JSON)" --> listen
+    g8eoB -- "mTLS WSS (canonical JSON)" --> listen
 ```
 
 ---

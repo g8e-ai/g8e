@@ -414,7 +414,7 @@ The remote LLM inference component. g8e supports any remote Ollama server reacha
 
 An abbreviation generally referring to the **Governed Operator (`g8eo`)** role when running on target hosts as the PEP, or the compiled Go codebase which generates both `g8e.gateway` (`g8eg`) and `g8e.operator` (`g8eo`) binaries.
 
-Operator command/result traffic follows the g8e protocol: UAP JSON `GovernanceEnvelope` bytes carry typed `operator.proto` payloads and L1/L2/L3 governance metadata over the pub/sub transport.
+Operator command/result traffic follows the g8e protocol: canonical JSON `GovernanceEnvelope` bytes carry typed `operator.proto` payloads and L1/L2/L3 governance metadata over the pub/sub transport.
 
 ---
 

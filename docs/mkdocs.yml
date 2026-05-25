@@ -107,4 +107,4 @@ nav:
   - External:
       - A2A Protocol (JSON Schema): external/a2a.json
       - A2A Protocol (Proto): external/a2a.proto
-      - Ollama API: external/ollam_api.md
+      - Ollama API: external/ollama_api.md

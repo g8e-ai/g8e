@@ -301,7 +301,7 @@ The Gateway implements a circuit breaker for downstream MCP/A2A servers:
 | MCP models | `internal/services/mcp/models.go` |
 | Field path registry | `internal/services/mcp/field_parser.go` |
 | Envelope construction | `internal/services/mcp/gateway.go` (processGatewayTransaction) |
-| Transaction verification | `internal/services/governance/transaction_verifier.go` |
+| Transaction verification | `internal/services/governance/l4_warden.go` |
 | Envelope processor | `internal/services/governance/processor.go` |
 | Pub/Sub command service | `internal/services/pubsub/pubsub_commands.go` |
 | Session management | `internal/services/gateway/session_service.go` |

@@ -91,7 +91,7 @@ For air-gapped reasoning, g8e supports external local inference via g8e-compatib
 - Build dependency: `grpcio-tools` for Python stub generation.
 
 **Evals Suite:**
-- Dependencies in `evals/pyproject.toml` (pytest, httpx, pydantic).
+- Dependencies in `evals/pyproject.toml` (httpx, pydantic).
 - Separate from runtime agentic ensemble dependencies.
 
 **Build-Time Tools:**

@@ -29,7 +29,7 @@ import (
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
-	"github.com/g8e-ai/g8e/internal/services/sentinel"
+	"github.com/g8e-ai/g8e/internal/services/sovereignty"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/pkg/uap"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -102,7 +102,7 @@ type CommandServiceConfig struct {
 	AuditVault        *storage.AuditVaultService
 	Ledger            *storage.LedgerService
 	HistoryHandler    *storage.HistoryHandler
-	Sentinel          *sentinel.Sentinel
+	Sovereignty       *sovereignty.SovereigntyService
 	L3Notary          governance.L3Notary
 	ReplayStore       governance.ReplayStore
 	StateRootProvider governance.StateRootProvider
@@ -151,8 +151,8 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 	rs.commands = NewCommandService(c.Config, c.Logger, c.Execution)
 	rs.commands.results = c.ResultsService
-	rs.commands.sentinel = c.Sentinel
-	rs.commands.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Sentinel, c.LocalStore)
+	rs.commands.sovereignty = c.Sovereignty
+	rs.commands.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Sovereignty, c.LocalStore)
 	rs.commands.auditVault = c.AuditVault
 	rs.commands.localStore = c.LocalStore
 	rs.commands.ledger = c.Ledger
@@ -160,8 +160,8 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 	rs.fileOps = NewFileOpsService(c.Config, c.Logger, c.FileEdit, client)
 	rs.fileOps.results = c.ResultsService
-	rs.fileOps.sentinel = c.Sentinel
-	rs.fileOps.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Sentinel, c.LocalStore)
+	rs.fileOps.sovereignty = c.Sovereignty
+	rs.fileOps.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Sovereignty, c.LocalStore)
 	rs.fileOps.auditVault = c.AuditVault
 	rs.fileOps.ledger = c.Ledger
 
@@ -206,15 +206,17 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 }
 
 func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, serviceCtx context.Context) {
-	// Initialize L2Consensus with Sentinel for MITRE checks and private key for L2 signing
+	// Initialize L2Consensus with L1Doctrine for threat detection and private key for L2 signing
+	// L1Doctrine is the canonical L1 (Technical Bedrock) validator - it replaces Sentinel's threat detection
+	l1Doctrine := governance.NewL1Doctrine()
 	rs.consensus = governance.NewL2Consensus(
 		c.Config.OperatorID,
-		c.Sentinel,
-		nil, // Doctrine will be updated below
+		l1Doctrine,
 		c.ConsensusSigningKey,
 	)
 
 	// Initialize L5Actuator with trusted nodes and audit vault
+	// SovereigntyService handles data scrubbing/rehydration at the execution boundary
 	rs.actuator = &governance.L5Actuator{
 		Logger:            c.Logger,
 		SignerStore:       rs.signerStore,
@@ -225,7 +227,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		StateRootProvider: c.StateRootProvider,
 		Ctx:               serviceCtx,
 		ExecutionHandler:  rs, // PubSubCommandService implements ExecutionHandler
-		Sentinel:          c.Sentinel,
+		Sovereignty:       c.Sovereignty,
 		SigningKey:        c.ActuatorSigningKey,
 		KeyID:             c.ActuatorKeyID,
 	}

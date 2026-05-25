@@ -2,7 +2,7 @@
 
 ## Overview
 
-This codemap traces the complete lifecycle of a mutation request from envelope submission to execution and audit. It documents the actual implementation in the g8eo Operator substrate, showing how UAP JSON envelopes flow through the governance verification gauntlet to the Actuator execution boundary.
+This codemap traces the complete lifecycle of a mutation request from envelope submission to execution and audit. It documents the actual implementation in the g8eo Operator substrate, showing how canonical JSON GovernanceEnvelope payloads flow through the governance verification gauntlet to the Actuator execution boundary.
 
 The Operator runs in two modes:
 - **Outbound mode**: Traditional operator with pub/sub subscription to cloud platform, executes commands locally
@@ -17,7 +17,7 @@ Both modes share the same fail-closed verification gauntlet and Actuator executi
 │                         ENVELOPE SUBMISSION                          │
 │  Gateway mode: POST /api/governance/envelope (HTTP/WebSocket)        │
 │  Outbound mode: pub/sub message from cloud platform                  │
-│  Wire format: Canonical protojson UAP JSON GovernanceEnvelope       │
+│  Wire format: Canonical protojson GovernanceEnvelope                 │
 └─────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -41,7 +41,7 @@ Both modes share the same fail-closed verification gauntlet and Actuator executi
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    L5ACTUATOR.EXECUTE                                  │
 │  Sign initial receipt → Log receipt (SQLite + console_audit)          │
-│  Sentinel payload rehydration (if available)                          │
+│  Sovereignty payload rehydration (if available)                      │
 │  Execute handler (local or MCP/A2A egress)                           │
 │  Update receipt with final status → Return signed receipt             │
 └─────────────────────────────────────────────────────────────────────┘
@@ -71,12 +71,11 @@ Both modes share the same fail-closed verification gauntlet and Actuator executi
 
 **Process**:
 1. Payload size validation (rejects oversized payloads)
-2. Protojson decode to `UAPEnvelope` (rejects non-JSON formats)
+2. Protojson decode to `GovernanceEnvelope` (rejects non-JSON formats)
 3. Dispatch to verification gauntlet
 
 **Key Components**:
 - `internal/services/pubsub/pubsub_commands.go` - Dispatch logic
-- `pkg/uap/` - UAP envelope handling
 - Wire format: canonical protojson JSON (not binary protobuf)
 - Gateway mode: No pub/sub subscription, commands arrive via HTTP/WebSocket
 - Outbound mode: Pub/sub subscription to cloud platform command channel
@@ -104,7 +103,7 @@ Both modes share the same fail-closed verification gauntlet and Actuator executi
    - Compute transaction hash from normalized envelope fields
    - Verify id == computed hash (hash binding invariant)
    - L1 Doctrine validation via protobuf field options (forbidden patterns)
-   - Extended L1 validation for MCP/A2A argument payloads via Sentinel (recursive threat analysis)
+   - Extended L1 validation for MCP/A2A argument payloads via L1Doctrine (recursive threat analysis)
 
 4. **Stateful Validation** (requires external state):
    - Verify state_merkle_root matches current state root
@@ -122,7 +121,7 @@ Both modes share the same fail-closed verification gauntlet and Actuator executi
 - `internal/services/storage/replay_store.go` - Nonce replay protection (SQLite)
 - `protocol/constants/status.json` - Action type definitions and mutation flags
 - `protocol/proto/common.proto` - GovernanceEnvelope schema with L1 field options
-- `internal/services/sentinel/` - MCP/A2A argument threat analysis
+- `internal/services/governance/l1_doctrine.go` - MCP/A2A argument threat analysis
 - Governance postures: doctrine, consensus, notary (configurable via --doctrine, --consensus, --notary flags)
 
 ### Phase 3: Actuator Execution

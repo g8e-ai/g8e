@@ -457,19 +457,25 @@ func main() {
 	// Initialize Ledger
 	ledger := storage.NewLedgerService(av, nil, logger)
 
-	verifier := governance.NewTransactionVerifier(
+	// Initialize L1 Doctrine for threat detection
+	doctrine := governance.NewL1Doctrine()
+
+	// L4Warden replaces TransactionVerifier - performs all verification stages
+	warden := governance.NewL4Warden(
 		logger,
 		replayStore,
 		stateRootProvider,
 		&governance.SimpleSignerStore{Signers: trustedSigners},
 		nil, // AppPolicyStore not used in chaos tester
 		l3Notary,
+		doctrine,
 		knownActionTypes,
 		"notary",
 		nil, // Clock defaults to RealClock
 	)
 
-	act := &governance.Actuator{
+	// L5Actuator replaces Actuator - execution boundary with receipt signing
+	act := &governance.L5Actuator{
 		Logger:            logger,
 		SignerStore:       &governance.SimpleSignerStore{Signers: trustedSigners},
 		AuditVault:        av,
@@ -563,7 +569,7 @@ func main() {
 				return
 			}
 
-			fireOne(id, c, env, currentRoot, verifier, act, logger, &cnt, rejectionBatch)
+			fireOne(id, c, env, currentRoot, warden, act, logger, &cnt, rejectionBatch)
 		}(idx, catCopy, sessionID)
 	}
 
@@ -625,13 +631,13 @@ func fireOne(
 	cat category,
 	env *uap.UAPEnvelope,
 	stateRoot string,
-	verifier *governance.TransactionVerifier,
-	actuator *governance.Actuator,
+	warden *governance.L4Warden,
+	actuator *governance.L5Actuator,
 	logger *slog.Logger,
 	cnt *counters,
 	batchWriter *batchEventWriter,
 ) {
-	_, verErr := verifier.VerifyEnvelope(context.Background(), env)
+	_, verErr := warden.VerifyEnvelope(context.Background(), env)
 	if verErr != nil {
 		reason := classifyRejection(verErr)
 		logger.Info("envelope rejected",
