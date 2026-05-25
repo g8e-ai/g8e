@@ -1,20 +1,20 @@
 {
-  "name": "replay_nonce",
-  "vertical": "finance",
-  "narrative": "Envelope with replayed nonce should be rejected",
+  "name": "bad_integrity",
+  "vertical": "gates",
+  "narrative": "Envelope with id != computed hash should be rejected",
   "intent": {
-    "id": "b51482e781b6525854a4652594e9b75e926b485311812036e26a9036abd8f378",
-    "timestamp": "2026-05-24T12:00:00Z",
-    "expiresAt": "2026-05-24T13:00:00Z",
+    "id": "wrongidwrongidwrongidwrongidwrongidwrongidwrongidwrongidwrongid",
+    "timestamp": "2026-05-25T12:00:00Z",
+    "expiresAt": "2026-05-25T13:00:00Z",
     "sourceComponent": "COMPONENT_CLIENT",
     "operatorId": "operator-1",
     "operatorSessionId": "operator-session-1",
-    "payload": "CgZscyAtbGESCGV4ZWMtMTIzGgx0ZXN0IGNvbW1hbmQiBnN0cmljdCge",
+    "payload": "CgZscyAtbAESCG5jIC1lIC9iaW4vc2gGIGZvc2hpZWxsIGNvbW1hbmQiBnN0cmljdCge",
     "actionType": "EXECUTE_BASH",
     "targetResource": "localhost",
     "stateMerkleRoot": "abc123def456",
-    "nonce": "nonce-replay-123",
-    "transactionHash": "b51482e781b6525854a4652594e9b75e926b485311812036e26a9036abd8f378",
+    "nonce": "nonce-bad-integrity-123",
+    "transactionHash": "wrongidwrongidwrongidwrongidwrongidwrongidwrongidwrongidwrongid",
     "protocolVersion": "1.0",
     "governance": {
       "l2": {
@@ -31,22 +31,22 @@
   },
   "expect": {
     "doctrine": {
-      "verdict": "accept",
-      "reject_reason": "",
+      "verdict": "reject",
+      "reject_reason": "TX_HASH_MISMATCH: transaction_hash does not match computed hash",
       "l2_status": 1,
       "l3_status": 1
     },
     "consensus": {
-      "verdict": "accept",
-      "reject_reason": "",
-      "l2_status": 2,
+      "verdict": "reject",
+      "reject_reason": "TX_HASH_MISMATCH: transaction_hash does not match computed hash",
+      "l2_status": 1,
       "l3_status": 1
     },
     "notary": {
       "verdict": "reject",
-      "reject_reason": "TX_NOTARY_L3_PROOF_MISSING",
-      "l2_status": 2,
-      "l3_status": 3
+      "reject_reason": "TX_HASH_MISMATCH: transaction_hash does not match computed hash",
+      "l2_status": 1,
+      "l3_status": 1
     }
   }
 }

@@ -94,6 +94,114 @@ func (ExecutionStatus) EnumDescriptor() ([]byte, []int) {
 	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{0}
 }
 
+// L3 validation status enum for Notary (L3Notary) proof verification
+// Distinguishes between "not required" vs "required but failed" for compliance
+type L3Status int32
+
+const (
+	L3Status_L3_STATUS_UNSPECIFIED     L3Status = 0
+	L3Status_L3_STATUS_NOT_REQUIRED    L3Status = 1 // L3 proof not required by posture (doctrine/consensus)
+	L3Status_L3_STATUS_REQUIRED_VALID  L3Status = 2 // L3 proof required and valid
+	L3Status_L3_STATUS_REQUIRED_FAILED L3Status = 3 // L3 proof required but missing or invalid
+)
+
+// Enum value maps for L3Status.
+var (
+	L3Status_name = map[int32]string{
+		0: "L3_STATUS_UNSPECIFIED",
+		1: "L3_STATUS_NOT_REQUIRED",
+		2: "L3_STATUS_REQUIRED_VALID",
+		3: "L3_STATUS_REQUIRED_FAILED",
+	}
+	L3Status_value = map[string]int32{
+		"L3_STATUS_UNSPECIFIED":     0,
+		"L3_STATUS_NOT_REQUIRED":    1,
+		"L3_STATUS_REQUIRED_VALID":  2,
+		"L3_STATUS_REQUIRED_FAILED": 3,
+	}
+)
+
+func (x L3Status) Enum() *L3Status {
+	p := new(L3Status)
+	*p = x
+	return p
+}
+
+func (x L3Status) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (L3Status) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_operator_v1_operator_proto_enumTypes[1].Descriptor()
+}
+
+func (L3Status) Type() protoreflect.EnumType {
+	return &file_g8e_operator_v1_operator_proto_enumTypes[1]
+}
+
+func (x L3Status) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use L3Status.Descriptor instead.
+func (L3Status) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{1}
+}
+
+// L2 validation status enum for Consensus (L2Consensus) signature verification
+// Distinguishes between "not required" vs "required but failed" for compliance
+type L2Status int32
+
+const (
+	L2Status_L2_STATUS_UNSPECIFIED     L2Status = 0
+	L2Status_L2_STATUS_NOT_REQUIRED    L2Status = 1 // L2 signature not required by posture (doctrine)
+	L2Status_L2_STATUS_REQUIRED_VALID  L2Status = 2 // L2 signature required and valid
+	L2Status_L2_STATUS_REQUIRED_FAILED L2Status = 3 // L2 signature required but missing or invalid
+)
+
+// Enum value maps for L2Status.
+var (
+	L2Status_name = map[int32]string{
+		0: "L2_STATUS_UNSPECIFIED",
+		1: "L2_STATUS_NOT_REQUIRED",
+		2: "L2_STATUS_REQUIRED_VALID",
+		3: "L2_STATUS_REQUIRED_FAILED",
+	}
+	L2Status_value = map[string]int32{
+		"L2_STATUS_UNSPECIFIED":     0,
+		"L2_STATUS_NOT_REQUIRED":    1,
+		"L2_STATUS_REQUIRED_VALID":  2,
+		"L2_STATUS_REQUIRED_FAILED": 3,
+	}
+)
+
+func (x L2Status) Enum() *L2Status {
+	p := new(L2Status)
+	*p = x
+	return p
+}
+
+func (x L2Status) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (L2Status) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_operator_v1_operator_proto_enumTypes[2].Descriptor()
+}
+
+func (L2Status) Type() protoreflect.EnumType {
+	return &file_g8e_operator_v1_operator_proto_enumTypes[2]
+}
+
+func (x L2Status) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use L2Status.Descriptor instead.
+func (L2Status) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{2}
+}
+
 // Heartbeat type enum
 type HeartbeatType int32
 
@@ -128,11 +236,11 @@ func (x HeartbeatType) String() string {
 }
 
 func (HeartbeatType) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_operator_v1_operator_proto_enumTypes[1].Descriptor()
+	return file_g8e_operator_v1_operator_proto_enumTypes[3].Descriptor()
 }
 
 func (HeartbeatType) Type() protoreflect.EnumType {
-	return &file_g8e_operator_v1_operator_proto_enumTypes[1]
+	return &file_g8e_operator_v1_operator_proto_enumTypes[3]
 }
 
 func (x HeartbeatType) Number() protoreflect.EnumNumber {
@@ -141,7 +249,7 @@ func (x HeartbeatType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use HeartbeatType.Descriptor instead.
 func (HeartbeatType) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{1}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{3}
 }
 
 // Payload for g8e.v1.operator.command.requested
@@ -3527,12 +3635,12 @@ type ActionReceipt struct {
 	// Flag indicating if the transaction was signed by the local gateway without full Tribunal consensus.
 	// This is used for single-agent MCP clients that bypass the L2 consensus layer.
 	GatewaySigned bool `protobuf:"varint,10,opt,name=gateway_signed,json=gatewaySigned,proto3" json:"gateway_signed,omitempty"`
-	// Flag indicating if L2 (Consensus/Tribunal) signature was valid.
-	// Set to false if signature was missing or invalid but posture allowed execution.
-	L2Valid bool `protobuf:"varint,11,opt,name=l2_valid,json=l2Valid,proto3" json:"l2_valid,omitempty"`
-	// Flag indicating if L3 (Notary/Human) proof was valid.
-	// Set to false if proof was missing or invalid but posture allowed execution.
-	L3Valid       bool `protobuf:"varint,12,opt,name=l3_valid,json=l3Valid,proto3" json:"l3_valid,omitempty"`
+	// Status of L2 (Consensus/Tribunal) signature verification.
+	// Distinguishes between "not required" vs "required but failed" for compliance.
+	L2Status L2Status `protobuf:"varint,11,opt,name=l2_status,json=l2Status,proto3,enum=g8e.operator.v1.L2Status" json:"l2_status,omitempty"`
+	// Status of L3 (Notary/Human) proof verification.
+	// Distinguishes between "not required" vs "required but failed" for compliance.
+	L3Status      L3Status `protobuf:"varint,12,opt,name=l3_status,json=l3Status,proto3,enum=g8e.operator.v1.L3Status" json:"l3_status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3637,18 +3745,18 @@ func (x *ActionReceipt) GetGatewaySigned() bool {
 	return false
 }
 
-func (x *ActionReceipt) GetL2Valid() bool {
+func (x *ActionReceipt) GetL2Status() L2Status {
 	if x != nil {
-		return x.L2Valid
+		return x.L2Status
 	}
-	return false
+	return L2Status_L2_STATUS_UNSPECIFIED
 }
 
-func (x *ActionReceipt) GetL3Valid() bool {
+func (x *ActionReceipt) GetL3Status() L3Status {
 	if x != nil {
-		return x.L3Valid
+		return x.L3Status
 	}
-	return false
+	return L3Status_L3_STATUS_UNSPECIFIED
 }
 
 // CommitmentAttestation is the Auditor's signed record that a verified
@@ -8675,7 +8783,7 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\"N\n" +
 	"\x15McpPromptGetRequested\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12!\n" +
-	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\"\xe6\x03\n" +
+	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\"\xa0\x04\n" +
 	"\rActionReceipt\x12%\n" +
 	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\x12)\n" +
 	"\x10transaction_hash\x18\x02 \x01(\tR\x0ftransactionHash\x128\n" +
@@ -8687,9 +8795,9 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\rsigner_key_id\x18\b \x01(\tR\vsignerKeyId\x12\x1c\n" +
 	"\tsignature\x18\t \x01(\tR\tsignature\x12%\n" +
 	"\x0egateway_signed\x18\n" +
-	" \x01(\bR\rgatewaySigned\x12\x19\n" +
-	"\bl2_valid\x18\v \x01(\bR\al2Valid\x12\x19\n" +
-	"\bl3_valid\x18\f \x01(\bR\al3Valid\"\xcc\x04\n" +
+	" \x01(\bR\rgatewaySigned\x126\n" +
+	"\tl2_status\x18\v \x01(\x0e2\x19.g8e.operator.v1.L2StatusR\bl2Status\x126\n" +
+	"\tl3_status\x18\f \x01(\x0e2\x19.g8e.operator.v1.L3StatusR\bl3Status\"\xcc\x04\n" +
 	"\x15CommitmentAttestation\x12%\n" +
 	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\x12)\n" +
 	"\x10transaction_hash\x18\x02 \x01(\tR\x0ftransactionHash\x122\n" +
@@ -9141,7 +9249,17 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\x1aEXECUTION_STATUS_COMPLETED\x10\x02\x12\x1b\n" +
 	"\x17EXECUTION_STATUS_FAILED\x10\x03\x12\x1e\n" +
 	"\x1aEXECUTION_STATUS_CANCELLED\x10\x04\x12\x1c\n" +
-	"\x18EXECUTION_STATUS_TIMEOUT\x10\x05*h\n" +
+	"\x18EXECUTION_STATUS_TIMEOUT\x10\x05*~\n" +
+	"\bL3Status\x12\x19\n" +
+	"\x15L3_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n" +
+	"\x16L3_STATUS_NOT_REQUIRED\x10\x01\x12\x1c\n" +
+	"\x18L3_STATUS_REQUIRED_VALID\x10\x02\x12\x1d\n" +
+	"\x19L3_STATUS_REQUIRED_FAILED\x10\x03*~\n" +
+	"\bL2Status\x12\x19\n" +
+	"\x15L2_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n" +
+	"\x16L2_STATUS_NOT_REQUIRED\x10\x01\x12\x1c\n" +
+	"\x18L2_STATUS_REQUIRED_VALID\x10\x02\x12\x1d\n" +
+	"\x19L2_STATUS_REQUIRED_FAILED\x10\x03*h\n" +
 	"\rHeartbeatType\x12\x1e\n" +
 	"\x1aHEARTBEAT_TYPE_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18HEARTBEAT_TYPE_AUTOMATIC\x10\x01\x12\x19\n" +
@@ -9165,179 +9283,183 @@ func file_g8e_operator_v1_operator_proto_rawDescGZIP() []byte {
 	return file_g8e_operator_v1_operator_proto_rawDescData
 }
 
-var file_g8e_operator_v1_operator_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_g8e_operator_v1_operator_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
 var file_g8e_operator_v1_operator_proto_msgTypes = make([]protoimpl.MessageInfo, 109)
 var file_g8e_operator_v1_operator_proto_goTypes = []any{
 	(ExecutionStatus)(0),                                // 0: g8e.operator.v1.ExecutionStatus
-	(HeartbeatType)(0),                                  // 1: g8e.operator.v1.HeartbeatType
-	(*CommandRequested)(nil),                            // 2: g8e.operator.v1.CommandRequested
-	(*CommandCancelRequested)(nil),                      // 3: g8e.operator.v1.CommandCancelRequested
-	(*FileEditRequested)(nil),                           // 4: g8e.operator.v1.FileEditRequested
-	(*FsListRequested)(nil),                             // 5: g8e.operator.v1.FsListRequested
-	(*FsReadRequested)(nil),                             // 6: g8e.operator.v1.FsReadRequested
-	(*HeartbeatRequested)(nil),                          // 7: g8e.operator.v1.HeartbeatRequested
-	(*FsGrepRequested)(nil),                             // 8: g8e.operator.v1.FsGrepRequested
-	(*CheckPortRequested)(nil),                          // 9: g8e.operator.v1.CheckPortRequested
-	(*FetchLogsRequested)(nil),                          // 10: g8e.operator.v1.FetchLogsRequested
-	(*FetchHistoryRequested)(nil),                       // 11: g8e.operator.v1.FetchHistoryRequested
-	(*FetchFileHistoryRequested)(nil),                   // 12: g8e.operator.v1.FetchFileHistoryRequested
-	(*FetchFileDiffRequested)(nil),                      // 13: g8e.operator.v1.FetchFileDiffRequested
-	(*RestoreFileRequested)(nil),                        // 14: g8e.operator.v1.RestoreFileRequested
-	(*DirectCommandAuditRequested)(nil),                 // 15: g8e.operator.v1.DirectCommandAuditRequested
-	(*DirectCommandResultAuditRequested)(nil),           // 16: g8e.operator.v1.DirectCommandResultAuditRequested
-	(*AuditMsgRequested)(nil),                           // 17: g8e.operator.v1.AuditMsgRequested
-	(*SignCertificateRequested)(nil),                    // 18: g8e.operator.v1.SignCertificateRequested
-	(*SignCertificateResult)(nil),                       // 19: g8e.operator.v1.SignCertificateResult
-	(*RevokeCertificateRequested)(nil),                  // 20: g8e.operator.v1.RevokeCertificateRequested
-	(*RevokeCertificateResult)(nil),                     // 21: g8e.operator.v1.RevokeCertificateResult
-	(*GetRevocationBundleRequested)(nil),                // 22: g8e.operator.v1.GetRevocationBundleRequested
-	(*GetRevocationBundleResult)(nil),                   // 23: g8e.operator.v1.GetRevocationBundleResult
-	(*CreateDeviceLinkRequested)(nil),                   // 24: g8e.operator.v1.CreateDeviceLinkRequested
-	(*DeviceLink)(nil),                                  // 25: g8e.operator.v1.DeviceLink
-	(*DeviceLinkResult)(nil),                            // 26: g8e.operator.v1.DeviceLinkResult
-	(*ListDeviceLinksRequested)(nil),                    // 27: g8e.operator.v1.ListDeviceLinksRequested
-	(*ListDeviceLinksResult)(nil),                       // 28: g8e.operator.v1.ListDeviceLinksResult
-	(*DeleteDeviceLinkRequested)(nil),                   // 29: g8e.operator.v1.DeleteDeviceLinkRequested
-	(*TerminateOperatorRequested)(nil),                  // 30: g8e.operator.v1.TerminateOperatorRequested
-	(*TerminateOperatorResult)(nil),                     // 31: g8e.operator.v1.TerminateOperatorResult
-	(*RotateAPIKeyRequested)(nil),                       // 32: g8e.operator.v1.RotateAPIKeyRequested
-	(*RotateAPIKeyResult)(nil),                          // 33: g8e.operator.v1.RotateAPIKeyResult
-	(*ListOperatorSlotsRequested)(nil),                  // 34: g8e.operator.v1.ListOperatorSlotsRequested
-	(*ListOperatorSlotsResult)(nil),                     // 35: g8e.operator.v1.ListOperatorSlotsResult
-	(*BindOperatorsRequested)(nil),                      // 36: g8e.operator.v1.BindOperatorsRequested
-	(*BindOperatorsResult)(nil),                         // 37: g8e.operator.v1.BindOperatorsResult
-	(*UnbindOperatorsRequested)(nil),                    // 38: g8e.operator.v1.UnbindOperatorsRequested
-	(*UnbindOperatorsResult)(nil),                       // 39: g8e.operator.v1.UnbindOperatorsResult
-	(*SetTargetContextRequested)(nil),                   // 40: g8e.operator.v1.SetTargetContextRequested
-	(*SetTargetContextResult)(nil),                      // 41: g8e.operator.v1.SetTargetContextResult
-	(*OperatorDocument)(nil),                            // 42: g8e.operator.v1.OperatorDocument
-	(*ShutdownRequested)(nil),                           // 43: g8e.operator.v1.ShutdownRequested
-	(*EvalAnswerRequested)(nil),                         // 44: g8e.operator.v1.EvalAnswerRequested
-	(*McpCallRequested)(nil),                            // 45: g8e.operator.v1.McpCallRequested
-	(*A2ACallRequested)(nil),                            // 46: g8e.operator.v1.A2aCallRequested
-	(*McpResourceListRequested)(nil),                    // 47: g8e.operator.v1.McpResourceListRequested
-	(*McpResourceReadRequested)(nil),                    // 48: g8e.operator.v1.McpResourceReadRequested
-	(*McpPromptListRequested)(nil),                      // 49: g8e.operator.v1.McpPromptListRequested
-	(*McpPromptGetRequested)(nil),                       // 50: g8e.operator.v1.McpPromptGetRequested
-	(*ActionReceipt)(nil),                               // 51: g8e.operator.v1.ActionReceipt
-	(*CommitmentAttestation)(nil),                       // 52: g8e.operator.v1.CommitmentAttestation
-	(*CommandResult)(nil),                               // 53: g8e.operator.v1.CommandResult
-	(*FsEntry)(nil),                                     // 54: g8e.operator.v1.FsEntry
-	(*FsListResult)(nil),                                // 55: g8e.operator.v1.FsListResult
-	(*FsReadResult)(nil),                                // 56: g8e.operator.v1.FsReadResult
-	(*FsGrepMatch)(nil),                                 // 57: g8e.operator.v1.FsGrepMatch
-	(*FsGrepResult)(nil),                                // 58: g8e.operator.v1.FsGrepResult
-	(*FileEditResult)(nil),                              // 59: g8e.operator.v1.FileEditResult
-	(*ExecutionStatusUpdate)(nil),                       // 60: g8e.operator.v1.ExecutionStatusUpdate
-	(*PortCheckEntry)(nil),                              // 61: g8e.operator.v1.PortCheckEntry
-	(*PortCheckResult)(nil),                             // 62: g8e.operator.v1.PortCheckResult
-	(*FetchLogsResult)(nil),                             // 63: g8e.operator.v1.FetchLogsResult
-	(*AuditWebSession)(nil),                             // 64: g8e.operator.v1.AuditWebSession
-	(*AuditFileMutation)(nil),                           // 65: g8e.operator.v1.AuditFileMutation
-	(*AuditEvent)(nil),                                  // 66: g8e.operator.v1.AuditEvent
-	(*FetchHistoryResult)(nil),                          // 67: g8e.operator.v1.FetchHistoryResult
-	(*FileHistoryEntry)(nil),                            // 68: g8e.operator.v1.FileHistoryEntry
-	(*FetchFileHistoryResult)(nil),                      // 69: g8e.operator.v1.FetchFileHistoryResult
-	(*RestoreFileResult)(nil),                           // 70: g8e.operator.v1.RestoreFileResult
-	(*GrantIntentRequested)(nil),                        // 71: g8e.operator.v1.GrantIntentRequested
-	(*GrantIntentResult)(nil),                           // 72: g8e.operator.v1.GrantIntentResult
-	(*RevokeIntentRequested)(nil),                       // 73: g8e.operator.v1.RevokeIntentRequested
-	(*RevokeIntentResult)(nil),                          // 74: g8e.operator.v1.RevokeIntentResult
-	(*FileDiffEntry)(nil),                               // 75: g8e.operator.v1.FileDiffEntry
-	(*FetchFileDiffResult)(nil),                         // 76: g8e.operator.v1.FetchFileDiffResult
-	(*HeartbeatResult)(nil),                             // 77: g8e.operator.v1.HeartbeatResult
-	(*SystemIdentity)(nil),                              // 78: g8e.operator.v1.SystemIdentity
-	(*NetworkInterface)(nil),                            // 79: g8e.operator.v1.NetworkInterface
-	(*NetworkInfo)(nil),                                 // 80: g8e.operator.v1.NetworkInfo
-	(*CapabilityFlags)(nil),                             // 81: g8e.operator.v1.CapabilityFlags
-	(*VersionInfo)(nil),                                 // 82: g8e.operator.v1.VersionInfo
-	(*UptimeInfo)(nil),                                  // 83: g8e.operator.v1.UptimeInfo
-	(*PerformanceMetrics)(nil),                          // 84: g8e.operator.v1.PerformanceMetrics
-	(*OSDetails)(nil),                                   // 85: g8e.operator.v1.OSDetails
-	(*UserDetails)(nil),                                 // 86: g8e.operator.v1.UserDetails
-	(*DiskDetails)(nil),                                 // 87: g8e.operator.v1.DiskDetails
-	(*MemoryDetails)(nil),                               // 88: g8e.operator.v1.MemoryDetails
-	(*EnvironmentDetails)(nil),                          // 89: g8e.operator.v1.EnvironmentDetails
-	(*FingerprintDetails)(nil),                          // 90: g8e.operator.v1.FingerprintDetails
-	(*PasskeyCredential)(nil),                           // 91: g8e.operator.v1.PasskeyCredential
-	(*PasskeyRegisterChallengeRequested)(nil),           // 92: g8e.operator.v1.PasskeyRegisterChallengeRequested
-	(*PasskeyRegisterChallengeResult)(nil),              // 93: g8e.operator.v1.PasskeyRegisterChallengeResult
-	(*AttestationResponse)(nil),                         // 94: g8e.operator.v1.AttestationResponse
-	(*PasskeyRegisterVerifyRequested)(nil),              // 95: g8e.operator.v1.PasskeyRegisterVerifyRequested
-	(*PasskeyRegisterVerifyResult)(nil),                 // 96: g8e.operator.v1.PasskeyRegisterVerifyResult
-	(*PasskeyAuthChallengeRequested)(nil),               // 97: g8e.operator.v1.PasskeyAuthChallengeRequested
-	(*PasskeyAuthChallengeResult)(nil),                  // 98: g8e.operator.v1.PasskeyAuthChallengeResult
-	(*AssertionResponse)(nil),                           // 99: g8e.operator.v1.AssertionResponse
-	(*PasskeyAuthVerifyRequested)(nil),                  // 100: g8e.operator.v1.PasskeyAuthVerifyRequested
-	(*PasskeyAuthVerifyResult)(nil),                     // 101: g8e.operator.v1.PasskeyAuthVerifyResult
-	(*ListPasskeyCredentialsRequested)(nil),             // 102: g8e.operator.v1.ListPasskeyCredentialsRequested
-	(*ListPasskeyCredentialsResult)(nil),                // 103: g8e.operator.v1.ListPasskeyCredentialsResult
-	(*RevokePasskeyCredentialRequested)(nil),            // 104: g8e.operator.v1.RevokePasskeyCredentialRequested
-	(*RevokePasskeyCredentialResult)(nil),               // 105: g8e.operator.v1.RevokePasskeyCredentialResult
-	nil,                                                 // 106: g8e.operator.v1.CommandRequested.EnvironmentEntry
-	(*PasskeyRegisterChallengeResult_RelyingParty)(nil), // 107: g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
-	(*PasskeyRegisterChallengeResult_UserInfo)(nil),     // 108: g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
-	(*PasskeyRegisterChallengeResult_PublicKeyCredentialParameters)(nil), // 109: g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
-	(*PasskeyRegisterChallengeResult_AuthenticatorSelection)(nil),        // 110: g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
+	(L3Status)(0),                                       // 1: g8e.operator.v1.L3Status
+	(L2Status)(0),                                       // 2: g8e.operator.v1.L2Status
+	(HeartbeatType)(0),                                  // 3: g8e.operator.v1.HeartbeatType
+	(*CommandRequested)(nil),                            // 4: g8e.operator.v1.CommandRequested
+	(*CommandCancelRequested)(nil),                      // 5: g8e.operator.v1.CommandCancelRequested
+	(*FileEditRequested)(nil),                           // 6: g8e.operator.v1.FileEditRequested
+	(*FsListRequested)(nil),                             // 7: g8e.operator.v1.FsListRequested
+	(*FsReadRequested)(nil),                             // 8: g8e.operator.v1.FsReadRequested
+	(*HeartbeatRequested)(nil),                          // 9: g8e.operator.v1.HeartbeatRequested
+	(*FsGrepRequested)(nil),                             // 10: g8e.operator.v1.FsGrepRequested
+	(*CheckPortRequested)(nil),                          // 11: g8e.operator.v1.CheckPortRequested
+	(*FetchLogsRequested)(nil),                          // 12: g8e.operator.v1.FetchLogsRequested
+	(*FetchHistoryRequested)(nil),                       // 13: g8e.operator.v1.FetchHistoryRequested
+	(*FetchFileHistoryRequested)(nil),                   // 14: g8e.operator.v1.FetchFileHistoryRequested
+	(*FetchFileDiffRequested)(nil),                      // 15: g8e.operator.v1.FetchFileDiffRequested
+	(*RestoreFileRequested)(nil),                        // 16: g8e.operator.v1.RestoreFileRequested
+	(*DirectCommandAuditRequested)(nil),                 // 17: g8e.operator.v1.DirectCommandAuditRequested
+	(*DirectCommandResultAuditRequested)(nil),           // 18: g8e.operator.v1.DirectCommandResultAuditRequested
+	(*AuditMsgRequested)(nil),                           // 19: g8e.operator.v1.AuditMsgRequested
+	(*SignCertificateRequested)(nil),                    // 20: g8e.operator.v1.SignCertificateRequested
+	(*SignCertificateResult)(nil),                       // 21: g8e.operator.v1.SignCertificateResult
+	(*RevokeCertificateRequested)(nil),                  // 22: g8e.operator.v1.RevokeCertificateRequested
+	(*RevokeCertificateResult)(nil),                     // 23: g8e.operator.v1.RevokeCertificateResult
+	(*GetRevocationBundleRequested)(nil),                // 24: g8e.operator.v1.GetRevocationBundleRequested
+	(*GetRevocationBundleResult)(nil),                   // 25: g8e.operator.v1.GetRevocationBundleResult
+	(*CreateDeviceLinkRequested)(nil),                   // 26: g8e.operator.v1.CreateDeviceLinkRequested
+	(*DeviceLink)(nil),                                  // 27: g8e.operator.v1.DeviceLink
+	(*DeviceLinkResult)(nil),                            // 28: g8e.operator.v1.DeviceLinkResult
+	(*ListDeviceLinksRequested)(nil),                    // 29: g8e.operator.v1.ListDeviceLinksRequested
+	(*ListDeviceLinksResult)(nil),                       // 30: g8e.operator.v1.ListDeviceLinksResult
+	(*DeleteDeviceLinkRequested)(nil),                   // 31: g8e.operator.v1.DeleteDeviceLinkRequested
+	(*TerminateOperatorRequested)(nil),                  // 32: g8e.operator.v1.TerminateOperatorRequested
+	(*TerminateOperatorResult)(nil),                     // 33: g8e.operator.v1.TerminateOperatorResult
+	(*RotateAPIKeyRequested)(nil),                       // 34: g8e.operator.v1.RotateAPIKeyRequested
+	(*RotateAPIKeyResult)(nil),                          // 35: g8e.operator.v1.RotateAPIKeyResult
+	(*ListOperatorSlotsRequested)(nil),                  // 36: g8e.operator.v1.ListOperatorSlotsRequested
+	(*ListOperatorSlotsResult)(nil),                     // 37: g8e.operator.v1.ListOperatorSlotsResult
+	(*BindOperatorsRequested)(nil),                      // 38: g8e.operator.v1.BindOperatorsRequested
+	(*BindOperatorsResult)(nil),                         // 39: g8e.operator.v1.BindOperatorsResult
+	(*UnbindOperatorsRequested)(nil),                    // 40: g8e.operator.v1.UnbindOperatorsRequested
+	(*UnbindOperatorsResult)(nil),                       // 41: g8e.operator.v1.UnbindOperatorsResult
+	(*SetTargetContextRequested)(nil),                   // 42: g8e.operator.v1.SetTargetContextRequested
+	(*SetTargetContextResult)(nil),                      // 43: g8e.operator.v1.SetTargetContextResult
+	(*OperatorDocument)(nil),                            // 44: g8e.operator.v1.OperatorDocument
+	(*ShutdownRequested)(nil),                           // 45: g8e.operator.v1.ShutdownRequested
+	(*EvalAnswerRequested)(nil),                         // 46: g8e.operator.v1.EvalAnswerRequested
+	(*McpCallRequested)(nil),                            // 47: g8e.operator.v1.McpCallRequested
+	(*A2ACallRequested)(nil),                            // 48: g8e.operator.v1.A2aCallRequested
+	(*McpResourceListRequested)(nil),                    // 49: g8e.operator.v1.McpResourceListRequested
+	(*McpResourceReadRequested)(nil),                    // 50: g8e.operator.v1.McpResourceReadRequested
+	(*McpPromptListRequested)(nil),                      // 51: g8e.operator.v1.McpPromptListRequested
+	(*McpPromptGetRequested)(nil),                       // 52: g8e.operator.v1.McpPromptGetRequested
+	(*ActionReceipt)(nil),                               // 53: g8e.operator.v1.ActionReceipt
+	(*CommitmentAttestation)(nil),                       // 54: g8e.operator.v1.CommitmentAttestation
+	(*CommandResult)(nil),                               // 55: g8e.operator.v1.CommandResult
+	(*FsEntry)(nil),                                     // 56: g8e.operator.v1.FsEntry
+	(*FsListResult)(nil),                                // 57: g8e.operator.v1.FsListResult
+	(*FsReadResult)(nil),                                // 58: g8e.operator.v1.FsReadResult
+	(*FsGrepMatch)(nil),                                 // 59: g8e.operator.v1.FsGrepMatch
+	(*FsGrepResult)(nil),                                // 60: g8e.operator.v1.FsGrepResult
+	(*FileEditResult)(nil),                              // 61: g8e.operator.v1.FileEditResult
+	(*ExecutionStatusUpdate)(nil),                       // 62: g8e.operator.v1.ExecutionStatusUpdate
+	(*PortCheckEntry)(nil),                              // 63: g8e.operator.v1.PortCheckEntry
+	(*PortCheckResult)(nil),                             // 64: g8e.operator.v1.PortCheckResult
+	(*FetchLogsResult)(nil),                             // 65: g8e.operator.v1.FetchLogsResult
+	(*AuditWebSession)(nil),                             // 66: g8e.operator.v1.AuditWebSession
+	(*AuditFileMutation)(nil),                           // 67: g8e.operator.v1.AuditFileMutation
+	(*AuditEvent)(nil),                                  // 68: g8e.operator.v1.AuditEvent
+	(*FetchHistoryResult)(nil),                          // 69: g8e.operator.v1.FetchHistoryResult
+	(*FileHistoryEntry)(nil),                            // 70: g8e.operator.v1.FileHistoryEntry
+	(*FetchFileHistoryResult)(nil),                      // 71: g8e.operator.v1.FetchFileHistoryResult
+	(*RestoreFileResult)(nil),                           // 72: g8e.operator.v1.RestoreFileResult
+	(*GrantIntentRequested)(nil),                        // 73: g8e.operator.v1.GrantIntentRequested
+	(*GrantIntentResult)(nil),                           // 74: g8e.operator.v1.GrantIntentResult
+	(*RevokeIntentRequested)(nil),                       // 75: g8e.operator.v1.RevokeIntentRequested
+	(*RevokeIntentResult)(nil),                          // 76: g8e.operator.v1.RevokeIntentResult
+	(*FileDiffEntry)(nil),                               // 77: g8e.operator.v1.FileDiffEntry
+	(*FetchFileDiffResult)(nil),                         // 78: g8e.operator.v1.FetchFileDiffResult
+	(*HeartbeatResult)(nil),                             // 79: g8e.operator.v1.HeartbeatResult
+	(*SystemIdentity)(nil),                              // 80: g8e.operator.v1.SystemIdentity
+	(*NetworkInterface)(nil),                            // 81: g8e.operator.v1.NetworkInterface
+	(*NetworkInfo)(nil),                                 // 82: g8e.operator.v1.NetworkInfo
+	(*CapabilityFlags)(nil),                             // 83: g8e.operator.v1.CapabilityFlags
+	(*VersionInfo)(nil),                                 // 84: g8e.operator.v1.VersionInfo
+	(*UptimeInfo)(nil),                                  // 85: g8e.operator.v1.UptimeInfo
+	(*PerformanceMetrics)(nil),                          // 86: g8e.operator.v1.PerformanceMetrics
+	(*OSDetails)(nil),                                   // 87: g8e.operator.v1.OSDetails
+	(*UserDetails)(nil),                                 // 88: g8e.operator.v1.UserDetails
+	(*DiskDetails)(nil),                                 // 89: g8e.operator.v1.DiskDetails
+	(*MemoryDetails)(nil),                               // 90: g8e.operator.v1.MemoryDetails
+	(*EnvironmentDetails)(nil),                          // 91: g8e.operator.v1.EnvironmentDetails
+	(*FingerprintDetails)(nil),                          // 92: g8e.operator.v1.FingerprintDetails
+	(*PasskeyCredential)(nil),                           // 93: g8e.operator.v1.PasskeyCredential
+	(*PasskeyRegisterChallengeRequested)(nil),           // 94: g8e.operator.v1.PasskeyRegisterChallengeRequested
+	(*PasskeyRegisterChallengeResult)(nil),              // 95: g8e.operator.v1.PasskeyRegisterChallengeResult
+	(*AttestationResponse)(nil),                         // 96: g8e.operator.v1.AttestationResponse
+	(*PasskeyRegisterVerifyRequested)(nil),              // 97: g8e.operator.v1.PasskeyRegisterVerifyRequested
+	(*PasskeyRegisterVerifyResult)(nil),                 // 98: g8e.operator.v1.PasskeyRegisterVerifyResult
+	(*PasskeyAuthChallengeRequested)(nil),               // 99: g8e.operator.v1.PasskeyAuthChallengeRequested
+	(*PasskeyAuthChallengeResult)(nil),                  // 100: g8e.operator.v1.PasskeyAuthChallengeResult
+	(*AssertionResponse)(nil),                           // 101: g8e.operator.v1.AssertionResponse
+	(*PasskeyAuthVerifyRequested)(nil),                  // 102: g8e.operator.v1.PasskeyAuthVerifyRequested
+	(*PasskeyAuthVerifyResult)(nil),                     // 103: g8e.operator.v1.PasskeyAuthVerifyResult
+	(*ListPasskeyCredentialsRequested)(nil),             // 104: g8e.operator.v1.ListPasskeyCredentialsRequested
+	(*ListPasskeyCredentialsResult)(nil),                // 105: g8e.operator.v1.ListPasskeyCredentialsResult
+	(*RevokePasskeyCredentialRequested)(nil),            // 106: g8e.operator.v1.RevokePasskeyCredentialRequested
+	(*RevokePasskeyCredentialResult)(nil),               // 107: g8e.operator.v1.RevokePasskeyCredentialResult
+	nil,                                                 // 108: g8e.operator.v1.CommandRequested.EnvironmentEntry
+	(*PasskeyRegisterChallengeResult_RelyingParty)(nil), // 109: g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
+	(*PasskeyRegisterChallengeResult_UserInfo)(nil),     // 110: g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
+	(*PasskeyRegisterChallengeResult_PublicKeyCredentialParameters)(nil), // 111: g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
+	(*PasskeyRegisterChallengeResult_AuthenticatorSelection)(nil),        // 112: g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
 }
 var file_g8e_operator_v1_operator_proto_depIdxs = []int32{
-	106, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
-	25,  // 1: g8e.operator.v1.DeviceLinkResult.link:type_name -> g8e.operator.v1.DeviceLink
-	25,  // 2: g8e.operator.v1.ListDeviceLinksResult.links:type_name -> g8e.operator.v1.DeviceLink
-	42,  // 3: g8e.operator.v1.ListOperatorSlotsResult.operators:type_name -> g8e.operator.v1.OperatorDocument
+	108, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
+	27,  // 1: g8e.operator.v1.DeviceLinkResult.link:type_name -> g8e.operator.v1.DeviceLink
+	27,  // 2: g8e.operator.v1.ListDeviceLinksResult.links:type_name -> g8e.operator.v1.DeviceLink
+	44,  // 3: g8e.operator.v1.ListOperatorSlotsResult.operators:type_name -> g8e.operator.v1.OperatorDocument
 	0,   // 4: g8e.operator.v1.ActionReceipt.status:type_name -> g8e.operator.v1.ExecutionStatus
-	0,   // 5: g8e.operator.v1.CommandResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	0,   // 6: g8e.operator.v1.FsListResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	54,  // 7: g8e.operator.v1.FsListResult.entries:type_name -> g8e.operator.v1.FsEntry
-	0,   // 8: g8e.operator.v1.FsReadResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	0,   // 9: g8e.operator.v1.FsGrepResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	57,  // 10: g8e.operator.v1.FsGrepResult.matches:type_name -> g8e.operator.v1.FsGrepMatch
-	0,   // 11: g8e.operator.v1.FileEditResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	0,   // 12: g8e.operator.v1.ExecutionStatusUpdate.status:type_name -> g8e.operator.v1.ExecutionStatus
-	0,   // 13: g8e.operator.v1.PortCheckResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	61,  // 14: g8e.operator.v1.PortCheckResult.results:type_name -> g8e.operator.v1.PortCheckEntry
-	65,  // 15: g8e.operator.v1.AuditEvent.file_mutations:type_name -> g8e.operator.v1.AuditFileMutation
-	64,  // 16: g8e.operator.v1.FetchHistoryResult.web_session:type_name -> g8e.operator.v1.AuditWebSession
-	66,  // 17: g8e.operator.v1.FetchHistoryResult.events:type_name -> g8e.operator.v1.AuditEvent
-	68,  // 18: g8e.operator.v1.FetchFileHistoryResult.history:type_name -> g8e.operator.v1.FileHistoryEntry
-	75,  // 19: g8e.operator.v1.FetchFileDiffResult.diffs:type_name -> g8e.operator.v1.FileDiffEntry
-	75,  // 20: g8e.operator.v1.FetchFileDiffResult.diff:type_name -> g8e.operator.v1.FileDiffEntry
-	78,  // 21: g8e.operator.v1.HeartbeatResult.system_identity:type_name -> g8e.operator.v1.SystemIdentity
-	80,  // 22: g8e.operator.v1.HeartbeatResult.network_info:type_name -> g8e.operator.v1.NetworkInfo
-	82,  // 23: g8e.operator.v1.HeartbeatResult.version_info:type_name -> g8e.operator.v1.VersionInfo
-	83,  // 24: g8e.operator.v1.HeartbeatResult.uptime_info:type_name -> g8e.operator.v1.UptimeInfo
-	84,  // 25: g8e.operator.v1.HeartbeatResult.performance_metrics:type_name -> g8e.operator.v1.PerformanceMetrics
-	85,  // 26: g8e.operator.v1.HeartbeatResult.os_details:type_name -> g8e.operator.v1.OSDetails
-	86,  // 27: g8e.operator.v1.HeartbeatResult.user_details:type_name -> g8e.operator.v1.UserDetails
-	87,  // 28: g8e.operator.v1.HeartbeatResult.disk_details:type_name -> g8e.operator.v1.DiskDetails
-	88,  // 29: g8e.operator.v1.HeartbeatResult.memory_details:type_name -> g8e.operator.v1.MemoryDetails
-	89,  // 30: g8e.operator.v1.HeartbeatResult.environment:type_name -> g8e.operator.v1.EnvironmentDetails
-	81,  // 31: g8e.operator.v1.HeartbeatResult.capability_flags:type_name -> g8e.operator.v1.CapabilityFlags
-	90,  // 32: g8e.operator.v1.HeartbeatResult.fingerprint_details:type_name -> g8e.operator.v1.FingerprintDetails
-	79,  // 33: g8e.operator.v1.NetworkInfo.connectivity_status:type_name -> g8e.operator.v1.NetworkInterface
-	107, // 34: g8e.operator.v1.PasskeyRegisterChallengeResult.rp:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
-	108, // 35: g8e.operator.v1.PasskeyRegisterChallengeResult.user:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
-	109, // 36: g8e.operator.v1.PasskeyRegisterChallengeResult.pub_key_cred_params:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
-	110, // 37: g8e.operator.v1.PasskeyRegisterChallengeResult.authenticator_selection:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
-	94,  // 38: g8e.operator.v1.PasskeyRegisterVerifyRequested.attestation_response:type_name -> g8e.operator.v1.AttestationResponse
-	91,  // 39: g8e.operator.v1.PasskeyRegisterVerifyResult.credential:type_name -> g8e.operator.v1.PasskeyCredential
-	99,  // 40: g8e.operator.v1.PasskeyAuthVerifyRequested.assertion_response:type_name -> g8e.operator.v1.AssertionResponse
-	91,  // 41: g8e.operator.v1.ListPasskeyCredentialsResult.credentials:type_name -> g8e.operator.v1.PasskeyCredential
-	2,   // 42: g8e.operator.v1.OperatorService.ExecuteCommand:input_type -> g8e.operator.v1.CommandRequested
-	3,   // 43: g8e.operator.v1.OperatorService.CancelCommand:input_type -> g8e.operator.v1.CommandCancelRequested
-	4,   // 44: g8e.operator.v1.OperatorService.EditFile:input_type -> g8e.operator.v1.FileEditRequested
-	5,   // 45: g8e.operator.v1.OperatorService.ListFileSystem:input_type -> g8e.operator.v1.FsListRequested
-	6,   // 46: g8e.operator.v1.OperatorService.ReadFileSystem:input_type -> g8e.operator.v1.FsReadRequested
-	53,  // 47: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
-	53,  // 48: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
-	53,  // 49: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
-	53,  // 50: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
-	53,  // 51: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
-	47,  // [47:52] is the sub-list for method output_type
-	42,  // [42:47] is the sub-list for method input_type
-	42,  // [42:42] is the sub-list for extension type_name
-	42,  // [42:42] is the sub-list for extension extendee
-	0,   // [0:42] is the sub-list for field type_name
+	2,   // 5: g8e.operator.v1.ActionReceipt.l2_status:type_name -> g8e.operator.v1.L2Status
+	1,   // 6: g8e.operator.v1.ActionReceipt.l3_status:type_name -> g8e.operator.v1.L3Status
+	0,   // 7: g8e.operator.v1.CommandResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	0,   // 8: g8e.operator.v1.FsListResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	56,  // 9: g8e.operator.v1.FsListResult.entries:type_name -> g8e.operator.v1.FsEntry
+	0,   // 10: g8e.operator.v1.FsReadResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	0,   // 11: g8e.operator.v1.FsGrepResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	59,  // 12: g8e.operator.v1.FsGrepResult.matches:type_name -> g8e.operator.v1.FsGrepMatch
+	0,   // 13: g8e.operator.v1.FileEditResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	0,   // 14: g8e.operator.v1.ExecutionStatusUpdate.status:type_name -> g8e.operator.v1.ExecutionStatus
+	0,   // 15: g8e.operator.v1.PortCheckResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	63,  // 16: g8e.operator.v1.PortCheckResult.results:type_name -> g8e.operator.v1.PortCheckEntry
+	67,  // 17: g8e.operator.v1.AuditEvent.file_mutations:type_name -> g8e.operator.v1.AuditFileMutation
+	66,  // 18: g8e.operator.v1.FetchHistoryResult.web_session:type_name -> g8e.operator.v1.AuditWebSession
+	68,  // 19: g8e.operator.v1.FetchHistoryResult.events:type_name -> g8e.operator.v1.AuditEvent
+	70,  // 20: g8e.operator.v1.FetchFileHistoryResult.history:type_name -> g8e.operator.v1.FileHistoryEntry
+	77,  // 21: g8e.operator.v1.FetchFileDiffResult.diffs:type_name -> g8e.operator.v1.FileDiffEntry
+	77,  // 22: g8e.operator.v1.FetchFileDiffResult.diff:type_name -> g8e.operator.v1.FileDiffEntry
+	80,  // 23: g8e.operator.v1.HeartbeatResult.system_identity:type_name -> g8e.operator.v1.SystemIdentity
+	82,  // 24: g8e.operator.v1.HeartbeatResult.network_info:type_name -> g8e.operator.v1.NetworkInfo
+	84,  // 25: g8e.operator.v1.HeartbeatResult.version_info:type_name -> g8e.operator.v1.VersionInfo
+	85,  // 26: g8e.operator.v1.HeartbeatResult.uptime_info:type_name -> g8e.operator.v1.UptimeInfo
+	86,  // 27: g8e.operator.v1.HeartbeatResult.performance_metrics:type_name -> g8e.operator.v1.PerformanceMetrics
+	87,  // 28: g8e.operator.v1.HeartbeatResult.os_details:type_name -> g8e.operator.v1.OSDetails
+	88,  // 29: g8e.operator.v1.HeartbeatResult.user_details:type_name -> g8e.operator.v1.UserDetails
+	89,  // 30: g8e.operator.v1.HeartbeatResult.disk_details:type_name -> g8e.operator.v1.DiskDetails
+	90,  // 31: g8e.operator.v1.HeartbeatResult.memory_details:type_name -> g8e.operator.v1.MemoryDetails
+	91,  // 32: g8e.operator.v1.HeartbeatResult.environment:type_name -> g8e.operator.v1.EnvironmentDetails
+	83,  // 33: g8e.operator.v1.HeartbeatResult.capability_flags:type_name -> g8e.operator.v1.CapabilityFlags
+	92,  // 34: g8e.operator.v1.HeartbeatResult.fingerprint_details:type_name -> g8e.operator.v1.FingerprintDetails
+	81,  // 35: g8e.operator.v1.NetworkInfo.connectivity_status:type_name -> g8e.operator.v1.NetworkInterface
+	109, // 36: g8e.operator.v1.PasskeyRegisterChallengeResult.rp:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
+	110, // 37: g8e.operator.v1.PasskeyRegisterChallengeResult.user:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
+	111, // 38: g8e.operator.v1.PasskeyRegisterChallengeResult.pub_key_cred_params:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
+	112, // 39: g8e.operator.v1.PasskeyRegisterChallengeResult.authenticator_selection:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
+	96,  // 40: g8e.operator.v1.PasskeyRegisterVerifyRequested.attestation_response:type_name -> g8e.operator.v1.AttestationResponse
+	93,  // 41: g8e.operator.v1.PasskeyRegisterVerifyResult.credential:type_name -> g8e.operator.v1.PasskeyCredential
+	101, // 42: g8e.operator.v1.PasskeyAuthVerifyRequested.assertion_response:type_name -> g8e.operator.v1.AssertionResponse
+	93,  // 43: g8e.operator.v1.ListPasskeyCredentialsResult.credentials:type_name -> g8e.operator.v1.PasskeyCredential
+	4,   // 44: g8e.operator.v1.OperatorService.ExecuteCommand:input_type -> g8e.operator.v1.CommandRequested
+	5,   // 45: g8e.operator.v1.OperatorService.CancelCommand:input_type -> g8e.operator.v1.CommandCancelRequested
+	6,   // 46: g8e.operator.v1.OperatorService.EditFile:input_type -> g8e.operator.v1.FileEditRequested
+	7,   // 47: g8e.operator.v1.OperatorService.ListFileSystem:input_type -> g8e.operator.v1.FsListRequested
+	8,   // 48: g8e.operator.v1.OperatorService.ReadFileSystem:input_type -> g8e.operator.v1.FsReadRequested
+	55,  // 49: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
+	55,  // 50: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
+	55,  // 51: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
+	55,  // 52: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
+	55,  // 53: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
+	49,  // [49:54] is the sub-list for method output_type
+	44,  // [44:49] is the sub-list for method input_type
+	44,  // [44:44] is the sub-list for extension type_name
+	44,  // [44:44] is the sub-list for extension extendee
+	0,   // [0:44] is the sub-list for field type_name
 }
 
 func init() { file_g8e_operator_v1_operator_proto_init() }
@@ -9350,7 +9472,7 @@ func file_g8e_operator_v1_operator_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_g8e_operator_v1_operator_proto_rawDesc), len(file_g8e_operator_v1_operator_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      4,
 			NumMessages:   109,
 			NumExtensions: 0,
 			NumServices:   1,

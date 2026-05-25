@@ -1,11 +1,11 @@
 {
-  "name": "forge_signature",
-  "vertical": "security",
-  "narrative": "Envelope with forged L2 signature should be rejected",
+  "name": "hash_mismatch",
+  "vertical": "gates",
+  "narrative": "Envelope with transaction_hash != computed hash should be rejected",
   "intent": {
-    "id": "6b4c37f91ce3c71b8cbf963ab58e21452906e8311ad897d729d0febcc3711738",
-    "timestamp": "2026-05-24T12:00:00Z",
-    "expiresAt": "2026-05-24T13:00:00Z",
+    "id": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+    "timestamp": "2026-05-25T12:00:00Z",
+    "expiresAt": "2026-05-25T13:00:00Z",
     "sourceComponent": "COMPONENT_CLIENT",
     "operatorId": "operator-1",
     "operatorSessionId": "operator-session-1",
@@ -13,12 +13,12 @@
     "actionType": "EXECUTE_BASH",
     "targetResource": "localhost",
     "stateMerkleRoot": "abc123def456",
-    "nonce": "nonce-forged-123",
-    "transactionHash": "6b4c37f91ce3c71b8cbf963ab58e21452906e8311ad897d729d0febcc3711738",
+    "nonce": "nonce-hash-mismatch-123",
+    "transactionHash": "wronghashwronghashwronghashwronghashwronghashwronghashwronghash",
     "protocolVersion": "1.0",
     "governance": {
       "l2": {
-        "tribunalSignature": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        "tribunalSignature": "68c757ff1d0c37e2d972c41f12baba63973072b209d6cf58aafb1e8bc7775971c7f12c7740935823713027809cd19adfcdba1108151572ffb3ecd2891e900403",
         "keyId": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
       }
     }
@@ -31,22 +31,22 @@
   },
   "expect": {
     "doctrine": {
-      "verdict": "accept",
-      "reject_reason": "",
+      "verdict": "reject",
+      "reject_reason": "TX_HASH_MISMATCH: transaction_hash does not match computed hash",
       "l2_status": 1,
       "l3_status": 1
     },
     "consensus": {
       "verdict": "reject",
-      "reject_reason": "TX_QUORUM_L2_SIG_INVALID",
-      "l2_status": 3,
+      "reject_reason": "TX_HASH_MISMATCH: transaction_hash does not match computed hash",
+      "l2_status": 1,
       "l3_status": 1
     },
     "notary": {
       "verdict": "reject",
-      "reject_reason": "TX_QUORUM_L2_SIG_INVALID",
-      "l2_status": 3,
-      "l3_status": 3
+      "reject_reason": "TX_HASH_MISMATCH: transaction_hash does not match computed hash",
+      "l2_status": 1,
+      "l3_status": 1
     }
   }
 }

@@ -3,50 +3,146 @@
 
 ## Table of Contents
 
-- [g8e/pubsub/v1/pubsub.proto](#g8e_pubsub_v1_pubsub-proto)
-    - [PubSubEvent](#g8e-pubsub-v1-PubSubEvent)
-    - [PubSubMessage](#g8e-pubsub-v1-PubSubMessage)
+- [g8e/common/v1/common.proto](#g8e_common_v1_common-proto)
+    - [GovernanceEnvelope](#g8e-common-v1-GovernanceEnvelope)
+    - [GovernanceMetadata](#g8e-common-v1-GovernanceMetadata)
+    - [L1Metadata](#g8e-common-v1-L1Metadata)
+    - [L2Metadata](#g8e-common-v1-L2Metadata)
+    - [L3Metadata](#g8e-common-v1-L3Metadata)
+    - [L3Proof](#g8e-common-v1-L3Proof)
+  
+    - [Component](#g8e-common-v1-Component)
+  
+    - [File-level Extensions](#g8e_common_v1_common-proto-extensions)
   
 - [Scalar Value Types](#scalar-value-types)
 
 
 
-<a name="g8e_pubsub_v1_pubsub-proto"></a>
+<a name="g8e_common_v1_common-proto"></a>
 <p align="right"><a href="#top">Top</a></p>
 
-## g8e/pubsub/v1/pubsub.proto
+## g8e/common/v1/common.proto
 
 
 
-<a name="g8e-pubsub-v1-PubSubEvent"></a>
+<a name="g8e-common-v1-GovernanceEnvelope"></a>
 
-### PubSubEvent
+### GovernanceEnvelope
+GovernanceEnvelope is the single canonical container for all g8e mutations.
+It binds identity, intent, state, and governance proofs into one transaction.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| id | [string](#string) |  | Identity &amp; Metadata |
+| timestamp | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| expires_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| source_component | [Component](#g8e-common-v1-Component) |  |  |
+| operator_id | [string](#string) |  |  |
+| operator_session_id | [string](#string) |  |  |
+| web_session_id | [string](#string) |  |  |
+| cli_session_id | [string](#string) |  |  |
+| event_type | [string](#string) |  | Intent &amp; Payload |
+| payload | [bytes](#bytes) |  | Raw protobuf payload |
+| intent_data | [google.protobuf.Struct](#google-protobuf-Struct) |  | Structured JSON-first view |
+| action_type | [string](#string) |  | UAP-compatible action type (e.g., EXECUTE_BASH) |
+| target_resource | [string](#string) |  | UAP-compatible target resource |
+| state_merkle_root | [string](#string) |  | State &amp; Replay Protection |
+| nonce | [string](#string) |  |  |
+| transaction_hash | [string](#string) |  |  |
+| protocol_version | [string](#string) |  | UAP-compatible protocol version (e.g., &#34;1.0&#34;) |
+| governance | [GovernanceMetadata](#g8e-common-v1-GovernanceMetadata) |  | Governance Proofs |
+| case_id | [string](#string) |  | Application Context |
+| investigation_id | [string](#string) |  |  |
+| task_id | [string](#string) |  |  |
+| system_fingerprint | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-common-v1-GovernanceMetadata"></a>
+
+### GovernanceMetadata
+Unified Governance Metadata
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| l1 | [L1Metadata](#g8e-common-v1-L1Metadata) |  |  |
+| l2 | [L2Metadata](#g8e-common-v1-L2Metadata) |  |  |
+| l3 | [L3Metadata](#g8e-common-v1-L3Metadata) |  |  |
+| gateway_signed | [bool](#bool) |  | Set to true if signed by the local gateway without full Tribunal consensus. This is used for single-agent MCP clients that bypass the L2 consensus layer. |
+
+
+
+
+
+
+<a name="g8e-common-v1-L1Metadata"></a>
+
+### L1Metadata
+Doctrine (L1Doctrine) Governance: Technical Bedrock (Hard Gates)
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| validated | [bool](#bool) |  |  |
+| violations | [string](#string) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-common-v1-L2Metadata"></a>
+
+### L2Metadata
+Quorum (L2Consensus) Governance: Consensus (Tribunal)
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| tribunal_signature | [string](#string) |  | ED25519 signature over transaction_hash|decision |
+| agent_ids | [string](#string) | repeated | IDs of agents that voted |
+| key_id | [string](#string) |  | ID of the key used for signature |
+
+
+
+
+
+
+<a name="g8e-common-v1-L3Metadata"></a>
+
+### L3Metadata
 
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| type | [string](#string) |  |  |
-| channel | [string](#string) |  |  |
-| pattern | [string](#string) |  |  |
-| data | [bytes](#bytes) |  |  |
+| proof | [L3Proof](#g8e-common-v1-L3Proof) |  | Real WebAuthn proof |
+| auto_approved | [bool](#bool) |  | True if skipped via auto-approval policy |
 
 
 
 
 
 
-<a name="g8e-pubsub-v1-PubSubMessage"></a>
+<a name="g8e-common-v1-L3Proof"></a>
 
-### PubSubMessage
-
+### L3Proof
+Notary (L3Notary) Governance: Authorization (Human-in-the-loop)
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| action | [string](#string) |  |  |
-| channel | [string](#string) |  |  |
-| data | [bytes](#bytes) |  |  |
+| client_data_json | [string](#string) |  |  |
+| authenticator_data | [string](#string) |  |  |
+| signature | [string](#string) |  |  |
+| credential_id | [string](#string) |  |  |
+| mtls_cert_fingerprint | [string](#string) |  | CLI mTLS proof: fingerprint of the CLI certificate used for authentication Used when the L3Notary proof is based on mTLS certificate validation rather than WebAuthn |
 
 
 
@@ -54,7 +150,29 @@
 
  
 
+
+<a name="g8e-common-v1-Component"></a>
+
+### Component
+Source component identifier
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| COMPONENT_UNSPECIFIED | 0 |  |
+| COMPONENT_G8EE | 1 |  |
+| COMPONENT_G8EO | 2 |  |
+| COMPONENT_CLIENT | 3 |  |
+
+
  
+
+
+<a name="g8e_common_v1_common-proto-extensions"></a>
+
+### File-level Extensions
+| Extension | Type | Base | Number | Description |
+| --------- | ---- | ---- | ------ | ----------- |
+| forbidden_patterns | string | .google.protobuf.FieldOptions | 50001 | Comma-separated list of forbidden regex patterns |
 
  
 

@@ -80,11 +80,11 @@ A scenario is pure data defined in JSON:
 
 The framework tests three governance postures:
 
-- **doctrine**: L1 (Doctrine) + L2 + L3 validation
+- **doctrine**: L1 (Doctrine) validation only (L2 and L3 not required)
 - **consensus**: L1 (Doctrine) + L2 validation (no L3 required)
 - **notary**: L1 (Doctrine) + L2 + L3 validation
 
-Each mode has different requirements for L2 signatures and L3 proofs.
+Each mode has different requirements for L2 signatures and L3 proofs. Doctrine is the minimal posture, accepting any envelope that passes L1 validation.
 
 ## Deterministic Testing
 

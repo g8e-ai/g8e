@@ -29,6 +29,24 @@ enum ExecutionStatus {
   EXECUTION_STATUS_TIMEOUT = 5;
 }
 
+// L3 validation status enum for Notary (L3Notary) proof verification
+// Distinguishes between "not required" vs "required but failed" for compliance
+enum L3Status {
+  L3_STATUS_UNSPECIFIED = 0;
+  L3_STATUS_NOT_REQUIRED = 1;  // L3 proof not required by posture (doctrine/consensus)
+  L3_STATUS_REQUIRED_VALID = 2;  // L3 proof required and valid
+  L3_STATUS_REQUIRED_FAILED = 3;  // L3 proof required but missing or invalid
+}
+
+// L2 validation status enum for Consensus (L2Consensus) signature verification
+// Distinguishes between "not required" vs "required but failed" for compliance
+enum L2Status {
+  L2_STATUS_UNSPECIFIED = 0;
+  L2_STATUS_NOT_REQUIRED = 1;  // L2 signature not required by posture (doctrine)
+  L2_STATUS_REQUIRED_VALID = 2;  // L2 signature required and valid
+  L2_STATUS_REQUIRED_FAILED = 3;  // L2 signature required but missing or invalid
+}
+
 // Heartbeat type enum
 enum HeartbeatType {
   HEARTBEAT_TYPE_UNSPECIFIED = 0;
@@ -470,13 +488,13 @@ message ActionReceipt {
   // This is used for single-agent MCP clients that bypass the L2 consensus layer.
   bool gateway_signed = 10;
 
-  // Flag indicating if L2 (Consensus/Tribunal) signature was valid.
-  // Set to false if signature was missing or invalid but posture allowed execution.
-  bool l2_valid = 11;
+  // Status of L2 (Consensus/Tribunal) signature verification.
+  // Distinguishes between "not required" vs "required but failed" for compliance.
+  L2Status l2_status = 11;
 
-  // Flag indicating if L3 (Notary/Human) proof was valid.
-  // Set to false if proof was missing or invalid but posture allowed execution.
-  bool l3_valid = 12;
+  // Status of L3 (Notary/Human) proof verification.
+  // Distinguishes between "not required" vs "required but failed" for compliance.
+  L3Status l3_status = 12;
 }
 
 // CommitmentAttestation is the Auditor's signed record that a verified

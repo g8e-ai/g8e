@@ -1,32 +1,39 @@
 {
-  "name": "replay_nonce",
-  "vertical": "finance",
-  "narrative": "Envelope with replayed nonce should be rejected",
+  "name": "l3_invalid",
+  "vertical": "gates",
+  "narrative": "Envelope with invalid L3 proof should be rejected",
   "intent": {
-    "id": "b51482e781b6525854a4652594e9b75e926b485311812036e26a9036abd8f378",
-    "timestamp": "2026-05-24T12:00:00Z",
-    "expiresAt": "2026-05-24T13:00:00Z",
+    "id": "f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1",
+    "timestamp": "2026-05-25T12:00:00Z",
+    "expiresAt": "2026-05-25T13:00:00Z",
     "sourceComponent": "COMPONENT_CLIENT",
     "operatorId": "operator-1",
     "operatorSessionId": "operator-session-1",
-    "payload": "CgZscyAtbGESCGV4ZWMtMTIzGgx0ZXN0IGNvbW1hbmQiBnN0cmljdCge",
+    "payload": "CgZscyAtbAESCGV4ZWMtMTIzGgx0ZXN0IGNvbW1hbmQiBnN0cmljdCge",
     "actionType": "EXECUTE_BASH",
     "targetResource": "localhost",
     "stateMerkleRoot": "abc123def456",
-    "nonce": "nonce-replay-123",
-    "transactionHash": "b51482e781b6525854a4652594e9b75e926b485311812036e26a9036abd8f378",
+    "nonce": "nonce-l3-invalid-123",
+    "transactionHash": "f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1",
     "protocolVersion": "1.0",
     "governance": {
       "l2": {
         "tribunalSignature": "68c757ff1d0c37e2d972c41f12baba63973072b209d6cf58aafb1e8bc7775971c7f12c7740935823713027809cd19adfcdba1108151572ffb3ecd2891e900403",
         "keyId": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
+      },
+      "l3": {
+        "proof": {
+          "authenticatorData": "invalidauthdata",
+          "clientDataJSON": "invalidclientdata",
+          "signature": "invalidsignature"
+        }
       }
     }
   },
   "evidence": {
     "l2_signature_present": true,
     "l2_key_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd",
-    "l3_proof_present": false,
+    "l3_proof_present": true,
     "signer_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
   },
   "expect": {
@@ -44,7 +51,7 @@
     },
     "notary": {
       "verdict": "reject",
-      "reject_reason": "TX_NOTARY_L3_PROOF_MISSING",
+      "reject_reason": "TX_NOTARY_L3_PROOF_INVALID: Notary (L3Notary) WebAuthn proof failed verification",
       "l2_status": 2,
       "l3_status": 3
     }
