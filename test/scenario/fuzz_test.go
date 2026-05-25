@@ -44,7 +44,7 @@ func TestPropertyBasedInvariants(t *testing.T) {
 	// Generate test signers
 	testSigners := generateTestSigners()
 
-	gate, err := NewOperatorGate(mode, clock, testStateRoot, testSigners)
+	gate, err := NewOperatorGate(mode, clock, testStateRoot, testSigners, nil)
 	if err != nil {
 		t.Fatalf("failed to create operator gate: %v", err)
 	}

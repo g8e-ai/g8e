@@ -1,8 +1,8 @@
 {
-  "status": "EXECUTION_STATUS_COMPLETED",
-  "resultSummary": "mock execution succeeded",
-  "stateRootBefore": "abc123def456",
-  "stateRootAfter": "abc123def456",
-  "l2Status": "L2_STATUS_REQUIRED_VALID",
-  "l3Status": "L3_STATUS_REQUIRED_VALID"
+  "status":  "EXECUTION_STATUS_COMPLETED",
+  "resultSummary":  "mock execution succeeded",
+  "stateRootBefore":  "abc123def456",
+  "stateRootAfter":  "abc123def456",
+  "l2Status":  "L2_STATUS_REQUIRED_VALID",
+  "l3Status":  "L3_STATUS_REQUIRED_VALID"
 }

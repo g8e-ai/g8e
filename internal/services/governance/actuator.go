@@ -287,6 +287,8 @@ func (w *Actuator) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt)
 		SignerKeyID:       r.SignerKeyId,
 		Signature:         r.Signature,
 		GatewaySigned:     r.GatewaySigned,
+		L2Valid:           r.L2Status == operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
+		L3Valid:           r.L3Status == operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
 		Timestamp:         time.Now().UTC(),
 	}
 
@@ -323,6 +325,8 @@ func (w *Actuator) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.Action
 		SignerKeyID:       r.SignerKeyId,
 		Signature:         r.Signature,
 		GatewaySigned:     r.GatewaySigned,
+		L2Valid:           r.L2Status == operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
+		L3Valid:           r.L3Status == operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
 		Timestamp:         time.Now().UTC(),
 	}
 

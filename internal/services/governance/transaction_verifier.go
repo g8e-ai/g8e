@@ -29,6 +29,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/governance/l1"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/pkg/uap"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -317,6 +318,7 @@ type TransactionVerifier struct {
 	signerStore       SignerStore
 	appPolicyStore    AppPolicyStore
 	l3Notary          L3Notary
+	doctrine          l1.DoctrineValidator
 	knownActionTypes  map[constants.ActionType]struct{}
 	posture           GovernancePosture // Governance posture: doctrine, consensus, or notary
 	clock             system.Clock      // Injectable time source for deterministic testing
@@ -332,6 +334,7 @@ func NewTransactionVerifier(
 	signerStore SignerStore,
 	appPolicyStore AppPolicyStore,
 	l3Notary L3Notary,
+	doctrine l1.DoctrineValidator,
 	knownActionTypes []constants.ActionType,
 	posture string,
 	clock system.Clock,
@@ -346,6 +349,11 @@ func NewTransactionVerifier(
 		clock = &system.RealClock{}
 	}
 
+	// Default to protobuf doctrine validator if not provided
+	if doctrine == nil {
+		doctrine = l1.NewProtoDoctrineValidator()
+	}
+
 	return &TransactionVerifier{
 		logger:            logger,
 		replayStore:       replayStore,
@@ -353,6 +361,7 @@ func NewTransactionVerifier(
 		signerStore:       signerStore,
 		appPolicyStore:    appPolicyStore,
 		l3Notary:          l3Notary,
+		doctrine:          doctrine,
 		knownActionTypes:  knownActions,
 		posture:           NewGovernancePosture(posture),
 		clock:             clock,

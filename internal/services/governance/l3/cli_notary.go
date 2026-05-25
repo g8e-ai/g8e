@@ -11,14 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package governance
+package l3
 
 import (
 	"fmt"
 	"log/slog"
 
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"github.com/g8e-ai/g8e/internal/services/storage"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
 // CLIL3Notary provides L3 verification for outbound mode using CLI-based approval.

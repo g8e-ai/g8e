@@ -28,6 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/internal/services/governance/l2"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/sentinel"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
@@ -81,7 +82,7 @@ type PubSubCommandService struct {
 	reconnectBaseDelay time.Duration
 
 	// UAP governance services for Phase 3 integration
-	tribunal            *governance.Tribunal
+	tribunal            *l2.Tribunal
 	Actuator            *governance.Actuator
 	transactionVerifier *governance.TransactionVerifier
 	signerStore         governance.SignerStore
@@ -207,7 +208,7 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, serviceCtx context.Context) {
 	// Initialize Tribunal with Sentinel for MITRE checks and private key for L2 signing
-	rs.tribunal = &governance.Tribunal{
+	rs.tribunal = &l2.Tribunal{
 		NodeID:     c.Config.OperatorID,
 		Sentinel:   c.Sentinel,
 		PrivateKey: c.TribunalSigningKey,

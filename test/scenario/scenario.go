@@ -11,6 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build integration
+
 package scenario
 
 import (
@@ -19,6 +21,12 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"testing"
+
+	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/stretchr/testify/require"
 )
 
 //go:embed fixtures
@@ -117,4 +125,38 @@ func loadFixturesRecursive(dir string, scenarios []Scenario) ([]Scenario, error)
 	}
 
 	return scenarios, nil
+}
+
+// AssertPersistedReceipt verifies that receipts are persisted to the database correctly.
+// For accepting scenarios, receipts MUST be persisted to console_audit.
+// For rejecting scenarios, receipts MUST NOT be persisted.
+func AssertPersistedReceipt(t *testing.T, db *sqliteutil.DB, receipt *operatorv1.ActionReceipt, expected Outcome) {
+	if expected.Verdict == VerdictReject {
+		// Rejected transactions should NOT persist receipts
+		doc, err := QueryReceipt(db, receipt.TransactionId)
+		require.NoError(t, err, "QueryReceipt should not error for rejected transaction")
+		require.Nil(t, doc, "receipt should not be persisted for rejected transaction")
+		return
+	}
+
+	// Accepted transactions MUST persist receipts
+	doc, err := QueryReceipt(db, receipt.TransactionId)
+	require.NoError(t, err, "QueryReceipt should not error for accepted transaction")
+	require.NotNil(t, doc, "receipt must be persisted for accepted transaction")
+
+	// The receipt is stored as the entire document data map
+	// Marshal the map back to JSON, then unmarshal to ActionReceiptRecord
+	dataJSON, err := json.Marshal(doc.Data)
+	require.NoError(t, err, "failed to marshal document data")
+
+	var record models.ActionReceiptRecord
+	err = json.Unmarshal(dataJSON, &record)
+	require.NoError(t, err, "persisted receipt should unmarshal to ActionReceiptRecord")
+
+	require.Equal(t, receipt.TransactionId, record.TransactionID, "transaction_id must match")
+	require.Equal(t, receipt.TransactionHash, record.TransactionHash, "transaction_hash must match")
+	require.Equal(t, receipt.Status, record.Status, "status must match")
+	require.Equal(t, receipt.Signature, record.Signature, "signature must match")
+	require.Equal(t, receipt.L2Status == operatorv1.L2Status_L2_STATUS_REQUIRED_VALID, record.L2Valid, "l2_valid must match l2_status")
+	require.Equal(t, receipt.L3Status == operatorv1.L3Status_L3_STATUS_REQUIRED_VALID, record.L3Valid, "l3_valid must match l3_status")
 }

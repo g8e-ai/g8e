@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/system"
 )
 
@@ -36,11 +37,22 @@ var (
 
 	// testSigners holds the trusted L2 signers for testing
 	testSigners map[string]ed25519.PublicKey
+
+	// testDB is the in-memory database for receipt persistence testing
+	testDB *sqliteutil.DB
 )
 
 func TestMain(m *testing.M) {
 	// Generate test signers
 	testSigners = generateTestSigners()
+
+	// Setup in-memory database for receipt persistence
+	var err error
+	testDB, err = SetupTestDB()
+	if err != nil {
+		panicf("failed to setup test database: %v", err)
+	}
+	defer TeardownTestDB(testDB)
 
 	// Create operator gates for each mode
 	ops = make(map[Mode]*OperatorGate)
@@ -51,7 +63,7 @@ func TestMain(m *testing.M) {
 		fixedTime := time.Date(2026, 5, 24, 12, 0, 0, 0, time.UTC)
 		clock := system.NewFixedClock(fixedTime)
 
-		gate, err := NewOperatorGate(mode, clock, testStateRoot, testSigners)
+		gate, err := NewOperatorGate(mode, clock, testStateRoot, testSigners, testDB)
 		if err != nil {
 			panicf("failed to create operator gate for mode %s: %v", mode, err)
 		}
@@ -113,21 +125,22 @@ func TestScenarios(t *testing.T) {
 				// Assert L2/L3 validity
 				AssertL2L3(t, result, expected)
 
+				// Assert receipt persistence to database
+				if result.Receipt != nil {
+					AssertPersistedReceipt(t, gate.db, result.Receipt, expected)
+				}
+
 				// Golden diff
 				GoldenDiff(t, s, mode, result.Receipt)
 
 				// Report trace under -v
 				Report(t, s, mode, result)
-			})
-		}
-	}
 
-	// Clear replay store after all scenarios to avoid interfering with negative controls
-	for _, mode := range []Mode{ModeDoctrine, ModeConsensus, ModeNotary} {
-		if gate, ok := ops[mode]; ok {
-			if gate.replayStore != nil {
-				gate.replayStore.Clear()
-			}
+				// Clear replay store after each scenario to prevent state leakage
+				if gate.replayStore != nil {
+					gate.replayStore.Clear()
+				}
+			})
 		}
 	}
 }

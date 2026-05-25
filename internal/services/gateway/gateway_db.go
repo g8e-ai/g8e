@@ -45,6 +45,12 @@ import (
 //go:embed schema.sql
 var gatewaySchema string
 
+// GatewaySchema returns the embedded gateway schema SQL.
+// This is exported for use in integration tests that need to set up a test database.
+func GatewaySchema() string {
+	return gatewaySchema
+}
+
 // GatewayDBService provides the unified SQLite persistence layer for gateway mode.
 // Three subsystems:
 //   - Document store: collection/id based CRUD (replaces client+g8ee separate SQLite DBs)

@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/governance/l2"
 	"github.com/g8e-ai/g8e/pkg/uap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -44,7 +45,7 @@ func TestGovernanceFlow(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(nil)
 	nodeID := "test-node-1"
 
-	tribunal := &Tribunal{
+	tribunal := &l2.Tribunal{
 		NodeID:     nodeID,
 		PrivateKey: priv,
 	}
@@ -119,7 +120,7 @@ func TestGovernanceFailClosed(t *testing.T) {
 
 	t.Run("SentinelNil_FailClosed", func(t *testing.T) {
 		t.Parallel()
-		tribunal := &Tribunal{
+		tribunal := &l2.Tribunal{
 			NodeID:     nodeID,
 			PrivateKey: priv,
 			Sentinel:   nil, // explicitly nil
@@ -132,7 +133,7 @@ func TestGovernanceFailClosed(t *testing.T) {
 
 	t.Run("MissingPrivateKey_Error", func(t *testing.T) {
 		t.Parallel()
-		tribunal := &Tribunal{NodeID: nodeID, PrivateKey: nil}
+		tribunal := &l2.Tribunal{NodeID: nodeID, PrivateKey: nil}
 		_, err := tribunal.SignDecision("test-id", true)
 		if err == nil {
 			t.Errorf("Expected error when PrivateKey is nil during SignDecision")

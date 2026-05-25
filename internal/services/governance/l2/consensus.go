@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package governance
+package l2
 
 import (
 	"crypto/ed25519"
@@ -20,9 +20,10 @@ import (
 	"fmt"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	"github.com/g8e-ai/g8e/internal/services/governance/l1"
 	"github.com/g8e-ai/g8e/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/pkg/uap"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
 // Tribunal is the internal consensus engine's evaluator.
@@ -30,6 +31,7 @@ import (
 type Tribunal struct {
 	NodeID     string
 	Sentinel   *sentinel.Sentinel
+	Doctrine   l1.DoctrineValidator
 	PrivateKey ed25519.PrivateKey
 }
 
@@ -69,8 +71,8 @@ func (t *Tribunal) EvaluatePayload(env *uap.UAPEnvelope) error {
 	isSafe := t.RunMITREChecks(env.TargetResource, cmdData)
 
 	// Doctrine (L1) Intent Validation: ensure the requested intent is in the allowlist
-	if intent != "" && t.Sentinel != nil {
-		if !t.Sentinel.ValidateIntent(intent) {
+	if intent != "" && t.Doctrine != nil {
+		if !t.Doctrine.ValidateIntent(intent) {
 			isSafe = false
 		}
 	}
