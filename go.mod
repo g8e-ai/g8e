@@ -18,6 +18,8 @@ require (
 
 replace github.com/g8e-ai/g8e/protocol => ./protocol
 
+replace google.golang.org/protobuf => google.golang.org/protobuf v1.35.2
+
 require (
 	dario.cat/mergo v1.0.2 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect

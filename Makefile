@@ -23,7 +23,7 @@ export PATH := $(shell go env GOPATH)/bin:$(HOME)/go/bin:$(PATH)
 # =============================================================================
 BUF := $(shell command -v buf 2>/dev/null || echo "./buf")
 PROTOC := $(shell command -v protoc 2>/dev/null || echo "/usr/local/bin/protoc")
-PROTOC_GEN_GO := $(shell go list -m -f '{{.Version}}' google.golang.org/protobuf 2>/dev/null || echo "v1.36.11")
+PROTOC_GEN_GO := $(shell go list -m -f '{{.Version}}' google.golang.org/protobuf 2>/dev/null || echo "v1.35.2")
 PROTOC_MIN_VERSION := 21.0
 
 # =============================================================================
