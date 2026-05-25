@@ -100,7 +100,7 @@ nav:
       - Developer Guidelines: devs.md
       - Codemaps:
           - High-Level Architecture: codemaps/00_high_level_architecture.md
-          - g8eo Internal Structure: codemaps/01_g8eo_internal_structure.md
+          - g8e Internal Structure: codemaps/01_g8e_internal_structure.md
           - g8e-Compatible Apps Internal Structure: codemaps/02_g8ee_internal_structure.md
           - Protocol Layer: codemaps/03_protocol_layer.md
           - Data Flow Lifecycle: codemaps/04_data_flow_lifecycle.md

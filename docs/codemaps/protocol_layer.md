@@ -8,9 +8,13 @@ The protocol layer is the single source of truth for all g8e protocol definition
 protocol/
 ├── proto/                       # Protobuf schemas (wire format source of truth)
 │   ├── buf.yaml                 # Buf module configuration
-│   ├── common.proto             # Common message definitions
-│   ├── operator.proto           # Operator-specific messages
-│   └── pubsub.proto             # Pub/sub message definitions
+│   └── g8e/                     # Protobuf package hierarchy
+│       ├── common/v1/
+│       │   └── common.proto     # Common message definitions
+│       ├── operator/v1/
+│       │   └── operator.proto   # Operator-specific messages
+│       └── pubsub/v1/
+│           └── pubsub.proto     # Pub/sub message definitions
 │
 ├── constants/                   # Governance constants and rules
 │   ├── doctrine/                # L1 Doctrine definitions
@@ -19,13 +23,17 @@ protocol/
 │   │   ├── mcp_vectors_doctrine.json    # MCP threat patterns
 │   │   └── owasp_crs_doctrine.json     # OWASP security patterns
 │   │
-│   ├── agents.json              # Agent type definitions
+│   ├── agents.json              # Agent constant mappings
 │   ├── api_paths.json           # API path mappings
 │   ├── channels.json            # Pub/sub channel definitions
 │   ├── collections.json        # Canonical collection schemas
+│   ├── document_ids.json        # Document ID constants
+│   ├── env_vars.json            # Environment variable names
 │   ├── events.json              # Event type definitions
+│   ├── field_paths.json         # JSON field path constants
 │   ├── headers.json             # HTTP header constants
 │   ├── intents.json             # Intent definitions
+│   ├── kv_keys.json             # Key-value store key constants
 │   ├── paths.json               # Path mappings
 │   ├── platform.json            # Platform configuration
 │   ├── ports.json               # Port assignments
@@ -33,10 +41,17 @@ protocol/
 │   ├── pubsub.json              # Pub/sub configuration
 │   ├── senders.json             # Sender identifiers
 │   ├── status.json              # Status codes
-│   └── ...                      # Other constant files
+│   └── timestamp.json          # Timestamp format constants
 │
 ├── models/                      # Shared data models (JSON schemas)
-│   ├── agents/                  # Agent-related models
+│   ├── agents/                  # Agent configuration models
+│   │   ├── assistant.json
+│   │   ├── auditor.json
+│   │   ├── lite.json
+│   │   ├── primary.json
+│   │   ├── title_generator.json
+│   │   ├── triage.json
+│   │   └── tribunal.json
 │   ├── agent_activity_metadata.json
 │   ├── auditor_commands.json
 │   ├── case.json
@@ -66,29 +81,29 @@ protocol/
 └── workload_identity.go         # Workload identity utilities
 
 # Generated outputs (not in protocol/)
-protocol/proto/  # Generated Go protobuf code
-protocol/python/g8e_protocol/  # Generated Python constants
-docs/reference/api/                 # Generated API documentation
+protocol/proto/g8e/              # Generated Go protobuf code (source_relative)
+protocol/python/g8e_protocol/    # Generated Python constants
+docs/reference/api/              # Generated API documentation
 ```
 
 ## Protobuf Schemas (`proto/`)
 
-### `common.proto`
+### `proto/g8e/common/v1/common.proto`
 - **Purpose**: Common message definitions used across all services
 - **Key Messages**:
-  - `GovernanceEnvelope` - The canonical mutation envelope
+  - `GovernanceEnvelope` - The canonical mutation envelope binding identity, intent, state, and governance proofs
   - `GovernanceMetadata` - Unified L1/L2/L3 governance proofs
-  - `L1Metadata` - Doctrine (L1) validation status
-  - `L2Metadata` - Quorum (L2) consensus signature
-  - `L3Proof` - Notary (L3) authorization proof (WebAuthn or mTLS)
-  - `L3Metadata` - Notary authorization metadata
-  - `Component` - Source component identifier enum
+  - `L1Metadata` - Doctrine (L1) validation status with violations list
+  - `L2Metadata` - Quorum (L2) consensus signature with tribunal signature, agent IDs, and key ID
+  - `L3Proof` - Notary (L3) authorization proof supporting WebAuthn (client_data_json, authenticator_data, signature, credential_id) or mTLS (mtls_cert_fingerprint)
+  - `L3Metadata` - Notary authorization metadata with proof and auto_approved flag
+  - `Component` - Source component identifier enum (G8EE, G8EO, CLIENT)
 - **Wire Format**: protojson (canonical JSON)
-- **Signing Basis**: Deterministic transaction_hash from normalized fields
-- **Custom Options**: `forbidden_patterns` field option for L1 reflection
+- **Signing Basis**: Deterministic transaction_hash from normalized envelope fields
+- **Custom Options**: `forbidden_patterns` field option (extension 50001) for L1 reflection on payload fields
 
-### `operator.proto`
-- **Purpose**: Operator-specific message definitions
+### `proto/g8e/operator/v1/operator.proto`
+- **Purpose**: Operator-specific message definitions for command execution, MCP/A2A protocol translation, PKI management, device-link flows, audit trails, and WebAuthn brokerage
 - **Key Message Categories**:
   - **Command Payloads**: `CommandRequested`, `CommandCancelRequested`, `FileEditRequested`, `FsListRequested`, `FsReadRequested`, `FsGrepRequested`
   - **MCP/A2A Protocol**: `McpCallRequested`, `A2aCallRequested`, `McpResourceListRequested`, `McpResourceReadRequested`, `McpPromptListRequested`, `McpPromptGetRequested`
@@ -98,22 +113,22 @@ docs/reference/api/                 # Generated API documentation
   - **Operator Lifecycle**: `TerminateOperatorRequested`, `TerminateOperatorResult`, `RotateAPIKeyRequested`, `RotateAPIKeyResult`, `ListOperatorSlotsRequested`, `ListOperatorSlotsResult`, `BindOperatorsRequested`, `BindOperatorsResult`, `UnbindOperatorsRequested`, `UnbindOperatorsResult`, `SetTargetContextRequested`, `SetTargetContextResult`, `OperatorDocument`
   - **Audit/History**: `FetchHistoryRequested`, `FetchHistoryResult`, `FetchFileHistoryRequested`, `FetchFileHistoryResult`, `FetchFileDiffRequested`, `FetchFileDiffResult`, `RestoreFileRequested`, `RestoreFileResult`, `DirectCommandAuditRequested`, `DirectCommandResultAuditRequested`, `AuditMsgRequested`
   - **Heartbeat**: `HeartbeatRequested`, `HeartbeatResult` (with system identity, network info, performance metrics, OS details, etc.)
-  - **Governance Receipts**: `ActionReceipt` (signed execution proof), `CommitmentAttestation` (Auditor's commitment chain)
+  - **Governance Receipts**: `ActionReceipt` (signed execution proof with transaction_id, transaction_hash, status, state roots, signature, gateway_signed flag, l2_valid flag, l3_valid flag), `CommitmentAttestation` (Auditor's commitment chain)
   - **Passkey/WebAuthn**: `PasskeyRegisterChallengeRequested`, `PasskeyRegisterChallengeResult`, `PasskeyRegisterVerifyRequested`, `PasskeyRegisterVerifyResult`, `PasskeyAuthChallengeRequested`, `PasskeyAuthChallengeResult`, `PasskeyAuthVerifyRequested`, `PasskeyAuthVerifyResult`, `ListPasskeyCredentialsRequested`, `ListPasskeyCredentialsResult`, `RevokePasskeyCredentialRequested`, `RevokePasskeyCredentialResult`, `PasskeyCredential`
   - **Intent Grants**: `GrantIntentRequested`, `GrantIntentResult`, `RevokeIntentRequested`, `RevokeIntentResult`
   - **Shutdown**: `ShutdownRequested`
   - **Evals**: `EvalAnswerRequested`
-- **Enums**: `ExecutionStatus`, `HeartbeatType`
-- **Usage**: Operator command execution, MCP/A2A protocol translation, PKI management, device-link flows, audit trails, WebAuthn brokerage
+- **Enums**: `ExecutionStatus` (UNSPECIFIED, EXECUTING, COMPLETED, FAILED, CANCELLED, TIMEOUT), `HeartbeatType` (UNSPECIFIED, AUTOMATIC, MANUAL)
+- **Service Definition**: `OperatorService` with RPC methods for command execution, cancellation, file operations, and filesystem access
 
-### `pubsub.proto`
+### `proto/g8e/pubsub/v1/pubsub.proto`
 - **Purpose**: Pub/sub message definitions for command/result channels
 - **Key Messages**:
-  - `PubSubMessage` - Command pub/sub message (action, channel, data)
-  - `PubSubEvent` - Event pub/sub message (type, channel, pattern, data)
+  - `PubSubMessage` - Command pub/sub message (action, channel, data bytes)
+  - `PubSubEvent` - Event pub/sub message (type, channel, pattern, data bytes)
 - **Usage**: Redis pub/sub command dispatch and event streaming
 
-### `buf.yaml` (protocol/proto/)
+### `proto/buf.yaml`
 - **Purpose**: Buf module configuration
 - **Configuration**:
   - Module name: `buf.build/g8e/platform`
@@ -121,9 +136,10 @@ docs/reference/api/                 # Generated API documentation
   - Breaking change detection: FILE
 
 ### `buf.gen.yaml` (root)
-- **Purpose**: Buf generation configuration
+- **Purpose**: Buf generation configuration for local-only generation
 - **Plugins**:
-  - `protoc-gen-go` (local): Generates Go code to `protocol/proto/`
+  - `protoc-gen-go` (local): Generates Go code to `protocol/proto/` with `paths=source_relative`
+  - `protoc-gen-go-grpc` (local): Generates gRPC Go code to `protocol/proto/` with `paths=source_relative`
   - `protoc-gen-doc` (local): Generates Markdown documentation to `docs/reference/api/`
 - **Note**: Python constants are generated separately via Go exporter in `cmd/exporter`
 
@@ -154,64 +170,78 @@ docs/reference/api/                 # Generated API documentation
 ### Agent Definitions (`constants/agents.json`)
 - **Purpose**: Agent constant mappings (not full definitions)
 - **Contents**:
-  - Agent name constants (Dash, Sage)
-  - Triage classification constants (Complexity, Confidence, Intent, Posture)
-  - Tribunal member constants (Axiom, Concord, Nemesis, Pragma, Variance)
-  - Tribunal voting constants (Auditor reasons, tie-break reasons)
-- **Note**: Full agent definitions are in `models/agents/`
+  - Agent name constants (dash, sage)
+  - Tribunal member constants (axiom, concord, nemesis, pragma, variance)
+  - Tribunal auditor reason constants (auditor_error, empty_response, no_valid_revision, ok, revised_from_dissent, swapped_to_dissenter, whitelist_violation)
+  - Tribunal tie-break reason constants (alphabetical, excluded_nemesis, shortest)
+- **Note**: Full agent configuration definitions are in `models/agents/`
 
 ### API Paths (`constants/api_paths.json`)
 - **Purpose**: API path mappings for all services
 - **Contents**:
-  - Gateway API paths
-  - Operator API paths
-  - g8e-compatible agentic ensemble API paths
-  - Internal admin paths
-  - Path constants with Go and Python enum generation
+  - `client` - Client API paths (chat, health, SSE events/stream)
+  - `client_full` - Full client API paths with /api prefix
+  - `g8ee` - g8ee application paths (auth, case, chat, investigation, operators, settings)
+  - `g8ee_full` - Full g8ee paths with /api/v1 prefix
+  - `g8eo` - Operator API paths
+  - `g8eo_full` - Full Operator paths with /api prefix
+  - `internal` - Internal admin paths
+- **Generation**: Go and Python enum generation from `_go_const` and `_python_const` fields
 
 ### Channels (`constants/channels.json`)
 - **Purpose**: Pub/sub channel definitions
 - **Contents**:
-  - Command channels (cmd::)
-  - Result channels (result::)
-  - Event channels (event::)
-  - Channel patterns and access rules
-  - Go and Python constant generation
+  - `Governance` - Governance channel
+  - `Message` - Message channel
+  - `OperatorDevice` - Operator device channel
+  - `OperatorIntent` - Operator intent channel
+  - `SseEvent` - SSE event channel
+  - `StorageBlob` - Storage blob channel
+  - `StorageDocument` - Storage document channel
+  - `StorageKv` - Storage key-value channel
+  - Pub/sub actions: `Publish`, `Subscribe`, `PSubscribe`, `Unsubscribe`
+  - Pub/sub events: `Message`, `PMessage`, `Subscribed`
+- **Generation**: Go and Python constant generation from `_go_const` and `_python_const` fields
 
 ### Collections (`constants/collections.json`)
 - **Purpose**: Canonical collection names for storage
 - **Contents**:
-  - User collections (users, organizations, api_keys, web_sessions, cli_sessions)
-  - Governance collections (trusted_signers, revoked_certificates, passkey_challenges)
-  - Operator collections (operators, operator_sessions, bound_sessions, operator_usage)
-  - App collections (cases, investigations, memories, tasks)
-  - Reputation collections (reputation_state, reputation_commitments, stake_resolutions)
-  - Audit collections (console_audit, login_audit, auth_admin_audit, agent_activity_metadata)
-  - System collections (account_locks, settings, app_policies, tribunal_commands, chaos_events)
-  - Go and Python constant generation
+  - User collections: `users`, `organizations`, `api_keys`, `web_sessions`, `cli_sessions`
+  - Governance collections: `trusted_signers`, `revoked_certificates`, `passkey_challenges`
+  - Operator collections: `operators`, `operator_sessions`, `bound_sessions`, `operator_usage`
+  - App collections: `cases`, `investigations`, `memories`, `tasks`
+  - Reputation collections: `reputation_state`, `reputation_commitments`, `stake_resolutions`
+  - Audit collections: `console_audit`, `login_audit`, `auth_admin_audit`, `agent_activity_metadata`
+  - System collections: `account_locks`, `settings`, `app_policies`, `tribunal_commands`, `chaos_events`
+- **Generation**: Go and Python constant generation from `_go_const` and `_python_const` fields
 
 ### Events (`constants/events.json`)
 - **Purpose**: Event type definitions for audit and pub/sub
 - **Contents**:
-  - AI agent events (conflict, continue approval, tribunal voting, triage)
-  - LLM chat events (iterations, streaming, lifecycle, tool calls)
-  - App events (case, investigation, task lifecycle)
-  - Operator events (command execution, bootstrap, PKI, device-link, audit)
-  - Go and Python constant generation
+  - AI agent events: conflict detection/resolution, continue approval, tribunal voting/consensus, triage clarification
+  - LLM chat events: iterations (started, completed, failed, retry), streaming (delta, text, thinking), lifecycle, tool calls, message lifecycle
+  - App events: case lifecycle (created, assigned, escalated, resolved, closed), investigation lifecycle, task lifecycle
+  - Operator events: command execution (requested, started, completed, failed, cancelled), bootstrap, PKI (API key refresh), audit recording, device-link, heartbeat
+  - MCP/A2A events: call requested
+- **Generation**: Go and Python constant generation from `_go_const` and `_python_const` fields
 
 ## Shared Data Models (`models/`)
 
 ### Agent Models (`models/agents/`)
-- **Purpose**: Agent-related data models
+- **Purpose**: Agent configuration and behavior models
 - **Contents**:
-  - Agent configuration models
-  - Agent state models
-  - Agent reputation models
+  - `assistant.json` - Assistant agent configuration
+  - `auditor.json` - Auditor agent configuration
+  - `lite.json` - Lite agent configuration
+  - `primary.json` - Primary agent configuration
+  - `title_generator.json` - Title generator agent configuration
+  - `triage.json` - Triage agent configuration
+  - `tribunal.json` - Tribunal agent configuration
 
 ### Domain Models
 - `agent_activity_metadata.json` - Agent activity tracking schema
 - `auditor_commands.json` - Auditor command definitions
-- `case.json` - Case/investigation schema
+- `case.json` - Case schema
 - `conversation.json` - Conversation schema
 - `conversation_message.json` - Conversation message schema
 - `investigation.json` - Investigation schema
@@ -263,7 +293,7 @@ docs/reference/api/                 # Generated API documentation
 
 ## Build Targets
 
-### Root Makefile (not protocol/Makefile)
+### Root Makefile
 ```makefile
 make generate           # Generate all protocol artifacts (proto + constants)
 make proto              # Generate Go Protobuf code only
@@ -283,7 +313,7 @@ make lint               # Run golangci-lint
 ### Generation Process
 1. **Protobuf Generation** (`make proto`):
    - Run `buf generate protocol/proto` with root `buf.gen.yaml`
-   - Generate Go code to `protocol/proto/`
+   - Generate Go code to `protocol/proto/g8e/` (source_relative)
    - Generate Markdown docs to `docs/reference/api/`
 
 2. **Constants Generation** (`make constants`):
@@ -342,12 +372,12 @@ Execution complete → ActionReceipt formation → execution metadata
 
 ### g8eo (Operator)
 - **Consumes**: `proto/` (Go generated code)
-- **Location**: `protocol/proto/`
+- **Location**: `protocol/proto/g8e/` (source_relative)
 - **Usage**: Envelope verification, receipt generation, audit events, MCP/A2A dispatch
 
 ### g8eg (Gateway)
 - **Consumes**: `proto/` (Go generated code)
-- **Location**: `protocol/proto/` (shared with g8eo)
+- **Location**: `protocol/proto/g8e/` (shared with g8eo)
 - **Usage**: Envelope admission, signature verification, state distribution, L2 consensus
 
 ### g8e-Compatible Agentic Ensembles
@@ -380,12 +410,13 @@ Execution complete → ActionReceipt formation → execution metadata
 
 ## Key Invariants
 
-1. **Single source of truth**: All schemas in `protocol/proto/`
+1. **Single source of truth**: All schemas in `protocol/proto/g8e/` with package hierarchy (common/v1, operator/v1, pubsub/v1)
 2. **No local duplication**: Services MUST NOT define local schemas
 3. **Protojson wire format**: JSON on all client-facing surfaces (HTTP APIs, pub/sub, receipts)
 4. **Hash-based signing**: Transaction hash independent of wire encoding
-5. **Generated code**: Go code generated from protobuf; Python constants exported from Go
+5. **Generated code**: Go code generated from protobuf with source_relative output; Python constants exported from Go
 6. **No backward compatibility**: Breaking changes require migration (per user directive)
-7. **Local generation**: No BSR remote plugins; local-only generation
+7. **Local generation**: No BSR remote plugins; local-only generation via buf.gen.yaml
 8. **Python constants path**: Generated to `protocol/python/g8e_protocol/`
 9. **Build orchestration**: Proto generation via root Makefile, not protocol/Makefile
+10. **Package hierarchy**: Protobuf files follow g8e package structure (g8e.common.v1, g8e.operator.v1, g8e.pubsub.v1)

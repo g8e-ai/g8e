@@ -1,8 +1,8 @@
-# g8eo (Operator) Internal Structure Codemap
+# g8e Internal Structure Codemap
 
 ## Overview
 
-g8eo is the Go-based Governed Operator - the sovereign execution boundary and protocol substrate. It operates in multiple modes: outbound operator mode (executes mutations on local host), gateway mode (platform persistence and messaging backbone), MCP serve mode (protocol translation gateway), and OpenClaw node host mode. All modes enforce the L1/L2/L3 governance gauntlet and maintain local-first audit architecture.
+g8e is the Go-based Governed Operator - the sovereign execution boundary and protocol substrate. It operates in multiple modes: outbound operator mode (executes mutations on local host), gateway mode (platform persistence and messaging backbone), MCP serve mode (protocol translation gateway), and OpenClaw node host mode. All modes enforce the L1/L2/L3 governance gauntlet and maintain local-first audit architecture.
 
 ```text
 cmd/                           # Binary entry points
@@ -27,8 +27,6 @@ internal/                       # Private implementation (not exported)
 ├── interfaces/                 # Interface definitions
 ├── marshaler/                  # Envelope marshaling/unmarshaling
 ├── models/                     # Operator-specific data models
-├── protocol/                   # Protocol integration layer
-│   └── proto/                  # Generated protobuf code (from protocol/proto/)
 ├── responder/                  # Response handling
 ├── security/                   # Cryptographic operations (Ed25519)
 ├── services/                   # Core service layer
@@ -49,6 +47,12 @@ internal/                       # Private implementation (not exported)
 
 pkg/                            # Public packages
 └── uap/                        # Universal Access Protocol utilities
+
+protocol/                       # Protocol substrate (canonical source of truth)
+├── constants/                  # Protocol constants (agents, API paths, channels, events, collections)
+├── models/                     # Protocol data models (agents, case, etc.)
+├── proto/                      # Protobuf schema definitions (commonv1, operatorv1, pubsubv1)
+└── test-fixtures/              # Protocol test fixtures
 
 test/                           # Integration and end-to-end tests
 ├── byo_client_test.go          # BYO client integration tests
@@ -81,7 +85,10 @@ go.mod                          # Go module definition
   - `file_edit.go` - FileEditService: file write, delete, create operations
   - `fs_grep.go` - FsGrepService: filesystem search
   - `fs_list.go` - FsListService: filesystem listing
+  - `file_edit_unix.go` - Unix-specific file operations
+  - `fs_list_unix.go` - Unix-specific filesystem operations
 - **Invariant**: Only verified transactions reach execution layer
+- **Testing**: Comprehensive integration and shell operator tests
 
 ### `services/storage/`
 - **Purpose**: Local-first audit architecture (LFAA)
@@ -99,6 +106,8 @@ go.mod                          # Go module definition
 - **Purpose**: Bootstrap and device-link enrollment
 - **Key Components**:
   - `bootstrap.go` - BootstrapService: device-link token authentication and bootstrap config application
+  - `device_auth.go` - Device authentication and enrollment
+  - `fingerprint.go` - Device fingerprinting for identity verification
 - **Note**: Full auth lifecycle (users, sessions, passkeys, PKI) lives in gateway mode
 
 ### `services/gateway/`
@@ -127,6 +136,7 @@ go.mod                          # Go module definition
   - `models.go` - SuspendedTransaction model
 - **Flow**: MCP tool calls → GovernanceEnvelope → governance verification → Actuator execution → downstream MCP/A2A dispatch
 - **Wire Format**: Canonical JSON (protojson) for UniversalEnvelope on all client-facing surfaces
+- **Testing**: BYO client E2E tests and gateway integration tests
 
 ### `services/pubsub/`
 - **Purpose**: Pub/sub command channel and results streaming
@@ -139,6 +149,10 @@ go.mod                          # Go module definition
   - `heartbeat_service.go` - HeartbeatService: operator heartbeat
   - `port_service.go` - PortService: port availability checks
   - `audit_service.go` - AuditService: audit event publishing
+  - `l2_verifier.go` - L2 signature verification for pub/sub commands
+  - `protocol_helpers.go` - Protocol envelope helpers
+  - `g8es_pubsub_client.go` - Pub/sub client for g8es communication
+  - `inprocess_client.go` - InProcessPubSubClient for in-process command dispatch
 - **Loopback**: InProcessPubSubClient for in-process command dispatch in gateway mode
 
 ### `services/sentinel/`
@@ -147,24 +161,28 @@ go.mod                          # Go module definition
   - `sentinel.go` - Sentinel: pattern-based secret detection, PII redaction, output projection
   - `sentinel_input.go` - Input validation and sanitization
 - **Invariant**: Raw data never crosses the trust boundary without scrubbing
+- **Testing**: Comprehensive fuzz testing and LFAA integration tests
 
 ### `services/system/`
 - **Purpose**: System-level operations
 - **Key Components**:
-  - Git operations via go-git (native Go implementation, not shell exec)
-  - Port availability checking
-  - Filesystem operations
+  - `git.go` - Git binary resolution (returns "embedded" stub for go-git)
+  - `path.go` - Path resolution and validation
+  - `system_utils.go` - System utilities (port checking, filesystem operations)
 - **Note**: Git binary resolution returns "embedded" stub; all git operations use go-git library
 
 ## Protocol Integration Layer
 
-### `internal/protocol/`
-- **Purpose**: Bridge between g8eo and protocol definitions
+### `protocol/`
+- **Purpose**: Canonical protocol substrate - source of truth for all protocol definitions
 - **Components**:
-  - `proto/` - Generated protobuf code from `protocol/proto/` (commonv1, operatorv1, pubsubv1)
-- **Source**: All protobuf schemas come from `protocol/proto/` (canonical protocol substrate)
+  - `constants/` - Protocol constants (agents.json, api_paths.json, channels.json, events.json, collections.json)
+  - `models/` - Protocol data models (agents, case, etc.)
+  - `proto/` - Protobuf schema definitions (commonv1, operatorv1, pubsubv1)
+  - `test-fixtures/` - Protocol test fixtures (gold-set-schema.json, ledger-hash-fixtures.json)
 - **Wire Format**: Canonical JSON (protojson) for UniversalEnvelope on all client-facing surfaces (HTTP APIs, pub/sub, receipts, audit exports)
 - **Signing Basis**: Deterministic transaction_hash computed from normalized envelope fields; wire encoding is irrelevant since verifier enforces id == computed hash
+- **Note**: Generated protobuf code is consumed by internal services via Go module imports
 
 ## Configuration
 
@@ -188,8 +206,7 @@ go.mod                          # Go module definition
   - **OpenClaw mode** (`--openclaw`): Connect to OpenClaw Gateway as node host
   - **CLI subcommands**: `platform`, `apps`, `auth`, `data`, `test`, `evals`, `security`, `setup`, `vars`
   - **Vault management**: `--rekey-vault`, `--verify-vault`, `--reset-vault`
-  - **Stream mode**: `stream` subprocess for approval UI
-- **Output**: `bin/g8e` (binary name is `g8e`, not `g8e.operator`)
+- **Output**: `bin/g8e` (binary name is `g8e`, invoked as `g8e.operator` in platform scripts)
 
 ### Supporting Tools
 - **chaos_tester**: Chaos and fault injection testing
@@ -275,10 +292,11 @@ make version            # Show version info
 
 1. **Fail-closed execution**: Only verified transactions reach execution layer; TransactionVerifier rejects invalid envelopes before execution
 2. **Protocol substrate**: All protobuf schemas from `protocol/proto/` (canonical protocol source of truth)
-3. **Local-first audit**: Audit vault and ledger are host-local only; session validation required for audit writes
+3. **Local-first audit**: Audit vault and ledger are host-local only; session validation required for audit writes (fail-closed)
 4. **Wire format**: Canonical JSON (protojson) for UniversalEnvelope on all client-facing surfaces; binary protobuf only for internal storage
 5. **Git-native**: Ledger uses go-git library (native Go implementation), not shell git commands
 6. **Sentinel scrubbing**: All output passes through Sentinel before crossing trust boundary
 7. **Replay protection**: Nonce validation via ReplayStore prevents transaction replay
 8. **State binding**: State root verification ensures transactions bind to current system state
 9. **Multi-mode architecture**: Single binary supports outbound operator, gateway, MCP serve, and OpenClaw modes
+10. **No backwards compatibility**: Rip and replace approach; no compatibility shims or deprecated paths
