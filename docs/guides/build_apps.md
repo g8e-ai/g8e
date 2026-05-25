@@ -309,5 +309,5 @@ Refer to the g8ee source code for a complete example of a g8e-compatible applica
 
 ## Next Steps
 
-- **[Deploy Gateway](deploy_gateway.md)** — Connect to, authenticate, use, maintain, and pull reports from a Gateway.
-- **[Deploy Operator](deploy_operator.md)** — Deploy and use a Governed Operator.
+- **[Connect Apps to Gateway](connect_apps_to_gateway.md)** — Connect to, authenticate, use, maintain, and pull reports from a Gateway.
+- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Deploy and use a Governed Operator.

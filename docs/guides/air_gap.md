@@ -5,10 +5,10 @@ parent: Architecture
 
 # Air-Gap Architecture
 
-Last Updated: 2026-05-20
-Version: v0.2.7
+Last Updated: 2026-05-25
+Version: v0.3.0
 
-g8e is designed for high-security environments where internet connectivity is strictly prohibited. The platform supports fully air-gapped deployments with **zero runtime internet dependencies**, achieving this through a self-contained **Gateway** (Governance Gateway, Governed Operator, and Protocol), vendored dependencies, and optional local LLM inference.
+g8e is designed for high-security environments where internet connectivity is strictly prohibited. The platform supports fully air-gapped deployments with **zero runtime internet dependencies**, achieving this through a self-contained substrate (g8e Protocol and g8e Operator), Go module dependencies, and optional local LLM inference.
 
 ---
 

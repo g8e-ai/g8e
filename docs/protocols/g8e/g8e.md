@@ -73,9 +73,9 @@ The `governance` field encapsulates all three governance layers:
 | Field | Type | Description |
 |---|---|---|
 | `l1` | L1Metadata | L1 Doctrine status (validated flag, violations list) |
-| `l2` | L2Metadata | L2 Consensus signature and agent IDs |
+| `l2` | L2Metadata | L2 Consensus signature, agent IDs, and key ID |
 | `l3` | L3Metadata | L3 Notary proof and auto-approval flag |
-| `gateway_signed` | bool | True if signed by local gateway without full Tribunal consensus |
+| `gateway_signed` | bool | True if signed by local gateway without full L2 consensus |
 
 ### Canonical JSON Wire Format
 
@@ -131,7 +131,7 @@ Every mutation must pass three independent layers in order. A failure at any lay
 Static, deterministic checks enforced before any code executes. Validated using doctrines sourced from `protocol/constants/doctrine/doctrine_registry.json`.
 
 - **Forbidden Patterns**: The custom protobuf field option `(g8e.common.v1.forbidden_patterns)` is reflected at runtime to scan typed payloads
-- **Threat Detection**: Sentinel threat logic runs within L1 Doctrine to analyze command inputs for MITRE ATT&CK patterns, reverse shells, and injection vectors
+- **Threat Detection**: L1 Doctrine analyzes command inputs for MITRE ATT&CK patterns, reverse shells, and injection vectors
 - **Allow/Deny Lists**: Enforces per-host policy and user settings
 
 ### L2 Consensus: Distributed Agreement
@@ -140,7 +140,6 @@ A cryptographic proof that an independent ensemble agreed on the instruction.
 
 - An Ed25519 signature is generated over `transaction_hash | decision`
 - Verified against the Operator-owned `SignerStore`
-- The reference implementation runs a Byzantine cascade: Triage -> Dash/Sage -> 5-member Consensus generation -> Auditor verification -> Signature
 - Gateway mode may sign locally (`gateway_signed=true`) for single-agent MCP clients
 
 ### L3 Notary: Human Authorization
@@ -273,6 +272,7 @@ Output scrubbing is performed directly at the `L5Actuator` boundary to redact to
 | Warden logic | `internal/services/governance/l4_warden.go` |
 | Actuator logic | `internal/services/governance/l5_actuator.go` |
 | Audit storage | `internal/services/storage/audit_vault.go` |
+| Ledger storage | `internal/services/storage/ledger.go` |
 | Workload identity | `protocol/workload_identity.go` |
 | Gateway envelope construction | `internal/services/gateway/governance_envelope.go` |
 | Gateway HTTP routing | `internal/services/gateway/gateway_http.go` |
@@ -289,7 +289,7 @@ Output scrubbing is performed directly at the `L5Actuator` boundary to redact to
 
 ## Related Documentation
 
-- [**Architecture Protocol**](../architecture/protocol.md) - Detailed protocol architecture and governance hierarchy
+- [**Architecture Protocol Overview**](../architecture/protocol.md) - High-level protocol architecture and governance overview
 - [**Operator (g8eo)**](../architecture/operator.md) - Operator architecture and execution boundary
 - [**Gateway (g8eg)**](../architecture/gateway.md) - Governance Gateway architecture
 - [**MCP Protocol**](../mcp/mcp.md) - MCP protocol specification and integration

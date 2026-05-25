@@ -22,8 +22,8 @@ import (
 var (
 	ErrL2KeyNotConfigured   = errors.New("L2Consensus: trusted ED25519 key not configured")
 	ErrL2KeyIDMissing       = errors.New("L2Consensus: key_id missing from envelope")
-	ErrL2SignatureMissing   = errors.New("L2Consensus: tribunal_signature missing from envelope")
-	ErrL2AsymmetricInvalid  = errors.New("L2Consensus: tribunal_signature failed ED25519 verification")
+	ErrL2SignatureMissing   = errors.New("L2Consensus: consensus_signature missing from envelope")
+	ErrL2AsymmetricInvalid  = errors.New("L2Consensus: consensus_signature failed ED25519 verification")
 	ErrL3ProofMissing       = errors.New("L3Notary: governance.l3.proof missing from envelope")
 	ErrL3ProofInvalid       = errors.New("L3Notary: governance.l3.proof failed verification")
 	ErrStateRootMissing     = errors.New("Protocol: state_merkle_root missing")

@@ -135,7 +135,7 @@ For stdio-based MCP (required by editors like Cursor or Claude Code):
 ## Next Steps
 
 - **[Build Gateway](build_gateway.md)** — Build a custom g8e-compatible Governance Gateway.
-- **[Deploy Gateway](deploy_gateway.md)** — Connect to, authenticate, use, maintain, and pull reports from a Gateway.
+- **[Connect Apps to Gateway](connect_apps_to_gateway.md)** — Connect to, authenticate, use, maintain, and pull reports from a Gateway.
 - **[Build Operator](build_operator.md)** — Build a custom g8e-compatible Governed Operator.
-- **[Deploy Operator](deploy_operator.md)** — Deploy and use a Governed Operator.
+- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Deploy and use a Governed Operator.
 - **[Build Apps](build_apps.md)** — Build g8e-compatible applications using a Gateway.

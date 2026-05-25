@@ -31,13 +31,13 @@
     },
     "consensus": {
       "verdict": "reject",
-      "reject_reason": "TX_QUORUM_L2_SIG_MISSING: Consensus (L2Consensus) tribunal_signature required but missing",
+      "reject_reason": "TX_QUORUM_L2_SIG_MISSING: Consensus (L2Consensus) consensus_signature required but missing",
       "l2_status": 3,
       "l3_status": 1
     },
     "notary": {
       "verdict": "reject",
-      "reject_reason": "TX_QUORUM_L2_SIG_MISSING: Consensus (L2Consensus) tribunal_signature required but missing",
+      "reject_reason": "TX_QUORUM_L2_SIG_MISSING: Consensus (L2Consensus) consensus_signature required but missing",
       "l2_status": 3,
       "l3_status": 1
     }

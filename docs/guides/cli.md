@@ -1,13 +1,10 @@
 # CLI Guide
 
-The g8e CLI is the primary operational interface for the Governance Gateway (g8eg) and Governed Operator (g8eo). It is a statically compiled Go binary that manages platform lifecycle, authentication, data queries, and testing.
+The g8e CLI is the primary operational interface for the Governance Gateway. It is a statically compiled Go binary that manages platform lifecycle, authentication, data queries, and testing.
 
 ## Architecture
 
-g8e runs directly on the host without container-orchestration complexity. The CLI serves dual purposes:
-
-- **Daemon mode**: Runs the Governance Gateway when invoked without subcommands
-- **CLI mode**: Manages platform lifecycle, auth, data, and tests when invoked with subcommands
+g8e runs directly on the host without container-orchestration complexity. The CLI manages the Governance Gateway (the g8e Operator binary running in listen mode) as a separate process.
 
 **Host runtime state** - All runtime data lives at `./.g8e/`: `data/`, `pki/`, `secrets/`, `logs/`.
 **Credentials** - Authenticated commands use `~/.g8e/credentials`.
@@ -17,7 +14,7 @@ Command form: `./g8e <command> [subcommand] [options]`.
 ## Technical Invariants
 
 1. **Zero Shell Scripts**: NO shell scripts are used for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary.
-2. **Service readiness** - The platform is not "ready" until the Gateway `/healthz` passes. The Go CLI blocks until this state.
+2. **Service readiness** - The platform is not "ready" until the Gateway is running. The Go CLI checks process status before operations.
 3. **Canonical wire format** - All client-facing interaction uses canonical JSON (protojson). Binary protobuf is reserved for internal storage.
 4. **Fail-closed execution** - The CLI must never mask failures or proceed with missing trust material. Missing trust bundles or secrets exit with an actionable error pointing at the platform Gateway.
 
@@ -75,7 +72,7 @@ Command form: `./g8e <command> [subcommand] [options]`.
 ### Testing
 
 ```bash
-# Run Gateway tests
+# Run Gateway (g8eo) tests
 ./g8e test g8eo
 
 # Run unit tests
@@ -83,6 +80,15 @@ Command form: `./g8e <command> [subcommand] [options]`.
 
 # Run integration tests
 ./g8e test integration
+
+# Run scenario tests
+./g8e test scenario
+
+# Run chaos tests
+./g8e test chaos
+
+# Run CI test suite
+./g8e test ci
 ```
 
 ### Environment Variables
@@ -96,6 +102,16 @@ Command form: `./g8e <command> [subcommand] [options]`.
 
 # Get a variable
 ./g8e vars get <key>
+
+# Unset a variable
+./g8e vars unset <key>
+```
+
+### Security Validation
+
+```bash
+# Run security validation checks
+./g8e security validate
 ```
 
 ## Command Reference
@@ -115,10 +131,10 @@ For detailed command help, use `--help`:
 ## Key Commands
 
 - `setup` - Bootstrap dependencies and build services
-- `platform` - Manage Gateway lifecycle (start, stop, status, logs, reset, clean)
+- `platform` - Manage Gateway lifecycle (start, stop, status, restart, logs, settings, reset, clean)
 - `auth` - Manage mTLS enrollment and sessions (bootstrap, login, logout)
 - `data` - Administer substrate over mTLS (users, operators, device-links, settings, store, audit)
-- `test` - Run test suites (unit, integration, g8eo, chaos, scenario)
+- `test` - Run test suites (unit, integration, g8eo, ci, chaos, scenario)
 - `security` - Run security validation checks
 - `vars` - Manage environment variables in `.g8e/.env`
 

@@ -6,7 +6,7 @@ title: MCP Protocol
 
 Last Updated: 2026-05-25
 
-The Operator (g8eo) in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 3-layer BFT verification gauntlet (L1Doctrine/L2Consensus/L3Notary), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
+The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 3-layer BFT verification gauntlet (L1Doctrine/L2Consensus/L3Notary), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
 ---
 
@@ -19,7 +19,7 @@ MCP is a JSON-RPC 2.0 protocol for AI tool invocation. MCP clients connect to th
 MCP requests follow a JSON-RPC 2.0 pattern:
 
 - **Transport**: JSON-RPC 2.0 over HTTP
-- **Authentication**: mTLS certificate or API key depending on configuration
+- **Authentication**: mTLS certificate for MCP ingress routes
 - **Payload**: JSON-RPC request with method, params, and id
 
 ### Gateway Integration
@@ -27,9 +27,15 @@ MCP requests follow a JSON-RPC 2.0 pattern:
 The gateway translates MCP tool invocations into governance envelopes:
 
 1. **Inbound**: MCP client sends JSON-RPC tool invocation to gateway
-2. **Envelope Construction**: Gateway wraps payload in `GovernanceEnvelope` with action type `MCP_CALL`, `MCP_RESOURCE_READ`, or `MCP_PROMPT_GET`
+2. **Envelope Construction**: Gateway wraps payload in `GovernanceEnvelope` with action type `MCP_CALL`, `MCP_RESOURCE_READ`, `MCP_RESOURCE_LIST`, `MCP_PROMPT_GET`, or `MCP_PROMPT_LIST`
 3. **Verification**: Envelope passes through L1/L2/L3 verification gates
 4. **Dispatch**: Verified envelope forwarded to downstream MCP server or local execution
+
+### Local Tool Execution
+
+The gateway handles certain tools locally without downstream proxy:
+
+- **read_field**: JIT field resolution from governed collections with L1 field path validation, L3 session validation, and audit vault logging. Requires `collection`, `document_id`, `field_path`, and `operator_session_id` parameters.
 
 ---
 
@@ -99,11 +105,11 @@ This ensures compatibility with JSON-based ecosystems while maintaining typed sc
 MCP clients connect to the gateway via:
 
 - **JSON-RPC 2.0**: Standard JSON-RPC over HTTP to gateway endpoints
-- **Authentication**: mTLS certificate or API key depending on configuration
+- **Authentication**: mTLS certificate (RequireAndVerifyClientCert) for MCP ingress routes
 
 ### Tool Invocation
 
-Invoke MCP tools via JSON-RPC POST to `/api/mcp/v1/tools/call`:
+Invoke MCP tools via JSON-RPC POST to `/api/mcp/v1/tools/call` or `/api/mcp/v1/tools/call/sse` for streaming:
 
 ```json
 {
@@ -147,14 +153,14 @@ The Gateway applies L1 forbidden pattern checks to tool names before forwarding 
 ### L1 Doctrine (Hard Gates)
 
 - **Forbidden patterns**: Protobuf field options with regex constraints on tool names and URIs
-- **Sentinel scanning**: Runtime scanning of field values for forbidden patterns (sudo, password, api_key, etc.)
+- **Runtime scanning**: Runtime scanning of field values for forbidden patterns (sudo, password, api_key, etc.)
 - **Field path validation**: Allowlist/denylist enforcement for `read_field` tool via `FieldPathRegistry`
 
 ### L2 Consensus
 
 - **Ed25519 signatures**: Consensus agents sign envelopes with their private keys
 - **Signer verification**: Gateway verifies signatures against trusted signers in SQLite store
-- **Gateway bypass**: In doctrine mode, Gateway signs envelopes locally (single-agent consensus)
+- **Gateway signing**: In doctrine mode, Gateway signs envelopes locally (single-agent consensus) with `gateway_signed=true` flag
 - **Reputation staking**: Signers stake reputation on their decisions
 
 ### L3 Notary (Authorization)
@@ -170,20 +176,41 @@ The Gateway applies L1 forbidden pattern checks to tool names before forwarding 
 
 MCP protocol errors follow JSON-RPC 2.0 conventions:
 
+- **Parse error**: `-32700` (Parse error)
 - **Invalid request**: `-32600` (Invalid Request)
+- **Method not found**: `-32601` (Method not found)
 - **Invalid params**: `-32602` (Invalid params)
 - **Internal error**: `-32603` (Internal error)
-- **Unauthorized**: `-32001` (Unauthorized)
+
+### Gateway-Specific Error Codes
+
+The gateway uses reserved error codes in the `-32000` to `-32099` range for governance verification failures:
+
+- **Invalid envelope**: `-32000` (Invalid envelope structure or missing fields)
+- **Hash mismatch**: `-32001` (Transaction hash mismatch)
+- **Expired**: `-32002` (Transaction expired)
+- **Replay**: `-32003` (Transaction replay detected)
+- **State mismatch**: `-32004` (State root mismatch)
+- **L1 validation failed**: `-32005` (L1 forbidden pattern violation)
+- **L2 signature invalid**: `-32006` (L2 signature verification failed)
+- **L3 proof invalid**: `-32007` (L3 WebAuthn proof verification failed)
+- **Payload decode failed**: `-32008` (Failed to decode protobuf payload)
+- **Resource not found**: `-32100` (Requested resource not found)
+- **Gateway not ready**: `-32101` (Gateway not ready to process requests)
 
 ### Error Mapping
 
-Gateway verification errors are mapped to standard JSON-RPC error responses:
+Gateway verification errors are mapped to JSON-RPC error responses:
 
-- **Invalid envelope**: `-32600` (Invalid Request)
-- **L1 rejection**: `-32602` (Invalid params)
-- **L2 rejection**: `-32603` (Internal error)
-- **L3 rejection**: `-32001` (Unauthorized)
+- **Invalid envelope**: `-32000` (Invalid envelope structure)
+- **L1 rejection**: `-32005` (L1 forbidden pattern violation)
+- **L2 rejection**: `-32006` (L2 signature verification failed)
+- **L3 rejection**: `-32007` (L3 proof verification failed)
 - **Downstream unavailable**: `-32603` (Internal error, circuit breaker)
+
+### L3 Suspension
+
+When L3 proof is missing (`ErrL3ProofMissing`), the gateway suspends the transaction and returns an approval URL for out-of-band WebAuthn authorization. The client must retry after approval.
 
 ---
 
@@ -205,9 +232,9 @@ Default ports (configurable via flags or paths.json):
 
 | Port | Purpose | Auth |
 |---|---|---|
-| `8440` | mTLS API + Pub/Sub | mTLS (RequireAndVerifyClientCert) |
-| `8441` | Bootstrap enrollment | Plain HTTP (no TLS) |
+| `8441` | Bootstrap enrollment | TLS (no client cert) |
 | `8442` | Public web session | TLS (no client cert) |
+| `9000-9003` | Operator mTLS API + Pub/Sub | mTLS (RequireAndVerifyClientCert) |
 
 ### Environment Variables
 
@@ -257,6 +284,8 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 | CLI L3 verification | `internal/services/gateway/cli_l3_notary.go` |
 | Composite L3 verifier | `internal/services/gateway/composite_l3_verifier.go` |
 | Passkey L3 brokerage | `internal/services/gateway/passkey_service.go` |
+| Error mapping | `internal/services/mcp/gateway.go` (mapGatewayError) |
+| Suspended transaction store | `internal/services/gateway/gateway_db_service.go` |
 
 ---
 

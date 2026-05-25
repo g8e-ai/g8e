@@ -84,9 +84,9 @@ nav:
   - Guides:
       - Getting Started: guides/getting_started.md
       - Build Gateway: guides/build_gateway.md
-      - Deploy Gateway: guides/deploy_gateway.md
+      - Connect Apps to Gateway: guides/connect_apps_to_gateway.md
       - Build Operator: guides/build_operator.md
-      - Deploy Operator: guides/deploy_operator.md
+      - Connect Operator to Gateway: guides/connect_operator_to_gateway.md
       - Build Apps: guides/build_apps.md
       - Air Gap: guides/air_gap.md
   - Reference:

@@ -194,5 +194,5 @@ This verifies:
 
 ## Next Steps
 
-- **[Deploy Gateway](deploy_gateway.md)** — Connect to, authenticate, use, maintain, and pull reports from a Gateway.
+- **[Connect Apps to Gateway](connect_apps_to_gateway.md)** — Connect to, authenticate, use, maintain, and pull reports from a Gateway.
 - **[Build Operator](build_operator.md)** — Build a custom g8e-compatible Governed Operator.
