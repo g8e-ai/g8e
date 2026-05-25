@@ -3,7 +3,7 @@
   "vertical": "gates",
   "narrative": "Envelope with forged L2 signature should be rejected",
   "intent": {
-    "id": "b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4",
+    "id": "3b833b0634d68cb1eae4245eea8329775be00f42ab36fb90bd1761064ae33227",
     "timestamp": "2026-05-25T12:00:00Z",
     "expiresAt": "2026-05-25T13:00:00Z",
     "sourceComponent": "COMPONENT_CLIENT",
@@ -14,11 +14,11 @@
     "targetResource": "localhost",
     "stateMerkleRoot": "abc123def456",
     "nonce": "nonce-l2-invalid-123",
-    "transactionHash": "b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4",
+    "transactionHash": "3b833b0634d68cb1eae4245eea8329775be00f42ab36fb90bd1761064ae33227",
     "protocolVersion": "1.0",
     "governance": {
       "l2": {
-        "tribunalSignature": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        "tribunalSignature": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
         "keyId": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
       }
     }

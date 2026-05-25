@@ -3,28 +3,28 @@
   "vertical": "gates",
   "narrative": "Envelope with invalid L3 proof should be rejected",
   "intent": {
-    "id": "f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1",
+    "id": "7459287e8cc67b3de0a346d5d05b66b0061bd3d4ff28384bebcdebc9eefffa0f",
     "timestamp": "2026-05-25T12:00:00Z",
     "expiresAt": "2026-05-25T13:00:00Z",
     "sourceComponent": "COMPONENT_CLIENT",
     "operatorId": "operator-1",
     "operatorSessionId": "operator-session-1",
-    "payload": "CgZscyAtbAESCGV4ZWMtMTIzGgx0ZXN0IGNvbW1hbmQiBnN0cmljdCge",
+    "payload": "CgZscyAtbGESCGV4ZWMtMTIzGgx0ZXN0IGNvbW1hbmQiBnN0cmljdCge",
     "actionType": "EXECUTE_BASH",
     "targetResource": "localhost",
     "stateMerkleRoot": "abc123def456",
     "nonce": "nonce-l3-invalid-123",
-    "transactionHash": "f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1",
+    "transactionHash": "7459287e8cc67b3de0a346d5d05b66b0061bd3d4ff28384bebcdebc9eefffa0f",
     "protocolVersion": "1.0",
     "governance": {
       "l2": {
-        "tribunalSignature": "68c757ff1d0c37e2d972c41f12baba63973072b209d6cf58aafb1e8bc7775971c7f12c7740935823713027809cd19adfcdba1108151572ffb3ecd2891e900403",
+        "tribunalSignature": "a31de2267952fe8c4eae82ee5aadbd77be81545688b9ff9f9c8605115e3bbeea71d4c2ae51b3453a9b0fff98a53f96641ff3e09dbbc1fbcb711d24a2262f2701",
         "keyId": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
       },
       "l3": {
         "proof": {
-          "authenticatorData": "invalidauthdata",
           "clientDataJSON": "invalidclientdata",
+          "authenticatorData": "invalidauthdata",
           "signature": "invalidsignature"
         }
       }

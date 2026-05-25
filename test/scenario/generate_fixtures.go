@@ -30,6 +30,11 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
+// Test placeholder constants for intentionally corrupted test fixtures
+const (
+	fixtureBadSignature = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+)
+
 func main() {
 	// Generate test signers
 	pub1, priv1, _ := ed25519.GenerateKey(nil)
@@ -87,7 +92,7 @@ func main() {
 
 	// 1. Forged signature - use wrong signature
 	forgedEnv := proto.Clone(baseEnv).(*commonv1.GovernanceEnvelope)
-	forgedEnv.Governance.L2.TribunalSignature = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	forgedEnv.Governance.L2.TribunalSignature = fixtureBadSignature
 	forgedJSON, _ := marshaler.Marshal(forgedEnv)
 
 	// 2. Replay - use a different nonce but same envelope structure

@@ -30,6 +30,15 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
+// Test placeholder constants for intentionally corrupted test fixtures
+const (
+	fixtureBadID               = "wrongidwrongidwrongidwrongidwrongidwrongidwrongidwrongidwrongid"
+	fixtureBadSignature        = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	fixtureInvalidL3ClientData = "invalidclientdata"
+	fixtureInvalidL3AuthData   = "invalidauthdata"
+	fixtureInvalidL3Signature  = "invalidsignature"
+)
+
 func main() {
 	// Use the same private key as the test fixtures
 	privKeyHex := "c847d8625a1d1be737b8c86012ef1ceb7cfe1c2f5bed5115b90b490c55600502797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
@@ -98,7 +107,7 @@ func main() {
 	// 2. bad_integrity - id != computed hash
 	badIntegrity := createBase("nonce-bad-integrity-123")
 	signAndHash(badIntegrity)
-	badIntegrity.Id = "wrongidwrongidwrongidwrongidwrongidwrongidwrongidwrongidwrongid"
+	badIntegrity.Id = fixtureBadID
 	badIntegrityJSON, _ := marshaler.Marshal(badIntegrity)
 	fmt.Println("BAD_INTEGRITY_INTENT:")
 	fmt.Println(string(badIntegrityJSON))
@@ -118,7 +127,7 @@ func main() {
 	// 4. l2_invalid - forged L2 signature
 	l2Invalid := createBase("nonce-l2-invalid-123")
 	signAndHash(l2Invalid)
-	l2Invalid.Governance.L2.TribunalSignature = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	l2Invalid.Governance.L2.TribunalSignature = fixtureBadSignature
 	l2InvalidJSON, _ := marshaler.Marshal(l2Invalid)
 	fmt.Println("L2_INVALID_INTENT:")
 	fmt.Println(string(l2InvalidJSON))
@@ -137,9 +146,9 @@ func main() {
 	signAndHash(l3Invalid)
 	l3Invalid.Governance.L3 = &commonv1.L3Metadata{
 		Proof: &commonv1.L3Proof{
-			AuthenticatorData: "invalidauthdata",
-			ClientDataJson:    "invalidclientdata",
-			Signature:         "invalidsignature",
+			AuthenticatorData: fixtureInvalidL3AuthData,
+			ClientDataJson:    fixtureInvalidL3ClientData,
+			Signature:         fixtureInvalidL3Signature,
 		},
 	}
 	l3InvalidJSON, _ := marshaler.Marshal(l3Invalid)

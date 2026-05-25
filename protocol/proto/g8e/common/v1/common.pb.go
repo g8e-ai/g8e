@@ -207,7 +207,7 @@ func (x *L2Metadata) GetKeyId() string {
 // Notary (L3Notary) Governance: Authorization (Human-in-the-loop)
 type L3Proof struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
-	ClientDataJson    string                 `protobuf:"bytes,1,opt,name=client_data_json,json=clientDataJson,proto3" json:"client_data_json,omitempty"`
+	ClientDataJson    string                 `protobuf:"bytes,1,opt,name=client_data_json,json=clientDataJSON,proto3" json:"client_data_json,omitempty"`
 	AuthenticatorData string                 `protobuf:"bytes,2,opt,name=authenticator_data,json=authenticatorData,proto3" json:"authenticator_data,omitempty"`
 	Signature         string                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 	CredentialId      string                 `protobuf:"bytes,4,opt,name=credential_id,json=credentialId,proto3" json:"credential_id,omitempty"`
@@ -661,7 +661,7 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\tagent_ids\x18\x02 \x03(\tR\bagentIds\x12\x15\n" +
 	"\x06key_id\x18\x03 \x01(\tR\x05keyId\"\xd9\x01\n" +
 	"\aL3Proof\x12(\n" +
-	"\x10client_data_json\x18\x01 \x01(\tR\x0eclientDataJson\x12-\n" +
+	"\x10client_data_json\x18\x01 \x01(\tR\x0eclientDataJSON\x12-\n" +
 	"\x12authenticator_data\x18\x02 \x01(\tR\x11authenticatorData\x12\x1c\n" +
 	"\tsignature\x18\x03 \x01(\tR\tsignature\x12#\n" +
 	"\rcredential_id\x18\x04 \x01(\tR\fcredentialId\x122\n" +
