@@ -109,7 +109,7 @@ func TestAuditVaultService_Session(t *testing.T) {
 
 	// Create a session
 	operatorSessionID := "test-session-123"
-	err = avs.CreateSession(operatorSessionID, "Test OperatorSession", "user@example.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Test OperatorSession", "user@example.com")
 	require.NoError(t, err)
 
 	// Retrieve the session
@@ -144,7 +144,7 @@ func TestAuditVaultService_Event(t *testing.T) {
 
 	// Create a session first
 	operatorSessionID := "test-session-456"
-	err = avs.CreateSession(operatorSessionID, "Test OperatorSession", "user@example.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Test OperatorSession", "user@example.com")
 	require.NoError(t, err)
 
 	// Record a command execution event
@@ -271,7 +271,7 @@ func TestAuditVaultService_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 	defer avs.Close()
 
 	operatorSessionID := "batch-valid-session"
-	err = avs.CreateSession(operatorSessionID, "Batch Session", "user@example.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Batch Session", "user@example.com")
 	require.NoError(t, err)
 
 	err = avs.RecordEvents([]*Event{
@@ -318,7 +318,7 @@ func TestAuditVaultService_RecordEvents_SucceedsWithExistingSessions(t *testing.
 	defer avs.Close()
 
 	operatorSessionID := "batch-existing-session"
-	err = avs.CreateSession(operatorSessionID, "Batch Session", "user@example.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Batch Session", "user@example.com")
 	require.NoError(t, err)
 
 	err = avs.RecordEvents([]*Event{
@@ -364,7 +364,7 @@ func TestAuditVaultService_OutputTruncation(t *testing.T) {
 
 	// Create a session
 	operatorSessionID := "test-session-truncation"
-	err = avs.CreateSession(operatorSessionID, "Truncation Test", "user@example.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Truncation Test", "user@example.com")
 	require.NoError(t, err)
 
 	// Create large output that exceeds threshold
@@ -422,7 +422,7 @@ func TestAuditVaultService_FileMutation(t *testing.T) {
 
 	// Create a session
 	operatorSessionID := "test-session-mutation"
-	err = avs.CreateSession(operatorSessionID, "Mutation Test", "user@example.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Mutation Test", "user@example.com")
 	require.NoError(t, err)
 
 	// Record a file mutation event
@@ -508,7 +508,7 @@ func TestAuditVaultService_MultipleSessions(t *testing.T) {
 	}
 
 	for _, s := range sessions {
-		err := avs.CreateSession(s.id, s.title, s.user)
+		err := avs.CreateSession(s.id, "operator", s.title, s.user)
 		require.NoError(t, err)
 	}
 
@@ -544,7 +544,7 @@ func TestAuditVaultService_EventPagination(t *testing.T) {
 	defer avs.Close()
 
 	operatorSessionID := "test-pagination-session"
-	err = avs.CreateSession(operatorSessionID, "Pagination Test", "user@test.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Pagination Test", "user@test.com")
 	require.NoError(t, err)
 
 	// Create 25 events
@@ -611,7 +611,7 @@ func TestAuditVaultService_EventOrdering(t *testing.T) {
 	defer avs.Close()
 
 	operatorSessionID := "test-ordering-session"
-	err = avs.CreateSession(operatorSessionID, "Ordering Test", "user@test.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Ordering Test", "user@test.com")
 	require.NoError(t, err)
 
 	// Create events with increasing timestamps
@@ -660,7 +660,7 @@ func TestAuditVaultService_MultipleFileMutationsPerEvent(t *testing.T) {
 	defer avs.Close()
 
 	operatorSessionID := "test-multi-mutation-session"
-	err = avs.CreateSession(operatorSessionID, "Multi-Mutation Test", "user@test.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Multi-Mutation Test", "user@test.com")
 	require.NoError(t, err)
 
 	// Create an event
@@ -723,7 +723,7 @@ func TestAuditVaultService_NullExitCode(t *testing.T) {
 	defer avs.Close()
 
 	operatorSessionID := "test-null-exit-session"
-	err = avs.CreateSession(operatorSessionID, "Null Exit Test", "user@test.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Null Exit Test", "user@test.com")
 	require.NoError(t, err)
 
 	// Create event with nil exit code
@@ -766,7 +766,7 @@ func TestAuditVaultService_DifferentEventTypes(t *testing.T) {
 	defer avs.Close()
 
 	operatorSessionID := "test-event-types-session"
-	err = avs.CreateSession(operatorSessionID, "Event Types Test", "user@test.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Event Types Test", "user@test.com")
 	require.NoError(t, err)
 
 	eventTypes := []constants.EventType{
@@ -822,7 +822,7 @@ func TestAuditVaultService_StderrTruncation(t *testing.T) {
 	defer avs.Close()
 
 	operatorSessionID := "test-stderr-truncation"
-	err = avs.CreateSession(operatorSessionID, "Stderr Truncation Test", "user@test.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Stderr Truncation Test", "user@test.com")
 	require.NoError(t, err)
 
 	// Large stderr output
@@ -900,7 +900,7 @@ func TestAuditVaultService_GetEventsEmptySession(t *testing.T) {
 	defer avs.Close()
 
 	operatorSessionID := "empty-session"
-	err = avs.CreateSession(operatorSessionID, "Empty OperatorSession", "user@test.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Empty OperatorSession", "user@test.com")
 	require.NoError(t, err)
 
 	events, err := avs.GetEvents(operatorSessionID, 10, 0)
@@ -959,7 +959,7 @@ func TestAuditVaultService_WALMode(t *testing.T) {
 	assert.FileExists(t, dbPath)
 
 	// WAL file should be created after some activity
-	err = avs.CreateSession("wal-test", "WAL Test", "user@test.com")
+	err = avs.CreateSession("wal-test", "operator", "WAL Test", "user@test.com")
 	require.NoError(t, err)
 
 	// The -wal and -shm files may or may not exist depending on activity
@@ -1055,7 +1055,7 @@ func TestAuditVaultService_NilServiceMethods(t *testing.T) {
 	var avs *AuditVaultService
 
 	// These should not panic and return gracefully
-	err := avs.CreateSession("id", "title", "user")
+	err := avs.CreateSession("id", "operator", "title", "user")
 	assert.NoError(t, err)
 
 	eventID, err := avs.RecordEvent(&Event{})
@@ -1222,7 +1222,7 @@ func TestAuditVaultService_LongContentFields(t *testing.T) {
 	defer avs.Close()
 
 	operatorSessionID := "test-long-content"
-	err = avs.CreateSession(operatorSessionID, "Long Content Test", "user@test.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Long Content Test", "user@test.com")
 	require.NoError(t, err)
 
 	// Create event with long content (below truncation threshold)
@@ -1276,7 +1276,7 @@ func TestAuditVaultService_FileMutationOperationTypes(t *testing.T) {
 	defer avs.Close()
 
 	operatorSessionID := "test-mutation-types"
-	err = avs.CreateSession(operatorSessionID, "Mutation Types Test", "user@test.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Mutation Types Test", "user@test.com")
 	require.NoError(t, err)
 
 	operations := []FileMutationOperation{
@@ -1331,7 +1331,7 @@ func TestAuditVaultService_SessionWithNullFields(t *testing.T) {
 	defer avs.Close()
 
 	// Create session with empty optional fields
-	err = avs.CreateSession("null-fields-session", "", "")
+	err = avs.CreateSession("null-fields-session", "operator", "", "")
 	require.NoError(t, err)
 
 	session, err := avs.GetSession("null-fields-session")
@@ -1406,7 +1406,7 @@ func TestAuditVaultService_WithEncryption(t *testing.T) {
 	assert.True(t, avs.IsEncryptionEnabled())
 
 	// Create session
-	err = avs.CreateSession("encrypted-session-1", "Encrypted Test", "test-user")
+	err = avs.CreateSession("encrypted-session-1", "operator", "Encrypted Test", "test-user")
 	require.NoError(t, err)
 
 	// Record event with sensitive content
@@ -1466,7 +1466,7 @@ func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 	require.NoError(t, err)
 
 	// Write encrypted data
-	err = avs1.CreateSession("locked-test-session", "Locked Test", "test-user")
+	err = avs1.CreateSession("locked-test-session", "operator", "Locked Test", "test-user")
 	require.NoError(t, err)
 
 	secretData := "TOP SECRET: Password is hunter2"
@@ -1544,7 +1544,7 @@ func TestAuditVaultService_EncryptionWithRekey(t *testing.T) {
 	require.NoError(t, err)
 
 	// Write data with old key
-	err = avs.CreateSession("rekey-session", "Rekey Test", "test-user")
+	err = avs.CreateSession("rekey-session", "operator", "Rekey Test", "test-user")
 	require.NoError(t, err)
 
 	originalData := "Data encrypted with old key"
@@ -1619,7 +1619,7 @@ func TestAuditVaultService_MixedEncryptedUnencrypted(t *testing.T) {
 	avs1, err := NewAuditVaultService(config1, testutil.NewTestLogger())
 	require.NoError(t, err)
 
-	err = avs1.CreateSession("mixed-session", "Mixed Test", "test-user")
+	err = avs1.CreateSession("mixed-session", "operator", "Mixed Test", "test-user")
 	require.NoError(t, err)
 
 	unencryptedData := "This is plaintext data"

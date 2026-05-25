@@ -432,7 +432,7 @@ func main() {
 			os.Exit(1)
 		}
 		if session == nil {
-			if err := av.CreateSession(sessionID, fmt.Sprintf("Chaos Worker %d", i+1), "chaos@test.local"); err != nil {
+			if err := av.CreateSession(sessionID, "operator", fmt.Sprintf("Chaos Worker %d", i+1), "chaos@test.local"); err != nil {
 				logger.Error("failed to create chaos audit session", "error", err)
 				av.Close()
 				os.Exit(1)

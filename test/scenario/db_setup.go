@@ -115,10 +115,10 @@ func QueryAuditVault(vault *storage.AuditVaultService, transactionID string) (*m
 
 // CreateTestSession creates a test session in the audit vault for receipt recording.
 // This is required because the receipts table has a foreign key constraint on sessions.
-func CreateTestSession(vault *storage.AuditVaultService, sessionID string) error {
+func CreateTestSession(vault *storage.AuditVaultService, sessionID, sessionType string) error {
 	if vault == nil {
 		return fmt.Errorf("audit vault is nil")
 	}
 
-	return vault.CreateSession(sessionID, "test session", "test-user")
+	return vault.CreateSession(sessionID, sessionType, "test session", "test-user")
 }

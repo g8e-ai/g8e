@@ -8,7 +8,7 @@
     "expiresAt": "2026-05-24T13:00:00Z",
     "sourceComponent": "COMPONENT_CLIENT",
     "operatorId": "operator-1",
-    "operatorSessionId": "operator-session-1",
+    "operatorSessionId": "operator-session-security-stale",
     "payload": "CgZscyAtbGESCGV4ZWMtMTIzGgx0ZXN0IGNvbW1hbmQiBnN0cmljdCge",
     "actionType": "EXECUTE_BASH",
     "targetResource": "localhost",

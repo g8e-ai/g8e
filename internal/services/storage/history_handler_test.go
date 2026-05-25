@@ -59,7 +59,7 @@ func TestHistoryHandler_FetchHistory(t *testing.T) {
 
 	// Create test data
 	operatorSessionID := "test-session-history"
-	err := avs.CreateSession(operatorSessionID, "Test History OperatorSession", "user@test.com")
+	err := avs.CreateSession(operatorSessionID, "operator", "Test History OperatorSession", "user@test.com")
 	require.NoError(t, err)
 
 	// Add some events
@@ -142,7 +142,7 @@ func TestHistoryHandler_FetchHistoryWithFileMutations(t *testing.T) {
 
 	// Create test data
 	operatorSessionID := "test-session-mutations"
-	err := avs.CreateSession(operatorSessionID, "Mutation Test OperatorSession", "user@test.com")
+	err := avs.CreateSession(operatorSessionID, "operator", "Mutation Test OperatorSession", "user@test.com")
 	require.NoError(t, err)
 
 	// Add file mutation event
@@ -193,7 +193,7 @@ func TestHistoryHandler_FetchHistoryPagination(t *testing.T) {
 	defer avs.Close()
 
 	operatorSessionID := "test-pagination-session"
-	err := avs.CreateSession(operatorSessionID, "Pagination Test", "user@test.com")
+	err := avs.CreateSession(operatorSessionID, "operator", "Pagination Test", "user@test.com")
 	require.NoError(t, err)
 
 	// Create 15 events
@@ -239,7 +239,7 @@ func TestHistoryHandler_FetchHistoryDefaultLimit(t *testing.T) {
 	defer avs.Close()
 
 	operatorSessionID := "test-default-limit"
-	err := avs.CreateSession(operatorSessionID, "Default Limit Test", "user@test.com")
+	err := avs.CreateSession(operatorSessionID, "operator", "Default Limit Test", "user@test.com")
 	require.NoError(t, err)
 
 	// Create 5 events
@@ -515,7 +515,7 @@ func TestHistoryHandler_AllEventTypes(t *testing.T) {
 	defer avs.Close()
 
 	operatorSessionID := "test-all-event-types"
-	err := avs.CreateSession(operatorSessionID, "All Event Types", "user@test.com")
+	err := avs.CreateSession(operatorSessionID, "operator", "All Event Types", "user@test.com")
 	require.NoError(t, err)
 
 	// Create events of all types
@@ -584,7 +584,7 @@ func TestHistoryHandler_EventWithTruncatedOutput(t *testing.T) {
 	hh := NewHistoryHandler(avs, lms, logger)
 
 	operatorSessionID := "test-truncated-output"
-	err = avs.CreateSession(operatorSessionID, "Truncated Output", "user@test.com")
+	err = avs.CreateSession(operatorSessionID, "operator", "Truncated Output", "user@test.com")
 	require.NoError(t, err)
 
 	// Create event with large output
@@ -623,7 +623,7 @@ func TestHistoryHandler_MultipleFileMutationsInHistory(t *testing.T) {
 	defer avs.Close()
 
 	operatorSessionID := "test-multi-mutations"
-	err := avs.CreateSession(operatorSessionID, "Multi Mutations", "user@test.com")
+	err := avs.CreateSession(operatorSessionID, "operator", "Multi Mutations", "user@test.com")
 	require.NoError(t, err)
 
 	// Create file mutation event with multiple files

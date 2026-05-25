@@ -36,7 +36,7 @@ func testCmd() *cobra.Command {
 
 			cmd.Println("Running all tests (unit + integration)...")
 			cmd.Println("\n=== Unit Tests ===")
-			goCmd := exec.Command("go", "test", "-race", "-timeout", "180s", "./...")
+			goCmd := exec.Command("go", "test", "-race", "-timeout", "180s", "./cmd/...", "./internal/...", "./pkg/...", "./test/...")
 			goCmd.Stdout = os.Stdout
 			goCmd.Stderr = os.Stderr
 			goCmd.Dir = cfg.ProjectRoot
@@ -86,7 +86,7 @@ func testUnitCmd() *cobra.Command {
 			}
 
 			var goArgs []string
-			goArgs = []string{"test", "-race", "-timeout", "180s", "./..."}
+			goArgs = []string{"test", "-race", "-timeout", "180s", "./cmd/...", "./internal/...", "./pkg/...", "./test/..."}
 
 			if run != "" {
 				goArgs = append(goArgs, "-run", run)
@@ -164,7 +164,7 @@ func testG8eoCmd() *cobra.Command {
 			}
 
 			var goArgs []string
-			goArgs = []string{"test", "./..."}
+			goArgs = []string{"test", "./cmd/...", "./internal/...", "./pkg/...", "./test/..."}
 
 			if run != "" {
 				goArgs = append(goArgs, "-run", run)
@@ -208,7 +208,7 @@ func testCICmd() *cobra.Command {
 
 			cmd.Println("Running CI test suite...")
 			cmd.Println("\n=== Testing g8eo ===")
-			goCmd := exec.Command("go", "test", "-race", "-timeout", "180s", "./...")
+			goCmd := exec.Command("go", "test", "-race", "-timeout", "180s", "./cmd/...", "./internal/...", "./pkg/...", "./test/...")
 			goCmd.Stdout = os.Stdout
 			goCmd.Stderr = os.Stderr
 			goCmd.Dir = cfg.ProjectRoot
