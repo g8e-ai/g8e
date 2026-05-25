@@ -247,7 +247,6 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		rs.signerStore,
 		c.AppPolicyStore,
 		c.L3Notary,
-		c.Sentinel,
 		knownActionTypes,
 		posture,
 		nil, // Clock defaults to RealClock

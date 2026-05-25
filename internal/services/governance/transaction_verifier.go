@@ -29,7 +29,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/pkg/uap"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -117,8 +116,8 @@ type GovernancePosture interface {
 type DoctrinePosture struct{}
 
 func (p *DoctrinePosture) Name() string              { return "doctrine" }
-func (p *DoctrinePosture) RequiresL2Signature() bool { return true }
-func (p *DoctrinePosture) RequiresL3Proof() bool     { return true }
+func (p *DoctrinePosture) RequiresL2Signature() bool { return false }
+func (p *DoctrinePosture) RequiresL3Proof() bool     { return false }
 
 // ConsensusPosture implements the consensus governance posture.
 // Consensus requires L1 (Doctrine) and L2 (Consensus) validation.
@@ -307,6 +306,7 @@ type VerifiedTransaction struct {
 	ExpiresAt      time.Time
 	L2Valid        bool // Whether L2 signature was valid (may be false in Doctrine posture)
 	L3Valid        bool // Whether L3 proof was valid (may be false in Doctrine/Consensus posture)
+	Posture        GovernancePosture
 }
 
 // TransactionVerifier performs all pre-dispatch verification checks.
@@ -317,7 +317,6 @@ type TransactionVerifier struct {
 	signerStore       SignerStore
 	appPolicyStore    AppPolicyStore
 	l3Notary          L3Notary
-	sentinel          *sentinel.Sentinel // L1 threat detection for MCP arguments
 	knownActionTypes  map[constants.ActionType]struct{}
 	posture           GovernancePosture // Governance posture: doctrine, consensus, or notary
 	clock             system.Clock      // Injectable time source for deterministic testing
@@ -333,7 +332,6 @@ func NewTransactionVerifier(
 	signerStore SignerStore,
 	appPolicyStore AppPolicyStore,
 	l3Notary L3Notary,
-	sentinel *sentinel.Sentinel,
 	knownActionTypes []constants.ActionType,
 	posture string,
 	clock system.Clock,
@@ -355,7 +353,6 @@ func NewTransactionVerifier(
 		signerStore:       signerStore,
 		appPolicyStore:    appPolicyStore,
 		l3Notary:          l3Notary,
-		sentinel:          sentinel,
 		knownActionTypes:  knownActions,
 		posture:           NewGovernancePosture(posture),
 		clock:             clock,
@@ -468,6 +465,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(ctx context.Context, envelope *uap
 		ExpiresAt:      expiresAt,
 		L2Valid:        l2Valid,
 		L3Valid:        l3Valid,
+		Posture:        tv.posture,
 	}, nil
 }
 
@@ -599,7 +597,7 @@ func (tv *TransactionVerifier) verifyPosture(ctx context.Context, envelope *uap.
 
 func (tv *TransactionVerifier) verifyL2Posture(envelope *uap.UAPEnvelope, computedHash string) (bool, error) {
 	if !tv.posture.RequiresL2Signature() {
-		return true, nil
+		return false, nil
 	}
 
 	if envelope.Governance == nil || envelope.Governance.L2 == nil {
@@ -644,15 +642,10 @@ func (tv *TransactionVerifier) verifyL2Posture(envelope *uap.UAPEnvelope, comput
 
 func (tv *TransactionVerifier) verifyL3Posture(ctx context.Context, envelope *uap.UAPEnvelope) (bool, error) {
 	actionType := constants.ActionType(envelope.ActionType)
-	if !tv.isMutation(actionType) {
-		return true, nil
-	}
-
-	if !tv.posture.RequiresL3Proof() {
-		return true, nil
-	}
 
 	// Check if this is an external app transaction that can bypass L3 via policy
+	// This check must come before the mutation check so that read-only actions
+	// with explicit app policy bypasses get L3Valid=true
 	if envelope.Governance != nil && envelope.Governance.L2 != nil && envelope.Governance.L2.KeyId != "" {
 		if tv.appPolicyStore != nil {
 			appID := envelope.Governance.L2.KeyId
@@ -671,6 +664,15 @@ func (tv *TransactionVerifier) verifyL3Posture(ctx context.Context, envelope *ua
 				}
 			}
 		}
+	}
+
+	// If not bypassed by app policy, check if L3 is required for this action
+	if !tv.isMutation(actionType) {
+		return false, nil
+	}
+
+	if !tv.posture.RequiresL3Proof() {
+		return false, nil
 	}
 
 	if envelope.Governance == nil || envelope.Governance.L3 == nil || envelope.Governance.L3.Proof == nil {
@@ -789,37 +791,6 @@ func (tv *TransactionVerifier) validateL1Governance(msg proto.Message) []string 
 		}
 	}
 
-	// Extended L1 validation: recursively analyze MCP/A2A tool arguments
-	if tv.sentinel != nil {
-		switch m := msg.(type) {
-		case *operatorv1.McpCallRequested:
-			if m.ArgumentsJson != "" {
-				analysis := tv.sentinel.AnalyzeMCPArguments(m.ArgumentsJson)
-				if !analysis.Safe {
-					violations = append(violations, fmt.Sprintf("MCP arguments violate L1 governance: %s", analysis.BlockReason))
-				}
-				// Also add elevated threat signals as informational violations
-				if analysis.RequiresApproval {
-					for _, sig := range analysis.ThreatSignals {
-						violations = append(violations, fmt.Sprintf("MCP argument threat detected in %s: %s (confidence: %.2f)", sig.Context, sig.Indicator, sig.Confidence))
-					}
-				}
-			}
-		case *operatorv1.A2ACallRequested:
-			if m.PayloadJson != "" {
-				analysis := tv.sentinel.AnalyzeMCPArguments(m.PayloadJson) // Reuse same recursive logic
-				if !analysis.Safe {
-					violations = append(violations, fmt.Sprintf("A2A payload violates L1 governance: %s", analysis.BlockReason))
-				}
-				if analysis.RequiresApproval {
-					for _, sig := range analysis.ThreatSignals {
-						violations = append(violations, fmt.Sprintf("A2A payload threat detected in %s: %s (confidence: %.2f)", sig.Context, sig.Indicator, sig.Confidence))
-					}
-				}
-			}
-		}
-	}
-
 	return violations
 }
 
@@ -839,4 +810,9 @@ func (tv *TransactionVerifier) verifyL2Signature(pubKey ed25519.PublicKey, signa
 	}
 	payload := fmt.Sprintf("%s|%v", messageID, decision)
 	return ed25519.Verify(pubKey, []byte(payload), sigBytes)
+}
+
+// Posture returns the current governance posture.
+func (tv *TransactionVerifier) Posture() GovernancePosture {
+	return tv.posture
 }

@@ -27,9 +27,9 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 // TestBYOClientEndToEndProof tests the complete BYO (Bring-Your-Own) client lifecycle:
@@ -55,8 +55,8 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 			StateRootBefore:  "root-before",
 			StateRootAfter:   "root-after",
 			ExecutedAtUnixMs: time.Now().UnixMilli(),
-			L2Valid:          true,
-			L3Valid:          true,
+			L2Status:         operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
+			L3Status:         operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
 		},
 		onExecute: func(env *commonv1.GovernanceEnvelope) {
 			executionCount++
@@ -178,8 +178,8 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, receipt.Status)
 	require.Equal(t, "file edited successfully", receipt.ResultSummary)
 	require.True(t, receipt.GatewaySigned)
-	require.True(t, receipt.L2Valid)
-	require.True(t, receipt.L3Valid)
+	require.Equal(t, operatorv1.L2Status_L2_STATUS_REQUIRED_VALID, receipt.L2Status)
+	require.Equal(t, operatorv1.L3Status_L3_STATUS_REQUIRED_VALID, receipt.L3Status)
 
 	// Step 6: Verify transaction was deleted from suspended store after execution
 	_, found = suspendedStore.GetSuspendedTransaction(txHash)
@@ -206,8 +206,8 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 			Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 			ResultSummary: "file edited successfully",
 			GatewaySigned: true,
-			L2Valid:       true,
-			L3Valid:       true,
+			L2Status:      operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
+			L3Status:      operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
 		},
 	}
 
@@ -253,8 +253,8 @@ func TestBYOClientA2AEndToEndProof(t *testing.T) {
 			Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 			ResultSummary: "A2A skill executed successfully",
 			GatewaySigned: true,
-			L2Valid:       true,
-			L3Valid:       true,
+			L2Status:      operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
+			L3Status:      operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
 		},
 	}
 

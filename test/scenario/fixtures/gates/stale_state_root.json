@@ -1,24 +1,24 @@
 {
   "name": "stale_state_root",
-  "vertical": "security",
+  "vertical": "gates",
   "narrative": "Envelope with stale state root should be rejected",
   "intent": {
-    "id": "8a7d8c5900d2945b3ad8839ece2c5a3c159b13c44f3746257e1a5b4b0c984364",
-    "timestamp": "2026-05-24T12:00:00Z",
-    "expiresAt": "2026-05-24T13:00:00Z",
+    "id": "a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3",
+    "timestamp": "2026-05-25T12:00:00Z",
+    "expiresAt": "2026-05-25T13:00:00Z",
     "sourceComponent": "COMPONENT_CLIENT",
     "operatorId": "operator-1",
     "operatorSessionId": "operator-session-1",
-    "payload": "CgZscyAtbGESCGV4ZWMtMTIzGgx0ZXN0IGNvbW1hbmQiBnN0cmljdCge",
+    "payload": "CgZscyAtbAESCGV4ZWMtMTIzGgx0ZXN0IGNvbW1hbmQiBnN0cmljdCge",
     "actionType": "EXECUTE_BASH",
     "targetResource": "localhost",
-    "stateMerkleRoot": "stale-old-root-999",
-    "nonce": "nonce-stale-123",
-    "transactionHash": "8a7d8c5900d2945b3ad8839ece2c5a3c159b13c44f3746257e1a5b4b0c984364",
+    "stateMerkleRoot": "stale123stale456",
+    "nonce": "nonce-stale-state-123",
+    "transactionHash": "a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3",
     "protocolVersion": "1.0",
     "governance": {
       "l2": {
-        "tribunalSignature": "ff58d5bad4cd1185c624a0ea437a91e99d8c7f8812caf299705780583418fa5be7642f3ce054b8a44f8d0028db2a2accc62ba1a4cd4cc217cb4cd757bc8dec0e",
+        "tribunalSignature": "68c757ff1d0c37e2d972c41f12baba63973072b209d6cf58aafb1e8bc7775971c7f12c7740935823713027809cd19adfcdba1108151572ffb3ecd2891e900403",
         "keyId": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
       }
     }
@@ -32,21 +32,21 @@
   "expect": {
     "doctrine": {
       "verdict": "reject",
-      "reject_reason": "TX_STATE_MISMATCH",
+      "reject_reason": "TX_STATE_MISMATCH: state_merkle_root does not match current state",
       "l2_status": 1,
       "l3_status": 1
     },
     "consensus": {
       "verdict": "reject",
-      "reject_reason": "TX_STATE_MISMATCH",
-      "l2_status": 2,
+      "reject_reason": "TX_STATE_MISMATCH: state_merkle_root does not match current state",
+      "l2_status": 1,
       "l3_status": 1
     },
     "notary": {
       "verdict": "reject",
-      "reject_reason": "TX_STATE_MISMATCH",
-      "l2_status": 2,
-      "l3_status": 3
+      "reject_reason": "TX_STATE_MISMATCH: state_merkle_root does not match current state",
+      "l2_status": 1,
+      "l3_status": 1
     }
   }
 }

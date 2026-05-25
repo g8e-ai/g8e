@@ -27,12 +27,12 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/pkg/uap"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 //go:generate mockery --name L3Notary --output ./mocks --dir .
@@ -67,6 +67,7 @@ type Actuator struct {
 	Ctx               context.Context
 	ExecutionHandler  ExecutionHandler
 	Sentinel          *sentinel.Sentinel
+	Posture           GovernancePosture
 
 	// Actuator's own signing identity for ActionReceipts
 	SigningKey ed25519.PrivateKey
@@ -115,6 +116,22 @@ func (w *Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg 
 		gatewaySigned = vt.Envelope.Governance.GatewaySigned
 	}
 
+	// Determine L2 status based on posture and verification result
+	l2Status := operatorv1.L2Status_L2_STATUS_NOT_REQUIRED
+	if vt.L2Valid {
+		l2Status = operatorv1.L2Status_L2_STATUS_REQUIRED_VALID
+	} else if vt.Posture != nil && vt.Posture.RequiresL2Signature() {
+		l2Status = operatorv1.L2Status_L2_STATUS_REQUIRED_FAILED
+	}
+
+	// Determine L3 status based on posture and verification result
+	l3Status := operatorv1.L3Status_L3_STATUS_NOT_REQUIRED
+	if vt.L3Valid {
+		l3Status = operatorv1.L3Status_L3_STATUS_REQUIRED_VALID
+	} else if vt.Posture != nil && vt.Posture.RequiresL3Proof() {
+		l3Status = operatorv1.L3Status_L3_STATUS_REQUIRED_FAILED
+	}
+
 	receipt := &operatorv1.ActionReceipt{
 		TransactionId:    vt.Envelope.Id,
 		TransactionHash:  vt.Envelope.TransactionHash,
@@ -124,8 +141,8 @@ func (w *Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg 
 		ExecutedAtUnixMs: time.Now().UnixMilli(),
 		SignerKeyId:      w.KeyID,
 		GatewaySigned:    gatewaySigned,
-		L2Valid:          vt.L2Valid,
-		L3Valid:          vt.L3Valid,
+		L2Status:         l2Status,
+		L3Status:         l3Status,
 	}
 
 	// 2. Sign the initial receipt (intent to execute)
@@ -210,7 +227,7 @@ func (w *Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg 
 // CanonicalizeActionReceipt produces a deterministic byte representation for signing/verification.
 // This function must be used by both signing and verification to ensure consistency.
 // Field order: transaction_id, transaction_hash, status, result_summary, state_root_before,
-// state_root_after, executed_at_unix_ms, signer_key_id, gateway_signed, l2_valid, l3_valid.
+// state_root_after, executed_at_unix_ms, signer_key_id, gateway_signed, l2_status, l3_status.
 // All fields are included in the canonical form.
 func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 	payload, err := json.Marshal(map[string]interface{}{
@@ -223,8 +240,8 @@ func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 		"executed_at_unix_ms": r.ExecutedAtUnixMs,
 		"signer_key_id":       r.SignerKeyId,
 		"gateway_signed":      r.GatewaySigned,
-		"l2_valid":            r.L2Valid,
-		"l3_valid":            r.L3Valid,
+		"l2_status":           int32(r.L2Status),
+		"l3_status":           int32(r.L3Status),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal receipt for canonicalization: %w", err)

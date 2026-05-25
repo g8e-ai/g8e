@@ -459,7 +459,6 @@ func main() {
 		&governance.SimpleSignerStore{Signers: trustedSigners},
 		nil, // AppPolicyStore not used in chaos tester
 		l3Notary,
-		nil, // Sentinel not used in chaos tester
 		knownActionTypes,
 		"notary",
 		nil, // Clock defaults to RealClock

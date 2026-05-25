@@ -26,9 +26,9 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 // TestGatewaySignedEndToEndIntegration tests the full flow from MCP gateway
@@ -128,8 +128,8 @@ func TestGatewaySignedReceiptIntegration(t *testing.T) {
 			ExecutedAtUnixMs: 1234567890,
 			SignerKeyId:      "test-key",
 			Signature:        "test-sig",
-			L2Valid:          true,
-			L3Valid:          true,
+			L2Status:         operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
+			L3Status:         operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
 		},
 	}
 
@@ -176,8 +176,8 @@ func TestGatewaySignedCanonicalizationIntegration(t *testing.T) {
 		ExecutedAtUnixMs: 1234567890,
 		SignerKeyId:      "test-key",
 		GatewaySigned:    true,
-		L2Valid:          true,
-		L3Valid:          true,
+		L2Status:         operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
+		L3Status:         operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
 	}
 
 	// Canonicalize the receipt

@@ -27,7 +27,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/governance"
-	"github.com/g8e-ai/g8e/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -74,6 +73,13 @@ func (s *InMemoryReplayStore) ReleaseNonce(nonce string) error {
 	return nil
 }
 
+// Clear removes all nonces from the store (useful for test isolation)
+func (s *InMemoryReplayStore) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.nonces = make(map[string]time.Time)
+}
+
 // Result represents the outcome of submitting a scenario through the admission path.
 type Result struct {
 	Receipt *operatorv1.ActionReceipt
@@ -82,11 +88,12 @@ type Result struct {
 
 // OperatorGate is the real admission path integration for a given governance mode.
 type OperatorGate struct {
-	verifier *governance.TransactionVerifier
-	actuator *governance.Actuator
-	clock    system.Clock
-	mode     Mode
-	logger   *slog.Logger
+	verifier    *governance.TransactionVerifier
+	actuator    *governance.Actuator
+	replayStore *InMemoryReplayStore
+	clock       system.Clock
+	mode        Mode
+	logger      *slog.Logger
 }
 
 // NewOperatorGate creates an OperatorGate for the given mode with injectable dependencies.
@@ -105,13 +112,6 @@ func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSig
 	// Create a mock execution handler
 	execHandler := &mockExecutionHandler{}
 
-	// Create sentinel for L1 validation
-	sentinelConfig := &sentinel.SentinelConfig{
-		Enabled:         false,
-		SentinelEnabled: false,
-	}
-	sentinelInstance := sentinel.NewSentinel(sentinelConfig, logger)
-
 	// Generate signing key for the actuator
 	actuatorPub, actuatorPriv, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -128,7 +128,6 @@ func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSig
 		signerStore,
 		appPolicyStore,
 		l3Notary,
-		sentinelInstance,
 		knownActionTypes,
 		string(mode),
 		clock,
@@ -141,16 +140,18 @@ func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSig
 		ExecutionHandler:  execHandler,
 		L3Notary:          l3Notary,
 		StateRootProvider: stateRootProvider,
+		Posture:           verifier.Posture(),
 		SigningKey:        actuatorPriv,
 		KeyID:             actuatorKeyID,
 	}
 
 	return &OperatorGate{
-		verifier: verifier,
-		actuator: actuator,
-		clock:    clock,
-		mode:     mode,
-		logger:   logger,
+		verifier:    verifier,
+		actuator:    actuator,
+		replayStore: replayStore,
+		clock:       clock,
+		mode:        mode,
+		logger:      logger,
 	}, nil
 }
 

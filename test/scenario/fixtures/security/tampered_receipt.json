@@ -31,22 +31,22 @@
   },
   "expect": {
     "doctrine": {
-      "verdict": "reject",
-      "reject_reason": "TX_NOTARY_L3_PROOF_MISSING",
-      "l2_valid": true,
-      "l3_valid": false
+      "verdict": "accept",
+      "reject_reason": "",
+      "l2_status": 1,
+      "l3_status": 1
     },
     "consensus": {
       "verdict": "accept",
       "reject_reason": "",
-      "l2_valid": true,
-      "l3_valid": true
+      "l2_status": 2,
+      "l3_status": 1
     },
     "notary": {
       "verdict": "reject",
       "reject_reason": "TX_NOTARY_L3_PROOF_MISSING",
-      "l2_valid": true,
-      "l3_valid": false
+      "l2_status": 2,
+      "l3_status": 3
     }
   }
 }

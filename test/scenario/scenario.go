@@ -49,8 +49,8 @@ const (
 type Outcome struct {
 	Verdict      Verdict `json:"verdict"`
 	RejectReason string  `json:"reject_reason,omitempty"`
-	L2Valid      bool    `json:"l2_valid"`
-	L3Valid      bool    `json:"l3_valid"`
+	L2Status     int32   `json:"l2_status"` // L2Status enum: 0=unspecified, 1=not_required, 2=required_valid, 3=required_failed
+	L3Status     int32   `json:"l3_status"` // L3Status enum: 0=unspecified, 1=not_required, 2=required_valid, 3=required_failed
 }
 
 // Evidence describes which governance proofs are present in the envelope.

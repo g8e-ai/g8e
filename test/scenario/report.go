@@ -55,8 +55,8 @@ func Report(t *testing.T, s Scenario, mode Mode, result Result) {
 	t.Logf("  Signer Key ID: %s", result.Receipt.SignerKeyId)
 	t.Logf("  Signature: %s", result.Receipt.Signature)
 	t.Logf("  Gateway Signed: %v", result.Receipt.GatewaySigned)
-	t.Logf("  L2 Valid: %v", result.Receipt.L2Valid)
-	t.Logf("  L3 Valid: %v", result.Receipt.L3Valid)
+	t.Logf("  L2 Status: %v", result.Receipt.L2Status)
+	t.Logf("  L3 Status: %v", result.Receipt.L3Status)
 	t.Logf("  Executed At: %d", result.Receipt.ExecutedAtUnixMs)
 }
 
@@ -76,11 +76,20 @@ func AssertVerdict(t *testing.T, result Result, expected Outcome) {
 	}
 }
 
-// AssertReason checks that the rejection reason matches the expected reason.
+// AssertReason checks that the rejection reason matches the expected reason exactly.
+// This prevents false passes where a transaction rejects for the wrong reason.
 func AssertReason(t *testing.T, result Result, expected Outcome) {
-	if expected.Verdict == VerdictReject && result.Error != nil {
+	if expected.Verdict == VerdictReject {
+		if result.Error == nil {
+			t.Errorf("expected REJECT with reason %q but got ACCEPT (no error)", expected.RejectReason)
+			return
+		}
 		errMsg := result.Error.Error()
-		if expected.RejectReason != "" && !containsSubstring(errMsg, expected.RejectReason) {
+		if expected.RejectReason == "" {
+			t.Errorf("expected REJECT but no reject_reason specified in fixture")
+			return
+		}
+		if !containsSubstring(errMsg, expected.RejectReason) {
 			t.Errorf("expected rejection reason to contain %q, got %q", expected.RejectReason, errMsg)
 		}
 	}
@@ -89,11 +98,11 @@ func AssertReason(t *testing.T, result Result, expected Outcome) {
 // AssertL2L3 checks that L2/L3 validity matches expectations.
 func AssertL2L3(t *testing.T, result Result, expected Outcome) {
 	if result.Receipt != nil {
-		if result.Receipt.L2Valid != expected.L2Valid {
-			t.Errorf("expected L2Valid=%v, got %v", expected.L2Valid, result.Receipt.L2Valid)
+		if int32(result.Receipt.L2Status) != expected.L2Status {
+			t.Errorf("expected L2Status=%v, got %v", expected.L2Status, result.Receipt.L2Status)
 		}
-		if result.Receipt.L3Valid != expected.L3Valid {
-			t.Errorf("expected L3Valid=%v, got %v", expected.L3Valid, result.Receipt.L3Valid)
+		if int32(result.Receipt.L3Status) != expected.L3Status {
+			t.Errorf("expected L3Status=%v, got %v", expected.L3Status, result.Receipt.L3Status)
 		}
 	}
 }
@@ -114,8 +123,8 @@ func GoldenDiff(t *testing.T, s Scenario, mode Mode, receipt *operatorv1.ActionR
 		ResultSummary:   receipt.ResultSummary,
 		StateRootBefore: receipt.StateRootBefore,
 		StateRootAfter:  receipt.StateRootAfter,
-		L2Valid:         receipt.L2Valid,
-		L3Valid:         receipt.L3Valid,
+		L2Status:        receipt.L2Status,
+		L3Status:        receipt.L3Status,
 		// Exclude: ExecutedAtUnixMs, SignerKeyId, Signature, GatewaySigned
 	}
 
