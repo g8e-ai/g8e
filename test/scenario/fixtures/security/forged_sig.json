@@ -18,16 +18,16 @@
     "protocolVersion": "1.0",
     "governance": {
       "l2": {
-        "tribunalSignature": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
-        "keyId": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
+        "tribunalSignature": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        "keyId": "2033b866aa250feeffd71b5065d534868fdd37fbf507accb01bdab7c36a11ffb"
       }
     }
   },
   "evidence": {
     "l2_signature_present": true,
-    "l2_key_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd",
+    "l2_key_id": "2033b866aa250feeffd71b5065d534868fdd37fbf507accb01bdab7c36a11ffb",
     "l3_proof_present": false,
-    "signer_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
+    "signer_id": "2033b866aa250feeffd71b5065d534868fdd37fbf507accb01bdab7c36a11ffb"
   },
   "expect": {
     "doctrine": {

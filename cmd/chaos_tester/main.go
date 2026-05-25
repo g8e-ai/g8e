@@ -57,6 +57,11 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
+// Test placeholder constants for intentionally corrupted test payloads
+const (
+	chaosTestCorruptedHash = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+)
+
 // ── flags ─────────────────────────────────────────────────────────────────────
 
 var (
@@ -158,7 +163,7 @@ func buildMitMEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, key
 		return nil, err
 	}
 	// Corrupt the hash to simulate a man-in-the-middle tampering with the envelope.
-	env.TransactionHash = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	env.TransactionHash = chaosTestCorruptedHash
 	return env, nil
 }
 

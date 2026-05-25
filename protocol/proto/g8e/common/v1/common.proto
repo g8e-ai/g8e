@@ -50,13 +50,13 @@ message L2Metadata {
 
 // Notary (L3Notary) Governance: Authorization (Human-in-the-loop)
 message L3Proof {
-  string client_data_json = 1;
-  string authenticator_data = 2;
+  string client_data_json = 1 [json_name = "clientDataJSON"];
+  string authenticator_data = 2 [json_name = "authenticatorData"];
   string signature = 3;
-  string credential_id = 4;
+  string credential_id = 4 [json_name = "credentialId"];
   // CLI mTLS proof: fingerprint of the CLI certificate used for authentication
   // Used when the L3Notary proof is based on mTLS certificate validation rather than WebAuthn
-  string mtls_cert_fingerprint = 5;
+  string mtls_cert_fingerprint = 5 [json_name = "mtlsCertFingerprint"];
 }
 
 message L3Metadata {

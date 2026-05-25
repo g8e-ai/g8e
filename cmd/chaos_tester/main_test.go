@@ -287,7 +287,7 @@ func TestBuildMitMEnvelope(t *testing.T) {
 		t.Fatal("envelope is nil")
 	}
 
-	if env.TransactionHash != "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef" {
+	if env.TransactionHash != chaosTestCorruptedHash {
 		t.Errorf("TransactionHash not corrupted as expected: %s", env.TransactionHash)
 	}
 

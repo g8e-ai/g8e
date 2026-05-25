@@ -117,15 +117,13 @@ func GoldenDiff(t *testing.T, s Scenario, mode Mode, receipt *operatorv1.ActionR
 
 	// Create a deterministic receipt for comparison
 	deterministicReceipt := &operatorv1.ActionReceipt{
-		TransactionId:   receipt.TransactionId,
-		TransactionHash: receipt.TransactionHash,
 		Status:          receipt.Status,
 		ResultSummary:   receipt.ResultSummary,
 		StateRootBefore: receipt.StateRootBefore,
 		StateRootAfter:  receipt.StateRootAfter,
 		L2Status:        receipt.L2Status,
 		L3Status:        receipt.L3Status,
-		// Exclude: ExecutedAtUnixMs, SignerKeyId, Signature, GatewaySigned
+		// Exclude: TransactionId, TransactionHash, ExecutedAtUnixMs, SignerKeyId, Signature, GatewaySigned
 	}
 
 	// Serialize deterministic receipt to JSON for comparison

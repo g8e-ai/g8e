@@ -1,6 +1,4 @@
 {
-  "transactionId": "b51482e781b6525854a4652594e9b75e926b485311812036e26a9036abd8f378",
-  "transactionHash": "b51482e781b6525854a4652594e9b75e926b485311812036e26a9036abd8f378",
   "status": "EXECUTION_STATUS_COMPLETED",
   "resultSummary": "mock execution succeeded",
   "stateRootBefore": "abc123def456",

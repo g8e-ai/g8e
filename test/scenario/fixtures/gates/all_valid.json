@@ -3,7 +3,6 @@
   "vertical": "gates",
   "narrative": "Valid envelope should be accepted in all modes",
   "intent": {
-    "id": "d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6",
     "timestamp": "2026-05-25T12:00:00Z",
     "expiresAt": "2026-05-25T13:00:00Z",
     "sourceComponent": "COMPONENT_CLIENT",
@@ -14,17 +13,13 @@
     "targetResource": "localhost",
     "stateMerkleRoot": "abc123def456",
     "nonce": "nonce-all-valid-123",
-    "transactionHash": "d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6",
     "protocolVersion": "1.0",
     "governance": {
-      "l2": {
-        "tribunalSignature": "68c757ff1d0c37e2d972c41f12baba63973072b209d6cf58aafb1e8bc7775971c7f12c7740935823713027809cd19adfcdba1108151572ffb3ecd2891e900403",
-        "keyId": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
-      },
+      "l2": {},
       "l3": {
         "proof": {
-          "authenticatorData": "mockauthdata",
           "clientDataJSON": "mockclientdata",
+          "authenticatorData": "mockauthdata",
           "signature": "mocksignature"
         }
       }
