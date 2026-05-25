@@ -115,6 +115,9 @@ services/g8ee/models/*.bin
 # Generated code is committed to avoid tool dependencies in air-gap
 # protocol/python/g8e_protocol/
 # protocol/go/g8e_protocol/
+# Auto-generated protobuf documentation
+protocol/docs/reference/api/
+protocol/proto/docs/reference/api/
 
 # --- Deployment ---
 .dockerignore
