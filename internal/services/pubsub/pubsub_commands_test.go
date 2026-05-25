@@ -163,7 +163,7 @@ func TestPubSubCommandService_handleUAPEnvelope(t *testing.T) {
 			SignerStore:       &governance.SimpleSignerStore{Signers: map[string]ed25519.PublicKey{}},
 		})
 		require.NoError(t, err)
-		svc.Actuator = nil
+		svc.SetActuator(nil)
 
 		req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
 		payload, _ := proto.Marshal(req)
@@ -265,7 +265,7 @@ func TestPubSubCommandService_handleA2aCallRequestSync(t *testing.T) {
 func TestPubSubCommandService_handleAppInvestigationCreatedSync(t *testing.T) {
 	t.Run("rejects when Actuator not configured", func(t *testing.T) {
 		f := newPubsubFixture(t)
-		f.Svc.Actuator = nil
+		f.Svc.SetActuator(nil)
 		msg := PubSubCommandMessage{
 			EventType: constants.EventAppInvestigationCreated,
 			ID:        "msg-1",
@@ -278,8 +278,8 @@ func TestPubSubCommandService_handleAppInvestigationCreatedSync(t *testing.T) {
 
 	t.Run("rejects when AuditStore not configured", func(t *testing.T) {
 		f := newPubsubFixture(t)
-		f.Svc.Actuator = &governance.Actuator{}
-		f.Svc.Actuator.AuditStore = nil
+		f.Svc.SetActuator(&governance.L5Actuator{})
+		f.Svc.Actuator().AuditStore = nil
 		msg := PubSubCommandMessage{
 			EventType: constants.EventAppInvestigationCreated,
 			ID:        "msg-1",

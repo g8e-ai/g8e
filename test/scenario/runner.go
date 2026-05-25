@@ -23,14 +23,16 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/governance"
-	"github.com/g8e-ai/g8e/internal/services/governance/l1"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/pkg/uap"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -103,17 +105,20 @@ type Result struct {
 
 // OperatorGate is the real admission path integration for a given governance mode.
 type OperatorGate struct {
-	verifier    *governance.TransactionVerifier
-	actuator    *governance.Actuator
+	verifier    *governance.L4Warden
+	actuator    *governance.L5Actuator
 	replayStore *InMemoryReplayStore
 	clock       system.Clock
 	mode        Mode
 	logger      *slog.Logger
 	db          *sqliteutil.DB
+	auditVault  *storage.AuditVaultService
+	tempDir     string // Temporary directory for audit vault git ledger
 }
 
 // NewOperatorGate creates an OperatorGate for the given mode with injectable dependencies.
-func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSigners map[string]ed25519.PublicKey, db *sqliteutil.DB) (*OperatorGate, error) {
+// If t is non-nil, it creates a temporary directory for the audit vault git ledger.
+func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSigners map[string]ed25519.PublicKey, db *sqliteutil.DB, t *testing.T) (*OperatorGate, error) {
 	// Create a discard logger for testing to avoid nil pointer issues
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -137,8 +142,8 @@ func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSig
 
 	// Create transaction verifier
 	knownActionTypes := constants.AllActionTypes()
-	doctrine := l1.NewProtoDoctrineValidator()
-	verifier := governance.NewTransactionVerifier(
+	doctrine := governance.NewL1Doctrine()
+	verifier := governance.NewL4Warden(
 		logger,
 		replayStore,
 		stateRootProvider,
@@ -157,8 +162,27 @@ func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSig
 		auditStore = &testAuditStore{db: db}
 	}
 
-	// Create actuator
-	actuator := &governance.Actuator{
+	// Create audit vault with temporary directory for git ledger
+	var auditVault *storage.AuditVaultService
+	var tempDir string
+	if t != nil {
+		tempDir = t.TempDir()
+		auditVaultConfig := storage.DefaultAuditVaultConfig()
+		auditVaultConfig.DataDir = tempDir
+		auditVaultConfig.DBPath = "audit_vault.db"
+		auditVaultConfig.LedgerDir = "ledger"
+		auditVaultConfig.GitPath = "embedded" // Use native go-git
+		auditVaultConfig.Enabled = true
+
+		var err error
+		auditVault, err = storage.NewAuditVaultService(auditVaultConfig, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create audit vault: %w", err)
+		}
+	}
+
+	// Create actuator with audit vault
+	actuator := &governance.L5Actuator{
 		Logger:            logger,
 		SignerStore:       signerStore,
 		ExecutionHandler:  execHandler,
@@ -168,6 +192,7 @@ func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSig
 		SigningKey:        actuatorPriv,
 		KeyID:             actuatorKeyID,
 		AuditStore:        auditStore,
+		AuditVault:        auditVault,
 	}
 
 	return &OperatorGate{
@@ -178,7 +203,20 @@ func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSig
 		mode:        mode,
 		logger:      logger,
 		db:          db,
+		auditVault:  auditVault,
+		tempDir:     tempDir,
 	}, nil
+}
+
+// Close cleans up resources including the audit vault.
+func (g *OperatorGate) Close() error {
+	if g.auditVault != nil {
+		// Clean up temporary directory
+		if g.tempDir != "" {
+			os.RemoveAll(g.tempDir)
+		}
+	}
+	return nil
 }
 
 // normalizeEnvelope dynamically computes hashes and signatures.

@@ -25,7 +25,7 @@ The reference Go implementation of the g8e Protocol compiles from a single codeb
 
 The g8e platform is built on the g8e Protocol as Gateway. Conforming gateway and operator implementations are what make that protocol live.
 
-- **Protocol (Gateway)**: The wire contract, schemas, and L1Doctrine/L2Consensus/L3Notary verification rules. Mandatory and immutable for any client or implementation.
+- **Protocol (Gateway)**: The wire contract, schemas, and Doctrine (L1Doctrine)/Consensus (L2Consensus)/Notary (L3Notary) verification rules. Mandatory and immutable for any client or implementation.
 - **Governance Gateway (`g8eg`)**: Built as `g8e.gateway` and run in **Gateway mode** (--doctrine, --consensus, or --notary). It acts as the platform's backbone - protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority.
 - **Governed Operator (`g8eo`)**: Built as `g8e.operator` and run in **Standard Mode** or **MCP Mode** (`--mcp-serve`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease.
 - **Reference Application Layer (Optional)**: Reference components like g8e-compatible agentic ensembles consume the public Gateway/Operator protocol surface. They have no privileged Gateway responsibilities and no private access channels.
@@ -115,7 +115,7 @@ When Public and mTLS surfaces share a port, the gateway serves them through a si
 
 ### Gateway Mutation Entry
 
-`POST /api/governance/envelope` is the only customer-facing mutation API on the Governance Gateway (`g8eg`). Clients submit canonical JSON (protojson) `GovernanceEnvelope` transactions and receive a signed `ActionReceipt` after the envelope passes transaction hash, expiry, nonce/replay, state-root, L2Consensus signer, L3Notary proof, and L1Doctrine typed-payload validation.
+`POST /api/governance/envelope` is the only customer-facing mutation API on the Governance Gateway (`g8eg`). Clients submit canonical JSON (protojson) `GovernanceEnvelope` transactions and receive a signed `ActionReceipt` after the envelope passes transaction hash, expiry, nonce/replay, state-root, Consensus (L2Consensus) signer, Notary (L3Notary) proof, and Doctrine (L1Doctrine) typed-payload validation.
 
 #### Out-of-Band (OOB) Suspension & WebAuthn Approval Flow
 
@@ -137,7 +137,7 @@ graph TD
     subgraph g8eg_suspension ["g8eg Governance Gateway (Suspension & Approval)"]
         direction TB
 
-        CheckL3{"L3Notary Gate Checked<br/>(Proof Present?)"}:::gate
+        CheckL3{"Notary (L3Notary) Gate Checked<br/>(Proof Present?)"}:::gate
         SuspendTx["Suspend Transaction<br/>(Store SuspendedTransaction)"]:::gate
         ReturnURL["Return OOB Approval URL<br/>(Response as MCP Tool Text)"]:::gate
 
@@ -146,7 +146,7 @@ graph TD
         ApprovePage["Serve HTML Approval Page<br/>(/approve/:tx_hash)"]:::gate
         Challenge["Get WebAuthn Challenge<br/>(/api/approve/:tx_hash/challenge)"]:::gate
         VerifyProof["Verify WebAuthn Proof<br/>(/api/approve/:tx_hash/verify)"]:::gate
-        ResumeTx["Resume Transaction<br/>(Attach L3Notary Proof & Submit)"]:::gate
+        ResumeTx["Resume Transaction<br/>(Attach Notary (L3Notary) Proof & Submit)"]:::gate
         PruneTx["Delete Suspended TX<br/>(Cleanup Store)"]:::gate
 
         CheckL3 -- "No / Missing" --> SuspendTx
@@ -161,7 +161,7 @@ graph TD
         PruneTx --> LocalDB
     end
 
-    EgressPath["Proceed to Egress & Response<br/>(Actuator Downstream Dispatch)"]:::target
+    EgressPath["Proceed to Egress & Response<br/>(L5Actuator Downstream Dispatch)"]:::target
 
     Client -- "1. Mutation (tools/call)" --> CheckL3
     ReturnURL -- "2. Challenge Link" --> Client
@@ -173,7 +173,7 @@ graph TD
     ResumeTx -- "5. Fully Verified" --> EgressPath
 ```
 
-Direct `/db/` mutations are restricted to bootstrap and Operator-owned collections required to initialize governance and persist Actuator/audit records. Mutations to non-bootstrap collections return `409 Conflict` with `{"error":"submit via POST /api/governance/envelope"}`. `/db/` reads and `_query` remain available because they do not mutate state.
+Direct `/db/` mutations are restricted to bootstrap and Operator-owned collections required to initialize governance and persist L5Actuator/audit records. Mutations to non-bootstrap collections return `409 Conflict` with `{"error":"submit via POST /api/governance/envelope"}`. `/db/` reads and `_query` remain available because they do not mutate state.
 
 `/pubsub/publish` remains available for non-mutation fan-out (`heartbeat:*`, `results:*`, `sse:*`, `ws_session:*`, `internal:*`). Mutation channels such as `cmd:*` and `auditor:*` return the same `409 Conflict` redirect so callers cannot bypass the governed execution boundary.
 
@@ -270,7 +270,7 @@ Hub state is anchored by a Merkle state root computed deterministically across a
     - **Intermediate CAs** - Hub CA, Operator CA, Bootstrap CA.
     - **Trust Bundles** - `trust/hub-bundle.pem` (Root + Hub Intermediate).
 - **.g8e/secrets/** stores tamper-evident bootstrap material:
-    - `session_encryption_key`, `Actuator_signing_key`, `Actuator_key_id`.
+    - `session_encryption_key`, `L5Actuator_signing_key`, `L5Actuator_key_id`.
     - `bootstrap_digest.json` - SHA-256 digests of every secret. Mismatch fails startup hard.
 
 ---
@@ -319,7 +319,7 @@ The Hub keeps an authoritative encrypted audit vault keyed by `transaction_hash`
 | **Audit & Security** | `login_audit`, `auth_admin_audit`, `account_locks`, `console_audit`, `revoked_certificates` |
 | **Operators & Usage** | `operators`, `operator_usage` |
 | **Cases & Investigations** | `cases`, `investigations`, `tasks` |
-| **Governance & Reputation** | `tribunal_commands`, `reputation_state`, `reputation_commitments`, `stake_resolutions` |
+| **Governance & Reputation** | `consensus_commands`, `reputation_state`, `reputation_commitments`, `stake_resolutions` |
 | **AI & Context** | `memories`, `agent_activity_metadata` |
 | **Configuration** | `settings` |
 

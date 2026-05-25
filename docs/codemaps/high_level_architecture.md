@@ -21,7 +21,7 @@ g8e/
 ├── internal/                    # Private implementation (not exported)
 │   ├── services/                # Core service layer
 │   │   ├── gateway/             # Gateway mode: platform persistence, PKI, auth, pub/sub
-│   │   ├── governance/          # L1/L2/L3 verification (TransactionVerifier, Tribunal, Actuator)
+│   │   ├── governance/          # L1-L5 verification (L1Doctrine, L2Consensus, L3Notary, L4Warden, L5Actuator)
 │   │   ├── execution/           # Command execution, file edit, fs operations
 │   │   ├── storage/             # Audit vault (SQLite+Git), ledger, local store, replay store
 │   │   ├── pubsub/              # Pub/sub command channel, results streaming, loopback
@@ -49,7 +49,7 @@ g8e/
 - **Purpose**: Single source of truth for all protocol definitions
 - **Contents**:
   - `proto/` - Protobuf schemas for GovernanceEnvelope, receipts, audit events
-  - `constants/` - Doctrine patterns, L1/L2/L3 validation rules, collection schemas, ports, API paths
+  - `constants/` - Doctrine patterns, Doctrine (L1Doctrine)/Consensus (L2Consensus)/Notary (L3Notary) validation rules, collection schemas, ports, API paths
   - `models/` - Shared data models (agents, operator metadata, audit structures)
   - `workload_identity.go` - Go workload identity implementation
 - **Invariant**: All services MUST consume protocol definitions from this layer. No local schema duplication.
@@ -92,8 +92,8 @@ g8e/
 **Standard Operator Mode** (default):
 - No special flags required
 - Responsibilities:
-  - Enforce L1/L2/L3 governance gauntlet
-  - Execute mutations through fail-closed Actuator
+  - Enforce Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) governance gauntlet
+  - Execute mutations through fail-closed L5Actuator
   - Maintain local audit vault (SQLite + Git-backed ledger)
   - Outbound mTLS connection to Gateway
   - Device-link enrollment via bootstrap service

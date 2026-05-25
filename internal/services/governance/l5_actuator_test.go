@@ -25,18 +25,18 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/pkg/uap"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
-func newTestActuator(t *testing.T) (*Actuator, ed25519.PublicKey) {
+func newTestActuator(t *testing.T) (*L5Actuator, ed25519.PublicKey) {
 	t.Helper()
 
-	// Generate Actuator signing key
+	// Generate L5Actuator signing key
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 
@@ -47,7 +47,7 @@ func newTestActuator(t *testing.T) (*Actuator, ed25519.PublicKey) {
 
 	logger := slog.Default()
 
-	Actuator := &Actuator{
+	actuator := &L5Actuator{
 		Logger:            logger,
 		SigningKey:        privKey,
 		KeyID:             "test-Actuator-key",
@@ -56,12 +56,12 @@ func newTestActuator(t *testing.T) (*Actuator, ed25519.PublicKey) {
 		StateRootProvider: mockStateRoot,
 	}
 
-	return Actuator, pubKey
+	return actuator, pubKey
 }
 
-func TestActuatorExecuteHappyPath(t *testing.T) {
+func TestL5ActuatorExecuteHappyPath(t *testing.T) {
 	t.Parallel()
-	Actuator, pubKey := newTestActuator(t)
+	actuator, pubKey := newTestActuator(t)
 
 	// Configure handler to succeed (already set in newTestActuator)
 
@@ -81,7 +81,7 @@ func TestActuatorExecuteHappyPath(t *testing.T) {
 	}
 
 	// Execute
-	receipt, err := Actuator.Execute(context.Background(), vt, nil)
+	receipt, err := actuator.Execute(context.Background(), vt, nil)
 	require.NoError(t, err)
 	require.NotNil(t, receipt)
 
@@ -103,10 +103,10 @@ func TestActuatorExecuteHappyPath(t *testing.T) {
 	require.NoError(t, err)
 
 	valid := ed25519.Verify(pubKey, canonical, sigBytes)
-	require.True(t, valid, "Receipt signature should verify against Actuator public key")
+	require.True(t, valid, "Receipt signature should verify against L5Actuator public key")
 
 	// Verify audit store was called twice (initial EXECUTING receipt + final COMPLETED receipt)
-	auditStore := Actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
+	auditStore := actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
 	require.Len(t, auditStore.Calls, 2)
 
 	// Verify both calls were to console_audit collection
@@ -128,12 +128,12 @@ func TestActuatorExecuteHappyPath(t *testing.T) {
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, finalRecord.Status)
 }
 
-func TestActuatorExecuteHandlerError(t *testing.T) {
+func TestL5ActuatorExecuteHandlerError(t *testing.T) {
 	t.Parallel()
-	Actuator, pubKey := newTestActuator(t)
+	actuator, pubKey := newTestActuator(t)
 
 	// Configure handler to return error
-	handler := Actuator.ExecutionHandler.(*mockExecutionHandler)
+	handler := actuator.ExecutionHandler.(*mockExecutionHandler)
 	handler.err = errors.New("handler execution failed")
 
 	envelope := &uap.UAPEnvelope{
@@ -151,7 +151,7 @@ func TestActuatorExecuteHandlerError(t *testing.T) {
 	}
 
 	// Execute
-	receipt, err := Actuator.Execute(context.Background(), vt, nil)
+	receipt, err := actuator.Execute(context.Background(), vt, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "handler execution failed")
 	require.NotNil(t, receipt)
@@ -171,7 +171,7 @@ func TestActuatorExecuteHandlerError(t *testing.T) {
 	require.True(t, valid, "Receipt signature should verify even when handler fails")
 
 	// Verify audit store was called twice
-	auditStore := Actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
+	auditStore := actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
 	require.Len(t, auditStore.Calls, 2)
 
 	// Verify final receipt has FAILED status
@@ -181,12 +181,12 @@ func TestActuatorExecuteHandlerError(t *testing.T) {
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, finalRecord.Status)
 }
 
-func TestActuatorExecuteAuditWriteFailInitial(t *testing.T) {
+func TestL5ActuatorExecuteAuditWriteFailInitial(t *testing.T) {
 	t.Parallel()
-	Actuator, _ := newTestActuator(t)
+	actuator, _ := newTestActuator(t)
 
 	// Configure audit store to fail on first call (initial receipt)
-	auditStore := Actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
+	auditStore := actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
 	callCount := 0
 	auditStore.DocSetFunc = func(collection, id string, data json.RawMessage) error {
 		callCount++
@@ -211,7 +211,7 @@ func TestActuatorExecuteAuditWriteFailInitial(t *testing.T) {
 	}
 
 	// Execute - should fail before handler is invoked
-	receipt, err := Actuator.Execute(context.Background(), vt, nil)
+	receipt, err := actuator.Execute(context.Background(), vt, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to log initial action receipt")
 	require.Nil(t, receipt)
@@ -220,12 +220,12 @@ func TestActuatorExecuteAuditWriteFailInitial(t *testing.T) {
 	require.Equal(t, 1, callCount)
 }
 
-func TestActuatorExecuteReceiptPersistFail(t *testing.T) {
+func TestL5ActuatorExecuteReceiptPersistFail(t *testing.T) {
 	t.Parallel()
-	Actuator, _ := newTestActuator(t)
+	actuator, _ := newTestActuator(t)
 
 	// Configure audit store to fail on DocSet
-	auditStore := Actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
+	auditStore := actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
 	auditStore.DocSetFunc = func(collection, id string, data json.RawMessage) error {
 		return errors.New("doc set failed")
 	}
@@ -245,16 +245,16 @@ func TestActuatorExecuteReceiptPersistFail(t *testing.T) {
 	}
 
 	// Execute - should fail before handler is invoked
-	receipt, err := Actuator.Execute(context.Background(), vt, nil)
+	receipt, err := actuator.Execute(context.Background(), vt, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to log initial action receipt")
 	require.Nil(t, receipt)
 }
 
-func TestActuatorExecuteMissingSigningKey(t *testing.T) {
+func TestL5ActuatorExecuteMissingSigningKey(t *testing.T) {
 	t.Parallel()
-	Actuator, _ := newTestActuator(t)
-	Actuator.SigningKey = nil
+	actuator, _ := newTestActuator(t)
+	actuator.SigningKey = nil
 
 	envelope := &uap.UAPEnvelope{
 		Id:                uuid.New().String(),
@@ -271,16 +271,16 @@ func TestActuatorExecuteMissingSigningKey(t *testing.T) {
 	}
 
 	// Execute - should fail immediately
-	receipt, err := Actuator.Execute(context.Background(), vt, nil)
+	receipt, err := actuator.Execute(context.Background(), vt, nil)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Actuator signing key missing")
+	require.Contains(t, err.Error(), "L5Actuator signing key missing")
 	require.Nil(t, receipt)
 }
 
-func TestActuatorExecuteMissingExecutionHandler(t *testing.T) {
+func TestL5ActuatorExecuteMissingExecutionHandler(t *testing.T) {
 	t.Parallel()
-	Actuator, _ := newTestActuator(t)
-	Actuator.ExecutionHandler = nil
+	actuator, _ := newTestActuator(t)
+	actuator.ExecutionHandler = nil
 
 	envelope := &uap.UAPEnvelope{
 		Id:                uuid.New().String(),
@@ -297,9 +297,9 @@ func TestActuatorExecuteMissingExecutionHandler(t *testing.T) {
 	}
 
 	// Execute - should fail immediately
-	receipt, err := Actuator.Execute(context.Background(), vt, nil)
+	receipt, err := actuator.Execute(context.Background(), vt, nil)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Actuator ExecutionHandler not set")
+	require.Contains(t, err.Error(), "L5Actuator ExecutionHandler not set")
 	require.Nil(t, receipt)
 }
 
@@ -341,9 +341,9 @@ func TestCanonicalizeActionReceipt(t *testing.T) {
 	require.Equal(t, "test-key-id", parsed["signer_key_id"])
 }
 
-func TestActuatorGatewaySignedPropagation(t *testing.T) {
+func TestL5ActuatorGatewaySignedPropagation(t *testing.T) {
 	t.Parallel()
-	Actuator, _ := newTestActuator(t)
+	actuator, _ := newTestActuator(t)
 
 	// Create envelope with GatewaySigned=true
 	envelope := &uap.UAPEnvelope{
@@ -364,7 +364,7 @@ func TestActuatorGatewaySignedPropagation(t *testing.T) {
 	}
 
 	// Execute
-	receipt, err := Actuator.Execute(context.Background(), vt, nil)
+	receipt, err := actuator.Execute(context.Background(), vt, nil)
 	require.NoError(t, err)
 	require.NotNil(t, receipt)
 
@@ -372,7 +372,7 @@ func TestActuatorGatewaySignedPropagation(t *testing.T) {
 	require.True(t, receipt.GatewaySigned, "GatewaySigned should be propagated from envelope to receipt")
 
 	// Verify audit record also has GatewaySigned
-	auditStore := Actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
+	auditStore := actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
 	require.Len(t, auditStore.Calls, 2)
 
 	var finalRecord models.ActionReceiptRecord
@@ -381,11 +381,11 @@ func TestActuatorGatewaySignedPropagation(t *testing.T) {
 	require.True(t, finalRecord.GatewaySigned, "Audit record should have GatewaySigned=true")
 }
 
-func TestActuatorGatewaySignedFalse(t *testing.T) {
+func TestL5ActuatorGatewaySignedFalse(t *testing.T) {
 	t.Parallel()
-	Actuator, _ := newTestActuator(t)
+	actuator, _ := newTestActuator(t)
 
-	// Create envelope with GatewaySigned=false (normal Tribunal path)
+	// Create envelope with GatewaySigned=false (normal L2Consensus path)
 	envelope := &uap.UAPEnvelope{
 		Id:                uuid.New().String(),
 		TransactionHash:   "test-hash-1234567890abcdef",
@@ -404,10 +404,10 @@ func TestActuatorGatewaySignedFalse(t *testing.T) {
 	}
 
 	// Execute
-	receipt, err := Actuator.Execute(context.Background(), vt, nil)
+	receipt, err := actuator.Execute(context.Background(), vt, nil)
 	require.NoError(t, err)
 	require.NotNil(t, receipt)
 
 	// Verify GatewaySigned is false in receipt
-	require.False(t, receipt.GatewaySigned, "GatewaySigned should be false for Tribunal-signed transactions")
+	require.False(t, receipt.GatewaySigned, "GatewaySigned should be false for L2Consensus-signed transactions")
 }

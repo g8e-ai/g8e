@@ -6,7 +6,7 @@ title: g8e Operator
 
 Last Updated: 2026-05-20
 
-The **g8e Operator** is the host-side, sovereign agent role defined by the [g8e Protocol](./protocol.md): a daemon or piece of software that speaks the protocol to perform remote operations under the security guarantees the protocol enables. An Operator receives signed transactions, enforces Doctrine (L1Doctrine), Quorum (L2Consensus), and Notary (L3Notary) verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
+The **g8e Operator** is the host-side, sovereign agent role defined by the [g8e Protocol](./protocol.md): a daemon or piece of software that speaks the protocol to perform remote operations under the security guarantees the protocol enables. An Operator receives signed transactions, enforces Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
 The reference Operator is **`g8eo`** (built as the `g8e.operator` binary). It functions as a sovereign, **Governed Operator** and **Model Context Protocol (MCP) Server** (the Policy Execution Point).
 
@@ -25,8 +25,8 @@ An Operator is the only component that can mutate the host. It executes ordinary
 Concretely, the reference Operator:
 
 - Connects outbound-only over mTLS WSS to the Hub (no inbound ports required).
-- Verifies every inbound `GovernanceEnvelope` against Doctrine (L1Doctrine), Quorum (L2Consensus), Notary (L3Notary), integrity, freshness, and state-root gates.
-- Runs the **Actuator** as the sole execution boundary, signing pre- and post-execution `ActionReceipt`s.
+- Verifies every inbound `GovernanceEnvelope` against Doctrine (L1Doctrine), Consensus (L2Consensus), Notary (L3Notary), integrity, freshness, and state-root gates.
+- Runs the **L5Actuator** as the sole execution boundary, signing pre- and post-execution `ActionReceipt`s.
 - Records every accepted mutation to a host-local, encrypted, append-only audit vault and a per-session git-backed ledger.
 - Scrubs sensitive data (PII, secrets) at the host boundary so AI never sees unscrubbed data.
 - Self-deploys to remote hosts (cross-compiled binaries pulled from the Hub blob store over SSH).
@@ -35,26 +35,26 @@ Concretely, the reference Operator:
 
 ## Defense at Ingress
 
-The Operator distrusts every upstream input. Before any code runs on the host, the `TransactionVerifier` enforces the gates in this order:
+The Operator distrusts every upstream input. Before any code runs on the host, the `L4Warden` enforces the gates in this order:
 
 1. **Integrity** - `id == transaction_hash == SHA256(canonical_fields)`.
 2. **Freshness** - `expires_at` not passed; `nonce` not in the replay store.
 3. **State binding** - `state_merkle_root` matches the host's current ledger root.
 4. **Doctrine (L1Doctrine) hard gates** - Reflected `forbidden_patterns` over the typed protobuf payload, plus Sentinel pre-execution threat analysis (90+ MITRE ATT&CK patterns).
-5. **Quorum (L2Consensus) consensus** - Ed25519 Tribunal signature verified against the Operator-owned `SignerStore`. Missing or unknown signers → reject.
-6. **Notary (L3Notary) authorization** - WebAuthn proof verified for web sessions, mTLS certificate fingerprint verified for CLI sessions. Web sessions authenticate once with a passkey to establish a `web_session` (24-hour TTL), then can approve multiple mutations without re-authenticating. CLI sessions authenticate via mTLS certificates with SPIFFE URI SANs; the certificate fingerprint serves as the L3Notary proof. Auto-approval policy may suppress the human prompt for benign verbs only after Doctrine (L1Doctrine) and Quorum (L2Consensus) have passed.
+5. **Consensus (L2Consensus)** - Signature verified against the Operator-owned `SignerStore`. Missing or unknown signers → reject.
+6. **Notary (L3Notary) authorization** - WebAuthn proof verified for web sessions, mTLS certificate fingerprint verified for CLI sessions. Web sessions authenticate once with a passkey to establish a `web_session` (24-hour TTL), then can approve multiple mutations without re-authenticating. CLI sessions authenticate via mTLS certificates with SPIFFE URI SANs; the certificate fingerprint serves as the L3Notary proof. Auto-approval policy may suppress the human prompt for benign verbs only after Doctrine (L1Doctrine) and Consensus (L2Consensus) have passed.
 
-If any gate fails, the envelope is rejected, a `BLOCKED` receipt is recorded, and no execution (via the Actuator) occurs. There are no fallbacks.
+If any gate fails, the envelope is rejected, a `BLOCKED` receipt is recorded, and no execution (via the L5Actuator) occurs. There are no fallbacks.
 
 ---
 
-## Defense at Execution: The Actuator
+## Defense at Execution: The L5Actuator
 
-The **Actuator** is the Operator's execution boundary and the only service permitted to mutate host state.
+The **L5Actuator** is the Operator's execution boundary and the only service permitted to mutate host state.
 
-1. **Pre-execution receipt** - Actuator signs an `ActionReceipt` with status `EXECUTING` and writes it to the AuditVault. If the audit write fails, execution is aborted.
-2. **Dispatch** - Actuator routes the typed payload to its handler (shell executor, file editor, port checker, etc.).
-3. **Post-execution receipt** - Actuator updates the receipt with `COMPLETED` or `FAILED`, captures `state_root_after`, signs again, and publishes the result envelope.
+1. **Pre-execution receipt** - L5Actuator signs an `ActionReceipt` with status `EXECUTING` and writes it to the AuditVault. If the audit write fails, execution is aborted.
+2. **Dispatch** - L5Actuator routes the typed payload to its handler (shell executor, file editor, port checker, etc.).
+3. **Post-execution receipt** - L5Actuator updates the receipt with `COMPLETED` or `FAILED`, captures `state_root_after`, signs again, and publishes the result envelope.
 
 The dual-receipt model guarantees that every attempt to change reality is cryptographically recorded - even if the process crashes mid-execution. Reputation slashing for missed risk or over-cautious blocking is anchored to these receipts.
 
@@ -113,7 +113,7 @@ The Operator runs entirely under mTLS with workload identity bound to SPIFFE-sty
 
 Revocation is enforced on every handshake against the `revoked_certificates` collection, with signed revocation bundles available for external verification.
 
-The Actuator's Ed25519 signing key lives in `.g8e/secrets/Actuator_signing_key`; its public key is exported on every Hub startup to `.g8e/pki/Actuator_pub.pem` and `.g8e/pki/Actuator_pub.json` for offline receipt verification (used by evals and external auditors).
+The L5Actuator's Ed25519 signing key lives in `.g8e/secrets/L5Actuator_signing_key`; its public key is exported on every Hub startup to `.g8e/pki/L5Actuator_pub.pem` and `.g8e/pki/L5Actuator_pub.json` for offline receipt verification (used by evals and external auditors).
 
 ---
 
@@ -125,7 +125,7 @@ The Actuator's Ed25519 signing key lives in `.g8e/secrets/Actuator_signing_key`;
 4. **mTLS upgrade** - Switch all transport to TLS 1.3 + mTLS WSS.
 5. **Vault unlock** - API key unlocks the local Encryption Vault to retrieve the DEK.
 6. **Steady state** - Subscribe to `cmd:{operator_id}:{operator_session_id}`; await governed envelopes.
-7. **Verify and execute** - Run the verification gates; on success, the Actuator executes; in all cases a signed receipt is published.
+7. **Verify and execute** - Run the verification gates; on success, the L5Actuator executes; in all cases a signed receipt is published.
 
 ### Operating modes
 
@@ -187,8 +187,8 @@ The Operator is fully self-contained. There are no runtime internet dependencies
 
 | Concern | Authoritative file |
 |---|---|
-| Verification gates | `internal/services/governance/transaction_verifier.go` |
-| Actuator / receipts | `internal/services/governance/warden.go` |
+| Verification gates | `internal/services/governance/l4_warden.go` |
+| Actuator / receipts | `internal/services/governance/l5_actuator.go` |
 | Sentinel | `internal/services/sentinel/sentinel.go` |
 | Audit vault | `internal/services/storage/audit_vault.go` |
 | Ledger (git) | `internal/services/storage/ledger.go` |

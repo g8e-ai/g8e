@@ -5,7 +5,7 @@ This document defines the technical standards, architectural invariants, and con
 ## Core Architectural Invariants
 
 1. **Human agency is absolute.** Every state-changing operation surfaces its own approval prompt. Automatic Function Calling is permanently disabled.
-2. **3-layer governance bedrock.** Doctrine (L1Doctrine) hard gates (forbidden patterns) via protobuf reflection; Quorum (L2Consensus) multi-agent Tribunal consensus with reputation staking; Notary (L3Notary) human-in-the-loop with hardware-bound WebAuthn proofs (auto-approval for benign diagnostics only after Doctrine (L1Doctrine)+Quorum (L2Consensus) pass).
+2. **3-layer governance bedrock.** Doctrine (L1Doctrine) hard gates (forbidden patterns) via protobuf reflection; Consensus (L2Consensus) multi-agent consensus with reputation staking; Notary (L3Notary) human-in-the-loop with hardware-bound WebAuthn proofs (auto-approval for benign diagnostics only after Doctrine (L1Doctrine)+Consensus (L2Consensus) pass).
 3. **Data sovereignty.** Raw command output and file contents stay on the Operator host, encrypted, and never persist platform-side. Platform state is host-native under `.g8e/`.
 4. **Security by structure.** All changes adhere to the Security Review Checklist. The Operator is the only execution boundary.
 5. **BYO Frontend.** The platform is UI-less by design. The **CLI (`./g8e`) is the default out-of-the-box UI**. The Operator provides a minimal bootstrap web interface, but primary interaction is via the CLI, BYO clients, or optional g8e-compatible agentic ensembles.
@@ -96,7 +96,7 @@ g8e is split into the **Protocol (Gateway)**, the **Governance Gateway (g8eg)**,
 
 - **Protocol (Gateway)** - Shared `.proto` schemas plus the canonical-JSON wire contract; the source of truth for what every operator and client must honor.
 - **Governance Gateway (`g8eg`)** - The central, BFT-governed Policy Decision Point (PDP) running in Gateway mode (--doctrine, --consensus, or --notary). It provides the platform's central persistence, PKI, and protocol API (including a minimal bootstrap interface).
-- **Governed Operator (`g8eo`)** - The host-side Policy Execution Point (PEP) and MCP Server. It enforces protocol compliance, verifies Doctrine (L1Doctrine), Quorum (L2Consensus), and Notary (L3Notary) signatures, and executes transactions via the Actuator stage.
+- **Governed Operator (`g8eo`)** - The host-side Policy Execution Point (PEP) and MCP Server. It enforces protocol compliance, verifies Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) signatures, and executes transactions via the L5Actuator stage.
 - **Reference Application Layer (optional)** - Optional adapters like the **g8e Agentic Ensemble** (`g8ee`) that extend the platform's reasoning capabilities. All interaction flows through the CLI by default.
 - **Host-native execution** - Core components run as native processes.
 - **Zero-config discovery** - Services use a standardized local runtime directory (`.g8e/`) for discovery and configuration sharing.
@@ -205,7 +205,7 @@ All tests are orchestrated via the `./g8e` CLI. **Never call `pytest` or `go tes
 
 ## Evals (AI Benchmarks)
 
-The evals harness drives the **real g8e Agentic Ensemble** chat pipeline end-to-end** - Triage, Dash/Sage, Tribunal, Auditor, Actuator - and fold the full agent trail into a per-task receipt.
+The evals harness drives the **real g8e Agentic Ensemble** chat pipeline end-to-end** - Triage, Dash/Sage, Consensus stage, Auditor, L5Actuator - and fold the full agent trail into a per-task receipt.
 
 ```bash
 # 1. Start the platform and login

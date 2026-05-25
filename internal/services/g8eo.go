@@ -124,7 +124,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.execution = execution.NewExecutionService(vs.config, vs.logger)
 	vs.fileEdit = execution.NewFileEditService(vs.config, vs.logger)
 
-	// Initialize SecretManager for loading signing keys (Actuator and Tribunal)
+	// Initialize SecretManager for loading signing keys (Actuator and Consensus)
 	// This must be initialized before LocalStore to provide keystore for encrypted token storage
 	secretsDir := filepath.Join(vs.config.WorkDir, ".g8e", "secrets")
 
@@ -247,18 +247,18 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	transactionAudit := &auditVaultTransactionStore{vault: vs.auditVault}
 	// L3Notary for outbound mode: CLI-based approval via suspended transactions
 	// Mutations requiring L3 are suspended and must be approved via CLI command
-	cliL3Notary := governance.NewCLIL3Notary(vs.localStore, vs.logger)
+	cliL3Notary := governance.NewOutboundL3Notary(vs.localStore, vs.logger)
 
-	// Load signing keys for Actuator and Tribunal (fail-closed if missing)
+	// Load signing keys for Actuator and Consensus (fail-closed if missing)
 	actuatorPriv, actuatorKeyID, err := vs.secretManager.GetActuatorKey()
 	if err != nil {
 		return fmt.Errorf("failed to load Actuator signing key: %w", err)
 	}
-	tribunalPriv, err := vs.secretManager.GetTribunalKey()
+	consensusPriv, err := vs.secretManager.GetTribunalKey()
 	if err != nil {
-		return fmt.Errorf("failed to load Tribunal signing key: %w", err)
+		return fmt.Errorf("failed to load Consensus signing key: %w", err)
 	}
-	vs.logger.Info("Tribunal signing key loaded successfully")
+	vs.logger.Info("Consensus signing key loaded successfully")
 
 	// Load trusted L2 signers from filesystem (fail-closed if directory doesn't exist)
 	trustedSignersDir := filepath.Join(vs.config.PKIDir, "trusted_signers")
@@ -270,26 +270,26 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// PubSubCommandService Construction
 	psConfig := pubsub.CommandServiceConfig{
-		Config:             vs.config,
-		Logger:             vs.logger,
-		Execution:          vs.execution,
-		FileEdit:           vs.fileEdit,
-		PubSubClient:       vs.pubSubClient,
-		ResultsService:     vs.pubSubResults,
-		LocalStore:         vs.localStore,
-		AuditVault:         vs.auditVault,
-		Ledger:             vs.ledger,
-		HistoryHandler:     vs.historyHandler,
-		Sentinel:           sentinel.NewSentinelWithStorage(ProductionSentinelConfig(), vs.logger, vs.localStore),
-		ReplayStore:        vs.replayStore,
-		StateRootProvider:  stateRootProvider,
-		TransactionAudit:   transactionAudit,
-		SignerStore:        signerStore,
-		AppPolicyStore:     vs.gatewayDB,
-		ActuatorSigningKey: actuatorPriv,
-		ActuatorKeyID:      actuatorKeyID,
-		TribunalSigningKey: tribunalPriv,
-		L3Notary:           cliL3Notary,
+		Config:              vs.config,
+		Logger:              vs.logger,
+		Execution:           vs.execution,
+		FileEdit:            vs.fileEdit,
+		PubSubClient:        vs.pubSubClient,
+		ResultsService:      vs.pubSubResults,
+		LocalStore:          vs.localStore,
+		AuditVault:          vs.auditVault,
+		Ledger:              vs.ledger,
+		HistoryHandler:      vs.historyHandler,
+		Sentinel:            sentinel.NewSentinelWithStorage(ProductionSentinelConfig(), vs.logger, vs.localStore),
+		ReplayStore:         vs.replayStore,
+		StateRootProvider:   stateRootProvider,
+		TransactionAudit:    transactionAudit,
+		SignerStore:         signerStore,
+		AppPolicyStore:      vs.gatewayDB,
+		ActuatorSigningKey:  actuatorPriv,
+		ActuatorKeyID:       actuatorKeyID,
+		ConsensusSigningKey: consensusPriv,
+		L3Notary:            cliL3Notary,
 	}
 
 	vs.pubSubCommands, err = pubsub.NewPubSubCommandService(psConfig)
@@ -350,9 +350,9 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 
 	// Stop pubsub command service first to stop receiving new commands
 	if vs.pubSubCommands != nil {
-		if vs.pubSubCommands.Actuator != nil {
+		if vs.pubSubCommands.Actuator() != nil {
 			vs.logger.Info("Waiting for in-flight transactions to drain...")
-			vs.pubSubCommands.Actuator.Wait()
+			vs.pubSubCommands.Actuator().Wait()
 		}
 		if err := vs.pubSubCommands.Stop(); err != nil {
 			vs.logger.Error("Failed to stop pubsub command service", string(constants.ConnectionStateError), err)

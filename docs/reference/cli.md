@@ -57,9 +57,9 @@ Options:
   -v, --version           Show version
 
 Gateway Mode (platform persistence + pub/sub broker):
-  --doctrine                Gateway mode: L1 enforced, L2/L3 audited (default)
-  --consensus               Gateway mode: L1/L2 enforced, L3 audited
-  --notary                  Gateway mode: L1/L2/L3 strictly enforced
+  --doctrine                Gateway mode: Doctrine (L1Doctrine) enforced, Quorum (L2Consensus)/Notary (L3Notary) audited (default)
+  --consensus               Gateway mode: Doctrine (L1Doctrine)/Quorum (L2Consensus) enforced, Notary (L3Notary) audited
+  --notary                  Gateway mode: Doctrine (L1Doctrine)/Quorum (L2Consensus)/Notary (L3Notary) strictly enforced
   --http-listen-port <port>   HTTPS port for mTLS API (default: 8440)
   --bootstrap-listen-port <port> Bootstrap TLS port for device-link enrollment (default: 8441)
   --public-listen-port <port> Public browser/BYO bootstrap port (default: 8442)

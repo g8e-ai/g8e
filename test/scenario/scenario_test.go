@@ -63,7 +63,10 @@ func TestMain(m *testing.M) {
 		fixedTime := time.Date(2026, 5, 24, 12, 0, 0, 0, time.UTC)
 		clock := system.NewFixedClock(fixedTime)
 
-		gate, err := NewOperatorGate(mode, clock, testStateRoot, testSigners, testDB)
+		// Create a temporary testing.T for audit vault initialization
+		// We use a nil T in TestMain since t.TempDir() is not available there
+		// The audit vault will be initialized in the test cases instead
+		gate, err := NewOperatorGate(mode, clock, testStateRoot, testSigners, testDB, nil)
 		if err != nil {
 			panicf("failed to create operator gate for mode %s: %v", mode, err)
 		}
@@ -87,9 +90,31 @@ func TestScenarios(t *testing.T) {
 	for _, s := range scenarios {
 		for _, mode := range []Mode{ModeDoctrine, ModeConsensus, ModeNotary} {
 			t.Run(s.Name+"/"+mode.String(), func(t *testing.T) {
-				gate, ok := ops[mode]
-				if !ok {
-					t.Fatalf("operator gate not initialized for mode %s", mode)
+				// Create a new gate with audit vault for this test
+				fixedTime := time.Date(2026, 5, 24, 12, 0, 0, 0, time.UTC)
+				clock := system.NewFixedClock(fixedTime)
+				gate, err := NewOperatorGate(mode, clock, testStateRoot, testSigners, testDB, t)
+				if err != nil {
+					t.Fatalf("failed to create operator gate for mode %s: %v", mode, err)
+				}
+				defer gate.Close()
+
+				// Create a test session in the audit vault for receipt recording
+				// This is required because the receipts table has a foreign key constraint on sessions
+				if gate.auditVault != nil {
+					// Extract operator_session_id from the envelope to create the matching session
+					var envelope struct {
+						OperatorSessionID string `json:"operatorSessionId"`
+					}
+					if err := json.Unmarshal(s.Intent, &envelope); err != nil {
+						t.Fatalf("failed to parse operator_session_id from intent: %v", err)
+					}
+					if envelope.OperatorSessionID == "" {
+						envelope.OperatorSessionID = "test-scenario-session"
+					}
+					if err := CreateTestSession(gate.auditVault, envelope.OperatorSessionID); err != nil {
+						t.Fatalf("failed to create test session: %v", err)
+					}
 				}
 
 				expected, ok := s.Expect[mode]
@@ -128,6 +153,8 @@ func TestScenarios(t *testing.T) {
 				// Assert receipt persistence to database
 				if result.Receipt != nil {
 					AssertPersistedReceipt(t, gate.db, result.Receipt, expected)
+					// Assert receipt persistence to audit vault
+					AssertAuditVaultReceipt(t, gate.auditVault, result.Receipt, expected)
 				}
 
 				// Golden diff

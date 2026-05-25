@@ -51,7 +51,7 @@ protocol/
 │   │   ├── primary.json
 │   │   ├── title_generator.json
 │   │   ├── triage.json
-│   │   └── tribunal.json
+│   │   └── consensus.json
 │   ├── agent_activity_metadata.json
 │   ├── auditor_commands.json
 │   ├── case.json
@@ -65,7 +65,7 @@ protocol/
 │   ├── security_constraints.json
 │   ├── stake_resolution.json
 │   ├── tool_results.json
-│   ├── tribunal.json
+│   ├── consensus.json
 │   ├── user.json
 │   ├── user_settings.json
 │   └── errors.py                # Python error definitions
@@ -94,9 +94,9 @@ docs/reference/api/              # Generated API documentation
   - `GovernanceEnvelope` - The canonical mutation envelope binding identity, intent, state, and governance proofs
   - `GovernanceMetadata` - Unified L1/L2/L3 governance proofs
   - `L1Metadata` - Doctrine (L1) validation status with violations list
-  - `L2Metadata` - Quorum (L2) consensus signature with tribunal signature, agent IDs, and key ID
-  - `L3Proof` - Notary (L3) authorization proof supporting WebAuthn (client_data_json, authenticator_data, signature, credential_id) or mTLS (mtls_cert_fingerprint)
-  - `L3Metadata` - Notary authorization metadata with proof and auto_approved flag
+  - `L2Metadata` - Consensus (L2Consensus) signature with agent IDs and key ID
+  - `L3Proof` - Notary (L3Notary) authorization proof supporting WebAuthn (client_data_json, authenticator_data, signature, credential_id) or mTLS (mtls_cert_fingerprint)
+  - `L3Metadata` - Notary (L3Notary) authorization metadata with proof and auto_approved flag
   - `Component` - Source component identifier enum (G8EE, G8EO, CLIENT)
 - **Wire Format**: protojson (canonical JSON)
 - **Signing Basis**: Deterministic transaction_hash from normalized envelope fields
@@ -171,9 +171,9 @@ docs/reference/api/              # Generated API documentation
 - **Purpose**: Agent constant mappings (not full definitions)
 - **Contents**:
   - Agent name constants (dash, sage)
-  - Tribunal member constants (axiom, concord, nemesis, pragma, variance)
-  - Tribunal auditor reason constants (auditor_error, empty_response, no_valid_revision, ok, revised_from_dissent, swapped_to_dissenter, whitelist_violation)
-  - Tribunal tie-break reason constants (alphabetical, excluded_nemesis, shortest)
+  - Consensus member constants (axiom, concord, nemesis, pragma, variance)
+  - Consensus auditor reason constants (auditor_error, empty_response, no_valid_revision, ok, revised_from_dissent, swapped_to_dissenter, whitelist_violation)
+  - Consensus tie-break reason constants (alphabetical, excluded_nemesis, shortest)
 - **Note**: Full agent configuration definitions are in `models/agents/`
 
 ### API Paths (`constants/api_paths.json`)
@@ -212,13 +212,13 @@ docs/reference/api/              # Generated API documentation
   - App collections: `cases`, `investigations`, `memories`, `tasks`
   - Reputation collections: `reputation_state`, `reputation_commitments`, `stake_resolutions`
   - Audit collections: `console_audit`, `login_audit`, `auth_admin_audit`, `agent_activity_metadata`
-  - System collections: `account_locks`, `settings`, `app_policies`, `tribunal_commands`, `chaos_events`
+  - System collections: `account_locks`, `settings`, `app_policies`, `consensus_commands`, `chaos_events`
 - **Generation**: Go and Python constant generation from `_go_const` and `_python_const` fields
 
 ### Events (`constants/events.json`)
 - **Purpose**: Event type definitions for audit and pub/sub
 - **Contents**:
-  - AI agent events: conflict detection/resolution, continue approval, tribunal voting/consensus, triage clarification
+  - AI agent events: conflict detection/resolution, continue approval, consensus voting/consensus, triage clarification
   - LLM chat events: iterations (started, completed, failed, retry), streaming (delta, text, thinking), lifecycle, tool calls, message lifecycle
   - App events: case lifecycle (created, assigned, escalated, resolved, closed), investigation lifecycle, task lifecycle
   - Operator events: command execution (requested, started, completed, failed, cancelled), bootstrap, PKI (API key refresh), audit recording, device-link, heartbeat
@@ -236,7 +236,7 @@ docs/reference/api/              # Generated API documentation
   - `primary.json` - Primary agent configuration
   - `title_generator.json` - Title generator agent configuration
   - `triage.json` - Triage agent configuration
-  - `tribunal.json` - Tribunal agent configuration
+  - `consensus.json` - Consensus agent configuration
 
 ### Domain Models
 - `agent_activity_metadata.json` - Agent activity tracking schema
@@ -252,7 +252,7 @@ docs/reference/api/              # Generated API documentation
 - `security_constraints.json` - Security constraints schema
 - `stake_resolution.json` - Stake resolution schema
 - `tool_results.json` - Tool results schema
-- `tribunal.json` - Tribunal schema
+- `consensus.json` - Consensus schema
 - `user.json` - User schema
 - `user_settings.json` - User settings schema
 - `errors.py` - Python error definitions

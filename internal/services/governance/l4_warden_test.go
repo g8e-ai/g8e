@@ -35,19 +35,20 @@ import (
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
-func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Notary L3Notary) (*TransactionVerifier, ed25519.PrivateKey) {
+func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Notary L3Notary) (*L4Warden, ed25519.PrivateKey) {
 	t.Helper()
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("failed to generate signer: %v", err)
 	}
-	return NewTransactionVerifier(
+	return NewL4Warden(
 		slog.New(slog.NewTextHandler(os.Stdout, nil)),
 		replayStore,
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
 		nil, // AppPolicyStore not used in tests
 		l3Notary,
+		nil,                        // DoctrineValidator defaults to L1Doctrine
 		constants.AllActionTypes(), // Use SSOT for action types
 		"notary",
 		nil, // Clock defaults to RealClock
@@ -163,7 +164,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 }
 
 // isMutationAction returns true if the action type is a mutation.
-// This mirrors the logic in TransactionVerifier.isMutation.
+// This mirrors the logic in L4Warden.isMutation.
 func isMutationAction(actionType constants.ActionType) bool {
 	switch actionType {
 	case constants.ActionTypeExecuteBash, constants.ActionTypeFileEdit, constants.ActionTypeRestoreFile, constants.ActionTypeShutdown,
@@ -174,7 +175,7 @@ func isMutationAction(actionType constants.ActionType) bool {
 	}
 }
 
-func TestTransactionVerifier_AcceptsValidNonMutationUAPEnvelope(t *testing.T) {
+func TestL4Warden_AcceptsValidNonMutationUAPEnvelope(t *testing.T) {
 	t.Parallel()
 	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
@@ -188,7 +189,7 @@ func TestTransactionVerifier_AcceptsValidNonMutationUAPEnvelope(t *testing.T) {
 	}
 }
 
-func TestTransactionVerifier_AcceptsValidMutationUAPEnvelopeWithL3(t *testing.T) {
+func TestL4Warden_AcceptsValidMutationUAPEnvelopeWithL3(t *testing.T) {
 	t.Parallel()
 	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
@@ -199,7 +200,7 @@ func TestTransactionVerifier_AcceptsValidMutationUAPEnvelopeWithL3(t *testing.T)
 	}
 }
 
-func TestTransactionVerifier_FailClosedProofs(t *testing.T) {
+func TestL4Warden_FailClosedProofs(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name   string
@@ -239,7 +240,7 @@ func TestTransactionVerifier_FailClosedProofs(t *testing.T) {
 	}
 }
 
-func TestTransactionVerifier_ReplayAndStateRootReject(t *testing.T) {
+func TestL4Warden_ReplayAndStateRootReject(t *testing.T) {
 	t.Parallel()
 	t.Run("replayed nonce", func(t *testing.T) {
 		t.Parallel()
@@ -266,7 +267,7 @@ func TestTransactionVerifier_ReplayAndStateRootReject(t *testing.T) {
 	})
 }
 
-func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
+func TestL4Warden_MissingVerifierDependenciesReject(t *testing.T) {
 	t.Parallel()
 	t.Run("missing replay store", func(t *testing.T) {
 		t.Parallel()
@@ -299,7 +300,7 @@ func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
 	})
 }
 
-func TestTransactionVerifier_NonceRaceCondition(t *testing.T) {
+func TestL4Warden_NonceRaceCondition(t *testing.T) {
 	t.Parallel()
 	replayStore := testutil.NewStatefulMockReplayStore()
 	stateRootProvider := testutil.NewMockStateRootProvider("root-1")
@@ -398,11 +399,11 @@ func TestNewGovernancePosture_AcceptsValidPostures(t *testing.T) {
 	}
 }
 
-// TestTransactionVerifier_AllActionTypesFromSSOT verifies that every action type
+// TestL4Warden_AllActionTypesFromSSOT verifies that every action type
 // defined in the SSOT (constants.AllActionTypes) can be successfully decoded
 // and verified. This prevents action type drift where new action types are added
 // to constants but not to the decodePayloadForAction switch.
-func TestTransactionVerifier_AllActionTypesFromSSOT(t *testing.T) {
+func TestL4Warden_AllActionTypesFromSSOT(t *testing.T) {
 	t.Parallel()
 	allActionTypes := constants.AllActionTypes()
 	if len(allActionTypes) == 0 {
@@ -440,9 +441,9 @@ func TestTransactionVerifier_AllActionTypesFromSSOT(t *testing.T) {
 	}
 }
 
-// TestTransactionVerifier_AppPolicyStore_L3Bypass_ReadOnly verifies that read-only
+// TestL4Warden_AppPolicyStore_L3Bypass_ReadOnly verifies that read-only
 // intents approved by AppPolicyStore bypass L3 human presence verification.
-func TestTransactionVerifier_AppPolicyStore_L3Bypass_ReadOnly(t *testing.T) {
+func TestL4Warden_AppPolicyStore_L3Bypass_ReadOnly(t *testing.T) {
 	t.Parallel()
 
 	// Create an AppPolicyStore that auto-approves read-only actions
@@ -499,9 +500,9 @@ func TestTransactionVerifier_AppPolicyStore_L3Bypass_ReadOnly(t *testing.T) {
 	}
 }
 
-// TestTransactionVerifier_AppPolicyStore_L3Required_Mutation verifies that mutating
+// TestL4Warden_AppPolicyStore_L3Required_Mutation verifies that mutating
 // intents NOT in AutoApproveIntents require L3 human presence verification.
-func TestTransactionVerifier_AppPolicyStore_L3Required_Mutation(t *testing.T) {
+func TestL4Warden_AppPolicyStore_L3Required_Mutation(t *testing.T) {
 	t.Parallel()
 
 	// Create an AppPolicyStore that only auto-approves read-only actions
@@ -535,9 +536,9 @@ func TestTransactionVerifier_AppPolicyStore_L3Required_Mutation(t *testing.T) {
 	}
 }
 
-// TestTransactionVerifier_AppPolicyStore_NoPolicy_Fallback verifies that when
+// TestL4Warden_AppPolicyStore_NoPolicy_Fallback verifies that when
 // no policy is found for an app, the system falls back to requiring standard L3.
-func TestTransactionVerifier_AppPolicyStore_NoPolicy_Fallback(t *testing.T) {
+func TestL4Warden_AppPolicyStore_NoPolicy_Fallback(t *testing.T) {
 	t.Parallel()
 
 	// Create an AppPolicyStore with no policy for the app
@@ -564,20 +565,21 @@ func TestTransactionVerifier_AppPolicyStore_NoPolicy_Fallback(t *testing.T) {
 	}
 }
 
-// createVerifierWithAppPolicyStore creates a TransactionVerifier with a custom AppPolicyStore.
-func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStore, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Notary L3Notary) (*TransactionVerifier, ed25519.PrivateKey) {
+// createVerifierWithAppPolicyStore creates a L4Warden with a custom AppPolicyStore.
+func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStore, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Notary L3Notary) (*L4Warden, ed25519.PrivateKey) {
 	t.Helper()
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("failed to generate signer: %v", err)
 	}
-	return NewTransactionVerifier(
+	return NewL4Warden(
 		slog.New(slog.NewTextHandler(os.Stdout, nil)),
 		replayStore,
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"spiffe://g8e.local/app/test-app-id": pubKey}},
 		appPolicyStore,
 		l3Notary,
+		nil, // DoctrineValidator defaults to ProtoDoctrineValidator
 		constants.AllActionTypes(),
 		"notary",
 		nil, // Clock defaults to RealClock

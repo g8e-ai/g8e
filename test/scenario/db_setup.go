@@ -25,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/gateway"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/services/storage"
 )
 
 // SetupTestDB initializes an in-memory SQLite database for scenario tests.
@@ -95,4 +96,29 @@ func QueryReceipt(db *sqliteutil.DB, transactionID string) (*models.Document, er
 		CreatedAt:  createdAt,
 		UpdatedAt:  updatedAt,
 	}, nil
+}
+
+// QueryAuditVault queries a receipt from the audit vault receipts table.
+// Returns nil if the receipt is not found.
+func QueryAuditVault(vault *storage.AuditVaultService, transactionID string) (*models.ActionReceiptRecord, error) {
+	if vault == nil {
+		return nil, fmt.Errorf("audit vault is nil")
+	}
+
+	record, err := vault.GetActionReceipt(transactionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query audit vault: %w", err)
+	}
+
+	return record, nil
+}
+
+// CreateTestSession creates a test session in the audit vault for receipt recording.
+// This is required because the receipts table has a foreign key constraint on sessions.
+func CreateTestSession(vault *storage.AuditVaultService, sessionID string) error {
+	if vault == nil {
+		return fmt.Errorf("audit vault is nil")
+	}
+
+	return vault.CreateSession(sessionID, "test session", "test-user")
 }

@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/governance/l2"
 	"github.com/g8e-ai/g8e/pkg/uap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -45,12 +44,12 @@ func TestGovernanceFlow(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(nil)
 	nodeID := "test-node-1"
 
-	tribunal := &l2.Tribunal{
+	consensus := &L2Consensus{
 		NodeID:     nodeID,
 		PrivateKey: priv,
 	}
 
-	Actuator := &Actuator{
+	actuator := &L5Actuator{
 		Logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
 		SignerStore: &SimpleSignerStore{
 			Signers: map[string]ed25519.PublicKey{
@@ -72,36 +71,36 @@ func TestGovernanceFlow(t *testing.T) {
 	id, _ := uap.GenerateMessageID(env)
 	env.Id = id
 
-	// 2. Tribunal Evaluation
-	err := tribunal.EvaluatePayload(env)
+	// 2. Consensus Evaluation
+	err := consensus.EvaluatePayload(env)
 	if err != nil {
-		t.Fatalf("Tribunal evaluation failed: %v", err)
+		t.Fatalf("L2Consensus evaluation failed: %v", err)
 	}
 
 	if env.Governance == nil || len(env.Governance.L2.AgentIds) != 1 {
 		t.Errorf("Expected 1 agent ID in L2, got %v", env.Governance)
 	}
 
-	// Ensure status is validated for Actuator
+	// Ensure status is validated for L5Actuator
 	env.Governance.L1.Validated = true
-	sig, _ := tribunal.SignDecision(env.Id, true)
+	sig, _ := consensus.SignDecision(env.Id, true)
 	env.Governance.L2.TribunalSignature = sig
 
 	handler := &mockExecutionHandler{}
-	Actuator.ExecutionHandler = handler
-	Actuator.SigningKey = priv
-	Actuator.KeyID = nodeID
-	Actuator.Ctx = context.Background()
+	actuator.ExecutionHandler = handler
+	actuator.SigningKey = priv
+	actuator.KeyID = nodeID
+	actuator.Ctx = context.Background()
 
 	vt := &VerifiedTransaction{
 		Envelope:   env,
 		ActionType: constants.ActionTypeFetchLogs,
 	}
 
-	// 3. Actuator Execution
-	receipt, err := Actuator.Execute(context.Background(), vt, nil)
+	// 3. L5Actuator Execution
+	receipt, err := actuator.Execute(context.Background(), vt, nil)
 	if err != nil {
-		t.Fatalf("Actuator execution failed: %v", err)
+		t.Fatalf("L5Actuator execution failed: %v", err)
 	}
 
 	if !handler.executed {
@@ -120,12 +119,12 @@ func TestGovernanceFailClosed(t *testing.T) {
 
 	t.Run("SentinelNil_FailClosed", func(t *testing.T) {
 		t.Parallel()
-		tribunal := &l2.Tribunal{
+		consensus := &L2Consensus{
 			NodeID:     nodeID,
 			PrivateKey: priv,
 			Sentinel:   nil, // explicitly nil
 		}
-		isSafe := tribunal.RunMITREChecks("test", "echo 'hello'")
+		isSafe := consensus.RunMITREChecks("test", "echo 'hello'")
 		if isSafe {
 			t.Error("Expected fail-closed (Safe=false) when Sentinel is nil")
 		}
@@ -133,8 +132,8 @@ func TestGovernanceFailClosed(t *testing.T) {
 
 	t.Run("MissingPrivateKey_Error", func(t *testing.T) {
 		t.Parallel()
-		tribunal := &l2.Tribunal{NodeID: nodeID, PrivateKey: nil}
-		_, err := tribunal.SignDecision("test-id", true)
+		consensus := &L2Consensus{NodeID: nodeID, PrivateKey: nil}
+		_, err := consensus.SignDecision("test-id", true)
 		if err == nil {
 			t.Errorf("Expected error when PrivateKey is nil during SignDecision")
 		}
