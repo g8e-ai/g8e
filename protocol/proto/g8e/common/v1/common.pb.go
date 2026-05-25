@@ -147,9 +147,9 @@ func (x *L1Metadata) GetViolations() []string {
 // Consensus (L2Consensus) Governance: Consensus (Tribunal)
 type L2Metadata struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
-	TribunalSignature string                 `protobuf:"bytes,1,opt,name=tribunal_signature,json=tribunalSignature,proto3" json:"tribunal_signature,omitempty"` // ED25519 signature over transaction_hash|decision
-	AgentIds          []string               `protobuf:"bytes,2,rep,name=agent_ids,json=agentIds,proto3" json:"agent_ids,omitempty"`                            // IDs of agents that voted
-	KeyId             string                 `protobuf:"bytes,3,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`                                     // ID of the key used for signature
+	TribunalSignature string                 `protobuf:"bytes,1,opt,name=consensus_signature,json=tribunalSignature,proto3" json:"consensus_signature,omitempty"` // ED25519 signature over transaction_hash|decision
+	AgentIds          []string               `protobuf:"bytes,2,rep,name=agent_ids,json=agentIds,proto3" json:"agent_ids,omitempty"`                              // IDs of agents that voted
+	KeyId             string                 `protobuf:"bytes,3,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`                                       // ID of the key used for signature
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -658,7 +658,7 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"violations\"o\n" +
 	"\n" +
 	"L2Metadata\x12-\n" +
-	"\x12tribunal_signature\x18\x01 \x01(\tR\x11tribunalSignature\x12\x1b\n" +
+	"\x12consensus_signature\x18\x01 \x01(\tR\x11tribunalSignature\x12\x1b\n" +
 	"\tagent_ids\x18\x02 \x03(\tR\bagentIds\x12\x15\n" +
 	"\x06key_id\x18\x03 \x01(\tR\x05keyId\"\xd9\x01\n" +
 	"\aL3Proof\x12(\n" +

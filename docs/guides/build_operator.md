@@ -194,5 +194,5 @@ This verifies:
 
 ## Next Steps
 
-- **[Deploy Operator](deploy_operator.md)** — Deploy and use a Governed Operator.
+- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Deploy and use a Governed Operator.
 - **[Build Apps](build_apps.md)** — Build g8e-compatible applications using a Gateway.

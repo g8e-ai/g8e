@@ -38,13 +38,13 @@
     },
     "consensus": {
       "verdict": "reject",
-      "reject_reason": "TX_QUORUM_L2_SIG_INVALID: Consensus (L2Consensus) tribunal_signature failed verification",
+      "reject_reason": "TX_QUORUM_L2_SIG_INVALID: Consensus (L2Consensus) consensus_signature failed verification",
       "l2_status": 3,
       "l3_status": 1
     },
     "notary": {
       "verdict": "reject",
-      "reject_reason": "TX_QUORUM_L2_SIG_INVALID: Consensus (L2Consensus) tribunal_signature failed verification",
+      "reject_reason": "TX_QUORUM_L2_SIG_INVALID: Consensus (L2Consensus) consensus_signature failed verification",
       "l2_status": 3,
       "l3_status": 3
     }

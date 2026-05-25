@@ -8,9 +8,13 @@ Last Updated: 2026-05-25
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
-The reference Operator is **`g8eo`** (built as the `g8e` binary and executed in satellite or MCP mode). It functions as a sovereign, **Governed Operator** and **Model Context Protocol (MCP) Server**, serving as the Policy Execution Point (PEP).
+The reference Operator is **`g8eo`** (built as the `g8e` binary). It functions as a sovereign, **Governed Operator** and **Model Context Protocol (MCP) Server**, serving as the Policy Execution Point (PEP). The Operator can run in three modes:
 
-> **One Codebase, Two Roles.** The exact same compiled Go codebase is used to power both sides of the governance boundary. When run as `g8eg` (Gateway mode), it acts as the central Policy Decision Point (PDP). This document focuses entirely on `g8eo` - the Governed Operator running on the target host.
+- **Gateway Mode** (`--doctrine`, `--consensus`, `--notary`): Platform persistence with in-process pub/sub broker and execution gateway
+- **MCP Mode** (`--mcp-serve`): Stdio JSON-RPC proxy to the Operator's mTLS HTTP API
+- **OpenClaw Mode** (`--openclaw`): Connects to an OpenClaw Gateway as a node host
+
+> **One Codebase, Two Roles.** The exact same compiled Go codebase is used to power both sides of the governance boundary. When run in Gateway mode, it acts as the central Policy Decision Point (PDP) with in-process execution. This document focuses on the Governed Operator role.
 
 ---
 
@@ -27,7 +31,7 @@ The Operator is the only component capable of mutating the host. It executes rem
 When a command targets an Operator, it progresses through a strict, fail-closed pipeline:
 
 ### A. Translation & Interception (MCP/A2A Gateway)
-Standard AI clients (Cursor, Claude, or custom agents) speak JSON-RPC/HTTP tool calls. The Operator acts as an MCP/A2A universal protocol translator. It intercepts these standard JSON tool calls and forces them into a canonical JSON (protojson) `GovernanceEnvelope`. This ensures that generic ecosystems can interact with the Operator without sacrificing the strict typed-payload governance required by the platform.
+Standard AI clients (Cursor, Claude, or custom agents) speak JSON-RPC/HTTP tool calls. The Operator acts as an MCP/A2A universal protocol translator. In MCP mode (`--mcp-serve`), it exposes a stdio JSON-RPC interface that intercepts standard tool calls and forwards them to the Operator's mTLS HTTP API (`/api/mcp/v1/tools/list`, `/api/mcp/v1/tools/call`). The HTTP gateway then forces these requests into a canonical JSON (protojson) `GovernanceEnvelope`. This ensures that generic ecosystems can interact with the Operator without sacrificing the strict typed-payload governance required by the platform.
 
 ### B. Ingress Defense (`L4Warden`)
 The Operator distrusts all inputs. Before any execution happens, the `L4Warden` serves as the singular verification gate, enforcing:
@@ -45,7 +49,7 @@ The `L5Actuator` is the single execution boundary permitted to mutate host state
 1. **Pre-execution receipt**: Signs an `ActionReceipt` with status `EXECUTING` and commits it to the local Audit Vault. If this write fails, execution aborts.
 2. **Execution**: Dispatches the verified payload to the appropriate handler (e.g., shell, file edit).
 3. **Sovereignty Boundary**: The `SovereigntyService` processes the output to scrub sensitive PII, credentials, and connection strings before the data leaves the boundary.
-4. **Post-execution receipt**: Updates the receipt to `COMPLETED` or `FAILED`, captures the new `state_root_after`, signs the result, and publishes it back to the Hub.
+4. **Post-execution receipt**: Updates the receipt to `COMPLETED` or `FAILED`, captures the new `state_root_after`, signs the result, and publishes it back to the Gateway.
 
 ---
 
@@ -56,10 +60,11 @@ By exposing standard MCP and A2A interfaces (`--mcp-serve`), the Operator acts a
 
 ### Identity, PKI, and mTLS
 The Operator runs entirely over outbound mutual TLS (mTLS) over WSS. It establishes workload identity bound to SPIFFE-style URI SANs:
-- **Satellite Identity**: `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>`
+- **Operator Identity**: `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>`
 - **CLI/BYO Client**: `spiffe://g8e.local/cli/<user_id>/<cli_session_id>`
+- **App Workload**: `spiffe://g8e.local/app/<operator_id>`
 
-Revocation is strictly enforced on every handshake. The L5Actuator possesses a unique Ed25519 signing key used exclusively to sign `ActionReceipts`, ensuring that evals, external auditors, and the Hub can cryptographically verify that the host itself completed the mutation.
+Revocation is strictly enforced on every handshake. The L5Actuator possesses a unique Ed25519 signing key used exclusively to sign `ActionReceipts`, ensuring that evals, external auditors, and the Gateway can cryptographically verify that the host itself completed the mutation.
 
 ### Defense of Local Data (LFAA)
 The Local-First Audit Architecture (LFAA) guarantees that the host remains the authoritative source of truth.
@@ -89,6 +94,11 @@ The Local-First Audit Architecture (LFAA) guarantees that the host remains the a
 | Threat Detection (`L1Doctrine`) | `internal/services/governance/l1_doctrine.go` |
 | Local Audit Vault | `internal/services/storage/audit_vault.go` |
 | Native Git Ledger | `internal/services/storage/ledger.go` |
-| MCP Proxy Entrypoint | `cmd/g8eo/main.go` |
+| Operator Entrypoint | `cmd/g8eo/main.go` |
+| Protocol Definitions | `protocol/proto/g8e/common/v1/common.proto` |
+| Operator Protocol | `protocol/proto/g8e/operator/v1/operator.proto` |
+| Workload Identity | `protocol/workload_identity.go` |
+| Event Constants | `protocol/constants/events.json` |
+| Port Constants | `protocol/constants/ports.json` |
 
-See also: [g8e Protocol](./protocol.md), [Governance Gateway (g8eg)](./gateway.md).
+See also: [g8e Protocol](./protocol.md), [Governance Gateway](./gateway.md).

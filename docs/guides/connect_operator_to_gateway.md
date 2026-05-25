@@ -1,9 +1,9 @@
 ---
-title: Deploy Operator
+title: Connect Operator to Gateway
 parent: Guides
 ---
 
-# Deploy a Governed Operator
+# Connect Operator to a Governance Gateway
 
 Last Updated: 2026-05-25
 Version: v0.2.6
@@ -12,11 +12,11 @@ Version: v0.2.6
 
 ## Overview
 
-This guide covers deploying and operating a g8e-compatible Governed Operator, whether using the reference implementation or a custom g8e-compatible operator.
+This guide covers connecting a Governed Operator to a Governance Gateway and operating it, whether using the reference implementation or a custom g8e-compatible operator.
 
 ---
 
-## Reference Operator Deployment
+## Reference Operator Connection
 
 ### Local Deployment
 
@@ -199,9 +199,9 @@ When the operator's mTLS certificate expires, re-enroll using the device-link to
 
 ---
 
-## Custom Operator Deployment
+## Custom Operator Connection
 
-For custom g8e-compatible operator implementations, deployment follows the same operational pattern:
+For custom g8e-compatible operator implementations, connection follows the same operational pattern:
 
 1. **Enroll with Gateway**: Use device-link token and CSR-based enrollment to obtain mTLS certificates.
 2. **Configure Runtime**: Set up the runtime directory, PKI directory, and audit vault.

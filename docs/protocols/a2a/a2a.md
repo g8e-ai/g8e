@@ -41,9 +41,9 @@ The gateway maps A2A skill invocations to the `A2A_CALL` action type with the `A
 
 | Field | Type | Description |
 |---|---|---|
-| `skill_name` | string | Name of the skill to invoke |
-| `payload` | google.protobuf.Struct | JSON-structured skill parameters |
-| `context` | map<string, string> | Optional context metadata |
+| `skill_name` | string | Name of the skill to invoke (L1 forbidden patterns: sudo, su) |
+| `payload_json` | string | JSON-encoded A2A task payload |
+| `execution_id` | string | Optional client-supplied invocation identifier |
 
 ### Canonical JSON Wire Format
 
@@ -73,13 +73,16 @@ Invoke A2A skills via POST to `/api/a2a/v1/call`:
 
 ```json
 {
-  "skill_name": "example_skill",
-  "payload": {
-    "param1": "value1",
-    "param2": "value2"
-  },
-  "context": {
-    "session_id": "optional_context"
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "a2a/call",
+  "params": {
+    "skill_name": "example_skill",
+    "payload": {
+      "param1": "value1",
+      "param2": "value2"
+    },
+    "execution_id": "optional_execution_id"
   }
 }
 ```
@@ -102,9 +105,9 @@ Bring-your-own clients can integrate by:
 
 ### L1 Doctrine (Hard Gates)
 
-- **Forbidden patterns**: Protobuf field options with regex constraints on skill names
-- **Sentinel scanning**: Runtime scanning of field values for forbidden patterns (sudo, password, api_key, etc.)
-- **Field path validation**: Allowlist/denylist enforcement for skill parameters
+- **Forbidden patterns**: Protobuf field options with regex constraints on skill names (e.g., sudo, su)
+- **Runtime scanning**: Gateway validates skill names against L1 forbidden patterns before envelope construction
+- **Field validation**: Payload parameters are validated against allowlist/denylist where configured
 
 ### L2 Consensus
 
@@ -132,13 +135,15 @@ A2A protocol errors follow gateway error conventions:
 
 ### Error Mapping
 
-Gateway verification errors are mapped to standard error responses:
+Gateway verification errors are mapped to JSON-RPC error codes via `mapGatewayError`:
 
-- **Invalid envelope**: `-32600` (Invalid Request)
-- **L1 rejection**: `-32602` (Invalid params)
-- **L2 rejection**: `-32603` (Internal error)
-- **L3 rejection**: `-32001` (Unauthorized)
-- **Downstream unavailable**: `-32603` (Internal error, circuit breaker)
+- **Invalid envelope**: `-32600` (Invalid Request) - malformed GovernanceEnvelope
+- **Payload decode failed**: `-32602` (Invalid params) - protobuf unmarshaling error
+- **Hash mismatch**: `-32603` (Internal error) - transaction_hash validation failure
+- **L1 rejection**: `-32603` (Internal error) - forbidden pattern violation
+- **L2 rejection**: `-32603` (Internal error) - signature verification failure
+- **L3 rejection**: `-32001` (Unauthorized) - missing or invalid L3 proof
+- **Downstream unavailable**: `-32603` (Internal error) - circuit breaker open
 
 ---
 
@@ -146,17 +151,17 @@ Gateway verification errors are mapped to standard error responses:
 
 ### Gateway Modes
 
-The Operator runs in gateway mode with three posture options:
+The Gateway supports three governance postures (configured via `G8E_GATEWAY_POSTURE` environment variable or config):
 
-| Mode | Flag | Purpose |
+| Mode | Posture | Purpose |
 |---|---|---|
-| **Doctrine** | `--doctrine` | L1 enforced, L2/L3 audited (default) |
-| **Consensus** | `--consensus` | L1/L2 enforced, L3 audited |
-| **Notary** | `--notary` | L1/L2/L3 strictly enforced |
+| **Doctrine** | `doctrine` | L1 enforced, L2/L3 audited but not enforced (default) |
+| **Consensus** | `consensus` | L1/L2 enforced, L3 audited but not enforced |
+| **Notary** | `notary` | L1/L2/L3 strictly enforced (default for outbound mode) |
 
 ### Port Configuration
 
-Default ports (configurable via flags or paths.json):
+Default ports (configurable via config or paths.json):
 
 | Port | Purpose | Auth |
 |---|---|---|
@@ -201,7 +206,7 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 | Gateway entry | `cmd/g8eo/main.go` (runGatewayMode) |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | HTTP routing | `internal/services/gateway/gateway_http.go` |
-| A2A translation | `internal/services/mcp/gateway.go` |
+| A2A translation | `internal/services/mcp/gateway.go` (HandleA2aCall) |
 | Envelope construction | `internal/services/mcp/gateway.go` (processGatewayTransaction) |
 | Transaction verification | `internal/services/governance/l4_warden.go` |
 | Envelope processor | `internal/services/governance/processor.go` |
@@ -209,6 +214,8 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 | Session management | `internal/services/gateway/session_service.go` |
 | CLI L3 verification | `internal/services/gateway/cli_l3_notary.go` |
 | Composite L3 verifier | `internal/services/gateway/composite_l3_verifier.go` |
+| Error mapping | `internal/services/mcp/gateway.go` (mapGatewayError) |
+| Circuit breaker | `internal/services/mcp/gateway.go` (isCircuitOpen, recordFailure, recordSuccess) |
 
 ---
 

@@ -1,8 +1,8 @@
 # Developer Troubleshooting
 
 This page covers common setup failures for contributors working on g8e from a
-fresh checkout. The platform itself runs host-native; Docker is only needed for
-the demo fleet and a few data-inspection helpers.
+fresh checkout. The platform runs host-native; Docker is not required for
+substrate development.
 
 ## First checks
 
@@ -20,7 +20,6 @@ At minimum, install the tools for the component you are touching:
 
 - Go for `g8eo` and protocol work.
 - Python for optional g8e-compatible agentic ensembles and evals.
-- Docker only for demo fleet workflows.
 
 ## `./g8e` fails with missing `curl`
 
@@ -75,43 +74,19 @@ make proto
 The full target also creates `__init__.py` files and rewrites generated Python
 imports for package-relative use.
 
-## Docker socket not found
-
-Core component development does not use Docker. If you see a Docker socket
-error while starting the main platform, check that you are not accidentally
-running a demo or data-inspection helper.
-
-For normal development, use host-native commands:
-
-```bash
-./g8e platform start
-./g8e test g8eo
-```
-
-For demo fleet work, start Docker Desktop or the local Docker daemon, then check
-that the current user can reach the socket:
-
-```bash
-docker ps
-./g8e demo status
-```
-
-On Linux, a permission error usually means the user is not allowed to access the
-Docker socket. Fix the host Docker setup before changing g8e code.
-
 ## `./g8e platform start` does not become healthy
 
-The platform start path builds and launches the Operator, then waits for the
-health endpoint. Start with the status command and the Operator log:
+The platform start path builds and launches the Governance Gateway (g8eg), then waits for the
+health endpoint. Start with the status command and the log:
 
 ```bash
 ./g8e platform status
-tail -n 80 .g8e/logs/operator-listen.log
+tail -n 80 .g8e/logs/operator.log
 ```
 
 Common causes:
 
-- One of the local ports from `internal/constants/paths.go` is already in use (the startup script performs an automatic preflight check and reports conflicting PIDs).
+- One of the local ports from `internal/constants/ports.go` is already in use (the startup script performs an automatic preflight check and reports conflicting PIDs).
 - The Go toolchain is missing or below the version expected by the current Developer Guidelines.
 - Runtime PKI or secrets were created by an older incompatible checkout.
 
@@ -125,29 +100,10 @@ Stop the managed process before retrying:
 Use `./g8e platform reset` or `./g8e platform clean` only for disposable local
 state. They intentionally remove runtime data under `.g8e/`.
 
-## g8e-compatible agentic ensemble virtualenv is missing
-
-The agentic ensemble is optional. Ensemble and eval commands expect the local
-virtualenv under `.venv` at the project root.
-
-To maximize developer ergonomics, **both the platform start script and the test runner will automatically bootstrap this virtualenv for you** if it is not found.
-
-You can also manually build it or start the platform with optional apps pre-enabled:
-
-```bash
-./g8e platform start --with-apps
-```
-
-If you only need the Operator, skip the agentic ensemble and run:
-
-```bash
-./g8e test g8eo
-```
-
 ## Tests fail because the platform is not running
 
 The test runner uses real infrastructure. Start the platform before tests that
-need the Operator, and start optional apps only when the test target requires
+need the Governance Gateway, and start optional apps only when the test target requires
 them.
 
 ```bash
@@ -156,7 +112,7 @@ them.
 ```
 
 If a test failure mentions missing trust bundles or client certificates, confirm
-that `.g8e/pki/` exists and that `./g8e platform status` reports the Operator as
+that `.g8e/pki/` exists and that `./g8e platform status` reports the Governance Gateway as
 running.
 
 ## Path resolution problems

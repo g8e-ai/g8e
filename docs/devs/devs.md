@@ -58,7 +58,7 @@ The unified `g8e` binary is the single entry point for all platform operations. 
 - **Environment (`./g8e vars`)**: Environment variable management.
 
 **Technical Invariants:**
-1. **Zero Shell Scripts**: NO shell scripts are used for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary. Constants are exported to JSON and Python via the Go exporter tool (`cmd/exporter`), not shell scripts. Tests and code consume protocol constants directly from JSON files (`protocol/constants/*.json`), not by sourcing shell scripts.
+1. **Zero Shell Scripts**: NO shell scripts are used for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary. Constants are exported to Go registry files via the Go exporter tool (`cmd/exporter`), which reads from JSON SSOT (`protocol/constants/*.json`). Tests and code consume protocol constants directly from JSON files (`protocol/constants/*.json`), not by sourcing shell scripts.
 2. **Service Readiness**: The platform is not "ready" until the Governance Gateway (`g8eg`) Gateway mode health check (`/healthz`) passes.
 3. **Canonical Wire Format**: All client-facing interaction (HTTP, PubSub, receipts) must use **canonical JSON (protojson)**. Binary Protobuf is reserved for internal storage.
 4. **Fail-Closed Execution**: The CLI must never mask failures or proceed with missing trust material.
@@ -68,9 +68,9 @@ The unified `g8e` binary is the single entry point for all platform operations. 
 
 ## Architecture Philosophy
 
-g8e is split into the **Protocol (Gateway)**, the **Governance Gateway (g8eg)**, and the **Governed Operator (g8eo)**.
+g8e is split into the **g8e Protocol**, the **Governance Gateway (g8eg)**, and the **Governed Operator (g8eo)**.
 
-- **Protocol (Gateway)** - Shared `.proto` schemas plus the canonical-JSON wire contract; the source of truth for what every operator and client must honor.
+- **g8e Protocol** - Shared `.proto` schemas plus the canonical-JSON wire contract; the source of truth for what every operator and client must honor.
 - **Governance Gateway (`g8eg`)** - The central, BFT-governed Policy Decision Point (PDP) running in Gateway mode (--doctrine, --consensus, or --notary). It provides the platform's central persistence, PKI, and protocol API (including a minimal bootstrap interface).
 - **Governed Operator (`g8eo`)** - The host-side Policy Execution Point (PEP) and MCP Server. It enforces protocol compliance, verifies Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) signatures, and executes transactions via the L5Actuator stage.
 - **Host-native execution** - Core components run as native processes.
@@ -178,7 +178,7 @@ All substrate tests are orchestrated via the `./g8e` CLI. **Never call `go test`
 
 ## Doctrine Ingestion
 
-g8e ingests industry security doctrines from OWASP CRS, Gitleaks, Semgrep, and secrets-patterns-db. Doctrines are stored in `protocol/constants/doctrine/` as canonical JSON and loaded by the g8eo Sentinel at startup.
+g8e ingests industry security doctrines from OWASP CRS, Gitleaks, Semgrep, and secrets-patterns-db. Doctrines are stored in `protocol/constants/doctrine/` as canonical JSON and loaded by the L1Doctrine service at startup.
 
 ### Doctrine Schema
 
@@ -216,7 +216,7 @@ Each doctrine file follows this canonical schema:
 
 1. Create or update the doctrine JSON file in `protocol/constants/doctrine/`
 2. Run `make validate-doctrines` to ensure JSON validity
-3. Restart g8eo to load the new doctrines (Sentinel loads doctrines at startup)
+3. Restart g8eo to load the new doctrines (L1Doctrine loads doctrines at startup)
 
 ### MCP/Agentic-Specific Doctrines
 
@@ -230,24 +230,24 @@ g8e defines unique threat doctrines for agentic execution in `mcp_vectors_doctri
 
 ## Working with Constants
 
-g8e maintains a Single Source of Truth (SSOT) for cross-component constants in Go at `internal/constants/`. Constants are exported to JSON and Python via a generation pipeline.
+g8e maintains a Single Source of Truth (SSOT) for cross-component constants in JSON at `protocol/constants/`. Go and Python consume these constants via generated registry files.
 
 ### Adding New Constants
 
-1. Add the constant to the appropriate Go file in `internal/constants/`
-2. Run `make constants` to regenerate JSON and Python exports
+1. Add the constant to the appropriate JSON file in `protocol/constants/`
+2. Run `make constants` to regenerate Go registry files from JSON
 3. Run `go run ./internal/constants/check_registry.go` to verify registration
-4. Commit both the Go source and generated files
+4. Commit both the JSON source and generated Go files
 
 ### Regeneration Commands
 
-- `make constants` - Generate all constants from Go SSOT
+- `make constants` - Generate Go registry files from JSON SSOT
 - `make generate` - Generate both protobuf and constants
 - `make clean-constants` - Remove generated constants
 
 ### Tracked vs Internal Files
 
-The registry tracking system distinguishes exportable constants from internal-only constants. Tracked files (collections, events, headers, channels, etc.) are exported to JSON/Python. Internal-only files (status, platform, agents, timestamp) contain Go-specific enums and are not exported.
+The registry tracking system distinguishes exportable constants from internal-only constants. Tracked JSON files (collections.json, events.json, headers.json, channels.json, etc.) are exported to Go registry files. Internal-only Go files (status.go, platform.go, agents.go, timestamp.go) contain Go-specific enums and are not exported from JSON.
 
 See `docs/reference/constants.md` for complete documentation of the constants pipeline.
 
@@ -256,8 +256,9 @@ See `docs/reference/constants.md` for complete documentation of the constants pi
 | Concern | Location |
 |---|---|
 | Protobuf schemas | `protocol/proto/` |
-| Constants registries | `internal/constants/` |
+| Constants registries (JSON SSOT) | `protocol/constants/` |
 | Constants documentation | `docs/reference/constants.md` |
+| Go registry files | `internal/constants/` |
 | Operator implementation | Root-level (cmd/, internal/, pkg/) |
 | CLI | Unified `g8e` binary (daemon + CLI modes) |
 

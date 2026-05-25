@@ -12,7 +12,7 @@ g8e tests run directly on the host using real infrastructure. The test environme
 
 ## Test Philosophy
 
-- **Hermetic execution** - Tests run on the host via `./g8e test`. The Operator is a single binary combining Governance Gateway (Policy Decision Point) and Governance Operator (Policy Execution Point).
+- **Hermetic execution** - Tests run on the host via `./g8e test`. The g8e Operator is a unified binary that operates as Governance Gateway (Policy Decision Point) in gateway mode or as g8e Operator (Policy Execution Point) in cloud mode.
 - **Real infrastructure** - Tests use the actual SQLite database, PKI certificates, and pub/sub channels. Platform starts via `./g8e platform start`.
 - **No mocks** - Mocking internal services, database clients, or cross-component communication is prohibited. Integration tests use real wire paths.
 - **mTLS required** - Operator communication requires mTLS. Authentication via `./g8e login` issues certificates from `.g8e/pki`.
@@ -114,11 +114,13 @@ This creates the first user and issues mTLS certificates for the Operator and CL
 
 ## Infrastructure Ports
 
-Defaults from `internal/constants/ports.go`:
+Defaults from `protocol/constants/ports.json` (canonical source of truth):
 
 - `8440` - Operator mTLS API and Pub/Sub
 - `8441` - Operator Bootstrap (plain HTTP; device-link enrollment)
 - `8442` - Operator Public TLS (browser/BYO bootstrap)
+- `8443` - g8ee HTTPS (optional application-layer Engine)
+- `18789` - OpenClaw Gateway
 
 All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NET_BIND_SERVICE` to the Operator binary or front with an external port redirect.
 
