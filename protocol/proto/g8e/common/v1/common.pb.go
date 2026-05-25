@@ -20,15 +20,14 @@
 package commonv1
 
 import (
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
-
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	descriptorpb "google.golang.org/protobuf/types/descriptorpb"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
 )
 
 const (
@@ -146,12 +145,12 @@ func (x *L1Metadata) GetViolations() []string {
 
 // Consensus (L2Consensus) Governance: Consensus (Tribunal)
 type L2Metadata struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	TribunalSignature string                 `protobuf:"bytes,1,opt,name=consensus_signature,json=tribunalSignature,proto3" json:"consensus_signature,omitempty"` // ED25519 signature over transaction_hash|decision
-	AgentIds          []string               `protobuf:"bytes,2,rep,name=agent_ids,json=agentIds,proto3" json:"agent_ids,omitempty"`                              // IDs of agents that voted
-	KeyId             string                 `protobuf:"bytes,3,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`                                       // ID of the key used for signature
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	ConsensusSignature string                 `protobuf:"bytes,1,opt,name=consensus_signature,json=consensusSignature,proto3" json:"consensus_signature,omitempty"` // ED25519 signature over transaction_hash|decision
+	AgentIds           []string               `protobuf:"bytes,2,rep,name=agent_ids,json=agentIds,proto3" json:"agent_ids,omitempty"`                               // IDs of agents that voted
+	KeyId              string                 `protobuf:"bytes,3,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`                                        // ID of the key used for signature
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *L2Metadata) Reset() {
@@ -184,9 +183,9 @@ func (*L2Metadata) Descriptor() ([]byte, []int) {
 	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *L2Metadata) GetTribunalSignature() string {
+func (x *L2Metadata) GetConsensusSignature() string {
 	if x != nil {
-		return x.TribunalSignature
+		return x.ConsensusSignature
 	}
 	return ""
 }
@@ -655,10 +654,10 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\tvalidated\x18\x01 \x01(\bR\tvalidated\x12\x1e\n" +
 	"\n" +
 	"violations\x18\x02 \x03(\tR\n" +
-	"violations\"o\n" +
+	"violations\"q\n" +
 	"\n" +
-	"L2Metadata\x12-\n" +
-	"\x12consensus_signature\x18\x01 \x01(\tR\x11tribunalSignature\x12\x1b\n" +
+	"L2Metadata\x12/\n" +
+	"\x13consensus_signature\x18\x01 \x01(\tR\x12consensusSignature\x12\x1b\n" +
 	"\tagent_ids\x18\x02 \x03(\tR\bagentIds\x12\x15\n" +
 	"\x06key_id\x18\x03 \x01(\tR\x05keyId\"\xd9\x01\n" +
 	"\aL3Proof\x12(\n" +

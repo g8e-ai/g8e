@@ -106,8 +106,8 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *uap.UA
 	env.TransactionHash = hash
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			KeyId:             "missing-key",
-			TribunalSignature: hex.EncodeToString(ed25519.Sign(signerPriv, []byte(hash+"|true"))),
+			KeyId:              "missing-key",
+			ConsensusSignature: hex.EncodeToString(ed25519.Sign(signerPriv, []byte(hash+"|true"))),
 		},
 	}
 	return env
@@ -273,7 +273,7 @@ func TestPubSubCommandService_handleAppInvestigationCreatedSync(t *testing.T) {
 		}
 		_, err := f.Svc.handleAppInvestigationCreatedSync(context.Background(), msg)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "Actuator or AuditStore not configured")
+		assert.Contains(t, err.Error(), "actuator or AuditStore not configured")
 	})
 
 	t.Run("rejects when AuditStore not configured", func(t *testing.T) {
@@ -287,7 +287,7 @@ func TestPubSubCommandService_handleAppInvestigationCreatedSync(t *testing.T) {
 		}
 		_, err := f.Svc.handleAppInvestigationCreatedSync(context.Background(), msg)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "Actuator or AuditStore not configured")
+		assert.Contains(t, err.Error(), "actuator or AuditStore not configured")
 	})
 }
 
@@ -448,7 +448,7 @@ func TestPubSubCommandService_ProcessEnvelope(t *testing.T) {
 		// Sign for verifier
 		l2Payload := fmt.Sprintf("%s|true", env.TransactionHash)
 		sig := ed25519.Sign(f.SignerPriv, []byte(l2Payload))
-		env.Governance.L2.TribunalSignature = hex.EncodeToString(sig)
+		env.Governance.L2.ConsensusSignature = hex.EncodeToString(sig)
 
 		uapBytes, _ := (protojson.MarshalOptions{}).Marshal(env)
 

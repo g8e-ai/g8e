@@ -83,7 +83,7 @@ func main() {
 	baseEnv.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
 			KeyId:             keyID1,
-			TribunalSignature: hex.EncodeToString(ed25519.Sign(priv1, []byte(hash+"|true"))),
+			ConsensusSignature: hex.EncodeToString(ed25519.Sign(priv1, []byte(hash+"|true"))),
 		},
 	}
 
@@ -92,7 +92,7 @@ func main() {
 
 	// 1. Forged signature - use wrong signature
 	forgedEnv := proto.Clone(baseEnv).(*commonv1.GovernanceEnvelope)
-	forgedEnv.Governance.L2.TribunalSignature = fixtureBadSignature
+	forgedEnv.Governance.L2.ConsensusSignature = fixtureBadSignature
 	forgedJSON, _ := marshaler.Marshal(forgedEnv)
 
 	// 2. Replay - use a different nonce but same envelope structure
@@ -103,7 +103,7 @@ func main() {
 	replayEnv.Id = replayHash
 	replayEnv.TransactionHash = replayHash
 	// Re-sign with new hash
-	replayEnv.Governance.L2.TribunalSignature = hex.EncodeToString(ed25519.Sign(priv1, []byte(replayHash+"|true")))
+	replayEnv.Governance.L2.ConsensusSignature = hex.EncodeToString(ed25519.Sign(priv1, []byte(replayHash+"|true")))
 	replayJSON, _ := marshaler.Marshal(replayEnv)
 
 	// 3. Stale state root
@@ -115,7 +115,7 @@ func main() {
 	staleEnv.Id = newHash
 	staleEnv.TransactionHash = newHash
 	// Re-sign with new hash
-	staleEnv.Governance.L2.TribunalSignature = hex.EncodeToString(ed25519.Sign(priv1, []byte(newHash+"|true")))
+	staleEnv.Governance.L2.ConsensusSignature = hex.EncodeToString(ed25519.Sign(priv1, []byte(newHash+"|true")))
 	staleJSON, _ := marshaler.Marshal(staleEnv)
 
 	// 4. Tampered receipt - this is tested by the receipt verification, not envelope
@@ -127,7 +127,7 @@ func main() {
 	tamperedEnv.Id = tamperedHash
 	tamperedEnv.TransactionHash = tamperedHash
 	// Re-sign with new hash
-	tamperedEnv.Governance.L2.TribunalSignature = hex.EncodeToString(ed25519.Sign(priv1, []byte(tamperedHash+"|true")))
+	tamperedEnv.Governance.L2.ConsensusSignature = hex.EncodeToString(ed25519.Sign(priv1, []byte(tamperedHash+"|true")))
 	tamperedJSON, _ := marshaler.Marshal(tamperedEnv)
 
 	// Output the JSON strings for fixtures

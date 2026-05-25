@@ -324,7 +324,7 @@ func TestMustMarshalUAPEnvelopeWithVotes(t *testing.T) {
 	require.NotNil(t, env.Governance)
 	require.NotNil(t, env.Governance.L2)
 	require.Equal(t, agentIDs, env.Governance.L2.AgentIds)
-	require.Equal(t, tribunalSig, env.Governance.L2.TribunalSignature)
+	require.Equal(t, tribunalSig, env.Governance.L2.ConsensusSignature)
 }
 
 func TestMustUnmarshalUAPEnvelope(t *testing.T) {

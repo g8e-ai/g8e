@@ -294,7 +294,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			TribunalSignature: hex.EncodeToString(signature),
+			ConsensusSignature: hex.EncodeToString(signature),
 			AgentIds:          []string{signerName},
 			KeyId:             signerName,
 		},

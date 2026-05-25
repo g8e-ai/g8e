@@ -22,6 +22,9 @@ export PATH := $(shell go env GOPATH)/bin:$(HOME)/go/bin:$(PATH)
 # TOOLS
 # =============================================================================
 BUF := $(shell command -v buf 2>/dev/null || echo "./buf")
+PROTOC := $(shell command -v protoc 2>/dev/null || echo "/usr/local/bin/protoc")
+PROTOC_GEN_GO := $(shell go list -m -f '{{.Version}}' google.golang.org/protobuf 2>/dev/null || echo "v1.36.11")
+PROTOC_MIN_VERSION := 21.0
 
 # =============================================================================
 # HELP
@@ -70,7 +73,7 @@ constants:
 	@echo "Constants generation complete."
 
 .PHONY: proto
-proto: buf-install
+proto: buf-install protoc-install
 	@if command -v buf &> /dev/null || [ -f "./buf" ]; then \
 		echo "Generating Go Protobuf code with Buf..."; \
 		$(BUF) generate protocol/proto; \
@@ -91,13 +94,32 @@ buf-install:
 	@if ! command -v buf &> /dev/null && [ ! -f "./buf" ]; then \
 		if command -v go &> /dev/null; then \
 			echo "Installing Buf natively via Go toolchain..."; \
-			GOBIN=$$(pwd) go install github.com/bufbuild/buf/cmd/buf@v1.30.0; \
+			GOBIN=$$(pwd) go install github.com/bufbuild/buf/cmd/buf@v1.69.0; \
 		else \
 			echo "Go not found, attempting direct download..."; \
 			curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-$$(uname -s)-$$(uname -m)" -o ./buf && chmod +x ./buf || \
 			echo "Warning: Failed to download Buf. Proceeding with existing protocol files if available."; \
 		fi \
 	fi
+
+.PHONY: protoc-install
+protoc-install:
+	@if ! command -v protoc &> /dev/null; then \
+		echo "Installing protoc v28.3..."; \
+		cd /tmp && curl -sSL https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip -o protoc.zip && \
+		unzip -o protoc.zip -d protoc && \
+		sudo cp protoc/bin/protoc /usr/local/bin/protoc && \
+		sudo chmod +x /usr/local/bin/protoc && \
+		rm -rf /tmp/protoc /tmp/protoc.zip; \
+	fi
+	@echo "Verifying protoc version compatibility..."
+	@PROTOC_VERSION=$$($(PROTOC) --version | grep -oP '\d+\.\d+'); \
+	PROTOC_MAJOR=$$(echo $$PROTOC_VERSION | cut -d. -f1); \
+	if [ "$$(echo "$$PROTOC_MAJOR < $(PROTOC_MIN_VERSION)" | bc -l)" -eq 1 ]; then \
+		echo "Error: protoc version $$PROTOC_VERSION is too old. Minimum required: $(PROTOC_MIN_VERSION)"; \
+		exit 1; \
+	fi
+	@echo "protoc version $$PROTOC_VERSION is compatible."
 
 # =============================================================================
 # LINTING
@@ -185,6 +207,7 @@ ci-substrate: _ci-verify-proto _ci-lint-g8eo _ci-vulncheck-g8eo _ci-test-g8eo _c
 .PHONY: _ci-verify-proto
 _ci-verify-proto:
 	@echo "=== verify-proto ==="
+	@$(MAKE) protoc-install
 	@$(MAKE) proto
 	@$(MAKE) constants
 	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*\.go$$|^\s*M.*\.sh$$" || true); \

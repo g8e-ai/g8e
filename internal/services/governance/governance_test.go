@@ -84,7 +84,7 @@ func TestGovernanceFlow(t *testing.T) {
 	// Ensure status is validated for L5Actuator
 	env.Governance.L1.Validated = true
 	sig, _ := consensus.SignDecision(env.Id, true)
-	env.Governance.L2.TribunalSignature = sig
+	env.Governance.L2.ConsensusSignature = sig
 
 	handler := &mockExecutionHandler{}
 	actuator.ExecutionHandler = handler

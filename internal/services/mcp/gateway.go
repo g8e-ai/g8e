@@ -966,7 +966,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 			env.Governance = &commonv1.GovernanceMetadata{}
 		}
 		env.Governance.L2 = &commonv1.L2Metadata{
-			TribunalSignature: hex.EncodeToString(sig),
+			ConsensusSignature: hex.EncodeToString(sig),
 			KeyId:             g.keyID,
 			AgentIds:          []string{"gateway-local-signer"},
 		}

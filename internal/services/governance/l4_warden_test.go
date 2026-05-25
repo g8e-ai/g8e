@@ -149,7 +149,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
 			KeyId:             "test-key",
-			TribunalSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true"))),
+			ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true"))),
 		},
 	}
 	// Add L3 proof for mutation actions
@@ -221,7 +221,7 @@ func TestL4Warden_FailClosedProofs(t *testing.T) {
 		{name: "missing state root", mutate: func(env *uap.UAPEnvelope) { env.StateMerkleRoot = ""; rehash(t, env) }, want: ErrStateRootRequired},
 		{name: "missing l2", mutate: func(env *uap.UAPEnvelope) { env.Governance.L2 = nil }, want: ErrL2SignatureMissing},
 		{name: "missing l2 key", mutate: func(env *uap.UAPEnvelope) { env.Governance.L2.KeyId = "" }, want: ErrL2KeyNotConfigured},
-		{name: "invalid l2 signature", mutate: func(env *uap.UAPEnvelope) { env.Governance.L2.TribunalSignature = "deadbeef" }, want: ErrL2SignatureInvalid},
+		{name: "invalid l2 signature", mutate: func(env *uap.UAPEnvelope) { env.Governance.L2.ConsensusSignature = "deadbeef" }, want: ErrL2SignatureInvalid},
 		{name: "missing l3", mutate: func(env *uap.UAPEnvelope) { env.Governance.L3 = nil }, want: ErrL3ProofMissing},
 	}
 

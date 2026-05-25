@@ -84,7 +84,7 @@ func main() {
 		env.Governance = &commonv1.GovernanceMetadata{
 			L2: &commonv1.L2Metadata{
 				KeyId:             keyID,
-				TribunalSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true"))),
+				ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true"))),
 			},
 		}
 	}
@@ -127,7 +127,7 @@ func main() {
 	// 4. l2_invalid - forged L2 signature
 	l2Invalid := createBase("nonce-l2-invalid-123")
 	signAndHash(l2Invalid)
-	l2Invalid.Governance.L2.TribunalSignature = fixtureBadSignature
+	l2Invalid.Governance.L2.ConsensusSignature = fixtureBadSignature
 	l2InvalidJSON, _ := marshaler.Marshal(l2Invalid)
 	fmt.Println("L2_INVALID_INTENT:")
 	fmt.Println(string(l2InvalidJSON))
