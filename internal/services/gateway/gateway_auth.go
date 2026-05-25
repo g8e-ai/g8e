@@ -24,11 +24,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/g8e-ai/g8e/protocol"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/protocol"
 	"golang.org/x/time/rate"
 )
 
@@ -236,6 +236,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		// of the trust bootstrap.
 		if r.URL.Path == "/api/pki/sign-csr" ||
 			r.URL.Path == "/api/auth/device-link/register" ||
+			r.URL.Path == "/api/auth/device-link/request" ||
 			r.URL.Path == "/api/auth/bootstrap" ||
 			r.URL.Path == "/api/auth/bootstrap/status" {
 			next.ServeHTTP(w, r)

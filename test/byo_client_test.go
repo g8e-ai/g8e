@@ -55,9 +55,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
 	"github.com/g8e-ai/g8e/internal/services"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/gateway"
@@ -65,6 +62,9 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/pkg/uap"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
 )
 
 type acceptingL3Notary struct{}
@@ -133,7 +133,6 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	// Since we used port 0, we need to know what ports were assigned.
 	// We'll add getters for the servers in GatewayService.
 	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
-	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 	wssURL := fmt.Sprintf("wss://localhost:%d/ws/pubsub", ls.GetHTTPPort())
 
@@ -206,12 +205,12 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 		Hostname:          "byo-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	req, err := http.NewRequest(http.MethodPost, bootstrapURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
+	req, err := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
 	require.NoError(t, err)
 	req.Header.Set(constants.HeaderDeviceToken, token)
 
-	bootstrapClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
-	resp, err = bootstrapClient.Do(req)
+	publicClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
+	resp, err = publicClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)

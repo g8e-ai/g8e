@@ -118,12 +118,6 @@ func TestDataDeviceLinksListCmd(t *testing.T) {
 		assert.NotNil(t, flag)
 	})
 
-	t.Run("list has email flag", func(t *testing.T) {
-		cmd := dataDeviceLinksListCmd()
-		flag := cmd.Flags().Lookup("email")
-		assert.NotNil(t, flag)
-	})
-
 	t.Run("list fails with invalid project root", func(t *testing.T) {
 		cmd := dataDeviceLinksListCmd()
 		var buf bytes.Buffer
@@ -137,10 +131,10 @@ func TestDataDeviceLinksListCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not authenticated")
+		assert.Contains(t, err.Error(), "failed to read paths.json")
 	})
 
-	t.Run("list fails without user-id or email", func(t *testing.T) {
+	t.Run("list fails without user-id", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupDataTestConfig(t, tmpDir)
 
@@ -155,7 +149,7 @@ func TestDataDeviceLinksListCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not authenticated")
+		assert.Contains(t, err.Error(), "failed to read trust bundle")
 	})
 }
 
@@ -166,9 +160,9 @@ func TestDataDeviceLinksCreateCmd(t *testing.T) {
 		assert.Contains(t, cmd.Short, "Create a device-link token")
 	})
 
-	t.Run("create has email flag", func(t *testing.T) {
+	t.Run("create has user-id flag", func(t *testing.T) {
 		cmd := dataDeviceLinksCreateCmd()
-		flag := cmd.Flags().Lookup("email")
+		flag := cmd.Flags().Lookup("user-id")
 		assert.NotNil(t, flag)
 	})
 
@@ -200,7 +194,7 @@ func TestDataDeviceLinksCreateCmd(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to load config")
 	})
 
-	t.Run("create fails without email", func(t *testing.T) {
+	t.Run("create fails without user-id", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupDataTestConfig(t, tmpDir)
 
@@ -215,7 +209,6 @@ func TestDataDeviceLinksCreateCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "--email is required")
 	})
 }
 
@@ -288,7 +281,7 @@ func TestDataDeviceLinksDeleteCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "--user-id is required")
+		assert.Contains(t, err.Error(), "failed to read trust bundle")
 	})
 }
 

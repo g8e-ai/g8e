@@ -7252,8 +7252,7 @@ func (x *PasskeyCredential) GetLastUsedAtUnixMs() int64 {
 type PasskeyRegisterChallengeRequested struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
-	UserName      string                 `protobuf:"bytes,3,opt,name=user_name,json=userName,proto3" json:"user_name,omitempty"`
+	UserName      string                 `protobuf:"bytes,2,opt,name=user_name,json=userName,proto3" json:"user_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7291,13 +7290,6 @@ func (*PasskeyRegisterChallengeRequested) Descriptor() ([]byte, []int) {
 func (x *PasskeyRegisterChallengeRequested) GetUserId() string {
 	if x != nil {
 		return x.UserId
-	}
-	return ""
-}
-
-func (x *PasskeyRegisterChallengeRequested) GetEmail() string {
-	if x != nil {
-		return x.Email
 	}
 	return ""
 }
@@ -7616,8 +7608,7 @@ func (x *PasskeyRegisterVerifyResult) GetCredential() *PasskeyCredential {
 
 type PasskeyAuthChallengeRequested struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Email         string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
-	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7650,13 +7641,6 @@ func (x *PasskeyAuthChallengeRequested) ProtoReflect() protoreflect.Message {
 // Deprecated: Use PasskeyAuthChallengeRequested.ProtoReflect.Descriptor instead.
 func (*PasskeyAuthChallengeRequested) Descriptor() ([]byte, []int) {
 	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{95}
-}
-
-func (x *PasskeyAuthChallengeRequested) GetEmail() string {
-	if x != nil {
-		return x.Email
-	}
-	return ""
 }
 
 func (x *PasskeyAuthChallengeRequested) GetUserId() string {
@@ -7853,9 +7837,8 @@ func (x *AssertionResponse) GetUserHandle() string {
 
 type PasskeyAuthVerifyRequested struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
-	Email             string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
-	UserId            string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	AssertionResponse *AssertionResponse     `protobuf:"bytes,3,opt,name=assertion_response,json=assertionResponse,proto3" json:"assertion_response,omitempty"`
+	UserId            string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	AssertionResponse *AssertionResponse     `protobuf:"bytes,2,opt,name=assertion_response,json=assertionResponse,proto3" json:"assertion_response,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -7888,13 +7871,6 @@ func (x *PasskeyAuthVerifyRequested) ProtoReflect() protoreflect.Message {
 // Deprecated: Use PasskeyAuthVerifyRequested.ProtoReflect.Descriptor instead.
 func (*PasskeyAuthVerifyRequested) Descriptor() ([]byte, []int) {
 	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{98}
-}
-
-func (x *PasskeyAuthVerifyRequested) GetEmail() string {
-	if x != nil {
-		return x.Email
-	}
-	return ""
 }
 
 func (x *PasskeyAuthVerifyRequested) GetUserId() string {
@@ -9070,11 +9046,10 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"transports\x18\x04 \x03(\tR\n" +
 	"transports\x12+\n" +
 	"\x12created_at_unix_ms\x18\x05 \x01(\x03R\x0fcreatedAtUnixMs\x12.\n" +
-	"\x14last_used_at_unix_ms\x18\x06 \x01(\x03R\x10lastUsedAtUnixMs\"o\n" +
+	"\x14last_used_at_unix_ms\x18\x06 \x01(\x03R\x10lastUsedAtUnixMs\"Y\n" +
 	"!PasskeyRegisterChallengeRequested\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
-	"\x05email\x18\x02 \x01(\tR\x05email\x12\x1b\n" +
-	"\tuser_name\x18\x03 \x01(\tR\buserName\"\xae\a\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1b\n" +
+	"\tuser_name\x18\x02 \x01(\tR\buserName\"\xae\a\n" +
 	"\x1ePasskeyRegisterChallengeResult\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x1c\n" +
@@ -9116,10 +9091,9 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12B\n" +
 	"\n" +
 	"credential\x18\x03 \x01(\v2\".g8e.operator.v1.PasskeyCredentialR\n" +
-	"credential\"N\n" +
-	"\x1dPasskeyAuthChallengeRequested\x12\x14\n" +
-	"\x05email\x18\x01 \x01(\tR\x05email\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\"\x94\x02\n" +
+	"credential\"8\n" +
+	"\x1dPasskeyAuthChallengeRequested\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\x94\x02\n" +
 	"\x1aPasskeyAuthChallengeResult\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x1f\n" +
@@ -9137,11 +9111,10 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\x12authenticator_data\x18\x04 \x01(\tR\x11authenticatorData\x12\x1c\n" +
 	"\tsignature\x18\x05 \x01(\tR\tsignature\x12\x1f\n" +
 	"\vuser_handle\x18\x06 \x01(\tR\n" +
-	"userHandle\"\x9e\x01\n" +
-	"\x1aPasskeyAuthVerifyRequested\x12\x14\n" +
-	"\x05email\x18\x01 \x01(\tR\x05email\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\x12Q\n" +
-	"\x12assertion_response\x18\x03 \x01(\v2\".g8e.operator.v1.AssertionResponseR\x11assertionResponse\"\xc4\x01\n" +
+	"userHandle\"\x88\x01\n" +
+	"\x1aPasskeyAuthVerifyRequested\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12Q\n" +
+	"\x12assertion_response\x18\x02 \x01(\v2\".g8e.operator.v1.AssertionResponseR\x11assertionResponse\"\xc4\x01\n" +
 	"\x17PasskeyAuthVerifyResult\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x17\n" +

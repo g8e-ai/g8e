@@ -65,7 +65,7 @@ func main() {
 	if len(os.Args) > 1 {
 		constantsDir = os.Args[1]
 	}
-	protocolConstantsDir := filepath.Join(constantsDir, "..", "..", "..", "..", "protocol", "constants")
+	protocolConstantsDir := filepath.Join(constantsDir, "..", "..", "protocol", "constants")
 	if len(os.Args) > 2 {
 		protocolConstantsDir = os.Args[2]
 	}
@@ -455,7 +455,8 @@ func generateRegistry(data JSONFile) string {
 		sb.WriteString("\t\tAgents: map[string]string{\n")
 		keys := sortedStringKeys(data.Agents)
 		for _, key := range keys {
-			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": %s,\n", key, key))
+			value := data.Agents[key]
+			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": %s,\n", key, formatGoValue(value)))
 		}
 		sb.WriteString("\t\t},\n")
 	}

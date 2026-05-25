@@ -421,8 +421,8 @@ func (lms *LedgerService) snapshotLedger(ledgerDir, message string) (string, err
 	commitMsg := fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), message)
 	hash, err := w.Commit(commitMsg, &git.CommitOptions{
 		Author: &object.Signature{
-			Name:  "g8e Operator",
-			Email: "operator@" + constants.DefaultEndpoint,
+			Name:  "g8e-operator",
+			Email: "g8e-operator@system",
 			When:  time.Now(),
 		},
 		AllowEmptyCommits: true,

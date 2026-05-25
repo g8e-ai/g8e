@@ -42,12 +42,6 @@ func TestLoginCmd(t *testing.T) {
 		assert.Contains(t, cmd.Short, "Authenticate")
 	})
 
-	t.Run("login has email flag", func(t *testing.T) {
-		cmd := loginCmd()
-		flag := cmd.Flags().Lookup("email")
-		assert.NotNil(t, flag)
-	})
-
 	t.Run("login has count flag", func(t *testing.T) {
 		cmd := loginCmd()
 		flag := cmd.Flags().Lookup("count")
@@ -81,7 +75,6 @@ func TestLoginCmd(t *testing.T) {
 		setupTestConfig(t, tmpDir)
 
 		cmd := loginCmd()
-		cmd.Flags().Set("email", "test@example.com")
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -100,7 +93,6 @@ func TestLoginCmd(t *testing.T) {
 		setupTestConfig(t, tmpDir)
 
 		cmd := loginCmd()
-		cmd.Flags().Set("email", "test@example.com")
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -200,17 +192,6 @@ func TestLogoutCmd(t *testing.T) {
 }
 
 func TestAuthCommandFlags(t *testing.T) {
-	t.Run("login email flag defaults to environment variable", func(t *testing.T) {
-		originalEmail := os.Getenv("G8E_BOOTSTRAP_EMAIL")
-		defer os.Setenv("G8E_BOOTSTRAP_EMAIL", originalEmail)
-
-		os.Setenv("G8E_BOOTSTRAP_EMAIL", "env@example.com")
-		cmd := loginCmd()
-		emailFlag := cmd.Flags().Lookup("email")
-		assert.NotNil(t, emailFlag)
-		assert.Equal(t, "", emailFlag.DefValue)
-	})
-
 	t.Run("login count flag has default value", func(t *testing.T) {
 		cmd := loginCmd()
 		countFlag := cmd.Flags().Lookup("count")

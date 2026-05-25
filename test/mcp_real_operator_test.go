@@ -100,8 +100,6 @@ func TestMCPRealOperator_Smoke(t *testing.T) {
 	fingerprint := hex.EncodeToString(fpHash[:])
 
 	reqBody, _ := json.Marshal(map[string]string{
-		"email":              "mcp-smoke@test.local",
-		"name":               "MCP Smoke Tester",
 		"csr_pem":            string(opCsrPEM),
 		"cli_csr_pem":        string(cliCsrPEM),
 		"system_fingerprint": fingerprint,

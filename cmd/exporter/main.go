@@ -140,7 +140,6 @@ func main() {
 
 	// Validate root path by checking for expected marker files/directories
 	expectedMarkers := []string{
-		filepath.Join(*root, "services", "g8eo"),
 		filepath.Join(*root, "protocol"),
 		filepath.Join(*root, "VERSION"),
 	}

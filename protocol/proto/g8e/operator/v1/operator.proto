@@ -937,8 +937,7 @@ message PasskeyCredential {
 
 message PasskeyRegisterChallengeRequested {
   string user_id = 1;
-  string email = 2;
-  string user_name = 3;
+  string user_name = 2;
 }
 
 message PasskeyRegisterChallengeResult {
@@ -1000,8 +999,7 @@ message PasskeyRegisterVerifyResult {
 // ---------------------------------------------------------------------------
 
 message PasskeyAuthChallengeRequested {
-  string email = 1;
-  string user_id = 2;
+  string user_id = 1;
 }
 
 message PasskeyAuthChallengeResult {
@@ -1030,9 +1028,8 @@ message AssertionResponse {
 }
 
 message PasskeyAuthVerifyRequested {
-  string email = 1;
-  string user_id = 2;
-  AssertionResponse assertion_response = 3;
+  string user_id = 1;
+  AssertionResponse assertion_response = 2;
 }
 
 message PasskeyAuthVerifyResult {

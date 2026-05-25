@@ -34,6 +34,7 @@ func testCmd() *cobra.Command {
 		testG8eoCmd(),
 		testCICmd(),
 		testChaosCmd(),
+		testScenarioCmd(),
 	)
 
 	return cmd
@@ -150,5 +151,38 @@ func testChaosCmd() *cobra.Command {
 	}
 
 	cmd.Flags().IntVar(&count, "count", 0, "Number of payloads to fire (default: 100)")
+	return cmd
+}
+
+func testScenarioCmd() *cobra.Command {
+	var run string
+
+	cmd := &cobra.Command{
+		Use:   "scenario",
+		Short: "Run scenario integration tests",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			var goArgs []string
+			goArgs = []string{"test", "-tags=integration", "-v", "-run", "TestScenarios", "./test/scenario/..."}
+
+			if run != "" {
+				goArgs = append(goArgs, "-run", "TestScenarios/"+run)
+			}
+
+			cmd.Printf("Running scenario tests...\n")
+			goCmd := exec.Command("go", goArgs...)
+			goCmd.Stdout = os.Stdout
+			goCmd.Stderr = os.Stderr
+			goCmd.Dir = cfg.ProjectRoot
+			return goCmd.Run()
+		},
+	}
+
+	cmd.Flags().StringVar(&run, "run", "", "Run specific scenario (e.g., forge_signature)")
+
 	return cmd
 }

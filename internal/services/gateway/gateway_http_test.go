@@ -30,7 +30,6 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/g8e-ai/g8e/protocol"
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
@@ -39,6 +38,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/g8e-ai/g8e/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1227,7 +1227,6 @@ func TestHandleBootstrap(t *testing.T) {
 		csr := generateTestCSR(t)
 		cliCsr := generateTestCSR(t)
 		body := map[string]string{
-			"email":              "superadmin@g8e.local",
 			"name":               "Superadmin",
 			"csr_pem":            csr,
 			"cli_csr_pem":        cliCsr,
@@ -1261,7 +1260,6 @@ func TestHandleBootstrap(t *testing.T) {
 		csr := generateTestCSR(t)
 		cliCsr := generateTestCSR(t)
 		body := map[string]string{
-			"email":              "superadmin@g8e.local",
 			"name":               "Superadmin",
 			"csr_pem":            csr,
 			"cli_csr_pem":        cliCsr,
@@ -1289,7 +1287,6 @@ func TestHandleBootstrap(t *testing.T) {
 		csr := generateTestCSR(t)
 		cliCsr := generateTestCSR(t)
 		body := map[string]string{
-			"email":              "superadmin@g8e.local",
 			"name":               "Superadmin",
 			"csr_pem":            csr,
 			"cli_csr_pem":        cliCsr,
@@ -1322,7 +1319,6 @@ func TestHandleBootstrap(t *testing.T) {
 		csr := generateTestCSR(t)
 		cliCsr := generateTestCSR(t)
 		body := map[string]string{
-			"email":              "superadmin@g8e.local",
 			"name":               "Superadmin",
 			"csr_pem":            csr,
 			"cli_csr_pem":        cliCsr,
@@ -1346,8 +1342,7 @@ func TestHandleBootstrap(t *testing.T) {
 		h4.userSvc.CreateUser()
 
 		body := map[string]string{
-			"email": "superadmin@g8e.local",
-			"name":  "Superadmin",
+			"name": "Superadmin",
 		}
 		b, _ := json.Marshal(body)
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", bytes.NewReader(b))

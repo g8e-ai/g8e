@@ -36,11 +36,11 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"github.com/g8e-ai/g8e/internal/responder"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"github.com/google/uuid"
 	"golang.org/x/time/rate"
 )
@@ -131,8 +131,6 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux.HandleFunc("/.well-known/g8e/pki/root.pem", h.handlePKIRoot)
 	mux.HandleFunc("/.well-known/g8e/pki/hub-bundle.pem", h.handlePKIHubBundle)
 	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.handlePKIFingerprint)
-	mux.HandleFunc("/api/auth/device-link/register", h.handleDeviceLinkRegister)
-	mux.HandleFunc("/api/auth/device-link/request", h.handleDeviceLinkRequest)
 
 	// Blob endpoint for operator binary download (device-link token auth)
 	mux.HandleFunc("/blob/", h.handleBlob)
@@ -255,11 +253,14 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// Landing page and health
 	mux.HandleFunc("/", h.handleLandingPage)
 	mux.HandleFunc("/health", h.handleHealth)
-	mux.HandleFunc("/api/auth/login/challenge", h.handleAuthLoginChallenge)
 	mux.HandleFunc("/api/auth/login/verify", h.handleAuthLoginVerify)
 	mux.HandleFunc("/api/auth/logout", h.handleAuthLogout)
 	mux.HandleFunc("/api/auth/bootstrap", h.handleBootstrap)
 	mux.HandleFunc("/api/auth/bootstrap/status", h.handleBootstrapStatus)
+
+	// Device-link routes (TLS-protected, for secure enrollment)
+	mux.HandleFunc("/api/auth/device-link/register", h.handleDeviceLinkRegister)
+	mux.HandleFunc("/api/auth/device-link/request", h.handleDeviceLinkRequest)
 
 	// PKI discovery also available on public port for BYO bootstrap
 	mux.HandleFunc("/.well-known/g8e/pki/root.pem", h.handlePKIRoot)
@@ -684,8 +685,7 @@ func (h *HTTPHandler) handleDeviceLinkRequest(w http.ResponseWriter, r *http.Req
 	}
 
 	// For bootstrap/public requests, we enforce some constraints
-	// e.g. cannot specify a custom UserID directly if we want to be safe,
-	// but CreateDeviceLink handles email-to-UserID resolution.
+	// e.g. cannot specify a custom UserID directly if we want to be safe.
 	// We might want to flag these as 'CLI' or 'Bootstrap' requests.
 
 	resp, err := h.reg.CreateDeviceLink(req)
@@ -2392,7 +2392,6 @@ func (h *HTTPHandler) handlePasskeyRegisterChallenge(w http.ResponseWriter, r *h
 
 	var req struct {
 		UserID   string `json:"user_id"`
-		Email    string `json:"email"`
 		UserName string `json:"user_name"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -2414,7 +2413,7 @@ func (h *HTTPHandler) handlePasskeyRegisterChallenge(w http.ResponseWriter, r *h
 		return
 	}
 
-	options, err := h.passkey.GenerateRegistrationChallenge(req.UserID, req.Email, req.UserName)
+	options, err := h.passkey.GenerateRegistrationChallenge(req.UserID, req.UserName)
 	if err != nil {
 		h.logger.Warn("Passkey register challenge failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
 		h.responder.Error(w, http.StatusBadRequest, err.Error())
@@ -2493,7 +2492,6 @@ func (h *HTTPHandler) handlePasskeyAuthChallenge(w http.ResponseWriter, r *http.
 	}
 
 	var req struct {
-		Email  string `json:"email"`
 		UserID string `json:"user_id"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -2546,7 +2544,6 @@ func (h *HTTPHandler) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.Req
 	}
 
 	var req struct {
-		Email             string             `json:"email"`
 		UserID            string             `json:"user_id"`
 		AssertionResponse *AssertionResponse `json:"assertion_response"`
 	}
@@ -2674,8 +2671,7 @@ func (h *HTTPHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Email string `json:"email"`
-		Name  string `json:"name"`
+		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		h.responder.Error(w, http.StatusBadRequest, "invalid JSON")
@@ -3118,50 +3114,8 @@ func (h *HTTPHandler) handleListSuspendedTransactions(w http.ResponseWriter, r *
 // =============================================================================
 // Browser Auth Handlers (Public Router)
 // =============================================================================
-
-// handleAuthLoginChallenge generates an auth challenge for a user email.
-func (h *HTTPHandler) handleAuthLoginChallenge(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	body, err := h.readBody(r)
-	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
-		return
-	}
-
-	var req struct {
-		Email string `json:"email"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "invalid JSON")
-		return
-	}
-
-	user, err := h.userSvc.FindByEmail(req.Email)
-	if err != nil {
-		h.responder.Error(w, http.StatusInternalServerError, "failed to find user")
-		return
-	}
-	if user == nil {
-		h.responder.Error(w, http.StatusNotFound, "user not found")
-		return
-	}
-
-	options, err := h.passkey.GenerateAuthenticationChallenge(user.ID)
-	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	h.responder.JSON(w, http.StatusOK, models.AuthLoginChallengeResponse{
-		Success: true,
-		UserID:  user.ID,
-		Options: options,
-	})
-}
+// Note: Email-based login removed per Zero-PII architecture.
+// Use user_id-based passkey authentication instead.
 
 // handleAuthLoginVerify verifies an auth assertion and sets a web session cookie.
 func (h *HTTPHandler) handleAuthLoginVerify(w http.ResponseWriter, r *http.Request) {
@@ -3252,7 +3206,6 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Email             string `json:"email"`
 		Name              string `json:"name"`
 		CSRPEM            string `json:"csr_pem"`
 		CLICSRPEM         string `json:"cli_csr_pem,omitempty"`
@@ -3260,11 +3213,6 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		h.responder.Error(w, http.StatusBadRequest, "invalid JSON")
-		return
-	}
-
-	if req.Email == "" {
-		h.responder.Error(w, http.StatusBadRequest, "email required")
 		return
 	}
 

@@ -20,6 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -31,6 +32,7 @@ func authCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(
+		bootstrapCmd(),
 		loginCmd(),
 		logoutCmd(),
 	)
@@ -38,8 +40,83 @@ func authCmd() *cobra.Command {
 	return cmd
 }
 
+func bootstrapCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "bootstrap",
+		Short: "Bootstrap the platform with initial user and certificates",
+		Long:  `Create the first user and issue mTLS certificates for the Operator and CLI. Only available over loopback when no users exist.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			if err := auth.CheckOperatorRunning(cfg); err != nil {
+				return err
+			}
+
+			cmd.Println("Generating keys and CSRs...")
+			hostname, _ := os.Hostname()
+			opCSR, opKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
+			if err != nil {
+				return fmt.Errorf("failed to generate operator CSR: %w", err)
+			}
+
+			cliCSR, cliKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
+			if err != nil {
+				return fmt.Errorf("failed to generate CLI CSR: %w", err)
+			}
+
+			cmd.Println("Bootstrapping with operator...")
+			regResp, err := auth.Bootstrap(cfg, opCSR, cliCSR)
+			if err != nil {
+				return err
+			}
+
+			if regResp.OperatorSessionID == "" || regResp.OperatorID == "" || regResp.OperatorCert == "" || regResp.CLISessionID == "" || regResp.CLICert == "" {
+				return fmt.Errorf("unexpected bootstrap response (missing required fields)")
+			}
+
+			if err := auth.SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
+				return fmt.Errorf("failed to save CLI credentials: %w", err)
+			}
+
+			if err := auth.SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey, cfg.OperatorCertFile(), cfg.OperatorKeyFile()); err != nil {
+				return fmt.Errorf("failed to save operator credentials: %w", err)
+			}
+
+			if regResp.HubTrustBundle != "" {
+				hubBundlePath := filepath.Join(cfg.CredentialsDir, "hub-bundle.pem")
+				if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0600); err != nil {
+					return fmt.Errorf("failed to save hub trust bundle: %w", err)
+				}
+			}
+
+			creds := &auth.Credentials{
+				OperatorSessionID: regResp.OperatorSessionID,
+				UserID:            regResp.UserID,
+				OperatorID:        regResp.OperatorID,
+				CLISessionID:      regResp.CLISessionID,
+			}
+
+			if err := auth.SaveCredentials(cfg, creds); err != nil {
+				return fmt.Errorf("failed to save credentials: %w", err)
+			}
+
+			cmd.Printf("\nBootstrap complete\n")
+			cmd.Printf("User ID: %s\n", regResp.UserID)
+			cmd.Printf("Operator Session ID: %s\n", regResp.OperatorSessionID)
+			cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
+			cmd.Printf("Operator ID: %s\n", regResp.OperatorID)
+
+			return nil
+		},
+	}
+
+	return cmd
+}
+
 func loginCmd() *cobra.Command {
-	var email string
 	var count int
 	var ttl int
 
@@ -62,15 +139,9 @@ func loginCmd() *cobra.Command {
 				return fmt.Errorf("trust bundle not found at %s - start the platform first: ./g8e platform start", trustBundle)
 			}
 
-			if email == "" {
-				email = os.Getenv("G8E_BOOTSTRAP_EMAIL")
-				if email == "" {
-					email = "superadmin@g8e.local"
-				}
-			}
-
-			cmd.Printf("Requesting device-link token for %s...\n", email)
-			dlResp, err := auth.RequestDeviceLink(cfg, email, count, ttl)
+			userID := uuid.New().String()
+			cmd.Printf("Requesting device-link token for user %s...\n", userID)
+			dlResp, err := auth.RequestDeviceLink(cfg, userID, count, ttl)
 			if err != nil {
 				return err
 			}
@@ -124,7 +195,7 @@ func loginCmd() *cobra.Command {
 				return fmt.Errorf("failed to save credentials: %w", err)
 			}
 
-			cmd.Printf("\nAuthenticated as %s\n", email)
+			cmd.Printf("\nAuthenticated as user %s\n", userID)
 			cmd.Printf("Operator Session ID: %s\n", regResp.OperatorSessionID)
 			cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
 			cmd.Printf("Operator ID: %s\n", regResp.OperatorID)
@@ -133,7 +204,6 @@ func loginCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&email, "email", "", "Email address for device-link (default: superadmin@g8e.local)")
 	cmd.Flags().IntVar(&count, "count", 1, "Number of device-link uses")
 	cmd.Flags().IntVar(&ttl, "ttl", 3600, "Device-link token TTL in seconds")
 

@@ -92,8 +92,8 @@ func TestAuditVaultService_GitGetCurrentHash_HashChangesAfterCommit(t *testing.T
 
 	_, err = w.Commit("Second commit", &git.CommitOptions{
 		Author: &object.Signature{
-			Name:  "Test",
-			Email: "test@example.com",
+			Name:  "test-operator",
+			Email: "test-operator@system",
 			When:  time.Now(),
 		},
 	})
