@@ -43,23 +43,7 @@ func FuzzJSONRPCRequestDecoding(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data string) {
 		// This should never panic - JSON decoding must handle all inputs gracefully
 		var req JSONRPCRequest
-		err := json.Unmarshal([]byte(data), &req)
-
-		// If decoding succeeded, validate the structure
-		if err == nil {
-			// JSONRPC should be "2.0" for valid requests
-			if req.JSONRPC != "" && req.JSONRPC != "2.0" {
-				// Non-2.0 version is allowed but may be rejected by validation logic
-			}
-
-			// Method should be non-empty for valid requests
-			if req.Method == "" && req.JSONRPC == "2.0" {
-				// Missing method is invalid but shouldn't panic
-			}
-
-			// ID can be any JSON value (string, number, null)
-			// Params can be any JSON value (object, array, null, or omitted)
-		}
+		_ = json.Unmarshal([]byte(data), &req)
 	})
 }
 
@@ -85,23 +69,6 @@ func FuzzJSONRPCResponseDecoding(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data string) {
 		// This should never panic - JSON decoding must handle all inputs gracefully
 		var resp JSONRPCResponse
-		err := json.Unmarshal([]byte(data), &resp)
-
-		// If decoding succeeded, validate the structure
-		if err == nil {
-			// JSONRPC should be "2.0" for valid responses
-			if resp.JSONRPC != "" && resp.JSONRPC != "2.0" {
-				// Non-2.0 version is allowed but may be rejected by validation logic
-			}
-
-			// Exactly one of result or error should be present (per JSON-RPC spec)
-			// But we allow both to be null for flexibility
-			if resp.Result != nil && resp.Error != nil {
-				// Both present is technically invalid per spec but shouldn't panic
-			}
-
-			// ID should match the request ID
-			// ID can be any JSON value (string, number, null)
-		}
+		_ = json.Unmarshal([]byte(data), &resp)
 	})
 }

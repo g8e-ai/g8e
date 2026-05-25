@@ -172,6 +172,7 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 }
 
 func (pm *ProcessManager) buildAll() error {
+	// #nosec G204 -- pm.projectRoot is validated during ProcessManager initialization
 	cmd := exec.Command("make", "--no-print-directory", "-C", pm.projectRoot, "build")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

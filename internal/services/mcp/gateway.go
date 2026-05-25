@@ -29,11 +29,11 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/g8e-ai/g8e/internal/responder"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -967,8 +967,8 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		}
 		env.Governance.L2 = &commonv1.L2Metadata{
 			ConsensusSignature: hex.EncodeToString(sig),
-			KeyId:             g.keyID,
-			AgentIds:          []string{"gateway-local-signer"},
+			KeyId:              g.keyID,
+			AgentIds:           []string{"gateway-local-signer"},
 		}
 	}
 

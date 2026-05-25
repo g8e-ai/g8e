@@ -27,8 +27,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"github.com/g8e-ai/g8e/pkg/uap"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
 func TestGenerateCA(t *testing.T) {
@@ -278,7 +278,10 @@ func TestMTLSServerClient_InvalidClientCert(t *testing.T) {
 		Timeout: 5 * time.Second,
 	}
 
-	_, err = client.Get(server.URL)
+	resp, err := client.Get(server.URL)
+	if resp != nil {
+		resp.Body.Close()
+	}
 	if err == nil {
 		t.Error("Expected TLS handshake error with no client certificate")
 	}

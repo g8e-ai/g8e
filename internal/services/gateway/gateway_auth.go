@@ -528,13 +528,6 @@ func (s *AuthService) enforceAppPolicy(r *http.Request, policy *models.AppPolicy
 		}
 	}
 
-	// Check event type for governance envelope submissions
-	if strings.HasPrefix(r.URL.Path, "/api/governance/envelope") {
-		// Extract action type from request body (if available)
-		// This is a simplified check - full enforcement happens in the transaction verifier
-		// For now, we just ensure the policy exists (already checked before this call)
-	}
-
 	return nil
 }
 

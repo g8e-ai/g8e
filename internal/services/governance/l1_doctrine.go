@@ -172,8 +172,9 @@ const (
 type ThreatCategory string
 
 const (
-	ThreatCategoryReverseShell        ThreatCategory = "reverse_shell"
-	ThreatCategoryPrivilegeEsc        ThreatCategory = "privilege_escalation"
+	ThreatCategoryReverseShell ThreatCategory = "reverse_shell"
+	ThreatCategoryPrivilegeEsc ThreatCategory = "privilege_escalation"
+	// #nosec G101 -- this is a threat category name, not a credential
 	ThreatCategoryCredentialAccess    ThreatCategory = "credential_access"
 	ThreatCategoryExfiltration        ThreatCategory = "data_exfiltration"
 	ThreatCategoryCryptominer         ThreatCategory = "cryptominer"

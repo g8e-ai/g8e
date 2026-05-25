@@ -129,7 +129,7 @@ func securityValidateCmd() *cobra.Command {
 			if trustData, err := os.ReadFile(trustBundlePath); err == nil {
 				certPool := x509.NewCertPool()
 				if certPool.AppendCertsFromPEM(trustData) {
-					cmd.Printf("  [OK]   Trust bundle contains %d certificates\n", len(certPool.Subjects()))
+					cmd.Printf("  [OK]   Trust bundle is valid PEM\n")
 				} else {
 					cmd.Printf("  [FAIL] Trust bundle is not valid PEM\n")
 					failed = true

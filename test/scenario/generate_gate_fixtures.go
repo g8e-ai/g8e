@@ -83,7 +83,7 @@ func main() {
 		env.TransactionHash = hash
 		env.Governance = &commonv1.GovernanceMetadata{
 			L2: &commonv1.L2Metadata{
-				KeyId:             keyID,
+				KeyId:              keyID,
 				ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true"))),
 			},
 		}

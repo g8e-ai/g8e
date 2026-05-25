@@ -93,7 +93,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 	// Add L2 governance signature
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			KeyId:             "test-key-id",
+			KeyId:              "test-key-id",
 			ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(computedHash+"|true"))),
 		},
 	}

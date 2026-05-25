@@ -40,7 +40,7 @@ func (b *keychainBackend) Name() string {
 
 func (b *keychainBackend) RetrieveMasterKey() ([]byte, error) {
 	account := fmt.Sprintf("%s/%s", keyStoreName, masterKeyName)
-	
+
 	args := []string{
 		"find-generic-password",
 		"-a", account,
