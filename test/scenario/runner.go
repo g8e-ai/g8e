@@ -11,6 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build integration
+
 package scenario
 
 import (
@@ -27,6 +29,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/internal/services/governance/l1"
+	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/pkg/uap"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -105,10 +109,11 @@ type OperatorGate struct {
 	clock       system.Clock
 	mode        Mode
 	logger      *slog.Logger
+	db          *sqliteutil.DB
 }
 
 // NewOperatorGate creates an OperatorGate for the given mode with injectable dependencies.
-func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSigners map[string]ed25519.PublicKey) (*OperatorGate, error) {
+func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSigners map[string]ed25519.PublicKey, db *sqliteutil.DB) (*OperatorGate, error) {
 	// Create a discard logger for testing to avoid nil pointer issues
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -132,6 +137,7 @@ func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSig
 
 	// Create transaction verifier
 	knownActionTypes := constants.AllActionTypes()
+	doctrine := l1.NewProtoDoctrineValidator()
 	verifier := governance.NewTransactionVerifier(
 		logger,
 		replayStore,
@@ -139,10 +145,17 @@ func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSig
 		signerStore,
 		appPolicyStore,
 		l3Notary,
+		doctrine,
 		knownActionTypes,
 		string(mode),
 		clock,
 	)
+
+	// Create real audit store from database (no mocks principle)
+	var auditStore governance.TransactionAuditStore
+	if db != nil {
+		auditStore = &testAuditStore{db: db}
+	}
 
 	// Create actuator
 	actuator := &governance.Actuator{
@@ -154,6 +167,7 @@ func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSig
 		Posture:           verifier.Posture(),
 		SigningKey:        actuatorPriv,
 		KeyID:             actuatorKeyID,
+		AuditStore:        auditStore,
 	}
 
 	return &OperatorGate{
@@ -163,6 +177,7 @@ func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSig
 		clock:       clock,
 		mode:        mode,
 		logger:      logger,
+		db:          db,
 	}, nil
 }
 
@@ -285,4 +300,22 @@ type mockExecutionHandler struct{}
 
 func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
 	return "mock execution succeeded", nil
+}
+
+// testAuditStore implements TransactionAuditStore using a real database.
+// This follows the "no mocks" principle for integration tests.
+type testAuditStore struct {
+	db *sqliteutil.DB
+}
+
+func (s *testAuditStore) DocSet(collection, id string, data json.RawMessage) error {
+	now := time.Now().UTC()
+	nowStr := sqliteutil.FormatTimestamp(now)
+	_, err := s.db.ExecWithRetry(
+		`INSERT INTO documents (collection, id, data, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(collection, id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+		collection, id, string(data), nowStr, nowStr,
+	)
+	return err
 }

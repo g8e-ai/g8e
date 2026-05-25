@@ -51,6 +51,7 @@ Integration tests exercising end-to-end governance workflows across doctrine, co
 - **Concurrency tests** - Double-submit replay detection using goroutines to verify TOCTOU resistance
 - **Negative controls** - Tests that intentionally flip expectations to prove the suite can detect failures
 - **Receipt verification** - Separate axis testing cryptographic receipt validation (signature verification, field tampering detection)
+- **Receipt persistence** - Database persistence verification for accepted transactions (receipts stored in `console_audit` collection), rejected transactions verify no persistence
 
 ### Chaos Tests
 

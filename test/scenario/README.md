@@ -107,7 +107,25 @@ This prevents flaky tests due to wall time or state drift.
 
 ## Golden File Diffing
 
-TODO: Implement golden file diffing for signed receipts. This will serialize receipts to JSON and compare against `test/scenario/golden/{scenario}_{mode}.json`. Use `-update` flag to refresh golden files.
+The framework automatically diffs signed receipts against golden files in `test/scenario/golden/{scenario}_{mode}.golden.json`. When a scenario accepts an envelope, the receipt is serialized to JSON and compared against the golden snapshot. Set `G8E_UPDATE_GOLDEN=1` to refresh golden files after intentional changes.
+
+## Database Persistence
+
+The framework uses real SQLite databases (no mocks) to verify receipt persistence. This ensures the substrate actually writes receipts to the audit store as expected in production.
+
+### Database Setup
+
+- **Setup**: `SetupTestDB()` initializes an in-memory SQLite database with the gateway schema
+- **Teardown**: `TeardownTestDB()` closes the database connection after all tests complete
+- **Lifecycle**: Database is created once in `TestMain()` and shared across all scenario tests
+
+### Receipt Verification
+
+- **Query Helper**: `QueryReceipt()` retrieves persisted receipts by transaction ID from the database
+- **Assertion**: `AssertPersistedReceipt()` verifies that accepting scenarios persist receipts and rejecting scenarios do not
+- **Integration**: The `OperatorGate` uses a real `TransactionAuditStore` backed by the test database
+
+This approach follows the "no mocks" principle from `docs/devs.md`, ensuring tests exercise the actual persistence path rather than mocked behavior.
 
 ## Current Scenarios
 
