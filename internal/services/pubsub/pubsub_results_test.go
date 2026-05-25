@@ -20,9 +20,9 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	pb "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -44,7 +44,6 @@ func mustUnmarshalGovernanceEnvelope(t *testing.T, data []byte) *commonv1.Govern
 }
 
 func TestNewPubSubResultsService(t *testing.T) {
-	t.Parallel()
 	t.Run("creates service", func(t *testing.T) {
 		t.Parallel()
 		db := NewMockOperatorPubSubClient()
@@ -57,7 +56,6 @@ func TestNewPubSubResultsService(t *testing.T) {
 }
 
 func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
-	t.Parallel()
 	t.Run("successful heartbeat publish", func(t *testing.T) {
 		t.Parallel()
 		db := NewMockOperatorPubSubClient()
@@ -83,7 +81,6 @@ func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 }
 
 func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
-	t.Parallel()
 	t.Run("successful cancellation publish", func(t *testing.T) {
 		t.Parallel()
 		db := NewMockOperatorPubSubClient()
@@ -116,7 +113,6 @@ func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
 }
 
 func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
-	t.Parallel()
 	t.Run("successful fs list publish", func(t *testing.T) {
 		t.Parallel()
 		db := NewMockOperatorPubSubClient()
@@ -177,7 +173,6 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 }
 
 func TestPubSubResultsService_PublishFsGrepResult(t *testing.T) {
-	t.Parallel()
 	t.Run("successful fs grep publish", func(t *testing.T) {
 		t.Parallel()
 		db := NewMockOperatorPubSubClient()
@@ -238,7 +233,6 @@ func TestPubSubResultsService_PublishFsGrepResult(t *testing.T) {
 }
 
 func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
-	t.Parallel()
 	t.Run("successful publish", func(t *testing.T) {
 		t.Parallel()
 		db := NewMockOperatorPubSubClient()
@@ -345,7 +339,6 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 }
 
 func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
-	t.Parallel()
 	t.Run("successful publish", func(t *testing.T) {
 		t.Parallel()
 		db := NewMockOperatorPubSubClient()

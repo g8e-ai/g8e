@@ -22,10 +22,10 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/pkg/uap"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -51,6 +51,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 		nil, // Sentinel not used in tests
 		[]constants.ActionType{constants.ActionTypeEvalAnswer},
 		"doctrine",
+		nil, // Clock defaults to RealClock
 	)
 
 	// Create an EVAL_ANSWER payload

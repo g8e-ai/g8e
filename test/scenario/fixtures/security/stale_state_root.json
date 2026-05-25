@@ -3,9 +3,9 @@
   "vertical": "security",
   "narrative": "Envelope with stale state root should be rejected",
   "intent": {
-    "id": "5567404f79c0d50ae3fe98d261ddc55fdb5d60539e2155fbda4499e586e4357d",
-    "timestamp": "2026-05-24T23:55:00.628303786Z",
-    "expiresAt": "2026-05-25T00:55:00.628304134Z",
+    "id": "8a7d8c5900d2945b3ad8839ece2c5a3c159b13c44f3746257e1a5b4b0c984364",
+    "timestamp": "2026-05-24T12:00:00Z",
+    "expiresAt": "2026-05-24T13:00:00Z",
     "sourceComponent": "COMPONENT_CLIENT",
     "operatorId": "operator-1",
     "operatorSessionId": "operator-session-1",
@@ -14,20 +14,20 @@
     "targetResource": "localhost",
     "stateMerkleRoot": "stale-old-root-999",
     "nonce": "nonce-stale-123",
-    "transactionHash": "5567404f79c0d50ae3fe98d261ddc55fdb5d60539e2155fbda4499e586e4357d",
+    "transactionHash": "8a7d8c5900d2945b3ad8839ece2c5a3c159b13c44f3746257e1a5b4b0c984364",
     "protocolVersion": "1.0",
     "governance": {
       "l2": {
-        "tribunalSignature": "0f6d035c089f417624c2f07d2bb4ef93e7d3dc57fa585e2a426aa356041e14a8dba79c3342a076bd765869e802b3ca1af349edbf7b62344dd6f48454068ed60f",
-        "keyId": "28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747"
+        "tribunalSignature": "ff58d5bad4cd1185c624a0ea437a91e99d8c7f8812caf299705780583418fa5be7642f3ce054b8a44f8d0028db2a2accc62ba1a4cd4cc217cb4cd757bc8dec0e",
+        "keyId": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
       }
     }
   },
   "evidence": {
     "l2_signature_present": true,
-    "l2_key_id": "28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747",
+    "l2_key_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd",
     "l3_proof_present": false,
-    "signer_id": "28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747"
+    "signer_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
   },
   "expect": {
     "doctrine": {

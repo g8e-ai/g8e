@@ -26,11 +26,11 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/pkg/uap"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -39,7 +39,6 @@ import (
 )
 
 func TestNewPubSubCommandService(t *testing.T) {
-	t.Parallel()
 	t.Run("creates service successfully", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
@@ -197,7 +196,6 @@ func TestPubSubCommandService_dispatchCommand(t *testing.T) {
 }
 
 func TestPubSubCommandService_ExecuteVerifiedTransaction(t *testing.T) {
-	t.Parallel()
 	f := newPubsubFixture(t)
 
 	t.Run("rejects invalid cmdMsg type", func(t *testing.T) {
@@ -220,7 +218,6 @@ func TestPubSubCommandService_ExecuteVerifiedTransaction(t *testing.T) {
 }
 
 func TestPubSubCommandService_handleMcpCallRequestSync(t *testing.T) {
-	t.Parallel()
 	f := newPubsubFixture(t)
 
 	t.Run("rejects when MCP gateway not configured", func(t *testing.T) {
@@ -238,7 +235,6 @@ func TestPubSubCommandService_handleMcpCallRequestSync(t *testing.T) {
 }
 
 func TestPubSubCommandService_handleA2aCallRequestSync(t *testing.T) {
-	t.Parallel()
 	f := newPubsubFixture(t)
 
 	t.Run("rejects when A2A gateway not configured", func(t *testing.T) {
@@ -296,7 +292,6 @@ func TestPubSubCommandService_handleAppInvestigationCreatedSync(t *testing.T) {
 }
 
 func TestPubSubCommandService_handleShutdownRequest(t *testing.T) {
-	t.Parallel()
 	f := newPubsubFixture(t)
 
 	t.Run("rejects unmarshal error", func(t *testing.T) {
@@ -357,7 +352,6 @@ func TestPubSubCommandService_handleShutdownRequest(t *testing.T) {
 }
 
 func TestPubSubCommandService_handleEvalAnswerRequestSync(t *testing.T) {
-	t.Parallel()
 	f := newPubsubFixture(t)
 
 	t.Run("rejects unmarshal error", func(t *testing.T) {
@@ -373,7 +367,6 @@ func TestPubSubCommandService_handleEvalAnswerRequestSync(t *testing.T) {
 }
 
 func TestPubSubCommandService_Start(t *testing.T) {
-	t.Parallel()
 
 	t.Run("rejects start when already running", func(t *testing.T) {
 		t.Parallel()
@@ -423,7 +416,6 @@ func TestPubSubCommandService_Stop(t *testing.T) {
 }
 
 func TestPubSubCommandService_ProcessEnvelope(t *testing.T) {
-	t.Parallel()
 	f := newPubsubFixture(t)
 
 	t.Run("successful synchronous processing", func(t *testing.T) {

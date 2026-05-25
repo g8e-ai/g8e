@@ -29,10 +29,11 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/g8e-ai/g8e/internal/services/sentinel"
+	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/pkg/uap"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -319,6 +320,7 @@ type TransactionVerifier struct {
 	sentinel          *sentinel.Sentinel // L1 threat detection for MCP arguments
 	knownActionTypes  map[constants.ActionType]struct{}
 	posture           GovernancePosture // Governance posture: doctrine, consensus, or notary
+	clock             system.Clock      // Injectable time source for deterministic testing
 
 	inFlight sync.Map // Concurrent-safe tracking of in-flight nonces
 }
@@ -334,10 +336,16 @@ func NewTransactionVerifier(
 	sentinel *sentinel.Sentinel,
 	knownActionTypes []constants.ActionType,
 	posture string,
+	clock system.Clock,
 ) *TransactionVerifier {
 	knownActions := make(map[constants.ActionType]struct{})
 	for _, action := range knownActionTypes {
 		knownActions[action] = struct{}{}
+	}
+
+	// Default to real clock if not provided
+	if clock == nil {
+		clock = &system.RealClock{}
 	}
 
 	return &TransactionVerifier{
@@ -350,6 +358,7 @@ func NewTransactionVerifier(
 		sentinel:          sentinel,
 		knownActionTypes:  knownActions,
 		posture:           NewGovernancePosture(posture),
+		clock:             clock,
 	}
 }
 
@@ -381,11 +390,11 @@ func (tv *TransactionVerifier) VerifyEnvelope(ctx context.Context, envelope *uap
 		return nil, ErrExpiresAtMissing
 	}
 	expiresAt := envelope.ExpiresAt.AsTime()
-	if time.Now().UTC().After(expiresAt) {
+	if tv.clock.Now().After(expiresAt) {
 		tv.logger.Error("Transaction rejected: EXPIRED",
 			"nonce", envelope.Nonce,
 			"expires_at", expiresAt,
-			"now", time.Now().UTC())
+			"now", tv.clock.Now())
 		tv.releaseInFlight(envelope.Nonce)
 		return nil, ErrTransactionExpired
 	}

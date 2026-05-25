@@ -3,9 +3,9 @@
   "vertical": "security",
   "narrative": "Envelope with tampered receipt signature should be rejected",
   "intent": {
-    "id": "3ab829ff268a191aa19ef37fc923a7a47ef45cdf583e72bc901c80a213d0701b",
-    "timestamp": "2026-05-24T23:55:00.628303786Z",
-    "expiresAt": "2026-05-25T00:55:00.628304134Z",
+    "id": "3e6d9354e2e95b267c67872a5eee0f35cad377e36a0c342be4bc4a6cb4fa7437",
+    "timestamp": "2026-05-24T12:00:00Z",
+    "expiresAt": "2026-05-24T13:00:00Z",
     "sourceComponent": "COMPONENT_CLIENT",
     "operatorId": "operator-1",
     "operatorSessionId": "operator-session-1",
@@ -14,20 +14,20 @@
     "targetResource": "localhost",
     "stateMerkleRoot": "abc123def456",
     "nonce": "nonce-tampered-123",
-    "transactionHash": "3ab829ff268a191aa19ef37fc923a7a47ef45cdf583e72bc901c80a213d0701b",
+    "transactionHash": "3e6d9354e2e95b267c67872a5eee0f35cad377e36a0c342be4bc4a6cb4fa7437",
     "protocolVersion": "1.0",
     "governance": {
       "l2": {
-        "tribunalSignature": "b9ae21ab109056dd4599ce07c26bce15943f7b2ab481dcc33522df13e3960bfe874ffde30ebfa12a1aaae8f861bd6cb7574037d324dbd22392525c6c413e7701",
-        "keyId": "28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747"
+        "tribunalSignature": "5b38f328d362aeba74ef8e8f3a45deda3d5fd9cc59c76f3bd4e44c97377dcae3c0cbdc5d025158caf66a6248f9b5d9c18861a762e80c9382140508c1eae8bf0e",
+        "keyId": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
       }
     }
   },
   "evidence": {
     "l2_signature_present": true,
-    "l2_key_id": "28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747",
+    "l2_key_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd",
     "l3_proof_present": false,
-    "signer_id": "28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747"
+    "signer_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
   },
   "expect": {
     "doctrine": {
