@@ -21,10 +21,16 @@ test/scenario/
 ### Local Development
 
 ```bash
-# Run scenario tests with verbose output
+# Run scenario tests with verbose output (using g8e wrapper)
+./g8e test scenario -v
+
+# Run scenario tests with verbose output (direct go test)
 go test -tags=integration -v -run TestScenarios ./test/scenario/...
 
-# Run a specific scenario
+# Run a specific scenario (using g8e wrapper)
+./g8e test scenario --run forge_signature -v
+
+# Run a specific scenario (direct go test)
 go test -tags=integration -v -run TestScenarios/forge_signature ./test/scenario/...
 ```
 
@@ -131,14 +137,15 @@ This approach follows the "no mocks" principle from `docs/guides/devs.md`, ensur
 
 ### Forge Anything (#6)
 
-Four security scenarios testing fundamental rejection criteria:
+Security scenarios testing fundamental rejection criteria:
 
 - **forge_signature**: Forged L2 signature → reject
-- **replay_nonce**: Replayed nonce → reject
+- **actual_replay**: Replayed nonce (store seeded) → reject
 - **stale_state_root**: Stale state root → reject
-- **tampered_receipt**: Tampered receipt signature → reject
+- **l3_missing**: Missing L3 proof in notary mode → reject
+- **tampered_receipt**: Valid envelope accepted, receipt signature tampered → tampering detected
 
-These are the CI backbone - trivially deterministic and fast.
+These are the CI backbone - trivially deterministic and fast. The `tampered_receipt` scenario specifically tests the "tamper-evident" property of signed receipts.
 
 ## Future Scenarios
 
@@ -151,16 +158,45 @@ Planned scenarios from the original specification:
 - **Hand Me the Proof (#7)**: Receipt chain validation with scorecard
 - **Pull the Cable (#2)**: Transport fault-injection (requires `-tags=integration,partition`)
 
-## The Theater
+## Viewing Receipts
 
-Under `-v`, the test prints a full gauntlet trace:
+Receipts are printed to the test output when running with the `-v` flag:
 
+```bash
+go test -tags=integration -v -run TestScenarios ./test/scenario/...
+```
+
+For accepted scenarios, the receipt includes:
+- Transaction ID and hash
+- Execution status and result summary
+- State root before/after
+- L2/L3 validation status
+- Signer key ID and signature
+
+Example output:
 ```
 === Scenario: forge_signature (doctrine mode) ===
 Vertical: security
 Narrative: Envelope with forged L2 signature should be rejected
 Evidence: L2=true (key=tribunal_1), L3=false, signer=tribunal_1
-Result: REJECTED - TX_QUORUM_L2_SIG_INVALID
+Result: ACCEPTED
+Receipt:
+  Transaction ID: abc123...
+  Transaction Hash: def456...
+  Status: EXECUTION_STATUS_COMPLETED
+  Result Summary: mock execution succeeded
+  State Root Before: abc123def456
+  State Root After: abc123def456
+  Signer Key ID: 797c07dc...
+  Signature: deadbeef...
+  Gateway Signed: false
+  L2 Status: L2_STATUS_REQUIRED_VALID
+  L3 Status: L3_STATUS_REQUIRED_VALID
+  Executed At: 1716624000000
 ```
 
-The same test that gates the pipeline is the demo - no duplicate maintenance.
+Note: The test database and audit vault use in-memory storage that is cleaned up after test completion. Receipts are only visible in the test output or via golden file snapshots.
+
+## The Theater
+
+Under `-v`, the test prints a full gauntlet trace including receipt details. The same test that gates the pipeline is the demo - no duplicate maintenance.

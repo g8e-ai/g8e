@@ -17,6 +17,7 @@ package scenario
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -116,8 +117,8 @@ func TestConcurrencyReplayDetection(t *testing.T) {
 		t.Error("expected one result to have an error")
 	} else {
 		errMsg := rejectedResult.Error.Error()
-		if !containsSubstring(errMsg, "TX_REPLAY") && !containsSubstring(errMsg, "replay") {
-			t.Errorf("expected rejection reason to contain 'TX_REPLAY' or 'replay', got %q", errMsg)
+		if !strings.HasPrefix(errMsg, "TX_REPLAY") {
+			t.Errorf("expected rejection reason to start with 'TX_REPLAY', got %q", errMsg)
 		}
 	}
 }

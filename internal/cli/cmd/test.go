@@ -264,6 +264,7 @@ func testChaosCmd() *cobra.Command {
 
 func testScenarioCmd() *cobra.Command {
 	var run string
+	var verbose bool
 
 	cmd := &cobra.Command{
 		Use:   "scenario",
@@ -275,7 +276,11 @@ func testScenarioCmd() *cobra.Command {
 			}
 
 			var goArgs []string
-			goArgs = []string{"test", "-tags=integration", "-v", "-run", "TestScenarios", "./test/scenario/..."}
+			goArgs = []string{"test", "-tags=integration", "-run", "TestScenarios", "./test/scenario/..."}
+
+			if verbose {
+				goArgs = append(goArgs, "-v")
+			}
 
 			if run != "" {
 				goArgs = append(goArgs, "-run", "TestScenarios/"+run)
@@ -291,6 +296,7 @@ func testScenarioCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&run, "run", "", "Run specific scenario (e.g., forge_signature)")
+	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 
 	return cmd
 }

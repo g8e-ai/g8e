@@ -16,10 +16,14 @@
 package scenario
 
 import (
+	"crypto/ed25519"
+	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/services/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -80,6 +84,7 @@ func AssertVerdict(t *testing.T, result Result, expected Outcome) {
 
 // AssertReason checks that the rejection reason matches the expected reason exactly.
 // This prevents false passes where a transaction rejects for the wrong reason.
+// The expected reason must match as a prefix to allow for additional context in the error message.
 func AssertReason(t *testing.T, result Result, expected Outcome) {
 	if expected.Verdict == VerdictReject {
 		if result.Error == nil {
@@ -91,10 +96,27 @@ func AssertReason(t *testing.T, result Result, expected Outcome) {
 			t.Errorf("expected REJECT but no reject_reason specified in fixture")
 			return
 		}
-		if !containsSubstring(errMsg, expected.RejectReason) {
-			t.Errorf("expected rejection reason to contain %q, got %q", expected.RejectReason, errMsg)
+		// Require exact prefix match for the error code to prevent wrong-reason false passes
+		// e.g., "TX_REPLAY: nonce already used" must start with "TX_REPLAY", not just contain it
+		if !hasErrorCodePrefix(errMsg, expected.RejectReason) {
+			t.Errorf("expected rejection reason to start with %q, got %q", expected.RejectReason, errMsg)
 		}
 	}
+}
+
+// hasErrorCodePrefix checks if the error message starts with the expected error code prefix.
+// This ensures strict matching of error codes while allowing additional context after the prefix.
+func hasErrorCodePrefix(errMsg, expected string) bool {
+	if len(errMsg) < len(expected) {
+		return false
+	}
+	// Check for exact prefix match
+	if errMsg[:len(expected)] == expected {
+		return true
+	}
+	// Also allow matching if the expected is a complete error code and errMsg starts with it
+	// This handles cases like "TX_REPLAY: nonce already used" vs "TX_REPLAY"
+	return len(errMsg) >= len(expected) && errMsg[:len(expected)] == expected
 }
 
 // AssertL2L3 checks that L2/L3 validity matches expectations.
@@ -106,6 +128,115 @@ func AssertL2L3(t *testing.T, result Result, expected Outcome) {
 		if int32(result.Receipt.L3Status) != expected.L3Status {
 			t.Errorf("expected L3Status=%v, got %v", expected.L3Status, result.Receipt.L3Status)
 		}
+	}
+}
+
+// AssertReceiptTamperDetection verifies that receipt signature tampering is detected.
+// This tests the "tamper-evident" property - a core security guarantee.
+func AssertReceiptTamperDetection(t *testing.T, receipt *operatorv1.ActionReceipt, actuator interface{}) {
+	// Verify the original receipt signature is valid
+	if receipt.Signature == "" {
+		t.Errorf("receipt has no signature to verify")
+		return
+	}
+
+	// Test 1: Verify original receipt signature is valid
+	valid, err := verifyReceiptSignature(receipt)
+	if err != nil {
+		t.Errorf("failed to verify original receipt signature: %v", err)
+		return
+	}
+	if !valid {
+		t.Errorf("original receipt signature should be valid but verification failed")
+		return
+	}
+	t.Logf("Receipt tamper detection: original signature verified successfully")
+
+	// Test 2: Tamper with signature and verify it fails
+	tamperedReceipt := cloneReceipt(receipt)
+	if len(tamperedReceipt.Signature) >= 2 {
+		// Flip a byte in the signature
+		sigBytes, _ := hex.DecodeString(tamperedReceipt.Signature)
+		if len(sigBytes) > 0 {
+			sigBytes[0] = sigBytes[0] ^ 0xff
+			tamperedReceipt.Signature = hex.EncodeToString(sigBytes)
+		}
+	}
+
+	valid, err = verifyReceiptSignature(tamperedReceipt)
+	if err != nil {
+		t.Errorf("failed to verify tampered receipt signature: %v", err)
+		return
+	}
+	if valid {
+		t.Errorf("tampered receipt signature should fail verification but passed - TAMPER DETECTION BROKEN")
+		return
+	}
+	t.Logf("Receipt tamper detection: tampered signature correctly rejected")
+
+	// Test 3: Tamper with state_root_after and verify it fails
+	tamperedReceipt2 := cloneReceipt(receipt)
+	tamperedReceipt2.StateRootAfter = tamperedReceipt2.StateRootAfter + "-tampered"
+	// Keep the original signature (which was for the untampered data)
+	tamperedReceipt2.Signature = receipt.Signature
+
+	valid, err = verifyReceiptSignature(tamperedReceipt2)
+	if err != nil {
+		t.Errorf("failed to verify tampered receipt (state_root_after): %v", err)
+		return
+	}
+	if valid {
+		t.Errorf("tampered state_root_after should fail verification but passed - TAMPER DETECTION BROKEN")
+		return
+	}
+	t.Logf("Receipt tamper detection: tampered state_root_after correctly rejected")
+
+	// Test 4: Verify GatewaySigned field is present and true (as set in fixture)
+	if !receipt.GatewaySigned {
+		t.Errorf("receipt.GatewaySigned should be true for tampered_receipt scenario (set in envelope)")
+	}
+}
+
+// verifyReceiptSignature verifies an ActionReceipt signature using the canonical form.
+func verifyReceiptSignature(receipt *operatorv1.ActionReceipt) (bool, error) {
+	if receipt.Signature == "" {
+		return false, fmt.Errorf("receipt has no signature")
+	}
+
+	// Import the governance package for canonicalization
+	canonical, err := governance.CanonicalizeActionReceipt(receipt)
+	if err != nil {
+		return false, fmt.Errorf("failed to canonicalize receipt: %w", err)
+	}
+
+	sigBytes, err := hex.DecodeString(receipt.Signature)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode signature: %w", err)
+	}
+
+	signerKeyID, err := hex.DecodeString(receipt.SignerKeyId)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode signer key ID: %w", err)
+	}
+
+	return ed25519.Verify(signerKeyID, canonical, sigBytes), nil
+}
+
+// cloneReceipt creates a deep copy of an ActionReceipt.
+func cloneReceipt(r *operatorv1.ActionReceipt) *operatorv1.ActionReceipt {
+	return &operatorv1.ActionReceipt{
+		TransactionId:    r.TransactionId,
+		TransactionHash:  r.TransactionHash,
+		Status:           r.Status,
+		ResultSummary:    r.ResultSummary,
+		StateRootBefore:  r.StateRootBefore,
+		StateRootAfter:   r.StateRootAfter,
+		ExecutedAtUnixMs: r.ExecutedAtUnixMs,
+		SignerKeyId:      r.SignerKeyId,
+		Signature:        r.Signature,
+		GatewaySigned:    r.GatewaySigned,
+		L2Status:         r.L2Status,
+		L3Status:         r.L3Status,
 	}
 }
 
@@ -203,17 +334,4 @@ func CheckGoldenFilesUpToDate(t *testing.T) bool {
 	}
 
 	return true
-}
-
-func containsSubstring(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && containsSubstringHelper(s, substr))
-}
-
-func containsSubstringHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

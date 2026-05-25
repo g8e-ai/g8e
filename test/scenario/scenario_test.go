@@ -164,6 +164,12 @@ func TestScenarios(t *testing.T) {
 					AssertAuditVaultReceipt(t, gate.auditVault, result.Receipt, expected)
 				}
 
+				// For tampered_receipt scenario: verify receipt tampering is detected
+				// This tests the "tamper-evident" property of signed receipts
+				if s.Name == "tampered_receipt" && result.Receipt != nil {
+					AssertReceiptTamperDetection(t, result.Receipt, gate.actuator)
+				}
+
 				// Golden diff
 				GoldenDiff(t, s, mode, result.Receipt)
 
