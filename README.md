@@ -51,20 +51,22 @@ transaction — and the host verifies that transaction before it executes.
 - **One ~4MB binary, zero standing dependencies.** The reference Operator is a single statically compiled Go binary that serves dual purposes: daemon mode (Governance Gateway/Operator) and CLI mode (platform management). No runtime to patch, no interpreter to exploit, no package tree to audit. Air-gapped deployment is the normal case.
 - **Multi-model Byzantine consensus.** The consensus layer (Consensus) is provider-agnostic. Heterogeneous models — Anthropic, OpenAI, local — independently co-sign every mutation, so no single model's hallucination or poisoning gets through.
 - **Local-first audit with instant rollback.** Every decision, accepted or blocked, is written to a host-local vault *before* the side effect. A two-phase Git-backed commit architecture gives tamper-evident history and one-command rollback.
-- **Fail-closed, in order.** Doctrine → Consensus → Notary, enforced at the host boundary. Each layer has to pass before the next is even reached.
+- **Fail-closed, in order.** Doctrine → Consensus → Notary → Warden → Actuator, enforced at the host boundary. Each layer has to pass before the next is even reached.
 - **Protocol-native.** MCP, A2A, and OpenAI-style tool calls all normalize into one signed envelope. The Operator is itself an MCP server.
 
 ---
 
 ## The gauntlet
 
-Every mutation passes three layers in sequence at the host boundary. Each one produces cryptographic evidence that travels inside the envelope.
+Every mutation passes five layers in sequence at the host boundary. Each one produces cryptographic evidence that travels inside the envelope.
 
 | Layer | Name | Mechanism | What it proves |
 | :---: | --- | --- | --- |
 | **L1** | **Doctrine** | Static analysis / reflection | The action violates no hard technical policy or forbidden pattern. |
 | **L2** | **Consensus** | Ed25519 over k-of-n consensus | An independent, heterogeneous ensemble co-validated the intent. |
 | **L3** | **Notary** | WebAuthn / FIDO2 | A human authorized **this exact transaction**, using its hash as the challenge. |
+| **L4** | **Warden** | Pre-dispatch gate | All prior proofs check out, state is fresh, and transaction is bound to this host. |
+| **L5** | **Actuator** | Execution boundary | The single fail-closed path for reality-changing side effects. |
 
 Before any of these run, the envelope is checked for integrity, typed-payload decode, hash binding (`id == SHA-256(canonical_fields)`), freshness (nonce + expiry), and state binding (expected Merkle root vs. current local root). Only a transaction that clears the whole chain reaches the **Actuator** — the single fail-closed dispatch path through which any change to the host has to pass.
 
@@ -97,9 +99,9 @@ sequenceDiagram
     Operator->>Gateway: Open outbound-only mTLS tunnel
     Operator->>Gateway: Fetch pending GovernanceEnvelope
 
-    Note over Operator: Run gauntlet — Doctrine, Consensus, Notary<br/>(fail-closed)<br/>Execute via Actuator<br/>Anchor to local audit vault
+    Note over Operator: Run gauntlet — Doctrine, Consensus, Notary, Warden<br/>(fail-closed)<br/>Execute via Actuator<br/>Anchor to local audit vault
 
-    Operator->>Gateway: Push Sentinel-scrubbed signed receipt
+    Operator->>Gateway: Push Sovereignty-scrubbed signed receipt
     Gateway->>Principal: Return final safe output
 ```
 
@@ -116,21 +118,24 @@ graph TD
         L1{"L1 · Doctrine<br/>Forbidden patterns?"}
         L2{"L2 · Consensus<br/>Consensus signature?"}
         L3{"L3 · Notary<br/>Human authorization?"}
+        L4{"L4 · Warden<br/>Pre-dispatch gate"}
         Fail["Fail closed<br/>Typed rejection + audit entry"]
-        Act["Actuator<br/>Execute + signed receipt"]
+        Act["L5 · Actuator<br/>Execute + signed receipt"]
         Vault([Local audit vault])
 
         Pre -- ok --> State
         State -- fresh --> L1
         L1 -- passed --> L2
         L2 -- valid --> L3
-        L3 -- authorized --> Act
+        L3 -- authorized --> L4
+        L4 -- verified --> Act
 
         Pre -- bad --> Fail
         State -- stale --> Fail
         L1 -- violated --> Fail
         L2 -- invalid --> Fail
         L3 -- denied --> Fail
+        L4 -- failed --> Fail
 
         Act --> Vault
         Fail --> Vault
@@ -151,7 +156,7 @@ Every component distrusts every other. Execution authority is never ambient.
 | **Principal** | Any single AI provider; any host | Heterogeneous Consensus; mTLS + device fingerprinting |
 | **Gateway (g8eg)** | The producer and the client | Scoped sessions; replay protection; envelope verification |
 | **Operator (g8eo)** | User, AI, transport, and stale state | Doctrine + Notary gates; outbound-only mTLS; state-root binding |
-| **Output** | All downstream readers | Sentinel scrubs secrets, PII, and tokens before exposure |
+| **Output** | All downstream readers | The Sovereignty Boundary scrubs secrets, PII, and tokens before exposure |
 
 ---
 
@@ -163,7 +168,7 @@ The outbound-only Operator architecture enables governed execution on hosts that
 
 - **Incident response on firewalled hosts.** When a production host is behind a corporate firewall that blocks SSH, an AI proposes a fix, the Tribunal validates consensus, you authorize via WebAuthn from a mobile device, and the Operator executes locally. Raw logs remain on-host; only a scrubbed receipt returns. Human-present remediation into unreachable infrastructure with hardware-bound authentication and forensic locality.
 
-- **Data-sovereign analysis.** Point an AI at a directory containing PHI, financial data, or proprietary source. The Operator runs analysis on-host, Sentinel scrubs the output, and the model receives only a safe projection. Raw data and model execution never touch. The Operator enforces the data boundary; the AI reasons through a keyhole rather than over the dataset.
+- **Data-sovereign analysis.** Point an AI at a directory containing PHI, financial data, or proprietary source. The Operator runs analysis on-host, the Sovereignty Boundary scrubs the output, and the model receives only a safe projection. Raw data and model execution never touch. The Operator enforces the data boundary; the AI reasons through a keyhole rather than over the dataset.
 
 - **Queued execution for offline hosts.** Submit a governed envelope at the Gateway with an expiry and expected state root. When the Operator next connects, it retrieves the pending job, re-verifies freshness and that local state has not drifted, then executes — or fails closed if reality has changed. Task machines that are not currently online; the host refuses execution if state has moved.
 
@@ -184,18 +189,18 @@ The outbound-only Operator architecture enables governed execution on hosts that
 g8e ships a full reference stack, but the protocol is the only mandatory part — any conforming producer can emit a valid envelope.
 
 - **Gateway (`g8eg`)** — reference policy decision point: admission APIs, mTLS/PKI, replay protection, state-root distribution, fan-out to Operators.
-- **Operator (`g8eo`)** — reference enforcement point and sovereign boundary: local audit authority, Sentinel scrubber, Actuator, MCP server. The 4MB binary.
+- **Operator (`g8eo`)** — reference enforcement point and sovereign boundary: local audit authority, Sovereignty Boundary, Actuator, MCP server. The 4MB binary.
 
 **g8e-compatible agentic ensembles** are optional producers that implement the protocol to emit signed envelopes with L2 consensus evidence.
 
 **Code pointers:**
-`protocol/proto/*.proto` · `internal/services/governance/` · `internal/services/storage/audit_vault.go`
+`protocol/proto/g8e/` · `internal/services/governance/` · `internal/services/storage/audit_vault.go`
 
 ---
 
 ## Self-hosting & air-gap
 
-g8e is built to run entirely inside your perimeter. The Operator has no inbound gateway, so there is nothing to expose and nothing to scan. The single static binary supports fully air-gapped deployment — no runtime, no package manager, no outbound dependency beyond the one mTLS tunnel it opens to your own Gateway. Raw data, forensic context, and execution history never leave the host; only Sentinel-scrubbed projections cross the wire.
+g8e is built to run entirely inside your perimeter. The Operator has no inbound gateway, so there is nothing to expose and nothing to scan. The single static binary supports fully air-gapped deployment — no runtime, no package manager, no outbound dependency beyond the one mTLS tunnel it opens to your own Gateway. Raw data, forensic context, and execution history never leave the host; only Sovereignty-scrubbed projections cross the wire.
 
 <!-- ============================================================= -->
 <!-- INSERT: SCREENSHOT (optional but strong) — the audit vault:    -->

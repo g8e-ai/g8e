@@ -1,295 +1,162 @@
 # g8e Gateway - Governance Gateway
 
-The reference Go implementation of the g8e Protocol compiles from a single codebase into the `g8e.operator` binary, which operates in two distinct modes to secure and govern AI execution:
+The g8e Protocol substrate is composed of two logically distinct roles, both implemented by the reference `g8e.operator` binary:
 
-1. **Gateway Mode** (`g8e.operator --doctrine`, `--consensus`, or `--notary`): Runs as the central, fail-closed Byzantine Fault Tolerant (BFT) Governance Gateway (Policy Decision Point / PDP).
-2. **Standard Operator Mode** (`g8e.operator` without gateway flags): Runs on target hosts (and exposes MCP over stdio with `--mcp-serve`) to function as the sovereign tool execution boundary (Policy Execution Point / PEP).
+1.  **Governance Gateway** (Policy Decision Point / PDP): Serves as the central, BFT-governed coordinator for the platform.
+2.  **g8e Operator** (Policy Execution Point / PEP): Runs on target hosts as the sovereign execution boundary and MCP server.
 
 ---
 
 ## Core Principles
 
-- **Single Binary, Two Modes**: The same `g8e.operator` binary operates in either Gateway Mode (central Policy Decision Point) or Standard Operator Mode (host-level Policy Execution Point). Behavior is activated via invocation flags (`--doctrine`, `--consensus`, or `--notary` for Gateway Mode).
-- **mTLS-Everywhere**: All communication is outbound-only from the target operator and strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts.
+- **5-Layer Governance Bedrock**: Every transaction must pass through five mandatory, fail-closed layers:
+    - **L1 Doctrine**: Technical bedrock (Hard Gates, threat detection).
+    - **L2 Consensus**: Tribunal verification (5 independent agents).
+    - **L3 Notary**: Human-in-the-loop authorization (WebAuthn/Passkey).
+    - **L4 Warden**: Pre-dispatch verification gate (Hash, Expiry, Nonce, State Root).
+    - **L5 Actuator**: Execution boundary (Single fail-closed dispatch path, signed ActionReceipts).
+- **mTLS-Everywhere**: All communication is strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts.
 - **Local-First Audit (LFAA)**: The target host remains the source of truth for command history and file mutations, stored in a tamper-evident local ledger.
 - **Canonical JSON (GovernanceEnvelope)**: Every mutation action is governed by a canonical JSON `GovernanceEnvelope`. This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
-- **3-Layer Governance**: Hard gates at the bedrock (L1Doctrine), consensus in the middle (L2Consensus), and human authorization at the top (L3Notary).
 - **Transaction Invariants**: Every transaction is identified by a deterministic `transaction_hash` computed from its content. The envelope `id` must match this hash for the transaction to be valid.
-- **Protocol vs Implementation**: The protocol is the Gateway. The reference Governance Gateway (g8e.operator in Gateway mode) and Governed Operator (g8e.operator in Standard mode) implement the protocol's core invariants, while application layers consume their public interfaces.
-- **Sovereign Authority (PKI)**: The Governance Gateway owns the platform's PKI and is the only entity permitted to sign certificates, maintaining isolated intermediate CAs.
-- **CSR-Based Enrollment**: Participants enroll by submitting a Certificate Signing Request (CSR) to the Governance Gateway. Long-lived API keys are deprecated for identity; the platform relies on short-lived, session-bound certificates.
+- **Protocol vs Implementation**: The protocol is the Gateway. Conforming implementations of the Governance Gateway and g8e Operator enforce these invariants.
+- **Sovereign Authority (PKI)**: The Governance Gateway owns the platform's PKI and is the only entity permitted to sign certificates.
+- **CSR-Based Enrollment**: Participants enroll by submitting a Certificate Signing Request (CSR) to the Governance Gateway. Identities are encoded as SPIFFE URI SANs.
 
 ---
 
 ## Architecture Overview
 
-The g8e platform is built on the g8e Protocol as Gateway. Conforming gateway and operator implementations are what make that protocol live.
+The g8e platform is built on the g8e Protocol. Conforming gateway and operator implementations are what make that protocol live.
 
-- **Protocol (Gateway)**: The wire contract, schemas, and Doctrine (L1Doctrine)/Consensus (L2Consensus)/Notary (L3Notary) verification rules. Mandatory and immutable for any client or implementation.
-- **Governance Gateway**: The `g8e.operator` binary run in **Gateway mode** (`--doctrine`, `--consensus`, or `--notary`). It acts as the platform's backbone - protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority.
-- **Governed Operator**: The `g8e.operator` binary run in **Standard Mode** or **MCP Mode** (`--mcp-serve`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease.
-- **Reference Application Layer (Optional)**: Reference components like g8e-compatible agentic ensembles consume the public Gateway/Operator protocol surface. They have no privileged Gateway responsibilities and no private access channels.
+- **Governance Gateway (PDP)**: The `g8e.operator` binary run in **Gateway mode** (`--doctrine`, `--consensus`, or `--notary`). It acts as the platform's backbone - protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority.
+- **g8e Operator (PEP)**: The `g8e.operator` binary run in **Standard Mode** or **MCP Mode** (`--mcp-serve`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease.
 
 ```mermaid
 flowchart TD
-    subgraph Hub ["Operator/Protocol Gateway"]
+    subgraph Hub ["Governance Gateway (PDP)"]
         direction TB
-        subgraph Persistence ["Reference Runtime (Gateway Mode)"]
-            listen["g8e.operator (Gateway mode)"]
-            db[("SQLite / KV")]
-            ps[["Pub/Sub Broker"]]
-            ca["Root CA / PKI"]
+        subgraph Layers ["5-Layer Governance"]
+            L1["L1 Doctrine"]
+            L2["L2 Consensus"]
+            L3["L3 Notary"]
+            L4["L4 Warden"]
+            L5["L5 Actuator"]
             
-            listen --- db
-            listen --- ps
-            listen --- ca
+            L1 --> L2 --> L3 --> L4 --> L5
         end
+        db[("SQLite / KV")]
+        ps[["Pub/Sub Broker"]]
+        ca["Root CA / PKI"]
+        
+        L5 --- db
+        L5 --- ps
+        L5 --- ca
     end
 
-    subgraph Apps ["Reference Application Layer"]
+    subgraph Apps ["Reference Applications"]
         ensemble["g8e-compatible agentic ensemble"]
     end
 
-    ensemble -. "mTLS canonical JSON" .-> listen
+    ensemble -- "mTLS JSON" --> L1
 
-    subgraph EP_A ["Managed Host A"]
-        g8eoA["Reference Operator (g8eo)"] --- LFAA_A["LFAA Ledger & Vault"]
+    subgraph Host_A ["Managed Host A"]
+        g8eoA["g8e Operator (PEP)"] --- LFAA_A["LFAA Ledger & Vault"]
     end
 
-    subgraph EP_B ["Managed Host B"]
-        g8eoB["Reference Operator (g8eo)"] --- LFAA_B["LFAA Ledger & Vault"]
-    end
-
-    g8eoA -- "mTLS WSS (canonical JSON)" --> listen
-    g8eoB -- "mTLS WSS (canonical JSON)" --> listen
+    g8eoA -- "mTLS WSS (JSON)" --> ps
 ```
 
 ---
 
-## Operating Modes: Gateway Mode (Hub)
+## Operating Modes: Gateway Mode (PDP)
 
-By passing --doctrine, --consensus, or --notary, the binary transforms into the platform's central backbone.
+By passing `--doctrine`, `--consensus`, or `--notary`, the binary transforms into the platform's central backbone.
 
 - **Role**: Reference hub for the bundled deployment.
+- **Governance Posture**:
+    - **Doctrine** (`--doctrine`): L1 enforced, L2/L3 audited.
+    - **Consensus** (`--consensus`): L1/L2 enforced, L3 audited.
+    - **Notary** (`--notary`): L1/L2/L3 strictly enforced.
 - **Capabilities**:
     - **Gateway API** - `POST /api/governance/envelope` is the only customer-facing mutation entry point.
-    - **Document Store** - JSON document CRUD on a Collection/ID pattern with `json_extract` query support.
-    - **KV Store** - TTL-aware ephemeral state with `GLOB` pattern scanning and cursor-based `KVScan`. Supports a Write-Only cache policy.
-    - **Blob Store** - Binary persistence for attachments, large objects, and certificate material.
+    - **Document Store** - JSON document CRUD on a Collection/ID pattern.
+    - **KV Store** - TTL-aware ephemeral state with `GLOB` pattern scanning.
+    - **Blob Store** - Binary persistence for attachments and certificate material.
     - **Pub/Sub Broker** - High-performance WebSocket fan-out. Mutation channels (`cmd:*`) are governed.
-    - **SSE Buffer** - Per-session ring buffer for Server-Sent Events reconnection replay.
-    - **State Root Provider** - Deterministic Merkle state root across all authoritative Hub data.
-    - **Nonce Manager** - Sliding-window replay protection for governance transactions.
     - **Root CA / PKI** - Issues mTLS certificates via CSR-based enrollment with SPIFFE URI SAN identity.
-    - **Secrets Vault** - Tamper-evident bootstrap secrets with a `bootstrap_digest.json` manifest.
     - **Audit Authority** - Append-only encrypted log of every event and signed `ActionReceipt`.
 
-### Multiplexed Port Contract
+### Port Topology
 
-The Governance Gateway exposes four logical protocol surfaces. Operators may bind each surface to its own TCP port or collapse multiple surfaces onto a single shared port. The Gateway automatically detects port overlaps and promotes the shared gateway to a **Multiplexed Handler** with **Optional mTLS**.
+The Governance Gateway exposes three logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements **must not** share a port.
 
 Default ports are sourced from `internal/constants/ports.go`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **Bootstrap** | `<!-- g8e:port:operator_bootstrap -->8441<!-- /g8e:port -->` (TLS) | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/trust`, device-link enrollment, CSR signing. |
-| **Public Port** | `<!-- g8e:port:operator_public -->8442<!-- /g8e:port -->` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery for browser/BYO bootstrap. |
-| **mTLS API + Pub/Sub** | `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->` (mTLS) | mTLS + URI SAN | `/api/governance/envelope`, `/db/*`, `/kv/*`, `/blob/*`, `/pubsub/publish`, and `/ws/pubsub` real-time fan-out. |
+| **mTLS API + Pub/Sub** | `8440` (mTLS) | mTLS + URI SAN | `/api/governance/envelope`, `/db/*`, `/kv/*`, `/blob/*`, `/pubsub/publish`, and `/ws/pubsub` real-time fan-out. |
+| **Bootstrap** | `8441` (TLS) | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/trust`, device-link enrollment, CSR signing. |
+| **Public Port** | `8442` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery for browser/BYO bootstrap. |
 
-#### Multiplexing rules
+#### Port Constraints
 
-The gateway selects a TLS configuration and HTTP handler per port based on which surfaces are mapped to it:
+- **mTLS Surface** (`8440`): Requires `tls.RequireAndVerifyClientCert`. This is the primary execution boundary.
+- **Bootstrap Surface** (`8441`): Serves plain TLS (without client-cert) to allow enrollment.
+- **Public Surface** (`8442`): Serves TLS with WebAuthn/Passkey authentication for browser-based access.
+- **Collision Prevention**: The gateway fails startup if incompatible surfaces (e.g., mTLS and Public) are assigned to the same port, as this would force a downgrade to `VerifyClientCertIfGiven`.
 
-- **mTLS only on a port** (HTTP and/or WSS, no Public): `tls.RequireAndVerifyClientCert`. Strict mTLS for every connection.
-- **mTLS + Public on the same port**: `tls.VerifyClientCertIfGiven`. Unauthenticated requests reach public routes (web-session governed); mTLS and URI SAN verification are enforced for Gateway routes by per-route handlers.
-- **Public only on a port**: TLS without client-cert request.
-- **Bootstrap only on a port**: TLS without client-cert request (serves trust anchor and enrollment endpoints).
+---
 
-When Public and mTLS surfaces share a port, the gateway serves them through a single `MasterRouter` that dispatches by route prefix. WebSocket connections are natively upgraded over the same gateway.
+## The 5-Layer Governance Gauntlet
 
-#### Constraints
+Every transaction submitted to `POST /api/governance/envelope` must pass through the following layers:
 
-- **Bootstrap serves TLS**: The Bootstrap port uses TLS (without client-cert requirement) to serve trust anchor and enrollment endpoints. Clients must have the platform CA to verify the Bootstrap port TLS certificate, or they can fetch the CA bundle via HTTP from the well-known endpoint before establishing TLS connections.
-- **Privileged ports**: the gateway runs as an unprivileged user, so each configured port must be >1024 unless the binary has been granted `CAP_NET_BIND_SERVICE` (or another root-granted mechanism) out of band. The default ports above are all >1024 and require no privileged setup.
-- **Port equality is the multiplex trigger**: ports collapse only when their numeric values match. Setting `operator_http` and `operator_public` to the same number multiplexes them; setting them to different numbers creates two listeners.
+### L1 Doctrine (Hard Gates)
+The technical bedrock. Enforces forbidden patterns (e.g., `sudo`, `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.
 
-### Gateway Mutation Entry
+### L2 Consensus (Tribunal)
+A Byzantine Fault Tolerant consensus layer where 5 independent agents verify the intent and safety of the command. In Gateway mode, this can be configured to require Ed25519 signatures from trusted Tribunal members.
 
-`POST /api/governance/envelope` is the only customer-facing mutation API on the Governance Gateway. Clients submit canonical JSON (protojson) `GovernanceEnvelope` transactions and receive a signed `ActionReceipt` after the envelope passes transaction hash, expiry, nonce/replay, state-root, Consensus (L2Consensus) signer, Notary (L3Notary) proof, and Doctrine (L1Doctrine) typed-payload validation.
+### L3 Notary (Human Authorization)
+The human-in-the-loop layer. Requires a cryptographic proof of human intent.
+- **BYO Clients**: Use WebAuthn/Passkey proofs.
+- **CLI Sessions**: Use mTLS certificate fingerprints bound to the session.
 
-#### Out-of-Band (OOB) Suspension & WebAuthn Approval Flow
+### L4 Warden (Pre-Dispatch Verification)
+The final pre-execution check. Verifies:
+- **Transaction Hash**: `envelope.id` must match computed hash of content.
+- **Expiry**: `expires_at` must be in the future.
+- **Nonce/Replay**: `nonce` must not have been used previously (sliding-window protection).
+- **State Root**: `state_merkle_root` (if provided) must match the Gateway's current state root.
+- **Signer Trust**: Verifies L2/L3 signatures against trusted keys.
 
-When a standard AI client requests a mutation, it typically cannot generate an L3 human signature. Instead of failing open or throwing a hard error, the gateway suspends the transaction. It records the envelope in the SQLite `suspended_transactions` table and returns a local out-of-band (OOB) WebAuthn challenge URL. The user authenticates once with a passkey to establish a `web_session` (24-hour TTL). Within this authenticated session, the user can approve multiple suspended transactions via their browser without re-authenticating. The gateway attaches the resulting WebAuthn proof, resumes verification, and moves the transaction to execution.
+### L5 Actuator (Execution Boundary)
+The single fail-closed dispatch path.
+- **Execution**: Dispatches the verified payload to the downstream execution handler (e.g., MCP server).
+- **Audit**: Persists a `console_audit` record and a signed `ActionReceipt`.
+- **Receipt**: Generates a deterministic, signed receipt containing the result and state transitions.
 
-**CLI sessions** use a different L3Notary path: they authenticate via mTLS certificates with SPIFFE URI SANs. The L3Notary proof for CLI sessions is the SHA-256 fingerprint of the mTLS certificate. The composite L3Notary verifier validates the certificate fingerprint, checks revocation status, expiry, and ensures the SPIFFE URI SAN matches the expected CLI session. CLI sessions do not require OOB approval flows since the mTLS certificate itself provides the L3Notary proof.
+---
 
-```mermaid
-graph TD
-    classDef client fill:#eceff1,stroke:#37474f,stroke-width:2px,color:#37474f;
-    classDef gate fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
-    classDef fail fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#b71c1c;
-    classDef vault fill:#efebe9,stroke:#4e342e,stroke-width:2px,color:#3e2723;
-    classDef target fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20;
+## Out-of-Band (OOB) Suspension & WebAuthn Approval Flow
 
-    Client["Standard AI Client<br/>(Claude / Cursor / Agent)"]:::client
-    Human["Human Validator<br/>(Web Browser / Passkey)"]:::client
+When a standard AI client (e.g., Claude, Cursor) requests a mutation, it typically cannot generate an L3 human signature.
 
-    subgraph g8eg_suspension ["g8eg Governance Gateway (Suspension & Approval)"]
-        direction TB
-
-        CheckL3{"Notary (L3Notary) Gate Checked<br/>(Proof Present?)"}:::gate
-        SuspendTx["Suspend Transaction<br/>(Store SuspendedTransaction)"]:::gate
-        ReturnURL["Return OOB Approval URL<br/>(Response as MCP Tool Text)"]:::gate
-
-        LocalDB[("Local SQLite Store<br/>(suspended_transactions)")]:::vault
-
-        ApprovePage["Serve HTML Approval Page<br/>(/approve/:tx_hash)"]:::gate
-        Challenge["Get WebAuthn Challenge<br/>(/api/approve/:tx_hash/challenge)"]:::gate
-        VerifyProof["Verify WebAuthn Proof<br/>(/api/approve/:tx_hash/verify)"]:::gate
-        ResumeTx["Resume Transaction<br/>(Attach Notary (L3Notary) Proof & Submit)"]:::gate
-        PruneTx["Delete Suspended TX<br/>(Cleanup Store)"]:::gate
-
-        CheckL3 -- "No / Missing" --> SuspendTx
-        SuspendTx --> ReturnURL
-        SuspendTx --> LocalDB
-
-        LocalDB -.-> ApprovePage
-        ApprovePage --> Challenge
-        Challenge -.-> VerifyProof
-        VerifyProof --> ResumeTx
-        ResumeTx --> PruneTx
-        PruneTx --> LocalDB
-    end
-
-    EgressPath["Proceed to Egress & Response<br/>(L5Actuator Downstream Dispatch)"]:::target
-
-    Client -- "1. Mutation (tools/call)" --> CheckL3
-    ReturnURL -- "2. Challenge Link" --> Client
-    Client -. "Show URL" .-> Human
-
-    Human -- "3. Open Browser & Touch Passkey" --> ApprovePage
-    VerifyProof -- "4. Signature Signed" --> Human
-
-    ResumeTx -- "5. Fully Verified" --> EgressPath
-```
-
-Direct `/db/` mutations are restricted to bootstrap and Operator-owned collections required to initialize governance and persist L5Actuator/audit records. Mutations to non-bootstrap collections return `409 Conflict` with `{"error":"submit via POST /api/governance/envelope"}`. `/db/` reads and `_query` remain available because they do not mutate state.
-
-`/pubsub/publish` remains available for non-mutation fan-out (`heartbeat:*`, `results:*`, `sse:*`, `ws_session:*`, `internal:*`). Mutation channels such as `cmd:*` and `auditor:*` return the same `409 Conflict` redirect so callers cannot bypass the governed execution boundary.
+1.  **Suspension**: The gateway detects missing L3 proof and suspends the transaction in the SQLite `suspended_transactions` store.
+2.  **Challenge**: The gateway returns an OOB WebAuthn challenge URL to the AI client.
+3.  **Approval**: The human opens the URL, authenticates with a passkey, and approves the specific transaction.
+4.  **Resumption**: The gateway attaches the resulting WebAuthn proof to the envelope and resumes the L4/L5 flow.
 
 ---
 
 ## Session Types
 
-The g8e Protocol enforces strict separation between disjoint session types to prevent cross-tenant data leakage and identity conflation.
-
 | Session Type | Identifier | Purpose | Authentication |
 |---|---|---|---|
-| **Operator Session** | `operator_session_id` | Authenticates a specific host-side **governed operator** (`g8eo`). Bound to the machine fingerprint. | mTLS (Operator Cert) |
-| **CLI Session** | `cli_session_id` | Authenticates a specific **BYO/CLI client** (e.g., `./g8e chat`). Used for receiving real-time events. | mTLS (CLI Cert) |
-| **Web Session** | `web_session_id` | Authenticates a **browser-based client**. Bound to a secure session cookie. | Passkey (WebAuthn) |
-
-**Key Invariants:**
-- **Disjoint Routing**: The Gateway (SSE/PubSub) routes events based on these identifiers. A `web_session_id` can never receive events intended for a `cli_session_id`.
-- **Identity Binding**: CLI and Operator sessions are cryptographically bound to their respective mTLS certificates via SPIFFE URI SANs.
-- **No Conflation**: The Gateway refuses to "fallback" to a single session ID; every request must explicitly declare which session context it is operating within.
-
-SSE producers must set exactly one top-level routing key. Session-targeted events use either `web_session_id` or `cli_session_id` at the top level; `user_id` remains inside the typed event body for correlation. Background fan-out events use top-level `user_id` and no session route.
-
----
-
-## PKI & Identity
-
-The **Governance Gateway** owns the platform's Public Key Infrastructure (PKI). It acts as the sovereign root Certificate Authority (CA) for all platform participants, enforcing strict mutual TLS (mTLS) for all control-plane communication.
-
-### PKI Hierarchy
-
-The gateway manages a structured hierarchy in `.g8e/pki` to ensure isolation between different participants:
-
-- **Root CA**: The foundational trust anchor, used only to sign intermediate CAs.
-  - Path: `.g8e/pki/root/root_ca.crt`
-- **Intermediate CAs**: Scoped authorities that sign leaf certificates.
-  - **Hub CA**: Signs service certificates for the Gateway itself (e.g., `operator-listen`).
-  - **Operator CA**: Signs certificates for Satellite operators (`g8eo`) during enrollment.
-  - **Bootstrap CA**: Signs temporary certificates used during the initial discovery phase.
-- **Trust Bundles**: Combinations of root and intermediate certificates used for verification.
-  - Path: `.g8e/pki/trust/hub-bundle.pem` (Root + Hub Intermediate)
-
-### Identity Schemes (SPIFFE)
-
-Client identities follow the SPIFFE URI scheme, encoded in the certificate's URI SAN. These are generated using the `protocol.WorkloadIdentity` helper:
-
-| Role | Helper | URI SAN Pattern |
-|---|---|---|
-| **Operator (Satellite)** | `OperatorSPIFFEID()` | `spiffe://g8e.local/operator/<org>/<op>/<session>` |
-| **CLI (BYO Client)** | `CLISPIFFEID()` | `spiffe://g8e.local/cli/<user>/<session>` |
-| **Application (Agent)** | `AppSPIFFEID()` | `spiffe://g8e.local/app/<operator>` |
-| **Hub (Operator Listen)** | `HubSPIFFEID()` | `spiffe://g8e.local/hub/operator-listen` |
-
-### CLI vs Operator separation
-
-CLI and Operator are cryptographically distinct principals with separate keys, separate CSRs, and separate certificates:
-
-- **Operator certificates** - Bound to `operator_session_id`. Authorize host-side mutations.
-- **CLI certificates** - Bound to `cli_session_id`. Authorize BYO/CLI clients to issue commands and receive SSE.
-
-This means CLI sessions cannot impersonate governed operators and operator sessions cannot drain another client's event stream. SSE routes are bound to CLI sessions specifically.
-
-### Enrollment Lifecycle
-
-The enrollment process transitions a participant from "untrusted" to "mTLS-verified":
-
-1.  **Trust Verification**: The enrolling client fetches the Hub's root CA fingerprint from `GET /.well-known/pki/fingerprint` to verify the Hub's identity.
-2.  **Registration Request**: The client presents a one-time device-link token and a locally generated `system_fingerprint` to the **Bootstrap Port (9002)**.
-3.  **CSR Submission**: The client generates **two private keys** (Operator and CLI) and submits **two CSRs** (`csr_pem` for Operator, `cli_csr_pem` for CLI).
-4.  **Issuance**: The Hub/Gateway verifies the token and fingerprint, signs both CSRs using the **Operator Intermediate CA** (with role-specific URI SANs), and returns both certificate chains (`operator_cert` and `cli_cert`).
-5.  **Steady State**: The client uses the `cli_cert` for CLI-based operations and the `operator_cert` for host-side agent operations.
-
----
-
-## Storage & Persistence
-
-The Governance Gateway implements the central coordination store for the platform.
-
-### Coordination Store
-
-All Hub state lives in a single SQLite database at `.g8e/data/g8e.db`.
-
-#### State Merkle Root Invariant
-Hub state is anchored by a Merkle state root computed deterministically across authoritative documents, KV entries, and blobs.
-
-#### Cache-Aside read/write contract
-- **Writes** - Always go to the authoritative DB first, then invalidate the cache key.
-- **Reads** - `get_document` checks the KV cache; on miss it fetches from the DB and warms the cache. `query_documents` hashes query parameters for result caching.
-- **Atomic array ops** - `arrayUnion`/`arrayRemove` operate on the DB and invalidate the cache.
-- **Write-Only mode** - Application adapters set `enable_cache_read: false`, ensuring every read is satisfied by the authoritative database while still populating the cache for ecosystem consumers.
-
-#### PKI and Secrets directories (root of trust)
-- **.g8e/pki/** stores the CA hierarchy and trust bundles:
-    - **Root CA** - `root/root_ca.crt`
-    - **Intermediate CAs** - Hub CA, Operator CA, Bootstrap CA.
-    - **Trust Bundles** - `trust/hub-bundle.pem` (Root + Hub Intermediate).
-- **.g8e/secrets/** stores tamper-evident bootstrap material:
-    - `session_encryption_key`, `L5Actuator_signing_key`, `L5Actuator_key_id`.
-    - `bootstrap_digest.json` - SHA-256 digests of every secret. Mismatch fails startup hard.
-
----
-
-## Pub/Sub Broker
-
-The Hub is the WSS broker and governance gate for all real-time traffic.
-
-- **Channel format** - `{prefix}:{operator_id}:{operator_session_id}`. Always parse with a bounded split.
-- **Mutation channels** - `cmd:*` and `auditor:*` only accept envelopes via `POST /api/governance/envelope`.
-- **Non-mutation channels** - `heartbeat:*`, `results:*`, `sse:*`, `ws_session:*`, `internal:*` flow through `/pubsub/publish`.
-- **Fail-closed** - Missing `message_id` or `operator_session_id` → reject. Unknown `event_type` → drop.
-- **Subscribe-and-wait** - Subscribers must wait for the broker's `{"type":"subscribed","channel":"..."}` ack before publishing or dispatching commands.
-
----
-
-## Audit Vault (Hub side)
-
-The Hub keeps an authoritative encrypted audit vault keyed by `transaction_hash` for every governed mutation. ActionReceipts are queryable via the protected audit API. Audit writes are fail-closed: events with missing or unknown `operator_session_id` are rejected.
+| **Operator Session** | `operator_session_id` | Authenticates a specific **g8e Operator** (PEP). | mTLS (Operator Cert) |
+| **CLI Session** | `cli_session_id` | Authenticates a **BYO/CLI client**. | mTLS (CLI Cert) |
+| **Web Session** | `web_session_id` | Authenticates a **browser-based client**. | Passkey (WebAuthn) |
 
 ---
 
@@ -301,11 +168,13 @@ The Hub keeps an authoritative encrypted audit vault keyed by `transaction_hash`
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | Coordination Store | `internal/services/gateway/gateway_db.go` |
 | Pub/Sub broker | `internal/services/gateway/gateway_pubsub.go` |
-| State Root provider | `internal/services/gateway/gateway_db.go` |
-| Nonce / replay store | `internal/services/gateway/gateway_db.go` |
+| L1 Doctrine | `internal/services/governance/l1_doctrine.go` |
+| L2 Consensus | `internal/services/governance/l2_consensus.go` |
+| L3 Notary | `internal/services/governance/l3_notary.go` |
+| L4 Warden | `internal/services/governance/l4_warden.go` |
+| L5 Actuator | `internal/services/governance/l5_actuator.go` |
 | PKI / CertStore | `internal/services/gateway/gateway_certs.go` |
 | Secret Manager | `internal/services/gateway/secret_manager.go` |
-| Audit Vault | `internal/services/gateway/gateway_db.go` |
 | Workload identity | `protocol/workload_identity.go` |
 | Collections registry | `internal/constants/collections.go` |
 
@@ -329,4 +198,4 @@ The Hub keeps an authoritative encrypted audit vault keyed by `transaction_hash`
 ## Related Documentation
 
 - [**g8e Protocol**](./protocol.md) - The wire contract and governance hierarchy.
-- [**g8eo Operator**](./operator.md) - Sovereign host-side execution agent and MCP server.
+- [**g8e Operator**](./operator.md) - Sovereign host-side execution agent and MCP server.
