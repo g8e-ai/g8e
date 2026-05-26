@@ -1,26 +1,52 @@
 {
-  "_comment": "Canonical message types and senders. Every value must be composed exclusively from segments in segments.json.",
-
-  "message": {
-    "sender": {
-      "user": {
-        "chat": "g8e.v1.source.user.chat",
-        "terminal": "g8e.v1.source.user.terminal"
-      },
-      "ai": {
-        "primary": "g8e.v1.source.ai.primary",
-        "assistant": "g8e.v1.source.ai.assistant",
-        "triage": "g8e.v1.source.ai.triage"
-      },
-      "system": "g8e.v1.source.system"
+  "senders": {
+    "AiAssistant": {
+      "_go_const": "SourceAiAssistant",
+      "value": "g8e.v1.source.ai.assistant"
     },
-    "type": {
-      "text": "text",
-      "code": "code",
-      "call": "call",
-      "result": "result",
-      "error": "error",
-      "thinking": "thinking"
+    "AiPrimary": {
+      "_go_const": "SourceAiPrimary",
+      "value": "g8e.v1.source.ai.primary"
+    },
+    "AiTriage": {
+      "_go_const": "SourceAiTriage",
+      "value": "g8e.v1.source.ai.triage"
+    },
+    "System": {
+      "_go_const": "SourceSystem",
+      "value": "g8e.v1.source.system"
+    },
+    "TypeCall": {
+      "_go_const": "MessageTypeCall",
+      "value": "call"
+    },
+    "TypeCode": {
+      "_go_const": "MessageTypeCode",
+      "value": "code"
+    },
+    "TypeError": {
+      "_go_const": "MessageTypeError",
+      "value": "error"
+    },
+    "TypeResult": {
+      "_go_const": "MessageTypeResult",
+      "value": "result"
+    },
+    "TypeText": {
+      "_go_const": "MessageTypeText",
+      "value": "text"
+    },
+    "TypeThinking": {
+      "_go_const": "MessageTypeThinking",
+      "value": "thinking"
+    },
+    "UserChat": {
+      "_go_const": "SourceUserChat",
+      "value": "g8e.v1.source.user.chat"
+    },
+    "UserTerminal": {
+      "_go_const": "SourceUserTerminal",
+      "value": "g8e.v1.source.user.terminal"
     }
   }
 }

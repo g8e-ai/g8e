@@ -1,0 +1,54 @@
+{
+  "name": "all_valid",
+  "vertical": "gates",
+  "narrative": "Valid envelope should be accepted in all modes",
+  "intent": {
+    "timestamp": "2026-05-25T12:00:00Z",
+    "expiresAt": "2026-05-25T13:00:00Z",
+    "sourceComponent": "COMPONENT_CLIENT",
+    "operatorId": "operator-1",
+    "operatorSessionId": "operator-session-1",
+    "payload": "CgZscyAtbAESCGV4ZWMtMTIzGgx0ZXN0IGNvbW1hbmQiBnN0cmljdCge",
+    "actionType": "EXECUTE_BASH",
+    "targetResource": "localhost",
+    "stateMerkleRoot": "abc123def456",
+    "nonce": "nonce-all-valid-123",
+    "protocolVersion": "1.0",
+    "governance": {
+      "l2": {},
+      "l3": {
+        "proof": {
+          "clientDataJSON": "mockclientdata",
+          "authenticatorData": "mockauthdata",
+          "signature": "mocksignature"
+        }
+      }
+    }
+  },
+  "evidence": {
+    "l2_signature_present": true,
+    "l2_key_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd",
+    "l3_proof_present": true,
+    "signer_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
+  },
+  "expect": {
+    "doctrine": {
+      "verdict": "accept",
+      "reject_reason": "",
+      "l2_status": 1,
+      "l3_status": 1
+    },
+    "consensus": {
+      "verdict": "accept",
+      "reject_reason": "",
+      "l2_status": 2,
+      "l3_status": 1
+    },
+    "notary": {
+      "verdict": "accept",
+      "reject_reason": "",
+      "l2_status": 2,
+      "l3_status": 2
+    }
+  }
+}

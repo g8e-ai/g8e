@@ -50,6 +50,11 @@
         "required": false,
         "description": "Browser session the operator is currently bound to. Set during bind. Cleared on unbind."
       },
+      "cli_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "CLI session the operator is currently bound to. Set during bind. Cleared on unbind."
+      },
       "api_key": {
         "type": "string",
         "required": false,
@@ -285,6 +290,7 @@
       "user_id": { "type": "string", "required": false },
       "status": { "type": "string", "required": true },
       "web_session_id": { "type": "string", "required": false },
+      "cli_session_id": { "type": "string", "required": false },
       "operator_session_id": { "type": "string", "required": false },
       "latest_heartbeat_snapshot": {
         "type": "object",

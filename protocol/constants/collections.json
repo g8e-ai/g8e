@@ -1,135 +1,116 @@
 {
-  "_comment": "Canonical database collection names shared across g8ee (Python) and g8eo (Go).",
   "collections": {
-    "users": {
-      "value": "users",
-      "_go_const": "Users",
-      "_python_const": "USERS"
-    },
-    "web_sessions": {
-      "value": "web_sessions",
-      "_go_const": "WebSessions",
-      "_python_const": "WEB_SESSIONS"
-    },
-    "operator_sessions": {
-      "value": "operator_sessions",
-      "_go_const": "OperatorSessions",
-      "_python_const": "OPERATOR_SESSIONS"
-    },
-    "cli_sessions": {
-      "value": "cli_sessions",
-      "_go_const": "CLISessions",
-      "_python_const": "CLI_SESSIONS"
-    },
-    "login_audit": {
-      "value": "login_audit",
-      "_go_const": "LoginAudit",
-      "_python_const": "LOGIN_AUDIT"
-    },
-    "auth_admin_audit": {
-      "value": "auth_admin_audit",
-      "_go_const": "AuthAdminAudit",
-      "_python_const": "AUTH_ADMIN_AUDIT"
-    },
     "account_locks": {
-      "value": "account_locks",
-      "_go_const": "AccountLocks",
-      "_python_const": "ACCOUNT_LOCKS"
-    },
-    "api_keys": {
-      "value": "api_keys",
-      "_go_const": "APIKeys",
-      "_python_const": "API_KEYS"
-    },
-    "organizations": {
-      "value": "organizations",
-      "_go_const": "Organizations",
-      "_python_const": "ORGANIZATIONS"
-    },
-    "operators": {
-      "value": "operators",
-      "_go_const": "Operators",
-      "_python_const": "OPERATORS"
-    },
-    "operator_usage": {
-      "value": "operator_usage",
-      "_go_const": "OperatorUsage",
-      "_python_const": "OPERATOR_USAGE"
-    },
-    "cases": {
-      "value": "cases",
-      "_go_const": "Cases",
-      "_python_const": "CASES"
-    },
-    "investigations": {
-      "value": "investigations",
-      "_go_const": "Investigations",
-      "_python_const": "INVESTIGATIONS"
-    },
-    "tasks": {
-      "value": "tasks",
-      "_go_const": "Tasks",
-      "_python_const": "TASKS"
-    },
-    "memories": {
-      "value": "memories",
-      "_go_const": "Memories",
-      "_python_const": "MEMORIES"
-    },
-    "settings": {
-      "value": "settings",
-      "_go_const": "Settings",
-      "_python_const": "SETTINGS"
-    },
-    "console_audit": {
-      "value": "console_audit",
-      "_go_const": "ConsoleAudit",
-      "_python_const": "CONSOLE_AUDIT"
-    },
-    "bound_sessions": {
-      "value": "bound_sessions",
-      "_go_const": "BoundSessions",
-      "_python_const": "BOUND_SESSIONS"
-    },
-    "passkey_challenges": {
-      "value": "passkey_challenges",
-      "_go_const": "PasskeyChallenges",
-      "_python_const": "PASSKEY_CHALLENGES"
-    },
-    "tribunal_commands": {
-      "value": "tribunal_commands",
-      "_go_const": "TribunalCommands",
-      "_python_const": "TRIBUNAL_COMMANDS"
+      "_go_const": "CollectionAccountLocks",
+      "value": "account_locks"
     },
     "agent_activity_metadata": {
-      "value": "agent_activity_metadata",
-      "_go_const": "AgentActivityMetadata",
-      "_python_const": "AGENT_ACTIVITY_METADATA"
+      "_go_const": "CollectionAgentActivityMetadata",
+      "value": "agent_activity_metadata"
     },
-    "reputation_state": {
-      "value": "reputation_state",
-      "_go_const": "ReputationState",
-      "_python_const": "REPUTATION_STATE"
+    "api_keys": {
+      "_go_const": "CollectionAPIKeys",
+      "value": "api_keys"
+    },
+    "app_policies": {
+      "_go_const": "CollectionAppPolicies",
+      "value": "app_policies"
+    },
+    "auth_admin_audit": {
+      "_go_const": "CollectionAuthAdminAudit",
+      "value": "auth_admin_audit"
+    },
+    "bound_sessions": {
+      "_go_const": "CollectionBoundSessions",
+      "value": "bound_sessions"
+    },
+    "cases": {
+      "_go_const": "CollectionCases",
+      "value": "cases"
+    },
+    "chaos_events": {
+      "_go_const": "CollectionChaosEvents",
+      "value": "chaos_events"
+    },
+    "cli_sessions": {
+      "_go_const": "CollectionCLISessions",
+      "value": "cli_sessions"
+    },
+    "console_audit": {
+      "_go_const": "CollectionConsoleAudit",
+      "value": "console_audit"
+    },
+    "investigations": {
+      "_go_const": "CollectionInvestigations",
+      "value": "investigations"
+    },
+    "login_audit": {
+      "_go_const": "CollectionLoginAudit",
+      "value": "login_audit"
+    },
+    "memories": {
+      "_go_const": "CollectionMemories",
+      "value": "memories"
+    },
+    "operator_sessions": {
+      "_go_const": "CollectionOperatorSessions",
+      "value": "operator_sessions"
+    },
+    "operator_usage": {
+      "_go_const": "CollectionOperatorUsage",
+      "value": "operator_usage"
+    },
+    "operators": {
+      "_go_const": "CollectionOperators",
+      "value": "operators"
+    },
+    "organizations": {
+      "_go_const": "CollectionOrganizations",
+      "value": "organizations"
+    },
+    "passkey_challenges": {
+      "_go_const": "CollectionPasskeyChallenges",
+      "value": "passkey_challenges"
+    },
+    "personas": {
+      "_go_const": "CollectionPersonas",
+      "value": "personas"
     },
     "reputation_commitments": {
-      "value": "reputation_commitments",
-      "_go_const": "ReputationCommitments",
-      "_python_const": "REPUTATION_COMMITMENTS"
+      "_go_const": "CollectionReputationCommitments",
+      "value": "reputation_commitments"
     },
-    "stake_resolutions": {
-      "value": "stake_resolutions",
-      "_go_const": "StakeResolutions",
-      "_python_const": "STAKE_RESOLUTIONS"
+    "reputation_state": {
+      "_go_const": "CollectionReputationState",
+      "value": "reputation_state"
     },
     "revoked_certificates": {
-      "value": "revoked_certificates",
-      "_go_const": "RevokedCertificates",
-      "_python_const": "REVOKED_CERTIFICATES"
+      "_go_const": "CollectionRevokedCertificates",
+      "value": "revoked_certificates"
+    },
+    "settings": {
+      "_go_const": "CollectionSettings",
+      "value": "settings"
+    },
+    "stake_resolutions": {
+      "_go_const": "CollectionStakeResolutions",
+      "value": "stake_resolutions"
+    },
+    "tasks": {
+      "_go_const": "CollectionTasks",
+      "value": "tasks"
     },
     "trusted_signers": {
-      "value": "trusted_signers",
-      "_go_const": "TrustedSigners",
-      "_python_const": "TRUSTED_SIGNERS"
+      "_go_const": "CollectionTrustedSigners",
+      "value": "trusted_signers"
+    },
+    "users": {
+      "_go_const": "CollectionUsers",
+      "value": "users"
+    },
+    "web_sessions": {
+      "_go_const": "CollectionWebSessions",
+      "value": "web_sessions"
     }
   }
 }

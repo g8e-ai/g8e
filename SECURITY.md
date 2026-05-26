@@ -1,36 +1,100 @@
 # Security Policy
 
-We want g8e to be the safest way to run AI on your machine. If you find a security hole, we'd love to hear about it so we can fix it fast.
+**Project:** g8e — Byzantine Fault Tolerant Governance Substrate  
+**Maintained by:** [Lateralus Labs](https://lateraluslabs.com)
+
+---
+
+## Supported Versions
+
+| Version | Supported |
+|---|---|
+| `main` (latest) | ✅ |
+| Older releases | ❌ — upgrade to latest |
+
+---
 
 ## Reporting a Vulnerability
 
-Please don't open a public issue for security bugs. It's better for everyone if we fix it before the world knows about it.
+**Do not open a public GitHub issue for security vulnerabilities.**
 
-Shoot an email to **security@g8e.ai** with:
-- What the problem is.
-- How we can reproduce it.
-- How bad you think it is.
+Report privately to: **security@lateraluslabs.com**
 
-We'll get back to you within 48 hours to start working on a fix together.
+Include as much of the following as you can:
 
-## What's In Scope?
+- Description of the vulnerability and its potential impact
+- Affected component(s): Governance Gateway (PDP), g8e Operator (PEP), g8e Protocol (Common), Application Adapters (`g8ee`, `g8ed`)
+- Steps to reproduce or a minimal proof-of-concept
+- Your assessment of severity (Critical / High / Medium / Low)
+- Whether you believe the issue is currently being exploited
 
-Basically, anything that breaks our trust model:
-- Bypassing the 3-Layer Governance (L1/L2/L3).
-- Sneaking past mTLS or workload identity.
-- Leaking secrets or sensitive audit data.
-- Messing with the local audit vaults.
+We will acknowledge receipt within **48 hours** and provide an initial assessment within **5 business days**.
 
-We focus on the Operator (Go), Engine (Python), and Dashboard (Node.js) components. 
+---
 
-*Note: Third-party LLM providers (like OpenAI/Anthropic) and upstream dependencies are out of our direct control, but we still want to know if they're causing issues in g8e.*
+## Disclosure Policy
 
-## Our Promise
+g8e follows **coordinated disclosure**:
 
-- **Transparency**: We'll keep you updated while we fix the issue.
-- **Credit**: We'll give you a shout-out in the release notes (unless you want to stay anonymous).
-- **No legal action**: We won't take legal action against you if you're acting in good faith to help us.
+1. You report privately to us.
+2. We confirm, assess, and develop a fix.
+3. We release the fix and credit you (unless you prefer anonymity).
+4. You may publish after the fix is released, or after **90 days** from initial report — whichever comes first.
 
-## Security Architecture
+We will not pursue legal action against researchers acting in good faith under this policy.
 
-If you want to dive deep into how we've built our "Zero-Trust" model, Check out our [detailed security docs](docs/protocol.md#host-sovereignty--audit). It covers our L1/L2/L3 gates, mTLS setup, and data sovereignty in much more detail.
+---
+
+## Scope
+
+### In Scope
+
+- **Governance Gateway (PDP)** — `GovernanceEnvelope` parsing, deterministic transaction hash binding, L1-L4 verification logic (Doctrine, Consensus, Notary, Warden)
+- **g8e Operator (PEP)** — execution boundary (L5 Actuator), mTLS tunnel, `AuditVaultService`, Sovereignty Boundary Plane (scrubbing)
+- **g8e Protocol** — Protobuf schemas (`common.proto`, `operator.proto`), canonical JSON (protojson) serialization, envelope integrity
+- **Authentication** — WebAuthn/FIDO2 L3 Notary flow, Ed25519 signature verification (L2 Consensus, L4 Warden, L5 Actuator), replay protection (Nonce)
+- **CLI and bootstrap** — `g8e login`, device-link token generation, mTLS credential and PKI handling
+
+### Out of Scope
+
+- Third-party model providers (Anthropic, OpenAI, etc.)
+- Vulnerabilities in dependencies that have already been publicly disclosed and are pending upstream fix
+- Social engineering or phishing attacks against Lateralus Labs employees
+- Denial-of-service attacks without demonstrated security impact beyond availability
+
+---
+
+## Security Architecture Notes
+
+The following are structural properties of g8e, provided to help researchers understand the intended security model:
+
+- **Fail-closed by design.** Any verification failure at the L1-L4 layers (Doctrine, Consensus, Notary, Warden) drops the payload and writes an audit record. There is no fallback execution path.
+- **Sovereign Execution Boundary.** The `g8e Operator` (PEP) acts as the sovereign boundary. It refuses to mutate host reality unless a transaction carries a valid L2 signature (Tribunal consensus) and, where required, an L3 proof (Human-in-the-loop).
+- **No ambient execution authority.** No component holds standing permission to mutate state. Authority is granted strictly per-transaction via the `GovernanceEnvelope`, verified independently at the PEP.
+- **Local audit sovereignty.** Raw forensic material is stored locally in the `AuditVaultService`. The Sovereignty Boundary Plane scrubs all outbound data before delivery to remote clients or AI systems.
+- **mTLS everywhere.** All substrate communication (Operator-to-Gateway) requires mutual TLS. Unauthenticated or unverified connections are rejected.
+- **State & Replay Protection.** Transactions are bound to a `state_merkle_root`, protected by a unique `nonce`, and carry a temporal `expires_at` deadline.
+
+If your finding demonstrates a bypass of any of these properties, treat it as **Critical**.
+
+---
+
+## CVE and Dependency Scanning
+
+g8e runs automated dependency scanning on every build. If you identify a dependency vulnerability not yet captured by our tooling, please report it via the channel above.
+
+---
+
+## Hall of Fame
+
+We gratefully acknowledge security researchers who responsibly disclose vulnerabilities. With your permission, your name or handle will be listed here.
+
+*No entries yet — be the first.*
+
+---
+
+## Contact
+
+**Security:** security@lateraluslabs.com  
+**General:** hello@lateraluslabs.com  
+**Website:** https://lateraluslabs.com

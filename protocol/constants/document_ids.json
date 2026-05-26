@@ -1,22 +1,12 @@
 {
-  "_comment": "Canonical document IDs for database collections shared across g8ee (Python) and g8eo (Go).",
   "document_ids": {
     "platform_settings": {
-      "value": "platform_settings",
-      "_go_const": "PlatformSettings",
-      "_python_const": "PLATFORM_SETTINGS"
+      "_go_const": "DocIDPlatformSettings",
+      "value": "platform_settings"
     },
     "user_settings_prefix": {
-      "value": "user_settings_",
-      "_go_const": "UserSettingsPrefix",
-      "_python_const": "USER_SETTINGS_PREFIX"
-    }
-  },
-  "sentinel_id": {
-    "unknown": {
-      "value": "unknown",
-      "_go_const": "Unknown",
-      "_python_const": "UNKNOWN"
+      "_go_const": "DocIDUserSettingsPrefix",
+      "value": "user_settings_"
     }
   }
 }

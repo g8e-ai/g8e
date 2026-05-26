@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical Auditor model. A separate, fast Tribunal call that provides final syntactic validation of the voting winner.",
+  "_comment": "Canonical Auditor model. A separate, fast Consensus call that provides final syntactic validation of the voting winner.",
   "name": "Auditor",
   "metadata": {
     "id": "auditor",

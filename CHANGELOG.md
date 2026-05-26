@@ -7,6 +7,118 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0] - 2026-05-25
+
+### Overview
+
+v1.0.0 completes the substrate-first architecture. The g8ee application layer is excised from the
+substrate entirely; the Sentinel component is dissolved into the governance protocol layers; and the
+codebase is restructured so `services/g8eo` is the root module. The platform is now a pure, host-sovereign
+governance substrate: typed, signed, state-bound transactions enforced through fail-closed L1/L2/L3/L4/L5
+gates with no optional application-layer coupling in the critical path.
+
+### Breaking Changes
+
+* **g8ee removed from substrate** - g8ee is no longer part of the substrate. All `services/g8ee`
+  references, root Makefile targets, and environment variable dependencies are gone. Run g8ee
+  separately as an optional application adapter.
+* **Sentinel dissolved** - Sentinel no longer exists as a standalone component. Threat detection
+  (MITRE/pattern analysis) moved into L1 Doctrine executed within the L4 Warden gate. Data
+  sovereignty (scrubbing, rehydration, encryption) moved into the new `internal/services/sovereignty`
+  Boundary Plane, invoked at L5 Actuator egress and before audit publishing. The raw audit vault is
+  removed; all audit data now passes through Sentinel-moderated (`SentinelModerateRaw`) storage.
+* **Repository root is now the g8eo module** - `services/g8eo/` content promoted to root. `go.mod`,
+  `go.sum`, and all `internal/` packages now live at the repo root. `cmd/g8eo`, `cmd/chaos_tester`,
+  `cmd/uap-ping` are top-level `cmd/` entries.
+* **`web_session_id` → `cli_session_id`** - Session ID field renamed across all logging, events, and
+  generated constants to reflect CLI-first architecture.
+* **Cursor-based queries removed** - All cursor-based database query patterns eliminated in favor of
+  direct indexed access.
+* **Demo profiles removed** - Docker-based demo profiles (`acme-corp`, `fleet`, `nginx`, `pnfs`) and
+  the `evals/` Python harness are removed. Demos and evals are no longer bundled with the substrate.
+
+### Added
+
+* **Scenario testing framework** (`test/scenario/`) - End-to-end governance pipeline test suite with
+  fixture-driven runner, golden file assertions, receipt verification tests, concurrency tests, and
+  fuzz tests. Covers L1/L2/L3 gate passes/failures, forged signatures, stale state roots, tampered
+  receipts, and Mode X truth table scenarios. Fixture generation tooling included.
+* **Sovereignty Boundary Plane** (`internal/services/sovereignty/`) - New first-class package
+  implementing data scrubbing, rehydration, and Sentinel encryption for the egress boundary.
+* **App enrollment service** (`internal/services/gateway/app_enrollment_service.go`) - Operator-owned
+  enrollment for non-native app mTLS integration.
+* **SQLite utility package** (`internal/services/sqliteutil/`) - Extracted shared SQLite helpers.
+* **CLI Go package** (`internal/cli/`) - Full Go implementation of CLI commands (`auth`, `data`,
+  `platform`, `security`, `test`), config, and platform process management, replacing shell scripts.
+* **A2A and MCP integration tests** (`test/a2a_gateway_test.go`, `test/a2a_real_operator_test.go`,
+  `test/byo_client_test.go`, `test/mcp_gateway_test.go`) - Real-operator gateway integration tests.
+* **Bulk certificate revocation** - Fleet-scale cert revocation with rate limiting.
+* **`protocol/constants/field_paths.json`** - Canonical field path registry added to the protocol module.
+* **Generated constant tracking** - `headers_generated.go` and `status_generated.go` added to the
+  constant registry with deterministic sorting for reproducible builds.
+* **`-a` shorthand** - `./g8e platform start -a` shorthand for faster invocation.
+* **Unit/integration test subcommands** - `./g8e test` now exposes distinct `unit` and `integration`
+  subcommands for CI granularity.
+
+### Changed
+
+* **Governance layer separation** - L1 Doctrine, L2 Consensus (Tribunal), L3 Notary, L4 Warden, and
+  L5 Actuator are now clearly separated packages with explicit interfaces and generated mocks. Dead
+  code and ambiguous shared state between Tribunal and consensus definitions removed.
+* **Canonical wire format** - Formalized canonical JSON (`protojson`) as the required client-facing wire format for all Governance Envelopes instead of binary protobuf bytes, ensuring universal BYO client compatibility.
+* **Local-only Protobuf generation** - Migrated `buf.gen.yaml` from BSR remote plugins to local-only generation to completely eliminate network dependencies and rate limits during compilation.
+* **SPIFFE URI SAN hardening** - Parsing fragility fixed; format validation tightened across both
+  code and test fixtures.
+* **DB transaction safety** - Unprotected transactions fixed; cursor-based query patterns replaced.
+* **mTLS bootstrap** - First-time mTLS setup sequence fixed; PKI test initialization refactored for
+  isolation.
+* **Binary build process** - "build once, then copy" pattern enforces a single compilation artifact
+  per binary, eliminating race conditions during `platform start`.
+* **Constants casing** - Acronym and general casing standardized across all generated Go constants.
+* **Docs restructured** - Documentation reorganized to match the new root layout: `docs/architecture/`,
+  `docs/core/`, `docs/devs/`, `docs/guides/`, `docs/protocols/`, `docs/reference/`. Mkdocs migrated
+  to the built-in readthedocs theme.
+* **Protobuf toolchain** - Upgraded to protobuf v1.35.2; toolchain mismatch resolved.
+
+### Removed
+
+* `services/g8ee/` - Entire Engine application layer removed from the substrate repository.
+* `evals/` - Python evaluation harness removed.
+* `demo/` - All Docker-based demo profiles removed.
+* Raw audit vault - `VaultModerateRaw` replaced by `SentinelModerateRaw`; unmoderated raw storage path eliminated.
+* Vendored `gotestsum` - Removed in favor of direct tooling.
+* Shell script entrypoints - `entrypoint.sh` remnants and substrate shell scripts removed; replaced by the Go CLI package.
+
+### Security
+
+* **Sentinel encryption** - Sovereignty Boundary Plane encrypts sensitive fields before audit publishing; decrypts at authorized egress.
+* **Fail-closed Audit Vault** - `AuditVaultService` now strictly rejects missing/malformed session IDs and unknown sessions prior to any audit writes, preventing invalid event relationships.
+* **Bulk revocation with rate limiting** - Rapid revocation of compromised credentials at fleet scale without unbounded load.
+* **mTLS for non-native apps** - App enrollment service extends mTLS enforcement to heterogeneous clients.
+* **SPIFFE URI SAN hardening** - Fragile SPIFFE parsing that accepted malformed URIs on valid inputs fixed.
+* **Unprotected transaction fix** - DB transactions that could expose inconsistent state under concurrency now properly bounded.
+* **Receipt tampering detection** - Scenario tests verify the substrate rejects tampered receipts across all governance layers.
+
+---
+
+# [0.2.7] - 2026-05-20
+
+## Overview
+Release **v0.2.7** separates the **Governance Gateway (`g8eg`)** and the **Governed Operator (`g8eo`)** into distinct roles, introduces an **MCP & A2A protocol translator gateway**, removes external runtime dependencies (`git` and `jq`), and improves overall security and developer experience.
+
+## Key Changes
+
+* **Gateway Role Splitting**: The Go Gateway is now explicitly split into the **Governance Gateway (`g8eg`)** acting as the central Policy Decision Point (PDP), and the **Governed Operator (`g8eo`)** acting as the host-side Policy Execution Point (PEP).
+* **MCP & A2A Gateway**: `g8eo` can now act as a standalone admission gate for standard AI clients. It translates standard tool calls into governed transactions and supports out-of-band transaction suspension with WebAuthn approval before execution.
+* **Native Dependencies**: Replaced external CLI dependencies on `git` and `jq` with native Go (`go-git/v5`) and Python implementations to streamline the runtime footprint.
+* **Security Enhancements**: Implemented strict mTLS client-identity verification for Server-Sent Events (SSE) push endpoints.
+* **CLI Protections**: Added interactive confirmation prompts to prevent accidental data loss on destructive operations like `platform reset` and `platform clean`.
+* **Air-gapped Support**: Improved protobuf generation for air-gapped environments.
+
+## Shoutout
+Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding a new developer troubleshooting guide - hopefully this PR addresses the friction. If not, PRs are much appreciated.
+
+
 ## [0.2.6] - 2026-05-19
 
 ### Added
@@ -16,7 +128,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **CLI & UX Improvements:** Improved login UX, operator-side UX, and trust script stability. Enhanced build output for Mac and Linux.
 - **Protocol Refinement:** Ripped out legacy protobuf definitions, refined boundary structures, and decoupled operator auth from the app layer.
-- **Session Isolation:** Improved session typing and untangled CLI chat sessions to better separate the substrate and app layer.
+- **Session Isolation:** Improved session typing and untangled CLI chat sessions to better separate the Gateway and app layer.
 - **Code Quality & Linting:** Comprehensive code quality passes including Go critic/lint fixes, Ruff, and Pyright typing improvements.
 - **Eval & Testing:** Refactored the eval harness and bench tests. Improved chaos testing with better audit summaries, L1 reporting, and correct DB location.
 - **Documentation:** Reorganized and updated documentation including improved diagrams and README updates.
@@ -30,7 +142,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **CLI Chat Wiring:** Implemented full CLI chat functionality (`./g8e chat`) with backend wiring to `g8ee` and unified stream handling.
 - **Multi-Ledger Audit:** Implemented session-isolated Git audit ledgers for per-investigation transaction tracing.
-- **Warden Execution Boundary:** Established `g8eo` Warden as the authoritative execution boundary with signed action receipts.
+- **Actuator Execution Boundary:** Established `g8eo` Actuator as the authoritative execution boundary with signed action receipts.
 - **Governance APIs:** Added first-class governance APIs for audit export and trust management.
 - **Protobuf Module:** Introduced a unified `protocol/` directory with formal Protobuf module definitions.
 - **Commitment Ledger:** Added definitions for the commitment ledger to support reputation staking.
@@ -38,16 +150,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **RequestContext Body Migration:** Migrated business context (`web_session_id`, `user_id`, `source_component`, etc.) from HTTP headers to body-embedded `RequestContext` objects for improved security and contract stability.
-- **Directory Reorganization:** Renamed `components/` to `services/` and `shared/` to `protocol/` to align with the mandatory substrate-first architecture.
+- **Directory Reorganization:** Renamed `components/` to `services/` and `shared/` to `protocol/` to align with the mandatory Gateway-first architecture.
 - **g8ed Decommissioning:** Completed the removal of `g8ed` (Dashboard) remnants; migrated all core logic to the `g8eo` operator.
-- **Auth Cleanup:** Refactored `ApiKeyService` and passkey authentication for better consistency and security across the substrate.
+- **Auth Cleanup:** Refactored `APIKeyService` and passkey authentication for better consistency and security across the Gateway.
 - **CodeQL Refactor:** Optimized CodeQL workflows and addressed findings in `event_service`.
 - **Exit Code Handling:** Standardized exit code handling and improved path validation in `g8eo` execution services.
 - **Event Service:** Consolidated `client_event_service` into a unified `event_service` within `g8eo`.
 - **Improved Chaos Output:** Enhanced chaos test reporting for better failure visibility.
 
 ### Fixed
-- **Operator TLS Hardening:** Refined operator TLS configuration and improved listener service stability.
+- **Operator TLS Hardening:** Refined operator TLS configuration and improved gateway service stability.
 - **WebAuthn L3:** Fixed L3 verification issues following the `g8ed` decommissioning.
 - **Path Resolution:** Improved path resolution and environment variable handling across the platform, including fixes in `paths.json`.
 - **Test Stability:** Extensive fixes for unit and integration tests across `g8ee` and `g8eo`, particularly around the `RequestContext` migration and tribunal consensus.
@@ -62,11 +174,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI Login:** Added first-class CLI login support via the operator.
 
 ### Changed
-- **Substrate/App Layer Split:** Formalized `g8eo` as the mandatory substrate and moved `client`/`g8ee` to optional application-layer adapters.
+- **Gateway/App Layer Split:** Formalized `g8eo` as the mandatory Gateway and moved `client`/`g8ee` to optional application-layer adapters.
 - **client Elimination:** Removed `client` Dashboard as a mandatory component; migrated data management scripts to `g8eo` API.
 - **Governance Envelope Hardening:** Improved UAP and proto definitions for better transaction integrity.
 - **Reorganized g8eo:** Directory restructuring for better modularity and maintainability.
-- **Passkey & Setup Refactor:** Migrated passkey and setup logic to the operator substrate.
+- **Passkey & Setup Refactor:** Migrated passkey and setup logic to the operator Gateway.
 
 ### Fixed
 - **Settings Model Paths:** Fixed inconsistencies in settings model resolution.
@@ -141,7 +253,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **L1/L2/L3 Governance:** Integrated a 3-layer command validation hierarchy (L1 Technical Bedrock, L2 Consensus/Tribunal, L3 Authorization/Human) directly into the message envelope.
 - **Recursive Grep Tool:** Introduced `recursive_grep_search` for high-efficiency filesystem exploration across operator fleets.
 - **Interrogation Gate:** Implemented a new gate in the agent loop that detects `<interrogation>` blocks and suppresses pending tool calls to prioritize user input.
-- **Warden Risk Analysis:** Enhanced risk classification logic for Warden sub-agents with improved reputation staking and file-read security.
+- **Actuator Risk Analysis:** Enhanced risk classification logic for Actuator sub-agents with improved reputation staking and file-read security.
 - **LFAA Audit Enhancements:** Refactored the Low-Fidelity Agentic Assistance audit recording to use typed Protobuf schemas.
 
 ### Changed
@@ -154,7 +266,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Standardized Cloud Subtype:** Standardized operator identification using `cloud_subtype` for consistency across cloud providers.
 
 ### Fixed
-- **Warden Risk Regression:** Resolved a regression where Warden risk levels were incorrectly calculated in certain agent turns.
+- **Actuator Risk Regression:** Resolved a regression where Actuator risk levels were incorrectly calculated in certain agent turns.
 - **Interrogation Plumbing:** Fixed response handling and user interaction flow for the device interrogation pipeline.
 - **G8EO Execution ID:** Fixed a bug where `FsGrepResultPayload` was missing `ExecutionID` propagation, breaking correlation for recursive searches.
 - **Fingerprint Recording:** Resolved issues with system fingerprint recording and included missing events in the audit trail.
@@ -172,7 +284,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Nginx Demo Profile:** Reorganized and enhanced the Nginx demo profile with regional deployments.
 
 ### Changed
-- **Warden Prompts & Pathing:** Improved Warden sub-agent prompts and corrected file pathing behavior.
+- **Actuator Prompts & Pathing:** Improved Actuator sub-agent prompts and corrected file pathing behavior.
 - **Read-Only Tools UX:** Enhanced the user experience for read-only tools and terminal results alignment.
 - **Tribunal Logging:** Improved logging detail and clarity for the Tribunal consensus pipeline.
 - **Tribunal Voting:** Enforced a mandatory two-round minimum for Tribunal voting to ensure rigorous consensus.
@@ -198,7 +310,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Information Isolation:** Formalized the "Information Isolation Principle" (formerly Vortex Principle) for enhanced multi-agent safety.
 - **Tribunal Consensus:** Refined consensus logic (Plurality Consensus) with deterministic tie-breaking and circuit breaker for deadlocks.
-- **Warden Reputation Staking:** Warden sub-agents now stake reputation on risk classifications.
+- **Actuator Reputation Staking:** Actuator sub-agents now stake reputation on risk classifications.
 - **Setup UX:** Improvements to the onboarding wizard, ensuring validation visibility and cleaner summary view.
 - **Python Modernization:** Migrated to `StrEnum` for improved type safety and performance across `g8ee`.
 
@@ -210,11 +322,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.7] - 2026-05-01
 
 ### Added
-- **Warden Reputation Staking Improvements:** Enhanced reputation staking logic for Warden's risk assessments, including file read fixes and order handling.
+- **Actuator Reputation Staking Improvements:** Enhanced reputation staking logic for Actuator's risk assessments, including file read fixes and order handling.
 - **Agent Cancellation:** Added support for cancelling agent tasks with dedicated UI controls and tests.
 
 ### Changed
-- **Warden Personas & Context:** Refined Warden's context and personas for better risk evaluation.
+- **Actuator Personas & Context:** Refined Actuator's context and personas for better risk evaluation.
 - **Tool Call Event Delivery:** Improved reliability and performance of tool call event delivery.
 - **Onboarding UX:** Enhancements to the onboarding flow for a smoother user experience.
 - **Node Package Updates:** Updated dependencies in `client` for security and performance.
@@ -343,7 +455,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Core Platform:** Open-source release of the `g8e` platform for AI-assisted infrastructure operations.
-- **g8ee (AI Engine):** ReAct-based Python orchestration layer with support for Anthropic, OpenAI, and local Ollama models.
+- **g8ee (g8e-Compliant Agentic Ensemble):** ReAct-based Python orchestration layer with support for Anthropic, OpenAI, and local Ollama models.
 - **g8eo (Operator):** ~4MB dependency-free static Go binary for remote host execution. Features zero-inbound ports and outbound-only mTLS.
 - **operator (Data Store):** SQLite-backed persistence layer, KV store, and pub/sub broker running within the Operator framework.
 - **client (Dashboard):** Node.js central management console featuring FIDO2 WebAuthn (passkey) authentication and real-time mTLS gateway proxying.
