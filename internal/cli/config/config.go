@@ -14,12 +14,16 @@
 package config
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+//go:embed paths.json
+var defaultPathsJSON []byte
 
 const (
 	DefaultRuntimeDir     = ".g8e"
@@ -104,7 +108,8 @@ func Load(projectRoot string) (*Config, error) {
 	pathsPath := filepath.Join(projectRoot, "protocol", "constants", "paths.json")
 	pathsData, err := os.ReadFile(pathsPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read paths.json: %w", err)
+		// Fallback to embedded paths.json for precompiled binaries
+		pathsData = defaultPathsJSON
 	}
 
 	var paths PathsConfig
