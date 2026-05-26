@@ -30,7 +30,7 @@ help:
 
 .PHONY: test
 test:
-	@$(GO) test ./...
+	@$(GO) test -race -count=1 ./...
 
 .PHONY: fmt
 fmt:

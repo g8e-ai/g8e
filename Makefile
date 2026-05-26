@@ -57,7 +57,10 @@ help:
 	@echo "  build-compressed Build g8e operator with compression (-s -w -trimpath)"
 	@echo ""
 	@echo "Test:"
-	@echo "  test          Run all tests"
+	@echo "  test          Run all tests with race detection"
+	@echo "  test-short    Run short tests with race detection"
+	@echo "  test-coverage Run all tests with coverage (enforces 85% threshold)"
+	@echo "  test-shuffle  Run all tests with randomized order"
 	@echo "  update-golden Update scenario test golden files"
 	@echo ""
 	@echo "Lint & Quality:"
@@ -250,12 +253,33 @@ build-compressed:
 # =============================================================================
 .PHONY: test
 test:
-	@go test -race -timeout 180s ./...
+	@go test -race -count=1 -timeout 180s ./...
+
+.PHONY: test-short
+test-short:
+	@go test -race -short -count=1 -timeout 60s ./...
+
+.PHONY: test-coverage
+test-coverage:
+	@echo "Running all tests with coverage..."
+	@go test -race -count=1 -timeout 180s -coverprofile=coverage.out -covermode=atomic ./...
+	@echo "Coverage report generated in coverage.out"
+	@go tool cover -func=coverage.out | tail -1
+	@COVERAGE=$$(go tool cover -func=coverage.out | grep -v "internal/protocol/proto" | grep -v "/mocks/" | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+	if [ $$(echo "$$COVERAGE < 85" | bc -l) -eq 1 ]; then \
+		echo "Coverage $$COVERAGE% is below 85% threshold"; \
+		exit 1; \
+	fi; \
+	echo "Coverage $$COVERAGE% meets 85% threshold"
+
+.PHONY: test-shuffle
+test-shuffle:
+	@go test -race -count=1 -shuffle=on -timeout 180s ./...
 
 .PHONY: update-golden
 update-golden:
 	@echo "Updating scenario test golden files..."
-	@G8E_UPDATE_GOLDEN=1 go test -tags=integration ./test/scenario -run TestScenarios
+	@G8E_UPDATE_GOLDEN=1 go test -tags=integration -count=1 ./test/scenario -run TestScenarios
 	@echo "Golden files updated."
 
 # =============================================================================
