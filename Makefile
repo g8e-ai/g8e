@@ -21,10 +21,16 @@ export PATH := $(shell go env GOPATH)/bin:$(HOME)/go/bin:$(PATH)
 # =============================================================================
 # TOOLS
 # =============================================================================
+# Protocol buffer tool versions - update these when upgrading tools
+PROTOC_VERSION := v35.0
+PROTOC_GEN_GO_VERSION := v1.36.1
+PROTOC_GEN_GO_GRPC_VERSION := v1.6.2
+PROTOC_GEN_DOC_VERSION := v1.5.1
+PROTOC_MIN_VERSION := 21
+
 BUF := $(shell command -v buf 2>/dev/null || echo "./buf")
 PROTOC := $(shell command -v protoc 2>/dev/null || echo "/usr/local/bin/protoc")
-PROTOC_GEN_GO := $(shell go list -m -f '{{.Version}}' google.golang.org/protobuf 2>/dev/null || echo "v1.35.2")
-PROTOC_MIN_VERSION := 21.0
+PROTOC_GEN_GO := $(shell go list -m -f '{{.Version}}' google.golang.org/protobuf 2>/dev/null || echo "$(PROTOC_GEN_GO_VERSION)")
 
 # =============================================================================
 # HELP
@@ -128,17 +134,18 @@ buf-install:
 .PHONY: protoc-install
 protoc-install:
 	@if ! command -v protoc &> /dev/null; then \
-		echo "Installing protoc v28.3..."; \
-		cd /tmp && curl -sSL https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip -o protoc.zip && \
+		echo "Installing protoc $(PROTOC_VERSION)..."; \
+		cd /tmp && curl -fSL https://github.com/protocolbuffers/protobuf/releases/download/$(PROTOC_VERSION)/protoc-35.0-linux-x86_64.zip -o protoc.zip && \
 		unzip -o protoc.zip -d protoc && \
 		sudo cp protoc/bin/protoc /usr/local/bin/protoc && \
 		sudo chmod +x /usr/local/bin/protoc && \
 		rm -rf /tmp/protoc /tmp/protoc.zip; \
 	fi
 	@echo "Verifying protoc version compatibility..."
-	@PROTOC_VERSION=$$($(PROTOC) --version | grep -oP '\d+\.\d+'); \
+	@PROTOC_VERSION=$$($(PROTOC) --version | grep -oE '[0-9]+\.[0-9]+'); \
 	PROTOC_MAJOR=$$(echo $$PROTOC_VERSION | cut -d. -f1); \
-	if [ "$$(echo "$$PROTOC_MAJOR < $(PROTOC_MIN_VERSION)" | bc -l)" -eq 1 ]; then \
+	PROTOC_MIN=$(PROTOC_MIN_VERSION); \
+	if [ "$$PROTOC_MAJOR" -lt "$$PROTOC_MIN" ]; then \
 		echo "Error: protoc version $$PROTOC_VERSION is too old. Minimum required: $(PROTOC_MIN_VERSION)"; \
 		exit 1; \
 	fi

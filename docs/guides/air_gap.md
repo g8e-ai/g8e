@@ -78,7 +78,7 @@ For air-gapped reasoning, g8e supports external local inference via BYO agentic 
 
 **Gateway (Go):**
 - 100% vendored in `vendor/`.
-- Build tools declared in `go.mod` (protoc-gen-go, protoc-gen-go-grpc).
+- Build tools declared in `go.mod` (protoc-gen-go, protoc-gen-go-grpc, protoc-gen-doc).
 - Protocol generation uses local `buf` and `protoc` (no remote BSR dependency).
 
 **Python Runtime (BYO Agentic Clients):**
