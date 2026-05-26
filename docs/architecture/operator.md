@@ -83,6 +83,7 @@ The host is the authoritative source of truth for all mutations.
 
 ---
 
+<<<<<<< HEAD
 ## 5. Current Implementation Status
 
 The reference implementation (`g8eo`) currently supports:
@@ -99,6 +100,9 @@ The reference implementation (`g8eo`) currently supports:
 ---
 
 ## 6. Implementation Reference
+=======
+## 5. Implementation Reference
+>>>>>>> 224c7b82
 
 | Concern | Authoritative file |
 |---|---|
