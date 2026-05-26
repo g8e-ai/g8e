@@ -1,5 +1,3 @@
-version: 2
-
 linters-settings:
   govet:
     enable-all: true
@@ -15,7 +13,6 @@ linters-settings:
       - performance
     disabled-checks:
       - appendCombine # too noisy for generated code/exporters
-
 
 linters:
   disable-all: true
