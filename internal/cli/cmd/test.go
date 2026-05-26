@@ -201,30 +201,21 @@ func testG8eoCmd() *cobra.Command {
 func testCICmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ci",
-		Short: "Run CI test suite (g8eo)",
+		Short: "Run full CI test suite (mirrors GitHub Actions)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			cmd.Println("Running CI test suite...")
-			cmd.Println("\n=== Testing g8eo ===")
-			goCmd := exec.Command("go", "test", "-race", "-timeout", "180s", "./cmd/...", "./internal/...", "./pkg/...", "./test/...")
-			goCmd.Stdout = os.Stdout
-			goCmd.Stderr = os.Stderr
-			goCmd.Dir = cfg.ProjectRoot
-			if err := goCmd.Run(); err != nil {
-				return fmt.Errorf("g8eo tests failed: %w", err)
-			}
-
-			cmd.Println("\n=== Testing scenario integration ===")
-			scenarioCmd := exec.Command("go", "test", "-tags=integration", "-v", "-run", "TestScenarios", "./test/scenario/...")
-			scenarioCmd.Stdout = os.Stdout
-			scenarioCmd.Stderr = os.Stderr
-			scenarioCmd.Dir = cfg.ProjectRoot
-			if err := scenarioCmd.Run(); err != nil {
-				return fmt.Errorf("scenario tests failed: %w", err)
+			cmd.Println("Running full CI test suite...")
+			cmd.Println("\n=== Running make ci ===")
+			makeCmd := exec.Command("make", "ci")
+			makeCmd.Stdout = os.Stdout
+			makeCmd.Stderr = os.Stderr
+			makeCmd.Dir = cfg.ProjectRoot
+			if err := makeCmd.Run(); err != nil {
+				return fmt.Errorf("CI suite failed: %w", err)
 			}
 
 			cmd.Println("\nCI test suite passed")
