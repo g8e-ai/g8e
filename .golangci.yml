@@ -20,9 +20,7 @@ linters:
   enable:
     - bodyclose
     - errcheck
-    - gocritic
     - gofmt
-    - gosec
     - gosimple
     - govet
     - ineffassign

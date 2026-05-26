@@ -455,25 +455,6 @@ func (s *PasskeyService) addCredential(userID string, cred models.PasskeyCredent
 	return s.updateUser(userID, user)
 }
 
-func (s *PasskeyService) updateCredential(userID string, cred models.PasskeyCredential) error {
-	user, err := s.getUser(userID)
-	if err != nil {
-		return err
-	}
-	if user == nil {
-		return fmt.Errorf("user not found")
-	}
-
-	for i := range user.PasskeyCredentials {
-		if string(user.PasskeyCredentials[i].ID) == string(cred.ID) {
-			user.PasskeyCredentials[i] = cred
-			break
-		}
-	}
-
-	return s.updateUser(userID, user)
-}
-
 func (s *PasskeyService) setCredentials(userID string, creds []models.PasskeyCredential) error {
 	user, err := s.getUser(userID)
 	if err != nil {
