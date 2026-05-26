@@ -32,7 +32,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/responder"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/pkg/uap"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -747,7 +747,7 @@ func (g *GatewayService) HandlePromptsGet(w http.ResponseWriter, r *http.Request
 			Description: receipt.ResultSummary,
 			Messages: []PromptMessage{
 				{
-					Role: "user",
+					Role: string(constants.UserRoleUser),
 					Content: TextContent{
 						Type: "text",
 						Text: receipt.ResultSummary,

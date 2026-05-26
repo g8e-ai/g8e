@@ -201,7 +201,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to verify audit session: %w", err)
 	}
 	if session == nil {
-		if err := vs.auditVault.CreateSession(vs.config.OperatorSessionId, "operator", "Operator Session", vs.config.OperatorID); err != nil {
+		if err := vs.auditVault.CreateSession(vs.config.OperatorSessionId, string(constants.UserRoleOperator), "Operator Session", vs.config.OperatorID); err != nil {
 			return fmt.Errorf("failed to create audit session: %w", err)
 		}
 	}

@@ -21,6 +21,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // fileBackend stores the master key in a file within the secrets directory.
@@ -34,7 +36,7 @@ func newFileBackend(secretsDir string) (Backend, error) {
 }
 
 func (b *fileBackend) Name() string {
-	return "file"
+	return string(constants.ToolDisplayCategoryFile)
 }
 
 func (b *fileBackend) RetrieveMasterKey() ([]byte, error) {

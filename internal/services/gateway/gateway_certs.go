@@ -623,9 +623,9 @@ func (pki *PKIAuthority) loadCertificatePair(certPath, keyPath string, cert **x5
 	} else if strings.Contains(certPath, "hub_ca.crt") {
 		caType = "hub"
 	} else if strings.Contains(certPath, "operator_ca.crt") {
-		caType = "operator"
+		caType = string(constants.UserRoleOperator)
 	} else if strings.Contains(certPath, "bootstrap_ca.crt") {
-		caType = "bootstrap"
+		caType = string(constants.HeartbeatTypeBootstrap)
 	}
 
 	if caType == "" {
@@ -784,9 +784,9 @@ func (pki *PKIAuthority) generateIntermediateCA(keyPath, certPath string, parent
 	case hubCommonName:
 		caType = "hub"
 	case operatorCommonName:
-		caType = "operator"
+		caType = string(constants.UserRoleOperator)
 	case bootstrapCommonName:
-		caType = "bootstrap"
+		caType = string(constants.HeartbeatTypeBootstrap)
 	}
 
 	if pki.secretManager == nil {
