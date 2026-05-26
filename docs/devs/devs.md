@@ -129,6 +129,7 @@ AI agents tend to wrap poorly understood code in new abstractions. This is stric
 - **Concurrency**: Goroutines must be managed with `context.Context` for cancellation and `sync.WaitGroup` or channels for synchronization. No orphan goroutines.
 - **Testing**: Table-driven tests are the standard for unit testing. Use `testify/assert` for readability.
 - **Formatting**: Group imports into three blocks: standard library, external, and internal (`g8e/g8eo/...`).
+- **Parameter Passing**: Use pointers for structs with mutable fields, maps, slices, or large data to avoid copying. Use values for small, read-only structs. Most service methods should avoid taking model structs as parameters; work with them internally within service boundaries.
 
 ## Application Boundary and State Management
 
