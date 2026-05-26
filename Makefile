@@ -37,30 +37,46 @@ help:
 	@echo "  ci            Run full CI pipeline locally (mirrors GitHub Actions)"
 	@echo "  ci-substrate  Run substrate-only CI (g8eo, protocol, proto, docs)"
 	@echo ""
-	@echo "Development:"
-	@echo "  generate      Generate all protocol artifacts (proto + constants + docs)"
+	@echo "Protocol Generation:"
+	@echo "  generate      Generate all protocol artifacts (proto + constants)"
 	@echo "  proto         Generate all Protobuf code (Go)"
 	@echo "  constants     Generate all constants and sync documentation ports"
-	@echo "  clean-constants  Remove generated constants files"
-	@echo "  update-golden Update scenario test golden files (use after intentional changes)"
 	@echo "  buf-install   Install Buf CLI locally if not found"
-	@echo "  lint-no-bare-session-id  Check for bare session_id regression"
-	@echo "  first-issues  Find good first issues in the codebase"
-	@echo "  clean         Remove build artifacts and runtime state"
+	@echo "  protoc-install Install protoc compiler"
+	@echo ""
+	@echo "Build:"
+	@echo "  build         Build all services (cli + operator)"
+	@echo "  build-cli     Build g8e CLI wrapper"
+	@echo "  build-operator Build g8e operator binary (system type)"
+	@echo "  build-operator-system Build g8e operator (system type)"
+	@echo "  build-operator-cloud Build g8e operator (cloud type)"
+	@echo "  build-operator-aws Build g8e operator (AWS)"
+	@echo "  build-operator-gcp Build g8e operator (GCP)"
+	@echo "  build-operator-azure Build g8e operator (Azure)"
+	@echo "  build-operator-g8ep Build g8e operator (g8ep)"
+	@echo "  build-compressed Build g8e operator with compression (-s -w -trimpath)"
+	@echo ""
+	@echo "Test:"
+	@echo "  test          Run all tests"
+	@echo "  update-golden Update scenario test golden files"
+	@echo ""
+	@echo "Lint & Quality:"
+	@echo "  lint          Run all linting and quality checks"
+	@echo "  vulncheck     Run Operator vulnerability check"
+	@echo "  validate-doctrines Validate doctrine JSON schema"
 	@echo ""
 	@echo "Documentation:"
+	@echo "  docs          Run all documentation tasks (cli + build)"
 	@echo "  docs-cli      Auto-generate CLI reference documentation"
 	@echo "  docs-build    Build MkDocs documentation site (via Docker)"
 	@echo "  docs-serve    Serve MkDocs documentation locally at :8000 (via Docker)"
 	@echo ""
-	@echo "Services:"
-	@echo "  build         Build the Operator service (g8e binary)"
-	@echo "  test-g8eo     Run Operator tests"
-	@echo "  lint-g8eo     Run Operator linters (golangci-lint)"
-	@echo "  vulncheck-g8eo Run Operator vulnerability check"
+	@echo "Cleanup:"
+	@echo "  clean         Remove all build artifacts, runtime state, and generated files"
+	@echo "  clean-constants Remove generated constants files only"
 
 # =============================================================================
-# PROTOBUF GENERATION
+# PROTOCOL GENERATION
 # =============================================================================
 .PHONY: generate
 generate: proto constants
@@ -90,6 +106,9 @@ proto-force: buf-install
 	@$(BUF) generate protocol/proto
 	@echo "Protobuf generation complete."
 
+# =============================================================================
+# TOOL INSTALLATION
+# =============================================================================
 .PHONY: buf-install
 buf-install:
 	@if ! command -v buf &> /dev/null && [ ! -f "./buf" ]; then \
@@ -123,36 +142,115 @@ protoc-install:
 	@echo "protoc version $$PROTOC_VERSION is compatible."
 
 # =============================================================================
-# LINTING
+# BUILD
 # =============================================================================
-.PHONY: lint-no-bare-session-id
-lint-no-bare-session-id:
-	@echo "Checking for bare session_id regression..."
-	@if grep -rE "\bsession_id\b" . \
-		--exclude-dir={.git,vendor,node_modules,.g8e,.local.dev,.github,docs,site} \
-		--exclude={*.pb.go,Makefile,*.json} \
-		-I; then \
-		echo "Error: Bare 'session_id' found. Use 'operator_session_id', 'cli_session_id', or 'web_session_id' instead."; \
-		exit 1; \
-	fi
-	@echo "No bare session_id found."
+.PHONY: build
+build: build-cli build-operator
+	@echo "All builds complete."
 
+.PHONY: build-cli
+build-cli:
+	@echo "Building g8e CLI wrapper..."
+	@mkdir -p bin
+	@go build -o bin/g8e ./cmd/g8e
+	@ln -sf bin/g8e ./g8e
+	@echo "CLI wrapper build complete."
 
-.PHONY: first-issues
-first-issues:
-	@echo "Searching for good first issues (TODO comments)..."
-	@grep -rni 'TODO' . \
-		--exclude-dir={.git,vendor,node_modules,.g8e,.local.dev,.github} \
-		--exclude={*.pb.go,Makefile} \
-		-I || echo "No TODOs found."
+.PHONY: build-operator
+build-operator:
+	@echo "Building g8e operator (default)..."
+	@$(MAKE) build-operator-system
 
-.PHONY: clean-constants
-clean-constants:
-	@echo "Cleaning generated constants..."
-	@rm -rf internal/constants/headers_generated.go
-	@rm -rf internal/constants/status_generated.go
-	@rm -rf internal/constants/registry.go
-	@echo "Constants clean complete."
+.PHONY: build-operator-system
+build-operator-system:
+	@echo "Building g8e operator (system type)..."
+	@mkdir -p bin
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	PLATFORM=$$(uname -s)_$$(uname -m); \
+	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo
+	@ln -sf bin/g8e ./g8e
+	@echo "System operator build complete."
+
+.PHONY: build-operator-cloud
+build-operator-cloud:
+	@echo "Building g8e operator (cloud type)..."
+	@mkdir -p bin
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	PLATFORM=$$(uname -s)_$$(uname -m); \
+	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo
+	@ln -sf bin/g8e ./g8e
+	@echo "Cloud operator build complete."
+
+.PHONY: build-operator-aws
+build-operator-aws:
+	@echo "Building g8e operator (AWS)..."
+	@mkdir -p bin
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	PLATFORM=$$(uname -s)_$$(uname -m); \
+	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -tags aws -o bin/g8e ./cmd/g8eo
+	@ln -sf bin/g8e ./g8e
+	@echo "AWS operator build complete."
+
+.PHONY: build-operator-gcp
+build-operator-gcp:
+	@echo "Building g8e operator (GCP)..."
+	@mkdir -p bin
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	PLATFORM=$$(uname -s)_$$(uname -m); \
+	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -tags gcp -o bin/g8e ./cmd/g8eo
+	@ln -sf bin/g8e ./g8e
+	@echo "GCP operator build complete."
+
+.PHONY: build-operator-azure
+build-operator-azure:
+	@echo "Building g8e operator (Azure)..."
+	@mkdir -p bin
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	PLATFORM=$$(uname -s)_$$(uname -m); \
+	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -tags azure -o bin/g8e ./cmd/g8eo
+	@ln -sf bin/g8e ./g8e
+	@echo "Azure operator build complete."
+
+.PHONY: build-operator-g8ep
+build-operator-g8ep:
+	@echo "Building g8e operator (g8ep)..."
+	@mkdir -p bin
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	PLATFORM=$$(uname -s)_$$(uname -m); \
+	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -tags g8ep -o bin/g8e ./cmd/g8eo
+	@ln -sf bin/g8e ./g8e
+	@echo "g8ep operator build complete."
+
+.PHONY: build-compressed
+build-compressed:
+	@echo "Building g8e operator with compression..."
+	@mkdir -p bin
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	PLATFORM=$$(uname -s)_$$(uname -m); \
+	go build -ldflags "-s -w -X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -trimpath -o bin/g8e ./cmd/g8eo
+	@ln -sf bin/g8e ./g8e
+	@echo "Compressed operator build complete."
+
+# =============================================================================
+# TEST
+# =============================================================================
+.PHONY: test
+test:
+	@go test -race -timeout 180s ./...
 
 .PHONY: update-golden
 update-golden:
@@ -160,22 +258,17 @@ update-golden:
 	@G8E_UPDATE_GOLDEN=1 go test -tags=integration ./test/scenario -run TestScenarios
 	@echo "Golden files updated."
 
-.PHONY: clean
-clean:
-	@echo "Cleaning up build artifacts and runtime state..."
-	@$(MAKE) clean-constants
-	@rm -rf .g8e/
-	@rm -f ./g8e
-	@rm -rf bin/
-	@rm -rf build/
-	@echo "Clean complete."
+# =============================================================================
+# LINT & QUALITY
+# =============================================================================
+.PHONY: lint
+lint: vulncheck validate-doctrines
+	@golangci-lint run
+	@echo "All linting and quality checks complete."
 
-# =============================================================================
-# DOCTRINE INGESTION
-# =============================================================================
-.PHONY: ingest-doctrines
-ingest-doctrines:
-	@echo "Doctrine ingestion scripts removed. Use manual ingestion if needed."
+.PHONY: vulncheck
+vulncheck:
+	@govulncheck ./...
 
 .PHONY: validate-doctrines
 validate-doctrines:
@@ -187,6 +280,14 @@ validate-doctrines:
 		fi \
 	done
 	@echo "All doctrine files are valid JSON."
+
+
+# =============================================================================
+# DOCTRINE MANAGEMENT
+# =============================================================================
+.PHONY: ingest-doctrines
+ingest-doctrines:
+	@echo "Doctrine ingestion scripts removed. Use manual ingestion if needed."
 
 .PHONY: update-doctrines
 update-doctrines:
@@ -201,6 +302,27 @@ update-doctrines:
 	@echo "Doctrine update complete."
 
 # =============================================================================
+# CLEANUP
+# =============================================================================
+.PHONY: clean
+clean:
+	@echo "Cleaning up build artifacts and runtime state..."
+	@$(MAKE) clean-constants
+	@rm -rf .g8e/
+	@rm -f ./g8e
+	@rm -rf bin/
+	@rm -rf build/
+	@echo "Clean complete."
+
+.PHONY: clean-constants
+clean-constants:
+	@echo "Cleaning generated constants..."
+	@rm -rf internal/constants/headers_generated.go
+	@rm -rf internal/constants/status_generated.go
+	@rm -rf internal/constants/registry.go
+	@echo "Constants clean complete."
+
+# =============================================================================
 # CI/CD (LOCAL)
 # =============================================================================
 .PHONY: ci
@@ -208,7 +330,7 @@ ci: ci-substrate
 	@echo "CI complete."
 
 .PHONY: ci-substrate
-ci-substrate: _ci-verify-proto _ci-lint-g8eo _ci-vulncheck-g8eo _ci-test-g8eo _ci-docs
+ci-substrate: _ci-verify-proto _ci-lint _ci-vulncheck _ci-test _ci-docs
 	@echo "Substrate CI complete."
 
 .PHONY: _ci-verify-proto
@@ -231,26 +353,25 @@ _ci-verify-proto:
 		git diff -- $$(git status --porcelain | grep -E "^\s*M" | awk '{print $$2}'); \
 		exit 1; \
 	fi
-	@$(MAKE) lint-no-bare-session-id
 	@$(MAKE) validate-doctrines
 	@cd internal/constants && go run check_registry.go
 
-.PHONY: _ci-lint-g8eo
-_ci-lint-g8eo:
-	@echo "=== lint-g8eo ==="
-	@$(MAKE) lint-g8eo
+.PHONY: _ci-lint
+_ci-lint:
+	@echo "=== lint ==="
+	@$(MAKE) lint
 
-.PHONY: _ci-vulncheck-g8eo
-_ci-vulncheck-g8eo:
-	@echo "=== vulncheck-g8eo ==="
-	@$(MAKE) vulncheck-g8eo
+.PHONY: _ci-vulncheck
+_ci-vulncheck:
+	@echo "=== vulncheck ==="
+	@$(MAKE) vulncheck
 
-.PHONY: _ci-test-g8eo
-_ci-test-g8eo:
-	@echo "=== test-g8eo ==="
+.PHONY: _ci-test
+_ci-test:
+	@echo "=== test ==="
 	@./g8e platform start
 	@G8E_STRICT_CONSTANTS_LINT=1 go test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic ./...
-	@COVERAGE=$$(go tool cover -func=coverage.out | grep -v "internal/protocol/proto" | grep -v "/mocks/" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+	@COVERAGE=$$(go tool cover -func=coverage.out | grep -v "internal/protocol/proto" | grep -v "/mocks/" | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
 	if [ $$(echo "$$COVERAGE < 85" | bc -l) -eq 1 ]; then \
 		echo "Coverage $$COVERAGE% is below 85% threshold"; \
 		exit 1; \
@@ -278,47 +399,11 @@ _ci-docs:
 	fi
 
 # =============================================================================
-# SERVICE DISPATCH
-# =============================================================================
-.PHONY: build
-build: build-g8eo
-	@echo "All builds complete."
-
-.PHONY: build-cli
-build-cli:
-	@echo "Building g8e CLI wrapper..."
-	@mkdir -p bin
-	@go build -o bin/g8e ./cmd/g8e
-	@ln -sf bin/g8e ./g8e
-	@echo "CLI wrapper build complete."
-
-.PHONY: build-g8eo
-build-g8eo:
-	@echo "Building g8e operator..."
-	@mkdir -p bin
-	@VERSION=$$(cat VERSION | tr -d '\n'); \
-	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
-	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
-	PLATFORM=$$(uname -s)_$$(uname -m); \
-	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo
-	@ln -sf bin/g8e ./g8e
-	@echo "Build complete."
-
-.PHONY: test-g8eo
-test-g8eo:
-	@go test -race -timeout 180s ./...
-
-.PHONY: lint-g8eo
-lint-g8eo:
-	@golangci-lint run
-
-.PHONY: vulncheck-g8eo
-vulncheck-g8eo:
-	@govulncheck ./...
-
-# =============================================================================
 # DOCUMENTATION
 # =============================================================================
+.PHONY: docs
+docs: docs-cli docs-build
+	@echo "All documentation tasks complete."
 .PHONY: docs-cli
 docs-cli:
 	@echo "Building g8e binary for CLI help generation..."

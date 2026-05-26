@@ -82,7 +82,7 @@ func platformStartCmd() *cobra.Command {
 			cmd.Printf("Governance mode: doctrine (L1 enforced, L2/L3 audited)\n")
 			cmd.Printf("\nEndpoints:\n")
 			cmd.Printf("  Operator Bootstrap: https://localhost:%d\n", cfg.OperatorBootstrapHTTPSPort())
-			cmd.Printf("  Public API:        https://localhost:%d (Public browser/BYO bootstrap)\n", cfg.Paths.Ports.OperatorPublicHTTPS)
+			cmd.Printf("  Gateway Endpoint:        https://localhost:%d\n", cfg.Paths.Ports.OperatorPublicHTTPS)
 
 			return nil
 		},
