@@ -69,7 +69,7 @@ func TestStateRootSemantics(t *testing.T) {
 	assert.NotEqual(t, root4, root5, "Blob change must alter state root")
 
 	// 6. Nonce insert does NOT alter root
-	replayed, err := db.CheckAndSetNonce("nonce1", time.Now().Add(time.Hour))
+	replayed, err := db.ReserveNonce("nonce1", time.Now().Add(time.Hour))
 	require.NoError(t, err)
 	assert.False(t, replayed)
 	root6, err := db.GetCurrentStateRoot()

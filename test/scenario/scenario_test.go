@@ -139,7 +139,7 @@ func TestScenarios(t *testing.T) {
 						t.Fatalf("failed to parse nonce from intent: %v", err)
 					}
 					expiresAt := time.Date(2026, 5, 25, 13, 0, 0, 0, time.UTC)
-					_, err := gate.replayStore.CheckAndSetNonce(intent.Nonce, expiresAt)
+					_, err := gate.replayStore.ReserveNonce(intent.Nonce, expiresAt)
 					if err != nil {
 						t.Fatalf("failed to seed replay store: %v", err)
 					}

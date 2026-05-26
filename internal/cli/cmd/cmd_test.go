@@ -164,7 +164,7 @@ func TestTestCommandSubcommands(t *testing.T) {
 		cmd := testCmd()
 		require.NotNil(t, cmd)
 
-		expectedSubcommands := []string{"g8eo", "ci", "chaos"}
+		expectedSubcommands := []string{"unit", "integration", "chaos", "scenario", "review"}
 
 		for _, subcmd := range expectedSubcommands {
 			found := false

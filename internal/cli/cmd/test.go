@@ -62,7 +62,6 @@ func testCmd() *cobra.Command {
 	cmd.AddCommand(
 		testUnitCmd(),
 		testIntegrationCmd(),
-		testG8eoCmd(),
 		testChaosCmd(),
 		testScenarioCmd(),
 		testReviewCmd(),

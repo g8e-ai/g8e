@@ -25,10 +25,6 @@ import (
 // Simple version that never detects replays (returns false).
 type MockReplayStore struct{}
 
-func (m *MockReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
-	return false, nil
-}
-
 func (m *MockReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
 	return false, nil
 }
@@ -49,16 +45,6 @@ type StatefulMockReplayStore struct {
 
 func NewStatefulMockReplayStore() *StatefulMockReplayStore {
 	return &StatefulMockReplayStore{Nonces: make(map[string]bool)}
-}
-
-func (m *StatefulMockReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.Nonces[nonce] {
-		return true, nil
-	}
-	m.Nonces[nonce] = true
-	return false, nil
 }
 
 func (m *StatefulMockReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {

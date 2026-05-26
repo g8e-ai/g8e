@@ -245,7 +245,7 @@ func TestAuthMiddleware(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
 
 	// Seed platform settings
-	err := h.db.DocSet("settings", "app_settings", mustDocJSON(t, map[string]interface{}{
+	err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
 		"session_encryption_key": "test-key",
 	}))
 	require.NoError(t, err)
@@ -290,7 +290,7 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 
 	t.Run("Uninitialized token - Native Registration Path - allow without token", func(t *testing.T) {
 		t.Parallel()
-		h.db.DocDelete("settings", "app_settings")
+		h.db.DocDelete("settings", "platform_settings")
 
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/device-link/register", nil)
 		rr := httptest.NewRecorder()
@@ -302,17 +302,17 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 
 	t.Run("Uninitialized token - deny unauthenticated access", func(t *testing.T) {
 		t.Parallel()
-		h.db.DocDelete("settings", "app_settings")
+		h.db.DocDelete("settings", "platform_settings")
 
 		paths := []string{
-			"/db/settings/app_settings",
+			"/db/settings/platform_settings",
 			"/kv/some-key",
 			"/ws/pubsub",
 		}
 
 		for _, path := range paths {
 			method := http.MethodGet
-			if path == "/db/settings/app_settings" {
+			if path == "/db/settings/platform_settings" {
 				method = http.MethodPut
 			}
 			req := httptest.NewRequest(method, path, nil)
@@ -375,20 +375,20 @@ func TestHandleHealth(t *testing.T) {
 	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
-	t.Run("Returns 503 when app_settings not found", func(t *testing.T) {
+	t.Run("Returns 503 when platform_settings not found", func(t *testing.T) {
 		t.Parallel()
-		h.db.DocDelete("settings", "app_settings")
+		h.db.DocDelete("settings", "platform_settings")
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rr := httptest.NewRecorder()
 
 		h.handleHealth(rr, req)
 		assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
-		assert.JSONEq(t, `{"error":"app_settings not ready"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"platform_settings not ready"}`, rr.Body.String())
 	})
 
-	t.Run("Returns 200 when app_settings exists", func(t *testing.T) {
+	t.Run("Returns 200 when platform_settings exists", func(t *testing.T) {
 		t.Parallel()
-		err := h.db.DocSet("settings", "app_settings", mustDocJSON(t, map[string]interface{}{
+		err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
 			"session_encryption_key": "test-key",
 		}))
 		require.NoError(t, err)
@@ -625,7 +625,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	_, _ = h.db.SSEEventsWipe()
 
 	// Seed platform settings required for SSE push
-	err := h.db.DocSet("settings", "app_settings", mustDocJSON(t, map[string]interface{}{
+	err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
 		"session_encryption_key": "test-key",
 	}))
 	require.NoError(t, err)

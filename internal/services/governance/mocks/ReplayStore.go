@@ -13,34 +13,6 @@ type ReplayStore struct {
 	mock.Mock
 }
 
-// CheckAndSetNonce provides a mock function with given fields: nonce, expiresAt
-func (_m *ReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
-	ret := _m.Called(nonce, expiresAt)
-
-	if len(ret) == 0 {
-		panic("no return value specified for CheckAndSetNonce")
-	}
-
-	var r0 bool
-	var r1 error
-	if rf, ok := ret.Get(0).(func(string, time.Time) (bool, error)); ok {
-		return rf(nonce, expiresAt)
-	}
-	if rf, ok := ret.Get(0).(func(string, time.Time) bool); ok {
-		r0 = rf(nonce, expiresAt)
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-
-	if rf, ok := ret.Get(1).(func(string, time.Time) error); ok {
-		r1 = rf(nonce, expiresAt)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
 // FinalizeNonce provides a mock function with given fields: nonce
 func (_m *ReplayStore) FinalizeNonce(nonce string) error {
 	ret := _m.Called(nonce)

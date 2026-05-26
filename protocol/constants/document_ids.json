@@ -1,8 +1,8 @@
 {
   "document_ids": {
-    "app_settings": {
-      "_go_const": "DocIDAppSettings",
-      "value": "app_settings"
+    "platform_settings": {
+      "_go_const": "DocIDPlatformSettings",
+      "value": "platform_settings"
     },
     "user_settings_prefix": {
       "_go_const": "DocIDUserSettingsPrefix",

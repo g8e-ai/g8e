@@ -72,7 +72,7 @@ func readSecretFromDB(t *testing.T, db *sqliteutil.DB, name string) string {
 	t.Helper()
 	var dataJSON string
 	err := db.QueryRow(
-		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'app_settings'",
+		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
 	).Scan(&dataJSON)
 	require.NoError(t, err)
 	var doc models.SettingsDocument
@@ -93,7 +93,7 @@ func updatePlatformSetting(t *testing.T, db *sqliteutil.DB, name string, value s
 	t.Helper()
 	var dataJSON string
 	require.NoError(t, db.QueryRow(
-		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'app_settings'",
+		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
 	).Scan(&dataJSON))
 	var doc models.SettingsDocument
 	require.NoError(t, json.Unmarshal([]byte(dataJSON), &doc))
@@ -102,7 +102,7 @@ func updatePlatformSetting(t *testing.T, db *sqliteutil.DB, name string, value s
 	mutated, err := json.Marshal(doc)
 	require.NoError(t, err)
 	_, err = db.Exec(
-		"UPDATE documents SET data = ? WHERE collection = 'settings' AND id = 'app_settings'",
+		"UPDATE documents SET data = ? WHERE collection = 'settings' AND id = 'platform_settings'",
 		string(mutated),
 	)
 	require.NoError(t, err)
@@ -282,7 +282,7 @@ func TestSecretManager_InitAppSettings_RejectsPreexistingSecretWithoutAppSetting
 	sm := newTestSecretManager(t, db, secretsDir)
 	err := sm.InitAppSettings()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "found preexisting bootstrap secret session_encryption_key without app_settings")
+	assert.Contains(t, err.Error(), "found preexisting bootstrap secret session_encryption_key without platform_settings")
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *testing.T) {
@@ -341,7 +341,7 @@ func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *te
 	assert.Contains(t, err.Error(), "bootstrap digest manifest missing required entry session_encryption_key")
 }
 
-func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedAppSettings(t *testing.T) {
+func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedPlatformSettings(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
@@ -350,14 +350,14 @@ func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedAppSettings(t *tes
 	require.NoError(t, sm.InitAppSettings())
 
 	_, err := db.Exec(
-		"UPDATE documents SET data = ? WHERE collection = 'settings' AND id = 'app_settings'",
+		"UPDATE documents SET data = ? WHERE collection = 'settings' AND id = 'platform_settings'",
 		"{invalid json",
 	)
 	require.NoError(t, err)
 
 	sm2 := newTestSecretManager(t, db, secretsDir)
 	err = sm2.InitAppSettings()
-	// This test is no longer valid since InitAppSettings doesn't read app_settings on subsequent boots
+	// This test is no longer valid since InitAppSettings doesn't read platform_settings on subsequent boots
 	// It only checks for existence and then validates secrets
 	// The cleanupStaleAppSettings would fail on malformed JSON
 	require.NoError(t, err)

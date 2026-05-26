@@ -64,13 +64,6 @@ func (rs *SQLReplayStore) initSchema() error {
 	return nil
 }
 
-// CheckAndSetNonce returns true if the nonce was already used (replay detected).
-// If not used, it marks the nonce as used and returns false.
-// This is the legacy method for backward compatibility.
-func (rs *SQLReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
-	return rs.ReserveNonce(nonce, expiresAt)
-}
-
 // ReserveNonce atomically reserves a nonce for early replay protection.
 // Returns true if the nonce was already reserved/used (replay detected).
 // If not used, it reserves the nonce and returns false.

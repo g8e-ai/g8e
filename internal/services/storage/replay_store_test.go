@@ -25,10 +25,6 @@ type FailingMockReplayStore struct {
 	ReserveCallCount    int
 }
 
-func (m *FailingMockReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
-	return false, nil
-}
-
 func (m *FailingMockReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
 	m.ReserveCallCount++
 	if m.ShouldFailOnReserve {

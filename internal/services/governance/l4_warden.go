@@ -65,10 +65,6 @@ var (
 
 // ReplayStore defines the interface for nonce replay protection.
 type ReplayStore interface {
-	// CheckAndSetNonce returns true if the nonce was already used (replay detected).
-	// If not used, it marks the nonce as used and returns false.
-	CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error)
-
 	// ReserveNonce atomically reserves a nonce for early replay protection.
 	// Returns true if the nonce was already reserved/used (replay detected).
 	// If not used, it reserves the nonce and returns false.
