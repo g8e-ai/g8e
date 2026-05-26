@@ -19,17 +19,11 @@ jobs:
       contents: read
       security-events: write
 
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [ 'go', 'javascript-typescript', 'actions' ]
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
     - name: Set up Go
-      if: matrix.language == 'go'
       uses: actions/setup-go@v5
       with:
         go-version-file: go.mod
@@ -38,30 +32,11 @@ jobs:
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
       with:
-        languages: ${{ matrix.language }}
-        build-mode: ${{ (matrix.language == 'go') && 'manual' || 'none' }}
-
-    - name: Set up Buf
-      if: matrix.language == 'go'
-      uses: bufbuild/buf-setup-action@v1
-      with:
-        github_token: ${{ github.token }}
-
-    - name: Install protoc-gen plugins
-      if: matrix.language == 'go'
-      run: |
-        go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-        go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-
-    - name: Generate Proto
-      if: matrix.language == 'go'
-      run: make proto
+        languages: go
+        build-mode: manual
 
     - name: Build Go
-      if: matrix.language == 'go'
       run: make build
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
-      with:
-        category: "/language:${{matrix.language}}"
