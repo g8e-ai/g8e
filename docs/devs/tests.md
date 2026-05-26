@@ -107,7 +107,6 @@ This creates the first user and issues mTLS certificates for the Operator and CL
 ### Lints
 
 - **`make lint-no-bare-session-id`** - CI-enforced lint preventing bare `session_id`. Excludes vendor, generated files, `.local.dev`, `.github`, and the Makefile.
-- **`make lint-no-hand-authored-events`** - Prevents hand-authored event type strings; requires constants from `protocol/constants/events.json`.
 - **`make validate-doctrines`** - Validates doctrine JSON schema against the governance policy model.
 
 ---

@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/protocol"
 )
@@ -92,7 +93,7 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 		if envelope.SourceComponent != "" && envelope.OperatorID != "" {
 			// Check if this is an app component (not CLI or other sources)
 			// CLI components use session-based auth, apps use operator_id-based auth
-			if envelope.SourceComponent != "cli" {
+			if envelope.SourceComponent != string(constants.SessionTypeCLI) {
 				if wid.MatchesApp(spiffeID, envelope.OperatorID) {
 					return nil
 				}

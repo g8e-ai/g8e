@@ -7,19 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-# [1.0.0] - 2026-05-25
+## [1.0.0] - 2026-05-25
 
 ## Overview
-Release **v1.0.0** represents the maturation of g8e into a production-ready zero-trust governance substrate. This release completes the substrate-first architecture by removing the g8ee application layer from the substrate, dissolving the Sentinel component into protocol layers, and establishing a comprehensive scenario-based testing framework. The platform now operates as a pure governance substrate with typed, signed, state-bound transactions enforced through fail-closed L1/L2/L3 verification gates.
+
+Release **v1.0.0** represents the maturation of g8e into a production-ready zero-trust governance
+substrate. This release completes the substrate-first architecture by removing the g8ee application
+layer from the substrate, dissolving the Sentinel component into protocol layers, and establishing
+a comprehensive scenario-based testing framework. The platform now operates as a pure governance
+substrate with typed, signed, state-bound transactions enforced through fail-closed L1/L2/L3
+verification gates.
 
 ## Breaking Changes
 
-* **g8ee Removal from Substrate**: Completely removed the g8ee (Engine) application layer from the substrate. g8ee is now a standalone optional application adapter that must be run separately from the governance substrate.
-* **Sentinel Dissolution**: Dissolved the Sentinel component into L1 Doctrine (Technical Bedrock) protocol layers. Threat detection logic now executes within the L4 Warden gate, and data sovereignty logic moved to a new Sovereignty Boundary Plane package.
+* **g8ee Removal from Substrate**: Completely removed the g8ee (Engine) application layer from the
+  substrate. g8ee is now a standalone optional application adapter that must be run separately
+  from the governance substrate.
+* **Sentinel Dissolution**: Dissolved the Sentinel component into L1 Doctrine (Technical Bedrock)
+  protocol layers. Threat detection logic now executes within the L4 Warden gate, and data
+  sovereignty logic moved to a new Sovereignty Boundary Plane package.
 * **Raw Vault Removal**: Removed the raw audit vault in favor of sentinel-moderated vault storage. All audit data now passes through Sentinel scrubbing/rehydration logic.
 * **Cursor-Based Query Elimination**: Removed cursor-based query patterns in favor of optimized direct database access patterns.
-* **Session ID Field Migration**: Migrated from `web_session_id` to `cli_session_id` across all logging, events, and constants for consistency with CLI-first architecture.
-* **Constants Regeneration**: All Go constants regenerated with deterministic sorting and new collection definitions (app_policies, storage events, operator field read events).
+* **Session ID Field Migration**: Migrated from `web_session_id` to `cli_session_id` across all
+  logging, events, and constants for consistency with CLI-first architecture.
+* **Constants Regeneration**: All Go constants regenerated with deterministic sorting and new
+  collection definitions (app_policies, storage events, operator field read events).
 
 ## Added
 

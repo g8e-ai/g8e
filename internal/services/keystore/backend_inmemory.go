@@ -15,6 +15,8 @@ package keystore
 
 import (
 	"sync"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // sharedTestKeyStorage is package-level shared storage for test backend.
@@ -33,7 +35,7 @@ func NewTestBackend() (Backend, error) {
 }
 
 func (b *testBackend) Name() string {
-	return "test"
+	return string(constants.EnvironmentTest)
 }
 
 func (b *testBackend) RetrieveMasterKey() ([]byte, error) {

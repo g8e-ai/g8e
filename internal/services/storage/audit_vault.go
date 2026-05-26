@@ -457,7 +457,7 @@ func (avs *AuditVaultService) CreateSession(id, sessionType, title, userIdentity
 		return ErrAuditSessionMissing
 	}
 	if sessionType == "" {
-		sessionType = "operator"
+		sessionType = string(constants.UserRoleOperator)
 	}
 
 	query := `INSERT INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`

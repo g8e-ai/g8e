@@ -66,15 +66,15 @@ func main() {
 
 	// Check for CLI subcommands (platform, apps, auth, data, test, evals, security, setup, vars)
 	cliSubcommands := map[string]bool{
-		"platform": true,
-		"apps":     true,
-		"auth":     true,
-		"data":     true,
-		"test":     true,
-		"evals":    true,
-		"security": true,
-		"setup":    true,
-		"vars":     true,
+		"platform":                        true,
+		"apps":                            true,
+		"auth":                            true,
+		"data":                            true,
+		string(constants.EnvironmentTest): true,
+		"evals":                           true,
+		"security":                        true,
+		"setup":                           true,
+		"vars":                            true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
