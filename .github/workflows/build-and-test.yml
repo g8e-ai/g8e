@@ -68,7 +68,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v1.65.0
           args: --timeout=5m --disable=gocritic,gosec
 
       - name: Lint no bare session_id
@@ -108,7 +108,7 @@ jobs:
         run: make build-cli
 
       - name: Run substrate tests
-        run: make _ci-test-g8eo
+        run: make _ci-test
 
       - name: Show Operator logs
         if: failure()
