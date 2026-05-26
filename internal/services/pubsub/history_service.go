@@ -23,7 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -46,7 +46,7 @@ func NewHistoryService(cfg *config.Config, logger *slog.Logger, client PubSubCli
 }
 
 // HandleFetchLogsRequest processes a fetch logs request from the consolidated execution vault.
-func (hs *HistoryService) HandleFetchLogsRequest(ctx context.Context, msg PubSubCommandMessage) {
+func (hs *HistoryService) HandleFetchLogsRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoFetch operatorv1.FetchLogsRequested
 	if err := proto.Unmarshal(msg.Payload, &protoFetch); err != nil {
 		hs.logger.Error("Failed to decode fetch logs payload as protobuf FetchLogsRequested", string(constants.ConnectionStateError), err)
@@ -67,7 +67,7 @@ func (hs *HistoryService) HandleFetchLogsRequest(ctx context.Context, msg PubSub
 	hs.handleFetchFromConsolidatedVault(ctx, msg, executionID)
 }
 
-func (hs *HistoryService) handleFetchFromConsolidatedVault(ctx context.Context, msg PubSubCommandMessage, executionID string) {
+func (hs *HistoryService) handleFetchFromConsolidatedVault(ctx context.Context, msg *PubSubCommandMessage, executionID string) {
 	if hs.localStore == nil || !hs.localStore.IsEnabled() {
 		hs.logger.Warn("Consolidated execution vault not available")
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "consolidated execution vault is not enabled on this operator")
@@ -90,7 +90,7 @@ func (hs *HistoryService) handleFetchFromConsolidatedVault(ctx context.Context, 
 	hs.publishFetchLogsResult(ctx, msg, record)
 }
 
-func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg PubSubCommandMessage, record *storage.ExecutionRecord) {
+func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg *PubSubCommandMessage, record *storage.ExecutionRecord) {
 	publishLFAATypedResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Completed,
 		&operatorv1.FetchLogsResult{
 			ExecutionId: record.ID,
@@ -110,7 +110,7 @@ func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg PubSub
 }
 
 // HandleFetchHistoryRequest processes a fetch history request.
-func (hs *HistoryService) HandleFetchHistoryRequest(ctx context.Context, msg PubSubCommandMessage) {
+func (hs *HistoryService) HandleFetchHistoryRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	hs.logger.Info("FETCH_HISTORY requested (LFAA)")
 
 	if hs.historyHandler == nil || !hs.historyHandler.IsEnabled() {
@@ -132,7 +132,7 @@ func (hs *HistoryService) HandleFetchHistoryRequest(ctx context.Context, msg Pub
 }
 
 // HandleFetchFileHistoryRequest processes a fetch file history request.
-func (hs *HistoryService) HandleFetchFileHistoryRequest(ctx context.Context, msg PubSubCommandMessage) {
+func (hs *HistoryService) HandleFetchFileHistoryRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoFetch operatorv1.FetchFileHistoryRequested
 	if err := proto.Unmarshal(msg.Payload, &protoFetch); err != nil {
 		hs.logger.Error("Failed to decode fetch file history payload as protobuf FetchFileHistoryRequested", string(constants.ConnectionStateError), err)
@@ -160,7 +160,7 @@ func (hs *HistoryService) HandleFetchFileHistoryRequest(ctx context.Context, msg
 }
 
 // HandleRestoreFileRequest processes a file restore request.
-func (hs *HistoryService) HandleRestoreFileRequest(ctx context.Context, msg PubSubCommandMessage) {
+func (hs *HistoryService) HandleRestoreFileRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoRestore operatorv1.RestoreFileRequested
 	if err := proto.Unmarshal(msg.Payload, &protoRestore); err != nil {
 		hs.logger.Error("Failed to decode restore file payload as protobuf RestoreFileRequested", string(constants.ConnectionStateError), err)
@@ -188,7 +188,7 @@ func (hs *HistoryService) HandleRestoreFileRequest(ctx context.Context, msg PubS
 }
 
 // HandleFetchFileDiffRequest processes a fetch file diff request.
-func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg PubSubCommandMessage) {
+func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	hs.logger.Info("FETCH_FILE_DIFF requested (LFAA, via Protobuf)")
 
 	if hs.localStore == nil || !hs.localStore.IsEnabled() {

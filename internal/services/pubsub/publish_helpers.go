@@ -23,13 +23,13 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 // executionIDFromMessage resolves the execution_id for a command from the
 // inbound payload's execution_id field using strict Protobuf extraction.
 // If the payload does not carry one it falls back to the envelope id (msg.ID).
-func executionIDFromMessage(msg PubSubCommandMessage) string {
+func executionIDFromMessage(msg *PubSubCommandMessage) string {
 	payloadMsg, err := unmarshalPayload(msg.EventType, msg.Payload)
 	if err != nil {
 		return msg.ID
@@ -69,7 +69,7 @@ func publishLFAATypedResponseTo(
 	client PubSubClient,
 	cfg *config.Config,
 	logger *slog.Logger,
-	msg PubSubCommandMessage,
+	msg *PubSubCommandMessage,
 	eventType constants.EventType,
 	payload proto.Message,
 ) {
@@ -103,7 +103,7 @@ func publishLFAAErrorTo(
 	client PubSubClient,
 	cfg *config.Config,
 	logger *slog.Logger,
-	msg PubSubCommandMessage,
+	msg *PubSubCommandMessage,
 	eventType constants.EventType,
 	errorMsg string,
 ) {

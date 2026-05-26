@@ -125,7 +125,7 @@ func TestMustBuildFileEditRequestedPayload(t *testing.T) {
 		CreateIfMissing: false,
 	}
 
-	payload := MustBuildFileEditRequestedPayload(t, fields)
+	payload := MustBuildFileEditRequestedPayload(t, &fields)
 	require.NotNil(t, payload)
 
 	edit := &operatorv1.FileEditRequested{}

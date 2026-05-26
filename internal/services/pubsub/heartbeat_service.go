@@ -25,7 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/system"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -257,7 +257,7 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 }
 
 // HandleRequest processes an inbound heartbeat request message.
-func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg PubSubCommandMessage) {
+func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoReq operatorv1.HeartbeatRequested
 	if err := proto.Unmarshal(msg.Payload, &protoReq); err != nil {
 		hs.logger.Error("[HEARTBEAT] Failed to decode heartbeat request payload as protobuf HeartbeatRequested", string(constants.ConnectionStateError), err)

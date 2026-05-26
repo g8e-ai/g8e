@@ -53,7 +53,7 @@ func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client Pub
 
 // PublishExecutionResult publishes command execution result via operator pub/sub
 // Stdout/stderr have already been sentinel.Sentinel-scrubbed by pubsub_commands.go before this is called.
-func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
+func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
 	// Determine event type based on status field via reflection
 	eventType := constants.Event.Operator.Command.Completed
 
@@ -82,7 +82,7 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 }
 
 // PublishCancellationResult publishes command cancellation result via operator pub/sub
-func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
+func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.Command.Cancelled
 
 	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
@@ -95,7 +95,7 @@ func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, r
 }
 
 // PublishFileEditResult publishes file edit result via operator pub/sub.
-func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
+func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.FileEdit.Completed
 
 	reflectMsg := result.ProtoReflect()
@@ -116,7 +116,7 @@ func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, resul
 }
 
 // PublishFsListResult publishes file system list result via operator pub/sub.
-func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
+func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.FsList.Completed
 
 	reflectMsg := result.ProtoReflect()
@@ -137,7 +137,7 @@ func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result 
 }
 
 // PublishFsGrepResult publishes file system grep result via operator pub/sub.
-func (rr *PubSubResultsService) PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
+func (rr *PubSubResultsService) PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.FsGrep.Completed
 
 	reflectMsg := result.ProtoReflect()
@@ -158,7 +158,7 @@ func (rr *PubSubResultsService) PublishFsGrepResult(ctx context.Context, result 
 }
 
 // PublishExecutionStatus publishes periodic status updates during command execution.
-func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, status proto.Message, originalMsg PubSubCommandMessage) error {
+func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, status proto.Message, originalMsg *PubSubCommandMessage) error {
 	reflectMsg := status.ProtoReflect()
 
 	// Extract execution status and execution ID via reflection (payload-specific)
@@ -244,7 +244,7 @@ func (rr *PubSubResultsService) publishResultEnvelopeUniversal(
 	caseID string,
 	taskID *string,
 	investigationID string,
-	originalMsg PubSubCommandMessage,
+	originalMsg *PubSubCommandMessage,
 	payload proto.Message,
 ) error {
 	// Use original message ID for correlation

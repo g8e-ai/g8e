@@ -288,7 +288,7 @@ func platformResetCmd() *cobra.Command {
 				cmd.Println("  4. Restart the services with a fresh database")
 				cmd.Print("\nContinue? [y/N]: ")
 				var response string
-				fmt.Scanln(&response)
+				_, _ = fmt.Scanln(&response)
 				if response != "y" && response != "Y" {
 					cmd.Println("Aborted")
 					return nil
@@ -351,7 +351,7 @@ func platformCleanCmd() *cobra.Command {
 				cmd.Println("  4. All trust routes and credentials will be permanently destroyed")
 				cmd.Print("\nContinue? [y/N]: ")
 				var response string
-				fmt.Scanln(&response)
+				_, _ = fmt.Scanln(&response)
 				if response != "y" && response != "Y" {
 					cmd.Println("Aborted")
 					return nil

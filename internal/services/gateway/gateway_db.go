@@ -789,7 +789,7 @@ func (s *GatewayDBService) DocQuery(collection string, filters []models.DocFilte
 		parts := strings.Fields(orderBy)
 		orderField := parts[0]
 		dir := "ASC"
-		if len(parts) > 1 && strings.ToUpper(parts[1]) == "DESC" {
+		if len(parts) > 1 && strings.EqualFold(parts[1], "DESC") {
 			dir = "DESC"
 		}
 

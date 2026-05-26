@@ -23,7 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -44,7 +44,7 @@ func NewAuditService(cfg *config.Config, logger *slog.Logger) *AuditService {
 }
 
 // HandleUserMsgRequest records an inbound user message to the audit vault.
-func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg PubSubCommandMessage) {
+func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording user message (via Protobuf)")
 
 	if as.auditVault == nil || !as.auditVault.IsEnabled() {
@@ -80,7 +80,7 @@ func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg PubSubComman
 }
 
 // HandleAIMsgRequest records an inbound AI message to the audit vault.
-func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg PubSubCommandMessage) {
+func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording AI message (via Protobuf)")
 
 	if as.auditVault == nil || !as.auditVault.IsEnabled() {
@@ -116,7 +116,7 @@ func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg PubSubCommandM
 }
 
 // HandleDirectCmdRequest records an inbound direct terminal command to the audit vault.
-func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg PubSubCommandMessage) {
+func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording direct terminal command (via Protobuf)")
 
 	if as.auditVault == nil || !as.auditVault.IsEnabled() {
@@ -152,7 +152,7 @@ func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg PubSubComm
 }
 
 // HandleDirectCmdResultRequest records an inbound direct terminal command result to the audit vault.
-func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg PubSubCommandMessage) {
+func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording direct terminal command result (via Protobuf)")
 
 	if as.auditVault == nil || !as.auditVault.IsEnabled() {

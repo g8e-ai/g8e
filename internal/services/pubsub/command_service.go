@@ -90,7 +90,7 @@ func (cs *CommandService) SetSovereignty(s *sovereignty.SovereigntyService) {
 }
 
 // HandleExecutionRequest processes an inbound command execution request.
-func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSubCommandMessage) {
+func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	if len(msg.Payload) > 1024*1024 {
 		cs.logger.Error("Command payload exceeds size limit", "size", len(msg.Payload), "limit", 1024*1024)
 		return
@@ -265,7 +265,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 func (cs *CommandService) runStatusTicker(
 	ctx context.Context,
 	execReq *models.ExecutionRequestPayload,
-	msg PubSubCommandMessage,
+	msg *PubSubCommandMessage,
 	command string,
 	startTime time.Time,
 	done <-chan struct{},
@@ -311,7 +311,7 @@ func (cs *CommandService) runStatusTicker(
 }
 
 // HandleCancelRequest processes an inbound command cancellation request.
-func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCommandMessage) {
+func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	if len(msg.Payload) > 64*1024 {
 		cs.logger.Error("Cancel payload exceeds size limit", "size", len(msg.Payload), "limit", 64*1024)
 		return
@@ -377,7 +377,7 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 }
 
 // payloadToExecutionRequest is a package-level helper shared by CommandService and tests.
-func payloadToExecutionRequest(msg PubSubCommandMessage) (*models.ExecutionRequestPayload, error) {
+func payloadToExecutionRequest(msg *PubSubCommandMessage) (*models.ExecutionRequestPayload, error) {
 	var protoCmd operatorv1.CommandRequested
 	if err := proto.Unmarshal(msg.Payload, &protoCmd); err != nil {
 		return nil, fmt.Errorf("failed to decode command payload as protobuf CommandRequested: %w", err)

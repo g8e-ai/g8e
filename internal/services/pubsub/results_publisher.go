@@ -25,11 +25,11 @@ import (
 // from the g8eo Operator back to g8e-Compliant Agentic Ensemble (g8ee).
 // Implemented by PubSubResultsService (operator pub/sub via client proxy).
 type ResultsPublisher interface {
-	PublishExecutionResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
-	PublishCancellationResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
-	PublishFileEditResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
-	PublishFsListResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
-	PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
-	PublishExecutionStatus(ctx context.Context, status proto.Message, originalMsg PubSubCommandMessage) error
+	PublishExecutionResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error
+	PublishCancellationResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error
+	PublishFileEditResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error
+	PublishFsListResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error
+	PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error
+	PublishExecutionStatus(ctx context.Context, status proto.Message, originalMsg *PubSubCommandMessage) error
 	PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error
 }

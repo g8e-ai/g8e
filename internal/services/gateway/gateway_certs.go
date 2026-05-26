@@ -618,13 +618,14 @@ func (pki *PKIAuthority) loadCertificatePair(certPath, keyPath string, cert **x5
 
 	// Determine CA type from cert path
 	var caType string
-	if strings.Contains(certPath, "root_ca.crt") {
+	switch {
+	case strings.Contains(certPath, "root_ca.crt"):
 		caType = "root"
-	} else if strings.Contains(certPath, "hub_ca.crt") {
+	case strings.Contains(certPath, "hub_ca.crt"):
 		caType = "hub"
-	} else if strings.Contains(certPath, "operator_ca.crt") {
+	case strings.Contains(certPath, "operator_ca.crt"):
 		caType = string(constants.UserRoleOperator)
-	} else if strings.Contains(certPath, "bootstrap_ca.crt") {
+	case strings.Contains(certPath, "bootstrap_ca.crt"):
 		caType = string(constants.HeartbeatTypeBootstrap)
 	}
 
@@ -636,13 +637,14 @@ func (pki *PKIAuthority) loadCertificatePair(certPath, keyPath string, cert **x5
 
 		// Extract service name from cert path
 		var serviceName string
-		if strings.Contains(certPath, "operator-gateway.crt") {
+		switch {
+		case strings.Contains(certPath, "operator-gateway.crt"):
 			serviceName = "operator-gateway"
-		} else if strings.Contains(certPath, "issued/apps/") {
+		case strings.Contains(certPath, "issued/apps/"):
 			// Extract app name from path like "issued/apps/g8ee.crt"
 			base := filepath.Base(certPath)
 			serviceName = strings.TrimSuffix(base, ".crt")
-		} else {
+		default:
 			return fmt.Errorf("cannot determine service name from cert path: %s", certPath)
 		}
 

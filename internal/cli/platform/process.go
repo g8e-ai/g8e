@@ -233,7 +233,7 @@ func (pm *ProcessManager) StartOperator(httpPort, bootstrapPort, publicPort int)
 	}
 
 	if err := pm.writePID(operatorPIDFile, cmd.Process.Pid); err != nil {
-		cmd.Process.Kill()
+		_ = cmd.Process.Kill()
 		logHandle.Close()
 		return fmt.Errorf("failed to write pid file: %w", err)
 	}
@@ -242,7 +242,7 @@ func (pm *ProcessManager) StartOperator(httpPort, bootstrapPort, publicPort int)
 
 	time.Sleep(2 * time.Second)
 	if !pm.isProcessRunning(cmd.Process.Pid) {
-		pm.deletePID(operatorPIDFile)
+		_ = pm.deletePID(operatorPIDFile)
 		return fmt.Errorf("operator failed to start, check %s", logFile)
 	}
 

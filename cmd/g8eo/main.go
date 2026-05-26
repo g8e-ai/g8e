@@ -465,6 +465,7 @@ func main() {
 	}
 	shutdownCancel()
 
+	cancel()
 	os.Exit(constants.ExitSuccess)
 }
 
@@ -673,18 +674,21 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	sm, err := svc.GetSecretManager()
 	if err != nil {
 		logger.Error("Failed to get secret manager", string(constants.ConnectionStateError), err)
+		cancel()
 		os.Exit(constants.ExitConfigError)
 	}
 
 	ActuatorPriv, ActuatorKeyID, err := sm.GetActuatorKey()
 	if err != nil {
 		logger.Error("Failed to load Actuator signing key - mutations will fail", string(constants.ConnectionStateError), err)
+		cancel()
 		os.Exit(constants.ExitConfigError)
 	}
 
 	ConsensusPriv, err := sm.GetConsensusKey()
 	if err != nil {
 		logger.Error("Failed to load Consensus signing key - L2 consensus will fail", string(constants.ConnectionStateError), err)
+		cancel()
 		os.Exit(constants.ExitConfigError)
 	}
 

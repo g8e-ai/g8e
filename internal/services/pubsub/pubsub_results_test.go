@@ -96,7 +96,7 @@ func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
 			ReturnCode:  130,
 		}
 
-		originalMsg := PubSubCommandMessage{
+		originalMsg := &PubSubCommandMessage{
 			ID:                "msg-123",
 			EventType:         constants.Event.Operator.Command.CancelRequested,
 			CaseID:            "case-456",
@@ -127,7 +127,7 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 			Entries:     []*pb.FsEntry{{Name: "test.txt", Size: 100}},
 		}
 
-		originalMsg := PubSubCommandMessage{
+		originalMsg := &PubSubCommandMessage{
 			ID:                "msg-123",
 			EventType:         constants.Event.Operator.FsList.Requested,
 			CaseID:            "case-456",
@@ -156,7 +156,7 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 			ErrorMessage: "permission denied",
 		}
 
-		originalMsg := PubSubCommandMessage{
+		originalMsg := &PubSubCommandMessage{
 			ID:                "msg-123",
 			EventType:         constants.Event.Operator.FsList.Requested,
 			CaseID:            "case-456",
@@ -187,7 +187,7 @@ func TestPubSubResultsService_PublishFsGrepResult(t *testing.T) {
 			Matches:     []*pb.FsGrepMatch{{Path: "/tmp/test.txt", LineNumber: 1, Content: "match"}},
 		}
 
-		originalMsg := PubSubCommandMessage{
+		originalMsg := &PubSubCommandMessage{
 			ID:                "msg-123",
 			EventType:         constants.Event.Operator.FsGrep.Requested,
 			CaseID:            "case-456",
@@ -216,7 +216,7 @@ func TestPubSubResultsService_PublishFsGrepResult(t *testing.T) {
 			ErrorMessage: "pattern error",
 		}
 
-		originalMsg := PubSubCommandMessage{
+		originalMsg := &PubSubCommandMessage{
 			ID:                "msg-123",
 			EventType:         constants.Event.Operator.FsGrep.Requested,
 			CaseID:            "case-456",
@@ -249,7 +249,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 			ExecutionTimeSeconds: 2.0,
 		}
 
-		originalMsg := PubSubCommandMessage{
+		originalMsg := &PubSubCommandMessage{
 			ID:                "msg-123",
 			EventType:         constants.Event.Operator.Command.Requested,
 			CaseID:            "case-456",
@@ -292,7 +292,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 			ReturnCode:  1,
 		}
 
-		originalMsg := PubSubCommandMessage{
+		originalMsg := &PubSubCommandMessage{
 			ID:                "msg-123",
 			EventType:         constants.Event.Operator.Command.Requested,
 			CaseID:            "case-456",
@@ -322,7 +322,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 			ReturnCode:  124,
 		}
 
-		originalMsg := PubSubCommandMessage{
+		originalMsg := &PubSubCommandMessage{
 			ID:                "msg-123",
 			EventType:         constants.Event.Operator.Command.Requested,
 			CaseID:            "case-456",
@@ -354,7 +354,7 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 			Status:      pb.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 		}
 
-		originalMsg := PubSubCommandMessage{
+		originalMsg := &PubSubCommandMessage{
 			ID:                "msg-123",
 			EventType:         constants.Event.Operator.FileEdit.Requested,
 			CaseID:            "case-456",
@@ -385,7 +385,7 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 			ErrorMessage: "permission denied",
 		}
 
-		originalMsg := PubSubCommandMessage{
+		originalMsg := &PubSubCommandMessage{
 			ID:                "msg-123",
 			EventType:         constants.Event.Operator.FileEdit.Requested,
 			CaseID:            "case-456",
