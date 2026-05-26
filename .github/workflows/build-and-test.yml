@@ -26,14 +26,14 @@ jobs:
 
       - name: Install Buf
         run: |
-          go install github.com/bufbuild/buf/cmd/buf@latest
+          go install github.com/bufbuild/buf/cmd/buf@v1.70.0
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Install protoc-gen plugins
         run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-          go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@latest
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.35.2
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+          go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@v1.5.1
 
       - name: Generate Proto
         run: make proto
@@ -68,7 +68,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.65.0
+          version: v1.64.8
           args: --timeout=5m --disable=gocritic,gosec
 
       - name: Lint no bare session_id
@@ -88,7 +88,7 @@ jobs:
 
       - name: Run govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
           govulncheck ./...
 
   test:
