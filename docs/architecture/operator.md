@@ -83,7 +83,22 @@ The host is the authoritative source of truth for all mutations.
 
 ---
 
-## 5. Implementation Reference
+## 5. Current Implementation Status
+
+The reference implementation (`g8eo`) currently supports:
+
+- **Universal Protocol Translation** — Functional MCP and A2A gateway mapping standard tool calls to signed `GovernanceEnvelope` mutations.
+- **Fail-Closed 5-Layer Gauntlet** — L1 (Doctrine), L2 (Consensus), and L4 (Warden) gates are fully enforced on every transaction.
+- **Outbound-Only mTLS Connectivity** — Dial-out reverse tunnels with zero inbound port requirements.
+- **Local-First Audit Vault** — Git-backed ledger and fail-closed SQLite audit vault enforcing session existence for all writes.
+- **Deterministic Hash Binding** — SHA-256 transaction hash integrity enforced across all wire formats.
+- **Sovereignty Boundary** — Automated scrubbing and rehydration of sensitive data during the execution lifecycle.
+- **Host-Unique Signing** — Cryptographic Action Receipts signed by host-specific keys.
+- **Zero-Dependency Binary** — Statically compiled Go binary for air-gapped and high-security deployments.
+
+---
+
+## 6. Implementation Reference
 
 | Concern | Authoritative file |
 |---|---|

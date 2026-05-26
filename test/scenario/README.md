@@ -9,7 +9,7 @@ test/scenario/
   fixtures/      // go:embed — the payload matrix
     security/forged_sig.json
     finance/wire_replay.json
-  golden/        // signed-receipt snapshots (TODO)
+  golden/        // signed-receipt snapshots
   scenario.go    // Scenario struct + loader
   runner.go      // fires a fixture at the REAL admission path
   report.go      // pretty trace (the theater)
