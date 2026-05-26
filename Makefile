@@ -53,13 +53,7 @@ help:
 	@echo "Build:"
 	@echo "  build         Build all services (cli + operator)"
 	@echo "  build-cli     Build g8e CLI wrapper"
-	@echo "  build-operator Build g8e operator binary (system type)"
-	@echo "  build-operator-system Build g8e operator (system type)"
-	@echo "  build-operator-cloud Build g8e operator (cloud type)"
-	@echo "  build-operator-aws Build g8e operator (AWS)"
-	@echo "  build-operator-gcp Build g8e operator (GCP)"
-	@echo "  build-operator-azure Build g8e operator (Azure)"
-	@echo "  build-operator-g8ep Build g8e operator (g8ep)"
+	@echo "  build-operator Build g8e operator binary"
 	@echo "  build-compressed Build g8e operator with compression (-s -w -trimpath)"
 	@echo ""
 	@echo "Test:"
@@ -168,12 +162,7 @@ build-cli:
 
 .PHONY: build-operator
 build-operator:
-	@echo "Building g8e operator (default)..."
-	@$(MAKE) build-operator-system
-
-.PHONY: build-operator-system
-build-operator-system:
-	@echo "Building g8e operator (system type)..."
+	@echo "Building g8e operator..."
 	@mkdir -p bin
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
@@ -181,67 +170,7 @@ build-operator-system:
 	PLATFORM=$$(uname -s)_$$(uname -m); \
 	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo
 	@ln -sf bin/g8e ./g8e
-	@echo "System operator build complete."
-
-.PHONY: build-operator-cloud
-build-operator-cloud:
-	@echo "Building g8e operator (cloud type)..."
-	@mkdir -p bin
-	@VERSION=$$(cat VERSION | tr -d '\n'); \
-	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
-	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
-	PLATFORM=$$(uname -s)_$$(uname -m); \
-	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo
-	@ln -sf bin/g8e ./g8e
-	@echo "Cloud operator build complete."
-
-.PHONY: build-operator-aws
-build-operator-aws:
-	@echo "Building g8e operator (AWS)..."
-	@mkdir -p bin
-	@VERSION=$$(cat VERSION | tr -d '\n'); \
-	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
-	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
-	PLATFORM=$$(uname -s)_$$(uname -m); \
-	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -tags aws -o bin/g8e ./cmd/g8eo
-	@ln -sf bin/g8e ./g8e
-	@echo "AWS operator build complete."
-
-.PHONY: build-operator-gcp
-build-operator-gcp:
-	@echo "Building g8e operator (GCP)..."
-	@mkdir -p bin
-	@VERSION=$$(cat VERSION | tr -d '\n'); \
-	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
-	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
-	PLATFORM=$$(uname -s)_$$(uname -m); \
-	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -tags gcp -o bin/g8e ./cmd/g8eo
-	@ln -sf bin/g8e ./g8e
-	@echo "GCP operator build complete."
-
-.PHONY: build-operator-azure
-build-operator-azure:
-	@echo "Building g8e operator (Azure)..."
-	@mkdir -p bin
-	@VERSION=$$(cat VERSION | tr -d '\n'); \
-	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
-	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
-	PLATFORM=$$(uname -s)_$$(uname -m); \
-	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -tags azure -o bin/g8e ./cmd/g8eo
-	@ln -sf bin/g8e ./g8e
-	@echo "Azure operator build complete."
-
-.PHONY: build-operator-g8ep
-build-operator-g8ep:
-	@echo "Building g8e operator (g8ep)..."
-	@mkdir -p bin
-	@VERSION=$$(cat VERSION | tr -d '\n'); \
-	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
-	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
-	PLATFORM=$$(uname -s)_$$(uname -m); \
-	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -tags g8ep -o bin/g8e ./cmd/g8eo
-	@ln -sf bin/g8e ./g8e
-	@echo "g8ep operator build complete."
+	@echo "Operator build complete."
 
 .PHONY: build-compressed
 build-compressed:

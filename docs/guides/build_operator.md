@@ -40,13 +40,7 @@ This produces the `g8e` binary in the repository root. The binary is statically 
 The Makefile provides several build targets:
 
 - `make build` — Builds both the CLI wrapper and the `g8e` binary.
-- `make build-operator` — Builds the `g8e` binary (default system type).
-- `make build-operator-system` — Builds the `g8e` binary (system type).
-- `make build-operator-cloud` — Builds the `g8e` binary (cloud type).
-- `make build-operator-aws` — Builds the `g8e` binary with AWS build tags.
-- `make build-operator-gcp` — Builds the `g8e` binary with GCP build tags.
-- `make build-operator-azure` — Builds the `g8e` binary with Azure build tags.
-- `make build-operator-g8ep` — Builds the `g8e` binary with g8ep build tags.
+- `make build-operator` — Builds the `g8e` binary.
 - `make build-compressed` — Builds the `g8e` binary with compression optimizations.
 - `make clean` — Removes compiled binaries and test artifacts.
 
