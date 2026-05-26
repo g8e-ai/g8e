@@ -45,6 +45,8 @@ const (
 type ContextKey string
 
 const (
-	ContextKeyUserID ContextKey = "user_id"
-	ContextKeyAppID  ContextKey = "app_id"
+	ContextKeyUserID         ContextKey = "user_id"
+	ContextKeyAppID          ContextKey = "app_id"
+	ContextKeyTenantID       ContextKey = "tenant_id"
+	ContextKeyBindingPersona ContextKey = "binding_persona"
 )

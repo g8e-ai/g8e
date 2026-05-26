@@ -28,6 +28,8 @@ Desktop.ini
 *.iml
 .windsurf/
 .windsurf/*
+.local.dev/
+.loal.dev/*
 
 # --- Logs & Performance ---
 *.log

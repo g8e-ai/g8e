@@ -81,8 +81,9 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
 	resp := responder.New(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, resp, secretsDir)
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "")
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
 	apiKeySvc := NewAPIKeyService(db, logger)
@@ -158,8 +159,9 @@ func setupTestGatewayService(t *testing.T) (*GatewayService, *config.Config) {
 
 	// Build all services with the initialized PKI
 	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
 	resp := responder.New(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, resp, secretsDir)
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "")
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
 	apiKeySvc := NewAPIKeyService(db, logger)

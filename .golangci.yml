@@ -44,10 +44,6 @@ linters:
           - unused
         path: _test\.go
       - linters:
-          - gosec
-        path: cmd/exporter/main\.go
-        text: G304
-      - linters:
           - bodyclose
         path: internal/testutil/pubsub\.go
         text: Dial

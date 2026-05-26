@@ -57,6 +57,8 @@ It binds identity, intent, state, and governance proofs into one transaction.
 | investigation_id | [string](#string) |  |  |
 | task_id | [string](#string) |  |  |
 | system_fingerprint | [string](#string) |  |  |
+| tenant_id | [string](#string) |  |  |
+| binding_persona | [string](#string) |  |  |
 
 
 

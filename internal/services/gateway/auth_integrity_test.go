@@ -141,7 +141,8 @@ func setupAuthService(t *testing.T) (*AuthService, *GatewayDBService) {
 	t.Cleanup(func() { db.Close() })
 
 	responderSvc := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, nil, responderSvc, secretsDir)
+	personaSvc := NewPersonaService(db, logger)
+	auth := NewAuthService(db, nil, logger, nil, personaSvc, responderSvc, secretsDir, nil, "")
 	return auth, db
 }
 

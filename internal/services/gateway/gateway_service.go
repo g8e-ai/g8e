@@ -76,7 +76,18 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 	pki := newPKIAuthority(cfg.Gateway.DataDir, cfg.Gateway.PKIDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	res := responder.New(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, res, cfg.Gateway.SecretsDir)
+
+	var jwksProvider *JWKSProvider
+	if cfg.Gateway.JWKSURL != "" {
+		jwksProvider = NewJWKSProvider(cfg.Gateway.JWKSURL)
+	}
+
+	personaSvc := NewPersonaService(db, logger)
+	if err := personaSvc.GetOrCreateDefaultPersonas(); err != nil {
+		return nil, fmt.Errorf("failed to initialize default personas: %w", err)
+	}
+
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, jwksProvider, cfg.Gateway.JWTRoleClaim)
 	sessionSvc := NewSessionService(db, logger)
 
 	var extraIPs []net.IP
@@ -150,8 +161,9 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 	sm, _ := NewSecretManager(db.db, cfg.Gateway.SecretsDir, logger)
 	pki := newPKIAuthority(cfg.Gateway.DataDir, cfg.Gateway.PKIDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
 	res := responder.New(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, res, cfg.Gateway.SecretsDir)
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, nil, "")
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
 

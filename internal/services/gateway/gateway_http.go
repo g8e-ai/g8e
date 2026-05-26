@@ -176,7 +176,6 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 
 	// MCP Ingress routes with rate limiting
 	mcpMux := http.NewServeMux()
-	mcpMux.HandleFunc("/api/governance/envelope", h.handleGovernanceEnvelope)
 	mcpMux.HandleFunc("/api/mcp/v1/tools/list", h.mcp.HandleToolsList)
 	mcpMux.HandleFunc("/api/mcp/v1/tools/call", h.mcp.HandleToolsCall)
 	mcpMux.HandleFunc("/api/mcp/v1/tools/call/sse", h.mcp.HandleToolsCallSSE)
@@ -186,7 +185,13 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mcpMux.HandleFunc("/api/mcp/v1/prompts/get", h.mcp.HandlePromptsGet)
 	mcpMux.HandleFunc("/api/a2a/v1/call", h.mcp.HandleA2aCall)
 
-	mcpHandler := h.rateLimitMiddleware(mcpMux)
+	// Wrap MCP/A2A with JWT and Rate Limiting
+	mcpJWTHandler := h.auth.JWTAuthMiddleware(h.rateLimitMiddleware(mcpMux))
+
+	// Rate-limited mux for core governance envelope (uses mTLS via main middleware)
+	govEnvMux := http.NewServeMux()
+	govEnvMux.HandleFunc("/api/governance/envelope", h.handleGovernanceEnvelope)
+	govEnvHandler := h.rateLimitMiddleware(govEnvMux)
 
 	// Health check (available internally)
 	mux.HandleFunc("/health", h.handleHealth)
@@ -208,9 +213,9 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/admin/revoke-app", h.handleRevokeApp)
 
 	// Register rate-limited MCP routes
-	mux.Handle("/api/governance/envelope", mcpHandler)
-	mux.Handle("/api/mcp/", mcpHandler)
-	mux.Handle("/api/a2a/", mcpHandler)
+	mux.Handle("/api/governance/envelope", govEnvHandler)
+	mux.Handle("/api/mcp/", mcpJWTHandler)
+	mux.Handle("/api/a2a/", mcpJWTHandler)
 
 	mux.HandleFunc("/api/audit/receipts", h.handleAuditReceipts)
 	mux.HandleFunc("/api/audit/receipts/export", h.handleAuditReceiptsExport)

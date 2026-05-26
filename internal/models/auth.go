@@ -432,3 +432,14 @@ type AppPolicy struct {
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
+
+// Persona defines a declarative persona manifest for role-based access control.
+// Personas map JWT roles to binding personas used in GovernanceEnvelope.
+type Persona struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Roles       []string  `json:"roles"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}

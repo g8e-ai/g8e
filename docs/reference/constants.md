@@ -2,37 +2,20 @@
 
 ## Single Source of Truth
 
-The g8e constants system maintains a Single Source of Truth (SSOT) in Go at `internal/constants/`. All cross-component constants (collections, events, channels, headers, etc.) are defined as Go constants and exported to JSON via a generation pipeline.
+The g8e constants system maintains a Single Source of Truth (SSOT) in JSON at `protocol/constants/`. All cross-component constants (collections, events, channels, headers, etc.) are defined as JSON files and generated into Go constants via `internal/constants/generate_registry.go`.
 
-## Export Flow
+## Generation Flow
 
 ```text
-Go SSOT (internal/constants/*.go)
-    ↓
-JSON Export (protocol/constants/*.json) via cmd/exporter
+JSON SSOT (protocol/constants/*.json)
     ↓
 Go Registry (internal/constants/registry.go, status_generated.go, headers_generated.go) via generate_registry.go
 ```
 
-### Step 1: Go Source Files
+### Step 1: JSON Source Files
 
-Constants are defined in Go files within `internal/constants/`. Each file contains typed constants with naming metadata:
+Constants are defined in JSON files within `protocol/constants/`. Each file contains constant values with Go constant naming metadata:
 
-```go
-const (
-    CollectionUsers = "users"
-    CollectionCases = "cases"
-)
-```
-
-### Step 2: JSON Export
-
-The `cmd/exporter` binary reads Go constants from the `internal/constants` package and exports them to JSON in `protocol/constants/`. Each JSON file includes:
-
-- `value`: The constant value
-- `_go_const`: The Go constant name
-
-Example (`protocol/constants/collections.json`):
 ```json
 {
   "collections": {
@@ -44,38 +27,36 @@ Example (`protocol/constants/collections.json`):
 }
 ```
 
-The exporter supports merging hand-authored JSON extensions (e.g., documentation fields) with Go-generated constants, with Go SSOT taking precedence on conflicts.
-
-### Step 3: Registry Generation
+### Step 2: Registry Generation
 
 The `generate_registry.go` script reads JSON files from `protocol/constants/` and generates Go registry files (`registry.go`, `status_generated.go`, `headers_generated.go`) that provide runtime access to the constants snapshot.
 
 ## Tracked vs Internal Files
 
-The constants system distinguishes between files exported to JSON and internal-only files:
+The constants system distinguishes between files that generate Go constants and internal-only files:
 
-### Files Exported to JSON (via cmd/exporter)
+### Files That Generate Go Constants
 
-The following Go constant files are exported to `protocol/constants/*.json`:
+The following JSON files are processed by `generate_registry.go`:
 
-- `collections.go` - Database collection names
-- `events.go` - Event type identifiers
-- `headers.go` - HTTP header names
-- `channels.go` - Pub/sub channel names
-- `intents.go` - Intent classification values
-- `document_ids.go` - Document ID prefixes
-- `kv_keys.go` - Key-value store key patterns
-- `senders.go` - Message sender identifiers
-- `prompts.go` - Prompt template identifiers
-- `pubsub.go` - Pub/sub protocol constants
-- `status.go` - Internal enums (UserRole, OperatorStatus, ExecutionStatus)
-- `platform.go` - Platform-specific constants
-- `agents.go` - Agent persona details
-- `timestamp.go` - Go-specific format strings
+- `collections.json` - Database collection names
+- `events.json` - Event type identifiers
+- `headers.json` - HTTP header names
+- `channels.json` - Pub/sub channel names
+- `intents.json` - Intent classification values
+- `document_ids.json` - Document ID prefixes
+- `kv_keys.json` - Key-value store key patterns
+- `senders.json` - Message sender identifiers
+- `prompts.json` - Prompt template identifiers
+- `pubsub.json` - Pub/sub protocol constants
+- `status.json` - Internal enums (UserRole, OperatorStatus, ExecutionStatus)
+- `platform.json` - Platform-specific constants
+- `agents.json` - Agent persona details
+- `timestamp.json` - Go-specific format strings
 
-### Internal-Only Files (Not Exported to JSON)
+### Internal-Only Files (Not Processed by generate_registry.go)
 
-The following files contain Go-specific constants not exported to JSON:
+The following files contain Go-specific constants not defined in JSON:
 
 - `paths.go` - Filesystem paths
 - `ports.go` - Network port numbers
@@ -89,11 +70,11 @@ The following files contain Go-specific constants not exported to JSON:
 
 ### Registry Validation Tracked Files
 
-The `check_registry.go` script validates that constants in the following files are registered in `registry.go`:
+The `check_registry.go` script validates that constants in the following generated files are registered in `registry.go`:
 
+- `headers_generated.go` (generated from headers.json)
 - `collections.go`
 - `events.go`
-- `headers_generated.go` (generated from headers.json)
 - `channels.go`
 - `intents.go`
 - `document_ids.go`
@@ -101,7 +82,7 @@ The `check_registry.go` script validates that constants in the following files a
 - `prompts.go`
 - `pubsub.go`
 
-Note that `kv_keys.go`, `status.go`, `platform.go`, `agents.go`, and `timestamp.go` are excluded from registry validation as they contain internal schemas or data not required in the runtime registry snapshot.
+Note that `kv_keys.json`, `status.json`, `platform.json`, `agents.json`, and `timestamp.json` are excluded from registry validation as they contain internal schemas or data not required in the runtime registry snapshot.
 
 ## Regeneration Commands
 
@@ -111,10 +92,7 @@ Note that `kv_keys.go`, `status.go`, `platform.go`, `agents.go`, and `timestamp.
 make constants
 ```
 
-This command:
-1. Runs `go run ./internal/constants/generate_registry.go` to generate Go registry files from JSON
-2. Builds the `g8e.exporter` binary from `cmd/exporter`
-3. Runs the exporter to generate JSON files in `protocol/constants/` from Go SSOT
+This command runs `go run ./internal/constants/generate_registry.go` to generate Go registry files from JSON.
 
 ### Generate All Protocol Artifacts
 
@@ -154,10 +132,10 @@ The `trackedFiles` map in `check_registry.go` defines which files should be vali
 
 ## Adding New Constants
 
-1. **Add the constant** to the appropriate Go file in `internal/constants/`
-2. **Run `make constants`** to regenerate JSON exports and Go registry files
+1. **Add the constant** to the appropriate JSON file in `protocol/constants/`
+2. **Run `make constants`** to regenerate Go registry files
 3. **Run `check_registry.go`** to verify the constant is registered
-4. **Commit both** the Go source file and the generated files
+4. **Commit both** the JSON source file and the generated files
 
 ## CI Integration
 
@@ -167,7 +145,7 @@ The registry check is enforced in CI via the `registry-check` job in `.github/wo
 
 The constants pipeline generates the following artifacts:
 
-- JSON files in `protocol/constants/` - Canonical constant definitions
 - Go registry files in `internal/constants/` - Runtime access to constants snapshot (registry.go, status_generated.go, headers_generated.go)
 
 These generated files ensure consistency across the platform's Go components.
+

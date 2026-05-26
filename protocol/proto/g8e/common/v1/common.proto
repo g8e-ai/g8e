@@ -108,5 +108,7 @@ message GovernanceEnvelope {
   string investigation_id = 16;
   string task_id = 17;
   string system_fingerprint = 18;
+  string tenant_id = 23;
+  string binding_persona = 24;
 }
 

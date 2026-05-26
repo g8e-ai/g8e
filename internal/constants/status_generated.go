@@ -200,6 +200,7 @@ const (
 type AuthProvider string
 
 const (
+	AuthProviderJWT     AuthProvider = "jwt"
 	AuthProviderLocal   AuthProvider = "local"
 	AuthProviderPasskey AuthProvider = "passkey"
 )
