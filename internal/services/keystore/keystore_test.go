@@ -14,6 +14,8 @@
 package keystore
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,7 +26,6 @@ import (
 )
 
 func TestNewWithBackend(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -40,7 +41,6 @@ func TestNewWithBackend(t *testing.T) {
 }
 
 func TestNewWithBackend_CreatesSecretsDir(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	baseDir := t.TempDir()
 	secretsDir := filepath.Join(baseDir, "secrets")
@@ -57,7 +57,6 @@ func TestNewWithBackend_CreatesSecretsDir(t *testing.T) {
 }
 
 func TestKeystore_Initialize_GeneratesNewKey(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -76,7 +75,6 @@ func TestKeystore_Initialize_GeneratesNewKey(t *testing.T) {
 }
 
 func TestKeystore_Initialize_RetrievesExistingKey(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -102,7 +100,6 @@ func TestKeystore_Initialize_RetrievesExistingKey(t *testing.T) {
 }
 
 func TestKeystore_Initialize_RejectsInvalidKeyLength(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -122,7 +119,6 @@ func TestKeystore_Initialize_RejectsInvalidKeyLength(t *testing.T) {
 }
 
 func TestKeystore_EncryptSecret(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -143,7 +139,6 @@ func TestKeystore_EncryptSecret(t *testing.T) {
 }
 
 func TestKeystore_EncryptSecret_Atomically(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -163,7 +158,6 @@ func TestKeystore_EncryptSecret_Atomically(t *testing.T) {
 }
 
 func TestKeystore_DecryptSecret(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -184,7 +178,6 @@ func TestKeystore_DecryptSecret(t *testing.T) {
 }
 
 func TestKeystore_DecryptSecret_MissingFile(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -201,7 +194,6 @@ func TestKeystore_DecryptSecret_MissingFile(t *testing.T) {
 }
 
 func TestKeystore_DecryptSecret_CorruptedFile(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -212,7 +204,7 @@ func TestKeystore_DecryptSecret_CorruptedFile(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
-	corruptedData := []byte(`{"version":1,"nonce":"AAAA","ciphertext":"corrupted"}`)
+	corruptedData := []byte(`{"version":1,"nonce":"AAAAAA==","ciphertext":"corrupted"}`)
 	secretPath := filepath.Join(secretsDir, "test-secret")
 	err = os.WriteFile(secretPath, corruptedData, 0600)
 	require.NoError(t, err)
@@ -223,7 +215,6 @@ func TestKeystore_DecryptSecret_CorruptedFile(t *testing.T) {
 }
 
 func TestKeystore_DeleteSecret(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -246,7 +237,6 @@ func TestKeystore_DeleteSecret(t *testing.T) {
 }
 
 func TestKeystore_DeleteSecret_Nonexistent(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -262,7 +252,6 @@ func TestKeystore_DeleteSecret_Nonexistent(t *testing.T) {
 }
 
 func TestKeystore_Purge(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -291,7 +280,6 @@ func TestKeystore_Purge(t *testing.T) {
 }
 
 func TestKeystore_EnsurePermissions(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -319,7 +307,6 @@ func TestKeystore_EnsurePermissions(t *testing.T) {
 }
 
 func TestKeystore_BackendName(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -330,4 +317,255 @@ func TestKeystore_BackendName(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "test", ks.BackendName())
+}
+
+func TestKeystore_Encrypt(t *testing.T) {
+	ResetTestStorage()
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+	backend, err := NewTestBackend()
+	require.NoError(t, err)
+
+	ks, err := NewWithBackend(secretsDir, logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+
+	plaintext := "my-plaintext-value"
+	encoded, err := ks.Encrypt(plaintext)
+	require.NoError(t, err)
+	assert.NotEmpty(t, encoded)
+	assert.NotEqual(t, plaintext, encoded)
+}
+
+func TestKeystore_Decrypt(t *testing.T) {
+	ResetTestStorage()
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+	backend, err := NewTestBackend()
+	require.NoError(t, err)
+
+	ks, err := NewWithBackend(secretsDir, logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+
+	plaintext := "my-plaintext-value"
+	encoded, err := ks.Encrypt(plaintext)
+	require.NoError(t, err)
+
+	decrypted, err := ks.Decrypt(encoded)
+	require.NoError(t, err)
+	assert.Equal(t, plaintext, decrypted)
+}
+
+func TestKeystore_EncryptDecrypt_RoundTrip(t *testing.T) {
+	ResetTestStorage()
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+	backend, err := NewTestBackend()
+	require.NoError(t, err)
+
+	ks, err := NewWithBackend(secretsDir, logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+
+	testCases := []string{
+		"simple text",
+		"text with special chars: !@#$%^&*()",
+		"text with unicode: café 日本語 🚀",
+		"multi\nline\ntext",
+		"very long text: " + string(make([]byte, 1000)),
+	}
+
+	for _, plaintext := range testCases {
+		t.Run(plaintext[:min(20, len(plaintext))], func(t *testing.T) {
+			encoded, err := ks.Encrypt(plaintext)
+			require.NoError(t, err)
+
+			decrypted, err := ks.Decrypt(encoded)
+			require.NoError(t, err)
+			assert.Equal(t, plaintext, decrypted)
+		})
+	}
+}
+
+func TestKeystore_Decrypt_InvalidBase64(t *testing.T) {
+	ResetTestStorage()
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+	backend, err := NewTestBackend()
+	require.NoError(t, err)
+
+	ks, err := NewWithBackend(secretsDir, logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+
+	_, err = ks.Decrypt("not-valid-base64!!!")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "decode base64")
+}
+
+func TestKeystore_Decrypt_InvalidJSON(t *testing.T) {
+	ResetTestStorage()
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+	backend, err := NewTestBackend()
+	require.NoError(t, err)
+
+	ks, err := NewWithBackend(secretsDir, logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+
+	invalidJSON := base64.StdEncoding.EncodeToString([]byte(`{invalid json`))
+	_, err = ks.Decrypt(invalidJSON)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unmarshal encrypted value")
+}
+
+func TestKeystore_Decrypt_UnsupportedVersion(t *testing.T) {
+	ResetTestStorage()
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+	backend, err := NewTestBackend()
+	require.NoError(t, err)
+
+	ks, err := NewWithBackend(secretsDir, logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+
+	enc := EncryptedSecret{
+		Version:    999,
+		Nonce:      make([]byte, nonceSize),
+		Ciphertext: []byte("fake"),
+	}
+	data, err := json.Marshal(enc)
+	require.NoError(t, err)
+	encoded := base64.StdEncoding.EncodeToString(data)
+
+	_, err = ks.Decrypt(encoded)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported secret version")
+}
+
+func TestKeystore_Decrypt_InvalidCiphertext(t *testing.T) {
+	ResetTestStorage()
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+	backend, err := NewTestBackend()
+	require.NoError(t, err)
+
+	ks, err := NewWithBackend(secretsDir, logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+
+	enc := EncryptedSecret{
+		Version:    keyVersion,
+		Nonce:      make([]byte, nonceSize),
+		Ciphertext: []byte("invalid ciphertext that will fail GCM"),
+	}
+	data, err := json.Marshal(enc)
+	require.NoError(t, err)
+	encoded := base64.StdEncoding.EncodeToString(data)
+
+	_, err = ks.Decrypt(encoded)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid ciphertext")
+}
+
+func TestKeystore_Encrypt_EmptyPlaintext(t *testing.T) {
+	ResetTestStorage()
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+	backend, err := NewTestBackend()
+	require.NoError(t, err)
+
+	ks, err := NewWithBackend(secretsDir, logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+
+	encoded, err := ks.Encrypt("")
+	require.NoError(t, err)
+	assert.NotEmpty(t, encoded)
+
+	decrypted, err := ks.Decrypt(encoded)
+	require.NoError(t, err)
+	assert.Equal(t, "", decrypted)
+}
+
+func TestKeystore_Encrypt_LargePlaintext(t *testing.T) {
+	ResetTestStorage()
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+	backend, err := NewTestBackend()
+	require.NoError(t, err)
+
+	ks, err := NewWithBackend(secretsDir, logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+
+	largePlaintext := string(make([]byte, 10000))
+	for i := range largePlaintext {
+		largePlaintext = largePlaintext[:i] + "A" + largePlaintext[i+1:]
+	}
+	encoded, err := ks.Encrypt(largePlaintext)
+	require.NoError(t, err)
+	assert.NotEmpty(t, encoded)
+
+	decrypted, err := ks.Decrypt(encoded)
+	require.NoError(t, err)
+	assert.Equal(t, largePlaintext, decrypted)
+}
+
+func TestKeystore_DecryptSecret_InvalidJSON(t *testing.T) {
+	ResetTestStorage()
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+	backend, err := NewTestBackend()
+	require.NoError(t, err)
+
+	ks, err := NewWithBackend(secretsDir, logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+
+	invalidJSON := []byte(`{invalid json`)
+	secretPath := filepath.Join(secretsDir, "test-secret")
+	err = os.WriteFile(secretPath, invalidJSON, 0600)
+	require.NoError(t, err)
+
+	_, err = ks.DecryptSecret("test-secret")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unmarshal encrypted secret")
+}
+
+func TestKeystore_DecryptSecret_UnsupportedVersion(t *testing.T) {
+	ResetTestStorage()
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+	backend, err := NewTestBackend()
+	require.NoError(t, err)
+
+	ks, err := NewWithBackend(secretsDir, logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+
+	enc := EncryptedSecret{
+		Version:    999,
+		Nonce:      make([]byte, nonceSize),
+		Ciphertext: []byte("fake"),
+	}
+	data, err := json.Marshal(enc)
+	require.NoError(t, err)
+	secretPath := filepath.Join(secretsDir, "test-secret")
+	err = os.WriteFile(secretPath, data, 0600)
+	require.NoError(t, err)
+
+	_, err = ks.DecryptSecret("test-secret")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported secret version")
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
