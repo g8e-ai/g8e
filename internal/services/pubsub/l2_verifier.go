@@ -26,11 +26,11 @@ var (
 	ErrL2AsymmetricInvalid  = errors.New("L2Consensus: consensus_signature failed ED25519 verification")
 	ErrL3ProofMissing       = errors.New("L3Notary: governance.l3.proof missing from envelope")
 	ErrL3ProofInvalid       = errors.New("L3Notary: governance.l3.proof failed verification")
-	ErrStateRootMissing     = errors.New("Protocol: state_merkle_root missing")
-	ErrStateRootUnavailable = errors.New("Protocol: current state merkle root unavailable")
-	ErrStateRootMismatch    = errors.New("Protocol: state_merkle_root does not match current state")
-	ErrTransactionExpired   = errors.New("Protocol: transaction has expired")
-	ErrTransactionReplay    = errors.New("Protocol: transaction replay detected")
+	ErrStateRootMissing     = errors.New("protocol: state_merkle_root missing")
+	ErrStateRootUnavailable = errors.New("protocol: current state merkle root unavailable")
+	ErrStateRootMismatch    = errors.New("protocol: state_merkle_root does not match current state")
+	ErrTransactionExpired   = errors.New("protocol: transaction has expired")
+	ErrTransactionReplay    = errors.New("protocol: transaction replay detected")
 )
 
 // L2Consensus and L3Notary verification for UAP JSON envelopes is handled by the L2Consensus and L5Actuator services.

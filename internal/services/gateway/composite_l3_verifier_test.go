@@ -37,8 +37,7 @@ func TestCompositeL3Verifier_VerifyL3Proof_NilProof(t *testing.T) {
 	verifier := NewCompositeL3Verifier(nil, nil, logger)
 
 	_, err := verifier.VerifyL3Proof("user-123", "tx-hash-456", "cli-session-789", nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "L3Notary proof is required")
+	require.ErrorIs(t, err, ErrL3ProofRequired)
 }
 
 func TestCompositeL3Verifier_VerifyL3Proof_MTLSProof_NoCLIVerifier(t *testing.T) {
@@ -51,8 +50,7 @@ func TestCompositeL3Verifier_VerifyL3Proof_MTLSProof_NoCLIVerifier(t *testing.T)
 	}
 
 	_, err := verifier.VerifyL3Proof("user-123", "tx-hash-456", "cli-session-789", proof)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "CLI L3Notary verifier not configured")
+	require.ErrorIs(t, err, ErrCLIL3NotaryNotConfigured)
 }
 
 func TestCompositeL3Verifier_VerifyL3Proof_WebAuthnProof_NoPasskeyVerifier(t *testing.T) {
@@ -66,8 +64,7 @@ func TestCompositeL3Verifier_VerifyL3Proof_WebAuthnProof_NoPasskeyVerifier(t *te
 	}
 
 	_, err := verifier.VerifyL3Proof("user-123", "tx-hash-456", "", proof)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "Passkey L3Notary verifier not configured")
+	require.ErrorIs(t, err, ErrPasskeyL3NotaryNotConfigured)
 }
 
 func TestCompositeL3Verifier_VerifyL3Proof_MTLSProof_DelegatesToCLI(t *testing.T) {
@@ -88,7 +85,7 @@ func TestCompositeL3Verifier_VerifyL3Proof_MTLSProof_DelegatesToCLI(t *testing.T
 	_, err := verifier.VerifyL3Proof("user-123", "tx-hash-789", "cli-session-101", proof)
 	assert.Error(t, err)
 	// The error should come from the CLI verifier, not about missing verifier
-	assert.NotContains(t, err.Error(), "CLI L3Notary verifier not configured")
+	assert.NotErrorIs(t, err, ErrCLIL3NotaryNotConfigured)
 }
 
 func TestCompositeL3Verifier_VerifyL3Proof_WebAuthnProof_DelegatesToPasskey(t *testing.T) {
@@ -110,5 +107,5 @@ func TestCompositeL3Verifier_VerifyL3Proof_WebAuthnProof_DelegatesToPasskey(t *t
 	_, err := verifier.VerifyL3Proof("user-123", "tx-hash-101", "", proof)
 	assert.Error(t, err)
 	// The error should come from the passkey verifier, not about missing verifier
-	assert.NotContains(t, err.Error(), "Passkey L3Notary verifier not configured")
+	assert.NotErrorIs(t, err, ErrPasskeyL3NotaryNotConfigured)
 }

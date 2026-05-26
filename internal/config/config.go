@@ -27,9 +27,9 @@ import (
 type GatewayPosture string
 
 const (
-	// PostureDoctrine: L1 enforced, L2/L3 audited but not enforced (default)
+	// PostureDoctrine: L1 enforced, L2/L3 signature not required (default)
 	PostureDoctrine GatewayPosture = "doctrine"
-	// PostureConsensus: L1/L2 enforced, L3 audited but not enforced
+	// PostureConsensus: L1/L2 enforced, L3 signature not required
 	PostureConsensus GatewayPosture = "consensus"
 	// PostureNotary: L1/L2/L3 strictly enforced
 	PostureNotary GatewayPosture = "notary"

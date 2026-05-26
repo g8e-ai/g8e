@@ -14,10 +14,17 @@
 package gateway
 
 import (
-	"fmt"
+	"errors"
 	"log/slog"
 
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+)
+
+// Sentinel errors for L3 verification failures.
+var (
+	ErrL3ProofRequired              = errors.New("L3Notary proof is required")
+	ErrCLIL3NotaryNotConfigured     = errors.New("CLI L3Notary verifier not configured")
+	ErrPasskeyL3NotaryNotConfigured = errors.New("passkey L3Notary verifier not configured")
 )
 
 // CompositeL3Verifier provides L3Notary verification for both web sessions (WebAuthn)
@@ -44,13 +51,13 @@ func NewCompositeL3Verifier(passkeyL3 *PasskeyService, cliL3 *CLIL3Notary, logge
 // - Otherwise, it uses the WebAuthn passkey verifier
 func (v *CompositeL3Verifier) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	if proof == nil {
-		return false, fmt.Errorf("L3Notary proof is required")
+		return false, ErrL3ProofRequired
 	}
 
 	// Check if this is a CLI mTLS proof
 	if proof.MtlsCertFingerprint != "" {
 		if v.cliL3 == nil {
-			return false, fmt.Errorf("CLI L3Notary verifier not configured")
+			return false, ErrCLIL3NotaryNotConfigured
 		}
 		hashPrefix := transactionHash
 		if len(transactionHash) > 8 {
@@ -62,7 +69,7 @@ func (v *CompositeL3Verifier) VerifyL3Proof(userID, transactionHash, cliSessionI
 
 	// Otherwise, use WebAuthn passkey verifier (web sessions don't use cli_session_id)
 	if v.passkeyL3 == nil {
-		return false, fmt.Errorf("Passkey L3Notary verifier not configured")
+		return false, ErrPasskeyL3NotaryNotConfigured
 	}
 	hashPrefix := transactionHash
 	if len(transactionHash) > 8 {

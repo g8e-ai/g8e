@@ -155,8 +155,8 @@ The Gateway supports three governance postures (configured via `G8E_GATEWAY_POST
 
 | Mode | Posture | Purpose |
 |---|---|---|
-| **Doctrine** | `doctrine` | L1 enforced, L2/L3 audited but not enforced (default) |
-| **Consensus** | `consensus` | L1/L2 enforced, L3 audited but not enforced |
+| **Doctrine** | `doctrine` | L1 enforced, L2/L3 signature not required (default) |
+| **Consensus** | `consensus` | L1/L2 enforced, L3 signature not required |
 | **Notary** | `notary` | L1/L2/L3 strictly enforced (default for outbound mode) |
 
 ### Port Configuration

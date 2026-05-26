@@ -427,21 +427,8 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	ls.running = true
 	ls.mu.Unlock()
 
-	// Log enforcement levels based on posture
-	var l1Status, l2Status, l3Status string
-	switch ls.cfg.Gateway.Posture {
-	case config.PostureDoctrine:
-		l1Status, l2Status, l3Status = "Enforced", "NOT Enforced", "NOT Enforced"
-	case config.PostureConsensus:
-		l1Status, l2Status, l3Status = "Enforced", "Enforced", "NOT Enforced"
-	case config.PostureNotary:
-		l1Status, l2Status, l3Status = "Enforced", "Enforced", "Enforced"
-	}
 	ls.logger.Info("operator Gateway Mode ready",
 		"posture", ls.cfg.Gateway.Posture,
-		"L1 Doctrine", l1Status,
-		"L2 Consensus", l2Status,
-		"L3 Notary", l3Status,
 		"http_port", ls.cfg.Gateway.HTTPPort,
 		"bootstrap_port", ls.cfg.Gateway.BootstrapPort,
 		"data_dir", ls.cfg.Gateway.DataDir)
@@ -484,7 +471,7 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 			s.Addr = ln.Addr().String()
 		}
 
-		var lnToServe net.Listener = ln
+		lnToServe := ln
 		tlsMode := "plain"
 		if s.TLSConfig != nil {
 			lnToServe = tls.NewListener(ln, s.TLSConfig)
@@ -517,21 +504,8 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 		ls.mu.Lock()
 		ls.ready = true
 		ls.mu.Unlock()
-		// Log enforcement levels based on posture
-		var l1Status, l2Status, l3Status string
-		switch ls.cfg.Gateway.Posture {
-		case config.PostureDoctrine:
-			l1Status, l2Status, l3Status = "Enforced", "NOT Enforced", "NOT Enforced"
-		case config.PostureConsensus:
-			l1Status, l2Status, l3Status = "Enforced", "Enforced", "NOT Enforced"
-		case config.PostureNotary:
-			l1Status, l2Status, l3Status = "Enforced", "Enforced", "Enforced"
-		}
 		ls.logger.Info("operator Gateway Mode fully operational",
-			"posture", ls.cfg.Gateway.Posture,
-			"L1 Doctrine", l1Status,
-			"L2 Consensus", l2Status,
-			"L3 Notary", l3Status)
+			"posture", ls.cfg.Gateway.Posture)
 	}()
 
 	return <-errChan

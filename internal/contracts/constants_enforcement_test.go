@@ -500,7 +500,7 @@ func TestNoRawStringLiteralsWhereConstantsExist(t *testing.T) {
 		}
 
 		var report strings.Builder
-		report.WriteString(fmt.Sprintf("\nFound %d raw string literal(s) that should use constants:\n", len(allViolations)))
+		fmt.Fprintf(&report, "\nFound %d raw string literal(s) that should use constants:\n", len(allViolations))
 
 		fileKeys := make([]string, 0, len(byFile))
 		for k := range byFile {
@@ -510,10 +510,10 @@ func TestNoRawStringLiteralsWhereConstantsExist(t *testing.T) {
 
 		for _, file := range fileKeys {
 			vList := byFile[file]
-			report.WriteString(fmt.Sprintf("\n  %s:\n", file))
+			fmt.Fprintf(&report, "\n  %s:\n", file)
 			for _, v := range vList {
-				report.WriteString(fmt.Sprintf("    Line %d: %q -> use %s from %s\n",
-					v.Line, v.Value, v.ConstantName, v.SourceFile))
+				fmt.Fprintf(&report, "    Line %d: %q -> use %s from %s\n",
+					v.Line, v.Value, v.ConstantName, v.SourceFile)
 			}
 		}
 

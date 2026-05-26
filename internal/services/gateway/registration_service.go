@@ -269,7 +269,7 @@ func (s *RegistrationService) CreateDeviceLink(req models.CreateDeviceLinkReques
 		return nil, fmt.Errorf("failed to generate device link token: %w", err)
 	}
 	now := time.Now().UTC()
-	var status constants.DeviceLinkStatus = deviceLinkStatusActive
+	status := deviceLinkStatusActive
 	if req.OperatorID != "" {
 		status = deviceLinkStatusPending
 	}
@@ -318,7 +318,7 @@ func (s *RegistrationService) ListDeviceLinks(userID string) ([]models.DeviceLin
 		if link.UserID != userID {
 			continue
 		}
-		var status constants.DeviceLinkStatus = link.Status
+		status := link.Status
 		if link.ExpiresAt.Before(time.Now()) {
 			status = deviceLinkStatusExpired
 		}

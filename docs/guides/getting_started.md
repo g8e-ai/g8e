@@ -28,8 +28,8 @@ The Governance Gateway serves as the central Policy Decision Point (PDP). It pro
 
 The Gateway runs in one of three modes, each enforcing different layers of the 3-Layer Governance model:
 
-- **Doctrine Mode**: Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2 and L3 are audited but not enforced.
-- **Consensus Mode**: Enforces L1 and L2 (multi-model Byzantine consensus). L3 is audited but not enforced.
+- **Doctrine Mode**: Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures not required.
+- **Consensus Mode**: Enforces L1 and L2 (multi-model Byzantine consensus). L3 signature not required.
 - **Notary Mode**: Enforces L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2). This is the most secure mode.
 
 ### Governed Operator (g8eo)

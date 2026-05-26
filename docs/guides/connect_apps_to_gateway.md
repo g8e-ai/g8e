@@ -40,11 +40,11 @@ Start the Gateway:
 ./g8e platform start
 ```
 
-The Gateway runs in the default mode (doctrine: L1 enforced, L2/L3 audited). To run in different enforcement modes, invoke the binary directly with mode flags:
+The Gateway runs in the default mode (doctrine: L1 enforced, L2/L3 signatures not required). To run in different enforcement modes, invoke the binary directly with mode flags:
 
 #### Doctrine Mode (Default)
 
-Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2 and L3 are audited but not enforced.
+Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures not required.
 
 ```bash
 ./g8e.operator --doctrine
@@ -52,7 +52,7 @@ Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2 and
 
 #### Consensus Mode
 
-Enforces L1 and L2 (multi-model Byzantine consensus). L3 is audited but not enforced.
+Enforces L1 and L2 (multi-model Byzantine consensus). L3 signature not required.
 
 ```bash
 ./g8e.operator --consensus

@@ -348,10 +348,7 @@ func (rs *PubSubCommandService) Start(ctx context.Context) error {
 		}()
 	} else {
 		rs.logger.Info("Command service starting in Gateway mode (no pub/sub subscription)",
-			"mode", string(constants.GatewayModeMode),
-			"L1 Doctrine", "Enforced",
-			"L2 Consensus", "NOT Enforced",
-			"L3 Notary", "NOT Enforced")
+			"mode", string(constants.GatewayModeMode))
 	}
 
 	rs.heartbeat.StartSchedulerUnlocked()

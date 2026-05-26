@@ -612,21 +612,8 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		os.Exit(constants.ExitConfigError)
 	}
 
-	// Log enforcement levels based on posture
-	var l1Status, l2Status, l3Status string
-	switch posture {
-	case config.PostureDoctrine:
-		l1Status, l2Status, l3Status = "Enforced", "NOT Enforced", "NOT Enforced"
-	case config.PostureConsensus:
-		l1Status, l2Status, l3Status = "Enforced", "Enforced", "NOT Enforced"
-	case config.PostureNotary:
-		l1Status, l2Status, l3Status = "Enforced", "Enforced", "Enforced"
-	}
 	logger.Info("g8e Operator - Gateway Mode",
 		"posture", posture,
-		"L1 Doctrine", l1Status,
-		"L2 Consensus", l2Status,
-		"L3 Notary", l3Status,
 		"version", version,
 		"build", buildID)
 
