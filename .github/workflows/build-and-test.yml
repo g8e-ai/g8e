@@ -1,24 +1,32 @@
-name: Build and Test
+name: CI
 
 on:
+  push:
+    branches: [ "main" ]
   pull_request:
+    branches: [ "main" ]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  verify-proto:
+  verify:
+    name: Verify Code Generation
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache-dependency-path: go.sum
+          cache: true
 
       - name: Set up Buf
         uses: bufbuild/buf-setup-action@v1
@@ -47,7 +55,6 @@ jobs:
 
       - name: Check for drift
         run: |
-          # Only check for changes in generated proto files, ignore untracked files
           CHANGES=$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$|^\s*M.*\.proto$" || true)
           if [ -n "$CHANGES" ]; then
             echo "Error: Generated proto files are out of sync with protocol/proto/*.proto"
@@ -56,137 +63,112 @@ jobs:
             exit 1
           fi
 
-      - name: Lint no bare session_id
-        run: make lint-no-bare-session-id
-
       - name: Validate doctrine JSON schema
         run: make validate-doctrines
 
       - name: Check constants registry
         run: go run ./internal/constants/check_registry.go ./internal/constants
 
-  lint-g8eo:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache-dependency-path: go.sum
+          cache: false
 
-      - name: Install tools
-        run: |
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          go install gotest.tools/gotestsum@latest
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
 
-      - name: Run golangci-lint (g8eo)
-        run: golangci-lint run
+      - name: Lint no bare session_id
+        run: make lint-no-bare-session-id
 
-  vulncheck-g8eo:
+      - name: Constants lint
+        run: go test -v -run TestNoRawStringLiteralsWhereConstantsExist ./internal/contracts
+        env:
+          G8E_STRICT_CONSTANTS_LINT: "1"
+        continue-on-error: true
+
+  security:
+    name: Security Scan
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache-dependency-path: go.sum
+          cache: true
 
       - name: Run govulncheck
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-default: true
+          repo-checkout: false
 
-  test-g8eo:
+  test:
+    name: Substrate Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache-dependency-path: go.sum
+          cache: true
 
-      - name: Install tools
-        run: |
-          go install gotest.tools/gotestsum@latest
-
-      - name: Build unified g8eo binary
+      - name: Build CLI
         run: make build-cli
 
-      - name: Start Operator Gateway
-        run: ./g8e platform start
-
-      - name: Test Operator Gateway
-        run: |
-          GOMAXPROCS=4 gotestsum --format testname -- -race -p 4 -timeout 180s ./...
-
-      - name: Check coverage
-        run: |
-          GOMAXPROCS=4 go test -race -p 4 -timeout 180s -coverprofile=coverage.out -covermode=atomic ./...
-          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
-          if [ $(echo "$COVERAGE < 85" | bc -l) -eq 1 ]; then
-            echo "Coverage $COVERAGE% is below 85% threshold"
-            exit 1
-          fi
-          echo "Coverage $COVERAGE% meets 85% threshold"
+      - name: Run substrate tests
+        run: make _ci-test-g8eo
 
       - name: Show Operator logs
         if: failure()
         run: tail -n 200 .g8e/logs/operator-listen.log || true
 
-      - name: Stop platform
-        if: always()
-        run: ./g8e platform stop
-
   test-scenarios:
+    name: Scenario Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache-dependency-path: go.sum
+          cache: true
 
       - name: Run scenario integration tests
-        run: |
-          go test -tags=integration -v -run TestScenarios ./test/scenario/...
+        run: go test -tags=integration -v -run TestScenarios ./test/scenario/...
 
-  constants-lint:
+  docs:
+    name: Check Documentation
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache-dependency-path: go.sum
-
-      - name: Run Constants Lint
-        run: go test -v -run TestNoRawStringLiteralsWhereConstantsExist ./internal/contracts
-        env:
-          G8E_STRICT_CONSTANTS_LINT: "1"
-
-  docs-build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+          cache: true
 
       - name: Build CLI reference
         run: make docs-cli
@@ -203,4 +185,3 @@ jobs:
 
       - name: Build documentation
         run: make docs-build
-
