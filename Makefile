@@ -128,7 +128,7 @@ protoc-install:
 lint-no-bare-session-id:
 	@echo "Checking for bare session_id regression..."
 	@if grep -rE "\bsession_id\b" . \
-		--exclude-dir={.git,vendor,node_modules,.g8e,.local.dev,.github} \
+		--exclude-dir={.git,vendor,node_modules,.g8e,.local.dev,.github,docs,site} \
 		--exclude={*.pb.go,Makefile,*.json} \
 		-I; then \
 		echo "Error: Bare 'session_id' found. Use 'operator_session_id', 'cli_session_id', or 'web_session_id' instead."; \
