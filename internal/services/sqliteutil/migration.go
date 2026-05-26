@@ -54,6 +54,7 @@ func (db *DB) RunMigrations(migrations []Migration) error {
 		currentVersion = 0
 	}
 
+	appliedCount := 0
 	for _, m := range migrations {
 		if m.Version <= currentVersion {
 			continue
@@ -84,9 +85,11 @@ func (db *DB) RunMigrations(migrations []Migration) error {
 			return err
 		}
 
-		db.logger.Info("Schema migration applied",
-			"version", m.Version,
-			"description", m.Description)
+		appliedCount++
+	}
+
+	if appliedCount > 0 {
+		db.logger.Info("Database schema migrations completed", "applied", appliedCount)
 	}
 
 	return nil

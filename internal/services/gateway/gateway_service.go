@@ -427,9 +427,22 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	ls.running = true
 	ls.mu.Unlock()
 
+	// Log enforcement levels based on posture
+	var l1Status, l2Status, l3Status string
+	switch ls.cfg.Gateway.Posture {
+	case config.PostureDoctrine:
+		l1Status, l2Status, l3Status = "Enforced", "NOT Enforced", "NOT Enforced"
+	case config.PostureConsensus:
+		l1Status, l2Status, l3Status = "Enforced", "Enforced", "NOT Enforced"
+	case config.PostureNotary:
+		l1Status, l2Status, l3Status = "Enforced", "Enforced", "Enforced"
+	}
 	ls.logger.Info("operator Gateway Mode ready",
+		"posture", ls.cfg.Gateway.Posture,
+		"L1 Doctrine", l1Status,
+		"L2 Consensus", l2Status,
+		"L3 Notary", l3Status,
 		"http_port", ls.cfg.Gateway.HTTPPort,
-
 		"bootstrap_port", ls.cfg.Gateway.BootstrapPort,
 		"data_dir", ls.cfg.Gateway.DataDir)
 
@@ -458,8 +471,6 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	}
 
 	startServer := func(s *http.Server, name string) {
-		ls.logger.Info("Starting gateway", "server", name, "addr", s.Addr)
-
 		// Use a temporary gateway to signal readiness before blocking on Serve
 		ln, err := net.Listen(string(constants.NetworkProtocolTCP), s.Addr)
 		if err != nil {
@@ -473,18 +484,19 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 			s.Addr = ln.Addr().String()
 		}
 
-		ls.logger.Info("TCP gateway bound", "server", name, "addr", s.Addr)
-
 		var lnToServe net.Listener = ln
+		tlsMode := "plain"
 		if s.TLSConfig != nil {
 			lnToServe = tls.NewListener(ln, s.TLSConfig)
-			ls.logger.Info("TLS gateway bound", "server", name, "addr", s.Addr)
-		} else {
-			ls.logger.Info("Plain HTTP gateway bound", "server", name, "addr", s.Addr)
+			tlsMode = "mTLS"
 		}
 
+		ls.logger.Info("Gateway server listening",
+			"server", name,
+			"addr", s.Addr,
+			"tls", tlsMode)
+
 		readyChan <- struct{}{}
-		ls.logger.Info("Starting server Serve", "server", name, "addr", s.Addr)
 		errChan <- s.Serve(lnToServe)
 	}
 
@@ -505,7 +517,21 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 		ls.mu.Lock()
 		ls.ready = true
 		ls.mu.Unlock()
-		ls.logger.Info("operator Gateway Mode fully operational")
+		// Log enforcement levels based on posture
+		var l1Status, l2Status, l3Status string
+		switch ls.cfg.Gateway.Posture {
+		case config.PostureDoctrine:
+			l1Status, l2Status, l3Status = "Enforced", "NOT Enforced", "NOT Enforced"
+		case config.PostureConsensus:
+			l1Status, l2Status, l3Status = "Enforced", "Enforced", "NOT Enforced"
+		case config.PostureNotary:
+			l1Status, l2Status, l3Status = "Enforced", "Enforced", "Enforced"
+		}
+		ls.logger.Info("operator Gateway Mode fully operational",
+			"posture", ls.cfg.Gateway.Posture,
+			"L1 Doctrine", l1Status,
+			"L2 Consensus", l2Status,
+			"L3 Notary", l3Status)
 	}()
 
 	return <-errChan

@@ -38,19 +38,19 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
-// TestMCPRealOperator_Smoke is a live-operator smoke test that validates
-// the bootstrap + MCP tools/list flow against a running ./g8e platform.
+// TestA2ARealOperator_Smoke is a live-operator smoke test that validates
+// the bootstrap + A2A call flow against a running ./g8e platform.
 //
-// This test is intentionally narrow: it does NOT exercise tools/call,
-// which requires a downstream MCP server and OOB WebAuthn approval -
-// those flows are covered hermetically by TestMCPGateway_EndToEnd in
+// This test is intentionally narrow: it does NOT exercise the full A2A
+// skill execution with downstream server and OOB WebAuthn approval -
+// those flows are covered hermetically by TestA2AGateway_EndToEnd in
 // mcp_gateway_test.go.
 //
 // Skip conditions:
 //   - Operator not reachable at $OPERATOR_URL (default from paths.json)
 //   - Trust bundle not present at $G8E_PKI_DIR_HOST/trust/hub-bundle.pem
 //   - Platform already bootstrapped (403) and no rotation context available
-func TestMCPRealOperator_Smoke(t *testing.T) {
+func TestA2ARealOperator_Smoke(t *testing.T) {
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
 		operatorURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
@@ -96,7 +96,7 @@ func TestMCPRealOperator_Smoke(t *testing.T) {
 	require.NoError(t, err)
 	cliCsrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCsrDER})
 
-	fpHash := sha256.Sum256([]byte("g8e-mcp-smoke-test"))
+	fpHash := sha256.Sum256([]byte("g8e-a2a-smoke-test"))
 	fingerprint := hex.EncodeToString(fpHash[:])
 
 	reqBody, _ := json.Marshal(map[string]string{
@@ -146,20 +146,32 @@ func TestMCPRealOperator_Smoke(t *testing.T) {
 		},
 	}
 
-	listReq, err := http.NewRequest(http.MethodGet, operatorURL+"/api/mcp/v1/tools/list", nil)
-	require.NoError(t, err)
-	listReq.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
-	listReq.Header.Set("X-G8E-CLI-Session-ID", regResp.CLISessionID)
-	listReq.Header.Set("X-G8E-Source-Component", "client")
+	// Test A2A call endpoint
+	a2aCallReq := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "a2a/call",
+		"params": map[string]interface{}{
+			"skill_name": "test-skill",
+			"payload":    map[string]string{"foo": "bar"},
+		},
+	}
 
-	listResp, err := mtlsClient.Do(listReq)
+	reqBody2, _ := json.Marshal(a2aCallReq)
+	callReq, err := http.NewRequest(http.MethodPost, operatorURL+"/api/a2a/v1/call", bytes.NewReader(reqBody2))
 	require.NoError(t, err)
-	defer listResp.Body.Close()
+	callReq.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
+	callReq.Header.Set("X-G8E-CLI-Session-ID", regResp.CLISessionID)
+	callReq.Header.Set("X-G8E-Source-Component", "client")
+	callReq.Header.Set("Content-Type", "application/json")
 
-	listBody, _ := io.ReadAll(listResp.Body)
-	require.Equal(t, http.StatusOK, listResp.StatusCode, "tools/list failed: %s", string(listBody))
-	require.Contains(t, string(listBody), "jsonrpc")
-	require.Contains(t, string(listBody), "tools")
+	callResp, err := mtlsClient.Do(callReq)
+	require.NoError(t, err)
+	defer callResp.Body.Close()
+
+	callBody, _ := io.ReadAll(callResp.Body)
+	require.Equal(t, http.StatusOK, callResp.StatusCode, "a2a/call failed: %s", string(callBody))
+	require.Contains(t, string(callBody), "jsonrpc")
 
 	// Query live operator audit vault for inspection
 	t.Logf("Test completed. Querying live operator audit vault at %s", filepath.Join(repoRoot, ".g8e", "audit_vault.db"))

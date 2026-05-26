@@ -294,51 +294,19 @@ func TestCheckOperatorRunning_NotRunning(t *testing.T) {
 		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
 		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
 		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	err := CheckOperatorRunning(cfg)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "operator is not running")
+	assert.Contains(t, err.Error(), "operator is not running or not responding")
 }
 
-func TestCheckOperatorRunning_InvalidPID(t *testing.T) {
+func TestCheckOperatorRunning_HealthCheckFailed(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
-	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
-		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
-		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
-		CredentialsDir: tmpDir,
-	}
 
-	pidDir := filepath.Join(cfg.RuntimeDir, "pids")
-	require.NoError(t, os.MkdirAll(pidDir, 0700))
-	pidFile := filepath.Join(pidDir, "operator.pid")
-	require.NoError(t, os.WriteFile(pidFile, []byte("invalid-pid"), 0600))
-
-	err := CheckOperatorRunning(cfg)
+	// Test with a non-existent port
+	err := CheckOperatorRunningAtURL("https://localhost:99999")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to parse pid")
-}
-
-func TestCheckOperatorRunning_ProcessNotRunning(t *testing.T) {
-	t.Parallel()
-	tmpDir := t.TempDir()
-	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
-		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
-		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
-		CredentialsDir: tmpDir,
-	}
-
-	pidDir := filepath.Join(cfg.RuntimeDir, "pids")
-	require.NoError(t, os.MkdirAll(pidDir, 0700))
-	pidFile := filepath.Join(pidDir, "operator.pid")
-	require.NoError(t, os.WriteFile(pidFile, []byte("99999"), 0600))
-
-	err := CheckOperatorRunning(cfg)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "operator process not running")
+	assert.Contains(t, err.Error(), "not running or not responding")
 }
