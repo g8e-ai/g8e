@@ -23,7 +23,7 @@ export PATH := $(shell go env GOPATH)/bin:$(HOME)/go/bin:$(PATH)
 # =============================================================================
 # Protocol buffer tool versions - update these when upgrading tools
 PROTOC_VERSION := v35.0
-PROTOC_GEN_GO_VERSION := v1.36.1
+PROTOC_GEN_GO_VERSION := v1.36.11
 PROTOC_GEN_GO_GRPC_VERSION := v1.6.2
 PROTOC_GEN_DOC_VERSION := v1.5.1
 PROTOC_MIN_VERSION := 21
@@ -155,7 +155,7 @@ protoc-install:
 # BUILD
 # =============================================================================
 .PHONY: build
-build: build-cli build-operator
+build: constants build-cli build-operator
 	@echo "All builds complete."
 
 .PHONY: build-cli
