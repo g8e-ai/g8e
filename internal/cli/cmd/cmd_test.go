@@ -14,7 +14,6 @@
 package cmd
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -36,23 +35,17 @@ func TestRootCommandStructure(t *testing.T) {
 func TestCommandRegistration(t *testing.T) {
 	t.Run("all expected subcommands are registered", func(t *testing.T) {
 		expectedCommands := []string{
-			"setup",
 			"platform",
 			"auth",
 			"data",
 			"test",
 			"security",
-			"vars",
 		}
 
 		for _, cmdName := range expectedCommands {
 			t.Run(cmdName+" command exists", func(t *testing.T) {
 				// Verify command constructors don't panic
 				switch cmdName {
-				case "setup":
-					cmd := setupCmd()
-					assert.NotNil(t, cmd)
-					assert.Equal(t, "setup", cmd.Use)
 				case "platform":
 					cmd := platformCmd()
 					assert.NotNil(t, cmd)
@@ -73,10 +66,6 @@ func TestCommandRegistration(t *testing.T) {
 					cmd := securityCmd()
 					assert.NotNil(t, cmd)
 					assert.Equal(t, "security", cmd.Use)
-				case "vars":
-					cmd := varsCmd()
-					assert.NotNil(t, cmd)
-					assert.Equal(t, "vars", cmd.Use)
 				}
 			})
 		}
@@ -199,39 +188,17 @@ func TestSecurityCommandSubcommands(t *testing.T) {
 	})
 }
 
-func TestVarsCommandSubcommands(t *testing.T) {
-	t.Run("vars command has expected subcommands", func(t *testing.T) {
-		cmd := varsCmd()
-		require.NotNil(t, cmd)
-
-		expectedSubcommands := []string{"list", "set", "get", "unset"}
-
-		for _, subcmd := range expectedSubcommands {
-			found := false
-			for _, c := range cmd.Commands() {
-				if c.Name() == subcmd {
-					found = true
-					break
-				}
-			}
-			assert.True(t, found, "vars command should have %s subcommand", subcmd)
-		}
-	})
-}
-
 func TestCommandHelpText(t *testing.T) {
 	t.Run("commands have non-empty help text", func(t *testing.T) {
 		commands := []struct {
 			name string
 			cmd  *cobra.Command
 		}{
-			{"setup", setupCmd()},
 			{"platform", platformCmd()},
 			{"auth", authCmd()},
 			{"data", dataCmd()},
 			{"test", testCmd()},
 			{"security", securityCmd()},
-			{"vars", varsCmd()},
 		}
 
 		for _, tc := range commands {
@@ -308,97 +275,10 @@ func TestCommandFlagValidation(t *testing.T) {
 	})
 }
 
-func TestCommandArgumentValidation(t *testing.T) {
-	t.Run("vars set requires exact args", func(t *testing.T) {
-		cmd := varsSetCmd()
-		require.NotNil(t, cmd)
-	})
-
-	t.Run("vars get requires exact args", func(t *testing.T) {
-		cmd := varsGetCmd()
-		require.NotNil(t, cmd)
-	})
-
-	t.Run("vars unset requires exact args", func(t *testing.T) {
-		cmd := varsUnsetCmd()
-		require.NotNil(t, cmd)
-	})
-}
-
 func TestCommandAliases(t *testing.T) {
-	t.Run("vars list has ls alias", func(t *testing.T) {
-		cmd := varsListCmd()
-		require.NotNil(t, cmd)
-
-		assert.Contains(t, cmd.Aliases, "ls")
-	})
 }
 
 func TestPlaceholderCommands(t *testing.T) {
-	t.Run("setup command is placeholder", func(t *testing.T) {
-		cmd := setupCmd()
-		require.NotNil(t, cmd)
-
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		err := cmd.RunE(cmd, []string{})
-		require.NoError(t, err)
-		assert.Contains(t, buf.String(), "to be implemented")
-	})
-
-	t.Run("vars list is placeholder", func(t *testing.T) {
-		cmd := varsListCmd()
-		require.NotNil(t, cmd)
-
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		err := cmd.RunE(cmd, []string{})
-		require.NoError(t, err)
-		assert.Contains(t, buf.String(), "to be implemented")
-	})
-
-	t.Run("vars set is placeholder", func(t *testing.T) {
-		cmd := varsSetCmd()
-		require.NotNil(t, cmd)
-
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		err := cmd.RunE(cmd, []string{"key", "value"})
-		require.NoError(t, err)
-		assert.Contains(t, buf.String(), "to be implemented")
-	})
-
-	t.Run("vars get is placeholder", func(t *testing.T) {
-		cmd := varsGetCmd()
-		require.NotNil(t, cmd)
-
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		err := cmd.RunE(cmd, []string{"key"})
-		require.NoError(t, err)
-		assert.Contains(t, buf.String(), "to be implemented")
-	})
-
-	t.Run("vars unset is placeholder", func(t *testing.T) {
-		cmd := varsUnsetCmd()
-		require.NotNil(t, cmd)
-
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		err := cmd.RunE(cmd, []string{"key"})
-		require.NoError(t, err)
-		assert.Contains(t, buf.String(), "to be implemented")
-	})
 }
 
 func TestCommandErrorHandling(t *testing.T) {

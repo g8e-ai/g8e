@@ -112,7 +112,7 @@ Every mutation passes through sequential verification layers at the Operator bou
 | :---: | --- | --- | --- |
 | **L1** | **Doctrine** | Reflected `forbidden_patterns` + MITRE ATT&CK heuristics | The action trips no hard gate (reverse shells, privilege escalation, destructive disk ops). |
 | **L2** | **Consensus** | Ed25519 k-of-n over the transaction hash | An independent, heterogeneous model ensemble co-signed the intent. |
-| **L3** | **Notary** | WebAuthn (web) / mTLS cert fingerprint (CLI) | A human authorized *this exact* transaction hash — not a session. |
+| **L3** | **Notary** | mTLS certificate fingerprint (CLI) | A human authorized *this exact* transaction hash — not a session. |
 | **L4** | **Warden** | Pre-dispatch verification gate | Hash, freshness, state binding, and signer trust all hold. |
 | **L5** | **Actuator** | Single fail-closed dispatch path | The only code path that mutates the host; emits a signed `ActionReceipt`. |
 
@@ -252,9 +252,12 @@ v1.0.0 completes the "substrate-first" decoupling. Originally a monolith (Dashbo
 
 **Not yet supported — read before you deploy**
 - **RBAC** — no granular role-based access control yet; session scoping is basic.
-- **Full L3 Notary** — WebAuthn/Passkey is a placeholder. Human authorization works via CLI/mTLS approval but lacks FIDO2 hardware binding.
+- **L3 Notary** — Human authorization is enforced via CLI-based mTLS certificate approval. Hardware-bound WebAuthn/FIDO2 support is in development.
 - **Multi-tenant isolation** — single-organization only; no tenant partitioning.
-- **Complex policy engine** — L1 Doctrine is limited to static pattern matching and basic reflection.
+- **Complex policy engine** — L1 Doctrine is limited to static pattern matching and basic reflection. Intent allowlisting is not yet integrated.
+- **Unified Diff Patching** — file `patch` operations are not yet implemented; use `replace` or `write` instead.
+- **Downstream Circuit Breaking** — A2A protocol translation lacks circuit breakers for downstream service failures.
+- **Advanced MCP/A2A Features** — resource listing/reading, prompt management, and intent grant/revoke actions are defined in the protocol but not yet implemented in the Operator.
 
 ---
 
