@@ -1,145 +1,569 @@
-# CLI Guide
+# CLI Reference
 
-The g8e CLI is the primary operational interface for the Governance Gateway. It is a statically compiled Go binary that manages platform lifecycle, authentication, data queries, and testing.
+This reference is auto-generated from the Cobra CLI help output.
 
-## Architecture
+## g8e Root Help
+```
+g8e is a zero-trust execution substrate for agentic infrastructure.
+The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).
 
-g8e runs directly on the host without container-orchestration complexity. The CLI manages the Governance Gateway (the g8e Operator binary running in listen mode) as a separate process.
+Usage:
+  g8e [command]
 
-**Host runtime state** - All runtime data lives at `./.g8e/`: `data/`, `pki/`, `secrets/`, `logs/`.
-**Credentials** - Authenticated commands use `~/.g8e/credentials`.
+Available Commands:
+  auth        Authentication and session management
+  data        Administer the local substrate over mTLS
+  help        Help about any command
+  platform    Manage the Governance Gateway (g8eg) lifecycle
+  security    Security validation checks
+  setup       Bootstrap platform dependencies and configuration
+  test        Run test suites
+  vars        Environment variable management
 
-Command form: `./g8e <command> [subcommand] [options]`.
+Flags:
+  -h, --help   help for g8e
 
-## Technical Invariants
-
-1. **Zero Shell Scripts**: NO shell scripts are used for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary.
-2. **Service readiness** - The platform is not "ready" until the Gateway is running. The Go CLI checks process status before operations.
-3. **Canonical wire format** - All client-facing interaction uses canonical JSON (protojson). Binary protobuf is reserved for internal storage.
-4. **Fail-closed execution** - The CLI must never mask failures or proceed with missing trust material. Missing trust bundles or secrets exit with an actionable error pointing at the platform Gateway.
-
-## Common Workflows
-
-### First-Time Setup
-
-```bash
-# Bootstrap the platform with initial user and certificates
-./g8e auth bootstrap
-
-# Start the Governance Gateway
-./g8e platform start
+Use "g8e [command] --help" for more information about a command.
 ```
 
-### Daily Operations
+## setup
+```
+Setup checks for required dependencies (Go, Python), generates protocol artifacts, and builds services.
 
-```bash
-# Check platform status
-./g8e platform status
+Usage:
+  g8e setup [flags]
 
-# View logs
-./g8e platform logs
-
-# Restart the platform
-./g8e platform restart
+Flags:
+  -h, --help   help for setup
 ```
 
-### Authentication
+## platform
+```
+Platform lifecycle commands for starting, stopping, and checking the status of the Governance Gateway.
 
-```bash
-# Authenticate via device-link token
-./g8e auth login
+Usage:
+  g8e platform [command]
 
-# Clear local session
-./g8e auth logout
+Available Commands:
+  clean       Destructively remove all Gateway state
+  logs        View Gateway logs
+  reset       Reset Gateway data and secrets (preserves CA)
+  restart     Restart the Governance Gateway
+  settings    Manage Gateway settings
+  start       Start the Governance Gateway
+  status      Check Gateway health and status
+  stop        Stop the Governance Gateway
+
+Flags:
+  -h, --help   help for platform
+
+Use "g8e platform [command] --help" for more information about a command.
 ```
 
-### Data Management
+### platform start
+```
+Start the Governance Gateway
 
-```bash
-# List users
-./g8e data users
+Usage:
+  g8e platform start [flags]
 
-# List operators
-./g8e data operators
-
-# Query document storage
-./g8e data store --collection <collection>
-
-# Query audit vault
-./g8e data audit list --operator-session-id <session-id>
+Flags:
+  -h, --help   help for start
 ```
 
-### Testing
+### platform stop
+```
+Stop the Governance Gateway
 
-```bash
-# Run Gateway (g8eo) tests
-./g8e test g8eo
+Usage:
+  g8e platform stop [flags]
 
-# Run unit tests
-./g8e test unit
-
-# Run integration tests
-./g8e test integration
-
-# Run scenario tests
-./g8e test scenario
-
-# Run chaos tests
-./g8e test chaos
-
-# Run CI test suite
-./g8e test ci
+Flags:
+  -h, --help   help for stop
 ```
 
-### Environment Variables
+### platform status
+```
+Check Gateway health and status
 
-```bash
-# List all variables
-./g8e vars list
+Usage:
+  g8e platform status [flags]
 
-# Set a variable
-./g8e vars set <key> <value>
-
-# Get a variable
-./g8e vars get <key>
-
-# Unset a variable
-./g8e vars unset <key>
+Flags:
+  -h, --help   help for status
 ```
 
-### Security Validation
+### platform restart
+```
+Restart the Governance Gateway
 
-```bash
-# Run security validation checks
-./g8e security validate
+Usage:
+  g8e platform restart [flags]
+
+Flags:
+  -h, --help   help for restart
 ```
 
-## Command Reference
+### platform logs
+```
+View Gateway logs
 
-For detailed command help, use `--help`:
+Usage:
+  g8e platform logs [flags]
 
-```bash
-./g8e --help
-./g8e platform --help
-./g8e auth --help
-./g8e data --help
-./g8e test --help
-./g8e security --help
-./g8e vars --help
+Flags:
+  -h, --help   help for logs
 ```
 
-## Key Commands
+### platform settings
+```
+Manage Gateway settings
 
-- `setup` - Bootstrap dependencies and build services
-- `platform` - Manage Gateway lifecycle (start, stop, status, restart, logs, settings, reset, clean)
-- `auth` - Manage mTLS enrollment and sessions (bootstrap, login, logout)
-- `data` - Administer substrate over mTLS (users, operators, device-links, settings, store, audit)
-- `test` - Run test suites (unit, integration, g8eo, ci, chaos, scenario)
-- `security` - Run security validation checks
-- `vars` - Manage environment variables in `.g8e/.env`
+Usage:
+  g8e platform settings [flags]
 
-## See Also
+Flags:
+  -h, --help   help for settings
+```
 
-- [Operator](../architecture/operator.md)
-- [Governance Gateway (g8eg)](../architecture/gateway.md)
-- [Testing](../developer/testing.md)
+### platform reset
+```
+Reset Gateway data and secrets (preserves CA)
+
+Usage:
+  g8e platform reset [flags]
+
+Flags:
+      --force   Skip confirmation prompt
+  -h, --help    help for reset
+      --y       Skip confirmation prompt (shorthand)
+      --yes     Skip confirmation prompt (shorthand)
+```
+
+### platform clean
+```
+Destructively remove all Gateway state
+
+Usage:
+  g8e platform clean [flags]
+
+Flags:
+      --force   Skip confirmation prompt
+  -h, --help    help for clean
+      --y       Skip confirmation prompt (shorthand)
+      --yes     Skip confirmation prompt (shorthand)
+```
+
+## auth
+```
+Manage mTLS enrollment, device-link tokens, and operator sessions.
+
+Usage:
+  g8e auth [command]
+
+Available Commands:
+  bootstrap   Bootstrap the platform with initial user and certificates
+  login       Authenticate and save operator session
+  logout      Clear local operator session and credentials
+
+Flags:
+  -h, --help   help for auth
+
+Use "g8e auth [command] --help" for more information about a command.
+```
+
+### auth bootstrap
+```
+Create the first user and issue mTLS certificates for the Operator and CLI. Only available over loopback when no users exist.
+
+Usage:
+  g8e auth bootstrap [flags]
+
+Flags:
+  -h, --help   help for bootstrap
+```
+
+### auth login
+```
+Authenticate via device-link token and save mTLS credentials to ~/.g8e/credentials
+
+Usage:
+  g8e auth login [flags]
+
+Flags:
+      --count int   Number of device-link uses (default 1)
+  -h, --help        help for login
+      --ttl int     Device-link token TTL in seconds (default 3600)
+```
+
+### auth logout
+```
+Clear local operator session and credentials
+
+Usage:
+  g8e auth logout [flags]
+
+Flags:
+  -h, --help   help for logout
+```
+
+## data
+```
+Data management commands for users, operators, device-links, and settings.
+
+Usage:
+  g8e data [command]
+
+Available Commands:
+  audit        Query audit vault
+  device-links Manage device-link tokens
+  operators    Manage operator instances
+  settings     Manage Gateway settings
+  store        Manage document storage
+  users        Manage user accounts
+
+Flags:
+  -h, --help   help for data
+
+Use "g8e data [command] --help" for more information about a command.
+```
+
+### data users
+```
+Manage user accounts
+
+Usage:
+  g8e data users [flags]
+
+Flags:
+  -h, --help   help for users
+```
+
+### data operators
+```
+Manage operator instances
+
+Usage:
+  g8e data operators [flags]
+
+Flags:
+  -h, --help   help for operators
+```
+
+### data device-links
+```
+Manage device-link tokens
+
+Usage:
+  g8e data device-links [command]
+
+Available Commands:
+  create      Create a device-link token
+  delete      Delete a device-link token
+  list        List device-link tokens
+
+Flags:
+  -h, --help   help for device-links
+
+Use "g8e data device-links [command] --help" for more information about a command.
+```
+
+#### data device-links list
+```
+List device-link tokens
+
+Usage:
+  g8e data device-links list [flags]
+
+Flags:
+  -h, --help             help for list
+      --user-id string   User ID (auto-generated if not provided)
+```
+
+#### data device-links create
+```
+Create a device-link token
+
+Usage:
+  g8e data device-links create [flags]
+
+Flags:
+      --count int        Number of uses (default 1)
+  -h, --help             help for create
+      --ttl int          TTL in seconds (default 3600)
+      --user-id string   User ID (auto-generated if not provided)
+```
+
+#### data device-links delete
+```
+Delete a device-link token
+
+Usage:
+  g8e data device-links delete [flags]
+
+Flags:
+  -h, --help             help for delete
+      --token string     Token to delete (required)
+      --user-id string   User ID (auto-generated if not provided)
+```
+
+### data settings
+```
+Manage Gateway settings
+
+Usage:
+  g8e data settings [flags]
+
+Flags:
+  -h, --help   help for settings
+```
+
+### data store
+```
+Manage document storage
+
+Usage:
+  g8e data store [flags]
+
+Flags:
+      --collection string    Collection name
+      --document-id string   Document ID (omit to list collection)
+  -h, --help                 help for store
+```
+
+### data audit
+```
+Query audit vault
+
+Usage:
+  g8e data audit [command]
+
+Available Commands:
+  list        List audit events for a session
+  summary     Show chaos test summary from audit vault
+
+Flags:
+  -h, --help   help for audit
+
+Use "g8e data audit [command] --help" for more information about a command.
+```
+
+#### data audit list
+```
+List audit events for a session
+
+Usage:
+  g8e data audit list [flags]
+
+Flags:
+  -h, --help                         help for list
+      --limit int                    Limit number of events (default 100)
+      --operator-session-id string   Operator session ID
+```
+
+#### data audit summary
+```
+Show chaos test summary from audit vault
+
+Usage:
+  g8e data audit summary [flags]
+
+Flags:
+  -h, --help   help for summary
+```
+
+## test
+```
+Orchestrate test execution for g8eo (Gateway).
+
+Usage:
+  g8e test [flags]
+  g8e test [command]
+
+Available Commands:
+  chaos       Run chaos engineering tests
+  ci          Run CI test suite (g8eo)
+  g8eo        Run Gateway (g8eo) tests
+  integration Run integration tests
+  scenario    Run scenario integration tests
+  unit        Run unit tests
+
+Flags:
+  -h, --help   help for test
+
+Use "g8e test [command] --help" for more information about a command.
+```
+
+### test unit
+```
+Run unit tests
+
+Usage:
+  g8e test unit [flags]
+
+Flags:
+      --coverage     Generate coverage report
+  -h, --help         help for unit
+      --race         Enable race detector (default true)
+      --run string   Run specific test (regex)
+      --v            Verbose output
+```
+
+### test integration
+```
+Run integration tests
+
+Usage:
+  g8e test integration [flags]
+
+Flags:
+  -h, --help         help for integration
+      --run string   Run specific scenario (e.g., forge_signature)
+```
+
+### test g8eo
+```
+Run Gateway (g8eo) tests
+
+Usage:
+  g8e test g8eo [flags]
+
+Flags:
+      --coverage     Generate coverage report
+  -h, --help         help for g8eo
+      --race         Enable race detector (default true)
+      --run string   Run specific test (regex)
+      --v            Verbose output
+```
+
+### test ci
+```
+Run CI test suite (g8eo)
+
+Usage:
+  g8e test ci [flags]
+
+Flags:
+  -h, --help   help for ci
+```
+
+### test chaos
+```
+Run chaos engineering tests
+
+Usage:
+  g8e test chaos [flags]
+
+Flags:
+      --count int   Number of payloads to fire (default: 100)
+  -h, --help        help for chaos
+```
+
+### test scenario
+```
+Run scenario integration tests
+
+Usage:
+  g8e test scenario [flags]
+
+Flags:
+  -h, --help         help for scenario
+      --run string   Run specific scenario (e.g., forge_signature)
+  -v, --verbose      Verbose output
+```
+
+## security
+```
+Run security validation and PKI verification checks.
+
+Usage:
+  g8e security [command]
+
+Available Commands:
+  validate    Run security validation checks
+
+Flags:
+  -h, --help   help for security
+
+Use "g8e security [command] --help" for more information about a command.
+```
+
+### security validate
+```
+Run security validation checks
+
+Usage:
+  g8e security validate [flags]
+
+Flags:
+  -h, --help                 help for validate
+      --pki-dir string       PKI directory (default: .g8e/pki)
+      --secrets-dir string   Secrets directory (default: .g8e/secrets)
+```
+
+## vars
+```
+Manage g8e environment variables in .g8e/.env
+
+Usage:
+  g8e vars [command]
+
+Available Commands:
+  get         Display the value of a specific variable
+  list        List all g8e environment variables
+  set         Set a variable in .g8e/.env
+  unset       Remove a variable from .g8e/.env
+
+Flags:
+  -h, --help   help for vars
+
+Use "g8e vars [command] --help" for more information about a command.
+```
+
+### vars list
+```
+List all g8e environment variables
+
+Usage:
+  g8e vars list [flags]
+
+Aliases:
+  list, ls
+
+Flags:
+  -h, --help   help for list
+```
+
+### vars set
+```
+Set a variable in .g8e/.env
+
+Usage:
+  g8e vars set <key> <value> [flags]
+
+Flags:
+  -h, --help   help for set
+```
+
+### vars get
+```
+Display the value of a specific variable
+
+Usage:
+  g8e vars get <key> [flags]
+
+Flags:
+  -h, --help   help for get
+```
+
+### vars unset
+```
+Remove a variable from .g8e/.env
+
+Usage:
+  g8e vars unset <key> [flags]
+
+Flags:
+  -h, --help   help for unset
+```
+

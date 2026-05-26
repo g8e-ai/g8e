@@ -49,8 +49,8 @@ help:
 	@echo ""
 	@echo "Documentation:"
 	@echo "  docs-cli      Auto-generate CLI reference documentation"
-	@echo "  docs-build    Build MkDocs documentation site"
-	@echo "  docs-serve    Serve MkDocs documentation locally (live reload)"
+	@echo "  docs-build    Build MkDocs documentation site (via Docker)"
+	@echo "  docs-serve    Serve MkDocs documentation locally at :8000 (via Docker)"
 	@echo ""
 	@echo "Services:"
 	@echo "  build         Build the Operator service (g8e binary)"
@@ -260,7 +260,15 @@ _ci-docs:
 		echo "markdownlint not found, skipping docs-lint. Install with: npm install -g markdownlint-cli"; \
 	fi
 	@echo "=== docs-build ==="
-	@$(MAKE) docs-build
+	@if command -v docker >/dev/null 2>&1; then \
+		$(MAKE) docs-build; \
+	else \
+		echo "Warning: docker not found, skipping docs-build."; \
+		if [ "$$CI" = "true" ]; then \
+			echo "Error: docker must be available in CI environment." >&2; \
+			exit 1; \
+		fi \
+	fi
 
 # =============================================================================
 # SERVICE DISPATCH
@@ -511,19 +519,17 @@ docs-cli:
 
 .PHONY: docs-build
 docs-build: constants
-	@echo "Checking for mkdocs..."
-	@if command -v mkdocs >/dev/null 2>&1; then \
-		echo "Compiling documentation site strictly..."; \
-		mkdocs build --strict; \
-	else \
-		echo "Warning: mkdocs not found. Skipping build validation."; \
-		if [ "$$CI" = "true" ]; then \
-			echo "Error: mkdocs must be installed in CI environment." >&2; \
-			exit 1; \
-		fi \
-	fi
+	@echo "Building MkDocs documentation site via Docker..."
+	@docker run --rm \
+		-v $(PWD):/repo \
+		-w /repo \
+		squidfunk/mkdocs-material:9.7.5 build --strict --quiet
 
 .PHONY: docs-serve
 docs-serve:
-	@echo "Serving MkDocs documentation locally..."
-	@echo "Error: MkDocs serve requires Python. Use Dockerized MkDocs action in CI."
+	@echo "Serving MkDocs documentation at http://localhost:8000 ..."
+	@docker run --rm -it \
+		-p 8000:8000 \
+		-v $(PWD):/repo \
+		-w /repo \
+		squidfunk/mkdocs-material:9.7.5 serve --dev-addr 0.0.0.0:8000 --quiet
