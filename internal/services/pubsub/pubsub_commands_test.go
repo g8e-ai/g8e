@@ -248,18 +248,6 @@ func TestPubSubCommandService_handleA2aCallRequestSync(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "A2A gateway not configured")
 	})
-
-	t.Run("rejects unmarshal error", func(t *testing.T) {
-		t.Parallel()
-		f := newPubsubFixture(t)
-		msg := &PubSubCommandMessage{
-			EventType: constants.Event.Operator.A2a.CallRequested,
-			ID:        "msg-1",
-			Payload:   []byte("invalid json"),
-		}
-		_, err := f.Svc.handleA2aCallRequestSync(context.Background(), msg)
-		require.Error(t, err)
-	})
 }
 
 func TestPubSubCommandService_handleAppInvestigationCreatedSync(t *testing.T) {

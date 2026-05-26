@@ -209,7 +209,9 @@ func (g *GatewayService) recordFailure() {
 	g.lastFailure = time.Now()
 	if g.failureCount >= g.maxFailures {
 		if !g.circuitOpen {
-			g.logger.Warn("MCP downstream circuit breaker OPENED", "url", g.downstreamURL, "failures", g.failureCount)
+			if g.logger != nil {
+				g.logger.Warn("MCP downstream circuit breaker OPENED", "url", g.downstreamURL, "failures", g.failureCount)
+			}
 		}
 		g.circuitOpen = true
 	}
@@ -220,7 +222,9 @@ func (g *GatewayService) recordSuccess() {
 	defer g.mu.Unlock()
 
 	if g.circuitOpen {
-		g.logger.Info("MCP downstream circuit breaker CLOSED", "url", g.downstreamURL)
+		if g.logger != nil {
+			g.logger.Info("MCP downstream circuit breaker CLOSED", "url", g.downstreamURL)
+		}
 	}
 	g.failureCount = 0
 	g.circuitOpen = false
