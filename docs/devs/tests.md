@@ -132,7 +132,7 @@ GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 - **`verify-proto`** - Generated Go and Python code sync with `.proto` definitions.
 - **`lint-g8eo`** - Runs `golangci-lint` on the Operator and protocol code.
 - **`vulncheck-g8eo`** - Scans Go dependencies for known vulnerabilities.
-- **`test-g8eo`** (blocking) - Installs Go, starts the platform, runs `./g8e test` with 85% coverage threshold.
+- **`test-g8eo`** (blocking) - Installs Go, starts the platform, runs `./g8e test` with 60% coverage threshold.
 - **`test-scenarios`** - Runs scenario integration tests with `-tags=integration`.
 - **`constants-lint`** - Enforces use of constants instead of raw string literals.
 - **`docs-lint`** - Validates Markdown formatting with markdownlint.

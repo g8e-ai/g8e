@@ -584,6 +584,14 @@ func (s *GatewayDBService) DocCreate(collection, id string, data json.RawMessage
 // Timestamps are managed by the service - created_at is set once on insert and
 // never overwritten. updated_at is refreshed on every upsert.
 func (s *GatewayDBService) DocSet(collection, id string, data json.RawMessage) error {
+	return s.DocSetWithTimestamps(collection, id, data, time.Time{}, time.Time{})
+}
+
+// DocSetWithTimestamps creates or replaces a document with custom timestamps.
+// This is a test-only hook for setting specific created_at/updated_at values.
+// For production use, call DocSet instead which auto-manages timestamps.
+// Zero-valued timestamps are replaced with time.Now().UTC().
+func (s *GatewayDBService) DocSetWithTimestamps(collection, id string, data json.RawMessage, createdAt, updatedAt time.Time) error {
 	var userDoc map[string]json.RawMessage
 	if err := json.Unmarshal(data, &userDoc); err != nil {
 		return fmt.Errorf("failed to unmarshal document: %w", err)
@@ -601,7 +609,15 @@ func (s *GatewayDBService) DocSet(collection, id string, data json.RawMessage) e
 	}
 
 	now := time.Now().UTC()
-	nowStr := sqliteutil.FormatTimestamp(now)
+	createdAtStr := sqliteutil.FormatTimestamp(now)
+	updatedAtStr := sqliteutil.FormatTimestamp(now)
+
+	if !createdAt.IsZero() {
+		createdAtStr = sqliteutil.FormatTimestamp(createdAt)
+	}
+	if !updatedAt.IsZero() {
+		updatedAtStr = sqliteutil.FormatTimestamp(updatedAt)
+	}
 
 	_, err = s.db.ExecWithRetry(
 		`INSERT INTO documents (collection, id, data, created_at, updated_at)
@@ -609,7 +625,7 @@ func (s *GatewayDBService) DocSet(collection, id string, data json.RawMessage) e
 		 ON CONFLICT(collection, id) DO UPDATE SET
 		   data = excluded.data,
 		   updated_at = excluded.updated_at`,
-		collection, id, string(dataJSON), nowStr, nowStr,
+		collection, id, string(dataJSON), createdAtStr, updatedAtStr,
 	)
 	return err
 }

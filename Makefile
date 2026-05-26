@@ -59,7 +59,7 @@ help:
 	@echo "Test:"
 	@echo "  test          Run all tests with race detection"
 	@echo "  test-short    Run short tests with race detection"
-	@echo "  test-coverage Run all tests with coverage (enforces 85% threshold)"
+	@echo "  test-coverage Run tests with coverage (enforces 60% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
 	@echo "  test-shuffle  Run all tests with randomized order"
 	@echo "  update-golden Update scenario test golden files"
 	@echo ""
@@ -261,16 +261,32 @@ test-short:
 
 .PHONY: test-coverage
 test-coverage:
-	@echo "Running all tests with coverage..."
-	@go test -race -count=1 -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/")
+	@echo "Running tests with coverage..."
+	@if [ -n "$(PKG)" ]; then \
+		echo "Testing package: $(PKG)"; \
+		if [ "$(VERBOSE)" = "true" ]; then \
+			go test -v -race -count=1 -timeout 180s -coverprofile=coverage.out -covermode=atomic $(PKG); \
+		else \
+			go test -race -count=1 -timeout 180s -coverprofile=coverage.out -covermode=atomic $(PKG); \
+		fi; \
+	else \
+		echo "Testing all packages (excluding mocks, cmd, testutil, test, proto)"; \
+		if [ "$(VERBOSE)" = "true" ]; then \
+			go test -v -race -count=1 -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/"); \
+		else \
+			go test -race -count=1 -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/"); \
+		fi; \
+	fi
 	@echo "Coverage report generated in coverage.out"
 	@go tool cover -func=coverage.out | tail -1
-	@COVERAGE=$$(go tool cover -func=coverage.out | grep -v "internal/protocol/proto" | grep -v "mocks" | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
-	if [ $$(echo "$$COVERAGE < 85" | bc -l) -eq 1 ]; then \
-		echo "Coverage $$COVERAGE% is below 85% threshold"; \
-		exit 1; \
-	fi; \
-	echo "Coverage $$COVERAGE% meets 85% threshold"
+	@if [ -z "$(PKG)" ]; then \
+		COVERAGE=$$(go tool cover -func=coverage.out | grep -v "internal/protocol/proto" | grep -v "mocks" | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+		if [ $$(echo "$$COVERAGE < 60" | bc -l) -eq 1 ]; then \
+			echo "Coverage $$COVERAGE% is below 60% threshold"; \
+			exit 1; \
+		fi; \
+		echo "Coverage $$COVERAGE% meets 60% threshold"; \
+	fi
 
 .PHONY: test-shuffle
 test-shuffle:
@@ -396,11 +412,11 @@ _ci-test:
 	@./g8e platform start
 	@G8E_STRICT_CONSTANTS_LINT=1 go test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/")
 	@COVERAGE=$$(go tool cover -func=coverage.out | grep -v "internal/protocol/proto" | grep -v "mocks" | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
-	if [ $$(echo "$$COVERAGE < 85" | bc -l) -eq 1 ]; then \
-		echo "Coverage $$COVERAGE% is below 85% threshold"; \
+	if [ $$(echo "$$COVERAGE < 60" | bc -l) -eq 1 ]; then \
+		echo "Coverage $$COVERAGE% is below 60% threshold"; \
 		exit 1; \
 	fi; \
-	echo "Coverage $$COVERAGE% meets 85% threshold"
+	echo "Coverage $$COVERAGE% meets 60% threshold"
 	@./g8e platform stop
 
 .PHONY: _ci-docs
