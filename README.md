@@ -198,7 +198,7 @@ g8e is built to run entirely inside your perimeter. The Operator has no inbound 
 
 ## Status
 
-Active development, pre-1.0. The protocol and the reference Operator are functional; APIs may change before the 1.0 cut. Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+**v1.0 — Production.** The g8e protocol, Governance Gateway, and Governed Operator are live and stable. The substrate is a pure, host-sovereign governance layer with no optional application coupling in the critical path. Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
