@@ -67,8 +67,9 @@ type GatewayService struct {
 	dbService         interface {
 		GetField(collection, id, fieldPath string) (interface{}, error)
 	}
-	sessionValidator SessionValidator
-	auditLogger      AuditLogger
+	sessionValidator  SessionValidator
+	auditLogger       AuditLogger
+	nativeToolHandler *NativeToolHandler
 
 	// Circuit breaker state
 	mu               sync.RWMutex
@@ -111,6 +112,7 @@ func NewGatewayService(deps Dependencies) *GatewayService {
 		responder:         deps.Responder,
 		suspendedStore:    deps.SuspendedStore,
 		fieldPathRegistry: fieldPathRegistry,
+		nativeToolHandler: NewNativeToolHandler(),
 		maxFailures:       5,
 		cooldownDuration:  1 * time.Minute,
 		maxPayloadBytes:   deps.MaxPayloadBytes,
@@ -172,6 +174,17 @@ func (g *GatewayService) SetAuditLogger(logger AuditLogger) {
 	g.auditLogger = logger
 }
 
+// isNativeTool checks if a tool name is a native tool compiled into the Operator.
+func (g *GatewayService) isNativeTool(name string) bool {
+	nativeTools := NativeTools()
+	for _, tool := range nativeTools {
+		if tool.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 func (g *GatewayService) isCircuitOpen() bool {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -220,8 +233,8 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 	}
 
 	if g.downstreamURL == "" {
-		// Mock response if no downstream configured
-		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: []Tool{}})
+		// Return native tools if no downstream configured
+		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: NativeTools()})
 		return
 	}
 
@@ -427,6 +440,11 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 		// Handle read_field tool locally (JIT field resolution)
 		if callParams.Name == "read_field" {
 			return g.handleReadField(ctx, callParams.Arguments)
+		}
+
+		// Handle native tools within Operator's execution boundary
+		if g.isNativeTool(callParams.Name) {
+			return g.nativeToolHandler.HandleTool(ctx, callParams.Name, callParams.Arguments)
 		}
 
 		argumentsJSON := "{}"
