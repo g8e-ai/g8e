@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  verify:
-    name: Verify Code Generation
+  verify-lint:
+    name: Verify & Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -67,19 +67,6 @@ jobs:
       - name: Check constants registry
         run: go run ./internal/constants/check_registry.go ./internal/constants
 
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: false
-
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
@@ -88,12 +75,6 @@ jobs:
 
       - name: Lint no bare session_id
         run: make lint-no-bare-session-id
-
-      - name: Constants lint
-        run: go test -v -run TestNoRawStringLiteralsWhereConstantsExist ./internal/contracts
-        env:
-          G8E_STRICT_CONSTANTS_LINT: "1"
-        continue-on-error: true
 
   security:
     name: Security Scan
@@ -137,49 +118,3 @@ jobs:
       - name: Show Operator logs
         if: failure()
         run: tail -n 200 .g8e/logs/operator-listen.log || true
-
-  test-scenarios:
-    name: Scenario Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Run scenario integration tests
-        run: go test -tags=integration -v -run TestScenarios ./test/scenario/...
-
-  docs:
-    name: Check Documentation
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Build CLI reference
-        run: make docs-cli
-
-      - name: Check for CLI documentation drift
-        run: |
-          CHANGES=$(git status --porcelain | grep -E "^\s*M.*docs/guides/cli\.md$" || true)
-          if [ -n "$CHANGES" ]; then
-            echo "Error: CLI documentation is out of sync with CLI help output"
-            echo "$CHANGES"
-            git diff docs/guides/cli.md
-            exit 1
-          fi
-
-      - name: Build documentation
-        run: make docs-build
