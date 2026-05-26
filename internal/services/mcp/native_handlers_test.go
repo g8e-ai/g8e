@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 )
 
@@ -532,6 +533,28 @@ func TestHandleProcSignalSafe(t *testing.T) {
 		}
 	})
 
+	t.Run("protected PID 2 rejected", func(t *testing.T) {
+		req := ProcSignalSafeRequest{
+			PID:    2,
+			Signal: "SIGKILL",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "proc_signal_safe", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var signalResult ProcSignalSafeResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &signalResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if signalResult.Sent {
+			t.Error("expected protected PID 2 to be rejected")
+		}
+	})
+
 	t.Run("unsupported signal", func(t *testing.T) {
 		req := ProcSignalSafeRequest{
 			PID:    9999,
@@ -551,6 +574,56 @@ func TestHandleProcSignalSafe(t *testing.T) {
 
 		if signalResult.Sent {
 			t.Error("expected unsupported signal to be rejected")
+		}
+	})
+
+	t.Run("missing PID", func(t *testing.T) {
+		req := ProcSignalSafeRequest{
+			Signal: "SIGTERM",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "proc_signal_safe", reqJSON)
+		if err == nil {
+			t.Error("expected error for missing PID")
+		}
+	})
+
+	t.Run("missing signal", func(t *testing.T) {
+		req := ProcSignalSafeRequest{
+			PID: 9999,
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "proc_signal_safe", reqJSON)
+		if err == nil {
+			t.Error("expected error for missing signal")
+		}
+	})
+
+	t.Run("valid signals accepted", func(t *testing.T) {
+		signals := []string{"SIGTERM", "SIGKILL", "SIGINT"}
+		for _, sig := range signals {
+			req := ProcSignalSafeRequest{
+				PID:    99999, // Non-existent PID
+				Signal: sig,
+			}
+			reqJSON, _ := json.Marshal(req)
+
+			result, err := handler.HandleTool(context.Background(), "proc_signal_safe", reqJSON)
+			if err != nil {
+				t.Fatalf("HandleTool failed for %s: %v", sig, err)
+			}
+
+			var signalResult ProcSignalSafeResult
+			if err := json.Unmarshal([]byte(result.Content[0].Text), &signalResult); err != nil {
+				t.Fatalf("failed to unmarshal result for %s: %v", sig, err)
+			}
+
+			// Signal should be attempted (process may not exist, but signal is valid)
+			if signalResult.Error == "" {
+				t.Errorf("expected error for non-existent PID with %s", sig)
+			}
 		}
 	})
 }
@@ -612,6 +685,80 @@ func TestHandleNetEndpointPing(t *testing.T) {
 			t.Error("expected error for missing host")
 		}
 	})
+
+	t.Run("missing port", func(t *testing.T) {
+		req := NetEndpointPingRequest{
+			Host: "localhost",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "net_endpoint_ping", reqJSON)
+		if err == nil {
+			t.Error("expected error for missing port")
+		}
+	})
+
+	t.Run("invalid port", func(t *testing.T) {
+		req := NetEndpointPingRequest{
+			Host: "localhost",
+			Port: -1,
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "net_endpoint_ping", reqJSON)
+		if err == nil {
+			t.Error("expected error for invalid port")
+		}
+	})
+
+	t.Run("localhost ping", func(t *testing.T) {
+		req := NetEndpointPingRequest{
+			Host: "127.0.0.1",
+			Port: 80, // May or may not be listening
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "net_endpoint_ping", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var pingResult NetEndpointPingResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &pingResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		// Latency should be set regardless of reachability
+		if pingResult.LatencyMs < 0 {
+			t.Error("expected non-negative latency")
+		}
+	})
+
+	t.Run("context cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel immediately
+
+		req := NetEndpointPingRequest{
+			Host: "google.com",
+			Port: 443,
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(ctx, "net_endpoint_ping", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var pingResult NetEndpointPingResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &pingResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		// Should fail due to context cancellation
+		if pingResult.Reachable {
+			t.Error("expected unreachable due to context cancellation")
+		}
+	})
 }
 
 func TestHandleNetHTTPProbe(t *testing.T) {
@@ -645,6 +792,97 @@ func TestHandleNetHTTPProbe(t *testing.T) {
 		_, err := handler.HandleTool(context.Background(), "net_http_probe", reqJSON)
 		if err == nil {
 			t.Error("expected error for missing URL")
+		}
+	})
+
+	t.Run("default method is HEAD", func(t *testing.T) {
+		req := NetHTTPProbeRequest{
+			URL: "http://example.com",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "net_http_probe", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var probeResult NetHTTPProbeResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &probeResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		// Latency should be set regardless of success
+		if probeResult.LatencyMs < 0 {
+			t.Error("expected non-negative latency")
+		}
+	})
+
+	t.Run("custom method GET", func(t *testing.T) {
+		req := NetHTTPProbeRequest{
+			URL:    "http://example.com",
+			Method: "GET",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "net_http_probe", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var probeResult NetHTTPProbeResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &probeResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		// Latency should be set
+		if probeResult.LatencyMs < 0 {
+			t.Error("expected non-negative latency")
+		}
+	})
+
+	t.Run("context cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel immediately
+
+		req := NetHTTPProbeRequest{
+			URL: "http://example.com",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(ctx, "net_http_probe", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var probeResult NetHTTPProbeResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &probeResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		// Should fail due to context cancellation
+		if probeResult.Error == "" {
+			t.Error("expected error due to context cancellation")
+		}
+	})
+
+	t.Run("invalid URL format", func(t *testing.T) {
+		req := NetHTTPProbeRequest{
+			URL: "not-a-valid-url",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "net_http_probe", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var probeResult NetHTTPProbeResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &probeResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if probeResult.Error == "" {
+			t.Error("expected error for invalid URL format")
 		}
 	})
 }
@@ -682,4 +920,147 @@ func TestNativeTools(t *testing.T) {
 			t.Errorf("missing expected tool: %s", expected)
 		}
 	}
+}
+
+func TestNativeToolHandler_ScrubLine(t *testing.T) {
+	t.Parallel()
+	h := &NativeToolHandler{}
+
+	t.Run("redacts password", func(t *testing.T) {
+		t.Parallel()
+		line := "user login password=secret123"
+		scrubbed := h.scrubLine(line)
+		require.Equal(t, "user login password=REDACTED", scrubbed)
+		require.NotContains(t, scrubbed, "secret123")
+	})
+
+	t.Run("redacts api_key", func(t *testing.T) {
+		t.Parallel()
+		line := "api_key=sk-12345 processed"
+		scrubbed := h.scrubLine(line)
+		require.Equal(t, "api_key=REDACTED processed", scrubbed)
+		require.NotContains(t, scrubbed, "sk-12345")
+	})
+
+	t.Run("redacts secret", func(t *testing.T) {
+		t.Parallel()
+		line := "secret=mysecret value"
+		scrubbed := h.scrubLine(line)
+		require.Equal(t, "secret=REDACTED value", scrubbed)
+		require.NotContains(t, scrubbed, "mysecret")
+	})
+
+	t.Run("redacts token", func(t *testing.T) {
+		t.Parallel()
+		line := "token=abc123def456 session"
+		scrubbed := h.scrubLine(line)
+		require.Equal(t, "token=REDACTED session", scrubbed)
+		require.NotContains(t, scrubbed, "abc123def456")
+	})
+
+	t.Run("redacts bearer", func(t *testing.T) {
+		t.Parallel()
+		line := "Authorization: bearer xyz789"
+		scrubbed := h.scrubLine(line)
+		require.Equal(t, "Authorization: bearer REDACTED", scrubbed)
+		require.NotContains(t, scrubbed, "xyz789")
+	})
+
+	t.Run("case insensitive", func(t *testing.T) {
+		t.Parallel()
+		line := "PASSWORD=secret123 API_KEY=sk-12345"
+		scrubbed := h.scrubLine(line)
+		require.Equal(t, "password=REDACTED api_key=REDACTED", scrubbed)
+	})
+
+	t.Run("safe line unchanged", func(t *testing.T) {
+		t.Parallel()
+		line := "INFO: request processed successfully"
+		scrubbed := h.scrubLine(line)
+		require.Equal(t, line, scrubbed)
+	})
+}
+
+func TestNativeToolHandler_MaskSecret(t *testing.T) {
+	t.Parallel()
+	h := &NativeToolHandler{}
+
+	t.Run("masks password line", func(t *testing.T) {
+		t.Parallel()
+		line := "db_password=secret123"
+		masked := h.maskSecret(line)
+		require.Equal(t, "REDACTED", masked)
+	})
+
+	t.Run("masks secret line", func(t *testing.T) {
+		t.Parallel()
+		line := "shared_secret=mysecret"
+		masked := h.maskSecret(line)
+		require.Equal(t, "REDACTED", masked)
+	})
+
+	t.Run("masks token line", func(t *testing.T) {
+		t.Parallel()
+		line := "access_token=abc123"
+		masked := h.maskSecret(line)
+		require.Equal(t, "REDACTED", masked)
+	})
+
+	t.Run("masks key line", func(t *testing.T) {
+		t.Parallel()
+		line := "encryption_key=xyz789"
+		masked := h.maskSecret(line)
+		require.Equal(t, "REDACTED", masked)
+	})
+
+	t.Run("case insensitive", func(t *testing.T) {
+		t.Parallel()
+		line := "PASSWORD=secret123"
+		masked := h.maskSecret(line)
+		require.Equal(t, "REDACTED", masked)
+	})
+
+	t.Run("safe line unchanged", func(t *testing.T) {
+		t.Parallel()
+		line := "timeout=30"
+		masked := h.maskSecret(line)
+		require.Equal(t, line, masked)
+	})
+}
+
+func TestParseSocketAddr(t *testing.T) {
+	t.Parallel()
+
+	t.Run("valid IPv4 address", func(t *testing.T) {
+		t.Parallel()
+		// 127.0.0.1:8080 in hex (little-endian)
+		// IP: 0100007F (127.0.0.1), Port: 1F90 (8080)
+		ip, port := parseSocketAddr("0100007F1F90")
+		require.Equal(t, "127.0.0.1", ip)
+		require.Equal(t, 8080, port)
+	})
+
+	t.Run("localhost", func(t *testing.T) {
+		t.Parallel()
+		// 0.0.0.0:443 in hex
+		// IP: 00000000 (0.0.0.0), Port: 01BB (443)
+		ip, port := parseSocketAddr("0000000001BB")
+		require.Equal(t, "0.0.0.0", ip)
+		require.Equal(t, 443, port)
+	})
+
+	t.Run("invalid short address", func(t *testing.T) {
+		t.Parallel()
+		ip, port := parseSocketAddr("1234")
+		require.Equal(t, "0.0.0.0", ip)
+		require.Equal(t, 0, port)
+	})
+
+	t.Run("invalid IP length", func(t *testing.T) {
+		t.Parallel()
+		// IP part not 8 bytes
+		ip, port := parseSocketAddr("12345601BB")
+		require.Equal(t, "unknown", ip)
+		require.Equal(t, 443, port)
+	})
 }

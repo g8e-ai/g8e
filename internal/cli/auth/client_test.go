@@ -14,10 +14,16 @@
 package auth
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -25,6 +31,25 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// extractPortFromURL extracts the port number from a httptest server URL
+func extractPortFromURL(url string) int {
+	// httptest URLs are like "http://127.0.0.1:12345"
+	// Split by "://" first to get the host:port part
+	parts := strings.Split(url, "://")
+	if len(parts) < 2 {
+		return 0
+	}
+	// Then split by ":" to get the port
+	hostPort := parts[1]
+	portParts := strings.Split(hostPort, ":")
+	if len(portParts) < 2 {
+		return 0
+	}
+	var port int
+	fmt.Sscanf(portParts[1], "%d", &port)
+	return port
+}
 
 // ---------------------------------------------------------------------------
 // GenerateCSR
@@ -77,13 +102,174 @@ func TestGenerateCSR_DifferentCommonNames(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// NewSecureHTTPClient
+// ---------------------------------------------------------------------------
+
+func TestNewSecureHTTPClient_Success(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
+
+	// Generate a test CA certificate
+	caPEM, _ := testutil.GenerateTestCertificate(t, "test-ca")
+	require.NoError(t, os.WriteFile(trustBundlePath, []byte(caPEM), 0600))
+
+	cfg := &config.Config{
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
+		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
+		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
+	}
+	cfg.Paths.Infra.CACertPath = trustBundlePath
+
+	client, err := NewSecureHTTPClient(cfg)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	// Verify TLS config is set correctly
+	transport, ok := client.Transport.(*http.Transport)
+	require.True(t, ok)
+	require.NotNil(t, transport.TLSClientConfig)
+	assert.Equal(t, uint16(tls.VersionTLS13), transport.TLSClientConfig.MinVersion)
+}
+
+func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
+		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
+		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
+	}
+
+	client, err := NewSecureHTTPClient(cfg)
+	require.Error(t, err)
+	assert.Nil(t, client)
+	assert.Contains(t, err.Error(), "trust bundle path not configured")
+}
+
+func TestNewSecureHTTPClient_InvalidPEM(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
+
+	require.NoError(t, os.WriteFile(trustBundlePath, []byte("invalid-pem-data"), 0600))
+
+	cfg := &config.Config{
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
+		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
+		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
+	}
+	cfg.Paths.Infra.CACertPath = trustBundlePath
+
+	client, err := NewSecureHTTPClient(cfg)
+	require.Error(t, err)
+	assert.Nil(t, client)
+	assert.Contains(t, err.Error(), "failed to parse CA certificates")
+}
+
+// ---------------------------------------------------------------------------
+// DownloadCA
+// ---------------------------------------------------------------------------
+
+func TestDownloadCA_Success(t *testing.T) {
+	t.Parallel()
+	testCA := "-----BEGIN CERTIFICATE-----\ntest-ca-data\n-----END CERTIFICATE-----"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/.well-known/g8e/pki/root.pem", r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(testCA))
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
+		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
+		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
+	}
+
+	// Override discovery URL to point to test server by setting the port directly
+	cfg.Paths.Ports.OperatorBootstrapHTTPS = extractPortFromURL(server.URL)
+
+	caPEM, err := DownloadCA(cfg)
+	require.NoError(t, err)
+	assert.Equal(t, testCA, string(caPEM))
+}
+
+func TestDownloadCA_HTTPError(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
+		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
+		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
+	}
+	cfg.Paths.Ports.OperatorBootstrapHTTPS = extractPortFromURL(server.URL)
+
+	caPEM, err := DownloadCA(cfg)
+	require.Error(t, err)
+	assert.Nil(t, caPEM)
+	assert.Contains(t, err.Error(), "CA download failed with status 404")
+}
+
+func TestDownloadCA_NetworkError(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
+		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
+		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
+	}
+	// For network error test, we'll use a non-existent URL directly in the function
+	// by setting a port that won't respond
+	cfg.Paths.Ports.OperatorBootstrapHTTPS = 99999
+
+	caPEM, err := DownloadCA(cfg)
+	require.Error(t, err)
+	assert.Nil(t, caPEM)
+}
+
+// ---------------------------------------------------------------------------
 // RequestDeviceLink
 // ---------------------------------------------------------------------------
-// Note: RequestDeviceLink and RegisterDeviceLink make HTTP calls to the configured
-// OperatorBootstrapURL. These functions require either:
-// 1. Dependency injection of an HTTP client for unit testing, or
-// 2. Integration testing with a real test server
-// For now, these are tested via integration/e2e tests rather than unit tests.
+// Note: RequestDeviceLink and RegisterDeviceLink use NewSecureHTTPClient internally
+// which requires TLS. These functions are tested via integration/e2e tests with a real Operator.
+
+// ---------------------------------------------------------------------------
+// RegisterDeviceLink
+// ---------------------------------------------------------------------------
+// Note: RegisterDeviceLink uses NewSecureHTTPClient internally which requires TLS.
+// This function is tested via integration/e2e tests with a real Operator.
+
+// ---------------------------------------------------------------------------
+// Bootstrap
+// ---------------------------------------------------------------------------
+// Note: Bootstrap has complex CA download logic that is difficult to test with httptest.
+// This function is tested via integration/e2e tests with a real Operator.
 
 // ---------------------------------------------------------------------------
 // SaveCredentials / LoadCredentials
@@ -309,4 +495,36 @@ func TestCheckOperatorRunning_HealthCheckFailed(t *testing.T) {
 	err := CheckOperatorRunningAtURL("https://localhost:99999")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not running or not responding")
+}
+
+func TestCheckOperatorRunning_Success(t *testing.T) {
+	t.Parallel()
+
+	// Start a test server on a random port
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer listener.Close()
+
+	_, port, err := net.SplitHostPort(listener.Addr().String())
+	require.NoError(t, err)
+
+	url := fmt.Sprintf("http://127.0.0.1:%s", port)
+	err = CheckOperatorRunningAtURL(url)
+	require.NoError(t, err)
+}
+
+func TestCheckOperatorRunning_InvalidURL(t *testing.T) {
+	t.Parallel()
+
+	err := CheckOperatorRunningAtURL("invalid-url")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid operator URL")
+}
+
+func TestCheckOperatorRunning_URLWithoutProtocol(t *testing.T) {
+	t.Parallel()
+
+	err := CheckOperatorRunningAtURL("localhost:8440")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid operator URL")
 }
