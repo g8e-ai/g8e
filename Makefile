@@ -117,7 +117,7 @@ buf-install:
 	@if ! command -v buf &> /dev/null && [ ! -f "./buf" ]; then \
 		if command -v go &> /dev/null; then \
 			echo "Installing Buf natively via Go toolchain..."; \
-			GOBIN=$$(pwd) go install github.com/bufbuild/buf/cmd/buf@v1.69.0; \
+			GOBIN=$$(pwd) go install github.com/bufbuild/buf/cmd/buf@v1.70.0; \
 		else \
 			echo "Go not found, attempting direct download..."; \
 			curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-$$(uname -s)-$$(uname -m)" -o ./buf && chmod +x ./buf || \
