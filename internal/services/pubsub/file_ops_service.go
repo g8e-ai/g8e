@@ -74,7 +74,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 
 	vaultMode := constants.VaultMode(protoEdit.SentinelMode)
 	if vaultMode == "" {
-		vaultMode = constants.SentinelModeRaw
+		vaultMode = constants.VaultModeRaw
 	}
 
 	fs.logger.Info("File edit requested (via Protobuf)",
@@ -283,7 +283,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 
 	vaultMode := constants.VaultMode(protoList.SentinelMode)
 	if vaultMode == "" {
-		vaultMode = constants.SentinelModeRaw
+		vaultMode = constants.VaultModeRaw
 	}
 
 	fs.logger.Info("File system list requested (via Protobuf)", "path", path, "sentinel_mode", vaultMode)
@@ -409,7 +409,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 
 	vaultMode := constants.VaultMode(protoGrep.SentinelMode)
 	if vaultMode == "" {
-		vaultMode = constants.SentinelModeRaw
+		vaultMode = constants.VaultModeRaw
 	}
 
 	fs.logger.Info("File system grep requested (via Protobuf)", "path", path, "pattern", protoGrep.Pattern, "sentinel_mode", vaultMode)
@@ -542,7 +542,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg *PubSubCo
 
 	vaultMode := constants.VaultMode(protoRead.SentinelMode)
 	if vaultMode == "" {
-		vaultMode = constants.SentinelModeRaw
+		vaultMode = constants.VaultModeRaw
 	}
 
 	fs.logger.Info("File system read requested (via Protobuf)", "path", protoRead.Path, "sentinel_mode", vaultMode)

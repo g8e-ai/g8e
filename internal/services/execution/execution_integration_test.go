@@ -415,8 +415,8 @@ exit 0
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.Contains(t, result.Stdout, "Starting script")
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status, "Stderr: %s, ErrorMessage: %v", result.Stderr, result.ErrorMessage)
+		assert.Contains(t, result.Stdout, "Starting script", "Stderr: %s", result.Stderr)
 		assert.Contains(t, result.Stdout, "Middle of script")
 		assert.Contains(t, result.Stdout, "Ending script")
 

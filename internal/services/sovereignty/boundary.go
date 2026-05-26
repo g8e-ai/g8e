@@ -177,7 +177,7 @@ func (s *SovereigntyService) initializeScrubbers() {
 		},
 		// JWT (JSON Web Token) - specific base64.base64.base64 format
 		&RegexScrubber{
-			name:        "jwt",
+			name:        string(constants.AuthProviderJWT),
 			pattern:     regexp.MustCompile(`\beyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\b`),
 			replacement: "[JWT]",
 		},

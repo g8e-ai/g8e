@@ -109,9 +109,9 @@ var excludePatterns = []string{
 // constantSourceFiles are the files that define constants (relative to g8eo root).
 // Map key is the display name, value is the relative path.
 var constantSourceFiles = map[string]string{
-	"events.go":           "internal/constants/events.go",
-	"status_generated.go": "internal/constants/status_generated.go",
-	"file_edit.go":        "internal/models/file_edit.go",
+	"events.go":    "internal/constants/events.go",
+	"status.go":    "internal/constants/status.go",
+	"file_edit.go": "internal/models/file_edit.go",
 }
 
 // allowlistedValues are constant values too generic/short to enforce.
@@ -435,12 +435,12 @@ func TestExtractConstantsFromEvents(t *testing.T) {
 }
 
 func TestExtractConstantsFromVault(t *testing.T) {
-	fullPath := filepath.Join(g8eoRoot, "internal/constants/status_generated.go")
-	constants, err := extractConstantsFromFile(fullPath, "status_generated.go")
+	fullPath := filepath.Join(g8eoRoot, "internal/constants/status.go")
+	constants, err := extractConstantsFromFile(fullPath, "status.go")
 	require.NoError(t, err)
-	require.NotEmpty(t, constants, "should extract constants from status_generated.go")
+	require.NotEmpty(t, constants, "should extract constants from status.go")
 
-	t.Logf("Extracted %d constants from status_generated.go", len(constants))
+	t.Logf("Extracted %d constants from status.go", len(constants))
 
 	_, hasRaw := constants["raw"]
 	assert.True(t, hasRaw, "should contain raw (SentinelModeRaw)")

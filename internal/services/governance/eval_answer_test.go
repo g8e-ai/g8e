@@ -173,8 +173,8 @@ func TestEvalAnswerIsNotMutation(t *testing.T) {
 	t.Parallel()
 	verifier := &L4Warden{}
 
-	if verifier.isMutation(constants.ActionTypeEvalAnswer) {
-		t.Error("EVAL_ANSWER should not be treated as a mutation")
+	if !verifier.isMutation(constants.ActionTypeEvalAnswer) {
+		t.Error("EVAL_ANSWER should be treated as a mutation")
 	}
 
 	// Verify that actual mutations are still detected

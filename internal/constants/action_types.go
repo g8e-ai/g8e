@@ -1,0 +1,91 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package constants
+
+// ActionType is a typed string for action types.
+type ActionType string
+
+const (
+	ActionTypeA2aCall             ActionType = "A2A_CALL"
+	ActionTypeEvalAnswer          ActionType = "EVAL_ANSWER"
+	ActionTypeExecuteBash         ActionType = "EXECUTE_BASH"
+	ActionTypeFetchFileDiff       ActionType = "FETCH_FILE_DIFF"
+	ActionTypeFetchFileHistory    ActionType = "FETCH_FILE_HISTORY"
+	ActionTypeFetchHistory        ActionType = "FETCH_HISTORY"
+	ActionTypeFetchLogs           ActionType = "FETCH_LOGS"
+	ActionTypeFileEdit            ActionType = "FILE_EDIT"
+	ActionTypeFsGrep              ActionType = "FS_GREP"
+	ActionTypeFsList              ActionType = "FS_LIST"
+	ActionTypeFsRead              ActionType = "FS_READ"
+	ActionTypeGrantIntent         ActionType = "GRANT_INTENT"
+	ActionTypeHeartbeat           ActionType = "HEARTBEAT"
+	ActionTypeInvestigationCreate ActionType = "INVESTIGATION_CREATE"
+	ActionTypeMcpCall             ActionType = "MCP_CALL"
+	ActionTypeMcpPromptGet        ActionType = "MCP_PROMPT_GET"
+	ActionTypeMcpPromptList       ActionType = "MCP_PROMPT_LIST"
+	ActionTypeMcpResourceList     ActionType = "MCP_RESOURCE_LIST"
+	ActionTypeMcpResourceRead     ActionType = "MCP_RESOURCE_READ"
+	ActionTypePortCheck           ActionType = "PORT_CHECK"
+	ActionTypeRestoreFile         ActionType = "RESTORE_FILE"
+	ActionTypeRevokeIntent        ActionType = "REVOKE_INTENT"
+	ActionTypeShutdown            ActionType = "SHUTDOWN"
+)
+
+// AllActionTypes returns a slice of all valid action types.
+func AllActionTypes() []ActionType {
+	return []ActionType{
+		ActionTypeA2aCall,
+		ActionTypeEvalAnswer,
+		ActionTypeExecuteBash,
+		ActionTypeFetchFileDiff,
+		ActionTypeFetchFileHistory,
+		ActionTypeFetchHistory,
+		ActionTypeFetchLogs,
+		ActionTypeFileEdit,
+		ActionTypeFsGrep,
+		ActionTypeFsList,
+		ActionTypeFsRead,
+		ActionTypeGrantIntent,
+		ActionTypeHeartbeat,
+		ActionTypeInvestigationCreate,
+		ActionTypeMcpCall,
+		ActionTypeMcpPromptGet,
+		ActionTypeMcpPromptList,
+		ActionTypeMcpResourceList,
+		ActionTypeMcpResourceRead,
+		ActionTypePortCheck,
+		ActionTypeRestoreFile,
+		ActionTypeRevokeIntent,
+		ActionTypeShutdown,
+	}
+}
+
+// IsMutation returns true if the action type is a mutation (modifies system state).
+func IsMutation(actionType ActionType) bool {
+	switch actionType {
+	case ActionTypeExecuteBash,
+		ActionTypeFileEdit,
+		ActionTypeRestoreFile,
+		ActionTypeShutdown,
+		ActionTypeGrantIntent,
+		ActionTypeRevokeIntent,
+		ActionTypeA2aCall,
+		ActionTypeMcpCall,
+		ActionTypeEvalAnswer,
+		ActionTypeInvestigationCreate:
+		return true
+	default:
+		return false
+	}
+}

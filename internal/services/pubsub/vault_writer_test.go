@@ -59,7 +59,7 @@ func TestVaultWriter_WriteExecution(t *testing.T) {
 			durationMs: 1000,
 			stdout:     "file1\nfile2",
 			stderr:     "",
-			vaultMode:  constants.SentinelModeRaw,
+			vaultMode:  constants.VaultModeRaw,
 		}
 
 		svc.WriteExecution(params)
@@ -85,7 +85,7 @@ func TestVaultWriter_WriteExecution(t *testing.T) {
 			caseID:          "case-1",
 			taskID:          "task-1",
 			investigationID: "investigation-1",
-			vaultMode:       constants.SentinelModeRaw,
+			vaultMode:       constants.VaultModeRaw,
 		}
 
 		svc.WriteExecution(params)
