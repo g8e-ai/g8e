@@ -199,3 +199,215 @@ type FieldReadRequest struct {
 type FieldReadResult struct {
 	Value interface{} `json:"value"`
 }
+
+// Native tool definitions compiled into the Operator binary
+
+// DBDiscoverTopologyRequest is the params for the "db_discover_topology" tool.
+type DBDiscoverTopologyRequest struct {
+	DatabasePath string `json:"database_path"`
+}
+
+// DBDiscoverTopologyResult is the result for the "db_discover_topology" tool.
+type DBDiscoverTopologyResult struct {
+	Schema map[string]map[string]string `json:"schema"`
+}
+
+// DBQueryValidateRequest is the params for the "db_query_validate" tool.
+type DBQueryValidateRequest struct {
+	DatabasePath string `json:"database_path"`
+	Query        string `json:"query"`
+}
+
+// DBQueryValidateResult is the result for the "db_query_validate" tool.
+type DBQueryValidateResult struct {
+	Valid    bool   `json:"valid"`
+	Plan     string `json:"plan,omitempty"`
+	Warning  string `json:"warning,omitempty"`
+	Rejected bool   `json:"rejected"`
+	Reason   string `json:"reason,omitempty"`
+}
+
+// DBIsolatedReadRequest is the params for the "db_isolated_read" tool.
+type DBIsolatedReadRequest struct {
+	DatabasePath string `json:"database_path"`
+	Query        string `json:"query"`
+}
+
+// DBIsolatedReadResult is the result for the "db_isolated_read" tool.
+type DBIsolatedReadResult struct {
+	Rows    []map[string]interface{} `json:"rows"`
+	Columns []string                 `json:"columns"`
+}
+
+// DBIndexTriageRequest is the params for the "db_index_triage" tool.
+type DBIndexTriageRequest struct {
+	DatabasePath string `json:"database_path"`
+}
+
+// DBIndexTriageResult is the result for the "db_index_triage" tool.
+type DBIndexTriageResult struct {
+	Indexes       []IndexInfo `json:"indexes"`
+	Fragmentation float64     `json:"fragmentation"`
+}
+
+// IndexInfo represents database index information.
+type IndexInfo struct {
+	Name    string   `json:"name"`
+	Table   string   `json:"table"`
+	Columns []string `json:"columns"`
+	Unique  bool     `json:"unique"`
+	Used    bool     `json:"used"`
+}
+
+// LogStreamFilterRequest is the params for the "log_stream_filter" tool.
+type LogStreamFilterRequest struct {
+	LogPath string `json:"log_path"`
+	Pattern string `json:"pattern"`
+	Limit   int    `json:"limit,omitempty"`
+}
+
+// LogStreamFilterResult is the result for the "log_stream_filter" tool.
+type LogStreamFilterResult struct {
+	Lines []string `json:"lines"`
+	Count int      `json:"count"`
+}
+
+// SysOOMDetectRequest is the params for the "sys_oom_detect" tool.
+type SysOOMDetectRequest struct {
+	LogPath string `json:"log_path,omitempty"`
+}
+
+// SysOOMDetectResult is the result for the "sys_oom_detect" tool.
+type SysOOMDetectResult struct {
+	Events []OOMEvent `json:"events"`
+}
+
+// OOMEvent represents an OOM killer event.
+type OOMEvent struct {
+	Timestamp string `json:"timestamp"`
+	PID       int    `json:"pid"`
+	Process   string `json:"process"`
+	MemoryMB  int    `json:"memory_mb"`
+}
+
+// ConfigDiffMaskRequest is the params for the "config_diff_mask" tool.
+type ConfigDiffMaskRequest struct {
+	ConfigPath string `json:"config_path"`
+	Baseline   string `json:"baseline"`
+}
+
+// ConfigDiffMaskResult is the result for the "config_diff_mask" tool.
+type ConfigDiffMaskResult struct {
+	Differences []ConfigDiff `json:"differences"`
+}
+
+// ConfigDiff represents a configuration difference.
+type ConfigDiff struct {
+	Key      string `json:"key"`
+	Current  string `json:"current,omitempty"`
+	Baseline string `json:"baseline,omitempty"`
+	Type     string `json:"type"`
+}
+
+// ProcMetricTopRequest is the params for the "proc_metric_top" tool.
+type ProcMetricTopRequest struct {
+	Limit int `json:"limit,omitempty"`
+}
+
+// ProcMetricTopResult is the result for the "proc_metric_top" tool.
+type ProcMetricTopResult struct {
+	Processes []ProcessInfo `json:"processes"`
+}
+
+// ProcessInfo represents process information from /proc.
+type ProcessInfo struct {
+	PID        int     `json:"pid"`
+	Name       string  `json:"name"`
+	CPUPercent float64 `json:"cpu_percent"`
+	MemoryMB   float64 `json:"memory_mb"`
+	User       string  `json:"user"`
+	Command    string  `json:"command"`
+}
+
+// FSDiskProfileRequest is the params for the "fs_disk_profile" tool.
+type FSDiskProfileRequest struct {
+	Path     string `json:"path"`
+	MaxDepth int    `json:"max_depth,omitempty"`
+}
+
+// FSDiskProfileResult is the result for the "fs_disk_profile" tool.
+type FSDiskProfileResult struct {
+	Entries []DirEntry `json:"entries"`
+	TotalMB int64      `json:"total_mb"`
+}
+
+// DirEntry represents a directory entry for disk profiling.
+type DirEntry struct {
+	Path     string `json:"path"`
+	SizeMB   int64  `json:"size_mb"`
+	IsDir    bool   `json:"is_dir"`
+	Modified int64  `json:"modified"`
+}
+
+// ProcSignalSafeRequest is the params for the "proc_signal_safe" tool.
+type ProcSignalSafeRequest struct {
+	PID    int    `json:"pid"`
+	Signal string `json:"signal"`
+}
+
+// ProcSignalSafeResult is the result for the "proc_signal_safe" tool.
+type ProcSignalSafeResult struct {
+	Sent   bool   `json:"sent"`
+	PID    int    `json:"pid"`
+	Signal string `json:"signal"`
+	Error  string `json:"error,omitempty"`
+}
+
+// NetSocketAuditRequest is the params for the "net_socket_audit" tool.
+type NetSocketAuditRequest struct {
+	Protocol string `json:"protocol,omitempty"`
+}
+
+// NetSocketAuditResult is the result for the "net_socket_audit" tool.
+type NetSocketAuditResult struct {
+	Sockets []SocketInfo `json:"sockets"`
+}
+
+// SocketInfo represents network socket information.
+type SocketInfo struct {
+	Protocol   string `json:"protocol"`
+	LocalAddr  string `json:"local_addr"`
+	LocalPort  int    `json:"local_port"`
+	RemoteAddr string `json:"remote_addr,omitempty"`
+	RemotePort int    `json:"remote_port,omitempty"`
+	State      string `json:"state,omitempty"`
+	PID        int    `json:"pid,omitempty"`
+	Process    string `json:"process,omitempty"`
+}
+
+// NetEndpointPingRequest is the params for the "net_endpoint_ping" tool.
+type NetEndpointPingRequest struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+}
+
+// NetEndpointPingResult is the result for the "net_endpoint_ping" tool.
+type NetEndpointPingResult struct {
+	Reachable bool    `json:"reachable"`
+	LatencyMs float64 `json:"latency_ms"`
+	Error     string  `json:"error,omitempty"`
+}
+
+// NetHTTPProbeRequest is the params for the "net_http_probe" tool.
+type NetHTTPProbeRequest struct {
+	URL    string `json:"url"`
+	Method string `json:"method,omitempty"`
+}
+
+// NetHTTPProbeResult is the result for the "net_http_probe" tool.
+type NetHTTPProbeResult struct {
+	StatusCode int               `json:"status_code"`
+	Headers    map[string]string `json:"headers"`
+	LatencyMs  float64           `json:"latency_ms"`
+	Error      string            `json:"error,omitempty"`
+}
