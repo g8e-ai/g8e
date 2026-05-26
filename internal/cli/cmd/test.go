@@ -28,7 +28,7 @@ func testCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test",
 		Short: "Run test suites",
-		Long:  `Orchestrate test execution for g8eo (Gateway).`,
+		Long:  `Run test suites. Use 'test ci' to mirror GitHub Actions CI exactly.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
@@ -201,14 +201,15 @@ func testG8eoCmd() *cobra.Command {
 func testCICmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ci",
-		Short: "Run full CI test suite (mirrors GitHub Actions)",
+		Short: "Run full CI test suite (mirrors GitHub Actions exactly)",
+		Long:  `Runs make ci which includes proto generation, linting, vulncheck, and substrate tests with platform start/stop and coverage enforcement. This is the canonical way to replicate CI locally.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			cmd.Println("Running full CI test suite...")
+			cmd.Println("Running full CI test suite (mirrors GitHub Actions)...")
 			cmd.Println("\n=== Running make ci ===")
 			makeCmd := exec.Command("make", "ci")
 			makeCmd.Stdout = os.Stdout
