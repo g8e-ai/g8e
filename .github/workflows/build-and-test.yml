@@ -79,7 +79,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.64.8
+          version: v1.65.0
           args: --timeout=5m --disable=gocritic,gosec
 
   security:
