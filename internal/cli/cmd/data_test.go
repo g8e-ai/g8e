@@ -131,7 +131,7 @@ func TestDataDeviceLinksListCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to read paths.json")
+		assert.Contains(t, err.Error(), "failed to parse paths.json")
 	})
 
 	t.Run("list fails without user-id", func(t *testing.T) {

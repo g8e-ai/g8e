@@ -204,7 +204,7 @@ func TestLoad(t *testing.T) {
 		config, err := Load(tempDir)
 		assert.Error(t, err)
 		assert.Nil(t, config)
-		assert.Contains(t, err.Error(), "failed to read paths.json")
+		assert.Contains(t, err.Error(), "failed to parse paths.json")
 	})
 
 	t.Run("returns error when paths.json is invalid JSON", func(t *testing.T) {
@@ -232,7 +232,7 @@ func TestLoad(t *testing.T) {
 		config, err := Load(tempDir)
 		assert.Error(t, err)
 		assert.Nil(t, config)
-		assert.Contains(t, err.Error(), "failed to read paths.json")
+		assert.Contains(t, err.Error(), "failed to parse paths.json")
 	})
 }
 

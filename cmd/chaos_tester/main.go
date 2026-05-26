@@ -234,16 +234,6 @@ func newMemReplayStore() *memReplayStore {
 	return &memReplayStore{nonces: make(map[string]bool)}
 }
 
-func (m *memReplayStore) CheckAndSetNonce(nonce string, _ time.Time) (bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.nonces[nonce] {
-		return true, nil
-	}
-	m.nonces[nonce] = true
-	return false, nil
-}
-
 func (m *memReplayStore) ReserveNonce(nonce string, _ time.Time) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

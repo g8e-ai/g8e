@@ -355,7 +355,7 @@ func dataSettingsCmd() *cobra.Command {
 				return err
 			}
 
-			resp, err := client.Get("/db/app_settings/app_settings")
+			resp, err := client.Get("/db/settings/platform_settings")
 			if err != nil {
 				return err
 			}

@@ -66,7 +66,7 @@ func TestDocumentID(t *testing.T) {
 		d    constants.DocumentID
 		want string
 	}{
-		{"app_settings", constants.DocIDAppSettings, "app_settings"},
+		{"platform_settings", constants.DocIDPlatformSettings, "platform_settings"},
 		{"user_settings_prefix", constants.DocIDUserSettingsPrefix, "user_settings_"},
 	}
 

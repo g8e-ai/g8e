@@ -164,6 +164,9 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamServer.URL)
 	mcpGateway.SetA2ADependencies(downstreamServer.URL)
 
+	// Seed platform_settings required for health check
+	ls.GetDB().DocSet("settings", "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go ls.Start(ctx)
@@ -376,6 +379,9 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 
 	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamServer.URL)
 	mcpGateway.SetA2ADependencies(downstreamServer.URL)
+
+	// Seed platform_settings required for health check
+	ls.GetDB().DocSet("settings", "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -710,6 +716,9 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	ls.SetEnvelopeProcessor(cmdSvc)
 
 	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, "")
+
+	// Seed platform_settings required for health check
+	ls.GetDB().DocSet("settings", "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

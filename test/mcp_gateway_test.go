@@ -201,6 +201,9 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	// Set MCP gateway dependencies for governance processing
 	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamServer.URL)
 
+	// Seed platform_settings required for health check
+	ls.GetDB().DocSet("settings", "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go ls.Start(ctx)
@@ -477,6 +480,9 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 
 	// Set MCP gateway dependencies for governance processing
 	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamServer.URL)
+
+	// Seed platform_settings required for health check
+	ls.GetDB().DocSet("settings", "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -798,6 +804,9 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 
 	// Set MCP gateway dependencies for governance processing
 	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, "")
+
+	// Seed platform_settings required for health check
+	ls.GetDB().DocSet("settings", "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -649,6 +649,11 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *GatewayDBService) ht
 	})
 }
 
+// HasJWKS returns true if JWT authentication is configured.
+func (s *AuthService) HasJWKS() bool {
+	return s.jwks != nil
+}
+
 // JWTAuthMiddleware validates JWT tokens and performs JIT user provisioning.
 // This is for external IdP authentication on MCP/A2A endpoints.
 func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {

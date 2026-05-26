@@ -259,13 +259,6 @@ func (s *GatewayDBService) calculateStateRoot() (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-// CheckAndSetNonce returns true if the nonce was already used (replay detected).
-// If not used, it marks the nonce as used and returns false.
-// This is the legacy method for backward compatibility.
-func (s *GatewayDBService) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
-	return s.ReserveNonce(nonce, expiresAt)
-}
-
 // ReserveNonce atomically reserves a nonce for early replay protection.
 // Returns true if the nonce was already reserved/used (replay detected).
 // If not used, it reserves the nonce and returns false.
@@ -342,11 +335,6 @@ func (s *GatewayDBService) initSchema(secretsDir string) error {
 		return err
 	}
 
-	// Run data migrations
-	if err := s.runDataMigrations(); err != nil {
-		return err
-	}
-
 	sm, err := NewSecretManager(s.db, secretsDir, s.logger)
 	if err != nil {
 		return err
@@ -360,58 +348,6 @@ func (s *GatewayDBService) initSchema(secretsDir string) error {
 		return err
 	}
 
-	return nil
-}
-
-// runDataMigrations applies data-only migrations (not schema changes).
-func (s *GatewayDBService) runDataMigrations() error {
-	// Migration 1: Scrub plaintext secrets from app_settings
-	// This is a one-time migration that removes the old plaintext secret fields
-	// from the app_settings document, since secrets are now stored in the keystore.
-	var count int
-	err := s.db.QueryRowWithRetry(
-		"SELECT COUNT(*) FROM documents WHERE collection = 'settings' AND id = 'app_settings'",
-	).Scan(&count)
-	if err != nil {
-		return err
-	}
-	if count == 0 {
-		// No app_settings document yet, nothing to migrate
-		return nil
-	}
-
-	// Check if migration already applied by checking for the old secret fields
-	var hasSecrets int
-	err = s.db.QueryRowWithRetry(
-		"SELECT COUNT(*) FROM documents WHERE collection = 'settings' AND id = 'app_settings' AND (json_extract(data, '$.settings.session_encryption_key') IS NOT NULL OR json_extract(data, '$.settings.actuator_signing_key') IS NOT NULL OR json_extract(data, '$.settings.auditor_hmac_key') IS NOT NULL)",
-	).Scan(&hasSecrets)
-	if err != nil {
-		return err
-	}
-	if hasSecrets == 0 {
-		// Already migrated
-		return nil
-	}
-
-	// Apply the migration
-	_, err = s.db.ExecWithRetry(
-		`UPDATE documents
-		 SET data = json_remove(
-			 json_remove(
-				 json_remove(data, '$.settings.session_encryption_key'),
-				 '$.settings.actuator_signing_key'
-			 ),
-			 '$.settings.auditor_hmac_key'
-		 ),
-		 updated_at = ?
-		 WHERE collection = 'settings' AND id = 'app_settings'`,
-		sqliteutil.NowTimestamp(),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to scrub plaintext secrets from app_settings: %w", err)
-	}
-
-	s.logger.Info("Applied data migration: scrubbed plaintext secrets from app_settings")
 	return nil
 }
 

@@ -301,45 +301,23 @@ func TestMemReplayStore(t *testing.T) {
 	nonce := "test-nonce-123"
 	expiry := time.Now().Add(1 * time.Hour)
 
-	t.Run("CheckAndSetNonce first use", func(t *testing.T) {
-		seen, err := store.CheckAndSetNonce(nonce, expiry)
+	t.Run("ReserveNonce first use", func(t *testing.T) {
+		seen, err := store.ReserveNonce(nonce, expiry)
 		if err != nil {
-			t.Fatalf("CheckAndSetNonce() error = %v", err)
+			t.Fatalf("ReserveNonce() error = %v", err)
 		}
 		if seen {
 			t.Error("nonce should not be seen on first use")
 		}
 	})
 
-	t.Run("CheckAndSetNonce second use", func(t *testing.T) {
-		seen, err := store.CheckAndSetNonce(nonce, expiry)
+	t.Run("ReserveNonce second use", func(t *testing.T) {
+		seen, err := store.ReserveNonce(nonce, expiry)
 		if err != nil {
-			t.Fatalf("CheckAndSetNonce() error = %v", err)
+			t.Fatalf("ReserveNonce() error = %v", err)
 		}
 		if !seen {
 			t.Error("nonce should be seen on second use")
-		}
-	})
-
-	t.Run("ReserveNonce first use", func(t *testing.T) {
-		newNonce := "test-nonce-456"
-		seen, err := store.ReserveNonce(newNonce, expiry)
-		if err != nil {
-			t.Fatalf("ReserveNonce() error = %v", err)
-		}
-		if seen {
-			t.Error("nonce should not be seen on first reserve")
-		}
-	})
-
-	t.Run("ReserveNonce second use", func(t *testing.T) {
-		newNonce := "test-nonce-456"
-		seen, err := store.ReserveNonce(newNonce, expiry)
-		if err != nil {
-			t.Fatalf("ReserveNonce() error = %v", err)
-		}
-		if !seen {
-			t.Error("nonce should be seen on second reserve")
 		}
 	})
 
@@ -357,9 +335,9 @@ func TestMemReplayStore(t *testing.T) {
 		}
 
 		// After release, nonce should be available again
-		seen, err := store.CheckAndSetNonce(nonce, expiry)
+		seen, err := store.ReserveNonce(nonce, expiry)
 		if err != nil {
-			t.Fatalf("CheckAndSetNonce() after release error = %v", err)
+			t.Fatalf("ReserveNonce() after release error = %v", err)
 		}
 		if seen {
 			t.Error("nonce should not be seen after release")

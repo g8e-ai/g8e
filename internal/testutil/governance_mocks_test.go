@@ -25,13 +25,8 @@ import (
 func TestMockReplayStore(t *testing.T) {
 	store := &MockReplayStore{}
 
-	// MockReplayStore never detects replays
-	isReplay, err := store.CheckAndSetNonce("test-nonce", time.Now().Add(5*time.Minute))
-	require.NoError(t, err)
-	require.False(t, isReplay, "MockReplayStore should never detect replays")
-
-	// ReserveNonce also never detects replays
-	isReplay, err = store.ReserveNonce("test-nonce", time.Now().Add(5*time.Minute))
+	// ReserveNonce never detects replays
+	isReplay, err := store.ReserveNonce("test-nonce", time.Now().Add(5*time.Minute))
 	require.NoError(t, err)
 	require.False(t, isReplay)
 
@@ -53,18 +48,18 @@ func TestStatefulMockReplayStore(t *testing.T) {
 	expiresAt := time.Now().Add(5 * time.Minute)
 
 	// First use - should not be a replay
-	isReplay, err := store.CheckAndSetNonce(nonce, expiresAt)
+	isReplay, err := store.ReserveNonce(nonce, expiresAt)
 	require.NoError(t, err)
 	require.False(t, isReplay, "First use should not be a replay")
 
 	// Second use - should be a replay
-	isReplay, err = store.CheckAndSetNonce(nonce, expiresAt)
+	isReplay, err = store.ReserveNonce(nonce, expiresAt)
 	require.NoError(t, err)
 	require.True(t, isReplay, "Second use should be detected as replay")
 
 	// Different nonce - should not be a replay
 	nonce2 := "test-nonce-456"
-	isReplay, err = store.CheckAndSetNonce(nonce2, expiresAt)
+	isReplay, err = store.ReserveNonce(nonce2, expiresAt)
 	require.NoError(t, err)
 	require.False(t, isReplay, "Different nonce should not be a replay")
 
@@ -83,7 +78,7 @@ func TestStatefulMockReplayStore(t *testing.T) {
 	require.NoError(t, err)
 
 	// After release, nonce should be available again
-	isReplay, err = store.CheckAndSetNonce(nonce3, expiresAt)
+	isReplay, err = store.ReserveNonce(nonce3, expiresAt)
 	require.NoError(t, err)
 	require.False(t, isReplay, "After release, nonce should not be a replay")
 
@@ -101,7 +96,7 @@ func TestStatefulMockReplayStore_Concurrent(t *testing.T) {
 	done := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func() {
-			_, err := store.CheckAndSetNonce(nonce, expiresAt)
+			_, err := store.ReserveNonce(nonce, expiresAt)
 			require.NoError(t, err)
 			done <- true
 		}()
@@ -113,7 +108,7 @@ func TestStatefulMockReplayStore_Concurrent(t *testing.T) {
 	}
 
 	// Nonce should be marked as used
-	isReplay, err := store.CheckAndSetNonce(nonce, expiresAt)
+	isReplay, err := store.ReserveNonce(nonce, expiresAt)
 	require.NoError(t, err)
 	require.True(t, isReplay, "Nonce should be marked as used after concurrent access")
 }

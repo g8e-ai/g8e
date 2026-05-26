@@ -63,7 +63,7 @@ func NewInMemoryReplayStore() *InMemoryReplayStore {
 	}
 }
 
-func (s *InMemoryReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
+func (s *InMemoryReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, exists := s.nonces[nonce]; exists {
@@ -71,10 +71,6 @@ func (s *InMemoryReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time
 	}
 	s.nonces[nonce] = expiresAt
 	return false, nil
-}
-
-func (s *InMemoryReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
-	return s.CheckAndSetNonce(nonce, expiresAt)
 }
 
 func (s *InMemoryReplayStore) FinalizeNonce(nonce string) error {

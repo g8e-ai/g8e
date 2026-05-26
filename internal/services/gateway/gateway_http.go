@@ -185,8 +185,17 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mcpMux.HandleFunc("/api/mcp/v1/prompts/get", h.mcp.HandlePromptsGet)
 	mcpMux.HandleFunc("/api/a2a/v1/call", h.mcp.HandleA2aCall)
 
-	// Wrap MCP/A2A with JWT and Rate Limiting
-	mcpJWTHandler := h.auth.JWTAuthMiddleware(h.rateLimitMiddleware(mcpMux))
+	// Wrap MCP/A2A with Rate Limiting
+	mcpRateLimited := h.rateLimitMiddleware(mcpMux)
+
+	// Apply JWT middleware only when JWKS is configured (for external IdP auth)
+	// When JWKS is not configured, mTLS authentication is used via main middleware
+	var mcpHandler http.Handler
+	if h.auth != nil && h.auth.HasJWKS() {
+		mcpHandler = h.auth.JWTAuthMiddleware(mcpRateLimited)
+	} else {
+		mcpHandler = mcpRateLimited
+	}
 
 	// Rate-limited mux for core governance envelope (uses mTLS via main middleware)
 	govEnvMux := http.NewServeMux()
@@ -214,8 +223,8 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 
 	// Register rate-limited MCP routes
 	mux.Handle("/api/governance/envelope", govEnvHandler)
-	mux.Handle("/api/mcp/", mcpJWTHandler)
-	mux.Handle("/api/a2a/", mcpJWTHandler)
+	mux.Handle("/api/mcp/", mcpHandler)
+	mux.Handle("/api/a2a/", mcpHandler)
 
 	mux.HandleFunc("/api/audit/receipts", h.handleAuditReceipts)
 	mux.HandleFunc("/api/audit/receipts/export", h.handleAuditReceiptsExport)
@@ -446,15 +455,15 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDAppSettings))
+	doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
 	if err != nil {
-		h.logger.Error("Health check failed to query app_settings", string(constants.ConnectionStateError), err)
-		h.responder.Error(w, http.StatusServiceUnavailable, "app_settings not ready")
+		h.logger.Error("Health check failed to query platform_settings", string(constants.ConnectionStateError), err)
+		h.responder.Error(w, http.StatusServiceUnavailable, "platform_settings not ready")
 		return
 	}
 	if doc == nil {
-		h.logger.Warn("Health check: app_settings not found")
-		h.responder.Error(w, http.StatusServiceUnavailable, "app_settings not ready")
+		h.logger.Warn("Health check: platform_settings not found")
+		h.responder.Error(w, http.StatusServiceUnavailable, "platform_settings not ready")
 		return
 	}
 
@@ -752,7 +761,7 @@ func (h *HTTPHandler) handleDeviceLinkRegister(w http.ResponseWriter, r *http.Re
 func (h *HTTPHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDAppSettings))
+		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
 		if err != nil {
 			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -770,9 +779,9 @@ func (h *HTTPHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		var err2 error
 		if r.Method == http.MethodPut {
-			err2 = h.db.DocSet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDAppSettings), json.RawMessage(body))
+			err2 = h.db.DocSet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
 		} else {
-			_, err2 = h.db.DocUpdate(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDAppSettings), json.RawMessage(body))
+			_, err2 = h.db.DocUpdate(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
 		}
 		if err2 != nil {
 			h.responder.Error(w, http.StatusInternalServerError, err2.Error())
