@@ -23,11 +23,12 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version-file: go.mod
-        cache: true
+    - name: Install Go
+      run: |
+        wget https://go.dev/dl/go1.22.5.linux-amd64.tar.gz
+        sudo rm -rf /usr/local/go
+        sudo tar -C /usr/local -xzf go1.22.5.linux-amd64.tar.gz
+        echo "/usr/local/go/bin" >> $GITHUB_PATH
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
