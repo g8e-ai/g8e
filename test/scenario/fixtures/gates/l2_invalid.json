@@ -1,7 +1,7 @@
 {
   "name": "l2_invalid",
   "vertical": "gates",
-  "narrative": "Envelope with forged L2 signature should be rejected",
+  "narrative": "Envelope with forged L2 signature: rejected in consensus/notary (L2 enforced), accepted in doctrine (L2 audited only)",
   "intent": {
     "id": "3b833b0634d68cb1eae4245eea8329775be00f42ab36fb90bd1761064ae33227",
     "timestamp": "2026-05-25T12:00:00Z",

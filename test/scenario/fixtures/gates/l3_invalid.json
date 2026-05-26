@@ -1,7 +1,7 @@
 {
   "name": "l3_invalid",
   "vertical": "gates",
-  "narrative": "Envelope with invalid L3 proof should be rejected",
+  "narrative": "Envelope with invalid L3 proof: rejected in notary (L3 enforced), accepted in doctrine/consensus (L3 audited only)",
   "intent": {
     "id": "7459287e8cc67b3de0a346d5d05b66b0061bd3d4ff28384bebcdebc9eefffa0f",
     "timestamp": "2026-05-25T12:00:00Z",
