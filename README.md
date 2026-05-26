@@ -1,7 +1,5 @@
 <div align="center">
 
-<!-- INSERT: logo here (recommend a small wordmark or the g8e gate glyph, ~120px tall) -->
-
 # g8e
 
 **Byzantine Fault Tolerant governance for AI agents that touch real infrastructure.**
@@ -16,18 +14,6 @@ g8e is a zero-trust execution protocol and outbound-only gateway that forces eve
 [Getting Started](docs/guides/getting_started.md) · [How it works](#how-it-works) · [Self-hosting](#self-hosting--air-gap) · [Docs](#documentation) · [Paper](docs/reference/position_paper.md)
 
 </div>
-
----
-
-<!-- ============================================================= -->
-<!-- INSERT: HERO DEMO (video or GIF) — this is the money shot.    -->
-<!-- Capture one governed mutation moving end to end:              -->
-<!--   intent (MCP/tool call) → Consensus co-sign → Notary tap →      -->
-<!--   Actuator executes → signed receipt in the audit log.        -->
-<!-- 10–20s, terminal + the WebAuthn prompt. Put it right here.    -->
-<!-- ============================================================= -->
-
-> *Insert hero demo video/GIF above.*
 
 ---
 
@@ -69,14 +55,6 @@ Every mutation passes five layers in sequence at the host boundary. Each one pro
 | **L5** | **Actuator** | Execution boundary | The single fail-closed path for reality-changing side effects. |
 
 Before any of these run, the envelope is checked for integrity, typed-payload decode, hash binding (`id == SHA-256(canonical_fields)`), freshness (nonce + expiry), and state binding (expected Merkle root vs. current local root). Only a transaction that clears the whole chain reaches the **Actuator** — the single fail-closed dispatch path through which any change to the host has to pass.
-
-<!-- ============================================================= -->
-<!-- INSERT: SCREENSHOT — the Notary step: the WebAuthn / FIDO2     -->
-<!-- hardware-key prompt at the moment of human approval. Very      -->
-<!-- tangible; shows the human-in-the-loop is real and hardware-bound. -->
-<!-- ============================================================= -->
-
-> *Insert screenshot of the Notary (WebAuthn/FIDO2) approval prompt here.*
 
 ---
 
@@ -201,14 +179,6 @@ g8e ships a full reference stack, but the protocol is the only mandatory part �
 ## Self-hosting & air-gap
 
 g8e is built to run entirely inside your perimeter. The Operator has no inbound gateway, so there is nothing to expose and nothing to scan. The single static binary supports fully air-gapped deployment — no runtime, no package manager, no outbound dependency beyond the one mTLS tunnel it opens to your own Gateway. Raw data, forensic context, and execution history never leave the host; only Sovereignty-scrubbed projections cross the wire.
-
-<!-- ============================================================= -->
-<!-- INSERT: SCREENSHOT (optional but strong) — the audit vault:    -->
-<!-- a blocked transaction's rejection reason, or a rollback        -->
-<!-- showing before/after content hashes and the Git-backed history. -->
-<!-- ============================================================= -->
-
-> *Optional: insert screenshot of the audit vault / rollback view here.*
 
 ---
 

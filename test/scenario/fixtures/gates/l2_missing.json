@@ -1,7 +1,7 @@
 {
   "name": "l2_missing",
   "vertical": "gates",
-  "narrative": "Envelope missing L2 signature when required should be rejected",
+  "narrative": "Envelope missing L2 signature: rejected in consensus/notary (L2 enforced), accepted in doctrine (L2 audited only)",
   "intent": {
     "timestamp": "2026-05-25T12:00:00Z",
     "expiresAt": "2026-05-25T13:00:00Z",

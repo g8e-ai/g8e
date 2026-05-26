@@ -1,7 +1,7 @@
 {
   "name": "l3_missing",
   "vertical": "gates",
-  "narrative": "Envelope missing L3 proof when required should be rejected",
+  "narrative": "Envelope missing L3 proof: rejected in notary (L3 enforced), accepted in doctrine/consensus (L3 audited only)",
   "intent": {
     "timestamp": "2026-05-25T12:00:00Z",
     "expiresAt": "2026-05-25T13:00:00Z",
