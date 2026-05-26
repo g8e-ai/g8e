@@ -112,7 +112,8 @@ Usage:
   g8e platform logs [flags]
 
 Flags:
-  -h, --help   help for logs
+  -f, --follow   Follow log output (like tail -f)
+  -h, --help     help for logs
 ```
 
 ### platform settings
@@ -385,6 +386,7 @@ Available Commands:
   ci          Run CI test suite (g8eo)
   g8eo        Run Gateway (g8eo) tests
   integration Run integration tests
+  review      Review integration test vault results
   scenario    Run scenario integration tests
   unit        Run unit tests
 
