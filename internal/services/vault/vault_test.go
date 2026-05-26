@@ -448,15 +448,16 @@ func TestVaultHeaderSaveLoad(t *testing.T) {
 
 func TestVaultHeaderExists(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
 
 	t.Run("returns false when not exists", func(t *testing.T) {
 		t.Parallel()
+		tempDir := t.TempDir()
 		assert.False(t, VaultHeaderExists(tempDir))
 	})
 
 	t.Run("returns true when exists", func(t *testing.T) {
 		t.Parallel()
+		tempDir := t.TempDir()
 		header, dek, _ := NewVaultHeader(testAPIKey1)
 		defer SecureZero(dek)
 		header.Save(tempDir)
