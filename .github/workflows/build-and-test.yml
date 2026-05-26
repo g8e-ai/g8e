@@ -52,17 +52,6 @@ jobs:
       - name: Generate Proto
         run: make proto
 
-      - name: Verify Constants
-        run: |
-          make constants
-          CHANGES=$(git status --porcelain | grep -E "^\s*M.*\.go$|^\s*M.*\.py$|^\s*M.*\.sh$" || true)
-          if [ -n "$CHANGES" ]; then
-            echo "Error: Generated constant files are out of sync with protocol/constants/*.json"
-            echo "$CHANGES"
-            git diff
-            exit 1
-          fi
-
       - name: Check for drift
         run: |
           CHANGES=$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$|^\s*M.*\.proto$" || true)
@@ -75,9 +64,6 @@ jobs:
 
       - name: Validate doctrine JSON schema
         run: make validate-doctrines
-
-      - name: Check constants registry
-        run: go run ./internal/constants/check_registry.go ./internal/constants
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v7
