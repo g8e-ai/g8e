@@ -333,7 +333,7 @@ func TestWindowsTrustScriptBat_ContainsElevationCheck(t *testing.T) {
 	result := WindowsTrustScriptBat("example.com", 80, 443)
 
 	assert.Contains(t, result, "cacls.exe")
-	assert.Contains(t, result, "RunAs")
+	assert.Contains(t, result, "runas")
 }
 
 func TestUniversalTrustScript_ContainsRootCheck(t *testing.T) {

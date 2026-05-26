@@ -47,7 +47,7 @@ func (s *UserService) CreateUser() (*models.User, error) {
 	return s.createUser(false)
 }
 
-// CreateBootstrapUser creates the ephemeral local-superadmin identity used by
+// CreateBootstrapUser creates the ephemeral local-owner identity used by
 // `./g8e platform start -a`. The resulting user carries IsBootstrap=true so
 // the device-link registration path can identify and retire it the first time
 // a real identity is provisioned.
@@ -111,7 +111,7 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 		// Already disabled - idempotent no-op, but still record an audit row
 		// so the caller's intent is visible if they retried.
 		return s.appendAdminAudit(models.AdminAuditEntry{
-			Action:     models.AdminAuditActionRetireLocalSuperadmin,
+			Action:     models.AdminAuditActionRetireLocalOwner,
 			Actor:      actorUserID,
 			Target:     userID,
 			OperatorID: actorOperatorID,
@@ -130,7 +130,7 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 	}
 
 	if err := s.appendAdminAudit(models.AdminAuditEntry{
-		Action:     models.AdminAuditActionRetireLocalSuperadmin,
+		Action:     models.AdminAuditActionRetireLocalOwner,
 		Actor:      actorUserID,
 		Target:     userID,
 		OperatorID: actorOperatorID,
@@ -140,7 +140,7 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 	}); err != nil {
 		// Audit write failed AFTER state change. Best we can do is log loudly
 		// and propagate - the caller (registration) treats this as a hard
-		// failure so we never reach a half-state where superadmin is disabled
+		// failure so we never reach a half-state where owner is disabled
 		// but the audit trail does not record why.
 		return fmt.Errorf("user %s disabled but audit append failed: %w", userID, err)
 	}

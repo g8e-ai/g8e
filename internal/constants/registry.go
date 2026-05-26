@@ -1022,10 +1022,10 @@ func Registry() Snapshot {
 				"universal":      {Value: "universal", GoConst: "ToolScopeUniversal", PythonConst: "UNIVERSAL"},
 			},
 			"user_role": map[string]Entry{
-				"admin":      {Value: "admin", GoConst: "UserRoleAdmin", PythonConst: "ADMIN"},
-				"operator":   {Value: "operator", GoConst: "UserRoleOperator", PythonConst: "OPERATOR"},
-				"superadmin": {Value: "superadmin", GoConst: "UserRoleSuperadmin", PythonConst: "SUPERADMIN"},
-				"user":       {Value: "user", GoConst: "UserRoleUser", PythonConst: "USER"},
+				"admin":    {Value: "admin", GoConst: "UserRoleAdmin", PythonConst: "ADMIN"},
+				"operator": {Value: "operator", GoConst: "UserRoleOperator", PythonConst: "OPERATOR"},
+				"owner":    {Value: "owner", GoConst: "UserRoleOwner", PythonConst: "OWNER"},
+				"user":     {Value: "user", GoConst: "UserRoleUser", PythonConst: "USER"},
 			},
 			"user_status": map[string]Entry{
 				"active":   {Value: "active", GoConst: "UserStatusActive", PythonConst: "ACTIVE"},

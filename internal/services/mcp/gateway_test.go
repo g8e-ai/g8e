@@ -583,6 +583,176 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 		require.NotEmpty(t, result.Tools)
 	})
 
+	t.Run("successful POST proxy to downstream", func(t *testing.T) {
+		t.Parallel()
+		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"test-tool"}]}}`))
+		}))
+		defer downstream.Close()
+
+		g := &GatewayService{
+			downstreamURL:    downstream.URL,
+			responder:        responder.New(slog.Default()),
+			logger:           slog.Default(),
+			maxFailures:      5,
+			cooldownDuration: 1 * time.Minute,
+			maxPayloadBytes:  10 * 1024 * 1024,
+		}
+
+		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
+		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(reqBody))
+		w := httptest.NewRecorder()
+
+		g.HandleToolsList(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.Nil(t, resp.Error)
+	})
+
+	t.Run("successful GET proxy to downstream", func(t *testing.T) {
+		t.Parallel()
+		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}`))
+		}))
+		defer downstream.Close()
+
+		g := &GatewayService{
+			downstreamURL:    downstream.URL,
+			responder:        responder.New(slog.Default()),
+			logger:           slog.Default(),
+			maxFailures:      5,
+			cooldownDuration: 1 * time.Minute,
+			maxPayloadBytes:  10 * 1024 * 1024,
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/mcp/tools/list", nil)
+		w := httptest.NewRecorder()
+
+		g.HandleToolsList(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.Nil(t, resp.Error)
+	})
+
+	t.Run("circuit breaker open", func(t *testing.T) {
+		t.Parallel()
+		g := &GatewayService{
+			downstreamURL:    "http://localhost:9999",
+			responder:        responder.New(slog.Default()),
+			logger:           slog.Default(),
+			maxFailures:      3,
+			cooldownDuration: 1 * time.Minute,
+			maxPayloadBytes:  10 * 1024 * 1024,
+		}
+
+		// Open the circuit
+		for i := 0; i < 5; i++ {
+			g.recordFailure()
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+		w := httptest.NewRecorder()
+
+		g.HandleToolsList(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
+		require.Contains(t, resp.Error.Message, "circuit open")
+	})
+
+	t.Run("downstream HTTP error", func(t *testing.T) {
+		t.Parallel()
+		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer downstream.Close()
+
+		g := &GatewayService{
+			downstreamURL:    downstream.URL,
+			responder:        responder.New(slog.Default()),
+			logger:           slog.Default(),
+			maxFailures:      5,
+			cooldownDuration: 1 * time.Minute,
+			maxPayloadBytes:  10 * 1024 * 1024,
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+		w := httptest.NewRecorder()
+
+		g.HandleToolsList(w, req)
+
+		require.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	t.Run("downstream connection error", func(t *testing.T) {
+		t.Parallel()
+		g := &GatewayService{
+			downstreamURL:    "http://localhost:9999",
+			responder:        responder.New(slog.Default()),
+			logger:           slog.Default(),
+			maxFailures:      5,
+			cooldownDuration: 1 * time.Minute,
+			maxPayloadBytes:  10 * 1024 * 1024,
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+		w := httptest.NewRecorder()
+
+		g.HandleToolsList(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
+		require.Contains(t, resp.Error.Message, "failed to query downstream")
+	})
+
+	t.Run("empty POST body uses default", func(t *testing.T) {
+		t.Parallel()
+		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			require.Contains(t, string(body), "tools/list")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}`))
+		}))
+		defer downstream.Close()
+
+		g := &GatewayService{
+			downstreamURL:    downstream.URL,
+			responder:        responder.New(slog.Default()),
+			logger:           slog.Default(),
+			maxFailures:      5,
+			cooldownDuration: 1 * time.Minute,
+			maxPayloadBytes:  10 * 1024 * 1024,
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(""))
+		w := httptest.NewRecorder()
+
+		g.HandleToolsList(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+	})
+
 	t.Run("method not allowed", func(t *testing.T) {
 		t.Parallel()
 		g := &GatewayService{
@@ -1172,6 +1342,430 @@ func TestGatewayService_DeleteSuspendedTransaction(t *testing.T) {
 	})
 }
 
+func TestGatewayService_NewGatewayService(t *testing.T) {
+	t.Parallel()
+
+	t.Run("creates service with dependencies", func(t *testing.T) {
+		t.Parallel()
+		deps := Dependencies{
+			Logger:          slog.Default(),
+			Responder:       responder.New(slog.Default()),
+			SuspendedStore:  &fakeSuspendedStore{},
+			MaxPayloadBytes: 10 * 1024 * 1024,
+		}
+
+		g := NewGatewayService(deps)
+
+		require.NotNil(t, g)
+		require.Equal(t, deps.Logger, g.logger)
+		require.Equal(t, deps.Responder, g.responder)
+		require.Equal(t, deps.SuspendedStore, g.suspendedStore)
+		require.Equal(t, deps.MaxPayloadBytes, g.maxPayloadBytes)
+		require.Equal(t, 5, g.maxFailures)
+		require.Equal(t, 1*time.Minute, g.cooldownDuration)
+		require.NotNil(t, g.nativeToolHandler)
+	})
+
+	t.Run("initializes field path registry", func(t *testing.T) {
+		t.Parallel()
+		deps := Dependencies{
+			Logger:          slog.Default(),
+			Responder:       responder.New(slog.Default()),
+			MaxPayloadBytes: 10 * 1024 * 1024,
+		}
+
+		g := NewGatewayService(deps)
+
+		require.NotNil(t, g.fieldPathRegistry)
+	})
+
+	t.Run("handles field path registry initialization error gracefully", func(t *testing.T) {
+		t.Parallel()
+		deps := Dependencies{
+			Logger:          slog.Default(),
+			Responder:       responder.New(slog.Default()),
+			MaxPayloadBytes: 10 * 1024 * 1024,
+		}
+
+		g := NewGatewayService(deps)
+
+		// Should not panic even if registry init fails
+		require.NotNil(t, g)
+	})
+}
+
+func TestGatewayService_HandleReadField(t *testing.T) {
+	t.Parallel()
+
+	t.Run("field path registry not initialized", func(t *testing.T) {
+		t.Parallel()
+		g := &GatewayService{
+			fieldPathRegistry: nil,
+			logger:            slog.Default(),
+			maxPayloadBytes:   10 * 1024 * 1024,
+		}
+
+		_, err := g.handleReadField(context.Background(), json.RawMessage(`{}`))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "field path registry not initialized")
+	})
+
+	t.Run("database service not configured", func(t *testing.T) {
+		t.Parallel()
+		registry, _ := NewFieldPathRegistry(slog.Default())
+		g := &GatewayService{
+			fieldPathRegistry: registry,
+			dbService:         nil,
+			logger:            slog.Default(),
+			maxPayloadBytes:   10 * 1024 * 1024,
+		}
+
+		_, err := g.handleReadField(context.Background(), json.RawMessage(`{}`))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "database service not configured")
+	})
+
+	t.Run("invalid JSON arguments", func(t *testing.T) {
+		t.Parallel()
+		registry, _ := NewFieldPathRegistry(slog.Default())
+		g := &GatewayService{
+			fieldPathRegistry: registry,
+			dbService:         &fakeDBService{},
+			logger:            slog.Default(),
+			maxPayloadBytes:   10 * 1024 * 1024,
+		}
+
+		_, err := g.handleReadField(context.Background(), json.RawMessage(`invalid json`))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid read_field arguments")
+	})
+
+	t.Run("missing required fields", func(t *testing.T) {
+		t.Parallel()
+		registry, _ := NewFieldPathRegistry(slog.Default())
+		g := &GatewayService{
+			fieldPathRegistry: registry,
+			dbService:         &fakeDBService{},
+			logger:            slog.Default(),
+			maxPayloadBytes:   10 * 1024 * 1024,
+		}
+
+		testCases := []struct {
+			name  string
+			args  string
+			error string
+		}{
+			{"missing collection", `{"document_id":"doc1","field_path":"field1","operator_session_id":"sess1"}`, "collection required"},
+			{"missing document_id", `{"collection":"coll1","field_path":"field1","operator_session_id":"sess1"}`, "document_id required"},
+			{"missing field_path", `{"collection":"coll1","document_id":"doc1","operator_session_id":"sess1"}`, "field_path required"},
+			{"missing operator_session_id", `{"collection":"coll1","document_id":"doc1","field_path":"field1"}`, "operator_session_id required"},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				_, err := g.handleReadField(context.Background(), json.RawMessage(tc.args))
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.error)
+			})
+		}
+	})
+
+	t.Run("field path validation failed", func(t *testing.T) {
+		t.Parallel()
+		registry, _ := NewFieldPathRegistry(slog.Default())
+		g := &GatewayService{
+			fieldPathRegistry: registry,
+			dbService:         &fakeDBService{},
+			logger:            slog.Default(),
+			maxPayloadBytes:   10 * 1024 * 1024,
+		}
+
+		args := `{"collection":"investigations","document_id":"doc1","field_path":"credentials.api_key","operator_session_id":"sess1"}`
+		_, err := g.handleReadField(context.Background(), json.RawMessage(args))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "field path validation failed")
+	})
+
+	t.Run("session validation failed", func(t *testing.T) {
+		t.Parallel()
+		registry, _ := NewFieldPathRegistry(slog.Default())
+		validator := &fakeSessionValidator{valid: false}
+		g := &GatewayService{
+			fieldPathRegistry: registry,
+			dbService:         &fakeDBService{},
+			sessionValidator:  validator,
+			logger:            slog.Default(),
+			maxPayloadBytes:   10 * 1024 * 1024,
+		}
+
+		args := `{"collection":"investigations","document_id":"doc1","field_path":"status","operator_session_id":"sess1"}`
+		_, err := g.handleReadField(context.Background(), json.RawMessage(args))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "operator session is invalid or expired")
+	})
+
+	t.Run("successful field read", func(t *testing.T) {
+		t.Parallel()
+		registry, _ := NewFieldPathRegistry(slog.Default())
+		db := &fakeDBService{}
+		validator := &fakeSessionValidator{valid: true}
+		audit := &fakeAuditLogger{}
+		g := &GatewayService{
+			fieldPathRegistry: registry,
+			dbService:         db,
+			sessionValidator:  validator,
+			auditLogger:       audit,
+			logger:            slog.Default(),
+			maxPayloadBytes:   10 * 1024 * 1024,
+		}
+
+		args := `{"collection":"investigations","document_id":"doc1","field_path":"status","operator_session_id":"sess1"}`
+		result, err := g.handleReadField(context.Background(), json.RawMessage(args))
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		toolResult, ok := result.(CallToolResult)
+		require.True(t, ok)
+		require.Len(t, toolResult.Content, 1)
+		require.Equal(t, "text", toolResult.Content[0].Type)
+		require.Contains(t, toolResult.Content[0].Text, "test-value")
+	})
+
+	t.Run("forbidden pattern in field value", func(t *testing.T) {
+		t.Parallel()
+		registry, _ := NewFieldPathRegistry(slog.Default())
+		db := &fakeDBService{value: "password=secret123"}
+		validator := &fakeSessionValidator{valid: true}
+		g := &GatewayService{
+			fieldPathRegistry: registry,
+			dbService:         db,
+			sessionValidator:  validator,
+			logger:            slog.Default(),
+			maxPayloadBytes:   10 * 1024 * 1024,
+		}
+
+		args := `{"collection":"investigations","document_id":"doc1","field_path":"status","operator_session_id":"sess1"}`
+		_, err := g.handleReadField(context.Background(), json.RawMessage(args))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "forbidden patterns")
+	})
+}
+
+func TestGatewayService_HandleMCPRequest(t *testing.T) {
+	t.Parallel()
+
+	t.Run("method not allowed", func(t *testing.T) {
+		t.Parallel()
+		g := &GatewayService{
+			responder:       responder.New(slog.Default()),
+			maxPayloadBytes: 10 * 1024 * 1024,
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/mcp/test", nil)
+		w := httptest.NewRecorder()
+
+		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+			return nil, nil
+		})
+
+		require.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+
+	t.Run("circuit breaker open", func(t *testing.T) {
+		t.Parallel()
+		g := &GatewayService{
+			responder:        responder.New(slog.Default()),
+			logger:           slog.Default(),
+			maxFailures:      3,
+			cooldownDuration: 1 * time.Minute,
+			maxPayloadBytes:  10 * 1024 * 1024,
+		}
+
+		// Open the circuit
+		for i := 0; i < 5; i++ {
+			g.recordFailure()
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"test/method"}`))
+		w := httptest.NewRecorder()
+
+		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+			return nil, nil
+		})
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
+		require.Contains(t, resp.Error.Message, "circuit open")
+	})
+
+	t.Run("payload too large", func(t *testing.T) {
+		t.Parallel()
+		g := &GatewayService{
+			responder:       responder.New(slog.Default()),
+			maxPayloadBytes: 1024,
+		}
+
+		largeBody := strings.Repeat("a", 2048)
+		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"test/method","params":"%s"}`, largeBody)))
+		w := httptest.NewRecorder()
+
+		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+			return nil, nil
+		})
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
+		require.Contains(t, resp.Error.Message, "payload too large")
+	})
+
+	t.Run("invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		g := &GatewayService{
+			responder:       responder.New(slog.Default()),
+			maxPayloadBytes: 10 * 1024 * 1024,
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`invalid json`))
+		w := httptest.NewRecorder()
+
+		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+			return nil, nil
+		})
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
+		require.Contains(t, resp.Error.Message, "parse error")
+	})
+
+	t.Run("invalid JSON-RPC version", func(t *testing.T) {
+		t.Parallel()
+		g := &GatewayService{
+			responder:       responder.New(slog.Default()),
+			maxPayloadBytes: 10 * 1024 * 1024,
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"1.0","id":1,"method":"test/method"}`))
+		w := httptest.NewRecorder()
+
+		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+			return nil, nil
+		})
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
+		require.Contains(t, resp.Error.Message, "jsonrpc version must be 2.0")
+	})
+
+	t.Run("missing method", func(t *testing.T) {
+		t.Parallel()
+		g := &GatewayService{
+			responder:       responder.New(slog.Default()),
+			maxPayloadBytes: 10 * 1024 * 1024,
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1}`))
+		w := httptest.NewRecorder()
+
+		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+			return nil, nil
+		})
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
+		require.Contains(t, resp.Error.Message, "method required")
+	})
+
+	t.Run("method mismatch", func(t *testing.T) {
+		t.Parallel()
+		g := &GatewayService{
+			responder:       responder.New(slog.Default()),
+			maxPayloadBytes: 10 * 1024 * 1024,
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"wrong/method"}`))
+		w := httptest.NewRecorder()
+
+		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+			return nil, nil
+		})
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
+		require.Contains(t, resp.Error.Message, "method not found")
+	})
+
+	t.Run("handler error", func(t *testing.T) {
+		t.Parallel()
+		g := &GatewayService{
+			responder:       responder.New(slog.Default()),
+			maxPayloadBytes: 10 * 1024 * 1024,
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"test/method"}`))
+		w := httptest.NewRecorder()
+
+		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+			return nil, errors.New("handler error")
+		})
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
+		require.Contains(t, resp.Error.Message, "handler error")
+	})
+
+	t.Run("successful request", func(t *testing.T) {
+		t.Parallel()
+		g := &GatewayService{
+			responder:       responder.New(slog.Default()),
+			maxPayloadBytes: 10 * 1024 * 1024,
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"test/method"}`))
+		w := httptest.NewRecorder()
+
+		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+			return map[string]string{"result": "success"}, nil
+		})
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.Nil(t, resp.Error)
+		require.NotNil(t, resp.Result)
+	})
+}
+
 func TestGatewayService_DependencySetters(t *testing.T) {
 	t.Parallel()
 	g := &GatewayService{
@@ -1241,16 +1835,23 @@ func TestGatewayService_RunMaintenance(t *testing.T) {
 
 // Helper fakes for dependency tests
 
-type fakeDBService struct{}
+type fakeDBService struct {
+	value interface{}
+}
 
 func (f *fakeDBService) GetField(collection, id, fieldPath string) (interface{}, error) {
+	if f.value != nil {
+		return f.value, nil
+	}
 	return "test-value", nil
 }
 
-type fakeSessionValidator struct{}
+type fakeSessionValidator struct {
+	valid bool
+}
 
 func (f *fakeSessionValidator) ValidateSession(operatorSessionID string) (bool, error) {
-	return true, nil
+	return f.valid, nil
 }
 
 type fakeAuditLogger struct{}

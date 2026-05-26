@@ -2163,10 +2163,10 @@
         "_python_const": "OPERATOR",
         "value": "operator"
       },
-      "superadmin": {
-        "_go_const": "UserRoleSuperadmin",
-        "_python_const": "SUPERADMIN",
-        "value": "superadmin"
+      "owner": {
+        "_go_const": "UserRoleOwner",
+        "_python_const": "OWNER",
+        "value": "owner"
       },
       "user": {
         "_go_const": "UserRoleUser",

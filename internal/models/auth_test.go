@@ -614,7 +614,7 @@ func TestAdminAuditEntry(t *testing.T) {
 		entry := &AdminAuditEntry{
 			ID:         "audit-123",
 			At:         now,
-			Action:     AdminAuditActionRetireLocalSuperadmin,
+			Action:     AdminAuditActionRetireLocalOwner,
 			Actor:      "user-123",
 			Target:     "target-123",
 			OperatorID: "operator-123",
@@ -623,7 +623,7 @@ func TestAdminAuditEntry(t *testing.T) {
 			},
 		}
 
-		assert.Equal(t, AdminAuditActionRetireLocalSuperadmin, entry.Action)
+		assert.Equal(t, AdminAuditActionRetireLocalOwner, entry.Action)
 		assert.Equal(t, "user-123", entry.Actor)
 	})
 }

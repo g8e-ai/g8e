@@ -1227,7 +1227,7 @@ func TestHandleBootstrap(t *testing.T) {
 		csr := generateTestCSR(t)
 		cliCsr := generateTestCSR(t)
 		body := map[string]string{
-			"name":               "Superadmin",
+			"name":               "Owner",
 			"csr_pem":            csr,
 			"cli_csr_pem":        cliCsr,
 			"system_fingerprint": "test-fp",
@@ -1260,7 +1260,7 @@ func TestHandleBootstrap(t *testing.T) {
 		csr := generateTestCSR(t)
 		cliCsr := generateTestCSR(t)
 		body := map[string]string{
-			"name":               "Superadmin",
+			"name":               "Owner",
 			"csr_pem":            csr,
 			"cli_csr_pem":        cliCsr,
 			"system_fingerprint": "test-fp",
@@ -1287,7 +1287,7 @@ func TestHandleBootstrap(t *testing.T) {
 		csr := generateTestCSR(t)
 		cliCsr := generateTestCSR(t)
 		body := map[string]string{
-			"name":               "Superadmin",
+			"name":               "Owner",
 			"csr_pem":            csr,
 			"cli_csr_pem":        cliCsr,
 			"system_fingerprint": "rotated-fp",
@@ -1319,7 +1319,7 @@ func TestHandleBootstrap(t *testing.T) {
 		csr := generateTestCSR(t)
 		cliCsr := generateTestCSR(t)
 		body := map[string]string{
-			"name":               "Superadmin",
+			"name":               "Owner",
 			"csr_pem":            csr,
 			"cli_csr_pem":        cliCsr,
 			"system_fingerprint": "fail-fp",
