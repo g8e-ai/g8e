@@ -44,9 +44,8 @@ help:
 	@echo "  ci-substrate  Run substrate-only CI (g8eo, protocol, proto, docs)"
 	@echo ""
 	@echo "Protocol Generation:"
-	@echo "  generate      Generate all protocol artifacts (proto + constants)"
+	@echo "  generate      Generate all protocol artifacts (proto)"
 	@echo "  proto         Generate all Protobuf code (Go)"
-	@echo "  constants     Generate all constants and sync documentation ports"
 	@echo "  buf-install   Install Buf CLI locally if not found"
 	@echo "  protoc-install Install protoc compiler"
 	@echo ""
@@ -75,20 +74,14 @@ help:
 	@echo "  docs-serve    Serve MkDocs documentation locally at :8000 (via Docker)"
 	@echo ""
 	@echo "Cleanup:"
-	@echo "  clean         Remove all build artifacts, runtime state, and generated files"
-	@echo "  clean-constants Remove generated constants files only"
+	@echo "  clean         Remove all build artifacts and runtime state"
 
 # =============================================================================
 # PROTOCOL GENERATION
 # =============================================================================
 .PHONY: generate
-generate: proto constants
+generate: proto
 
-.PHONY: constants
-constants:
-	@echo "Generating Go constants from JSON source..."
-	@cd internal/constants && go run generate_registry.go
-	@echo "Constants generation complete."
 
 .PHONY: proto
 proto: buf-install protoc-install
@@ -147,7 +140,7 @@ protoc-install:
 # BUILD
 # =============================================================================
 .PHONY: build
-build: constants build-cli build-operator
+build: build-cli build-operator
 	@echo "All builds complete."
 
 .PHONY: build-cli
@@ -278,19 +271,11 @@ update-doctrines:
 .PHONY: clean
 clean:
 	@echo "Cleaning up build artifacts and runtime state..."
-	@$(MAKE) clean-constants
 	@rm -rf .g8e/
 	@rm -rf bin/
 	@rm -rf build/
 	@echo "Clean complete."
 
-.PHONY: clean-constants
-clean-constants:
-	@echo "Cleaning generated constants..."
-	@rm -rf internal/constants/headers_generated.go
-	@rm -rf internal/constants/status_generated.go
-	@rm -rf internal/constants/registry.go
-	@echo "Constants clean complete."
 
 # =============================================================================
 # CI/CD (LOCAL)
@@ -308,14 +293,6 @@ _ci-verify-proto:
 	@echo "=== verify-proto ==="
 	@$(MAKE) protoc-install
 	@$(MAKE) proto
-	@$(MAKE) constants
-	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*\.go$$|^\s*M.*\.sh$$" || true); \
-	if [ -n "$$CHANGES" ]; then \
-		echo "Error: Generated constant files are out of sync with protocol/constants/*.json"; \
-		echo "$$CHANGES"; \
-		git diff; \
-		exit 1; \
-	fi
 	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$$|^\s*M.*\.proto$$" || true); \
 	if [ -n "$$CHANGES" ]; then \
 		echo "Error: Generated proto files are out of sync with protocol/proto/*.proto"; \
@@ -324,7 +301,6 @@ _ci-verify-proto:
 		exit 1; \
 	fi
 	@$(MAKE) validate-doctrines
-	@cd internal/constants && go run check_registry.go
 
 .PHONY: _ci-lint
 _ci-lint:
@@ -339,7 +315,7 @@ _ci-vulncheck:
 .PHONY: _ci-test
 _ci-test:
 	@echo "=== test ==="
-	@./g8e platform start
+	@./bin/g8e platform start
 	@G8E_STRICT_CONSTANTS_LINT=1 go test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/")
 	@COVERAGE=$$(go tool cover -func=coverage.out | grep -v "internal/protocol/proto" | grep -v "mocks" | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
 	if [ $$(echo "$$COVERAGE < 60" | bc -l) -eq 1 ]; then \
@@ -347,7 +323,7 @@ _ci-test:
 		exit 1; \
 	fi; \
 	echo "Coverage $$COVERAGE% meets 60% threshold"
-	@./g8e platform stop
+	@./bin/g8e platform stop
 
 .PHONY: _ci-docs
 _ci-docs:
@@ -592,7 +568,7 @@ docs-cli:
 	@echo "CLI reference documentation generated successfully."
 
 .PHONY: docs-build
-docs-build: constants
+docs-build:
 	@echo "Building MkDocs documentation site via Docker..."
 	@docker run --rm \
 		-v $(PWD):/repo \

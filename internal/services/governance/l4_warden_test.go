@@ -166,13 +166,8 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 // isMutationAction returns true if the action type is a mutation.
 // This mirrors the logic in L4Warden.isMutation.
 func isMutationAction(actionType constants.ActionType) bool {
-	switch actionType {
-	case constants.ActionTypeExecuteBash, constants.ActionTypeFileEdit, constants.ActionTypeRestoreFile, constants.ActionTypeShutdown,
-		constants.ActionTypeMcpCall, constants.ActionTypeA2aCall:
-		return true
-	default:
-		return false
-	}
+	// Include all mutation actions that L4Warden expects L3 proof for
+	return constants.IsMutation(actionType) || actionType == constants.ActionTypeMcpCall || actionType == constants.ActionTypeA2aCall || actionType == constants.ActionTypeEvalAnswer || actionType == constants.ActionTypeInvestigationCreate
 }
 
 func TestL4Warden_AcceptsValidNonMutationUAPEnvelope(t *testing.T) {

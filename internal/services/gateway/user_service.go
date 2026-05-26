@@ -320,10 +320,10 @@ func NewPersonaService(db *GatewayDBService, logger *slog.Logger) *PersonaServic
 func (s *PersonaService) GetOrCreateDefaultPersonas() error {
 	defaultPersonas := []models.Persona{
 		{
-			ID:          "admin",
-			Name:        "admin",
+			ID:          string(constants.UserRoleAdmin),
+			Name:        string(constants.UserRoleAdmin),
 			Description: "Administrator persona with full system access",
-			Roles:       []string{"admin", "administrator"},
+			Roles:       []string{string(constants.UserRoleAdmin), "administrator"},
 		},
 		{
 			ID:          "security-analyst",
