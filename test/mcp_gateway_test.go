@@ -56,6 +56,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/gateway"
+	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/sovereignty"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -66,6 +67,14 @@ type gatewayRejectingL3Notary struct{}
 
 func (gatewayRejectingL3Notary) VerifyL3Proof(_ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
 	return false, nil
+}
+
+func mustMarshal(v interface{}) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
 
 func TestMCPGateway_EndToEnd(t *testing.T) {
@@ -100,14 +109,35 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		json.NewDecoder(r.Body).Decode(&req)
 
 		w.Header().Set("Content-Type", "application/json")
-		if req.Method == "tools/list" {
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"echo","description":"echoes input"}]}}`))
-		} else if req.Method == "tools/call" {
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"mcp says hello"}]}}`))
-		} else if req.Method == "resources/list" {
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"resources":[{"uri":"file:///test.txt","name":"test.txt"}]}}`))
-		} else if req.Method == "prompts/list" {
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"prompts":[{"name":"test-prompt","description":"A test prompt"}]}}`))
+		switch req.Method {
+		case "tools/list":
+			resp := mcp.JSONRPCResponse{
+				JSONRPC: "2.0",
+				ID:      1,
+				Result:  mustMarshal(mcp.ToolsListResult{Tools: []mcp.Tool{{Name: "echo", Description: "echoes input"}}}),
+			}
+			json.NewEncoder(w).Encode(resp)
+		case "tools/call":
+			resp := mcp.JSONRPCResponse{
+				JSONRPC: "2.0",
+				ID:      1,
+				Result:  mustMarshal(mcp.CallToolResult{Content: []mcp.TextContent{{Type: "text", Text: "mcp says hello"}}}),
+			}
+			json.NewEncoder(w).Encode(resp)
+		case "resources/list":
+			resp := mcp.JSONRPCResponse{
+				JSONRPC: "2.0",
+				ID:      1,
+				Result:  mustMarshal(mcp.ListResourcesResult{Resources: []mcp.Resource{{URI: "file:///test.txt", Name: "test.txt"}}}),
+			}
+			json.NewEncoder(w).Encode(resp)
+		case "prompts/list":
+			resp := mcp.JSONRPCResponse{
+				JSONRPC: "2.0",
+				ID:      1,
+				Result:  mustMarshal(mcp.ListPromptsResult{Prompts: []mcp.Prompt{{Name: "test-prompt", Description: "A test prompt"}}}),
+			}
+			json.NewEncoder(w).Encode(resp)
 		}
 	}))
 	defer downstreamServer.Close()
@@ -260,11 +290,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var mcpResp struct {
-			Result struct {
-				Tools []struct {
-					Name string `json:"name"`
-				} `json:"tools"`
-			} `json:"result"`
+			Result mcp.ToolsListResult `json:"result"`
 		}
 		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
 		require.NoError(t, err)
@@ -279,12 +305,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var mcpResp struct {
-			Result struct {
-				Resources []struct {
-					URI  string `json:"uri"`
-					Name string `json:"name"`
-				} `json:"resources"`
-			} `json:"result"`
+			Result mcp.ListResourcesResult `json:"result"`
 		}
 		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
 		require.NoError(t, err)
@@ -299,12 +320,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var mcpResp struct {
-			Result struct {
-				Prompts []struct {
-					Name        string `json:"name"`
-					Description string `json:"description"`
-				} `json:"prompts"`
-			} `json:"result"`
+			Result mcp.ListPromptsResult `json:"result"`
 		}
 		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
 		require.NoError(t, err)
@@ -317,21 +333,16 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	// In this test environment, gatewayRejectingL3Notary always returns false, so the transaction
 	// is suspended and returns "Execution paused" instead of dispatching to downstream.
 	t.Run("tools/call", func(t *testing.T) {
-		callReq := struct {
-			Jsonrpc string `json:"jsonrpc"`
-			Method  string `json:"method"`
-			Params  struct {
-				Name      string                 `json:"name"`
-				Arguments map[string]interface{} `json:"arguments"`
-			} `json:"params"`
-			ID int `json:"id"`
-		}{
-			Jsonrpc: "2.0",
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
 			Method:  "tools/call",
 			ID:      1,
 		}
-		callReq.Params.Name = "echo"
-		callReq.Params.Arguments = map[string]interface{}{"msg": "hello"}
+		params := mcp.CallToolRequest{
+			Name:      "echo",
+			Arguments: mustMarshal(map[string]interface{}{"msg": "hello"}),
+		}
+		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
 		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
@@ -341,10 +352,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 		var mcpRes struct {
 			Result struct {
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
+				Content []mcp.TextContent `json:"content"`
 			} `json:"result"`
 		}
 		body, _ := io.ReadAll(resp.Body)
@@ -390,10 +398,25 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		json.NewDecoder(r.Body).Decode(&req)
 
 		w.Header().Set("Content-Type", "application/json")
-		if req.Method == "tools/list" {
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"nested_tool","description":"nested tool"},{"name":"unicode_tool","description":"unicode tool"},{"name":"large_tool","description":"large tool"}]}}`))
-		} else if req.Method == "tools/call" {
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"mcp says hello"}]}}`))
+		switch req.Method {
+		case "tools/list":
+			resp := mcp.JSONRPCResponse{
+				JSONRPC: "2.0",
+				ID:      1,
+				Result: mustMarshal(mcp.ToolsListResult{Tools: []mcp.Tool{
+					{Name: "nested_tool", Description: "nested tool"},
+					{Name: "unicode_tool", Description: "unicode tool"},
+					{Name: "large_tool", Description: "large tool"},
+				}}),
+			}
+			json.NewEncoder(w).Encode(resp)
+		case "tools/call":
+			resp := mcp.JSONRPCResponse{
+				JSONRPC: "2.0",
+				ID:      1,
+				Result:  mustMarshal(mcp.CallToolResult{Content: []mcp.TextContent{{Type: "text", Text: "mcp says hello"}}}),
+			}
+			json.NewEncoder(w).Encode(resp)
 		}
 	}))
 	defer downstreamServer.Close()
@@ -534,30 +557,25 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	mcpGateway.SetPublicBaseURL(publicURL)
 
 	t.Run("nested object arguments", func(t *testing.T) {
-		callReq := struct {
-			Jsonrpc string `json:"jsonrpc"`
-			Method  string `json:"method"`
-			Params  struct {
-				Name      string                 `json:"name"`
-				Arguments map[string]interface{} `json:"arguments"`
-			} `json:"params"`
-			ID int `json:"id"`
-		}{
-			Jsonrpc: "2.0",
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
 			Method:  "tools/call",
 			ID:      1,
 		}
-		callReq.Params.Name = "nested_tool"
-		callReq.Params.Arguments = map[string]interface{}{
-			"config": map[string]interface{}{
-				"nested": map[string]interface{}{
-					"deep": map[string]interface{}{
-						"value": "test",
+		params := mcp.CallToolRequest{
+			Name: "nested_tool",
+			Arguments: mustMarshal(map[string]interface{}{
+				"config": map[string]interface{}{
+					"nested": map[string]interface{}{
+						"deep": map[string]interface{}{
+							"value": "test",
+						},
 					},
 				},
-			},
-			"items": []interface{}{"item1", "item2", 123},
+				"items": []interface{}{"item1", "item2", 123},
+			}),
 		}
+		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
 		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
@@ -567,10 +585,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 
 		var mcpRes struct {
 			Result struct {
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
+				Content []mcp.TextContent `json:"content"`
 			} `json:"result"`
 		}
 		body, _ := io.ReadAll(resp.Body)
@@ -581,24 +596,19 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	})
 
 	t.Run("unicode and special characters", func(t *testing.T) {
-		callReq := struct {
-			Jsonrpc string `json:"jsonrpc"`
-			Method  string `json:"method"`
-			Params  struct {
-				Name      string                 `json:"name"`
-				Arguments map[string]interface{} `json:"arguments"`
-			} `json:"params"`
-			ID int `json:"id"`
-		}{
-			Jsonrpc: "2.0",
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
 			Method:  "tools/call",
 			ID:      1,
 		}
-		callReq.Params.Name = "unicode_tool"
-		callReq.Params.Arguments = map[string]interface{}{
-			"text":  "Hello 世界 🌍 \n\t\r\"'\\",
-			"emoji": []string{"😀", "🎉", "🚀"},
+		params := mcp.CallToolRequest{
+			Name: "unicode_tool",
+			Arguments: mustMarshal(map[string]interface{}{
+				"text":  "Hello 世界 🌍 \n\t\r\"'\\",
+				"emoji": []string{"😀", "🎉", "🚀"},
+			}),
 		}
+		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
 		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
@@ -608,10 +618,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 
 		var mcpRes struct {
 			Result struct {
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
+				Content []mcp.TextContent `json:"content"`
 			} `json:"result"`
 		}
 		body, _ := io.ReadAll(resp.Body)
@@ -623,23 +630,16 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 
 	t.Run("large payload", func(t *testing.T) {
 		largeString := strings.Repeat("x", 100000)
-		callReq := struct {
-			Jsonrpc string `json:"jsonrpc"`
-			Method  string `json:"method"`
-			Params  struct {
-				Name      string                 `json:"name"`
-				Arguments map[string]interface{} `json:"arguments"`
-			} `json:"params"`
-			ID int `json:"id"`
-		}{
-			Jsonrpc: "2.0",
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
 			Method:  "tools/call",
 			ID:      1,
 		}
-		callReq.Params.Name = "large_tool"
-		callReq.Params.Arguments = map[string]interface{}{
-			"data": largeString,
+		params := mcp.CallToolRequest{
+			Name:      "large_tool",
+			Arguments: mustMarshal(map[string]interface{}{"data": largeString}),
 		}
+		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
 		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
@@ -649,10 +649,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 
 		var mcpRes struct {
 			Result struct {
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
+				Content []mcp.TextContent `json:"content"`
 			} `json:"result"`
 		}
 		body, _ := io.ReadAll(resp.Body)
@@ -663,21 +660,16 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	})
 
 	t.Run("empty arguments", func(t *testing.T) {
-		callReq := struct {
-			Jsonrpc string `json:"jsonrpc"`
-			Method  string `json:"method"`
-			Params  struct {
-				Name      string          `json:"name"`
-				Arguments json.RawMessage `json:"arguments"`
-			} `json:"params"`
-			ID int `json:"id"`
-		}{
-			Jsonrpc: "2.0",
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
 			Method:  "tools/call",
 			ID:      1,
 		}
-		callReq.Params.Name = "empty_tool"
-		callReq.Params.Arguments = json.RawMessage("{}")
+		params := mcp.CallToolRequest{
+			Name:      "empty_tool",
+			Arguments: json.RawMessage("{}"),
+		}
+		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
 		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
@@ -687,10 +679,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 
 		var mcpRes struct {
 			Result struct {
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
+				Content []mcp.TextContent `json:"content"`
 			} `json:"result"`
 		}
 		body, _ := io.ReadAll(resp.Body)
@@ -701,21 +690,16 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	})
 
 	t.Run("null arguments", func(t *testing.T) {
-		callReq := struct {
-			Jsonrpc string `json:"jsonrpc"`
-			Method  string `json:"method"`
-			Params  struct {
-				Name      string          `json:"name"`
-				Arguments json.RawMessage `json:"arguments"`
-			} `json:"params"`
-			ID int `json:"id"`
-		}{
-			Jsonrpc: "2.0",
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
 			Method:  "tools/call",
 			ID:      1,
 		}
-		callReq.Params.Name = "null_tool"
-		callReq.Params.Arguments = json.RawMessage("null")
+		params := mcp.CallToolRequest{
+			Name:      "null_tool",
+			Arguments: json.RawMessage("null"),
+		}
+		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
 		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
@@ -725,10 +709,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 
 		var mcpRes struct {
 			Result struct {
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
+				Content []mcp.TextContent `json:"content"`
 			} `json:"result"`
 		}
 		body, _ := io.ReadAll(resp.Body)
@@ -894,24 +875,49 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 
 	t.Run("invalid JSON-RPC version", func(t *testing.T) {
-		reqBody := `{"jsonrpc":"1.0","id":1,"method":"tools/call","params":{"name":"test","arguments":{}}}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "1.0",
+			Method:  "tools/call",
+			ID:      1,
+		}
+		params := mcp.CallToolRequest{
+			Name:      "test",
+			Arguments: mustMarshal(map[string]interface{}{}),
+		}
+		callReq.Params = mustMarshal(params)
+		reqBody, _ := json.Marshal(callReq)
+		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 
 	t.Run("missing method", func(t *testing.T) {
-		reqBody := `{"jsonrpc":"2.0","id":1,"params":{"name":"test","arguments":{}}}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			ID:      1,
+		}
+		params := mcp.CallToolRequest{
+			Name:      "test",
+			Arguments: mustMarshal(map[string]interface{}{}),
+		}
+		callReq.Params = mustMarshal(params)
+		reqBody, _ := json.Marshal(callReq)
+		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 
 	t.Run("unknown method", func(t *testing.T) {
-		reqBody := `{"jsonrpc":"2.0","id":1,"method":"unknown_method","params":{}}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "unknown_method",
+			ID:      1,
+		}
+		callReq.Params = mustMarshal(map[string]interface{}{})
+		reqBody, _ := json.Marshal(callReq)
+		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -938,16 +944,36 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	})
 
 	t.Run("missing tool name", func(t *testing.T) {
-		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"arguments":{}}}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "tools/call",
+			ID:      1,
+		}
+		params := mcp.CallToolRequest{
+			Arguments: mustMarshal(map[string]interface{}{}),
+		}
+		callReq.Params = mustMarshal(params)
+		reqBody, _ := json.Marshal(callReq)
+		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 
 	t.Run("invalid arguments JSON", func(t *testing.T) {
-		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test","arguments":"{invalid}"}}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "tools/call",
+			ID:      1,
+		}
+		params := mcp.CallToolRequest{
+			Name:      "test",
+			Arguments: json.RawMessage("{invalid}"),
+		}
+		paramsBytes, _ := json.Marshal(params)
+		callReq.Params = paramsBytes
+		reqBody, _ := json.Marshal(callReq)
+		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)

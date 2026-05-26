@@ -206,12 +206,8 @@ func getContainerMachineID(logger *slog.Logger) (string, error) {
 
 // isHex checks if a string is a valid hexadecimal string
 func isHex(s string) bool {
-	for _, c := range s {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-	return true
+	_, err := hex.DecodeString(s)
+	return err == nil
 }
 
 // getDarwinMachineID uses the system preferences plist as a stable machine identifier on macOS

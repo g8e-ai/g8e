@@ -49,7 +49,7 @@ func (t *L2Consensus) EvaluatePayload(env *uap.UAPEnvelope) error {
 		return fmt.Errorf("failed to generate message ID: %w", err)
 	}
 	if env.Id != expectedHash {
-		return errors.New("FATAL: Payload hash mismatch. Dropping request.")
+		return errors.New("FATAL: payload hash mismatch. dropping request")
 	}
 
 	// 2. Run Deterministic SRE Rules (e.g., MITRE checks)

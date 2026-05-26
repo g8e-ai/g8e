@@ -159,8 +159,8 @@ Your implementation must enforce these core invariants:
 
 The gateway must support three operating modes:
 
-- **Doctrine Mode**: Enforce L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2 and L3 are audited but not enforced.
-- **Consensus Mode**: Enforce L1 and L2 (multi-model Byzantine consensus). L3 is audited but not enforced.
+- **Doctrine Mode**: Enforce L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures not required.
+- **Consensus Mode**: Enforce L1 and L2 (multi-model Byzantine consensus). L3 signature not required.
 - **Notary Mode**: Enforce L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2).
 
 ### Session Types

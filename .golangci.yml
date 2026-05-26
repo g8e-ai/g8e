@@ -1,64 +1,77 @@
-linters-settings:
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment
-      - shadow # extremely common in Go (if err := ...)
-  gosec:
-    excludes:
-      - G104 # errcheck already handles this
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - performance
-    disabled-checks:
-      - appendCombine # too noisy for generated code/exporters
-
+version: "2"
+run:
+  modules-download-mode: readonly
+  allow-parallel-runners: true
 linters:
-  disable-all: true
+  default: none
   enable:
     - bodyclose
     - errcheck
-    - gofmt
-    - gosimple
     - govet
     - ineffassign
+    - misspell
     - staticcheck
     - unconvert
     - unused
-    - misspell
-
-run:
-  timeout: 5m
-  modules-download-mode: readonly
-  allow-parallel-runners: true
-
+  settings:
+    gocritic:
+      disabled-checks:
+        - appendCombine
+      enabled-tags:
+        - diagnostic
+        - performance
+    gosec:
+      excludes:
+        - G104
+    govet:
+      disable:
+        - fieldalignment
+        - shadow
+      enable-all: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - errcheck
+          - gocritic
+          - gosec
+          - govet
+          - unused
+        path: _test\.go
+      - linters:
+          - gosec
+        path: cmd/exporter/main\.go
+        text: G304
+      - linters:
+          - bodyclose
+        path: internal/testutil/pubsub\.go
+        text: Dial
+      - linters:
+          - bodyclose
+        path: tests/byo_client_test\.go
+        text: Dial
+      - linters:
+          - gosec
+        path: internal/services/vault/vault_crypto\.go
+        text: G115
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  exclude-use-default: true
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gosec
-        - errcheck
-        - govet
-        - unused
-        - gocritic
-    - path: cmd/exporter/main\.go
-      linters:
-        - gosec
-      text: "G304" # Exporter legitimately reads files from paths provided in variables
-    - path: internal/testutil/pubsub\.go
-      linters:
-        - bodyclose
-      text: "Dial" # False positive: websocket Dial returns conn, not http response needing close
-    - path: tests/byo_client_test\.go
-      linters:
-        - bodyclose
-      text: "Dial" # False positive: websocket Dial returns conn, not http response needing close
-    - path: internal/services/vault/vault_crypto\.go
-      linters:
-        - gosec
-      text: "G115" # crypto block indexing conversions are safe
-
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

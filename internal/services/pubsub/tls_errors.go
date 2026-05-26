@@ -18,6 +18,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"net"
+	"strings"
 )
 
 func containsAny(s string, patterns []string) bool {
@@ -32,42 +33,11 @@ func containsAny(s string, patterns []string) bool {
 func findSubstring(s, substr string) bool {
 	sLower := toLower(s)
 	subLower := toLower(substr)
-	return len(sLower) >= len(subLower) && hasSubstring(sLower, subLower)
+	return strings.Contains(sLower, subLower)
 }
 
 func toLower(s string) string {
-	result := make([]byte, len(s))
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= 'A' && c <= 'Z' {
-			result[i] = c + 32
-		} else {
-			result[i] = c
-		}
-	}
-	return string(result)
-}
-
-func hasSubstring(s, substr string) bool {
-	if len(substr) == 0 {
-		return true
-	}
-	if len(s) < len(substr) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(substr); i++ {
-		match := true
-		for j := 0; j < len(substr); j++ {
-			if s[i+j] != substr[j] {
-				match = false
-				break
-			}
-		}
-		if match {
-			return true
-		}
-	}
-	return false
+	return strings.ToLower(s)
 }
 
 // IsTLSCertError returns true if the error indicates a TLS certificate trust failure.
