@@ -244,20 +244,31 @@ The Operator also holds **zero standing privileges**: no permanent admin credent
 v1.0.0 completes the "substrate-first" decoupling. Originally a monolith (Dashboard + Engine + Operator), the platform has been refactored down to the **g8e Core**: the protocol, the Governance Gateway (`g8eg`), and the Governed Operator (`g8eo`). The Engine and everything that rode along with it are gone — what's left is the substrate that governs whatever engine you bring.
 
 **Working today**
-- Sequential gauntlet: L1 (Doctrine), L2 (Consensus), and L4 (Warden) are functional.
-- Outbound-only mTLS reverse tunnel; zero inbound ports on the host.
-- Local-first, git-backed audit vault written before every execution.
-- MCP and tool calls normalized into a signed `GovernanceEnvelope`.
-- Single statically compiled Go binary, zero standing dependencies.
+- **Universal Protocol Translation** — Fully functional MCP and A2A gateway that intercepts standard tool calls and normalizes them into a signed, state-bound `GovernanceEnvelope`.
+- **Standalone Governance Gateway (PDP)** — Reference binary running in Gateway mode (`--notary`, `--consensus`, `--doctrine`) to admit envelopes, own PKI, and manage distribution.
+- **Sovereign Governed Operator (PEP)** — Host-side MCP server that enforces local verification before host mutation; pre-compiled binary with zero standing dependencies.
+- **Zero-Trust Posture** — Absolute distrust of all upstream inputs; every mutation must clear the 5-layer gauntlet at the host boundary before execution.
+- **Outbound-Only mTLS Connectivity** — Operators dial out to the Gateway via secure mTLS reverse tunnels; requires zero inbound ports on the host.
+- **Fail-Closed 5-Layer Gauntlet** — Sequential verification of technical bedrock (L1), model consensus (L2), and pre-dispatch (L4) gates is fully operational.
+- **Local-First Audit Vault** — Mandatory host-local, git-backed ledger and SQLite audit vault that records mutations and signed receipts *before* side effects occur.
+- **Sovereignty Boundary** — Automated scrubbing and rehydration of sensitive data context, ensuring raw data and forensic context never leave the host.
+- **Deterministic Hash Binding** — Enforced integrity where `id == transaction_hash == SHA-256(canonical_fields)` across all wire formats and signing operations.
+- **Statically Compiled Go Binary** — Single ~7MB binary with zero external dependencies (no Python, no Node, no shared libs), suitable for air-gapped or high-security environments.
+- **Host-Unique Signing** — Every `ActionReceipt` is cryptographically signed by a host-unique Ed25519 key, providing non-repudiable proof of execution.
 
 **Not yet supported — read before you deploy**
-- **RBAC** — no granular role-based access control yet; session scoping is basic.
-- **L3 Notary** — Human authorization is enforced via CLI-based mTLS certificate approval. Hardware-bound WebAuthn/FIDO2 support is in development.
-- **Multi-tenant isolation** — single-organization only; no tenant partitioning.
-- **Complex policy engine** — L1 Doctrine is limited to static pattern matching and basic reflection. Intent allowlisting is not yet integrated.
-- **Unified Diff Patching** — file `patch` operations are not yet implemented; use `replace` or `write` instead.
-- **Downstream Circuit Breaking** — A2A protocol translation lacks circuit breakers for downstream service failures.
-- **Advanced MCP/A2A Features** — resource listing/reading, prompt management, and intent grant/revoke actions are defined in the protocol but not yet implemented in the Operator.
+- **RBAC** — no granular role-based access control yet; session scoping is basic. [#84](https://github.com/g8e-ai/g8e/issues/84)
+- **L3 Notary** — Human authorization is enforced via CLI-based mTLS certificate approval. Hardware-bound WebAuthn/FIDO2 support is in development. [#85](https://github.com/g8e-ai/g8e/issues/85)
+- **Multi-tenant isolation** — single-organization only; no tenant partitioning. [#86](https://github.com/g8e-ai/g8e/issues/86)
+- **Complex policy engine** — L1 Doctrine is limited to static pattern matching and basic reflection. Intent allowlisting is not yet integrated. [#87](https://github.com/g8e-ai/g8e/issues/87)
+- **Unified Diff Patching** — file `patch` operations are not yet implemented; use `replace` or `write` instead. [#88](https://github.com/g8e-ai/g8e/issues/88)
+- **Downstream Circuit Breaking** — A2A protocol translation lacks circuit breakers for downstream service failures. [#89](https://github.com/g8e-ai/g8e/issues/89)
+- **Advanced MCP/A2A Features** — resource listing/reading, prompt management, and intent grant/revoke actions are defined in the protocol but not yet implemented in the Operator. [#90](https://github.com/g8e-ai/g8e/issues/90)
+- **CLI Approval** — CLI `approve` command for signing suspended transactions is missing. [#91](https://github.com/g8e-ai/g8e/issues/91)
+- **Execution Boundary** — Warden should be the absolute execution boundary to achieve true zero-trust. [#93](https://github.com/g8e-ai/g8e/issues/93)
+- **Sovereignty Persistence** — TokenStore needs persistence for rehydration across restarts. [#94](https://github.com/g8e-ai/g8e/issues/94)
+- **State-Root Sync** — Dynamic distribution of the authoritative state root across Operators. [#95](https://github.com/g8e-ai/g8e/issues/95)
+- **PKI Consistency** — Reconcile conflicting signer path resolution in Operator configuration. [#96](https://github.com/g8e-ai/g8e/issues/96)
 
 ---
 
