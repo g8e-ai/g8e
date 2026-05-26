@@ -66,7 +66,7 @@ jobs:
         run: make validate-doctrines
 
       - name: Check constants registry
-        run: go run ./internal/constants/check_registry.go
+        run: go run ./internal/constants/check_registry.go ./internal/constants
 
   lint-g8eo:
     runs-on: ubuntu-latest

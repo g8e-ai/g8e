@@ -383,7 +383,7 @@ Usage:
 
 Available Commands:
   chaos       Run chaos engineering tests
-  ci          Run CI test suite (g8eo)
+  ci          Run full CI test suite (mirrors GitHub Actions)
   g8eo        Run Gateway (g8eo) tests
   integration Run integration tests
   review      Review integration test vault results
@@ -440,7 +440,7 @@ Flags:
 
 ### test ci
 ```
-Run CI test suite (g8eo)
+Run full CI test suite (mirrors GitHub Actions)
 
 Usage:
   g8e test ci [flags]
