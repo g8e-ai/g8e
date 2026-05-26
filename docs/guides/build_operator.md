@@ -5,7 +5,7 @@ parent: Guides
 
 # Build a Governed Operator
 
-Last Updated: 2026-05-25
+Last Updated: 2026-05-26
 Version: v1.0.0
 
 ---
@@ -14,7 +14,7 @@ Version: v1.0.0
 
 A g8e-compatible Governed Operator implements the host-side Policy Execution Point (PEP) of the substrate. It receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
-The reference implementation is a single Go codebase that compiles into the `g8e.operator` binary. Custom operator implementations must implement the same protocol contracts and invariants.
+The reference implementation is a single Go codebase that compiles into the `g8e` binary. The same binary serves both Governance Gateway (PDP) and g8e Operator (PEP) roles, selected via command-line flags. Custom operator implementations must implement the same protocol contracts and invariants.
 
 ---
 
@@ -23,8 +23,6 @@ The reference implementation is a single Go codebase that compiles into the `g8e
 ### Prerequisites
 
 - **Go 1.26+** — Required for building the reference operator.
-- **OpenSSL** — Required for PKI operations during runtime.
-- **Git** — Required for the audit vault's Git-backed commit history.
 
 ### Build from Source
 
@@ -35,14 +33,21 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces the `g8e.operator` binary in the repository root. The binary is statically linked and requires no runtime dependencies.
+This produces the `g8e` binary in the repository root. The binary is statically linked and requires no runtime dependencies.
 
 ### Build Targets
 
 The Makefile provides several build targets:
 
-- `make build` — Builds both `g8e.gateway` and `g8e.operator` binaries.
-- `make build-operator` — Builds only the `g8e.operator` binary.
+- `make build` — Builds both the CLI wrapper and the `g8e` binary.
+- `make build-operator` — Builds the `g8e` binary (default system type).
+- `make build-operator-system` — Builds the `g8e` binary (system type).
+- `make build-operator-cloud` — Builds the `g8e` binary (cloud type).
+- `make build-operator-aws` — Builds the `g8e` binary with AWS build tags.
+- `make build-operator-gcp` — Builds the `g8e` binary with GCP build tags.
+- `make build-operator-azure` — Builds the `g8e` binary with Azure build tags.
+- `make build-operator-g8ep` — Builds the `g8e` binary with g8ep build tags.
+- `make build-compressed` — Builds the `g8e` binary with compression optimizations.
 - `make clean` — Removes compiled binaries and test artifacts.
 
 ### Cross-Compilation
@@ -178,7 +183,7 @@ A custom operator implementation must pass the substrate test suite to claim g8e
 ./g8e test g8eo
 ```
 
-This verifies:
+This runs Gateway tests covering:
 - Pub/Sub command dispatch
 - Audit vault writes
 - Ledger commits

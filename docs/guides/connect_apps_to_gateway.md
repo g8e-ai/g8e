@@ -5,7 +5,7 @@ parent: Guides
 
 # Connect Apps to a Governance Gateway
 
-Last Updated: 2026-05-25
+Last Updated: 2026-05-26
 Version: v1.0.0
 
 ---
@@ -47,7 +47,7 @@ The Gateway runs in the default mode (doctrine: L1 enforced, L2/L3 audited). To 
 Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2 and L3 are audited but not enforced.
 
 ```bash
-./g8e.operator --doctrine --listen
+./g8e.operator --doctrine
 ```
 
 #### Consensus Mode
@@ -55,7 +55,7 @@ Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2 and
 Enforces L1 and L2 (multi-model Byzantine consensus). L3 is audited but not enforced.
 
 ```bash
-./g8e.operator --consensus --listen
+./g8e.operator --consensus
 ```
 
 #### Notary Mode
@@ -63,7 +63,7 @@ Enforces L1 and L2 (multi-model Byzantine consensus). L3 is audited but not enfo
 Enforces L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2). This is the most secure mode.
 
 ```bash
-./g8e.operator --notary --listen
+./g8e.operator --notary
 ```
 
 ### Gateway Ports
@@ -393,107 +393,6 @@ curl -X POST https://localhost:8440/api/pki/sign-csr \
     "operator_id": "op-123"
   }'
 ```
-
----
-
-## Gateway Initialization and Management
-
-### Initialize Platform Runtime
-
-```bash
-./g8e setup
-```
-
-This creates the `.g8e` directory structure:
-- `.g8e/pki/` — PKI hierarchy (CA, certificates, keys)
-- `.g8e/data/` — SQLite database for Gateway persistence
-- `.g8e/logs/` — Gateway logs
-- `.g8e/secrets/` — Encrypted vault for platform secrets
-
-### Starting the Gateway
-
-Start the Gateway:
-
-```bash
-./g8e platform start
-```
-
-The Gateway runs in the default mode (doctrine: L1 enforced, L2/L3 audited). To run in different enforcement modes, invoke the binary directly with mode flags:
-
-#### Doctrine Mode (Default)
-
-Enforces L1 technical bedrock. L2 and L3 are audited but not enforced.
-
-```bash
-./g8e.operator --doctrine --listen
-```
-
-#### Consensus Mode
-
-Enforces L1 and L2 (multi-model Byzantine consensus). L3 is audited but not enforced.
-
-```bash
-./g8e.operator --consensus --listen
-```
-
-#### Notary Mode
-
-Enforces L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2). This is the most secure mode.
-
-```bash
-./g8e.operator --notary --listen
-```
-
-### Health Checks
-
-Check Gateway status:
-
-```bash
-./g8e platform status
-```
-
-This reports:
-- Gateway process status
-- Listening ports
-- PKI hierarchy status
-- Connected Operators
-- Governance readiness
-
-### Log Management
-
-View Gateway logs:
-
-```bash
-./g8e platform logs
-```
-
-Logs are stored in `.g8e/logs/operator-listen.log`.
-
-### Restart
-
-Restart the Gateway:
-
-```bash
-./g8e platform restart
-```
-
-### Reset
-
-Reset Gateway data and secrets while preserving the CA:
-
-```bash
-./g8e platform reset
-```
-
-### Clean
-
-Destructively remove all Gateway state:
-
-```bash
-./g8e platform clean
-```
-
-Use with caution. This removes all runtime data under `.g8e/`.
 
 ---
 

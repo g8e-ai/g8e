@@ -66,7 +66,7 @@ protocol/
 │   └── timestamp.json
 ├── models/                         # Shared JSON schema models
 │   ├── agents/
-│   ├── auditor_commands.json
+│   ├── agent_activity_metadata.json
 │   ├── case.json
 │   ├── conversation.json
 │   ├── conversation_message.json
@@ -258,6 +258,8 @@ Integration and scenario-based tests.
 
 ```text
 test/
+├── a2a_gateway_test.go             # A2A gateway integration
+├── a2a_real_operator_test.go       # Real operator A2A tests
 ├── byo_client_test.go              # BYO client integration
 ├── mcp_gateway_test.go             # MCP gateway tests
 ├── mcp_real_operator_test.go       # Real operator MCP tests

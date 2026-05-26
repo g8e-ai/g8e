@@ -89,23 +89,17 @@ func TestAuthStatusIndependence(t *testing.T) {
 		opID := "op-expired"
 		userID := "user-expired"
 
-		// Create an operator document with an old CreatedAt
-		// We must set it in the JSON data because ValidateOperatorSession unmarshals it.
+		// Create an operator document with an old CreatedAt using the test hook
+		oldTime := time.Now().UTC().Add(-48 * time.Hour) // 48h > 24h TTL
 		op := &models.OperatorDocumentGo{
 			ID:                opID,
 			UserID:            userID,
 			OperatorSessionID: sessionID,
 			Status:            constants.OperatorStatusActive,
-			CreatedAt:         time.Now().UTC().Add(-48 * time.Hour), // 48h > 24h TTL
+			CreatedAt:         oldTime,
 		}
 		opBytes, _ := json.Marshal(op)
-		err = db.DocSet(marshaler.CollectionName(constants.CollectionOperators), opID, opBytes)
-		require.NoError(t, err)
-
-		// Manually update created_at in the DB to bypass DocSet's auto-timestamping
-		oldTime := time.Now().UTC().Add(-48 * time.Hour)
-		_, err = db.db.Exec("UPDATE documents SET created_at = ? WHERE collection = ? AND id = ?",
-			oldTime.Format(time.RFC3339Nano), marshaler.CollectionName(constants.CollectionOperators), opID)
+		err = db.DocSetWithTimestamps(marshaler.CollectionName(constants.CollectionOperators), opID, opBytes, oldTime, oldTime)
 		require.NoError(t, err)
 
 		// Validate session - should fail

@@ -5,7 +5,7 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-05-25
+Last Updated: 2026-05-26
 Version: v1.0.0
 
 ---
@@ -74,7 +74,7 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces `g8e.gateway` (Governance Gateway) and `g8e.operator` (Governed Operator) binaries.
+This produces the `g8e` CLI wrapper and the `g8e.operator` binary. The same `g8e.operator` binary runs in two modes: Gateway mode (Policy Decision Point) and Operator mode (Policy Execution Point).
 
 ### 3. Start the Governance Gateway
 
@@ -84,50 +84,62 @@ This produces `g8e.gateway` (Governance Gateway) and `g8e.operator` (Governed Op
 
 This starts the Gateway in doctrine mode (L1 enforced, L2/L3 audited). Follow the CLI prompts to initialize the PKI hierarchy and Gateway state.
 
-### 4. Authenticate
+### 4. Bootstrap (First-Time Setup)
+
+For first-time setup on a fresh installation:
 
 ```bash
-./g8e login
+./g8e auth bootstrap
 ```
 
-This generates an mTLS client certificate and stores it in `.g8e/pki/client.crt`.
+This creates the first user and issues mTLS certificates for the Operator and CLI. Only available over loopback when no users exist.
 
-### 5. Start a Governed Operator
+### 5. Authenticate (Existing Installation)
 
-For local development:
+For subsequent authentication on an existing Gateway:
 
 ```bash
-./g8e operator start --gateway-url https://localhost:8440
+./g8e auth login
+```
+
+This authenticates via device-link token and saves mTLS credentials to `~/.g8e/credentials`.
+
+### 6. Start a Governed Operator
+
+For local development with MCP server mode:
+
+```bash
+./g8e.operator --mcp-serve
 ```
 
 For remote deployment, generate a device-link token on the Gateway:
 
 ```bash
-./g8e auth device-link create --name "prod-db-node"
+./g8e data device-links create --name "prod-db-node"
 ```
 
 Then start the Operator on the remote host with the token:
 
 ```bash
-./g8e.operator start --gateway-url https://<gateway-ip>:8440 --device-token <token>
+./g8e.operator --device-token <token> --endpoint <gateway-ip>
 ```
 
-### 6. Use as Protocol Translator
+### 7. Use as Protocol Translator
 
 The Gateway automatically translates MCP and A2A requests. AI clients can connect directly to the Gateway's HTTP API:
 
 ```bash
-curl -X POST https://localhost:8440/api/mcp/v1/tools/call \
+curl -X POST https://localhost:8440/api/governance/envelope \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
-  -d '{"tool": "shell.execute", "arguments": {"command": "ls -la"}}'
+  -d '{"event_type": "g8e.v1.operator.command.requested", "payload": "..."}'
 ```
 
 For stdio-based MCP (required by editors like Cursor or Claude Code):
 
 ```bash
-./g8e --mcp-serve
+./g8e.operator --mcp-serve
 ```
 
 ---

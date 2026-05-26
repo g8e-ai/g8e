@@ -98,8 +98,9 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("users", userID, userBytes))
 
-	// Create an operator session
+	// Create an operator session with old timestamp using the test hook
 	sessionID := "expired-session"
+	oldTime := time.Now().UTC().Add(-25 * time.Hour)
 	opDoc := map[string]interface{}{
 		"id":                  "op-456",
 		"operator_session_id": sessionID,
@@ -108,13 +109,7 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("operators", "op-456", opBytes))
-
-	// Manually update created_at in the DB to simulate expiry (DocSet manages timestamps automatically)
-	oldTime := time.Now().UTC().Add(-25 * time.Hour)
-	_, err = db.db.Exec("UPDATE documents SET created_at = ? WHERE collection = ? AND id = ?",
-		oldTime.Format(time.RFC3339Nano), "operators", "op-456")
-	require.NoError(t, err)
+	require.NoError(t, db.DocSetWithTimestamps("operators", "op-456", opBytes, oldTime, oldTime))
 
 	_, err = auth.ValidateOperatorSession(sessionID)
 	assert.Error(t, err)

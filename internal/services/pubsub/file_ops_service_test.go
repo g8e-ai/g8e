@@ -390,3 +390,63 @@ func TestFileOpsService_HandleFileEditRequest(t *testing.T) {
 		// Should log error and return without panic
 	})
 }
+
+func TestFileOpsService_HandleFsGrepRequest(t *testing.T) {
+	t.Run("rejects invalid protobuf payload", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		fileEditSvc := execution.NewFileEditService(cfg, logger)
+		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
+
+		msg := &PubSubCommandMessage{
+			ID:        "msg-1",
+			EventType: constants.Event.Operator.FsGrep.Requested,
+			Payload:   []byte("invalid protobuf"),
+		}
+
+		svc.HandleFsGrepRequest(context.Background(), msg)
+		// Should log error and return without panic
+	})
+}
+
+func TestFileOpsService_HandleFsReadRequest(t *testing.T) {
+	t.Run("rejects invalid protobuf payload", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		fileEditSvc := execution.NewFileEditService(cfg, logger)
+		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
+
+		msg := &PubSubCommandMessage{
+			ID:        "msg-1",
+			EventType: constants.Event.Operator.FsRead.Requested,
+			Payload:   []byte("invalid protobuf"),
+		}
+
+		svc.HandleFsReadRequest(context.Background(), msg)
+		// Should log error and return without panic
+	})
+
+	t.Run("rejects missing path", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		fileEditSvc := execution.NewFileEditService(cfg, logger)
+		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
+
+		req := &operatorv1.FsReadRequested{Path: ""}
+		payload, _ := proto.Marshal(req)
+		msg := &PubSubCommandMessage{
+			ID:        "msg-1",
+			EventType: constants.Event.Operator.FsRead.Requested,
+			Payload:   payload,
+		}
+
+		svc.HandleFsReadRequest(context.Background(), msg)
+		// Should log error and return without panic
+	})
+}

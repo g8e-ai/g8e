@@ -16,7 +16,10 @@ package pubsub
 import (
 	"context"
 	"testing"
+	"time"
 
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
@@ -217,5 +220,34 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		published := client.LastPublished()
 		require.NotNil(t, published)
 		assert.Contains(t, string(published.Data), "local storage not available")
+	})
+}
+
+func TestHistoryService_publishFetchLogsResult(t *testing.T) {
+	t.Run("publishes result successfully", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		svc := NewHistoryService(cfg, logger, client)
+
+		record := &storage.ExecutionRecord{
+			ID:               "exec-1",
+			Command:          "ls -la",
+			ExitCode:         system.IntPtr(0),
+			DurationMs:       1000,
+			StdoutCompressed: []byte("stdout data"),
+			StderrCompressed: []byte("stderr data"),
+			StdoutSize:       10,
+			StderrSize:       10,
+			TimestampUTC:     time.Now().UTC(),
+		}
+
+		msg := &PubSubCommandMessage{ID: "msg-1"}
+		svc.publishFetchLogsResult(context.Background(), msg, record)
+
+		published := client.LastPublished()
+		require.NotNil(t, published)
+		assert.Contains(t, string(published.Data), "ls -la")
 	})
 }

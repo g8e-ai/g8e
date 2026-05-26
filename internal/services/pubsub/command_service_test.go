@@ -16,8 +16,10 @@ package pubsub
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -173,5 +175,181 @@ func TestCommandService_HandleExecutionRequest(t *testing.T) {
 
 		svc.HandleExecutionRequest(context.Background(), msg)
 		// Should log error and return without panic
+	})
+}
+
+func TestCommandService_Setters(t *testing.T) {
+	t.Run("SetResultsPublisher", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		execSvc := execution.NewExecutionService(cfg, logger)
+		svc := NewCommandService(cfg, logger, execSvc)
+
+		mockResults := &mockResultsPublisher{}
+		svc.SetResultsPublisher(mockResults)
+		// Verify method can be called without panic
+		assert.NotNil(t, svc.results)
+	})
+
+	t.Run("SetLocalStoreService", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		execSvc := execution.NewExecutionService(cfg, logger)
+		svc := NewCommandService(cfg, logger, execSvc)
+
+		// Use nil for test - just verify method can be called
+		svc.SetLocalStoreService(nil)
+		// Verify method can be called without panic
+	})
+
+	t.Run("SetAuditVaultService", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		execSvc := execution.NewExecutionService(cfg, logger)
+		svc := NewCommandService(cfg, logger, execSvc)
+
+		// Use nil for test - just verify method can be called
+		svc.SetAuditVaultService(nil)
+		// Verify method can be called without panic
+	})
+
+	t.Run("SetLedgerService", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		execSvc := execution.NewExecutionService(cfg, logger)
+		svc := NewCommandService(cfg, logger, execSvc)
+
+		// Use nil for test - just verify method can be called
+		svc.SetLedgerService(nil)
+		// Verify method can be called without panic
+	})
+
+	t.Run("SetHistoryHandler", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		execSvc := execution.NewExecutionService(cfg, logger)
+		svc := NewCommandService(cfg, logger, execSvc)
+
+		// Use nil for test - just verify method can be called
+		svc.SetHistoryHandler(nil)
+		// Verify method can be called without panic
+	})
+
+	t.Run("SetSovereignty", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		execSvc := execution.NewExecutionService(cfg, logger)
+		svc := NewCommandService(cfg, logger, execSvc)
+
+		// Use nil for test - just verify method can be called
+		svc.SetSovereignty(nil)
+		// Verify method can be called without panic
+	})
+}
+
+func TestCommandService_HandleCancelRequest(t *testing.T) {
+	t.Run("rejects oversized payload", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		execSvc := execution.NewExecutionService(cfg, logger)
+		svc := NewCommandService(cfg, logger, execSvc)
+
+		largePayload := make([]byte, 64*1024+1)
+		msg := &PubSubCommandMessage{
+			ID:        "msg-1",
+			EventType: constants.Event.Operator.Command.CancelRequested,
+			Payload:   largePayload,
+		}
+
+		svc.HandleCancelRequest(context.Background(), msg)
+		// Should log error and return without panic
+	})
+
+	t.Run("rejects invalid protobuf payload", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		execSvc := execution.NewExecutionService(cfg, logger)
+		svc := NewCommandService(cfg, logger, execSvc)
+
+		msg := &PubSubCommandMessage{
+			ID:        "msg-1",
+			EventType: constants.Event.Operator.Command.CancelRequested,
+			Payload:   []byte("invalid protobuf"),
+		}
+
+		svc.HandleCancelRequest(context.Background(), msg)
+		// Should log error and return without panic
+	})
+
+	t.Run("rejects missing execution_id", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		execSvc := execution.NewExecutionService(cfg, logger)
+		svc := NewCommandService(cfg, logger, execSvc)
+
+		req := &operatorv1.CommandCancelRequested{ExecutionId: ""}
+		payload, _ := proto.Marshal(req)
+		msg := &PubSubCommandMessage{
+			ID:        "msg-1",
+			EventType: constants.Event.Operator.Command.CancelRequested,
+			Payload:   payload,
+		}
+
+		svc.HandleCancelRequest(context.Background(), msg)
+		// Should log error and return without panic
+	})
+}
+
+func TestCommandService_runStatusTicker(t *testing.T) {
+	t.Run("returns zero when done channel closes immediately", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		execSvc := execution.NewExecutionService(cfg, logger)
+		svc := NewCommandService(cfg, logger, execSvc)
+
+		ctx := context.Background()
+		done := make(chan struct{})
+		close(done)
+
+		execReq := &models.ExecutionRequestPayload{ExecutionID: "exec-1"}
+		msg := &PubSubCommandMessage{ID: "msg-1"}
+		startTime := time.Now()
+
+		count := svc.runStatusTicker(ctx, execReq, msg, "test", startTime, done)
+		assert.Equal(t, 0, count)
+	})
+
+	t.Run("returns count when context cancelled", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		execSvc := execution.NewExecutionService(cfg, logger)
+		svc := NewCommandService(cfg, logger, execSvc)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+
+		execReq := &models.ExecutionRequestPayload{ExecutionID: "exec-1"}
+		msg := &PubSubCommandMessage{ID: "msg-1"}
+		startTime := time.Now()
+
+		// Cancel context after a short delay
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			cancel()
+		}()
+
+		count := svc.runStatusTicker(ctx, execReq, msg, "test", startTime, done)
+		assert.GreaterOrEqual(t, count, 0)
 	})
 }

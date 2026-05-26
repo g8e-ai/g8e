@@ -12,7 +12,7 @@ Version: v1.0.0
 
 ## Overview
 
-A g8e-compatible application functions strictly as a GovernanceEnvelope producer and receipt consumer. It maintains no privileged communication channels, never interacts directly with the host system, and communicates with the Gateway exclusively through public ingress paths.
+A g8e-compatible application functions strictly as a GovernanceEnvelope producer and receipt consumer. It maintains no privileged communication channels, never interacts directly with the host system, and communicates with the Gateway (Operator in gateway mode) exclusively through public ingress paths.
 
 Security operations including Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) verification gates, replay defense, state binding, cryptographic audit, and human-in-the-loop authorization are fully delegated to the Gateway substrate. The application provides only the components the protocol cannot intrinsically supply: the mutation intent and optionally, consensus evidence.
 
@@ -47,11 +47,11 @@ Two invariants apply to all g8e applications:
 
 ### Identity and Authentication
 
-Application identity is established via an mTLS/SPIFFE certificate. The application authenticates cryptographically and receives no ambient trust. The Gateway evaluates its envelope with identical rigor to any external client.
+Application identity is established via an mTLS/SPIFFE certificate. The application authenticates cryptographically and receives no ambient trust. The Gateway (Operator in gateway mode) evaluates its envelope with identical rigor to any external client.
 
 ### State Management
 
-Application-internal state remains the exclusive responsibility of the application. The g8e protocol governs and audits mutations to host reality; it does not manage or persist the application working memory.
+Application-internal state remains the exclusive responsibility of the application. The g8e protocol governs and audits mutations to host reality; it does not manage or persist the application working memory. The Gateway maintains the canonical state root for replay defense and state binding.
 
 ---
 
@@ -93,7 +93,7 @@ Refer to `protocol/proto/g8e/` for the canonical schema definitions.
 
 ### Step 1: Obtain Client Certificate
 
-Generate an mTLS client certificate from the Gateway:
+Generate an mTLS client certificate from the Gateway (Operator in gateway mode):
 
 ```bash
 ./g8e login
@@ -103,13 +103,15 @@ This stores the certificate in `.g8e/pki/client.crt` and key in `.g8e/pki/client
 
 ### Step 2: Fetch State Root
 
-Query the Gateway for the current state root:
+Query the Gateway health endpoint for the current state root:
 
 ```bash
-curl -X GET https://localhost:8440/api/state/root \
+curl -X GET https://localhost:8440/health \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key
 ```
+
+The response includes the `state_merkle_root` field.
 
 ### Step 3: Construct Typed Payload
 
@@ -164,7 +166,7 @@ Construct the GovernanceEnvelope:
 
 ### Step 6: Submit to Gateway
 
-Submit the envelope to the Gateway:
+Submit the envelope to the Gateway (Operator in gateway mode):
 
 ```bash
 curl -X POST https://localhost:8440/api/governance/envelope \
@@ -223,13 +225,13 @@ Add the L2Consensus signatures to the envelope:
 
 ### Step 3: Submit to Gateway
 
-Submit the envelope with L2 signatures to the Gateway. The Gateway will verify the signatures as part of the L2Consensus check.
+Submit the envelope with L2 signatures to the Gateway (Operator in gateway mode). The Gateway will verify the signatures as part of the L2Consensus check.
 
 ---
 
 ## Protocol Translation Integration
 
-Applications can leverage the Gateway's MCP/A2A translation layer instead of constructing envelopes directly.
+Applications can leverage the Gateway's (Operator in gateway mode) MCP/A2A translation layer instead of constructing envelopes directly.
 
 ### MCP Integration
 
@@ -245,21 +247,21 @@ curl -X POST https://localhost:8440/api/mcp/v1/tools/call \
 
 ### A2A Integration
 
-For A2A-based applications, the Gateway automatically translates HTTP/JSON skill invocations into GovernanceEnvelope format:
+For A2A-based applications, the Gateway automatically translates HTTP/JSON task invocations into GovernanceEnvelope format:
 
 ```bash
-curl -X POST https://localhost:8440/api/a2a/v1/skills/execute \
+curl -X POST https://localhost:8440/api/a2a/v1/call \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
-  -d '{"skill": "file.read", "parameters": {"path": "/etc/hosts"}}'
+  -d '{"task": {"id": "task-1", "type": "file.read", "input": {"path": "/etc/hosts"}}}'
 ```
 
 ---
 
 ## Testing
 
-Applications should test against the reference Gateway to ensure compatibility:
+Applications should test against the reference Gateway (Operator in gateway mode) to ensure compatibility:
 
 ```bash
 ./g8e platform start
@@ -278,11 +280,11 @@ Verify that:
 
 ### No Privileged Channels
 
-Applications must not attempt to establish privileged communication channels with the Gateway or Operators. All communication must go through public ingress paths.
+Applications must not attempt to establish privileged communication channels with the Gateway (Operator in gateway mode) or Operators. All communication must go through public ingress paths.
 
 ### Fail-Closed Behavior
 
-Applications must handle verification failures gracefully. If the Gateway rejects an envelope, the application must not retry with modified parameters or attempt fallback paths.
+Applications must handle verification failures gracefully. If the Gateway (Operator in gateway mode) rejects an envelope, the application must not retry with modified parameters or attempt fallback paths.
 
 ### Certificate Management
 
@@ -290,7 +292,7 @@ Applications must manage their mTLS certificates securely. Certificates should b
 
 ### State Root Validation
 
-Applications must validate the state root returned by the Gateway before using it in envelope construction. This prevents man-in-the-middle attacks.
+Applications must validate the state root returned by the Gateway (via health endpoint) before using it in envelope construction. This prevents man-in-the-middle attacks.
 
 ---
 
