@@ -2,62 +2,50 @@
   "senders": {
     "AiAssistant": {
       "_go_const": "SourceAiAssistant",
-      "_python_const": "AI_ASSISTANT",
       "value": "g8e.v1.source.ai.assistant"
     },
     "AiPrimary": {
       "_go_const": "SourceAiPrimary",
-      "_python_const": "AI_PRIMARY",
       "value": "g8e.v1.source.ai.primary"
     },
     "AiTriage": {
       "_go_const": "SourceAiTriage",
-      "_python_const": "AI_TRIAGE",
       "value": "g8e.v1.source.ai.triage"
     },
     "System": {
       "_go_const": "SourceSystem",
-      "_python_const": "SYSTEM",
       "value": "g8e.v1.source.system"
     },
     "TypeCall": {
       "_go_const": "MessageTypeCall",
-      "_python_const": "TYPE_CALL",
       "value": "call"
     },
     "TypeCode": {
       "_go_const": "MessageTypeCode",
-      "_python_const": "TYPE_CODE",
       "value": "code"
     },
     "TypeError": {
       "_go_const": "MessageTypeError",
-      "_python_const": "TYPE_ERROR",
       "value": "error"
     },
     "TypeResult": {
       "_go_const": "MessageTypeResult",
-      "_python_const": "TYPE_RESULT",
       "value": "result"
     },
     "TypeText": {
       "_go_const": "MessageTypeText",
-      "_python_const": "TYPE_TEXT",
       "value": "text"
     },
     "TypeThinking": {
       "_go_const": "MessageTypeThinking",
-      "_python_const": "TYPE_THINKING",
       "value": "thinking"
     },
     "UserChat": {
       "_go_const": "SourceUserChat",
-      "_python_const": "USER_CHAT",
       "value": "g8e.v1.source.user.chat"
     },
     "UserTerminal": {
       "_go_const": "SourceUserTerminal",
-      "_python_const": "USER_TERMINAL",
       "value": "g8e.v1.source.user.terminal"
     }
   }

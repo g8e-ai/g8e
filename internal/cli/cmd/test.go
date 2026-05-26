@@ -63,7 +63,6 @@ func testCmd() *cobra.Command {
 		testUnitCmd(),
 		testIntegrationCmd(),
 		testG8eoCmd(),
-		testCICmd(),
 		testChaosCmd(),
 		testScenarioCmd(),
 		testReviewCmd(),
@@ -195,34 +194,6 @@ func testG8eoCmd() *cobra.Command {
 	cmd.Flags().StringVar(&run, "run", "", "Run specific test (regex)")
 	cmd.Flags().BoolVar(&coverage, "coverage", false, "Generate coverage report")
 
-	return cmd
-}
-
-func testCICmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "ci",
-		Short: "Run full CI test suite (mirrors GitHub Actions exactly)",
-		Long:  `Runs make ci which includes proto generation, linting, vulncheck, and substrate tests with platform start/stop and coverage enforcement. This is the canonical way to replicate CI locally.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			cmd.Println("Running full CI test suite (mirrors GitHub Actions)...")
-			cmd.Println("\n=== Running make ci ===")
-			makeCmd := exec.Command("make", "ci")
-			makeCmd.Stdout = os.Stdout
-			makeCmd.Stderr = os.Stderr
-			makeCmd.Dir = cfg.ProjectRoot
-			if err := makeCmd.Run(); err != nil {
-				return fmt.Errorf("CI suite failed: %w", err)
-			}
-
-			cmd.Println("\nCI test suite passed")
-			return nil
-		},
-	}
 	return cmd
 }
 

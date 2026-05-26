@@ -88,8 +88,6 @@ generate: proto constants
 constants:
 	@echo "Generating Go constants from JSON source..."
 	@cd internal/constants && go run generate_registry.go
-	@echo "Exporting constants to JSON and Python via Go exporter..."
-	@cd cmd/exporter && go run main.go -root $(PWD)
 	@echo "Constants generation complete."
 
 .PHONY: proto
@@ -157,7 +155,6 @@ build-cli:
 	@echo "Building g8e CLI wrapper..."
 	@mkdir -p bin
 	@go build -o bin/g8e ./cmd/g8e
-	@ln -sf bin/g8e ./g8e
 	@echo "CLI wrapper build complete."
 
 .PHONY: build-operator
@@ -169,7 +166,6 @@ build-operator:
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
 	PLATFORM=$$(uname -s)_$$(uname -m); \
 	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo
-	@ln -sf bin/g8e ./g8e
 	@echo "Operator build complete."
 
 .PHONY: build-compressed
@@ -181,7 +177,6 @@ build-compressed:
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
 	PLATFORM=$$(uname -s)_$$(uname -m); \
 	go build -ldflags "-s -w -X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -trimpath -o bin/g8e ./cmd/g8eo
-	@ln -sf bin/g8e ./g8e
 	@echo "Compressed operator build complete."
 
 # =============================================================================
@@ -285,7 +280,6 @@ clean:
 	@echo "Cleaning up build artifacts and runtime state..."
 	@$(MAKE) clean-constants
 	@rm -rf .g8e/
-	@rm -f ./g8e
 	@rm -rf bin/
 	@rm -rf build/
 	@echo "Clean complete."

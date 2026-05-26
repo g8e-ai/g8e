@@ -36,8 +36,10 @@ import (
 type contextKey string
 
 const (
-	userIDKey contextKey = "user_id"
-	appIDKey  contextKey = "app_id"
+	userIDKey         contextKey = "user_id"
+	appIDKey          contextKey = "app_id"
+	tenantIDKey       contextKey = "tenant_id"
+	bindingPersonaKey contextKey = "binding_persona"
 )
 
 // AuthError represents a structured authentication error.
@@ -63,8 +65,12 @@ type AuthService struct {
 	pki        *PKIAuthority
 	logger     *slog.Logger
 	userSvc    *UserService
+	personaSvc *PersonaService
 	responder  *responder.Responder
 	secretsDir string
+
+	jwks    *JWKSProvider
+	jwtRole string
 
 	// Rate limiting state for app policies
 	muLimiters sync.Mutex
@@ -72,14 +78,17 @@ type AuthService struct {
 }
 
 // NewAuthService creates a new AuthService.
-func NewAuthService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, responder *responder.Responder, secretsDir string) *AuthService {
+func NewAuthService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, personaSvc *PersonaService, responder *responder.Responder, secretsDir string, jwks *JWKSProvider, jwtRole string) *AuthService {
 	return &AuthService{
 		db:         db,
 		pki:        pki,
 		logger:     logger,
 		userSvc:    userSvc,
+		personaSvc: personaSvc,
 		responder:  responder,
 		secretsDir: secretsDir,
+		jwks:       jwks,
+		jwtRole:    jwtRole,
 		limiters:   make(map[string]*rate.Limiter),
 	}
 }
@@ -636,6 +645,76 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *GatewayDBService) ht
 
 		// Stamp context with user_id
 		ctx := context.WithValue(r.Context(), userIDKey, webSession.UserID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// JWTAuthMiddleware validates JWT tokens and performs JIT user provisioning.
+// This is for external IdP authentication on MCP/A2A endpoints.
+func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.jwks == nil {
+			s.logger.Warn("JWT authentication requested but JWKS provider not configured")
+			s.responder.Error(w, http.StatusServiceUnavailable, "JWT authentication not configured")
+			return
+		}
+
+		authHeader := r.Header.Get(constants.HeaderAuthorization)
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			s.responder.Error(w, http.StatusUnauthorized, "missing JWT bearer token")
+			return
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == "" {
+			s.responder.Error(w, http.StatusUnauthorized, "missing JWT token")
+			return
+		}
+
+		jwt, err := ParseAndVerifyJWT(tokenString, s.jwks, s.jwtRole)
+		if err != nil {
+			s.logger.Warn("JWT validation failed", "error", err)
+			s.responder.Error(w, http.StatusUnauthorized, "invalid JWT token")
+			return
+		}
+
+		if jwt.Claims.Sub == "" {
+			s.responder.Error(w, http.StatusUnauthorized, "JWT missing subject claim")
+			return
+		}
+
+		// JIT User Provisioning: get or create user by subject
+		user, err := s.userSvc.GetOrCreateBySub(jwt.Claims.Sub)
+		if err != nil {
+			s.logger.Error("JIT user provisioning failed", "sub", jwt.Claims.Sub, "error", err)
+			s.responder.Error(w, http.StatusInternalServerError, "user provisioning failed")
+			return
+		}
+
+		if !user.IsActive() {
+			s.responder.Error(w, http.StatusForbidden, "identity disabled")
+			return
+		}
+
+		// Persona Mapping: map JWT roles to binding persona
+		bindingPersona, err := s.personaSvc.MapRolesToPersona(jwt.Roles)
+		if err != nil {
+			s.logger.Warn("Failed to map roles to persona, using default", "error", err)
+			bindingPersona = "default"
+		}
+
+		// Extract tenant_id from JWT claims (if present)
+		tenantID := jwt.Claims.TenantID
+		if tenantID == "" {
+			tenantID = "default"
+		}
+
+		// Stamp context with identity and persona
+		ctx := context.WithValue(r.Context(), userIDKey, user.ID)
+		ctx = context.WithValue(ctx, constants.ContextKeyTenantID, tenantID)
+		ctx = context.WithValue(ctx, constants.ContextKeyBindingPersona, bindingPersona)
+
+		s.logger.Debug("JWT authentication successful", "user_id", user.ID, "tenant_id", tenantID, "persona", bindingPersona)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

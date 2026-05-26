@@ -2,37 +2,30 @@
   "pubsub": {
     "FieldAction": {
       "_go_const": "PubSubFieldAction",
-      "_python_const": "FIELD_ACTION",
       "value": "action"
     },
     "FieldChannel": {
       "_go_const": "PubSubFieldChannel",
-      "_python_const": "FIELD_CHANNEL",
       "value": "channel"
     },
     "FieldData": {
       "_go_const": "PubSubFieldData",
-      "_python_const": "FIELD_DATA",
       "value": "data"
     },
     "FieldMessage": {
       "_go_const": "PubSubFieldMessage",
-      "_python_const": "FIELD_MESSAGE",
       "value": "message"
     },
     "FieldPattern": {
       "_go_const": "PubSubFieldPattern",
-      "_python_const": "FIELD_PATTERN",
       "value": "pattern"
     },
     "FieldSender": {
       "_go_const": "PubSubFieldSender",
-      "_python_const": "FIELD_SENDER",
       "value": "sender"
     },
     "FieldType": {
       "_go_const": "PubSubFieldType",
-      "_python_const": "FIELD_TYPE",
       "value": "type"
     }
   }

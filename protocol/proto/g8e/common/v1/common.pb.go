@@ -437,6 +437,8 @@ type GovernanceEnvelope struct {
 	InvestigationId   string `protobuf:"bytes,16,opt,name=investigation_id,json=investigationId,proto3" json:"investigation_id,omitempty"`
 	TaskId            string `protobuf:"bytes,17,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
 	SystemFingerprint string `protobuf:"bytes,18,opt,name=system_fingerprint,json=systemFingerprint,proto3" json:"system_fingerprint,omitempty"`
+	TenantId          string `protobuf:"bytes,23,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	BindingPersona    string `protobuf:"bytes,24,opt,name=binding_persona,json=bindingPersona,proto3" json:"binding_persona,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -625,6 +627,20 @@ func (x *GovernanceEnvelope) GetSystemFingerprint() string {
 	return ""
 }
 
+func (x *GovernanceEnvelope) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *GovernanceEnvelope) GetBindingPersona() string {
+	if x != nil {
+		return x.BindingPersona
+	}
+	return ""
+}
+
 var file_g8e_common_v1_common_proto_extTypes = []protoimpl.ExtensionInfo{
 	{
 		ExtendedType:  (*descriptorpb.FieldOptions)(nil),
@@ -674,7 +690,7 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\x02l1\x18\x01 \x01(\v2\x19.g8e.common.v1.L1MetadataR\x02l1\x12)\n" +
 	"\x02l2\x18\x02 \x01(\v2\x19.g8e.common.v1.L2MetadataR\x02l2\x12)\n" +
 	"\x02l3\x18\x03 \x01(\v2\x19.g8e.common.v1.L3MetadataR\x02l3\x12%\n" +
-	"\x0egateway_signed\x18\x04 \x01(\bR\rgatewaySigned\"\x9f\a\n" +
+	"\x0egateway_signed\x18\x04 \x01(\bR\rgatewaySigned\"\xe5\a\n" +
 	"\x12GovernanceEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x128\n" +
 	"\ttimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x129\n" +
@@ -705,7 +721,9 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\acase_id\x18\x0f \x01(\tR\x06caseId\x12)\n" +
 	"\x10investigation_id\x18\x10 \x01(\tR\x0finvestigationId\x12\x17\n" +
 	"\atask_id\x18\x11 \x01(\tR\x06taskId\x12-\n" +
-	"\x12system_fingerprint\x18\x12 \x01(\tR\x11systemFingerprint*d\n" +
+	"\x12system_fingerprint\x18\x12 \x01(\tR\x11systemFingerprint\x12\x1b\n" +
+	"\ttenant_id\x18\x17 \x01(\tR\btenantId\x12'\n" +
+	"\x0fbinding_persona\x18\x18 \x01(\tR\x0ebindingPersona*d\n" +
 	"\tComponent\x12\x19\n" +
 	"\x15COMPONENT_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eCOMPONENT_G8EE\x10\x01\x12\x12\n" +

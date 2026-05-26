@@ -196,6 +196,48 @@ func (s *UserService) GetByID(userID string) (*models.User, error) {
 	return s.docToUser(doc)
 }
 
+// GetOrCreateBySub retrieves a user by subject (JWT sub claim) or creates one if it doesn't exist.
+// This is used for JIT user provisioning from external IdP authentication.
+func (s *UserService) GetOrCreateBySub(sub string) (*models.User, error) {
+	if sub == "" {
+		return nil, fmt.Errorf("sub is required")
+	}
+
+	// First, try to find an existing user with this sub as the ID
+	user, err := s.GetByID(sub)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query user by sub: %w", err)
+	}
+
+	if user != nil {
+		s.logger.Debug("[USER-SERVICE] User found by sub", "sub", sub, "user_id", user.ID)
+		return user, nil
+	}
+
+	// User doesn't exist, create one with the sub as the ID
+	s.logger.Info("[USER-SERVICE] JIT provisioning new user from JWT", "sub", sub)
+
+	user = &models.User{
+		ID:                 sub,
+		PasskeyCredentials: []models.PasskeyCredential{},
+		Provider:           string(constants.AuthProviderJWT),
+		Status:             constants.UserStatusActive,
+		IsBootstrap:        false,
+	}
+
+	data, err := json.Marshal(user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal user: %w", err)
+	}
+
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), sub, data); err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	s.logger.Info("[USER-SERVICE] JIT user created", "user_id", sub, "provider", constants.AuthProviderJWT)
+	return user, nil
+}
+
 // UpdateUser updates a user with the provided field changes.
 func (s *UserService) UpdateUser(userID string, updates map[string]interface{}) (*models.User, error) {
 	existing, err := s.GetByID(userID)
@@ -258,4 +300,160 @@ func (s *UserService) docToUser(doc *models.Document) (*models.User, error) {
 	}
 	user.ID = doc.ID
 	return &user, nil
+}
+
+// PersonaService handles persona management for role-based access control.
+type PersonaService struct {
+	db     *GatewayDBService
+	logger *slog.Logger
+}
+
+// NewPersonaService creates a new PersonaService.
+func NewPersonaService(db *GatewayDBService, logger *slog.Logger) *PersonaService {
+	return &PersonaService{
+		db:     db,
+		logger: logger,
+	}
+}
+
+// GetOrCreateDefaultPersonas ensures default personas exist in the database.
+func (s *PersonaService) GetOrCreateDefaultPersonas() error {
+	defaultPersonas := []models.Persona{
+		{
+			ID:          "admin",
+			Name:        "admin",
+			Description: "Administrator persona with full system access",
+			Roles:       []string{"admin", "administrator"},
+		},
+		{
+			ID:          "security-analyst",
+			Name:        "security-analyst",
+			Description: "Security analyst persona for investigation and audit",
+			Roles:       []string{"security-analyst", "analyst"},
+		},
+		{
+			ID:          "developer",
+			Name:        "developer",
+			Description: "Developer persona for development and testing",
+			Roles:       []string{"developer", "engineer"},
+		},
+		{
+			ID:          "auditor",
+			Name:        "auditor",
+			Description: "Auditor persona for read-only audit access",
+			Roles:       []string{"auditor"},
+		},
+		{
+			ID:          "default",
+			Name:        "default",
+			Description: "Default persona for users without specific roles",
+			Roles:       []string{},
+		},
+	}
+
+	for _, persona := range defaultPersonas {
+		existing, err := s.GetByID(persona.ID)
+		if err != nil {
+			return fmt.Errorf("failed to check existing persona %s: %w", persona.ID, err)
+		}
+		if existing != nil {
+			continue
+		}
+
+		now := time.Now().UTC()
+		persona.CreatedAt = now
+		persona.UpdatedAt = now
+
+		data, err := json.Marshal(persona)
+		if err != nil {
+			return fmt.Errorf("failed to marshal persona %s: %w", persona.ID, err)
+		}
+
+		if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionPersonas), persona.ID, data); err != nil {
+			return fmt.Errorf("failed to create persona %s: %w", persona.ID, err)
+		}
+
+		s.logger.Info("[PERSONA-SERVICE] Default persona created", "persona_id", persona.ID, "name", persona.Name)
+	}
+
+	return nil
+}
+
+// GetByID retrieves a persona by ID.
+func (s *PersonaService) GetByID(id string) (*models.Persona, error) {
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionPersonas), id)
+	if err != nil {
+		return nil, err
+	}
+	if doc == nil {
+		return nil, nil
+	}
+
+	return s.docToPersona(doc)
+}
+
+// GetAll retrieves all personas.
+func (s *PersonaService) GetAll() ([]models.Persona, error) {
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionPersonas), []models.DocFilter{}, "", 100)
+	if err != nil {
+		return nil, err
+	}
+
+	personas := make([]models.Persona, 0, len(docs))
+	for _, doc := range docs {
+		persona, err := s.docToPersona(doc)
+		if err != nil {
+			s.logger.Warn("[PERSONA-SERVICE] Failed to convert persona doc", "doc_id", doc.ID, "error", err)
+			continue
+		}
+		personas = append(personas, *persona)
+	}
+
+	return personas, nil
+}
+
+// MapRolesToPersona maps JWT roles to a binding persona.
+// Returns the first matching persona, or "default" if no match is found.
+func (s *PersonaService) MapRolesToPersona(roles []string) (string, error) {
+	if len(roles) == 0 {
+		return "default", nil
+	}
+
+	personas, err := s.GetAll()
+	if err != nil {
+		s.logger.Warn("[PERSONA-SERVICE] Failed to load personas, falling back to default", "error", err)
+		return "default", nil
+	}
+
+	roleSet := make(map[string]struct{})
+	for _, role := range roles {
+		roleSet[role] = struct{}{}
+	}
+
+	for _, persona := range personas {
+		for _, personaRole := range persona.Roles {
+			if _, ok := roleSet[personaRole]; ok {
+				s.logger.Debug("[PERSONA-SERVICE] Mapped role to persona", "role", personaRole, "persona", persona.ID)
+				return persona.ID, nil
+			}
+		}
+	}
+
+	s.logger.Debug("[PERSONA-SERVICE] No persona matched roles, using default", "roles", roles)
+	return "default", nil
+}
+
+// docToPersona converts a Document to a Persona model.
+func (s *PersonaService) docToPersona(doc *models.Document) (*models.Persona, error) {
+	data, err := json.Marshal(doc.ForWire())
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal doc: %w", err)
+	}
+
+	var persona models.Persona
+	if err := json.Unmarshal(data, &persona); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal persona: %w", err)
+	}
+	persona.ID = doc.ID
+	return &persona, nil
 }

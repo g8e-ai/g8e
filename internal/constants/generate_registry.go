@@ -24,21 +24,21 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/g8e-ai/g8e/internal/services/system"
 )
 
 // JSONEntry represents a constant entry from JSON files
 type JSONEntry struct {
-	Value       interface{} `json:"value"`
-	GoConst     string      `json:"_go_const"`
-	PythonConst string      `json:"_python_const"`
-	Mutation    bool        `json:"_mutation"`
+	Value    interface{} `json:"value"`
+	GoConst  string      `json:"_go_const"`
+	Mutation bool        `json:"_mutation"`
 }
 
 // NestedStatusEntry represents the nested structure of status.json
 type NestedStatusEntry struct {
-	Value       string `json:"value"`
-	GoConst     string `json:"_go_const"`
-	PythonConst string `json:"_python_const"`
+	Value   string `json:"value"`
+	GoConst string `json:"_go_const"`
 }
 
 // JSONFile represents the structure of a constants JSON file
@@ -62,11 +62,14 @@ type JSONFile struct {
 
 func main() {
 	// Get paths
-	constantsDir := "."
+	projectRoot := system.ResolveProjectRoot()
+
+	constantsDir := filepath.Join(projectRoot, "internal", "constants")
 	if len(os.Args) > 1 {
 		constantsDir = os.Args[1]
 	}
-	protocolConstantsDir := filepath.Join(constantsDir, "..", "..", "protocol", "constants")
+
+	protocolConstantsDir := filepath.Join(projectRoot, "protocol", "constants")
 	if len(os.Args) > 2 {
 		protocolConstantsDir = os.Args[2]
 	}
@@ -229,9 +232,8 @@ func generateRegistry(data JSONFile) string {
 	sb.WriteString("\n")
 	sb.WriteString("// Entry represents a constant with its value and naming metadata.\n")
 	sb.WriteString("type Entry struct {\n")
-	sb.WriteString("\tValue       string `json:\"value\"`\n")
-	sb.WriteString("\tGoConst     string `json:\"_go_const\"`\n")
-	sb.WriteString("\tPythonConst string `json:\"_python_const\"`\n")
+	sb.WriteString("\tValue   string `json:\"value\"`\n")
+	sb.WriteString("\tGoConst string `json:\"_go_const\"`\n")
 	sb.WriteString("}\n")
 	sb.WriteString("\n")
 	sb.WriteString("// KVKeysSnapshot represents the nested structure for KV keys.\n")
@@ -279,8 +281,8 @@ func generateRegistry(data JSONFile) string {
 		keys := sortedKeys(data.Collections)
 		for _, key := range keys {
 			entry := data.Collections[key]
-			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-				key, valueToString(entry.Value), entry.GoConst, entry.PythonConst))
+			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\"},\n",
+				key, valueToString(entry.Value), entry.GoConst))
 		}
 		sb.WriteString("\t\t},\n")
 	}
@@ -291,8 +293,8 @@ func generateRegistry(data JSONFile) string {
 		keys := sortedKeys(data.Channels)
 		for _, key := range keys {
 			entry := data.Channels[key]
-			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-				key, valueToString(entry.Value), entry.GoConst, entry.PythonConst))
+			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\"},\n",
+				key, valueToString(entry.Value), entry.GoConst))
 		}
 		sb.WriteString("\t\t},\n")
 	}
@@ -304,8 +306,8 @@ func generateRegistry(data JSONFile) string {
 		keys := sortedKeys(data.DocumentIds)
 		for _, key := range keys {
 			entry := data.DocumentIds[key]
-			sb.WriteString(fmt.Sprintf("\t\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-				key, valueToString(entry.Value), entry.GoConst, entry.PythonConst))
+			sb.WriteString(fmt.Sprintf("\t\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\"},\n",
+				key, valueToString(entry.Value), entry.GoConst))
 		}
 		sb.WriteString("\t\t\t},\n")
 		sb.WriteString("\t\t},\n")
@@ -317,8 +319,8 @@ func generateRegistry(data JSONFile) string {
 		keys := sortedKeys(data.Headers)
 		for _, key := range keys {
 			entry := data.Headers[key]
-			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-				key, valueToString(entry.Value), entry.GoConst, entry.PythonConst))
+			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\"},\n",
+				key, valueToString(entry.Value), entry.GoConst))
 		}
 		sb.WriteString("\t\t},\n")
 	}
@@ -329,8 +331,8 @@ func generateRegistry(data JSONFile) string {
 		keys := sortedKeys(data.Intents)
 		for _, key := range keys {
 			entry := data.Intents[key]
-			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-				key, valueToString(entry.Value), entry.GoConst, entry.PythonConst))
+			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\"},\n",
+				key, valueToString(entry.Value), entry.GoConst))
 		}
 		sb.WriteString("\t\t},\n")
 	}
@@ -387,8 +389,8 @@ func generateRegistry(data JSONFile) string {
 		keys := sortedKeys(data.Events)
 		for _, key := range keys {
 			entry := data.Events[key]
-			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-				key, entry.Value, entry.GoConst, entry.PythonConst))
+			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\"},\n",
+				key, entry.Value, entry.GoConst))
 		}
 		sb.WriteString("\t\t},\n")
 	}
@@ -407,8 +409,8 @@ func generateRegistry(data JSONFile) string {
 			keys := sortedKeys(entries)
 			for _, key := range keys {
 				entry := entries[key]
-				sb.WriteString(fmt.Sprintf("\t\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-					key, valueToString(entry.Value), entry.GoConst, entry.PythonConst))
+				sb.WriteString(fmt.Sprintf("\t\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\"},\n",
+					key, valueToString(entry.Value), entry.GoConst))
 			}
 			sb.WriteString("\t\t\t},\n")
 		}
@@ -421,8 +423,8 @@ func generateRegistry(data JSONFile) string {
 		keys := sortedKeys(data.Senders)
 		for _, key := range keys {
 			entry := data.Senders[key]
-			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-				key, entry.Value, entry.GoConst, entry.PythonConst))
+			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\"},\n",
+				key, entry.Value, entry.GoConst))
 		}
 		sb.WriteString("\t\t},\n")
 	}
@@ -433,8 +435,8 @@ func generateRegistry(data JSONFile) string {
 		keys := sortedKeys(data.Prompts)
 		for _, key := range keys {
 			entry := data.Prompts[key]
-			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-				key, entry.Value, entry.GoConst, entry.PythonConst))
+			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\"},\n",
+				key, entry.Value, entry.GoConst))
 		}
 		sb.WriteString("\t\t},\n")
 	}
@@ -445,8 +447,8 @@ func generateRegistry(data JSONFile) string {
 		keys := sortedKeys(data.PubSub)
 		for _, key := range keys {
 			entry := data.PubSub[key]
-			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-				key, entry.Value, entry.GoConst, entry.PythonConst))
+			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\"},\n",
+				key, entry.Value, entry.GoConst))
 		}
 		sb.WriteString("\t\t},\n")
 	}
@@ -457,8 +459,8 @@ func generateRegistry(data JSONFile) string {
 		keys := sortedKeys(data.Platform)
 		for _, key := range keys {
 			entry := data.Platform[key]
-			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\", PythonConst: \"%s\"},\n",
-				key, entry.Value, entry.GoConst, entry.PythonConst))
+			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": {Value: \"%s\", GoConst: \"%s\"},\n",
+				key, entry.Value, entry.GoConst))
 		}
 		sb.WriteString("\t\t},\n")
 	}
@@ -826,9 +828,6 @@ func validateRequiredFields(data JSONFile) error {
 			if entry.GoConst == "" {
 				return fmt.Errorf("collections.%s: missing required field _go_const", key)
 			}
-			if entry.PythonConst == "" {
-				return fmt.Errorf("collections.%s: missing required field _python_const", key)
-			}
 		}
 	}
 
@@ -837,9 +836,6 @@ func validateRequiredFields(data JSONFile) error {
 		for key, entry := range data.Events {
 			if entry.GoConst == "" {
 				return fmt.Errorf("events.%s: missing required field _go_const", key)
-			}
-			if entry.PythonConst == "" {
-				return fmt.Errorf("events.%s: missing required field _python_const", key)
 			}
 		}
 	}
@@ -851,9 +847,6 @@ func validateRequiredFields(data JSONFile) error {
 				if entry.GoConst == "" {
 					return fmt.Errorf("status.%s.%s: missing required field _go_const", category, key)
 				}
-				if entry.PythonConst == "" {
-					return fmt.Errorf("status.%s.%s: missing required field _python_const", category, key)
-				}
 			}
 		}
 	}
@@ -864,9 +857,6 @@ func validateRequiredFields(data JSONFile) error {
 			if entry.GoConst == "" {
 				return fmt.Errorf("senders.%s: missing required field _go_const", key)
 			}
-			if entry.PythonConst == "" {
-				return fmt.Errorf("senders.%s: missing required field _python_const", key)
-			}
 		}
 	}
 
@@ -875,9 +865,6 @@ func validateRequiredFields(data JSONFile) error {
 		for key, entry := range data.Channels {
 			if entry.GoConst == "" {
 				return fmt.Errorf("channels.%s: missing required field _go_const", key)
-			}
-			if entry.PythonConst == "" {
-				return fmt.Errorf("channels.%s: missing required field _python_const", key)
 			}
 		}
 	}
@@ -888,9 +875,6 @@ func validateRequiredFields(data JSONFile) error {
 			if entry.GoConst == "" {
 				return fmt.Errorf("intents.%s: missing required field _go_const", key)
 			}
-			if entry.PythonConst == "" {
-				return fmt.Errorf("intents.%s: missing required field _python_const", key)
-			}
 		}
 	}
 
@@ -899,9 +883,6 @@ func validateRequiredFields(data JSONFile) error {
 		for key, entry := range data.Prompts {
 			if entry.GoConst == "" {
 				return fmt.Errorf("prompts.%s: missing required field _go_const", key)
-			}
-			if entry.PythonConst == "" {
-				return fmt.Errorf("prompts.%s: missing required field _python_const", key)
 			}
 		}
 	}
@@ -912,9 +893,6 @@ func validateRequiredFields(data JSONFile) error {
 			if entry.GoConst == "" {
 				return fmt.Errorf("headers.%s: missing required field _go_const", key)
 			}
-			if entry.PythonConst == "" {
-				return fmt.Errorf("headers.%s: missing required field _python_const", key)
-			}
 		}
 	}
 
@@ -923,9 +901,6 @@ func validateRequiredFields(data JSONFile) error {
 		for key, entry := range data.DocumentIds {
 			if entry.GoConst == "" {
 				return fmt.Errorf("document_ids.%s: missing required field _go_const", key)
-			}
-			if entry.PythonConst == "" {
-				return fmt.Errorf("document_ids.%s: missing required field _python_const", key)
 			}
 		}
 	}
@@ -936,9 +911,6 @@ func validateRequiredFields(data JSONFile) error {
 			if entry.GoConst == "" {
 				return fmt.Errorf("platform.%s: missing required field _go_const", key)
 			}
-			if entry.PythonConst == "" {
-				return fmt.Errorf("platform.%s: missing required field _python_const", key)
-			}
 		}
 	}
 
@@ -948,13 +920,10 @@ func validateRequiredFields(data JSONFile) error {
 			if entry.GoConst == "" {
 				return fmt.Errorf("pubsub.%s: missing required field _go_const", key)
 			}
-			if entry.PythonConst == "" {
-				return fmt.Errorf("pubsub.%s: missing required field _python_const", key)
-			}
 		}
 	}
 
-	// KVKeys, Agents, and Timestamp are special cases that don't require _go_const/_python_const
+	// KVKeys, Agents, and Timestamp are special cases that don't require _go_const
 	// KVKeys uses nested structure with different field naming
 	// Agents and Timestamp are simple string maps
 

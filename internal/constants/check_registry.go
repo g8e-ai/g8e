@@ -25,6 +25,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/g8e-ai/g8e/internal/services/system"
 )
 
 // ConstantInfo holds information about a constant declaration
@@ -34,7 +36,7 @@ type ConstantInfo struct {
 }
 
 func main() {
-	constantsDir := "."
+	constantsDir := system.ResolveProjectRoot()
 	if len(os.Args) > 1 {
 		constantsDir = os.Args[1]
 	}

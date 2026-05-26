@@ -77,9 +77,24 @@ func (pm *ProcessManager) ensureDirectories() error {
 }
 
 func (pm *ProcessManager) checkPortAvailable(port int, name string) error {
+	pid, err := pm.readPID(operatorPIDFile)
+	if err != nil {
+		return fmt.Errorf("failed to read pid file: %w", err)
+	}
+
+	if pid != 0 && !pm.isProcessRunning(pid) {
+		if err := pm.deletePID(operatorPIDFile); err != nil {
+			return fmt.Errorf("failed to delete stale pid file %d: %w", pid, err)
+		}
+	}
+
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
 	if err != nil {
+		conflictingPID := pm.findProcessOnPort(port)
+		if conflictingPID > 0 {
+			return fmt.Errorf("port %d (%s) is already in use by process %d: %w", port, name, conflictingPID, err)
+		}
 		return fmt.Errorf("port %d (%s) is already in use: %w", port, name, err)
 	}
 	listener.Close()
@@ -131,6 +146,21 @@ func (pm *ProcessManager) isProcessRunning(pid int) bool {
 	return err == nil
 }
 
+func (pm *ProcessManager) findProcessOnPort(port int) int {
+	cmd := exec.Command("lsof", "-ti", fmt.Sprintf(":%d", port))
+	output, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+
+	var pid int
+	if _, err := fmt.Sscanf(string(output), "%d", &pid); err != nil {
+		return 0
+	}
+
+	return pid
+}
+
 func (pm *ProcessManager) stopProcess(pid int, name string) error {
 	if pid == 0 {
 		return nil
@@ -169,16 +199,11 @@ func (pm *ProcessManager) stopProcess(pid int, name string) error {
 }
 
 func (pm *ProcessManager) getOperatorBinary() (string, error) {
-	binPath := filepath.Join(pm.projectRoot, "bin", "g8e")
-	return binPath, nil
-}
-
-func (pm *ProcessManager) buildAll() error {
-	// #nosec G204 -- pm.projectRoot is validated during ProcessManager initialization
-	cmd := exec.Command("make", "--no-print-directory", "-C", pm.projectRoot, "build")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	exePath, err := os.Executable()
+	if err == nil {
+		return exePath, nil
+	}
+	return "./g8e", nil
 }
 
 func (pm *ProcessManager) StartOperator(httpPort, bootstrapPort, publicPort int) error {
@@ -194,10 +219,6 @@ func (pm *ProcessManager) StartOperator(httpPort, bootstrapPort, publicPort int)
 	}
 	if err := pm.checkPortAvailable(publicPort, "Operator Public API"); err != nil {
 		return fmt.Errorf("failed to check Operator Public API port %d: %w", publicPort, err)
-	}
-
-	if err := pm.buildAll(); err != nil {
-		return fmt.Errorf("failed to build: %w", err)
 	}
 
 	binPath, err := pm.getOperatorBinary()

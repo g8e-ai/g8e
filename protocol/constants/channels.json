@@ -2,72 +2,58 @@
   "channels": {
     "Governance": {
       "_go_const": "ChannelGovernance",
-      "_python_const": "GOVERNANCE",
       "value": "governance"
     },
     "Message": {
       "_go_const": "PubSubEventMessage",
-      "_python_const": "MESSAGE",
       "value": "message"
     },
     "OperatorDevice": {
       "_go_const": "ChannelOperatorDevice",
-      "_python_const": "OPERATOR_DEVICE",
       "value": "operator_device"
     },
     "OperatorIntent": {
       "_go_const": "ChannelOperatorIntent",
-      "_python_const": "OPERATOR_INTENT",
       "value": "operator_intent"
     },
     "PMessage": {
       "_go_const": "PubSubEventPMessage",
-      "_python_const": "P_MESSAGE",
       "value": "pmessage"
     },
     "PSubscribe": {
       "_go_const": "PubSubActionPSubscribe",
-      "_python_const": "P_SUBSCRIBE",
       "value": "psubscribe"
     },
     "Publish": {
       "_go_const": "PubSubActionPublish",
-      "_python_const": "PUBLISH",
       "value": "publish"
     },
     "SseEvent": {
       "_go_const": "ChannelSseEvent",
-      "_python_const": "SSE_EVENT",
       "value": "sse_event"
     },
     "StorageBlob": {
       "_go_const": "ChannelStorageBlob",
-      "_python_const": "STORAGE_BLOB",
       "value": "storage_blob"
     },
     "StorageDocument": {
       "_go_const": "ChannelStorageDocument",
-      "_python_const": "STORAGE_DOCUMENT",
       "value": "storage_document"
     },
     "StorageKv": {
       "_go_const": "ChannelStorageKv",
-      "_python_const": "STORAGE_KV",
       "value": "storage_kv"
     },
     "Subscribe": {
       "_go_const": "PubSubActionSubscribe",
-      "_python_const": "SUBSCRIBE",
       "value": "subscribe"
     },
     "Subscribed": {
       "_go_const": "PubSubEventSubscribed",
-      "_python_const": "SUBSCRIBED",
       "value": "subscribed"
     },
     "Unsubscribe": {
       "_go_const": "PubSubActionUnsubscribe",
-      "_python_const": "UNSUBSCRIBE",
       "value": "unsubscribe"
     }
   }

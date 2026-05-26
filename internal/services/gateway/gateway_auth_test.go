@@ -33,8 +33,9 @@ func TestAuthService_ValidateOperatorSession_MissingSessionID(t *testing.T) {
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
 	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, res, "")
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "")
 
 	_, err := auth.ValidateOperatorSession("")
 	assert.Error(t, err)
@@ -46,8 +47,9 @@ func TestAuthService_ValidateOperatorSession_SessionNotFound(t *testing.T) {
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
 	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, res, "")
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "")
 
 	_, err := auth.ValidateOperatorSession("nonexistent-session")
 	assert.Error(t, err)
@@ -59,8 +61,9 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
 	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, res, "")
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "")
 
 	// Create an operator session with terminated status
 	sessionID := "terminated-session"
@@ -84,8 +87,9 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
 	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, res, "")
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "")
 
 	// Create an active user
 	userID := "user-456"
@@ -121,8 +125,9 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
 	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, res, "")
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "")
 
 	// Create an inactive user
 	userID := "inactive-user"
@@ -158,8 +163,9 @@ func TestAuthService_ValidateAPIKey_MissingKey(t *testing.T) {
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
 	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, res, "")
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "")
 
 	_, err := auth.ValidateAPIKey("")
 	assert.Error(t, err)
@@ -171,8 +177,9 @@ func TestAuthService_ValidateAPIKey_KeyNotFound(t *testing.T) {
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
 	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, res, "")
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "")
 
 	_, err := auth.ValidateAPIKey("invalid-api-key")
 	assert.Error(t, err)
@@ -184,8 +191,9 @@ func TestAuthService_ExtractOperatorSessionID_BearerToken(t *testing.T) {
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
 	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, res, "")
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "")
 
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Authorization", "Bearer test-token-123")
@@ -199,8 +207,9 @@ func TestAuthService_ExtractOperatorSessionID_NoBearer(t *testing.T) {
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
 	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, res, "")
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "")
 
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Authorization", "Basic dGVzdDp0ZXN0")
@@ -214,8 +223,9 @@ func TestAuthService_ExtractOperatorSessionID_NoHeader(t *testing.T) {
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
 	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, res, "")
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "")
 
 	req := httptest.NewRequest("GET", "/", nil)
 

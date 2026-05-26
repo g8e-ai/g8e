@@ -44,8 +44,9 @@ func TestAuthStatusIndependence(t *testing.T) {
 	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
 	resp := responder.New(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, resp, secretsDir)
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "")
 
 	t.Run("ValidateOperatorSession succeeds even if status is OFFLINE", func(t *testing.T) {
 		t.Parallel()

@@ -96,6 +96,8 @@ type GatewayConfig struct {
 	PasskeyRpName    string         // RP Name for passkey operations (default: g8e)
 	MCPDownstreamURL string         // URL of the downstream MCP server to proxy discovery and execution to
 	A2ADownstreamURL string         // URL of the downstream A2A server to proxy execution to
+	JWKSURL          string         // URL to fetch JWKS for JWT validation
+	JWTRoleClaim     string         // The claim in JWT that contains roles (default: "roles")
 
 	// HTTP server limits
 	MaxPayloadBytes   int64         // Maximum request payload size in bytes (default: 10MB)
@@ -263,6 +265,8 @@ type GatewayOptions struct {
 	PasskeyRpName    string
 	MCPDownstreamURL string
 	A2ADownstreamURL string
+	JWKSURL          string
+	JWTRoleClaim     string
 
 	// AllowTestPortZero should be true only when called from Go tests; when false,
 	// port 0 is rejected to prevent dynamic port assignment in production.
@@ -360,6 +364,18 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 		posture = PostureDoctrine
 	}
 
+	jwksURL := opts.JWKSURL
+	if jwksURL == "" {
+		jwksURL = os.Getenv("G8E_JWKS_URL")
+	}
+	jwtRoleClaim := opts.JWTRoleClaim
+	if jwtRoleClaim == "" {
+		jwtRoleClaim = os.Getenv("G8E_JWT_ROLE_CLAIM")
+		if jwtRoleClaim == "" {
+			jwtRoleClaim = "roles"
+		}
+	}
+
 	return &Config{
 		ComponentName: constants.ComponentNameG8EOGateway,
 		PKIDir:        pkiDir,     // Also set top-level for services that use Config.PKIDir
@@ -378,6 +394,8 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			PasskeyRpName:    passkeyRpName,
 			MCPDownstreamURL: mcpDownstreamURL,
 			A2ADownstreamURL: a2aDownstreamURL,
+			JWKSURL:          jwksURL,
+			JWTRoleClaim:     jwtRoleClaim,
 
 			// HTTP server limits with fail-closed defaults
 			MaxPayloadBytes:   512 * 1024, // 512KB

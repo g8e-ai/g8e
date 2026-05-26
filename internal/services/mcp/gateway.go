@@ -974,6 +974,14 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		},
 	}
 
+	// Enrich from context if present
+	if tenantID, ok := ctx.Value(constants.ContextKeyTenantID).(string); ok {
+		env.TenantId = tenantID
+	}
+	if persona, ok := ctx.Value(constants.ContextKeyBindingPersona).(string); ok {
+		env.BindingPersona = persona
+	}
+
 	hash, err = uap.GenerateMessageID(env)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to compute transaction hash: %w", err)
