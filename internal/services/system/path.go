@@ -40,18 +40,22 @@ func ResolveProjectRoot() string {
 	current := cwd
 	for {
 		// Check for markers of the repository root
-		if _, err := os.Stat(filepath.Join(current, "protocol")); err == nil {
-			if _, err := os.Stat(filepath.Join(current, "g8e")); err == nil {
-				return current
-			}
+		// protocol/ is the canonical marker for the g8e repository
+		// .git is the standard git repository marker
+		_, protocolErr := os.Stat(filepath.Join(current, "protocol"))
+		_, gitErr := os.Stat(filepath.Join(current, ".git"))
+
+		if protocolErr == nil || gitErr == nil {
+			// Either marker found - this is the repository root
+			return current
 		}
 
 		parent := filepath.Dir(current)
 		if parent == current {
-			break
+			// Reached filesystem root without finding markers
+			// Fall back to CWD
+			return cwd
 		}
 		current = parent
 	}
-
-	return cwd
 }

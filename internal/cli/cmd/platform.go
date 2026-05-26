@@ -20,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 )
 
@@ -46,7 +47,7 @@ func platformCmd() *cobra.Command {
 
 func platformStartCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "start",
+		Use:   string(constants.ThinkingActionTypeStart),
 		Short: "Start the Governance Gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
@@ -271,7 +272,7 @@ func platformResetCmd() *cobra.Command {
 	var force bool
 
 	cmd := &cobra.Command{
-		Use:   "reset",
+		Use:   string(constants.HistoryEventTypeReset),
 		Short: "Reset Gateway data and secrets (preserves CA)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")

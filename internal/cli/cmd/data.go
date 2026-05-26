@@ -23,6 +23,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
@@ -242,7 +243,7 @@ func dataDeviceLinksCreateCmd() *cobra.Command {
 	var ttl int
 
 	cmd := &cobra.Command{
-		Use:   "create",
+		Use:   string(constants.FileOperationCreate),
 		Short: "Create a device-link token",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
@@ -499,7 +500,7 @@ func dataAuditListCmd() *cobra.Command {
 
 func dataAuditSummaryCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "summary",
+		Use:   string(constants.StreamStatusSummary),
 		Short: "Show chaos test summary from audit vault",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")

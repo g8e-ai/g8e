@@ -54,11 +54,47 @@ func init() {
 	g8eoRoot = system.ResolveProjectRoot()
 }
 
-// scanDirs are the directories to scan for violations (relative to g8eo root)
-var scanDirs = []string{"internal/services", "internal/models", "internal/config"}
+// discoverScanDirs returns all subdirectories under internal/ to scan for violations
+func discoverScanDirs() ([]string, error) {
+	var dirs []string
+	internalPath := filepath.Join(g8eoRoot, "internal")
 
-// scanRootFiles are individual root-level files to scan
-var scanRootFiles = []string{"cmd/g8eo/main.go"}
+	if _, err := os.Stat(internalPath); os.IsNotExist(err) {
+		return dirs, nil
+	}
+
+	entries, err := os.ReadDir(internalPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read internal/ directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			dirName := entry.Name()
+			dirs = append(dirs, filepath.Join("internal", dirName))
+		}
+	}
+
+	return dirs, nil
+}
+
+// discoverRootFiles returns all root-level .go files to scan
+func discoverRootFiles() ([]string, error) {
+	var files []string
+
+	entries, err := os.ReadDir(g8eoRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read root directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") {
+			files = append(files, entry.Name())
+		}
+	}
+
+	return files, nil
+}
 
 // excludePatterns are path substrings that exclude a file from scanning
 var excludePatterns = []string{
@@ -112,6 +148,11 @@ var allowlistedValues = map[string]bool{
 	"client":    true,
 	"suspended": true,
 	"text":      true,
+	"test":      true, // go test command name
+	"g8eo":      true, // CLI command name
+	"stream":    true, // flag set name
+	"user":      true, // SSH config key
+	"operator":  true, // process name
 }
 
 // constantInfo tracks where a constant value is defined
@@ -250,6 +291,11 @@ func buildEnforcedValues() (map[string]constantInfo, map[string]map[string]const
 func getFilesToScan() ([]string, error) {
 	var files []string
 
+	scanDirs, err := discoverScanDirs()
+	if err != nil {
+		return nil, err
+	}
+
 	// Scan directories
 	for _, dir := range scanDirs {
 		dirPath := filepath.Join(g8eoRoot, dir)
@@ -278,6 +324,11 @@ func getFilesToScan() ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	scanRootFiles, err := discoverRootFiles()
+	if err != nil {
+		return nil, err
 	}
 
 	// Scan root-level files
@@ -474,6 +525,7 @@ func TestScansMeaningfulNumberOfSourceFiles(t *testing.T) {
 	files, err := getFilesToScan()
 	require.NoError(t, err)
 
+	scanDirs, _ := discoverScanDirs()
 	t.Logf("Scanned %d source files across: %s + root files", len(files), strings.Join(scanDirs, ", "))
 	assert.Greater(t, len(files), 10, "should scan a meaningful number of source files")
 }

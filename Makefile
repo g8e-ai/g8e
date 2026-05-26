@@ -42,6 +42,7 @@ help:
 	@echo "  proto         Generate all Protobuf code (Go)"
 	@echo "  constants     Generate all constants and sync documentation ports"
 	@echo "  clean-constants  Remove generated constants files"
+	@echo "  update-golden Update scenario test golden files (use after intentional changes)"
 	@echo "  buf-install   Install Buf CLI locally if not found"
 	@echo "  lint-no-bare-session-id  Check for bare session_id regression"
 	@echo "  first-issues  Find good first issues in the codebase"
@@ -152,6 +153,12 @@ clean-constants:
 	@rm -rf internal/constants/status_generated.go
 	@rm -rf internal/constants/registry.go
 	@echo "Constants clean complete."
+
+.PHONY: update-golden
+update-golden:
+	@echo "Updating scenario test golden files..."
+	@G8E_UPDATE_GOLDEN=1 go test -tags=integration ./test/scenario -run TestScenarios
+	@echo "Golden files updated."
 
 .PHONY: clean
 clean:

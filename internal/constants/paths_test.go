@@ -14,6 +14,7 @@
 package constants
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -71,5 +72,75 @@ func TestResolveProjectRoot(t *testing.T) {
 		t.Setenv("G8E_PROJECT_ROOT", ".")
 		result := resolveProjectRoot()
 		assert.True(t, filepath.IsAbs(result), "resolveProjectRoot should return absolute path")
+	})
+
+	t.Run("walks up to find protocol marker", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		protocolDir := filepath.Join(tmpDir, "protocol")
+		if err := os.Mkdir(protocolDir, 0755); err != nil {
+			t.Fatalf("Failed to create protocol dir: %v", err)
+		}
+
+		subDir := filepath.Join(tmpDir, "internal", "services")
+		if err := os.MkdirAll(subDir, 0755); err != nil {
+			t.Fatalf("Failed to create subdirs: %v", err)
+		}
+
+		t.Setenv("G8E_PROJECT_ROOT", "")
+
+		originalWd, _ := os.Getwd()
+		defer os.Chdir(originalWd)
+
+		if err := os.Chdir(subDir); err != nil {
+			t.Fatalf("Failed to chdir: %v", err)
+		}
+
+		result := resolveProjectRoot()
+		assert.Equal(t, tmpDir, result)
+	})
+
+	t.Run("walks up to find .git marker", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		gitDir := filepath.Join(tmpDir, ".git")
+		if err := os.Mkdir(gitDir, 0755); err != nil {
+			t.Fatalf("Failed to create .git dir: %v", err)
+		}
+
+		subDir := filepath.Join(tmpDir, "deep", "nested")
+		if err := os.MkdirAll(subDir, 0755); err != nil {
+			t.Fatalf("Failed to create subdirs: %v", err)
+		}
+
+		t.Setenv("G8E_PROJECT_ROOT", "")
+
+		originalWd, _ := os.Getwd()
+		defer os.Chdir(originalWd)
+
+		if err := os.Chdir(subDir); err != nil {
+			t.Fatalf("Failed to chdir: %v", err)
+		}
+
+		result := resolveProjectRoot()
+		assert.Equal(t, tmpDir, result)
+	})
+
+	t.Run("returns CWD when no markers found", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		subDir := filepath.Join(tmpDir, "some", "path")
+		if err := os.MkdirAll(subDir, 0755); err != nil {
+			t.Fatalf("Failed to create subdirs: %v", err)
+		}
+
+		t.Setenv("G8E_PROJECT_ROOT", "")
+
+		originalWd, _ := os.Getwd()
+		defer os.Chdir(originalWd)
+
+		if err := os.Chdir(subDir); err != nil {
+			t.Fatalf("Failed to chdir: %v", err)
+		}
+
+		result := resolveProjectRoot()
+		assert.Equal(t, subDir, result)
 	})
 }

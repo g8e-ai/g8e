@@ -67,3 +67,185 @@ func TestResolveProjectRootWithEnvVar(t *testing.T) {
 		t.Errorf("ResolveProjectRoot with G8E_PROJECT_ROOT: got %s, want /custom/root", root)
 	}
 }
+
+func TestResolveProjectRootWithRelativeEnvVar(t *testing.T) {
+	// Set a relative path - should be converted to absolute
+	t.Setenv("G8E_PROJECT_ROOT", "../relative")
+
+	root := ResolveProjectRoot()
+	if !filepath.IsAbs(root) {
+		t.Errorf("ResolveProjectRoot with relative G8E_PROJECT_ROOT: got %s, want absolute path", root)
+	}
+}
+
+func TestResolveProjectRootWalksWithProtocolMarker(t *testing.T) {
+	// Create a temporary directory structure
+	tmpDir := t.TempDir()
+	protocolDir := filepath.Join(tmpDir, "protocol")
+	if err := os.Mkdir(protocolDir, 0755); err != nil {
+		t.Fatalf("Failed to create protocol dir: %v", err)
+	}
+
+	// Change to a subdirectory
+	subDir := filepath.Join(tmpDir, "internal", "services", "system")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("Failed to create subdirs: %v", err)
+	}
+
+	// Unset env var to force walking
+	t.Setenv("G8E_PROJECT_ROOT", "")
+
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+
+	if err := os.Chdir(subDir); err != nil {
+		t.Fatalf("Failed to chdir: %v", err)
+	}
+
+	root := ResolveProjectRoot()
+	if root != tmpDir {
+		t.Errorf("ResolveProjectRoot walking with protocol marker: got %s, want %s", root, tmpDir)
+	}
+}
+
+func TestResolveProjectRootWalksWithGitMarker(t *testing.T) {
+	// Create a temporary directory structure with .git marker
+	tmpDir := t.TempDir()
+	gitDir := filepath.Join(tmpDir, ".git")
+	if err := os.Mkdir(gitDir, 0755); err != nil {
+		t.Fatalf("Failed to create .git dir: %v", err)
+	}
+
+	// Change to a subdirectory
+	subDir := filepath.Join(tmpDir, "deep", "nested", "path")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("Failed to create subdirs: %v", err)
+	}
+
+	// Unset env var to force walking
+	t.Setenv("G8E_PROJECT_ROOT", "")
+
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+
+	if err := os.Chdir(subDir); err != nil {
+		t.Fatalf("Failed to chdir: %v", err)
+	}
+
+	root := ResolveProjectRoot()
+	if root != tmpDir {
+		t.Errorf("ResolveProjectRoot walking with .git marker: got %s, want %s", root, tmpDir)
+	}
+}
+
+func TestResolveProjectRootPrefersCloserMarker(t *testing.T) {
+	// Create nested directory structures with markers at different levels
+	tmpDir := t.TempDir()
+	parentMarker := filepath.Join(tmpDir, "protocol")
+	if err := os.Mkdir(parentMarker, 0755); err != nil {
+		t.Fatalf("Failed to create parent protocol dir: %v", err)
+	}
+
+	// Create a subdirectory with its own marker
+	subDir := filepath.Join(tmpDir, "subdir")
+	subMarker := filepath.Join(subDir, ".git")
+	if err := os.MkdirAll(subMarker, 0755); err != nil {
+		t.Fatalf("Failed to create subdir with marker: %v", err)
+	}
+
+	// Change to the subdirectory
+	t.Setenv("G8E_PROJECT_ROOT", "")
+
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+
+	if err := os.Chdir(subDir); err != nil {
+		t.Fatalf("Failed to chdir: %v", err)
+	}
+
+	root := ResolveProjectRoot()
+	// Should find the closer marker (subdir with .git)
+	if root != subDir {
+		t.Errorf("ResolveProjectRoot should prefer closer marker: got %s, want %s", root, subDir)
+	}
+}
+
+func TestResolveProjectRootNoMarkerReturnsCWD(t *testing.T) {
+	// Create a temporary directory with no markers
+	tmpDir := t.TempDir()
+	subDir := filepath.Join(tmpDir, "some", "path")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("Failed to create subdirs: %v", err)
+	}
+
+	// Unset env var to force walking
+	t.Setenv("G8E_PROJECT_ROOT", "")
+
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+
+	if err := os.Chdir(subDir); err != nil {
+		t.Fatalf("Failed to chdir: %v", err)
+	}
+
+	root := ResolveProjectRoot()
+	// Should return CWD when no markers found
+	if root != subDir {
+		t.Errorf("ResolveProjectRoot with no markers: got %s, want %s (CWD)", root, subDir)
+	}
+}
+
+func TestResolveProjectRootAtFilesystemRoot(t *testing.T) {
+	// This test verifies the loop termination condition
+	// When parent == current (filesystem root), it should return CWD
+
+	// Create a temp dir and chdir to it
+	tmpDir := t.TempDir()
+	t.Setenv("G8E_PROJECT_ROOT", "")
+
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to chdir: %v", err)
+	}
+
+	root := ResolveProjectRoot()
+	// Should return tmpDir (CWD) since no markers exist
+	if root != tmpDir {
+		t.Errorf("ResolveProjectRoot at filesystem boundary: got %s, want %s", root, tmpDir)
+	}
+}
+
+func TestResolveProjectRootBothMarkers(t *testing.T) {
+	// Create a directory with both protocol and .git markers
+	tmpDir := t.TempDir()
+	protocolDir := filepath.Join(tmpDir, "protocol")
+	gitDir := filepath.Join(tmpDir, ".git")
+	if err := os.Mkdir(protocolDir, 0755); err != nil {
+		t.Fatalf("Failed to create protocol dir: %v", err)
+	}
+	if err := os.Mkdir(gitDir, 0755); err != nil {
+		t.Fatalf("Failed to create .git dir: %v", err)
+	}
+
+	// Change to a subdirectory
+	subDir := filepath.Join(tmpDir, "internal")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("Failed to create subdir: %v", err)
+	}
+
+	t.Setenv("G8E_PROJECT_ROOT", "")
+
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+
+	if err := os.Chdir(subDir); err != nil {
+		t.Fatalf("Failed to chdir: %v", err)
+	}
+
+	root := ResolveProjectRoot()
+	if root != tmpDir {
+		t.Errorf("ResolveProjectRoot with both markers: got %s, want %s", root, tmpDir)
+	}
+}

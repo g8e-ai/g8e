@@ -28,12 +28,14 @@ import (
 	"net"
 	"net/http"
 	"os"
+
 	"path/filepath"
 	"runtime"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+
+	"github.com/g8e-ai/g8e/internal/cli/config"
 )
 
 type DeviceLinkRequest struct {
@@ -201,7 +203,7 @@ func RegisterDeviceLink(cfg *config.Config, token string, operatorCSR, cliCSR st
 	req := RegistrationRequest{
 		SystemFingerprint: fmt.Sprintf("g8e-cli-%s-%s", hostname, username),
 		Hostname:          hostname,
-		OS:                "linux",
+		OS:                string(constants.PlatformLinux),
 		Arch:              runtime.GOARCH,
 		Username:          username,
 		CSRPEM:            operatorCSR,
@@ -443,7 +445,7 @@ func CheckOperatorRunningAtURL(operatorURL string) error {
 
 	hostPort := parts[1]
 	// Try to connect to the port
-	conn, err := net.Dial("tcp", hostPort)
+	conn, err := net.Dial(string(constants.NetworkProtocolTCP), hostPort)
 	if err != nil {
 		return fmt.Errorf("operator is not running or not responding at %s: %w", operatorURL, err)
 	}

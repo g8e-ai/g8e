@@ -110,10 +110,11 @@ func resolveProjectRoot() string {
 	// Try to find the root by looking for protocol or .git
 	current := cwd
 	for {
-		if _, err := os.Stat(filepath.Join(current, "protocol")); err == nil {
-			if _, err := os.Stat(filepath.Join(current, "g8e")); err == nil {
-				return current
-			}
+		_, protocolErr := os.Stat(filepath.Join(current, "protocol"))
+		_, gitErr := os.Stat(filepath.Join(current, ".git"))
+
+		if protocolErr == nil || gitErr == nil {
+			return current
 		}
 
 		parent := filepath.Dir(current)

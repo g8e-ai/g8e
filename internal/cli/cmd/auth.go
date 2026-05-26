@@ -20,6 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
@@ -42,7 +43,7 @@ func authCmd() *cobra.Command {
 
 func bootstrapCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "bootstrap",
+		Use:   string(constants.HeartbeatTypeBootstrap),
 		Short: "Bootstrap the platform with initial user and certificates",
 		Long:  `Create the first user and issue mTLS certificates for the Operator and CLI. Only available over loopback when no users exist.`,
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -25,6 +25,8 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 const (
@@ -76,7 +78,7 @@ func (pm *ProcessManager) ensureDirectories() error {
 
 func (pm *ProcessManager) checkPortAvailable(port int, name string) error {
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	listener, err := net.Listen("tcp", addr)
+	listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
 	if err != nil {
 		return fmt.Errorf("port %d (%s) is already in use: %w", port, name, err)
 	}
