@@ -880,7 +880,6 @@ func (h *NativeToolHandler) handleNetSocketAudit(ctx context.Context, arguments 
 		if err != nil {
 			continue
 		}
-		defer file.Close()
 
 		scanner := bufio.NewScanner(file)
 		scanner.Scan()
@@ -913,8 +912,10 @@ func (h *NativeToolHandler) handleNetSocketAudit(ctx context.Context, arguments 
 		}
 
 		if err := scanner.Err(); err != nil {
+			file.Close()
 			continue
 		}
+		file.Close()
 	}
 
 	result := NetSocketAuditResult{Sockets: sockets}

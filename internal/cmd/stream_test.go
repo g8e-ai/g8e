@@ -571,7 +571,7 @@ func TestEmitJSON_PerHostEvent(t *testing.T) {
 		ElapsedMs: 250,
 		Ts:        ts,
 	}
-	emitJSON(evt)
+	emitJSON(&evt)
 	w.Close()
 
 	var buf bytes.Buffer
@@ -608,7 +608,7 @@ func TestEmitJSON_SummaryEvent(t *testing.T) {
 		TotalMs: 5000,
 		Ts:      time.Now().UTC(),
 	}
-	emitJSON(evt)
+	emitJSON(&evt)
 	w.Close()
 
 	var buf bytes.Buffer
@@ -640,7 +640,7 @@ func TestEmitJSON_StatusConstants(t *testing.T) {
 		require.NoError(t, pipeErr)
 		os.Stdout = w
 
-		emitJSON(StreamStatusEvent{Status: status, Ts: time.Now().UTC()})
+		emitJSON(&StreamStatusEvent{Status: status, Ts: time.Now().UTC()})
 		w.Close()
 		os.Stdout = old
 
@@ -661,7 +661,7 @@ func TestEmitJSON_ErrorFieldOmittedWhenEmpty(t *testing.T) {
 	os.Stdout = w
 	t.Cleanup(func() { os.Stdout = old })
 
-	emitJSON(StreamStatusEvent{
+	emitJSON(&StreamStatusEvent{
 		Host:   "host1",
 		Status: constants.StreamStatusCompleted,
 		Ts:     time.Now().UTC(),
@@ -686,7 +686,7 @@ func TestEmitJSON_ErrorFieldPresentOnFailure(t *testing.T) {
 	os.Stdout = w
 	t.Cleanup(func() { os.Stdout = old })
 
-	emitJSON(StreamStatusEvent{
+	emitJSON(&StreamStatusEvent{
 		Host:   "host2",
 		Status: constants.StreamStatusFailed,
 		Error:  "dial tcp: connection refused",
@@ -711,7 +711,7 @@ func TestEmitJSON_TsIsRFC3339(t *testing.T) {
 	os.Stdout = w
 	t.Cleanup(func() { os.Stdout = old })
 
-	emitJSON(StreamStatusEvent{
+	emitJSON(&StreamStatusEvent{
 		Status: constants.StreamStatusCompleted,
 		Ts:     time.Now().UTC(),
 	})

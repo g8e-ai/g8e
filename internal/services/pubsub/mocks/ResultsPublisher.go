@@ -17,7 +17,7 @@ type ResultsPublisher struct {
 }
 
 // PublishCancellationResult provides a mock function with given fields: ctx, result, originalMsg
-func (_m *ResultsPublisher) PublishCancellationResult(ctx context.Context, result protoreflect.ProtoMessage, originalMsg pubsub.PubSubCommandMessage) error {
+func (_m *ResultsPublisher) PublishCancellationResult(ctx context.Context, result protoreflect.ProtoMessage, originalMsg *pubsub.PubSubCommandMessage) error {
 	ret := _m.Called(ctx, result, originalMsg)
 
 	if len(ret) == 0 {
@@ -25,7 +25,7 @@ func (_m *ResultsPublisher) PublishCancellationResult(ctx context.Context, resul
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, protoreflect.ProtoMessage, pubsub.PubSubCommandMessage) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, protoreflect.ProtoMessage, *pubsub.PubSubCommandMessage) error); ok {
 		r0 = rf(ctx, result, originalMsg)
 	} else {
 		r0 = ret.Error(0)
@@ -35,7 +35,7 @@ func (_m *ResultsPublisher) PublishCancellationResult(ctx context.Context, resul
 }
 
 // PublishExecutionResult provides a mock function with given fields: ctx, result, originalMsg
-func (_m *ResultsPublisher) PublishExecutionResult(ctx context.Context, result protoreflect.ProtoMessage, originalMsg pubsub.PubSubCommandMessage) error {
+func (_m *ResultsPublisher) PublishExecutionResult(ctx context.Context, result protoreflect.ProtoMessage, originalMsg *pubsub.PubSubCommandMessage) error {
 	ret := _m.Called(ctx, result, originalMsg)
 
 	if len(ret) == 0 {
@@ -43,7 +43,7 @@ func (_m *ResultsPublisher) PublishExecutionResult(ctx context.Context, result p
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, protoreflect.ProtoMessage, pubsub.PubSubCommandMessage) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, protoreflect.ProtoMessage, *pubsub.PubSubCommandMessage) error); ok {
 		r0 = rf(ctx, result, originalMsg)
 	} else {
 		r0 = ret.Error(0)
@@ -53,7 +53,7 @@ func (_m *ResultsPublisher) PublishExecutionResult(ctx context.Context, result p
 }
 
 // PublishExecutionStatus provides a mock function with given fields: ctx, status, originalMsg
-func (_m *ResultsPublisher) PublishExecutionStatus(ctx context.Context, status protoreflect.ProtoMessage, originalMsg pubsub.PubSubCommandMessage) error {
+func (_m *ResultsPublisher) PublishExecutionStatus(ctx context.Context, status protoreflect.ProtoMessage, originalMsg *pubsub.PubSubCommandMessage) error {
 	ret := _m.Called(ctx, status, originalMsg)
 
 	if len(ret) == 0 {
@@ -61,7 +61,7 @@ func (_m *ResultsPublisher) PublishExecutionStatus(ctx context.Context, status p
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, protoreflect.ProtoMessage, pubsub.PubSubCommandMessage) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, protoreflect.ProtoMessage, *pubsub.PubSubCommandMessage) error); ok {
 		r0 = rf(ctx, status, originalMsg)
 	} else {
 		r0 = ret.Error(0)
@@ -71,7 +71,7 @@ func (_m *ResultsPublisher) PublishExecutionStatus(ctx context.Context, status p
 }
 
 // PublishFileEditResult provides a mock function with given fields: ctx, result, originalMsg
-func (_m *ResultsPublisher) PublishFileEditResult(ctx context.Context, result protoreflect.ProtoMessage, originalMsg pubsub.PubSubCommandMessage) error {
+func (_m *ResultsPublisher) PublishFileEditResult(ctx context.Context, result protoreflect.ProtoMessage, originalMsg *pubsub.PubSubCommandMessage) error {
 	ret := _m.Called(ctx, result, originalMsg)
 
 	if len(ret) == 0 {
@@ -79,7 +79,7 @@ func (_m *ResultsPublisher) PublishFileEditResult(ctx context.Context, result pr
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, protoreflect.ProtoMessage, pubsub.PubSubCommandMessage) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, protoreflect.ProtoMessage, *pubsub.PubSubCommandMessage) error); ok {
 		r0 = rf(ctx, result, originalMsg)
 	} else {
 		r0 = ret.Error(0)
@@ -89,7 +89,7 @@ func (_m *ResultsPublisher) PublishFileEditResult(ctx context.Context, result pr
 }
 
 // PublishFsGrepResult provides a mock function with given fields: ctx, result, originalMsg
-func (_m *ResultsPublisher) PublishFsGrepResult(ctx context.Context, result protoreflect.ProtoMessage, originalMsg pubsub.PubSubCommandMessage) error {
+func (_m *ResultsPublisher) PublishFsGrepResult(ctx context.Context, result protoreflect.ProtoMessage, originalMsg *pubsub.PubSubCommandMessage) error {
 	ret := _m.Called(ctx, result, originalMsg)
 
 	if len(ret) == 0 {
@@ -97,7 +97,7 @@ func (_m *ResultsPublisher) PublishFsGrepResult(ctx context.Context, result prot
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, protoreflect.ProtoMessage, pubsub.PubSubCommandMessage) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, protoreflect.ProtoMessage, *pubsub.PubSubCommandMessage) error); ok {
 		r0 = rf(ctx, result, originalMsg)
 	} else {
 		r0 = ret.Error(0)
@@ -107,7 +107,7 @@ func (_m *ResultsPublisher) PublishFsGrepResult(ctx context.Context, result prot
 }
 
 // PublishFsListResult provides a mock function with given fields: ctx, result, originalMsg
-func (_m *ResultsPublisher) PublishFsListResult(ctx context.Context, result protoreflect.ProtoMessage, originalMsg pubsub.PubSubCommandMessage) error {
+func (_m *ResultsPublisher) PublishFsListResult(ctx context.Context, result protoreflect.ProtoMessage, originalMsg *pubsub.PubSubCommandMessage) error {
 	ret := _m.Called(ctx, result, originalMsg)
 
 	if len(ret) == 0 {
@@ -115,7 +115,7 @@ func (_m *ResultsPublisher) PublishFsListResult(ctx context.Context, result prot
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, protoreflect.ProtoMessage, pubsub.PubSubCommandMessage) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, protoreflect.ProtoMessage, *pubsub.PubSubCommandMessage) error); ok {
 		r0 = rf(ctx, result, originalMsg)
 	} else {
 		r0 = ret.Error(0)

@@ -186,7 +186,7 @@ func TestPubSubCommandService_dispatchCommand(t *testing.T) {
 	t.Run("warns on unknown event type", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		msg := PubSubCommandMessage{
+		msg := &PubSubCommandMessage{
 			EventType: "UNKNOWN_EVENT_TYPE",
 			ID:        "msg-1",
 		}
@@ -207,7 +207,7 @@ func TestPubSubCommandService_ExecuteVerifiedTransaction(t *testing.T) {
 
 	t.Run("rejects when no handler registered", func(t *testing.T) {
 		t.Parallel()
-		msg := PubSubCommandMessage{
+		msg := &PubSubCommandMessage{
 			EventType: "NONEXISTENT_EVENT",
 			ID:        "msg-1",
 		}
@@ -223,7 +223,7 @@ func TestPubSubCommandService_handleMcpCallRequestSync(t *testing.T) {
 	t.Run("rejects when MCP gateway not configured", func(t *testing.T) {
 		t.Parallel()
 		f.Svc.mcpGateway = nil
-		msg := PubSubCommandMessage{
+		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.Mcp.CallRequested,
 			ID:        "msg-1",
 			Payload:   mustMarshalJSON(t, map[string]interface{}{"tool_name": "test"}),
@@ -239,7 +239,7 @@ func TestPubSubCommandService_handleA2aCallRequestSync(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
 		f.Svc.mcpGateway = nil
-		msg := PubSubCommandMessage{
+		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.A2a.CallRequested,
 			ID:        "msg-1",
 			Payload:   mustMarshalJSON(t, map[string]interface{}{"skill_name": "test"}),
@@ -252,7 +252,7 @@ func TestPubSubCommandService_handleA2aCallRequestSync(t *testing.T) {
 	t.Run("rejects unmarshal error", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		msg := PubSubCommandMessage{
+		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.A2a.CallRequested,
 			ID:        "msg-1",
 			Payload:   []byte("invalid json"),
@@ -266,7 +266,7 @@ func TestPubSubCommandService_handleAppInvestigationCreatedSync(t *testing.T) {
 	t.Run("rejects when Actuator not configured", func(t *testing.T) {
 		f := newPubsubFixture(t)
 		f.Svc.SetActuator(nil)
-		msg := PubSubCommandMessage{
+		msg := &PubSubCommandMessage{
 			EventType: constants.EventAppInvestigationCreated,
 			ID:        "msg-1",
 			Payload:   mustMarshalJSON(t, map[string]string{"test": "data"}),
@@ -280,7 +280,7 @@ func TestPubSubCommandService_handleAppInvestigationCreatedSync(t *testing.T) {
 		f := newPubsubFixture(t)
 		f.Svc.SetActuator(&governance.L5Actuator{})
 		f.Svc.Actuator().AuditStore = nil
-		msg := PubSubCommandMessage{
+		msg := &PubSubCommandMessage{
 			EventType: constants.EventAppInvestigationCreated,
 			ID:        "msg-1",
 			Payload:   mustMarshalJSON(t, map[string]string{"test": "data"}),
@@ -296,7 +296,7 @@ func TestPubSubCommandService_handleShutdownRequest(t *testing.T) {
 
 	t.Run("rejects unmarshal error", func(t *testing.T) {
 		t.Parallel()
-		msg := PubSubCommandMessage{
+		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.ShutdownRequested,
 			ID:        "msg-1",
 			Payload:   []byte("invalid json"),
@@ -309,7 +309,7 @@ func TestPubSubCommandService_handleShutdownRequest(t *testing.T) {
 		t.Parallel()
 		req := &operatorv1.FsListRequested{Path: "."}
 		payload, _ := proto.Marshal(req)
-		msg := PubSubCommandMessage{
+		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.ShutdownRequested,
 			ID:        "msg-1",
 			Payload:   payload,
@@ -322,7 +322,7 @@ func TestPubSubCommandService_handleShutdownRequest(t *testing.T) {
 		t.Parallel()
 		req := &operatorv1.ShutdownRequested{Reason: "test shutdown"}
 		payload, _ := proto.Marshal(req)
-		msg := PubSubCommandMessage{
+		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.ShutdownRequested,
 			ID:        "msg-1",
 			Payload:   payload,
@@ -338,7 +338,7 @@ func TestPubSubCommandService_handleShutdownRequest(t *testing.T) {
 		t.Parallel()
 		req := &operatorv1.ShutdownRequested{Reason: ""}
 		payload, _ := proto.Marshal(req)
-		msg := PubSubCommandMessage{
+		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.ShutdownRequested,
 			ID:        "msg-1",
 			Payload:   payload,
@@ -356,7 +356,7 @@ func TestPubSubCommandService_handleEvalAnswerRequestSync(t *testing.T) {
 
 	t.Run("rejects unmarshal error", func(t *testing.T) {
 		t.Parallel()
-		msg := PubSubCommandMessage{
+		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.Eval.AnswerRequested,
 			ID:        "msg-1",
 			Payload:   []byte("invalid json"),

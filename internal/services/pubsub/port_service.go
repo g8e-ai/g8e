@@ -22,7 +22,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -43,7 +43,7 @@ func NewPortService(cfg *config.Config, logger *slog.Logger, client PubSubClient
 }
 
 // HandlePortCheckRequest processes an inbound port check request.
-func (ps *PortService) HandlePortCheckRequest(ctx context.Context, msg PubSubCommandMessage) {
+func (ps *PortService) HandlePortCheckRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoPort operatorv1.CheckPortRequested
 	if err := proto.Unmarshal(msg.Payload, &protoPort); err != nil {
 		ps.logger.Error("Failed to decode port check payload as protobuf CheckPortRequested", string(constants.ConnectionStateError), err)

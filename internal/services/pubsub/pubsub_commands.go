@@ -70,7 +70,7 @@ type PubSubCommandService struct {
 
 	ShutdownChan chan string
 
-	handlers map[constants.EventType]func(context.Context, PubSubCommandMessage)
+	handlers map[constants.EventType]func(context.Context, *PubSubCommandMessage)
 
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -280,7 +280,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 }
 
 func (rs *PubSubCommandService) buildHandlers() {
-	rs.handlers = map[constants.EventType]func(context.Context, PubSubCommandMessage){
+	rs.handlers = map[constants.EventType]func(context.Context, *PubSubCommandMessage){
 		constants.Event.Operator.HeartbeatRequested:         rs.heartbeat.HandleRequest,
 		constants.Event.Operator.Command.Requested:          rs.commands.HandleExecutionRequest,
 		constants.Event.Operator.Command.CancelRequested:    rs.commands.HandleCancelRequest,
@@ -293,24 +293,24 @@ func (rs *PubSubCommandService) buildHandlers() {
 		constants.Event.Operator.FetchHistory.Requested:     rs.history.HandleFetchHistoryRequest,
 		constants.Event.Operator.FetchFileHistory.Requested: rs.history.HandleFetchFileHistoryRequest,
 		constants.Event.Operator.RestoreFile.Requested:      rs.history.HandleRestoreFileRequest,
-		constants.Event.Operator.ShutdownRequested:          func(ctx context.Context, msg PubSubCommandMessage) { rs.handleShutdownRequest(msg) },
+		constants.Event.Operator.ShutdownRequested:          func(ctx context.Context, msg *PubSubCommandMessage) { rs.handleShutdownRequest(msg) },
 		constants.Event.Operator.Eval.AnswerRequested:       rs.handleEvalAnswerRequest,
 		constants.Event.Operator.Audit.UserMsg:              rs.audit.HandleUserMsgRequest,
 		constants.Event.Operator.Audit.AIMsg:                rs.audit.HandleAIMsgRequest,
 		constants.Event.Operator.Audit.DirectCmd:            rs.audit.HandleDirectCmdRequest,
 		constants.Event.Operator.Audit.DirectCmdResult:      rs.audit.HandleDirectCmdResultRequest,
 		constants.Event.Operator.FetchFileDiff.Requested:    rs.history.HandleFetchFileDiffRequest,
-		constants.Event.Operator.Mcp.CallRequested: func(ctx context.Context, msg PubSubCommandMessage) {
+		constants.Event.Operator.Mcp.CallRequested: func(ctx context.Context, msg *PubSubCommandMessage) {
 			if _, err := rs.handleMcpCallRequestSync(ctx, msg); err != nil {
 				rs.logger.Error("MCP call request handler failed", "error", err)
 			}
 		},
-		constants.Event.Operator.A2a.CallRequested: func(ctx context.Context, msg PubSubCommandMessage) {
+		constants.Event.Operator.A2a.CallRequested: func(ctx context.Context, msg *PubSubCommandMessage) {
 			if _, err := rs.handleA2aCallRequestSync(ctx, msg); err != nil {
 				rs.logger.Error("A2A call request handler failed", "error", err)
 			}
 		},
-		constants.EventAppInvestigationCreated: func(ctx context.Context, msg PubSubCommandMessage) {
+		constants.EventAppInvestigationCreated: func(ctx context.Context, msg *PubSubCommandMessage) {
 			if _, err := rs.handleAppInvestigationCreatedSync(ctx, msg); err != nil {
 				rs.logger.Error("App investigation creation handler failed", "error", err)
 			}
@@ -493,7 +493,7 @@ func (rs *PubSubCommandService) listenForCommands(channelName string) {
 // HandleCommandData processes a typed command message from the Gateway transport.
 func (rs *PubSubCommandService) HandleCommandData(msg *PubSubCommandMessage) {
 	rs.logger.Info("Processing request (via Gateway)")
-	rs.dispatchCommand(*msg)
+	rs.dispatchCommand(msg)
 }
 
 func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
@@ -561,7 +561,7 @@ func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []b
 	}
 
 	eventType := constants.MapActionTypeToEventType(verified.ActionType)
-	cmdMsg := PubSubCommandMessage{
+	cmdMsg := &PubSubCommandMessage{
 		ID:                envelope.Id,
 		EventType:         eventType,
 		CaseID:            envelope.CaseId,
@@ -575,7 +575,7 @@ func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []b
 		Timestamp:         envelope.Timestamp.AsTime(),
 	}
 
-	receipt, execErr := rs.actuator.Execute(ctx, verified, &cmdMsg)
+	receipt, execErr := rs.actuator.Execute(ctx, verified, cmdMsg)
 	return receipt, execErr
 }
 
@@ -612,7 +612,7 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 		return
 	}
 
-	cmdMsg := PubSubCommandMessage{
+	cmdMsg := &PubSubCommandMessage{
 		ID:                env.Id,
 		EventType:         eventType,
 		CaseID:            env.CaseId,
@@ -628,7 +628,7 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 
 	// Execute through Actuator (execution boundary)
 	if rs.actuator != nil {
-		receipt, err := rs.actuator.Execute(rs.ctx, verified, &cmdMsg)
+		receipt, err := rs.actuator.Execute(rs.ctx, verified, cmdMsg)
 		if err != nil {
 			rs.logger.Error("Actuator execution failed",
 				string(constants.ConnectionStateError), err,
@@ -660,7 +660,7 @@ func (rs *PubSubCommandService) SetL4Warden(w *governance.L4Warden) {
 	rs.l4warden = w
 }
 
-func (rs *PubSubCommandService) dispatchCommand(cmdMsg PubSubCommandMessage) {
+func (rs *PubSubCommandService) dispatchCommand(cmdMsg *PubSubCommandMessage) {
 	handler, ok := rs.handlers[cmdMsg.EventType]
 	if !ok {
 		rs.logger.Warn("Unknown request type", "event_type", cmdMsg.EventType)
@@ -678,15 +678,10 @@ func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, 
 		return "", fmt.Errorf("no handler for event type: %s", string(eventType))
 	}
 
-	// Type assert to PubSubCommandMessage
-	var pubsubMsg PubSubCommandMessage
-	switch v := cmdMsg.(type) {
-	case PubSubCommandMessage:
-		pubsubMsg = v
-	case *PubSubCommandMessage:
-		pubsubMsg = *v
-	default:
-		rs.logger.Error("Invalid cmdMsg type", "expected", "PubSubCommandMessage", "got", fmt.Sprintf("%T", cmdMsg))
+	// Type assert to *PubSubCommandMessage
+	pubsubMsg, ok := cmdMsg.(*PubSubCommandMessage)
+	if !ok {
+		rs.logger.Error("Invalid cmdMsg type", "expected", "*PubSubCommandMessage", "got", fmt.Sprintf("%T", cmdMsg))
 		return "", fmt.Errorf("invalid cmdMsg type: %T", cmdMsg)
 	}
 	rs.logger.Info("Executing verified transaction through Actuator", "event_type", eventType)
@@ -713,7 +708,7 @@ func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, 
 // it decodes the typed payload, dispatches to the configured downstream MCP
 // server via the gateway, and returns the textual result so the Actuator can
 // stamp it into the signed ActionReceipt.
-func (rs *PubSubCommandService) handleMcpCallRequestSync(ctx context.Context, msg PubSubCommandMessage) (string, error) {
+func (rs *PubSubCommandService) handleMcpCallRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	if rs.mcpGateway == nil {
 		return "", errors.New("MCP gateway not configured - cannot dispatch downstream call")
 	}
@@ -755,7 +750,7 @@ func (rs *PubSubCommandService) handleMcpCallRequestSync(ctx context.Context, ms
 // it decodes the typed payload, dispatches to the configured downstream A2A
 // server via the gateway, and returns the textual result so the Actuator can
 // stamp it into the signed ActionReceipt.
-func (rs *PubSubCommandService) handleA2aCallRequestSync(ctx context.Context, msg PubSubCommandMessage) (string, error) {
+func (rs *PubSubCommandService) handleA2aCallRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	if rs.mcpGateway == nil {
 		return "", errors.New("A2A gateway not configured - cannot dispatch downstream call")
 	}
@@ -793,7 +788,7 @@ func (rs *PubSubCommandService) handleA2aCallRequestSync(ctx context.Context, ms
 	return summary, nil
 }
 
-func (rs *PubSubCommandService) handleAppInvestigationCreatedSync(ctx context.Context, msg PubSubCommandMessage) (string, error) {
+func (rs *PubSubCommandService) handleAppInvestigationCreatedSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	rs.logger.Info("App investigation creation request received", "investigation_id", msg.ID)
 
 	if rs.actuator == nil || rs.actuator.AuditStore == nil {
@@ -811,7 +806,7 @@ func (rs *PubSubCommandService) handleAppInvestigationCreatedSync(ctx context.Co
 	return "investigation created", nil
 }
 
-func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) {
+func (rs *PubSubCommandService) handleShutdownRequest(msg *PubSubCommandMessage) {
 	rs.logger.Info("Shutdown command received")
 
 	req, err := unmarshalPayload(msg.EventType, msg.Payload)
@@ -834,11 +829,11 @@ func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) 
 	rs.ShutdownChan <- reason
 }
 
-func (rs *PubSubCommandService) handleEvalAnswerRequest(ctx context.Context, msg PubSubCommandMessage) {
+func (rs *PubSubCommandService) handleEvalAnswerRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	_, _ = rs.handleEvalAnswerRequestSync(ctx, msg)
 }
 
-func (rs *PubSubCommandService) handleEvalAnswerRequestSync(ctx context.Context, msg PubSubCommandMessage) (string, error) {
+func (rs *PubSubCommandService) handleEvalAnswerRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	rs.logger.Info("Eval answer request received")
 
 	req, err := unmarshalPayload(msg.EventType, msg.Payload)

@@ -62,7 +62,7 @@ func NewFileOpsService(cfg *config.Config, logger *slog.Logger, fileEditSvc *exe
 }
 
 // HandleFileEditRequest processes an inbound file edit request.
-func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubCommandMessage) {
+func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoEdit operatorv1.FileEditRequested
 	if err := proto.Unmarshal(msg.Payload, &protoEdit); err != nil {
 		fs.logger.Error("Failed to decode file edit payload as protobuf FileEditRequested", string(constants.ConnectionStateError), err)
@@ -269,7 +269,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 }
 
 // HandleFsListRequest processes an inbound filesystem list request.
-func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg PubSubCommandMessage) {
+func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoList operatorv1.FsListRequested
 	if err := proto.Unmarshal(msg.Payload, &protoList); err != nil {
 		fs.logger.Error("Failed to decode fs list payload as protobuf FsListRequested", string(constants.ConnectionStateError), err)
@@ -395,7 +395,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg PubSubCom
 }
 
 // HandleFsGrepRequest processes an inbound filesystem grep request.
-func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg PubSubCommandMessage) {
+func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoGrep operatorv1.FsGrepRequested
 	if err := proto.Unmarshal(msg.Payload, &protoGrep); err != nil {
 		fs.logger.Error("Failed to decode fs grep payload as protobuf FsGrepRequested", string(constants.ConnectionStateError), err)
@@ -521,7 +521,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg PubSubCom
 }
 
 // HandleFsReadRequest processes an inbound filesystem read request.
-func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCommandMessage) {
+func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoRead operatorv1.FsReadRequested
 	if err := proto.Unmarshal(msg.Payload, &protoRead); err != nil {
 		fs.logger.Error("Failed to decode fs read payload as protobuf FsReadRequested", string(constants.ConnectionStateError), err)
@@ -631,16 +631,16 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 	fs.publishLFAATypedResponse(ctx, msg, constants.Event.Operator.FsRead.Completed, payload)
 }
 
-func (fs *FileOpsService) publishLFAATypedResponse(ctx context.Context, msg PubSubCommandMessage, eventType constants.EventType, payload proto.Message) {
+func (fs *FileOpsService) publishLFAATypedResponse(ctx context.Context, msg *PubSubCommandMessage, eventType constants.EventType, payload proto.Message) {
 	publishLFAATypedResponseTo(ctx, fs.client, fs.config, fs.logger, msg, eventType, payload)
 }
 
-func (fs *FileOpsService) publishLFAAError(ctx context.Context, msg PubSubCommandMessage, eventType constants.EventType, errorMsg string) {
+func (fs *FileOpsService) publishLFAAError(ctx context.Context, msg *PubSubCommandMessage, eventType constants.EventType, errorMsg string) {
 	publishLFAAErrorTo(ctx, fs.client, fs.config, fs.logger, msg, eventType, errorMsg)
 }
 
 // payloadToFileEditRequest is a package-level helper shared by FileOpsService and tests.
-func payloadToFileEditRequest(msg PubSubCommandMessage) (*models.FileEditRequest, error) {
+func payloadToFileEditRequest(msg *PubSubCommandMessage) (*models.FileEditRequest, error) {
 	var p operatorv1.FileEditRequested
 	if err := proto.Unmarshal(msg.Payload, &p); err != nil {
 		return nil, fmt.Errorf("failed to decode file edit payload as protobuf FileEditRequested: %w", err)
@@ -704,7 +704,7 @@ func payloadToFileEditRequest(msg PubSubCommandMessage) (*models.FileEditRequest
 }
 
 // payloadToFsListRequest is a package-level helper shared by FileOpsService and tests.
-func payloadToFsListRequest(msg PubSubCommandMessage) (*models.FsListRequest, error) {
+func payloadToFsListRequest(msg *PubSubCommandMessage) (*models.FsListRequest, error) {
 	var p operatorv1.FsListRequested
 	if err := proto.Unmarshal(msg.Payload, &p); err != nil {
 		return nil, fmt.Errorf("failed to decode fs list payload as protobuf FsListRequested: %w", err)
@@ -738,7 +738,7 @@ func payloadToFsListRequest(msg PubSubCommandMessage) (*models.FsListRequest, er
 }
 
 // payloadToFsGrepRequest is a package-level helper shared by FileOpsService and tests.
-func payloadToFsGrepRequest(msg PubSubCommandMessage) (*models.FsGrepRequest, error) {
+func payloadToFsGrepRequest(msg *PubSubCommandMessage) (*models.FsGrepRequest, error) {
 	var p operatorv1.FsGrepRequested
 	if err := proto.Unmarshal(msg.Payload, &p); err != nil {
 		return nil, fmt.Errorf("failed to decode fs grep payload as protobuf FsGrepRequested: %w", err)

@@ -190,7 +190,7 @@ func RunStream(args []string) {
 		TotalMs: totalMs,
 		Ts:      time.Now().UTC(),
 	}
-	emitJSON(summary)
+	emitJSON(&summary)
 
 	fmt.Fprintf(os.Stderr, "[stream] done: %d/%d succeeded in %dms\n",
 		succeeded, len(hosts), totalMs)
@@ -251,7 +251,7 @@ func runConcurrentStream(
 		if res.Error != "" {
 			evt.Error = res.Error
 		}
-		emitJSON(evt)
+		emitJSON(&evt)
 		if res.Error != "" {
 			fmt.Fprintf(os.Stderr, "[stream] FAIL  %-30s %s\n", res.Host, res.Error)
 		} else {
@@ -364,7 +364,7 @@ func shellQuote(s string) string {
 }
 
 // emitJSON writes a StreamStatusEvent as a JSON line to stdout.
-func emitJSON(evt StreamStatusEvent) {
+func emitJSON(evt *StreamStatusEvent) {
 	data, err := json.Marshal(evt)
 	if err != nil {
 		fmt.Printf(`{"error":"failed to marshal event","details":"%s"}\n`, err)

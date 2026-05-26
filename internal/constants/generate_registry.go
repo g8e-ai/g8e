@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -168,6 +169,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error writing registry.go: %v\n", err)
 		os.Exit(1)
 	}
+	if err := gofmtFile(registryPath); err != nil {
+		fmt.Fprintf(os.Stderr, "Error formatting registry.go: %v\n", err)
+		os.Exit(1)
+	}
 
 	// Generate status.go content from status.json
 	statusOutput := generateStatusConstants(allData.Status)
@@ -178,6 +183,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error writing status_generated.go: %v\n", err)
 		os.Exit(1)
 	}
+	if err := gofmtFile(statusPath); err != nil {
+		fmt.Fprintf(os.Stderr, "Error formatting status_generated.go: %v\n", err)
+		os.Exit(1)
+	}
 
 	// Generate headers.go content from headers.json
 	headersOutput := generateHeaderConstants(allData.Headers)
@@ -186,6 +195,10 @@ func main() {
 	headersPath := filepath.Join(constantsDir, "headers_generated.go")
 	if err := os.WriteFile(headersPath, []byte(headersOutput), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing headers_generated.go: %v\n", err)
+		os.Exit(1)
+	}
+	if err := gofmtFile(headersPath); err != nil {
+		fmt.Fprintf(os.Stderr, "Error formatting headers_generated.go: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -945,5 +958,13 @@ func validateRequiredFields(data JSONFile) error {
 	// KVKeys uses nested structure with different field naming
 	// Agents and Timestamp are simple string maps
 
+	return nil
+}
+
+func gofmtFile(filePath string) error {
+	cmd := exec.Command("gofmt", "-s", "-w", filePath)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("gofmt failed: %w", err)
+	}
 	return nil
 }

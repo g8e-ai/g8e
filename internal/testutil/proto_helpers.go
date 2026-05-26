@@ -94,7 +94,7 @@ type FileEditRequestFields struct {
 }
 
 // MustBuildFileEditRequestedPayload builds a FileEditRequested payload bytes.
-func MustBuildFileEditRequestedPayload(t *testing.T, f FileEditRequestFields) []byte {
+func MustBuildFileEditRequestedPayload(t *testing.T, f *FileEditRequestFields) []byte {
 	t.Helper()
 	protoFileEdit := &operatorv1.FileEditRequested{
 		FilePath:        f.FilePath,
