@@ -1,7 +1,6 @@
 name: CI
 
 on:
-  push:
   pull_request:
   workflow_dispatch:
 
@@ -20,17 +19,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Go
-        run: |
-          wget https://go.dev/dl/go1.22.5.linux-amd64.tar.gz
-          sudo rm -rf /usr/local/go
-          sudo tar -C /usr/local -xzf go1.22.5.linux-amd64.tar.gz
-          echo "/usr/local/go/bin" >> $GITHUB_PATH
-
-      - name: Set up Buf
-        uses: bufbuild/buf-setup-action@v1
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          github_token: ${{ github.token }}
+          go-version: '1.22.5'
+
+      - name: Install Buf
+        run: |
+          go install github.com/bufbuild/buf/cmd/buf@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Install protoc-gen plugins
         run: |
@@ -84,12 +81,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Go
-        run: |
-          wget https://go.dev/dl/go1.22.5.linux-amd64.tar.gz
-          sudo rm -rf /usr/local/go
-          sudo tar -C /usr/local -xzf go1.22.5.linux-amd64.tar.gz
-          echo "/usr/local/go/bin" >> $GITHUB_PATH
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.5'
 
       - name: Run govulncheck
         run: |
@@ -104,12 +99,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Go
-        run: |
-          wget https://go.dev/dl/go1.22.5.linux-amd64.tar.gz
-          sudo rm -rf /usr/local/go
-          sudo tar -C /usr/local -xzf go1.22.5.linux-amd64.tar.gz
-          echo "/usr/local/go/bin" >> $GITHUB_PATH
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.5'
 
       - name: Build CLI
         run: make build-cli
