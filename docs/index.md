@@ -1,6 +1,6 @@
-# g8e
+# g8e: Data-Sovereign Runtime Governance for Autonomous Execution
 
-Byzantine Fault Tolerant (BFT) Governance Protocol for Agentic Infrastructure.
+**A self-hosted, air-gap capable substrate that enforces fail-closed authority over AI tool calls through a sequential technical, consensus, and human verification gauntlet.**
 
 [Getting Started](guides/getting_started.md){ .md-button .md-button--primary } [Position Paper](core/position_paper.md){ .md-button }
 
