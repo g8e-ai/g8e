@@ -53,9 +53,10 @@ import (
 
 // Version information (set via ldflags during build)
 var (
-	version  string = string(constants.VersionStabilityDev)
-	buildID  string = string(constants.SystemHealthUnknown)
-	platform string = string(constants.SystemHealthUnknown)
+	version   string = string(constants.VersionStabilityDev)
+	buildID   string = string(constants.SystemHealthUnknown)
+	buildTime string = string(constants.SystemHealthUnknown)
+	platform  string = string(constants.SystemHealthUnknown)
 )
 
 func main() {
@@ -468,7 +469,7 @@ func main() {
 }
 
 func printVersion() {
-	fmt.Printf("g8e Operator\n  Version:  %s\n  Build ID: %s\n  Platform: %s\n", version, buildID, platform)
+	fmt.Printf("g8e Operator\n  Version:   %s\n  Build ID:  %s\n  Build Time: %s\n  Platform:  %s\n", version, buildID, buildTime, platform)
 }
 
 // loadTrustBundle attempts to read a trust bundle from:

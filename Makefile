@@ -296,7 +296,11 @@ build-cli:
 build-g8eo:
 	@echo "Building g8e operator..."
 	@mkdir -p bin
-	@go build -o bin/g8e ./cmd/g8eo
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	PLATFORM=$$(uname -s)_$$(uname -m); \
+	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo
 	@ln -sf bin/g8e ./g8e
 	@echo "Build complete."
 
