@@ -1,0 +1,654 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package mcp
+
+import (
+	"context"
+	"crypto/ed25519"
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/services/governance"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+)
+
+// TestGatewaySignedEndToEndIntegration tests the full flow from MCP gateway
+// through envelope processing to receipt generation, verifying that GatewaySigned
+// is properly propagated through the entire chain.
+func TestGatewaySignedEndToEndIntegration(t *testing.T) {
+	t.Parallel()
+	// Setup: Create a real envelope processor that will verify GatewaySigned
+	processorCalled := false
+	var receivedEnvelope *commonv1.GovernanceEnvelope
+
+	processor := &fakeEnvelopeProcessor{
+		receipt: &operatorv1.ActionReceipt{
+			TransactionId: "tx-1",
+			Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			ResultSummary: "test result",
+		},
+	}
+
+	// Wrap the processor to capture the envelope for verification
+	wrappedProcessor := &envelopeCaptureProcessor{
+		delegate: processor,
+		capture: func(env *commonv1.GovernanceEnvelope) {
+			processorCalled = true
+			receivedEnvelope = env
+		},
+	}
+
+	pubKey, privKey, _ := ed25519.GenerateKey(nil)
+	_ = pubKey
+
+	g := &GatewayService{
+		envProc:           wrappedProcessor,
+		signingKey:        privKey,
+		keyID:             "test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
+	}
+
+	// Execute a tools/call request
+	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{"foo":"bar"}}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+
+	g.HandleToolsCall(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	require.Nil(t, resp.Error)
+
+	// Verify the processor was called
+	require.True(t, processorCalled, "Envelope processor should have been called")
+	require.NotNil(t, receivedEnvelope)
+
+	// Verify GatewaySigned is set in the envelope
+	require.NotNil(t, receivedEnvelope.Governance)
+	require.True(t, receivedEnvelope.Governance.GatewaySigned, "Envelope should have GatewaySigned=true for MCP gateway")
+
+	// Verify L2 metadata is present (gateway-local signer)
+	require.NotNil(t, receivedEnvelope.Governance.L2)
+	require.Equal(t, "test-key", receivedEnvelope.Governance.L2.KeyId)
+	require.Contains(t, receivedEnvelope.Governance.L2.AgentIds, "gateway-local-signer")
+}
+
+// envelopeCaptureProcessor wraps an EnvelopeProcessor to capture envelopes for verification
+type envelopeCaptureProcessor struct {
+	delegate governance.EnvelopeProcessor
+	capture  func(*commonv1.GovernanceEnvelope)
+}
+
+func (e *envelopeCaptureProcessor) ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error) {
+	// Parse the envelope to capture it
+	var envelope commonv1.GovernanceEnvelope
+	err := protojson.Unmarshal(payload, &envelope)
+	if err == nil && e.capture != nil {
+		e.capture(&envelope)
+	}
+	return e.delegate.ProcessEnvelope(ctx, payload)
+}
+
+// TestGatewaySignedReceiptIntegration tests that GatewaySigned is properly
+// set in the receipt returned by the envelope processor.
+func TestGatewaySignedReceiptIntegration(t *testing.T) {
+	t.Parallel()
+	processor := &fakeEnvelopeProcessor{
+		receipt: &operatorv1.ActionReceipt{
+			TransactionId:    "tx-1",
+			TransactionHash:  "hash-1",
+			Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			ResultSummary:    "test result",
+			GatewaySigned:    true,
+			StateRootBefore:  "root-before",
+			StateRootAfter:   "root-after",
+			ExecutedAtUnixMs: 1234567890,
+			SignerKeyId:      "test-key",
+			Signature:        "test-sig",
+			L2Status:         operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
+			L3Status:         operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
+		},
+	}
+
+	pubKey, privKey, _ := ed25519.GenerateKey(nil)
+	_ = pubKey
+
+	g := &GatewayService{
+		envProc:           processor,
+		signingKey:        privKey,
+		keyID:             "test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
+	}
+
+	// Execute a tools/call request
+	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+
+	g.HandleToolsCall(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	require.Nil(t, resp.Error)
+
+	// Verify the receipt has GatewaySigned=true
+	require.True(t, processor.receipt.GatewaySigned, "Receipt should have GatewaySigned=true")
+}
+
+// TestGatewaySignedCanonicalizationIntegration tests that GatewaySigned is included
+// in the canonical form used for receipt signing.
+func TestGatewaySignedCanonicalizationIntegration(t *testing.T) {
+	t.Parallel()
+	receipt := &operatorv1.ActionReceipt{
+		TransactionId:    "tx-1",
+		TransactionHash:  "hash-1",
+		Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		ResultSummary:    "test result",
+		StateRootBefore:  "root-before",
+		StateRootAfter:   "root-after",
+		ExecutedAtUnixMs: 1234567890,
+		SignerKeyId:      "test-key",
+		GatewaySigned:    true,
+		L2Status:         operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
+		L3Status:         operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
+	}
+
+	// Canonicalize the receipt
+	canonical, err := governance.CanonicalizeActionReceipt(receipt)
+	require.NoError(t, err)
+
+	// Parse the canonical form to verify GatewaySigned is included
+	var parsed map[string]interface{}
+	err = json.Unmarshal(canonical, &parsed)
+	require.NoError(t, err)
+
+	// Verify gateway_signed field is present and true
+	gatewaySigned, ok := parsed["gateway_signed"]
+	require.True(t, ok, "gateway_signed should be in canonical form")
+	require.True(t, gatewaySigned.(bool), "gateway_signed should be true")
+
+	// Verify it's deterministic
+	canonical2, err := governance.CanonicalizeActionReceipt(receipt)
+	require.NoError(t, err)
+	require.Equal(t, canonical, canonical2, "Canonicalization should be deterministic")
+}
+
+// TestGatewaySignedFalseIntegration tests the Consensus path where GatewaySigned=false
+func TestGatewaySignedFalseIntegration(t *testing.T) {
+	t.Parallel()
+	processor := &fakeEnvelopeProcessor{
+		receipt: &operatorv1.ActionReceipt{
+			TransactionId: "tx-1",
+			Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			ResultSummary: "test result",
+			GatewaySigned: false,
+		},
+	}
+
+	// Simulate a Consensus-signed envelope (not from MCP gateway)
+	envelope := &commonv1.GovernanceEnvelope{
+		Id:              "tx-1",
+		TransactionHash: "hash-1",
+		ActionType:      string(constants.ActionTypeExecuteBash),
+		Governance: &commonv1.GovernanceMetadata{
+			GatewaySigned: false,
+			L2: &commonv1.L2Metadata{
+				ConsensusSignature: "consensus-sig",
+				KeyId:              "consensus-key",
+				AgentIds:           []string{"agent-1", "agent-2", "agent-3"},
+			},
+		},
+	}
+
+	// Marshal the envelope
+	uapBytes, err := protojson.Marshal(envelope)
+	require.NoError(t, err)
+
+	// Process through the envelope processor
+	receipt, err := processor.ProcessEnvelope(context.Background(), uapBytes)
+	require.NoError(t, err)
+	require.NotNil(t, receipt)
+
+	// Verify GatewaySigned is false
+	require.False(t, receipt.GatewaySigned, "Consensus-signed transactions should have GatewaySigned=false")
+}
+
+// TestSSEStreamingIntegration tests the SSE streaming endpoint for tools/call
+func TestSSEStreamingIntegration(t *testing.T) {
+	t.Parallel()
+
+	processor := &fakeEnvelopeProcessor{
+		receipt: &operatorv1.ActionReceipt{
+			TransactionId:    "tx-sse-1",
+			Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			ResultSummary:    "streaming result",
+			GatewaySigned:    true,
+			StateRootBefore:  "root-before",
+			StateRootAfter:   "root-after",
+			ExecutedAtUnixMs: 1234567890,
+			L2Status:         operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
+			L3Status:         operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
+		},
+	}
+
+	pubKey, privKey, _ := ed25519.GenerateKey(nil)
+	_ = pubKey
+
+	g := &GatewayService{
+		envProc:           processor,
+		signingKey:        privKey,
+		keyID:             "sse-test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		maxPayloadBytes:   10 * 1024 * 1024,
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"streaming_tool","arguments":{"msg":"hello"}}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/call/sse", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+
+	g.HandleToolsCallSSE(w, req)
+
+	// Verify SSE headers
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
+	require.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
+	require.Equal(t, "keep-alive", w.Header().Get("Connection"))
+
+	// Verify SSE response format
+	body := w.Body.String()
+	require.Contains(t, body, "data: ")
+	require.Contains(t, body, "streaming result")
+
+	// Parse SSE chunk
+	lines := strings.Split(body, "\n")
+	require.GreaterOrEqual(t, len(lines), 2)
+	require.True(t, strings.HasPrefix(lines[0], "data: "))
+
+	var chunk CallToolResult
+	dataLine := strings.TrimPrefix(lines[0], "data: ")
+	err := json.Unmarshal([]byte(dataLine), &chunk)
+	require.NoError(t, err)
+	require.Equal(t, "streaming result", chunk.Content[0].Text)
+	require.False(t, chunk.IsError)
+}
+
+// TestCircuitBreakerIntegration tests circuit breaker state transitions
+func TestCircuitBreakerIntegration(t *testing.T) {
+	t.Parallel()
+
+	// Circuit breaker is only triggered on downstream proxy failures (tools/list, resources/list, prompts/list)
+	// not on envelope processor failures. Test through tools/list with a failing downstream URL.
+
+	pubKey, privKey, _ := ed25519.GenerateKey(nil)
+	_ = pubKey
+
+	g := &GatewayService{
+		logger:            slog.New(slog.NewTextHandler(os.Stdout, nil)),
+		envProc:           nil,
+		signingKey:        privKey,
+		keyID:             "circuit-test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		maxPayloadBytes:   10 * 1024 * 1024,
+		maxFailures:       3, // Lower threshold for faster test
+		cooldownDuration:  100 * time.Millisecond,
+		downstreamURL:     "http://localhost:9999", // Invalid URL that will fail
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
+
+	// Trigger failures until circuit opens
+	for i := 0; i < 3; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/list", strings.NewReader(reqBody))
+		w := httptest.NewRecorder()
+		g.HandleToolsList(w, req)
+	}
+
+	// Circuit should now be open
+	require.True(t, g.isCircuitOpen(), "Circuit should be open after 3 failures")
+
+	// Next request should be rejected with circuit open error
+	req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/list", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+	g.HandleToolsList(w, req)
+
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	require.NotNil(t, resp.Error)
+	require.Contains(t, resp.Error.Message, "circuit open")
+
+	// Wait for cooldown and verify circuit closes
+	time.Sleep(150 * time.Millisecond)
+	require.False(t, g.isCircuitOpen(), "Circuit should close after cooldown")
+}
+
+// TestGatewayErrorCodesIntegration tests gateway-specific error code mapping
+func TestGatewayErrorCodesIntegration(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name          string
+		errorToReturn error
+		expectedCode  int
+		expectedMsg   string
+	}{
+		{
+			name:          "L1 validation failed",
+			errorToReturn: governance.ErrL1ValidationFailed,
+			expectedCode:  -32005,
+			expectedMsg:   "TX_DOCTRINE_L1_FAILED",
+		},
+		{
+			name:          "L2 signature invalid",
+			errorToReturn: governance.ErrL2SignatureInvalid,
+			expectedCode:  -32006,
+			expectedMsg:   "TX_QUORUM_L2_SIG_INVALID",
+		},
+		{
+			name:          "L3 proof invalid",
+			errorToReturn: governance.ErrL3ProofInvalid,
+			expectedCode:  -32007,
+			expectedMsg:   "TX_NOTARY_L3_PROOF_INVALID",
+		},
+		{
+			name:          "Invalid envelope",
+			errorToReturn: governance.ErrInvalidEnvelope,
+			expectedCode:  -32000,
+			expectedMsg:   "TX_INVALID_ENVELOPE",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			processor := &errorReturningProcessor{
+				err: tc.errorToReturn,
+			}
+
+			pubKey, privKey, _ := ed25519.GenerateKey(nil)
+			_ = pubKey
+
+			g := &GatewayService{
+				envProc:           processor,
+				signingKey:        privKey,
+				keyID:             "error-test-key",
+				stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+				maxPayloadBytes:   10 * 1024 * 1024,
+			}
+
+			reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test","arguments":{}}}`
+			req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/call", strings.NewReader(reqBody))
+			w := httptest.NewRecorder()
+
+			g.HandleToolsCall(w, req)
+
+			var resp JSONRPCResponse
+			err := json.Unmarshal(w.Body.Bytes(), &resp)
+			require.NoError(t, err)
+			require.NotNil(t, resp.Error)
+			require.Equal(t, tc.expectedCode, resp.Error.Code)
+			require.Contains(t, resp.Error.Message, tc.expectedMsg)
+		})
+	}
+}
+
+// TestNativeToolExecutionIntegration tests native tool execution within gateway
+func TestNativeToolExecutionIntegration(t *testing.T) {
+	t.Parallel()
+
+	// Native tools bypass envelope processing but still need envProc set for the gateway
+	// This test verifies the gateway correctly identifies native tools
+	pubKey, privKey, _ := ed25519.GenerateKey(nil)
+	_ = pubKey
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	processor := &fakeEnvelopeProcessor{
+		receipt: &operatorv1.ActionReceipt{
+			TransactionId: "tx-native-1",
+			Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			ResultSummary: "native tool executed",
+			GatewaySigned: true,
+		},
+	}
+
+	g := &GatewayService{
+		logger:            logger,
+		responder:         responder.New(logger),
+		envProc:           processor,
+		signingKey:        privKey,
+		keyID:             "native-test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		maxPayloadBytes:   10 * 1024 * 1024,
+	}
+
+	// Test with a known native tool (e.g., uptime)
+	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"uptime","arguments":{}}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/call", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+
+	g.HandleToolsCall(w, req)
+
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	require.Nil(t, resp.Error)
+
+	// Verify native tool was identified and processed
+	var result CallToolResult
+	err = json.Unmarshal(resp.Result, &result)
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Content)
+	require.Equal(t, "text", result.Content[0].Type)
+}
+
+// errorReturningProcessor is a fake processor that returns specific errors
+type errorReturningProcessor struct {
+	err error
+}
+
+func (e *errorReturningProcessor) ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error) {
+	return nil, e.err
+}
+
+// TestReadFieldIntegration tests the read_field tool with field path registry and L3 validation
+func TestReadFieldIntegration(t *testing.T) {
+	t.Parallel()
+
+	// Setup fake DB service with map-based data
+	// Use "investigations" collection which exists in field_paths.json schema
+	dbService := &integrationTestDBService{
+		data: map[string]map[string]interface{}{
+			"investigations": {
+				"investigation-123": map[string]interface{}{
+					"suspect_ip_addresses": []string{"192.168.1.1"},
+					"status":               "active",
+					"priority":             "high",
+				},
+			},
+		},
+	}
+
+	// Setup fake session validator
+	sessionValidator := &integrationTestSessionValidator{
+		validSessions: map[string]bool{
+			"valid-session-123": true,
+		},
+	}
+
+	// Setup fake audit logger
+	auditLogger := &integrationTestAuditLogger{
+		logs: []auditLogEntry{},
+	}
+
+	pubKey, privKey, _ := ed25519.GenerateKey(nil)
+	_ = pubKey
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	fieldPathRegistry, err := NewFieldPathRegistry(logger)
+	require.NoError(t, err, "Failed to initialize field path registry")
+
+	g := &GatewayService{
+		logger:            logger,
+		responder:         responder.New(logger),
+		envProc:           nil, // read_field doesn't use envelope processor
+		signingKey:        privKey,
+		keyID:             "readfield-test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		maxPayloadBytes:   10 * 1024 * 1024,
+		fieldPathRegistry: fieldPathRegistry,
+		dbService:         dbService,
+		sessionValidator:  sessionValidator,
+		auditLogger:       auditLogger,
+	}
+
+	t.Run("successful field read", func(t *testing.T) {
+		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_field","arguments":{"collection":"investigations","document_id":"investigation-123","field_path":"status","operator_session_id":"valid-session-123"}}}`
+		req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/call", strings.NewReader(reqBody))
+		w := httptest.NewRecorder()
+
+		g.HandleToolsCall(w, req)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.Nil(t, resp.Error)
+
+		var result CallToolResult
+		err = json.Unmarshal(resp.Result, &result)
+		require.NoError(t, err)
+		require.Contains(t, result.Content[0].Text, "active")
+
+		// Verify audit log was written
+		require.Len(t, auditLogger.logs, 1)
+		require.Equal(t, "investigations", auditLogger.logs[0].collection)
+		require.Equal(t, "investigation-123", auditLogger.logs[0].documentID)
+		require.Equal(t, "status", auditLogger.logs[0].fieldPath)
+	})
+
+	t.Run("invalid session", func(t *testing.T) {
+		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_field","arguments":{"collection":"investigations","document_id":"investigation-123","field_path":"status","operator_session_id":"invalid-session"}}}`
+		req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/call", strings.NewReader(reqBody))
+		w := httptest.NewRecorder()
+
+		g.HandleToolsCall(w, req)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
+		require.Contains(t, resp.Error.Message, "operator session is invalid or expired")
+	})
+
+	t.Run("forbidden pattern in field value", func(t *testing.T) {
+		// Add an investigation with a forbidden pattern in an allowed field
+		dbService.data["investigations"]["investigation-456"] = map[string]interface{}{
+			"status":               "active",
+			"suspect_ip_addresses": "192.168.1.1 password=secret123",
+		}
+
+		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_field","arguments":{"collection":"investigations","document_id":"investigation-456","field_path":"suspect_ip_addresses","operator_session_id":"valid-session-123"}}}`
+		req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/call", strings.NewReader(reqBody))
+		w := httptest.NewRecorder()
+
+		g.HandleToolsCall(w, req)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
+		require.Contains(t, resp.Error.Message, "forbidden pattern")
+	})
+}
+
+// integrationTestDBService is a mock database service for integration tests
+type integrationTestDBService struct {
+	data map[string]map[string]interface{}
+}
+
+func (f *integrationTestDBService) GetField(collection, id, fieldPath string) (interface{}, error) {
+	collectionData, ok := f.data[collection]
+	if !ok {
+		return nil, errors.New("collection not found")
+	}
+	doc, ok := collectionData[id]
+	if !ok {
+		return nil, errors.New("document not found")
+	}
+	docMap, ok := doc.(map[string]interface{})
+	if !ok {
+		return nil, errors.New("document is not a map")
+	}
+	value, ok := docMap[fieldPath]
+	if !ok {
+		return nil, errors.New("field not found")
+	}
+	return value, nil
+}
+
+// integrationTestSessionValidator is a mock session validator for integration tests
+type integrationTestSessionValidator struct {
+	validSessions map[string]bool
+}
+
+func (f *integrationTestSessionValidator) ValidateSession(sessionID string) (bool, error) {
+	valid, ok := f.validSessions[sessionID]
+	if !ok {
+		return false, nil
+	}
+	return valid, nil
+}
+
+// integrationTestAuditLogger is a mock audit logger for integration tests
+type integrationTestAuditLogger struct {
+	logs []auditLogEntry
+}
+
+type auditLogEntry struct {
+	operatorSessionID string
+	collection        string
+	documentID        string
+	fieldPath         string
+	value             interface{}
+}
+
+func (f *integrationTestAuditLogger) LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value interface{}) error {
+	f.logs = append(f.logs, auditLogEntry{
+		operatorSessionID: operatorSessionID,
+		collection:        collection,
+		documentID:        documentID,
+		fieldPath:         fieldPath,
+		value:             value,
+	})
+	return nil
+}

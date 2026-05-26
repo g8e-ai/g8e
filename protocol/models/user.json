@@ -43,7 +43,7 @@
         "items": "string",
         "required": true,
         "default": ["user"],
-        "description": "RBAC roles assigned to this user. See status.js UserRole. Values: user, admin, superadmin, operator."
+        "description": "RBAC roles assigned to this user. See status.js UserRole. Values: user, admin, owner, operator."
       }
     },
 

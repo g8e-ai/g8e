@@ -13,7 +13,7 @@
       "agent_id": {
         "type": "string",
         "required": true,
-        "description": "Stable persona identifier (TribunalMember enum value, or 'sage' / 'triage' / 'auditor'). Used as the document id in the reputation_state collection."
+        "description": "Stable persona identifier (ConsensusMember enum value, or 'sage' / 'triage' / 'auditor'). Used as the document id in the reputation_state collection."
       }
     },
 

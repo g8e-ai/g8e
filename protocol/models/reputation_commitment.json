@@ -4,18 +4,18 @@
   "_consumers": [
     "g8ee (Auditor - writes one commitment per passing verdict; reads prev_root from latest commitment)",
     "g8ee (peer auditor replay - recomputes Merkle root over historical reputation_state to verify)",
-    "g8ee (TribunalCommandAuditor.reputation_commitment_id - FK reference)"
+    "g8ee (ConsensusCommandAuditor.reputation_commitment_id - FK reference)"
   ],
 
   "reputation_commitment": {
-    "_description": "Auditor-signed Merkle commitment binding a tribunal verdict to the reputation scoreboard at verdict time. Append-only; commitments are never revised. Genesis commitment uses the deployment-scoped sentinel prev_root '0' * 64.",
+    "_description": "Auditor-signed Merkle commitment binding a consensus verdict to the reputation scoreboard at verdict time. Append-only; commitments are never revised. Genesis commitment uses the deployment-scoped sentinel prev_root '0' * 64.",
 
     "core_identity": {
       "id": {
         "type": "string",
         "format": "uuid",
         "required": true,
-        "description": "Stable document identifier (UUID4). Referenced by tribunal_command.auditor.reputation_commitment_id."
+        "description": "Stable document identifier (UUID4). Referenced by consensus_command.auditor.reputation_commitment_id."
       }
     },
 
@@ -25,10 +25,10 @@
         "required": true,
         "description": "Investigation that produced this verdict. Binds the commitment to a specific chain (block producer)."
       },
-      "tribunal_command_id": {
+      "consensus_command_id": {
         "type": "string",
         "required": true,
-        "description": "TribunalCommand whose auditor verdict triggered this commitment. The block being committed."
+        "description": "ConsensusCommand whose auditor verdict triggered this commitment. The block being committed."
       }
     },
 
@@ -61,7 +61,7 @@
       "signature": {
         "type": "string",
         "required": true,
-        "description": "HMAC-SHA256 hex (64 chars) over canonical_input = `merkle_root || prev_root || tribunal_command_id` using the auditor's HMAC key. Day-1 key custody: g8eo SecretManager (see GDD §14.10 resolved decisions)."
+        "description": "HMAC-SHA256 hex (64 chars) over canonical_input = `merkle_root || prev_root || consensus_command_id` using the auditor's HMAC key. Day-1 key custody: g8eo SecretManager (see GDD §14.10 resolved decisions)."
       }
     },
 

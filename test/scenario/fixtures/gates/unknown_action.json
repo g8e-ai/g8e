@@ -1,0 +1,47 @@
+{
+  "name": "unknown_action",
+  "vertical": "gates",
+  "narrative": "Envelope with unknown action type should be rejected",
+  "intent": {
+    "timestamp": "2026-05-25T12:00:00Z",
+    "expiresAt": "2026-05-25T13:00:00Z",
+    "sourceComponent": "COMPONENT_CLIENT",
+    "operatorId": "operator-1",
+    "operatorSessionId": "operator-session-1",
+    "payload": "CgZscyAtbAESCGV4ZWMtMTIzGgx0ZXN0IGNvbW1hbmQiBnN0cmljdCge",
+    "actionType": "UNKNOWN_ACTION",
+    "targetResource": "localhost",
+    "stateMerkleRoot": "abc123def456",
+    "nonce": "nonce-unknown-action-123",
+    "protocolVersion": "1.0",
+    "governance": {
+      "l2": {}
+    }
+  },
+  "evidence": {
+    "l2_signature_present": true,
+    "l2_key_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd",
+    "l3_proof_present": false,
+    "signer_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
+  },
+  "expect": {
+    "doctrine": {
+      "verdict": "reject",
+      "reject_reason": "TX_UNKNOWN_ACTION: action type not recognized",
+      "l2_status": 1,
+      "l3_status": 1
+    },
+    "consensus": {
+      "verdict": "reject",
+      "reject_reason": "TX_UNKNOWN_ACTION: action type not recognized",
+      "l2_status": 1,
+      "l3_status": 1
+    },
+    "notary": {
+      "verdict": "reject",
+      "reject_reason": "TX_UNKNOWN_ACTION: action type not recognized",
+      "l2_status": 1,
+      "l3_status": 1
+    }
+  }
+}

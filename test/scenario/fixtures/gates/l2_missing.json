@@ -1,0 +1,45 @@
+{
+  "name": "l2_missing",
+  "vertical": "gates",
+  "narrative": "Envelope missing L2 signature: rejected in consensus/notary (L2 enforced), accepted in doctrine (L2 audited only)",
+  "intent": {
+    "timestamp": "2026-05-25T12:00:00Z",
+    "expiresAt": "2026-05-25T13:00:00Z",
+    "sourceComponent": "COMPONENT_CLIENT",
+    "operatorId": "operator-1",
+    "operatorSessionId": "operator-session-1",
+    "payload": "CgZscyAtbAESCGV4ZWMtMTIzGgx0ZXN0IGNvbW1hbmQiBnN0cmljdCge",
+    "actionType": "EXECUTE_BASH",
+    "targetResource": "localhost",
+    "stateMerkleRoot": "abc123def456",
+    "nonce": "nonce-l2-missing-123",
+    "protocolVersion": "1.0",
+    "governance": {}
+  },
+  "evidence": {
+    "l2_signature_present": false,
+    "l2_key_id": "",
+    "l3_proof_present": false,
+    "signer_id": ""
+  },
+  "expect": {
+    "doctrine": {
+      "verdict": "accept",
+      "reject_reason": "",
+      "l2_status": 1,
+      "l3_status": 1
+    },
+    "consensus": {
+      "verdict": "reject",
+      "reject_reason": "TX_QUORUM_L2_SIG_MISSING: Consensus (L2Consensus) consensus_signature required but missing",
+      "l2_status": 3,
+      "l3_status": 1
+    },
+    "notary": {
+      "verdict": "reject",
+      "reject_reason": "TX_QUORUM_L2_SIG_MISSING: Consensus (L2Consensus) consensus_signature required but missing",
+      "l2_status": 3,
+      "l3_status": 1
+    }
+  }
+}
