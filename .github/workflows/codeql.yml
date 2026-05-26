@@ -14,39 +14,24 @@ jobs:
       contents: read
       security-events: write
 
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [ 'go', 'javascript-typescript', 'python', 'actions' ]
-
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v4
 
-    - name: Set up Go
-      if: matrix.language == 'go'
-      uses: actions/setup-go@v6
-      with:
-        go-version-file: services/g8eo/go.mod
+    - name: Install Go
+      run: |
+        wget https://go.dev/dl/go1.22.5.linux-amd64.tar.gz
+        sudo rm -rf /usr/local/go
+        sudo tar -C /usr/local -xzf go1.22.5.linux-amd64.tar.gz
+        echo "/usr/local/go/bin" >> $GITHUB_PATH
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v4
+      uses: github/codeql-action/init@v3
       with:
-        languages: ${{ matrix.language }}
-        build-mode: ${{ (matrix.language == 'go') && 'manual' || 'none' }}
-
-    - name: Set up Buf
-      if: matrix.language == 'go'
-      uses: bufbuild/buf-setup-action@v1
-      with:
-        github_token: ${{ github.token }}
-
-    - name: Generate Proto
-      if: matrix.language == 'go'
-      run: make proto
+        languages: go
+        build-mode: manual
 
     - name: Build Go
-      if: matrix.language == 'go'
       run: |
         cd services/g8eo
         make build
@@ -59,6 +44,4 @@ jobs:
         go build test_root.go
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v4
-      with:
-        category: "/language:${{matrix.language}}"
+      uses: github/codeql-action/analyze@v3

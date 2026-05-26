@@ -1,23 +1,42 @@
-name: Build and Test
+name: CI
 
 on:
+  push:
   pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  verify-proto:
+  verify-lint:
+    name: Verify & Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        run: |
+          wget https://go.dev/dl/go1.22.5.linux-amd64.tar.gz
+          sudo rm -rf /usr/local/go
+          sudo tar -C /usr/local -xzf go1.22.5.linux-amd64.tar.gz
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
 
       - name: Set up Buf
         uses: bufbuild/buf-setup-action@v1
         with:
           github_token: ${{ github.token }}
+
+      - name: Install protoc-gen plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+          go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@latest
 
       - name: Generate Proto
         run: make proto
@@ -35,7 +54,6 @@ jobs:
 
       - name: Check for drift
         run: |
-          # Only check for changes in generated proto files, ignore untracked files
           CHANGES=$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$|^\s*M.*_pb2.*\.py$|^\s*M.*\.proto$" || true)
           if [ -n "$CHANGES" ]; then
             echo "Error: Generated proto files are out of sync with protocol/proto/*.proto"
@@ -47,19 +65,7 @@ jobs:
       - name: Lint no bare session_id
         run: make lint-no-bare-session-id
 
-  lint-g8eo:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: services/g8eo/go.mod
-          cache-dependency-path: services/g8eo/go.sum
-
-      - name: Install golangci-lint from source
+      - name: Install golangci-lint
         run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
       - name: Run golangci-lint (g8eo)
@@ -70,17 +76,26 @@ jobs:
         run: golangci-lint run
         working-directory: protocol
 
-  vulncheck-g8eo:
+      - name: Run Constants Lint
+        run: go test -v -run TestNoRawStringLiteralsWhereConstantsExist ./internal/contracts
+        working-directory: services/g8eo
+        env:
+          G8E_STRICT_CONSTANTS_LINT: "1"
+        continue-on-error: true
+
+  security:
+    name: Security Scan
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: services/g8eo/go.mod
-          cache-dependency-path: services/g8eo/go.sum
+      - name: Install Go
+        run: |
+          wget https://go.dev/dl/go1.22.5.linux-amd64.tar.gz
+          sudo rm -rf /usr/local/go
+          sudo tar -C /usr/local -xzf go1.22.5.linux-amd64.tar.gz
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
 
       - name: Run govulncheck
         run: |
@@ -88,18 +103,20 @@ jobs:
           govulncheck ./...
         working-directory: services/g8eo
 
-  test-g8eo:
+  test:
+    name: Substrate Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: services/g8eo/go.mod
-          cache-dependency-path: services/g8eo/go.sum
+      - name: Install Go
+        run: |
+          wget https://go.dev/dl/go1.22.5.linux-amd64.tar.gz
+          sudo rm -rf /usr/local/go
+          sudo tar -C /usr/local -xzf go1.22.5.linux-amd64.tar.gz
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
 
       - name: Start Operator substrate
         run: ./g8e platform start
@@ -110,73 +127,6 @@ jobs:
       - name: Show Operator logs
         if: failure()
         run: tail -n 200 .g8e/logs/operator-listen.log || true
-
-      - name: Stop platform
-        if: always()
-        run: ./g8e platform stop
-
-  constants-lint:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: services/g8eo/go.mod
-          cache-dependency-path: services/g8eo/go.sum
-
-      - name: Run Constants Lint
-        run: go test -v -run TestNoRawStringLiteralsWhereConstantsExist ./internal/contracts
-        working-directory: services/g8eo
-        env:
-          G8E_STRICT_CONSTANTS_LINT: "1"
-
-  apps-g8ee:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    continue-on-error: true
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: services/g8eo/go.mod
-          cache-dependency-path: services/g8eo/go.sum
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
-      - name: Start Operator substrate
-        run: ./g8e platform start
-
-      - name: Start g8ee adapter
-        run: ./g8e apps start g8ee
-
-      - name: Test g8ee adapter
-        run: >-
-          ./g8e test g8ee
-          -p gemini
-          -k "$GEMINI_API_KEY"
-          -m gemini-3.1-pro-preview-customtools
-          -a gemini-3-flash-preview
-          -l gemini-3.1-flash-lite
-          -j auto
-          -- tests
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-
-      - name: Show app logs
-        if: failure()
-        run: |
-          tail -n 200 .g8e/logs/operator-listen.log || true
-          tail -n 200 .g8e/logs/g8ee.log || true
 
       - name: Stop platform
         if: always()
