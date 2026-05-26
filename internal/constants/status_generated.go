@@ -23,10 +23,10 @@ import "fmt"
 type ActionStatus string
 
 const (
-	ActionStatusCancelled                  = "cancelled"
-	ActionStatusCompleted                  = "completed"
-	ActionStatusFailed                     = "failed"
-	ActionStatusTimeout                    = "timeout"
+	ActionStatusCancelled     ActionStatus = "cancelled"
+	ActionStatusCompleted     ActionStatus = "completed"
+	ActionStatusFailed        ActionStatus = "failed"
+	ActionStatusTimeout       ActionStatus = "timeout"
 	ActionStatusUserCancelled ActionStatus = "user.cancelled"
 )
 
