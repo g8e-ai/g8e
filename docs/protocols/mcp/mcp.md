@@ -291,6 +291,6 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 
 ## Related Documentation
 
-- [**g8e Protocol**](../architecture/protocol.md) - The wire contract and governance hierarchy
-- [**Operator (g8eo)**](../architecture/operator.md) - Operator architecture and gateway mode
+- [**g8e Protocol**](../../architecture/protocol.md) - The wire contract and governance hierarchy
+- [**Operator (g8eo)**](../../architecture/operator.md) - Operator architecture and gateway mode
 - [**A2A Protocol**](../a2a/a2a.md) - A2A protocol specification and integration

@@ -3,8 +3,8 @@ site_description: Zero-trust execution substrate for agentic infrastructure
 site_author: g8e.ai
 site_url: https://docs.g8e.ai
 
-docs_dir: .
-site_dir: ../site
+docs_dir: docs
+site_dir: site
 
 # Repository
 repo_name: g8e-ai/g8e
@@ -33,13 +33,17 @@ theme:
     - content.code.copy
     - content.tabs.link
     - navigation.instant
+    - navigation.instant.progress
     - navigation.tracking
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.expand
     - navigation.top
+    - navigation.indexes
     - search.suggest
     - search.highlight
+    - search.share
   font:
     text: false
     code: false
@@ -73,12 +77,15 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Architecture:
-      - About: architecture/about.md
-      - Position Paper: reference/position_paper.md
+      - About: core/about.md
+      - Position Paper: core/position_paper.md
       - Operator: architecture/operator.md
       - Governance Gateway: architecture/gateway.md
+      - Protocol: architecture/protocol.md
+      - Codemap: architecture/codemap.md
   - Protocols:
-      - g8e Protocol: architecture/protocol.md
+      - g8e Protocol: protocols/g8e/g8e.md
+      - Architecture Protocol: architecture/protocol.md
       - MCP Protocol: protocols/mcp/mcp.md
       - A2A Protocol: protocols/a2a/a2a.md
   - Guides:
@@ -89,16 +96,19 @@ nav:
       - Connect Operator to Gateway: guides/connect_operator_to_gateway.md
       - Build Apps: guides/build_apps.md
       - Air Gap: guides/air_gap.md
+      - CLI Reference: guides/cli.md
   - Reference:
-      - API: reference/api/index.md
+      - API:
+          - API Overview: reference/api/index.md
+          - Common v1: reference/api/g8e/common/v1/index.md
+          - Operator v1: reference/api/g8e/operator/v1/index.md
+          - PubSub v1: reference/api/g8e/pubsub/v1/index.md
       - Constants: reference/constants.md
       - Glossary: reference/glossary.md
   - Developer:
       - Developer Guidelines: devs/devs.md
-      - CLI Reference: devs/cli.md
       - Testing: devs/tests.md
       - Troubleshooting: devs/troubleshooting.md
-      - Codemap: codemap.md
   - External:
       - A2A Protocol (JSON Schema): protocols/a2a/a2a.json
       - A2A Protocol (Proto): protocols/a2a/a2a.proto

@@ -289,8 +289,8 @@ Output scrubbing is performed directly at the `L5Actuator` boundary to redact to
 
 ## Related Documentation
 
-- [**Architecture Protocol Overview**](../architecture/protocol.md) - High-level protocol architecture and governance overview
-- [**Operator (g8eo)**](../architecture/operator.md) - Operator architecture and execution boundary
-- [**Gateway (g8eg)**](../architecture/gateway.md) - Governance Gateway architecture
+- [**Architecture Protocol Overview**](../../architecture/protocol.md) - High-level protocol architecture and governance overview
+- [**Operator (g8eo)**](../../architecture/operator.md) - Operator architecture and execution boundary
+- [**Gateway (g8eg)**](../../architecture/gateway.md) - Governance Gateway architecture
 - [**MCP Protocol**](../mcp/mcp.md) - MCP protocol specification and integration
 - [**A2A Protocol**](../a2a/a2a.md) - A2A protocol specification and integration

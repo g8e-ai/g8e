@@ -83,7 +83,7 @@ See [Error Handling](../protocols/g8e/g8e.md#error-handling) for complete error 
 - **Fail-Closed Audit Vault**: SQLite-backed service mandates valid session identifiers and rejects malformed events. If audit logging fails, execution is aborted.
 - **Sovereignty Boundary**: Output scrubbing is performed at the execution boundary to redact tokens, keys, and PII before any data leaves the host.
 
-See [Host Sovereignty & Data Audit](../protocols/g8e/g8e.md#host-sovereignty--data-audit) for detailed specifications.
+See [Host Sovereignty & Data Audit](../protocols/g8e/g8e.md#host-sovereignty-data-audit) for detailed specifications.
 
 ## Deep-Dive Reference
 
@@ -93,5 +93,5 @@ For comprehensive protocol specifications, schema details, event types, configur
 
 - [**Operator (g8eo)**](operator.md) - Operator architecture and execution boundary
 - [**Gateway (g8eg)**](gateway.md) - Governance Gateway architecture
-- [**MCP Protocol**](../mcp/mcp.md) - MCP protocol specification and integration
-- [**A2A Protocol**](../a2a/a2a.md) - A2A protocol specification and integration
+- [**MCP Protocol**](../protocols/mcp/mcp.md) - MCP protocol specification and integration
+- [**A2A Protocol**](../protocols/a2a/a2a.md) - A2A protocol specification and integration
