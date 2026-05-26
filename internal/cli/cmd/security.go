@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 )
 
@@ -114,7 +115,7 @@ func securityValidateCmd() *cobra.Command {
 			ports := []int{8440, 8443, 9000}
 			for _, port := range ports {
 				addr := fmt.Sprintf("127.0.0.1:%d", port)
-				listener, err := net.Listen("tcp", addr)
+				listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
 				if err != nil {
 					cmd.Printf("  [WARN] Port %d is in use\n", port)
 				} else {

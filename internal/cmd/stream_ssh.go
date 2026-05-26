@@ -24,11 +24,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
-
-	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // resolvedHost holds the SSH connection parameters for a single target.
@@ -398,7 +397,7 @@ func streamToHost(
 		err    error
 	}, 1)
 	go func() {
-		client, err := ssh.Dial("tcp", addr, clientConfig)
+		client, err := ssh.Dial(string(constants.NetworkProtocolTCP), addr, clientConfig)
 		dialDone <- struct {
 			client *ssh.Client
 			err    error
