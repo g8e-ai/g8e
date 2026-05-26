@@ -137,7 +137,7 @@ func TestBootstrapFlow(t *testing.T) {
 	// 8. Verify audit entry was created for bootstrap retirement
 	filters := []models.DocFilter{
 		{Field: "target", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", bootstrapUserID))},
-		{Field: "action", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", models.AdminAuditActionRetireLocalSuperadmin))},
+		{Field: "action", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", models.AdminAuditActionRetireLocalOwner))},
 	}
 	results, err := h.db.DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
 	require.NoError(t, err)
@@ -148,7 +148,7 @@ func TestBootstrapFlow(t *testing.T) {
 	require.NoError(t, err)
 	err = json.Unmarshal(auditBytes, &auditEntry)
 	require.NoError(t, err)
-	assert.Equal(t, models.AdminAuditActionRetireLocalSuperadmin, auditEntry.Action)
+	assert.Equal(t, models.AdminAuditActionRetireLocalOwner, auditEntry.Action)
 	assert.Equal(t, realUserID, auditEntry.Actor)
 	assert.Equal(t, realOperatorID, auditEntry.OperatorID)
 	assert.Equal(t, "retired_by_real_login", auditEntry.Details["reason"])

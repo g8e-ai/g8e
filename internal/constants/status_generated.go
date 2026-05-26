@@ -833,10 +833,10 @@ const (
 type UserRole string
 
 const (
-	UserRoleAdmin      UserRole = "admin"
-	UserRoleOperator   UserRole = "operator"
-	UserRoleSuperadmin UserRole = "superadmin"
-	UserRoleUser       UserRole = "user"
+	UserRoleAdmin    UserRole = "admin"
+	UserRoleOperator UserRole = "operator"
+	UserRoleOwner    UserRole = "owner"
+	UserRoleUser     UserRole = "user"
 )
 
 // UserStatus is a typed string for user_status.
