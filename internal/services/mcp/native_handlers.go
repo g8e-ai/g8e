@@ -29,6 +29,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -654,7 +656,7 @@ func (h *NativeToolHandler) handleProcMetricTop(ctx context.Context, arguments j
 			Name:       name,
 			CPUPercent: totalTime,
 			MemoryMB:   memoryMB,
-			User:       "unknown",
+			User:       string(constants.SystemHealthUnknown),
 			Command:    name,
 		})
 	}
@@ -866,7 +868,7 @@ func (h *NativeToolHandler) handleNetSocketAudit(ctx context.Context, arguments 
 	}
 
 	var sockets []SocketInfo
-	protocols := []string{"tcp", "udp"}
+	protocols := []string{string(constants.NetworkProtocolTCP), string(constants.NetworkProtocolUDP)}
 
 	if req.Protocol != "" {
 		protocols = []string{strings.ToLower(req.Protocol)}
@@ -947,7 +949,7 @@ func parseSocketAddr(hexAddr string) (string, int) {
 		p4, _ := strconv.ParseInt(ipHex[0:2], 16, 32)
 		ip = fmt.Sprintf("%d.%d.%d.%d", p1, p2, p3, p4)
 	} else {
-		ip = "unknown"
+		ip = string(constants.SystemHealthUnknown)
 	}
 
 	return ip, int(port)
@@ -975,7 +977,7 @@ func (h *NativeToolHandler) handleNetEndpointPing(ctx context.Context, arguments
 		}
 	}
 
-	conn, err := dialer.DialContext(ctx, "tcp", address)
+	conn, err := dialer.DialContext(ctx, string(constants.NetworkProtocolTCP), address)
 	latency := time.Since(start).Seconds() * 1000
 
 	if err != nil {
