@@ -112,7 +112,7 @@ Every mutation passes through sequential verification layers at the Operator bou
 | :---: | --- | --- | --- |
 | **L1** | **Doctrine** | Reflected `forbidden_patterns` + MITRE ATT&CK heuristics | The action trips no hard gate (reverse shells, privilege escalation, destructive disk ops). |
 | **L2** | **Consensus** | Ed25519 k-of-n over the transaction hash | An independent, heterogeneous model ensemble co-signed the intent. |
-| **L3** | **Notary** | mTLS certificate fingerprint (CLI) | A human authorized *this exact* transaction hash — not a session. |
+| **L3** | **Notary** | WebAuthn (web) / mTLS cert fingerprint (CLI) | A human authorized *this exact* transaction hash — not a session. |
 | **L4** | **Warden** | Pre-dispatch verification gate | Hash, freshness, state binding, and signer trust all hold. |
 | **L5** | **Actuator** | Single fail-closed dispatch path | The only code path that mutates the host; emits a signed `ActionReceipt`. |
 
