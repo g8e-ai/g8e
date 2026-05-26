@@ -65,6 +65,8 @@ gates with no optional application-layer coupling in the critical path.
 * **Governance layer separation** - L1 Doctrine, L2 Consensus (Tribunal), L3 Notary, L4 Warden, and
   L5 Actuator are now clearly separated packages with explicit interfaces and generated mocks. Dead
   code and ambiguous shared state between Tribunal and consensus definitions removed.
+* **Canonical wire format** - Formalized canonical JSON (`protojson`) as the required client-facing wire format for all Governance Envelopes instead of binary protobuf bytes, ensuring universal BYO client compatibility.
+* **Local-only Protobuf generation** - Migrated `buf.gen.yaml` from BSR remote plugins to local-only generation to completely eliminate network dependencies and rate limits during compilation.
 * **SPIFFE URI SAN hardening** - Parsing fragility fixed; format validation tightened across both
   code and test fixtures.
 * **DB transaction safety** - Unprotected transactions fixed; cursor-based query patterns replaced.
@@ -90,6 +92,7 @@ gates with no optional application-layer coupling in the critical path.
 ### Security
 
 * **Sentinel encryption** - Sovereignty Boundary Plane encrypts sensitive fields before audit publishing; decrypts at authorized egress.
+* **Fail-closed Audit Vault** - `AuditVaultService` now strictly rejects missing/malformed session IDs and unknown sessions prior to any audit writes, preventing invalid event relationships.
 * **Bulk revocation with rate limiting** - Rapid revocation of compromised credentials at fleet scale without unbounded load.
 * **mTLS for non-native apps** - App enrollment service extends mTLS enforcement to heterogeneous clients.
 * **SPIFFE URI SAN hardening** - Fragile SPIFFE parsing that accepted malformed URIs on valid inputs fixed.
