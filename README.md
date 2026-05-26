@@ -1,12 +1,12 @@
-<div align="center">
+<div align="left">
 
 # g8e
 
-**Data-Sovereign Runtime Governance for Autonomous Execution**
+**Runtime Governance Substrate for Autonomous Execution**
 
-g8e is three things: a **protocol** that wraps every tool call in a signed, state-bound transaction; a **Governance Gateway** that admits those transactions; and a **Governed Operator** that verifies and executes them on the host.
+g8e is a zero-trust execution substrate for agentic infrastructure. It defines a protocol for typed, signed, state-bound transactions; a Governance Gateway (`g8eg`) for admission and PKI management; and a Governed Operator (`g8eo`) for host-local verification and execution.
 
-If you know MCP, you already know the shape of this: the Governed Operator is an MCP server — elevated. The Governance Gateway is an MCP gateway — elevated. g8e is not an agent and not an engine. It's the substrate that makes any agent safe to run against real infrastructure.
+The architecture extends standard Model Context Protocol (MCP) and Agent-to-Agent (A2A) topologies with a fail-closed governance gauntlet. The Operator serves as the execution boundary, requiring cryptographic evidence of technical bedrock (L1), model consensus (L2), and human authorization (L3) before mutating state. g8e is the underlying substrate that secures agentic ensembles against production environments.
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev)
@@ -35,14 +35,14 @@ transaction; the host verifies that transaction before it executes.
 
 ## The mental model
 
-You already run MCP servers and, maybe, an MCP gateway in front of them. g8e is the same topology with governance and sovereignty welded in.
+g8e follows standard MCP topology with integrated governance and data sovereignty.
 
-| You know… | g8e elevates it to… | What's added |
+| Reference | g8e Role | Implementation |
 | --- | --- | --- |
-| **MCP server** — exposes tools to a client | **Governed Operator (`g8eo`)** | Same tool-calling facade, but every call clears the gauntlet *on the host* before it executes. Listens on nothing, runs on remote / private / air-gapped machines, and keeps a local audit vault. |
-| **MCP gateway** — proxies calls to servers | **Governance Gateway (`g8eg`)** | Doesn't just route — it admits *signed, state-bound* envelopes and dispatches them to remote Operators that execute locally and return scrubbed receipts. Raw data never leaves the host. |
+| **MCP server** | **Governed Operator (`g8eo`)** | Provides a tool-calling facade where every execution clears the host-local governance gauntlet. Listens on no inbound ports; runs on remote, private, or air-gapped hosts. |
+| **MCP gateway** | **Governance Gateway (`g8eg`)** | Admits signed, state-bound envelopes and dispatches them to remote Operators. Maintains PKI and provides a centralized audit authority without raw data exposure. |
 
-The payoff is that g8e is **agent-agnostic, model-agnostic, platform-agnostic, and domain-agnostic**. The governance layer doesn't care which agent proposed the action, which model signed it, which OS runs it, or what the action is for. It governs the envelope, not the source.
+The substrate is **agent-agnostic, model-agnostic, platform-agnostic, and domain-agnostic**. The governance layer verifies the envelope integrity and proofs regardless of the proposing agent, signing model, or target operating system.
 
 ```mermaid
 graph TD
@@ -51,10 +51,10 @@ graph TD
         C2["Agentic ensemble<br/>(A2A / tool calls)"]
     end
 
-    GW["Governance Gateway · g8eg<br/>(elevated MCP gateway)<br/>admits signed envelopes · owns PKI"]
+    GW["Governance Gateway · g8eg<br/>(Policy Decision Point)<br/>admits signed envelopes · owns PKI"]
 
     subgraph Fleet ["Sovereign hosts — platform-agnostic · domain-agnostic"]
-        O1["Governed Operator · g8eo<br/>(elevated MCP server)<br/>governs + executes locally"]
+        O1["Governed Operator · g8eo<br/>(Policy Execution Point)<br/>governs + executes locally"]
         D1[("Raw data + audit<br/>stay on host")]
         O2["Governed Operator · g8eo<br/>(firewalled / air-gapped host)"]
         D2[("Raw data + audit<br/>stay on host")]
@@ -72,7 +72,7 @@ graph TD
 
 ## The Governed Operator
 
-The Operator is the center of gravity — an elevated MCP server that is the only component permitted to mutate the host, and refuses to do so until every proof checks out locally.
+The Operator is the primary execution boundary—a protocol-aware MCP server that enforces local verification before host mutation.
 
 The reference implementation, **`g8eo`**, is a single statically compiled Go binary — **~7MB compressed, zero standing dependencies** — and how you start it decides what it is:
 
@@ -104,9 +104,9 @@ Any conforming implementation, in any language, that enforces the invariants is 
 
 ---
 
-## The gauntlet
+## Governance Layers
 
-Every mutation passes through layers in sequence at the Operator boundary. Each layer produces cryptographic evidence that travels inside the envelope. Fail any layer, and the transaction is rejected and audited — never executed.
+Every mutation passes through sequential verification layers at the Operator boundary. Each layer produces cryptographic evidence that travels inside the envelope. Failed transactions are rejected and audited immediately.
 
 | Layer | Name | Mechanism | What it proves |
 | :---: | --- | --- | --- |
@@ -129,7 +129,7 @@ The split between L2 and L3 is the point: one model can't unilaterally move the 
 
 ## How it works
 
-A producer forms intent and reaches consensus; the Operator pulls the envelope over its outbound tunnel, runs the gauntlet locally, executes through the Actuator, and pushes back a scrubbed, signed receipt.
+A producer forms intent and reaches consensus; the Operator pulls the envelope over its outbound tunnel, runs local verification layers, executes through the Actuator, and pushes back a scrubbed, signed receipt.
 
 ```mermaid
 sequenceDiagram
@@ -146,7 +146,7 @@ sequenceDiagram
     Operator->>Gateway: Open outbound-only mTLS tunnel
     Operator->>Gateway: Fetch pending GovernanceEnvelope
 
-    Note over Operator: Run gauntlet — Doctrine, Consensus, Notary, Warden<br/>(fail-closed)<br/>Execute via Actuator<br/>Anchor to local audit vault
+    Note over Operator: Sequential verification — Doctrine, Consensus, Notary, Warden<br/>(fail-closed)<br/>Execute via Actuator<br/>Anchor to local audit vault
 
     Operator->>Gateway: Push Sovereignty-scrubbed signed receipt
     Gateway->>Principal: Return final safe output
@@ -258,9 +258,9 @@ v1.0.0 completes the "substrate-first" decoupling. Originally a monolith (Dashbo
 
 ---
 
-## What the outbound-only model unlocks
+## Outbound-Only Deployment Patterns
 
-Every use case is the same pattern: a signed envelope reaches a sovereign host through an outbound tunnel, clears the gauntlet locally, and produces a tamper-evident receipt.
+The outbound-only mTLS model enables several secure infrastructure patterns where a signed envelope reaches a sovereign host, clears local verification, and produces a tamper-evident receipt.
 
 - **Distributed fleet operations.** Operators across on-prem, VPCs, and edge all dial out to one Gateway. A single signed command fans out to every host — no inbound ports, no VPNs.
 - **Incident response on firewalled hosts.** A production box sits behind a corporate firewall. An AI proposes a fix, the consensus panel validates it, you authorize via CLI/mTLS, and the Operator executes locally.
