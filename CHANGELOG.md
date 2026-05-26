@@ -7,6 +7,268 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+# [1.0.0] - 2026-05-25
+
+## Overview
+Release **v1.0.0** represents the maturation of g8e into a production-ready zero-trust governance substrate. This release completes the substrate-first architecture by removing the g8ee application layer from the substrate, dissolving the Sentinel component into protocol layers, and establishing a comprehensive scenario-based testing framework. The platform now operates as a pure governance substrate with typed, signed, state-bound transactions enforced through fail-closed L1/L2/L3 verification gates.
+
+## Breaking Changes
+
+* **g8ee Removal from Substrate**: Completely removed the g8ee (Engine) application layer from the substrate. g8ee is now a standalone optional application adapter that must be run separately from the governance substrate.
+* **Sentinel Dissolution**: Dissolved the Sentinel component into L1 Doctrine (Technical Bedrock) protocol layers. Threat detection logic now executes within the L4 Warden gate, and data sovereignty logic moved to a new Sovereignty Boundary Plane package.
+* **Raw Vault Removal**: Removed the raw audit vault in favor of sentinel-moderated vault storage. All audit data now passes through Sentinel scrubbing/rehydration logic.
+* **Cursor-Based Query Elimination**: Removed cursor-based query patterns in favor of optimized direct database access patterns.
+* **Session ID Field Migration**: Migrated from `web_session_id` to `cli_session_id` across all logging, events, and constants for consistency with CLI-first architecture.
+* **Constants Regeneration**: All Go constants regenerated with deterministic sorting and new collection definitions (app_policies, storage events, operator field read events).
+
+## Added
+
+* **Scenario Testing Framework**: Comprehensive scenario-based testing suite with 39 test fixtures covering governance gates (L1/L2/L3 validation), security scenarios (forged signatures, stale state roots), and receipt verification. Includes golden file assertions and fixture generation tooling.
+* **A2A Gateway Tests**: Added A2A (Agent-to-Agent) protocol translator gateway tests with real operator integration.
+* **Bulk Certificate Revocation**: Implemented bulk certificate revocation with rate limiting for large-scale fleet management.
+* **SPIFFE URI SAN Parsing**: Enhanced SPIFFE URI SAN parsing with improved fragility handling and format validation.
+* **External App mTLS Integration**: mTLS support for non-native applications integrating with the substrate.
+* **Sentinel Encryption**: Added Sentinel encryption layer for data sovereignty with BYO client test coverage.
+* **App Policies Collection**: New `app_policies` collection in constants for application-layer policy governance.
+* **Clock Injection**: Test-time clock injection for deterministic testing of time-sensitive operations.
+* **Deterministic Constant Generation**: Implemented deterministic sorting for Go constant exporter to ensure reproducible builds.
+* **Headers Generation Tracking**: Added `headers_generated.go` tracking to constant registry check system.
+* **Unit and Integration Test Subcommands**: Separated unit and integration test execution into distinct CLI subcommands for better CI/CD control.
+* **Test Parallelism**: Improved test parallelism with session definition fixes and chaos test count corrections.
+* **Tamper Receipt Tests**: Added comprehensive tests for receipt tampering detection and verification.
+* **Gauntlet Tests**: Added Gauntlet framework tests for governance pipeline validation.
+* **Chaos Tester Tests**: Enhanced chaos testing with dedicated test coverage.
+* **Exporter Tests**: Added test coverage for the exporter component.
+* **Platform Start Shorthand**: Added `-a` shorthand flag to `platform start` command for faster startup.
+
+## Changed
+
+* **Governance File Structure**: Improved governance file structure organization for better maintainability.
+* **Tribunal and Consensus Separation**: Clarified separation between Tribunal (L2 consensus) and consensus mechanisms for architectural clarity.
+* **Doctrine and Sentinel Separation**: Better separation between L1 Doctrine definitions and Sentinel enforcement logic.
+* **DB Optimizations**: Database query optimizations including removal of cursor-based patterns and unprotected transaction fixes.
+* **PKI Test Initialization**: Refactored PKI test initialization for better reliability and isolation.
+* **Binary Building**: Improved binary building process with "one build, then copy" pattern for consistency.
+* **Platform Reset Fix**: Fixed platform reset command to properly clean all substrate state.
+* **CLI Auth Improvements**: Enhanced CLI authentication flow and error handling.
+* **CLI Menu Organization**: Moved setup to top of menu, cleaned up menu structure for better UX.
+* **Gateway Start and Login**: Improved gateway startup sequence and login flow reliability.
+* **Test Constants Fix**: Fixed test constant generation and resolution issues.
+* **Docs and Status**: Improved documentation and platform status reporting.
+* **Docs Pipeline**: Complete documentation pipeline reorganization with script cleanup.
+* **Mkdocs Improvements**: Migrated to built-in readthedocs theme, removing external theme dependency.
+* **Dev Setup Improvements**: Enhanced developer setup documentation and tooling.
+* **mTLS Bootstrap**: Fixed mTLS bootstrap process for first-time setup.
+* **Operator Build Tooling**: Improved operator binary build tooling and reliability.
+* **Sentinel Data Handling**: Enhanced Sentinel data handling with local store integration.
+* **Concurrency Improvements**: Fixed concurrency issues in various services.
+* **Constants Casing**: Standardized constants casing including acronym fixes.
+* **MCP and A2A Documentation**: Improved documentation for MCP and A2A protocol integration.
+* **Codemap Updates**: Updated architecture codemaps to reflect new structure.
+* **Directory Structure**: Updated directory structure to align with substrate-first architecture.
+* **Local Directory Fix**: Fixed local directory resolution issues.
+* **Header Fix**: Fixed header generation and tracking issues.
+* **Logout and Platform Tests**: Fixed logout functionality and platform test suite.
+* **Protobuf Version**: Upgraded to Protobuf version 1.35.2 with toolchain mismatch fixes.
+* **Go Lints**: Applied comprehensive Go linting fixes across the codebase.
+* **Test Coverage**: Massive test coverage improvements across pubsub, auth, UAP, interfaces, models, responder, API clients, security, and CLI components.
+* **Unprotected Transaction Fix**: Fixed unprotected database transactions that could lead to data inconsistency.
+* **Decouple App Policy**: Decoupled application policy logic from substrate core.
+* **Strongly Typed Mutations**: Enhanced strongly typed mutation enforcement.
+* **External App mTLS**: Improved mTLS integration for external applications.
+* **Wire Up Sentinel to LocalStore**: Integrated Sentinel with local storage layer.
+* **Move VaultModerateRaw to SentinelModerateRaw**: Renamed vault moderation functions to reflect Sentinel ownership.
+* **Remove Raw Vault**: Completely removed raw audit vault in favor of Sentinel-moderated storage.
+* **Fix Hardcoded Test Cert**: Fixed hardcoded test certificate usage for proper test isolation.
+* **Exclude Proto from Tests**: Excluded protobuf-generated code from test coverage calculations.
+* **Exclude Mocks from Tests**: Excluded mock code from test coverage calculations.
+* **Fix Gov Mock and Coverage Report**: Fixed governance mocks and coverage reporting accuracy.
+* **SPIFFE Format in Tests**: Standardized SPIFFE format usage in test fixtures.
+* **Fix SPIFFE Parsing Fragility**: Fixed fragile SPIFFE URI parsing logic.
+* **Improve Test Session Definitions**: Enhanced test session definition handling.
+* **Improve Scenario Tests**: Improved scenario test framework reliability.
+* **Fix Chaos Test Count**: Fixed chaos test counting logic.
+* **Mode X Truth Table Fixtures**: Added Mode X truth table test fixtures for governance validation.
+* **Finish Adding Scenario Tests**: Completed scenario test suite implementation.
+* **Unit and Integration Test Subcommands**: Split test execution into unit and integration subcommands.
+* **Improve Governance File Structure**: Reorganized governance-related files for better structure.
+* **Clear Consensus Definition**: Clarified consensus mechanism definitions.
+* **Dissolve Sentinel into Proto Layers**: Moved Sentinel logic into protocol layer definitions.
+* **Docs Update**: Comprehensive documentation updates reflecting architectural changes.
+* **More Doc Reorgs**: Multiple documentation reorganization passes.
+* **Clean Up Docs Pipeline**: Streamlined documentation generation pipeline.
+* **Doc Reorg**: Major documentation reorganization effort.
+* **Tribunal Cleanup**: Cleaned up Tribunal implementation and removed dead code.
+* **Protocol Gen Doc Fix**: Fixed protocol documentation generation.
+* **More Tribunal Cleanup**: Additional Tribunal cleanup and simplification.
+* **Clearer Separation of Tribunal and Consensus**: Improved architectural separation.
+* **Improve Test Session Definitions**: Enhanced test session handling.
+* **Tamper Receipt Test**: Added receipt tampering detection tests.
+* **Fix Gauntlet Tests**: Fixed Gauntlet framework test failures.
+* **Improve GW Start and Login Fix**: Fixed gateway startup and login issues.
+* **Mkdocs Improvements**: Enhanced Mkdocs configuration and theming.
+
+## Removed
+
+* **g8ee from Substrate**: Completely removed g8ee (Engine) from the substrate codebase and root Makefile.
+* **g8ee Environment Dependencies**: Cleaned up g8ee-specific environment variable dependencies.
+* **Shell Scripts**: Removed unnecessary shell scripts in favor of Go-native implementations.
+* **Entrypoint.sh Remnants**: Removed remaining entrypoint.sh script remnants.
+* **Raw Vault**: Removed raw audit vault storage layer.
+* **Cursor-Based Queries**: Eliminated cursor-based database query patterns.
+* **Unnecessary Scripts**: Cleaned up unnecessary scripts throughout the codebase.
+* **Vendor Dependencies**: Removed vendored gotestsum dependencies in favor of direct tooling.
+
+## Fixed
+
+* **Unprotected Transactions**: Fixed database transactions that were not properly protected.
+* **SPIFFE Parsing Fragility**: Fixed fragile SPIFFE URI parsing that could fail on valid inputs.
+* **Hardcoded Test Cert**: Removed hardcoded test certificate for proper test isolation.
+* **Platform Reset**: Fixed platform reset command to clean all state.
+* **Logout and Platform Tests**: Fixed logout functionality and platform test failures.
+* **Chaos Test Count**: Fixed incorrect chaos test counting logic.
+* **Local Directory Resolution**: Fixed local directory path resolution issues.
+* **Header Generation**: Fixed header generation and tracking in constant registry.
+* **Test Constants**: Fixed test constant generation and resolution.
+* **mTLS Bootstrap**: Fixed mTLS bootstrap process for first-time setup.
+* **CLI Auth**: Fixed CLI authentication flow issues.
+* **Gateway Start**: Fixed gateway startup sequence.
+* **Concurrency Issues**: Fixed various concurrency race conditions.
+* **DB Optimizations**: Fixed database performance and correctness issues.
+* **PKI Test Init**: Fixed PKI test initialization for better isolation.
+* **Binary Building**: Fixed binary build process issues.
+* **Docs Pipeline**: Fixed documentation generation pipeline issues.
+* **Protobuf Toolchain**: Fixed Protobuf toolchain version mismatch.
+* **Go Lints**: Fixed Go linting issues across the codebase.
+* **Test Coverage**: Fixed test coverage calculation and reporting.
+* **Gov Mock**: Fixed governance mock implementations.
+* **SPIFFE Format**: Fixed SPIFFE format inconsistencies in tests.
+* **Scenario Tests**: Fixed scenario test framework issues.
+* **Gauntlet Tests**: Fixed Gauntlet test failures.
+* **Tamper Receipt Test**: Fixed receipt tampering detection tests.
+* **Test Session Definitions**: Fixed test session definition handling.
+* **Clock Injection**: Fixed clock injection for deterministic testing.
+* **Constants Casing**: Fixed inconsistent constants casing.
+* **Acronym Casing**: Fixed acronym casing in constants.
+* **External App mTLS**: Fixed mTLS integration for external apps.
+* **Sentinel Encryption**: Fixed Sentinel encryption layer issues.
+* **BYO Client Test**: Fixed BYO client test failures.
+* **Constants Generation**: Fixed constants generation and sorting.
+* **Headers Generated Tracking**: Fixed tracking of generated headers.
+* **App Policies Collection**: Fixed app_policies collection integration.
+* **Remove g8ee References**: Fixed remaining g8ee references in root Makefile.
+* **Env Var Dep Cleanup**: Fixed environment variable dependency cleanup.
+* **SH Scripts Removal**: Fixed issues after shell script removal.
+* **Entrypoint Remnants**: Fixed issues after entrypoint.sh removal.
+* **Headers and Makefile Print**: Fixed header generation and Makefile output.
+* **Pubsub and Auth Test Coverage**: Fixed test coverage for pubsub and auth.
+* **UAP Test Coverage**: Fixed UAP (Universal Action Protocol) test coverage.
+* **Exclude Proto from Tests**: Fixed protobuf exclusion from test coverage.
+* **Exclude Mocks from Tests**: Fixed mock exclusion from test coverage.
+* **Interfaces Test Coverage**: Fixed interfaces test coverage.
+* **Models Test Coverage**: Fixed models test coverage.
+* **Responder Test Coverage**: Fixed responder test coverage.
+* **API and Auth Clients Coverage**: Fixed API and auth client test coverage.
+* **Security Test Coverage**: Fixed security test coverage.
+* **CLI Test Coverage**: Fixed CLI test coverage.
+* **More Test Coverage**: Fixed general test coverage issues.
+* **Exporter Test**: Fixed exporter test failures.
+* **Chaos Tester Tests**: Fixed chaos tester test failures.
+* **Logout and Platform Tests**: Fixed logout and platform test failures.
+* **Fix Gov Mock and Coverage Report**: Fixed governance mock and coverage reporting.
+* **Add -a Shorthand**: Fixed platform start shorthand flag.
+* **SPIFFE Format in Tests**: Fixed SPIFFE format in test fixtures.
+* **Bulk Revocation**: Fixed bulk certificate revocation implementation.
+* **Rate Limiting**: Fixed rate limiting implementation.
+* **SPIFFE Parsing**: Fixed SPIFFE URI parsing implementation.
+* **Decouple App Policy**: Fixed app policy decoupling.
+* **Strongly Typed Mutations**: Fixed strongly typed mutation enforcement.
+* **External App mTLS Integration**: Fixed external app mTLS integration.
+* **Improve Concurrency**: Fixed concurrency issues.
+* **Elim Cursor Based Query**: Fixed cursor-based query removal.
+* **More Constants Casing**: Fixed constants casing issues.
+* **Fix Acronym Casing**: Fixed acronym casing.
+* **Improve Constants**: Fixed constants generation.
+* **MCP and A2A Doc**: Fixed MCP and A2A documentation.
+* **Concurrency Fix**: Fixed concurrency issues.
+* **MV VaultModerateRaw to SentinelModerateRaw**: Fixed vault moderation function renaming.
+* **Wire Up Sentinel to LocalStore**: Fixed Sentinel local store integration.
+* **RM Raw Vault**: Fixed raw vault removal.
+* **DB Optimizations**: Fixed database optimizations.
+* **Fix Unprotected Txns**: Fixed unprotected transaction issues.
+* **Refactor PKI Test Init**: Fixed PKI test initialization.
+* **mTLS for Non-Native Apps**: Fixed mTLS for non-native apps.
+* **Sentinel Encrypt**: Fixed Sentinel encryption.
+* **BYO Client Test**: Fixed BYO client tests.
+* **Constants Generation**: Fixed constants generation.
+* **One Build Then CP**: Fixed build process.
+* **Platform Reset Fix**: Fixed platform reset.
+* **Test Constants Fix**: Fixed test constants.
+* **Improve Docs and Status**: Fixed documentation and status.
+* **More CLI Improvements**: Fixed CLI improvements.
+* **Exec Service Fixes**: Fixed execution service issues.
+* **Docs Pipeline**: Fixed documentation pipeline.
+* **RM Scripts**: Fixed script removal.
+* **Cleanup Unnecessary Scripts**: Fixed unnecessary script cleanup.
+* **A More Sovereign Binary**: Fixed binary sovereignty.
+* **Add --path-prefix Flag**: Fixed golangci-lint path prefix.
+* **Add Operator Field Read Events**: Fixed operator field read events.
+* **Regenerate Constants Registry**: Fixed constants registry regeneration.
+* **Commit Generated Channels Constants**: Fixed generated channels constants.
+* **Update Logger Field Names**: Fixed logger field names.
+* **Add Storage Events**: Fixed storage events.
+* **Docs Pipeline**: Fixed documentation pipeline.
+* **RM Scripts**: Fixed script removal.
+* **Docs Update Scripts Updates**: Fixed documentation update scripts.
+* **Migrate to Built-in ReadTheDocs Theme**: Fixed theme migration.
+* **Fix Helps**: Fixed help text.
+* **New Dev Setup Improvements**: Fixed dev setup.
+* **Fix mTLS Bootstrap**: Fixed mTLS bootstrap.
+* **Move Setup to Top of Menu**: Fixed menu organization.
+* **Clean Menu**: Fixed menu cleanup.
+* **Sentinel Data Handling**: Fixed Sentinel data handling.
+* **Improve Operator Build Tooling**: Fixed operator build tooling.
+
+## Security
+
+* **Bulk Certificate Revocation**: Added bulk certificate revocation with rate limiting for rapid response to compromised credentials.
+* **Sentinel Encryption**: Enhanced data sovereignty with Sentinel encryption layer for sensitive audit data.
+* **mTLS for Non-Native Apps**: Extended mTLS enforcement to non-native applications integrating with the substrate.
+* **SPIFFE URI SAN Hardening**: Improved SPIFFE URI SAN parsing with better validation and fragility fixes.
+* **Unprotected Transaction Fix**: Fixed database transactions that could expose inconsistent state.
+* **Receipt Tampering Detection**: Added comprehensive tests for receipt tampering detection.
+* **Mode X Truth Table Fixtures**: Added security fixtures for Mode X governance validation.
+* **Security Test Coverage**: Improved security test coverage across all components.
+
+## Testing
+
+* **Scenario Testing Framework**: New comprehensive scenario-based testing suite with 39 fixtures covering governance gates, security scenarios, and receipt verification.
+* **A2A Gateway Tests**: Added A2A protocol translator gateway tests with real operator integration.
+* **Tamper Receipt Tests**: Added receipt tampering detection and verification tests.
+* **Gauntlet Tests**: Added Gauntlet framework tests for governance pipeline validation.
+* **Chaos Tester Tests**: Enhanced chaos testing with dedicated test coverage.
+* **Test Coverage Improvements**: Massive test coverage improvements across pubsub, auth, UAP, interfaces, models, responder, API clients, security, and CLI components.
+* **Unit and Integration Test Subcommands**: Separated unit and integration test execution for better CI/CD control.
+* **Test Parallelism**: Improved test parallelism with session definition fixes.
+* **Clock Injection**: Added test-time clock injection for deterministic testing.
+* **Golden File Assertions**: Added golden file assertions for scenario tests.
+* **Fixture Generation Tooling**: Added tooling for generating test fixtures.
+* **Exclude Proto and Mocks**: Excluded protobuf-generated code and mocks from test coverage calculations.
+
+## Documentation
+
+* **Complete Documentation Reorganization**: Major documentation reorganization reflecting substrate-first architecture.
+* **Mkdocs Migration**: Migrated to built-in readthedocs theme, removing external theme dependency.
+* **MCP and A2A Documentation**: Improved documentation for MCP and A2A protocol integration.
+* **Dev Setup Improvements**: Enhanced developer setup documentation and tooling.
+* **Codemap Updates**: Updated architecture codemaps to reflect new structure.
+* **Docs Pipeline**: Streamlined documentation generation pipeline with script cleanup.
+* **Governance File Structure**: Improved governance file structure documentation.
+* **Tribunal and Consensus Separation**: Clarified separation between Tribunal and consensus in documentation.
+* **Doctrine and Sentinel Separation**: Better documentation of L1 Doctrine and Sentinel separation.
+
+---
+
 # [0.2.7] - 2026-05-20
 
 ## Overview

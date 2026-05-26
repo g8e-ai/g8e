@@ -6,7 +6,7 @@ parent: Guides
 # Build a Governance Gateway
 
 Last Updated: 2026-05-25
-Version: v0.2.6
+Version: v1.0.0
 
 ---
 
