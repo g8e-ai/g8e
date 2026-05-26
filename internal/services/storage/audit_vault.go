@@ -213,8 +213,12 @@ func (avs *AuditVaultService) createDirectoryStructure() error {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
-		avs.logger.Info("Directory ensured", "path", dir)
 	}
+
+	avs.logger.Info("Audit vault directory structure ensured",
+		"data_dir", avs.config.DataDir,
+		"ledger_dir", avs.ledgerPath,
+		"sessions_dir", avs.sessionsRoot)
 
 	return nil
 }

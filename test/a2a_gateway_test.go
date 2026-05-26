@@ -14,18 +14,18 @@
 package tests
 
 /*
-TestMCPGateway_EndToEnd exercises g8eo from the perspective of a standard MCP client
-(e.g., Claude Code or a generic AI agent). It verifies the "Universal Protocol Translator"
+TestA2AGateway_EndToEnd exercises g8eo from the perspective of a standard A2A client
+(e.g., Google Agent2Agent protocol). It verifies the "Universal Protocol Translator"
 logic which allows "dumb" clients to be governed by the g8e Gateway without needing
 native signing or envelope construction logic.
 
 Practical Coverage:
-1. Protocol Translation: Maps JSON-RPC tools/list and tools/call to typed GovernanceEnvelopes.
-2. 3-Layer Gauntlet: Forces tool calls through L1 (Hard Gates), L2 (Consensus), and L3 (Approval).
+1. Protocol Translation: Maps A2A skill calls to typed GovernanceEnvelopes.
+2. 3-Layer Gauntlet: Forces skill calls through L1 (Hard Gates), L2 (Consensus), and L3 (Approval).
 3. Suspension & OOB: Verifies that mutations are suspended, recorded, and only resumed
    after Out-of-Band (OOB) human approval via WebAuthn/Passkey.
 4. Downstream Dispatch: Ensures verified payloads are correctly unwrapped and dispatched
-   to the real downstream MCP server.
+   to the real downstream A2A server.
 */
 
 import (
@@ -62,13 +62,13 @@ import (
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
-type gatewayRejectingL3Notary struct{}
+type a2aGatewayRejectingL3Notary struct{}
 
-func (gatewayRejectingL3Notary) VerifyL3Proof(_ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
+func (a2aGatewayRejectingL3Notary) VerifyL3Proof(_ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
 	return false, nil
 }
 
-func TestMCPGateway_EndToEnd(t *testing.T) {
+func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	// Use shared test vault directory for persistent inspection
 	repoRoot, err := os.Getwd()
 	require.NoError(t, err)
@@ -92,27 +92,19 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	secretsDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 
-	// 1. Setup Mock Downstream MCP Server
+	// 1. Setup Mock Downstream A2A Server
 	downstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Method string `json:"method"`
+			SkillName string `json:"skill_name"`
 		}
 		json.NewDecoder(r.Body).Decode(&req)
 
 		w.Header().Set("Content-Type", "application/json")
-		if req.Method == "tools/list" {
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"echo","description":"echoes input"}]}}`))
-		} else if req.Method == "tools/call" {
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"mcp says hello"}]}}`))
-		} else if req.Method == "resources/list" {
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"resources":[{"uri":"file:///test.txt","name":"test.txt"}]}}`))
-		} else if req.Method == "prompts/list" {
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"prompts":[{"name":"test-prompt","description":"A test prompt"}]}}`))
-		}
+		w.Write([]byte(`{"result":"a2a says hello","summary":"verified skill execution"}`))
 	}))
 	defer downstreamServer.Close()
 
-	// 2. Setup Operator with MCP configuration
+	// 2. Setup Operator with A2A configuration
 	cfg, err := config.LoadGateway(config.GatewayOptions{
 		DataDir:           dataDir,
 		PKIDir:            pkiDir,
@@ -123,7 +115,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		Posture:           config.PostureNotary, // Enforce L3 verification
 	})
 	require.NoError(t, err)
-	cfg.Gateway.MCPDownstreamURL = downstreamServer.URL
+	cfg.Gateway.A2ADownstreamURL = downstreamServer.URL
 
 	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
@@ -160,7 +152,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
 		SignerStore:        govDeps.SignerStore,
-		L3Notary:           gatewayRejectingL3Notary{},
+		L3Notary:           a2aGatewayRejectingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 		MCPGateway:         mcpGateway,
@@ -170,6 +162,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 	// Set MCP gateway dependencies for governance processing
 	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamServer.URL)
+	mcpGateway.SetA2ADependencies(downstreamServer.URL)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -178,10 +171,10 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	require.Eventually(t, func() bool { return ls.IsReady() }, 5*time.Second, 100*time.Millisecond)
 
 	// 3. Setup client identity
-	token := "dlk_mcp_test"
-	userID := "mcp-user"
+	token := "dlk_a2a_test"
+	userID := "a2a-user"
 	linkData := models.DeviceLinkData{
-		Token: token, UserID: userID, OrganizationID: "mcp-org", MaxUses: 1, Status: "active", ExpiresAt: time.Now().Add(1 * time.Hour),
+		Token: token, UserID: userID, OrganizationID: "a2a-org", MaxUses: 1, Status: "active", ExpiresAt: time.Now().Add(1 * time.Hour),
 	}
 	linkBytes, _ := json.Marshal(linkData)
 	ls.GetDB().KVSet("g8e:device-link:"+token, string(linkBytes), 3600)
@@ -217,14 +210,14 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	publicClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
 
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
-	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "mcp-test-client"}}
+	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "a2a-test-client"}}
 	csrDER, _ := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
-		SystemFingerprint: "mcp-fingerprint",
-		Hostname:          "mcp-host",
+		SystemFingerprint: "a2a-fingerprint",
+		Hostname:          "a2a-host",
 	}
 	regBody, _ := json.Marshal(regReq)
 	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
@@ -253,111 +246,44 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	// Set public base URL for approval links
 	mcpGateway.SetPublicBaseURL(publicURL)
 
-	// 4. Test MCP tools/list
-	t.Run("tools/list", func(t *testing.T) {
-		resp, err := mtlsClient.Get(mtlsURL + "/api/mcp/v1/tools/list")
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-		var mcpResp struct {
-			Result struct {
-				Tools []struct {
-					Name string `json:"name"`
-				} `json:"tools"`
-			} `json:"result"`
+	// 4. Test A2A Call (Suspends for L3, then Resume)
+	t.Run("a2a call", func(t *testing.T) {
+		callReq := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"method":  "a2a/call",
+			"id":      1,
+			"params": map[string]interface{}{
+				"skill_name": "test-skill",
+				"payload":    map[string]string{"foo": "bar"},
+			},
 		}
-		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
-		require.NoError(t, err)
-		require.Len(t, mcpResp.Result.Tools, 1)
-		require.Equal(t, "echo", mcpResp.Result.Tools[0].Name)
-	})
-
-	// 4.5 Test MCP resources/list
-	t.Run("resources/list", func(t *testing.T) {
-		resp, err := mtlsClient.Get(mtlsURL + "/api/mcp/v1/resources/list")
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-		var mcpResp struct {
-			Result struct {
-				Resources []struct {
-					URI  string `json:"uri"`
-					Name string `json:"name"`
-				} `json:"resources"`
-			} `json:"result"`
-		}
-		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
-		require.NoError(t, err)
-		require.Len(t, mcpResp.Result.Resources, 1)
-		require.Equal(t, "file:///test.txt", mcpResp.Result.Resources[0].URI)
-	})
-
-	// 4.6 Test MCP prompts/list
-	t.Run("prompts/list", func(t *testing.T) {
-		resp, err := mtlsClient.Get(mtlsURL + "/api/mcp/v1/prompts/list")
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-		var mcpResp struct {
-			Result struct {
-				Prompts []struct {
-					Name        string `json:"name"`
-					Description string `json:"description"`
-				} `json:"prompts"`
-			} `json:"result"`
-		}
-		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
-		require.NoError(t, err)
-		require.Len(t, mcpResp.Result.Prompts, 1)
-		require.Equal(t, "test-prompt", mcpResp.Result.Prompts[0].Name)
-	})
-
-	// 5. Test MCP tools/call (Direct, no L3 needed for benign echo)
-	// Actually, MCP_CALL is classified as a mutation, so it needs L3 unless we bypass it.
-	// In this test environment, gatewayRejectingL3Notary always returns false, so the transaction
-	// is suspended and returns "Execution paused" instead of dispatching to downstream.
-	t.Run("tools/call", func(t *testing.T) {
-		callReq := struct {
-			Jsonrpc string `json:"jsonrpc"`
-			Method  string `json:"method"`
-			Params  struct {
-				Name      string                 `json:"name"`
-				Arguments map[string]interface{} `json:"arguments"`
-			} `json:"params"`
-			ID int `json:"id"`
-		}{
-			Jsonrpc: "2.0",
-			Method:  "tools/call",
-			ID:      1,
-		}
-		callReq.Params.Name = "echo"
-		callReq.Params.Arguments = map[string]interface{}{"msg": "hello"}
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/a2a/v1/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var mcpRes struct {
-			Result struct {
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
+		var a2aRes struct {
+			JSONRPC string `json:"jsonrpc"`
+			ID      int    `json:"id"`
+			Result  struct {
+				ID          string `json:"id"`
+				Status      string `json:"status"`
+				TxHash      string `json:"tx_hash"`
+				ApprovalURL string `json:"approval_url"`
+				Message     string `json:"message"`
 			} `json:"result"`
 		}
-		body, _ := io.ReadAll(resp.Body)
-		err = json.Unmarshal(body, &mcpRes)
+		err = json.NewDecoder(resp.Body).Decode(&a2aRes)
 		require.NoError(t, err)
-
-		// MCP tool call returns "Execution paused" because L3 is rejected
-		require.NotEmpty(t, mcpRes.Result.Content)
-		require.Contains(t, mcpRes.Result.Content[0].Text, "Execution paused")
+		// The L3 notary rejects, so the transaction should be suspended
+		require.Equal(t, "suspended", a2aRes.Result.Status, "expected suspended status, got: %s", a2aRes.Result.Status)
+		require.NotEmpty(t, a2aRes.Result.ApprovalURL)
 	})
 }
 
-func TestMCPGateway_PayloadVariations(t *testing.T) {
+func TestA2AGateway_PayloadVariations(t *testing.T) {
 	// Use shared test vault directory for persistent inspection
 	repoRoot, err := os.Getwd()
 	require.NoError(t, err)
@@ -381,23 +307,19 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	secretsDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 
-	// 1. Setup Mock Downstream MCP Server
+	// 1. Setup Mock Downstream A2A Server
 	downstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Jsonrpc string `json:"jsonrpc"`
-			Method  string `json:"method"`
+			SkillName string `json:"skill_name"`
 		}
 		json.NewDecoder(r.Body).Decode(&req)
 
 		w.Header().Set("Content-Type", "application/json")
-		if req.Method == "tools/list" {
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"nested_tool","description":"nested tool"},{"name":"unicode_tool","description":"unicode tool"},{"name":"large_tool","description":"large tool"}]}}`))
-		} else if req.Method == "tools/call" {
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"mcp says hello"}]}}`))
-		}
+		w.Write([]byte(`{"result":"a2a response","summary":"verified skill execution"}`))
 	}))
 	defer downstreamServer.Close()
 
+	// 2. Setup Operator with A2A configuration
 	cfg, err := config.LoadGateway(config.GatewayOptions{
 		DataDir:           dataDir,
 		PKIDir:            pkiDir,
@@ -405,10 +327,10 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		PasskeyRpID:       "localhost",
 		PasskeyRpName:     "g8e",
 		AllowTestPortZero: true,
-		Posture:           config.PostureNotary, // Enforce L3 verification
+		Posture:           config.PostureNotary,
 	})
 	require.NoError(t, err)
-	cfg.Gateway.MCPDownstreamURL = downstreamServer.URL
+	cfg.Gateway.A2ADownstreamURL = downstreamServer.URL
 
 	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
@@ -444,7 +366,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
 		SignerStore:        govDeps.SignerStore,
-		L3Notary:           gatewayRejectingL3Notary{},
+		L3Notary:           a2aGatewayRejectingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 		MCPGateway:         mcpGateway,
@@ -452,8 +374,8 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	require.NoError(t, err)
 	ls.SetEnvelopeProcessor(cmdSvc)
 
-	// Set MCP gateway dependencies for governance processing
 	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamServer.URL)
+	mcpGateway.SetA2ADependencies(downstreamServer.URL)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -461,10 +383,10 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 
 	require.Eventually(t, func() bool { return ls.IsReady() }, 5*time.Second, 100*time.Millisecond)
 
-	token := "dlk_payload_test"
-	userID := "payload-user"
+	token := "dlk_a2a_payload_test"
+	userID := "a2a-payload-user"
 	linkData := models.DeviceLinkData{
-		Token: token, UserID: userID, OrganizationID: "payload-org", MaxUses: 1, Status: "active", ExpiresAt: time.Now().Add(1 * time.Hour),
+		Token: token, UserID: userID, OrganizationID: "a2a-payload-org", MaxUses: 1, Status: "active", ExpiresAt: time.Now().Add(1 * time.Hour),
 	}
 	linkBytes, _ := json.Marshal(linkData)
 	ls.GetDB().KVSet("g8e:device-link:"+token, string(linkBytes), 3600)
@@ -498,14 +420,14 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	publicClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
 
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
-	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "payload-test-client"}}
+	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "a2a-payload-test-client"}}
 	csrDER, _ := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
-		SystemFingerprint: "payload-fingerprint",
-		Hostname:          "payload-host",
+		SystemFingerprint: "a2a-payload-fingerprint",
+		Hostname:          "a2a-payload-host",
 	}
 	regBody, _ := json.Marshal(regReq)
 	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
@@ -530,216 +452,188 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	}
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 
-	// Set public base URL for approval links
 	mcpGateway.SetPublicBaseURL(publicURL)
 
-	t.Run("nested object arguments", func(t *testing.T) {
-		callReq := struct {
-			Jsonrpc string `json:"jsonrpc"`
-			Method  string `json:"method"`
-			Params  struct {
-				Name      string                 `json:"name"`
-				Arguments map[string]interface{} `json:"arguments"`
-			} `json:"params"`
-			ID int `json:"id"`
-		}{
-			Jsonrpc: "2.0",
-			Method:  "tools/call",
-			ID:      1,
-		}
-		callReq.Params.Name = "nested_tool"
-		callReq.Params.Arguments = map[string]interface{}{
-			"config": map[string]interface{}{
-				"nested": map[string]interface{}{
-					"deep": map[string]interface{}{
-						"value": "test",
+	t.Run("nested payload structure", func(t *testing.T) {
+		callReq := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"method":  "a2a/call",
+			"id":      1,
+			"params": map[string]interface{}{
+				"skill_name": "nested_skill",
+				"payload": map[string]interface{}{
+					"config": map[string]interface{}{
+						"nested": map[string]interface{}{
+							"deep": map[string]interface{}{
+								"value": "test",
+							},
+						},
 					},
+					"items": []interface{}{"item1", "item2", 123},
 				},
 			},
-			"items": []interface{}{"item1", "item2", 123},
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/a2a/v1/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var mcpRes struct {
+		var a2aRes struct {
 			Result struct {
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
+				Status string `json:"status"`
 			} `json:"result"`
 		}
-		body, _ := io.ReadAll(resp.Body)
-		err = json.Unmarshal(body, &mcpRes)
+		err = json.NewDecoder(resp.Body).Decode(&a2aRes)
 		require.NoError(t, err)
-		require.NotEmpty(t, mcpRes.Result.Content)
-		require.Contains(t, mcpRes.Result.Content[0].Text, "Execution paused")
+		require.Equal(t, "suspended", a2aRes.Result.Status)
 	})
 
-	t.Run("unicode and special characters", func(t *testing.T) {
-		callReq := struct {
-			Jsonrpc string `json:"jsonrpc"`
-			Method  string `json:"method"`
-			Params  struct {
-				Name      string                 `json:"name"`
-				Arguments map[string]interface{} `json:"arguments"`
-			} `json:"params"`
-			ID int `json:"id"`
-		}{
-			Jsonrpc: "2.0",
-			Method:  "tools/call",
-			ID:      1,
-		}
-		callReq.Params.Name = "unicode_tool"
-		callReq.Params.Arguments = map[string]interface{}{
-			"text":  "Hello 世界 🌍 \n\t\r\"'\\",
-			"emoji": []string{"😀", "🎉", "🚀"},
+	t.Run("unicode and special characters in payload", func(t *testing.T) {
+		callReq := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"method":  "a2a/call",
+			"id":      1,
+			"params": map[string]interface{}{
+				"skill_name": "unicode_skill",
+				"payload": map[string]interface{}{
+					"text":  "Hello 世界 🌍 \n\t\r\"'\\",
+					"emoji": []string{"😀", "🎉", "🚀"},
+				},
+			},
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/a2a/v1/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var mcpRes struct {
+		var a2aRes struct {
 			Result struct {
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
+				Status string `json:"status"`
 			} `json:"result"`
 		}
-		body, _ := io.ReadAll(resp.Body)
-		err = json.Unmarshal(body, &mcpRes)
+		err = json.NewDecoder(resp.Body).Decode(&a2aRes)
 		require.NoError(t, err)
-		require.NotEmpty(t, mcpRes.Result.Content)
-		require.Contains(t, mcpRes.Result.Content[0].Text, "Execution paused")
+		require.Equal(t, "suspended", a2aRes.Result.Status)
 	})
 
 	t.Run("large payload", func(t *testing.T) {
 		largeString := strings.Repeat("x", 100000)
-		callReq := struct {
-			Jsonrpc string `json:"jsonrpc"`
-			Method  string `json:"method"`
-			Params  struct {
-				Name      string                 `json:"name"`
-				Arguments map[string]interface{} `json:"arguments"`
-			} `json:"params"`
-			ID int `json:"id"`
-		}{
-			Jsonrpc: "2.0",
-			Method:  "tools/call",
-			ID:      1,
-		}
-		callReq.Params.Name = "large_tool"
-		callReq.Params.Arguments = map[string]interface{}{
-			"data": largeString,
+		callReq := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"method":  "a2a/call",
+			"id":      1,
+			"params": map[string]interface{}{
+				"skill_name": "large_skill",
+				"payload": map[string]interface{}{
+					"data": largeString,
+				},
+			},
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/a2a/v1/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var mcpRes struct {
+		var a2aRes struct {
 			Result struct {
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
+				Status string `json:"status"`
 			} `json:"result"`
 		}
-		body, _ := io.ReadAll(resp.Body)
-		err = json.Unmarshal(body, &mcpRes)
+		err = json.NewDecoder(resp.Body).Decode(&a2aRes)
 		require.NoError(t, err)
-		require.NotEmpty(t, mcpRes.Result.Content)
-		require.Contains(t, mcpRes.Result.Content[0].Text, "Execution paused")
+		require.Equal(t, "suspended", a2aRes.Result.Status)
 	})
 
-	t.Run("empty arguments", func(t *testing.T) {
-		callReq := struct {
-			Jsonrpc string `json:"jsonrpc"`
-			Method  string `json:"method"`
-			Params  struct {
-				Name      string          `json:"name"`
-				Arguments json.RawMessage `json:"arguments"`
-			} `json:"params"`
-			ID int `json:"id"`
-		}{
-			Jsonrpc: "2.0",
-			Method:  "tools/call",
-			ID:      1,
+	t.Run("empty payload", func(t *testing.T) {
+		callReq := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"method":  "a2a/call",
+			"id":      1,
+			"params": map[string]interface{}{
+				"skill_name": "empty_skill",
+				"payload":    map[string]interface{}{},
+			},
 		}
-		callReq.Params.Name = "empty_tool"
-		callReq.Params.Arguments = json.RawMessage("{}")
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/a2a/v1/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var mcpRes struct {
+		var a2aRes struct {
 			Result struct {
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
+				Status string `json:"status"`
 			} `json:"result"`
 		}
-		body, _ := io.ReadAll(resp.Body)
-		err = json.Unmarshal(body, &mcpRes)
+		err = json.NewDecoder(resp.Body).Decode(&a2aRes)
 		require.NoError(t, err)
-		require.NotEmpty(t, mcpRes.Result.Content)
-		require.Contains(t, mcpRes.Result.Content[0].Text, "Execution paused")
+		require.Equal(t, "suspended", a2aRes.Result.Status)
 	})
 
-	t.Run("null arguments", func(t *testing.T) {
-		callReq := struct {
-			Jsonrpc string `json:"jsonrpc"`
-			Method  string `json:"method"`
-			Params  struct {
-				Name      string          `json:"name"`
-				Arguments json.RawMessage `json:"arguments"`
-			} `json:"params"`
-			ID int `json:"id"`
-		}{
-			Jsonrpc: "2.0",
-			Method:  "tools/call",
-			ID:      1,
+	t.Run("null payload", func(t *testing.T) {
+		callReq := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"method":  "a2a/call",
+			"id":      1,
+			"params": map[string]interface{}{
+				"skill_name": "null_skill",
+				"payload":    nil,
+			},
 		}
-		callReq.Params.Name = "null_tool"
-		callReq.Params.Arguments = json.RawMessage("null")
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/a2a/v1/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var mcpRes struct {
+		var a2aRes struct {
 			Result struct {
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
+				Status string `json:"status"`
 			} `json:"result"`
 		}
-		body, _ := io.ReadAll(resp.Body)
-		err = json.Unmarshal(body, &mcpRes)
+		err = json.NewDecoder(resp.Body).Decode(&a2aRes)
 		require.NoError(t, err)
-		require.NotEmpty(t, mcpRes.Result.Content)
-		require.Contains(t, mcpRes.Result.Content[0].Text, "Execution paused")
+		require.Equal(t, "suspended", a2aRes.Result.Status)
+	})
+
+	t.Run("execution_id parameter", func(t *testing.T) {
+		callReq := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"method":  "a2a/call",
+			"id":      1,
+			"params": map[string]interface{}{
+				"skill_name":   "execution_id_skill",
+				"payload":      map[string]string{"foo": "bar"},
+				"execution_id": "exec-12345",
+			},
+		}
+
+		reqBody, _ := json.Marshal(callReq)
+		resp, err := mtlsClient.Post(mtlsURL+"/api/a2a/v1/call", "application/json", bytes.NewReader(reqBody))
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var a2aRes struct {
+			Result struct {
+				Status string `json:"status"`
+			} `json:"result"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&a2aRes)
+		require.NoError(t, err)
+		require.Equal(t, "suspended", a2aRes.Result.Status)
 	})
 }
 
-func TestMCPGateway_ErrorCases(t *testing.T) {
+func TestA2AGateway_ErrorCases(t *testing.T) {
 	// Use shared test vault directory for persistent inspection
 	repoRoot, err := os.Getwd()
 	require.NoError(t, err)
@@ -807,7 +701,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
 		SignerStore:        govDeps.SignerStore,
-		L3Notary:           gatewayRejectingL3Notary{},
+		L3Notary:           a2aGatewayRejectingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 		MCPGateway:         mcpGateway,
@@ -815,7 +709,6 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	require.NoError(t, err)
 	ls.SetEnvelopeProcessor(cmdSvc)
 
-	// Set MCP gateway dependencies for governance processing
 	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, "")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -824,10 +717,10 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 
 	require.Eventually(t, func() bool { return ls.IsReady() }, 5*time.Second, 100*time.Millisecond)
 
-	token := "dlk_error_test"
-	userID := "error-user"
+	token := "dlk_a2a_error_test"
+	userID := "a2a-error-user"
 	linkData := models.DeviceLinkData{
-		Token: token, UserID: userID, OrganizationID: "error-org", MaxUses: 1, Status: "active", ExpiresAt: time.Now().Add(1 * time.Hour),
+		Token: token, UserID: userID, OrganizationID: "a2a-error-org", MaxUses: 1, Status: "active", ExpiresAt: time.Now().Add(1 * time.Hour),
 	}
 	linkBytes, _ := json.Marshal(linkData)
 	ls.GetDB().KVSet("g8e:device-link:"+token, string(linkBytes), 3600)
@@ -861,14 +754,14 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	publicClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
 
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
-	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "error-test-client"}}
+	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "a2a-error-test-client"}}
 	csrDER, _ := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
-		SystemFingerprint: "error-fingerprint",
-		Hostname:          "error-host",
+		SystemFingerprint: "a2a-error-fingerprint",
+		Hostname:          "a2a-error-host",
 	}
 	regBody, _ := json.Marshal(regReq)
 	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
@@ -894,16 +787,16 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 
 	t.Run("invalid JSON-RPC version", func(t *testing.T) {
-		reqBody := `{"jsonrpc":"1.0","id":1,"method":"tools/call","params":{"name":"test","arguments":{}}}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		reqBody := `{"jsonrpc":"1.0","id":1,"method":"a2a/call","params":{"skill_name":"test"}}`
+		resp, err := mtlsClient.Post(mtlsURL+"/api/a2a/v1/call", "application/json", bytes.NewReader([]byte(reqBody)))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 
 	t.Run("missing method", func(t *testing.T) {
-		reqBody := `{"jsonrpc":"2.0","id":1,"params":{"name":"test","arguments":{}}}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		reqBody := `{"jsonrpc":"2.0","id":1,"params":{"skill_name":"test"}}`
+		resp, err := mtlsClient.Post(mtlsURL+"/api/a2a/v1/call", "application/json", bytes.NewReader([]byte(reqBody)))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -911,7 +804,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 
 	t.Run("unknown method", func(t *testing.T) {
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"unknown_method","params":{}}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/a2a/v1/call", "application/json", bytes.NewReader([]byte(reqBody)))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -919,11 +812,10 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 
 	t.Run("malformed JSON", func(t *testing.T) {
 		reqBody := `{invalid json`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/a2a/v1/call", "application/json", bytes.NewReader([]byte(reqBody)))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
-		// JSON-RPC 2.0 spec: errors are returned with HTTP 200, error in JSON body
 		var jsonRPCResp struct {
 			Error struct {
 				Code    int    `json:"code"`
@@ -933,21 +825,29 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		body, _ := io.ReadAll(resp.Body)
 		err = json.Unmarshal(body, &jsonRPCResp)
 		require.NoError(t, err)
-		require.Equal(t, -32700, jsonRPCResp.Error.Code) // Parse error
+		require.Equal(t, -32700, jsonRPCResp.Error.Code)
 		require.Contains(t, jsonRPCResp.Error.Message, "parse error")
 	})
 
-	t.Run("missing tool name", func(t *testing.T) {
-		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"arguments":{}}}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader([]byte(reqBody)))
+	t.Run("missing skill_name", func(t *testing.T) {
+		reqBody := `{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"payload":{}}}`
+		resp, err := mtlsClient.Post(mtlsURL+"/api/a2a/v1/call", "application/json", bytes.NewReader([]byte(reqBody)))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 
-	t.Run("invalid arguments JSON", func(t *testing.T) {
-		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test","arguments":"{invalid}"}}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader([]byte(reqBody)))
+	t.Run("invalid payload JSON", func(t *testing.T) {
+		reqBody := `{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"skill_name":"test","payload":"{invalid}"}}`
+		resp, err := mtlsClient.Post(mtlsURL+"/api/a2a/v1/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
+	t.Run("missing params", func(t *testing.T) {
+		reqBody := `{"jsonrpc":"2.0","id":1,"method":"a2a/call"}`
+		resp, err := mtlsClient.Post(mtlsURL+"/api/a2a/v1/call", "application/json", bytes.NewReader([]byte(reqBody)))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)

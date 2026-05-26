@@ -109,6 +109,3 @@ nav:
       - Developer Guidelines: devs/devs.md
       - Testing: devs/tests.md
       - Troubleshooting: devs/troubleshooting.md
-  - External:
-      - A2A Protocol (JSON Schema): protocols/a2a/a2a.json
-      - A2A Protocol (Proto): protocols/a2a/a2a.proto

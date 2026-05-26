@@ -314,15 +314,27 @@ func (pm *ProcessManager) Clean() error {
 	return nil
 }
 
-// TailLog tails a log file using native Go file watching, replacing tail -f
-func TailLog(logPath string) error {
+// TailLog prints a log file, optionally following new entries (like tail -f)
+func TailLog(logPath string, follow bool) error {
 	file, err := os.Open(logPath)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
 	defer file.Close()
 
-	// Seek to end of file to start tailing
+	// Print existing content
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("failed to seek to start of file: %w", err)
+	}
+	if _, err := io.Copy(os.Stdout, file); err != nil {
+		return fmt.Errorf("failed to print log content: %w", err)
+	}
+
+	if !follow {
+		return nil
+	}
+
+	// Follow mode: seek to end and watch for new content
 	if _, err := file.Seek(0, io.SeekEnd); err != nil {
 		return fmt.Errorf("failed to seek to end of file: %w", err)
 	}
@@ -330,19 +342,6 @@ func TailLog(logPath string) error {
 	reader := bufio.NewReader(file)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	// Print existing content first
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to seek to start of file: %w", err)
-	}
-	if _, err := io.Copy(os.Stdout, file); err != nil {
-		return fmt.Errorf("failed to print existing log content: %w", err)
-	}
-
-	// Seek back to end for tailing
-	if _, err := file.Seek(0, io.SeekEnd); err != nil {
-		return fmt.Errorf("failed to seek to end of file: %w", err)
-	}
 
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()

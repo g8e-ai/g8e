@@ -99,7 +99,21 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 
 	vs.ctx, vs.cancel = context.WithCancel(ctx)
-	vs.logger.Info("g8e Operator initializing (Outbound Mode)...")
+	// Log enforcement levels based on posture
+	var l1Status, l2Status, l3Status string
+	switch vs.config.Posture {
+	case config.PostureDoctrine:
+		l1Status, l2Status, l3Status = "Enforced", "NOT Enforced", "NOT Enforced"
+	case config.PostureConsensus:
+		l1Status, l2Status, l3Status = "Enforced", "Enforced", "NOT Enforced"
+	case config.PostureNotary:
+		l1Status, l2Status, l3Status = "Enforced", "Enforced", "Enforced"
+	}
+	vs.logger.Info("g8e Operator initializing (Outbound Mode)",
+		"posture", vs.config.Posture,
+		"L1 Doctrine", l1Status,
+		"L2 Consensus", l2Status,
+		"L3 Notary", l3Status)
 
 	bootstrapConfig, err := vs.bootstrap.RequestBootstrapConfig(ctx)
 	if err != nil {

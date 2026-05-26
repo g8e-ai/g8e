@@ -277,6 +277,14 @@ _ci-docs:
 build: build-g8eo
 	@echo "All builds complete."
 
+.PHONY: build-cli
+build-cli:
+	@echo "Building g8e CLI wrapper..."
+	@mkdir -p bin
+	@go build -o bin/g8e ./cmd/g8e
+	@ln -sf bin/g8e ./g8e
+	@echo "CLI wrapper build complete."
+
 .PHONY: build-g8eo
 build-g8eo:
 	@echo "Building g8e operator..."

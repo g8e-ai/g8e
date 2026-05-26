@@ -24,6 +24,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -162,23 +163,48 @@ func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSig
 		auditStore = &testAuditStore{db: db}
 	}
 
-	// Create audit vault with temporary directory for git ledger
+	// Create audit vault with shared test directory for persistent inspection
 	var auditVault *storage.AuditVaultService
 	var tempDir string
 	if t != nil {
-		tempDir = t.TempDir()
+		// Use shared test vault directory under .g8e/test-vault for persistent inspection
+		repoRoot, cwdErr := os.Getwd()
+		if cwdErr != nil {
+			return nil, fmt.Errorf("failed to get working directory: %w", cwdErr)
+		}
+		// Navigate from test/ to repo root
+		for i := 0; i < 2; i++ {
+			repoRoot = filepath.Dir(repoRoot)
+		}
+		tempDir = filepath.Join(repoRoot, ".g8e", "test-vault")
+
+		// Ensure directory exists
+		if mkdirErr := os.MkdirAll(tempDir, 0755); mkdirErr != nil {
+			return nil, fmt.Errorf("failed to create test vault directory: %w", mkdirErr)
+		}
+
+		// Create unique subdirectory for this test run to avoid conflicts
+		testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), t.Name())
+		testRunDir := filepath.Join(tempDir, testRunID)
+		if mkdirErr := os.MkdirAll(testRunDir, 0755); mkdirErr != nil {
+			return nil, fmt.Errorf("failed to create test run directory: %w", mkdirErr)
+		}
+
 		auditVaultConfig := storage.DefaultAuditVaultConfig()
-		auditVaultConfig.DataDir = tempDir
+		auditVaultConfig.DataDir = testRunDir
 		auditVaultConfig.DBPath = "audit_vault.db"
 		auditVaultConfig.LedgerDir = "ledger"
 		auditVaultConfig.GitPath = "embedded" // Use native go-git
 		auditVaultConfig.Enabled = true
 
-		var err error
-		auditVault, err = storage.NewAuditVaultService(auditVaultConfig, logger)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create audit vault: %w", err)
+		var vaultErr error
+		auditVault, vaultErr = storage.NewAuditVaultService(auditVaultConfig, logger)
+		if vaultErr != nil {
+			return nil, fmt.Errorf("failed to create audit vault: %w", vaultErr)
 		}
+
+		// Log the vault path for user reference
+		t.Logf("Test vault created at: %s", testRunDir)
 	}
 
 	// Create actuator with audit vault
@@ -208,14 +234,10 @@ func NewOperatorGate(mode Mode, clock system.Clock, stateRoot string, trustedSig
 	}, nil
 }
 
-// Close cleans up resources including the audit vault.
+// Close cleans up resources. Note: audit vault directory is preserved for inspection.
 func (g *OperatorGate) Close() error {
-	if g.auditVault != nil {
-		// Clean up temporary directory
-		if g.tempDir != "" {
-			os.RemoveAll(g.tempDir)
-		}
-	}
+	// Audit vault directory is intentionally NOT cleaned up to allow post-test inspection
+	// Users can manually clean .g8e/test-vault/ when needed
 	return nil
 }
 

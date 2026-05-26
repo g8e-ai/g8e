@@ -478,7 +478,7 @@ func TestTailLog(t *testing.T) {
 	}
 
 	// Test tailing a non-existent file
-	err := TailLog(filepath.Join(tmpDir, "nonexistent.log"))
+	err := TailLog(filepath.Join(tmpDir, "nonexistent.log"), false)
 	if err == nil {
 		t.Error("expected error for non-existent log file")
 	}

@@ -25,11 +25,12 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
-	"syscall"
+	"strings"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -430,28 +431,23 @@ func SaveCertAndKey(certPEM, chainPEM string, key *ecdsa.PrivateKey, certFile, k
 }
 
 func CheckOperatorRunning(cfg *config.Config) error {
-	pidFile := filepath.Join(cfg.RuntimeDir, "pids", "operator.pid")
-	pidData, err := os.ReadFile(pidFile)
+	return CheckOperatorRunningAtURL(cfg.OperatorHTTPURL())
+}
+
+func CheckOperatorRunningAtURL(operatorURL string) error {
+	// Parse the URL to extract host:port
+	parts := strings.Split(operatorURL, "://")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid operator URL: %s", operatorURL)
+	}
+
+	hostPort := parts[1]
+	// Try to connect to the port
+	conn, err := net.Dial("tcp", hostPort)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("operator is not running - start the platform first: ./g8e platform start")
-		}
-		return fmt.Errorf("failed to read pid file: %w", err)
+		return fmt.Errorf("operator is not running or not responding at %s: %w", operatorURL, err)
 	}
-
-	var pid int
-	if _, err := fmt.Sscanf(string(pidData), "%d", &pid); err != nil {
-		return fmt.Errorf("failed to parse pid: %w", err)
-	}
-
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return fmt.Errorf("failed to find process: %w", err)
-	}
-
-	if err := process.Signal(syscall.Signal(0)); err != nil {
-		return fmt.Errorf("operator process not running: %w", err)
-	}
+	conn.Close()
 
 	return nil
 }

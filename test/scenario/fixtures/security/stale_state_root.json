@@ -1,7 +1,7 @@
 {
-  "name": "stale_state_root",
+  "name": "stale_state_root_security",
   "vertical": "security",
-  "narrative": "Envelope with stale state root should be rejected",
+  "narrative": "Envelope with stale state root should be rejected (security vertical)",
   "intent": {
     "id": "8a7d8c5900d2945b3ad8839ece2c5a3c159b13c44f3746257e1a5b4b0c984364",
     "timestamp": "2026-05-24T12:00:00Z",

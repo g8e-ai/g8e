@@ -610,7 +610,23 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		os.Exit(constants.ExitConfigError)
 	}
 
-	logger.Info("g8e Operator - Gateway Mode", "posture", posture, "version", version, "build", buildID)
+	// Log enforcement levels based on posture
+	var l1Status, l2Status, l3Status string
+	switch posture {
+	case config.PostureDoctrine:
+		l1Status, l2Status, l3Status = "Enforced", "NOT Enforced", "NOT Enforced"
+	case config.PostureConsensus:
+		l1Status, l2Status, l3Status = "Enforced", "Enforced", "NOT Enforced"
+	case config.PostureNotary:
+		l1Status, l2Status, l3Status = "Enforced", "Enforced", "Enforced"
+	}
+	logger.Info("g8e Operator - Gateway Mode",
+		"posture", posture,
+		"L1 Doctrine", l1Status,
+		"L2 Consensus", l2Status,
+		"L3 Notary", l3Status,
+		"version", version,
+		"build", buildID)
 
 	cfg, err := config.LoadGateway(config.GatewayOptions{
 		Posture:           posture,
@@ -1064,6 +1080,17 @@ func runMCPServe(endpointURL, pkiDir, logLevel string) {
 			operatorURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 		}
 	}
+
+	logger, err := configureLogger(logLevel)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
+		os.Exit(1)
+	}
+
+	logger.Info("g8e Operator - MCP Serve Mode (stdio proxy to Gateway mTLS API)",
+		"version", version,
+		"build", buildID,
+		"operator_url", operatorURL)
 
 	sessionID := os.Getenv("G8E_OPERATOR_SESSION_ID")
 

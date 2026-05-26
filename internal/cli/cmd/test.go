@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/spf13/cobra"
@@ -65,6 +66,7 @@ func testCmd() *cobra.Command {
 		testCICmd(),
 		testChaosCmd(),
 		testScenarioCmd(),
+		testReviewCmd(),
 	)
 
 	return cmd
@@ -299,4 +301,203 @@ func testScenarioCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 
 	return cmd
+}
+
+func testReviewCmd() *cobra.Command {
+	var list bool
+	var query string
+	var vaultPath string
+	var clean bool
+	var cleanOld int
+
+	cmd := &cobra.Command{
+		Use:   "review",
+		Short: "Review integration test vault results",
+		Long:  `Inspect and manage persistent test vaults from integration test runs.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			vaultDir := filepath.Join(cfg.ProjectRoot, ".g8e", "test-vault")
+
+			if clean {
+				if cleanOld > 0 {
+					return cleanOldVaults(vaultDir, cleanOld, cmd)
+				}
+				return cleanAllVaults(vaultDir, cmd)
+			}
+
+			if list {
+				return listVaults(vaultDir, cmd)
+			}
+
+			if query != "" {
+				if vaultPath == "" {
+					return fmt.Errorf("--vault-path required when using --query")
+				}
+				return queryVault(vaultPath, query, cmd)
+			}
+
+			if vaultPath != "" {
+				return inspectVault(vaultPath, cmd)
+			}
+
+			return cmd.Help()
+		},
+	}
+
+	cmd.Flags().BoolVar(&list, "list", false, "List all test vaults")
+	cmd.Flags().StringVar(&query, "query", "", "SQL query to execute on vault database")
+	cmd.Flags().StringVar(&vaultPath, "vault-path", "", "Path to specific vault directory")
+	cmd.Flags().BoolVar(&clean, "clean", false, "Clean vaults")
+	cmd.Flags().IntVar(&cleanOld, "clean-old", 0, "Clean vaults older than N days")
+
+	return cmd
+}
+
+func listVaults(vaultDir string, cmd *cobra.Command) error {
+	entries, err := os.ReadDir(vaultDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			cmd.Println("No test vaults found")
+			return nil
+		}
+		return fmt.Errorf("failed to read vault directory: %w", err)
+	}
+
+	if len(entries) == 0 {
+		cmd.Println("No test vaults found")
+		return nil
+	}
+
+	cmd.Printf("Found %d test vault(s):\n\n", len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() && entry.Name() != "README.md" {
+			vaultPath := filepath.Join(vaultDir, entry.Name())
+			info, err := entry.Info()
+			if err != nil {
+				cmd.Printf("  %s (error reading info: %v)\n", entry.Name(), err)
+				continue
+			}
+			cmd.Printf("  %s (modified: %s)\n", entry.Name(), info.ModTime().Format("2006-01-02 15:04:05"))
+			cmd.Printf("    Path: %s\n", vaultPath)
+		}
+	}
+
+	return nil
+}
+
+func inspectVault(vaultPath string, cmd *cobra.Command) error {
+	dbPath := filepath.Join(vaultPath, "audit_vault.db")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return fmt.Errorf("vault database not found at %s", dbPath)
+	}
+
+	cmd.Printf("Inspecting vault: %s\n\n", vaultPath)
+
+	sqliteCmd := exec.Command("sqlite3", dbPath, ".tables")
+	sqliteCmd.Stdout = os.Stdout
+	sqliteCmd.Stderr = os.Stderr
+	if err := sqliteCmd.Run(); err != nil {
+		return fmt.Errorf("failed to list tables: %w", err)
+	}
+
+	cmd.Println("\nTo query this vault, use:")
+	cmd.Printf("  ./g8e test review --vault-path %s --query \"SELECT * FROM action_receipts;\"\n", vaultPath)
+
+	return nil
+}
+
+func queryVault(vaultPath, query string, cmd *cobra.Command) error {
+	dbPath := filepath.Join(vaultPath, "audit_vault.db")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return fmt.Errorf("vault database not found at %s", dbPath)
+	}
+
+	cmd.Printf("Executing query on %s:\n  %s\n\n", vaultPath, query)
+
+	sqliteCmd := exec.Command("sqlite3", dbPath, query)
+	sqliteCmd.Stdout = os.Stdout
+	sqliteCmd.Stderr = os.Stderr
+	if err := sqliteCmd.Run(); err != nil {
+		return fmt.Errorf("query failed: %w", err)
+	}
+
+	return nil
+}
+
+func cleanAllVaults(vaultDir string, cmd *cobra.Command) error {
+	entries, err := os.ReadDir(vaultDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			cmd.Println("No test vaults found")
+			return nil
+		}
+		return fmt.Errorf("failed to read vault directory: %w", err)
+	}
+
+	if len(entries) == 0 {
+		cmd.Println("No test vaults found")
+		return nil
+	}
+
+	removed := 0
+	for _, entry := range entries {
+		if entry.IsDir() && entry.Name() != "README.md" {
+			vaultPath := filepath.Join(vaultDir, entry.Name())
+			if err := os.RemoveAll(vaultPath); err != nil {
+				cmd.Printf("Failed to remove %s: %v\n", entry.Name(), err)
+			} else {
+				cmd.Printf("Removed: %s\n", entry.Name())
+				removed++
+			}
+		}
+	}
+
+	cmd.Printf("\nRemoved %d vault(s)\n", removed)
+	return nil
+}
+
+func cleanOldVaults(vaultDir string, days int, cmd *cobra.Command) error {
+	entries, err := os.ReadDir(vaultDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			cmd.Println("No test vaults found")
+			return nil
+		}
+		return fmt.Errorf("failed to read vault directory: %w", err)
+	}
+
+	if len(entries) == 0 {
+		cmd.Println("No test vaults found")
+		return nil
+	}
+
+	cutoff := time.Now().AddDate(0, 0, -days)
+	removed := 0
+
+	for _, entry := range entries {
+		if entry.IsDir() && entry.Name() != "README.md" {
+			info, err := entry.Info()
+			if err != nil {
+				cmd.Printf("Failed to read info for %s: %v\n", entry.Name(), err)
+				continue
+			}
+
+			if info.ModTime().Before(cutoff) {
+				vaultPath := filepath.Join(vaultDir, entry.Name())
+				if err := os.RemoveAll(vaultPath); err != nil {
+					cmd.Printf("Failed to remove %s: %v\n", entry.Name(), err)
+				} else {
+					cmd.Printf("Removed: %s (older than %d days)\n", entry.Name(), days)
+					removed++
+				}
+			}
+		}
+	}
+
+	cmd.Printf("\nRemoved %d vault(s) older than %d days\n", removed, days)
+	return nil
 }

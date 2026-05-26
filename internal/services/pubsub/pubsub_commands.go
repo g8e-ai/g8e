@@ -199,9 +199,12 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	// Initialize UAP governance services after trusted signers are loaded
 	rs.initializeUAPGovernance(c, serviceCtx)
 
-	c.Logger.Info("g8e connectivity initialized",
-		"config_operator_id", c.Config.OperatorID,
-		"config_operator_session_id", c.Config.OperatorSessionId)
+	c.Logger.Info("g8e connectivity initialized")
+	if c.Config.OperatorID != "" {
+		c.Logger.Info("Operator identity configured",
+			"operator_id", c.Config.OperatorID,
+			"operator_session_id", c.Config.OperatorSessionId)
+	}
 	return rs, nil
 }
 
@@ -269,9 +272,11 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 	}
 
 	c.Logger.Info("UAP governance services initialized",
-		"consensus_node_id", c.Config.OperatorID,
 		"signer_store_configured", rs.signerStore != nil,
 		"transaction_verifier_enabled", rs.l4warden != nil)
+	if c.Config.OperatorID != "" {
+		c.Logger.Info("Consensus node identity", "node_id", c.Config.OperatorID)
+	}
 }
 
 func (rs *PubSubCommandService) buildHandlers() {
@@ -343,7 +348,10 @@ func (rs *PubSubCommandService) Start(ctx context.Context) error {
 		}()
 	} else {
 		rs.logger.Info("Command service starting in Gateway mode (no pub/sub subscription)",
-			"mode", "gateway")
+			"mode", "gateway",
+			"L1 Doctrine", "Enforced",
+			"L2 Consensus", "NOT Enforced",
+			"L3 Notary", "NOT Enforced")
 	}
 
 	rs.heartbeat.StartSchedulerUnlocked()

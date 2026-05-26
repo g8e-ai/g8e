@@ -78,9 +78,10 @@ func platformStartCmd() *cobra.Command {
 			}
 
 			cmd.Printf("Governance Gateway started successfully\n")
-			cmd.Printf("HTTP API: https://localhost:%d\n", cfg.OperatorHTTPSPort())
-			cmd.Printf("Bootstrap: https://localhost:%d\n", cfg.OperatorBootstrapHTTPSPort())
-			cmd.Printf("Public API: https://localhost:%d\n", cfg.Paths.Ports.OperatorPublicHTTPS)
+			cmd.Printf("Governance mode: doctrine (L1 enforced, L2/L3 audited)\n")
+			cmd.Printf("\nEndpoints:\n")
+			cmd.Printf("  Operator Bootstrap: https://localhost:%d\n", cfg.OperatorBootstrapHTTPSPort())
+			cmd.Printf("  Public API:        https://localhost:%d (Public browser/BYO bootstrap)\n", cfg.Paths.Ports.OperatorPublicHTTPS)
 
 			return nil
 		},
@@ -149,9 +150,9 @@ func platformStatusCmd() *cobra.Command {
 			cmd.Println("========================")
 			if running {
 				cmd.Printf("State: RUNNING (PID: %d)\n", pid)
-				cmd.Printf("HTTP API: https://localhost:%d\n", cfg.OperatorHTTPSPort())
-				cmd.Printf("Bootstrap: https://localhost:%d\n", cfg.OperatorBootstrapHTTPSPort())
-				cmd.Printf("Public API: https://localhost:%d\n", cfg.Paths.Ports.OperatorPublicHTTPS)
+				cmd.Printf("\nEndpoints:\n")
+				cmd.Printf("  Operator Bootstrap: https://localhost:%d\n", cfg.OperatorBootstrapHTTPSPort())
+				cmd.Printf("  Public API:        https://localhost:%d (Public browser/BYO bootstrap)\n", cfg.Paths.Ports.OperatorPublicHTTPS)
 			} else {
 				cmd.Println("State: STOPPED")
 			}
@@ -199,6 +200,7 @@ func platformRestartCmd() *cobra.Command {
 			}
 
 			cmd.Println("Governance Gateway restarted successfully")
+			cmd.Printf("Governance mode: doctrine (L1 enforced, L2/L3 audited)\n")
 			return nil
 		},
 	}
@@ -207,6 +209,8 @@ func platformRestartCmd() *cobra.Command {
 }
 
 func platformLogsCmd() *cobra.Command {
+	var follow bool
+
 	cmd := &cobra.Command{
 		Use:   "logs",
 		Short: "View Gateway logs",
@@ -227,9 +231,12 @@ func platformLogsCmd() *cobra.Command {
 				return nil
 			}
 
-			return platform.TailLog(logPath)
+			return platform.TailLog(logPath, follow)
 		},
 	}
+
+	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow log output (like tail -f)")
+
 	return cmd
 }
 
@@ -308,9 +315,10 @@ func platformResetCmd() *cobra.Command {
 			}
 
 			cmd.Println("Services restarted successfully")
-			cmd.Printf("HTTP API: https://localhost:%d\n", cfg.OperatorHTTPSPort())
-			cmd.Printf("Bootstrap: https://localhost:%d\n", cfg.OperatorBootstrapHTTPSPort())
-			cmd.Printf("Public API: https://localhost:%d\n", cfg.Paths.Ports.OperatorPublicHTTPS)
+			cmd.Printf("Governance mode: doctrine (L1 enforced, L2/L3 audited)\n")
+			cmd.Printf("\nEndpoints:\n")
+			cmd.Printf("  Operator Bootstrap: https://localhost:%d\n", cfg.OperatorBootstrapHTTPSPort())
+			cmd.Printf("  Public API:        https://localhost:%d (Public browser/BYO bootstrap)\n", cfg.Paths.Ports.OperatorPublicHTTPS)
 			return nil
 		},
 	}
