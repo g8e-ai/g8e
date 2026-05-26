@@ -538,7 +538,7 @@ func (fes *FileEditService) executePatch(ctx context.Context, request *models.Fi
 }
 
 // createBackup creates a backup of a file using streaming to prevent OOM
-func (fes *FileEditService) createBackup(filePath string) (string, error) {
+func (fes *FileEditService) createBackup(filePath string) (backupPath string, err error) {
 	// Generate backup filename with timestamp and hash
 	timestamp := time.Now().UTC().Format("20060102-150405")
 
@@ -555,7 +555,7 @@ func (fes *FileEditService) createBackup(filePath string) (string, error) {
 	}
 	hashStr := hex.EncodeToString(h.Sum(nil))[:8]
 
-	backupPath := fmt.Sprintf("%s.backup-%s-%s", filePath, timestamp, hashStr)
+	backupPath = fmt.Sprintf("%s.backup-%s-%s", filePath, timestamp, hashStr)
 
 	// Reset file pointer to beginning
 	if _, err := file.Seek(0, 0); err != nil {
@@ -567,12 +567,24 @@ func (fes *FileEditService) createBackup(filePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer backupFile.Close()
+	defer func() {
+		if backupFile != nil {
+			if closeErr := backupFile.Close(); closeErr != nil && err == nil {
+				err = closeErr
+			}
+		}
+	}()
 
 	// Copy content streaming
-	if _, err := io.Copy(backupFile, file); err != nil {
+	if _, err = io.Copy(backupFile, file); err != nil {
 		return "", err
 	}
+
+	if err := backupFile.Close(); err != nil {
+		backupFile = nil
+		return "", err
+	}
+	backupFile = nil
 
 	return backupPath, nil
 }

@@ -228,17 +228,23 @@ func (pm *ProcessManager) StartOperator(httpPort, bootstrapPort, publicPort int)
 	}
 
 	if err := cmd.Start(); err != nil {
-		logHandle.Close()
+		if closeErr := logHandle.Close(); closeErr != nil {
+			return fmt.Errorf("failed to start operator: %w (additionally failed to close log file: %v)", err, closeErr)
+		}
 		return fmt.Errorf("failed to start operator: %w", err)
 	}
 
 	if err := pm.writePID(operatorPIDFile, cmd.Process.Pid); err != nil {
 		_ = cmd.Process.Kill()
-		logHandle.Close()
+		if closeErr := logHandle.Close(); closeErr != nil {
+			return fmt.Errorf("failed to write pid file: %w (additionally failed to close log file: %v)", err, closeErr)
+		}
 		return fmt.Errorf("failed to write pid file: %w", err)
 	}
 
-	logHandle.Close()
+	if err := logHandle.Close(); err != nil {
+		return fmt.Errorf("failed to close log file: %w", err)
+	}
 
 	time.Sleep(2 * time.Second)
 	if !pm.isProcessRunning(cmd.Process.Pid) {
