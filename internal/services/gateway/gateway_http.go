@@ -2241,7 +2241,7 @@ func blobSegmentValid(s string) bool {
 	return true
 }
 
-const maxBlobBodySize = 50 * 1024 * 1024 // 50 MB hard cap at the transport layer (operator binary is ~25MB)
+const maxBlobBodySize = 50 * 1024 * 1024 // 50 MB hard cap at the transport layer (operator binary is ~20MB)
 
 func (h *HTTPHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/blob/")

@@ -4,7 +4,7 @@
 
 **Verify, then execute.**
 
-g8e is a 7MB, zero-dependency binary that provides agentic governance and state-mutation control. It functions as both the **control plane** (host-local policy decision) and the **data plane** (exclusive mutation executor). 
+g8e is a ~20MB, zero-dependency binary that provides agentic governance and state-mutation control. It functions as both the **control plane** (host-local policy decision) and the **data plane** (exclusive mutation executor). 
 
 It dials out via mTLS and listens on nothing. Every AI-proposed action clears a fail-closed gauntlet on the host and is committed to a git-backed ledger before execution. Only scrubbed projections leave the host; raw data never crosses the wire.
 
