@@ -66,7 +66,6 @@ var EnvVar = struct {
 	SecretsDir                 EnvVarKey
 	PubSubCACert               EnvVarKey
 	SSLCertFile                EnvVarKey
-	OperatorAPIKey             EnvVarKey
 	OperatorSessionID          EnvVarKey
 	InternalAuthToken          EnvVarKey
 	DeviceToken                EnvVarKey
@@ -160,7 +159,6 @@ var EnvVar = struct {
 	SecretsDir:                 "G8E_SECRETS_DIR",
 	PubSubCACert:               "G8E_PUBSUB_CA_CERT",
 	SSLCertFile:                "G8E_SSL_CERT_FILE",
-	OperatorAPIKey:             "G8E_OPERATOR_API_KEY",
 	OperatorSessionID:          "G8E_OPERATOR_SESSION_ID",
 	InternalAuthToken:          "G8E_INTERNAL_AUTH_TOKEN",
 	DeviceToken:                "G8E_DEVICE_TOKEN",

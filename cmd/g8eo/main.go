@@ -360,9 +360,6 @@ func main() {
 	}
 
 	if apiKey == "" {
-		apiKey = settings.OperatorAPIKey
-	}
-	if apiKey == "" {
 		var err error
 		apiKey, err = promptForAPIKey()
 		if err != nil {
@@ -823,11 +820,8 @@ func handleRekeyVault(vault *vault.Vault, oldAPIKey, newAPIKey string, logger *s
 	}
 
 	if newAPIKey == "" {
-		newAPIKey = config.LoadSettings().OperatorAPIKey
-		if newAPIKey == "" {
-			fmt.Fprintf(os.Stderr, "Error: New API key is required (-k or G8E_OPERATOR_API_KEY)\n")
-			os.Exit(constants.ExitConfigError)
-		}
+		fmt.Fprintf(os.Stderr, "Error: New API key is required (-k)\n")
+		os.Exit(constants.ExitConfigError)
 	}
 
 	if !vault.IsInitialized() {
@@ -849,11 +843,8 @@ func handleRekeyVault(vault *vault.Vault, oldAPIKey, newAPIKey string, logger *s
 // handleVerifyVault checks vault integrity
 func handleVerifyVault(vault *vault.Vault, apiKey string, logger *slog.Logger) {
 	if apiKey == "" {
-		apiKey = config.LoadSettings().OperatorAPIKey
-		if apiKey == "" {
-			fmt.Fprintf(os.Stderr, "Error: API key is required for vault verification\n")
-			os.Exit(constants.ExitConfigError)
-		}
+		fmt.Fprintf(os.Stderr, "Error: API key is required for vault verification\n")
+		os.Exit(constants.ExitConfigError)
 	}
 
 	if !vault.IsInitialized() {

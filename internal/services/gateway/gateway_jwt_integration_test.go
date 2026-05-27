@@ -136,7 +136,6 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
-	apiKeySvc := NewAPIKeyService(db, logger)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
 	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
@@ -160,7 +159,6 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		Reg:               reg,
 		Passkey:           passkey,
 		UserSvc:           userSvc,
-		APIKey:            apiKeySvc,
 		Responder:         resp,
 		MCPGateway:        mcpGateway,
 		IsReady:           func() bool { return true },

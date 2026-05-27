@@ -8,10 +8,6 @@
       "_go_const": "CollectionAgentActivityMetadata",
       "value": "agent_activity_metadata"
     },
-    "api_keys": {
-      "_go_const": "CollectionAPIKeys",
-      "value": "api_keys"
-    },
     "app_policies": {
       "_go_const": "CollectionAppPolicies",
       "value": "app_policies"

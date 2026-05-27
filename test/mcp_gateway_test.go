@@ -883,6 +883,31 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	}
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 
+	t.Run("api key rejected", func(t *testing.T) {
+		plainClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "tools/call",
+			ID:      1,
+		}
+		params := mcp.CallToolRequest{
+			Name:      "test",
+			Arguments: mustMarshal(map[string]interface{}{}),
+		}
+		callReq.Params = mustMarshal(params)
+		reqBody, _ := json.Marshal(callReq)
+
+		// Test with API key in header
+		req, _ := http.NewRequest("POST", mtlsURL+"/api/mcp/v1/tools/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-API-Key", "test-api-key")
+
+		_, err := plainClient.Do(req)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "tls: certificate required")
+
+		// The gateway should reject this at the TLS layer or middleware before reaching the MCP handler
+	})
 	t.Run("invalid JSON-RPC version", func(t *testing.T) {
 		callReq := mcp.JSONRPCRequest{
 			JSONRPC: "1.0",

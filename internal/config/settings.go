@@ -24,7 +24,6 @@ import (
 // All other code receives these values via dependency injection.
 type Settings struct {
 	// g8e operator configuration - mirrors protocol/constants/env_vars.json "g8eo" section
-	OperatorAPIKey    string
 	OperatorEndpoint  string
 	OperatorSessionID string
 	InternalAuthToken string
@@ -66,7 +65,6 @@ func LoadSettings() Settings {
 	}
 
 	return Settings{
-		OperatorAPIKey:       readVar(constants.EnvVar.OperatorAPIKey),
 		OperatorEndpoint:     readVar(constants.EnvVar.OperatorEndpoint),
 		OperatorSessionID:    readVar(constants.EnvVar.OperatorSessionID),
 		InternalAuthToken:    readVar(constants.EnvVar.InternalAuthToken),

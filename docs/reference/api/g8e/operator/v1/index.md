@@ -98,8 +98,6 @@
     - [RevokeIntentResult](#g8e-operator-v1-RevokeIntentResult)
     - [RevokePasskeyCredentialRequested](#g8e-operator-v1-RevokePasskeyCredentialRequested)
     - [RevokePasskeyCredentialResult](#g8e-operator-v1-RevokePasskeyCredentialResult)
-    - [RotateAPIKeyRequested](#g8e-operator-v1-RotateAPIKeyRequested)
-    - [RotateAPIKeyResult](#g8e-operator-v1-RotateAPIKeyResult)
     - [SetTargetContextRequested](#g8e-operator-v1-SetTargetContextRequested)
     - [SetTargetContextResult](#g8e-operator-v1-SetTargetContextResult)
     - [ShutdownRequested](#g8e-operator-v1-ShutdownRequested)
@@ -1492,8 +1490,6 @@ Reads a specific resource from the downstream MCP server.
 | status | [string](#string) |  |  |
 | operator_session_id | [string](#string) |  |  |
 | bound_web_session_id | [string](#string) |  |  |
-| api_key | [string](#string) |  |  |
-| operator_api_key | [string](#string) |  |  |
 | operator_cert | [string](#string) |  |  |
 | operator_cert_serial | [string](#string) |  |  |
 | slot_number | [int32](#int32) |  |  |
@@ -1932,38 +1928,6 @@ A stored passkey credential for a user
 | error | [string](#string) |  |  |
 | found | [bool](#bool) |  |  |
 | remaining | [int32](#int32) |  |  |
-
-
-
-
-
-
-<a name="g8e-operator-v1-RotateAPIKeyRequested"></a>
-
-### RotateAPIKeyRequested
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| operator_id | [string](#string) |  |  |
-| user_id | [string](#string) |  |  |
-
-
-
-
-
-
-<a name="g8e-operator-v1-RotateAPIKeyResult"></a>
-
-### RotateAPIKeyResult
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| success | [bool](#bool) |  |  |
-| error | [string](#string) |  |  |
 
 
 

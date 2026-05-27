@@ -215,10 +215,18 @@ The same reference binary plays both sides of the boundary.
 
 | Role | Mode | Function |
 | --- | --- | --- |
-| **Governance Gateway** (`g8eg`) — Policy Decision Point | `--doctrine` / `--consensus` / `--notary` | Admission (`POST /api/governance/envelope`), mTLS/PKI root CA, replay defense, state-root distribution, pub/sub fan-out, audit authority. |
+| **Governance Gateway** (`g8eg`) — Policy Decision Point | `--doctrine` / `--consensus` / `--notary` | Admission (`POST /api/governance/envelope`), mTLS/PKI root CA, replay defense, state-root distribution, pub/sub fan-out, audit authority, JWT validation and JIT user provisioning. |
 | **Governed Operator** (`g8eo`) — Policy Execution Point | `--mcp-serve` (host agent) | Sovereign MCP server, local audit vault, Sovereignty Boundary, the L5 Actuator execution boundary. Outbound-only. |
 
 Governance posture sets what's enforced vs. merely audited: **Doctrine** (L1 enforced), **Consensus** (L1/L2 enforced), **Notary** (L1/L2/L3 strictly enforced).
+
+### JWT Authentication & JIT Provisioning
+
+The Gateway provides JWT authentication and Just-In-Time (JIT) user provisioning that fully isolates the Operator from Identity Providers (IdP):
+
+- **Gateway Layer**: Validates inbound `Authorization: Bearer <JWT>` tokens using JWKS or static public keys, performs JIT user provisioning (creates user accounts on first login), maps JWT roles to declarative Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
+- **Operator Layer**: Receives only the pre-validated, enriched security metadata in the envelope. Decodes `tenant_id` and `binding_persona`, propagates them into execution context, and applies Persona-based data scrubbing (column masks, redaction) before returning results.
+- **IdP Isolation**: The Operator never requires outbound internet access to verify tokens or manage user state, enabling air-gapped and high-security deployments.
 
 ---
 

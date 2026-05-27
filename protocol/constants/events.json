@@ -364,10 +364,6 @@
       "_go_const": "EventOperatorA2aCallRequested",
       "value": "g8e.v1.operator.a2a.call.requested"
     },
-    "OperatorAPIKeyRefreshed": {
-      "_go_const": "EventOperatorAPIKeyRefreshed",
-      "value": "g8e.v1.operator.api.key.refreshed"
-    },
     "OperatorAuditAiRecorded": {
       "_go_const": "EventOperatorAuditAiRecorded",
       "value": "g8e.v1.operator.audit.ai.recorded"

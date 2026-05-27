@@ -162,50 +162,6 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	return &op, nil
 }
 
-// ValidateAPIKey checks if an API key is valid and returns the operator document.
-func (s *AuthService) ValidateAPIKey(apiKey string) (*models.OperatorDocumentGo, error) {
-	if apiKey == "" {
-		return nil, &AuthError{Message: "missing api key", Status: http.StatusUnauthorized}
-	}
-
-	filters := []models.DocFilter{
-		{Field: "operator_api_key", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", apiKey))},
-	}
-
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(docs) == 0 {
-		return nil, &AuthError{Message: "invalid api key", Status: http.StatusUnauthorized}
-	}
-
-	// Convert Document to OperatorDocumentGo
-	b, err := json.Marshal(docs[0].ForWire())
-	if err != nil {
-		return nil, err
-	}
-
-	var op models.OperatorDocumentGo
-	if err := json.Unmarshal(b, &op); err != nil {
-		return nil, err
-	}
-
-	// Check if the linked user is active (plan §4.6)
-	if s.userSvc != nil && op.UserID != "" {
-		user, err := s.userSvc.GetByID(op.UserID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load user %s: %w", op.UserID, err)
-		}
-		if user != nil && !user.IsActive() {
-			return nil, &AuthError{Message: "identity disabled", Reason: "retired_by_real_login", Status: http.StatusForbidden}
-		}
-	}
-
-	return &op, nil
-}
-
 // ExtractOperatorSessionID returns the operator session ID from the request headers.
 // It prefers Authorization: Bearer <token>.
 func (s *AuthService) ExtractOperatorSessionID(r *http.Request) string {

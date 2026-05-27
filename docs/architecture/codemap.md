@@ -159,7 +159,6 @@ services/
 │   ├── trust_scripts.go            #   PKI trust bootstrap
 │   ├── user_service.go
 │   ├── session_service.go
-│   ├── api_key_service.go
 │   ├── app_enrollment_service.go
 │   └── pki/                        #   PKI dir structure (authorities, issued, revocation, root, trust)
 │

@@ -158,34 +158,6 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	assert.Contains(t, err.Error(), "identity disabled")
 }
 
-func TestAuthService_ValidateAPIKey_MissingKey(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(db, logger)
-	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "")
-
-	_, err := auth.ValidateAPIKey("")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "missing api key")
-}
-
-func TestAuthService_ValidateAPIKey_KeyNotFound(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(db, logger)
-	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "")
-
-	_, err := auth.ValidateAPIKey("invalid-api-key")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid api key")
-}
-
 func TestAuthService_ExtractOperatorSessionID_BearerToken(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)

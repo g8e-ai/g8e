@@ -86,7 +86,6 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "")
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
-	apiKeySvc := NewAPIKeyService(db, logger)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
@@ -105,7 +104,6 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 		Reg:               reg,
 		Passkey:           passkey,
 		UserSvc:           userSvc,
-		APIKey:            apiKeySvc,
 		Responder:         resp,
 		MCPGateway:        mcpGateway,
 		IsReady:           func() bool { return true },
@@ -164,7 +162,6 @@ func setupTestGatewayService(t *testing.T) (*GatewayService, *config.Config) {
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "")
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
-	apiKeySvc := NewAPIKeyService(db, logger)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
@@ -187,7 +184,6 @@ func setupTestGatewayService(t *testing.T) (*GatewayService, *config.Config) {
 		passkey:    passkey,
 		userSvc:    userSvc,
 		sessionSvc: sessionSvc,
-		apiKeySvc:  apiKeySvc,
 		mcpGateway: mcpGateway,
 		responder:  resp,
 	}
@@ -404,44 +400,6 @@ func TestHandleHealth(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, constants.GatewayModeStatusOK, resp.Status)
 	})
-}
-
-func TestHandleRotateAPIKeyDoesNotReturnSecret(t *testing.T) {
-	t.Parallel()
-	h, _ := setupTestHTTPHandler(t)
-	operatorID := "op-1"
-	userID := "user-1"
-	oldKey := "g8e_old_key_123"
-
-	op := &models.OperatorDocumentGo{
-		ID:             operatorID,
-		UserID:         userID,
-		OperatorAPIKey: oldKey,
-		Status:         constants.OperatorStatusOffline,
-	}
-	require.NoError(t, h.db.DocSet("operators", operatorID, mustDocJSON(t, op)))
-
-	body := mustDocJSON(t, models.RotateAPIKeyRequest{OperatorID: operatorID})
-	req := httptest.NewRequest(http.MethodPost, "/api/operators/rotate-api-key?user_id="+userID, bytes.NewReader(body))
-	rr := httptest.NewRecorder()
-
-	h.handleRotateAPIKey(rr, req)
-
-	require.Equal(t, http.StatusOK, rr.Code)
-	assert.NotContains(t, rr.Body.String(), "api_key")
-	assert.NotContains(t, rr.Body.String(), oldKey)
-
-	var resp map[string]interface{}
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	assert.Equal(t, true, resp["success"])
-	assert.NotContains(t, resp, "api_key")
-
-	doc, err := h.db.DocGet("operators", operatorID)
-	require.NoError(t, err)
-	newKey := docFieldString(t, doc, "operator_api_key")
-	require.NotEmpty(t, newKey)
-	assert.NotEqual(t, oldKey, newKey)
-	assert.NotContains(t, rr.Body.String(), newKey)
 }
 
 func TestHandleDB(t *testing.T) {

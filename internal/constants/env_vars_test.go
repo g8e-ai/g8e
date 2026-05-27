@@ -20,7 +20,6 @@ import (
 )
 
 func TestEnvVarConstants_OperatorKeys(t *testing.T) {
-	assert.Equal(t, "G8E_OPERATOR_API_KEY", string(EnvVar.OperatorAPIKey))
 	assert.Equal(t, "G8E_OPERATOR_SESSION_ID", string(EnvVar.OperatorSessionID))
 	assert.Equal(t, "G8E_OPERATOR_ENDPOINT", string(EnvVar.OperatorEndpoint))
 	assert.Equal(t, "G8E_DEVICE_TOKEN", string(EnvVar.DeviceToken))

@@ -22,7 +22,6 @@ import (
 )
 
 func TestLoadSettings_OperatorFields(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorAPIKey), "test-api-key")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorEndpoint), "10.0.0.1")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorSessionID), "sess-abc123")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.DeviceToken), "dtok_xyz")
@@ -31,7 +30,6 @@ func TestLoadSettings_OperatorFields(t *testing.T) {
 
 	s := LoadSettings()
 
-	assert.Equal(t, "test-api-key", s.OperatorAPIKey)
 	assert.Equal(t, "10.0.0.1", s.OperatorEndpoint)
 	assert.Equal(t, "sess-abc123", s.OperatorSessionID)
 	assert.Equal(t, "dtok_xyz", s.DeviceToken)
@@ -103,7 +101,6 @@ func TestLoadSettings_User_USERTakesPriorityOverUSERNAME(t *testing.T) {
 }
 
 func TestLoadSettings_EmptyWhenEnvNotSet(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorAPIKey), "")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorEndpoint), "")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorSessionID), "")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.DeviceToken), "")
@@ -115,7 +112,6 @@ func TestLoadSettings_EmptyWhenEnvNotSet(t *testing.T) {
 
 	s := LoadSettings()
 
-	assert.Empty(t, s.OperatorAPIKey)
 	assert.Empty(t, s.OperatorEndpoint)
 	assert.Empty(t, s.OperatorSessionID)
 	assert.Empty(t, s.DeviceToken)
@@ -127,7 +123,6 @@ func TestLoadSettings_EmptyWhenEnvNotSet(t *testing.T) {
 }
 
 func TestLoadSettings_AllFieldsPresent(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorAPIKey), "k")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorEndpoint), "e")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorSessionID), "s")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.DeviceToken), "d")
@@ -146,7 +141,6 @@ func TestLoadSettings_AllFieldsPresent(t *testing.T) {
 
 	s := LoadSettings()
 
-	assert.Equal(t, "k", s.OperatorAPIKey)
 	assert.Equal(t, "e", s.OperatorEndpoint)
 	assert.Equal(t, "s", s.OperatorSessionID)
 	assert.Equal(t, "d", s.DeviceToken)

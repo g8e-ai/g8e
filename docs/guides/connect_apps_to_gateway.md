@@ -78,11 +78,12 @@ The Gateway exposes four logical protocol surfaces. Each surface serves a specif
 
 ### Port Multiplexing
 
-The Gateway supports port multiplexing for flexible deployment:
-- **mTLS only**: `tls.RequireAndVerifyClientCert` for strict mutual TLS
-- **mTLS + Public**: `tls.VerifyClientCertIfGiven` with per-route authentication
-- **Public only**: TLS without client certificate requirement
-- **Bootstrap only**: Plain HTTP (no TLS)
+The Gateway enforces strict port separation for security:
+- **mTLS only**: `tls.RequireAndVerifyClientCert` for strict mutual TLS on the execution boundary
+- **Public only**: TLS without client certificate requirement for browser-based access
+- **Bootstrap only**: Plain HTTP (no TLS) for trust anchor download
+
+Port mixing is prohibited. The gateway fails startup if incompatible surfaces (e.g., mTLS and Public) are assigned to the same port, as this would force a downgrade to `VerifyClientCertIfGiven` and weaken the execution boundary to an L7 check.
 
 Bootstrap must remain on a dedicated port to preserve plain HTTP trust anchor download.
 

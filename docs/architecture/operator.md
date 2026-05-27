@@ -67,6 +67,12 @@ The Operator establishes workload identity bound to SPIFFE-style URI SANs, stric
 
 Revocation is checked on every handshake. Every `ActionReceipt` is signed by a host-unique Ed25519 key, providing a cryptographic proof of host execution.
 
+### JWT Authentication Isolation
+The Operator is fully isolated from Identity Providers (IdP). The Gateway handles all JWT validation, user provisioning, and role mapping:
+- **Gateway Responsibility**: The Gateway validates inbound `Authorization: Bearer <JWT>` tokens, performs JIT user provisioning, maps JWT roles to Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
+- **Operator Responsibility**: The Operator receives only the pre-validated, enriched security metadata in the envelope. It decodes `tenant_id` and `binding_persona` from the envelope, propagates them into the execution context, and applies Persona-based data scrubbing (column masks, redaction) before returning results.
+- **No IdP Dependency**: The Operator never requires outbound internet access to verify tokens or manage user state. This enables air-gapped and high-security deployments where the Operator has no external network connectivity.
+
 ### Local-First Audit Architecture (LFAA)
 The host is the authoritative source of truth for all mutations.
 - **AuditVaultService**: An append-only SQLite log of every event and signed `ActionReceipt`. It is fail-closed: events missing a valid `operator_session_id` are rejected.

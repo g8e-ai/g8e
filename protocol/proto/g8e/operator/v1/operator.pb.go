@@ -2341,110 +2341,6 @@ func (x *TerminateOperatorResult) GetError() string {
 	return ""
 }
 
-type RotateAPIKeyRequested struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	OperatorId    string                 `protobuf:"bytes,1,opt,name=operator_id,json=operatorId,proto3" json:"operator_id,omitempty"`
-	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RotateAPIKeyRequested) Reset() {
-	*x = RotateAPIKeyRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[30]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RotateAPIKeyRequested) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RotateAPIKeyRequested) ProtoMessage() {}
-
-func (x *RotateAPIKeyRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[30]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RotateAPIKeyRequested.ProtoReflect.Descriptor instead.
-func (*RotateAPIKeyRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{30}
-}
-
-func (x *RotateAPIKeyRequested) GetOperatorId() string {
-	if x != nil {
-		return x.OperatorId
-	}
-	return ""
-}
-
-func (x *RotateAPIKeyRequested) GetUserId() string {
-	if x != nil {
-		return x.UserId
-	}
-	return ""
-}
-
-type RotateAPIKeyResult struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RotateAPIKeyResult) Reset() {
-	*x = RotateAPIKeyResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[31]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RotateAPIKeyResult) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RotateAPIKeyResult) ProtoMessage() {}
-
-func (x *RotateAPIKeyResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[31]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RotateAPIKeyResult.ProtoReflect.Descriptor instead.
-func (*RotateAPIKeyResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{31}
-}
-
-func (x *RotateAPIKeyResult) GetSuccess() bool {
-	if x != nil {
-		return x.Success
-	}
-	return false
-}
-
-func (x *RotateAPIKeyResult) GetError() string {
-	if x != nil {
-		return x.Error
-	}
-	return ""
-}
-
 type ListOperatorSlotsRequested struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -2454,7 +2350,7 @@ type ListOperatorSlotsRequested struct {
 
 func (x *ListOperatorSlotsRequested) Reset() {
 	*x = ListOperatorSlotsRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[32]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2466,7 +2362,7 @@ func (x *ListOperatorSlotsRequested) String() string {
 func (*ListOperatorSlotsRequested) ProtoMessage() {}
 
 func (x *ListOperatorSlotsRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[32]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2479,7 +2375,7 @@ func (x *ListOperatorSlotsRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOperatorSlotsRequested.ProtoReflect.Descriptor instead.
 func (*ListOperatorSlotsRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{32}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ListOperatorSlotsRequested) GetUserId() string {
@@ -2500,7 +2396,7 @@ type ListOperatorSlotsResult struct {
 
 func (x *ListOperatorSlotsResult) Reset() {
 	*x = ListOperatorSlotsResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[33]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2512,7 +2408,7 @@ func (x *ListOperatorSlotsResult) String() string {
 func (*ListOperatorSlotsResult) ProtoMessage() {}
 
 func (x *ListOperatorSlotsResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[33]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2525,7 +2421,7 @@ func (x *ListOperatorSlotsResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOperatorSlotsResult.ProtoReflect.Descriptor instead.
 func (*ListOperatorSlotsResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{33}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ListOperatorSlotsResult) GetSuccess() bool {
@@ -2560,7 +2456,7 @@ type BindOperatorsRequested struct {
 
 func (x *BindOperatorsRequested) Reset() {
 	*x = BindOperatorsRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[34]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2572,7 +2468,7 @@ func (x *BindOperatorsRequested) String() string {
 func (*BindOperatorsRequested) ProtoMessage() {}
 
 func (x *BindOperatorsRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[34]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2585,7 +2481,7 @@ func (x *BindOperatorsRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BindOperatorsRequested.ProtoReflect.Descriptor instead.
 func (*BindOperatorsRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{34}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *BindOperatorsRequested) GetOperatorIds() []string {
@@ -2623,7 +2519,7 @@ type BindOperatorsResult struct {
 
 func (x *BindOperatorsResult) Reset() {
 	*x = BindOperatorsResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[35]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2635,7 +2531,7 @@ func (x *BindOperatorsResult) String() string {
 func (*BindOperatorsResult) ProtoMessage() {}
 
 func (x *BindOperatorsResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[35]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2648,7 +2544,7 @@ func (x *BindOperatorsResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BindOperatorsResult.ProtoReflect.Descriptor instead.
 func (*BindOperatorsResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{35}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *BindOperatorsResult) GetSuccess() bool {
@@ -2704,7 +2600,7 @@ type UnbindOperatorsRequested struct {
 
 func (x *UnbindOperatorsRequested) Reset() {
 	*x = UnbindOperatorsRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[36]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2716,7 +2612,7 @@ func (x *UnbindOperatorsRequested) String() string {
 func (*UnbindOperatorsRequested) ProtoMessage() {}
 
 func (x *UnbindOperatorsRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[36]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2729,7 +2625,7 @@ func (x *UnbindOperatorsRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnbindOperatorsRequested.ProtoReflect.Descriptor instead.
 func (*UnbindOperatorsRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{36}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *UnbindOperatorsRequested) GetOperatorIds() []string {
@@ -2767,7 +2663,7 @@ type UnbindOperatorsResult struct {
 
 func (x *UnbindOperatorsResult) Reset() {
 	*x = UnbindOperatorsResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[37]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2779,7 +2675,7 @@ func (x *UnbindOperatorsResult) String() string {
 func (*UnbindOperatorsResult) ProtoMessage() {}
 
 func (x *UnbindOperatorsResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[37]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2792,7 +2688,7 @@ func (x *UnbindOperatorsResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnbindOperatorsResult.ProtoReflect.Descriptor instead.
 func (*UnbindOperatorsResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{37}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *UnbindOperatorsResult) GetSuccess() bool {
@@ -2848,7 +2744,7 @@ type SetTargetContextRequested struct {
 
 func (x *SetTargetContextRequested) Reset() {
 	*x = SetTargetContextRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[38]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2860,7 +2756,7 @@ func (x *SetTargetContextRequested) String() string {
 func (*SetTargetContextRequested) ProtoMessage() {}
 
 func (x *SetTargetContextRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[38]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2873,7 +2769,7 @@ func (x *SetTargetContextRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetTargetContextRequested.ProtoReflect.Descriptor instead.
 func (*SetTargetContextRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{38}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *SetTargetContextRequested) GetOperatorId() string {
@@ -2908,7 +2804,7 @@ type SetTargetContextResult struct {
 
 func (x *SetTargetContextResult) Reset() {
 	*x = SetTargetContextResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[39]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2920,7 +2816,7 @@ func (x *SetTargetContextResult) String() string {
 func (*SetTargetContextResult) ProtoMessage() {}
 
 func (x *SetTargetContextResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[39]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2933,7 +2829,7 @@ func (x *SetTargetContextResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetTargetContextResult.ProtoReflect.Descriptor instead.
 func (*SetTargetContextResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{39}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *SetTargetContextResult) GetSuccess() bool {
@@ -2967,25 +2863,23 @@ type OperatorDocument struct {
 	Status             string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
 	OperatorSessionId  string                 `protobuf:"bytes,7,opt,name=operator_session_id,json=operatorSessionId,proto3" json:"operator_session_id,omitempty"`
 	BoundWebSessionId  string                 `protobuf:"bytes,8,opt,name=bound_web_session_id,json=boundWebSessionId,proto3" json:"bound_web_session_id,omitempty"`
-	ApiKey             string                 `protobuf:"bytes,9,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
-	OperatorApiKey     string                 `protobuf:"bytes,10,opt,name=operator_api_key,json=operatorApiKey,proto3" json:"operator_api_key,omitempty"`
-	OperatorCert       string                 `protobuf:"bytes,11,opt,name=operator_cert,json=operatorCert,proto3" json:"operator_cert,omitempty"`
-	OperatorCertSerial string                 `protobuf:"bytes,12,opt,name=operator_cert_serial,json=operatorCertSerial,proto3" json:"operator_cert_serial,omitempty"`
-	SlotNumber         int32                  `protobuf:"varint,13,opt,name=slot_number,json=slotNumber,proto3" json:"slot_number,omitempty"`
-	IsSlot             bool                   `protobuf:"varint,14,opt,name=is_slot,json=isSlot,proto3" json:"is_slot,omitempty"`
-	Claimed            bool                   `protobuf:"varint,15,opt,name=claimed,proto3" json:"claimed,omitempty"`
-	OperatorType       string                 `protobuf:"bytes,16,opt,name=operator_type,json=operatorType,proto3" json:"operator_type,omitempty"`
-	CloudSubtype       string                 `protobuf:"bytes,17,opt,name=cloud_subtype,json=cloudSubtype,proto3" json:"cloud_subtype,omitempty"`
-	SystemFingerprint  string                 `protobuf:"bytes,18,opt,name=system_fingerprint,json=systemFingerprint,proto3" json:"system_fingerprint,omitempty"`
-	CreatedAtUnixMs    int64                  `protobuf:"varint,19,opt,name=created_at_unix_ms,json=createdAtUnixMs,proto3" json:"created_at_unix_ms,omitempty"`
-	UpdatedAtUnixMs    int64                  `protobuf:"varint,20,opt,name=updated_at_unix_ms,json=updatedAtUnixMs,proto3" json:"updated_at_unix_ms,omitempty"`
+	OperatorCert       string                 `protobuf:"bytes,9,opt,name=operator_cert,json=operatorCert,proto3" json:"operator_cert,omitempty"`
+	OperatorCertSerial string                 `protobuf:"bytes,10,opt,name=operator_cert_serial,json=operatorCertSerial,proto3" json:"operator_cert_serial,omitempty"`
+	SlotNumber         int32                  `protobuf:"varint,11,opt,name=slot_number,json=slotNumber,proto3" json:"slot_number,omitempty"`
+	IsSlot             bool                   `protobuf:"varint,12,opt,name=is_slot,json=isSlot,proto3" json:"is_slot,omitempty"`
+	Claimed            bool                   `protobuf:"varint,13,opt,name=claimed,proto3" json:"claimed,omitempty"`
+	OperatorType       string                 `protobuf:"bytes,14,opt,name=operator_type,json=operatorType,proto3" json:"operator_type,omitempty"`
+	CloudSubtype       string                 `protobuf:"bytes,15,opt,name=cloud_subtype,json=cloudSubtype,proto3" json:"cloud_subtype,omitempty"`
+	SystemFingerprint  string                 `protobuf:"bytes,16,opt,name=system_fingerprint,json=systemFingerprint,proto3" json:"system_fingerprint,omitempty"`
+	CreatedAtUnixMs    int64                  `protobuf:"varint,17,opt,name=created_at_unix_ms,json=createdAtUnixMs,proto3" json:"created_at_unix_ms,omitempty"`
+	UpdatedAtUnixMs    int64                  `protobuf:"varint,18,opt,name=updated_at_unix_ms,json=updatedAtUnixMs,proto3" json:"updated_at_unix_ms,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
 
 func (x *OperatorDocument) Reset() {
 	*x = OperatorDocument{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[40]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2997,7 +2891,7 @@ func (x *OperatorDocument) String() string {
 func (*OperatorDocument) ProtoMessage() {}
 
 func (x *OperatorDocument) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[40]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3010,7 +2904,7 @@ func (x *OperatorDocument) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperatorDocument.ProtoReflect.Descriptor instead.
 func (*OperatorDocument) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{40}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *OperatorDocument) GetId() string {
@@ -3065,20 +2959,6 @@ func (x *OperatorDocument) GetOperatorSessionId() string {
 func (x *OperatorDocument) GetBoundWebSessionId() string {
 	if x != nil {
 		return x.BoundWebSessionId
-	}
-	return ""
-}
-
-func (x *OperatorDocument) GetApiKey() string {
-	if x != nil {
-		return x.ApiKey
-	}
-	return ""
-}
-
-func (x *OperatorDocument) GetOperatorApiKey() string {
-	if x != nil {
-		return x.OperatorApiKey
 	}
 	return ""
 }
@@ -3162,7 +3042,7 @@ type ShutdownRequested struct {
 
 func (x *ShutdownRequested) Reset() {
 	*x = ShutdownRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[41]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3174,7 +3054,7 @@ func (x *ShutdownRequested) String() string {
 func (*ShutdownRequested) ProtoMessage() {}
 
 func (x *ShutdownRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[41]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3187,7 +3067,7 @@ func (x *ShutdownRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShutdownRequested.ProtoReflect.Descriptor instead.
 func (*ShutdownRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{41}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *ShutdownRequested) GetReason() string {
@@ -3213,7 +3093,7 @@ type EvalAnswerRequested struct {
 
 func (x *EvalAnswerRequested) Reset() {
 	*x = EvalAnswerRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[42]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3225,7 +3105,7 @@ func (x *EvalAnswerRequested) String() string {
 func (*EvalAnswerRequested) ProtoMessage() {}
 
 func (x *EvalAnswerRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[42]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3238,7 +3118,7 @@ func (x *EvalAnswerRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvalAnswerRequested.ProtoReflect.Descriptor instead.
 func (*EvalAnswerRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{42}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *EvalAnswerRequested) GetPromptId() string {
@@ -3291,7 +3171,7 @@ type McpCallRequested struct {
 
 func (x *McpCallRequested) Reset() {
 	*x = McpCallRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[43]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3303,7 +3183,7 @@ func (x *McpCallRequested) String() string {
 func (*McpCallRequested) ProtoMessage() {}
 
 func (x *McpCallRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[43]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3316,7 +3196,7 @@ func (x *McpCallRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use McpCallRequested.ProtoReflect.Descriptor instead.
 func (*McpCallRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{43}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *McpCallRequested) GetToolName() string {
@@ -3355,7 +3235,7 @@ type A2ACallRequested struct {
 
 func (x *A2ACallRequested) Reset() {
 	*x = A2ACallRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[44]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3367,7 +3247,7 @@ func (x *A2ACallRequested) String() string {
 func (*A2ACallRequested) ProtoMessage() {}
 
 func (x *A2ACallRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[44]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3380,7 +3260,7 @@ func (x *A2ACallRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use A2ACallRequested.ProtoReflect.Descriptor instead.
 func (*A2ACallRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{44}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *A2ACallRequested) GetSkillName() string {
@@ -3416,7 +3296,7 @@ type McpResourceListRequested struct {
 
 func (x *McpResourceListRequested) Reset() {
 	*x = McpResourceListRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[45]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3428,7 +3308,7 @@ func (x *McpResourceListRequested) String() string {
 func (*McpResourceListRequested) ProtoMessage() {}
 
 func (x *McpResourceListRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[45]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3441,7 +3321,7 @@ func (x *McpResourceListRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use McpResourceListRequested.ProtoReflect.Descriptor instead.
 func (*McpResourceListRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{45}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *McpResourceListRequested) GetExecutionId() string {
@@ -3465,7 +3345,7 @@ type McpResourceReadRequested struct {
 
 func (x *McpResourceReadRequested) Reset() {
 	*x = McpResourceReadRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[46]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3477,7 +3357,7 @@ func (x *McpResourceReadRequested) String() string {
 func (*McpResourceReadRequested) ProtoMessage() {}
 
 func (x *McpResourceReadRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[46]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3490,7 +3370,7 @@ func (x *McpResourceReadRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use McpResourceReadRequested.ProtoReflect.Descriptor instead.
 func (*McpResourceReadRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{46}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *McpResourceReadRequested) GetUri() string {
@@ -3519,7 +3399,7 @@ type McpPromptListRequested struct {
 
 func (x *McpPromptListRequested) Reset() {
 	*x = McpPromptListRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[47]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3531,7 +3411,7 @@ func (x *McpPromptListRequested) String() string {
 func (*McpPromptListRequested) ProtoMessage() {}
 
 func (x *McpPromptListRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[47]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3544,7 +3424,7 @@ func (x *McpPromptListRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use McpPromptListRequested.ProtoReflect.Descriptor instead.
 func (*McpPromptListRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{47}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *McpPromptListRequested) GetExecutionId() string {
@@ -3568,7 +3448,7 @@ type McpPromptGetRequested struct {
 
 func (x *McpPromptGetRequested) Reset() {
 	*x = McpPromptGetRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[48]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3580,7 +3460,7 @@ func (x *McpPromptGetRequested) String() string {
 func (*McpPromptGetRequested) ProtoMessage() {}
 
 func (x *McpPromptGetRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[48]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3593,7 +3473,7 @@ func (x *McpPromptGetRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use McpPromptGetRequested.ProtoReflect.Descriptor instead.
 func (*McpPromptGetRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{48}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *McpPromptGetRequested) GetName() string {
@@ -3647,7 +3527,7 @@ type ActionReceipt struct {
 
 func (x *ActionReceipt) Reset() {
 	*x = ActionReceipt{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[49]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3659,7 +3539,7 @@ func (x *ActionReceipt) String() string {
 func (*ActionReceipt) ProtoMessage() {}
 
 func (x *ActionReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[49]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3672,7 +3552,7 @@ func (x *ActionReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActionReceipt.ProtoReflect.Descriptor instead.
 func (*ActionReceipt) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{49}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ActionReceipt) GetTransactionId() string {
@@ -3802,7 +3682,7 @@ type CommitmentAttestation struct {
 
 func (x *CommitmentAttestation) Reset() {
 	*x = CommitmentAttestation{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[50]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3814,7 +3694,7 @@ func (x *CommitmentAttestation) String() string {
 func (*CommitmentAttestation) ProtoMessage() {}
 
 func (x *CommitmentAttestation) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[50]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3827,7 +3707,7 @@ func (x *CommitmentAttestation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommitmentAttestation.ProtoReflect.Descriptor instead.
 func (*CommitmentAttestation) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{50}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *CommitmentAttestation) GetTransactionId() string {
@@ -3941,7 +3821,7 @@ type CommandResult struct {
 
 func (x *CommandResult) Reset() {
 	*x = CommandResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[51]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3953,7 +3833,7 @@ func (x *CommandResult) String() string {
 func (*CommandResult) ProtoMessage() {}
 
 func (x *CommandResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[51]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3966,7 +3846,7 @@ func (x *CommandResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandResult.ProtoReflect.Descriptor instead.
 func (*CommandResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{51}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *CommandResult) GetExecutionId() string {
@@ -4045,7 +3925,7 @@ type FsEntry struct {
 
 func (x *FsEntry) Reset() {
 	*x = FsEntry{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[52]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4057,7 +3937,7 @@ func (x *FsEntry) String() string {
 func (*FsEntry) ProtoMessage() {}
 
 func (x *FsEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[52]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4070,7 +3950,7 @@ func (x *FsEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FsEntry.ProtoReflect.Descriptor instead.
 func (*FsEntry) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{52}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *FsEntry) GetName() string {
@@ -4125,7 +4005,7 @@ type FsListResult struct {
 
 func (x *FsListResult) Reset() {
 	*x = FsListResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[53]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4137,7 +4017,7 @@ func (x *FsListResult) String() string {
 func (*FsListResult) ProtoMessage() {}
 
 func (x *FsListResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[53]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4150,7 +4030,7 @@ func (x *FsListResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FsListResult.ProtoReflect.Descriptor instead.
 func (*FsListResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{53}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *FsListResult) GetExecutionId() string {
@@ -4233,7 +4113,7 @@ type FsReadResult struct {
 
 func (x *FsReadResult) Reset() {
 	*x = FsReadResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[54]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4245,7 +4125,7 @@ func (x *FsReadResult) String() string {
 func (*FsReadResult) ProtoMessage() {}
 
 func (x *FsReadResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[54]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4258,7 +4138,7 @@ func (x *FsReadResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FsReadResult.ProtoReflect.Descriptor instead.
 func (*FsReadResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{54}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *FsReadResult) GetExecutionId() string {
@@ -4337,7 +4217,7 @@ type FsGrepMatch struct {
 
 func (x *FsGrepMatch) Reset() {
 	*x = FsGrepMatch{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[55]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4349,7 +4229,7 @@ func (x *FsGrepMatch) String() string {
 func (*FsGrepMatch) ProtoMessage() {}
 
 func (x *FsGrepMatch) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[55]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4362,7 +4242,7 @@ func (x *FsGrepMatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FsGrepMatch.ProtoReflect.Descriptor instead.
 func (*FsGrepMatch) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{55}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *FsGrepMatch) GetPath() string {
@@ -4417,7 +4297,7 @@ type FsGrepResult struct {
 
 func (x *FsGrepResult) Reset() {
 	*x = FsGrepResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[56]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4429,7 +4309,7 @@ func (x *FsGrepResult) String() string {
 func (*FsGrepResult) ProtoMessage() {}
 
 func (x *FsGrepResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[56]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4442,7 +4322,7 @@ func (x *FsGrepResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FsGrepResult.ProtoReflect.Descriptor instead.
 func (*FsGrepResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{56}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *FsGrepResult) GetExecutionId() string {
@@ -4529,7 +4409,7 @@ type FileEditResult struct {
 
 func (x *FileEditResult) Reset() {
 	*x = FileEditResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[57]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4541,7 +4421,7 @@ func (x *FileEditResult) String() string {
 func (*FileEditResult) ProtoMessage() {}
 
 func (x *FileEditResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[57]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4554,7 +4434,7 @@ func (x *FileEditResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileEditResult.ProtoReflect.Descriptor instead.
 func (*FileEditResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{57}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *FileEditResult) GetExecutionId() string {
@@ -4664,7 +4544,7 @@ type ExecutionStatusUpdate struct {
 
 func (x *ExecutionStatusUpdate) Reset() {
 	*x = ExecutionStatusUpdate{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[58]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4676,7 +4556,7 @@ func (x *ExecutionStatusUpdate) String() string {
 func (*ExecutionStatusUpdate) ProtoMessage() {}
 
 func (x *ExecutionStatusUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[58]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4689,7 +4569,7 @@ func (x *ExecutionStatusUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecutionStatusUpdate.ProtoReflect.Descriptor instead.
 func (*ExecutionStatusUpdate) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{58}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *ExecutionStatusUpdate) GetExecutionId() string {
@@ -4761,7 +4641,7 @@ type PortCheckEntry struct {
 
 func (x *PortCheckEntry) Reset() {
 	*x = PortCheckEntry{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[59]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4773,7 +4653,7 @@ func (x *PortCheckEntry) String() string {
 func (*PortCheckEntry) ProtoMessage() {}
 
 func (x *PortCheckEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[59]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4786,7 +4666,7 @@ func (x *PortCheckEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PortCheckEntry.ProtoReflect.Descriptor instead.
 func (*PortCheckEntry) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{59}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *PortCheckEntry) GetHost() string {
@@ -4837,7 +4717,7 @@ type PortCheckResult struct {
 
 func (x *PortCheckResult) Reset() {
 	*x = PortCheckResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[60]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4849,7 +4729,7 @@ func (x *PortCheckResult) String() string {
 func (*PortCheckResult) ProtoMessage() {}
 
 func (x *PortCheckResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[60]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4862,7 +4742,7 @@ func (x *PortCheckResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PortCheckResult.ProtoReflect.Descriptor instead.
 func (*PortCheckResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{60}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *PortCheckResult) GetExecutionId() string {
@@ -4919,7 +4799,7 @@ type FetchLogsResult struct {
 
 func (x *FetchLogsResult) Reset() {
 	*x = FetchLogsResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[61]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4931,7 +4811,7 @@ func (x *FetchLogsResult) String() string {
 func (*FetchLogsResult) ProtoMessage() {}
 
 func (x *FetchLogsResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[61]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4944,7 +4824,7 @@ func (x *FetchLogsResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchLogsResult.ProtoReflect.Descriptor instead.
 func (*FetchLogsResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{61}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *FetchLogsResult) GetExecutionId() string {
@@ -5036,7 +4916,7 @@ type AuditWebSession struct {
 
 func (x *AuditWebSession) Reset() {
 	*x = AuditWebSession{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[62]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5048,7 +4928,7 @@ func (x *AuditWebSession) String() string {
 func (*AuditWebSession) ProtoMessage() {}
 
 func (x *AuditWebSession) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[62]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5061,7 +4941,7 @@ func (x *AuditWebSession) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditWebSession.ProtoReflect.Descriptor instead.
 func (*AuditWebSession) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{62}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *AuditWebSession) GetId() string {
@@ -5106,7 +4986,7 @@ type AuditFileMutation struct {
 
 func (x *AuditFileMutation) Reset() {
 	*x = AuditFileMutation{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[63]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5118,7 +4998,7 @@ func (x *AuditFileMutation) String() string {
 func (*AuditFileMutation) ProtoMessage() {}
 
 func (x *AuditFileMutation) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[63]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5131,7 +5011,7 @@ func (x *AuditFileMutation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditFileMutation.ProtoReflect.Descriptor instead.
 func (*AuditFileMutation) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{63}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *AuditFileMutation) GetId() int64 {
@@ -5198,7 +5078,7 @@ type AuditEvent struct {
 
 func (x *AuditEvent) Reset() {
 	*x = AuditEvent{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[64]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5210,7 +5090,7 @@ func (x *AuditEvent) String() string {
 func (*AuditEvent) ProtoMessage() {}
 
 func (x *AuditEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[64]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5223,7 +5103,7 @@ func (x *AuditEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditEvent.ProtoReflect.Descriptor instead.
 func (*AuditEvent) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{64}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *AuditEvent) GetId() int64 {
@@ -5341,7 +5221,7 @@ type FetchHistoryResult struct {
 
 func (x *FetchHistoryResult) Reset() {
 	*x = FetchHistoryResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[65]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5353,7 +5233,7 @@ func (x *FetchHistoryResult) String() string {
 func (*FetchHistoryResult) ProtoMessage() {}
 
 func (x *FetchHistoryResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[65]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5366,7 +5246,7 @@ func (x *FetchHistoryResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchHistoryResult.ProtoReflect.Descriptor instead.
 func (*FetchHistoryResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{65}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *FetchHistoryResult) GetSuccess() bool {
@@ -5443,7 +5323,7 @@ type FileHistoryEntry struct {
 
 func (x *FileHistoryEntry) Reset() {
 	*x = FileHistoryEntry{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[66]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5455,7 +5335,7 @@ func (x *FileHistoryEntry) String() string {
 func (*FileHistoryEntry) ProtoMessage() {}
 
 func (x *FileHistoryEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[66]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5468,7 +5348,7 @@ func (x *FileHistoryEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileHistoryEntry.ProtoReflect.Descriptor instead.
 func (*FileHistoryEntry) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{66}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *FileHistoryEntry) GetCommitHash() string {
@@ -5505,7 +5385,7 @@ type FetchFileHistoryResult struct {
 
 func (x *FetchFileHistoryResult) Reset() {
 	*x = FetchFileHistoryResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[67]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5517,7 +5397,7 @@ func (x *FetchFileHistoryResult) String() string {
 func (*FetchFileHistoryResult) ProtoMessage() {}
 
 func (x *FetchFileHistoryResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[67]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5530,7 +5410,7 @@ func (x *FetchFileHistoryResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchFileHistoryResult.ProtoReflect.Descriptor instead.
 func (*FetchFileHistoryResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{67}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *FetchFileHistoryResult) GetSuccess() bool {
@@ -5581,7 +5461,7 @@ type RestoreFileResult struct {
 
 func (x *RestoreFileResult) Reset() {
 	*x = RestoreFileResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[68]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5593,7 +5473,7 @@ func (x *RestoreFileResult) String() string {
 func (*RestoreFileResult) ProtoMessage() {}
 
 func (x *RestoreFileResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[68]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5606,7 +5486,7 @@ func (x *RestoreFileResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreFileResult.ProtoReflect.Descriptor instead.
 func (*RestoreFileResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{68}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *RestoreFileResult) GetSuccess() bool {
@@ -5660,7 +5540,7 @@ type GrantIntentRequested struct {
 
 func (x *GrantIntentRequested) Reset() {
 	*x = GrantIntentRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[69]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5672,7 +5552,7 @@ func (x *GrantIntentRequested) String() string {
 func (*GrantIntentRequested) ProtoMessage() {}
 
 func (x *GrantIntentRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[69]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5685,7 +5565,7 @@ func (x *GrantIntentRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GrantIntentRequested.ProtoReflect.Descriptor instead.
 func (*GrantIntentRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{69}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *GrantIntentRequested) GetIntentName() string {
@@ -5729,7 +5609,7 @@ type GrantIntentResult struct {
 
 func (x *GrantIntentResult) Reset() {
 	*x = GrantIntentResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[70]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5741,7 +5621,7 @@ func (x *GrantIntentResult) String() string {
 func (*GrantIntentResult) ProtoMessage() {}
 
 func (x *GrantIntentResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[70]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5754,7 +5634,7 @@ func (x *GrantIntentResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GrantIntentResult.ProtoReflect.Descriptor instead.
 func (*GrantIntentResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{70}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *GrantIntentResult) GetSuccess() bool {
@@ -5803,7 +5683,7 @@ type RevokeIntentRequested struct {
 
 func (x *RevokeIntentRequested) Reset() {
 	*x = RevokeIntentRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[71]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5815,7 +5695,7 @@ func (x *RevokeIntentRequested) String() string {
 func (*RevokeIntentRequested) ProtoMessage() {}
 
 func (x *RevokeIntentRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[71]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5828,7 +5708,7 @@ func (x *RevokeIntentRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeIntentRequested.ProtoReflect.Descriptor instead.
 func (*RevokeIntentRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{71}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *RevokeIntentRequested) GetIntentName() string {
@@ -5864,7 +5744,7 @@ type RevokeIntentResult struct {
 
 func (x *RevokeIntentResult) Reset() {
 	*x = RevokeIntentResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[72]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5876,7 +5756,7 @@ func (x *RevokeIntentResult) String() string {
 func (*RevokeIntentResult) ProtoMessage() {}
 
 func (x *RevokeIntentResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[72]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5889,7 +5769,7 @@ func (x *RevokeIntentResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeIntentResult.ProtoReflect.Descriptor instead.
 func (*RevokeIntentResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{72}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *RevokeIntentResult) GetSuccess() bool {
@@ -5938,7 +5818,7 @@ type FileDiffEntry struct {
 
 func (x *FileDiffEntry) Reset() {
 	*x = FileDiffEntry{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[73]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5950,7 +5830,7 @@ func (x *FileDiffEntry) String() string {
 func (*FileDiffEntry) ProtoMessage() {}
 
 func (x *FileDiffEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[73]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5963,7 +5843,7 @@ func (x *FileDiffEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileDiffEntry.ProtoReflect.Descriptor instead.
 func (*FileDiffEntry) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{73}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *FileDiffEntry) GetId() string {
@@ -6051,7 +5931,7 @@ type FetchFileDiffResult struct {
 
 func (x *FetchFileDiffResult) Reset() {
 	*x = FetchFileDiffResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[74]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6063,7 +5943,7 @@ func (x *FetchFileDiffResult) String() string {
 func (*FetchFileDiffResult) ProtoMessage() {}
 
 func (x *FetchFileDiffResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[74]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6076,7 +5956,7 @@ func (x *FetchFileDiffResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchFileDiffResult.ProtoReflect.Descriptor instead.
 func (*FetchFileDiffResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{74}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *FetchFileDiffResult) GetSuccess() bool {
@@ -6158,7 +6038,7 @@ type HeartbeatResult struct {
 
 func (x *HeartbeatResult) Reset() {
 	*x = HeartbeatResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[75]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6170,7 +6050,7 @@ func (x *HeartbeatResult) String() string {
 func (*HeartbeatResult) ProtoMessage() {}
 
 func (x *HeartbeatResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[75]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6183,7 +6063,7 @@ func (x *HeartbeatResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatResult.ProtoReflect.Descriptor instead.
 func (*HeartbeatResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{75}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *HeartbeatResult) GetOperatorId() string {
@@ -6355,7 +6235,7 @@ type SystemIdentity struct {
 
 func (x *SystemIdentity) Reset() {
 	*x = SystemIdentity{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[76]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6367,7 +6247,7 @@ func (x *SystemIdentity) String() string {
 func (*SystemIdentity) ProtoMessage() {}
 
 func (x *SystemIdentity) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[76]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6380,7 +6260,7 @@ func (x *SystemIdentity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemIdentity.ProtoReflect.Descriptor instead.
 func (*SystemIdentity) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{76}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *SystemIdentity) GetHostname() string {
@@ -6443,7 +6323,7 @@ type NetworkInterface struct {
 
 func (x *NetworkInterface) Reset() {
 	*x = NetworkInterface{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[77]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6455,7 +6335,7 @@ func (x *NetworkInterface) String() string {
 func (*NetworkInterface) ProtoMessage() {}
 
 func (x *NetworkInterface) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[77]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6468,7 +6348,7 @@ func (x *NetworkInterface) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkInterface.ProtoReflect.Descriptor instead.
 func (*NetworkInterface) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{77}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *NetworkInterface) GetName() string {
@@ -6504,7 +6384,7 @@ type NetworkInfo struct {
 
 func (x *NetworkInfo) Reset() {
 	*x = NetworkInfo{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[78]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6516,7 +6396,7 @@ func (x *NetworkInfo) String() string {
 func (*NetworkInfo) ProtoMessage() {}
 
 func (x *NetworkInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[78]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6529,7 +6409,7 @@ func (x *NetworkInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkInfo.ProtoReflect.Descriptor instead.
 func (*NetworkInfo) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{78}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *NetworkInfo) GetPublicIp() string {
@@ -6571,7 +6451,7 @@ type CapabilityFlags struct {
 
 func (x *CapabilityFlags) Reset() {
 	*x = CapabilityFlags{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[79]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6583,7 +6463,7 @@ func (x *CapabilityFlags) String() string {
 func (*CapabilityFlags) ProtoMessage() {}
 
 func (x *CapabilityFlags) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[79]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6596,7 +6476,7 @@ func (x *CapabilityFlags) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CapabilityFlags.ProtoReflect.Descriptor instead.
 func (*CapabilityFlags) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{79}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *CapabilityFlags) GetLocalStorageEnabled() bool {
@@ -6630,7 +6510,7 @@ type VersionInfo struct {
 
 func (x *VersionInfo) Reset() {
 	*x = VersionInfo{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[80]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6642,7 +6522,7 @@ func (x *VersionInfo) String() string {
 func (*VersionInfo) ProtoMessage() {}
 
 func (x *VersionInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[80]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6655,7 +6535,7 @@ func (x *VersionInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VersionInfo.ProtoReflect.Descriptor instead.
 func (*VersionInfo) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{80}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *VersionInfo) GetOperatorVersion() string {
@@ -6682,7 +6562,7 @@ type UptimeInfo struct {
 
 func (x *UptimeInfo) Reset() {
 	*x = UptimeInfo{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[81]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6694,7 +6574,7 @@ func (x *UptimeInfo) String() string {
 func (*UptimeInfo) ProtoMessage() {}
 
 func (x *UptimeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[81]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6707,7 +6587,7 @@ func (x *UptimeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UptimeInfo.ProtoReflect.Descriptor instead.
 func (*UptimeInfo) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{81}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *UptimeInfo) GetUptime() string {
@@ -6740,7 +6620,7 @@ type PerformanceMetrics struct {
 
 func (x *PerformanceMetrics) Reset() {
 	*x = PerformanceMetrics{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[82]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6752,7 +6632,7 @@ func (x *PerformanceMetrics) String() string {
 func (*PerformanceMetrics) ProtoMessage() {}
 
 func (x *PerformanceMetrics) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[82]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6765,7 +6645,7 @@ func (x *PerformanceMetrics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PerformanceMetrics.ProtoReflect.Descriptor instead.
 func (*PerformanceMetrics) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{82}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *PerformanceMetrics) GetCpuPercent() float64 {
@@ -6835,7 +6715,7 @@ type OSDetails struct {
 
 func (x *OSDetails) Reset() {
 	*x = OSDetails{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[83]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6847,7 +6727,7 @@ func (x *OSDetails) String() string {
 func (*OSDetails) ProtoMessage() {}
 
 func (x *OSDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[83]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6860,7 +6740,7 @@ func (x *OSDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OSDetails.ProtoReflect.Descriptor instead.
 func (*OSDetails) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{83}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *OSDetails) GetKernel() string {
@@ -6898,7 +6778,7 @@ type UserDetails struct {
 
 func (x *UserDetails) Reset() {
 	*x = UserDetails{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[84]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6910,7 +6790,7 @@ func (x *UserDetails) String() string {
 func (*UserDetails) ProtoMessage() {}
 
 func (x *UserDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[84]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6923,7 +6803,7 @@ func (x *UserDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserDetails.ProtoReflect.Descriptor instead.
 func (*UserDetails) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{84}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *UserDetails) GetUsername() string {
@@ -6980,7 +6860,7 @@ type DiskDetails struct {
 
 func (x *DiskDetails) Reset() {
 	*x = DiskDetails{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[85]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6992,7 +6872,7 @@ func (x *DiskDetails) String() string {
 func (*DiskDetails) ProtoMessage() {}
 
 func (x *DiskDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[85]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7005,7 +6885,7 @@ func (x *DiskDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiskDetails.ProtoReflect.Descriptor instead.
 func (*DiskDetails) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{85}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *DiskDetails) GetTotalGb() float64 {
@@ -7048,7 +6928,7 @@ type MemoryDetails struct {
 
 func (x *MemoryDetails) Reset() {
 	*x = MemoryDetails{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[86]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7060,7 +6940,7 @@ func (x *MemoryDetails) String() string {
 func (*MemoryDetails) ProtoMessage() {}
 
 func (x *MemoryDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[86]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7073,7 +6953,7 @@ func (x *MemoryDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemoryDetails.ProtoReflect.Descriptor instead.
 func (*MemoryDetails) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{86}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *MemoryDetails) GetTotalMb() int64 {
@@ -7120,7 +7000,7 @@ type EnvironmentDetails struct {
 
 func (x *EnvironmentDetails) Reset() {
 	*x = EnvironmentDetails{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[87]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7132,7 +7012,7 @@ func (x *EnvironmentDetails) String() string {
 func (*EnvironmentDetails) ProtoMessage() {}
 
 func (x *EnvironmentDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[87]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7145,7 +7025,7 @@ func (x *EnvironmentDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnvironmentDetails.ProtoReflect.Descriptor instead.
 func (*EnvironmentDetails) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{87}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *EnvironmentDetails) GetPwd() string {
@@ -7216,7 +7096,7 @@ type FingerprintDetails struct {
 
 func (x *FingerprintDetails) Reset() {
 	*x = FingerprintDetails{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[88]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7228,7 +7108,7 @@ func (x *FingerprintDetails) String() string {
 func (*FingerprintDetails) ProtoMessage() {}
 
 func (x *FingerprintDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[88]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7241,7 +7121,7 @@ func (x *FingerprintDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FingerprintDetails.ProtoReflect.Descriptor instead.
 func (*FingerprintDetails) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{88}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *FingerprintDetails) GetOs() string {
@@ -7287,7 +7167,7 @@ type PasskeyCredential struct {
 
 func (x *PasskeyCredential) Reset() {
 	*x = PasskeyCredential{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[89]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7299,7 +7179,7 @@ func (x *PasskeyCredential) String() string {
 func (*PasskeyCredential) ProtoMessage() {}
 
 func (x *PasskeyCredential) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[89]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7312,7 +7192,7 @@ func (x *PasskeyCredential) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PasskeyCredential.ProtoReflect.Descriptor instead.
 func (*PasskeyCredential) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{89}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *PasskeyCredential) GetId() string {
@@ -7367,7 +7247,7 @@ type PasskeyRegisterChallengeRequested struct {
 
 func (x *PasskeyRegisterChallengeRequested) Reset() {
 	*x = PasskeyRegisterChallengeRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[90]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7379,7 +7259,7 @@ func (x *PasskeyRegisterChallengeRequested) String() string {
 func (*PasskeyRegisterChallengeRequested) ProtoMessage() {}
 
 func (x *PasskeyRegisterChallengeRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[90]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7392,7 +7272,7 @@ func (x *PasskeyRegisterChallengeRequested) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use PasskeyRegisterChallengeRequested.ProtoReflect.Descriptor instead.
 func (*PasskeyRegisterChallengeRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{90}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *PasskeyRegisterChallengeRequested) GetUserId() string {
@@ -7428,7 +7308,7 @@ type PasskeyRegisterChallengeResult struct {
 
 func (x *PasskeyRegisterChallengeResult) Reset() {
 	*x = PasskeyRegisterChallengeResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[91]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7440,7 +7320,7 @@ func (x *PasskeyRegisterChallengeResult) String() string {
 func (*PasskeyRegisterChallengeResult) ProtoMessage() {}
 
 func (x *PasskeyRegisterChallengeResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[91]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7453,7 +7333,7 @@ func (x *PasskeyRegisterChallengeResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PasskeyRegisterChallengeResult.ProtoReflect.Descriptor instead.
 func (*PasskeyRegisterChallengeResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{91}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *PasskeyRegisterChallengeResult) GetSuccess() bool {
@@ -7539,7 +7419,7 @@ type AttestationResponse struct {
 
 func (x *AttestationResponse) Reset() {
 	*x = AttestationResponse{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[92]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7551,7 +7431,7 @@ func (x *AttestationResponse) String() string {
 func (*AttestationResponse) ProtoMessage() {}
 
 func (x *AttestationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[92]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7564,7 +7444,7 @@ func (x *AttestationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttestationResponse.ProtoReflect.Descriptor instead.
 func (*AttestationResponse) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{92}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *AttestationResponse) GetId() string {
@@ -7612,7 +7492,7 @@ type PasskeyRegisterVerifyRequested struct {
 
 func (x *PasskeyRegisterVerifyRequested) Reset() {
 	*x = PasskeyRegisterVerifyRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[93]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7624,7 +7504,7 @@ func (x *PasskeyRegisterVerifyRequested) String() string {
 func (*PasskeyRegisterVerifyRequested) ProtoMessage() {}
 
 func (x *PasskeyRegisterVerifyRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[93]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7637,7 +7517,7 @@ func (x *PasskeyRegisterVerifyRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PasskeyRegisterVerifyRequested.ProtoReflect.Descriptor instead.
 func (*PasskeyRegisterVerifyRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{93}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *PasskeyRegisterVerifyRequested) GetUserId() string {
@@ -7665,7 +7545,7 @@ type PasskeyRegisterVerifyResult struct {
 
 func (x *PasskeyRegisterVerifyResult) Reset() {
 	*x = PasskeyRegisterVerifyResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[94]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7677,7 +7557,7 @@ func (x *PasskeyRegisterVerifyResult) String() string {
 func (*PasskeyRegisterVerifyResult) ProtoMessage() {}
 
 func (x *PasskeyRegisterVerifyResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[94]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7690,7 +7570,7 @@ func (x *PasskeyRegisterVerifyResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PasskeyRegisterVerifyResult.ProtoReflect.Descriptor instead.
 func (*PasskeyRegisterVerifyResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{94}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *PasskeyRegisterVerifyResult) GetSuccess() bool {
@@ -7723,7 +7603,7 @@ type PasskeyAuthChallengeRequested struct {
 
 func (x *PasskeyAuthChallengeRequested) Reset() {
 	*x = PasskeyAuthChallengeRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[95]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7735,7 +7615,7 @@ func (x *PasskeyAuthChallengeRequested) String() string {
 func (*PasskeyAuthChallengeRequested) ProtoMessage() {}
 
 func (x *PasskeyAuthChallengeRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[95]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7748,7 +7628,7 @@ func (x *PasskeyAuthChallengeRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PasskeyAuthChallengeRequested.ProtoReflect.Descriptor instead.
 func (*PasskeyAuthChallengeRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{95}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *PasskeyAuthChallengeRequested) GetUserId() string {
@@ -7775,7 +7655,7 @@ type PasskeyAuthChallengeResult struct {
 
 func (x *PasskeyAuthChallengeResult) Reset() {
 	*x = PasskeyAuthChallengeResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[96]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7787,7 +7667,7 @@ func (x *PasskeyAuthChallengeResult) String() string {
 func (*PasskeyAuthChallengeResult) ProtoMessage() {}
 
 func (x *PasskeyAuthChallengeResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[96]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7800,7 +7680,7 @@ func (x *PasskeyAuthChallengeResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PasskeyAuthChallengeResult.ProtoReflect.Descriptor instead.
 func (*PasskeyAuthChallengeResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{96}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *PasskeyAuthChallengeResult) GetSuccess() bool {
@@ -7873,7 +7753,7 @@ type AssertionResponse struct {
 
 func (x *AssertionResponse) Reset() {
 	*x = AssertionResponse{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[97]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7885,7 +7765,7 @@ func (x *AssertionResponse) String() string {
 func (*AssertionResponse) ProtoMessage() {}
 
 func (x *AssertionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[97]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7898,7 +7778,7 @@ func (x *AssertionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssertionResponse.ProtoReflect.Descriptor instead.
 func (*AssertionResponse) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{97}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *AssertionResponse) GetId() string {
@@ -7953,7 +7833,7 @@ type PasskeyAuthVerifyRequested struct {
 
 func (x *PasskeyAuthVerifyRequested) Reset() {
 	*x = PasskeyAuthVerifyRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[98]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7965,7 +7845,7 @@ func (x *PasskeyAuthVerifyRequested) String() string {
 func (*PasskeyAuthVerifyRequested) ProtoMessage() {}
 
 func (x *PasskeyAuthVerifyRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[98]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7978,7 +7858,7 @@ func (x *PasskeyAuthVerifyRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PasskeyAuthVerifyRequested.ProtoReflect.Descriptor instead.
 func (*PasskeyAuthVerifyRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{98}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *PasskeyAuthVerifyRequested) GetUserId() string {
@@ -8008,7 +7888,7 @@ type PasskeyAuthVerifyResult struct {
 
 func (x *PasskeyAuthVerifyResult) Reset() {
 	*x = PasskeyAuthVerifyResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[99]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8020,7 +7900,7 @@ func (x *PasskeyAuthVerifyResult) String() string {
 func (*PasskeyAuthVerifyResult) ProtoMessage() {}
 
 func (x *PasskeyAuthVerifyResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[99]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8033,7 +7913,7 @@ func (x *PasskeyAuthVerifyResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PasskeyAuthVerifyResult.ProtoReflect.Descriptor instead.
 func (*PasskeyAuthVerifyResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{99}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *PasskeyAuthVerifyResult) GetSuccess() bool {
@@ -8080,7 +7960,7 @@ type ListPasskeyCredentialsRequested struct {
 
 func (x *ListPasskeyCredentialsRequested) Reset() {
 	*x = ListPasskeyCredentialsRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[100]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8092,7 +7972,7 @@ func (x *ListPasskeyCredentialsRequested) String() string {
 func (*ListPasskeyCredentialsRequested) ProtoMessage() {}
 
 func (x *ListPasskeyCredentialsRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[100]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8105,7 +7985,7 @@ func (x *ListPasskeyCredentialsRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPasskeyCredentialsRequested.ProtoReflect.Descriptor instead.
 func (*ListPasskeyCredentialsRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{100}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *ListPasskeyCredentialsRequested) GetUserId() string {
@@ -8126,7 +8006,7 @@ type ListPasskeyCredentialsResult struct {
 
 func (x *ListPasskeyCredentialsResult) Reset() {
 	*x = ListPasskeyCredentialsResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[101]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8138,7 +8018,7 @@ func (x *ListPasskeyCredentialsResult) String() string {
 func (*ListPasskeyCredentialsResult) ProtoMessage() {}
 
 func (x *ListPasskeyCredentialsResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[101]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8151,7 +8031,7 @@ func (x *ListPasskeyCredentialsResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPasskeyCredentialsResult.ProtoReflect.Descriptor instead.
 func (*ListPasskeyCredentialsResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{101}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *ListPasskeyCredentialsResult) GetSuccess() bool {
@@ -8185,7 +8065,7 @@ type RevokePasskeyCredentialRequested struct {
 
 func (x *RevokePasskeyCredentialRequested) Reset() {
 	*x = RevokePasskeyCredentialRequested{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[102]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8197,7 +8077,7 @@ func (x *RevokePasskeyCredentialRequested) String() string {
 func (*RevokePasskeyCredentialRequested) ProtoMessage() {}
 
 func (x *RevokePasskeyCredentialRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[102]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8210,7 +8090,7 @@ func (x *RevokePasskeyCredentialRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokePasskeyCredentialRequested.ProtoReflect.Descriptor instead.
 func (*RevokePasskeyCredentialRequested) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{102}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *RevokePasskeyCredentialRequested) GetUserId() string {
@@ -8239,7 +8119,7 @@ type RevokePasskeyCredentialResult struct {
 
 func (x *RevokePasskeyCredentialResult) Reset() {
 	*x = RevokePasskeyCredentialResult{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[103]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8251,7 +8131,7 @@ func (x *RevokePasskeyCredentialResult) String() string {
 func (*RevokePasskeyCredentialResult) ProtoMessage() {}
 
 func (x *RevokePasskeyCredentialResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[103]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8264,7 +8144,7 @@ func (x *RevokePasskeyCredentialResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokePasskeyCredentialResult.ProtoReflect.Descriptor instead.
 func (*RevokePasskeyCredentialResult) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{103}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *RevokePasskeyCredentialResult) GetSuccess() bool {
@@ -8305,7 +8185,7 @@ type PasskeyRegisterChallengeResult_RelyingParty struct {
 
 func (x *PasskeyRegisterChallengeResult_RelyingParty) Reset() {
 	*x = PasskeyRegisterChallengeResult_RelyingParty{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[105]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8317,7 +8197,7 @@ func (x *PasskeyRegisterChallengeResult_RelyingParty) String() string {
 func (*PasskeyRegisterChallengeResult_RelyingParty) ProtoMessage() {}
 
 func (x *PasskeyRegisterChallengeResult_RelyingParty) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[105]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8330,7 +8210,7 @@ func (x *PasskeyRegisterChallengeResult_RelyingParty) ProtoReflect() protoreflec
 
 // Deprecated: Use PasskeyRegisterChallengeResult_RelyingParty.ProtoReflect.Descriptor instead.
 func (*PasskeyRegisterChallengeResult_RelyingParty) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{91, 0}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{89, 0}
 }
 
 func (x *PasskeyRegisterChallengeResult_RelyingParty) GetName() string {
@@ -8358,7 +8238,7 @@ type PasskeyRegisterChallengeResult_UserInfo struct {
 
 func (x *PasskeyRegisterChallengeResult_UserInfo) Reset() {
 	*x = PasskeyRegisterChallengeResult_UserInfo{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[106]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8370,7 +8250,7 @@ func (x *PasskeyRegisterChallengeResult_UserInfo) String() string {
 func (*PasskeyRegisterChallengeResult_UserInfo) ProtoMessage() {}
 
 func (x *PasskeyRegisterChallengeResult_UserInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[106]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8383,7 +8263,7 @@ func (x *PasskeyRegisterChallengeResult_UserInfo) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use PasskeyRegisterChallengeResult_UserInfo.ProtoReflect.Descriptor instead.
 func (*PasskeyRegisterChallengeResult_UserInfo) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{91, 1}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{89, 1}
 }
 
 func (x *PasskeyRegisterChallengeResult_UserInfo) GetId() string {
@@ -8417,7 +8297,7 @@ type PasskeyRegisterChallengeResult_PublicKeyCredentialParameters struct {
 
 func (x *PasskeyRegisterChallengeResult_PublicKeyCredentialParameters) Reset() {
 	*x = PasskeyRegisterChallengeResult_PublicKeyCredentialParameters{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[107]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8429,7 +8309,7 @@ func (x *PasskeyRegisterChallengeResult_PublicKeyCredentialParameters) String() 
 func (*PasskeyRegisterChallengeResult_PublicKeyCredentialParameters) ProtoMessage() {}
 
 func (x *PasskeyRegisterChallengeResult_PublicKeyCredentialParameters) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[107]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8442,7 +8322,7 @@ func (x *PasskeyRegisterChallengeResult_PublicKeyCredentialParameters) ProtoRefl
 
 // Deprecated: Use PasskeyRegisterChallengeResult_PublicKeyCredentialParameters.ProtoReflect.Descriptor instead.
 func (*PasskeyRegisterChallengeResult_PublicKeyCredentialParameters) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{91, 2}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{89, 2}
 }
 
 func (x *PasskeyRegisterChallengeResult_PublicKeyCredentialParameters) GetType() string {
@@ -8469,7 +8349,7 @@ type PasskeyRegisterChallengeResult_AuthenticatorSelection struct {
 
 func (x *PasskeyRegisterChallengeResult_AuthenticatorSelection) Reset() {
 	*x = PasskeyRegisterChallengeResult_AuthenticatorSelection{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[108]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8481,7 +8361,7 @@ func (x *PasskeyRegisterChallengeResult_AuthenticatorSelection) String() string 
 func (*PasskeyRegisterChallengeResult_AuthenticatorSelection) ProtoMessage() {}
 
 func (x *PasskeyRegisterChallengeResult_AuthenticatorSelection) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[108]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8494,7 +8374,7 @@ func (x *PasskeyRegisterChallengeResult_AuthenticatorSelection) ProtoReflect() p
 
 // Deprecated: Use PasskeyRegisterChallengeResult_AuthenticatorSelection.ProtoReflect.Descriptor instead.
 func (*PasskeyRegisterChallengeResult_AuthenticatorSelection) Descriptor() ([]byte, []int) {
-	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{91, 3}
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{89, 3}
 }
 
 func (x *PasskeyRegisterChallengeResult_AuthenticatorSelection) GetResidentKey() string {
@@ -8688,14 +8568,7 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\x17TerminateOperatorResult\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"Q\n" +
-	"\x15RotateAPIKeyRequested\x12\x1f\n" +
-	"\voperator_id\x18\x01 \x01(\tR\n" +
-	"operatorId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\"D\n" +
-	"\x12RotateAPIKeyResult\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error\"5\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"5\n" +
 	"\x1aListOperatorSlotsRequested\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\"\x8a\x01\n" +
 	"\x17ListOperatorSlotsResult\x12\x18\n" +
@@ -8734,7 +8607,7 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1f\n" +
 	"\voperator_id\x18\x02 \x01(\tR\n" +
 	"operatorId\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"\xd0\x05\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\x8d\x05\n" +
 	"\x10OperatorDocument\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12'\n" +
@@ -8743,21 +8616,19 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\x04name\x18\x05 \x01(\tR\x04name\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12.\n" +
 	"\x13operator_session_id\x18\a \x01(\tR\x11operatorSessionId\x12/\n" +
-	"\x14bound_web_session_id\x18\b \x01(\tR\x11boundWebSessionId\x12\x17\n" +
-	"\aapi_key\x18\t \x01(\tR\x06apiKey\x12(\n" +
-	"\x10operator_api_key\x18\n" +
-	" \x01(\tR\x0eoperatorApiKey\x12#\n" +
-	"\roperator_cert\x18\v \x01(\tR\foperatorCert\x120\n" +
-	"\x14operator_cert_serial\x18\f \x01(\tR\x12operatorCertSerial\x12\x1f\n" +
-	"\vslot_number\x18\r \x01(\x05R\n" +
+	"\x14bound_web_session_id\x18\b \x01(\tR\x11boundWebSessionId\x12#\n" +
+	"\roperator_cert\x18\t \x01(\tR\foperatorCert\x120\n" +
+	"\x14operator_cert_serial\x18\n" +
+	" \x01(\tR\x12operatorCertSerial\x12\x1f\n" +
+	"\vslot_number\x18\v \x01(\x05R\n" +
 	"slotNumber\x12\x17\n" +
-	"\ais_slot\x18\x0e \x01(\bR\x06isSlot\x12\x18\n" +
-	"\aclaimed\x18\x0f \x01(\bR\aclaimed\x12#\n" +
-	"\roperator_type\x18\x10 \x01(\tR\foperatorType\x12#\n" +
-	"\rcloud_subtype\x18\x11 \x01(\tR\fcloudSubtype\x12-\n" +
-	"\x12system_fingerprint\x18\x12 \x01(\tR\x11systemFingerprint\x12+\n" +
-	"\x12created_at_unix_ms\x18\x13 \x01(\x03R\x0fcreatedAtUnixMs\x12+\n" +
-	"\x12updated_at_unix_ms\x18\x14 \x01(\x03R\x0fupdatedAtUnixMs\"+\n" +
+	"\ais_slot\x18\f \x01(\bR\x06isSlot\x12\x18\n" +
+	"\aclaimed\x18\r \x01(\bR\aclaimed\x12#\n" +
+	"\roperator_type\x18\x0e \x01(\tR\foperatorType\x12#\n" +
+	"\rcloud_subtype\x18\x0f \x01(\tR\fcloudSubtype\x12-\n" +
+	"\x12system_fingerprint\x18\x10 \x01(\tR\x11systemFingerprint\x12+\n" +
+	"\x12created_at_unix_ms\x18\x11 \x01(\x03R\x0fcreatedAtUnixMs\x12+\n" +
+	"\x12updated_at_unix_ms\x18\x12 \x01(\x03R\x0fupdatedAtUnixMs\"+\n" +
 	"\x11ShutdownRequested\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"~\n" +
 	"\x13EvalAnswerRequested\x12\x1b\n" +
@@ -9284,7 +9155,7 @@ func file_g8e_operator_v1_operator_proto_rawDescGZIP() []byte {
 }
 
 var file_g8e_operator_v1_operator_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_g8e_operator_v1_operator_proto_msgTypes = make([]protoimpl.MessageInfo, 109)
+var file_g8e_operator_v1_operator_proto_msgTypes = make([]protoimpl.MessageInfo, 107)
 var file_g8e_operator_v1_operator_proto_goTypes = []any{
 	(ExecutionStatus)(0),                                // 0: g8e.operator.v1.ExecutionStatus
 	(L3Status)(0),                                       // 1: g8e.operator.v1.L3Status
@@ -9320,141 +9191,139 @@ var file_g8e_operator_v1_operator_proto_goTypes = []any{
 	(*DeleteDeviceLinkRequested)(nil),                   // 31: g8e.operator.v1.DeleteDeviceLinkRequested
 	(*TerminateOperatorRequested)(nil),                  // 32: g8e.operator.v1.TerminateOperatorRequested
 	(*TerminateOperatorResult)(nil),                     // 33: g8e.operator.v1.TerminateOperatorResult
-	(*RotateAPIKeyRequested)(nil),                       // 34: g8e.operator.v1.RotateAPIKeyRequested
-	(*RotateAPIKeyResult)(nil),                          // 35: g8e.operator.v1.RotateAPIKeyResult
-	(*ListOperatorSlotsRequested)(nil),                  // 36: g8e.operator.v1.ListOperatorSlotsRequested
-	(*ListOperatorSlotsResult)(nil),                     // 37: g8e.operator.v1.ListOperatorSlotsResult
-	(*BindOperatorsRequested)(nil),                      // 38: g8e.operator.v1.BindOperatorsRequested
-	(*BindOperatorsResult)(nil),                         // 39: g8e.operator.v1.BindOperatorsResult
-	(*UnbindOperatorsRequested)(nil),                    // 40: g8e.operator.v1.UnbindOperatorsRequested
-	(*UnbindOperatorsResult)(nil),                       // 41: g8e.operator.v1.UnbindOperatorsResult
-	(*SetTargetContextRequested)(nil),                   // 42: g8e.operator.v1.SetTargetContextRequested
-	(*SetTargetContextResult)(nil),                      // 43: g8e.operator.v1.SetTargetContextResult
-	(*OperatorDocument)(nil),                            // 44: g8e.operator.v1.OperatorDocument
-	(*ShutdownRequested)(nil),                           // 45: g8e.operator.v1.ShutdownRequested
-	(*EvalAnswerRequested)(nil),                         // 46: g8e.operator.v1.EvalAnswerRequested
-	(*McpCallRequested)(nil),                            // 47: g8e.operator.v1.McpCallRequested
-	(*A2ACallRequested)(nil),                            // 48: g8e.operator.v1.A2aCallRequested
-	(*McpResourceListRequested)(nil),                    // 49: g8e.operator.v1.McpResourceListRequested
-	(*McpResourceReadRequested)(nil),                    // 50: g8e.operator.v1.McpResourceReadRequested
-	(*McpPromptListRequested)(nil),                      // 51: g8e.operator.v1.McpPromptListRequested
-	(*McpPromptGetRequested)(nil),                       // 52: g8e.operator.v1.McpPromptGetRequested
-	(*ActionReceipt)(nil),                               // 53: g8e.operator.v1.ActionReceipt
-	(*CommitmentAttestation)(nil),                       // 54: g8e.operator.v1.CommitmentAttestation
-	(*CommandResult)(nil),                               // 55: g8e.operator.v1.CommandResult
-	(*FsEntry)(nil),                                     // 56: g8e.operator.v1.FsEntry
-	(*FsListResult)(nil),                                // 57: g8e.operator.v1.FsListResult
-	(*FsReadResult)(nil),                                // 58: g8e.operator.v1.FsReadResult
-	(*FsGrepMatch)(nil),                                 // 59: g8e.operator.v1.FsGrepMatch
-	(*FsGrepResult)(nil),                                // 60: g8e.operator.v1.FsGrepResult
-	(*FileEditResult)(nil),                              // 61: g8e.operator.v1.FileEditResult
-	(*ExecutionStatusUpdate)(nil),                       // 62: g8e.operator.v1.ExecutionStatusUpdate
-	(*PortCheckEntry)(nil),                              // 63: g8e.operator.v1.PortCheckEntry
-	(*PortCheckResult)(nil),                             // 64: g8e.operator.v1.PortCheckResult
-	(*FetchLogsResult)(nil),                             // 65: g8e.operator.v1.FetchLogsResult
-	(*AuditWebSession)(nil),                             // 66: g8e.operator.v1.AuditWebSession
-	(*AuditFileMutation)(nil),                           // 67: g8e.operator.v1.AuditFileMutation
-	(*AuditEvent)(nil),                                  // 68: g8e.operator.v1.AuditEvent
-	(*FetchHistoryResult)(nil),                          // 69: g8e.operator.v1.FetchHistoryResult
-	(*FileHistoryEntry)(nil),                            // 70: g8e.operator.v1.FileHistoryEntry
-	(*FetchFileHistoryResult)(nil),                      // 71: g8e.operator.v1.FetchFileHistoryResult
-	(*RestoreFileResult)(nil),                           // 72: g8e.operator.v1.RestoreFileResult
-	(*GrantIntentRequested)(nil),                        // 73: g8e.operator.v1.GrantIntentRequested
-	(*GrantIntentResult)(nil),                           // 74: g8e.operator.v1.GrantIntentResult
-	(*RevokeIntentRequested)(nil),                       // 75: g8e.operator.v1.RevokeIntentRequested
-	(*RevokeIntentResult)(nil),                          // 76: g8e.operator.v1.RevokeIntentResult
-	(*FileDiffEntry)(nil),                               // 77: g8e.operator.v1.FileDiffEntry
-	(*FetchFileDiffResult)(nil),                         // 78: g8e.operator.v1.FetchFileDiffResult
-	(*HeartbeatResult)(nil),                             // 79: g8e.operator.v1.HeartbeatResult
-	(*SystemIdentity)(nil),                              // 80: g8e.operator.v1.SystemIdentity
-	(*NetworkInterface)(nil),                            // 81: g8e.operator.v1.NetworkInterface
-	(*NetworkInfo)(nil),                                 // 82: g8e.operator.v1.NetworkInfo
-	(*CapabilityFlags)(nil),                             // 83: g8e.operator.v1.CapabilityFlags
-	(*VersionInfo)(nil),                                 // 84: g8e.operator.v1.VersionInfo
-	(*UptimeInfo)(nil),                                  // 85: g8e.operator.v1.UptimeInfo
-	(*PerformanceMetrics)(nil),                          // 86: g8e.operator.v1.PerformanceMetrics
-	(*OSDetails)(nil),                                   // 87: g8e.operator.v1.OSDetails
-	(*UserDetails)(nil),                                 // 88: g8e.operator.v1.UserDetails
-	(*DiskDetails)(nil),                                 // 89: g8e.operator.v1.DiskDetails
-	(*MemoryDetails)(nil),                               // 90: g8e.operator.v1.MemoryDetails
-	(*EnvironmentDetails)(nil),                          // 91: g8e.operator.v1.EnvironmentDetails
-	(*FingerprintDetails)(nil),                          // 92: g8e.operator.v1.FingerprintDetails
-	(*PasskeyCredential)(nil),                           // 93: g8e.operator.v1.PasskeyCredential
-	(*PasskeyRegisterChallengeRequested)(nil),           // 94: g8e.operator.v1.PasskeyRegisterChallengeRequested
-	(*PasskeyRegisterChallengeResult)(nil),              // 95: g8e.operator.v1.PasskeyRegisterChallengeResult
-	(*AttestationResponse)(nil),                         // 96: g8e.operator.v1.AttestationResponse
-	(*PasskeyRegisterVerifyRequested)(nil),              // 97: g8e.operator.v1.PasskeyRegisterVerifyRequested
-	(*PasskeyRegisterVerifyResult)(nil),                 // 98: g8e.operator.v1.PasskeyRegisterVerifyResult
-	(*PasskeyAuthChallengeRequested)(nil),               // 99: g8e.operator.v1.PasskeyAuthChallengeRequested
-	(*PasskeyAuthChallengeResult)(nil),                  // 100: g8e.operator.v1.PasskeyAuthChallengeResult
-	(*AssertionResponse)(nil),                           // 101: g8e.operator.v1.AssertionResponse
-	(*PasskeyAuthVerifyRequested)(nil),                  // 102: g8e.operator.v1.PasskeyAuthVerifyRequested
-	(*PasskeyAuthVerifyResult)(nil),                     // 103: g8e.operator.v1.PasskeyAuthVerifyResult
-	(*ListPasskeyCredentialsRequested)(nil),             // 104: g8e.operator.v1.ListPasskeyCredentialsRequested
-	(*ListPasskeyCredentialsResult)(nil),                // 105: g8e.operator.v1.ListPasskeyCredentialsResult
-	(*RevokePasskeyCredentialRequested)(nil),            // 106: g8e.operator.v1.RevokePasskeyCredentialRequested
-	(*RevokePasskeyCredentialResult)(nil),               // 107: g8e.operator.v1.RevokePasskeyCredentialResult
-	nil,                                                 // 108: g8e.operator.v1.CommandRequested.EnvironmentEntry
-	(*PasskeyRegisterChallengeResult_RelyingParty)(nil), // 109: g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
-	(*PasskeyRegisterChallengeResult_UserInfo)(nil),     // 110: g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
-	(*PasskeyRegisterChallengeResult_PublicKeyCredentialParameters)(nil), // 111: g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
-	(*PasskeyRegisterChallengeResult_AuthenticatorSelection)(nil),        // 112: g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
+	(*ListOperatorSlotsRequested)(nil),                  // 34: g8e.operator.v1.ListOperatorSlotsRequested
+	(*ListOperatorSlotsResult)(nil),                     // 35: g8e.operator.v1.ListOperatorSlotsResult
+	(*BindOperatorsRequested)(nil),                      // 36: g8e.operator.v1.BindOperatorsRequested
+	(*BindOperatorsResult)(nil),                         // 37: g8e.operator.v1.BindOperatorsResult
+	(*UnbindOperatorsRequested)(nil),                    // 38: g8e.operator.v1.UnbindOperatorsRequested
+	(*UnbindOperatorsResult)(nil),                       // 39: g8e.operator.v1.UnbindOperatorsResult
+	(*SetTargetContextRequested)(nil),                   // 40: g8e.operator.v1.SetTargetContextRequested
+	(*SetTargetContextResult)(nil),                      // 41: g8e.operator.v1.SetTargetContextResult
+	(*OperatorDocument)(nil),                            // 42: g8e.operator.v1.OperatorDocument
+	(*ShutdownRequested)(nil),                           // 43: g8e.operator.v1.ShutdownRequested
+	(*EvalAnswerRequested)(nil),                         // 44: g8e.operator.v1.EvalAnswerRequested
+	(*McpCallRequested)(nil),                            // 45: g8e.operator.v1.McpCallRequested
+	(*A2ACallRequested)(nil),                            // 46: g8e.operator.v1.A2aCallRequested
+	(*McpResourceListRequested)(nil),                    // 47: g8e.operator.v1.McpResourceListRequested
+	(*McpResourceReadRequested)(nil),                    // 48: g8e.operator.v1.McpResourceReadRequested
+	(*McpPromptListRequested)(nil),                      // 49: g8e.operator.v1.McpPromptListRequested
+	(*McpPromptGetRequested)(nil),                       // 50: g8e.operator.v1.McpPromptGetRequested
+	(*ActionReceipt)(nil),                               // 51: g8e.operator.v1.ActionReceipt
+	(*CommitmentAttestation)(nil),                       // 52: g8e.operator.v1.CommitmentAttestation
+	(*CommandResult)(nil),                               // 53: g8e.operator.v1.CommandResult
+	(*FsEntry)(nil),                                     // 54: g8e.operator.v1.FsEntry
+	(*FsListResult)(nil),                                // 55: g8e.operator.v1.FsListResult
+	(*FsReadResult)(nil),                                // 56: g8e.operator.v1.FsReadResult
+	(*FsGrepMatch)(nil),                                 // 57: g8e.operator.v1.FsGrepMatch
+	(*FsGrepResult)(nil),                                // 58: g8e.operator.v1.FsGrepResult
+	(*FileEditResult)(nil),                              // 59: g8e.operator.v1.FileEditResult
+	(*ExecutionStatusUpdate)(nil),                       // 60: g8e.operator.v1.ExecutionStatusUpdate
+	(*PortCheckEntry)(nil),                              // 61: g8e.operator.v1.PortCheckEntry
+	(*PortCheckResult)(nil),                             // 62: g8e.operator.v1.PortCheckResult
+	(*FetchLogsResult)(nil),                             // 63: g8e.operator.v1.FetchLogsResult
+	(*AuditWebSession)(nil),                             // 64: g8e.operator.v1.AuditWebSession
+	(*AuditFileMutation)(nil),                           // 65: g8e.operator.v1.AuditFileMutation
+	(*AuditEvent)(nil),                                  // 66: g8e.operator.v1.AuditEvent
+	(*FetchHistoryResult)(nil),                          // 67: g8e.operator.v1.FetchHistoryResult
+	(*FileHistoryEntry)(nil),                            // 68: g8e.operator.v1.FileHistoryEntry
+	(*FetchFileHistoryResult)(nil),                      // 69: g8e.operator.v1.FetchFileHistoryResult
+	(*RestoreFileResult)(nil),                           // 70: g8e.operator.v1.RestoreFileResult
+	(*GrantIntentRequested)(nil),                        // 71: g8e.operator.v1.GrantIntentRequested
+	(*GrantIntentResult)(nil),                           // 72: g8e.operator.v1.GrantIntentResult
+	(*RevokeIntentRequested)(nil),                       // 73: g8e.operator.v1.RevokeIntentRequested
+	(*RevokeIntentResult)(nil),                          // 74: g8e.operator.v1.RevokeIntentResult
+	(*FileDiffEntry)(nil),                               // 75: g8e.operator.v1.FileDiffEntry
+	(*FetchFileDiffResult)(nil),                         // 76: g8e.operator.v1.FetchFileDiffResult
+	(*HeartbeatResult)(nil),                             // 77: g8e.operator.v1.HeartbeatResult
+	(*SystemIdentity)(nil),                              // 78: g8e.operator.v1.SystemIdentity
+	(*NetworkInterface)(nil),                            // 79: g8e.operator.v1.NetworkInterface
+	(*NetworkInfo)(nil),                                 // 80: g8e.operator.v1.NetworkInfo
+	(*CapabilityFlags)(nil),                             // 81: g8e.operator.v1.CapabilityFlags
+	(*VersionInfo)(nil),                                 // 82: g8e.operator.v1.VersionInfo
+	(*UptimeInfo)(nil),                                  // 83: g8e.operator.v1.UptimeInfo
+	(*PerformanceMetrics)(nil),                          // 84: g8e.operator.v1.PerformanceMetrics
+	(*OSDetails)(nil),                                   // 85: g8e.operator.v1.OSDetails
+	(*UserDetails)(nil),                                 // 86: g8e.operator.v1.UserDetails
+	(*DiskDetails)(nil),                                 // 87: g8e.operator.v1.DiskDetails
+	(*MemoryDetails)(nil),                               // 88: g8e.operator.v1.MemoryDetails
+	(*EnvironmentDetails)(nil),                          // 89: g8e.operator.v1.EnvironmentDetails
+	(*FingerprintDetails)(nil),                          // 90: g8e.operator.v1.FingerprintDetails
+	(*PasskeyCredential)(nil),                           // 91: g8e.operator.v1.PasskeyCredential
+	(*PasskeyRegisterChallengeRequested)(nil),           // 92: g8e.operator.v1.PasskeyRegisterChallengeRequested
+	(*PasskeyRegisterChallengeResult)(nil),              // 93: g8e.operator.v1.PasskeyRegisterChallengeResult
+	(*AttestationResponse)(nil),                         // 94: g8e.operator.v1.AttestationResponse
+	(*PasskeyRegisterVerifyRequested)(nil),              // 95: g8e.operator.v1.PasskeyRegisterVerifyRequested
+	(*PasskeyRegisterVerifyResult)(nil),                 // 96: g8e.operator.v1.PasskeyRegisterVerifyResult
+	(*PasskeyAuthChallengeRequested)(nil),               // 97: g8e.operator.v1.PasskeyAuthChallengeRequested
+	(*PasskeyAuthChallengeResult)(nil),                  // 98: g8e.operator.v1.PasskeyAuthChallengeResult
+	(*AssertionResponse)(nil),                           // 99: g8e.operator.v1.AssertionResponse
+	(*PasskeyAuthVerifyRequested)(nil),                  // 100: g8e.operator.v1.PasskeyAuthVerifyRequested
+	(*PasskeyAuthVerifyResult)(nil),                     // 101: g8e.operator.v1.PasskeyAuthVerifyResult
+	(*ListPasskeyCredentialsRequested)(nil),             // 102: g8e.operator.v1.ListPasskeyCredentialsRequested
+	(*ListPasskeyCredentialsResult)(nil),                // 103: g8e.operator.v1.ListPasskeyCredentialsResult
+	(*RevokePasskeyCredentialRequested)(nil),            // 104: g8e.operator.v1.RevokePasskeyCredentialRequested
+	(*RevokePasskeyCredentialResult)(nil),               // 105: g8e.operator.v1.RevokePasskeyCredentialResult
+	nil,                                                 // 106: g8e.operator.v1.CommandRequested.EnvironmentEntry
+	(*PasskeyRegisterChallengeResult_RelyingParty)(nil), // 107: g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
+	(*PasskeyRegisterChallengeResult_UserInfo)(nil),     // 108: g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
+	(*PasskeyRegisterChallengeResult_PublicKeyCredentialParameters)(nil), // 109: g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
+	(*PasskeyRegisterChallengeResult_AuthenticatorSelection)(nil),        // 110: g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
 }
 var file_g8e_operator_v1_operator_proto_depIdxs = []int32{
-	108, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
+	106, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
 	27,  // 1: g8e.operator.v1.DeviceLinkResult.link:type_name -> g8e.operator.v1.DeviceLink
 	27,  // 2: g8e.operator.v1.ListDeviceLinksResult.links:type_name -> g8e.operator.v1.DeviceLink
-	44,  // 3: g8e.operator.v1.ListOperatorSlotsResult.operators:type_name -> g8e.operator.v1.OperatorDocument
+	42,  // 3: g8e.operator.v1.ListOperatorSlotsResult.operators:type_name -> g8e.operator.v1.OperatorDocument
 	0,   // 4: g8e.operator.v1.ActionReceipt.status:type_name -> g8e.operator.v1.ExecutionStatus
 	2,   // 5: g8e.operator.v1.ActionReceipt.l2_status:type_name -> g8e.operator.v1.L2Status
 	1,   // 6: g8e.operator.v1.ActionReceipt.l3_status:type_name -> g8e.operator.v1.L3Status
 	0,   // 7: g8e.operator.v1.CommandResult.status:type_name -> g8e.operator.v1.ExecutionStatus
 	0,   // 8: g8e.operator.v1.FsListResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	56,  // 9: g8e.operator.v1.FsListResult.entries:type_name -> g8e.operator.v1.FsEntry
+	54,  // 9: g8e.operator.v1.FsListResult.entries:type_name -> g8e.operator.v1.FsEntry
 	0,   // 10: g8e.operator.v1.FsReadResult.status:type_name -> g8e.operator.v1.ExecutionStatus
 	0,   // 11: g8e.operator.v1.FsGrepResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	59,  // 12: g8e.operator.v1.FsGrepResult.matches:type_name -> g8e.operator.v1.FsGrepMatch
+	57,  // 12: g8e.operator.v1.FsGrepResult.matches:type_name -> g8e.operator.v1.FsGrepMatch
 	0,   // 13: g8e.operator.v1.FileEditResult.status:type_name -> g8e.operator.v1.ExecutionStatus
 	0,   // 14: g8e.operator.v1.ExecutionStatusUpdate.status:type_name -> g8e.operator.v1.ExecutionStatus
 	0,   // 15: g8e.operator.v1.PortCheckResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	63,  // 16: g8e.operator.v1.PortCheckResult.results:type_name -> g8e.operator.v1.PortCheckEntry
-	67,  // 17: g8e.operator.v1.AuditEvent.file_mutations:type_name -> g8e.operator.v1.AuditFileMutation
-	66,  // 18: g8e.operator.v1.FetchHistoryResult.web_session:type_name -> g8e.operator.v1.AuditWebSession
-	68,  // 19: g8e.operator.v1.FetchHistoryResult.events:type_name -> g8e.operator.v1.AuditEvent
-	70,  // 20: g8e.operator.v1.FetchFileHistoryResult.history:type_name -> g8e.operator.v1.FileHistoryEntry
-	77,  // 21: g8e.operator.v1.FetchFileDiffResult.diffs:type_name -> g8e.operator.v1.FileDiffEntry
-	77,  // 22: g8e.operator.v1.FetchFileDiffResult.diff:type_name -> g8e.operator.v1.FileDiffEntry
-	80,  // 23: g8e.operator.v1.HeartbeatResult.system_identity:type_name -> g8e.operator.v1.SystemIdentity
-	82,  // 24: g8e.operator.v1.HeartbeatResult.network_info:type_name -> g8e.operator.v1.NetworkInfo
-	84,  // 25: g8e.operator.v1.HeartbeatResult.version_info:type_name -> g8e.operator.v1.VersionInfo
-	85,  // 26: g8e.operator.v1.HeartbeatResult.uptime_info:type_name -> g8e.operator.v1.UptimeInfo
-	86,  // 27: g8e.operator.v1.HeartbeatResult.performance_metrics:type_name -> g8e.operator.v1.PerformanceMetrics
-	87,  // 28: g8e.operator.v1.HeartbeatResult.os_details:type_name -> g8e.operator.v1.OSDetails
-	88,  // 29: g8e.operator.v1.HeartbeatResult.user_details:type_name -> g8e.operator.v1.UserDetails
-	89,  // 30: g8e.operator.v1.HeartbeatResult.disk_details:type_name -> g8e.operator.v1.DiskDetails
-	90,  // 31: g8e.operator.v1.HeartbeatResult.memory_details:type_name -> g8e.operator.v1.MemoryDetails
-	91,  // 32: g8e.operator.v1.HeartbeatResult.environment:type_name -> g8e.operator.v1.EnvironmentDetails
-	83,  // 33: g8e.operator.v1.HeartbeatResult.capability_flags:type_name -> g8e.operator.v1.CapabilityFlags
-	92,  // 34: g8e.operator.v1.HeartbeatResult.fingerprint_details:type_name -> g8e.operator.v1.FingerprintDetails
-	81,  // 35: g8e.operator.v1.NetworkInfo.connectivity_status:type_name -> g8e.operator.v1.NetworkInterface
-	109, // 36: g8e.operator.v1.PasskeyRegisterChallengeResult.rp:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
-	110, // 37: g8e.operator.v1.PasskeyRegisterChallengeResult.user:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
-	111, // 38: g8e.operator.v1.PasskeyRegisterChallengeResult.pub_key_cred_params:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
-	112, // 39: g8e.operator.v1.PasskeyRegisterChallengeResult.authenticator_selection:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
-	96,  // 40: g8e.operator.v1.PasskeyRegisterVerifyRequested.attestation_response:type_name -> g8e.operator.v1.AttestationResponse
-	93,  // 41: g8e.operator.v1.PasskeyRegisterVerifyResult.credential:type_name -> g8e.operator.v1.PasskeyCredential
-	101, // 42: g8e.operator.v1.PasskeyAuthVerifyRequested.assertion_response:type_name -> g8e.operator.v1.AssertionResponse
-	93,  // 43: g8e.operator.v1.ListPasskeyCredentialsResult.credentials:type_name -> g8e.operator.v1.PasskeyCredential
+	61,  // 16: g8e.operator.v1.PortCheckResult.results:type_name -> g8e.operator.v1.PortCheckEntry
+	65,  // 17: g8e.operator.v1.AuditEvent.file_mutations:type_name -> g8e.operator.v1.AuditFileMutation
+	64,  // 18: g8e.operator.v1.FetchHistoryResult.web_session:type_name -> g8e.operator.v1.AuditWebSession
+	66,  // 19: g8e.operator.v1.FetchHistoryResult.events:type_name -> g8e.operator.v1.AuditEvent
+	68,  // 20: g8e.operator.v1.FetchFileHistoryResult.history:type_name -> g8e.operator.v1.FileHistoryEntry
+	75,  // 21: g8e.operator.v1.FetchFileDiffResult.diffs:type_name -> g8e.operator.v1.FileDiffEntry
+	75,  // 22: g8e.operator.v1.FetchFileDiffResult.diff:type_name -> g8e.operator.v1.FileDiffEntry
+	78,  // 23: g8e.operator.v1.HeartbeatResult.system_identity:type_name -> g8e.operator.v1.SystemIdentity
+	80,  // 24: g8e.operator.v1.HeartbeatResult.network_info:type_name -> g8e.operator.v1.NetworkInfo
+	82,  // 25: g8e.operator.v1.HeartbeatResult.version_info:type_name -> g8e.operator.v1.VersionInfo
+	83,  // 26: g8e.operator.v1.HeartbeatResult.uptime_info:type_name -> g8e.operator.v1.UptimeInfo
+	84,  // 27: g8e.operator.v1.HeartbeatResult.performance_metrics:type_name -> g8e.operator.v1.PerformanceMetrics
+	85,  // 28: g8e.operator.v1.HeartbeatResult.os_details:type_name -> g8e.operator.v1.OSDetails
+	86,  // 29: g8e.operator.v1.HeartbeatResult.user_details:type_name -> g8e.operator.v1.UserDetails
+	87,  // 30: g8e.operator.v1.HeartbeatResult.disk_details:type_name -> g8e.operator.v1.DiskDetails
+	88,  // 31: g8e.operator.v1.HeartbeatResult.memory_details:type_name -> g8e.operator.v1.MemoryDetails
+	89,  // 32: g8e.operator.v1.HeartbeatResult.environment:type_name -> g8e.operator.v1.EnvironmentDetails
+	81,  // 33: g8e.operator.v1.HeartbeatResult.capability_flags:type_name -> g8e.operator.v1.CapabilityFlags
+	90,  // 34: g8e.operator.v1.HeartbeatResult.fingerprint_details:type_name -> g8e.operator.v1.FingerprintDetails
+	79,  // 35: g8e.operator.v1.NetworkInfo.connectivity_status:type_name -> g8e.operator.v1.NetworkInterface
+	107, // 36: g8e.operator.v1.PasskeyRegisterChallengeResult.rp:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
+	108, // 37: g8e.operator.v1.PasskeyRegisterChallengeResult.user:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
+	109, // 38: g8e.operator.v1.PasskeyRegisterChallengeResult.pub_key_cred_params:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
+	110, // 39: g8e.operator.v1.PasskeyRegisterChallengeResult.authenticator_selection:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
+	94,  // 40: g8e.operator.v1.PasskeyRegisterVerifyRequested.attestation_response:type_name -> g8e.operator.v1.AttestationResponse
+	91,  // 41: g8e.operator.v1.PasskeyRegisterVerifyResult.credential:type_name -> g8e.operator.v1.PasskeyCredential
+	99,  // 42: g8e.operator.v1.PasskeyAuthVerifyRequested.assertion_response:type_name -> g8e.operator.v1.AssertionResponse
+	91,  // 43: g8e.operator.v1.ListPasskeyCredentialsResult.credentials:type_name -> g8e.operator.v1.PasskeyCredential
 	4,   // 44: g8e.operator.v1.OperatorService.ExecuteCommand:input_type -> g8e.operator.v1.CommandRequested
 	5,   // 45: g8e.operator.v1.OperatorService.CancelCommand:input_type -> g8e.operator.v1.CommandCancelRequested
 	6,   // 46: g8e.operator.v1.OperatorService.EditFile:input_type -> g8e.operator.v1.FileEditRequested
 	7,   // 47: g8e.operator.v1.OperatorService.ListFileSystem:input_type -> g8e.operator.v1.FsListRequested
 	8,   // 48: g8e.operator.v1.OperatorService.ReadFileSystem:input_type -> g8e.operator.v1.FsReadRequested
-	55,  // 49: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
-	55,  // 50: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
-	55,  // 51: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
-	55,  // 52: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
-	55,  // 53: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
+	53,  // 49: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
+	53,  // 50: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
+	53,  // 51: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
+	53,  // 52: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
+	53,  // 53: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
 	49,  // [49:54] is the sub-list for method output_type
 	44,  // [44:49] is the sub-list for method input_type
 	44,  // [44:44] is the sub-list for extension type_name
@@ -9473,7 +9342,7 @@ func file_g8e_operator_v1_operator_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_g8e_operator_v1_operator_proto_rawDesc), len(file_g8e_operator_v1_operator_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   109,
+			NumMessages:   107,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
