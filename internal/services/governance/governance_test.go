@@ -21,7 +21,8 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -37,6 +38,58 @@ func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, e
 		return m.ExecuteVerifiedTransactionFunc(ctx, eventType, cmdMsg)
 	}
 	return "", m.err
+}
+
+// MockTribunal is a basic mock for the L2 Consensus layer (Tribunal).
+// It allows tests to control consensus evaluation behavior.
+type MockTribunal struct {
+	NodeID            string
+	ShouldPass        bool
+	ReturnError       error
+	EvaluateCallCount int
+}
+
+// EvaluatePayload mimics L2Consensus.EvaluatePayload for testing.
+func (m *MockTribunal) EvaluatePayload(env *governance.GovernanceEnvelope) error {
+	m.EvaluateCallCount++
+	if m.ReturnError != nil {
+		return m.ReturnError
+	}
+
+	if env.Governance == nil {
+		env.Governance = &commonv1.GovernanceMetadata{
+			L1: &commonv1.L1Metadata{},
+			L2: &commonv1.L2Metadata{},
+			L3: &commonv1.L3Metadata{},
+		}
+	}
+
+	env.Governance.L2.AgentIds = append(env.Governance.L2.AgentIds, m.NodeID)
+	env.Governance.L2.ConsensusSignature = "mock-signature"
+
+	if !m.ShouldPass {
+		env.Governance.L1.Validated = false
+		env.Governance.L1.Violations = append(env.Governance.L1.Violations, "MOCK_TRIBUNAL_REJECTED")
+	}
+
+	return nil
+}
+
+// MockHumanSigner is a basic mock for the L3 Authorization layer (Human signer).
+// It allows tests to control L3 verification behavior.
+type MockHumanSigner struct {
+	ShouldApprove   bool
+	ReturnError     error
+	VerifyCallCount int
+}
+
+// VerifyL3Proof mimics L3Notary.VerifyL3Proof for testing.
+func (m *MockHumanSigner) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+	m.VerifyCallCount++
+	if m.ReturnError != nil {
+		return false, m.ReturnError
+	}
+	return m.ShouldApprove, nil
 }
 
 func TestGovernanceFlow(t *testing.T) {
@@ -58,7 +111,7 @@ func TestGovernanceFlow(t *testing.T) {
 		},
 	}
 
-	env := &uap.UAPEnvelope{
+	env := &governance.GovernanceEnvelope{
 		ProtocolVersion: "1.0",
 		OperatorId:      "agent-1",
 		Timestamp:       timestamppb.Now(),
@@ -68,7 +121,7 @@ func TestGovernanceFlow(t *testing.T) {
 	}
 
 	// 1. Generate Message ID
-	id, _ := uap.GenerateMessageID(env)
+	id, _ := governance.GenerateMessageID(env)
 	env.Id = id
 
 	// 2. Consensus Evaluation

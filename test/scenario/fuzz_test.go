@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/services/system"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -229,7 +229,7 @@ func generateValidIntent() []byte {
 	}
 
 	// Generate transaction hash
-	hash, _ := uap.GenerateMessageID(env)
+	hash, _ := governance.GenerateMessageID(env)
 	env.Id = hash
 	env.TransactionHash = hash
 

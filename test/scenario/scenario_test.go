@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -75,7 +76,12 @@ func TestMain(m *testing.M) {
 	}
 
 	// Run tests
-	m.Run()
+	code := m.Run()
+
+	// Print the scenario matrix
+	PrintScenarioMatrix()
+
+	os.Exit(code)
 }
 
 func TestScenarios(t *testing.T) {
@@ -154,6 +160,9 @@ func TestScenarios(t *testing.T) {
 				// Assert rejection reason if applicable
 				AssertReason(t, result, expected)
 
+				// Assert audit expectations
+				AssertAudit(t, result, expected)
+
 				// Assert L2/L3 validity
 				AssertL2L3(t, result, expected)
 
@@ -206,16 +215,16 @@ func TestNegativeControls(t *testing.T) {
 
 	// Test 1: Flip a known-accepting scenario to expect reject
 	t.Run("flip_accept_to_reject", func(t *testing.T) {
-		// Use forge_signature which accepts in doctrine mode (L1-only)
+		// Use all_valid which accepts in doctrine mode (L1-only)
 		var targetScenario *Scenario
 		for _, s := range scenarios {
-			if s.Name == "forge_signature" {
+			if s.Name == "all_valid" {
 				targetScenario = &s
 				break
 			}
 		}
 		if targetScenario == nil {
-			t.Fatal("forge_signature scenario not found")
+			t.Fatal("all_valid scenario not found")
 		}
 
 		gate := ops[ModeDoctrine]
@@ -285,19 +294,6 @@ func generateTestSigners() map[string]ed25519.PublicKey {
 	pubKey := privKey.Public().(ed25519.PublicKey)
 	keyID := hex.EncodeToString(pubKey)
 	signers[keyID] = pubKey
-
-	// Add the forge_signature fixture key_id to trusted signers
-	// This allows the verifier to attempt signature verification and fail with "signature invalid"
-	// instead of "unknown signer"
-	forgeSigKeyID := "2033b866aa250feeffd71b5065d534868fdd37fbf507accb01bdab7c36a11ffb"
-	forgeSigPubBytes, err := hex.DecodeString(forgeSigKeyID)
-	if err != nil {
-		panicf("failed to decode forge_signature key_id: %v", err)
-	}
-	if len(forgeSigPubBytes) != ed25519.PublicKeySize {
-		panicf("invalid forge_signature key_id size: got %d, want %d", len(forgeSigPubBytes), ed25519.PublicKeySize)
-	}
-	signers[forgeSigKeyID] = ed25519.PublicKey(forgeSigPubBytes)
 
 	// Add 2 more signers for consensus testing
 	for i := 2; i <= 3; i++ {

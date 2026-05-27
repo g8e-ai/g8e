@@ -1,6 +1,6 @@
 # g8e Gateway - Governance Gateway
 
-The g8e Protocol substrate is composed of two logically distinct roles, both implemented by the reference `g8e.operator` binary:
+The g8e Protocol substrate is composed of two logically distinct roles, both implemented by the reference `g8e` binary:
 
 1.  **Governance Gateway** (Policy Decision Point / PDP): Serves as the central, BFT-governed coordinator for the platform.
 2.  **g8e Operator** (Policy Execution Point / PEP): Runs on target hosts as the sovereign execution boundary and MCP server.
@@ -29,8 +29,8 @@ The g8e Protocol substrate is composed of two logically distinct roles, both imp
 
 The g8e platform is built on the g8e Protocol. Conforming gateway and operator implementations are what make that protocol live.
 
-- **Governance Gateway (PDP)**: The `g8e.operator` binary run in **Gateway mode** (`--doctrine`, `--consensus`, or `--notary`). It acts as the platform's backbone - protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority.
-- **g8e Operator (PEP)**: The `g8e.operator` binary run in **Standard Mode** or **MCP Mode** (`--mcp-serve`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease.
+- **Governance Gateway (PDP)**: The `g8e` binary run in **Gateway mode** (`--doctrine`, `--consensus`, or `--notary`). It acts as the platform's backbone - protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority.
+- **g8e Operator (PEP)**: The `g8e` binary run in **Standard Mode** or **MCP Mode** (`--mcp-serve`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease.
 
 ```mermaid
 flowchart TD

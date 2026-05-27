@@ -29,16 +29,17 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/system"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
 
 var (
-	ErrInvalidEnvelope         = errors.New("TX_INVALID_ENVELOPE: failed to decode UAP JSON GovernanceEnvelope")
+	ErrInvalidEnvelope         = errors.New("TX_INVALID_ENVELOPE: failed to decode GovernanceEnvelope JSON GovernanceEnvelope")
 	ErrUnknownActionType       = errors.New("TX_UNKNOWN_ACTION: action type not recognized")
 	ErrPayloadDecodeFailed     = errors.New("TX_PAYLOAD_DECODE: failed to decode typed payload")
 	ErrTransactionHashMismatch = errors.New("TX_HASH_MISMATCH: transaction_hash does not match computed hash")
+	ErrTransactionIDMismatch   = errors.New("TX_ID_MISMATCH: id does not match computed hash")
 	ErrTransactionExpired      = errors.New("TX_EXPIRED: transaction has expired")
 	ErrTransactionReplay       = errors.New("TX_REPLAY: nonce already used")
 	ErrStateRootMissing        = errors.New("TX_STATE_MISSING: state_merkle_root required but missing")
@@ -290,7 +291,7 @@ func (s *SimpleStateRootProvider) GetCurrentStateRoot() (string, error) {
 
 // VerifiedTransaction represents a fully verified transaction ready for execution.
 type VerifiedTransaction struct {
-	Envelope       *uap.UAPEnvelope
+	Envelope       *governance.GovernanceEnvelope
 	ActionType     constants.ActionType
 	Payload        []byte
 	DecodedPayload proto.Message
@@ -360,12 +361,12 @@ func NewL4Warden(
 	}
 }
 
-// VerifyEnvelope performs all required verification checks on a decoded UAP JSON GovernanceEnvelope.
+// VerifyEnvelope performs all required verification checks on a decoded GovernanceEnvelope JSON GovernanceEnvelope.
 // It is decomposed into three discrete validation stages:
 // 1. Stateless: Basic structural, hash, and L1 Doctrine checks that don't require external state.
 // 2. Stateful: Checks requiring external state (expiry, state root, and early nonce reservation).
 // 3. Posture: Governance posture-aware checks (L2 Consensus and L3 Notary proofs).
-func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *uap.UAPEnvelope) (*VerifiedTransaction, error) {
+func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *governance.GovernanceEnvelope) (*VerifiedTransaction, error) {
 	if envelope == nil {
 		return nil, ErrInvalidEnvelope
 	}
@@ -495,7 +496,7 @@ func (tv *L4Warden) isMutation(actionType constants.ActionType) bool {
 }
 
 // verifyStateless performs basic structural, hash, and L1 Doctrine checks.
-func (tv *L4Warden) verifyStateless(envelope *uap.UAPEnvelope) (proto.Message, string, error) {
+func (tv *L4Warden) verifyStateless(envelope *governance.GovernanceEnvelope) (proto.Message, string, error) {
 	if envelope.Id == "" {
 		return nil, "", ErrTransactionIDMissing
 	}
@@ -544,14 +545,14 @@ func (tv *L4Warden) verifyStateless(envelope *uap.UAPEnvelope) (proto.Message, s
 		tv.logger.Error("Transaction id mismatch",
 			"provided", envelope.Id,
 			"computed", computedHash)
-		return nil, "", ErrTransactionHashMismatch
+		return nil, "", ErrTransactionIDMismatch
 	}
 
 	return decodedPayload, computedHash, nil
 }
 
 // verifyStateful checks state root. Nonce and expiry are checked earlier in VerifyEnvelope.
-func (tv *L4Warden) verifyStateful(envelope *uap.UAPEnvelope) (time.Time, error) {
+func (tv *L4Warden) verifyStateful(envelope *governance.GovernanceEnvelope) (time.Time, error) {
 	if envelope.StateMerkleRoot == "" {
 		return time.Time{}, ErrStateRootRequired
 	}
@@ -582,7 +583,7 @@ func (tv *L4Warden) verifyStateful(envelope *uap.UAPEnvelope) (time.Time, error)
 }
 
 // verifyPosture performs governance posture-aware checks for L2 and L3.
-func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *uap.UAPEnvelope, computedHash string) (bool, bool, error) {
+func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *governance.GovernanceEnvelope, computedHash string) (bool, bool, error) {
 	l2Valid, err := tv.verifyL2Posture(envelope, computedHash)
 	if err != nil {
 		return false, false, err
@@ -596,57 +597,65 @@ func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *uap.UAPEnvelope
 	return l2Valid, l3Valid, nil
 }
 
-func (tv *L4Warden) verifyL2Posture(envelope *uap.UAPEnvelope, computedHash string) (bool, error) {
-	if !tv.posture.RequiresL2Signature() {
+func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, computedHash string) (bool, error) {
+	if envelope.Governance == nil || envelope.Governance.L2 == nil || envelope.Governance.L2.ConsensusSignature == "" {
+		if tv.posture.RequiresL2Signature() {
+			tv.logger.Error("L2 signature missing but required by posture", "posture", tv.posture.Name())
+			return false, ErrL2SignatureMissing
+		}
 		return false, nil
 	}
 
-	if envelope.Governance == nil || envelope.Governance.L2 == nil {
-		tv.logger.Error("L2 signature missing but required by posture", "posture", tv.posture.Name())
-		return false, ErrL2SignatureMissing
-	}
-
 	l2 := envelope.Governance.L2
-	if l2.ConsensusSignature == "" {
-		tv.logger.Error("L2 signature empty but required by posture", "posture", tv.posture.Name())
-		return false, ErrL2SignatureMissing
-	}
-
 	if l2.KeyId == "" {
-		tv.logger.Error("L2 key ID missing but required by posture", "posture", tv.posture.Name())
-		return false, ErrL2KeyNotConfigured
+		if tv.posture.RequiresL2Signature() {
+			tv.logger.Error("L2 key ID missing but required by posture", "posture", tv.posture.Name())
+			return false, ErrL2KeyNotConfigured
+		}
+		return false, nil
 	}
 
 	if tv.signerStore == nil {
-		tv.logger.Error("Signer store not configured but required by posture", "posture", tv.posture.Name())
-		return false, ErrL2KeyNotConfigured
+		if tv.posture.RequiresL2Signature() {
+			tv.logger.Error("Signer store not configured but required by posture", "posture", tv.posture.Name())
+			return false, ErrL2KeyNotConfigured
+		}
+		return false, nil
 	}
 
 	pubKey, err := tv.signerStore.GetTrustedSigner(l2.KeyId)
 	if err != nil {
-		tv.logger.Error("Failed to load trusted signer", "key_id", l2.KeyId, string(constants.ConnectionStateError), err)
-		return false, ErrL2KeyNotConfigured
+		if tv.posture.RequiresL2Signature() {
+			tv.logger.Error("Failed to load trusted signer", "key_id", l2.KeyId, string(constants.ConnectionStateError), err)
+			return false, ErrL2KeyNotConfigured
+		}
+		return false, nil
 	}
 
 	if pubKey == nil {
-		tv.logger.Error("Consensus (L2Consensus) signer key not found in trusted signers", "key_id", l2.KeyId)
-		return false, ErrL2KeyNotConfigured
+		if tv.posture.RequiresL2Signature() {
+			tv.logger.Error("Consensus (L2Consensus) signer key not found in trusted signers", "key_id", l2.KeyId)
+			return false, ErrL2KeyNotConfigured
+		}
+		return false, nil
 	}
 
-	if tv.verifyL2Signature(pubKey, l2.ConsensusSignature, computedHash, true) {
-		return true, nil
+	valid := tv.verifyL2Signature(pubKey, l2.ConsensusSignature, computedHash, true)
+	if !valid && tv.posture.RequiresL2Signature() {
+		tv.logger.Error("L2 signature verification failed but required by posture", "posture", tv.posture.Name())
+		return false, ErrL2SignatureInvalid
 	}
 
-	tv.logger.Error("L2 signature verification failed but required by posture", "posture", tv.posture.Name())
-	return false, ErrL2SignatureInvalid
+	return valid, nil
 }
 
-func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *uap.UAPEnvelope) (bool, error) {
+func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *governance.GovernanceEnvelope) (bool, error) {
 	actionType := constants.ActionType(envelope.ActionType)
 
 	// Check if this is an external app transaction that can bypass L3 via policy
 	// This check must come before the mutation check so that read-only actions
 	// with explicit app policy bypasses get L3Valid=true
+	var bypassedByPolicy bool
 	if envelope.Governance != nil && envelope.Governance.L2 != nil && envelope.Governance.L2.KeyId != "" {
 		if tv.appPolicyStore != nil {
 			appID := envelope.Governance.L2.KeyId
@@ -660,30 +669,35 @@ func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *uap.UAPEnvelo
 				for _, autoApproveIntent := range policy.AutoApproveIntents {
 					if autoApproveIntent == actionStr {
 						tv.logger.Info("L3 bypassed via app policy", "app_id", appID, "action_type", actionStr)
-						return true, nil
+						bypassedByPolicy = true
+						break
 					}
 				}
 			}
 		}
 	}
 
-	// If not bypassed by app policy, check if L3 is required for this action
-	if !tv.isMutation(actionType) {
-		return false, nil
+	if bypassedByPolicy {
+		return true, nil
 	}
 
-	if !tv.posture.RequiresL3Proof() {
-		return false, nil
-	}
+	// If not bypassed by app policy, check if proof is present
+	hasProof := envelope.Governance != nil && envelope.Governance.L3 != nil && envelope.Governance.L3.Proof != nil
 
-	if envelope.Governance == nil || envelope.Governance.L3 == nil || envelope.Governance.L3.Proof == nil {
-		tv.logger.Error("L3 proof missing but required by posture", "posture", tv.posture.Name())
-		return false, ErrL3ProofMissing
+	if !hasProof {
+		if tv.isMutation(actionType) && tv.posture.RequiresL3Proof() {
+			tv.logger.Error("L3 proof missing but required by posture", "posture", tv.posture.Name())
+			return false, ErrL3ProofMissing
+		}
+		return false, nil
 	}
 
 	if tv.l3Notary == nil {
-		tv.logger.Error("L3 notary not configured but required by posture", "posture", tv.posture.Name())
-		return false, ErrL3NotaryNotConfigured
+		if tv.isMutation(actionType) && tv.posture.RequiresL3Proof() {
+			tv.logger.Error("L3 notary not configured but required by posture", "posture", tv.posture.Name())
+			return false, ErrL3NotaryNotConfigured
+		}
+		return false, nil
 	}
 
 	ok, err := tv.l3Notary.VerifyL3Proof(
@@ -693,12 +707,12 @@ func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *uap.UAPEnvelo
 		envelope.Governance.L3.Proof,
 	)
 
-	if err != nil || !ok {
+	if (err != nil || !ok) && tv.isMutation(actionType) && tv.posture.RequiresL3Proof() {
 		tv.logger.Error("Notary (L3Notary) verification failed but required by posture", string(constants.ConnectionStateError), err)
 		return false, ErrL3ProofInvalid
 	}
 
-	return true, nil
+	return ok && err == nil, nil
 }
 
 func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payload []byte) (proto.Message, error) {
@@ -761,8 +775,8 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 }
 
 // computeTransactionHash computes the canonical transaction hash.
-func (tv *L4Warden) computeTransactionHash(envelope *uap.UAPEnvelope) (string, error) {
-	return uap.GenerateMessageID(envelope)
+func (tv *L4Warden) computeTransactionHash(envelope *governance.GovernanceEnvelope) (string, error) {
+	return governance.GenerateMessageID(envelope)
 }
 
 // verifyL2Signature verifies an L2 ED25519 signature.

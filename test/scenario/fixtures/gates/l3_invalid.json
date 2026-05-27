@@ -1,6 +1,8 @@
 {
   "name": "l3_invalid",
   "vertical": "gates",
+  "hypothesis": "Invalid L3 WebAuthn proof must be rejected when posture requires L3 Notary",
+  "target_gate": "L3 notary (proof verification)",
   "narrative": "Envelope with invalid L3 proof: rejected in notary (L3 enforced), accepted in doctrine/consensus (L3 audited only)",
   "intent": {
     "id": "7459287e8cc67b3de0a346d5d05b66b0061bd3d4ff28384bebcdebc9eefffa0f",
@@ -41,13 +43,15 @@
       "verdict": "accept",
       "reject_reason": "",
       "l2_status": 1,
-      "l3_status": 1
+      "l3_status": 1,
+      "audit_l3_valid": false
     },
     "consensus": {
       "verdict": "accept",
       "reject_reason": "",
       "l2_status": 2,
-      "l3_status": 1
+      "l3_status": 1,
+      "audit_l3_valid": false
     },
     "notary": {
       "verdict": "reject",

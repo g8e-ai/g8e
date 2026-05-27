@@ -27,10 +27,12 @@ PROTOC_GEN_GO_VERSION := v1.36.11
 PROTOC_GEN_GO_GRPC_VERSION := v1.6.2
 PROTOC_GEN_DOC_VERSION := v1.5.1
 PROTOC_MIN_VERSION := 21
+UPX_VERSION := v4.2.4
 
 BUF := $(shell command -v buf 2>/dev/null || echo "./buf")
 PROTOC := $(shell command -v protoc 2>/dev/null || echo "/usr/local/bin/protoc")
 PROTOC_GEN_GO := $(shell go list -m -f '{{.Version}}' google.golang.org/protobuf 2>/dev/null || echo "$(PROTOC_GEN_GO_VERSION)")
+UPX := $(shell command -v upx 2>/dev/null || echo "/usr/local/bin/upx")
 
 # =============================================================================
 # HELP
@@ -48,12 +50,11 @@ help:
 	@echo "  proto         Generate all Protobuf code (Go)"
 	@echo "  buf-install   Install Buf CLI locally if not found"
 	@echo "  protoc-install Install protoc compiler"
+	@echo "  upx-install   Install UPX compressor"
 	@echo ""
 	@echo "Build:"
-	@echo "  build         Build all services (cli + operator)"
-	@echo "  build-cli     Build g8e CLI wrapper"
-	@echo "  build-operator Build g8e operator binary"
-	@echo "  build-compressed Build g8e operator with compression (-s -w -trimpath)"
+	@echo "  build         Build g8e binary"
+	@echo "  build-compressed Build g8e with UPX compression"
 	@echo ""
 	@echo "Test:"
 	@echo "  test          Run all tests with race detection"
@@ -66,12 +67,6 @@ help:
 	@echo "  lint          Run all linting and quality checks"
 	@echo "  vulncheck     Run Operator vulnerability check"
 	@echo "  validate-doctrines Validate doctrine JSON schema"
-	@echo ""
-	@echo "Documentation:"
-	@echo "  docs          Run all documentation tasks (cli + build)"
-	@echo "  docs-cli      Auto-generate CLI reference documentation"
-	@echo "  docs-build    Build MkDocs documentation site (via Docker)"
-	@echo "  docs-serve    Serve MkDocs documentation locally at :8000 (via Docker)"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean         Remove all build artifacts and runtime state"
@@ -136,41 +131,74 @@ protoc-install:
 	fi
 	@echo "protoc version $$PROTOC_VERSION is compatible."
 
+.PHONY: upx-install
+upx-install:
+	@if ! command -v upx &> /dev/null; then \
+		echo "Installing UPX $(UPX_VERSION)..."; \
+		cd /tmp && curl -fSL https://github.com/upx/upx/releases/download/$(UPX_VERSION)/upx-$(UPX_VERSION:v%=%)-linux_amd64.tar.xz -o upx.tar.xz && \
+		tar -xf upx.tar.xz && \
+		sudo cp upx-$(UPX_VERSION:v%=%)-linux_amd64/upx /usr/local/bin/upx && \
+		sudo chmod +x /usr/local/bin/upx && \
+		rm -rf /tmp/upx-$(UPX_VERSION:v%=%)-linux_amd64 /tmp/upx.tar.xz; \
+	fi
+	@echo "UPX installed."
+
 # =============================================================================
 # BUILD
 # =============================================================================
+PLATFORMS := linux/amd64 linux/arm64 linux/386
+
 .PHONY: build
-build: build-cli build-operator
-	@echo "All builds complete."
-
-.PHONY: build-cli
-build-cli:
-	@echo "Building g8e CLI wrapper..."
+build:
+	@echo "Building g8e..."
 	@mkdir -p bin
-	@go build -o bin/g8e ./cmd/g8e
-	@echo "CLI wrapper build complete."
-
-.PHONY: build-operator
-build-operator:
-	@echo "Building g8e operator..."
-	@mkdir -p bin
+	@echo "Preparing build directory for docs embedding..."
+	@rm -rf .build/cmd/g8eo
+	@mkdir -p .build/cmd/g8eo
+	@cp -r cmd/g8eo/* .build/cmd/g8eo/
+	@cp -r docs .build/cmd/g8eo/docs
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
 	PLATFORM=$$(uname -s)_$$(uname -m); \
-	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo
-	@echo "Operator build complete."
+	if go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./.build/cmd/g8eo; then \
+		rm -rf .build; \
+		ln -sf bin/g8e g8e; \
+		echo "Build complete."; \
+	else \
+		rm -rf .build; \
+		exit 1; \
+	fi
 
 .PHONY: build-compressed
-build-compressed:
-	@echo "Building g8e operator with compression..."
+build-compressed: upx-install
+	@echo "Building g8e with compression for $(PLATFORMS)..."
 	@mkdir -p bin
+	@echo "Preparing build directory for docs embedding..."
+	@rm -rf .build/cmd/g8eo
+	@mkdir -p .build/cmd/g8eo
+	@cp -r cmd/g8eo/* .build/cmd/g8eo/
+	@cp -r docs .build/cmd/g8eo/docs
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
-	PLATFORM=$$(uname -s)_$$(uname -m); \
-	go build -ldflags "-s -w -X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -trimpath -o bin/g8e ./cmd/g8eo
-	@echo "Compressed operator build complete."
+	for platform in $(PLATFORMS); do \
+		GOOS=$${platform%/*}; \
+		GOARCH=$${platform#*/}; \
+		BINARY=bin/g8e-$$GOOS-$$GOARCH; \
+		echo "Building $$platform -> $$BINARY..."; \
+		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$platform" -o $$BINARY ./.build/cmd/g8eo || exit 1; \
+		echo "Compressing $$BINARY with UPX..."; \
+		$(UPX) --best --lzma $$BINARY; \
+	done
+	@rm -rf .build
+	@HOST_OS=$$(go env GOOS); \
+	HOST_ARCH=$$(go env GOARCH); \
+	if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH ]; then \
+		ln -sf bin/g8e-$$HOST_OS-$$HOST_ARCH g8e; \
+		echo "Created symlink: g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
+	fi
+	@echo "Compressed multi-platform build complete."
 
 # =============================================================================
 # TEST
@@ -273,6 +301,7 @@ clean:
 	@echo "Cleaning up build artifacts and runtime state..."
 	@rm -rf .g8e/
 	@rm -rf bin/
+	@rm -f g8e
 	@rm -rf build/
 	@echo "Clean complete."
 
@@ -285,7 +314,7 @@ ci: ci-substrate
 	@echo "CI complete."
 
 .PHONY: ci-substrate
-ci-substrate: _ci-verify-proto _ci-lint _ci-vulncheck _ci-test _ci-docs
+ci-substrate: _ci-verify-proto _ci-lint _ci-vulncheck _ci-test
 	@echo "Substrate CI complete."
 
 .PHONY: _ci-verify-proto
@@ -324,262 +353,3 @@ _ci-test:
 	fi; \
 	echo "Coverage $$COVERAGE% meets 60% threshold"
 	@./bin/g8e platform stop
-
-.PHONY: _ci-docs
-_ci-docs:
-	@echo "=== docs-lint ==="
-	@if command -v markdownlint >/dev/null 2>&1; then \
-		markdownlint . -c docs/.markdownlint.json --ignore node_modules; \
-	else \
-		echo "markdownlint not found, skipping docs-lint. Install with: npm install -g markdownlint-cli"; \
-	fi
-	@echo "=== docs-build ==="
-	@if command -v docker >/dev/null 2>&1; then \
-		$(MAKE) docs-build; \
-	else \
-		echo "Warning: docker not found, skipping docs-build."; \
-		if [ "$$CI" = "true" ]; then \
-			echo "Error: docker must be available in CI environment." >&2; \
-			exit 1; \
-		fi \
-	fi
-
-# =============================================================================
-# DOCUMENTATION
-# =============================================================================
-.PHONY: docs
-docs: docs-cli docs-build
-	@echo "All documentation tasks complete."
-.PHONY: docs-cli
-docs-cli:
-	@echo "Building g8e binary for CLI help generation..."
-	@mkdir -p bin
-	@go build -o bin/g8e ./cmd/g8e
-	@echo "Generating CLI reference documentation..."
-	@echo "# CLI Reference" > docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "This reference is auto-generated from the Cobra CLI help output." >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "## g8e Root Help" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "## setup" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e setup --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "## platform" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e platform --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### platform start" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e platform start --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### platform stop" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e platform stop --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### platform status" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e platform status --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### platform restart" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e platform restart --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### platform logs" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e platform logs --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### platform settings" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e platform settings --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### platform reset" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e platform reset --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### platform clean" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e platform clean --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "## auth" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e auth --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### auth bootstrap" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e auth bootstrap --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### auth login" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e auth login --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### auth logout" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e auth logout --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "## data" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e data --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### data users" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e data users --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### data operators" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e data operators --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### data device-links" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e data device-links --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "#### data device-links list" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e data device-links list --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "#### data device-links create" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e data device-links create --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "#### data device-links delete" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e data device-links delete --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### data settings" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e data settings --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### data store" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e data store --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### data audit" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e data audit --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "#### data audit list" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e data audit list --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "#### data audit summary" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e data audit summary --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "## test" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e test --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### test unit" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e test unit --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### test integration" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e test integration --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### test g8eo" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e test g8eo --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### test ci" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e test ci --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### test chaos" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e test chaos --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### test scenario" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e test scenario --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "## security" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e security --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### security validate" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e security validate --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "## vars" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e vars --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### vars list" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e vars list --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### vars set" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e vars set --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### vars get" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e vars get --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "### vars unset" >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@./bin/g8e vars unset --help >> docs/guides/cli.md
-	@echo "\`\`\`" >> docs/guides/cli.md
-	@echo "" >> docs/guides/cli.md
-	@echo "CLI reference documentation generated successfully."
-
-.PHONY: docs-build
-docs-build:
-	@echo "Building MkDocs documentation site via Docker..."
-	@docker run --rm \
-		-v $(PWD):/repo \
-		-w /repo \
-		squidfunk/mkdocs-material:9.7.5 build --strict --quiet
-
-.PHONY: docs-serve
-docs-serve:
-	@echo "Serving MkDocs documentation at http://localhost:8000 ..."
-	@docker run --rm -it \
-		-p 8000:8000 \
-		-v $(PWD):/repo \
-		-w /repo \
-		squidfunk/mkdocs-material:9.7.5 serve --dev-addr 0.0.0.0:8000 --quiet

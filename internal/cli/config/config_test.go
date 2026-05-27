@@ -16,7 +16,6 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -88,45 +87,8 @@ func TestExpandPath(t *testing.T) {
 }
 
 func TestLoad(t *testing.T) {
-	t.Run("loads config from valid project root", func(t *testing.T) {
+	t.Run("loads config from any directory using embedded defaults", func(t *testing.T) {
 		tempDir := t.TempDir()
-
-		// Create protocol/constants directory structure
-		protocolDir := filepath.Join(tempDir, "protocol", "constants")
-		err := os.MkdirAll(protocolDir, 0755)
-		require.NoError(t, err)
-
-		// Create a valid paths.json
-		pathsJSON := `{
-			"g8ee": {
-				"app_dir": "/app/services/g8ee",
-				"cert_name": "g8ee",
-				"config_dir": "/app/services/g8ee/config",
-				"tests_dir": "/app/services/g8ee/tests"
-			},
-			"host": "localhost",
-			"infra": {
-				"app_cert_dir": ".g8e/pki/issued/apps",
-				"ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
-				"db_path": ".g8e/data/g8e.db",
-				"docs_dir": "/docs",
-				"pki_dir": ".g8e/pki",
-				"protocol_constants_dir": "/home/bob/g8e/protocol/constants",
-				"protocol_dir": "/home/bob/g8e/protocol",
-				"protocol_models_dir": "/home/bob/g8e/protocol/models",
-				"secrets_dir": ".g8e/secrets",
-				"ssh_config_path": "/etc/g8e/ssh_config"
-			},
-			"ports": {
-				"g8ee_https": 8443,
-				"insecure_mcp_gateway": 18789,
-				"operator_bootstrap_https": 8441,
-				"operator_https": 8440,
-				"operator_public_https": 8442
-			}
-		}`
-		err = os.WriteFile(filepath.Join(protocolDir, "paths.json"), []byte(pathsJSON), 0644)
-		require.NoError(t, err)
 
 		config, err := Load(tempDir)
 		require.NoError(t, err)
@@ -142,43 +104,6 @@ func TestLoad(t *testing.T) {
 	t.Run("uses current directory when project root is empty", func(t *testing.T) {
 		tempDir := t.TempDir()
 
-		// Create protocol/constants directory structure
-		protocolDir := filepath.Join(tempDir, "protocol", "constants")
-		err := os.MkdirAll(protocolDir, 0755)
-		require.NoError(t, err)
-
-		// Create a valid paths.json
-		pathsJSON := `{
-			"g8ee": {
-				"app_dir": "/app/services/g8ee",
-				"cert_name": "g8ee",
-				"config_dir": "/app/services/g8ee/config",
-				"tests_dir": "/app/services/g8ee/tests"
-			},
-			"host": "localhost",
-			"infra": {
-				"app_cert_dir": ".g8e/pki/issued/apps",
-				"ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
-				"db_path": ".g8e/data/g8e.db",
-				"docs_dir": "/docs",
-				"pki_dir": ".g8e/pki",
-				"protocol_constants_dir": "/home/bob/g8e/protocol/constants",
-				"protocol_dir": "/home/bob/g8e/protocol",
-				"protocol_models_dir": "/home/bob/g8e/protocol/models",
-				"secrets_dir": ".g8e/secrets",
-				"ssh_config_path": "/etc/g8e/ssh_config"
-			},
-			"ports": {
-				"g8ee_https": 8443,
-				"insecure_mcp_gateway": 18789,
-				"operator_bootstrap_https": 8441,
-				"operator_https": 8440,
-				"operator_public_https": 8442
-			}
-		}`
-		err = os.WriteFile(filepath.Join(protocolDir, "paths.json"), []byte(pathsJSON), 0644)
-		require.NoError(t, err)
-
 		// Change to temp directory and load with empty project root
 		originalWd, err := os.Getwd()
 		require.NoError(t, err)
@@ -193,46 +118,31 @@ func TestLoad(t *testing.T) {
 		assert.Equal(t, tempDir, config.ProjectRoot)
 	})
 
-	t.Run("returns error when paths.json does not exist", func(t *testing.T) {
+	t.Run("always uses embedded defaults regardless of file presence", func(t *testing.T) {
 		tempDir := t.TempDir()
 
-		// Create protocol/constants directory but no paths.json
+		// Create protocol/constants directory with a paths.json file
+		// This should be ignored since we always use embedded defaults
 		protocolDir := filepath.Join(tempDir, "protocol", "constants")
 		err := os.MkdirAll(protocolDir, 0755)
 		require.NoError(t, err)
 
-		config, err := Load(tempDir)
-		assert.Error(t, err)
-		assert.Nil(t, config)
-		assert.Contains(t, err.Error(), "failed to parse paths.json")
-	})
-
-	t.Run("returns error when paths.json is invalid JSON", func(t *testing.T) {
-		tempDir := t.TempDir()
-
-		// Create protocol/constants directory structure
-		protocolDir := filepath.Join(tempDir, "protocol", "constants")
-		err := os.MkdirAll(protocolDir, 0755)
-		require.NoError(t, err)
-
-		// Create invalid paths.json
-		err = os.WriteFile(filepath.Join(protocolDir, "paths.json"), []byte("invalid json"), 0644)
+		// Create a paths.json with different values to verify it's ignored
+		pathsJSON := `{
+			"host": "should-be-ignored",
+			"ports": {
+				"operator_https": 9999
+			}
+		}`
+		err = os.WriteFile(filepath.Join(protocolDir, "paths.json"), []byte(pathsJSON), 0644)
 		require.NoError(t, err)
 
 		config, err := Load(tempDir)
-		assert.Error(t, err)
-		assert.Nil(t, config)
-		assert.Contains(t, err.Error(), "failed to parse paths.json")
-	})
-
-	t.Run("returns error when protocol/constants directory does not exist", func(t *testing.T) {
-		tempDir := t.TempDir()
-		// Don't create protocol/constants directory
-
-		config, err := Load(tempDir)
-		assert.Error(t, err)
-		assert.Nil(t, config)
-		assert.Contains(t, err.Error(), "failed to parse paths.json")
+		require.NoError(t, err)
+		assert.NotNil(t, config)
+		// Should use embedded defaults, not the file
+		assert.Equal(t, "localhost", config.Paths.Host)
+		assert.Equal(t, 8440, config.Paths.Ports.OperatorHTTPS)
 	})
 }
 
@@ -373,6 +283,7 @@ func TestConfig_OperatorHTTPSPort(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
+					G8eeHTTPS              int `json:"g8ee_https"`
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -393,6 +304,7 @@ func TestConfig_OperatorBootstrapHTTPSPort(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
+					G8eeHTTPS              int `json:"g8ee_https"`
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -413,6 +325,7 @@ func TestConfig_OperatorHTTPURL(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
+					G8eeHTTPS              int `json:"g8ee_https"`
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -433,6 +346,7 @@ func TestConfig_OperatorBootstrapURL(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
+					G8eeHTTPS              int `json:"g8ee_https"`
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -454,6 +368,7 @@ func TestConfig_OperatorPublicURL(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
+					G8eeHTTPS              int `json:"g8ee_https"`
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -475,6 +390,7 @@ func TestConfig_OperatorDiscoveryURL(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
+					G8eeHTTPS              int `json:"g8ee_https"`
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -509,29 +425,45 @@ func TestDefaultConstants(t *testing.T) {
 }
 
 func TestLoadIntegration(t *testing.T) {
-	// This is an integration test that uses the actual project structure
-	// It verifies that Load works with the real paths.json file
+	// This is an integration test that verifies the embedded-only behavior
 
-	t.Run("loads real project config", func(t *testing.T) {
-		// This test assumes it's run from the project root
-		// Skip if not in the expected environment
-		projectRoot := "/home/bob/g8e"
-		if _, err := os.Stat(projectRoot); os.IsNotExist(err) {
-			t.Skip("Project root not found, skipping integration test")
-		}
+	t.Run("loads embedded default paths from any directory", func(t *testing.T) {
+		// This test verifies the self-sovereign binary behavior:
+		// The binary always uses embedded default paths regardless of directory structure.
 
-		config, err := Load(projectRoot)
+		tempDir := t.TempDir()
+
+		// Change to temp directory (simulating running binary from empty directory)
+		originalWd, err := os.Getwd()
+		require.NoError(t, err)
+		defer os.Chdir(originalWd)
+
+		err = os.Chdir(tempDir)
+		require.NoError(t, err)
+
+		// Load config from empty directory (no source tree)
+		config, err := Load("")
 		require.NoError(t, err)
 		assert.NotNil(t, config)
-		assert.Equal(t, projectRoot, config.ProjectRoot)
-		assert.NotNil(t, config.Paths)
 
-		// Verify port values match paths.json
+		// Verify it loaded from embedded defaults
+		assert.NotNil(t, config.Paths)
+		assert.Equal(t, tempDir, config.ProjectRoot)
+
+		// Verify embedded default paths are resolved relative to tempDir
+		assert.Equal(t, filepath.Join(tempDir, ".g8e"), config.RuntimeDir)
+		assert.Equal(t, filepath.Join(tempDir, ".g8e/pki"), config.PKIDir)
+		assert.Equal(t, filepath.Join(tempDir, ".g8e/secrets"), config.SecretsDir)
+
+		// Verify protocol paths are relative
+		assert.Equal(t, filepath.Join(tempDir, ".g8e/protocol"), config.Paths.Infra.ProtocolDir)
+		assert.Equal(t, filepath.Join(tempDir, ".g8e/protocol/constants"), config.Paths.Infra.ProtocolConstantsDir)
+		assert.Equal(t, filepath.Join(tempDir, ".g8e/protocol/models"), config.Paths.Infra.ProtocolModelsDir)
+
+		// Verify port values from embedded defaults
 		assert.Equal(t, 8440, config.OperatorHTTPSPort())
 		assert.Equal(t, 8441, config.OperatorBootstrapHTTPSPort())
-
-		// Verify URLs are formatted correctly
-		assert.True(t, strings.HasPrefix(config.OperatorHTTPURL(), "https://localhost:"))
-		assert.True(t, strings.HasPrefix(config.OperatorBootstrapURL(), "https://localhost:"))
+		assert.Equal(t, 8442, config.OperatorPublicHTTPSPort())
+		assert.Equal(t, 8443, config.G8eeHTTPSPort())
 	})
 }

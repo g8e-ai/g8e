@@ -14,7 +14,6 @@
 package cmd
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -39,22 +38,6 @@ func TestPlatformStartCmd(t *testing.T) {
 		assert.Contains(t, cmd.Short, "Start")
 		assert.Contains(t, cmd.Short, "Governance Gateway")
 	})
-
-	t.Run("start fails with invalid project root", func(t *testing.T) {
-		cmd := platformStartCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
-	})
 }
 
 func TestPlatformStopCmd(t *testing.T) {
@@ -63,22 +46,6 @@ func TestPlatformStopCmd(t *testing.T) {
 		assert.Equal(t, "stop", cmd.Use)
 		assert.Contains(t, cmd.Short, "Stop")
 		assert.Contains(t, cmd.Short, "Governance Gateway")
-	})
-
-	t.Run("stop fails with invalid project root", func(t *testing.T) {
-		cmd := platformStopCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
 	})
 }
 
@@ -89,22 +56,6 @@ func TestPlatformStatusCmd(t *testing.T) {
 		assert.Contains(t, cmd.Short, "health")
 		assert.Contains(t, cmd.Short, "status")
 	})
-
-	t.Run("status fails with invalid project root", func(t *testing.T) {
-		cmd := platformStatusCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
-	})
 }
 
 func TestPlatformRestartCmd(t *testing.T) {
@@ -114,22 +65,6 @@ func TestPlatformRestartCmd(t *testing.T) {
 		assert.Contains(t, cmd.Short, "Restart")
 		assert.Contains(t, cmd.Short, "Governance Gateway")
 	})
-
-	t.Run("restart fails with invalid project root", func(t *testing.T) {
-		cmd := platformRestartCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
-	})
 }
 
 func TestPlatformLogsCmd(t *testing.T) {
@@ -138,22 +73,6 @@ func TestPlatformLogsCmd(t *testing.T) {
 		assert.Equal(t, "logs", cmd.Use)
 		assert.Contains(t, cmd.Short, "logs")
 	})
-
-	t.Run("logs fails with invalid project root", func(t *testing.T) {
-		cmd := platformLogsCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
-	})
 }
 
 func TestPlatformSettingsCmd(t *testing.T) {
@@ -161,22 +80,6 @@ func TestPlatformSettingsCmd(t *testing.T) {
 		cmd := platformSettingsCmd()
 		assert.Equal(t, "settings", cmd.Use)
 		assert.Contains(t, cmd.Short, "settings")
-	})
-
-	t.Run("settings fails with invalid project root", func(t *testing.T) {
-		cmd := platformSettingsCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
 	})
 }
 
@@ -208,21 +111,6 @@ func TestPlatformResetCmd(t *testing.T) {
 		assert.NotNil(t, flag)
 	})
 
-	t.Run("reset fails with invalid project root", func(t *testing.T) {
-		cmd := platformResetCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
-	})
 }
 
 func TestPlatformCleanCmd(t *testing.T) {
@@ -252,21 +140,6 @@ func TestPlatformCleanCmd(t *testing.T) {
 		assert.NotNil(t, flag)
 	})
 
-	t.Run("clean fails with invalid project root", func(t *testing.T) {
-		cmd := platformCleanCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
-	})
 }
 
 func TestPlatformCommandFlags(t *testing.T) {

@@ -31,7 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/responder"
 	"github.com/g8e-ai/g8e/internal/services/governance"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/google/uuid"
@@ -470,7 +470,7 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 			return nil, fmt.Errorf("failed to marshal MCP payload: %w", err)
 		}
 
-		hash, uapBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
+		hash, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
 			actionType:     constants.ActionTypeMcpCall,
 			targetResource: callParams.Name,
 			payloadBytes:   payloadBytes,
@@ -479,13 +479,13 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 			return nil, err
 		}
 
-		receipt, err := g.envProc.ProcessEnvelope(ctx, uapBytes)
+		receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
 		if err != nil {
 			if errors.Is(err, governance.ErrL3ProofMissing) {
 				userID := r.Header.Get(constants.HeaderUserID)
 				operatorID := r.Header.Get(constants.HeaderOperatorID)
 
-				g.storeSuspendedTransaction(hash, uapBytes, callParams.Name, callParams.Arguments, userID, operatorID)
+				g.storeSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID)
 
 				approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 				return CallToolResult{
@@ -638,7 +638,7 @@ func (g *GatewayService) HandleResourcesRead(w http.ResponseWriter, r *http.Requ
 			return nil, fmt.Errorf("failed to marshal MCP payload: %w", err)
 		}
 
-		_, uapBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
+		_, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
 			actionType:     constants.ActionTypeMcpResourceRead,
 			targetResource: readParams.URI,
 			payloadBytes:   payloadBytes,
@@ -647,7 +647,7 @@ func (g *GatewayService) HandleResourcesRead(w http.ResponseWriter, r *http.Requ
 			return nil, err
 		}
 
-		receipt, err := g.envProc.ProcessEnvelope(ctx, uapBytes)
+		receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
 		if err != nil {
 			return nil, err
 		}
@@ -751,7 +751,7 @@ func (g *GatewayService) HandlePromptsGet(w http.ResponseWriter, r *http.Request
 			return nil, fmt.Errorf("failed to marshal MCP payload: %w", err)
 		}
 
-		_, uapBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
+		_, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
 			actionType:     constants.ActionTypeMcpPromptGet,
 			targetResource: getParams.Name,
 			payloadBytes:   payloadBytes,
@@ -760,7 +760,7 @@ func (g *GatewayService) HandlePromptsGet(w http.ResponseWriter, r *http.Request
 			return nil, err
 		}
 
-		receipt, err := g.envProc.ProcessEnvelope(ctx, uapBytes)
+		receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
 		if err != nil {
 			return nil, err
 		}
@@ -865,7 +865,7 @@ func (g *GatewayService) HandleToolsCallSSE(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	hash, uapBytes, err := g.processGatewayTransaction(r.Context(), processGatewayOptions{
+	hash, envelopeBytes, err := g.processGatewayTransaction(r.Context(), processGatewayOptions{
 		actionType:     constants.ActionTypeMcpCall,
 		targetResource: callParams.Name,
 		payloadBytes:   payloadBytes,
@@ -880,13 +880,13 @@ func (g *GatewayService) HandleToolsCallSSE(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	receipt, err := g.envProc.ProcessEnvelope(r.Context(), uapBytes)
+	receipt, err := g.envProc.ProcessEnvelope(r.Context(), envelopeBytes)
 	if err != nil {
 		if errors.Is(err, governance.ErrL3ProofMissing) {
 			userID := r.Header.Get(constants.HeaderUserID)
 			operatorID := r.Header.Get(constants.HeaderOperatorID)
 
-			g.storeSuspendedTransaction(hash, uapBytes, callParams.Name, callParams.Arguments, userID, operatorID)
+			g.storeSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID)
 
 			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 			g.responder.RPCResponse(w, req.ID, CallToolResult{
@@ -948,7 +948,7 @@ type processGatewayOptions struct {
 	payloadBytes   []byte
 }
 
-func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts processGatewayOptions) (hash string, uapBytes []byte, err error) {
+func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts processGatewayOptions) (hash string, envelopeBytes []byte, err error) {
 	stateRoot := ""
 	if g.stateRootProvider != nil {
 		var err error
@@ -982,7 +982,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		env.BindingPersona = persona
 	}
 
-	hash, err = uap.GenerateMessageID(env)
+	hash, err = govpkg.GenerateMessageID(env)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to compute transaction hash: %w", err)
 	}
@@ -1002,12 +1002,12 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		}
 	}
 
-	uapBytes, err = (protojson.MarshalOptions{Multiline: false}).Marshal(env)
+	envelopeBytes, err = (protojson.MarshalOptions{Multiline: false}).Marshal(env)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to marshal envelope: %w", err)
 	}
 
-	return hash, uapBytes, nil
+	return hash, envelopeBytes, nil
 }
 
 func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
@@ -1040,7 +1040,7 @@ func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 			return nil, fmt.Errorf("failed to marshal A2A payload: %w", err)
 		}
 
-		hash, uapBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
+		hash, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
 			actionType:     constants.ActionTypeA2aCall,
 			targetResource: req.SkillName,
 			payloadBytes:   payloadBytes,
@@ -1049,13 +1049,13 @@ func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 			return nil, err
 		}
 
-		receipt, err := g.envProc.ProcessEnvelope(ctx, uapBytes)
+		receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
 		if err != nil {
 			if errors.Is(err, governance.ErrL3ProofMissing) || errors.Is(err, governance.ErrL3ProofInvalid) {
 				userID := r.Header.Get(constants.HeaderUserID)
 				operatorID := r.Header.Get(constants.HeaderOperatorID)
 
-				g.storeSuspendedTransaction(hash, uapBytes, req.SkillName, req.PayloadJSON, userID, operatorID)
+				g.storeSuspendedTransaction(hash, envelopeBytes, req.SkillName, req.PayloadJSON, userID, operatorID)
 
 				approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 				return A2ASuspensionResponse{

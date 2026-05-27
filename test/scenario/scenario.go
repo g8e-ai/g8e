@@ -11,8 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build integration
-
 package scenario
 
 import (
@@ -60,6 +58,8 @@ type Outcome struct {
 	RejectReason string  `json:"reject_reason,omitempty"`
 	L2Status     int32   `json:"l2_status"` // L2Status enum: 0=unspecified, 1=not_required, 2=required_valid, 3=required_failed
 	L3Status     int32   `json:"l3_status"` // L3Status enum: 0=unspecified, 1=not_required, 2=required_valid, 3=required_failed
+	AuditL2Valid *bool   `json:"audit_l2_valid,omitempty"`
+	AuditL3Valid *bool   `json:"audit_l3_valid,omitempty"`
 }
 
 // Evidence describes which governance proofs are present in the envelope.
@@ -75,12 +75,14 @@ type RawIntent []byte
 
 // Scenario is a pure data structure describing a test case.
 type Scenario struct {
-	Name      string           `json:"name"`
-	Vertical  string           `json:"vertical"`
-	Narrative string           `json:"narrative"`
-	Intent    json.RawMessage  `json:"intent"`
-	Evidence  Evidence         `json:"evidence"`
-	Expect    map[Mode]Outcome `json:"expect"`
+	Name       string           `json:"name"`
+	Vertical   string           `json:"vertical"`
+	Hypothesis string           `json:"hypothesis,omitempty"`
+	TargetGate string           `json:"target_gate,omitempty"`
+	Narrative  string           `json:"narrative"`
+	Intent     json.RawMessage  `json:"intent"`
+	Evidence   Evidence         `json:"evidence"`
+	Expect     map[Mode]Outcome `json:"expect"`
 }
 
 // LoadFixtures loads all scenario fixtures from the embedded filesystem.

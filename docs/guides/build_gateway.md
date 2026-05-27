@@ -14,7 +14,7 @@ Version: v1.0.0
 
 A g8e-compatible Governance Gateway implements the central Policy Decision Point (PDP) of the substrate. It provides PKI management, persistence, messaging, admission APIs, and protocol translation for MCP/A2A requests.
 
-The reference implementation is the g8e Operator binary running in gateway mode. The same `g8e.operator` binary operates in two modes: Operator mode (connects to a remote gateway) and Gateway mode (acts as the platform's central persistence and pub/sub broker). Custom gateway implementations must implement the same protocol contracts and invariants.
+The reference implementation is the g8e binary running in gateway mode. The same `g8e` binary operates in two modes: Operator mode (connects to a remote gateway) and Gateway mode (acts as the platform's central persistence and pub/sub broker). Custom gateway implementations must implement the same protocol contracts and invariants.
 
 ---
 
@@ -28,20 +28,20 @@ The reference implementation is the g8e Operator binary running in gateway mode.
 
 ### Build from Source
 
-Clone the repository and build the operator binary:
+Clone the repository and build the g8e binary:
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces the `g8e.operator` binary in the repository root. The binary is statically linked and requires no runtime dependencies.
+This produces the `g8e` binary in the repository root. The binary is statically linked and requires no runtime dependencies.
 
 ### Build Targets
 
 The Makefile provides several build targets:
 
-- `make build` — Builds the `g8e.operator` binary.
+- `make build` — Builds the `g8e` binary.
 - `make clean` — Removes compiled binaries and test artifacts.
 
 ### Cross-Compilation
@@ -55,12 +55,12 @@ GOOS=darwin GOARCH=arm64 make build
 
 ### Running in Gateway Mode
 
-To start the gateway, run the operator binary with a gateway mode flag:
+To start the gateway, run the g8e binary with a gateway mode flag:
 
 ```bash
-./g8e.operator --doctrine          # L1 enforced, L2/L3 audited
-./g8e.operator --consensus         # L1/L2 enforced, L3 audited
-./g8e.operator --notary            # L1/L2/L3 strictly enforced
+./g8e --doctrine          # L1 enforced, L2/L3 audited
+./g8e --consensus         # L1/L2 enforced, L3 audited
+./g8e --notary            # L1/L2/L3 strictly enforced
 ```
 
 ### Gateway Mode Flags

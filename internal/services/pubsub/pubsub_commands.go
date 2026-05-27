@@ -31,7 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/sovereignty"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -80,7 +80,7 @@ type PubSubCommandService struct {
 
 	reconnectBaseDelay time.Duration
 
-	// UAP governance services for Phase 3 integration
+	// governance services for Phase 3 integration
 	consensus   *governance.L2Consensus
 	actuator    *governance.L5Actuator
 	l4warden    *governance.L4Warden
@@ -196,8 +196,8 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	// L3Notary is optional for outbound mode (platform verifies L3)
 	// Mutations requiring L3 will fail-closed at TransactionVerifier if L3Notary is nil
 
-	// Initialize UAP governance services after trusted signers are loaded
-	rs.initializeUAPGovernance(c, serviceCtx)
+	// Initialize governance services after trusted signers are loaded
+	rs.initializeGovernance(c, serviceCtx)
 
 	c.Logger.Info("g8e connectivity initialized")
 	if c.Config.OperatorID != "" {
@@ -208,7 +208,7 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	return rs, nil
 }
 
-func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, serviceCtx context.Context) {
+func (rs *PubSubCommandService) initializeGovernance(c CommandServiceConfig, serviceCtx context.Context) {
 	// Initialize L2Consensus with L1Doctrine for threat detection and private key for L2 signing
 	// L1Doctrine is the canonical L1 (Technical Bedrock) validator - it replaces Sentinel's threat detection
 	l1Doctrine := governance.NewL1Doctrine()
@@ -271,7 +271,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		rs.mcpGateway.SetA2ADependencies(c.Config.Gateway.A2ADownstreamURL)
 	}
 
-	c.Logger.Info("UAP governance services initialized",
+	c.Logger.Info("governance services initialized",
 		"signer_store_configured", rs.signerStore != nil,
 		"transaction_verifier_enabled", rs.l4warden != nil)
 	if c.Config.OperatorID != "" {
@@ -505,9 +505,9 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		return
 	}
 
-	// Decode as UAP JSON envelope - this is the only canonical mutation transport.
+	// Decode as GovernanceEnvelope - this is the only canonical mutation transport.
 	// Binary protobuf bytes and other formats are explicitly rejected.
-	envelope := &uap.UAPEnvelope{}
+	envelope := &govpkg.GovernanceEnvelope{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, envelope); err != nil {
 		rs.logger.Error("envelope: non-JSON payload rejected",
 			string(constants.ConnectionStateError), err,
@@ -515,15 +515,15 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		return
 	}
 
-	rs.logger.Info("Decoded request as UAP JSON envelope",
+	rs.logger.Info("Decoded request as GovernanceEnvelope",
 		"message_id", envelope.Id,
 		"protocol_version", envelope.ProtocolVersion)
-	rs.handleUAPEnvelope(envelope)
+	rs.handleGovernanceEnvelope(envelope)
 }
 
 // ProcessEnvelope is the public, synchronous entry point for fail-closed
 // Gateway transaction processing. It is used by the listen-mode HTTP surface
-// (POST /api/governance/envelope) to verify a UAP JSON envelope and execute it
+// (POST /api/governance/envelope) to verify a GovernanceEnvelope and execute it
 // through the Actuator, returning the signed ActionReceipt or a verification
 // error.
 //
@@ -539,9 +539,9 @@ func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []b
 		return nil, fmt.Errorf("payload exceeds %d byte limit", MaxPayloadSize)
 	}
 
-	envelope := &uap.UAPEnvelope{}
+	envelope := &govpkg.GovernanceEnvelope{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, envelope); err != nil {
-		return nil, fmt.Errorf("invalid UAP JSON envelope: %w", err)
+		return nil, fmt.Errorf("invalid GovernanceEnvelope: %w", err)
 	}
 
 	if rs.l4warden == nil {
@@ -576,8 +576,8 @@ func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []b
 	return receipt, execErr
 }
 
-// handleUAPEnvelope processes a UAPEnvelope using the TransactionVerifier, Consensus and Actuator services.
-func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
+// handleGovernanceEnvelope processes a GovernanceEnvelope using the TransactionVerifier, Consensus and Actuator services.
+func (rs *PubSubCommandService) handleGovernanceEnvelope(env *govpkg.GovernanceEnvelope) {
 	var verified *governance.VerifiedTransaction
 
 	// Strict transaction verification (P0: fail-closed gate before any dispatch)
@@ -599,13 +599,13 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 		return
 	}
 
-	// Convert UAPEnvelope to PubSubCommandMessage for execution through Actuator
-	// Map UAP action types back to protobuf event types for handler dispatch
+	// Convert GovernanceEnvelope to PubSubCommandMessage for execution through Actuator
+	// Map GovernanceEnvelope action types back to protobuf event types for handler dispatch
 	eventType := constants.MapActionTypeToEventType(verified.ActionType)
 
 	payload := env.Payload
 	if len(payload) == 0 {
-		rs.logger.Error("UAPEnvelope missing required binary Payload bytes - request rejected", "message_id", env.Id)
+		rs.logger.Error("GovernanceEnvelope missing required binary Payload bytes - request rejected", "message_id", env.Id)
 		return
 	}
 
@@ -867,7 +867,7 @@ func (rs *PubSubCommandService) SendAutomaticHeartbeat() {
 
 // logBlockedTransaction records a blocked/rejected transaction using the ActionReceiptRecord schema.
 // This ensures consistency with accepted/failed Actuator receipts - all transaction outcomes use the same canonical schema.
-func (rs *PubSubCommandService) logBlockedTransaction(env *uap.UAPEnvelope, rejectionReason error) {
+func (rs *PubSubCommandService) logBlockedTransaction(env *govpkg.GovernanceEnvelope, rejectionReason error) {
 	if rs.audit == nil || rs.audit.auditVault == nil {
 		return
 	}

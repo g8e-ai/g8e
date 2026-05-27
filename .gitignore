@@ -48,7 +48,9 @@ coverage.html
 coverage.txt
 
 # --- Runtime State & Persistence (CRITICAL: DO NOT COMMIT) ---
+.g8e
 .g8e/
+g8e
 .local.dev/
 /data/
 /db/
@@ -89,6 +91,12 @@ buf
 g8e.operator
 g8e.gateway
 g8eo
+
+# --- Build-time artifacts ---
+# Temporary build directory for docs embedding
+.build/
+# Legacy docs copy (no longer used, kept for safety)
+cmd/g8eo/docs
 
 # --- Go Gateway ---
 go.work

@@ -47,7 +47,7 @@ The Gateway runs in the default mode (doctrine: L1 enforced, L2/L3 signatures no
 Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures not required.
 
 ```bash
-./g8e.operator --doctrine
+./g8e --doctrine
 ```
 
 #### Consensus Mode
@@ -55,7 +55,7 @@ Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 
 Enforces L1 and L2 (multi-model Byzantine consensus). L3 signature not required.
 
 ```bash
-./g8e.operator --consensus
+./g8e --consensus
 ```
 
 #### Notary Mode
@@ -63,7 +63,7 @@ Enforces L1 and L2 (multi-model Byzantine consensus). L3 signature not required.
 Enforces L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2). This is the most secure mode.
 
 ```bash
-./g8e.operator --notary
+./g8e --notary
 ```
 
 ### Gateway Ports
@@ -309,7 +309,7 @@ The Gateway enforces strict session separation to prevent cross-tenant data leak
 Generate a client certificate for CLI operations:
 
 ```bash
-./g8e login
+./g8e auth login
 ```
 
 This:

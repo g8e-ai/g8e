@@ -8395,9 +8395,9 @@ var File_g8e_operator_v1_operator_proto protoreflect.FileDescriptor
 
 const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\n" +
-	"\x1eg8e/operator/v1/operator.proto\x12\x0fg8e.operator.v1\x1a\x1ag8e/common/v1/common.proto\"\xb4\x03\n" +
-	"\x10CommandRequested\x12.\n" +
-	"\acommand\x18\x01 \x01(\tB\x14\x8a\xb5\x18\x10sudo,su,rm -rf /R\acommand\x12!\n" +
+	"\x1eg8e/operator/v1/operator.proto\x12\x0fg8e.operator.v1\x1a\x1ag8e/common/v1/common.proto\"\xcc\x03\n" +
+	"\x10CommandRequested\x12F\n" +
+	"\acommand\x18\x01 \x01(\tB,\x8a\xb5\x18((^|\\s)sudo(\\s|$),(^|\\s)su(\\s|$),rm -rf /R\acommand\x12!\n" +
 	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12$\n" +
 	"\rjustification\x18\x03 \x01(\tR\rjustification\x12#\n" +
 	"\rsentinel_mode\x18\x04 \x01(\tR\fsentinelMode\x12'\n" +
@@ -8635,9 +8635,9 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\tprompt_id\x18\x01 \x01(\tR\bpromptId\x12\x1c\n" +
 	"\tbenchmark\x18\x02 \x01(\tR\tbenchmark\x12\x16\n" +
 	"\x06answer\x18\x03 \x01(\tR\x06answer\x12\x14\n" +
-	"\x05model\x18\x04 \x01(\tR\x05model\"\xbe\x01\n" +
-	"\x10McpCallRequested\x12`\n" +
-	"\ttool_name\x18\x01 \x01(\tBC\x8a\xb5\x18?(?i)^(sudo|su)$,(?i)rm[ _-]?rf[ _-]?root,(?i)drop[ _-]?databaseR\btoolName\x12%\n" +
+	"\x05model\x18\x04 \x01(\tR\x05model\"\xc2\x01\n" +
+	"\x10McpCallRequested\x12d\n" +
+	"\ttool_name\x18\x01 \x01(\tBG\x8a\xb5\x18C(?i)^(sudo|su)$,(?i)^rm[ _-]?rf[ _-]?root$,(?i)^drop[ _-]?database$R\btoolName\x12%\n" +
 	"\x0earguments_json\x18\x02 \x01(\tR\rargumentsJson\x12!\n" +
 	"\fexecution_id\x18\x03 \x01(\tR\vexecutionId\"\x8c\x01\n" +
 	"\x10A2aCallRequested\x122\n" +

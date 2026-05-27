@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package uap
+package governance
 
 import (
 	"crypto/sha256"
@@ -26,10 +26,10 @@ import (
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
-// UAPEnvelope is an alias for the canonical GovernanceEnvelope proto message.
+// GovernanceEnvelope is an alias for the canonical GovernanceEnvelope proto message.
 // This preserves JSON compatibility for inbound requests while enforcing
 // a single schema for both directions.
-type UAPEnvelope = commonv1.GovernanceEnvelope
+type GovernanceEnvelope = commonv1.GovernanceEnvelope
 
 // GenerateMessageID creates a deterministic hash of the critical envelope fields.
 // Canonicalization rules (from docs/architecture/governance.md):
@@ -40,7 +40,7 @@ type UAPEnvelope = commonv1.GovernanceEnvelope
 // - Nested messages recursed
 // - Bytes as base64
 // - Result hashed with SHA-256
-func GenerateMessageID(env *UAPEnvelope) (string, error) {
+func GenerateMessageID(env *GovernanceEnvelope) (string, error) {
 	if env == nil {
 		return "", fmt.Errorf("envelope is nil")
 	}

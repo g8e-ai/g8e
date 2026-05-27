@@ -26,7 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/google/uuid"
@@ -66,7 +66,7 @@ func TestL5ActuatorExecuteHappyPath(t *testing.T) {
 	// Configure handler to succeed (already set in newTestActuator)
 
 	// Create verified transaction
-	envelope := &uap.UAPEnvelope{
+	envelope := &governance.GovernanceEnvelope{
 		Id:                uuid.New().String(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
@@ -136,7 +136,7 @@ func TestL5ActuatorExecuteHandlerError(t *testing.T) {
 	handler := actuator.ExecutionHandler.(*mockExecutionHandler)
 	handler.err = errors.New("handler execution failed")
 
-	envelope := &uap.UAPEnvelope{
+	envelope := &governance.GovernanceEnvelope{
 		Id:                uuid.New().String(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
@@ -196,7 +196,7 @@ func TestL5ActuatorExecuteAuditWriteFailInitial(t *testing.T) {
 		return nil
 	}
 
-	envelope := &uap.UAPEnvelope{
+	envelope := &governance.GovernanceEnvelope{
 		Id:                uuid.New().String(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
@@ -230,7 +230,7 @@ func TestL5ActuatorExecuteReceiptPersistFail(t *testing.T) {
 		return errors.New("doc set failed")
 	}
 
-	envelope := &uap.UAPEnvelope{
+	envelope := &governance.GovernanceEnvelope{
 		Id:                uuid.New().String(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
@@ -256,7 +256,7 @@ func TestL5ActuatorExecuteMissingSigningKey(t *testing.T) {
 	actuator, _ := newTestActuator(t)
 	actuator.SigningKey = nil
 
-	envelope := &uap.UAPEnvelope{
+	envelope := &governance.GovernanceEnvelope{
 		Id:                uuid.New().String(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
@@ -282,7 +282,7 @@ func TestL5ActuatorExecuteMissingExecutionHandler(t *testing.T) {
 	actuator, _ := newTestActuator(t)
 	actuator.ExecutionHandler = nil
 
-	envelope := &uap.UAPEnvelope{
+	envelope := &governance.GovernanceEnvelope{
 		Id:                uuid.New().String(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
@@ -346,7 +346,7 @@ func TestL5ActuatorGatewaySignedPropagation(t *testing.T) {
 	actuator, _ := newTestActuator(t)
 
 	// Create envelope with GatewaySigned=true
-	envelope := &uap.UAPEnvelope{
+	envelope := &governance.GovernanceEnvelope{
 		Id:                uuid.New().String(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
@@ -386,7 +386,7 @@ func TestL5ActuatorGatewaySignedFalse(t *testing.T) {
 	actuator, _ := newTestActuator(t)
 
 	// Create envelope with GatewaySigned=false (normal L2Consensus path)
-	envelope := &uap.UAPEnvelope{
+	envelope := &governance.GovernanceEnvelope{
 		Id:                uuid.New().String(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",

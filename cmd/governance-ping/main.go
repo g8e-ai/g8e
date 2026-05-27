@@ -32,7 +32,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
@@ -80,14 +80,14 @@ func main() {
 				return
 			}
 
-			var env uap.UAPEnvelope
+			var env governance.GovernanceEnvelope
 			if err := json.NewDecoder(r.Body).Decode(&env); err != nil {
 				log.Printf("Actuator: Failed to decode envelope: %v", err)
 				http.Error(w, "Bad request", http.StatusBadRequest)
 				return
 			}
 
-			fmt.Println("\n--- Actuator Received UAP Envelope ---")
+			fmt.Println("\n--- Actuator Received Governance Envelope ---")
 			fmt.Printf("ID:      %s\n", env.Id)
 			fmt.Printf("Sender:  %s\n", env.OperatorId)
 			fmt.Printf("Action:  %s\n", env.ActionType)
@@ -108,7 +108,7 @@ func main() {
 	time.Sleep(1 * time.Second)
 
 	// 3. Sage Client sends Ping
-	env := &uap.UAPEnvelope{
+	env := &governance.GovernanceEnvelope{
 		ProtocolVersion: "1.0",
 		OperatorId:      "sage-agent-alpha",
 		Timestamp:       timestamppb.Now(),
@@ -122,7 +122,7 @@ func main() {
 		},
 	}
 
-	id, _ := uap.GenerateMessageID(env)
+	id, _ := governance.GenerateMessageID(env)
 	env.Id = id
 
 	payload, _ := json.Marshal(env)
@@ -142,7 +142,7 @@ func main() {
 		},
 	}
 
-	log.Printf("Sage Client: Sending UAP envelope to Actuator...")
+	log.Printf("Sage Client: Sending Governance envelope to Actuator...")
 	resp, err := client.Post(fmt.Sprintf("https://localhost:%d/uap", constants.Ports.G8eeHttps), "application/json", bytes.NewBuffer(payload))
 	if err != nil {
 		log.Fatalf("Sage Client: Request failed: %v", err)

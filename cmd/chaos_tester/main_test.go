@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 )
 
 func TestPickCategory(t *testing.T) {
@@ -105,7 +105,7 @@ func TestSignedEnvelope(t *testing.T) {
 		payload     []byte
 		isMutation  bool
 		wantErr     bool
-		checkFields func(*testing.T, *uap.UAPEnvelope)
+		checkFields func(*testing.T, *govpkg.GovernanceEnvelope)
 	}{
 		{
 			name:       "valid read envelope",
@@ -114,7 +114,7 @@ func TestSignedEnvelope(t *testing.T) {
 			payload:    []byte("test payload"),
 			isMutation: false,
 			wantErr:    false,
-			checkFields: func(t *testing.T, env *uap.UAPEnvelope) {
+			checkFields: func(t *testing.T, env *govpkg.GovernanceEnvelope) {
 				if env.ProtocolVersion != "1.0" {
 					t.Errorf("ProtocolVersion = %s, want 1.0", env.ProtocolVersion)
 				}
@@ -145,7 +145,7 @@ func TestSignedEnvelope(t *testing.T) {
 			payload:    []byte("test content"),
 			isMutation: true,
 			wantErr:    false,
-			checkFields: func(t *testing.T, env *uap.UAPEnvelope) {
+			checkFields: func(t *testing.T, env *govpkg.GovernanceEnvelope) {
 				if env.Governance.L3 == nil {
 					t.Error("L3 metadata should be present for mutations")
 				}
@@ -975,7 +975,7 @@ func TestRecordRejection(t *testing.T) {
 			auditVault: nil,
 		}
 
-		env := &uap.UAPEnvelope{
+		env := &govpkg.GovernanceEnvelope{
 			OperatorSessionId: "test-session",
 			TransactionHash:   "test-hash",
 			ActionType:        "FS_LIST",
@@ -989,7 +989,7 @@ func TestRecordRejection(t *testing.T) {
 	t.Run("event structure validation", func(t *testing.T) {
 		// Test the event structure directly without going through recordRejection
 		// since it requires a non-nil audit vault
-		env := &uap.UAPEnvelope{
+		env := &govpkg.GovernanceEnvelope{
 			OperatorSessionId: "test-session",
 			TransactionHash:   "test-hash",
 			ActionType:        "FS_LIST",
@@ -1026,7 +1026,7 @@ func TestRecordExecution(t *testing.T) {
 			auditVault: nil,
 		}
 
-		env := &uap.UAPEnvelope{
+		env := &govpkg.GovernanceEnvelope{
 			OperatorSessionId: "test-session",
 			TransactionHash:   "test-hash-123456789012",
 			ActionType:        "FS_LIST",
@@ -1040,7 +1040,7 @@ func TestRecordExecution(t *testing.T) {
 	t.Run("event structure validation - success", func(t *testing.T) {
 		// Test the event structure directly without going through recordExecution
 		// since it requires a non-nil audit vault
-		env := &uap.UAPEnvelope{
+		env := &govpkg.GovernanceEnvelope{
 			OperatorSessionId: "test-session",
 			TransactionHash:   "test-hash-123456789012",
 			ActionType:        "FS_LIST",
@@ -1067,7 +1067,7 @@ func TestRecordExecution(t *testing.T) {
 	t.Run("event structure validation - failure", func(t *testing.T) {
 		// Test the event structure directly without going through recordExecution
 		// since it requires a non-nil audit vault
-		env := &uap.UAPEnvelope{
+		env := &govpkg.GovernanceEnvelope{
 			OperatorSessionId: "test-session",
 			TransactionHash:   "test-hash-123456789012",
 			ActionType:        "FS_LIST",
