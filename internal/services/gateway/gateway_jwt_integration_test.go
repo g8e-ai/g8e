@@ -130,13 +130,16 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
 	require.NoError(t, personaSvc.GetOrCreateDefaultPersonas())
+
+	// Create an invitation for JIT provisioning
+	_, err = userSvc.CreateInvitation("tenant-abc", "user-1234", "bootstrap", []string{"admin"}, 24*time.Hour)
+	require.NoError(t, err)
 	resp := responder.New(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim)
 	// Apply JWT configuration to AuthService's provider
 
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
-	apiKeySvc := NewAPIKeyService(db, logger)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
 	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
@@ -160,7 +163,6 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		Reg:               reg,
 		Passkey:           passkey,
 		UserSvc:           userSvc,
-		APIKey:            apiKeySvc,
 		Responder:         resp,
 		MCPGateway:        mcpGateway,
 		IsReady:           func() bool { return true },

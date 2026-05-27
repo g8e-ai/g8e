@@ -40,7 +40,7 @@ When the mTLS and Public surfaces share a port, the gateway serves them through 
 ### Core Responsibilities
 - **Unified Persistence:** Replaces external databases with a single `g8e.db` SQLite file in `.g8e/data`.
 - **Internal PKI:** Acts as the platform's Certificate Authority (CA), auto-generating ECDSA P-384 TLS certificates for all inter-component traffic.
-- **Secret Management:** Provides an encrypted Vault for storing platform secrets (API keys, internal tokens) without external dependencies.
+- **Secret Management:** Provides an encrypted Vault for storing external service credentials (e.g., LLM provider API keys) and internal tokens without external dependencies.
 - **Messaging:** Serves as the central Pub/Sub broker for all compliant clients.
 
 ---

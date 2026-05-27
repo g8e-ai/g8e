@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package openclaw
+package insecure_mcp
 
 import (
 	"bytes"
@@ -36,7 +36,7 @@ import (
 )
 
 // ────────────────────────────────────────────────────────────────
-// Wire types - mirror OpenClaw's Gateway Protocol JSON shapes
+// Wire types - mirror MCP Gateway Protocol JSON shapes
 // ────────────────────────────────────────────────────────────────
 
 type ocFrame struct {
@@ -121,7 +121,7 @@ type systemWhichResult struct {
 }
 
 // ────────────────────────────────────────────────────────────────
-// OpenClawNodeService
+// InsecureMcpNodeService
 // ────────────────────────────────────────────────────────────────
 
 const (
@@ -130,11 +130,11 @@ const (
 	ocNodeClientID    = "g8e.operator"
 )
 
-// OpenClawNodeService connects the g8e Operator binary to an OpenClaw Gateway
-// as a Node Host. It advertises system.run and system.which, executes shell
-// commands on request, and streams results back - with no g8e infrastructure
-// dependency (no g8ee Ensemble, no client, no pub/sub, no auth bootstrap).
-type OpenClawNodeService struct {
+// InsecureMcpNodeService connects the g8e Operator to an MCP gateway without governance.
+// It advertises system.run and system.which, executes shell commands on request,
+// and streams results back - with no g8e infrastructure dependency (no g8ee Ensemble,
+// no client, no pub/sub, no auth bootstrap, NO L1/L2/L3 VERIFICATION).
+type InsecureMcpNodeService struct {
 	gatewayURL  string
 	token       string
 	nodeID      string
@@ -149,9 +149,9 @@ type OpenClawNodeService struct {
 	cancel context.CancelFunc
 }
 
-// NewOpenClawNodeService creates and validates the service. Call Start() to connect.
+// NewInsecureMcpNodeService creates and validates the service. Call Start() to connect.
 // pathEnv is the value of the PATH environment variable to advertise to the Gateway.
-func NewOpenClawNodeService(gatewayURL, token, nodeID, displayName, pathEnv string, logger *slog.Logger) (*OpenClawNodeService, error) {
+func NewInsecureMcpNodeService(gatewayURL, token, nodeID, displayName, pathEnv string, logger *slog.Logger) (*InsecureMcpNodeService, error) {
 	if gatewayURL == "" {
 		return nil, fmt.Errorf("gateway URL is required")
 	}
@@ -170,7 +170,7 @@ func NewOpenClawNodeService(gatewayURL, token, nodeID, displayName, pathEnv stri
 		resolvedDisplayName = resolvedNodeID
 	}
 
-	return &OpenClawNodeService{
+	return &InsecureMcpNodeService{
 		gatewayURL:  gatewayURL,
 		token:       token,
 		nodeID:      resolvedNodeID,
@@ -180,13 +180,13 @@ func NewOpenClawNodeService(gatewayURL, token, nodeID, displayName, pathEnv stri
 	}, nil
 }
 
-// Start connects to the OpenClaw Gateway and blocks until ctx is cancelled or
+// Start connects to the MCP gateway and blocks until ctx is cancelled or
 // a fatal error occurs. It reconnects automatically on transient failures.
-func (s *OpenClawNodeService) Start(ctx context.Context) error {
+func (s *InsecureMcpNodeService) Start(ctx context.Context) error {
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	defer s.cancel()
 
-	s.logger.Info("OpenClaw Node Host starting",
+	s.logger.Info("Insecure MCP Node Host starting",
 		"node_id", s.nodeID,
 		"display_name", s.displayName,
 		"gateway_url", s.gatewayURL)
@@ -222,7 +222,7 @@ func (s *OpenClawNodeService) Start(ctx context.Context) error {
 }
 
 // Stop gracefully shuts down the service.
-func (s *OpenClawNodeService) Stop() {
+func (s *InsecureMcpNodeService) Stop() {
 	if s.cancel != nil {
 		s.cancel()
 	}
@@ -230,7 +230,7 @@ func (s *OpenClawNodeService) Stop() {
 
 // runSession establishes one WS connection, runs the handshake, then pumps
 // incoming frames until disconnected or ctx cancelled.
-func (s *OpenClawNodeService) runSession(ctx context.Context) error {
+func (s *InsecureMcpNodeService) runSession(ctx context.Context) error {
 	conn, err := s.dial(ctx)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
@@ -251,13 +251,13 @@ func (s *OpenClawNodeService) runSession(ctx context.Context) error {
 		return fmt.Errorf("handshake: %w", err)
 	}
 
-	s.logger.Info("Connected to OpenClaw Gateway as node host",
+	s.logger.Info("Connected to MCP gateway as node host",
 		"node_id", s.nodeID)
 
 	return s.readLoop(ctx, conn)
 }
 
-func (s *OpenClawNodeService) dial(ctx context.Context) (*websocket.Conn, error) {
+func (s *InsecureMcpNodeService) dial(ctx context.Context) (*websocket.Conn, error) {
 	header := http.Header{}
 	header.Set(constants.HeaderUserAgent, fmt.Sprintf("%s/%s", ocNodeClientID, ocNodeVersion))
 
@@ -283,12 +283,12 @@ func (s *OpenClawNodeService) dial(ctx context.Context) (*websocket.Conn, error)
 	return conn, nil
 }
 
-// handshake performs the OpenClaw Gateway Protocol handshake:
+// handshake performs the MCP Gateway Protocol handshake:
 //
 //  1. Wait for connect.challenge event
 //  2. Send connect request with role="node" + commands
 //  3. Wait for ok response
-func (s *OpenClawNodeService) handshake(ctx context.Context, conn *websocket.Conn) error {
+func (s *InsecureMcpNodeService) handshake(ctx context.Context, conn *websocket.Conn) error {
 	// Step 1: read challenge
 	_ = conn.SetReadDeadline(time.Now().Add(15 * time.Second))
 	var challenge ocFrame
@@ -352,7 +352,7 @@ func (s *OpenClawNodeService) handshake(ctx context.Context, conn *websocket.Con
 	return nil
 }
 
-func (s *OpenClawNodeService) readLoop(ctx context.Context, conn *websocket.Conn) error {
+func (s *InsecureMcpNodeService) readLoop(ctx context.Context, conn *websocket.Conn) error {
 	go func() {
 		<-ctx.Done()
 		_ = conn.SetReadDeadline(time.Now().UTC())
@@ -374,7 +374,7 @@ func (s *OpenClawNodeService) readLoop(ctx context.Context, conn *websocket.Conn
 }
 
 // handleInvokeEvent is dispatched in a goroutine for each node.invoke.request.
-func (s *OpenClawNodeService) handleInvokeEvent(ctx context.Context, rawParams interface{}) {
+func (s *InsecureMcpNodeService) handleInvokeEvent(ctx context.Context, rawParams interface{}) {
 	data, err := json.Marshal(rawParams)
 	if err != nil {
 		s.logger.Warn("Failed to marshal invoke payload", string(constants.ConnectionStateError), err)
@@ -403,7 +403,7 @@ func (s *OpenClawNodeService) handleInvokeEvent(ctx context.Context, rawParams i
 // Command handlers
 // ────────────────────────────────────────────────────────────────
 
-func (s *OpenClawNodeService) handleSystemRun(ctx context.Context, req ocNodeInvokeRequest) {
+func (s *InsecureMcpNodeService) handleSystemRun(ctx context.Context, req ocNodeInvokeRequest) {
 	if req.ParamsJSON == nil || *req.ParamsJSON == "" {
 		s.sendInvokeError(req, "INVALID_REQUEST", "paramsJSON required")
 		return
@@ -457,7 +457,7 @@ func (s *OpenClawNodeService) handleSystemRun(ctx context.Context, req ocNodeInv
 	s.sendInvokeResult(req, payload)
 }
 
-func (s *OpenClawNodeService) handleSystemWhich(ctx context.Context, req ocNodeInvokeRequest) {
+func (s *InsecureMcpNodeService) handleSystemWhich(ctx context.Context, req ocNodeInvokeRequest) {
 	if req.ParamsJSON == nil || *req.ParamsJSON == "" {
 		s.sendInvokeError(req, "INVALID_REQUEST", "paramsJSON required")
 		return
@@ -487,7 +487,7 @@ func (s *OpenClawNodeService) handleSystemWhich(ctx context.Context, req ocNodeI
 // Result / error senders
 // ────────────────────────────────────────────────────────────────
 
-func (s *OpenClawNodeService) sendInvokeResult(req ocNodeInvokeRequest, payload interface{}) {
+func (s *InsecureMcpNodeService) sendInvokeResult(req ocNodeInvokeRequest, payload interface{}) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		s.logger.Error("Failed to marshal invoke result payload", string(constants.ConnectionStateError), err)
@@ -513,7 +513,7 @@ func (s *OpenClawNodeService) sendInvokeResult(req ocNodeInvokeRequest, payload 
 	}
 }
 
-func (s *OpenClawNodeService) sendInvokeError(req ocNodeInvokeRequest, code, message string) {
+func (s *InsecureMcpNodeService) sendInvokeError(req ocNodeInvokeRequest, code, message string) {
 	resultParams := ocNodeInvokeResultParams{
 		ID:     req.ID,
 		NodeID: s.nodeID,
@@ -535,7 +535,7 @@ func (s *OpenClawNodeService) sendInvokeError(req ocNodeInvokeRequest, code, mes
 // Transport helpers
 // ────────────────────────────────────────────────────────────────
 
-func (s *OpenClawNodeService) sendFrame(frame ocFrame) error {
+func (s *InsecureMcpNodeService) sendFrame(frame ocFrame) error {
 	s.wsMu.Lock()
 	conn := s.ws
 	s.wsMu.Unlock()
@@ -545,7 +545,7 @@ func (s *OpenClawNodeService) sendFrame(frame ocFrame) error {
 	return s.sendFrameConn(conn, frame)
 }
 
-func (s *OpenClawNodeService) sendFrameConn(conn *websocket.Conn, frame ocFrame) error {
+func (s *InsecureMcpNodeService) sendFrameConn(conn *websocket.Conn, frame ocFrame) error {
 	data, err := json.Marshal(frame)
 	if err != nil {
 		return err
@@ -555,7 +555,7 @@ func (s *OpenClawNodeService) sendFrameConn(conn *websocket.Conn, frame ocFrame)
 	return conn.WriteMessage(websocket.TextMessage, data)
 }
 
-func (s *OpenClawNodeService) readFrameConn(conn *websocket.Conn, out *ocFrame) error {
+func (s *InsecureMcpNodeService) readFrameConn(conn *websocket.Conn, out *ocFrame) error {
 	_, raw, err := conn.ReadMessage()
 	if err != nil {
 		return err
@@ -563,7 +563,7 @@ func (s *OpenClawNodeService) readFrameConn(conn *websocket.Conn, out *ocFrame) 
 	return json.Unmarshal(raw, out)
 }
 
-func (s *OpenClawNodeService) nextID(prefix string) string {
+func (s *InsecureMcpNodeService) nextID(prefix string) string {
 	n := s.seq.Add(1)
 	return fmt.Sprintf("%s_%d", prefix, n)
 }
@@ -580,8 +580,8 @@ type runResult struct {
 	stderr   string
 }
 
-// runCommand executes the argv passed by OpenClaw's exec tool.
-// OpenClaw always sends a pre-built argv slice (e.g. ["/bin/sh","-c","ls -la"]),
+// runCommand executes the argv passed by the MCP gateway's exec tool.
+// The gateway always sends a pre-built argv slice (e.g. ["/bin/sh","-c","ls -la"]),
 // so we exec it directly rather than re-wrapping in a shell.
 func runCommand(ctx context.Context, p systemRunParams) (runResult, bool) {
 	argv := p.Command

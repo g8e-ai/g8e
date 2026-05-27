@@ -116,20 +116,20 @@ type GatewayConfig struct {
 	LockRetryDelay time.Duration // Base delay for lock retry backoff (default: 50ms)
 }
 
-// OpenClawConfig holds configuration for --openclaw mode.
-// In this mode the Operator connects to an OpenClaw Gateway as a Node Host,
-// advertising system.run and system.which. No g8e infrastructure is needed.
-type OpenClawConfig struct {
-	GatewayURL  string // ws:// or wss:// URL of the OpenClaw Gateway
+// InsecureMcpConfig holds configuration for --insecure mode.
+// In this mode the Operator connects to an MCP gateway without governance.
+// This mode bypasses all L1/L2/L3 verification and is DANGEROUS.
+type InsecureMcpConfig struct {
+	GatewayURL  string // ws:// or wss:// URL of the MCP gateway
 	Token       string // Shared-secret token for Gateway auth (optional)
 	NodeID      string // Stable identifier for this node (defaults to hostname)
-	DisplayName string // Human-readable label shown in OpenClaw UI
+	DisplayName string // Human-readable label shown in MCP gateway UI
 	PathEnv     string // PATH value to advertise to the Gateway
 	LogLevel    string
 }
 
-// OpenClawOptions contains configuration values for LoadOpenClaw.
-type OpenClawOptions struct {
+// InsecureMcpOptions contains configuration values for LoadInsecureMcp.
+type InsecureMcpOptions struct {
 	GatewayURL  string
 	Token       string
 	NodeID      string
@@ -138,16 +138,16 @@ type OpenClawOptions struct {
 	LogLevel    string
 }
 
-// LoadOpenClaw creates configuration for --openclaw mode.
-func LoadOpenClaw(opts OpenClawOptions) (*OpenClawConfig, error) {
+// LoadInsecureMcp creates configuration for --insecure mode.
+func LoadInsecureMcp(opts InsecureMcpOptions) (*InsecureMcpConfig, error) {
 	if opts.GatewayURL == "" {
-		return nil, fmt.Errorf("gateway URL is required (--openclaw-url)")
+		return nil, fmt.Errorf("gateway URL is required (--insecure-url)")
 	}
 	logLevel := opts.LogLevel
 	if logLevel == "" {
 		logLevel = "info"
 	}
-	return &OpenClawConfig{
+	return &InsecureMcpConfig{
 		GatewayURL:  opts.GatewayURL,
 		Token:       opts.Token,
 		NodeID:      opts.NodeID,

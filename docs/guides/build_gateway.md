@@ -125,7 +125,7 @@ The gateway must expose HTTP endpoints:
 - **PKI Fingerprint**: `GET /.well-known/g8e/pki/fingerprint` for the root CA SHA-256 fingerprint.
 - **Device-Link Enrollment**: `POST /api/auth/device-link/request` and `POST /api/auth/device-link/register` for operator enrollment.
 - **CSR Signing**: `POST /api/pki/sign-csr` for signing CSRs during enrollment.
-- **App Enrollment**: `POST /api/pki/app-enroll` for external app enrollment (API key required).
+- **App Enrollment**: `POST /api/pki/app-enroll` for external app enrollment (device-link token required).
 - **Certificate Revocation**: `POST /api/pki/revoke` for certificate revocation.
 - **Revocation Bundle**: `GET /api/pki/revocation-bundle` for the signed revocation list.
 

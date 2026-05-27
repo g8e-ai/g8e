@@ -1,9 +1,5 @@
 {
   "headers": {
-    "APIKey": {
-      "_go_const": "HeaderAPIKey",
-      "value": "X-API-Key"
-    },
     "Accept": {
       "_go_const": "HeaderAccept",
       "value": "Accept"
@@ -83,10 +79,6 @@
     "LastEventID": {
       "_go_const": "HeaderLastEventID",
       "value": "Last-Event-ID"
-    },
-    "OperatorAPIKey": {
-      "_go_const": "HeaderOperatorAPIKey",
-      "value": "X-G8E-Operator-API-Key"
     },
     "OperatorID": {
       "_go_const": "HeaderOperatorID",

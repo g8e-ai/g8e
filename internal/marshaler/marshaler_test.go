@@ -27,7 +27,6 @@ func TestCollectionName(t *testing.T) {
 	}{
 		{"users", constants.CollectionUsers, "users"},
 		{"operators", constants.CollectionOperators, "operators"},
-		{"api_keys", constants.CollectionAPIKeys, "api_keys"},
 		{"web_sessions", constants.CollectionWebSessions, "web_sessions"},
 	}
 
@@ -48,7 +47,6 @@ func TestEnvVar(t *testing.T) {
 	}{
 		{"log_level", constants.EnvVar.LogLevel, "G8E_LOG_LEVEL"},
 		{"data_dir", constants.EnvVar.DataDir, "G8E_DATA_DIR"},
-		{"operator_api_key", constants.EnvVar.OperatorAPIKey, "G8E_OPERATOR_API_KEY"},
 	}
 
 	for _, tt := range tests {

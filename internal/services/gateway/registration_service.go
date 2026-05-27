@@ -38,7 +38,7 @@ const (
 	deviceLinkKeyPrefix            = "g8e:device-link:"
 	deviceLinkFingerprintSetPrefix = "g8e:device-link-fingerprints:"
 	deviceLinkLockPrefix           = "g8e:device-link-lock:"
-	defaultDeviceLinkTTL           = 24 * time.Hour
+	defaultDeviceLinkTTL           = 1 * time.Hour
 	minDeviceLinkTTL               = 5 * time.Minute
 	maxDeviceLinkTTL               = 7 * 24 * time.Hour
 	defaultDeviceLinkMaxUses       = 1
@@ -386,42 +386,6 @@ func (s *RegistrationService) ListOperatorSlots(userID string) ([]models.Operato
 	return slots, nil
 }
 
-func (s *RegistrationService) RotateOperatorAPIKey(operatorID, userID string) error {
-	if operatorID == "" {
-		return fmt.Errorf("operator_id is required")
-	}
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
-	if err != nil {
-		return err
-	}
-	if doc == nil {
-		return fmt.Errorf("operator not found")
-	}
-	op, err := s.toOperatorDoc(doc)
-	if err != nil {
-		return err
-	}
-	if op.UserID != userID {
-		return fmt.Errorf("operator does not belong to user")
-	}
-
-	prefix := operatorID
-	if len(prefix) > 8 {
-		prefix = prefix[:8]
-	}
-	newKey := fmt.Sprintf("g8e_%s_%s", prefix, uuid.NewString())
-	update := map[string]interface{}{
-		"operator_api_key": newKey,
-		"updated_at":       time.Now().UTC(),
-	}
-	updateBytes, _ := json.Marshal(update)
-	if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, updateBytes); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (s *RegistrationService) TerminateOperator(operatorID, userID, reason string) error {
 	if operatorID == "" {
 		return fmt.Errorf("operator_id is required")
@@ -750,7 +714,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	operatorSessionSummary := &models.SessionSummary{
 		OperatorSessionID: operatorSessionID,
 		CreatedAt:         time.Now().UTC(),
-		ExpiresAt:         time.Now().UTC().Add(24 * time.Hour),
+		ExpiresAt:         time.Now().UTC().Add(1 * time.Hour),
 	}
 
 	// Update operator document

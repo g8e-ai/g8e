@@ -69,7 +69,6 @@ const EventOperatorStatusUpdatedOffline EventType = "g8e.v1.operator.status.upda
 const EventOperatorStatusUpdatedStale EventType = "g8e.v1.operator.status.updated.stale"
 const EventOperatorStatusUpdatedStopped EventType = "g8e.v1.operator.status.updated.stopped"
 const EventOperatorStatusUpdatedTerminated EventType = "g8e.v1.operator.status.updated.terminated"
-const EventOperatorAPIKeyRefreshed EventType = "g8e.v1.operator.api.key.refreshed"
 const EventOperatorDeviceRegistered EventType = "g8e.v1.operator.device.registered"
 const EventOperatorCommandRequested EventType = "g8e.v1.operator.command.requested"
 const EventOperatorCommandStarted EventType = "g8e.v1.operator.command.started"
@@ -437,7 +436,6 @@ type _EventOperatorStreamApproval struct {
 
 type _EventOperator struct {
 	A2a                      _EventOperatorA2a
-	APIKeyRefreshed          EventType
 	Audit                    _EventOperatorAudit
 	Bootstrap                _EventOperatorBootstrap
 	BootstrapConfigReceived  EventType
@@ -483,7 +481,6 @@ var Event = struct {
 		A2a: _EventOperatorA2a{
 			CallRequested: EventOperatorA2aCallRequested,
 		},
-		APIKeyRefreshed: EventOperatorAPIKeyRefreshed,
 		Audit: _EventOperatorAudit{
 			AIMsg:           EventOperatorAuditAiRecorded,
 			Command:         EventOperatorAuditCommandRecorded,

@@ -566,64 +566,6 @@ func docFieldString(t *testing.T, doc *models.Document, field string) string {
 	return v
 }
 
-func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
-	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-
-	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
-	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
-	userSvc := NewUserService(db, logger)
-	sessionSvc := NewSessionService(db, logger)
-	gwCfg := &config.GatewayConfig{
-		LockMaxRetries: 30,
-		LockRetryDelay: 50 * time.Millisecond,
-	}
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, gwCfg)
-
-	userID := "user-1"
-	opID := "op-1"
-	oldKey := "g8e_old_key_123"
-
-	// Create operator slot
-	op := &models.OperatorDocumentGo{
-		ID:             opID,
-		UserID:         userID,
-		OperatorAPIKey: oldKey,
-		Status:         constants.OperatorStatusOffline,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
-	}
-	opBytes, _ := json.Marshal(op)
-	require.NoError(t, db.DocSet("operators", opID, opBytes))
-
-	t.Run("Success", func(t *testing.T) {
-		require.NoError(t, reg.RotateOperatorAPIKey(opID, userID))
-
-		doc, err := db.DocGet("operators", opID)
-		require.NoError(t, err)
-		newKey := docFieldString(t, doc, "operator_api_key")
-		assert.NotEmpty(t, newKey)
-		assert.NotEqual(t, oldKey, newKey)
-		assert.Contains(t, newKey, "g8e_op-1_")
-	})
-
-	t.Run("Failure - Wrong user", func(t *testing.T) {
-		err := reg.RotateOperatorAPIKey(opID, "wrong-user")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "does not belong to user")
-	})
-
-	t.Run("Failure - Not found", func(t *testing.T) {
-		err := reg.RotateOperatorAPIKey("nonexistent", userID)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not found")
-	})
-}
-
 func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
@@ -699,12 +641,11 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 
 	// Create operator slot
 	op := &models.OperatorDocumentGo{
-		ID:             opID,
-		UserID:         userID,
-		OperatorAPIKey: "g8e_old_key",
-		Status:         constants.OperatorStatusActive,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:        opID,
+		UserID:    userID,
+		Status:    constants.OperatorStatusActive,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	opBytes, _ := json.Marshal(op)
 	require.NoError(t, db.DocSet("operators", opID, opBytes))

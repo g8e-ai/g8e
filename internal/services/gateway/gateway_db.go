@@ -42,7 +42,7 @@ import (
 // from `schema.sql`. That file is the single source of truth - do not inline
 // CREATE TABLE statements in Go code.
 //
-//go:embed schema.sql
+//go:embed db/schema.sql
 var gatewaySchema string
 
 // GatewaySchema returns the embedded gateway schema SQL.

@@ -358,7 +358,7 @@ func setupPlatformTestConfig(t *testing.T, tmpDir string) {
 			"ssh_config_path": ".g8e/ssh/config"
 		},
 		"ports": {
-			"openclaw_gateway": 9003,
+			"insecure_mcp_gateway": 9003,
 			"operator_bootstrap_https": 9001,
 			"operator_https": 9000,
 			"operator_public_https": 9002

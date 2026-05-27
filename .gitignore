@@ -88,6 +88,7 @@ target/
 buf
 g8e.operator
 g8e.gateway
+g8eo
 
 # --- Go Gateway ---
 go.work

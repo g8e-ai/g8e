@@ -795,6 +795,24 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	}
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 
+	t.Run("api key rejected", func(t *testing.T) {
+		plainClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+		reqBody := `{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"skill_name":"test"}}`
+
+		// Test with API key in header
+		req, _ := http.NewRequest("POST", mtlsURL+"/api/a2a/v1/call", bytes.NewReader([]byte(reqBody)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-API-Key", "test-api-key")
+
+		resp, err := plainClient.Do(req)
+		if resp != nil {
+			defer resp.Body.Close()
+		}
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "tls: certificate required")
+
+		// The gateway should reject this at the TLS layer or middleware before reaching the A2A handler
+	})
 	t.Run("invalid JSON-RPC version", func(t *testing.T) {
 		reqBody := `{"jsonrpc":"1.0","id":1,"method":"a2a/call","params":{"skill_name":"test"}}`
 		resp, err := mtlsClient.Post(mtlsURL+"/api/a2a/v1/call", "application/json", bytes.NewReader([]byte(reqBody)))

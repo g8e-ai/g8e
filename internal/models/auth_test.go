@@ -269,7 +269,6 @@ func TestOperatorDocumentGo(t *testing.T) {
 			Name:              "Test Operator",
 			Status:            constants.OperatorStatusActive,
 			OperatorSessionID: "session-123",
-			APIKey:            "api-key-123",
 			OperatorCert:      certPEM,
 			SlotNumber:        0,
 			IsSlot:            true,
@@ -335,26 +334,6 @@ func TestOperatorSlotResponse(t *testing.T) {
 
 		assert.True(t, resp.Success)
 		assert.Len(t, resp.Operators, 2)
-	})
-}
-
-func TestRotateAPIKeyRequest(t *testing.T) {
-	t.Run("creates valid request", func(t *testing.T) {
-		req := &RotateAPIKeyRequest{
-			OperatorID: "operator-123",
-		}
-
-		assert.Equal(t, "operator-123", req.OperatorID)
-	})
-}
-
-func TestRotateAPIKeyResponse(t *testing.T) {
-	t.Run("creates valid response", func(t *testing.T) {
-		resp := &RotateAPIKeyResponse{
-			Success: true,
-		}
-
-		assert.True(t, resp.Success)
 	})
 }
 

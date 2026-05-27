@@ -208,14 +208,6 @@ type protocolOperatorShutdown struct {
 	Acknowledged protocolLeaf `json:"acknowledged"`
 }
 
-type protocolOperatorAPIKey struct {
-	Refreshed protocolLeaf `json:"refreshed"`
-}
-
-type protocolOperatorAPI struct {
-	Key protocolOperatorAPIKey `json:"key"`
-}
-
 type protocolOperatorLogs struct {
 	Fetch protocolFetchLeaf `json:"fetch"`
 }
@@ -227,7 +219,6 @@ type protocolOperatorHistory struct {
 type protocolOperatorEvents struct {
 	Heartbeat  protocolOperatorHeartbeat     `json:"operator.heartbeat"`
 	Shutdown   protocolOperatorShutdown      `json:"operator.shutdown"`
-	API        protocolOperatorAPI           `json:"operator.api"`
 	Command    protocolOperatorCommandEvents `json:"operator.command"`
 	Intent     protocolOperatorIntentEvents  `json:"operator.intent"`
 	Filesystem protocolOperatorFilesystem    `json:"operator.filesystem"`

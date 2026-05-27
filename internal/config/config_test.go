@@ -287,12 +287,12 @@ func TestLoadGateway_RejectsPortZeroInProduction(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// LoadOpenClaw
+// LoadInsecureMcp
 // ---------------------------------------------------------------------------
 
-func TestLoadOpenClaw_Valid(t *testing.T) {
-	gatewayURL := fmt.Sprintf("wss://gateway.example.com:%d", constants.Ports.OpenclawGateway)
-	cfg, err := LoadOpenClaw(OpenClawOptions{
+func TestLoadInsecureMcp_Valid(t *testing.T) {
+	gatewayURL := fmt.Sprintf("wss://gateway.example.com:%d", constants.Ports.InsecureMcpGateway)
+	cfg, err := LoadInsecureMcp(InsecureMcpOptions{
 		GatewayURL:  gatewayURL,
 		Token:       "token123",
 		NodeID:      "node-1",
@@ -309,14 +309,14 @@ func TestLoadOpenClaw_Valid(t *testing.T) {
 	assert.Equal(t, "debug", cfg.LogLevel)
 }
 
-func TestLoadOpenClaw_LogLevelDefaultsToInfo(t *testing.T) {
-	cfg, err := LoadOpenClaw(OpenClawOptions{GatewayURL: "wss://gateway.example.com"})
+func TestLoadInsecureMcp_LogLevelDefaultsToInfo(t *testing.T) {
+	cfg, err := LoadInsecureMcp(InsecureMcpOptions{GatewayURL: "wss://gateway.example.com"})
 	require.NoError(t, err)
 	assert.Equal(t, "info", cfg.LogLevel)
 }
 
-func TestLoadOpenClaw_MissingGatewayURL(t *testing.T) {
-	cfg, err := LoadOpenClaw(OpenClawOptions{
+func TestLoadInsecureMcp_MissingGatewayURL(t *testing.T) {
+	cfg, err := LoadInsecureMcp(InsecureMcpOptions{
 		Token:       "tok",
 		NodeID:      "node",
 		DisplayName: "label",
@@ -324,12 +324,12 @@ func TestLoadOpenClaw_MissingGatewayURL(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Nil(t, cfg)
-	assert.Contains(t, err.Error(), "--openclaw-url")
+	assert.Contains(t, err.Error(), "--insecure-url")
 }
 
-func TestLoadOpenClaw_OptionalFieldsEmpty(t *testing.T) {
-	gatewayURL := fmt.Sprintf("ws://gateway:%d", constants.Ports.OpenclawGateway)
-	cfg, err := LoadOpenClaw(OpenClawOptions{GatewayURL: gatewayURL})
+func TestLoadInsecureMcp_OptionalFieldsEmpty(t *testing.T) {
+	gatewayURL := fmt.Sprintf("ws://gateway:%d", constants.Ports.InsecureMcpGateway)
+	cfg, err := LoadInsecureMcp(InsecureMcpOptions{GatewayURL: gatewayURL})
 	require.NoError(t, err)
 
 	assert.Empty(t, cfg.Token)

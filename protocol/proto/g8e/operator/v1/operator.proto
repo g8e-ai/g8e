@@ -286,16 +286,6 @@ message TerminateOperatorResult {
   string error = 3;
 }
 
-message RotateAPIKeyRequested {
-  string operator_id = 1;
-  string user_id = 2;
-}
-
-message RotateAPIKeyResult {
-  bool success = 1;
-  string error = 2;
-}
-
 message ListOperatorSlotsRequested {
   string user_id = 1;
 }
@@ -357,18 +347,16 @@ message OperatorDocument {
   string status = 6;
   string operator_session_id = 7;
   string bound_web_session_id = 8;
-  string api_key = 9;
-  string operator_api_key = 10;
-  string operator_cert = 11;
-  string operator_cert_serial = 12;
-  int32 slot_number = 13;
-  bool is_slot = 14;
-  bool claimed = 15;
-  string operator_type = 16;
-  string cloud_subtype = 17;
-  string system_fingerprint = 18;
-  int64 created_at_unix_ms = 19;
-  int64 updated_at_unix_ms = 20;
+  string operator_cert = 9;
+  string operator_cert_serial = 10;
+  int32 slot_number = 11;
+  bool is_slot = 12;
+  bool claimed = 13;
+  string operator_type = 14;
+  string cloud_subtype = 15;
+  string system_fingerprint = 16;
+  int64 created_at_unix_ms = 17;
+  int64 updated_at_unix_ms = 18;
 }
 
 message ShutdownRequested {

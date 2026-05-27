@@ -50,7 +50,7 @@ func (s *SessionService) PersistSessions(cliSessionID, operatorSessionID, userID
 	// Store the binding between operator_session_id and cli_session_id in a first-class
 	// collection to support metadata, expiry, and revocation. Without this binding,
 	// any authenticated operator could drain any cli_session_id's event buffer.
-	cliExpiry := time.Now().UTC().Add(24 * time.Hour)
+	cliExpiry := time.Now().UTC().Add(1 * time.Hour)
 	cliSession := models.CLISession{
 		ID:                cliSessionID,
 		UserID:            userID,
@@ -79,7 +79,7 @@ func (s *SessionService) PersistSessions(cliSessionID, operatorSessionID, userID
 	// Write an operator_sessions document so g8e-compatible agentic ensembles can look up the
 	// session by ID via GET /db/operator_sessions/{operator_session_id}.
 	// Field names match the canonical operator session document schema.
-	sessionExpiry := time.Now().UTC().Add(24 * time.Hour)
+	sessionExpiry := time.Now().UTC().Add(1 * time.Hour)
 	operatorSessionDoc := map[string]interface{}{
 		"id":                  operatorSessionID,
 		"session_type":        string(constants.SessionTypeCLI),

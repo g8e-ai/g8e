@@ -119,7 +119,7 @@ Defaults from `protocol/constants/ports.json` (canonical source of truth):
 - `8441` - Operator Bootstrap (plain HTTP; device-link enrollment)
 - `8442` - Operator Public TLS (browser/BYO bootstrap)
 - `8443` - g8ee HTTPS (optional application-layer Engine)
-- `18789` - OpenClaw Gateway
+- `18789` - Insecure MCP Gateway
 
 All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NET_BIND_SERVICE` to the Operator binary or front with an external port redirect.
 

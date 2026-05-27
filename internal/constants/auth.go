@@ -43,7 +43,6 @@ const (
 
 // HTTP header constants.
 const (
-	HeaderAPIKey                        = "X-API-Key"
 	HeaderAccept                        = "Accept"
 	HeaderAcceptLanguage                = "Accept-Language"
 	HeaderAccessControlAllowCredentials = "Access-Control-Allow-Credentials"
@@ -64,7 +63,6 @@ const (
 	HeaderExecutionID                   = "X-G8E-Execution-ID"
 	HeaderInvestigationID               = "X-G8E-Investigation-ID"
 	HeaderLastEventID                   = "Last-Event-ID"
-	HeaderOperatorAPIKey                = "X-G8E-Operator-API-Key"
 	HeaderOperatorID                    = "X-G8E-Operator-ID"
 	HeaderOperatorSessionID             = "X-G8E-Operator-Session-ID"
 	HeaderOrganizationID                = "X-G8E-Organization-ID"

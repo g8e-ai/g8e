@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package openclaw
+package insecure_mcp
 
 import (
 	"context"
@@ -163,17 +163,17 @@ func newTestLogger() *slog.Logger {
 // Constructor
 // ────────────────────────────────────────────────────────────────
 
-func TestNewOpenClawNodeService_RequiresURL(t *testing.T) {
+func TestNewInsecureMcpNodeService_RequiresURL(t *testing.T) {
 	t.Parallel()
-	_, err := NewOpenClawNodeService("", "", "", "", "", newTestLogger())
+	_, err := NewInsecureMcpNodeService("", "", "", "", "", newTestLogger())
 	if err == nil {
 		t.Fatal("expected error for missing gateway URL")
 	}
 }
 
-func TestNewOpenClawNodeService_DefaultsNodeID(t *testing.T) {
+func TestNewInsecureMcpNodeService_DefaultsNodeID(t *testing.T) {
 	t.Parallel()
-	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.OpenclawGateway), "", "", "", "", newTestLogger())
+	svc, err := NewInsecureMcpNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.InsecureMcpGateway), "", "", "", "", newTestLogger())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -182,9 +182,9 @@ func TestNewOpenClawNodeService_DefaultsNodeID(t *testing.T) {
 	}
 }
 
-func TestNewOpenClawNodeService_DisplayNameFallsBackToNodeID(t *testing.T) {
+func TestNewInsecureMcpNodeService_DisplayNameFallsBackToNodeID(t *testing.T) {
 	t.Parallel()
-	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.OpenclawGateway), "", "my-node", "", "", newTestLogger())
+	svc, err := NewInsecureMcpNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.InsecureMcpGateway), "", "my-node", "", "", newTestLogger())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -193,9 +193,9 @@ func TestNewOpenClawNodeService_DisplayNameFallsBackToNodeID(t *testing.T) {
 	}
 }
 
-func TestNewOpenClawNodeService_ExplicitDisplayName(t *testing.T) {
+func TestNewInsecureMcpNodeService_ExplicitDisplayName(t *testing.T) {
 	t.Parallel()
-	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.OpenclawGateway), "", "my-node", "My Server", "", newTestLogger())
+	svc, err := NewInsecureMcpNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.InsecureMcpGateway), "", "my-node", "My Server", "", newTestLogger())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -211,9 +211,9 @@ func TestNewOpenClawNodeService_ExplicitDisplayName(t *testing.T) {
 func TestHandshake_SendsCorrectConnectFrame(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
-	svc, err := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "Test Node", "", newTestLogger())
+	svc, err := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "Test Node", "", newTestLogger())
 	if err != nil {
-		t.Fatalf("NewOpenClawNodeService: %v", err)
+		t.Fatalf("NewInsecureMcpNodeService: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -271,7 +271,7 @@ func TestHandshake_SendsCorrectConnectFrame(t *testing.T) {
 func TestHandshake_WithToken(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
-	svc, _ := NewOpenClawNodeService(mg.wsURL(), "secret-token", "node-1", "", "", newTestLogger())
+	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "secret-token", "node-1", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -303,7 +303,7 @@ func TestSystemWhich_FindsExistingBinary(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("wh-1", "test-node", "system.which", `{"bins":["sh","nonexistent_xyz_abc"]}`)
-	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -335,7 +335,7 @@ func TestSystemWhich_EmptyBins(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("wh-2", "test-node", "system.which", `{"bins":[]}`)
-	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -365,7 +365,7 @@ func TestSystemRun_EchoCommand(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("sr-1", "test-node", "command", `{"command":["/bin/sh","-c","echo hello"]}`)
-	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -400,7 +400,7 @@ func TestSystemRun_NonZeroExit(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("sr-2", "test-node", "command", `{"command":["/bin/sh","-c","exit 42"]}`)
-	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -429,7 +429,7 @@ func TestSystemRun_StderrCaptured(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("sr-3", "test-node", "command", `{"command":["/bin/sh","-c","echo err_msg >&2"]}`)
-	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -455,7 +455,7 @@ func TestSystemRun_WithCwd(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("sr-5", "test-node", "command", `{"command":["/bin/sh","-c","pwd"],"cwd":"/tmp"}`)
-	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -481,7 +481,7 @@ func TestSystemRun_WithEnvVar(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("sr-6", "test-node", "command", `{"command":["/bin/sh","-c","echo $MY_OCT_VAR"],"env":{"MY_OCT_VAR":"from_test"}}`)
-	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -507,7 +507,7 @@ func TestSystemRun_EmptyCommandArray(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("sr-7", "test-node", "command", `{"command":[]}`)
-	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -538,7 +538,7 @@ func TestUnknownCommand_ReturnsUnavailable(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("unk-1", "test-node", "system.nope", `{}`)
-	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -675,9 +675,9 @@ func TestTruncateOutput_ExactSize(t *testing.T) {
 
 func TestStop_BeforeStart_DoesNotPanic(t *testing.T) {
 	t.Parallel()
-	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.OpenclawGateway), "", "node-stop", "", "", newTestLogger())
+	svc, err := NewInsecureMcpNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.InsecureMcpGateway), "", "node-stop", "", "", newTestLogger())
 	if err != nil {
-		t.Fatalf("NewOpenClawNodeService: %v", err)
+		t.Fatalf("NewInsecureMcpNodeService: %v", err)
 	}
 	// Stop before Start - cancel is nil, must not panic
 	assert.NotPanics(t, func() { svc.Stop() })
@@ -686,9 +686,9 @@ func TestStop_BeforeStart_DoesNotPanic(t *testing.T) {
 func TestStop_CancelsRunningService(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
-	svc, err := NewOpenClawNodeService(mg.wsURL(), "", "node-stop-2", "", "", newTestLogger())
+	svc, err := NewInsecureMcpNodeService(mg.wsURL(), "", "node-stop-2", "", "", newTestLogger())
 	if err != nil {
-		t.Fatalf("NewOpenClawNodeService: %v", err)
+		t.Fatalf("NewInsecureMcpNodeService: %v", err)
 	}
 
 	ctx := context.Background()
@@ -712,9 +712,9 @@ func TestStop_CancelsRunningService(t *testing.T) {
 func TestStop_IdempotentDoubleStop(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
-	svc, err := NewOpenClawNodeService(mg.wsURL(), "", "node-stop-3", "", "", newTestLogger())
+	svc, err := NewInsecureMcpNodeService(mg.wsURL(), "", "node-stop-3", "", "", newTestLogger())
 	if err != nil {
-		t.Fatalf("NewOpenClawNodeService: %v", err)
+		t.Fatalf("NewInsecureMcpNodeService: %v", err)
 	}
 
 	ctx := context.Background()

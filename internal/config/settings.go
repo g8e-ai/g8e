@@ -24,7 +24,6 @@ import (
 // All other code receives these values via dependency injection.
 type Settings struct {
 	// g8e operator configuration - mirrors protocol/constants/env_vars.json "g8eo" section
-	OperatorAPIKey    string
 	OperatorEndpoint  string
 	OperatorSessionID string
 	InternalAuthToken string
@@ -37,8 +36,8 @@ type Settings struct {
 	IPService         string
 	IPResolver        string
 
-	// OpenClaw
-	OpenClawGatewayToken string
+	// Insecure MCP
+	InsecureMcpToken string
 
 	// System / process environment
 	Shell       string
@@ -66,26 +65,25 @@ func LoadSettings() Settings {
 	}
 
 	return Settings{
-		OperatorAPIKey:       readVar(constants.EnvVar.OperatorAPIKey),
-		OperatorEndpoint:     readVar(constants.EnvVar.OperatorEndpoint),
-		OperatorSessionID:    readVar(constants.EnvVar.OperatorSessionID),
-		InternalAuthToken:    readVar(constants.EnvVar.InternalAuthToken),
-		PKIDir:               readVar(constants.EnvVar.PKIDir),
-		SecretsDir:           readVar(constants.EnvVar.SecretsDir),
-		PubSubCACert:         readVar(constants.EnvVar.PubSubCACert),
-		DeviceToken:          readVar(constants.EnvVar.DeviceToken),
-		LogLevel:             readVar(constants.EnvVar.LogLevel),
-		DataDir:              readVar(constants.EnvVar.DataDir),
-		IPService:            readVar(constants.EnvVar.IPService),
-		IPResolver:           readVar(constants.EnvVar.IPResolver),
-		OpenClawGatewayToken: readVar(constants.EnvVar.OpenClawGatewayToken),
-		Shell:                readVar(constants.EnvVar.Shell),
-		Lang:                 readVar(constants.EnvVar.Lang),
-		Term:                 readVar(constants.EnvVar.Term),
-		TZ:                   readVar(constants.EnvVar.TZ),
-		Path:                 readVar(constants.EnvVar.Path),
-		SSHAuthSock:          readVar(constants.EnvVar.SSHAuthSock),
-		User:                 user,
-		LogName:              readVar(constants.EnvVar.LogName),
+		OperatorEndpoint:  readVar(constants.EnvVar.OperatorEndpoint),
+		OperatorSessionID: readVar(constants.EnvVar.OperatorSessionID),
+		InternalAuthToken: readVar(constants.EnvVar.InternalAuthToken),
+		PKIDir:            readVar(constants.EnvVar.PKIDir),
+		SecretsDir:        readVar(constants.EnvVar.SecretsDir),
+		PubSubCACert:      readVar(constants.EnvVar.PubSubCACert),
+		DeviceToken:       readVar(constants.EnvVar.DeviceToken),
+		LogLevel:          readVar(constants.EnvVar.LogLevel),
+		DataDir:           readVar(constants.EnvVar.DataDir),
+		IPService:         readVar(constants.EnvVar.IPService),
+		IPResolver:        readVar(constants.EnvVar.IPResolver),
+		InsecureMcpToken:  readVar(constants.EnvVar.InsecureMcpToken),
+		Shell:             readVar(constants.EnvVar.Shell),
+		Lang:              readVar(constants.EnvVar.Lang),
+		Term:              readVar(constants.EnvVar.Term),
+		TZ:                readVar(constants.EnvVar.TZ),
+		Path:              readVar(constants.EnvVar.Path),
+		SSHAuthSock:       readVar(constants.EnvVar.SSHAuthSock),
+		User:              user,
+		LogName:           readVar(constants.EnvVar.LogName),
 	}
 }

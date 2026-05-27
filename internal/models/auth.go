@@ -151,8 +151,6 @@ type OperatorDocumentGo struct {
 	Status               constants.OperatorStatus `json:"status"`
 	OperatorSessionID    string                   `json:"operator_session_id,omitempty"`
 	BoundWebSessionID    string                   `json:"bound_web_session_id,omitempty"`
-	APIKey               string                   `json:"api_key,omitempty"`
-	OperatorAPIKey       string                   `json:"operator_api_key,omitempty"`
 	OperatorCert         string                   `json:"operator_cert,omitempty"`
 	OperatorCertSerial   string                   `json:"operator_cert_serial,omitempty"`
 	SlotNumber           int                      `json:"slot_number,omitempty"`
@@ -193,14 +191,6 @@ func (o *OperatorDocumentGo) MarshalJSON() ([]byte, error) {
 type OperatorSlotResponse struct {
 	Success   bool                 `json:"success"`
 	Operators []OperatorDocumentGo `json:"operators"`
-}
-
-type RotateAPIKeyRequest struct {
-	OperatorID string `json:"operator_id"`
-}
-
-type RotateAPIKeyResponse struct {
-	Success bool `json:"success"`
 }
 
 type TerminateOperatorRequest struct {
@@ -376,6 +366,9 @@ type User struct {
 	ID                 string              `json:"id"`
 	PasskeyCredentials []PasskeyCredential `json:"passkey_credentials,omitempty"`
 	Provider           string              `json:"provider,omitempty"`
+
+	OrganizationID string   `json:"organization_id,omitempty"`
+	Roles          []string `json:"roles,omitempty"`
 
 	Status      constants.UserStatus `json:"status,omitempty"`
 	IsBootstrap bool                 `json:"is_bootstrap,omitempty"`

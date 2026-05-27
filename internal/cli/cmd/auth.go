@@ -146,7 +146,16 @@ func loginCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cmd.Printf("Device-link token obtained: %s... (count=%d, ttl=%d s)\n", dlResp.Token[:12], count, ttl)
+			ttlStr := fmt.Sprintf("%dh", ttl/3600)
+			cmd.Printf("Device-link token obtained: %s (count=%d, ttl=%s)\n", dlResp.Token, count, ttlStr)
+
+			externalIP := config.GetExternalInterfaceIP()
+			bootstrapPort := cfg.OperatorBootstrapHTTPSPort()
+			bootstrapURL := fmt.Sprintf("http://%s:%d", externalIP, bootstrapPort)
+			cmd.Println("\nTo launch the Operator on a remote system:")
+			cmd.Printf("  curl -fsSL %s/g8e | sh -s -- %s\n", bootstrapURL, dlResp.Token)
+			cmd.Printf("  G8E_TOKEN=%s curl -fsSL %s/g8e | sh\n", dlResp.Token, bootstrapURL)
+			cmd.Println()
 
 			cmd.Println("Generating keys and CSRs...")
 			hostname, _ := os.Hostname()
