@@ -310,7 +310,7 @@ g8e runs entirely inside your perimeter. The Operator has no inbound gateway, so
 - **[Protocol](docs/architecture/protocol.md)** — wire format, transaction hash, and the Doctrine / Consensus / Notary definitions.
 - **[Operator (g8eo)](docs/architecture/operator.md)** — execution boundary, gateway modes, and host storage.
 - **[Gateway (g8eg)](docs/architecture/gateway.md)** — Governance Gateway architecture and modes.
-- **[g8e-Compatible Applications](docs/guides/g8e-compatible-apps.md)** — building conforming producers and consumers.
+- **[Build Apps](docs/guides/build_apps.md)** — building g8e-compatible applications.
 - **[Guides](docs/guides/)** · **[Reference](docs/reference/)** · **[Contributing](CONTRIBUTING.md)**
 
 ---
