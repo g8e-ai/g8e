@@ -22,7 +22,6 @@ import (
 )
 
 func TestLoadSettings_OperatorFields(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorAPIKey), "test-api-key")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorEndpoint), "10.0.0.1")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorSessionID), "sess-abc123")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.DeviceToken), "dtok_xyz")
@@ -31,7 +30,6 @@ func TestLoadSettings_OperatorFields(t *testing.T) {
 
 	s := LoadSettings()
 
-	assert.Equal(t, "test-api-key", s.OperatorAPIKey)
 	assert.Equal(t, "10.0.0.1", s.OperatorEndpoint)
 	assert.Equal(t, "sess-abc123", s.OperatorSessionID)
 	assert.Equal(t, "dtok_xyz", s.DeviceToken)
@@ -49,12 +47,12 @@ func TestLoadSettings_IPFields(t *testing.T) {
 	assert.Equal(t, "1.1.1.1:80", s.IPResolver)
 }
 
-func TestLoadSettings_OpenClaw(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OpenClawGatewayToken), "oc-token-secret")
+func TestLoadSettings_InsecureMcp(t *testing.T) {
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.InsecureMcpToken), "oc-token-secret")
 
 	s := LoadSettings()
 
-	assert.Equal(t, "oc-token-secret", s.OpenClawGatewayToken)
+	assert.Equal(t, "oc-token-secret", s.InsecureMcpToken)
 }
 
 func TestLoadSettings_SystemEnvVars(t *testing.T) {
@@ -103,7 +101,6 @@ func TestLoadSettings_User_USERTakesPriorityOverUSERNAME(t *testing.T) {
 }
 
 func TestLoadSettings_EmptyWhenEnvNotSet(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorAPIKey), "")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorEndpoint), "")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorSessionID), "")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.DeviceToken), "")
@@ -111,11 +108,10 @@ func TestLoadSettings_EmptyWhenEnvNotSet(t *testing.T) {
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.DataDir), "")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPService), "")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPResolver), "")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OpenClawGatewayToken), "")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.InsecureMcpToken), "")
 
 	s := LoadSettings()
 
-	assert.Empty(t, s.OperatorAPIKey)
 	assert.Empty(t, s.OperatorEndpoint)
 	assert.Empty(t, s.OperatorSessionID)
 	assert.Empty(t, s.DeviceToken)
@@ -123,11 +119,10 @@ func TestLoadSettings_EmptyWhenEnvNotSet(t *testing.T) {
 	assert.Empty(t, s.DataDir)
 	assert.Empty(t, s.IPService)
 	assert.Empty(t, s.IPResolver)
-	assert.Empty(t, s.OpenClawGatewayToken)
+	assert.Empty(t, s.InsecureMcpToken)
 }
 
 func TestLoadSettings_AllFieldsPresent(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorAPIKey), "k")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorEndpoint), "e")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorSessionID), "s")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.DeviceToken), "d")
@@ -135,7 +130,7 @@ func TestLoadSettings_AllFieldsPresent(t *testing.T) {
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.DataDir), "/data")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPService), "https://ip.svc")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPResolver), "8.8.8.8:80")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OpenClawGatewayToken), "oc")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.InsecureMcpToken), "oc")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.Shell), "/bin/bash")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.Lang), "C")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.Term), "dumb")
@@ -146,7 +141,6 @@ func TestLoadSettings_AllFieldsPresent(t *testing.T) {
 
 	s := LoadSettings()
 
-	assert.Equal(t, "k", s.OperatorAPIKey)
 	assert.Equal(t, "e", s.OperatorEndpoint)
 	assert.Equal(t, "s", s.OperatorSessionID)
 	assert.Equal(t, "d", s.DeviceToken)
@@ -154,7 +148,7 @@ func TestLoadSettings_AllFieldsPresent(t *testing.T) {
 	assert.Equal(t, "/data", s.DataDir)
 	assert.Equal(t, "https://ip.svc", s.IPService)
 	assert.Equal(t, "8.8.8.8:80", s.IPResolver)
-	assert.Equal(t, "oc", s.OpenClawGatewayToken)
+	assert.Equal(t, "oc", s.InsecureMcpToken)
 	assert.Equal(t, "/bin/bash", s.Shell)
 	assert.Equal(t, "C", s.Lang)
 	assert.Equal(t, "dumb", s.Term)

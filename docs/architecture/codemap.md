@@ -94,7 +94,7 @@ Each subdirectory produces one binary. All import `internal/` and `protocol/`.
 ```text
 cmd/
 ├── g8e/main.go                     # Platform CLI (delegates to internal/cli/cmd)
-├── g8eo/main.go                    # Operator binary (multi-mode: gateway, mcp-serve, openclaw, outbound)
+├── g8eo/main.go                    # Operator binary (multi-mode: gateway, mcp-serve, insecure, outbound)
 ├── chaos_tester/main.go            # Chaos / fuzz testing harness
 └── uap-ping/main.go                # UAP protocol ping utility
 ```
@@ -159,7 +159,6 @@ services/
 │   ├── trust_scripts.go            #   PKI trust bootstrap
 │   ├── user_service.go
 │   ├── session_service.go
-│   ├── api_key_service.go
 │   ├── app_enrollment_service.go
 │   └── pki/                        #   PKI dir structure (authorities, issued, revocation, root, trust)
 │
@@ -236,8 +235,8 @@ services/
 │   ├── system_utils.go
 │   └── utils.go
 │
-└── openclaw/
-    └── openclaw_node_service.go    #   WebSocket node host
+└── insecure_mcp/
+    └── insecure_mcp_node_service.go    #   WebSocket node host
 ```
 
 ## pkg/

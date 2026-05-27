@@ -78,11 +78,12 @@ The Gateway exposes four logical protocol surfaces. Each surface serves a specif
 
 ### Port Multiplexing
 
-The Gateway supports port multiplexing for flexible deployment:
-- **mTLS only**: `tls.RequireAndVerifyClientCert` for strict mutual TLS
-- **mTLS + Public**: `tls.VerifyClientCertIfGiven` with per-route authentication
-- **Public only**: TLS without client certificate requirement
-- **Bootstrap only**: Plain HTTP (no TLS)
+The Gateway enforces strict port separation for security:
+- **mTLS only**: `tls.RequireAndVerifyClientCert` for strict mutual TLS on the execution boundary
+- **Public only**: TLS without client certificate requirement for browser-based access
+- **Bootstrap only**: Plain HTTP (no TLS) for trust anchor download
+
+Port mixing is prohibited. The gateway fails startup if incompatible surfaces (e.g., mTLS and Public) are assigned to the same port, as this would force a downgrade to `VerifyClientCertIfGiven` and weaken the execution boundary to an L7 check.
 
 Bootstrap must remain on a dedicated port to preserve plain HTTP trust anchor download.
 
@@ -331,13 +332,53 @@ Web sessions use WebAuthn signatures as L3 proof via PasskeyService.
 
 ### Device-Link Enrollment
 
-For operator enrollment, generate a device-link token:
+All authentication to the Gateway requires owner-approved device links. The platform enforces a strict owner-centric model where every entity (operator, MCP server, AI client, user) must authenticate via a device link created by the platform owner.
+
+#### Owner-Centric Device-Link Model
+
+- **Platform Owner**: The first human to authenticate via device-link becomes the Platform Owner
+- **Universal Requirement**: All entities must use device links for authentication
+- **Strict TTL**: Device links and sessions have a 1-hour TTL by default
+- **Owner Approval**: Only users with the `owner` role can create device links
+
+#### Creating Device Links
+
+Generate a device-link token for operator enrollment:
 
 ```bash
-./g8e auth device-link create --name "prod-db-node"
+./g8e auth device-link create --name "prod-db-node" --ttl 3600
 ```
 
-This token is used during operator enrollment to authenticate the host.
+For MCP servers or AI clients, create a device link via the admin API:
+
+```bash
+./g8e data device-links create --name "mcp-server-1" --max-uses 1 --ttl 3600
+```
+
+#### Device-Link Authentication Flow
+
+1. **Owner creates device link**: Owner generates a token with specific TTL and max-uses
+2. **Client requests enrollment**: Client presents device-link token during registration
+3. **Gateway validates**: Gateway checks token exists, is not expired, and has remaining uses
+4. **Session issuance**: Gateway issues short-lived mTLS certificate (1-day TTL) and session (1-hour TTL)
+5. **Session renewal**: Client must re-authenticate via device-link or session renewal before expiry
+
+#### JIT User Provisioning with Invitations
+
+For external IdP authentication (JWT), users must have an active invitation:
+
+```bash
+./g8e data invitations create --sub "user@example.com" --roles "user" --ttl 3600
+```
+
+When a JWT is presented:
+- Gateway validates JWT signature
+- Gateway extracts `sub` claim and checks for active invitation
+- If no invitation exists, authentication is rejected (403 Forbidden)
+- If invitation exists, user is provisioned and bound to owner's organization
+- Invitation is consumed after successful provisioning
+
+This ensures no implicit JIT provisioning occurs without owner approval.
 
 ---
 

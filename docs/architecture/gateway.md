@@ -150,6 +150,39 @@ When a standard AI client (e.g., Claude, Cursor) requests a mutation, it typical
 
 ---
 
+## JWT Authentication & JIT User Provisioning
+
+The Gateway provides a robust JWT authentication and Just-In-Time (JIT) user provisioning flow that fully isolates the downstream Operator from Identity Providers (IdP). The Gateway acts as the authentication brain, while the Operator receives a pre-validated, enriched payload via the pub/sub pipe.
+
+### 4-Step JWT Flow
+
+**Step 1: Inbound HTTP Handshake & JWT Verification**
+The Gateway intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS or static public keys, validates `exp` and `iss` claims, and extracts identity claims (`sub`, `tenant_id`, `roles`).
+
+**Step 2: Edge Validation & JIT Account Management**
+Following successful token validation, the Gateway ensures the user exists locally and maps their roles:
+- **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID). If the user does not exist, dynamically creates their user account record with default active status.
+- **Persona Mapping**: Loads declarative Persona manifests (e.g., YAML definitions representing `security-analyst`, `admin`). Evaluates the JWT `roles` against these manifests to determine the active `binding_persona`.
+- **Context Injection**: Stores the resolved `binding_persona` and `tenant_id` into the request context.
+
+**Step 3: Enriched Pub/Sub Handoff (GovernanceEnvelope)**
+The Gateway strips the heavy JWT and injects the evaluated security requirements directly into the canonical mutation envelope before passing it to the pub/sub broker:
+- The `GovernanceEnvelope` carries `tenant_id` and `binding_persona` as typed fields.
+- The pub/sub payload is strictly a canonical `GovernanceEnvelope` carrying typed payloads (e.g., `McpCallRequested`) alongside the validated security metadata.
+- The heavy JWT is discarded, reducing payload size.
+
+**Step 4: Native Execution & Data Scrubbing (Operator)**
+When the outbound Operator pulls the message off the pub/sub queue, it acts natively on the injected security metadata without second-guessing the Gateway:
+- The Operator decodes the `GovernanceEnvelope` and extracts `tenant_id` and `binding_persona`.
+- These fields propagate into the execution context.
+- Native tool isolation applies column masks or data redaction (e.g., stripping `password_hash`, masking emails) directly based on the Persona before returning results.
+
+### Operator Isolation from IdP
+
+This architecture ensures the Operator never requires outbound internet access to verify tokens or manage user state. The Gateway handles all IdP communication, JWT validation, and user lifecycle management. The Operator receives only the pre-validated, enriched security metadata needed for execution.
+
+---
+
 ## Session Types
 
 | Session Type | Identifier | Purpose | Authentication |
@@ -157,6 +190,7 @@ When a standard AI client (e.g., Claude, Cursor) requests a mutation, it typical
 | **Operator Session** | `operator_session_id` | Authenticates a specific **g8e Operator** (PEP). | mTLS (Operator Cert) |
 | **CLI Session** | `cli_session_id` | Authenticates a **BYO/CLI client**. | mTLS (CLI Cert) |
 | **Web Session** | `web_session_id` | Authenticates a **browser-based client**. | Passkey (WebAuthn) |
+| **JWT Session** | `sub` (User ID) | Authenticates via external IdP JWT. | JWT (validated at Gateway) |
 
 ---
 
@@ -184,7 +218,7 @@ When a standard AI client (e.g., Claude, Cursor) requests a mutation, it typical
 
 | Collection | Description |
 |---|---|
-| **Authentication & Sessions** | `users`, `web_sessions`, `operator_sessions`, `cli_sessions`, `bound_sessions`, `api_keys`, `passkey_challenges` |
+| **Authentication & Sessions** | `users`, `web_sessions`, `operator_sessions`, `cli_sessions`, `bound_sessions`, `passkey_challenges` |
 | **Organizations & Tenants** | `organizations` |
 | **Audit & Security** | `login_audit`, `auth_admin_audit`, `account_locks`, `console_audit`, `revoked_certificates` |
 | **Operators & Usage** | `operators`, `operator_usage` |

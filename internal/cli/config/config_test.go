@@ -119,7 +119,7 @@ func TestLoad(t *testing.T) {
 			},
 			"ports": {
 				"g8ee_https": 8443,
-				"openclaw_gateway": 18789,
+				"insecure_mcp_gateway": 18789,
 				"operator_bootstrap_https": 8441,
 				"operator_https": 8440,
 				"operator_public_https": 8442
@@ -170,7 +170,7 @@ func TestLoad(t *testing.T) {
 			},
 			"ports": {
 				"g8ee_https": 8443,
-				"openclaw_gateway": 18789,
+				"insecure_mcp_gateway": 18789,
 				"operator_bootstrap_https": 8441,
 				"operator_https": 8440,
 				"operator_public_https": 8442
@@ -373,7 +373,7 @@ func TestConfig_OperatorHTTPSPort(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					OpenclawGateway        int `json:"openclaw_gateway"`
+					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
 					OperatorPublicHTTPS    int `json:"operator_public_https"`
@@ -393,7 +393,7 @@ func TestConfig_OperatorBootstrapHTTPSPort(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					OpenclawGateway        int `json:"openclaw_gateway"`
+					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
 					OperatorPublicHTTPS    int `json:"operator_public_https"`
@@ -413,7 +413,7 @@ func TestConfig_OperatorHTTPURL(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					OpenclawGateway        int `json:"openclaw_gateway"`
+					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
 					OperatorPublicHTTPS    int `json:"operator_public_https"`
@@ -433,7 +433,7 @@ func TestConfig_OperatorBootstrapURL(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					OpenclawGateway        int `json:"openclaw_gateway"`
+					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
 					OperatorPublicHTTPS    int `json:"operator_public_https"`
@@ -454,7 +454,7 @@ func TestConfig_OperatorPublicURL(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					OpenclawGateway        int `json:"openclaw_gateway"`
+					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
 					OperatorPublicHTTPS    int `json:"operator_public_https"`
@@ -475,7 +475,7 @@ func TestConfig_OperatorDiscoveryURL(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					OpenclawGateway        int `json:"openclaw_gateway"`
+					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
 					OperatorPublicHTTPS    int `json:"operator_public_https"`

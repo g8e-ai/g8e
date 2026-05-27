@@ -59,7 +59,6 @@ type HTTPHandlerDependencies struct {
 	Reg               *RegistrationService
 	Passkey           *PasskeyService
 	UserSvc           *UserService
-	APIKey            *APIKeyService
 	Responder         *responder.Responder
 	MCPGateway        *mcp.GatewayService
 	AppEnrollment     *AppEnrollmentService
@@ -84,7 +83,6 @@ type HTTPHandler struct {
 	reg               *RegistrationService
 	passkey           *PasskeyService
 	userSvc           *UserService
-	apiKey            *APIKeyService
 	responder         *responder.Responder
 	mcp               *mcp.GatewayService
 	appEnrollment     *AppEnrollmentService
@@ -113,7 +111,6 @@ func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
 		reg:               deps.Reg,
 		passkey:           deps.Passkey,
 		userSvc:           deps.UserSvc,
-		apiKey:            deps.APIKey,
 		responder:         deps.Responder,
 		mcp:               deps.MCPGateway,
 		appEnrollment:     deps.AppEnrollment,
@@ -210,7 +207,6 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/device-links", h.handleDeviceLinks)
 	mux.HandleFunc("/api/device-links/", h.handleDeviceLinkByToken)
 	mux.HandleFunc("/api/operators", h.handleOperators)
-	mux.HandleFunc("/api/operators/rotate-api-key", h.handleRotateAPIKey)
 	mux.HandleFunc("/api/operators/terminate", h.handleTerminateOperator)
 	mux.HandleFunc("/api/operators/reauth", h.handleReauth)
 	mux.HandleFunc("/api/operators/bind", h.handleBindOperators)
@@ -344,8 +340,7 @@ func isDirectDBMutationAllowed(collection string) bool {
 		constants.CollectionPasskeyChallenges,
 		constants.CollectionRevokedCertificates,
 		constants.CollectionTrustedSigners,
-		constants.CollectionConsoleAudit,
-		constants.CollectionAPIKeys:
+		constants.CollectionConsoleAudit:
 		return true
 	// Governed collections must use POST /api/governance/envelope
 	// See: .local.dev/docs/plans/engine_gateway_secure_link.md §2
@@ -641,16 +636,49 @@ func (h *HTTPHandler) handleAppEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Require API key authentication for app enrollment (Option A from plan)
-	apiKey := r.Header.Get(constants.HeaderAPIKey)
-	if apiKey == "" {
-		h.responder.Error(w, http.StatusUnauthorized, "missing API key")
+	// Require device-link token authentication for app enrollment
+	// API keys are deprecated; device-link tokens provide cryptographic proof
+	// of possession during bootstrap and are issued via WebAuthn verification
+	authHeader := r.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		h.responder.Error(w, http.StatusUnauthorized, "missing bearer token")
 		return
 	}
 
-	_, err := h.apiKey.ValidateKey(apiKey)
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if !strings.HasPrefix(token, "dlk_") || len(token) < 20 {
+		h.responder.Error(w, http.StatusUnauthorized, "invalid device-link token format")
+		return
+	}
+
+	// Validate device-link token exists and is not expired
+	linkKey := "g8e:device-link:" + token
+	raw, found := h.db.KVGet(linkKey)
+	if !found {
+		h.responder.Error(w, http.StatusUnauthorized, "device-link token not found")
+		return
+	}
+
+	var linkData map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &linkData); err != nil {
+		h.responder.Error(w, http.StatusUnauthorized, "invalid device-link token data")
+		return
+	}
+
+	expiresAt, ok := linkData["expires_at"].(string)
+	if !ok {
+		h.responder.Error(w, http.StatusUnauthorized, "device-link token missing expiry")
+		return
+	}
+
+	expTime, err := time.Parse(time.RFC3339, expiresAt)
 	if err != nil {
-		h.responder.Error(w, http.StatusUnauthorized, "invalid API key")
+		h.responder.Error(w, http.StatusUnauthorized, "invalid device-link token expiry")
+		return
+	}
+
+	if expTime.Before(time.Now()) {
+		h.responder.Error(w, http.StatusUnauthorized, "device-link token expired")
 		return
 	}
 
@@ -963,33 +991,6 @@ func (h *HTTPHandler) handleTrustScriptBat(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(script))
-}
-
-func (h *HTTPHandler) handleRotateAPIKey(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	body, err := h.readBody(r)
-	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "invalid body")
-		return
-	}
-	var req models.RotateAPIKeyRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-	userID := r.URL.Query().Get("user_id")
-	if userID == "" {
-		h.responder.Error(w, http.StatusBadRequest, "user_id required")
-		return
-	}
-	if err := h.reg.RotateOperatorAPIKey(req.OperatorID, userID); err != nil {
-		h.responder.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	h.responder.JSON(w, http.StatusOK, models.RotateAPIKeyResponse{Success: true})
 }
 
 func (h *HTTPHandler) handleTerminateOperator(w http.ResponseWriter, r *http.Request) {

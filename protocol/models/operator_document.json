@@ -54,26 +54,6 @@
         "type": "string",
         "required": false,
         "description": "CLI session the operator is currently bound to. Set during bind. Cleared on unbind."
-      },
-      "api_key": {
-        "type": "string",
-        "required": false,
-        "description": "Platform API key used by this operator for client authentication (hashed form for validation)"
-      },
-      "operator_api_key": {
-        "type": "string",
-        "required": false,
-        "description": "Per-operator API key provisioned in the slot. Used by g8eo to authenticate to client."
-      },
-      "operator_api_key_created_at": {
-        "type": "string",
-        "format": "iso8601",
-        "required": false
-      },
-      "operator_api_key_updated_at": {
-        "type": "string",
-        "format": "iso8601",
-        "required": false
       }
     },
 

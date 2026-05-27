@@ -2,18 +2,22 @@
 
 # g8e
 
-**Runtime Governance Substrate for Autonomous Execution**
+**Verify, then execute.**
 
-g8e is a zero-trust execution substrate for agentic infrastructure. It defines a protocol for typed, signed, state-bound transactions; a Governance Gateway (`g8eg`) for admission and PKI management; and a Governed Operator (`g8eo`) for host-local verification and execution.
+g8e is an agentic governance and compliance protocol packed into one binary, 7MB, zero standing dependencies. Copy it to any host — a firewalled prod box, an air-gapped enclave, an edge device sitting on data that can't leave the building — and it becomes the only thing on that machine allowed to change state.
 
-The architecture extends standard Model Context Protocol (MCP) and Agent-to-Agent (A2A) topologies with a fail-closed governance gauntlet. The Operator serves as the execution boundary, requiring cryptographic evidence of technical bedrock (L1), model consensus (L2), and human authorization (L3) before mutating state. g8e is the underlying substrate that secures agentic ensembles against production environments.
+That binary is both planes at once. It's the **control plane**: the go/no-go decision happens *on the host*, re-verifying every proof against its own local state and trusting nothing upstream — not even the Gateway that sent the work. And it's the **data plane**: the only code path that executes the mutation, the only place raw data ever lives, and the local, git-backed record of everything that happened. Nothing about whether an action is allowed is decided off-host. Nothing about the data it touches leaves the host.
+
+It dials *out* to the Gateway over one mTLS tunnel and listens on nothing — no inbound ports, nothing to scan, nothing to expose. The same binary governs a host you can SSH into and a host you can't reach at all. Every action an AI proposes clears a fail-closed gauntlet before it runs and is committed to the ledger before the side effect happens; only scrubbed projections ever cross the wire, rehydrated locally at the instant of execution.
+
+Drop it on the host, and the host stops trusting anything upstream — including the network that delivered the order.
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev)
 [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v100--core-substrate)
-[![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/reference/position_paper.md)
+[![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/core/position_paper.md)
 
-[Getting Started](docs/guides/getting_started.md) · [Mental model](#the-mental-model) · [The Operator](#the-governed-operator) · [How it works](#how-it-works) · [Docs](#documentation)
+[Getting Started](docs/guides/getting_started.md) · [The two roles](#the-two-roles) · [How it works](#how-it-works) · [Docs](#documentation)
 
 </div>
 
@@ -306,11 +310,10 @@ g8e runs entirely inside your perimeter. The Operator has no inbound gateway, so
 ## Documentation
 
 - **[Getting Started](docs/guides/getting_started.md)** — stand up g8e in minutes via the unified CLI.
-- **[Position Paper](docs/reference/position_paper.md)** — full design rationale, threat model, and BFT analysis.
+- **[Position Paper](docs/core/position_paper.md)** — full design rationale, threat model, and BFT analysis.
 - **[Protocol](docs/architecture/protocol.md)** — wire format, transaction hash, and the Doctrine / Consensus / Notary definitions.
 - **[Operator (g8eo)](docs/architecture/operator.md)** — execution boundary, gateway modes, and host storage.
 - **[Gateway (g8eg)](docs/architecture/gateway.md)** — Governance Gateway architecture and modes.
-- **[g8e-Compatible Applications](docs/guides/g8e-compatible-apps.md)** — building conforming producers and consumers.
 - **[Guides](docs/guides/)** · **[Reference](docs/reference/)** · **[Contributing](CONTRIBUTING.md)**
 
 ---

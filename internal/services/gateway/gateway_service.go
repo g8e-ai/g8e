@@ -47,7 +47,6 @@ type GatewayService struct {
 	passkey         *PasskeyService
 	userSvc         *UserService
 	sessionSvc      *SessionService
-	apiKeySvc       *APIKeyService
 	mcpGateway      *mcp.GatewayService
 	responder       *responder.Responder
 	server          *http.Server
@@ -125,8 +124,6 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 		return nil, fmt.Errorf("failed to initialize passkey service: %w", err)
 	}
 
-	apiKeySvc := NewAPIKeyService(db, logger)
-
 	ls := &GatewayService{
 		cfg:        cfg,
 		logger:     logger,
@@ -138,7 +135,6 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 		passkey:    passkey,
 		userSvc:    userSvc,
 		sessionSvc: sessionSvc,
-		apiKeySvc:  apiKeySvc,
 		mcpGateway: mcp.NewGatewayService(mcp.Dependencies{
 			Logger:          logger,
 			Responder:       res,
@@ -175,8 +171,6 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 	// Passkey service initialization is optional; ignore errors for test configuration
 	passkey, _ := NewPasskeyService(db, logger, passkeyCfg) //nolint:errcheck
 
-	apiKeySvc := NewAPIKeyService(db, logger)
-
 	ls := &GatewayService{
 		cfg:        cfg,
 		logger:     logger,
@@ -188,7 +182,6 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 		passkey:    passkey,
 		userSvc:    userSvc,
 		sessionSvc: sessionSvc,
-		apiKeySvc:  apiKeySvc,
 		mcpGateway: mcp.NewGatewayService(mcp.Dependencies{
 			Logger:          logger,
 			Responder:       res,
@@ -216,7 +209,6 @@ func (ls *GatewayService) initHandlersAndServers() error {
 	reg := ls.reg
 	passkey := ls.passkey
 	userSvc := ls.userSvc
-	apiKeySvc := ls.apiKeySvc
 
 	// Initialize AppEnrollmentService for external app enrollment
 	appEnrollment := NewAppEnrollmentService(db, pki, logger)
@@ -235,7 +227,6 @@ func (ls *GatewayService) initHandlersAndServers() error {
 		Reg:               reg,
 		Passkey:           passkey,
 		UserSvc:           userSvc,
-		APIKey:            apiKeySvc,
 		Responder:         ls.responder,
 		MCPGateway:        ls.mcpGateway,
 		AppEnrollment:     appEnrollment,
@@ -279,6 +270,13 @@ func (ls *GatewayService) initHandlersAndServers() error {
 
 	tlsConfig := pki.TLSConfig()           // strict mTLS (RequireAndVerifyClientCert)
 	tlsConfigPlain := pki.TLSConfigPlain() // public TLS (no client cert)
+
+	// Fail-closed assertion: mTLS surface MUST use RequireAndVerifyClientCert
+	// If this is downgraded to VerifyClientCertIfGiven, the execution boundary
+	// becomes an L7 check instead of a TLS-layer gate, which is a security regression.
+	if tlsConfig.ClientAuth != tls.RequireAndVerifyClientCert {
+		panic(fmt.Sprintf("gateway: mTLS port %d configured with ClientAuth=%v; must be RequireAndVerifyClientCert for fail-closed execution boundary", cfg.Gateway.HTTPPort, tlsConfig.ClientAuth))
+	}
 
 	// Each surface gets its own dedicated gateway with a TLS config that
 	// matches the surface's authentication contract. The mTLS surface MUST

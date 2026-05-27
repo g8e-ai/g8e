@@ -214,14 +214,25 @@ func (s *UserService) GetOrCreateBySub(sub string) (*models.User, error) {
 		return user, nil
 	}
 
-	// User doesn't exist, create one with the sub as the ID
-	s.logger.Info("[USER-SERVICE] JIT provisioning new user from JWT", "sub", sub)
+	// User doesn't exist, check for an active invitation
+	invitation, err := s.FindActiveInvitationBySub(sub)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query invitations: %w", err)
+	}
+	if invitation == nil {
+		s.logger.Warn("[USER-SERVICE] JIT provisioning rejected: no active invitation found", "sub", sub)
+		return nil, fmt.Errorf("no active invitation found for sub: %s", sub)
+	}
+
+	s.logger.Info("[USER-SERVICE] JIT provisioning new user from JWT via invitation", "sub", sub, "org", invitation.OrganizationID)
 
 	user = &models.User{
 		ID:                 sub,
 		PasskeyCredentials: []models.PasskeyCredential{},
 		Provider:           string(constants.AuthProviderJWT),
 		Status:             constants.UserStatusActive,
+		OrganizationID:     invitation.OrganizationID,
+		Roles:              invitation.Roles,
 		IsBootstrap:        false,
 	}
 
@@ -234,8 +245,14 @@ func (s *UserService) GetOrCreateBySub(sub string) (*models.User, error) {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
+	if err := s.ConsumeInvitation(invitation.ID); err != nil {
+		s.logger.Error("[USER-SERVICE] Failed to consume invitation after provisioning", "invitation_id", invitation.ID, "error", err)
+		// We don't fail the login since the user was created, but log it heavily
+	}
+
 	s.logger.Info("[USER-SERVICE] JIT user created", "user_id", sub, "provider", constants.AuthProviderJWT)
 	return user, nil
+
 }
 
 // UpdateUser updates a user with the provided field changes.
@@ -456,4 +473,96 @@ func (s *PersonaService) docToPersona(doc *models.Document) (*models.Persona, er
 	}
 	persona.ID = doc.ID
 	return &persona, nil
+}
+
+// FindActiveInvitationBySub finds an active, unconsumed invitation for the given subject.
+func (s *UserService) FindActiveInvitationBySub(sub string) (*models.Invitation, error) {
+	if sub == "" {
+		return nil, fmt.Errorf("sub is required")
+	}
+
+	filters := []models.DocFilter{
+		{Field: "sub", Op: "==", Value: []byte(fmt.Sprintf("%q", sub))},
+		{Field: "is_consumed", Op: "==", Value: []byte("false")},
+	}
+
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionInvitations), filters, "", 1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query invitations: %w", err)
+	}
+
+	if len(docs) == 0 {
+		return nil, nil // No active invitation
+	}
+
+	var invitation models.Invitation
+	docData, err := json.Marshal(docs[0].ForWire())
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal doc data: %w", err)
+	}
+
+	if err := json.Unmarshal(docData, &invitation); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal invitation: %w", err)
+	}
+	invitation.ID = docs[0].ID
+
+	if !invitation.IsValid() {
+		return nil, nil // Expired
+	}
+
+	return &invitation, nil
+}
+
+// ConsumeInvitation marks an invitation as consumed.
+func (s *UserService) ConsumeInvitation(id string) error {
+	updates := map[string]interface{}{
+		"is_consumed": true,
+		"consumed_at": time.Now().UTC().UnixMilli(),
+	}
+
+	updateBytes, err := json.Marshal(updates)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updates: %w", err)
+	}
+
+	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionInvitations), id, updateBytes)
+	if err != nil {
+		return fmt.Errorf("failed to update invitation: %w", err)
+	}
+
+	s.logger.Info("[USER-SERVICE] Invitation consumed", "invitation_id", id)
+	return nil
+}
+
+// CreateInvitation creates a new invitation for a user to join an organization.
+func (s *UserService) CreateInvitation(organizationID, sub, createdBy string, roles []string, ttl time.Duration) (*models.Invitation, error) {
+	if organizationID == "" || sub == "" || createdBy == "" {
+		return nil, fmt.Errorf("organization_id, sub, and created_by are required")
+	}
+	if len(roles) == 0 {
+		roles = []string{"user"}
+	}
+
+	invitation := &models.Invitation{
+		ID:             uuid.New().String(),
+		OrganizationID: organizationID,
+		Sub:            sub,
+		Roles:          roles,
+		CreatedBy:      createdBy,
+		CreatedAt:      time.Now().UTC(),
+		ExpiresAt:      time.Now().UTC().Add(ttl),
+		IsConsumed:     false,
+	}
+
+	data, err := json.Marshal(invitation)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal invitation: %w", err)
+	}
+
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionInvitations), invitation.ID, data); err != nil {
+		return nil, fmt.Errorf("failed to save invitation: %w", err)
+	}
+
+	s.logger.Info("[USER-SERVICE] Invitation created", "invitation_id", invitation.ID, "sub", sub, "org", organizationID)
+	return invitation, nil
 }

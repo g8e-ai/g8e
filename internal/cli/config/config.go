@@ -71,7 +71,7 @@ type PathsConfig struct {
 		SSHConfigPath        string `json:"ssh_config_path"`
 	} `json:"infra"`
 	Ports struct {
-		OpenclawGateway        int `json:"openclaw_gateway"`
+		InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 		OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 		OperatorHTTPS          int `json:"operator_https"`
 		OperatorPublicHTTPS    int `json:"operator_public_https"`
