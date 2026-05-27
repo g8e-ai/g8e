@@ -27,7 +27,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
@@ -149,7 +149,7 @@ func TestMTLSServerClient_Handshake(t *testing.T) {
 			return
 		}
 
-		var env uap.UAPEnvelope
+		var env governance.GovernanceEnvelope
 		if err := json.NewDecoder(r.Body).Decode(&env); err != nil {
 			t.Errorf("Failed to decode envelope: %v", err)
 			http.Error(w, "Bad request", http.StatusBadRequest)
@@ -194,7 +194,7 @@ func TestMTLSServerClient_Handshake(t *testing.T) {
 		Timeout: 5 * time.Second,
 	}
 
-	env := &uap.UAPEnvelope{
+	env := &governance.GovernanceEnvelope{
 		ProtocolVersion: "1.0",
 		OperatorId:      "test-operator",
 		Timestamp:       timestamppb.Now(),
@@ -208,7 +208,7 @@ func TestMTLSServerClient_Handshake(t *testing.T) {
 		},
 	}
 
-	id, err := uap.GenerateMessageID(env)
+	id, err := governance.GenerateMessageID(env)
 	if err != nil {
 		t.Fatalf("Failed to generate MessageID: %v", err)
 	}
@@ -287,8 +287,8 @@ func TestMTLSServerClient_InvalidClientCert(t *testing.T) {
 	}
 }
 
-func TestUAPEnvelope_Integration(t *testing.T) {
-	env := &uap.UAPEnvelope{
+func TestGovernanceEnvelope_Integration(t *testing.T) {
+	env := &governance.GovernanceEnvelope{
 		ProtocolVersion: "1.0",
 		OperatorId:      "test-operator",
 		Timestamp:       timestamppb.Now(),
@@ -302,7 +302,7 @@ func TestUAPEnvelope_Integration(t *testing.T) {
 		},
 	}
 
-	id, err := uap.GenerateMessageID(env)
+	id, err := governance.GenerateMessageID(env)
 	if err != nil {
 		t.Fatalf("Failed to generate MessageID: %v", err)
 	}
@@ -318,7 +318,7 @@ func TestUAPEnvelope_Integration(t *testing.T) {
 		t.Fatalf("Failed to marshal envelope: %v", err)
 	}
 
-	var decoded uap.UAPEnvelope
+	var decoded governance.GovernanceEnvelope
 	if err := json.Unmarshal(payload, &decoded); err != nil {
 		t.Fatalf("Failed to unmarshal envelope: %v", err)
 	}

@@ -469,14 +469,14 @@ func TestGatewayService_EnvelopeGatewaySigned(t *testing.T) {
 		payloadBytes:   []byte("{}"),
 	}
 
-	hash, uapBytes, err := g.processGatewayTransaction(context.Background(), opts)
+	hash, envelopeBytes, err := g.processGatewayTransaction(context.Background(), opts)
 	require.NoError(t, err)
 	require.NotEmpty(t, hash)
-	require.NotEmpty(t, uapBytes)
+	require.NotEmpty(t, envelopeBytes)
 
 	// Parse the envelope to verify GatewaySigned is set
 	var envelope commonv1.GovernanceEnvelope
-	err = protojson.Unmarshal(uapBytes, &envelope)
+	err = protojson.Unmarshal(envelopeBytes, &envelope)
 	require.NoError(t, err)
 
 	// Verify GatewaySigned is set to true

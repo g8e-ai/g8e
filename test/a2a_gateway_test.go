@@ -117,7 +117,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	cfg.Gateway.A2ADownstreamURL = downstreamServer.URL
 
-	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
+	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger(), nil)
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
@@ -335,7 +335,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	require.NoError(t, err)
 	cfg.Gateway.A2ADownstreamURL = downstreamServer.URL
 
-	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
+	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger(), nil)
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
@@ -673,7 +673,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
+	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger(), nil)
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())

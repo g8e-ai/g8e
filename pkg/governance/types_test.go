@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package uap
+package governance
 
 import (
 	"testing"
@@ -24,10 +24,10 @@ import (
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
-func TestUAPEnvelope_GenerateMessageID(t *testing.T) {
+func TestGovernanceEnvelope_GenerateMessageID(t *testing.T) {
 	expiresAt := timestamppb.New(time.Now().Add(5 * time.Minute))
 
-	env := &UAPEnvelope{
+	env := &GovernanceEnvelope{
 		ActionType:      "EXECUTE_BASH",
 		TargetResource:  "localhost",
 		Payload:         []byte("echo 'hello world'"),
@@ -91,13 +91,13 @@ func TestUAPEnvelope_GenerateMessageID(t *testing.T) {
 	}
 }
 
-func TestUAPEnvelope_GenerateMessageID_WithIntentData(t *testing.T) {
+func TestGovernanceEnvelope_GenerateMessageID_WithIntentData(t *testing.T) {
 	intentData, _ := structpb.NewStruct(map[string]interface{}{
 		"command": "echo test",
 		"cwd":     "/home",
 	})
 
-	env := &UAPEnvelope{
+	env := &GovernanceEnvelope{
 		ActionType:      "EXECUTE_BASH",
 		TargetResource:  "localhost",
 		Payload:         []byte("echo test"),
@@ -124,7 +124,7 @@ func TestUAPEnvelope_GenerateMessageID_WithIntentData(t *testing.T) {
 	}
 }
 
-func TestUAPEnvelope_GenerateMessageID_DeterministicCanonicalization(t *testing.T) {
+func TestGovernanceEnvelope_GenerateMessageID_DeterministicCanonicalization(t *testing.T) {
 	// Create two envelopes that are logically identical but constructed differently
 	intent1, _ := structpb.NewStruct(map[string]interface{}{
 		"a": "1",
@@ -147,7 +147,7 @@ func TestUAPEnvelope_GenerateMessageID_DeterministicCanonicalization(t *testing.
 	expiresAt := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
 	expiresAtPB := timestamppb.New(expiresAt)
 
-	env1 := &UAPEnvelope{
+	env1 := &GovernanceEnvelope{
 		ActionType:     "TEST",
 		TargetResource: "res",
 		Payload:        []byte("payload"),
@@ -156,7 +156,7 @@ func TestUAPEnvelope_GenerateMessageID_DeterministicCanonicalization(t *testing.
 		IntentData:     intent1,
 	}
 
-	env2 := &UAPEnvelope{
+	env2 := &GovernanceEnvelope{
 		ActionType:     "TEST",
 		TargetResource: "res",
 		Payload:        []byte("payload"),
@@ -193,17 +193,17 @@ func TestUAPEnvelope_GenerateMessageID_DeterministicCanonicalization(t *testing.
 	}
 }
 
-func TestUAPEnvelope_GenerateMessageID_NilEnvelope(t *testing.T) {
+func TestGovernanceEnvelope_GenerateMessageID_NilEnvelope(t *testing.T) {
 	_, err := GenerateMessageID(nil)
 	if err == nil {
 		t.Error("GenerateMessageID should return error for nil envelope")
 	}
 }
 
-func TestUAPEnvelope_GenerateMessageID_IDHashMismatch(t *testing.T) {
+func TestGovernanceEnvelope_GenerateMessageID_IDHashMismatch(t *testing.T) {
 	expiresAt := timestamppb.New(time.Now().Add(5 * time.Minute))
 
-	env := &UAPEnvelope{
+	env := &GovernanceEnvelope{
 		Id:              "wrong-id",
 		ActionType:      "EXECUTE_BASH",
 		TargetResource:  "localhost",

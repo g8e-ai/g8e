@@ -25,7 +25,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
@@ -78,7 +78,10 @@ func main() {
 
 	// Helper to sign and hash
 	signAndHash := func(env *commonv1.GovernanceEnvelope) {
-		hash, _ := uap.GenerateMessageID(env)
+		hash, err := governance.GenerateMessageID(env)
+		if err != nil {
+			panic(err)
+		}
 		env.Id = hash
 		env.TransactionHash = hash
 		env.Governance = &commonv1.GovernanceMetadata{
@@ -115,7 +118,7 @@ func main() {
 
 	// 3. l2_missing - no L2 signature
 	l2Missing := createBase("nonce-l2-missing-123")
-	hash, _ := uap.GenerateMessageID(l2Missing)
+	hash, _ := governance.GenerateMessageID(l2Missing)
 	l2Missing.Id = hash
 	l2Missing.TransactionHash = hash
 	l2Missing.Governance = &commonv1.GovernanceMetadata{}
@@ -163,5 +166,69 @@ func main() {
 	staleStateJSON, _ := marshaler.Marshal(staleState)
 	fmt.Println("STALE_STATE_ROOT_INTENT:")
 	fmt.Println(string(staleStateJSON))
+	fmt.Println()
+
+	// 8. unknown_signer - envelope signed by untrusted key
+	// Generate a different keypair for this test
+	unknownPrivKey := ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))
+	unknownPubKey := unknownPrivKey.Public().(ed25519.PublicKey)
+	unknownKeyID := hex.EncodeToString(unknownPubKey)
+	unknownSigner := createBase("nonce-unknown-signer-123")
+	// Compute hash WITHOUT governance (verifier doesn't include governance in hash)
+	unknownHash, err := governance.GenerateMessageID(unknownSigner)
+	if err != nil {
+		panic(err)
+	}
+	unknownSigner.Id = unknownHash
+	unknownSigner.TransactionHash = unknownHash
+	// Now set governance with unknown key_id and sign with unknown private key
+	unknownSigner.Governance = &commonv1.GovernanceMetadata{
+		L2: &commonv1.L2Metadata{
+			KeyId:              unknownKeyID,
+			ConsensusSignature: hex.EncodeToString(ed25519.Sign(unknownPrivKey, []byte(unknownHash+"|true"))),
+		},
+	}
+	unknownSignerJSON, _ := marshaler.Marshal(unknownSigner)
+	fmt.Println("UNKNOWN_SIGNER_INTENT:")
+	fmt.Println(string(unknownSignerJSON))
+	fmt.Println()
+
+	// 9. malformed_payload - invalid base64 payload
+	malformedPayload := createBase("nonce-malformed-payload-123")
+	signAndHash(malformedPayload)
+	// Set payload to invalid base64 (not properly encoded)
+	malformedPayload.Payload = []byte("!!!invalid!!!base64!!!")
+	// Recompute hash after changing payload
+	malformedHash, err1 := governance.GenerateMessageID(malformedPayload)
+	if err1 != nil {
+		panic(err1)
+	}
+	malformedPayload.Id = malformedHash
+	malformedPayload.TransactionHash = malformedHash
+	// Re-sign with the new hash
+	malformedPayload.Governance.L2.ConsensusSignature = hex.EncodeToString(ed25519.Sign(privKey, []byte(malformedHash+"|true")))
+	malformedPayloadJSON, _ := marshaler.Marshal(malformedPayload)
+	fmt.Println("MALFORMED_PAYLOAD_INTENT:")
+	fmt.Println(string(malformedPayloadJSON))
+	fmt.Println()
+
+	// 10. empty_payload - missing payload field
+	emptyPayload := createBase("nonce-empty-payload-123")
+	emptyPayload.Payload = []byte{}
+	emptyHash, err2 := governance.GenerateMessageID(emptyPayload)
+	if err2 != nil {
+		panic(err2)
+	}
+	emptyPayload.Id = emptyHash
+	emptyPayload.TransactionHash = emptyHash
+	emptyPayload.Governance = &commonv1.GovernanceMetadata{
+		L2: &commonv1.L2Metadata{
+			KeyId:              keyID,
+			ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(emptyHash+"|true"))),
+		},
+	}
+	emptyPayloadJSON, _ := marshaler.Marshal(emptyPayload)
+	fmt.Println("EMPTY_PAYLOAD_INTENT:")
+	fmt.Println(string(emptyPayloadJSON))
 	fmt.Println()
 }

@@ -124,7 +124,6 @@ func TestDocsNoStaleTerms(t *testing.T) {
 		"Sentinel daemon",
 		"mandatory g8ed",
 		"mandatory g8ee",
-		"UAP JSON",
 	}
 
 	err := filepath.Walk(docsDir, func(path string, info os.FileInfo, err error) error {

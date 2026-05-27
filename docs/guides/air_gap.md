@@ -24,7 +24,7 @@ The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In th
 
 ## The Platform Backbone: Governance Gateway (g8eg)
 
-In an air-gapped deployment, the platform requires a local "Hub" for persistence and messaging. This is provided by running the Governance Gateway (`g8eg` / `g8e.gateway` binary) in **Gateway mode** (--doctrine, --consensus, or --notary). In this mode, the Governance Gateway acts as the platform's central persistence and messaging backbone rather than an outbound execution agent.
+In an air-gapped deployment, the platform requires a local "Hub" for persistence and messaging. This is provided by running the Governance Gateway (`g8eg` / `g8e` binary) in **Gateway mode** (--doctrine, --consensus, or --notary). In this mode, the Governance Gateway acts as the platform's central persistence and messaging backbone rather than an outbound execution agent.
 
 ### Architecture & Ports
 The Governance Gateway in Gateway mode exposes four logical surfaces. Defaults are sourced from `internal/constants/paths.go`. The TLS surfaces multiplex onto a single port when configured equal; Bootstrap must remain on its own port to be served as plain HTTP.
@@ -47,7 +47,7 @@ When the mTLS and Public surfaces share a port, the gateway serves them through 
 
 ## The PEP: Governed Operator (g8eo)
 
-To execute mutations on the local air-gapped host, a **Governed Operator (`g8eo` / `g8e.operator`)** daemon runs in standard mode on the target machine:
+To execute mutations on the local air-gapped host, a **Governed Operator (`g8eo` / `g8e`)** daemon runs in standard mode on the target machine:
 - Connects outbound-only over local mTLS WSS to the local `g8eg` gateway.
 - Subscribes to command events, processes them via local L5Actuator boundaries, and writes history to a host-local ledger.
 - Exposes tools to standard local clients as a Model Context Protocol (MCP) Server.
@@ -109,13 +109,13 @@ For air-gapped reasoning, g8e supports external local inference via BYO agentic 
 3. **Export Assets:** Bundle the `.g8e` runtime directory and component binaries.
 
 ### 2. Implementation (Air-Gapped Host)
-1. **Stage Binaries:** Place the `g8e.gateway` and `g8e.operator` binaries and component source/images on the host.
+1. **Stage Binaries:** Place the `g8e` binary and component source/images on the host.
 2. **Stage External LLM Server:** Deploy llama.cpp server with pre-staged `.gguf` model files on the host or adjacent network.
 3. **Configure:**
    - Set `search.enabled` to `false` in `SearchSettings`.
    - Set `llamacpp_endpoint` to the external llama.cpp server URL (default: `http://localhost:11444`).
    - Ensure `llm_primary_provider` is set to `llamacpp`.
-4. **Launch:** `./g8e platform up`
+4. **Launch:** `./g8e platform start`
 
 ---
 

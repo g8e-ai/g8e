@@ -1,0 +1,29 @@
+{
+  "_comment": "Embedded default path configuration. This file is embedded into the g8e binary via go:embed and is the sole source of truth for path configuration. All paths are relative and resolved from the current working directory. The binary is fully self-sovereign and requires no external configuration files.",
+  "g8ee": {
+    "app_dir": ".g8e/apps/g8ee",
+    "cert_name": "g8ee",
+    "config_dir": ".g8e/apps/g8ee/config",
+    "tests_dir": ".g8e/apps/g8ee/tests"
+  },
+  "host": "localhost",
+  "infra": {
+    "app_cert_dir": ".g8e/pki/issued/apps",
+    "ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
+    "db_path": ".g8e/data/g8e.db",
+    "docs_dir": ".g8e/docs",
+    "pki_dir": ".g8e/pki",
+    "protocol_constants_dir": ".g8e/protocol/constants",
+    "protocol_dir": ".g8e/protocol",
+    "protocol_models_dir": ".g8e/protocol/models",
+    "secrets_dir": ".g8e/secrets",
+    "ssh_config_path": ".g8e/ssh_config"
+  },
+  "ports": {
+    "g8ee_https": 8443,
+    "insecure_mcp_gateway": 18789,
+    "operator_bootstrap_https": 8441,
+    "operator_https": 8440,
+    "operator_public_https": 8442
+  }
+}

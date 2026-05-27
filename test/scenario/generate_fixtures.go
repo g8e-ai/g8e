@@ -25,7 +25,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
@@ -75,7 +75,7 @@ func main() {
 	baseEnv.Payload = payloadBytes
 
 	// Generate transaction hash
-	hash, _ := uap.GenerateMessageID(baseEnv)
+	hash, _ := governance.GenerateMessageID(baseEnv)
 	baseEnv.Id = hash
 	baseEnv.TransactionHash = hash
 
@@ -99,7 +99,7 @@ func main() {
 	replayEnv := proto.Clone(baseEnv).(*commonv1.GovernanceEnvelope)
 	replayEnv.Nonce = "nonce-replay-123"
 	// Rehash with new nonce
-	replayHash, _ := uap.GenerateMessageID(replayEnv)
+	replayHash, _ := governance.GenerateMessageID(replayEnv)
 	replayEnv.Id = replayHash
 	replayEnv.TransactionHash = replayHash
 	// Re-sign with new hash
@@ -111,7 +111,7 @@ func main() {
 	staleEnv.StateMerkleRoot = "stale-old-root-999"
 	staleEnv.Nonce = "nonce-stale-123"
 	// Rehash with new state root
-	newHash, _ := uap.GenerateMessageID(staleEnv)
+	newHash, _ := governance.GenerateMessageID(staleEnv)
 	staleEnv.Id = newHash
 	staleEnv.TransactionHash = newHash
 	// Re-sign with new hash
@@ -123,7 +123,7 @@ func main() {
 	tamperedEnv := proto.Clone(baseEnv).(*commonv1.GovernanceEnvelope)
 	tamperedEnv.Nonce = "nonce-tampered-123"
 	// Rehash with new nonce
-	tamperedHash, _ := uap.GenerateMessageID(tamperedEnv)
+	tamperedHash, _ := governance.GenerateMessageID(tamperedEnv)
 	tamperedEnv.Id = tamperedHash
 	tamperedEnv.TransactionHash = tamperedHash
 	// Re-sign with new hash

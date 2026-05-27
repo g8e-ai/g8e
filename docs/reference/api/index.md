@@ -46,12 +46,12 @@ It binds identity, intent, state, and governance proofs into one transaction.
 | event_type | [string](#string) |  | Intent &amp; Payload |
 | payload | [bytes](#bytes) |  | Raw protobuf payload |
 | intent_data | google.protobuf.Struct |  | Structured JSON-first view |
-| action_type | [string](#string) |  | UAP-compatible action type (e.g., EXECUTE_BASH) |
-| target_resource | [string](#string) |  | UAP-compatible target resource |
+| action_type | [string](#string) |  | GovernanceEnvelope action type (e.g., EXECUTE_BASH) |
+| target_resource | [string](#string) |  | GovernanceEnvelope target resource |
 | state_merkle_root | [string](#string) |  | State &amp; Replay Protection |
 | nonce | [string](#string) |  |  |
 | transaction_hash | [string](#string) |  |  |
-| protocol_version | [string](#string) |  | UAP-compatible protocol version (e.g., &#34;1.0&#34;) |
+| protocol_version | [string](#string) |  | GovernanceEnvelope protocol version (e.g., &#34;1.0&#34;) |
 | governance | [GovernanceMetadata](#g8e-common-v1-GovernanceMetadata) |  | Governance Proofs |
 | case_id | [string](#string) |  | Application Context |
 | investigation_id | [string](#string) |  |  |

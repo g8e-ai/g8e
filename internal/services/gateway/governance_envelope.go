@@ -107,7 +107,7 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 }
 
 // handleGovernanceEnvelope is the canonical synchronous mutation entry point
-// for BYO Gateway clients. It accepts a UAP JSON envelope, verifies it
+// for BYO Gateway clients. It accepts a GovernanceEnvelope, verifies it
 // through the Gateway's fail-closed gate (id, hash, expiry, nonce, state
 // root, L2/L3 governance), executes it through the Actuator, and returns the
 // signed ActionReceipt.
@@ -210,7 +210,7 @@ func classifyEnvelopeError(err error) int {
 		return http.StatusForbidden
 	}
 	// Wrapped invalid-envelope decode error from ProcessEnvelope.
-	if len(msg) > 0 && (containsAny(msg, "invalid UAP JSON envelope", "empty payload", "payload exceeds")) {
+	if len(msg) > 0 && (containsAny(msg, "invalid GovernanceEnvelope", "empty payload", "payload exceeds")) {
 		return http.StatusBadRequest
 	}
 	return http.StatusInternalServerError

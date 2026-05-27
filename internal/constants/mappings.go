@@ -20,12 +20,12 @@ import (
 // Boundary typing invariant:
 //
 // These mapping helpers operate on raw `string` because both endpoints of
-// the translation are protobuf-generated `string` fields (UAPEnvelope.ActionType,
+// the translation are protobuf-generated `string` fields (GovernanceEnvelope.ActionType,
 // UniversalEnvelope.EventType, etc.) that cannot be retyped without forking
 // protoc output. ActionType constants are used on the authoring side;
 // membership at the verification gate is enforced by the TransactionVerifier.
 
-// MapEventTypeToActionType maps protobuf event types to UAP action types.
+// MapEventTypeToActionType maps protobuf event types to GovernanceEnvelope action types.
 func MapEventTypeToActionType(eventType EventType) ActionType {
 	switch eventType {
 	case Event.Operator.Eval.AnswerRequested:
@@ -69,7 +69,7 @@ func MapEventTypeToActionType(eventType EventType) ActionType {
 	}
 }
 
-// MapActionTypeToEventType maps UAP action types back to protobuf event types.
+// MapActionTypeToEventType maps GovernanceEnvelope action types back to protobuf event types.
 func MapActionTypeToEventType(actionType ActionType) EventType {
 	switch actionType {
 	case ActionTypeEvalAnswer:

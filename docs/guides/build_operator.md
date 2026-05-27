@@ -35,12 +35,13 @@ make build
 
 This produces the `g8e` binary in the repository root. The binary is statically linked and requires no runtime dependencies.
 
+**Self-Contained Deployment**: The compiled binary is fully self-sovereign and requires no source tree, configuration files, or specific directory structure. It can be copied to any directory and run from there. All paths are resolved relative to the current working directory unless explicitly overridden by flags. Path configuration is embedded directly in the binary via go:embed and is the sole source of truth.
+
 ### Build Targets
 
 The Makefile provides several build targets:
 
-- `make build` — Builds both the CLI wrapper and the `g8e` binary.
-- `make build-operator` — Builds the `g8e` binary.
+- `make build` — Builds the `g8e` binary.
 - `make build-compressed` — Builds the `g8e` binary with compression optimizations.
 - `make clean` — Removes compiled binaries and test artifacts.
 

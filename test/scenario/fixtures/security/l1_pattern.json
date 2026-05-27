@@ -32,19 +32,19 @@
   "expect": {
     "doctrine": {
       "verdict": "reject",
-      "reject_reason": "TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1Doctrine) forbidden patterns: field command violates pattern sudo, field command violates pattern su, field command violates pattern rm -rf /",
+      "reject_reason": "TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1Doctrine) forbidden patterns: field command violates pattern (^|\\s)sudo(\\s|$), field command violates pattern rm -rf /, command threat detected: destroy_rm_rf_root (category: data_destruction, MITRE: T1485)",
       "l2_status": 1,
       "l3_status": 1
     },
     "consensus": {
       "verdict": "reject",
-      "reject_reason": "TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1Doctrine) forbidden patterns: field command violates pattern sudo, field command violates pattern su, field command violates pattern rm -rf /",
+      "reject_reason": "TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1Doctrine) forbidden patterns: field command violates pattern (^|\\s)sudo(\\s|$), field command violates pattern rm -rf /, command threat detected: destroy_rm_rf_root (category: data_destruction, MITRE: T1485)",
       "l2_status": 2,
       "l3_status": 1
     },
     "notary": {
       "verdict": "reject",
-      "reject_reason": "TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1Doctrine) forbidden patterns: field command violates pattern sudo, field command violates pattern su, field command violates pattern rm -rf /",
+      "reject_reason": "TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1Doctrine) forbidden patterns: field command violates pattern (^|\\s)sudo(\\s|$), field command violates pattern rm -rf /, command threat detected: destroy_rm_rf_root (category: data_destruction, MITRE: T1485)",
       "l2_status": 2,
       "l3_status": 3
     }

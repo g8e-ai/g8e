@@ -19,7 +19,7 @@ import (
 	"github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
-// EnvelopeProcessor verifies and executes UAP JSON envelopes synchronously,
+// EnvelopeProcessor verifies and executes GovernanceEnvelopes synchronously,
 // returning a signed ActionReceipt or a governance verification error.
 // It is the primary entry point for the g8e Gateway's fail-closed mutation gate.
 type EnvelopeProcessor interface {

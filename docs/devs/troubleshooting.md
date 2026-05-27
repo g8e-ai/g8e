@@ -93,7 +93,7 @@ Common causes:
 Stop the managed process before retrying:
 
 ```bash
-./g8e platform down
+./g8e platform stop
 ./g8e platform start
 ```
 

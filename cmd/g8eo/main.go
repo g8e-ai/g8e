@@ -634,7 +634,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	}
 	cfg.Version = version
 
-	svc, err := gateway.NewGatewayService(cfg, logger)
+	svc, err := gateway.NewGatewayService(cfg, logger, nil)
 	if err != nil {
 		logger.Error("Failed to create gateway service", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitCodeFromError(err))
@@ -721,7 +721,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	}
 
 	// Wire the synchronous fail-closed mutation gate into the gateway HTTP
-	// surface. Once set, BYO clients can POST UAP envelopes to
+	// surface. Once set, BYO clients can POST GovernanceEnvelope envelopes to
 	// /api/governance/envelope and receive a signed ActionReceipt.
 	svc.SetEnvelopeProcessor(cmdSvc)
 

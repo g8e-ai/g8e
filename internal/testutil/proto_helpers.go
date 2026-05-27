@@ -22,7 +22,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
@@ -313,13 +313,13 @@ func MustBuildShutdownRequestedPayload(t *testing.T, reason string) []byte {
 }
 
 // =============================================================================
-// UAP Envelope Helpers (Phase 3 - JSON-first protocol)
+// GovernanceEnvelope Helpers (Phase 3 - JSON-first protocol)
 // =============================================================================
 
-// MustMarshalUAPEnvelope creates a UAPEnvelope JSON with the given fields.
-func MustMarshalUAPEnvelope(t *testing.T, messageID string, protocolVersion string, senderID string, actionType string, targetResource string, dataFormat string, dataBlob string, requiredVotes int, caseID string, investigationID string, taskID *string) []byte {
+// MustMarshalGovernanceEnvelope creates a GovernanceEnvelope JSON with the given fields.
+func MustMarshalGovernanceEnvelope(t *testing.T, messageID string, protocolVersion string, senderID string, actionType string, targetResource string, dataFormat string, dataBlob string, requiredVotes int, caseID string, investigationID string, taskID *string) []byte {
 	t.Helper()
-	env := &uap.UAPEnvelope{
+	env := &governance.GovernanceEnvelope{
 		ProtocolVersion: protocolVersion,
 		Id:              messageID,
 		OperatorId:      senderID,
@@ -336,15 +336,15 @@ func MustMarshalUAPEnvelope(t *testing.T, messageID string, protocolVersion stri
 
 	b, err := json.Marshal(env)
 	if err != nil {
-		t.Fatalf("failed to marshal UAPEnvelope JSON: %v", err)
+		t.Fatalf("failed to marshal GovernanceEnvelope JSON: %v", err)
 	}
 	return b
 }
 
-// MustMarshalUAPEnvelopeWithVotes creates a UAPEnvelope JSON with pre-populated votes.
-func MustMarshalUAPEnvelopeWithVotes(t *testing.T, messageID string, protocolVersion string, senderID string, actionType string, targetResource string, dataFormat string, dataBlob string, requiredVotes int, agentIDs []string, consensusSig string) []byte {
+// MustMarshalGovernanceEnvelopeWithVotes creates a GovernanceEnvelope JSON with pre-populated votes.
+func MustMarshalGovernanceEnvelopeWithVotes(t *testing.T, messageID string, protocolVersion string, senderID string, actionType string, targetResource string, dataFormat string, dataBlob string, requiredVotes int, agentIDs []string, consensusSig string) []byte {
 	t.Helper()
-	env := &uap.UAPEnvelope{
+	env := &governance.GovernanceEnvelope{
 		ProtocolVersion: protocolVersion,
 		Id:              messageID,
 		OperatorId:      senderID,
@@ -361,41 +361,41 @@ func MustMarshalUAPEnvelopeWithVotes(t *testing.T, messageID string, protocolVer
 	}
 	b, err := json.Marshal(env)
 	if err != nil {
-		t.Fatalf("failed to marshal UAPEnvelope JSON with votes: %v", err)
+		t.Fatalf("failed to marshal GovernanceEnvelope JSON with votes: %v", err)
 	}
 	return b
 }
 
-// MustUnmarshalUAPEnvelope unmarshals bytes to a UAPEnvelope, fatally failing the test on error.
-func MustUnmarshalUAPEnvelope(t *testing.T, data []byte) *uap.UAPEnvelope {
+// MustUnmarshalGovernanceEnvelope unmarshals bytes to a GovernanceEnvelope, fatally failing the test on error.
+func MustUnmarshalGovernanceEnvelope(t *testing.T, data []byte) *governance.GovernanceEnvelope {
 	t.Helper()
-	env := &uap.UAPEnvelope{}
+	env := &governance.GovernanceEnvelope{}
 	if err := json.Unmarshal(data, env); err != nil {
-		t.Fatalf("failed to unmarshal UAPEnvelope JSON: %v", err)
+		t.Fatalf("failed to unmarshal GovernanceEnvelope JSON: %v", err)
 	}
 	return env
 }
 
-// MustGenerateUAPMessageID generates a deterministic MessageID from intent and context.
-func MustGenerateUAPMessageID(t *testing.T, actionType string, targetResource string, dataFormat string, dataBlob string) string {
+// MustGenerateGovernanceMessageID generates a deterministic MessageID from intent and context.
+func MustGenerateGovernanceMessageID(t *testing.T, actionType string, targetResource string, dataFormat string, dataBlob string) string {
 	t.Helper()
-	env := &uap.UAPEnvelope{
+	env := &governance.GovernanceEnvelope{
 		ActionType:     actionType,
 		TargetResource: targetResource,
 		Payload:        []byte(dataBlob),
 		ExpiresAt:      timestamppb.New(time.Now().Add(5 * time.Minute)),
 	}
-	id, err := uap.GenerateMessageID(env)
+	id, err := governance.GenerateMessageID(env)
 	if err != nil {
 		t.Fatalf("failed to generate UAP MessageID: %v", err)
 	}
 	return id
 }
 
-// MustMarshalUAPEnvelopeWithNonce creates a UAPEnvelope JSON with the given fields and a nonce.
-func MustMarshalUAPEnvelopeWithNonce(t *testing.T, messageID string, protocolVersion string, senderID string, actionType string, targetResource string, dataFormat string, dataBlob string, requiredVotes int, caseID string, investigationID string, taskID *string, nonce string) []byte {
+// MustMarshalGovernanceEnvelopeWithNonce creates a GovernanceEnvelope JSON with the given fields and a nonce.
+func MustMarshalGovernanceEnvelopeWithNonce(t *testing.T, messageID string, protocolVersion string, senderID string, actionType string, targetResource string, dataFormat string, dataBlob string, requiredVotes int, caseID string, investigationID string, taskID *string, nonce string) []byte {
 	t.Helper()
-	env := &uap.UAPEnvelope{
+	env := &governance.GovernanceEnvelope{
 		ProtocolVersion: protocolVersion,
 		Id:              messageID,
 		OperatorId:      senderID,
@@ -413,13 +413,13 @@ func MustMarshalUAPEnvelopeWithNonce(t *testing.T, messageID string, protocolVer
 
 	b, err := json.Marshal(env)
 	if err != nil {
-		t.Fatalf("failed to marshal UAPEnvelope JSON: %v", err)
+		t.Fatalf("failed to marshal GovernanceEnvelope JSON: %v", err)
 	}
 	return b
 }
 
-// MustCreateUAPVote creates a slice of agent IDs for testing.
-func MustCreateUAPVote(t *testing.T, nodeID string, signature string, decision bool) []string {
+// MustCreateGovernanceVote creates a slice of agent IDs for testing.
+func MustCreateGovernanceVote(t *testing.T, nodeID string, signature string, decision bool) []string {
 	t.Helper()
 	return []string{nodeID}
 }

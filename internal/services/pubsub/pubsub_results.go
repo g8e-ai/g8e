@@ -199,7 +199,7 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 }
 
 // PublishHeartbeat publishes heartbeat to dedicated operator pub/sub heartbeat channel.
-// It wraps the heartbeat in a UAPEnvelope for consistency with other results.
+// It wraps the heartbeat in a GovernanceEnvelope for consistency with other results.
 func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error {
 	rr.logger.Info("[HEARTBEAT] Publishing heartbeat to operator pub/sub (UAP)")
 

@@ -1,0 +1,52 @@
+{
+  "name": "malformed_payload",
+  "vertical": "gates",
+  "narrative": "Envelope with invalid protobuf payload should be rejected",
+  "intent": {
+    "id": "8051a39f21b2905d9019750ded5af39541b83b0521afbc89f3e374ec2c4a8ace",
+    "timestamp": "2026-05-25T12:00:00Z",
+    "expiresAt": "2026-05-25T13:00:00Z",
+    "sourceComponent": "COMPONENT_CLIENT",
+    "operatorId": "operator-1",
+    "operatorSessionId": "operator-session-1",
+    "payload": "ISEhaW52YWxpZCEhIWJhc2U2NCEhIQ==",
+    "actionType": "EXECUTE_BASH",
+    "targetResource": "localhost",
+    "stateMerkleRoot": "abc123def456",
+    "nonce": "nonce-malformed-payload-123",
+    "transactionHash": "8051a39f21b2905d9019750ded5af39541b83b0521afbc89f3e374ec2c4a8ace",
+    "protocolVersion": "1.0",
+    "governance": {
+      "l2": {
+        "consensusSignature": "38fbd0aa209d30d7caa1f215db7659fd6bea5698d3b4362422b95f4afd47a8ebc7e983c3839ae762186c83a870915f96336454af9c1be3a5f36221049a76a40b",
+        "keyId": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
+      }
+    }
+  },
+  "evidence": {
+    "l2_signature_present": true,
+    "l2_key_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd",
+    "l3_proof_present": false,
+    "signer_id": "797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
+  },
+  "expect": {
+    "doctrine": {
+      "verdict": "reject",
+      "reject_reason": "TX_PAYLOAD_DECODE: failed to decode typed payload",
+      "l2_status": 1,
+      "l3_status": 1
+    },
+    "consensus": {
+      "verdict": "reject",
+      "reject_reason": "TX_PAYLOAD_DECODE: failed to decode typed payload",
+      "l2_status": 1,
+      "l3_status": 1
+    },
+    "notary": {
+      "verdict": "reject",
+      "reject_reason": "TX_PAYLOAD_DECODE: failed to decode typed payload",
+      "l2_status": 1,
+      "l3_status": 1
+    }
+  }
+}

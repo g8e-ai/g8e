@@ -20,12 +20,12 @@ import (
 	"fmt"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
 // L2Consensus is the internal consensus engine's evaluator.
-// It receives UAP envelopes from agents and appends a cryptographic vote.
+// It receives GovernanceEnvelope envelopes from agents and appends a cryptographic vote.
 type L2Consensus struct {
 	NodeID     string
 	Doctrine   *L1Doctrine
@@ -42,9 +42,9 @@ func NewL2Consensus(nodeID string, d *L1Doctrine, pk ed25519.PrivateKey) *L2Cons
 }
 
 // EvaluatePayload represents the L2Consensus's core loop.
-func (t *L2Consensus) EvaluatePayload(env *uap.UAPEnvelope) error {
+func (t *L2Consensus) EvaluatePayload(env *governance.GovernanceEnvelope) error {
 	// 1. Verify Sender Hash
-	expectedHash, err := uap.GenerateMessageID(env)
+	expectedHash, err := governance.GenerateMessageID(env)
 	if err != nil {
 		return fmt.Errorf("failed to generate message ID: %w", err)
 	}

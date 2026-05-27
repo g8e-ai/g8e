@@ -74,7 +74,9 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces the `g8e` CLI wrapper and the `g8e.operator` binary. The same `g8e.operator` binary runs in two modes: Gateway mode (Policy Decision Point) and Operator mode (Policy Execution Point).
+This produces the `g8e` binary. The same `g8e` binary runs in two modes: Gateway mode (Policy Decision Point) and Operator mode (Policy Execution Point).
+
+**Self-Contained Deployment**: The compiled binary is fully self-sovereign and requires no source tree, configuration files, or specific directory structure. It can be copied to any directory and run from there. All paths are resolved relative to the current working directory unless explicitly overridden by flags. Path configuration is embedded directly in the binary via go:embed and is the sole source of truth.
 
 ### 3. Start the Governance Gateway
 
@@ -84,44 +86,34 @@ This produces the `g8e` CLI wrapper and the `g8e.operator` binary. The same `g8e
 
 This starts the Gateway in doctrine mode (L1 enforced, L2/L3 audited). Follow the CLI prompts to initialize the PKI hierarchy and Gateway state.
 
-### 4. Bootstrap (First-Time Setup)
+### 4. Authenticate
 
-For first-time setup on a fresh installation:
-
-```bash
-./g8e auth bootstrap
-```
-
-This creates the first user and issues mTLS certificates for the Operator and CLI. Only available over loopback when no users exist.
-
-### 5. Authenticate (Existing Installation)
-
-For subsequent authentication on an existing Gateway:
+The first login automatically bootstraps the platform, creating the first user and issuing mTLS certificates:
 
 ```bash
 ./g8e auth login
 ```
 
-This authenticates via device-link token and saves mTLS credentials to `~/.g8e/credentials`.
+This authenticates and saves mTLS credentials to `~/.g8e/credentials`. Subsequent logins use device-link token enrollment.
 
 ### 6. Start a Governed Operator
 
 For local development with MCP server mode:
 
 ```bash
-./g8e.operator --mcp-serve
+./g8e --mcp-serve
 ```
 
 For remote deployment, generate a device-link token on the Gateway:
 
 ```bash
-./g8e data device-links create --name "prod-db-node"
+./g8e data device-links create --user-id "prod-db-node"
 ```
 
 Then start the Operator on the remote host with the token:
 
 ```bash
-./g8e.operator --device-token <token> --endpoint <gateway-ip>
+./g8e --device-token <token> --endpoint <gateway-ip>
 ```
 
 ### 7. Use as Protocol Translator
@@ -139,7 +131,7 @@ curl -X POST https://localhost:8440/api/governance/envelope \
 For stdio-based MCP (required by editors like Cursor or Claude Code):
 
 ```bash
-./g8e.operator --mcp-serve
+./g8e --mcp-serve
 ```
 
 ---

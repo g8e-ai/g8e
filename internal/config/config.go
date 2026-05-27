@@ -273,6 +273,43 @@ type GatewayOptions struct {
 	AllowTestPortZero bool
 }
 
+// ResolveGatewayPorts finds three available ports incrementally, starting from the
+// requested ports. This allows multiple operators to run on the same host.
+func ResolveGatewayPorts(httpPort, bootstrapPort, publicPort int) (int, int, int) {
+	if httpPort <= 0 {
+		httpPort = constants.Ports.OperatorHttps
+	}
+	if bootstrapPort <= 0 {
+		bootstrapPort = constants.Ports.OperatorBootstrapHttps
+	}
+	if publicPort <= 0 {
+		publicPort = constants.Ports.OperatorPublicHttps
+	}
+
+	// Try up to 100 offsets
+	for offset := 0; offset < 100; offset++ {
+		h := httpPort + offset
+		b := bootstrapPort + offset
+		p := publicPort + offset
+
+		if isPortAvailable(h) && isPortAvailable(b) && isPortAvailable(p) {
+			return h, b, p
+		}
+	}
+
+	// Fallback to original if we can't find a free block (let it fail during bind)
+	return httpPort, bootstrapPort, publicPort
+}
+
+func isPortAvailable(port int) bool {
+	ln, err := net.Listen(string(constants.NetworkProtocolTCP), fmt.Sprintf(":%d", port))
+	if err != nil {
+		return false
+	}
+	_ = ln.Close()
+	return true
+}
+
 // LoadGateway creates configuration for gateway mode.
 // Gateway mode skips all operator-mode validation - no API key, no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
@@ -316,40 +353,33 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 		}
 	}
 
+	// Reject port 0 in production
+	// This check must happen before default assignment to validate actual input
+	if !opts.AllowTestPortZero {
+		if opts.HTTPPort == 0 && opts.BootstrapPort == 0 && opts.PublicPort == 0 {
+			// All zero means "use defaults and resolve"
+		} else {
+			if opts.HTTPPort == 0 {
+				return nil, fmt.Errorf("httpPort cannot be 0 in production")
+			}
+			if opts.BootstrapPort == 0 {
+				return nil, fmt.Errorf("bootstrapPort cannot be 0 in production")
+			}
+			if opts.PublicPort == 0 {
+				return nil, fmt.Errorf("publicPort cannot be 0 in production")
+			}
+		}
+	}
+
 	httpPort := opts.HTTPPort
 	bootstrapPort := opts.BootstrapPort
 	publicPort := opts.PublicPort
 
-	// Reject port 0 in production (only allowed for Go tests)
-	// This check must happen before default assignment to validate actual input
+	// Resolve available ports if they are not 0 (dynamic test ports)
 	if !opts.AllowTestPortZero {
-
-		if httpPort == 0 {
-			return nil, fmt.Errorf("httpPort cannot be 0 in production")
-		}
-		if bootstrapPort == 0 {
-			return nil, fmt.Errorf("bootstrapPort cannot be 0 in production")
-		}
-		if publicPort == 0 {
-			return nil, fmt.Errorf("publicPort cannot be 0 in production")
-		}
+		httpPort, bootstrapPort, publicPort = ResolveGatewayPorts(httpPort, bootstrapPort, publicPort)
 	}
 
-	// Assign default ports only if they are still 0 AND we are not in test-port-zero mode.
-	// If allowTestPortZero is true and ports are 0, we leave them as 0 so net.Listen can bind to a random port.
-	// Default ports must match protocol/constants/paths.json (canonical source of truth).
-	if !opts.AllowTestPortZero {
-
-		if httpPort <= 0 {
-			httpPort = constants.Ports.OperatorHttps
-		}
-		if bootstrapPort <= 0 {
-			bootstrapPort = constants.Ports.OperatorBootstrapHttps
-		}
-		if publicPort <= 0 {
-			publicPort = constants.Ports.OperatorPublicHttps
-		}
-	}
 	passkeyRpID := opts.PasskeyRpID
 	if passkeyRpID == "" {
 		passkeyRpID = "localhost"

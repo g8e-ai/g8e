@@ -30,7 +30,7 @@ import (
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/sovereignty"
 	"github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
@@ -48,7 +48,7 @@ type TransactionAuditStore interface {
 	DocSet(collection, id string, data json.RawMessage) error
 }
 
-// L5Actuator is the execution gateway. It is the final stop for all UAP envelopes.
+// L5Actuator is the execution gateway. It is the final stop for all GovernanceEnvelope envelopes.
 type L5Actuator struct {
 	Logger            *slog.Logger
 	SignerStore       SignerStore
@@ -111,18 +111,22 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 
 	// Determine L2 status based on posture and verification result
 	l2Status := operatorv1.L2Status_L2_STATUS_NOT_REQUIRED
-	if vt.L2Valid {
-		l2Status = operatorv1.L2Status_L2_STATUS_REQUIRED_VALID
-	} else if vt.Posture != nil && vt.Posture.RequiresL2Signature() {
-		l2Status = operatorv1.L2Status_L2_STATUS_REQUIRED_FAILED
+	if vt.Posture != nil && vt.Posture.RequiresL2Signature() {
+		if vt.L2Valid {
+			l2Status = operatorv1.L2Status_L2_STATUS_REQUIRED_VALID
+		} else {
+			l2Status = operatorv1.L2Status_L2_STATUS_REQUIRED_FAILED
+		}
 	}
 
 	// Determine L3 status based on posture and verification result
 	l3Status := operatorv1.L3Status_L3_STATUS_NOT_REQUIRED
-	if vt.L3Valid {
-		l3Status = operatorv1.L3Status_L3_STATUS_REQUIRED_VALID
-	} else if vt.Posture != nil && vt.Posture.RequiresL3Proof() {
-		l3Status = operatorv1.L3Status_L3_STATUS_REQUIRED_FAILED
+	if vt.Posture != nil && vt.Posture.RequiresL3Proof() {
+		if vt.L3Valid {
+			l3Status = operatorv1.L3Status_L3_STATUS_REQUIRED_VALID
+		} else {
+			l3Status = operatorv1.L3Status_L3_STATUS_REQUIRED_FAILED
+		}
 	}
 
 	receipt := &operatorv1.ActionReceipt{
@@ -258,7 +262,7 @@ func (w *L5Actuator) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 }
 
 // LogReceipt records the signed action receipt in the audit vault and console_audit.
-func (w *L5Actuator) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) error {
+func (w *L5Actuator) LogReceipt(env *governance.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
 	docErr := w.logReceiptDocument(env, r)
 
 	if w.AuditVault == nil {
@@ -298,7 +302,7 @@ func (w *L5Actuator) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceip
 	return docErr
 }
 
-func (w *L5Actuator) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) error {
+func (w *L5Actuator) logReceiptDocument(env *governance.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
 	if w.AuditStore == nil || env == nil {
 		return nil
 	}

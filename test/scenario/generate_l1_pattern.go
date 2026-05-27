@@ -25,7 +25,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
@@ -66,7 +66,7 @@ func main() {
 	baseEnv.Payload = payloadBytes
 
 	// Generate transaction hash
-	hash, _ := uap.GenerateMessageID(baseEnv)
+	hash, _ := governance.GenerateMessageID(baseEnv)
 	baseEnv.Id = hash
 	baseEnv.TransactionHash = hash
 

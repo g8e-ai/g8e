@@ -309,17 +309,17 @@ func dataDeviceLinksDeleteCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
+			client, err := api.NewClient(cfg)
+			if err != nil {
+				return err
+			}
+
 			if token == "" {
 				return fmt.Errorf("--token is required")
 			}
 
 			if userID == "" {
 				userID = uuid.New().String()
-			}
-
-			client, err := api.NewClient(cfg)
-			if err != nil {
-				return err
 			}
 
 			path := fmt.Sprintf("/api/device-links/%s?user_id=%s", token, userID)
@@ -386,10 +386,6 @@ func dataStoreCmd() *cobra.Command {
 		Use:   "store",
 		Short: "Manage document storage",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if collection == "" {
-				return fmt.Errorf("not authenticated: --collection is required")
-			}
-
 			cfg, err := config.Load("")
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
@@ -398,6 +394,10 @@ func dataStoreCmd() *cobra.Command {
 			client, err := api.NewClient(cfg)
 			if err != nil {
 				return err
+			}
+
+			if collection == "" {
+				return fmt.Errorf("--collection is required")
 			}
 
 			if documentID == "" {
@@ -455,14 +455,6 @@ func dataAuditListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List audit events for a session",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if operatorSessionID == "" {
-				operatorSessionID = os.Getenv("G8E_OPERATOR_SESSION_ID")
-			}
-
-			if operatorSessionID == "" {
-				return fmt.Errorf("not authenticated: --operator-session-id or G8E_OPERATOR_SESSION_ID is required")
-			}
-
 			cfg, err := config.Load("")
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
@@ -471,6 +463,14 @@ func dataAuditListCmd() *cobra.Command {
 			client, err := api.NewClient(cfg)
 			if err != nil {
 				return err
+			}
+
+			if operatorSessionID == "" {
+				operatorSessionID = os.Getenv("G8E_OPERATOR_SESSION_ID")
+			}
+
+			if operatorSessionID == "" {
+				return fmt.Errorf("--operator-session-id or G8E_OPERATOR_SESSION_ID is required")
 			}
 
 			query := QueryRequestWithLimit{
@@ -499,9 +499,11 @@ func dataAuditListCmd() *cobra.Command {
 }
 
 func dataAuditSummaryCmd() *cobra.Command {
+	var operatorSessionID string
+
 	cmd := &cobra.Command{
 		Use:   string(constants.StreamStatusSummary),
-		Short: "Show chaos test summary from audit vault",
+		Short: "Show audit event summary by type",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
@@ -510,67 +512,65 @@ func dataAuditSummaryCmd() *cobra.Command {
 
 			dbPath := filepath.Join(cfg.ProjectRoot, ".g8e", "data", "g8e.db")
 			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-				return fmt.Errorf("audit vault database not found at %s - run chaos test first", dbPath)
+				return fmt.Errorf("audit vault database not found at %s", dbPath)
 			}
 
-			query := "SELECT category, outcome FROM chaos_events"
-			rows, err := sqlDBQuery(dbPath, query)
+			query := "SELECT type, COUNT(*) as count FROM events"
+			if operatorSessionID != "" {
+				query += " WHERE operator_session_id = ?"
+			}
+			query += " GROUP BY type"
+
+			var rows *sql.Rows
+			if operatorSessionID != "" {
+				rows, err = sqlDBQuery(dbPath, query, operatorSessionID)
+			} else {
+				rows, err = sqlDBQuery(dbPath, query)
+			}
 			if err != nil {
-				return fmt.Errorf("failed to query chaos events: %w", err)
+				return fmt.Errorf("failed to query audit events: %w", err)
 			}
 			defer rows.Close()
 
-			var events []struct {
-				Category string
-				Outcome  string
-			}
+			summary := make(map[string]int)
+			total := 0
 			for rows.Next() {
-				var category, outcome string
-				if err := rows.Scan(&category, &outcome); err != nil {
+				var eventType string
+				var count int
+				if err := rows.Scan(&eventType, &count); err != nil {
 					return fmt.Errorf("failed to scan row: %w", err)
 				}
-				events = append(events, struct {
-					Category string
-					Outcome  string
-				}{category, outcome})
+				summary[eventType] = count
+				total += count
 			}
 
-			if len(events) == 0 {
-				cmd.Println("No chaos events found in audit vault")
+			if total == 0 {
+				cmd.Println("No audit events found in audit vault")
 				return nil
 			}
 
-			summary := make(map[string]map[string]int)
-			for _, event := range events {
-				if summary[event.Category] == nil {
-					summary[event.Category] = make(map[string]int)
-				}
-				summary[event.Category][event.Outcome]++
-			}
-
-			cmd.Println("Chaos Test Summary")
+			cmd.Println("Audit Event Summary")
 			cmd.Println(strings.Repeat("=", 110))
-			for category, outcomes := range summary {
-				cmd.Printf("%s:\n", category)
-				for outcome, count := range outcomes {
-					cmd.Printf("  %s: %d\n", outcome, count)
-				}
+			for eventType, count := range summary {
+				cmd.Printf("  %s: %d\n", eventType, count)
 			}
-			cmd.Printf("\nTotal events: %d\n", len(events))
+			cmd.Printf("\nTotal events: %d\n", total)
 
 			return nil
 		},
 	}
 
+	cmd.Flags().StringVar(&operatorSessionID, "operator-session-id", "", "Filter by operator session ID")
+
 	return cmd
 }
 
-func sqlDBQuery(dbPath, query string) (*sql.Rows, error) {
+func sqlDBQuery(dbPath, query string, args ...interface{}) (*sql.Rows, error) {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, err
 	}
 	defer db.Close()
 
-	return db.Query(query)
+	return db.Query(query, args...)
 }

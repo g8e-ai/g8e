@@ -40,7 +40,7 @@ The setup checks for required Go development dependencies, generates protocol ar
 | `./g8e` | Interactive Platform Manager. |
 | `./g8e platform start` | Start the Governance Gateway (`g8eg`). |
 | `./g8e platform status` | Get Gateway health and status. |
-| `./g8e login` | Authenticate the local CLI. |
+| `./g8e auth login` | Authenticate the local CLI. |
 | `./g8e test` | Run Go host-native tests. |
 
 ### CLI
@@ -80,7 +80,7 @@ g8e is split into the **g8e Protocol**, the **Governance Gateway (g8eg)**, and t
 
 | Component | Role | Runtime | Build |
 |---|---|---|---|
-| Governance Gateway (`g8eg`) / Governed Operator (`g8eo`) | Central PDP (`g8eg`) and host-side PEP (`g8eo`) | Host Go binary (compiled from single Go Gateway codebase to both `g8e.gateway` and `g8e.operator`) | Native Go via `Makefile` |
+| Governance Gateway (`g8eg`) / Governed Operator (`g8eo`) | Central PDP (`g8eg`) and host-side PEP (`g8eo`) | Host Go binary (compiled from single Go Gateway codebase to the `g8e` binary) | Native Go via `Makefile` |
 
 ### Host-native Startup Lifecycle
 
@@ -101,7 +101,6 @@ All runtime state is rooted at `./.g8e/`.
 | `.g8e/logs/` | Component stdout/stderr | - | - | nuke |
 | `.g8e/pids/` | Process IDs | clear | clear | nuke |
 
-- **`./g8e platform wipe`**: Clears application-layer data via the Operator API but preserves platform settings.
 - **`./g8e platform reset`**: Deletes the database and secrets, but keeps the CA cert so client trust is maintained (prompts for confirmation; bypass with `-y`, `--yes`, or `--force`).
 - **`./g8e platform clean`**: Destructive removal of the entire `.g8e/` directory and all running processes (prompts for confirmation; bypass with `-y`, `--yes`, or `--force`).
 

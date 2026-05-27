@@ -57,7 +57,7 @@ enum HeartbeatType {
 // Payload for g8e.v1.operator.command.requested
 message CommandRequested {
   // Shell command string to execute
-  string command = 1 [(g8e.common.v1.forbidden_patterns) = "sudo,su,rm -rf /"];
+  string command = 1 [(g8e.common.v1.forbidden_patterns) = "(^|\\s)sudo(\\s|$),(^|\\s)su(\\s|$),rm -rf /"];
 
   // Unique execution identifier (correlation key)
   string execution_id = 2;
@@ -385,7 +385,7 @@ message EvalAnswerRequested {
 message McpCallRequested {
   // The MCP tool name (e.g., "fs_read", "drop_table"). Forbidden patterns
   // here block the gauntlet at L1 before any signature or state check.
-  string tool_name = 1 [(g8e.common.v1.forbidden_patterns) = "(?i)^(sudo|su)$,(?i)rm[ _-]?rf[ _-]?root,(?i)drop[ _-]?database"];
+  string tool_name = 1 [(g8e.common.v1.forbidden_patterns) = "(?i)^(sudo|su)$,(?i)^rm[ _-]?rf[ _-]?root$,(?i)^drop[ _-]?database$"];
 
   // JSON-encoded arguments object exactly as the MCP client supplied it.
   // Stored as a string (not Struct) so the canonical hash is computed over

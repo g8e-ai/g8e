@@ -52,7 +52,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
@@ -97,7 +97,7 @@ func pickCategory(r *rand.Rand) category {
 
 // ── envelope construction ─────────────────────────────────────────────────────
 
-func buildGoodActorEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*uap.UAPEnvelope, error) {
+func buildGoodActorEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*govpkg.GovernanceEnvelope, error) {
 	payload, err := proto.Marshal(&operatorv1.FsListRequested{
 		Path:        fmt.Sprintf("/tmp/chaos-%d", id),
 		ExecutionId: fmt.Sprintf("exec-good-%d", id),
@@ -110,7 +110,7 @@ func buildGoodActorEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey
 		payload, false, privKey, keyID, sessionID)
 }
 
-func buildPromptInjEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*uap.UAPEnvelope, error) {
+func buildPromptInjEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*govpkg.GovernanceEnvelope, error) {
 	forbiddenCmds := []string{
 		"sudo rm -rf /var/log",
 		"su root -c 'cat /etc/shadow'",
@@ -133,7 +133,7 @@ func buildPromptInjEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey
 		payload, false, privKey, keyID, sessionID)
 }
 
-func buildFileMutationEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*uap.UAPEnvelope, error) {
+func buildFileMutationEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*govpkg.GovernanceEnvelope, error) {
 	payload, err := proto.Marshal(&operatorv1.FileEditRequested{
 		FilePath:    fmt.Sprintf("/tmp/chaos-edit-%d.txt", id),
 		Content:     fmt.Sprintf("chaos was here at %d", time.Now().UnixNano()),
@@ -148,7 +148,7 @@ func buildFileMutationEnvelope(id int, stateRoot string, privKey ed25519.Private
 		payload, true, privKey, keyID, sessionID)
 }
 
-func buildMitMEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*uap.UAPEnvelope, error) {
+func buildMitMEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*govpkg.GovernanceEnvelope, error) {
 	payload, err := proto.Marshal(&operatorv1.FsListRequested{
 		Path:        "/etc",
 		ExecutionId: fmt.Sprintf("exec-mitm-%d", id),
@@ -174,8 +174,8 @@ func signedEnvelope(
 	privKey ed25519.PrivateKey,
 	keyID string,
 	sessionID string,
-) (*uap.UAPEnvelope, error) {
-	env := &uap.UAPEnvelope{
+) (*govpkg.GovernanceEnvelope, error) {
+	env := &govpkg.GovernanceEnvelope{
 		ProtocolVersion:   "1.0",
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(30 * time.Minute)), // Increased to 30m for chaos runs
@@ -189,7 +189,7 @@ func signedEnvelope(
 		Nonce:             fmt.Sprintf("chaos-%s-%s", nonceSuffix, hex.EncodeToString(payload[:clampMin(4, len(payload))])),
 	}
 
-	hash, err := uap.GenerateMessageID(env)
+	hash, err := govpkg.GenerateMessageID(env)
 	if err != nil {
 		return nil, fmt.Errorf("hash generation: %w", err)
 	}
@@ -601,7 +601,7 @@ func main() {
 	printDemoQueries(filepath.Join(dataDir, "g8e.db"))
 }
 
-func buildEnvelope(id int, cat category, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*uap.UAPEnvelope, error) {
+func buildEnvelope(id int, cat category, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*govpkg.GovernanceEnvelope, error) {
 	switch cat {
 	case catGoodActor:
 		return buildGoodActorEnvelope(id, stateRoot, privKey, keyID, sessionID)
@@ -619,7 +619,7 @@ func buildEnvelope(id int, cat category, stateRoot string, privKey ed25519.Priva
 func fireOne(
 	id int,
 	cat category,
-	env *uap.UAPEnvelope,
+	env *govpkg.GovernanceEnvelope,
 	stateRoot string,
 	warden *governance.L4Warden,
 	actuator *governance.L5Actuator,
@@ -689,7 +689,7 @@ type batchEventWriter struct {
 	flushSize  int
 }
 
-func (b *batchEventWriter) recordRejection(id int, cat category, env *uap.UAPEnvelope, verErr error) {
+func (b *batchEventWriter) recordRejection(id int, cat category, env *govpkg.GovernanceEnvelope, verErr error) {
 	if b.auditVault == nil {
 		return
 	}
@@ -709,7 +709,7 @@ func (b *batchEventWriter) recordRejection(id int, cat category, env *uap.UAPEnv
 	b.queueEvent(event)
 }
 
-func (b *batchEventWriter) recordExecution(id int, cat category, env *uap.UAPEnvelope, execErr error) {
+func (b *batchEventWriter) recordExecution(id int, cat category, env *govpkg.GovernanceEnvelope, execErr error) {
 	if b.auditVault == nil {
 		return
 	}
@@ -824,14 +824,15 @@ func printSummaryRow(category string, count int, expectedOutcome string, actual 
 func printDemoQueries(dbPath string) {
 	fmt.Printf("=== Demo Queries (run these via ./g8e) ===\n\n")
 
-	fmt.Printf("# 1. View Chaos Test Summary\n")
-	fmt.Printf("./g8e data audit summary\n\n")
-
-	fmt.Printf("# 2. View Audit Events (requires Operator running and mTLS auth)\n")
-	fmt.Printf("./g8e data audit list --operator-session-id chaos-session-001 --limit 10\n\n")
-
-	fmt.Printf("# 3. Query specific collection via Operator API\n")
+	fmt.Printf("# 1. View Chaos Test Summary (requires Operator running and mTLS auth)\n")
 	fmt.Printf("./g8e data store --collection chaos_events\n\n")
+
+	fmt.Printf("# 2. View General Audit Event Summary (from local audit vault)\n")
+	fmt.Printf("./g8e data audit summary\n")
+	fmt.Printf("./g8e data audit summary --operator-session-id <session-id>\n\n")
+
+	fmt.Printf("# 3. View Audit Events via Operator API (requires Operator running and mTLS auth)\n")
+	fmt.Printf("./g8e data audit list --operator-session-id chaos-session-001 --limit 10\n\n")
 
 	fmt.Printf("# 4. View all users\n")
 	fmt.Printf("./g8e data users\n\n")
