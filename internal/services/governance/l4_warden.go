@@ -29,13 +29,13 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/system"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
 
 var (
-	ErrInvalidEnvelope         = errors.New("TX_INVALID_ENVELOPE: failed to decode UAP JSON GovernanceEnvelope")
+	ErrInvalidEnvelope         = errors.New("TX_INVALID_ENVELOPE: failed to decode GovernanceEnvelope JSON GovernanceEnvelope")
 	ErrUnknownActionType       = errors.New("TX_UNKNOWN_ACTION: action type not recognized")
 	ErrPayloadDecodeFailed     = errors.New("TX_PAYLOAD_DECODE: failed to decode typed payload")
 	ErrTransactionHashMismatch = errors.New("TX_HASH_MISMATCH: transaction_hash does not match computed hash")
@@ -291,7 +291,7 @@ func (s *SimpleStateRootProvider) GetCurrentStateRoot() (string, error) {
 
 // VerifiedTransaction represents a fully verified transaction ready for execution.
 type VerifiedTransaction struct {
-	Envelope       *uap.UAPEnvelope
+	Envelope       *governance.GovernanceEnvelope
 	ActionType     constants.ActionType
 	Payload        []byte
 	DecodedPayload proto.Message
@@ -361,12 +361,12 @@ func NewL4Warden(
 	}
 }
 
-// VerifyEnvelope performs all required verification checks on a decoded UAP JSON GovernanceEnvelope.
+// VerifyEnvelope performs all required verification checks on a decoded GovernanceEnvelope JSON GovernanceEnvelope.
 // It is decomposed into three discrete validation stages:
 // 1. Stateless: Basic structural, hash, and L1 Doctrine checks that don't require external state.
 // 2. Stateful: Checks requiring external state (expiry, state root, and early nonce reservation).
 // 3. Posture: Governance posture-aware checks (L2 Consensus and L3 Notary proofs).
-func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *uap.UAPEnvelope) (*VerifiedTransaction, error) {
+func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *governance.GovernanceEnvelope) (*VerifiedTransaction, error) {
 	if envelope == nil {
 		return nil, ErrInvalidEnvelope
 	}
@@ -496,7 +496,7 @@ func (tv *L4Warden) isMutation(actionType constants.ActionType) bool {
 }
 
 // verifyStateless performs basic structural, hash, and L1 Doctrine checks.
-func (tv *L4Warden) verifyStateless(envelope *uap.UAPEnvelope) (proto.Message, string, error) {
+func (tv *L4Warden) verifyStateless(envelope *governance.GovernanceEnvelope) (proto.Message, string, error) {
 	if envelope.Id == "" {
 		return nil, "", ErrTransactionIDMissing
 	}
@@ -552,7 +552,7 @@ func (tv *L4Warden) verifyStateless(envelope *uap.UAPEnvelope) (proto.Message, s
 }
 
 // verifyStateful checks state root. Nonce and expiry are checked earlier in VerifyEnvelope.
-func (tv *L4Warden) verifyStateful(envelope *uap.UAPEnvelope) (time.Time, error) {
+func (tv *L4Warden) verifyStateful(envelope *governance.GovernanceEnvelope) (time.Time, error) {
 	if envelope.StateMerkleRoot == "" {
 		return time.Time{}, ErrStateRootRequired
 	}
@@ -583,7 +583,7 @@ func (tv *L4Warden) verifyStateful(envelope *uap.UAPEnvelope) (time.Time, error)
 }
 
 // verifyPosture performs governance posture-aware checks for L2 and L3.
-func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *uap.UAPEnvelope, computedHash string) (bool, bool, error) {
+func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *governance.GovernanceEnvelope, computedHash string) (bool, bool, error) {
 	l2Valid, err := tv.verifyL2Posture(envelope, computedHash)
 	if err != nil {
 		return false, false, err
@@ -597,7 +597,7 @@ func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *uap.UAPEnvelope
 	return l2Valid, l3Valid, nil
 }
 
-func (tv *L4Warden) verifyL2Posture(envelope *uap.UAPEnvelope, computedHash string) (bool, error) {
+func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, computedHash string) (bool, error) {
 	if !tv.posture.RequiresL2Signature() {
 		return false, nil
 	}
@@ -642,7 +642,7 @@ func (tv *L4Warden) verifyL2Posture(envelope *uap.UAPEnvelope, computedHash stri
 	return false, ErrL2SignatureInvalid
 }
 
-func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *uap.UAPEnvelope) (bool, error) {
+func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *governance.GovernanceEnvelope) (bool, error) {
 	actionType := constants.ActionType(envelope.ActionType)
 
 	// Check if this is an external app transaction that can bypass L3 via policy
@@ -762,8 +762,8 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 }
 
 // computeTransactionHash computes the canonical transaction hash.
-func (tv *L4Warden) computeTransactionHash(envelope *uap.UAPEnvelope) (string, error) {
-	return uap.GenerateMessageID(envelope)
+func (tv *L4Warden) computeTransactionHash(envelope *governance.GovernanceEnvelope) (string, error) {
+	return governance.GenerateMessageID(envelope)
 }
 
 // verifyL2Signature verifies an L2 ED25519 signature.

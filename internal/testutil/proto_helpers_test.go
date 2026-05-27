@@ -19,7 +19,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/require"
 )
@@ -292,13 +292,13 @@ func TestMustBuildShutdownRequestedPayload(t *testing.T) {
 	require.Equal(t, "maintenance", shutdown.Reason)
 }
 
-func TestMustMarshalUAPEnvelope(t *testing.T) {
+func TestMustMarshalGovernanceEnvelope(t *testing.T) {
 	taskID := "task-123"
-	payload := MustMarshalUAPEnvelope(t, "msg-001", "v1.0", "operator-1", "execute", "/tmp", "json", "{}", 3, "case-001", "inv-001", &taskID)
+	payload := MustMarshalGovernanceEnvelope(t, "msg-001", "v1.0", "operator-1", "execute", "/tmp", "json", "{}", 3, "case-001", "inv-001", &taskID)
 	require.NotNil(t, payload)
 
 	// Verify it's valid JSON
-	env := &uap.UAPEnvelope{}
+	env := &governance.GovernanceEnvelope{}
 	err := json.Unmarshal(payload, env)
 	require.NoError(t, err)
 	require.Equal(t, "msg-001", env.Id)
@@ -311,13 +311,13 @@ func TestMustMarshalUAPEnvelope(t *testing.T) {
 	require.Equal(t, "task-123", env.TaskId)
 }
 
-func TestMustMarshalUAPEnvelopeWithVotes(t *testing.T) {
+func TestMustMarshalGovernanceEnvelopeWithVotes(t *testing.T) {
 	agentIDs := []string{"agent-1", "agent-2", "agent-3"}
 	consensusSig := "sig-abc123"
-	payload := MustMarshalUAPEnvelopeWithVotes(t, "msg-002", "v1.0", "operator-2", "execute", "/tmp", "json", "{}", 3, agentIDs, consensusSig)
+	payload := MustMarshalGovernanceEnvelopeWithVotes(t, "msg-002", "v1.0", "operator-2", "execute", "/tmp", "json", "{}", 3, agentIDs, consensusSig)
 	require.NotNil(t, payload)
 
-	env := &uap.UAPEnvelope{}
+	env := &governance.GovernanceEnvelope{}
 	err := json.Unmarshal(payload, env)
 	require.NoError(t, err)
 	require.Equal(t, "msg-002", env.Id)
@@ -327,45 +327,45 @@ func TestMustMarshalUAPEnvelopeWithVotes(t *testing.T) {
 	require.Equal(t, consensusSig, env.Governance.L2.ConsensusSignature)
 }
 
-func TestMustUnmarshalUAPEnvelope(t *testing.T) {
+func TestMustUnmarshalGovernanceEnvelope(t *testing.T) {
 	taskID := "task-456"
-	payload := MustMarshalUAPEnvelope(t, "msg-003", "v1.0", "operator-3", "execute", "/tmp", "json", "{}", 3, "case-002", "inv-002", &taskID)
+	payload := MustMarshalGovernanceEnvelope(t, "msg-003", "v1.0", "operator-3", "execute", "/tmp", "json", "{}", 3, "case-002", "inv-002", &taskID)
 
-	env := MustUnmarshalUAPEnvelope(t, payload)
+	env := MustUnmarshalGovernanceEnvelope(t, payload)
 	require.NotNil(t, env)
 	require.Equal(t, "msg-003", env.Id)
 	require.Equal(t, "v1.0", env.ProtocolVersion)
 	require.Equal(t, "operator-3", env.OperatorId)
 }
 
-func TestMustGenerateUAPMessageID(t *testing.T) {
-	id := MustGenerateUAPMessageID(t, "execute", "/tmp", "json", "{}")
+func TestMustGenerateGovernanceMessageID(t *testing.T) {
+	id := MustGenerateGovernanceMessageID(t, "execute", "/tmp", "json", "{}")
 	require.NotEmpty(t, id)
 
 	// Different inputs should generate different ID
-	id2 := MustGenerateUAPMessageID(t, "read", "/tmp", "json", "{}")
+	id2 := MustGenerateGovernanceMessageID(t, "read", "/tmp", "json", "{}")
 	require.NotEqual(t, id, id2, "Different inputs should generate different IDs")
 
 	// Different target should generate different ID
-	id3 := MustGenerateUAPMessageID(t, "execute", "/var", "json", "{}")
+	id3 := MustGenerateGovernanceMessageID(t, "execute", "/var", "json", "{}")
 	require.NotEqual(t, id, id3, "Different target should generate different IDs")
 }
 
-func TestMustMarshalUAPEnvelopeWithNonce(t *testing.T) {
+func TestMustMarshalGovernanceEnvelopeWithNonce(t *testing.T) {
 	taskID := "task-789"
 	nonce := "nonce-xyz123"
-	payload := MustMarshalUAPEnvelopeWithNonce(t, "msg-004", "v1.0", "operator-4", "execute", "/tmp", "json", "{}", 3, "case-003", "inv-003", &taskID, nonce)
+	payload := MustMarshalGovernanceEnvelopeWithNonce(t, "msg-004", "v1.0", "operator-4", "execute", "/tmp", "json", "{}", 3, "case-003", "inv-003", &taskID, nonce)
 	require.NotNil(t, payload)
 
-	env := &uap.UAPEnvelope{}
+	env := &governance.GovernanceEnvelope{}
 	err := json.Unmarshal(payload, env)
 	require.NoError(t, err)
 	require.Equal(t, "msg-004", env.Id)
 	require.Equal(t, nonce, env.Nonce)
 }
 
-func TestMustCreateUAPVote(t *testing.T) {
-	vote := MustCreateUAPVote(t, "node-1", "sig-123", true)
+func TestMustCreateGovernanceVote(t *testing.T) {
+	vote := MustCreateGovernanceVote(t, "node-1", "sig-123", true)
 	require.NotNil(t, vote)
 	require.Len(t, vote, 1)
 	require.Equal(t, "node-1", vote[0])

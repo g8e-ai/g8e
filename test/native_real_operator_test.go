@@ -40,7 +40,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
@@ -267,7 +267,7 @@ func TestNativeRealOperator_EndToEnd(t *testing.T) {
 			ProtocolVersion:   "1.0",
 		}
 
-		transactionHash, err := uap.GenerateMessageID(envelope)
+		transactionHash, err := governance.GenerateMessageID(envelope)
 		require.NoError(t, err)
 		envelope.Id = transactionHash
 		envelope.TransactionHash = transactionHash
@@ -351,7 +351,7 @@ func TestNativeRealOperator_EndToEnd(t *testing.T) {
 			ProtocolVersion:   "1.0",
 		}
 
-		transactionHash, err := uap.GenerateMessageID(envelope)
+		transactionHash, err := governance.GenerateMessageID(envelope)
 		require.NoError(t, err)
 		envelope.Id = transactionHash
 		envelope.TransactionHash = transactionHash
@@ -416,7 +416,7 @@ func TestNativeRealOperator_EndToEnd(t *testing.T) {
 			ProtocolVersion:   "1.0",
 		}
 
-		transactionHash, err := uap.GenerateMessageID(envelope)
+		transactionHash, err := governance.GenerateMessageID(envelope)
 		require.NoError(t, err)
 		envelope.Id = transactionHash
 		envelope.TransactionHash = transactionHash

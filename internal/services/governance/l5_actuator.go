@@ -30,7 +30,7 @@ import (
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/sovereignty"
 	"github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
@@ -48,7 +48,7 @@ type TransactionAuditStore interface {
 	DocSet(collection, id string, data json.RawMessage) error
 }
 
-// L5Actuator is the execution gateway. It is the final stop for all UAP envelopes.
+// L5Actuator is the execution gateway. It is the final stop for all GovernanceEnvelope envelopes.
 type L5Actuator struct {
 	Logger            *slog.Logger
 	SignerStore       SignerStore
@@ -258,7 +258,7 @@ func (w *L5Actuator) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 }
 
 // LogReceipt records the signed action receipt in the audit vault and console_audit.
-func (w *L5Actuator) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) error {
+func (w *L5Actuator) LogReceipt(env *governance.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
 	docErr := w.logReceiptDocument(env, r)
 
 	if w.AuditVault == nil {
@@ -298,7 +298,7 @@ func (w *L5Actuator) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceip
 	return docErr
 }
 
-func (w *L5Actuator) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) error {
+func (w *L5Actuator) logReceiptDocument(env *governance.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
 	if w.AuditStore == nil || env == nil {
 		return nil
 	}

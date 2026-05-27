@@ -62,7 +62,7 @@ func setExecutionIDOnPayload(payload proto.Message, executionID string) {
 	}
 }
 
-// publishLFAATypedResponseTo builds a UAPEnvelope from a typed payload and publishes it to the
+// publishLFAATypedResponseTo builds a GovernanceEnvelope from a typed payload and publishes it to the
 // results channel. Used by services that hold a PubSubClient directly.
 func publishLFAATypedResponseTo(
 	ctx context.Context,
@@ -97,7 +97,7 @@ func publishLFAATypedResponseTo(
 	logger.Info("LFAA typed response published (Universal)", "event_type", eventType)
 }
 
-// publishLFAAErrorTo builds an error UAPEnvelope and publishes it to the results channel.
+// publishLFAAErrorTo builds an error GovernanceEnvelope and publishes it to the results channel.
 func publishLFAAErrorTo(
 	ctx context.Context,
 	client PubSubClient,

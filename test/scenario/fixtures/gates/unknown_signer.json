@@ -1,0 +1,50 @@
+{
+  "name": "unknown_signer",
+  "vertical": "gates",
+  "narrative": "Envelope signed by untrusted key should be rejected",
+  "intent": {
+    "timestamp": "2026-05-25T12:00:00Z",
+    "expiresAt": "2026-05-25T13:00:00Z",
+    "sourceComponent": "COMPONENT_CLIENT",
+    "operatorId": "operator-1",
+    "operatorSessionId": "operator-session-1",
+    "payload": "CgZscyAtbAESCGV4ZWMtMTIzGgx0ZXN0IGNvbW1hbmQiBnN0cmljdCge",
+    "actionType": "EXECUTE_BASH",
+    "targetResource": "localhost",
+    "stateMerkleRoot": "abc123def456",
+    "nonce": "nonce-unknown-signer-123",
+    "protocolVersion": "1.0",
+    "governance": {
+      "l2": {
+        "consensusSignature": "4382ea224c94fce3a1664e87504c7041d928aba7093668accd7411e0e359323cabc39ec9f901098f0e4b3827b460637e009a8d15b99629efd5364ca277d32201",
+        "keyId": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29"
+      }
+    }
+  },
+  "evidence": {
+    "l2_signature_present": true,
+    "l2_key_id": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+    "l3_proof_present": false,
+    "signer_id": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29"
+  },
+  "expect": {
+    "doctrine": {
+      "verdict": "accept",
+      "reject_reason": "",
+      "l2_status": 1,
+      "l3_status": 1
+    },
+    "consensus": {
+      "verdict": "reject",
+      "reject_reason": "TX_QUORUM_L2_SIG_INVALID: Consensus (L2Consensus) consensus_signature failed verification",
+      "l2_status": 3,
+      "l3_status": 1
+    },
+    "notary": {
+      "verdict": "reject",
+      "reject_reason": "TX_QUORUM_L2_SIG_INVALID: Consensus (L2Consensus) consensus_signature failed verification",
+      "l2_status": 3,
+      "l3_status": 3
+    }
+  }
+}

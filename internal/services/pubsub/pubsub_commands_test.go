@@ -28,7 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/testutil"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
@@ -82,12 +82,12 @@ func TestNewPubSubCommandService_StartsWithoutTrustedSignersButRejectsL2(t *test
 	assert.True(t, errors.Is(err, governance.ErrL2KeyNotConfigured), "expected missing L2 key error, got %v", err)
 }
 
-func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *uap.UAPEnvelope {
+func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg.GovernanceEnvelope {
 	t.Helper()
 	req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
 	payload, err := proto.Marshal(req)
 	require.NoError(t, err)
-	env := &uap.UAPEnvelope{
+	env := &govpkg.GovernanceEnvelope{
 		ProtocolVersion:   "1.0",
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
@@ -100,7 +100,7 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *uap.UA
 		StateMerkleRoot:   "test-state-root",
 		Nonce:             "nonce-missing-signer",
 	}
-	hash, err := uap.GenerateMessageID(env)
+	hash, err := govpkg.GenerateMessageID(env)
 	require.NoError(t, err)
 	env.Id = hash
 	env.TransactionHash = hash
@@ -131,11 +131,11 @@ func TestPubSubCommandService_handleCommandPayload(t *testing.T) {
 	})
 }
 
-func TestPubSubCommandService_handleUAPEnvelope(t *testing.T) {
+func TestPubSubCommandService_handleGovernanceEnvelope(t *testing.T) {
 	t.Run("rejects envelope with missing payload", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		env := &uap.UAPEnvelope{
+		env := &govpkg.GovernanceEnvelope{
 			ProtocolVersion: "1.0",
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
@@ -145,7 +145,7 @@ func TestPubSubCommandService_handleUAPEnvelope(t *testing.T) {
 			StateMerkleRoot: "test-state-root",
 			Nonce:           "nonce-1",
 		}
-		f.Svc.handleUAPEnvelope(env)
+		f.Svc.handleGovernanceEnvelope(env)
 		// Should log error and return without panic
 	})
 
@@ -167,7 +167,7 @@ func TestPubSubCommandService_handleUAPEnvelope(t *testing.T) {
 
 		req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
 		payload, _ := proto.Marshal(req)
-		env := &uap.UAPEnvelope{
+		env := &govpkg.GovernanceEnvelope{
 			ProtocolVersion: "1.0",
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
@@ -177,7 +177,7 @@ func TestPubSubCommandService_handleUAPEnvelope(t *testing.T) {
 			StateMerkleRoot: "test-state-root",
 			Nonce:           "nonce-1",
 		}
-		svc.handleUAPEnvelope(env)
+		svc.handleGovernanceEnvelope(env)
 		// Should log error and return without panic
 	})
 }
@@ -430,7 +430,7 @@ func TestPubSubCommandService_ProcessEnvelope(t *testing.T) {
 		}
 
 		// Re-hash for verifier
-		env.TransactionHash, _ = uap.GenerateMessageID(env)
+		env.TransactionHash, _ = govpkg.GenerateMessageID(env)
 		env.Id = env.TransactionHash
 
 		// Sign for verifier
@@ -438,9 +438,9 @@ func TestPubSubCommandService_ProcessEnvelope(t *testing.T) {
 		sig := ed25519.Sign(f.SignerPriv, []byte(l2Payload))
 		env.Governance.L2.ConsensusSignature = hex.EncodeToString(sig)
 
-		uapBytes, _ := (protojson.MarshalOptions{}).Marshal(env)
+		envelopeBytes, _ := (protojson.MarshalOptions{}).Marshal(env)
 
-		receipt, err := f.Svc.ProcessEnvelope(context.Background(), uapBytes)
+		receipt, err := f.Svc.ProcessEnvelope(context.Background(), envelopeBytes)
 		require.NoError(t, err)
 		require.NotNil(t, receipt)
 		require.Equal(t, env.Id, receipt.TransactionId)
@@ -467,7 +467,7 @@ func TestPubSubCommandService_ProcessEnvelope(t *testing.T) {
 		invalidJSON := []byte("{invalid json}")
 		_, err := f.Svc.ProcessEnvelope(context.Background(), invalidJSON)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid UAP JSON envelope")
+		assert.Contains(t, err.Error(), "invalid GovernanceEnvelope")
 	})
 
 	t.Run("rejects when transaction verifier not configured", func(t *testing.T) {
@@ -487,7 +487,7 @@ func TestPubSubCommandService_ProcessEnvelope(t *testing.T) {
 
 		req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
 		payload, _ := proto.Marshal(req)
-		env := &uap.UAPEnvelope{
+		env := &govpkg.GovernanceEnvelope{
 			ProtocolVersion: "1.0",
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
@@ -497,9 +497,9 @@ func TestPubSubCommandService_ProcessEnvelope(t *testing.T) {
 			StateMerkleRoot: "test-state-root",
 			Nonce:           "nonce-1",
 		}
-		uapBytes, _ := protojson.Marshal(env)
+		envelopeBytes, _ := protojson.Marshal(env)
 
-		_, err = svc.ProcessEnvelope(context.Background(), uapBytes)
+		_, err = svc.ProcessEnvelope(context.Background(), envelopeBytes)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "transaction verifier not configured")
 	})

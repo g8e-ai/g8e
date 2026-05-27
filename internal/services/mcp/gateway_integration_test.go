@@ -16,8 +16,10 @@ package mcp
 import (
 	"context"
 	"crypto/ed25519"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -28,10 +30,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/responder"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/internal/testutil"
+	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
@@ -233,11 +238,11 @@ func TestGatewaySignedFalseIntegration(t *testing.T) {
 	}
 
 	// Marshal the envelope
-	uapBytes, err := protojson.Marshal(envelope)
+	envelopeBytes, err := protojson.Marshal(envelope)
 	require.NoError(t, err)
 
 	// Process through the envelope processor
-	receipt, err := processor.ProcessEnvelope(context.Background(), uapBytes)
+	receipt, err := processor.ProcessEnvelope(context.Background(), envelopeBytes)
 	require.NoError(t, err)
 	require.NotNil(t, receipt)
 
@@ -651,4 +656,236 @@ func (f *integrationTestAuditLogger) LogFieldRead(operatorSessionID, collection,
 		value:             value,
 	})
 	return nil
+}
+
+// TestGatewayL3Verification_RealNotary tests envelope processing with real L3 verification
+// instead of fake envelope processor, testing both pass and fail scenarios.
+func TestGatewayL3Verification_RealNotary(t *testing.T) {
+	t.Parallel()
+
+	t.Run("L3 verification passes with accepting notary", func(t *testing.T) {
+		t.Parallel()
+
+		// Create an accepting L3 notary
+		acceptingL3 := &testutil.ConfigurableMockL3Notary{ShouldPass: true}
+
+		// Create a stateful replay store and state root provider
+		replayStore := testutil.NewStatefulMockReplayStore()
+		stateRootProvider := testutil.NewMockStateRootProvider("test-root")
+
+		// Create signer store with test key
+		pubKey, privKey, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+		signerStore := &governance.SimpleSignerStore{
+			Signers: map[string]ed25519.PublicKey{"test-key": pubKey},
+		}
+
+		// Create a real L4Warden with L3 notary and notary posture
+		warden := governance.NewL4Warden(
+			slog.New(slog.NewTextHandler(os.Stdout, nil)),
+			replayStore,
+			stateRootProvider,
+			signerStore,
+			nil, // AppPolicyStore not used in this test
+			acceptingL3,
+			nil, // Doctrine defaults to L1Doctrine
+			constants.AllActionTypes(),
+			"notary", // Notary posture requires L3 verification
+			nil,      // Clock defaults to RealClock
+		)
+
+		// Create a real envelope processor that uses the warden
+		processor := &realL3EnvelopeProcessor{
+			warden:  warden,
+			privKey: privKey,
+			keyID:   "test-key",
+		}
+
+		// Build a test envelope with L3 metadata
+		envelope := &govpkg.GovernanceEnvelope{
+			ProtocolVersion:   "1.0",
+			Timestamp:         timestamppb.Now(),
+			ExpiresAt:         timestamppb.New(time.Now().Add(time.Hour)),
+			SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
+			OperatorId:        "operator-1",
+			OperatorSessionId: "session-1",
+			ActionType:        string(constants.ActionTypeMcpCall),
+			TargetResource:    "test-tool",
+			StateMerkleRoot:   "test-root",
+			Nonce:             "nonce-test-1",
+			Governance: &commonv1.GovernanceMetadata{
+				GatewaySigned: true,
+				L2: &commonv1.L2Metadata{
+					KeyId:              "test-key",
+					ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte("test"))),
+					AgentIds:           []string{"test-key"},
+				},
+				L3: &commonv1.L3Metadata{
+					AutoApproved: true, // For testing: simulate gateway auto-approval
+				},
+			},
+		}
+
+		// Generate transaction hash
+		txHash, err := govpkg.GenerateMessageID(envelope)
+		require.NoError(t, err)
+		envelope.Id = txHash
+		envelope.TransactionHash = txHash
+
+		// Marshal envelope to protojson
+		envelopeBytes, err := (protojson.MarshalOptions{}).Marshal(envelope)
+		require.NoError(t, err)
+
+		// Process envelope through the processor
+		receipt, err := processor.ProcessEnvelope(context.Background(), envelopeBytes)
+
+		// Verify success: L3 acceptance should return receipt
+		require.NoError(t, err)
+		require.NotNil(t, receipt)
+		require.True(t, processor.called, "Envelope processor should have been called")
+		require.Nil(t, processor.lastError, "L3 verification should have passed")
+	})
+
+	t.Run("L3 verification fails with rejecting notary", func(t *testing.T) {
+		t.Parallel()
+
+		// Create a rejecting L3 notary
+		rejectingL3 := &testutil.ConfigurableMockL3Notary{ShouldPass: false}
+
+		// Create a stateful replay store and state root provider
+		replayStore := testutil.NewStatefulMockReplayStore()
+		stateRootProvider := testutil.NewMockStateRootProvider("test-root")
+
+		// Create signer store with test key
+		pubKey, privKey, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+		signerStore := &governance.SimpleSignerStore{
+			Signers: map[string]ed25519.PublicKey{"test-key": pubKey},
+		}
+
+		// Create a real L4Warden with rejecting L3 notary and notary posture
+		warden := governance.NewL4Warden(
+			slog.New(slog.NewTextHandler(os.Stdout, nil)),
+			replayStore,
+			stateRootProvider,
+			signerStore,
+			nil, // AppPolicyStore not used in this test
+			rejectingL3,
+			nil, // Doctrine defaults to L1Doctrine
+			constants.AllActionTypes(),
+			"notary", // Notary posture requires L3 verification
+			nil,      // Clock defaults to RealClock
+		)
+
+		// Create a real envelope processor that uses the warden
+		processor := &realL3EnvelopeProcessor{
+			warden:  warden,
+			privKey: privKey,
+			keyID:   "test-key",
+		}
+
+		// Build a test envelope with L3 metadata
+		envelope := &govpkg.GovernanceEnvelope{
+			ProtocolVersion:   "1.0",
+			Timestamp:         timestamppb.Now(),
+			ExpiresAt:         timestamppb.New(time.Now().Add(time.Hour)),
+			SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
+			OperatorId:        "operator-1",
+			OperatorSessionId: "session-1",
+			ActionType:        string(constants.ActionTypeMcpCall),
+			TargetResource:    "test-tool",
+			StateMerkleRoot:   "test-root",
+			Nonce:             "nonce-test-2",
+			Governance: &commonv1.GovernanceMetadata{
+				GatewaySigned: true,
+				L2: &commonv1.L2Metadata{
+					KeyId:              "test-key",
+					ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte("test"))),
+					AgentIds:           []string{"test-key"},
+				},
+				L3: &commonv1.L3Metadata{
+					AutoApproved: true, // For testing: simulate gateway auto-approval
+				},
+			},
+		}
+
+		// Generate transaction hash
+		txHash, err := govpkg.GenerateMessageID(envelope)
+		require.NoError(t, err)
+		envelope.Id = txHash
+		envelope.TransactionHash = txHash
+
+		// Marshal envelope to protojson
+		envelopeBytes, err := (protojson.MarshalOptions{}).Marshal(envelope)
+		require.NoError(t, err)
+
+		// Process envelope through the processor
+		receipt, err := processor.ProcessEnvelope(context.Background(), envelopeBytes)
+
+		// Verify failure: L3 rejection should return error
+		require.Error(t, err)
+		require.Nil(t, receipt)
+		require.True(t, processor.called, "Envelope processor should have been called")
+		require.Error(t, processor.lastError, "L3 verification should have failed")
+	})
+}
+
+// realL3EnvelopeProcessor is a real envelope processor that uses L4Warden for verification
+type realL3EnvelopeProcessor struct {
+	warden    *governance.L4Warden
+	privKey   ed25519.PrivateKey
+	keyID     string
+	called    bool
+	lastError error
+}
+
+func (p *realL3EnvelopeProcessor) ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error) {
+	p.called = true
+
+	// Unmarshal as UAP envelope
+	envelope := &govpkg.GovernanceEnvelope{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, envelope); err != nil {
+		p.lastError = err
+		return nil, err
+	}
+
+	// Add L3 metadata with AutoApproved for testing (simulates gateway mode)
+	// This allows us to test L3 verification without requiring actual WebAuthn proof
+	if envelope.Governance == nil {
+		envelope.Governance = &commonv1.GovernanceMetadata{}
+	}
+	if envelope.Governance.L3 == nil {
+		envelope.Governance.L3 = &commonv1.L3Metadata{
+			AutoApproved: true, // For testing: simulate gateway auto-approval
+		}
+	}
+
+	// Verify through L4Warden (includes L3 verification)
+	_, err := p.warden.VerifyEnvelope(ctx, envelope)
+	if err != nil {
+		p.lastError = err
+		return nil, err
+	}
+
+	// Generate receipt
+	receipt := &operatorv1.ActionReceipt{
+		TransactionId:    envelope.Id,
+		TransactionHash:  envelope.TransactionHash,
+		Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		ResultSummary:    "test result",
+		StateRootBefore:  "root-before",
+		StateRootAfter:   "root-after",
+		ExecutedAtUnixMs: time.Now().UnixMilli(),
+		SignerKeyId:      p.keyID,
+		GatewaySigned:    true,
+		L2Status:         operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
+		L3Status:         operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
+	}
+
+	// Sign the receipt
+	sigPayload := fmt.Sprintf("%s|%s|%d", receipt.TransactionId, receipt.TransactionHash, receipt.ExecutedAtUnixMs)
+	signature := ed25519.Sign(p.privKey, []byte(sigPayload))
+	receipt.Signature = hex.EncodeToString(signature)
+
+	return receipt, nil
 }

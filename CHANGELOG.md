@@ -202,7 +202,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 ### Changed
 - **Gateway/App Layer Split:** Formalized `g8eo` as the mandatory Gateway and moved `client`/`g8ee` to optional application-layer adapters.
 - **client Elimination:** Removed `client` Dashboard as a mandatory component; migrated data management scripts to `g8eo` API.
-- **Governance Envelope Hardening:** Improved UAP and proto definitions for better transaction integrity.
+- **Governance Envelope Hardening:** Improved GovernanceEnvelope and proto definitions for better transaction integrity.
 - **Reorganized g8eo:** Directory restructuring for better modularity and maintainability.
 - **Passkey & Setup Refactor:** Migrated passkey and setup logic to the operator Gateway.
 
@@ -274,8 +274,8 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 ## [0.2.0] - 2026-05-07
 
 ### Added
-- **Protobuf-Driven Architecture:** Massively migrated the platform to a robust, typed Protobuf-driven architecture for payloads, while maintaining a UAP JSON-first transport for mutation envelopes.
-- **Governance Envelope:** Introduced the JSON `GovernanceEnvelope` (UAP) for all BFT transactions, binding event metadata, state roots, and hardware-bound fingerprints.
+- **Protobuf-Driven Architecture:** Massively migrated the platform to a robust, typed Protobuf-driven architecture for payloads, while maintaining a GovernanceEnvelope JSON-first transport for mutation envelopes.
+- **Governance Envelope:** Introduced the JSON `GovernanceEnvelope` for all BFT transactions, binding event metadata, state roots, and hardware-bound fingerprints.
 - **L1/L2/L3 Governance:** Integrated a 3-layer command validation hierarchy (L1 Technical Bedrock, L2 Consensus/Tribunal, L3 Authorization/Human) directly into the message envelope.
 - **Recursive Grep Tool:** Introduced `recursive_grep_search` for high-efficiency filesystem exploration across operator fleets.
 - **Interrogation Gate:** Implemented a new gate in the agent loop that detects `<interrogation>` blocks and suppresses pending tool calls to prioritize user input.

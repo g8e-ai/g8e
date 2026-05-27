@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
@@ -116,7 +116,7 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 	return payload
 }
 
-func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey) *uap.UAPEnvelope {
+func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey) *governance.GovernanceEnvelope {
 	t.Helper()
 	// Generate a safe nonce from action type and payload (handle empty payloads)
 	nonceSuffix := hex.EncodeToString(payload)
@@ -127,7 +127,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 		nonceSuffix = "empty"
 	}
 
-	env := &uap.UAPEnvelope{
+	env := &governance.GovernanceEnvelope{
 		ProtocolVersion:   "1.0",
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
@@ -140,7 +140,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 		StateMerkleRoot:   "root-1",
 		Nonce:             "nonce-" + string(actionType) + "-" + nonceSuffix,
 	}
-	hash, err := uap.GenerateMessageID(env)
+	hash, err := governance.GenerateMessageID(env)
 	if err != nil {
 		t.Fatalf("failed to generate transaction hash: %v", err)
 	}
@@ -170,7 +170,7 @@ func isMutationAction(actionType constants.ActionType) bool {
 	return constants.IsMutation(actionType) || actionType == constants.ActionTypeMcpCall || actionType == constants.ActionTypeA2aCall || actionType == constants.ActionTypeEvalAnswer || actionType == constants.ActionTypeInvestigationCreate
 }
 
-func TestL4Warden_AcceptsValidNonMutationUAPEnvelope(t *testing.T) {
+func TestL4Warden_AcceptsValidNonMutationGovernanceEnvelope(t *testing.T) {
 	t.Parallel()
 	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
@@ -184,7 +184,7 @@ func TestL4Warden_AcceptsValidNonMutationUAPEnvelope(t *testing.T) {
 	}
 }
 
-func TestL4Warden_AcceptsValidMutationUAPEnvelopeWithL3(t *testing.T) {
+func TestL4Warden_AcceptsValidMutationGovernanceEnvelopeWithL3(t *testing.T) {
 	t.Parallel()
 	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
@@ -199,25 +199,25 @@ func TestL4Warden_FailClosedProofs(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name   string
-		mutate func(*uap.UAPEnvelope)
+		mutate func(*governance.GovernanceEnvelope)
 		want   error
 	}{
-		{name: "missing id", mutate: func(env *uap.UAPEnvelope) { env.Id = "" }, want: ErrTransactionIDMissing},
-		{name: "unknown action", mutate: func(env *uap.UAPEnvelope) { env.ActionType = "UNKNOWN" }, want: ErrUnknownActionType},
-		{name: "missing payload", mutate: func(env *uap.UAPEnvelope) { env.Payload = nil }, want: ErrPayloadMissing},
-		{name: "invalid typed payload", mutate: func(env *uap.UAPEnvelope) { env.Payload = []byte("not protobuf") }, want: ErrPayloadDecodeFailed},
-		{name: "missing transaction hash", mutate: func(env *uap.UAPEnvelope) { env.TransactionHash = "" }, want: ErrTransactionHashMissing},
-		{name: "hash mismatch", mutate: func(env *uap.UAPEnvelope) { env.TransactionHash = "wrong" }, want: ErrTransactionHashMismatch},
-		{name: "expired", mutate: func(env *uap.UAPEnvelope) {
+		{name: "missing id", mutate: func(env *governance.GovernanceEnvelope) { env.Id = "" }, want: ErrTransactionIDMissing},
+		{name: "unknown action", mutate: func(env *governance.GovernanceEnvelope) { env.ActionType = "UNKNOWN" }, want: ErrUnknownActionType},
+		{name: "missing payload", mutate: func(env *governance.GovernanceEnvelope) { env.Payload = nil }, want: ErrPayloadMissing},
+		{name: "invalid typed payload", mutate: func(env *governance.GovernanceEnvelope) { env.Payload = []byte("not protobuf") }, want: ErrPayloadDecodeFailed},
+		{name: "missing transaction hash", mutate: func(env *governance.GovernanceEnvelope) { env.TransactionHash = "" }, want: ErrTransactionHashMissing},
+		{name: "hash mismatch", mutate: func(env *governance.GovernanceEnvelope) { env.TransactionHash = "wrong" }, want: ErrTransactionHashMismatch},
+		{name: "expired", mutate: func(env *governance.GovernanceEnvelope) {
 			env.ExpiresAt = timestamppb.New(time.Now().UTC().Add(-time.Minute))
 			rehash(t, env)
 		}, want: ErrTransactionExpired},
-		{name: "missing nonce", mutate: func(env *uap.UAPEnvelope) { env.Nonce = ""; rehash(t, env) }, want: ErrNonceMissing},
-		{name: "missing state root", mutate: func(env *uap.UAPEnvelope) { env.StateMerkleRoot = ""; rehash(t, env) }, want: ErrStateRootRequired},
-		{name: "missing l2", mutate: func(env *uap.UAPEnvelope) { env.Governance.L2 = nil }, want: ErrL2SignatureMissing},
-		{name: "missing l2 key", mutate: func(env *uap.UAPEnvelope) { env.Governance.L2.KeyId = "" }, want: ErrL2KeyNotConfigured},
-		{name: "invalid l2 signature", mutate: func(env *uap.UAPEnvelope) { env.Governance.L2.ConsensusSignature = "deadbeef" }, want: ErrL2SignatureInvalid},
-		{name: "missing l3", mutate: func(env *uap.UAPEnvelope) { env.Governance.L3 = nil }, want: ErrL3ProofMissing},
+		{name: "missing nonce", mutate: func(env *governance.GovernanceEnvelope) { env.Nonce = ""; rehash(t, env) }, want: ErrNonceMissing},
+		{name: "missing state root", mutate: func(env *governance.GovernanceEnvelope) { env.StateMerkleRoot = ""; rehash(t, env) }, want: ErrStateRootRequired},
+		{name: "missing l2", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2 = nil }, want: ErrL2SignatureMissing},
+		{name: "missing l2 key", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2.KeyId = "" }, want: ErrL2KeyNotConfigured},
+		{name: "invalid l2 signature", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2.ConsensusSignature = "deadbeef" }, want: ErrL2SignatureInvalid},
+		{name: "missing l3", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L3 = nil }, want: ErrL3ProofMissing},
 	}
 
 	for _, tc := range tests {
@@ -353,9 +353,9 @@ func TestL4Warden_NonceRaceCondition(t *testing.T) {
 	}
 }
 
-func rehash(t *testing.T, env *uap.UAPEnvelope) {
+func rehash(t *testing.T, env *governance.GovernanceEnvelope) {
 	t.Helper()
-	hash, err := uap.GenerateMessageID(env)
+	hash, err := governance.GenerateMessageID(env)
 	if err != nil {
 		t.Fatalf("failed to regenerate transaction hash: %v", err)
 	}
@@ -582,7 +582,7 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 }
 
 // signedEnvelopeWithAppID creates a signed envelope with a specific L2 KeyId.
-func signedEnvelopeWithAppID(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey, appID string) *uap.UAPEnvelope {
+func signedEnvelopeWithAppID(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey, appID string) *governance.GovernanceEnvelope {
 	t.Helper()
 	env := signedEnvelope(t, actionType, payload, privKey)
 	if env.Governance != nil && env.Governance.L2 != nil {

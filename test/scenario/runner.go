@@ -35,7 +35,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -253,7 +253,7 @@ func (g *OperatorGate) normalizeEnvelope(envelope *commonv1.GovernanceEnvelope) 
 	keyID := hex.EncodeToString(pubKey)
 
 	// Compute the correct hash from the envelope content
-	correctHash, err := uap.GenerateMessageID(envelope)
+	correctHash, err := governance.GenerateMessageID(envelope)
 	if err != nil {
 		return fmt.Errorf("failed to generate message ID: %w", err)
 	}
@@ -296,8 +296,9 @@ func (g *OperatorGate) normalizeEnvelope(envelope *commonv1.GovernanceEnvelope) 
 			// Signature is set with the test key_id - recompute to ensure correctness
 			envelope.Governance.L2.ConsensusSignature = correctSig
 		}
-		// else: signature is set with a different key_id (e.g., forge_signature fixture)
+		// else: signature is set with a different key_id (e.g., unknown_signer fixture)
 		// - preserve it to test unknown signer rejection
+		// - do NOT recompute hash or signature
 
 		// Set key ID if empty
 		if envelope.Governance.L2.KeyId == "" {

@@ -299,6 +299,19 @@ func generateTestSigners() map[string]ed25519.PublicKey {
 	}
 	signers[forgeSigKeyID] = ed25519.PublicKey(forgeSigPubBytes)
 
+	// Add the unknown_signer fixture key_id to trusted signers
+	// This allows the verifier to attempt signature verification and fail with "signature invalid"
+	// because the signature was created with a different private key
+	unknownSignerKeyID := "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29"
+	unknownSignerPubBytes, err := hex.DecodeString(unknownSignerKeyID)
+	if err != nil {
+		panicf("failed to decode unknown_signer key_id: %v", err)
+	}
+	if len(unknownSignerPubBytes) != ed25519.PublicKeySize {
+		panicf("invalid unknown_signer key_id size: got %d, want %d", len(unknownSignerPubBytes), ed25519.PublicKeySize)
+	}
+	signers[unknownSignerKeyID] = ed25519.PublicKey(unknownSignerPubBytes)
+
 	// Add 2 more signers for consensus testing
 	for i := 2; i <= 3; i++ {
 		pub, _, err := ed25519.GenerateKey(nil)

@@ -141,7 +141,7 @@ func TestGovernanceEnvelope_VerificationErrors_Return403(t *testing.T) {
 
 func TestGovernanceEnvelope_DecodeFailure_Returns400(t *testing.T) {
 	t.Parallel()
-	proc := &fakeEnvelopeProcessor{err: errors.New("invalid UAP JSON envelope: unexpected token")}
+	proc := &fakeEnvelopeProcessor{err: errors.New("invalid GovernanceEnvelope: unexpected token")}
 	h := newGovernanceEnvelopeHandler(t, proc)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`not-json`)))

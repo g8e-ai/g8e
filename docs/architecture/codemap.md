@@ -96,7 +96,7 @@ cmd/
 ├── g8e/main.go                     # Platform CLI (delegates to internal/cli/cmd)
 ├── g8eo/main.go                    # Operator binary (multi-mode: gateway, mcp-serve, insecure, outbound)
 ├── chaos_tester/main.go            # Chaos / fuzz testing harness
-└── uap-ping/main.go                # UAP protocol ping utility
+└── governance-ping/main.go         # GovernanceEnvelope protocol ping utility
 ```
 
 ## internal/
@@ -245,8 +245,8 @@ Public API. Importable by external consumers.
 
 ```text
 pkg/
-└── uap/
-    ├── types.go                    # Universal Access Protocol types
+└── governance/
+    ├── types.go                    # GovernanceEnvelope types and hash generation
     └── types_test.go
 ```
 

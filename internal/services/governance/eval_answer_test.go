@@ -23,7 +23,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
-	"github.com/g8e-ai/g8e/pkg/uap"
+	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
@@ -68,7 +68,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 	}
 
 	// Create envelope with proper structure
-	envelope := &uap.UAPEnvelope{
+	envelope := &governance.GovernanceEnvelope{
 		ProtocolVersion:   "1.0",
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
@@ -83,7 +83,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 	}
 
 	// Compute transaction hash
-	computedHash, err := uap.GenerateMessageID(envelope)
+	computedHash, err := governance.GenerateMessageID(envelope)
 	if err != nil {
 		t.Fatalf("Failed to compute transaction hash: %v", err)
 	}

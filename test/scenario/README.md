@@ -144,8 +144,11 @@ Security scenarios testing fundamental rejection criteria:
 - **stale_state_root**: Stale state root → reject
 - **l3_missing**: Missing L3 proof in notary mode → reject
 - **tampered_receipt**: Valid envelope accepted, receipt signature tampered → tampering detected
+- **unknown_signer**: Envelope signed by untrusted key → reject in consensus/notary modes
+- **malformed_payload**: Invalid protobuf payload structure → reject
+- **empty_payload**: Missing payload field → reject
 
-These are the CI backbone - trivially deterministic and fast. The `tampered_receipt` scenario specifically tests the "tamper-evident" property of signed receipts.
+These are the CI backbone - trivially deterministic and fast. The `tampered_receipt` scenario specifically tests the "tamper-evident" property of signed receipts. The edge case fixtures (unknown_signer, malformed_payload, empty_payload) ensure fail-closed behavior for malformed inputs and unknown signers.
 
 ## Future Scenarios
 

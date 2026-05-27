@@ -721,7 +721,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	}
 
 	// Wire the synchronous fail-closed mutation gate into the gateway HTTP
-	// surface. Once set, BYO clients can POST UAP envelopes to
+	// surface. Once set, BYO clients can POST GovernanceEnvelope envelopes to
 	// /api/governance/envelope and receive a signed ActionReceipt.
 	svc.SetEnvelopeProcessor(cmdSvc)
 
