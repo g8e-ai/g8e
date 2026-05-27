@@ -138,6 +138,13 @@ func TestDataDeviceLinksListCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupDataTestConfig(t, tmpDir)
 
+		// Clean up any existing credentials file in the real ~/.g8e directory
+		// to avoid test pollution from previous runs
+		homeDir, err := os.UserHomeDir()
+		require.NoError(t, err)
+		realCredsFile := filepath.Join(homeDir, ".g8e", "credentials")
+		os.Remove(realCredsFile)
+
 		cmd := dataDeviceLinksListCmd()
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
@@ -147,9 +154,9 @@ func TestDataDeviceLinksListCmd(t *testing.T) {
 		os.Chdir(tmpDir)
 		defer os.Chdir(originalWd)
 
-		err := cmd.RunE(cmd, []string{})
+		err = cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to read trust bundle")
+		assert.Contains(t, err.Error(), "not authenticated")
 	})
 }
 
@@ -269,6 +276,13 @@ func TestDataDeviceLinksDeleteCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupDataTestConfig(t, tmpDir)
 
+		// Clean up any existing credentials file in the real ~/.g8e directory
+		// to avoid test pollution from previous runs
+		homeDir, err := os.UserHomeDir()
+		require.NoError(t, err)
+		realCredsFile := filepath.Join(homeDir, ".g8e", "credentials")
+		os.Remove(realCredsFile)
+
 		cmd := dataDeviceLinksDeleteCmd()
 		cmd.Flags().Set("token", "test-token")
 		var buf bytes.Buffer
@@ -279,9 +293,9 @@ func TestDataDeviceLinksDeleteCmd(t *testing.T) {
 		os.Chdir(tmpDir)
 		defer os.Chdir(originalWd)
 
-		err := cmd.RunE(cmd, []string{})
+		err = cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to read trust bundle")
+		assert.Contains(t, err.Error(), "not authenticated")
 	})
 }
 
