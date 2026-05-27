@@ -1,4 +1,5 @@
 {
+  "_comment": "Embedded default path configuration. This file is embedded into the g8e binary via go:embed and is the sole source of truth for path configuration. All paths are relative and resolved from the current working directory. The binary is fully self-sovereign and requires no external configuration files.",
   "g8ee": {
     "app_dir": ".g8e/apps/g8ee",
     "cert_name": "g8ee",

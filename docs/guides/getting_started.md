@@ -76,6 +76,8 @@ make build
 
 This produces the `g8e` binary. The same `g8e` binary runs in two modes: Gateway mode (Policy Decision Point) and Operator mode (Policy Execution Point).
 
+**Self-Contained Deployment**: The compiled binary is fully self-sovereign and requires no source tree, configuration files, or specific directory structure. It can be copied to any directory and run from there. All paths are resolved relative to the current working directory unless explicitly overridden by flags. Path configuration is embedded directly in the binary via go:embed and is the sole source of truth.
+
 ### 3. Start the Governance Gateway
 
 ```bash

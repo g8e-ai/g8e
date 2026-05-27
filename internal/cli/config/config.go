@@ -23,6 +23,10 @@ import (
 	"strings"
 )
 
+// defaultPathsJSON contains embedded default path configuration. This is the sole source of truth
+// for path configuration in the g8e binary. All paths are relative and resolved from the current
+// working directory. The binary is fully self-sovereign and requires no external configuration files.
+//
 //go:embed paths_default.json
 var defaultPathsJSON []byte
 
@@ -72,6 +76,7 @@ type PathsConfig struct {
 		SSHConfigPath        string `json:"ssh_config_path"`
 	} `json:"infra"`
 	Ports struct {
+		G8eeHTTPS              int `json:"g8ee_https"`
 		InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 		OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 		OperatorHTTPS          int `json:"operator_https"`
@@ -106,16 +111,12 @@ func Load(projectRoot string) (*Config, error) {
 		return nil, fmt.Errorf("failed to expand credentials directory: %w", err)
 	}
 
-	pathsPath := filepath.Join(projectRoot, "protocol", "constants", "paths.json")
-	pathsData, err := os.ReadFile(pathsPath)
-	if err != nil {
-		// Fallback to embedded paths.json for precompiled binaries
-		pathsData = defaultPathsJSON
-	}
+	// Always use embedded default paths configuration
+	pathsData := defaultPathsJSON
 
 	var paths PathsConfig
 	if err := json.Unmarshal(pathsData, &paths); err != nil {
-		return nil, fmt.Errorf("failed to parse paths.json: %w", err)
+		return nil, fmt.Errorf("failed to parse embedded paths.json: %w", err)
 	}
 
 	// Resolve all relative paths in infra section relative to projectRoot
@@ -193,6 +194,14 @@ func (c *Config) OperatorHTTPSPort() int {
 
 func (c *Config) OperatorBootstrapHTTPSPort() int {
 	return c.Paths.Ports.OperatorBootstrapHTTPS
+}
+
+func (c *Config) OperatorPublicHTTPSPort() int {
+	return c.Paths.Ports.OperatorPublicHTTPS
+}
+
+func (c *Config) G8eeHTTPSPort() int {
+	return c.Paths.Ports.G8eeHTTPS
 }
 
 func (c *Config) OperatorHTTPURL() string {
