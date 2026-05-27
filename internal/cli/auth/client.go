@@ -453,3 +453,32 @@ func CheckOperatorRunningAtURL(operatorURL string) error {
 
 	return nil
 }
+
+// CheckBootstrapStatus returns whether the platform has been bootstrapped
+func CheckBootstrapStatus(cfg *config.Config) (bool, error) {
+	client, err := NewSecureHTTPClient(cfg)
+	if err != nil {
+		return false, fmt.Errorf("failed to create secure HTTP client: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/api/auth/bootstrap/status", cfg.OperatorPublicURL())
+	resp, err := client.Get(url)
+	if err != nil {
+		return false, fmt.Errorf("failed to check bootstrap status: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var statusResp struct {
+		Bootstrapped bool `json:"bootstrapped"`
+	}
+	if err := json.Unmarshal(respBody, &statusResp); err != nil {
+		return false, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return statusResp.Bootstrapped, nil
+}

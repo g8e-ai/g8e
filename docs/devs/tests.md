@@ -82,11 +82,11 @@ Chaos engineering tests firing random payloads at the Operator to verify fail-cl
 
 ### First-time Setup
 
-If no users exist, bootstrap the platform:
+If no users exist, the first login automatically bootstraps the platform:
 
 ```bash
 ./g8e platform start
-./g8e auth bootstrap
+./g8e auth login
 ```
 
 This creates the first user and issues mTLS certificates for the Operator and CLI.

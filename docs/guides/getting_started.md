@@ -86,25 +86,15 @@ This produces the `g8e` binary. The same `g8e` binary runs in two modes: Gateway
 
 This starts the Gateway in doctrine mode (L1 enforced, L2/L3 audited). Follow the CLI prompts to initialize the PKI hierarchy and Gateway state.
 
-### 4. Bootstrap (First-Time Setup)
+### 4. Authenticate
 
-For first-time setup on a fresh installation:
-
-```bash
-./g8e auth bootstrap
-```
-
-This creates the first user and issues mTLS certificates for the Operator and CLI. Only available over loopback when no users exist.
-
-### 5. Authenticate (Existing Installation)
-
-For subsequent authentication on an existing Gateway:
+The first login automatically bootstraps the platform, creating the first user and issuing mTLS certificates:
 
 ```bash
 ./g8e auth login
 ```
 
-This authenticates via device-link token and saves mTLS credentials to `~/.g8e/credentials`.
+This authenticates and saves mTLS credentials to `~/.g8e/credentials`. Subsequent logins use device-link token enrollment.
 
 ### 6. Start a Governed Operator
 

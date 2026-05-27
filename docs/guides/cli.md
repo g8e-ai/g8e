@@ -163,7 +163,6 @@ Usage:
   g8e auth [command]
 
 Available Commands:
-  bootstrap   Bootstrap the platform with initial user and certificates
   login       Authenticate and save operator session
   logout      Clear local operator session and credentials
 
@@ -173,20 +172,9 @@ Flags:
 Use "g8e auth [command] --help" for more information about a command.
 ```
 
-### auth bootstrap
-```
-Create the first user and issue mTLS certificates for the Operator and CLI. Only available over loopback when no users exist.
-
-Usage:
-  g8e auth bootstrap [flags]
-
-Flags:
-  -h, --help   help for bootstrap
-```
-
 ### auth login
 ```
-Authenticate via device-link token and save mTLS credentials to ~/.g8e/credentials
+Authenticate and save mTLS credentials to ~/.g8e/credentials. The first login automatically bootstraps the platform.
 
 Usage:
   g8e auth login [flags]

@@ -28,8 +28,8 @@ Get g8e online in under 60 seconds.
 # 1. Start the Governance Gateway (g8eg)
 ./g8e platform start
 
-# 2. Initialize the first user and certificates
-./g8e auth bootstrap
+# 2. Authenticate (first login automatically bootstraps the platform)
+./g8e auth login
 
 # 3. Verify the status
 ./g8e platform status
