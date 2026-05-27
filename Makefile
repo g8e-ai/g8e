@@ -27,10 +27,12 @@ PROTOC_GEN_GO_VERSION := v1.36.11
 PROTOC_GEN_GO_GRPC_VERSION := v1.6.2
 PROTOC_GEN_DOC_VERSION := v1.5.1
 PROTOC_MIN_VERSION := 21
+UPX_VERSION := v4.2.4
 
 BUF := $(shell command -v buf 2>/dev/null || echo "./buf")
 PROTOC := $(shell command -v protoc 2>/dev/null || echo "/usr/local/bin/protoc")
 PROTOC_GEN_GO := $(shell go list -m -f '{{.Version}}' google.golang.org/protobuf 2>/dev/null || echo "$(PROTOC_GEN_GO_VERSION)")
+UPX := $(shell command -v upx 2>/dev/null || echo "/usr/local/bin/upx")
 
 # =============================================================================
 # HELP
@@ -48,10 +50,11 @@ help:
 	@echo "  proto         Generate all Protobuf code (Go)"
 	@echo "  buf-install   Install Buf CLI locally if not found"
 	@echo "  protoc-install Install protoc compiler"
+	@echo "  upx-install   Install UPX compressor"
 	@echo ""
 	@echo "Build:"
 	@echo "  build         Build g8e binary"
-	@echo "  build-compressed Build g8e with compression (-s -w -trimpath)"
+	@echo "  build-compressed Build g8e with UPX compression"
 	@echo ""
 	@echo "Test:"
 	@echo "  test          Run all tests with race detection"
@@ -134,48 +137,74 @@ protoc-install:
 	fi
 	@echo "protoc version $$PROTOC_VERSION is compatible."
 
+.PHONY: upx-install
+upx-install:
+	@if ! command -v upx &> /dev/null; then \
+		echo "Installing UPX $(UPX_VERSION)..."; \
+		cd /tmp && curl -fSL https://github.com/upx/upx/releases/download/$(UPX_VERSION)/upx-$(UPX_VERSION:v%=%)-linux_amd64.tar.xz -o upx.tar.xz && \
+		tar -xf upx.tar.xz && \
+		sudo cp upx-$(UPX_VERSION:v%=%)-linux_amd64/upx /usr/local/bin/upx && \
+		sudo chmod +x /usr/local/bin/upx && \
+		rm -rf /tmp/upx-$(UPX_VERSION:v%=%)-linux_amd64 /tmp/upx.tar.xz; \
+	fi
+	@echo "UPX installed."
+
 # =============================================================================
 # BUILD
 # =============================================================================
+PLATFORMS := linux/amd64 linux/arm64 linux/386
+
 .PHONY: build
 build:
 	@echo "Building g8e..."
 	@mkdir -p bin
-	@echo "Copying docs for embedding..."
-	@rm -rf cmd/g8eo/docs
-	@cp -r docs cmd/g8eo/docs
+	@echo "Preparing build directory for docs embedding..."
+	@rm -rf .build/cmd/g8eo
+	@mkdir -p .build/cmd/g8eo
+	@cp -r cmd/g8eo/* .build/cmd/g8eo/
+	@cp -r docs .build/cmd/g8eo/docs
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
 	PLATFORM=$$(uname -s)_$$(uname -m); \
-	if go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo; then \
-		rm -rf cmd/g8eo/docs; \
+	if go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./.build/cmd/g8eo; then \
+		rm -rf .build; \
 		ln -sf bin/g8e g8e; \
 		echo "Build complete."; \
 	else \
-		rm -rf cmd/g8eo/docs; \
+		rm -rf .build; \
 		exit 1; \
 	fi
 
 .PHONY: build-compressed
-build-compressed:
-	@echo "Building g8e with compression..."
+build-compressed: upx-install
+	@echo "Building g8e with compression for $(PLATFORMS)..."
 	@mkdir -p bin
-	@echo "Copying docs for embedding..."
-	@rm -rf cmd/g8eo/docs
-	@cp -r docs cmd/g8eo/docs
+	@echo "Preparing build directory for docs embedding..."
+	@rm -rf .build/cmd/g8eo
+	@mkdir -p .build/cmd/g8eo
+	@cp -r cmd/g8eo/* .build/cmd/g8eo/
+	@cp -r docs .build/cmd/g8eo/docs
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
-	PLATFORM=$$(uname -s)_$$(uname -m); \
-	if go build -ldflags "-s -w -X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -trimpath -o bin/g8e ./cmd/g8eo; then \
-		rm -rf cmd/g8eo/docs; \
-		ln -sf bin/g8e g8e; \
-		echo "Compressed build complete."; \
-	else \
-		rm -rf cmd/g8eo/docs; \
-		exit 1; \
+	for platform in $(PLATFORMS); do \
+		GOOS=$${platform%/*}; \
+		GOARCH=$${platform#*/}; \
+		BINARY=bin/g8e-$$GOOS-$$GOARCH; \
+		echo "Building $$platform -> $$BINARY..."; \
+		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$platform" -o $$BINARY ./.build/cmd/g8eo || exit 1; \
+		echo "Compressing $$BINARY with UPX..."; \
+		$(UPX) --best --lzma $$BINARY; \
+	done
+	@rm -rf .build
+	@HOST_OS=$$(go env GOOS); \
+	HOST_ARCH=$$(go env GOARCH); \
+	if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH ]; then \
+		ln -sf bin/g8e-$$HOST_OS-$$HOST_ARCH g8e; \
+		echo "Created symlink: g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
 	fi
+	@echo "Compressed multi-platform build complete."
 
 # =============================================================================
 # TEST
