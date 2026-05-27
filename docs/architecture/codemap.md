@@ -236,7 +236,7 @@ services/
 │   └── utils.go
 │
 └── insecure_mcp/
-    └── openclaw_node_service.go    #   WebSocket node host (file name not yet renamed)
+    └── insecure_mcp_node_service.go    #   WebSocket node host
 ```
 
 ## pkg/
