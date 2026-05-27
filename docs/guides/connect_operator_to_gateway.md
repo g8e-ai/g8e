@@ -260,7 +260,7 @@ ls -la .g8e/pki/
 Re-enroll if certificates are missing or expired:
 
 ```bash
-./g8e.operator enroll --device-token <token>
+./g8e auth login
 ```
 
 ### Audit Vault Errors

@@ -3645,7 +3645,7 @@ func (x *ActionReceipt) GetL3Status() L3Status {
 type CommitmentAttestation struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// TransactionID and TransactionHash identify the envelope being
-	// committed (these mirror GovernanceEnvelope.Id / TransactionHash).
+	// committed (these mirror UAPEnvelope.Id / TransactionHash).
 	TransactionId   string `protobuf:"bytes,1,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	TransactionHash string `protobuf:"bytes,2,opt,name=transaction_hash,json=transactionHash,proto3" json:"transaction_hash,omitempty"`
 	// PriorCommitmentHash is the Hash of the immediately-preceding

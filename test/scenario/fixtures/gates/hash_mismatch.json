@@ -1,6 +1,8 @@
 {
   "name": "hash_mismatch",
   "vertical": "gates",
+  "hypothesis": "Envelope with tampered transaction_hash must be rejected by L0 integrity check",
+  "target_gate": "L0 / envelope integrity (transaction_hash field)",
   "narrative": "Envelope with transaction_hash != computed hash should be rejected",
   "intent": {
     "timestamp": "2026-05-25T12:00:00Z",

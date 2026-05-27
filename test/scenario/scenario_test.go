@@ -154,6 +154,9 @@ func TestScenarios(t *testing.T) {
 				// Assert rejection reason if applicable
 				AssertReason(t, result, expected)
 
+				// Assert audit expectations
+				AssertAudit(t, result, expected)
+
 				// Assert L2/L3 validity
 				AssertL2L3(t, result, expected)
 

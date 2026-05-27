@@ -23,6 +23,7 @@ import (
 	"strings"
 )
 
+//go:embed paths_default.json
 var defaultPathsJSON []byte
 
 const (
@@ -115,6 +116,38 @@ func Load(projectRoot string) (*Config, error) {
 	var paths PathsConfig
 	if err := json.Unmarshal(pathsData, &paths); err != nil {
 		return nil, fmt.Errorf("failed to parse paths.json: %w", err)
+	}
+
+	// Resolve all relative paths in infra section relative to projectRoot
+	if paths.Infra.AppCertDir != "" && !filepath.IsAbs(paths.Infra.AppCertDir) {
+		paths.Infra.AppCertDir = filepath.Join(projectRoot, paths.Infra.AppCertDir)
+	}
+	if paths.Infra.CACertPath != "" && !filepath.IsAbs(paths.Infra.CACertPath) {
+		paths.Infra.CACertPath = filepath.Join(projectRoot, paths.Infra.CACertPath)
+	}
+	if paths.Infra.DBPath != "" && !filepath.IsAbs(paths.Infra.DBPath) {
+		paths.Infra.DBPath = filepath.Join(projectRoot, paths.Infra.DBPath)
+	}
+	if paths.Infra.DocsDir != "" && !filepath.IsAbs(paths.Infra.DocsDir) {
+		paths.Infra.DocsDir = filepath.Join(projectRoot, paths.Infra.DocsDir)
+	}
+	if paths.Infra.PKIDir != "" && !filepath.IsAbs(paths.Infra.PKIDir) {
+		paths.Infra.PKIDir = filepath.Join(projectRoot, paths.Infra.PKIDir)
+	}
+	if paths.Infra.ProtocolConstantsDir != "" && !filepath.IsAbs(paths.Infra.ProtocolConstantsDir) {
+		paths.Infra.ProtocolConstantsDir = filepath.Join(projectRoot, paths.Infra.ProtocolConstantsDir)
+	}
+	if paths.Infra.ProtocolDir != "" && !filepath.IsAbs(paths.Infra.ProtocolDir) {
+		paths.Infra.ProtocolDir = filepath.Join(projectRoot, paths.Infra.ProtocolDir)
+	}
+	if paths.Infra.ProtocolModelsDir != "" && !filepath.IsAbs(paths.Infra.ProtocolModelsDir) {
+		paths.Infra.ProtocolModelsDir = filepath.Join(projectRoot, paths.Infra.ProtocolModelsDir)
+	}
+	if paths.Infra.SecretsDir != "" && !filepath.IsAbs(paths.Infra.SecretsDir) {
+		paths.Infra.SecretsDir = filepath.Join(projectRoot, paths.Infra.SecretsDir)
+	}
+	if paths.Infra.SSHConfigPath != "" && !filepath.IsAbs(paths.Infra.SSHConfigPath) {
+		paths.Infra.SSHConfigPath = filepath.Join(projectRoot, paths.Infra.SSHConfigPath)
 	}
 
 	return &Config{

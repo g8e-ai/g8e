@@ -35,7 +35,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
-	"github.com/g8e-ai/g8e/pkg/governance"
+	pkg_gov "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -96,8 +96,13 @@ func (s *InMemoryReplayStore) Clear() {
 
 // Result represents the outcome of submitting a scenario through the admission path.
 type Result struct {
-	Receipt *operatorv1.ActionReceipt
-	Error   error
+	Receipt         *operatorv1.ActionReceipt
+	Error           error
+	ComputedID      string
+	EnvelopeID      string
+	TransactionHash string
+	AuditL2Valid    *bool
+	AuditL3Valid    *bool
 }
 
 // OperatorGate is the real admission path integration for a given governance mode.
@@ -253,7 +258,7 @@ func (g *OperatorGate) normalizeEnvelope(envelope *commonv1.GovernanceEnvelope) 
 	keyID := hex.EncodeToString(pubKey)
 
 	// Compute the correct hash from the envelope content
-	correctHash, err := governance.GenerateMessageID(envelope)
+	correctHash, err := pkg_gov.GenerateMessageID(envelope)
 	if err != nil {
 		return fmt.Errorf("failed to generate message ID: %w", err)
 	}
@@ -317,24 +322,46 @@ func (g *OperatorGate) Submit(ctx context.Context, intent json.RawMessage) Resul
 		return Result{Error: fmt.Errorf("failed to unmarshal UAP envelope: %w", err)}
 	}
 
+	// Capture computed ID before normalization if it's already there, or let normalization set it
+	// Actually, we want the "correct" computed ID to show in construction.
+	computedID, _ := pkg_gov.GenerateMessageID(&envelope)
+
 	// Normalize the envelope (compute hash, sign L2 if present)
 	if err := g.normalizeEnvelope(&envelope); err != nil {
-		return Result{Error: fmt.Errorf("failed to normalize envelope: %w", err)}
+		return Result{
+			Error:      fmt.Errorf("failed to normalize envelope: %w", err),
+			ComputedID: computedID,
+			EnvelopeID: envelope.Id,
+		}
+	}
+
+	res := Result{
+		ComputedID:      computedID,
+		EnvelopeID:      envelope.Id,
+		TransactionHash: envelope.TransactionHash,
 	}
 
 	// Verify the envelope through the real transaction verifier
 	verified, err := g.verifier.VerifyEnvelope(ctx, &envelope)
 	if err != nil {
-		return Result{Error: err}
+		res.Error = err
+		return res
 	}
+
+	// Capture validity bits for reporting
+	res.AuditL2Valid = &verified.L2Valid
+	res.AuditL3Valid = &verified.L3Valid
 
 	// Execute through the real actuator
 	receipt, err := g.actuator.Execute(ctx, verified, nil)
 	if err != nil {
-		return Result{Error: err}
+		res.Error = err
+		res.Receipt = receipt // Receipt might be returned even on error (e.g. final signing failed)
+		return res
 	}
 
-	return Result{Receipt: receipt}
+	res.Receipt = receipt
+	return res
 }
 
 // mockL3Notary is a mock L3 notary that rejects proofs with invalid data for testing.

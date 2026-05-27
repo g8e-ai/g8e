@@ -111,18 +111,22 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 
 	// Determine L2 status based on posture and verification result
 	l2Status := operatorv1.L2Status_L2_STATUS_NOT_REQUIRED
-	if vt.L2Valid {
-		l2Status = operatorv1.L2Status_L2_STATUS_REQUIRED_VALID
-	} else if vt.Posture != nil && vt.Posture.RequiresL2Signature() {
-		l2Status = operatorv1.L2Status_L2_STATUS_REQUIRED_FAILED
+	if vt.Posture != nil && vt.Posture.RequiresL2Signature() {
+		if vt.L2Valid {
+			l2Status = operatorv1.L2Status_L2_STATUS_REQUIRED_VALID
+		} else {
+			l2Status = operatorv1.L2Status_L2_STATUS_REQUIRED_FAILED
+		}
 	}
 
 	// Determine L3 status based on posture and verification result
 	l3Status := operatorv1.L3Status_L3_STATUS_NOT_REQUIRED
-	if vt.L3Valid {
-		l3Status = operatorv1.L3Status_L3_STATUS_REQUIRED_VALID
-	} else if vt.Posture != nil && vt.Posture.RequiresL3Proof() {
-		l3Status = operatorv1.L3Status_L3_STATUS_REQUIRED_FAILED
+	if vt.Posture != nil && vt.Posture.RequiresL3Proof() {
+		if vt.L3Valid {
+			l3Status = operatorv1.L3Status_L3_STATUS_REQUIRED_VALID
+		} else {
+			l3Status = operatorv1.L3Status_L3_STATUS_REQUIRED_FAILED
+		}
 	}
 
 	receipt := &operatorv1.ActionReceipt{

@@ -1,6 +1,8 @@
 {
   "name": "bad_integrity",
   "vertical": "gates",
+  "hypothesis": "Envelope.id mutated post-hash -> must be rejected by ID integrity check",
+  "target_gate": "L0 / envelope integrity (id field)",
   "narrative": "Envelope with id != computed hash should be rejected",
   "intent": {
     "id": "wrongidwrongidwrongidwrongidwrongidwrongidwrongidwrongidwrongid",

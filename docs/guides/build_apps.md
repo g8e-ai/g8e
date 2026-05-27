@@ -96,7 +96,7 @@ Refer to `protocol/proto/g8e/` for the canonical schema definitions.
 Generate an mTLS client certificate from the Gateway (Operator in gateway mode):
 
 ```bash
-./g8e login
+./g8e auth login
 ```
 
 This stores the certificate in `.g8e/pki/client.crt` and key in `.g8e/pki/client.key`.

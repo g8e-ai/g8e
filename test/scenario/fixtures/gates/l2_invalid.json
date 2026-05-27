@@ -1,6 +1,8 @@
 {
   "name": "l2_invalid",
   "vertical": "gates",
+  "hypothesis": "Forged L2 signature must be rejected when posture requires L2 Consensus",
+  "target_gate": "L2 consensus (signature check)",
   "narrative": "Envelope with forged L2 signature: rejected in consensus/notary (L2 enforced), accepted in doctrine (L2 audited only)",
   "intent": {
     "id": "3b833b0634d68cb1eae4245eea8329775be00f42ab36fb90bd1761064ae33227",
@@ -34,7 +36,8 @@
       "verdict": "accept",
       "reject_reason": "",
       "l2_status": 1,
-      "l3_status": 1
+      "l3_status": 1,
+      "audit_l2_valid": false
     },
     "consensus": {
       "verdict": "reject",

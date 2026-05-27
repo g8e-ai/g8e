@@ -35,6 +35,7 @@ const (
 	shutdownTimeout     = 10 * time.Second
 	healthCheckInterval = 500 * time.Millisecond
 	maxHealthChecks     = 20
+	maxPortAttempts     = 100
 )
 
 type ProcessManager struct {
@@ -76,29 +77,34 @@ func (pm *ProcessManager) ensureDirectories() error {
 	return nil
 }
 
-func (pm *ProcessManager) checkPortAvailable(port int, name string) error {
+func (pm *ProcessManager) findAvailablePort(startPort int, name string) (int, error) {
 	pid, err := pm.readPID(operatorPIDFile)
 	if err != nil {
-		return fmt.Errorf("failed to read pid file: %w", err)
+		return 0, fmt.Errorf("failed to read pid file: %w", err)
 	}
 
 	if pid != 0 && !pm.isProcessRunning(pid) {
 		if err := pm.deletePID(operatorPIDFile); err != nil {
-			return fmt.Errorf("failed to delete stale pid file %d: %w", pid, err)
+			return 0, fmt.Errorf("failed to delete stale pid file %d: %w", pid, err)
 		}
 	}
 
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
-	if err != nil {
-		conflictingPID := pm.findProcessOnPort(port)
-		if conflictingPID > 0 {
-			return fmt.Errorf("port %d (%s) is already in use by process %d: %w", port, name, conflictingPID, err)
+	for attempt := 0; attempt < maxPortAttempts; attempt++ {
+		port := startPort + attempt
+		addr := fmt.Sprintf("127.0.0.1:%d", port)
+		listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
+		if err == nil {
+			listener.Close()
+			return port, nil
 		}
-		return fmt.Errorf("port %d (%s) is already in use: %w", port, name, err)
+
+		conflictingPID := pm.findProcessOnPort(port)
+		if conflictingPID > 0 && conflictingPID == pid {
+			return 0, fmt.Errorf("port %d (%s) is already in use by tracked process %d", port, name, conflictingPID)
+		}
 	}
-	listener.Close()
-	return nil
+
+	return 0, fmt.Errorf("failed to find available port starting from %d after %d attempts", startPort, maxPortAttempts)
 }
 
 func (pm *ProcessManager) readPID(filename string) (int, error) {
@@ -211,14 +217,17 @@ func (pm *ProcessManager) StartOperator(httpPort, bootstrapPort, publicPort int)
 		return err
 	}
 
-	if err := pm.checkPortAvailable(httpPort, "Operator HTTP API"); err != nil {
-		return fmt.Errorf("failed to check Operator HTTP API port %d: %w", httpPort, err)
+	availableHTTPPort, err := pm.findAvailablePort(httpPort, "Operator HTTP API")
+	if err != nil {
+		return fmt.Errorf("failed to find available HTTP API port: %w", err)
 	}
-	if err := pm.checkPortAvailable(bootstrapPort, "Operator Bootstrap"); err != nil {
-		return fmt.Errorf("failed to check Operator Bootstrap port %d: %w", bootstrapPort, err)
+	availableBootstrapPort, err := pm.findAvailablePort(bootstrapPort, "Operator Bootstrap")
+	if err != nil {
+		return fmt.Errorf("failed to find available Bootstrap port: %w", err)
 	}
-	if err := pm.checkPortAvailable(publicPort, "Operator Public API"); err != nil {
-		return fmt.Errorf("failed to check Operator Public API port %d: %w", publicPort, err)
+	availablePublicPort, err := pm.findAvailablePort(publicPort, "Operator Public API")
+	if err != nil {
+		return fmt.Errorf("failed to find available Public API port: %w", err)
 	}
 
 	binPath, err := pm.getOperatorBinary()
@@ -238,9 +247,9 @@ func (pm *ProcessManager) StartOperator(httpPort, bootstrapPort, publicPort int)
 		"--data-dir", pm.dataDir,
 		"--pki-dir", pm.pkiDir,
 		"--secrets-dir", pm.secretsDir,
-		"--http-listen-port", strconv.Itoa(httpPort),
-		"--bootstrap-listen-port", strconv.Itoa(bootstrapPort),
-		"--public-listen-port", strconv.Itoa(publicPort),
+		"--http-listen-port", strconv.Itoa(availableHTTPPort),
+		"--bootstrap-listen-port", strconv.Itoa(availableBootstrapPort),
+		"--public-listen-port", strconv.Itoa(availablePublicPort),
 	)
 	cmd.Stdout = logHandle
 	cmd.Stderr = logHandle

@@ -92,6 +92,9 @@ g8e.operator
 g8e.gateway
 g8eo
 
+# --- Build-time artifacts ---
+cmd/g8eo/docs
+
 # --- Go Gateway ---
 go.work
 go.work.sum

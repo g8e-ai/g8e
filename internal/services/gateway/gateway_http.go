@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -64,6 +65,7 @@ type HTTPHandlerDependencies struct {
 	AppEnrollment     *AppEnrollmentService
 	IsReady           func() bool
 	IsGovernanceReady func() bool
+	DocsFS            fs.FS
 }
 
 func (h *HTTPHandler) readBody(r *http.Request) ([]byte, error) {
@@ -97,6 +99,9 @@ type HTTPHandler struct {
 	// Rate limiting state
 	muLimiters sync.Mutex
 	limiters   map[string]*rate.Limiter
+
+	// docsFS is the embedded documentation filesystem
+	docsFS fs.FS
 }
 
 func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
@@ -117,6 +122,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
 		isReady:           deps.IsReady,
 		isGovernanceReady: deps.IsGovernanceReady,
 		limiters:          make(map[string]*rate.Limiter),
+		docsFS:            deps.DocsFS,
 	}
 }
 
@@ -139,6 +145,9 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux.HandleFunc("/trust.ps1", h.handleTrustScriptPS1)
 	mux.HandleFunc("/trust.bat", h.handleTrustScriptBat)
 	mux.HandleFunc("/deploy", h.handleDeploy)
+
+	// Documentation endpoint (embedded docs)
+	mux.HandleFunc("/docs/", h.handleDocs)
 
 	return h.pathTraversalGuard(mux)
 }
@@ -201,6 +210,9 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 
 	// Health check (available internally)
 	mux.HandleFunc("/health", h.handleHealth)
+
+	// Documentation endpoint (embedded docs)
+	mux.HandleFunc("/docs/", h.handleDocs)
 
 	// Authenticated routes (require mTLS)
 	mux.HandleFunc("/api/settings", h.handleSettings)
@@ -474,6 +486,40 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		GovernanceReady: h.isGovernanceReady != nil && h.isGovernanceReady(),
 		StateMerkleRoot: root,
 	})
+}
+
+func (h *HTTPHandler) handleDocs(w http.ResponseWriter, r *http.Request) {
+	if h.docsFS == nil {
+		h.responder.Error(w, http.StatusServiceUnavailable, "documentation not available")
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/docs/")
+	if path == "" {
+		path = "index.md"
+	}
+
+	if !strings.HasSuffix(path, ".md") {
+		path = path + ".md"
+	}
+
+	file, err := h.docsFS.Open("docs/" + path)
+	if err != nil {
+		h.responder.Error(w, http.StatusNotFound, "document not found")
+		return
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		h.responder.Error(w, http.StatusInternalServerError, "failed to read document")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(content)
 }
 
 func (h *HTTPHandler) handlePKIRoot(w http.ResponseWriter, r *http.Request) {

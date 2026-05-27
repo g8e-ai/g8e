@@ -634,7 +634,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	}
 	cfg.Version = version
 
-	svc, err := gateway.NewGatewayService(cfg, logger)
+	svc, err := gateway.NewGatewayService(cfg, logger, docsFS)
 	if err != nil {
 		logger.Error("Failed to create gateway service", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitCodeFromError(err))

@@ -53,13 +53,13 @@ The wire format is canonical JSON (protojson) for client-facing surfaces; signin
 
 ## Governance Gateway (g8eg)
 
-The central, BFT-governed Policy Decision Point (PDP) running in Gateway mode (--doctrine, --consensus, or --notary). Built as the `g8e.gateway` binary from the Go codebase. It acts as the platform's cryptographic backplane, providing central persistence (SQLite Coordination Store), PKI/CA certificate issuance, a secure pub/sub broker, Server-Sent Events (SSE) buffering, replay protection, and the authoritative audit event vault.
+The central, BFT-governed Policy Decision Point (PDP) running in Gateway mode (--doctrine, --consensus, or --notary). Built as the `g8e` binary from the Go codebase. It acts as the platform's cryptographic backplane, providing central persistence (SQLite Coordination Store), PKI/CA certificate issuance, a secure pub/sub broker, Server-Sent Events (SSE) buffering, replay protection, and the authoritative audit event vault.
 
 ---
 
 ## Governed Operator (g8eo)
 
-The host-resident execution agent and Policy Execution Point (PEP). Built as the `g8e.operator` binary from the Go codebase. Running on target hosts, `g8eo` connects outbound-only over mTLS to `g8eg`. It exposes host tools as a Model Context Protocol (MCP) Server, verifies incoming GovernanceEnvelope transactions against local L1/L2/L3 gates via the L4 Warden, executes actions strictly through the L5 Actuator boundary, and records tamper-evident local audit logs (Audit Vault, Scrubbed Vault, and git-backed session ledgers).
+The host-resident execution agent and Policy Execution Point (PEP). Built as the `g8e` binary from the Go codebase. Running on target hosts, `g8eo` connects outbound-only over mTLS to `g8eg`. It exposes host tools as a Model Context Protocol (MCP) Server, verifies incoming GovernanceEnvelope transactions against local L1/L2/L3 gates via the L4 Warden, executes actions strictly through the L5 Actuator boundary, and records tamper-evident local audit logs (Audit Vault, Scrubbed Vault, and git-backed session ledgers).
 
 ---
 
@@ -149,7 +149,7 @@ Two-way TLS authentication where both client and server verify each other's cert
 
 ## Operator
 
-The compiled Go codebase which generates both `g8e.gateway` (g8eg) and `g8e.operator` (g8eo) binaries. The term also refers to the Governed Operator (g8eo) role when running on target hosts as the PEP. Operator command/result traffic follows the g8e protocol: canonical JSON GovernanceEnvelope carries typed `operator.proto` payloads and L1/L2/L3 governance metadata over the pub/sub transport.
+The compiled Go codebase which generates the `g8e` binary. The term also refers to the Governed Operator (g8eo) role when running on target hosts as the PEP. Operator command/result traffic follows the g8e protocol: canonical JSON GovernanceEnvelope carries typed `operator.proto` payloads and L1/L2/L3 governance metadata over the pub/sub transport.
 
 ---
 

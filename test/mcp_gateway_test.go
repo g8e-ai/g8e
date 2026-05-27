@@ -155,7 +155,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	cfg.Gateway.MCPDownstreamURL = downstreamServer.URL
 
-	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
+	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger(), nil)
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
@@ -436,7 +436,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	require.NoError(t, err)
 	cfg.Gateway.MCPDownstreamURL = downstreamServer.URL
 
-	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
+	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger(), nil)
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
@@ -760,7 +760,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
+	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger(), nil)
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())

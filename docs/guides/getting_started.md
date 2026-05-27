@@ -74,7 +74,7 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces the `g8e` CLI wrapper and the `g8e.operator` binary. The same `g8e.operator` binary runs in two modes: Gateway mode (Policy Decision Point) and Operator mode (Policy Execution Point).
+This produces the `g8e` binary. The same `g8e` binary runs in two modes: Gateway mode (Policy Decision Point) and Operator mode (Policy Execution Point).
 
 ### 3. Start the Governance Gateway
 

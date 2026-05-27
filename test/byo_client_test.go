@@ -83,7 +83,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
+	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger(), nil)
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())

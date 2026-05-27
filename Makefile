@@ -141,25 +141,41 @@ protoc-install:
 build:
 	@echo "Building g8e..."
 	@mkdir -p bin
+	@echo "Copying docs for embedding..."
+	@rm -rf cmd/g8eo/docs
+	@cp -r docs cmd/g8eo/docs
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
 	PLATFORM=$$(uname -s)_$$(uname -m); \
-	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo
-	@ln -sf bin/g8e g8e
-	@echo "Build complete."
+	if go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo; then \
+		rm -rf cmd/g8eo/docs; \
+		ln -sf bin/g8e g8e; \
+		echo "Build complete."; \
+	else \
+		rm -rf cmd/g8eo/docs; \
+		exit 1; \
+	fi
 
 .PHONY: build-compressed
 build-compressed:
 	@echo "Building g8e with compression..."
 	@mkdir -p bin
+	@echo "Copying docs for embedding..."
+	@rm -rf cmd/g8eo/docs
+	@cp -r docs cmd/g8eo/docs
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
 	PLATFORM=$$(uname -s)_$$(uname -m); \
-	go build -ldflags "-s -w -X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -trimpath -o bin/g8e ./cmd/g8eo
-	@ln -sf bin/g8e g8e
-	@echo "Compressed build complete."
+	if go build -ldflags "-s -w -X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -trimpath -o bin/g8e ./cmd/g8eo; then \
+		rm -rf cmd/g8eo/docs; \
+		ln -sf bin/g8e g8e; \
+		echo "Compressed build complete."; \
+	else \
+		rm -rf cmd/g8eo/docs; \
+		exit 1; \
+	fi
 
 # =============================================================================
 # TEST

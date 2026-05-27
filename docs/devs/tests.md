@@ -15,7 +15,7 @@ g8e tests run directly on the host using real infrastructure. The test environme
 - **Hermetic execution** - Tests run on the host via `./g8e test`. The g8e Operator is a unified binary that operates as Governance Gateway (Policy Decision Point) in gateway mode or as g8e Operator (Policy Execution Point) in cloud mode.
 - **Real infrastructure** - Tests use the actual SQLite database, PKI certificates, and pub/sub channels. Platform starts via `./g8e platform start`.
 - **No mocks** - Mocking internal services, database clients, or cross-component communication is prohibited. Integration tests use real wire paths.
-- **mTLS required** - Operator communication requires mTLS. Authentication via `./g8e login` issues certificates from `.g8e/pki`.
+- **mTLS required** - Operator communication requires mTLS. Authentication via `./g8e auth login` issues certificates from `.g8e/pki`.
 - **Reproduce first** - Reproduce bugs with failing tests before fixes.
 - **Contract tests** - Enforce alignment between the Operator and `protocol/` constants/models with typed protobuf assertions.
 
@@ -70,7 +70,7 @@ Chaos engineering tests firing random payloads at the Operator to verify fail-cl
 ./g8e platform start
 
 # 2. Authenticate (required for mTLS tests)
-./g8e login
+./g8e auth login
 
 # 3. Run Operator tests
 ./g8e test

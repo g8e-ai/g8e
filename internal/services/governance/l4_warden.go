@@ -598,48 +598,55 @@ func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *governance.Gove
 }
 
 func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, computedHash string) (bool, error) {
-	if !tv.posture.RequiresL2Signature() {
+	if envelope.Governance == nil || envelope.Governance.L2 == nil || envelope.Governance.L2.ConsensusSignature == "" {
+		if tv.posture.RequiresL2Signature() {
+			tv.logger.Error("L2 signature missing but required by posture", "posture", tv.posture.Name())
+			return false, ErrL2SignatureMissing
+		}
 		return false, nil
 	}
 
-	if envelope.Governance == nil || envelope.Governance.L2 == nil {
-		tv.logger.Error("L2 signature missing but required by posture", "posture", tv.posture.Name())
-		return false, ErrL2SignatureMissing
-	}
-
 	l2 := envelope.Governance.L2
-	if l2.ConsensusSignature == "" {
-		tv.logger.Error("L2 signature empty but required by posture", "posture", tv.posture.Name())
-		return false, ErrL2SignatureMissing
-	}
-
 	if l2.KeyId == "" {
-		tv.logger.Error("L2 key ID missing but required by posture", "posture", tv.posture.Name())
-		return false, ErrL2KeyNotConfigured
+		if tv.posture.RequiresL2Signature() {
+			tv.logger.Error("L2 key ID missing but required by posture", "posture", tv.posture.Name())
+			return false, ErrL2KeyNotConfigured
+		}
+		return false, nil
 	}
 
 	if tv.signerStore == nil {
-		tv.logger.Error("Signer store not configured but required by posture", "posture", tv.posture.Name())
-		return false, ErrL2KeyNotConfigured
+		if tv.posture.RequiresL2Signature() {
+			tv.logger.Error("Signer store not configured but required by posture", "posture", tv.posture.Name())
+			return false, ErrL2KeyNotConfigured
+		}
+		return false, nil
 	}
 
 	pubKey, err := tv.signerStore.GetTrustedSigner(l2.KeyId)
 	if err != nil {
-		tv.logger.Error("Failed to load trusted signer", "key_id", l2.KeyId, string(constants.ConnectionStateError), err)
-		return false, ErrL2KeyNotConfigured
+		if tv.posture.RequiresL2Signature() {
+			tv.logger.Error("Failed to load trusted signer", "key_id", l2.KeyId, string(constants.ConnectionStateError), err)
+			return false, ErrL2KeyNotConfigured
+		}
+		return false, nil
 	}
 
 	if pubKey == nil {
-		tv.logger.Error("Consensus (L2Consensus) signer key not found in trusted signers", "key_id", l2.KeyId)
-		return false, ErrL2KeyNotConfigured
+		if tv.posture.RequiresL2Signature() {
+			tv.logger.Error("Consensus (L2Consensus) signer key not found in trusted signers", "key_id", l2.KeyId)
+			return false, ErrL2KeyNotConfigured
+		}
+		return false, nil
 	}
 
-	if tv.verifyL2Signature(pubKey, l2.ConsensusSignature, computedHash, true) {
-		return true, nil
+	valid := tv.verifyL2Signature(pubKey, l2.ConsensusSignature, computedHash, true)
+	if !valid && tv.posture.RequiresL2Signature() {
+		tv.logger.Error("L2 signature verification failed but required by posture", "posture", tv.posture.Name())
+		return false, ErrL2SignatureInvalid
 	}
 
-	tv.logger.Error("L2 signature verification failed but required by posture", "posture", tv.posture.Name())
-	return false, ErrL2SignatureInvalid
+	return valid, nil
 }
 
 func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *governance.GovernanceEnvelope) (bool, error) {
@@ -648,6 +655,7 @@ func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *governance.Go
 	// Check if this is an external app transaction that can bypass L3 via policy
 	// This check must come before the mutation check so that read-only actions
 	// with explicit app policy bypasses get L3Valid=true
+	var bypassedByPolicy bool
 	if envelope.Governance != nil && envelope.Governance.L2 != nil && envelope.Governance.L2.KeyId != "" {
 		if tv.appPolicyStore != nil {
 			appID := envelope.Governance.L2.KeyId
@@ -661,30 +669,35 @@ func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *governance.Go
 				for _, autoApproveIntent := range policy.AutoApproveIntents {
 					if autoApproveIntent == actionStr {
 						tv.logger.Info("L3 bypassed via app policy", "app_id", appID, "action_type", actionStr)
-						return true, nil
+						bypassedByPolicy = true
+						break
 					}
 				}
 			}
 		}
 	}
 
-	// If not bypassed by app policy, check if L3 is required for this action
-	if !tv.isMutation(actionType) {
-		return false, nil
+	if bypassedByPolicy {
+		return true, nil
 	}
 
-	if !tv.posture.RequiresL3Proof() {
-		return false, nil
-	}
+	// If not bypassed by app policy, check if proof is present
+	hasProof := envelope.Governance != nil && envelope.Governance.L3 != nil && envelope.Governance.L3.Proof != nil
 
-	if envelope.Governance == nil || envelope.Governance.L3 == nil || envelope.Governance.L3.Proof == nil {
-		tv.logger.Error("L3 proof missing but required by posture", "posture", tv.posture.Name())
-		return false, ErrL3ProofMissing
+	if !hasProof {
+		if tv.isMutation(actionType) && tv.posture.RequiresL3Proof() {
+			tv.logger.Error("L3 proof missing but required by posture", "posture", tv.posture.Name())
+			return false, ErrL3ProofMissing
+		}
+		return false, nil
 	}
 
 	if tv.l3Notary == nil {
-		tv.logger.Error("L3 notary not configured but required by posture", "posture", tv.posture.Name())
-		return false, ErrL3NotaryNotConfigured
+		if tv.isMutation(actionType) && tv.posture.RequiresL3Proof() {
+			tv.logger.Error("L3 notary not configured but required by posture", "posture", tv.posture.Name())
+			return false, ErrL3NotaryNotConfigured
+		}
+		return false, nil
 	}
 
 	ok, err := tv.l3Notary.VerifyL3Proof(
@@ -694,12 +707,12 @@ func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *governance.Go
 		envelope.Governance.L3.Proof,
 	)
 
-	if err != nil || !ok {
+	if (err != nil || !ok) && tv.isMutation(actionType) && tv.posture.RequiresL3Proof() {
 		tv.logger.Error("Notary (L3Notary) verification failed but required by posture", string(constants.ConnectionStateError), err)
 		return false, ErrL3ProofInvalid
 	}
 
-	return true, nil
+	return ok && err == nil, nil
 }
 
 func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payload []byte) (proto.Message, error) {
