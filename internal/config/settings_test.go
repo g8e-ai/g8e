@@ -47,12 +47,12 @@ func TestLoadSettings_IPFields(t *testing.T) {
 	assert.Equal(t, "1.1.1.1:80", s.IPResolver)
 }
 
-func TestLoadSettings_OpenClaw(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OpenClawGatewayToken), "oc-token-secret")
+func TestLoadSettings_InsecureMcp(t *testing.T) {
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.InsecureMcpToken), "oc-token-secret")
 
 	s := LoadSettings()
 
-	assert.Equal(t, "oc-token-secret", s.OpenClawGatewayToken)
+	assert.Equal(t, "oc-token-secret", s.InsecureMcpToken)
 }
 
 func TestLoadSettings_SystemEnvVars(t *testing.T) {
@@ -108,7 +108,7 @@ func TestLoadSettings_EmptyWhenEnvNotSet(t *testing.T) {
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.DataDir), "")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPService), "")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPResolver), "")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OpenClawGatewayToken), "")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.InsecureMcpToken), "")
 
 	s := LoadSettings()
 
@@ -119,7 +119,7 @@ func TestLoadSettings_EmptyWhenEnvNotSet(t *testing.T) {
 	assert.Empty(t, s.DataDir)
 	assert.Empty(t, s.IPService)
 	assert.Empty(t, s.IPResolver)
-	assert.Empty(t, s.OpenClawGatewayToken)
+	assert.Empty(t, s.InsecureMcpToken)
 }
 
 func TestLoadSettings_AllFieldsPresent(t *testing.T) {
@@ -130,7 +130,7 @@ func TestLoadSettings_AllFieldsPresent(t *testing.T) {
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.DataDir), "/data")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPService), "https://ip.svc")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPResolver), "8.8.8.8:80")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OpenClawGatewayToken), "oc")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.InsecureMcpToken), "oc")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.Shell), "/bin/bash")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.Lang), "C")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.Term), "dumb")
@@ -148,7 +148,7 @@ func TestLoadSettings_AllFieldsPresent(t *testing.T) {
 	assert.Equal(t, "/data", s.DataDir)
 	assert.Equal(t, "https://ip.svc", s.IPService)
 	assert.Equal(t, "8.8.8.8:80", s.IPResolver)
-	assert.Equal(t, "oc", s.OpenClawGatewayToken)
+	assert.Equal(t, "oc", s.InsecureMcpToken)
 	assert.Equal(t, "/bin/bash", s.Shell)
 	assert.Equal(t, "C", s.Lang)
 	assert.Equal(t, "dumb", s.Term)

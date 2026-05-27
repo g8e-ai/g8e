@@ -38,7 +38,7 @@ const (
 	deviceLinkKeyPrefix            = "g8e:device-link:"
 	deviceLinkFingerprintSetPrefix = "g8e:device-link-fingerprints:"
 	deviceLinkLockPrefix           = "g8e:device-link-lock:"
-	defaultDeviceLinkTTL           = 24 * time.Hour
+	defaultDeviceLinkTTL           = 1 * time.Hour
 	minDeviceLinkTTL               = 5 * time.Minute
 	maxDeviceLinkTTL               = 7 * 24 * time.Hour
 	defaultDeviceLinkMaxUses       = 1
@@ -714,7 +714,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	operatorSessionSummary := &models.SessionSummary{
 		OperatorSessionID: operatorSessionID,
 		CreatedAt:         time.Now().UTC(),
-		ExpiresAt:         time.Now().UTC().Add(24 * time.Hour),
+		ExpiresAt:         time.Now().UTC().Add(1 * time.Hour),
 	}
 
 	// Update operator document

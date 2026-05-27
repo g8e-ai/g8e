@@ -133,7 +133,7 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 			"ssh_config_path": "/tmp/ssh/config"
 		},
 		"ports": {
-			"openclaw_gateway": 9000,
+			"insecure_mcp_gateway": 9000,
 			"operator_bootstrap_https": 9001,
 			"operator_https": 9002,
 			"operator_public_https": 9003

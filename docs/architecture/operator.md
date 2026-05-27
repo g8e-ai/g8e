@@ -68,8 +68,11 @@ The Operator establishes workload identity bound to SPIFFE-style URI SANs, stric
 Revocation is checked on every handshake. Every `ActionReceipt` is signed by a host-unique Ed25519 key, providing a cryptographic proof of host execution.
 
 ### JWT Authentication Isolation
-The Operator is fully isolated from Identity Providers (IdP). The Gateway handles all JWT validation, user provisioning, and role mapping:
-- **Gateway Responsibility**: The Gateway validates inbound `Authorization: Bearer <JWT>` tokens, performs JIT user provisioning, maps JWT roles to Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
+The Operator is fully isolated from Identity Providers (IdP). The Gateway handles all JWT validation, user provisioning, and role mapping. JIT provisioning is **owner-controlled** and requires an active invitation:
+- **Owner-Centric Model**: All authentication requires owner approval via device links. The platform owner creates invitations for specific identities (IdP `sub` or email) before JIT provisioning can occur.
+- **Invitation-Based JIT**: When a JWT is presented, the Gateway validates the signature and checks for an active invitation. If no invitation exists, authentication is rejected (403 Forbidden). If a valid invitation exists, the user is provisioned and bound to the owner's organization, then the invitation is consumed.
+- **Strict TTL**: Device links and sessions have a 1-hour TTL by default. Long-lived access requires programmatic renewal or re-authentication via the device-link flow.
+- **Gateway Responsibility**: The Gateway validates inbound `Authorization: Bearer <JWT>` tokens, performs invitation-gated JIT user provisioning, maps JWT roles to Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
 - **Operator Responsibility**: The Operator receives only the pre-validated, enriched security metadata in the envelope. It decodes `tenant_id` and `binding_persona` from the envelope, propagates them into the execution context, and applies Persona-based data scrubbing (column masks, redaction) before returning results.
 - **No IdP Dependency**: The Operator never requires outbound internet access to verify tokens or manage user state. This enables air-gapped and high-security deployments where the Operator has no external network connectivity.
 
@@ -89,7 +92,6 @@ The host is the authoritative source of truth for all mutations.
 
 ---
 
-<<<<<<< HEAD
 ## 5. Current Implementation Status
 
 The reference implementation (`g8eo`) currently supports:
@@ -106,9 +108,6 @@ The reference implementation (`g8eo`) currently supports:
 ---
 
 ## 6. Implementation Reference
-=======
-## 5. Implementation Reference
->>>>>>> 224c7b82
 
 | Concern | Authoritative file |
 |---|---|

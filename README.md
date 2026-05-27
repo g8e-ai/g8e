@@ -222,9 +222,12 @@ Governance posture sets what's enforced vs. merely audited: **Doctrine** (L1 enf
 
 ### JWT Authentication & JIT Provisioning
 
-The Gateway provides JWT authentication and Just-In-Time (JIT) user provisioning that fully isolates the Operator from Identity Providers (IdP):
+The Gateway provides JWT authentication and Just-In-Time (JIT) user provisioning that fully isolates the Operator from Identity Providers (IdP). JIT provisioning is **owner-controlled** and requires an active invitation:
 
-- **Gateway Layer**: Validates inbound `Authorization: Bearer <JWT>` tokens using JWKS or static public keys, performs JIT user provisioning (creates user accounts on first login), maps JWT roles to declarative Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
+- **Owner-Centric Model**: All authentication requires owner approval via device links. The platform owner creates invitations for specific identities (IdP `sub` or email) before JIT provisioning can occur.
+- **Invitation-Based JIT**: When a JWT is presented, the Gateway validates the signature and checks for an active invitation. If no invitation exists, authentication is rejected (403 Forbidden). If a valid invitation exists, the user is provisioned and bound to the owner's organization, then the invitation is consumed.
+- **Strict TTL**: Device links and sessions have a 1-hour TTL by default. Long-lived access requires programmatic renewal or re-authentication via the device-link flow.
+- **Gateway Layer**: Validates inbound `Authorization: Bearer <JWT>` tokens using JWKS or static public keys, performs invitation-gated JIT user provisioning, maps JWT roles to declarative Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
 - **Operator Layer**: Receives only the pre-validated, enriched security metadata in the envelope. Decodes `tenant_id` and `binding_persona`, propagates them into execution context, and applies Persona-based data scrubbing (column masks, redaction) before returning results.
 - **IdP Isolation**: The Operator never requires outbound internet access to verify tokens or manage user state, enabling air-gapped and high-security deployments.
 

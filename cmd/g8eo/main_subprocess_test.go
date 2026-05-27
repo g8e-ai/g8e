@@ -23,7 +23,7 @@ package main
 //   - The parent asserts on the subprocess exit code.
 //
 // This exercises the actual function bodies (handleRekeyVault, handleVerifyVault,
-// handleResetVault, handleVaultCommand, runGatewayMode, runOpenClawMode) so that
+// handleResetVault, handleVaultCommand, runGatewayMode, runInsecureMode) so that
 // coverage tooling registers them as entered, while keeping the parent test process safe.
 
 import (
@@ -410,17 +410,17 @@ func TestRunGatewayMode_BadLogLevel_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// runOpenClawMode - invalid log level → ExitConfigError
+// runInsecureMode - invalid log level → ExitConfigError
 // ---------------------------------------------------------------------------
 
-func TestRunOpenClawMode_BadLogLevel_Subprocess(t *testing.T) {
-	if os.Getenv("G8E_TEST_OPENCLAW_BAD_LOG") == "1" {
-		runOpenClawMode(fmt.Sprintf("ws://localhost:%d", constants.Ports.OpenclawGateway), "", "", "", "", "notavalidlevel")
+func TestRunInsecureMode_BadLogLevel_Subprocess(t *testing.T) {
+	if os.Getenv("G8E_TEST_INSECURE_BAD_LOG") == "1" {
+		runInsecureMode(fmt.Sprintf("ws://localhost:%d", constants.Ports.InsecureMcpGateway), "", "", "", "", "notavalidlevel")
 		return
 	}
 
-	cmd := exec.Command(os.Args[0], "-test.run=TestRunOpenClawMode_BadLogLevel_Subprocess")
-	cmd.Env = append(os.Environ(), "G8E_TEST_OPENCLAW_BAD_LOG=1")
+	cmd := exec.Command(os.Args[0], "-test.run=TestRunInsecureMode_BadLogLevel_Subprocess")
+	cmd.Env = append(os.Environ(), "G8E_TEST_INSECURE_BAD_LOG=1")
 	err := cmd.Run()
 
 	exitErr, ok := err.(*exec.ExitError)
@@ -429,17 +429,17 @@ func TestRunOpenClawMode_BadLogLevel_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// runOpenClawMode - empty gateway URL → ExitConfigError
+// runInsecureMode - empty gateway URL → ExitConfigError
 // ---------------------------------------------------------------------------
 
-func TestRunOpenClawMode_EmptyURL_Subprocess(t *testing.T) {
-	if os.Getenv("G8E_TEST_OPENCLAW_NO_URL") == "1" {
-		runOpenClawMode("", "token", "node", "display", "", "info")
+func TestRunInsecureMode_EmptyURL_Subprocess(t *testing.T) {
+	if os.Getenv("G8E_TEST_INSECURE_NO_URL") == "1" {
+		runInsecureMode("", "token", "node", "display", "", "info")
 		return
 	}
 
-	cmd := exec.Command(os.Args[0], "-test.run=TestRunOpenClawMode_EmptyURL_Subprocess")
-	cmd.Env = append(os.Environ(), "G8E_TEST_OPENCLAW_NO_URL=1")
+	cmd := exec.Command(os.Args[0], "-test.run=TestRunInsecureMode_EmptyURL_Subprocess")
+	cmd.Env = append(os.Environ(), "G8E_TEST_INSECURE_NO_URL=1")
 	err := cmd.Run()
 
 	exitErr, ok := err.(*exec.ExitError)

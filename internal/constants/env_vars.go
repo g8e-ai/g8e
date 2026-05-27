@@ -77,7 +77,7 @@ var EnvVar = struct {
 	LocalStoreRetentionDays    EnvVarKey
 	IPService                  EnvVarKey
 	IPResolver                 EnvVarKey
-	OpenClawGatewayToken       EnvVarKey
+	InsecureMcpToken           EnvVarKey
 	Shell                      EnvVarKey
 	Lang                       EnvVarKey
 	Term                       EnvVarKey
@@ -170,7 +170,7 @@ var EnvVar = struct {
 	LocalStoreRetentionDays:    "G8E_LOCAL_STORE_RETENTION_DAYS",
 	IPService:                  "G8E_IP_SERVICE",
 	IPResolver:                 "G8E_IP_RESOLVER",
-	OpenClawGatewayToken:       "G8E_OPENCLAW_GATEWAY_TOKEN",
+	InsecureMcpToken:           "G8E_INSECURE_MCP_TOKEN",
 	Shell:                      "SHELL",
 	Lang:                       "LANG",
 	Term:                       "TERM",

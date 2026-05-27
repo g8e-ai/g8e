@@ -189,6 +189,8 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		}
 
 		// [PIVOT] MCP & A2A gateways handle their own authentication since they support standard clients
+		// When JWKS is configured, they use JWTAuthMiddleware which requires an invitation for JIT provisioning
+		// When JWKS is not configured, they require mTLS which requires device-link enrollment
 		if strings.HasPrefix(r.URL.Path, "/api/mcp/") || strings.HasPrefix(r.URL.Path, "/api/a2a/") || strings.HasPrefix(r.URL.Path, "/api/approve/") {
 			next.ServeHTTP(w, r)
 			return

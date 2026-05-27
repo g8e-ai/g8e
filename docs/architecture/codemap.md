@@ -94,7 +94,7 @@ Each subdirectory produces one binary. All import `internal/` and `protocol/`.
 ```text
 cmd/
 ├── g8e/main.go                     # Platform CLI (delegates to internal/cli/cmd)
-├── g8eo/main.go                    # Operator binary (multi-mode: gateway, mcp-serve, openclaw, outbound)
+├── g8eo/main.go                    # Operator binary (multi-mode: gateway, mcp-serve, insecure, outbound)
 ├── chaos_tester/main.go            # Chaos / fuzz testing harness
 └── uap-ping/main.go                # UAP protocol ping utility
 ```
@@ -235,8 +235,8 @@ services/
 │   ├── system_utils.go
 │   └── utils.go
 │
-└── openclaw/
-    └── openclaw_node_service.go    #   WebSocket node host
+└── insecure_mcp/
+    └── openclaw_node_service.go    #   WebSocket node host (file name not yet renamed)
 ```
 
 ## pkg/

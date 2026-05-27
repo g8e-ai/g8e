@@ -40,6 +40,10 @@
       "_go_const": "CollectionInvestigations",
       "value": "investigations"
     },
+    "invitations": {
+      "_go_const": "CollectionInvitations",
+      "value": "invitations"
+    },
     "login_audit": {
       "_go_const": "CollectionLoginAudit",
       "value": "login_audit"

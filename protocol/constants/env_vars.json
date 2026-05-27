@@ -32,7 +32,7 @@
     "LogLevel": "G8E_LOG_LEVEL",
     "LogMaxBackups": "G8E_LOG_MAX_BACKUPS",
     "LogName": "LOGNAME",
-    "OpenClawGatewayToken": "G8E_OPENCLAW_GATEWAY_TOKEN",
+    "InsecureMcpToken": "G8E_INSECURE_MCP_TOKEN",
     "OperatorBlobURL": "G8E_OPERATOR_BLOB_URL",
     "OperatorBootstrapHTTPSPort": "G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT",
     "OperatorEndpoint": "G8E_OPERATOR_ENDPOINT",

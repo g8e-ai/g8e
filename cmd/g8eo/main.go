@@ -44,7 +44,7 @@ import (
 	auth "github.com/g8e-ai/g8e/internal/services/auth"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	gateway "github.com/g8e-ai/g8e/internal/services/gateway"
-	openclaw "github.com/g8e-ai/g8e/internal/services/openclaw"
+	insecure_mcp "github.com/g8e-ai/g8e/internal/services/insecure_mcp"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/sovereignty"
 	"github.com/g8e-ai/g8e/internal/services/system"
@@ -119,11 +119,11 @@ func main() {
 	var gatewaySecretsDir string
 	var gatewayPasskeyRpID string
 	var gatewayPasskeyRpName string
-	var openclawMode bool
-	var openclawURL string
-	var openclawToken string
-	var openclawNodeID string
-	var openclawDisplayName string
+	var insecureMode bool
+	var insecureURL string
+	var insecureToken string
+	var insecureNodeID string
+	var insecureDisplayName string
 
 	var heartbeatInterval time.Duration
 
@@ -173,11 +173,11 @@ func main() {
 
 	flag.DurationVar(&heartbeatInterval, "heartbeat-interval", 0, "Heartbeat interval (e.g. 60s, 2m); overrides the 30s default")
 
-	flag.BoolVar(&openclawMode, "openclaw", false, "OpenClaw mode: connect to OpenClaw Gateway as a node host")
-	flag.StringVar(&openclawURL, "openclaw-url", "", "OpenClaw Gateway WebSocket URL (e.g. ws://"+constants.DefaultEndpoint+":18789)")
-	flag.StringVar(&openclawToken, "openclaw-token", "", "OpenClaw Gateway auth token (or set OPENCLAW_GATEWAY_TOKEN)")
-	flag.StringVar(&openclawNodeID, "openclaw-node-id", "", "Node ID to advertise (default: hostname)")
-	flag.StringVar(&openclawDisplayName, "openclaw-name", "", "Display name shown in OpenClaw UI (default: node ID)")
+	flag.BoolVar(&insecureMode, "insecure", false, "INSECURE mode: connect to MCP gateway without governance (DANGEROUS - bypasses all L1/L2/L3 verification)")
+	flag.StringVar(&insecureURL, "insecure-url", "", "MCP Gateway WebSocket URL (e.g. ws://"+constants.DefaultEndpoint+":18789)")
+	flag.StringVar(&insecureToken, "insecure-token", "", "MCP Gateway auth token (or set G8E_INSECURE_MCP_TOKEN)")
+	flag.StringVar(&insecureNodeID, "insecure-node-id", "", "Node ID to advertise (default: hostname)")
+	flag.StringVar(&insecureDisplayName, "insecure-name", "", "Display name shown in MCP gateway UI (default: node ID)")
 
 	// Customize usage
 	flag.Usage = func() {
@@ -226,12 +226,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  --old-key <key>         Old API key (required for --rekey-vault)\n")
 		fmt.Fprintf(os.Stderr, "  --verify-vault          Verify vault integrity\n")
 		fmt.Fprintf(os.Stderr, "  --reset-vault           Reset vault (DESTROYS ALL DATA)\n")
-		fmt.Fprintf(os.Stderr, "\nOpenClaw Node Host Mode:\n")
-		fmt.Fprintf(os.Stderr, "  --openclaw              Connect to an OpenClaw Gateway as a node host\n")
-		fmt.Fprintf(os.Stderr, "  --openclaw-url <url>    OpenClaw Gateway WebSocket URL (e.g. ws://"+constants.DefaultEndpoint+":18789)\n")
-		fmt.Fprintf(os.Stderr, "  --openclaw-token <tok>  Auth token (or set OPENCLAW_GATEWAY_TOKEN)\n")
-		fmt.Fprintf(os.Stderr, "  --openclaw-node-id <id> Node ID advertised to the Gateway (default: hostname)\n")
-		fmt.Fprintf(os.Stderr, "  --openclaw-name <name>  Display name shown in OpenClaw UI (default: node ID)\n")
+		fmt.Fprintf(os.Stderr, "\nInsecure MCP Node Host Mode:\n")
+		fmt.Fprintf(os.Stderr, "  --insecure              Connect to MCP gateway without governance (DANGEROUS - bypasses all L1/L2/L3 verification)\n")
+		fmt.Fprintf(os.Stderr, "  --insecure-url <url>    MCP Gateway WebSocket URL (e.g. ws://"+constants.DefaultEndpoint+":18789)\n")
+		fmt.Fprintf(os.Stderr, "  --insecure-token <tok>  Auth token (or set G8E_INSECURE_MCP_TOKEN)\n")
+		fmt.Fprintf(os.Stderr, "  --insecure-node-id <id> Node ID advertised to the Gateway (default: hostname)\n")
+		fmt.Fprintf(os.Stderr, "  --insecure-name <name>  Display name shown in MCP gateway UI (default: node ID)\n")
 	}
 
 	flag.Parse()
@@ -281,11 +281,11 @@ func main() {
 		return
 	}
 
-	if openclawMode {
-		if openclawToken == "" {
-			openclawToken = settings.OpenClawGatewayToken
+	if insecureMode {
+		if insecureToken == "" {
+			insecureToken = settings.InsecureMcpToken
 		}
-		runOpenClawMode(openclawURL, openclawToken, openclawNodeID, openclawDisplayName, settings.Path, logLevel)
+		runInsecureMode(insecureURL, insecureToken, insecureNodeID, insecureDisplayName, settings.Path, logLevel)
 		return
 	}
 
@@ -863,18 +863,18 @@ func handleVerifyVault(vault *vault.Vault, apiKey string, logger *slog.Logger) {
 	os.Exit(constants.ExitSuccess)
 }
 
-// runOpenClawMode starts the Operator as an OpenClaw Node Host.
-// The Operator connects to the OpenClaw Gateway via WebSocket, advertises
-// system.run and system.which, and executes shell commands on demand.
+// runInsecureMode starts the Operator in INSECURE MCP gateway mode.
+// The Operator connects to an MCP gateway via WebSocket without any governance.
+// This mode bypasses all L1/L2/L3 verification and is DANGEROUS.
 // No g8e infrastructure (g8ee, client) is required.
-func runOpenClawMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel string) {
+func runInsecureMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
 		os.Exit(constants.ExitConfigError)
 	}
 
-	cfg, err := config.LoadOpenClaw(config.OpenClawOptions{
+	cfg, err := config.LoadInsecureMcp(config.InsecureMcpOptions{
 		GatewayURL:  gatewayURL,
 		Token:       token,
 		NodeID:      nodeID,
@@ -883,13 +883,13 @@ func runOpenClawMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel s
 		LogLevel:    logLevel,
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "OpenClaw configuration error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "INSECURE MCP configuration error: %v\n", err)
 		os.Exit(constants.ExitConfigError)
 	}
 
-	logger.Info("g8e Operator - OpenClaw Node Host", "version", version, "build", buildID)
+	logger.Info("g8e Operator - INSECURE MCP Gateway Mode", "version", version, "build", buildID)
 
-	svc, err := openclaw.NewOpenClawNodeService(
+	svc, err := insecure_mcp.NewInsecureMcpNodeService(
 		cfg.GatewayURL,
 		cfg.Token,
 		cfg.NodeID,
@@ -898,7 +898,7 @@ func runOpenClawMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel s
 		logger,
 	)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create OpenClaw node service: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to create INSECURE MCP node service: %v\n", err)
 		os.Exit(constants.ExitCodeFromError(err))
 	}
 
@@ -907,7 +907,7 @@ func runOpenClawMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel s
 
 	go func() {
 		if err := svc.Start(ctx); err != nil {
-			logger.Error("OpenClaw node service failed", string(constants.ConnectionStateError), err)
+			logger.Error("INSECURE MCP node service failed", string(constants.ConnectionStateError), err)
 			os.Exit(constants.ExitCodeFromError(err))
 		}
 	}()
@@ -918,7 +918,7 @@ func runOpenClawMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel s
 	logger.Info("Received signal, shutting down", "signal", sig.String())
 	cancel()
 	svc.Stop()
-	logger.Info("OpenClaw node host stopped")
+	logger.Info("INSECURE MCP node host stopped")
 }
 
 // handleResetVault destroys the vault (requires confirmation)

@@ -367,6 +367,9 @@ type User struct {
 	PasskeyCredentials []PasskeyCredential `json:"passkey_credentials,omitempty"`
 	Provider           string              `json:"provider,omitempty"`
 
+	OrganizationID string   `json:"organization_id,omitempty"`
+	Roles          []string `json:"roles,omitempty"`
+
 	Status      constants.UserStatus `json:"status,omitempty"`
 	IsBootstrap bool                 `json:"is_bootstrap,omitempty"`
 }
