@@ -11,7 +11,7 @@ The architecture extends standard Model Context Protocol (MCP) and Agent-to-Agen
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev)
 [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v100--core-substrate)
-[![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/reference/position_paper.md)
+[![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/core/position_paper.md)
 
 [Getting Started](docs/guides/getting_started.md) · [Mental model](#the-mental-model) · [The Operator](#the-governed-operator) · [How it works](#how-it-works) · [Docs](#documentation)
 
@@ -306,7 +306,7 @@ g8e runs entirely inside your perimeter. The Operator has no inbound gateway, so
 ## Documentation
 
 - **[Getting Started](docs/guides/getting_started.md)** — stand up g8e in minutes via the unified CLI.
-- **[Position Paper](docs/reference/position_paper.md)** — full design rationale, threat model, and BFT analysis.
+- **[Position Paper](docs/core/position_paper.md)** — full design rationale, threat model, and BFT analysis.
 - **[Protocol](docs/architecture/protocol.md)** — wire format, transaction hash, and the Doctrine / Consensus / Notary definitions.
 - **[Operator (g8eo)](docs/architecture/operator.md)** — execution boundary, gateway modes, and host storage.
 - **[Gateway (g8eg)](docs/architecture/gateway.md)** — Governance Gateway architecture and modes.
