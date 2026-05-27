@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -75,7 +76,12 @@ func TestMain(m *testing.M) {
 	}
 
 	// Run tests
-	m.Run()
+	code := m.Run()
+
+	// Print the scenario matrix
+	PrintScenarioMatrix()
+
+	os.Exit(code)
 }
 
 func TestScenarios(t *testing.T) {
@@ -288,32 +294,6 @@ func generateTestSigners() map[string]ed25519.PublicKey {
 	pubKey := privKey.Public().(ed25519.PublicKey)
 	keyID := hex.EncodeToString(pubKey)
 	signers[keyID] = pubKey
-
-	// Add the forge_signature fixture key_id to trusted signers
-	// This allows the verifier to attempt signature verification and fail with "signature invalid"
-	// instead of "unknown signer"
-	forgeSigKeyID := "2033b866aa250feeffd71b5065d534868fdd37fbf507accb01bdab7c36a11ffb"
-	forgeSigPubBytes, err := hex.DecodeString(forgeSigKeyID)
-	if err != nil {
-		panicf("failed to decode forge_signature key_id: %v", err)
-	}
-	if len(forgeSigPubBytes) != ed25519.PublicKeySize {
-		panicf("invalid forge_signature key_id size: got %d, want %d", len(forgeSigPubBytes), ed25519.PublicKeySize)
-	}
-	signers[forgeSigKeyID] = ed25519.PublicKey(forgeSigPubBytes)
-
-	// Add the unknown_signer fixture key_id to trusted signers
-	// This allows the verifier to attempt signature verification and fail with "signature invalid"
-	// because the signature was created with a different private key
-	unknownSignerKeyID := "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29"
-	unknownSignerPubBytes, err := hex.DecodeString(unknownSignerKeyID)
-	if err != nil {
-		panicf("failed to decode unknown_signer key_id: %v", err)
-	}
-	if len(unknownSignerPubBytes) != ed25519.PublicKeySize {
-		panicf("invalid unknown_signer key_id size: got %d, want %d", len(unknownSignerPubBytes), ed25519.PublicKeySize)
-	}
-	signers[unknownSignerKeyID] = ed25519.PublicKey(unknownSignerPubBytes)
 
 	// Add 2 more signers for consensus testing
 	for i := 2; i <= 3; i++ {

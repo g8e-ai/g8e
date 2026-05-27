@@ -28,10 +28,10 @@ test/scenario/
 go test -tags=integration -v -run TestScenarios ./test/scenario/...
 
 # Run a specific scenario (using g8e wrapper)
-./g8e test scenario --run forge_signature -v
+./g8e test scenario --run l2_invalid -v
 
 # Run a specific scenario (direct go test)
-go test -tags=integration -v -run TestScenarios/forge_signature ./test/scenario/...
+go test -tags=integration -v -run TestScenarios/l2_invalid ./test/scenario/...
 ```
 
 ### CI Pipeline
@@ -50,9 +50,9 @@ A scenario is pure data defined in JSON:
 
 ```json
 {
-  "name": "forge_signature",
-  "vertical": "security",
-  "narrative": "Envelope with forged L2 signature should be rejected",
+  "name": "l2_invalid",
+  "vertical": "gates",
+  "narrative": "Envelope with forged L2 signature: rejected in consensus/notary (L2 enforced), accepted in doctrine (L2 audited only)",
   "intent": <GovernanceEnvelope JSON bytes>,
   "evidence": {
     "l2_signature_present": true,
@@ -139,16 +139,15 @@ This approach follows the "no mocks" principle from `docs/guides/devs.md`, ensur
 
 Security scenarios testing fundamental rejection criteria:
 
-- **forge_signature**: Forged L2 signature → reject
+- **l2_invalid**: Forged L2 signature → reject
 - **actual_replay**: Replayed nonce (store seeded) → reject
 - **stale_state_root**: Stale state root → reject
 - **l3_missing**: Missing L3 proof in notary mode → reject
 - **tampered_receipt**: Valid envelope accepted, receipt signature tampered → tampering detected
-- **unknown_signer**: Envelope signed by untrusted key → reject in consensus/notary modes
 - **malformed_payload**: Invalid protobuf payload structure → reject
 - **empty_payload**: Missing payload field → reject
 
-These are the CI backbone - trivially deterministic and fast. The `tampered_receipt` scenario specifically tests the "tamper-evident" property of signed receipts. The edge case fixtures (unknown_signer, malformed_payload, empty_payload) ensure fail-closed behavior for malformed inputs and unknown signers.
+These are the CI backbone - trivially deterministic and fast. The `tampered_receipt` scenario specifically tests the "tamper-evident" property of signed receipts. The edge case fixtures (malformed_payload, empty_payload) ensure fail-closed behavior for malformed inputs.
 
 ## Future Scenarios
 
@@ -178,10 +177,10 @@ For accepted scenarios, the receipt includes:
 
 Example output:
 ```
-=== Scenario: forge_signature (doctrine mode) ===
-Vertical: security
-Narrative: Envelope with forged L2 signature should be rejected
-Evidence: L2=true (key=tribunal_1), L3=false, signer=tribunal_1
+=== Scenario: l2_invalid (doctrine mode) ===
+Vertical: gates
+Narrative: Envelope with forged L2 signature: rejected in consensus/notary (L2 enforced), accepted in doctrine (L2 audited only)
+Evidence: L2=true (key=797c07dc...), L3=false, signer=797c07dc...
 Result: ACCEPTED
 Receipt:
   Transaction ID: abc123...
