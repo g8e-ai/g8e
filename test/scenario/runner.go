@@ -266,7 +266,7 @@ func (g *OperatorGate) normalizeEnvelope(envelope *commonv1.GovernanceEnvelope) 
 	}
 
 	// Set transaction_hash: if empty use correct hash, if it's a "bad" placeholder keep it
-	if envelope.TransactionHash == "" {
+	if envelope.TransactionHash == "" || (envelope.TransactionHash != testPlaceholderBadHash && envelope.TransactionHash != correctHash) {
 		envelope.TransactionHash = correctHash
 	} else if envelope.TransactionHash == testPlaceholderBadHash {
 		// Keep the bad hash for hash_mismatch test

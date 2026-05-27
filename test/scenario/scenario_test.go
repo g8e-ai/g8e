@@ -206,16 +206,16 @@ func TestNegativeControls(t *testing.T) {
 
 	// Test 1: Flip a known-accepting scenario to expect reject
 	t.Run("flip_accept_to_reject", func(t *testing.T) {
-		// Use forge_signature which accepts in doctrine mode (L1-only)
+		// Use all_valid which accepts in doctrine mode (L1-only)
 		var targetScenario *Scenario
 		for _, s := range scenarios {
-			if s.Name == "forge_signature" {
+			if s.Name == "all_valid" {
 				targetScenario = &s
 				break
 			}
 		}
 		if targetScenario == nil {
-			t.Fatal("forge_signature scenario not found")
+			t.Fatal("all_valid scenario not found")
 		}
 
 		gate := ops[ModeDoctrine]

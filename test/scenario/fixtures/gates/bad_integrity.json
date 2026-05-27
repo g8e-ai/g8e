@@ -32,19 +32,19 @@
   "expect": {
     "doctrine": {
       "verdict": "reject",
-      "reject_reason": "TX_HASH_MISMATCH: transaction_hash does not match computed hash",
+      "reject_reason": "TX_ID_MISMATCH: id does not match computed hash",
       "l2_status": 1,
       "l3_status": 1
     },
     "consensus": {
       "verdict": "reject",
-      "reject_reason": "TX_HASH_MISMATCH: transaction_hash does not match computed hash",
+      "reject_reason": "TX_ID_MISMATCH: id does not match computed hash",
       "l2_status": 1,
       "l3_status": 1
     },
     "notary": {
       "verdict": "reject",
-      "reject_reason": "TX_HASH_MISMATCH: transaction_hash does not match computed hash",
+      "reject_reason": "TX_ID_MISMATCH: id does not match computed hash",
       "l2_status": 1,
       "l3_status": 1
     }

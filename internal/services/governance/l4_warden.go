@@ -39,6 +39,7 @@ var (
 	ErrUnknownActionType       = errors.New("TX_UNKNOWN_ACTION: action type not recognized")
 	ErrPayloadDecodeFailed     = errors.New("TX_PAYLOAD_DECODE: failed to decode typed payload")
 	ErrTransactionHashMismatch = errors.New("TX_HASH_MISMATCH: transaction_hash does not match computed hash")
+	ErrTransactionIDMismatch   = errors.New("TX_ID_MISMATCH: id does not match computed hash")
 	ErrTransactionExpired      = errors.New("TX_EXPIRED: transaction has expired")
 	ErrTransactionReplay       = errors.New("TX_REPLAY: nonce already used")
 	ErrStateRootMissing        = errors.New("TX_STATE_MISSING: state_merkle_root required but missing")
@@ -544,7 +545,7 @@ func (tv *L4Warden) verifyStateless(envelope *uap.UAPEnvelope) (proto.Message, s
 		tv.logger.Error("Transaction id mismatch",
 			"provided", envelope.Id,
 			"computed", computedHash)
-		return nil, "", ErrTransactionHashMismatch
+		return nil, "", ErrTransactionIDMismatch
 	}
 
 	return decodedPayload, computedHash, nil
