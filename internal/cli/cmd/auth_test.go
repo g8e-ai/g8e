@@ -163,6 +163,46 @@ func TestLogoutCmd(t *testing.T) {
 		os.Chdir(tmpDir)
 		defer os.Chdir(originalWd)
 
+		// Set up minimal config structure so config loads, then auth fails
+		runtimeDir := filepath.Join(tmpDir, ".g8e")
+		credentialsParentDir := filepath.Join(tmpDir, ".g8e")
+		require.NoError(t, os.MkdirAll(credentialsParentDir, 0700))
+		require.NoError(t, os.MkdirAll(filepath.Join(runtimeDir, "pki"), 0755))
+
+		// Create minimal paths.json structure
+		protocolDir := filepath.Join(tmpDir, "protocol")
+		constantsDir := filepath.Join(protocolDir, "constants")
+		require.NoError(t, os.MkdirAll(constantsDir, 0755))
+
+		pathsJSON := `{
+			"host": "localhost",
+			"infra": {
+				"app_cert_dir": ".g8e/pki/app",
+				"ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
+				"db_path": ".g8e/data/operator.db",
+				"docs_dir": "docs",
+				"pki_dir": ".g8e/pki",
+				"protocol_constants_dir": "protocol/constants",
+				"protocol_dir": "protocol",
+				"protocol_models_dir": "protocol/models",
+				"secrets_dir": ".g8e/secrets",
+				"ssh_config_path": ".g8e/ssh/config"
+			},
+			"ports": {
+				"insecure_mcp_gateway": 9003,
+				"operator_bootstrap_https": 9001,
+				"operator_https": 9000,
+				"operator_public_https": 9002
+			}
+		}`
+		pathsPath := filepath.Join(constantsDir, "paths.json")
+		require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
+
+		// Set environment variable to override credentials directory
+		originalHome := os.Getenv("HOME")
+		os.Setenv("HOME", tmpDir)
+		defer os.Setenv("HOME", originalHome)
+
 		err := cmd.RunE(cmd, []string{})
 		assert.NoError(t, err)
 		assert.Contains(t, buf.String(), "No active session found")

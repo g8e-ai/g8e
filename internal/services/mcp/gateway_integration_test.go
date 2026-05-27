@@ -698,9 +698,10 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 
 		// Create a real envelope processor that uses the warden
 		processor := &realL3EnvelopeProcessor{
-			warden:  warden,
-			privKey: privKey,
-			keyID:   "test-key",
+			warden:   warden,
+			l3Notary: acceptingL3,
+			privKey:  privKey,
+			keyID:    "test-key",
 		}
 
 		// Build a test envelope with L3 metadata
@@ -790,9 +791,10 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 
 		// Create a real envelope processor that uses the warden
 		processor := &realL3EnvelopeProcessor{
-			warden:  warden,
-			privKey: privKey,
-			keyID:   "test-key",
+			warden:   warden,
+			l3Notary: rejectingL3,
+			privKey:  privKey,
+			keyID:    "test-key",
 		}
 
 		// Build a test envelope with L3 metadata
@@ -890,12 +892,17 @@ func (p *realL3EnvelopeProcessor) ProcessEnvelope(ctx context.Context, payload [
 
 	// Manually invoke L3 verification since doctrine posture doesn't require it
 	if p.l3Notary != nil {
-		l3Proof, err := p.l3Notary.VerifyProof(ctx, envelope)
+		l3Metadata := envelope.Governance.L3
+		if l3Metadata == nil {
+			p.lastError = governance.ErrL3ProofInvalid
+			return nil, governance.ErrL3ProofInvalid
+		}
+		valid, err := p.l3Notary.VerifyL3Proof(envelope.OperatorId, envelope.TransactionHash, envelope.OperatorSessionId, l3Metadata.Proof)
 		if err != nil {
 			p.lastError = err
 			return nil, err
 		}
-		if l3Proof == nil {
+		if !valid {
 			p.lastError = governance.ErrL3ProofInvalid
 			return nil, governance.ErrL3ProofInvalid
 		}

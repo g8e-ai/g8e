@@ -22,6 +22,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	clierrors "github.com/g8e-ai/g8e/internal/cli/errors"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,22 +42,6 @@ func TestDataUsersCmd(t *testing.T) {
 		assert.Equal(t, "users", cmd.Use)
 		assert.Contains(t, cmd.Short, "Manage user accounts")
 	})
-
-	t.Run("users fails with invalid project root", func(t *testing.T) {
-		cmd := dataUsersCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
-	})
 }
 
 func TestDataOperatorsCmd(t *testing.T) {
@@ -64,22 +49,6 @@ func TestDataOperatorsCmd(t *testing.T) {
 		cmd := dataOperatorsCmd()
 		assert.Equal(t, "operators", cmd.Use)
 		assert.Contains(t, cmd.Short, "Manage operator instances")
-	})
-
-	t.Run("operators fails with invalid project root", func(t *testing.T) {
-		cmd := dataOperatorsCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
 	})
 }
 
@@ -118,23 +87,6 @@ func TestDataDeviceLinksListCmd(t *testing.T) {
 		cmd := dataDeviceLinksListCmd()
 		flag := cmd.Flags().Lookup("user-id")
 		assert.NotNil(t, flag)
-	})
-
-	t.Run("list fails with invalid project root", func(t *testing.T) {
-		cmd := dataDeviceLinksListCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		// Config loading fails before auth check - not using custom error type
-		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
 	})
 
 	t.Run("list fails without user-id", func(t *testing.T) {
@@ -188,22 +140,6 @@ func TestDataDeviceLinksCreateCmd(t *testing.T) {
 		assert.NotNil(t, flag)
 	})
 
-	t.Run("create fails with invalid project root", func(t *testing.T) {
-		cmd := dataDeviceLinksCreateCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
-	})
-
 	t.Run("create fails without user-id", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupDataTestConfig(t, tmpDir)
@@ -241,22 +177,6 @@ func TestDataDeviceLinksDeleteCmd(t *testing.T) {
 		assert.NotNil(t, flag)
 	})
 
-	t.Run("delete fails with invalid project root", func(t *testing.T) {
-		cmd := dataDeviceLinksDeleteCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
-	})
-
 	t.Run("delete fails without user-id when env not set", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupDataTestConfig(t, tmpDir)
@@ -290,22 +210,6 @@ func TestDataSettingsCmd(t *testing.T) {
 		assert.Equal(t, "settings", cmd.Use)
 		assert.Contains(t, cmd.Short, "Manage Gateway settings")
 	})
-
-	t.Run("settings fails with invalid project root", func(t *testing.T) {
-		cmd := dataSettingsCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
-	})
 }
 
 func TestDataStoreCmd(t *testing.T) {
@@ -325,22 +229,6 @@ func TestDataStoreCmd(t *testing.T) {
 		cmd := dataStoreCmd()
 		flag := cmd.Flags().Lookup("document-id")
 		assert.NotNil(t, flag)
-	})
-
-	t.Run("store fails with invalid project root", func(t *testing.T) {
-		cmd := dataStoreCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
 	})
 
 }
@@ -364,22 +252,43 @@ func TestDataAuditCmd(t *testing.T) {
 		assert.NotNil(t, flag)
 	})
 
-	t.Run("audit fails with invalid project root", func(t *testing.T) {
-		cmd := dataAuditListCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
+}
 
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
+func TestDataCommandsRequireAuthentication(t *testing.T) {
+	testCases := []struct {
+		name string
+		cmd  func() *cobra.Command
+	}{
+		{"users", dataUsersCmd},
+		{"operators", dataOperatorsCmd},
+		{"device-links list", dataDeviceLinksListCmd},
+		{"device-links create", dataDeviceLinksCreateCmd},
+		{"device-links delete", dataDeviceLinksDeleteCmd},
+		{"settings", dataSettingsCmd},
+		{"store", dataStoreCmd},
+		{"audit list", dataAuditListCmd},
+	}
 
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := tc.cmd()
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
 
+			originalWd, _ := os.Getwd()
+			tmpDir := t.TempDir()
+			os.Chdir(tmpDir)
+			defer os.Chdir(originalWd)
+
+			// Set up minimal config structure so config loads, then auth fails
+			setupDataTestConfig(t, tmpDir)
+
+			err := cmd.RunE(cmd, []string{})
+			assert.Error(t, err)
+			assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
+		})
+	}
 }
 
 func TestDataCommandFlags(t *testing.T) {

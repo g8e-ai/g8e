@@ -152,6 +152,9 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	cfg, err := config.Load(projectRoot)
 	require.NoError(t, err)
 
+	// Override credentials directory to use temp directory for test isolation
+	cfg.CredentialsDir = credentialsDir
+
 	return cfg, tempDir
 }
 
