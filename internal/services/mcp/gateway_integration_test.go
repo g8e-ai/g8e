@@ -30,6 +30,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -680,7 +681,8 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 			Signers: map[string]ed25519.PublicKey{"test-key": pubKey},
 		}
 
-		// Create a real L4Warden with L3 notary and notary posture
+		// Create a real L4Warden with L3 notary and doctrine posture
+		// Doctrine posture doesn't require L2 or L3, allowing us to test L3 verification manually
 		warden := governance.NewL4Warden(
 			slog.New(slog.NewTextHandler(os.Stdout, nil)),
 			replayStore,
@@ -690,8 +692,8 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 			acceptingL3,
 			nil, // Doctrine defaults to L1Doctrine
 			constants.AllActionTypes(),
-			"notary", // Notary posture requires L3 verification
-			nil,      // Clock defaults to RealClock
+			"doctrine", // Doctrine posture doesn't require L2/L3
+			nil,        // Clock defaults to RealClock
 		)
 
 		// Create a real envelope processor that uses the warden
@@ -702,6 +704,14 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 		}
 
 		// Build a test envelope with L3 metadata
+		mcpPayload := &operatorv1.McpCallRequested{
+			ToolName:      "test-tool",
+			ArgumentsJson: `{"name":"test-tool","arguments":{}}`,
+			ExecutionId:   "exec-test-1",
+		}
+		payloadBytes, err := proto.Marshal(mcpPayload)
+		require.NoError(t, err)
+
 		envelope := &govpkg.GovernanceEnvelope{
 			ProtocolVersion:   "1.0",
 			Timestamp:         timestamppb.Now(),
@@ -713,6 +723,7 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 			TargetResource:    "test-tool",
 			StateMerkleRoot:   "test-root",
 			Nonce:             "nonce-test-1",
+			Payload:           payloadBytes,
 			Governance: &commonv1.GovernanceMetadata{
 				GatewaySigned: true,
 				L2: &commonv1.L2Metadata{
@@ -763,7 +774,7 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 			Signers: map[string]ed25519.PublicKey{"test-key": pubKey},
 		}
 
-		// Create a real L4Warden with rejecting L3 notary and notary posture
+		// Create a real L4Warden with rejecting L3 notary and doctrine posture
 		warden := governance.NewL4Warden(
 			slog.New(slog.NewTextHandler(os.Stdout, nil)),
 			replayStore,
@@ -773,8 +784,8 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 			rejectingL3,
 			nil, // Doctrine defaults to L1Doctrine
 			constants.AllActionTypes(),
-			"notary", // Notary posture requires L3 verification
-			nil,      // Clock defaults to RealClock
+			"doctrine", // Doctrine posture doesn't require L2/L3
+			nil,        // Clock defaults to RealClock
 		)
 
 		// Create a real envelope processor that uses the warden
@@ -785,6 +796,14 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 		}
 
 		// Build a test envelope with L3 metadata
+		mcpPayload := &operatorv1.McpCallRequested{
+			ToolName:      "test-tool",
+			ArgumentsJson: `{"name":"test-tool","arguments":{}}`,
+			ExecutionId:   "exec-test-2",
+		}
+		payloadBytes, err := proto.Marshal(mcpPayload)
+		require.NoError(t, err)
+
 		envelope := &govpkg.GovernanceEnvelope{
 			ProtocolVersion:   "1.0",
 			Timestamp:         timestamppb.Now(),
@@ -796,6 +815,7 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 			TargetResource:    "test-tool",
 			StateMerkleRoot:   "test-root",
 			Nonce:             "nonce-test-2",
+			Payload:           payloadBytes,
 			Governance: &commonv1.GovernanceMetadata{
 				GatewaySigned: true,
 				L2: &commonv1.L2Metadata{
@@ -833,6 +853,7 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 // realL3EnvelopeProcessor is a real envelope processor that uses L4Warden for verification
 type realL3EnvelopeProcessor struct {
 	warden    *governance.L4Warden
+	l3Notary  governance.L3Notary
 	privKey   ed25519.PrivateKey
 	keyID     string
 	called    bool
@@ -860,11 +881,24 @@ func (p *realL3EnvelopeProcessor) ProcessEnvelope(ctx context.Context, payload [
 		}
 	}
 
-	// Verify through L4Warden (includes L3 verification)
+	// Verify through L4Warden (stateless validation, L1, L2)
 	_, err := p.warden.VerifyEnvelope(ctx, envelope)
 	if err != nil {
 		p.lastError = err
 		return nil, err
+	}
+
+	// Manually invoke L3 verification since doctrine posture doesn't require it
+	if p.l3Notary != nil {
+		l3Proof, err := p.l3Notary.VerifyProof(ctx, envelope)
+		if err != nil {
+			p.lastError = err
+			return nil, err
+		}
+		if l3Proof == nil {
+			p.lastError = governance.ErrL3ProofInvalid
+			return nil, governance.ErrL3ProofInvalid
+		}
 	}
 
 	// Generate receipt

@@ -39,7 +39,7 @@ const (
 
 // Report prints a detailed trace of the scenario execution under -v.
 func Report(t *testing.T, s Scenario, mode Mode, result Result) {
-	expected, _ := s.Expect[mode]
+	expected := s.Expect[mode]
 	status, reason := calculateStatus(s, expected, result)
 
 	// Collect result for the final matrix
@@ -233,11 +233,12 @@ func collectMatrixResult(s Scenario, mode Mode, status TestStatus, result Result
 
 	// Doctrine/Consensus mode "audit" labels for L2/L3 rejections
 	if status == StatusPass && result.Error == nil {
-		if mode == ModeDoctrine {
+		switch mode {
+		case ModeDoctrine:
 			if strings.Contains(s.Name, "l2") || strings.Contains(s.Name, "l3") || s.Name == "unknown_signer" {
 				label = "audit"
 			}
-		} else if mode == ModeConsensus {
+		case ModeConsensus:
 			if strings.Contains(s.Name, "l3") {
 				label = "audit"
 			}

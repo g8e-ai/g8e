@@ -21,6 +21,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -36,6 +37,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	clierrors "github.com/g8e-ai/g8e/internal/cli/errors"
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
@@ -143,9 +145,9 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 
 	caCertPEM := generateTestCA(t)
-	caCertPath := filepath.Join(projectRoot, "pki", "ca.crt")
-	require.NoError(t, os.MkdirAll(filepath.Dir(caCertPath), 0755))
-	require.NoError(t, os.WriteFile(caCertPath, caCertPEM, 0644))
+	trustBundlePath := filepath.Join(projectRoot, ".g8e", "pki", "trust", "hub-bundle.pem")
+	require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
+	require.NoError(t, os.WriteFile(trustBundlePath, caCertPEM, 0644))
 
 	cfg, err := config.Load(projectRoot)
 	require.NoError(t, err)
@@ -260,7 +262,7 @@ func TestNewClient_NoCredentials(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.Contains(t, err.Error(), "not authenticated")
+	assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
 }
 
 func TestNewClient_LoadCredentialsError(t *testing.T) {
@@ -275,7 +277,7 @@ func TestNewClient_LoadCredentialsError(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.Contains(t, err.Error(), "failed to load credentials")
+	assert.True(t, errors.Is(err, clierrors.ErrFailedToLoadCredentials))
 }
 
 func TestNewClient_MissingCertFile(t *testing.T) {
@@ -287,7 +289,7 @@ func TestNewClient_MissingCertFile(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.Contains(t, err.Error(), "failed to load client certificate")
+	assert.True(t, errors.Is(err, clierrors.ErrFailedToLoadClientCertificate))
 }
 
 func TestNewClient_MissingKeyFile(t *testing.T) {
@@ -299,7 +301,7 @@ func TestNewClient_MissingKeyFile(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.Contains(t, err.Error(), "failed to load client certificate")
+	assert.True(t, errors.Is(err, clierrors.ErrFailedToLoadClientCertificate))
 }
 
 func TestNewClient_MissingTrustBundle(t *testing.T) {
@@ -312,7 +314,7 @@ func TestNewClient_MissingTrustBundle(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.Contains(t, err.Error(), "failed to read trust bundle")
+	assert.True(t, errors.Is(err, clierrors.ErrFailedToReadTrustBundle))
 }
 
 func TestNewClient_InvalidTrustBundle(t *testing.T) {
@@ -325,7 +327,7 @@ func TestNewClient_InvalidTrustBundle(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.Contains(t, err.Error(), "failed to parse trust bundle")
+	assert.True(t, errors.Is(err, clierrors.ErrFailedToParseTrustBundle))
 }
 
 func TestDoRequest_Success(t *testing.T) {

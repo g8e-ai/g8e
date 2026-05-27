@@ -21,6 +21,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	clierrors "github.com/g8e-ai/g8e/internal/cli/errors"
 )
 
 // defaultPathsJSON contains embedded default path configuration. This is the sole source of truth
@@ -116,7 +118,7 @@ func Load(projectRoot string) (*Config, error) {
 
 	var paths PathsConfig
 	if err := json.Unmarshal(pathsData, &paths); err != nil {
-		return nil, fmt.Errorf("failed to parse embedded paths.json: %w", err)
+		return nil, fmt.Errorf("%w: %w", clierrors.ErrFailedToParsePaths, err)
 	}
 
 	// Resolve all relative paths in infra section relative to projectRoot

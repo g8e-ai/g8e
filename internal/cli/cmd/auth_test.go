@@ -67,7 +67,7 @@ func TestLoginCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
+		assert.Contains(t, err.Error(), "trust bundle not found")
 	})
 
 	t.Run("login fails when operator not running", func(t *testing.T) {
@@ -85,12 +85,49 @@ func TestLoginCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "operator is not running")
+		assert.Contains(t, err.Error(), "failed to check bootstrap status")
 	})
 
 	t.Run("login fails when trust bundle missing", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		setupTestConfig(t, tmpDir)
+		// Setup config without trust bundle
+		runtimeDir := filepath.Join(tmpDir, ".g8e")
+		pkiDir := filepath.Join(runtimeDir, "pki")
+		secretsDir := filepath.Join(runtimeDir, "secrets")
+		credentialsDir := filepath.Join(runtimeDir, "credentials")
+
+		require.NoError(t, os.MkdirAll(pkiDir, 0755))
+		require.NoError(t, os.MkdirAll(secretsDir, 0700))
+		require.NoError(t, os.MkdirAll(credentialsDir, 0700))
+
+		// Create minimal paths.json structure
+		protocolDir := filepath.Join(tmpDir, "protocol")
+		constantsDir := filepath.Join(protocolDir, "constants")
+		require.NoError(t, os.MkdirAll(constantsDir, 0755))
+
+		pathsJSON := `{
+			"host": "localhost",
+			"infra": {
+				"app_cert_dir": ".g8e/pki/app",
+				"ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
+				"db_path": ".g8e/data/operator.db",
+				"docs_dir": "docs",
+				"pki_dir": ".g8e/pki",
+				"protocol_constants_dir": "protocol/constants",
+				"protocol_dir": "protocol",
+				"protocol_models_dir": "protocol/models",
+				"secrets_dir": ".g8e/secrets",
+				"ssh_config_path": ".g8e/ssh/config"
+			},
+			"ports": {
+				"insecure_mcp_gateway": 9003,
+				"operator_bootstrap_https": 9001,
+				"operator_https": 9000,
+				"operator_public_https": 9002
+			}
+		}`
+		pathsPath := filepath.Join(constantsDir, "paths.json")
+		require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 
 		cmd := loginCmd()
 		var buf bytes.Buffer
@@ -103,8 +140,7 @@ func TestLoginCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		// Operator check happens before trust bundle check
-		assert.Contains(t, err.Error(), "operator is not running")
+		assert.Contains(t, err.Error(), "trust bundle not found")
 	})
 }
 
@@ -116,7 +152,7 @@ func TestLogoutCmd(t *testing.T) {
 		assert.Contains(t, cmd.Short, "credentials")
 	})
 
-	t.Run("logout fails with invalid project root", func(t *testing.T) {
+	t.Run("logout succeeds with no active session", func(t *testing.T) {
 		cmd := logoutCmd()
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
@@ -128,8 +164,8 @@ func TestLogoutCmd(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
+		assert.NoError(t, err)
+		assert.Contains(t, buf.String(), "No active session found")
 	})
 
 	t.Run("logout succeeds when no session exists", func(t *testing.T) {

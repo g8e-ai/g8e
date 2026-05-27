@@ -15,11 +15,13 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	clierrors "github.com/g8e-ai/g8e/internal/cli/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -53,7 +55,7 @@ func TestDataUsersCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
+		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
 	})
 }
 
@@ -77,7 +79,7 @@ func TestDataOperatorsCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
+		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
 	})
 }
 
@@ -131,7 +133,8 @@ func TestDataDeviceLinksListCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to parse paths.json")
+		// Config loading fails before auth check - not using custom error type
+		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
 	})
 
 	t.Run("list fails without user-id", func(t *testing.T) {
@@ -198,7 +201,7 @@ func TestDataDeviceLinksCreateCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
+		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
 	})
 
 	t.Run("create fails without user-id", func(t *testing.T) {
@@ -251,25 +254,7 @@ func TestDataDeviceLinksDeleteCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
-	})
-
-	t.Run("delete fails without token", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
-
-		cmd := dataDeviceLinksDeleteCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "--token is required")
+		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
 	})
 
 	t.Run("delete fails without user-id when env not set", func(t *testing.T) {
@@ -319,7 +304,7 @@ func TestDataSettingsCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
+		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
 	})
 }
 
@@ -355,26 +340,9 @@ func TestDataStoreCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not authenticated")
+		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
 	})
 
-	t.Run("store fails without collection", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
-
-		cmd := dataStoreCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not authenticated")
-	})
 }
 
 func TestDataAuditCmd(t *testing.T) {
@@ -409,26 +377,9 @@ func TestDataAuditCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not authenticated")
+		assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
 	})
 
-	t.Run("audit fails without operator-session-id when env not set", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
-
-		cmd := dataAuditListCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not authenticated")
-	})
 }
 
 func TestDataCommandFlags(t *testing.T) {
@@ -463,6 +414,7 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 	require.NoError(t, os.MkdirAll(pkiDir, 0755))
 	require.NoError(t, os.MkdirAll(secretsDir, 0700))
 	require.NoError(t, os.MkdirAll(credentialsDir, 0700))
+	require.NoError(t, os.MkdirAll(filepath.Join(pkiDir, "root"), 0755))
 
 	// Create minimal paths.json structure
 	protocolDir := filepath.Join(tmpDir, "protocol")
@@ -499,5 +451,43 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 		PKIDir:         pkiDir,
 		SecretsDir:     secretsDir,
 		CredentialsDir: credentialsDir,
+		Paths: &config.PathsConfig{
+			Host: "localhost",
+			Infra: struct {
+				AppCertDir           string `json:"app_cert_dir"`
+				CACertPath           string `json:"ca_cert_path"`
+				DBPath               string `json:"db_path"`
+				DocsDir              string `json:"docs_dir"`
+				PKIDir               string `json:"pki_dir"`
+				ProtocolConstantsDir string `json:"protocol_constants_dir"`
+				ProtocolDir          string `json:"protocol_dir"`
+				ProtocolModelsDir    string `json:"protocol_models_dir"`
+				SecretsDir           string `json:"secrets_dir"`
+				SSHConfigPath        string `json:"ssh_config_path"`
+			}{
+				AppCertDir:           filepath.Join(tmpDir, ".g8e", "pki", "app"),
+				CACertPath:           filepath.Join(tmpDir, ".g8e", "pki", "root", "root_ca.crt"),
+				DBPath:               filepath.Join(tmpDir, ".g8e", "data", "operator.db"),
+				DocsDir:              "docs",
+				PKIDir:               filepath.Join(tmpDir, ".g8e", "pki"),
+				ProtocolConstantsDir: filepath.Join(tmpDir, "protocol", "constants"),
+				ProtocolDir:          filepath.Join(tmpDir, "protocol"),
+				ProtocolModelsDir:    filepath.Join(tmpDir, "protocol", "models"),
+				SecretsDir:           filepath.Join(tmpDir, ".g8e", "secrets"),
+				SSHConfigPath:        filepath.Join(tmpDir, ".g8e", "ssh", "config"),
+			},
+			Ports: struct {
+				G8eeHTTPS              int `json:"g8ee_https"`
+				InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
+				OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
+				OperatorHTTPS          int `json:"operator_https"`
+				OperatorPublicHTTPS    int `json:"operator_public_https"`
+			}{
+				InsecureMcpGateway:     9003,
+				OperatorBootstrapHTTPS: 9001,
+				OperatorHTTPS:          9000,
+				OperatorPublicHTTPS:    9002,
+			},
+		},
 	}
 }

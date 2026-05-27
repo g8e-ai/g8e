@@ -309,17 +309,17 @@ func dataDeviceLinksDeleteCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
+			client, err := api.NewClient(cfg)
+			if err != nil {
+				return err
+			}
+
 			if token == "" {
 				return fmt.Errorf("--token is required")
 			}
 
 			if userID == "" {
 				userID = uuid.New().String()
-			}
-
-			client, err := api.NewClient(cfg)
-			if err != nil {
-				return err
 			}
 
 			path := fmt.Sprintf("/api/device-links/%s?user_id=%s", token, userID)
@@ -386,10 +386,6 @@ func dataStoreCmd() *cobra.Command {
 		Use:   "store",
 		Short: "Manage document storage",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if collection == "" {
-				return fmt.Errorf("not authenticated: --collection is required")
-			}
-
 			cfg, err := config.Load("")
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
@@ -398,6 +394,10 @@ func dataStoreCmd() *cobra.Command {
 			client, err := api.NewClient(cfg)
 			if err != nil {
 				return err
+			}
+
+			if collection == "" {
+				return fmt.Errorf("--collection is required")
 			}
 
 			if documentID == "" {
@@ -455,14 +455,6 @@ func dataAuditListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List audit events for a session",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if operatorSessionID == "" {
-				operatorSessionID = os.Getenv("G8E_OPERATOR_SESSION_ID")
-			}
-
-			if operatorSessionID == "" {
-				return fmt.Errorf("not authenticated: --operator-session-id or G8E_OPERATOR_SESSION_ID is required")
-			}
-
 			cfg, err := config.Load("")
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
@@ -471,6 +463,14 @@ func dataAuditListCmd() *cobra.Command {
 			client, err := api.NewClient(cfg)
 			if err != nil {
 				return err
+			}
+
+			if operatorSessionID == "" {
+				operatorSessionID = os.Getenv("G8E_OPERATOR_SESSION_ID")
+			}
+
+			if operatorSessionID == "" {
+				return fmt.Errorf("--operator-session-id or G8E_OPERATOR_SESSION_ID is required")
 			}
 
 			query := QueryRequestWithLimit{

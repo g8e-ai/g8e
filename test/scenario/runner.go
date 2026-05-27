@@ -262,16 +262,18 @@ func (g *OperatorGate) normalizeEnvelope(envelope *commonv1.GovernanceEnvelope) 
 	}
 
 	// Set id: if empty use correct hash, if it's a "bad" placeholder keep it
-	if envelope.Id == "" {
+	switch envelope.Id {
+	case "":
 		envelope.Id = correctHash
-	} else if envelope.Id == testPlaceholderBadID {
+	case testPlaceholderBadID:
 		// Keep the bad id for bad_integrity test
 	}
 
 	// Set transaction_hash: if empty use correct hash, if it's a "bad" placeholder keep it
-	if envelope.TransactionHash == "" || (envelope.TransactionHash != testPlaceholderBadHash && envelope.TransactionHash != correctHash) {
+	switch {
+	case envelope.TransactionHash == "" || (envelope.TransactionHash != testPlaceholderBadHash && envelope.TransactionHash != correctHash):
 		envelope.TransactionHash = correctHash
-	} else if envelope.TransactionHash == testPlaceholderBadHash {
+	case envelope.TransactionHash == testPlaceholderBadHash:
 		// Keep the bad hash for hash_mismatch test
 	}
 
