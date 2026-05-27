@@ -77,6 +77,16 @@ func (pm *ProcessManager) ensureDirectories() error {
 	return nil
 }
 
+func (pm *ProcessManager) checkPortAvailable(port int, name string) error {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
+	if err != nil {
+		return fmt.Errorf("port %d (%s) is already in use: %w", port, name, err)
+	}
+	listener.Close()
+	return nil
+}
+
 func (pm *ProcessManager) findAvailablePort(startPort int, name string) (int, error) {
 	pid, err := pm.readPID(operatorPIDFile)
 	if err != nil {
@@ -217,17 +227,23 @@ func (pm *ProcessManager) StartOperator(httpPort, bootstrapPort, publicPort int)
 		return err
 	}
 
+	// Find the first available port starting from httpPort
 	availableHTTPPort, err := pm.findAvailablePort(httpPort, "Operator HTTP API")
 	if err != nil {
 		return fmt.Errorf("failed to find available HTTP API port: %w", err)
 	}
-	availableBootstrapPort, err := pm.findAvailablePort(bootstrapPort, "Operator Bootstrap")
-	if err != nil {
-		return fmt.Errorf("failed to find available Bootstrap port: %w", err)
+
+	// Calculate offset from original httpPort to maintain port spacing
+	offset := availableHTTPPort - httpPort
+	availableBootstrapPort := bootstrapPort + offset
+	availablePublicPort := publicPort + offset
+
+	// Verify the calculated ports are also available
+	if err := pm.checkPortAvailable(availableBootstrapPort, "Operator Bootstrap"); err != nil {
+		return fmt.Errorf("failed to verify Bootstrap port %d: %w", availableBootstrapPort, err)
 	}
-	availablePublicPort, err := pm.findAvailablePort(publicPort, "Operator Public API")
-	if err != nil {
-		return fmt.Errorf("failed to find available Public API port: %w", err)
+	if err := pm.checkPortAvailable(availablePublicPort, "Operator Public API"); err != nil {
+		return fmt.Errorf("failed to verify Public API port %d: %w", availablePublicPort, err)
 	}
 
 	binPath, err := pm.getOperatorBinary()
