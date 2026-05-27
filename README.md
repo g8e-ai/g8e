@@ -26,13 +26,13 @@ Get g8e online in under 60 seconds.
 
 ```bash
 # 1. Start the Governance Gateway (g8eg)
-./g8e gateway --init
+./g8e platform start
 
-# 2. Start the Governed Operator (g8eo) on a host
-./g8e operator --link https://gateway.internal:9000
+# 2. Initialize the first user and certificates
+./g8e auth bootstrap
 
-# 3. Verify the link
-./g8e status
+# 3. Verify the status
+./g8e platform status
 ```
 
 See the [Full QuickStart Guide](docs/guides/getting_started.md) for mTLS, enrollment, and CLI configuration.

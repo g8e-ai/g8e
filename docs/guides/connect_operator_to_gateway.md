@@ -20,13 +20,13 @@ This guide covers connecting a Governed Operator to a Governance Gateway and ope
 
 ### Local Deployment
 
-For development or single-host deployments, start the operator locally:
+For development or single-host deployments, start the Gateway locally:
 
 ```bash
-./g8e operator start --gateway-url https://localhost:8440
+./g8e platform start
 ```
 
-This starts the operator in standard mode, connecting to the Gateway on localhost.
+This starts the Gateway in doctrine mode (L1 enforced, L2/L3 audited).
 
 ### Remote Deployment
 
@@ -37,19 +37,19 @@ For distributed infrastructure, deploy the operator on remote hosts:
 On the Gateway, generate a device-link token for the remote host:
 
 ```bash
-./g8e auth device-link create --name "prod-db-node"
+./g8e data device-links create --user-id "prod-db-node"
 ```
 
 #### 2. Copy Binary and Token
 
-Copy the `g8e.operator` binary and the device-link token to the remote host.
+Copy the `g8e` binary and the device-link token to the remote host.
 
 #### 3. Start the Operator
 
 On the remote host, start the operator with the token:
 
 ```bash
-./g8e.operator start --gateway-url https://<gateway-ip>:8440 --device-token <token>
+./g8e --device-token <token> --endpoint <gateway-ip>
 ```
 
 The operator will:
@@ -72,12 +72,12 @@ This spins up a local proxy that forwards stdio JSON-RPC calls to the Gateway's 
 
 ## Operator Configuration
 
-### Gateway URL
+### Gateway Endpoint
 
-Specify the Gateway URL via the `--gateway-url` flag:
+Specify the Gateway endpoint via the `--endpoint` flag:
 
 ```bash
-./g8e.operator start --gateway-url https://gateway.example.com:8440
+./g8e --endpoint gateway.example.com
 ```
 
 ### Device-Link Token
@@ -85,25 +85,25 @@ Specify the Gateway URL via the `--gateway-url` flag:
 Specify the device-link token via the `--device-token` flag:
 
 ```bash
-./g8e.operator start --device-token <token>
+./g8e --device-token <token>
 ```
 
-### Runtime Directory
+### Working Directory
 
-Specify the runtime directory via the `--runtime-dir` flag:
+Specify the working directory via the `--working-dir` flag:
 
 ```bash
-./g8e.operator start --runtime-dir /var/lib/g8e
+./g8e --working-dir /var/lib/g8e
 ```
 
-This defaults to `.g8e` in the current working directory.
+This defaults to the current working directory. All data is stored in `.g8e/` within this directory.
 
 ### PKI Directory
 
 Specify the PKI directory via the `--pki-dir` flag:
 
 ```bash
-./g8e.operator start --pki-dir /etc/g8e/pki
+./g8e --pki-dir /etc/g8e/pki
 ```
 
 This defaults to `.g8e/pki` in the current working directory.
@@ -112,10 +112,10 @@ This defaults to `.g8e/pki` in the current working directory.
 
 ## Health Checks
 
-Check operator status:
+Check status:
 
 ```bash
-./g8e operator status
+./g8e platform status
 ```
 
 This reports:
@@ -175,26 +175,26 @@ Logs are stored in `.g8e/logs/operator.log`.
 
 ### Restart
 
-Restart the operator:
+Restart:
 
 ```bash
-./g8e operator restart
+./g8e platform restart
 ```
 
 ### Stop
 
-Stop the operator:
+Stop:
 
 ```bash
-./g8e operator stop
+./g8e platform stop
 ```
 
 ### Certificate Renewal
 
-When the operator's mTLS certificate expires, re-enroll using the device-link token:
+When the mTLS certificate expires, re-authenticate using the device-link token:
 
 ```bash
-./g8e.operator enroll --device-token <token>
+./g8e auth login
 ```
 
 ---

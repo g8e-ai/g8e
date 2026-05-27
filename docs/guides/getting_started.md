@@ -109,19 +109,19 @@ This authenticates via device-link token and saves mTLS credentials to `~/.g8e/c
 For local development with MCP server mode:
 
 ```bash
-./g8e.operator --mcp-serve
+./g8e --mcp-serve
 ```
 
 For remote deployment, generate a device-link token on the Gateway:
 
 ```bash
-./g8e data device-links create --name "prod-db-node"
+./g8e data device-links create --user-id "prod-db-node"
 ```
 
 Then start the Operator on the remote host with the token:
 
 ```bash
-./g8e.operator --device-token <token> --endpoint <gateway-ip>
+./g8e --device-token <token> --endpoint <gateway-ip>
 ```
 
 ### 7. Use as Protocol Translator
@@ -139,7 +139,7 @@ curl -X POST https://localhost:8440/api/governance/envelope \
 For stdio-based MCP (required by editors like Cursor or Claude Code):
 
 ```bash
-./g8e.operator --mcp-serve
+./g8e --mcp-serve
 ```
 
 ---

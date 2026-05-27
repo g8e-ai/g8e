@@ -39,8 +39,7 @@ This produces the `g8e` binary in the repository root. The binary is statically 
 
 The Makefile provides several build targets:
 
-- `make build` — Builds both the CLI wrapper and the `g8e` binary.
-- `make build-operator` — Builds the `g8e` binary.
+- `make build` — Builds the `g8e` binary.
 - `make build-compressed` — Builds the `g8e` binary with compression optimizations.
 - `make clean` — Removes compiled binaries and test artifacts.
 
