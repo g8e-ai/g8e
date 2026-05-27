@@ -130,6 +130,10 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
 	require.NoError(t, personaSvc.GetOrCreateDefaultPersonas())
+
+	// Create an invitation for JIT provisioning
+	_, err = userSvc.CreateInvitation("tenant-abc", "user-1234", "bootstrap", []string{"admin"}, 24*time.Hour)
+	require.NoError(t, err)
 	resp := responder.New(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim)
 	// Apply JWT configuration to AuthService's provider
