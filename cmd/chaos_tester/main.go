@@ -66,7 +66,7 @@ const (
 
 var (
 	flagCount   = flag.Int("count", 100, "number of payloads to fire")
-	flagDataDir = flag.String("data-dir", "", "audit vault data dir (default: <cwd>/.g8e/data)")
+	flagDataDir = flag.String("data-dir", "", "audit vault data dir (default: <project-root>/.g8e/test-vault/<timestamp>)")
 	flagPKIDir  = flag.String("pki-dir", "", "PKI dir for trusted_signers (default: <cwd>/.g8e/pki)")
 )
 
@@ -362,20 +362,46 @@ func main() {
 		projectRoot = cwd
 	}
 
+	// Use shared test vault directory for persistent inspection
 	dataDir := *flagDataDir
+	var testVaultDir string
 	if dataDir == "" {
-		dataDir = filepath.Join(projectRoot, ".g8e", "data")
+		testVaultDir = filepath.Join(projectRoot, ".g8e", "test-vault")
+		if err := os.MkdirAll(testVaultDir, 0755); err != nil {
+			logger.Error("failed to create test vault directory", "error", err)
+			os.Exit(1)
+		}
+
+		// Create unique subdirectory for this test run
+		testRunID := fmt.Sprintf("%s-chaos-test", time.Now().Format("20060102-150405"))
+		dataDir = filepath.Join(testVaultDir, testRunID)
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			logger.Error("failed to create test run directory", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		// If user specified a directory, ensure it exists
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			logger.Error("failed to create specified data directory", "error", err)
+			os.Exit(1)
+		}
 	}
+
 	pkiDir := *flagPKIDir
 	if pkiDir == "" {
 		pkiDir = filepath.Join(projectRoot, ".g8e", "pki")
 	}
 
-	logger.Info("Chaos tester starting",
+	logArgs := []any{
 		"count", *flagCount,
 		"data_dir", dataDir,
 		"pki_dir", pkiDir,
-		"project_root", projectRoot)
+		"project_root", projectRoot,
+	}
+	if testVaultDir != "" {
+		logArgs = append(logArgs, "test_vault", testVaultDir)
+	}
+	logger.Info("Chaos tester starting", logArgs...)
 
 	// ── generate ephemeral L2 signing key ─────────────────────────────────────
 	// In a real deployment the trusted signer key must be pre-provisioned in
@@ -593,8 +619,9 @@ func main() {
 	fmt.Printf("%-23s | %5d | %-16s | %6d | %s (%.0f%% success)\n", "TOTAL", *flagCount, "", int(total), matchTotal, successRate)
 
 	fmt.Printf("\nNote: Results are probabilistic (~60/20/10/10 distribution) and will vary by run.\n")
-	fmt.Printf("Use './g8e data audit summary' to see aggregate results across all runs.\n")
+	fmt.Printf("Use './g8e test summary' to see aggregate results across all test runs.\n")
 	fmt.Printf("\n")
+	fmt.Printf("Test vault: %s\n", dataDir)
 	fmt.Printf("Audit DB  : %s\n", filepath.Join(dataDir, "g8e.db"))
 	fmt.Printf("Ledger    : %s\n", filepath.Join(dataDir, "ledger"))
 	fmt.Printf("\n")
@@ -824,26 +851,29 @@ func printSummaryRow(category string, count int, expectedOutcome string, actual 
 func printDemoQueries(dbPath string) {
 	fmt.Printf("=== Demo Queries (run these via ./g8e) ===\n\n")
 
-	fmt.Printf("# 1. View Chaos Test Summary (requires Operator running and mTLS auth)\n")
+	fmt.Printf("# 1. View Chaos Test Summary (from test vault)\n")
+	fmt.Printf("./g8e test summary\n\n")
+
+	fmt.Printf("# 2. View Chaos Test Summary (requires Operator running and mTLS auth)\n")
 	fmt.Printf("./g8e data store --collection chaos_events\n\n")
 
-	fmt.Printf("# 2. View General Audit Event Summary (from local audit vault)\n")
+	fmt.Printf("# 3. View General Audit Event Summary (from local audit vault)\n")
 	fmt.Printf("./g8e data audit summary\n")
 	fmt.Printf("./g8e data audit summary --operator-session-id <session-id>\n\n")
 
-	fmt.Printf("# 3. View Audit Events via Operator API (requires Operator running and mTLS auth)\n")
+	fmt.Printf("# 4. View Audit Events via Operator API (requires Operator running and mTLS auth)\n")
 	fmt.Printf("./g8e data audit list --operator-session-id chaos-session-001 --limit 10\n\n")
 
-	fmt.Printf("# 4. View all users\n")
+	fmt.Printf("# 5. View all users\n")
 	fmt.Printf("./g8e data users\n\n")
 
-	fmt.Printf("# 5. View operators\n")
+	fmt.Printf("# 6. View operators\n")
 	fmt.Printf("./g8e data operators\n\n")
 
-	fmt.Printf("# 6. View device-links\n")
+	fmt.Printf("# 7. View device-links\n")
 	fmt.Printf("./g8e data device-links list --user-id <user-id>\n\n")
 
-	fmt.Printf("# 7. Direct SQLite access for offline analysis\n")
+	fmt.Printf("# 8. Direct SQLite access for offline analysis\n")
 	fmt.Printf("# sqlite3 '%s'\n", dbPath)
 	fmt.Printf("#   SELECT category, outcome, COUNT(*) FROM chaos_events GROUP BY category, outcome;\n\n")
 }
