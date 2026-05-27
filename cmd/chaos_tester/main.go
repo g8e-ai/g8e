@@ -824,14 +824,15 @@ func printSummaryRow(category string, count int, expectedOutcome string, actual 
 func printDemoQueries(dbPath string) {
 	fmt.Printf("=== Demo Queries (run these via ./g8e) ===\n\n")
 
-	fmt.Printf("# 1. View Chaos Test Summary\n")
-	fmt.Printf("./g8e data audit summary\n\n")
-
-	fmt.Printf("# 2. View Audit Events (requires Operator running and mTLS auth)\n")
-	fmt.Printf("./g8e data audit list --operator-session-id chaos-session-001 --limit 10\n\n")
-
-	fmt.Printf("# 3. Query specific collection via Operator API\n")
+	fmt.Printf("# 1. View Chaos Test Summary (requires Operator running and mTLS auth)\n")
 	fmt.Printf("./g8e data store --collection chaos_events\n\n")
+
+	fmt.Printf("# 2. View General Audit Event Summary (from local audit vault)\n")
+	fmt.Printf("./g8e data audit summary\n")
+	fmt.Printf("./g8e data audit summary --operator-session-id <session-id>\n\n")
+
+	fmt.Printf("# 3. View Audit Events via Operator API (requires Operator running and mTLS auth)\n")
+	fmt.Printf("./g8e data audit list --operator-session-id chaos-session-001 --limit 10\n\n")
 
 	fmt.Printf("# 4. View all users\n")
 	fmt.Printf("./g8e data users\n\n")

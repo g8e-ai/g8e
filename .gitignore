@@ -48,7 +48,9 @@ coverage.html
 coverage.txt
 
 # --- Runtime State & Persistence (CRITICAL: DO NOT COMMIT) ---
+.g8e
 .g8e/
+g8e
 .local.dev/
 /data/
 /db/

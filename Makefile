@@ -50,10 +50,8 @@ help:
 	@echo "  protoc-install Install protoc compiler"
 	@echo ""
 	@echo "Build:"
-	@echo "  build         Build all services (cli + operator)"
-	@echo "  build-cli     Build g8e CLI wrapper"
-	@echo "  build-operator Build g8e operator binary"
-	@echo "  build-compressed Build g8e operator with compression (-s -w -trimpath)"
+	@echo "  build         Build g8e binary"
+	@echo "  build-compressed Build g8e with compression (-s -w -trimpath)"
 	@echo ""
 	@echo "Test:"
 	@echo "  test          Run all tests with race detection"
@@ -140,37 +138,28 @@ protoc-install:
 # BUILD
 # =============================================================================
 .PHONY: build
-build: build-cli build-operator
-	@echo "All builds complete."
-
-.PHONY: build-cli
-build-cli:
-	@echo "Building g8e CLI wrapper..."
-	@mkdir -p bin
-	@go build -o bin/g8e ./cmd/g8e
-	@echo "CLI wrapper build complete."
-
-.PHONY: build-operator
-build-operator:
-	@echo "Building g8e operator..."
+build:
+	@echo "Building g8e..."
 	@mkdir -p bin
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
 	PLATFORM=$$(uname -s)_$$(uname -m); \
 	go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo
-	@echo "Operator build complete."
+	@ln -sf bin/g8e g8e
+	@echo "Build complete."
 
 .PHONY: build-compressed
 build-compressed:
-	@echo "Building g8e operator with compression..."
+	@echo "Building g8e with compression..."
 	@mkdir -p bin
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
 	PLATFORM=$$(uname -s)_$$(uname -m); \
 	go build -ldflags "-s -w -X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -trimpath -o bin/g8e ./cmd/g8eo
-	@echo "Compressed operator build complete."
+	@ln -sf bin/g8e g8e
+	@echo "Compressed build complete."
 
 # =============================================================================
 # TEST
@@ -273,6 +262,7 @@ clean:
 	@echo "Cleaning up build artifacts and runtime state..."
 	@rm -rf .g8e/
 	@rm -rf bin/
+	@rm -f g8e
 	@rm -rf build/
 	@echo "Clean complete."
 
@@ -354,7 +344,7 @@ docs: docs-cli docs-build
 docs-cli:
 	@echo "Building g8e binary for CLI help generation..."
 	@mkdir -p bin
-	@go build -o bin/g8e ./cmd/g8e
+	@go build -o bin/g8e ./cmd/g8eo
 	@echo "Generating CLI reference documentation..."
 	@echo "# CLI Reference" > docs/guides/cli.md
 	@echo "" >> docs/guides/cli.md
