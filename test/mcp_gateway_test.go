@@ -902,7 +902,10 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-API-Key", "test-api-key")
 
-		_, err := plainClient.Do(req)
+		resp, err := plainClient.Do(req)
+		if resp != nil {
+			defer resp.Body.Close()
+		}
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "tls: certificate required")
 
