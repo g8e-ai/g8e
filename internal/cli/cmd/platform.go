@@ -83,6 +83,7 @@ func platformStartCmd() *cobra.Command {
 			cmd.Printf("\nEndpoints:\n")
 			cmd.Printf("  Operator Bootstrap:  https://%s:%d\n", config.GetExternalInterfaceIP(), cfg.OperatorBootstrapHTTPSPort())
 			cmd.Printf("  Gateway Endpoint:    https://localhost:%d\n", cfg.Paths.Ports.OperatorPublicHTTPS)
+			cmd.Printf("\nNext step: Run './g8e auth login' to authenticate\n")
 
 			return nil
 		},
@@ -202,6 +203,7 @@ func platformRestartCmd() *cobra.Command {
 
 			cmd.Println("Governance Gateway restarted successfully")
 			cmd.Printf("Governance mode: doctrine (L1 enforced, L2/L3 audited)\n")
+			cmd.Printf("\nNext step: Run './g8e auth login' to authenticate\n")
 			return nil
 		},
 	}
@@ -320,6 +322,7 @@ func platformResetCmd() *cobra.Command {
 			cmd.Printf("\nEndpoints:\n")
 			cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), cfg.OperatorBootstrapHTTPSPort())
 			cmd.Printf("  Public API:         https://localhost:%d (Public browser/BYO bootstrap)\n", cfg.Paths.Ports.OperatorPublicHTTPS)
+			cmd.Printf("\nNext step: Run './g8e auth login' to authenticate\n")
 			return nil
 		},
 	}
