@@ -879,7 +879,9 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 		w.WriteHeader(http.StatusOK)
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			c.logger.Error("failed to write blob response", "error", err)
+		}
 
 	case http.MethodDelete:
 		deleted, err := c.db.BlobDelete(namespace, blobID)

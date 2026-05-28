@@ -250,7 +250,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 
 	// Bootstrap routes (CA discovery, trust scripts) - now on public HTTPS
 	mux.HandleFunc("/health", h.handleHealth)
-	mux.HandleFunc("/.well-known/g8e/pki/hub-bundle.pem", h.pkiController.handlePKIHubBundle)
+	mux.HandleFunc("/.well-known/g8e/pki/g8e-gw-ca-bundle.pem", h.pkiController.handlePKIHubBundle)
 	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.pkiController.handlePKIFingerprint)
 	mux.HandleFunc("/blob/", h.dbController.handleBlob)
 	mux.HandleFunc("/docs/", h.handleDocs)

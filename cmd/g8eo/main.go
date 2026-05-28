@@ -141,7 +141,7 @@ func main() {
 	flag.IntVar(&httpPort, "http-port", constants.Ports.OperatorHttps, "HTTPS port for auth/bootstrap via operator proxy (default: from paths.json)")
 	flag.StringVar(&privateKey, "key", "", "Private key")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
-	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: .g8e/pki/hub-bundle.pem or fetch from /.well-known/g8e/pki/hub-bundle.pem)")
+	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: .g8e/pki/g8e-gw-ca-bundle.pem or fetch from /.well-known/g8e/pki/g8e-gw-ca-bundle.pem)")
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory operator was launched from)")
 	flag.BoolVar(&cloudMode, string(constants.OperatorTypeCloud), true, "Cloud mode")
 	flag.StringVar(&cloudProvider, "provider", "", "Cloud provider")
@@ -190,7 +190,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -k, --key <key>         Private key (or set G8E_OPERATOR_PRIVATE_KEY)\n")
 		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running operator\n")
-		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: .g8e/pki/hub-bundle.pem or fetch from /.well-known/g8e/pki/hub-bundle.pem)\n")
+		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: .g8e/pki/g8e-gw-ca-bundle.pem or fetch from /.well-known/g8e/pki/g8e-gw-ca-bundle.pem)\n")
 		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory operator was launched from)\n")
 		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")
 		fmt.Fprintf(os.Stderr, "      --http-port <port>    HTTPS port to dial for auth/bootstrap (default: %d)\n", constants.Ports.OperatorHttps)
@@ -298,12 +298,12 @@ func main() {
 
 	// Load trust bundle for TLS verification. Priority:
 	// 1. Explicit --trust-bundle path
-	// 2. Local PKI directory (.g8e/pki/hub-bundle.pem)
-	// 3. Fetch from Operator /.well-known/g8e/pki/hub-bundle.pem endpoint
+	// 2. Local PKI directory (.g8e/pki/g8e-gw-ca-bundle.pem)
+	// 3. Fetch from Operator /.well-known/g8e/pki/g8e-gw-ca-bundle.pem endpoint
 	trustLoaded := loadTrustBundle(logger, trustBundlePath, workingDir)
 	if !trustLoaded {
 		if endpointURL != "" {
-			trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/hub-bundle.pem", endpointURL, constants.Ports.OperatorBootstrapHttps)
+			trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/g8e-gw-ca-bundle.pem", endpointURL, constants.Ports.OperatorBootstrapHttps)
 			logger.Info("Fetching trust bundle from Operator PKI endpoint", "url", trustURL)
 			if err := certs.FetchAndSetCA(context.Background(), trustURL); err != nil {
 				logger.Error("Failed to fetch trust bundle from Operator", "url", trustURL, string(constants.ConnectionStateError), err)
@@ -414,7 +414,7 @@ func printVersion() {
 
 // loadTrustBundle attempts to read a trust bundle from:
 // 1. Explicit path provided via --trust-bundle
-// 2. Working directory PKI path (.g8e/pki/hub-bundle.pem)
+// 2. Working directory PKI path (.g8e/pki/g8e-gw-ca-bundle.pem)
 // Returns true on the first valid PEM found, which is installed via
 // certs.SetCA. Returns false if no valid trust bundle is found.
 func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string) bool {
@@ -425,7 +425,7 @@ func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string) bool 
 	}
 
 	if workingDir != "" {
-		pkiPath := filepath.Join(workingDir, ".g8e", "pki", "hub-bundle.pem")
+		pkiPath := filepath.Join(workingDir, ".g8e", "pki", "g8e-gw-ca-bundle.pem")
 		pathsToCheck = append(pathsToCheck, pkiPath)
 	}
 
@@ -956,10 +956,10 @@ func runMCPServe(endpointURL, pkiDir, logLevel string) {
 	trustBundle := os.Getenv("G8E_TRUST_BUNDLE")
 	if trustBundle == "" {
 		if pkiDir != "" {
-			trustBundle = filepath.Join(pkiDir, "trust", "hub-bundle.pem")
+			trustBundle = filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
 		} else {
 			// fallback
-			trustBundle = ".g8e/pki/trust/hub-bundle.pem"
+			trustBundle = ".g8e/pki/trust/g8e-gw-ca-bundle.pem"
 		}
 	}
 

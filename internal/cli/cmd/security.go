@@ -67,7 +67,7 @@ func securityValidateCmd() *cobra.Command {
 			pkiFiles := []string{
 				filepath.Join(pkiDir, "root", "root_ca.crt"),
 				filepath.Join(pkiDir, "root", "root_ca.key"),
-				filepath.Join(pkiDir, "trust", "hub-bundle.pem"),
+				filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem"),
 				filepath.Join(pkiDir, "warden_pub.pem"),
 			}
 			for _, file := range pkiFiles {
@@ -131,7 +131,7 @@ func securityValidateCmd() *cobra.Command {
 
 			// Check TLS configuration
 			cmd.Println("\n=== TLS Configuration ===")
-			trustBundlePath := filepath.Join(pkiDir, "trust", "hub-bundle.pem")
+			trustBundlePath := filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
 			if trustData, err := os.ReadFile(trustBundlePath); err == nil {
 				certPool := x509.NewCertPool()
 				if certPool.AppendCertsFromPEM(trustData) {

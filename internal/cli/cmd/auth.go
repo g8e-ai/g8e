@@ -103,7 +103,7 @@ func loginCmd() *cobra.Command {
 				}
 
 				if regResp.HubTrustBundle != "" {
-					hubBundlePath := filepath.Join(cfg.CredentialsDir, "hub-bundle.pem")
+					hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
 					if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0600); err != nil {
 						return fmt.Errorf("failed to save hub trust bundle: %w", err)
 					}
@@ -163,7 +163,7 @@ func loginCmd() *cobra.Command {
 			}
 
 			if regResp.HubTrustBundle != "" {
-				hubBundlePath := filepath.Join(cfg.CredentialsDir, "hub-bundle.pem")
+				hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
 				if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0600); err != nil {
 					return fmt.Errorf("failed to save hub trust bundle: %w", err)
 				}

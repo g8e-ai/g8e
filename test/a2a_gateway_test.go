@@ -21,7 +21,7 @@ native signing or envelope construction logic.
 
 Practical Coverage:
 1. Protocol Translation: Maps A2A skill calls to typed GovernanceEnvelopes.
-2. 3-Layer Gauntlet: Forces skill calls through L1 (Hard Gates), L2 (Consensus), and L3 (Approval).
+2. 3-Layer Verification: Forces skill calls through L1 (Hard Gates), L2 (Consensus), and L3 (Approval).
 3. Suspension & OOB: Verifies that mutations are suspended, recorded, and only resumed
    after Out-of-Band (OOB) human approval via WebAuthn/Passkey.
 4. Downstream Dispatch: Ensures verified payloads are correctly unwrapped and dispatched

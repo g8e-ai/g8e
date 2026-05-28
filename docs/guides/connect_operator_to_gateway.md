@@ -55,7 +55,7 @@ On the remote host, start the operator with the token:
 The operator will:
 - Establish an outbound-only mTLS tunnel to the Gateway
 - Subscribe to command events on the Pub/Sub broker
-- Execute mutations through the L1/L2/L3 gauntlet
+- Execute mutations through the L1/L2/L3 verification layers
 - Write audit entries to the local Git-backed vault
 
 ### MCP Mode

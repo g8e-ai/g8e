@@ -173,7 +173,7 @@ func (pki *PKIAuthority) TLSConfig() *tls.Config {
 
 // TrustBundlePath returns the path to the hub trust bundle.
 func (pki *PKIAuthority) TrustBundlePath() string {
-	return filepath.Join(pki.pkiDir, "trust", "hub-bundle.pem")
+	return filepath.Join(pki.pkiDir, "trust", "g8e-gw-ca-bundle.pem")
 }
 
 // PKIDir returns the path to the pki directory.
@@ -319,7 +319,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	}
 
 	// Hub bundle (root + hub intermediate + operator intermediate)
-	hubBundlePath := filepath.Join(pki.pkiDir, "trust", "hub-bundle.pem")
+	hubBundlePath := filepath.Join(pki.pkiDir, "trust", "g8e-gw-ca-bundle.pem")
 	hubPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "hub_ca.crt"))
 	if err != nil {
 		return fmt.Errorf("failed to read hub CA: %w", err)
@@ -361,7 +361,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 func (pki *PKIAuthority) HubTrustBundle() ([]byte, error) {
 	pki.mu.RLock()
 	defer pki.mu.RUnlock()
-	return os.ReadFile(filepath.Join(pki.pkiDir, "trust", "hub-bundle.pem"))
+	return os.ReadFile(filepath.Join(pki.pkiDir, "trust", "g8e-gw-ca-bundle.pem"))
 }
 
 // RevokeCertificate adds a certificate serial to the revocation list.

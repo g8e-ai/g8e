@@ -1,3 +1,7 @@
+---
+title: Governance Gateway
+---
+
 # g8e Gateway - Governance Gateway
 
 The g8e Protocol substrate is composed of two logically distinct roles, both implemented by the reference `g8e` binary:
@@ -106,7 +110,7 @@ Default ports are sourced from `internal/constants/ports.go`:
 
 ---
 
-## The 5-Layer Governance Gauntlet
+## 5-Layer Verification Sequence
 
 Every transaction submitted to `POST /api/governance/envelope` must pass through the following layers:
 
@@ -196,19 +200,19 @@ This architecture ensures the Operator never requires outbound internet access t
 
 | Concern | File |
 |---|---|
-| Gateway mode entry | `cmd/g8eo/main.go` (runGatewayMode) |
-| Gateway service | `internal/services/gateway/gateway_service.go` |
-| Coordination Store | `internal/services/gateway/gateway_db.go` |
-| Pub/Sub broker | `internal/services/gateway/gateway_pubsub.go` |
-| L1 Doctrine | `internal/services/governance/l1_doctrine.go` |
-| L2 Consensus | `internal/services/governance/l2_consensus.go` |
-| L3 Notary | `internal/services/governance/l3_notary.go` |
-| L4 Warden | `internal/services/governance/l4_warden.go` |
-| L5 Actuator | `internal/services/governance/l5_actuator.go` |
-| PKI / CertStore | `internal/services/gateway/gateway_certs.go` |
-| Secret Manager | `internal/services/gateway/secret_manager.go` |
-| Workload identity | `protocol/workload_identity.go` |
-| Collections registry | `internal/constants/collections.go` |
+| Gateway mode entry | `/home/bob/g8e/cmd/g8eo/main.go` (runGatewayMode) |
+| Gateway service | `/home/bob/g8e/internal/services/gateway/gateway_service.go` |
+| Coordination Store | `/home/bob/g8e/internal/services/gateway/gateway_db.go` |
+| Pub/Sub broker | `/home/bob/g8e/internal/services/gateway/gateway_pubsub.go` |
+| L1 Doctrine | `/home/bob/g8e/internal/services/governance/l1_doctrine.go` |
+| L2 Consensus | `/home/bob/g8e/internal/services/governance/l2_consensus.go` |
+| L3 Notary | `/home/bob/g8e/internal/services/governance/l3_notary.go` |
+| L4 Warden | `/home/bob/g8e/internal/services/governance/l4_warden.go` |
+| L5 Actuator | `/home/bob/g8e/internal/services/governance/l5_actuator.go` |
+| PKI / CertStore | `/home/bob/g8e/internal/services/gateway/gateway_certs.go` |
+| Secret Manager | `/home/bob/g8e/internal/services/gateway/secret_manager.go` |
+| Workload identity | `/home/bob/g8e/protocol/workload_identity.go` |
+| Collections registry | `/home/bob/g8e/internal/constants/collections.go` |
 
 ---
 

@@ -109,7 +109,7 @@ func TestLoginCmd(t *testing.T) {
 			"host": "localhost",
 			"infra": {
 				"app_cert_dir": ".g8e/pki/app",
-				"ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
+				"ca_cert_path": ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
 				"db_path": ".g8e/data/operator.db",
 				"docs_dir": "docs",
 				"pki_dir": ".g8e/pki",
@@ -178,7 +178,7 @@ func TestLogoutCmd(t *testing.T) {
 			"host": "localhost",
 			"infra": {
 				"app_cert_dir": ".g8e/pki/app",
-				"ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
+				"ca_cert_path": ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
 				"db_path": ".g8e/data/operator.db",
 				"docs_dir": "docs",
 				"pki_dir": ".g8e/pki",
@@ -294,7 +294,7 @@ func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
 	require.NoError(t, os.MkdirAll(credentialsDir, 0700))
 
 	// Create trust bundle
-	trustBundlePath := filepath.Join(pkiDir, "trust", "hub-bundle.pem")
+	trustBundlePath := filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
 	require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
 	require.NoError(t, os.WriteFile(trustBundlePath, []byte("dummy-trust-bundle"), 0644))
 

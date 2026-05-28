@@ -244,7 +244,7 @@ func DeleteCredentials(cfg *config.Config) error {
 		cfg.CLIKeyFile(),
 		cfg.OperatorCertFile(),
 		cfg.OperatorKeyFile(),
-		filepath.Join(cfg.CredentialsDir, "hub-bundle.pem"),
+		filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem"),
 	}
 
 	for _, file := range certFiles {

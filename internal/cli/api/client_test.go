@@ -145,7 +145,7 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 
 	caCertPEM := generateTestCA(t)
-	trustBundlePath := filepath.Join(projectRoot, ".g8e", "pki", "trust", "hub-bundle.pem")
+	trustBundlePath := filepath.Join(projectRoot, ".g8e", "pki", "trust", "g8e-gw-ca-bundle.pem")
 	require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
 	require.NoError(t, os.WriteFile(trustBundlePath, caCertPEM, 0644))
 

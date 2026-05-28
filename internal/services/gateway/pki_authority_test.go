@@ -171,7 +171,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify trust bundles
-		bundles := []string{"root.pem", "hub-bundle.pem", "operator-bundle.pem"}
+		bundles := []string{"root.pem", "g8e-gw-ca-bundle.pem", "operator-bundle.pem"}
 		for _, bundle := range bundles {
 			bundlePath := filepath.Join(pkiDir, "trust", bundle)
 			_, err := os.Stat(bundlePath)
@@ -471,7 +471,7 @@ func TestPKIAuthority_TrustBundlePath(t *testing.T) {
 	err := pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
-	expectedPath := filepath.Join(pkiDir, "trust", "hub-bundle.pem")
+	expectedPath := filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
 	actualPath := pki.TrustBundlePath()
 	assert.Equal(t, expectedPath, actualPath)
 

@@ -48,7 +48,7 @@ var Paths = struct {
 		DbPath:               ".g8e/data/g8e.db",
 		PkiDir:               ".g8e/pki",
 		SecretsDir:           ".g8e/secrets",
-		CaCertPath:           ".g8e/pki/trust/hub-bundle.pem",
+		CaCertPath:           ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
 		AppCertDir:           ".g8e/pki/issued/apps",
 		DocsDir:              "/docs",
 		ProtocolDir:          "/app/protocol",

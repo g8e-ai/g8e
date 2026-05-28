@@ -136,7 +136,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	// Hub bundle (Root + Hub CA) is available on public port via HTTPS for initial discovery
 	// Instead of insecurely trusting the endpoint, we bootstrap trust from the known PKI dir
 	// which simulates a user pre-installing the Operator's root CA.
-	hubBundlePath := filepath.Join(pkiDir, "trust", "hub-bundle.pem")
+	hubBundlePath := filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
 	require.Eventually(t, func() bool {
 		_, err := os.Stat(hubBundlePath)
 		return err == nil
@@ -154,7 +154,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 			},
 		},
 	}
-	resp, err := secureDiscoveryClient.Get(publicURL + "/.well-known/g8e/pki/hub-bundle.pem")
+	resp, err := secureDiscoveryClient.Get(publicURL + "/.well-known/g8e/pki/g8e-gw-ca-bundle.pem")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)

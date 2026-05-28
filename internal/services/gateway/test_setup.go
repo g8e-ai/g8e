@@ -61,7 +61,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	t.Cleanup(func() { db.Close() })
 
 	os.RemoveAll(secretsDir)
-	os.MkdirAll(secretsDir, 0755)
+	require.NoError(t, os.MkdirAll(secretsDir, 0755))
 
 	pubsub := NewPubSubBroker(logger)
 	t.Cleanup(func() { pubsub.Close() })
