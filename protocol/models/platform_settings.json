@@ -18,11 +18,6 @@
         "required": false,
         "description": "Active operator session identifier for the operator component."
       },
-      "operator_api_key": {
-        "type": "string",
-        "required": false,
-        "description": "Long-lived API key for the operator component (fallback for operator_session_id)."
-      },
       "llm_command_gen_enabled": {
         "type": "boolean",
         "required": false,
@@ -83,10 +78,6 @@
         "type": "boolean",
         "required": false,
         "default": false
-      },
-      "g8e_api_key": {
-        "type": "string",
-        "required": false
       },
       "passkey_rp_name": {
         "type": "string",

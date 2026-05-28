@@ -219,16 +219,6 @@ func TestHeartbeatService_Build(t *testing.T) {
 		assert.Equal(t, cfg.SystemFingerprint, heartbeat.SystemFingerprint)
 	})
 
-	t.Run("includes API key from config", func(t *testing.T) {
-		t.Parallel()
-		cfg := testutil.NewTestConfig(t)
-		logger := testutil.NewTestLogger()
-		svc := NewHeartbeatService(cfg, logger, nil)
-
-		heartbeat := svc.Build(models.HeartbeatTypeRequested)
-		assert.Equal(t, cfg.APIKey, heartbeat.APIKey)
-	})
-
 	t.Run("includes OS details", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
@@ -361,16 +351,16 @@ func TestHeartbeatService_buildProtoHeartbeat(t *testing.T) {
 		assert.Equal(t, heartbeat.SystemFingerprint, protoHeartbeat.SystemFingerprint)
 	})
 
-	t.Run("includes API key", func(t *testing.T) {
+	t.Run("builds proto heartbeat without API key", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewHeartbeatService(cfg, logger, nil)
 
 		heartbeat := svc.Build(models.HeartbeatTypeRequested)
-		protoHeartbeat := svc.buildProtoHeartbeat(heartbeat)
+		_ = svc.buildProtoHeartbeat(heartbeat)
 
-		assert.Equal(t, heartbeat.APIKey, protoHeartbeat.ApiKey)
+		// API key authentication removed - platform now uses device-link tokens
 	})
 }
 

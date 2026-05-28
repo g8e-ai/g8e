@@ -48,13 +48,13 @@ var (
 	ErrInvalidPlaintextKey = errors.New("plaintext key must be multiple of 8 bytes")
 )
 
-// DeriveKEK derives a Key Encryption Key from an API key using HKDF-SHA256.
-func DeriveKEK(apiKey string) ([]byte, error) {
-	if apiKey == "" {
-		return nil, errors.New("API key cannot be empty")
+// DeriveKEK derives a Key Encryption Key from private key bytes using HKDF-SHA256.
+func DeriveKEK(privateKey []byte) ([]byte, error) {
+	if len(privateKey) == 0 {
+		return nil, errors.New("private key cannot be empty")
 	}
 
-	reader := hkdf.New(sha256.New, []byte(apiKey), nil, []byte(HKDFInfo))
+	reader := hkdf.New(sha256.New, privateKey, nil, []byte(HKDFInfo))
 
 	kek := make([]byte, KeySize)
 	if _, err := io.ReadFull(reader, kek); err != nil {
@@ -92,9 +92,9 @@ func KeyFingerprint(key []byte) []byte {
 	return argon2.IDKey(key, pepper, 1, 64*1024, 4, uint32(KeyFingerprintSize))
 }
 
-// APIKeyFingerprint returns the fingerprint of an API key.
-func APIKeyFingerprint(apiKey string) []byte {
-	return KeyFingerprint([]byte(apiKey))
+// PrivateKeyFingerprint returns the fingerprint of a private key.
+func PrivateKeyFingerprint(privateKey []byte) []byte {
+	return KeyFingerprint(privateKey)
 }
 
 // AESKeyWrap wraps a plaintext key using AES Key Wrap (RFC 3394).

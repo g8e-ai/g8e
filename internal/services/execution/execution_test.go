@@ -42,7 +42,6 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 			Args:           []string{"hello", "world"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -68,7 +67,6 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 			Args:           []string{"-c", "exit 42"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -89,7 +87,6 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 			Args:           []string{"-c", "nonexistent_command_12345"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -111,7 +108,6 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 			Args:           []string{"10"},
 			TimeoutSeconds: 1,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -135,7 +131,6 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 			TimeoutSeconds:   5,
 			WorkingDirectory: &workDir,
 			RequestedBy:      "test-user",
-			APIKey:           "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -158,7 +153,6 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 				"TEST_VAR": "test_value",
 			},
 			RequestedBy: "test-user",
-			APIKey:      "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -178,7 +172,6 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -201,7 +194,6 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 			Args:           []string{"2"},
 			TimeoutSeconds: 10,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		// Start execution in goroutine
@@ -238,7 +230,6 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 			Args:           []string{"line1\nline2\nline3"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -259,7 +250,6 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 			Args:           []string{"test"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -280,7 +270,6 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 			Args:           []string{"test"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -455,7 +444,6 @@ func TestExecutionService_CancelExecution(t *testing.T) {
 			Args:           []string{"30"},
 			TimeoutSeconds: 60,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		// Start execution in background
@@ -507,7 +495,6 @@ func TestExecutionService_CancelExecution_DoesNotSetCancelledStatus(t *testing.T
 		Command:        "sleep 30",
 		TimeoutSeconds: 60,
 		RequestedBy:    "test-user",
-		APIKey:         "test-key",
 	}
 
 	var result *models.ExecutionResultsPayload
@@ -559,7 +546,6 @@ func TestExecutionService_CancelExecution_NoConcurrentDeadlock(t *testing.T) {
 				Args:           []string{"30"},
 				TimeoutSeconds: 60,
 				RequestedBy:    "test-user",
-				APIKey:         "test-key",
 			}
 			execDone := make(chan struct{})
 			go func() {

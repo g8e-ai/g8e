@@ -100,7 +100,8 @@ func TestRequestHTTPAuth_Success(t *testing.T) {
 		require.Equal(t, "POST", r.Method)
 		require.Equal(t, "/api/auth/operator", r.URL.Path)
 		require.Equal(t, "application/json", r.Header.Get(constants.HeaderContentType))
-		require.NotEmpty(t, r.Header.Get(constants.HeaderAuthorization))
+		// mTLS authentication - no Authorization header expected
+		require.Empty(t, r.Header.Get(constants.HeaderAuthorization))
 
 		resp := AuthServicesResponse{
 			Success:           true,
@@ -274,47 +275,6 @@ func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
 	assert.False(t, capturedBody.RuntimeConfig.NoGit)
 	assert.Equal(t, "debug", capturedBody.RuntimeConfig.LogLevel)
 
-}
-
-func TestRequestHTTPAuth_APIKeyOnly(t *testing.T) {
-	t.Parallel()
-	var capturedBody operatorAuthRequest
-	var capturedAuthHeader string
-
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedAuthHeader = r.Header.Get(constants.HeaderAuthorization)
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&capturedBody))
-		resp := AuthServicesResponse{
-			Success:           true,
-			OperatorSessionId: "sess-api",
-			OperatorID:        "op-api",
-			Config:            &BootstrapConfig{},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(resp))
-	}))
-	defer server.Close()
-
-	hostport := strings.TrimPrefix(server.URL, "https://")
-	host, portStr, err := net.SplitHostPort(hostport)
-	require.NoError(t, err)
-	port, err := strconv.Atoi(portStr)
-	require.NoError(t, err)
-
-	cfg := testutil.NewTestConfig(t)
-	cfg.Endpoint = host
-	cfg.HTTPPort = port
-	cfg.APIKey = "g8e_test_apikey"
-	logger := testutil.NewTestLogger()
-
-	svc, err := NewBootstrapService(cfg, logger)
-	require.NoError(t, err)
-	svc.httpClient = server.Client()
-
-	_, err = svc.RequestBootstrapConfig(context.Background())
-	require.NoError(t, err)
-
-	assert.Equal(t, "Bearer g8e_test_apikey", capturedAuthHeader)
 }
 
 func TestApplyBootstrapConfig_AppliesAllFields(t *testing.T) {

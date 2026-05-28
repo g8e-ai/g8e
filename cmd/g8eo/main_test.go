@@ -288,7 +288,7 @@ func TestHandleRekeyVault_RequiresInitializedVault(t *testing.T) {
 	require.NoError(t, err)
 	defer v.Close()
 
-	err = v.Rekey("old-key", "new-key")
+	err = v.Rekey([]byte("old-key"), []byte("new-key"))
 	require.Error(t, err)
 }
 
@@ -343,7 +343,7 @@ func TestHandleRekeyVault_MissingOldKey_PrintsError(t *testing.T) {
 	defer v.Close()
 
 	// Rekey without initializing vault - must return error
-	err = v.Rekey("", "new-key")
+	err = v.Rekey([]byte(""), []byte("new-key"))
 	require.Error(t, err)
 }
 
@@ -362,7 +362,7 @@ func TestHandleVerifyVault_VaultNotInitialized(t *testing.T) {
 	assert.False(t, v.IsInitialized(), "fresh vault must not be initialized")
 }
 
-func TestHandleVerifyVault_MissingAPIKey_VaultInitialized(t *testing.T) {
+func TestHandleVerifyVault_MissingPrivateKey_VaultInitialized(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dir := t.TempDir()
 
@@ -370,14 +370,14 @@ func TestHandleVerifyVault_MissingAPIKey_VaultInitialized(t *testing.T) {
 	require.NoError(t, err)
 	defer v.Close()
 
-	header, _, err := vault.NewVaultHeader("initial-key")
+	header, _, err := vault.NewVaultHeader([]byte("initial-key"))
 	require.NoError(t, err)
 	require.NoError(t, header.Save(dir))
 
 	require.True(t, v.IsInitialized())
 
 	// Wrong key should fail integrity check
-	err = v.VerifyIntegrity("wrong-key")
+	err = v.VerifyIntegrity([]byte("wrong-key"))
 	require.Error(t, err)
 }
 
@@ -404,7 +404,7 @@ func TestHandleResetVault_Initialized_ResetDestroysData(t *testing.T) {
 	require.NoError(t, err)
 	defer v.Close()
 
-	header, _, err := vault.NewVaultHeader("some-key")
+	header, _, err := vault.NewVaultHeader([]byte("some-key"))
 	require.NoError(t, err)
 	require.NoError(t, header.Save(dir))
 	require.True(t, v.IsInitialized())
@@ -457,19 +457,19 @@ func TestHandleVaultLifecycle(t *testing.T) {
 
 	require.False(t, v.IsInitialized())
 
-	header, _, err := vault.NewVaultHeader("initial-api-key")
+	header, _, err := vault.NewVaultHeader([]byte("initial-api-key"))
 	require.NoError(t, err)
 	require.NoError(t, header.Save(dir))
 
 	require.True(t, v.IsInitialized())
 
-	require.NoError(t, v.VerifyIntegrity("initial-api-key"))
+	require.NoError(t, v.VerifyIntegrity([]byte("initial-api-key")))
 
-	require.NoError(t, v.Rekey("initial-api-key", "new-api-key"))
+	require.NoError(t, v.Rekey([]byte("initial-api-key"), []byte("new-api-key")))
 
-	require.NoError(t, v.VerifyIntegrity("new-api-key"))
+	require.NoError(t, v.VerifyIntegrity([]byte("new-api-key")))
 
-	err = v.VerifyIntegrity("wrong-key")
+	err = v.VerifyIntegrity([]byte("wrong-key"))
 	require.Error(t, err)
 
 	require.NoError(t, v.Reset(true))

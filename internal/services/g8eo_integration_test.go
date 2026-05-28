@@ -29,7 +29,6 @@ func TestG8eoService_Start_BootstrapFailure(t *testing.T) {
 	t.Parallel()
 
 	cfg := testutil.NewTestConfig(t)
-	cfg.APIKey = "invalid-api-key-for-testing"
 	logger := testutil.NewTestLogger()
 
 	service, err := NewG8eoService(cfg, logger)

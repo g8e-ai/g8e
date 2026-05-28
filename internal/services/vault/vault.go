@@ -49,11 +49,11 @@ type VaultConfig struct {
 
 // Vault-related errors
 var (
-	ErrVaultLocked      = errors.New("vault is locked")
-	ErrVaultNotInit     = errors.New("vault is not initialized")
-	ErrVaultAlreadyInit = errors.New("vault is already initialized")
-	ErrVaultAlreadyOpen = errors.New("vault is already unlocked")
-	ErrInvalidAPIKey    = errors.New("invalid API key for this vault")
+	ErrVaultLocked       = errors.New("vault is locked")
+	ErrVaultNotInit      = errors.New("vault is not initialized")
+	ErrVaultAlreadyInit  = errors.New("vault is already initialized")
+	ErrVaultAlreadyOpen  = errors.New("vault is already unlocked")
+	ErrInvalidPrivateKey = errors.New("invalid private key for this vault")
 )
 
 // NewVault creates a new Vault instance.
@@ -79,9 +79,9 @@ func NewVault(config *VaultConfig) (*Vault, error) {
 	return v, nil
 }
 
-// Unlock opens an existing vault using the provided API key.
+// Unlock opens an existing vault using the provided private key.
 // The DEK is unwrapped and held in memory for encryption operations.
-func (v *Vault) Unlock(apiKey string) error {
+func (v *Vault) Unlock(privateKey []byte) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -97,10 +97,10 @@ func (v *Vault) Unlock(apiKey string) error {
 		return fmt.Errorf("failed to load vault header: %w", err)
 	}
 
-	dek, err := header.UnwrapDEK(apiKey)
+	dek, err := header.UnwrapDEK(privateKey)
 	if err != nil {
 		if errors.Is(err, ErrKeyFingerprintMatch) {
-			return ErrInvalidAPIKey
+			return ErrInvalidPrivateKey
 		}
 		return fmt.Errorf("failed to unwrap DEK: %w", err)
 	}
@@ -116,10 +116,10 @@ func (v *Vault) Unlock(apiKey string) error {
 	return nil
 }
 
-// Rekey re-encrypts the DEK with a new API key.
-// Both old and new API keys are required.
+// Rekey re-encrypts the DEK with a new private key.
+// Both old and new private keys are required.
 // The vault data itself is not re-encrypted (only the DEK wrapper changes).
-func (v *Vault) Rekey(oldAPIKey, newAPIKey string) error {
+func (v *Vault) Rekey(oldPrivateKey, newPrivateKey []byte) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -135,7 +135,7 @@ func (v *Vault) Rekey(oldAPIKey, newAPIKey string) error {
 		}
 	}
 
-	if err := header.Rekey(oldAPIKey, newAPIKey); err != nil {
+	if err := header.Rekey(oldPrivateKey, newPrivateKey); err != nil {
 		return fmt.Errorf("failed to rekey vault: %w", err)
 	}
 
@@ -263,13 +263,13 @@ func (v *Vault) GetDataDir() string {
 
 // VerifyIntegrity checks the vault's integrity by attempting to unwrap the DEK.
 // Returns nil if the vault is healthy, error otherwise.
-func (v *Vault) VerifyIntegrity(apiKey string) error {
+func (v *Vault) VerifyIntegrity(privateKey []byte) error {
 	header, err := LoadVaultHeader(v.dataDir)
 	if err != nil {
 		return fmt.Errorf("header load failed: %w", err)
 	}
 
-	dek, err := header.UnwrapDEK(apiKey)
+	dek, err := header.UnwrapDEK(privateKey)
 	if err != nil {
 		return fmt.Errorf("DEK unwrap failed: %w", err)
 	}

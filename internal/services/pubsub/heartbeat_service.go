@@ -126,8 +126,6 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 			MachineID:    hs.config.SystemFingerprint,
 		},
 		SystemFingerprint: hs.config.SystemFingerprint,
-
-		APIKey: hs.config.APIKey,
 	}
 
 	hs.logger.Info("[HEARTBEAT] Built heartbeat payload",
@@ -233,7 +231,6 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 			LedgerMirrorEnabled: h.CapabilityFlags.LedgerMirrorEnabled,
 		},
 		SystemFingerprint: h.SystemFingerprint,
-		ApiKey:            h.APIKey,
 	}
 
 	if h.FingerprintDetails != nil {
