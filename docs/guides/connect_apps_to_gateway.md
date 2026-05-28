@@ -379,9 +379,30 @@ This ensures no implicit JIT provisioning occurs without owner approval.
 
 ## PKI and Trust
 
-### CSR Signing
+### Device Enrollment (CSR-based)
 
-Submit a CSR for certificate issuance:
+Enroll a device using CSR-based enrollment with mTLS authentication. The user_id is extracted from the client certificate's SPIFFE URI SAN:
+
+```bash
+curl -X POST https://localhost:8440/api/pki/device-enroll \
+  --cert .g8e/pki/client.crt \
+  --key .g8e/pki/client.key \
+  -H "Content-Type: application/json" \
+  -d '{
+    "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----...",
+    "cli_csr_pem": "-----BEGIN CERTIFICATE REQUEST-----...",
+    "system_fingerprint": "fp-123",
+    "hostname": "my-host",
+    "os": "linux",
+    "arch": "amd64",
+    "username": "user",
+    "ip_address": "192.168.1.1"
+  }'
+```
+
+### CSR Signing (Low-level)
+
+Submit a CSR for low-level certificate issuance (for advanced use cases):
 
 ```bash
 curl -X POST https://localhost:8440/api/pki/sign-csr \

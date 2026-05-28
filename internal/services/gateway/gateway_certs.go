@@ -44,12 +44,10 @@ const (
 	rootValidityDays         = 3650
 	intermediateValidityDays = 3650
 	serviceValidityDays      = 1 // 1-day TTL for operator mTLS certificates per device-link auth plan
-	bootstrapValidityDays    = 1 // Short-lived for enrollment certs
 
-	rootCommonName      = "g8e Root CA"
-	hubCommonName       = "g8e Hub Intermediate CA"
-	operatorCommonName  = "g8e Operator Intermediate CA"
-	bootstrapCommonName = "g8e Bootstrap Intermediate CA"
+	rootCommonName     = "g8e Root CA"
+	hubCommonName      = "g8e Hub Intermediate CA"
+	operatorCommonName = "g8e Operator Intermediate CA"
 )
 
 // PKIAuthority manages the full PKI hierarchy for the Operator.
@@ -72,12 +70,10 @@ type PKIAuthority struct {
 	rootKey  *ecdsa.PrivateKey
 
 	// Intermediate CAs
-	hubCert       *x509.Certificate
-	hubKey        *ecdsa.PrivateKey
-	operatorCert  *x509.Certificate
-	operatorKey   *ecdsa.PrivateKey
-	bootstrapCert *x509.Certificate
-	bootstrapKey  *ecdsa.PrivateKey
+	hubCert      *x509.Certificate
+	hubKey       *ecdsa.PrivateKey
+	operatorCert *x509.Certificate
+	operatorKey  *ecdsa.PrivateKey
 
 	// Service certificate for operator-gateway
 	serviceCert tls.Certificate
@@ -175,25 +171,6 @@ func (pki *PKIAuthority) TLSConfig() *tls.Config {
 	}
 }
 
-// TLSConfigPlain returns a TLS config for the bootstrap gateway.
-// This gateway does not require client certificates for unauthenticated routes
-// (/.well-known/, /api/auth/device-link/register).
-func (pki *PKIAuthority) TLSConfigPlain() *tls.Config {
-	pki.mu.RLock()
-	defer pki.mu.RUnlock()
-
-	return &tls.Config{
-		GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			pki.mu.RLock()
-			defer pki.mu.RUnlock()
-			c := pki.serviceCert
-			return &c, nil
-		},
-		ClientAuth: tls.NoClientCert,
-		MinVersion: tls.VersionTLS13,
-	}
-}
-
 // TrustBundlePath returns the path to the hub trust bundle.
 func (pki *PKIAuthority) TrustBundlePath() string {
 	return filepath.Join(pki.pkiDir, "trust", "hub-bundle.pem")
@@ -256,22 +233,6 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	if needOperator {
 		pki.logger.Info("[PKI] Generating operator intermediate CA")
 		if err := pki.generateIntermediateCA("", operatorCertPath, pki.rootCert, pki.rootKey, operatorCommonName); err != nil {
-			return err
-		}
-	}
-
-	// Bootstrap Intermediate CA
-	bootstrapCertPath := filepath.Join(pki.pkiDir, "authorities", "bootstrap_ca.crt")
-	needBootstrap := !fileExists(bootstrapCertPath)
-	if !needBootstrap {
-		if err := pki.loadCertificatePair(bootstrapCertPath, "", &pki.bootstrapCert, &pki.bootstrapKey); err != nil {
-			pki.logger.Warn("[PKI] Failed to load bootstrap CA, regenerating", string(constants.ConnectionStateError), err)
-			needBootstrap = true
-		}
-	}
-	if needBootstrap {
-		pki.logger.Info("[PKI] Generating bootstrap intermediate CA")
-		if err := pki.generateIntermediateCA("", bootstrapCertPath, pki.rootCert, pki.rootKey, bootstrapCommonName); err != nil {
 			return err
 		}
 	}
@@ -357,7 +318,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 		return fmt.Errorf("failed to write root bundle: %w", err)
 	}
 
-	// Hub bundle (root + hub intermediate + operator intermediate + bootstrap intermediate)
+	// Hub bundle (root + hub intermediate + operator intermediate)
 	hubBundlePath := filepath.Join(pki.pkiDir, "trust", "hub-bundle.pem")
 	hubPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "hub_ca.crt"))
 	if err != nil {
@@ -367,15 +328,10 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	if err != nil {
 		return fmt.Errorf("failed to read operator CA: %w", err)
 	}
-	bootstrapPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "bootstrap_ca.crt"))
-	if err != nil {
-		return fmt.Errorf("failed to read bootstrap CA: %w", err)
-	}
-	hubBundle := make([]byte, 0, len(rootPEM)+len(hubPEM)+len(operatorPEM)+len(bootstrapPEM))
+	hubBundle := make([]byte, 0, len(rootPEM)+len(hubPEM)+len(operatorPEM))
 	hubBundle = append(hubBundle, rootPEM...)
 	hubBundle = append(hubBundle, hubPEM...)
 	hubBundle = append(hubBundle, operatorPEM...)
-	hubBundle = append(hubBundle, bootstrapPEM...)
 	if err := os.WriteFile(hubBundlePath, hubBundle, 0600); err != nil {
 		return fmt.Errorf("failed to write hub bundle: %w", err)
 	}
@@ -387,15 +343,6 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	operatorBundle = append(operatorBundle, operatorPEM...)
 	if err := os.WriteFile(operatorBundlePath, operatorBundle, 0600); err != nil {
 		return fmt.Errorf("failed to write operator bundle: %w", err)
-	}
-
-	// Bootstrap bundle (root + bootstrap intermediate)
-	bootstrapBundlePath := filepath.Join(pki.pkiDir, "trust", "bootstrap-bundle.pem")
-	bootstrapBundle := make([]byte, 0, len(rootPEM)+len(bootstrapPEM))
-	bootstrapBundle = append(bootstrapBundle, rootPEM...)
-	bootstrapBundle = append(bootstrapBundle, bootstrapPEM...)
-	if err := os.WriteFile(bootstrapBundlePath, bootstrapBundle, 0600); err != nil {
-		return fmt.Errorf("failed to write bootstrap bundle: %w", err)
 	}
 
 	// Trust domain metadata
@@ -625,8 +572,6 @@ func (pki *PKIAuthority) loadCertificatePair(certPath, keyPath string, cert **x5
 		caType = "hub"
 	case strings.Contains(certPath, "operator_ca.crt"):
 		caType = string(constants.UserRoleOperator)
-	case strings.Contains(certPath, "bootstrap_ca.crt"):
-		caType = string(constants.HeartbeatTypeBootstrap)
 	}
 
 	if caType == "" {
@@ -787,8 +732,6 @@ func (pki *PKIAuthority) generateIntermediateCA(keyPath, certPath string, parent
 		caType = "hub"
 	case operatorCommonName:
 		caType = string(constants.UserRoleOperator)
-	case bootstrapCommonName:
-		caType = string(constants.HeartbeatTypeBootstrap)
 	}
 
 	if pki.secretManager == nil {
@@ -809,9 +752,6 @@ func (pki *PKIAuthority) generateIntermediateCA(keyPath, certPath string, parent
 	case operatorCommonName:
 		pki.operatorCert = intermediateCert
 		pki.operatorKey = intermediateKey
-	case bootstrapCommonName:
-		pki.bootstrapCert = intermediateCert
-		pki.bootstrapKey = intermediateKey
 	}
 
 	return nil

@@ -31,56 +31,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 )
 
-// autoTLSListener wraps a net.Listener to detect TLS vs HTTP connections.
-// It peeks at the first byte to determine if the client is initiating a TLS handshake.
-// If the first byte is 0x16 (TLS ClientHello), it wraps the connection with TLS.
-// Otherwise, it serves the connection as plain HTTP.
-type autoTLSListener struct {
-	net.Listener
-	tlsConfig *tls.Config
-	logger    *slog.Logger
-}
-
-func (l *autoTLSListener) Accept() (net.Conn, error) {
-	conn, err := l.Listener.Accept()
-	if err != nil {
-		return nil, err
-	}
-
-	// Peek at the first byte to detect TLS handshake
-	firstByte := make([]byte, 1)
-	_, err = conn.Read(firstByte)
-	if err != nil {
-		conn.Close()
-		return nil, err
-	}
-
-	// TLS ClientHello starts with 0x16 (Handshake type)
-	if firstByte[0] == 0x16 {
-		// Wrap with TLS
-		tlsConn := tls.Server(&peekedConn{conn, firstByte}, l.tlsConfig)
-		return tlsConn, nil
-	}
-
-	// Plain HTTP connection
-	return &peekedConn{conn, firstByte}, nil
-}
-
-// peekedConn wraps a net.Conn with a peeked byte that was already read.
-type peekedConn struct {
-	net.Conn
-	peeked []byte
-}
-
-func (c *peekedConn) Read(b []byte) (int, error) {
-	if len(c.peeked) > 0 {
-		n := copy(b, c.peeked)
-		c.peeked = c.peeked[n:]
-		return n, nil
-	}
-	return c.Conn.Read(b)
-}
-
 // GatewayService is the top-level orchestrator for gateway mode (operator).
 // It acts as the platform's central persistence and messaging backbone.
 // In this mode, the Operator does NOT execute commands or initiate outbound
@@ -285,44 +235,23 @@ func (ls *GatewayService) initHandlersAndServers() error {
 	})
 
 	// Build a map of ports to identify port assignments.
-	// Surfaces with different TLS client-auth requirements MUST NOT share a
-	// port; sharing would force tls.VerifyClientCertIfGiven and downgrade
-	// the mTLS execution boundary to an L7 check.
+	// All surfaces now use mTLS (RequireAndVerifyClientCert).
 	portUsage := make(map[int][]string)
 	portUsage[cfg.Gateway.HTTPPort] = append(portUsage[cfg.Gateway.HTTPPort], "HTTP")
-
-	// Bootstrap and Public now share the same port - HTTP for CA bootstrap, HTTPS for authenticated routes
 	portUsage[cfg.Gateway.PublicPort] = append(portUsage[cfg.Gateway.PublicPort], "Public")
-	portUsage[cfg.Gateway.PublicPort] = append(portUsage[cfg.Gateway.PublicPort], "Bootstrap")
 
-	// Validate up front so collisions fail during init, not only when a
-	// fresh gateway is built. HTTP and WSS may share a port (both mTLS);
-	// every other combination is rejected. Port 0 is reserved for tests
-	// (net.Listen picks a random free port per server) and is exempt.
+	// Validate up front so collisions fail during init.
+	// Port 0 is reserved for tests (net.Listen picks a random free port per server).
 	for port, usage := range portUsage {
 		if port == 0 {
 			continue
 		}
-		hasMTLS, hasPublic, hasBootstrap := false, false, false
-		for _, u := range usage {
-			switch u {
-			case "HTTP":
-				hasMTLS = true
-			case "Public":
-				hasPublic = true
-			case "Bootstrap":
-				hasBootstrap = true
-			}
-		}
-		// Allow Public+Bootstrap to share a port (HTTP for CA, HTTPS for auth)
-		// Reject all other incompatible combinations
-		if (hasMTLS && hasPublic) || (hasMTLS && hasBootstrap) {
-			return fmt.Errorf("listen: port %d binds incompatible surfaces %v; assign distinct ports", port, usage)
+		if len(usage) > 1 {
+			return fmt.Errorf("listen: port %d has multiple surface assignments %v; assign distinct ports", port, usage)
 		}
 	}
 
-	tlsConfig := pki.TLSConfig()           // strict mTLS (RequireAndVerifyClientCert)
-	tlsConfigPlain := pki.TLSConfigPlain() // public TLS (no client cert)
+	tlsConfig := pki.TLSConfig() // strict mTLS (RequireAndVerifyClientCert)
 
 	// Fail-closed assertion: mTLS surface MUST use RequireAndVerifyClientCert
 	// If this is downgraded to VerifyClientCertIfGiven, the execution boundary
@@ -347,11 +276,11 @@ func (ls *GatewayService) initHandlersAndServers() error {
 		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
 	}
 
-	// Combined Public+Bootstrap: single HTTPS server serving both bootstrap and authenticated routes
+	// Public server: mTLS-only for all routes (CSR-based enrollment)
 	ls.publicServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Gateway.PublicPort),
 		Handler:           ls.handler.buildPublicRouter(),
-		TLSConfig:         tlsConfigPlain,
+		TLSConfig:         tlsConfig,
 		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
 		ReadTimeout:       cfg.Gateway.ReadTimeout,
 		WriteTimeout:      cfg.Gateway.WriteTimeout,
@@ -506,22 +435,12 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 		lnToServe := ln
 		tlsMode := "plain"
 		if s.TLSConfig != nil {
-			// For public server, use autoTLSListener to support both HTTP and HTTPS on same port
-			if name == "Public" {
-				lnToServe = &autoTLSListener{
-					Listener:  ln,
-					tlsConfig: s.TLSConfig,
-					logger:    ls.logger,
-				}
-				tlsMode = "auto-TLS"
+			lnToServe = tls.NewListener(ln, s.TLSConfig)
+			// All servers now use mTLS (RequireAndVerifyClientCert)
+			if s.TLSConfig.ClientAuth == tls.RequireAndVerifyClientCert {
+				tlsMode = "mTLS"
 			} else {
-				lnToServe = tls.NewListener(ln, s.TLSConfig)
-				// Distinguish between mTLS (requires client cert) and plain TLS (no client cert)
-				if s.TLSConfig.ClientAuth == tls.RequireAndVerifyClientCert {
-					tlsMode = "mTLS"
-				} else {
-					tlsMode = "TLS"
-				}
+				tlsMode = "TLS"
 			}
 		}
 

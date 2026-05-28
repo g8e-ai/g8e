@@ -123,7 +123,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
 	}
 
 	// Initialize controllers
-	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.DB, deps.PKI, deps.AppEnrollment, deps.Responder)
+	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.DB, deps.PKI, deps.AppEnrollment, deps.Reg, deps.Responder)
 	h.dbController = newDBController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Pubsub, deps.UserSvc, deps.Responder)
 	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.SessionSvc, deps.MCPGateway, deps.Responder)
 
@@ -194,8 +194,6 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 
 	// Authenticated routes (require mTLS)
 	mux.HandleFunc("/api/settings", h.dbController.handleSettings)
-	mux.HandleFunc("/api/device-links", h.handleDeviceLinks)
-	mux.HandleFunc("/api/device-links/", h.handleDeviceLinkByToken)
 	mux.HandleFunc("/api/operators", h.handleOperators)
 	mux.HandleFunc("/api/operators/terminate", h.handleTerminateOperator)
 	mux.HandleFunc("/api/operators/reauth", h.handleReauth)
@@ -229,6 +227,7 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 
 	// PKI management routes (require mTLS)
 	mux.HandleFunc("/api/pki/sign-csr", h.pkiController.handlePKISignCSR)
+	mux.HandleFunc("/api/pki/device-enroll", h.pkiController.handleDeviceEnroll)
 	mux.HandleFunc("/api/pki/app-enroll", h.pkiController.handleAppEnroll)
 	mux.HandleFunc("/api/pki/revoke", h.pkiController.handlePKIRevoke)
 	mux.HandleFunc("/api/pki/revocation-bundle", h.pkiController.handlePKIRevocationBundle)
@@ -263,10 +262,6 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc("/api/auth/logout", h.authController.handleAuthLogout)
 	mux.HandleFunc("/api/auth/bootstrap", h.authController.handleBootstrap)
 	mux.HandleFunc("/api/auth/bootstrap/status", h.authController.handleBootstrapStatus)
-
-	// Device-link routes (TLS-protected, for secure enrollment)
-	mux.HandleFunc("/api/auth/device-link/register", h.handleDeviceLinkRegister)
-	mux.HandleFunc("/api/auth/device-link/request", h.handleDeviceLinkRequest)
 
 	// MCP/A2A Ingress routes with JWT authentication for remote clients
 	mcpMux := http.NewServeMux()
@@ -521,74 +516,6 @@ func (h *HTTPHandler) handleDocs(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(content)
 }
 
-func (h *HTTPHandler) handleDeviceLinkRequest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	body, err := h.readBody(r)
-	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
-		return
-	}
-
-	var req models.CreateDeviceLinkRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-
-	// For bootstrap/public requests, we enforce some constraints
-	// e.g. cannot specify a custom UserID directly if we want to be safe.
-	// We might want to flag these as 'CLI' or 'Bootstrap' requests.
-
-	resp, err := h.reg.CreateDeviceLink(req)
-	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	h.responder.JSON(w, http.StatusCreated, resp)
-}
-
-func (h *HTTPHandler) handleDeviceLinkRegister(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	body, err := h.readBody(r)
-	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
-		return
-	}
-
-	// We'll reuse the existing RegisterDevice logic but expose it via this new route
-	// The token usually comes from the URL in handleDeviceLink, but here we might
-	// want it in the body or header for the new protocol.
-	// For now, let's just forward to handleDeviceLink style if we have a token.
-	token := r.Header.Get(constants.HeaderDeviceToken)
-	if token == "" {
-		h.responder.Error(w, http.StatusBadRequest, "missing X-G8E-Device-Token header")
-		return
-	}
-
-	var req models.OperatorRegistrationRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-
-	resp, err := h.reg.RegisterDevice(token, req)
-	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	h.responder.JSON(w, http.StatusOK, resp)
-}
-
 // =============================================================================
 // /db/{collection}/{id} - Document Store
 //
@@ -598,56 +525,6 @@ func (h *HTTPHandler) handleDeviceLinkRegister(w http.ResponseWriter, r *http.Re
 // DELETE /db/{collection}/{id}       → delete document
 // POST   /db/{collection}/_query     → query documents
 // =============================================================================
-
-func (h *HTTPHandler) handleDeviceLinks(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPost:
-		body, err := h.readBody(r)
-		if err != nil {
-			h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
-			return
-		}
-		var req models.CreateDeviceLinkRequest
-		if err := json.Unmarshal(body, &req); err != nil {
-			h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
-			return
-		}
-		resp, err := h.reg.CreateDeviceLink(req)
-		if err != nil {
-			h.responder.Error(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		h.responder.JSON(w, http.StatusCreated, resp)
-	case http.MethodGet:
-		userID := r.URL.Query().Get("user_id")
-		links, err := h.reg.ListDeviceLinks(userID)
-		if err != nil {
-			h.responder.Error(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		h.responder.JSON(w, http.StatusOK, models.DeviceLinkListResponse{Success: true, Links: links})
-	default:
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-	}
-}
-
-func (h *HTTPHandler) handleDeviceLinkByToken(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	token := strings.TrimPrefix(r.URL.Path, "/api/device-links/")
-	if token == "" || strings.Contains(token, "/") {
-		h.responder.Error(w, http.StatusBadRequest, "token required")
-		return
-	}
-	userID := r.URL.Query().Get("user_id")
-	if err := h.reg.DeleteDeviceLink(token, userID); err != nil {
-		h.responder.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
-}
 
 func (h *HTTPHandler) handleOperators(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

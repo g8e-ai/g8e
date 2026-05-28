@@ -39,16 +39,18 @@ type PKIController struct {
 	db            *GatewayDBService
 	pki           *PKIAuthority
 	appEnrollment *AppEnrollmentService
+	registration  *RegistrationService
 	responder     *responder.Responder
 }
 
-func newPKIController(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, pki *PKIAuthority, appEnrollment *AppEnrollmentService, responder *responder.Responder) *PKIController {
+func newPKIController(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, pki *PKIAuthority, appEnrollment *AppEnrollmentService, registration *RegistrationService, responder *responder.Responder) *PKIController {
 	return &PKIController{
 		cfg:           cfg,
 		logger:        logger,
 		db:            db,
 		pki:           pki,
 		appEnrollment: appEnrollment,
+		registration:  registration,
 		responder:     responder,
 	}
 }
@@ -262,6 +264,55 @@ func (c *PKIController) handleAppEnroll(w http.ResponseWriter, r *http.Request) 
 
 	if !resp.Success {
 		c.responder.Error(w, http.StatusBadRequest, resp.Error)
+		return
+	}
+
+	c.responder.JSON(w, http.StatusCreated, resp)
+}
+
+func (c *PKIController) handleDeviceEnroll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	if c.registration == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, "registration service not available")
+		return
+	}
+
+	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+		c.responder.Error(w, http.StatusUnauthorized, "mTLS client certificate required")
+		return
+	}
+
+	userID, err := ExtractUserIDFromCert(r.TLS.PeerCertificates[0])
+	if err != nil {
+		c.responder.Error(w, http.StatusUnauthorized, "failed to extract user_id from client certificate")
+		return
+	}
+
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req models.OperatorRegistrationRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	organizationID := ""
+	if req.CSR == "" {
+		c.responder.Error(w, http.StatusBadRequest, "csr_pem is required")
+		return
+	}
+
+	resp, err := c.registration.RegisterDeviceCSR(userID, organizationID, req)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 

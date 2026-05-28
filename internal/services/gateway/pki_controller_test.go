@@ -96,7 +96,7 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Gate
 	appEnrollment := NewAppEnrollmentService(db, pki, logger)
 	resp := responder.New(logger)
 
-	controller := newPKIController(cfg, logger, db, pki, appEnrollment, resp)
+	controller := newPKIController(cfg, logger, db, pki, appEnrollment, nil, resp)
 	return controller, cfg, db
 }
 
@@ -247,7 +247,7 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 
 func TestPKIController_HandlePKISignCSR(t *testing.T) {
 	validCSRPayload := map[string]string{
-		"csr_pem":             generateTestCSR(t),
+		"csr_pem":             testutil.GenerateTestCSR(t, "test-operator"),
 		"leaf_type":           "operator",
 		"organization_id":     testOrganizationID,
 		"operator_id":         testOperatorID,
@@ -421,7 +421,7 @@ func TestPKIController_HandlePKIRevocationBundle(t *testing.T) {
 
 func TestPKIController_HandleAppEnroll(t *testing.T) {
 	validEnrollPayload := map[string]string{
-		"csr_pem":  generateTestCSR(t),
+		"csr_pem":  testutil.GenerateTestCSR(t, "test-operator"),
 		"app_name": testAppName,
 		"app_type": testAppType,
 	}
