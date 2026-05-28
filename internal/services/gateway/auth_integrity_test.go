@@ -142,7 +142,7 @@ func setupAuthService(t *testing.T) (*AuthService, *GatewayDBService) {
 
 	responderSvc := responder.New(logger)
 	personaSvc := NewPersonaService(db, logger)
-	auth := NewAuthService(db, nil, logger, nil, personaSvc, responderSvc, secretsDir, nil, "")
+	auth := NewAuthService(db, nil, logger, nil, personaSvc, responderSvc, secretsDir, nil, "", "", "")
 	return auth, db
 }
 

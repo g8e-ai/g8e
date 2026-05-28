@@ -16,6 +16,7 @@ package mcp
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -484,8 +485,9 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 			if errors.Is(err, governance.ErrL3ProofMissing) {
 				userID := r.Header.Get(constants.HeaderUserID)
 				operatorID := r.Header.Get(constants.HeaderOperatorID)
+				certFingerprint := extractCertFingerprint(r)
 
-				g.storeSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID)
+				g.storeSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
 
 				approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 				return CallToolResult{
@@ -885,8 +887,9 @@ func (g *GatewayService) HandleToolsCallSSE(w http.ResponseWriter, r *http.Reque
 		if errors.Is(err, governance.ErrL3ProofMissing) {
 			userID := r.Header.Get(constants.HeaderUserID)
 			operatorID := r.Header.Get(constants.HeaderOperatorID)
+			certFingerprint := extractCertFingerprint(r)
 
-			g.storeSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID)
+			g.storeSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
 
 			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 			g.responder.RPCResponse(w, req.ID, CallToolResult{
@@ -1054,8 +1057,9 @@ func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, governance.ErrL3ProofMissing) || errors.Is(err, governance.ErrL3ProofInvalid) {
 				userID := r.Header.Get(constants.HeaderUserID)
 				operatorID := r.Header.Get(constants.HeaderOperatorID)
+				certFingerprint := extractCertFingerprint(r)
 
-				g.storeSuspendedTransaction(hash, envelopeBytes, req.SkillName, req.PayloadJSON, userID, operatorID)
+				g.storeSuspendedTransaction(hash, envelopeBytes, req.SkillName, req.PayloadJSON, userID, operatorID, certFingerprint)
 
 				approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 				return A2ASuspensionResponse{
@@ -1126,20 +1130,32 @@ func (g *GatewayService) mapGatewayError(err error) (int, string) {
 	return -32603, msg
 }
 
+// extractCertFingerprint extracts the SHA-256 fingerprint of the client certificate from an HTTP request.
+// Returns empty string if no valid certificate is present.
+func extractCertFingerprint(r *http.Request) string {
+	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+		return ""
+	}
+	cert := r.TLS.PeerCertificates[0]
+	hash := sha256.Sum256(cert.Raw)
+	return hex.EncodeToString(hash[:])
+}
+
 // storeSuspendedTransaction stores a transaction awaiting L3 approval.
-func (g *GatewayService) storeSuspendedTransaction(txHash string, envelope []byte, toolName string, toolArgs json.RawMessage, userID, operatorID string) {
+func (g *GatewayService) storeSuspendedTransaction(txHash string, envelope []byte, toolName string, toolArgs json.RawMessage, userID, operatorID string, certFingerprint string) {
 	if g.suspendedStore == nil {
 		return
 	}
 	tx := &models.SuspendedTransaction{
-		TransactionHash: txHash,
-		Envelope:        json.RawMessage(envelope),
-		CreatedAt:       time.Now().UTC(),
-		ExpiresAt:       time.Now().UTC().Add(5 * time.Minute),
-		ToolName:        toolName,
-		ToolArguments:   toolArgs,
-		UserID:          userID,
-		OperatorID:      operatorID,
+		TransactionHash:         txHash,
+		Envelope:                json.RawMessage(envelope),
+		CreatedAt:               time.Now().UTC(),
+		ExpiresAt:               time.Now().UTC().Add(5 * time.Minute),
+		ToolName:                toolName,
+		ToolArguments:           toolArgs,
+		UserID:                  userID,
+		OperatorID:              operatorID,
+		ExpectedCertFingerprint: certFingerprint,
 	}
 	if err := g.suspendedStore.StoreSuspendedTransaction(tx); err != nil {
 		g.logger.Error("Failed to store suspended transaction", "tx_hash", txHash, "error", err)

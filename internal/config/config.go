@@ -97,6 +97,8 @@ type GatewayConfig struct {
 	A2ADownstreamURL string         // URL of the downstream A2A server to proxy execution to
 	JWKSURL          string         // URL to fetch JWKS for JWT validation
 	JWTRoleClaim     string         // The claim in JWT that contains roles (default: "roles")
+	JWTIssuer        string         // Expected issuer claim in JWT (optional, for multi-audience IdP deployments)
+	JWTAudience      string         // Expected audience claim in JWT (optional, for multi-audience IdP deployments)
 
 	// HTTP server limits
 	MaxPayloadBytes   int64         // Maximum request payload size in bytes (default: 10MB)
@@ -263,6 +265,8 @@ type GatewayOptions struct {
 	A2ADownstreamURL string
 	JWKSURL          string
 	JWTRoleClaim     string
+	JWTIssuer        string
+	JWTAudience      string
 
 	// AllowTestPortZero should be true only when called from Go tests; when false,
 	// port 0 is rejected to prevent dynamic port assignment in production.
@@ -401,6 +405,14 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			jwtRoleClaim = "roles"
 		}
 	}
+	jwtIssuer := opts.JWTIssuer
+	if jwtIssuer == "" {
+		jwtIssuer = os.Getenv("G8E_JWT_ISSUER")
+	}
+	jwtAudience := opts.JWTAudience
+	if jwtAudience == "" {
+		jwtAudience = os.Getenv("G8E_JWT_AUDIENCE")
+	}
 
 	return &Config{
 		ComponentName: constants.ComponentNameG8EOGateway,
@@ -422,6 +434,8 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			A2ADownstreamURL: a2aDownstreamURL,
 			JWKSURL:          jwksURL,
 			JWTRoleClaim:     jwtRoleClaim,
+			JWTIssuer:        jwtIssuer,
+			JWTAudience:      jwtAudience,
 
 			// HTTP server limits with fail-closed defaults
 			MaxPayloadBytes:   512 * 1024, // 512KB

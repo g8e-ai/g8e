@@ -34,6 +34,7 @@ The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
 	rootCmd.AddCommand(
 		platformCmd(),
 		authCmd(),
+		approveCmd(),
 		dataCmd(),
 		testCmd(),
 		securityCmd(),

@@ -1214,7 +1214,7 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 			maxPayloadBytes: 10 * 1024 * 1024,
 		}
 
-		g.storeSuspendedTransaction("hash-123", []byte(`{"id":"123"}`), "test-tool", json.RawMessage(`{"arg":"val"}`), "user-1", "op-1")
+		g.storeSuspendedTransaction("hash-123", []byte(`{"id":"123"}`), "test-tool", json.RawMessage(`{"arg":"val"}`), "user-1", "op-1", "cert-fp-abc123")
 
 		tx, found := store.GetSuspendedTransaction("hash-123")
 		require.True(t, found)
@@ -1222,6 +1222,7 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 		require.Equal(t, "test-tool", tx.ToolName)
 		require.Equal(t, "user-1", tx.UserID)
 		require.Equal(t, "op-1", tx.OperatorID)
+		require.Equal(t, "cert-fp-abc123", tx.ExpectedCertFingerprint)
 	})
 
 	t.Run("nil store does not panic", func(t *testing.T) {
@@ -1233,7 +1234,7 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 		}
 
 		// Should not panic
-		g.storeSuspendedTransaction("test-hash", []byte(`{}`), "test-tool", json.RawMessage(`{}`), "user-1", "op-1")
+		g.storeSuspendedTransaction("test-hash", []byte(`{}`), "test-tool", json.RawMessage(`{}`), "user-1", "op-1", "")
 	})
 }
 

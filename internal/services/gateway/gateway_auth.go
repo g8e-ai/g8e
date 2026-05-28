@@ -133,8 +133,10 @@ type AuthService struct {
 	responder  *responder.Responder
 	secretsDir string
 
-	jwks    *JWKSProvider
-	jwtRole string
+	jwks        *JWKSProvider
+	jwtRole     string
+	jwtIssuer   string
+	jwtAudience string
 
 	publicRoutes *PublicRouteRegistry
 
@@ -144,7 +146,7 @@ type AuthService struct {
 }
 
 // NewAuthService creates a new AuthService.
-func NewAuthService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, personaSvc *PersonaService, responder *responder.Responder, secretsDir string, jwks *JWKSProvider, jwtRole string) *AuthService {
+func NewAuthService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, personaSvc *PersonaService, responder *responder.Responder, secretsDir string, jwks *JWKSProvider, jwtRole, jwtIssuer, jwtAudience string) *AuthService {
 	jwksEnabled := jwks != nil
 	return &AuthService{
 		db:           db,
@@ -156,6 +158,8 @@ func NewAuthService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger
 		secretsDir:   secretsDir,
 		jwks:         jwks,
 		jwtRole:      jwtRole,
+		jwtIssuer:    jwtIssuer,
+		jwtAudience:  jwtAudience,
 		publicRoutes: NewPublicRouteRegistry(jwksEnabled),
 		limiters:     make(map[string]*rate.Limiter),
 	}
@@ -667,7 +671,7 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		jwt, err := ParseAndVerifyJWT(tokenString, s.jwks, s.jwtRole)
+		jwt, err := ParseAndVerifyJWT(tokenString, s.jwks, s.jwtRole, s.jwtIssuer, s.jwtAudience)
 		if err != nil {
 			s.logger.Warn("JWT validation failed", "error", err)
 			s.responder.Error(w, http.StatusUnauthorized, "invalid JWT token")

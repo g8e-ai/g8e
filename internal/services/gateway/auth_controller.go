@@ -566,10 +566,16 @@ func (c *AuthController) handleCLIApproval(w http.ResponseWriter, r *http.Reques
 	}
 
 	var req struct {
+		CliSignature        string `json:"cli_signature"`
 		MtlsCertFingerprint string `json:"mtls_cert_fingerprint"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if req.CliSignature == "" {
+		c.responder.Error(w, http.StatusBadRequest, "cli_signature required")
 		return
 	}
 
@@ -578,9 +584,16 @@ func (c *AuthController) handleCLIApproval(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Create L3 proof with mtls_cert_fingerprint for CLI approval
+	// Persist the approval with signature before resuming
+	if err := c.db.ApproveSuspendedTransaction(txHash, userID, req.CliSignature, req.MtlsCertFingerprint); err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to approve transaction: %v", err))
+		return
+	}
+
+	// Create L3 proof with mtls_cert_fingerprint and cli_signature for CLI approval
 	proof := &commonv1.L3Proof{
 		MtlsCertFingerprint: req.MtlsCertFingerprint,
+		CliSignature:        req.CliSignature,
 	}
 
 	// Resume the transaction with the proof
