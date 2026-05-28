@@ -71,7 +71,6 @@ func RunStream(args []string) {
 		timeoutSec      int
 		endpoint        string
 		deviceToken     string
-		apiKey          string
 		noGit           bool
 		sshConfigArg    string
 		binaryDir       string
@@ -85,7 +84,6 @@ func RunStream(args []string) {
 	fs.IntVar(&timeoutSec, "timeout", int(defaultTimeout.Seconds()), "Per-host dial+inject timeout in seconds")
 	fs.StringVar(&endpoint, "endpoint", "", "Platform endpoint - if set, starts operator on each remote host")
 	fs.StringVar(&deviceToken, "device-token", "", "Device link token (supports single and mass deployment via max_uses)")
-	fs.StringVar(&apiKey, "key", "", "API key auth")
 	fs.BoolVar(&noGit, "no-git", false, "Disable ledger")
 	fs.StringVar(&sshConfigArg, "ssh-config", "", "Path to SSH config file (default: ~/.ssh/config)")
 	fs.StringVar(&binaryDir, "binary-dir", getDefaultBinaryDir(), "Directory containing arch-specific operator builds")
@@ -139,7 +137,7 @@ func RunStream(args []string) {
 	}
 
 	// Build operator invocation args for the remote shell
-	operatorArgs := buildOperatorArgs(endpoint, deviceToken, apiKey, noGit)
+	operatorArgs := buildOperatorArgs(endpoint, deviceToken, noGit)
 
 	dialTimeout := time.Duration(timeoutSec) * time.Second
 
@@ -341,16 +339,13 @@ func collectHosts(positional []string, hostsFile string) ([]string, error) {
 // NOTE: Host-key policy is not passed here because strict mode is enforced on
 // the outgoing dial from g8ep (stream phase). If remote operators ever make
 // their own SSH connections, a --strict arg should be added here.
-func buildOperatorArgs(endpoint, deviceToken, apiKey string, noGit bool) string {
+func buildOperatorArgs(endpoint, deviceToken string, noGit bool) string {
 	if endpoint == "" {
 		return ""
 	}
 	parts := []string{"-e", shellQuote(endpoint)}
 	if deviceToken != "" {
 		parts = append(parts, "-D", shellQuote(deviceToken))
-	}
-	if apiKey != "" {
-		parts = append(parts, "-k", shellQuote(apiKey))
 	}
 	if noGit {
 		parts = append(parts, "--no-git")
@@ -411,7 +406,6 @@ FLAGS
   --timeout <secs>              Per-host dial+inject timeout (default: 60)
   --endpoint <host>             Platform endpoint: starts operator if set
   --device-token <tok>          Device link token (single or mass deployment via max_uses)
-  --key <apikey>                API key auth
   --no-git                      Disable ledger on remote operator
   --ssh-config <path>           SSH config path (default: ~/.ssh/config)
   --binary-dir <path>           Operator build dir (default: /home/g8e)

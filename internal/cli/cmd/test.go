@@ -14,6 +14,7 @@
 package cmd
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"os/exec"
@@ -21,7 +22,9 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
+	_ "modernc.org/sqlite"
 )
 
 func testCmd() *cobra.Command {
@@ -65,6 +68,7 @@ func testCmd() *cobra.Command {
 		testChaosCmd(),
 		testScenarioCmd(),
 		testReviewCmd(),
+		testSummaryCmd(),
 	)
 
 	return cmd
@@ -462,4 +466,99 @@ func cleanOldVaults(vaultDir string, days int, cmd *cobra.Command) error {
 
 	cmd.Printf("\nRemoved %d vault(s) older than %d days\n", removed, days)
 	return nil
+}
+
+func testSummaryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   string(constants.StreamStatusSummary),
+		Short: "Show summary of all integration test results",
+		Long:  `Aggregate and display test results from all test vaults in .g8e/test-vault/`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			vaultDir := filepath.Join(cfg.ProjectRoot, ".g8e", "test-vault")
+			entries, err := os.ReadDir(vaultDir)
+			if err != nil {
+				if os.IsNotExist(err) {
+					cmd.Println("No test vaults found")
+					return nil
+				}
+				return fmt.Errorf("failed to read vault directory: %w", err)
+			}
+
+			if len(entries) == 0 {
+				cmd.Println("No test vaults found")
+				return nil
+			}
+
+			cmd.Printf("Found %d test vault(s):\n\n", len(entries))
+
+			totalChaosEvents := 0
+			totalAuditEvents := 0
+
+			for _, entry := range entries {
+				if entry.IsDir() && entry.Name() != "README.md" {
+					vaultPath := filepath.Join(vaultDir, entry.Name())
+					dbPath := filepath.Join(vaultPath, "audit_vault.db")
+
+					if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+						continue
+					}
+
+					info, err := entry.Info()
+					if err != nil {
+						cmd.Printf("  %s (error reading info: %v)\n", entry.Name(), err)
+						continue
+					}
+
+					cmd.Printf("  %s (modified: %s)\n", entry.Name(), info.ModTime().Format("2006-01-02 15:04:05"))
+
+					// Query chaos_events table
+					chaosCount, err := countTableRows(dbPath, "chaos_events")
+					if err == nil && chaosCount > 0 {
+						cmd.Printf("    Chaos events: %d\n", chaosCount)
+						totalChaosEvents += chaosCount
+					}
+
+					// Query events table
+					auditCount, err := countTableRows(dbPath, "events")
+					if err == nil && auditCount > 0 {
+						cmd.Printf("    Audit events: %d\n", auditCount)
+						totalAuditEvents += auditCount
+					}
+
+					cmd.Printf("    Path: %s\n", vaultPath)
+					cmd.Println()
+				}
+			}
+
+			cmd.Printf("Summary:\n")
+			cmd.Printf("  Total chaos events: %d\n", totalChaosEvents)
+			cmd.Printf("  Total audit events: %d\n", totalAuditEvents)
+			cmd.Printf("\nUse './g8e test review --list' to see all vaults.\n")
+			cmd.Printf("Use './g8e test review --vault-path <path> --query \"SELECT * FROM chaos_events\"' to query specific vault.\n")
+
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+func countTableRows(dbPath, table string) (int, error) {
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return 0, err
+	}
+	defer db.Close()
+
+	var count int
+	err = db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }

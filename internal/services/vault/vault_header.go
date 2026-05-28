@@ -26,7 +26,7 @@ import (
 
 // VaultHeader contains the metadata and wrapped DEK for an encrypted vault.
 // The header is stored at .g8e/data/vault.header as JSON.
-// The DEK is wrapped (encrypted) with the KEK derived from the API key.
+// The DEK is wrapped (encrypted) with the KEK derived from the operator's private key.
 type VaultHeader struct {
 	Version        int        `json:"version"`
 	CreatedAt      time.Time  `json:"created_at"`
@@ -67,14 +67,14 @@ var (
 	ErrHeaderNotFound      = errors.New("vault header not found")
 	ErrHeaderCorrupted     = errors.New("vault header is corrupted")
 	ErrHeaderVersionUnsup  = errors.New("unsupported vault header version")
-	ErrKeyFingerprintMatch = errors.New("API key fingerprint mismatch")
+	ErrKeyFingerprintMatch = errors.New("private key fingerprint mismatch")
 	ErrVaultAlreadyExists  = errors.New("vault already exists")
 )
 
 // NewVaultHeader creates a new vault header with a freshly generated DEK
-// wrapped with a KEK derived from the provided API key.
-func NewVaultHeader(apiKey string) (*VaultHeader, []byte, error) {
-	kek, err := DeriveKEK(apiKey)
+// wrapped with a KEK derived from the provided private key.
+func NewVaultHeader(privateKey []byte) (*VaultHeader, []byte, error) {
+	kek, err := DeriveKEK(privateKey)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to derive KEK: %w", err)
 	}
@@ -105,20 +105,20 @@ func NewVaultHeader(apiKey string) (*VaultHeader, []byte, error) {
 			Algorithm: DEKAlgorithm,
 			Wrapped:   base64.StdEncoding.EncodeToString(wrappedDEK),
 		},
-		KeyFingerprint: hex.EncodeToString(APIKeyFingerprint(apiKey)),
+		KeyFingerprint: hex.EncodeToString(PrivateKeyFingerprint(privateKey)),
 	}
 
 	return header, dek, nil
 }
 
-// UnwrapDEK unwraps the DEK using the provided API key.
-func (h *VaultHeader) UnwrapDEK(apiKey string) ([]byte, error) {
-	expectedFingerprint := hex.EncodeToString(APIKeyFingerprint(apiKey))
+// UnwrapDEK unwraps the DEK using the provided private key.
+func (h *VaultHeader) UnwrapDEK(privateKey []byte) ([]byte, error) {
+	expectedFingerprint := hex.EncodeToString(PrivateKeyFingerprint(privateKey))
 	if h.KeyFingerprint != expectedFingerprint {
 		return nil, ErrKeyFingerprintMatch
 	}
 
-	kek, err := DeriveKEK(apiKey)
+	kek, err := DeriveKEK(privateKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to derive KEK: %w", err)
 	}
@@ -137,15 +137,15 @@ func (h *VaultHeader) UnwrapDEK(apiKey string) ([]byte, error) {
 	return dek, nil
 }
 
-// Rekey re-wraps the DEK with a new API key.
-func (h *VaultHeader) Rekey(oldAPIKey, newAPIKey string) error {
-	dek, err := h.UnwrapDEK(oldAPIKey)
+// Rekey re-wraps the DEK with a new private key.
+func (h *VaultHeader) Rekey(oldPrivateKey, newPrivateKey []byte) error {
+	dek, err := h.UnwrapDEK(oldPrivateKey)
 	if err != nil {
 		return fmt.Errorf("failed to unwrap DEK with old key: %w", err)
 	}
 	defer SecureZero(dek)
 
-	newKEK, err := DeriveKEK(newAPIKey)
+	newKEK, err := DeriveKEK(newPrivateKey)
 	if err != nil {
 		return fmt.Errorf("failed to derive new KEK: %w", err)
 	}
@@ -159,7 +159,7 @@ func (h *VaultHeader) Rekey(oldAPIKey, newAPIKey string) error {
 	now := time.Now().UTC()
 	h.LastRekeyedAt = &now
 	h.DEK.Wrapped = base64.StdEncoding.EncodeToString(wrappedDEK)
-	h.KeyFingerprint = hex.EncodeToString(APIKeyFingerprint(newAPIKey))
+	h.KeyFingerprint = hex.EncodeToString(PrivateKeyFingerprint(newPrivateKey))
 
 	return nil
 }
@@ -226,8 +226,8 @@ func DeleteVaultHeader(dataDir string) error {
 	return nil
 }
 
-// ValidateAPIKey checks if the provided API key matches the vault's key fingerprint.
-func (h *VaultHeader) ValidateAPIKey(apiKey string) bool {
-	expectedFingerprint := hex.EncodeToString(APIKeyFingerprint(apiKey))
+// ValidatePrivateKey checks if the provided private key matches the vault's key fingerprint.
+func (h *VaultHeader) ValidatePrivateKey(privateKey []byte) bool {
+	expectedFingerprint := hex.EncodeToString(PrivateKeyFingerprint(privateKey))
 	return h.KeyFingerprint == expectedFingerprint
 }

@@ -218,7 +218,7 @@ func (s *FsListService) buildEntry(fi os.FileInfo, fullPath string) models.FsLis
 	if sys := fi.Sys(); sys != nil {
 		if stat, ok := sys.(*syscall.Stat_t); ok {
 			entry.Inode = stat.Ino
-			entry.Nlink = stat.Nlink
+			entry.Nlink = getNlink(stat)
 
 			// Get owner/group names
 			if owner := getUsername(stat.Uid); owner != "" {

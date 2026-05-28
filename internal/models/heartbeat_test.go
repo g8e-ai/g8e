@@ -271,7 +271,6 @@ func TestHeartbeat(t *testing.T) {
 				Architecture: "amd64",
 			},
 			SystemFingerprint: "fp-123",
-			APIKey:            "api-key-123",
 		}
 
 		assert.Equal(t, constants.Event.Operator.Heartbeat, heartbeat.EventType)

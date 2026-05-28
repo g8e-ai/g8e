@@ -149,6 +149,4 @@ type Heartbeat struct {
 
 	FingerprintDetails *HeartbeatFingerprintDetails `json:"fingerprint_details,omitempty"`
 	SystemFingerprint  string                       `json:"system_fingerprint,omitempty"`
-
-	APIKey string `json:"api_key,omitempty"`
 }

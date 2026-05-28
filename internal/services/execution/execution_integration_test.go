@@ -46,7 +46,6 @@ func TestExecutionService_Integration(t *testing.T) {
 			Args:           []string{"hello", "from", "operator"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -76,7 +75,6 @@ func TestExecutionService_Integration(t *testing.T) {
 					Args:           []string{fmt.Sprintf("message-%d", idx)},
 					TimeoutSeconds: 5,
 					RequestedBy:    "test-user",
-					APIKey:         "test-key",
 				}
 
 				result, err := svc.ExecuteCommand(context.Background(), req)
@@ -110,7 +108,6 @@ func TestExecutionService_Integration(t *testing.T) {
 			Args:           []string{"-c", fmt.Sprintf("echo 'Line 1' > %s && echo 'Line 2' >> %s && cat %s", testFile, testFile, testFile)},
 			TimeoutSeconds: 10,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -139,7 +136,6 @@ func TestExecutionService_Integration(t *testing.T) {
 				"CUSTOM_VAR": "custom_value_123",
 			},
 			RequestedBy: "test-user",
-			APIKey:      "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -163,7 +159,6 @@ func TestExecutionService_Integration(t *testing.T) {
 			Args:           []string{"-c", fmt.Sprintf("echo 'Initial content' > %s/data.txt", tmpDir)},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result1, err := svc.ExecuteCommand(context.Background(), step1Req)
@@ -178,7 +173,6 @@ func TestExecutionService_Integration(t *testing.T) {
 			Args:           []string{"-c", fmt.Sprintf("echo 'Appended content' >> %s/data.txt", tmpDir)},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result2, err := svc.ExecuteCommand(context.Background(), step2Req)
@@ -193,7 +187,6 @@ func TestExecutionService_Integration(t *testing.T) {
 			Args:           []string{fmt.Sprintf("%s/data.txt", tmpDir)},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result3, err := svc.ExecuteCommand(context.Background(), step3Req)
@@ -213,7 +206,6 @@ func TestExecutionService_Integration(t *testing.T) {
 			Args:           []string{"30"},
 			TimeoutSeconds: 1,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -234,7 +226,6 @@ func TestExecutionService_Integration(t *testing.T) {
 			Args:           []string{"-c", "for i in $(seq 1 100); do echo \"Line $i: $(date)\"; done"},
 			TimeoutSeconds: 10,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -261,7 +252,6 @@ func TestExecutionService_Integration(t *testing.T) {
 			Args:           []string{"60"},
 			TimeoutSeconds: 120,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		// Start execution in background
@@ -306,7 +296,6 @@ func TestExecutionService_Integration(t *testing.T) {
 			Args:           []string{"-c", "echo 'stdout message' && echo 'stderr message' >&2"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -327,7 +316,6 @@ func TestExecutionService_Integration(t *testing.T) {
 			Args:           []string{"test"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -364,7 +352,6 @@ func TestExecutionService_Integration(t *testing.T) {
 				Args:           []string{fmt.Sprintf("message-%d", i)},
 				TimeoutSeconds: 5,
 				RequestedBy:    "test-user",
-				APIKey:         "test-key",
 			}
 
 			result, err := svc.ExecuteCommand(context.Background(), req)
@@ -409,7 +396,6 @@ exit 0
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -445,7 +431,6 @@ exit 0
 					Args:           []string{"-c", fmt.Sprintf("exit %d", tc.exitCode)},
 					TimeoutSeconds: 5,
 					RequestedBy:    "test-user",
-					APIKey:         "test-key",
 				}
 
 				result, err := svc.ExecuteCommand(context.Background(), req)
@@ -470,7 +455,6 @@ exit 0
 			Args:           []string{"-c", fmt.Sprintf("for i in $(seq 1 50); do echo $i >> %s/output.txt; done && wc -l %s/output.txt", tmpDir, tmpDir)},
 			TimeoutSeconds: 10,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)

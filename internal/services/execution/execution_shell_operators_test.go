@@ -45,7 +45,6 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -67,7 +66,6 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -90,7 +88,6 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -112,7 +109,6 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -134,7 +130,6 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -153,7 +148,6 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -172,7 +166,6 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -195,7 +188,6 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -213,7 +205,6 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -239,7 +230,6 @@ func TestExecutionService_SystemMetrics(t *testing.T) {
 			Args:           []string{"test"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -268,7 +258,6 @@ func TestExecutionService_SystemMetrics(t *testing.T) {
 			Args:           []string{"1"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		done := make(chan bool)
@@ -303,7 +292,6 @@ func TestExecutionService_SystemMetrics(t *testing.T) {
 			Args:           []string{"-c", "kill -9 $$"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -336,7 +324,6 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 					Args:           []string{fmt.Sprintf("task-%d", idx)},
 					TimeoutSeconds: 5,
 					RequestedBy:    "test-user",
-					APIKey:         "test-key",
 				}
 
 				result, err := svc.ExecuteCommand(context.Background(), req)
@@ -373,7 +360,6 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 					Args:           []string{"2"},
 					TimeoutSeconds: 5,
 					RequestedBy:    "test-user",
-					APIKey:         "test-key",
 				}
 				svc.ExecuteCommand(context.Background(), req)
 			}(i)
@@ -396,7 +382,6 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 			Args:           []string{"blocked"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(ctx, req)
@@ -423,7 +408,6 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 					Args:           []string{"0.1"},
 					TimeoutSeconds: 5,
 					RequestedBy:    "test-user",
-					APIKey:         "test-key",
 				}
 				svc.ExecuteCommand(context.Background(), req)
 			}(i)
@@ -464,7 +448,6 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -481,7 +464,6 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -500,7 +482,6 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 			TimeoutSeconds:   5,
 			WorkingDirectory: &badDir,
 			RequestedBy:      "test-user",
-			APIKey:           "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -524,7 +505,6 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 			Args:           []string{"-c", scriptPath},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -543,7 +523,6 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 			Args:           []string{"-c", "/nonexistent/command/path"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -562,7 +541,6 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 			Args:           []string{"10"},
 			TimeoutSeconds: 1,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -582,7 +560,6 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 			Args:           []string{"-c", "for i in $(seq 1 1000); do echo \"Line $i with additional text\"; done"},
 			TimeoutSeconds: 30,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -605,7 +582,6 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 			Args:           []string{"-c", "echo out1; echo err1 >&2; echo out2; echo err2 >&2"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -633,7 +609,6 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -651,7 +626,6 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -669,7 +643,6 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -690,7 +663,6 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -713,7 +685,6 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -735,7 +706,6 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 				"CUSTOM_VAR": "EXPANDED",
 			},
 			RequestedBy: "test-user",
-			APIKey:      "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
@@ -767,7 +737,6 @@ exit 0
 			Args:           []string{},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
-			APIKey:         "test-key",
 		}
 
 		result, err := svc.ExecuteCommand(context.Background(), req)

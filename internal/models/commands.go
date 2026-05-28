@@ -28,7 +28,6 @@ type ExecutionRequestPayload struct {
 	Args              []string          `json:"args,omitempty"`
 	TimeoutSeconds    int               `json:"timeout_seconds"`
 	RequestedBy       string            `json:"requested_by"`
-	APIKey            string            `json:"api_key,omitempty"`
 	Environment       map[string]string `json:"environment,omitempty"`
 	WorkingDirectory  *string           `json:"working_directory,omitempty"`
 	NetworkTopologyID *string           `json:"network_topology_id,omitempty"`

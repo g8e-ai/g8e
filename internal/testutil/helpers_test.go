@@ -52,7 +52,6 @@ func TestNewTestConfig_OperatorIDContainsTestName(t *testing.T) {
 func TestNewTestConfig_FieldsPopulated(t *testing.T) {
 	cfg := NewTestConfig(t)
 	assert.Equal(t, "test-project", cfg.ProjectID)
-	assert.Equal(t, "test-api-key", cfg.APIKey)
 	assert.NotEmpty(t, cfg.OperatorID)
 	assert.NotEmpty(t, cfg.OperatorSessionId)
 	assert.NotEmpty(t, cfg.PubSubURL)

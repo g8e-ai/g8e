@@ -17,54 +17,12 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"strings"
-	"syscall"
-	"unsafe"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 )
-
-// promptForAPIKey prompts for an API key with obfuscated (starred) terminal input.
-func promptForAPIKey() (string, error) {
-	fmt.Print("Enter the unique API key for one of your g8e Operators: ")
-
-	fd := int(os.Stdin.Fd())
-
-	var oldState syscall.Termios
-	if _, _, err := syscall.Syscall6(syscall.SYS_IOCTL, uintptr(fd), syscall.TCGETS, uintptr(unsafe.Pointer(&oldState)), 0, 0, 0); err != 0 {
-		reader := bufio.NewReader(os.Stdin)
-		apiKey, err := reader.ReadString('\n')
-		if err != nil {
-			return "", err
-		}
-		return strings.TrimSpace(apiKey), nil
-	}
-
-	newState := oldState
-	newState.Lflag &^= syscall.ECHO | syscall.ICANON
-	newState.Cc[syscall.VMIN] = 1
-	newState.Cc[syscall.VTIME] = 0
-
-	if _, _, err := syscall.Syscall6(syscall.SYS_IOCTL, uintptr(fd), syscall.TCSETS, uintptr(unsafe.Pointer(&newState)), 0, 0, 0); err != 0 {
-		reader := bufio.NewReader(os.Stdin)
-		apiKey, err := reader.ReadString('\n')
-		if err != nil {
-			return "", err
-		}
-		return strings.TrimSpace(apiKey), nil
-	}
-
-	defer func() {
-		_, _, _ = syscall.Syscall6(syscall.SYS_IOCTL, uintptr(fd), syscall.TCSETS, uintptr(unsafe.Pointer(&oldState)), 0, 0, 0)
-	}()
-
-	return readObfuscatedInput(os.Stdin, os.Stdout)
-}
 
 // readObfuscatedInput reads a password-style input from r, writing masked feedback
 // to w. Each printable character echoes as '*'. Backspace/Delete removes the last

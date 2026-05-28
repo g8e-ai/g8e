@@ -19,7 +19,6 @@ package main
 import (
 	"bytes"
 	"io"
-	"os"
 	"strings"
 	"testing"
 
@@ -192,67 +191,4 @@ func TestReadObfuscatedInput_BackspaceErasesStarSequence(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "ac", result)
 	assert.Equal(t, "**\b \b*\n", out.String())
-}
-
-func TestPromptForAPIKey_InteractivePrompt(t *testing.T) {
-	r, w, err := os.Pipe()
-	require.NoError(t, err)
-
-	_, writeErr := io.WriteString(w, "my-secret-key\n")
-	require.NoError(t, writeErr)
-	w.Close()
-
-	origStdin := os.Stdin
-	os.Stdin = r
-	t.Cleanup(func() {
-		os.Stdin = origStdin
-		r.Close()
-	})
-
-	result, err := promptForAPIKey()
-
-	require.NoError(t, err)
-	assert.Equal(t, "my-secret-key", result)
-}
-
-func TestPromptForAPIKey_InteractivePrompt_TrimsWhitespace(t *testing.T) {
-	r, w, err := os.Pipe()
-	require.NoError(t, err)
-
-	_, writeErr := io.WriteString(w, "  trimmed-key  \n")
-	require.NoError(t, writeErr)
-	w.Close()
-
-	origStdin := os.Stdin
-	os.Stdin = r
-	t.Cleanup(func() {
-		os.Stdin = origStdin
-		r.Close()
-	})
-
-	result, err := promptForAPIKey()
-
-	require.NoError(t, err)
-	assert.Equal(t, "trimmed-key", result)
-}
-
-func TestPromptForAPIKey_InteractivePrompt_EmptyKey(t *testing.T) {
-	r, w, err := os.Pipe()
-	require.NoError(t, err)
-
-	_, writeErr := io.WriteString(w, "\n")
-	require.NoError(t, writeErr)
-	w.Close()
-
-	origStdin := os.Stdin
-	os.Stdin = r
-	t.Cleanup(func() {
-		os.Stdin = origStdin
-		r.Close()
-	})
-
-	result, err := promptForAPIKey()
-
-	require.NoError(t, err)
-	assert.Equal(t, "", result)
 }

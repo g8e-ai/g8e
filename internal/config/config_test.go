@@ -41,7 +41,6 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 
 	cfg, err := Load(LoadOptions{
-		APIKey:           "test-key",
 		OperatorEndpoint: constants.DefaultEndpoint,
 	})
 	require.NoError(t, err)
@@ -69,7 +68,6 @@ func TestLoad_WorkDir_Flag(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	cfg, err := Load(LoadOptions{
-		APIKey:           "test-key",
 		OperatorEndpoint: constants.DefaultEndpoint,
 		WorkDir:          tmpDir,
 	})
@@ -82,18 +80,15 @@ func TestLoad_WorkDir_Flag(t *testing.T) {
 
 func TestLoad_FieldPassthrough(t *testing.T) {
 	cfg, err := Load(LoadOptions{
-		APIKey:           "my-key",
 		OperatorEndpoint: constants.DefaultEndpoint,
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, "my-key", cfg.APIKey)
 	assert.Equal(t, constants.DefaultEndpoint, cfg.Endpoint)
 }
 
 func TestLoad_HTTPPortOverride(t *testing.T) {
 	cfg, err := Load(LoadOptions{
-		APIKey:           "k",
 		OperatorEndpoint: constants.DefaultEndpoint,
 		HTTPPort:         constants.Ports.G8eeHttps,
 	})
@@ -132,7 +127,6 @@ func TestLoad_TLSServerName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg, err := Load(LoadOptions{
-				APIKey:           "k",
 				OperatorEndpoint: tt.endpoint,
 			})
 			require.NoError(t, err)
@@ -148,17 +142,8 @@ func TestLoad_ValidationErrors(t *testing.T) {
 		errContains string
 	}{
 		{
-			name: "missing api key",
-			opts: LoadOptions{
-				OperatorEndpoint: constants.DefaultEndpoint,
-			},
-			errContains: "APIKey is required",
-		},
-		{
-			name: "missing operator endpoint",
-			opts: LoadOptions{
-				APIKey: "k",
-			},
+			name:        "missing operator endpoint",
+			opts:        LoadOptions{},
 			errContains: "OperatorEndpoint is required",
 		},
 	}
@@ -288,7 +273,6 @@ func TestLoadGateway_PartialDefaults(t *testing.T) {
 	t.Run("no operator fields set", func(t *testing.T) {
 		cfg, err := LoadGateway(GatewayOptions{AllowTestPortZero: true})
 		require.NoError(t, err)
-		assert.Empty(t, cfg.APIKey)
 		assert.Empty(t, cfg.Endpoint)
 		assert.Empty(t, cfg.PubSubURL)
 	})
@@ -402,7 +386,6 @@ func TestLoadInsecureMcp_OptionalFieldsEmpty(t *testing.T) {
 
 func TestLoad_HeartbeatIntervalDefault(t *testing.T) {
 	cfg, err := Load(LoadOptions{
-		APIKey:           "k",
 		OperatorEndpoint: constants.DefaultEndpoint,
 	})
 	require.NoError(t, err)
@@ -411,7 +394,6 @@ func TestLoad_HeartbeatIntervalDefault(t *testing.T) {
 
 func TestLoad_HeartbeatIntervalOverride(t *testing.T) {
 	cfg, err := Load(LoadOptions{
-		APIKey:            "k",
 		OperatorEndpoint:  constants.DefaultEndpoint,
 		HeartbeatInterval: 90 * time.Second,
 	})
@@ -421,7 +403,6 @@ func TestLoad_HeartbeatIntervalOverride(t *testing.T) {
 
 func TestLoad_HeartbeatIntervalZeroUsesDefault(t *testing.T) {
 	cfg, err := Load(LoadOptions{
-		APIKey:            "k",
 		OperatorEndpoint:  constants.DefaultEndpoint,
 		HeartbeatInterval: 0,
 	})

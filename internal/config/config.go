@@ -38,7 +38,6 @@ const (
 // LoadOptions contains all configuration values passed explicitly from main
 type LoadOptions struct {
 	// Required
-	APIKey           string
 	OperatorEndpoint string
 	HTTPPort         int // HTTP port to dial on operator for auth proxy (default: from paths.json)
 
@@ -163,9 +162,6 @@ type Config struct {
 	ProjectID     string
 	ComponentName constants.ComponentName
 	Version       string
-
-	// Authentication
-	APIKey string
 
 	// Operator identification
 	OperatorID        string
@@ -311,7 +307,7 @@ func isPortAvailable(port int) bool {
 }
 
 // LoadGateway creates configuration for gateway mode.
-// Gateway mode skips all operator-mode validation - no API key, no endpoint,
+// Gateway mode skips all operator-mode validation - no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
 func LoadGateway(opts GatewayOptions) (*Config, error) {
 	projectRoot := FindProjectRoot()
@@ -467,10 +463,6 @@ func Load(opts LoadOptions) (*Config, error) {
 		}
 	}
 
-	if opts.APIKey == "" {
-		return nil, fmt.Errorf("APIKey is required")
-	}
-
 	if opts.OperatorEndpoint == "" {
 		return nil, fmt.Errorf("OperatorEndpoint is required")
 	}
@@ -478,7 +470,6 @@ func Load(opts LoadOptions) (*Config, error) {
 	// Build config from explicit options
 	cfg := &Config{
 		// From options
-		APIKey:            opts.APIKey,
 		CloudMode:         opts.CloudMode,
 		CloudProvider:     opts.CloudProvider,
 		LocalStoreEnabled: opts.LocalStorageEnabled,

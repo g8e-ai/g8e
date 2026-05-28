@@ -188,7 +188,7 @@ func setupTestGatewayService(t *testing.T) (*GatewayService, *config.Config) {
 		responder:  resp,
 	}
 
-	require.NoError(t, ls.initHandlersAndServers(nil))
+	require.NoError(t, ls.initHandlersAndServers())
 
 	return ls, cfg
 }

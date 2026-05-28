@@ -249,28 +249,6 @@
         "value": "ai.restore.file"
       }
     },
-    "api_key_status": {
-      "active": {
-        "_go_const": "APIKeyStatusActive",
-        "_python_const": "ACTIVE",
-        "value": "active"
-      },
-      "expired": {
-        "_go_const": "APIKeyStatusExpired",
-        "_python_const": "EXPIRED",
-        "value": "expired"
-      },
-      "revoked": {
-        "_go_const": "APIKeyStatusRevoked",
-        "_python_const": "REVOKED",
-        "value": "revoked"
-      },
-      "suspended": {
-        "_go_const": "APIKeyStatusSuspended",
-        "_python_const": "SUSPENDED",
-        "value": "suspended"
-      }
-    },
     "approval.error.type": {
       "approval.exception": {
         "_go_const": "ApprovalErrorTypeApprovalException",
