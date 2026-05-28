@@ -14,6 +14,10 @@
 package gateway
 
 import (
+	"crypto/tls"
+	"io"
+	"net"
+	"net/http"
 	"testing"
 	"time"
 
@@ -130,4 +134,78 @@ func TestNewGatewayServiceFromComponents(t *testing.T) {
 	assert.Equal(t, db, ls.db)
 	assert.Equal(t, pubsub, ls.pubsub)
 	assert.NotNil(t, ls.server)
+}
+
+func TestAutoTLSListener(t *testing.T) {
+	t.Parallel()
+
+	// Create a simple test handler
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	// Create a test TLS config from PEM strings
+	certPEM, keyPEM := testutil.GenerateTestCertificate(t, "test-cert")
+	cert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+	require.NoError(t, err)
+
+	tlsConfig := &tls.Config{
+		GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+			return &cert, nil
+		},
+	}
+
+	// Start a listener on a random port
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { ln.Close() })
+
+	// Wrap with autoTLSListener
+	autoLn := &autoTLSListener{
+		Listener:  ln,
+		tlsConfig: tlsConfig,
+		logger:    testutil.NewTestLogger(),
+	}
+
+	// Start server
+	server := &http.Server{
+		Handler: handler,
+	}
+	go server.Serve(autoLn)
+	t.Cleanup(func() { server.Close() })
+
+	// Give server time to start
+	time.Sleep(100 * time.Millisecond)
+
+	addr := ln.Addr().String()
+
+	t.Run("HTTP connection works", func(t *testing.T) {
+		t.Parallel()
+		resp, err := http.Get("http://" + addr + "/")
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, "OK", string(body))
+	})
+
+	t.Run("HTTPS connection works", func(t *testing.T) {
+		t.Parallel()
+		client := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+			},
+		}
+		resp, err := client.Get("https://" + addr + "/")
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, "OK", string(body))
+	})
 }

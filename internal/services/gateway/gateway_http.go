@@ -272,9 +272,22 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux := http.NewServeMux()
 
+	// Bootstrap routes (CA discovery, trust scripts) - now on public HTTPS
+	mux.HandleFunc("/health", h.handleHealth)
+	mux.HandleFunc("/.well-known/g8e/pki/root.pem", h.handlePKIRoot)
+	mux.HandleFunc("/.well-known/g8e/pki/hub-bundle.pem", h.handlePKIHubBundle)
+	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.handlePKIFingerprint)
+	mux.HandleFunc("/ca.crt", h.handlePKIRoot)
+	mux.HandleFunc("/bootstrap", h.handleTrustScript)
+	mux.HandleFunc("/bootstrap-ca", h.handleTrustScript)
+	mux.HandleFunc("/bootstrap-ca.ps1", h.handleTrustScriptPS1)
+	mux.HandleFunc("/bootstrap-ca.bat", h.handleTrustScriptBat)
+	mux.HandleFunc("/deploy", h.handleDeploy)
+	mux.HandleFunc("/blob/", h.handleBlob)
+	mux.HandleFunc("/docs/", h.handleDocs)
+
 	// Landing page and health
 	mux.HandleFunc("/", h.handleLandingPage)
-	mux.HandleFunc("/health", h.handleHealth)
 	mux.HandleFunc("/api/auth/login/verify", h.handleAuthLoginVerify)
 	mux.HandleFunc("/api/auth/logout", h.handleAuthLogout)
 	mux.HandleFunc("/api/auth/bootstrap", h.handleBootstrap)
@@ -284,10 +297,28 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc("/api/auth/device-link/register", h.handleDeviceLinkRegister)
 	mux.HandleFunc("/api/auth/device-link/request", h.handleDeviceLinkRequest)
 
-	// PKI discovery also available on public port for BYO bootstrap
-	mux.HandleFunc("/.well-known/g8e/pki/root.pem", h.handlePKIRoot)
-	mux.HandleFunc("/.well-known/g8e/pki/hub-bundle.pem", h.handlePKIHubBundle)
-	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.handlePKIFingerprint)
+	// MCP/A2A Ingress routes with JWT authentication for remote clients
+	mcpMux := http.NewServeMux()
+	mcpMux.HandleFunc("/api/mcp/v1/tools/list", h.mcp.HandleToolsList)
+	mcpMux.HandleFunc("/api/mcp/v1/tools/call", h.mcp.HandleToolsCall)
+	mcpMux.HandleFunc("/api/mcp/v1/tools/call/sse", h.mcp.HandleToolsCallSSE)
+	mcpMux.HandleFunc("/api/mcp/v1/resources/list", h.mcp.HandleResourcesList)
+	mcpMux.HandleFunc("/api/mcp/v1/resources/read", h.mcp.HandleResourcesRead)
+	mcpMux.HandleFunc("/api/mcp/v1/prompts/list", h.mcp.HandlePromptsList)
+	mcpMux.HandleFunc("/api/mcp/v1/prompts/get", h.mcp.HandlePromptsGet)
+	mcpMux.HandleFunc("/api/a2a/v1/call", h.mcp.HandleA2aCall)
+
+	// Wrap MCP/A2A with Rate Limiting
+	mcpRateLimited := h.rateLimitMiddleware(mcpMux)
+
+	// Apply JWT middleware only when JWKS is configured (for external IdP auth)
+	// When JWKS is not configured, MCP/A2A routes are not available on public port
+	var mcpHandler http.Handler
+	if h.auth != nil && h.auth.HasJWKS() {
+		mcpHandler = h.auth.JWTAuthMiddleware(mcpRateLimited)
+		mux.Handle("/api/mcp/", mcpHandler)
+		mux.Handle("/api/a2a/", mcpHandler)
+	}
 
 	// Browser-facing data routes (require web session cookie)
 	authedMux := http.NewServeMux()

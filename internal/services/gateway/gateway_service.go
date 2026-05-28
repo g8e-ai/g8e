@@ -31,6 +31,58 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 )
 
+// autoTLSListener wraps a net.Listener to detect TLS vs HTTP connections.
+// It peeks at the first byte to determine if the client is initiating a TLS handshake.
+// If the first byte is 0x16 (TLS ClientHello), it wraps the connection with TLS.
+// Otherwise, it serves the connection as plain HTTP.
+type autoTLSListener struct {
+	net.Listener
+	tlsConfig *tls.Config
+	server    *http.Server
+	handler   http.Handler
+	logger    *slog.Logger
+}
+
+func (l *autoTLSListener) Accept() (net.Conn, error) {
+	conn, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+
+	// Peek at the first byte to detect TLS handshake
+	firstByte := make([]byte, 1)
+	_, err = conn.Read(firstByte)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	// TLS ClientHello starts with 0x16 (Handshake type)
+	if firstByte[0] == 0x16 {
+		// Wrap with TLS
+		tlsConn := tls.Server(&peekedConn{conn, firstByte}, l.tlsConfig)
+		return tlsConn, nil
+	}
+
+	// Plain HTTP connection
+	return &peekedConn{conn, firstByte}, nil
+}
+
+// peekedConn wraps a net.Conn with a peeked byte that was already read.
+type peekedConn struct {
+	net.Conn
+	peeked []byte
+}
+
+func (c *peekedConn) Read(b []byte) (int, error) {
+	if len(c.peeked) > 0 {
+		n := copy(b, c.peeked)
+		c.peeked = c.peeked[n:]
+		return n, nil
+	}
+	return c.Conn.Read(b)
+}
+
 // GatewayService is the top-level orchestrator for gateway mode (operator).
 // It acts as the platform's central persistence and messaging backbone.
 // In this mode, the Operator does NOT execute commands or initiate outbound
@@ -39,19 +91,18 @@ type GatewayService struct {
 	cfg    *config.Config
 	logger *slog.Logger
 
-	db              *GatewayDBService
-	pubsub          *PubSubBroker
-	auth            *AuthService
-	pki             *PKIAuthority
-	reg             *RegistrationService
-	passkey         *PasskeyService
-	userSvc         *UserService
-	sessionSvc      *SessionService
-	mcpGateway      *mcp.GatewayService
-	responder       *responder.Responder
-	server          *http.Server
-	bootstrapServer *http.Server
-	publicServer    *http.Server
+	db           *GatewayDBService
+	pubsub       *PubSubBroker
+	auth         *AuthService
+	pki          *PKIAuthority
+	reg          *RegistrationService
+	passkey      *PasskeyService
+	userSvc      *UserService
+	sessionSvc   *SessionService
+	mcpGateway   *mcp.GatewayService
+	responder    *responder.Responder
+	server       *http.Server
+	publicServer *http.Server
 
 	handler *HTTPHandler
 
@@ -242,8 +293,9 @@ func (ls *GatewayService) initHandlersAndServers() error {
 	portUsage := make(map[int][]string)
 	portUsage[cfg.Gateway.HTTPPort] = append(portUsage[cfg.Gateway.HTTPPort], "HTTP")
 
-	portUsage[cfg.Gateway.BootstrapPort] = append(portUsage[cfg.Gateway.BootstrapPort], "Bootstrap")
+	// Bootstrap and Public now share the same port - HTTP for CA bootstrap, HTTPS for authenticated routes
 	portUsage[cfg.Gateway.PublicPort] = append(portUsage[cfg.Gateway.PublicPort], "Public")
+	portUsage[cfg.Gateway.PublicPort] = append(portUsage[cfg.Gateway.PublicPort], "Bootstrap")
 
 	// Validate up front so collisions fail during init, not only when a
 	// fresh gateway is built. HTTP and WSS may share a port (both mTLS);
@@ -264,7 +316,9 @@ func (ls *GatewayService) initHandlersAndServers() error {
 				hasBootstrap = true
 			}
 		}
-		if (hasMTLS && hasPublic) || (hasMTLS && hasBootstrap) || (hasPublic && hasBootstrap) {
+		// Allow Public+Bootstrap to share a port (HTTP for CA, HTTPS for auth)
+		// Reject all other incompatible combinations
+		if (hasMTLS && hasPublic) || (hasMTLS && hasBootstrap) {
 			return fmt.Errorf("listen: port %d binds incompatible surfaces %v; assign distinct ports", port, usage)
 		}
 	}
@@ -295,17 +349,7 @@ func (ls *GatewayService) initHandlersAndServers() error {
 		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
 	}
 
-	ls.bootstrapServer = &http.Server{
-		Addr:              fmt.Sprintf(":%d", cfg.Gateway.BootstrapPort),
-		Handler:           ls.handler.buildBootstrapRouter(),
-		TLSConfig:         nil, // Plain HTTP for bootstrap discovery
-		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
-		ReadTimeout:       15 * time.Second, // Shorter timeout for bootstrap
-		WriteTimeout:      15 * time.Second,
-		IdleTimeout:       cfg.Gateway.IdleTimeout,
-		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
-	}
-
+	// Combined Public+Bootstrap: single HTTPS server serving both bootstrap and authenticated routes
 	ls.publicServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Gateway.PublicPort),
 		Handler:           ls.handler.buildPublicRouter(),
@@ -354,16 +398,6 @@ func (ls *GatewayService) GetHTTPPort() int {
 // Deprecated: WSS is merged into HTTP; callers should use GetHTTPPort.
 func (ls *GatewayService) GetWSSPort() int {
 	return ls.GetHTTPPort()
-}
-
-// GetBootstrapPort returns the assigned port for the bootstrap server.
-func (ls *GatewayService) GetBootstrapPort() int {
-	if ls.bootstrapServer == nil || ls.bootstrapServer.Addr == "" {
-		return 0
-	}
-	_, portStr, _ := net.SplitHostPort(ls.bootstrapServer.Addr)
-	p, _ := strconv.Atoi(portStr)
-	return p
 }
 
 // GetPublicPort returns the assigned port for the public server.
@@ -457,11 +491,6 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	if ls.server != nil {
 		uniqueServers[ls.server] = "HTTP"
 	}
-	if ls.bootstrapServer != nil {
-		if _, ok := uniqueServers[ls.bootstrapServer]; !ok {
-			uniqueServers[ls.bootstrapServer] = "Bootstrap"
-		}
-	}
 	if ls.publicServer != nil {
 		if _, ok := uniqueServers[ls.publicServer]; !ok {
 			uniqueServers[ls.publicServer] = "Public"
@@ -485,8 +514,18 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 		lnToServe := ln
 		tlsMode := "plain"
 		if s.TLSConfig != nil {
-			lnToServe = tls.NewListener(ln, s.TLSConfig)
-			tlsMode = "mTLS"
+			// For public server, use autoTLSListener to support both HTTP and HTTPS on same port
+			if name == "Public" {
+				lnToServe = &autoTLSListener{
+					Listener:  ln,
+					tlsConfig: s.TLSConfig,
+					logger:    ls.logger,
+				}
+				tlsMode = "auto-TLS"
+			} else {
+				lnToServe = tls.NewListener(ln, s.TLSConfig)
+				tlsMode = "mTLS"
+			}
 		}
 
 		ls.logger.Info("Gateway server listening",
@@ -547,15 +586,6 @@ func (ls *GatewayService) Stop(ctx context.Context) error {
 			return fmt.Errorf("shutdown timeout exceeded")
 		}
 		ls.logger.Error("HTTP server shutdown error", string(constants.ConnectionStateError), err)
-	}
-	if ls.bootstrapServer != nil {
-		if err := ls.bootstrapServer.Shutdown(shutdownCtx); err != nil {
-			if shutdownCtx.Err() == context.DeadlineExceeded {
-				ls.logger.Error("Bootstrap server shutdown timeout - forcing exit to prevent zombie process")
-				return fmt.Errorf("shutdown timeout exceeded")
-			}
-			ls.logger.Error("Bootstrap server shutdown error", string(constants.ConnectionStateError), err)
-		}
 	}
 	if err := ls.publicServer.Shutdown(shutdownCtx); err != nil {
 		if shutdownCtx.Err() == context.DeadlineExceeded {

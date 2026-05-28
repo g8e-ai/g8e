@@ -73,7 +73,6 @@ func platformStartCmd() *cobra.Command {
 			cmd.Println("[g8e] Initializing BFT Governance Architecture...")
 			if err := pm.StartOperator(
 				cfg.OperatorHTTPSPort(),
-				cfg.OperatorBootstrapHTTPSPort(),
 				cfg.Paths.Ports.OperatorPublicHTTPS,
 			); err != nil {
 				return err
@@ -235,7 +234,6 @@ func platformRestartCmd() *cobra.Command {
 			cmd.Println("Starting Governance Gateway...")
 			if err := pm.StartOperator(
 				cfg.OperatorHTTPSPort(),
-				cfg.OperatorBootstrapHTTPSPort(),
 				cfg.Paths.Ports.OperatorPublicHTTPS,
 			); err != nil {
 				return err
@@ -351,7 +349,6 @@ func platformResetCmd() *cobra.Command {
 
 			if err := pm.StartOperator(
 				cfg.OperatorHTTPSPort(),
-				cfg.OperatorBootstrapHTTPSPort(),
 				cfg.Paths.Ports.OperatorPublicHTTPS,
 			); err != nil {
 				return fmt.Errorf("failed to restart services: %w", err)
@@ -360,8 +357,7 @@ func platformResetCmd() *cobra.Command {
 			cmd.Println("Services restarted successfully")
 			cmd.Printf("Governance mode: doctrine (L1 enforced, L2/L3 audited)\n")
 			cmd.Printf("\nEndpoints:\n")
-			cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), cfg.OperatorBootstrapHTTPSPort())
-			cmd.Printf("  Public API:         https://localhost:%d (Public browser/BYO bootstrap)\n", cfg.Paths.Ports.OperatorPublicHTTPS)
+			cmd.Printf("  Public API: https://localhost:%d (Bootstrap + browser/BYO)\n", cfg.Paths.Ports.OperatorPublicHTTPS)
 			cmd.Printf("\nNext step: Run './g8e auth login' to authenticate\n")
 			return nil
 		},

@@ -222,7 +222,7 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 	return "./g8e", nil
 }
 
-func (pm *ProcessManager) StartOperator(httpPort, bootstrapPort, publicPort int) error {
+func (pm *ProcessManager) StartOperator(httpPort, publicPort int) error {
 	if err := pm.ensureDirectories(); err != nil {
 		return err
 	}
@@ -235,13 +235,9 @@ func (pm *ProcessManager) StartOperator(httpPort, bootstrapPort, publicPort int)
 
 	// Calculate offset from original httpPort to maintain port spacing
 	offset := availableHTTPPort - httpPort
-	availableBootstrapPort := bootstrapPort + offset
 	availablePublicPort := publicPort + offset
 
-	// Verify the calculated ports are also available
-	if err := pm.checkPortAvailable(availableBootstrapPort, "Operator Bootstrap"); err != nil {
-		return fmt.Errorf("failed to verify Bootstrap port %d: %w", availableBootstrapPort, err)
-	}
+	// Verify the calculated Public port is available (Bootstrap now shares this port)
 	if err := pm.checkPortAvailable(availablePublicPort, "Operator Public API"); err != nil {
 		return fmt.Errorf("failed to verify Public API port %d: %w", availablePublicPort, err)
 	}
@@ -264,7 +260,6 @@ func (pm *ProcessManager) StartOperator(httpPort, bootstrapPort, publicPort int)
 		"--pki-dir", pm.pkiDir,
 		"--secrets-dir", pm.secretsDir,
 		"--http-listen-port", strconv.Itoa(availableHTTPPort),
-		"--bootstrap-listen-port", strconv.Itoa(availableBootstrapPort),
 		"--public-listen-port", strconv.Itoa(availablePublicPort),
 	)
 	cmd.Stdout = logHandle

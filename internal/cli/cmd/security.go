@@ -112,7 +112,12 @@ func securityValidateCmd() *cobra.Command {
 
 			// Check port availability (standard ports)
 			cmd.Println("\n=== Port Availability ===")
-			ports := []int{8440, 8443, 9000}
+			ports := []int{
+				constants.Ports.OperatorHttps,
+				constants.Ports.OperatorBootstrapHttps,
+				constants.Ports.OperatorPublicHttps,
+				constants.Ports.G8eeHttps,
+			}
 			for _, port := range ports {
 				addr := fmt.Sprintf("127.0.0.1:%d", port)
 				listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
