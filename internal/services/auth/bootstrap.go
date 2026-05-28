@@ -54,8 +54,6 @@ type BootstrapConfig struct {
 
 	OperatorSessionId string `json:"operator_session_id"`
 
-	APIKey string `json:"api_key"`
-
 	OperatorCert    string `json:"operator_cert"`
 	OperatorCertKey string `json:"operator_cert_key"`
 }
@@ -96,7 +94,6 @@ type AuthServicesResponse struct {
 	OperatorSessionId string           `json:"operator_session_id"`
 	OperatorID        string           `json:"operator_id"`
 	UserID            string           `json:"user_id"`
-	APIKey            string           `json:"api_key"`
 	Config            *BootstrapConfig `json:"config"`
 	Error             json.RawMessage  `json:"error,omitempty"`
 	OperatorCert      string           `json:"operator_cert"`
@@ -104,7 +101,7 @@ type AuthServicesResponse struct {
 }
 
 // RequestBootstrapConfig authenticates with client and receives bootstrap configuration.
-// Supports API key auth: POST /api/auth/operator with Bearer token
+// Uses mTLS authentication (device-link token enrollment path).
 func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*BootstrapConfig, error) {
 	bs.logger.Info("Authenticating with endpoint...", "endpoint", bs.config.Endpoint)
 
@@ -183,7 +180,6 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 			return nil, fmt.Errorf("failed to build auth request: %w", err)
 		}
 		req.Header.Set(constants.HeaderContentType, "application/json")
-		req.Header.Set(constants.HeaderAuthorization, "Bearer "+bs.config.APIKey)
 		req.Header.Set(constants.HeaderXRequestTimestamp, sqliteutil.NowTimestamp())
 
 		bs.logger.Info("Authentication request transmitted", "attempt", attempt)
@@ -248,7 +244,6 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 
 		authResp.Config.OperatorSessionId = authResp.OperatorSessionId
 		authResp.Config.OperatorID = authResp.OperatorID
-		authResp.Config.APIKey = authResp.APIKey
 		authResp.Config.OperatorCert = authResp.OperatorCert
 		authResp.Config.OperatorCertKey = authResp.OperatorCertKey
 		return authResp.Config, nil
@@ -278,10 +273,6 @@ func (bs *BootstrapService) ApplyBootstrapConfig(bootstrapConfig *BootstrapConfi
 	}
 	if bootstrapConfig.OperatorSessionId != "" {
 		bs.config.OperatorSessionId = bootstrapConfig.OperatorSessionId
-	}
-	if bootstrapConfig.APIKey != "" {
-		bs.config.APIKey = bootstrapConfig.APIKey
-		bs.logger.Info("API key applied to in-memory configuration")
 	}
 
 	if bootstrapConfig.HeartbeatIntervalSeconds > 0 {

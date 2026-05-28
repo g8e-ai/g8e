@@ -84,10 +84,6 @@
         "required": false,
         "default": false
       },
-      "g8e_api_key": {
-        "type": "string",
-        "required": false
-      },
       "passkey_rp_name": {
         "type": "string",
         "required": false,

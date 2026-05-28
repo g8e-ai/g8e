@@ -27,39 +27,39 @@ import (
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
-const (
-	testAPIKey1 = "g8e_test_abc123xyz789_TESTKEY1"
-	testAPIKey2 = "g8e_test_def456uvw012_TESTKEY2"
+var (
+	testPrivateKey1 = []byte("g8e_test_abc123xyz789_TESTKEY1")
+	testPrivateKey2 = []byte("g8e_test_def456uvw012_TESTKEY2")
 )
 
 func TestDeriveKEK(t *testing.T) {
 	t.Parallel()
 	t.Run("deterministic derivation", func(t *testing.T) {
 		t.Parallel()
-		kek1, err := DeriveKEK(testAPIKey1)
+		kek1, err := DeriveKEK(testPrivateKey1)
 		require.NoError(t, err)
 		require.Len(t, kek1, KeySize)
 
-		kek2, err := DeriveKEK(testAPIKey1)
+		kek2, err := DeriveKEK(testPrivateKey1)
 		require.NoError(t, err)
 
-		assert.Equal(t, kek1, kek2, "same API key should produce same KEK")
+		assert.Equal(t, kek1, kek2, "same private key should produce same KEK")
 	})
 
 	t.Run("different keys produce different KEKs", func(t *testing.T) {
 		t.Parallel()
-		kek1, err := DeriveKEK(testAPIKey1)
+		kek1, err := DeriveKEK(testPrivateKey1)
 		require.NoError(t, err)
 
-		kek2, err := DeriveKEK(testAPIKey2)
+		kek2, err := DeriveKEK(testPrivateKey2)
 		require.NoError(t, err)
 
-		assert.NotEqual(t, kek1, kek2, "different API keys should produce different KEKs")
+		assert.NotEqual(t, kek1, kek2, "different private keys should produce different KEKs")
 	})
 
 	t.Run("empty key rejected", func(t *testing.T) {
 		t.Parallel()
-		_, err := DeriveKEK("")
+		_, err := DeriveKEK([]byte{})
 		assert.Error(t, err)
 	})
 }
@@ -332,7 +332,7 @@ func TestNewVaultHeader(t *testing.T) {
 	t.Parallel()
 	t.Run("creates valid header", func(t *testing.T) {
 		t.Parallel()
-		header, dek, err := NewVaultHeader(testAPIKey1)
+		header, dek, err := NewVaultHeader(testPrivateKey1)
 		require.NoError(t, err)
 		require.NotNil(t, header)
 		require.NotNil(t, dek)
@@ -348,13 +348,13 @@ func TestNewVaultHeader(t *testing.T) {
 		SecureZero(dek)
 	})
 
-	t.Run("fingerprint matches API key", func(t *testing.T) {
+	t.Run("fingerprint matches private key", func(t *testing.T) {
 		t.Parallel()
-		header, dek, err := NewVaultHeader(testAPIKey1)
+		header, dek, err := NewVaultHeader(testPrivateKey1)
 		require.NoError(t, err)
 		defer SecureZero(dek)
 
-		expectedFP := hex.EncodeToString(APIKeyFingerprint(testAPIKey1))
+		expectedFP := hex.EncodeToString(PrivateKeyFingerprint(testPrivateKey1))
 		assert.Equal(t, expectedFP, header.KeyFingerprint)
 	})
 }
@@ -363,11 +363,11 @@ func TestVaultHeaderUnwrapDEK(t *testing.T) {
 	t.Parallel()
 	t.Run("unwrap with correct key", func(t *testing.T) {
 		t.Parallel()
-		header, originalDEK, err := NewVaultHeader(testAPIKey1)
+		header, originalDEK, err := NewVaultHeader(testPrivateKey1)
 		require.NoError(t, err)
 		defer SecureZero(originalDEK)
 
-		unwrappedDEK, err := header.UnwrapDEK(testAPIKey1)
+		unwrappedDEK, err := header.UnwrapDEK(testPrivateKey1)
 		require.NoError(t, err)
 		defer SecureZero(unwrappedDEK)
 
@@ -376,30 +376,30 @@ func TestVaultHeaderUnwrapDEK(t *testing.T) {
 
 	t.Run("unwrap with wrong key fails", func(t *testing.T) {
 		t.Parallel()
-		header, dek, err := NewVaultHeader(testAPIKey1)
+		header, dek, err := NewVaultHeader(testPrivateKey1)
 		require.NoError(t, err)
 		defer SecureZero(dek)
 
-		_, err = header.UnwrapDEK(testAPIKey2)
+		_, err = header.UnwrapDEK(testPrivateKey2)
 		assert.ErrorIs(t, err, ErrKeyFingerprintMatch)
 	})
 }
 
 func TestVaultHeaderRekey(t *testing.T) {
 	t.Parallel()
-	t.Run("rekey to new API key", func(t *testing.T) {
+	t.Run("rekey to new private key", func(t *testing.T) {
 		t.Parallel()
-		header, originalDEK, err := NewVaultHeader(testAPIKey1)
+		header, originalDEK, err := NewVaultHeader(testPrivateKey1)
 		require.NoError(t, err)
 		defer SecureZero(originalDEK)
 
-		err = header.Rekey(testAPIKey1, testAPIKey2)
+		err = header.Rekey(testPrivateKey1, testPrivateKey2)
 		require.NoError(t, err)
 
-		_, err = header.UnwrapDEK(testAPIKey1)
+		_, err = header.UnwrapDEK(testPrivateKey1)
 		assert.ErrorIs(t, err, ErrKeyFingerprintMatch)
 
-		unwrappedDEK, err := header.UnwrapDEK(testAPIKey2)
+		unwrappedDEK, err := header.UnwrapDEK(testPrivateKey2)
 		require.NoError(t, err)
 		defer SecureZero(unwrappedDEK)
 
@@ -409,11 +409,11 @@ func TestVaultHeaderRekey(t *testing.T) {
 
 	t.Run("rekey with wrong old key fails", func(t *testing.T) {
 		t.Parallel()
-		header, dek, err := NewVaultHeader(testAPIKey1)
+		header, dek, err := NewVaultHeader(testPrivateKey1)
 		require.NoError(t, err)
 		defer SecureZero(dek)
 
-		err = header.Rekey(testAPIKey2, testAPIKey2)
+		err = header.Rekey(testPrivateKey2, testPrivateKey2)
 		assert.Error(t, err)
 	})
 }
@@ -424,7 +424,7 @@ func TestVaultHeaderSaveLoad(t *testing.T) {
 
 	t.Run("save and load", func(t *testing.T) {
 		t.Parallel()
-		header, dek, err := NewVaultHeader(testAPIKey1)
+		header, dek, err := NewVaultHeader(testPrivateKey1)
 		require.NoError(t, err)
 		defer SecureZero(dek)
 
@@ -458,7 +458,7 @@ func TestVaultHeaderExists(t *testing.T) {
 	t.Run("returns true when exists", func(t *testing.T) {
 		t.Parallel()
 		tempDir := t.TempDir()
-		header, dek, _ := NewVaultHeader(testAPIKey1)
+		header, dek, _ := NewVaultHeader(testPrivateKey1)
 		defer SecureZero(dek)
 		header.Save(tempDir)
 
@@ -466,32 +466,32 @@ func TestVaultHeaderExists(t *testing.T) {
 	})
 }
 
-func TestVaultHeaderValidateAPIKey(t *testing.T) {
+func TestVaultHeaderValidatePrivateKey(t *testing.T) {
 	t.Parallel()
-	header, dek, _ := NewVaultHeader(testAPIKey1)
+	header, dek, _ := NewVaultHeader(testPrivateKey1)
 	defer SecureZero(dek)
 
 	t.Run("correct key validates", func(t *testing.T) {
 		t.Parallel()
-		assert.True(t, header.ValidateAPIKey(testAPIKey1))
+		assert.True(t, header.ValidatePrivateKey(testPrivateKey1))
 	})
 
 	t.Run("wrong key fails validation", func(t *testing.T) {
 		t.Parallel()
-		assert.False(t, header.ValidateAPIKey(testAPIKey2))
+		assert.False(t, header.ValidatePrivateKey(testPrivateKey2))
 	})
 }
 
-func newTestVault(t *testing.T, dataDir, apiKey string) *Vault {
+func newTestVault(t *testing.T, dataDir string, privateKey []byte) *Vault {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(dataDir, 0700))
-	header, dek, err := NewVaultHeader(apiKey)
+	header, dek, err := NewVaultHeader(privateKey)
 	require.NoError(t, err)
 	SecureZero(dek)
 	require.NoError(t, header.Save(dataDir))
 	v, err := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
 	require.NoError(t, err)
-	require.NoError(t, v.Unlock(apiKey))
+	require.NoError(t, v.Unlock(privateKey))
 	return v
 }
 
@@ -502,13 +502,13 @@ func TestVaultUnlock(t *testing.T) {
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
-		vault1 := newTestVault(t, dataDir, testAPIKey1)
+		vault1 := newTestVault(t, dataDir, testPrivateKey1)
 		vault1.Close()
 
 		vault2, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
 		defer vault2.Close()
 
-		err := vault2.Unlock(testAPIKey1)
+		err := vault2.Unlock(testPrivateKey1)
 		require.NoError(t, err)
 		assert.True(t, vault2.IsUnlocked())
 	})
@@ -518,14 +518,14 @@ func TestVaultUnlock(t *testing.T) {
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
-		vault1 := newTestVault(t, dataDir, testAPIKey1)
+		vault1 := newTestVault(t, dataDir, testPrivateKey1)
 		vault1.Close()
 
 		vault2, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
 		defer vault2.Close()
 
-		err := vault2.Unlock(testAPIKey2)
-		assert.ErrorIs(t, err, ErrInvalidAPIKey)
+		err := vault2.Unlock(testPrivateKey2)
+		assert.ErrorIs(t, err, ErrInvalidPrivateKey)
 	})
 
 	t.Run("unlock non-existent vault fails", func(t *testing.T) {
@@ -536,7 +536,7 @@ func TestVaultUnlock(t *testing.T) {
 		vault, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
 		defer vault.Close()
 
-		err := vault.Unlock(testAPIKey1)
+		err := vault.Unlock(testPrivateKey1)
 		assert.ErrorIs(t, err, ErrVaultNotInit)
 	})
 }
@@ -548,7 +548,7 @@ func TestVaultRekey(t *testing.T) {
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
-		vault := newTestVault(t, dataDir, testAPIKey1)
+		vault := newTestVault(t, dataDir, testPrivateKey1)
 
 		originalDEK, err := vault.GetDEK()
 		require.NoError(t, err)
@@ -559,16 +559,16 @@ func TestVaultRekey(t *testing.T) {
 		vault2, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
 		defer vault2.Close()
 
-		err = vault2.Rekey(testAPIKey1, testAPIKey2)
+		err = vault2.Rekey(testPrivateKey1, testPrivateKey2)
 		require.NoError(t, err)
 
-		err = vault2.Unlock(testAPIKey1)
-		assert.ErrorIs(t, err, ErrInvalidAPIKey)
+		err = vault2.Unlock(testPrivateKey1)
+		assert.ErrorIs(t, err, ErrInvalidPrivateKey)
 
 		vault3, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
 		defer vault3.Close()
 
-		err = vault3.Unlock(testAPIKey2)
+		err = vault3.Unlock(testPrivateKey2)
 		require.NoError(t, err)
 
 		newDEK, err := vault3.GetDEK()
@@ -586,7 +586,7 @@ func TestVaultLock(t *testing.T) {
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
-		vault := newTestVault(t, dataDir, testAPIKey1)
+		vault := newTestVault(t, dataDir, testPrivateKey1)
 		defer vault.Close()
 
 		assert.True(t, vault.IsUnlocked())
@@ -604,7 +604,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 	t.Run("encrypt and decrypt", func(t *testing.T) {
 		t.Parallel()
 		tempDir := t.TempDir()
-		v := newTestVault(t, filepath.Join(tempDir, "data"), testAPIKey1)
+		v := newTestVault(t, filepath.Join(tempDir, "data"), testPrivateKey1)
 		defer v.Close()
 
 		plaintext := []byte("This is a secret message that needs encryption.")
@@ -622,7 +622,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 	t.Run("encrypt empty data", func(t *testing.T) {
 		t.Parallel()
 		tempDir := t.TempDir()
-		v := newTestVault(t, filepath.Join(tempDir, "data"), testAPIKey1)
+		v := newTestVault(t, filepath.Join(tempDir, "data"), testPrivateKey1)
 		defer v.Close()
 
 		plaintext := []byte{}
@@ -638,7 +638,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 	t.Run("large data", func(t *testing.T) {
 		t.Parallel()
 		tempDir := t.TempDir()
-		v := newTestVault(t, filepath.Join(tempDir, "data"), testAPIKey1)
+		v := newTestVault(t, filepath.Join(tempDir, "data"), testPrivateKey1)
 		defer v.Close()
 
 		plaintext := bytes.Repeat([]byte("Large data block. "), 10000)
@@ -654,7 +654,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 	t.Run("decrypt ciphertext too short", func(t *testing.T) {
 		t.Parallel()
 		tempDir := t.TempDir()
-		v := newTestVault(t, filepath.Join(tempDir, "data"), testAPIKey1)
+		v := newTestVault(t, filepath.Join(tempDir, "data"), testPrivateKey1)
 		defer v.Close()
 
 		_, err := v.Decrypt([]byte("short"))
@@ -664,7 +664,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 	t.Run("encrypt fails when locked", func(t *testing.T) {
 		t.Parallel()
 		tempDir := t.TempDir()
-		v := newTestVault(t, filepath.Join(tempDir, "data"), testAPIKey1)
+		v := newTestVault(t, filepath.Join(tempDir, "data"), testPrivateKey1)
 		defer v.Close()
 
 		v.Lock()
@@ -675,7 +675,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 	t.Run("decrypt fails when locked", func(t *testing.T) {
 		t.Parallel()
 		tempDir := t.TempDir()
-		v := newTestVault(t, filepath.Join(tempDir, "data"), testAPIKey1)
+		v := newTestVault(t, filepath.Join(tempDir, "data"), testPrivateKey1)
 		defer v.Close()
 
 		v.Lock()
@@ -689,7 +689,7 @@ func TestVaultVerifyIntegrity(t *testing.T) {
 	tempDir := t.TempDir()
 	dataDir := filepath.Join(tempDir, "data")
 
-	vault := newTestVault(t, dataDir, testAPIKey1)
+	vault := newTestVault(t, dataDir, testPrivateKey1)
 	vault.Close()
 
 	t.Run("verify with correct key", func(t *testing.T) {
@@ -697,7 +697,7 @@ func TestVaultVerifyIntegrity(t *testing.T) {
 		vault2, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
 		defer vault2.Close()
 
-		err := vault2.VerifyIntegrity(testAPIKey1)
+		err := vault2.VerifyIntegrity(testPrivateKey1)
 		assert.NoError(t, err)
 	})
 
@@ -706,7 +706,7 @@ func TestVaultVerifyIntegrity(t *testing.T) {
 		vault2, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
 		defer vault2.Close()
 
-		err := vault2.VerifyIntegrity(testAPIKey2)
+		err := vault2.VerifyIntegrity(testPrivateKey2)
 		assert.Error(t, err)
 	})
 }
@@ -718,7 +718,7 @@ func TestVaultReset(t *testing.T) {
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
-		vault := newTestVault(t, dataDir, testAPIKey1)
+		vault := newTestVault(t, dataDir, testPrivateKey1)
 
 		err := vault.Reset(false)
 		assert.Error(t, err)
@@ -730,7 +730,7 @@ func TestVaultReset(t *testing.T) {
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
-		vault := newTestVault(t, dataDir, testAPIKey1)
+		vault := newTestVault(t, dataDir, testPrivateKey1)
 
 		err := vault.Reset(true)
 		require.NoError(t, err)
@@ -745,7 +745,7 @@ func TestVaultFullLifecycle(t *testing.T) {
 	tempDir := t.TempDir()
 	dataDir := filepath.Join(tempDir, "data")
 
-	vault1 := newTestVault(t, dataDir, testAPIKey1)
+	vault1 := newTestVault(t, dataDir, testPrivateKey1)
 
 	secretData := []byte("Highly confidential information")
 	encrypted, err := vault1.Encrypt(secretData)
@@ -754,7 +754,7 @@ func TestVaultFullLifecycle(t *testing.T) {
 	vault1.Close()
 
 	vault2, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
-	err = vault2.Unlock(testAPIKey1)
+	err = vault2.Unlock(testPrivateKey1)
 	require.NoError(t, err)
 
 	decrypted, err := vault2.Decrypt(encrypted)
@@ -764,17 +764,17 @@ func TestVaultFullLifecycle(t *testing.T) {
 	vault2.Close()
 
 	vault3, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
-	err = vault3.Rekey(testAPIKey1, testAPIKey2)
+	err = vault3.Rekey(testPrivateKey1, testPrivateKey2)
 	require.NoError(t, err)
 	vault3.Close()
 
 	vault4, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
-	err = vault4.Unlock(testAPIKey1)
-	assert.ErrorIs(t, err, ErrInvalidAPIKey)
+	err = vault4.Unlock(testPrivateKey1)
+	assert.ErrorIs(t, err, ErrInvalidPrivateKey)
 	vault4.Close()
 
 	vault5, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
-	err = vault5.Unlock(testAPIKey2)
+	err = vault5.Unlock(testPrivateKey2)
 	require.NoError(t, err)
 
 	decrypted2, err := vault5.Decrypt(encrypted)
@@ -815,10 +815,10 @@ func TestVaultUnlockAlreadyOpen(t *testing.T) {
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
-		v := newTestVault(t, dataDir, testAPIKey1)
+		v := newTestVault(t, dataDir, testPrivateKey1)
 		defer v.Close()
 
-		err := v.Unlock(testAPIKey1)
+		err := v.Unlock(testPrivateKey1)
 		assert.ErrorIs(t, err, ErrVaultAlreadyOpen)
 	})
 }
@@ -830,7 +830,7 @@ func TestVaultGetDataDir(t *testing.T) {
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
-		v := newTestVault(t, dataDir, testAPIKey1)
+		v := newTestVault(t, dataDir, testPrivateKey1)
 		defer v.Close()
 
 		assert.Equal(t, dataDir, v.GetDataDir())
@@ -855,7 +855,7 @@ func TestDeleteVaultHeader(t *testing.T) {
 		t.Parallel()
 		tempDir := t.TempDir()
 
-		header, dek, err := NewVaultHeader(testAPIKey1)
+		header, dek, err := NewVaultHeader(testPrivateKey1)
 		require.NoError(t, err)
 		defer SecureZero(dek)
 
@@ -893,7 +893,7 @@ func TestVaultConcurrentAccess(t *testing.T) {
 	tempDir := t.TempDir()
 	dataDir := filepath.Join(tempDir, "data")
 
-	v := newTestVault(t, dataDir, testAPIKey1)
+	v := newTestVault(t, dataDir, testPrivateKey1)
 	defer v.Close()
 
 	var wg sync.WaitGroup

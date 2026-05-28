@@ -33,16 +33,16 @@ func testGitPath(t *testing.T) string {
 	return gitPath
 }
 
-// createTestVault creates a new unlocked Vault in the given directory using the provided API key.
+// createTestVault creates a new unlocked Vault in the given directory using the provided private key.
 // The vault header is initialized and the vault is unlocked. Cleanup closes it via t.Cleanup.
-func createTestVault(t *testing.T, dataDir string, apiKey string) *vault.Vault {
+func createTestVault(t *testing.T, dataDir string, privateKey []byte) *vault.Vault {
 	t.Helper()
 
 	require.NoError(t, os.MkdirAll(dataDir, 0700))
 
 	logger := testutil.NewTestLogger()
 
-	header, _, err := vault.NewVaultHeader(apiKey)
+	header, _, err := vault.NewVaultHeader(privateKey)
 	require.NoError(t, err)
 	require.NoError(t, header.Save(dataDir))
 
@@ -51,7 +51,7 @@ func createTestVault(t *testing.T, dataDir string, apiKey string) *vault.Vault {
 		Logger:  logger,
 	})
 	require.NoError(t, err)
-	require.NoError(t, v.Unlock(apiKey))
+	require.NoError(t, v.Unlock(privateKey))
 
 	t.Cleanup(func() { v.Close() })
 	return v

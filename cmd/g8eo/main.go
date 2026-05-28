@@ -93,7 +93,7 @@ func main() {
 		os.Exit(constants.ExitConfigError)
 	}
 
-	var apiKey string
+	var privateKey string
 	var deviceToken string
 	var endpointURL string
 	var trustBundlePath string
@@ -128,12 +128,12 @@ func main() {
 	var heartbeatInterval time.Duration
 
 	var rekeyVault bool
-	var oldAPIKey string
+	var oldPrivateKeyStr string
 	var verifyVault bool
 	var resetVault bool
 	var mcpServe bool
 	flag.BoolVar(&mcpServe, "mcp-serve", false, "Expose MCP gateway over stdio (JSON-RPC)")
-	flag.StringVar(&apiKey, "k", "", "API key")
+	flag.StringVar(&privateKey, "k", "", "Private key")
 	flag.StringVar(&deviceToken, "D", "", "Device link token for operator deployment")
 	flag.StringVar(&endpointURL, "e", "", "Endpoint (hostname or IP)")
 	flag.BoolVar(&cloudMode, "c", true, "Cloud mode")
@@ -143,7 +143,7 @@ func main() {
 	flag.BoolVar(&noGit, "G", false, "Disable git (ledger)")
 	flag.BoolVar(&showVersion, "v", false, "Version")
 	flag.IntVar(&httpPort, "http-port", constants.Ports.OperatorHttps, "HTTPS port for auth/bootstrap via operator proxy (default: from paths.json)")
-	flag.StringVar(&apiKey, "key", "", "API key")
+	flag.StringVar(&privateKey, "key", "", "Private key")
 	flag.StringVar(&deviceToken, "device-token", "", "Device link token for operator deployment")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
 	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: .g8e/pki/hub-bundle.pem or fetch from /.well-known/g8e/pki/hub-bundle.pem)")
@@ -166,8 +166,8 @@ func main() {
 	flag.StringVar(&gatewaySecretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
 	flag.StringVar(&gatewayPasskeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
 	flag.StringVar(&gatewayPasskeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
-	flag.BoolVar(&rekeyVault, "rekey-vault", false, "Re-encrypt vault with new API key (requires --old-key)")
-	flag.StringVar(&oldAPIKey, "old-key", "", "Old API key for vault re-keying")
+	flag.BoolVar(&rekeyVault, "rekey-vault", false, "Re-encrypt vault with new private key (requires --old-key)")
+	flag.StringVar(&oldPrivateKeyStr, "old-key", "", "Old private key for vault re-keying")
 	flag.BoolVar(&verifyVault, "verify-vault", false, "Verify vault integrity")
 	flag.BoolVar(&resetVault, "reset-vault", false, "Reset vault (DESTROYS ALL DATA)")
 
@@ -194,7 +194,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  setup       Initial setup and configuration\n")
 		fmt.Fprintf(os.Stderr, "  vars        Environment variable management\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
-		fmt.Fprintf(os.Stderr, "  -k, --key <key>         API key (or set G8E_OPERATOR_API_KEY)\n")
+		fmt.Fprintf(os.Stderr, "  -k, --key <key>         Private key (or set G8E_OPERATOR_PRIVATE_KEY)\n")
 		fmt.Fprintf(os.Stderr, "  -D, --device-token <tok> Device link token for operator deployment\n")
 		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running operator\n")
 		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: .g8e/pki/hub-bundle.pem or fetch from /.well-known/g8e/pki/hub-bundle.pem)\n")
@@ -246,7 +246,7 @@ func main() {
 		if workingDir != "" {
 			vaultWorkDir = workingDir
 		}
-		handleVaultCommand(rekeyVault, verifyVault, resetVault, apiKey, oldAPIKey, logLevel, vaultWorkDir)
+		handleVaultCommand(rekeyVault, verifyVault, resetVault, privateKey, oldPrivateKeyStr, logLevel, vaultWorkDir)
 		return
 	}
 
@@ -359,17 +359,9 @@ func main() {
 		}
 	}
 
-	if apiKey == "" {
-		var err error
-		apiKey, err = promptForAPIKey()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading API key: %v\n", err)
-			os.Exit(constants.ExitConfigError)
-		}
-		if apiKey == "" {
-			fmt.Fprintf(os.Stderr, "API key is required\n")
-			os.Exit(constants.ExitConfigError)
-		}
+	if privateKey == "" {
+		fmt.Fprintf(os.Stderr, "Private key is required (-k or --key)\n")
+		os.Exit(constants.ExitConfigError)
 	}
 
 	// Resolve the effective working directory: flag overrides launch dir.
@@ -379,7 +371,6 @@ func main() {
 	}
 
 	cfg, err := config.Load(config.LoadOptions{
-		APIKey:           apiKey,
 		OperatorEndpoint: operatorEndpoint,
 
 		HTTPPort:            httpPort,
@@ -779,7 +770,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 }
 
 // handleVaultCommand processes vault management CLI commands
-func handleVaultCommand(rekeyVault, verifyVault, resetVault bool, newAPIKey, oldAPIKey, logLevel, workDir string) {
+func handleVaultCommand(rekeyVault, verifyVault, resetVault bool, newPrivateKeyStr, oldPrivateKeyStr, logLevel, workDir string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid log level: %v\n", err)
@@ -803,24 +794,24 @@ func handleVaultCommand(rekeyVault, verifyVault, resetVault bool, newAPIKey, old
 
 	switch {
 	case rekeyVault:
-		handleRekeyVault(vault, oldAPIKey, newAPIKey, logger)
+		handleRekeyVault(vault, []byte(oldPrivateKeyStr), []byte(newPrivateKeyStr), logger)
 	case verifyVault:
-		handleVerifyVault(vault, newAPIKey, logger)
+		handleVerifyVault(vault, []byte(newPrivateKeyStr), logger)
 	case resetVault:
 		handleResetVault(vault, logger)
 	}
 }
 
-// handleRekeyVault re-encrypts the vault DEK with a new API key
-func handleRekeyVault(vault *vault.Vault, oldAPIKey, newAPIKey string, logger *slog.Logger) {
-	if oldAPIKey == "" {
+// handleRekeyVault re-encrypts the vault DEK with a new private key
+func handleRekeyVault(vault *vault.Vault, oldPrivateKey, newPrivateKey []byte, logger *slog.Logger) {
+	if len(oldPrivateKey) == 0 {
 		fmt.Fprintf(os.Stderr, "Error: --old-key is required for --rekey-vault\n")
 		fmt.Fprintf(os.Stderr, "Usage: g8e.operator --rekey-vault --old-key <old-key> -k <new-key>\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
-	if newAPIKey == "" {
-		fmt.Fprintf(os.Stderr, "Error: New API key is required (-k)\n")
+	if len(newPrivateKey) == 0 {
+		fmt.Fprintf(os.Stderr, "Error: New private key is required (-k)\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -831,7 +822,7 @@ func handleRekeyVault(vault *vault.Vault, oldAPIKey, newAPIKey string, logger *s
 
 	logger.Info("Re-keying vault")
 
-	if err := vault.Rekey(oldAPIKey, newAPIKey); err != nil {
+	if err := vault.Rekey(oldPrivateKey, newPrivateKey); err != nil {
 		logger.Error("Failed to rekey vault", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitGeneralError)
 	}
@@ -841,9 +832,9 @@ func handleRekeyVault(vault *vault.Vault, oldAPIKey, newAPIKey string, logger *s
 }
 
 // handleVerifyVault checks vault integrity
-func handleVerifyVault(vault *vault.Vault, apiKey string, logger *slog.Logger) {
-	if apiKey == "" {
-		fmt.Fprintf(os.Stderr, "Error: API key is required for vault verification\n")
+func handleVerifyVault(vault *vault.Vault, privateKey []byte, logger *slog.Logger) {
+	if len(privateKey) == 0 {
+		fmt.Fprintf(os.Stderr, "Error: Private key is required for vault verification\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -854,7 +845,7 @@ func handleVerifyVault(vault *vault.Vault, apiKey string, logger *slog.Logger) {
 
 	logger.Info("Verifying vault integrity")
 
-	if err := vault.VerifyIntegrity(apiKey); err != nil {
+	if err := vault.VerifyIntegrity(privateKey); err != nil {
 		logger.Error("Vault verification failed", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitGeneralError)
 	}

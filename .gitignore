@@ -88,9 +88,6 @@ target/
 
 # --- g8e Specific Binaries ---
 buf
-g8e.operator
-g8e.gateway
-g8eo
 
 # --- Build-time artifacts ---
 # Temporary build directory for docs embedding

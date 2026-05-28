@@ -71,7 +71,6 @@ func NewTestConfig(t *testing.T) *config.Config {
 		ProjectID:          "test-project",
 		ComponentName:      constants.ComponentNameG8EO,
 		Version:            "test",
-		APIKey:             "test-api-key",
 		OperatorID:         operatorID,
 		OperatorSessionId:  operatorSessionID,
 		PubSubURL:          GetTestOperatorDirectURL(),

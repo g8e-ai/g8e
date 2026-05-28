@@ -56,7 +56,7 @@ func TestHandleRekeyVault_MissingOldKey_Subprocess(t *testing.T) {
 			os.Exit(constants.ExitConfigError)
 		}
 		defer v.Close()
-		handleRekeyVault(v, "", "new-key", logger)
+		handleRekeyVault(v, []byte(""), []byte("new-key"), logger)
 		return
 	}
 
@@ -82,7 +82,7 @@ func TestHandleRekeyVault_VaultNotInitialized_Subprocess(t *testing.T) {
 			os.Exit(constants.ExitConfigError)
 		}
 		defer v.Close()
-		handleRekeyVault(v, "old-key", "new-key", logger)
+		handleRekeyVault(v, []byte("old-key"), []byte("new-key"), logger)
 		return
 	}
 
@@ -112,12 +112,12 @@ func TestHandleRekeyVault_Success_Subprocess(t *testing.T) {
 			os.Exit(constants.ExitConfigError)
 		}
 		defer v.Close()
-		handleRekeyVault(v, "old-key", "new-key", logger)
+		handleRekeyVault(v, []byte("old-key"), []byte("new-key"), logger)
 		return
 	}
 
 	dir := t.TempDir()
-	header, _, err := vaultpkg.NewVaultHeader("old-key")
+	header, _, err := vaultpkg.NewVaultHeader([]byte("old-key"))
 	require.NoError(t, err)
 	require.NoError(t, header.Save(dir))
 
@@ -143,7 +143,7 @@ func TestHandleVerifyVault_NotInitialized_Subprocess(t *testing.T) {
 			os.Exit(constants.ExitConfigError)
 		}
 		defer v.Close()
-		handleVerifyVault(v, "any-key", logger)
+		handleVerifyVault(v, []byte("any-key"), logger)
 		return
 	}
 
@@ -170,12 +170,12 @@ func TestHandleVerifyVault_ValidKey_Subprocess(t *testing.T) {
 			os.Exit(constants.ExitConfigError)
 		}
 		defer v.Close()
-		handleVerifyVault(v, "correct-key", logger)
+		handleVerifyVault(v, []byte("correct-key"), logger)
 		return
 	}
 
 	dir := t.TempDir()
-	header, _, err := vaultpkg.NewVaultHeader("correct-key")
+	header, _, err := vaultpkg.NewVaultHeader([]byte("correct-key"))
 	require.NoError(t, err)
 	require.NoError(t, header.Save(dir))
 
@@ -201,12 +201,12 @@ func TestHandleVerifyVault_WrongKey_Subprocess(t *testing.T) {
 			os.Exit(constants.ExitConfigError)
 		}
 		defer v.Close()
-		handleVerifyVault(v, "wrong-key", logger)
+		handleVerifyVault(v, []byte("wrong-key"), logger)
 		return
 	}
 
 	dir := t.TempDir()
-	header, _, err := vaultpkg.NewVaultHeader("correct-key")
+	header, _, err := vaultpkg.NewVaultHeader([]byte("correct-key"))
 	require.NoError(t, err)
 	require.NoError(t, header.Save(dir))
 
@@ -223,10 +223,10 @@ func TestHandleVerifyVault_WrongKey_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleVerifyVault - missing API key → ExitConfigError
+// handleVerifyVault - missing private key → ExitConfigError
 // ---------------------------------------------------------------------------
 
-func TestHandleVerifyVault_MissingAPIKey_Subprocess(t *testing.T) {
+func TestHandleVerifyVault_MissingPrivateKey_Subprocess(t *testing.T) {
 	if os.Getenv("G8E_TEST_VERIFY_NO_KEY") == "1" {
 		logger := testutil.NewTestLogger()
 		dir := os.Getenv(marshaler.EnvVar(constants.EnvVar.TestTmpDir))
@@ -235,7 +235,7 @@ func TestHandleVerifyVault_MissingAPIKey_Subprocess(t *testing.T) {
 			os.Exit(constants.ExitConfigError)
 		}
 		defer v.Close()
-		handleVerifyVault(v, "", logger)
+		handleVerifyVault(v, []byte(""), logger)
 		return
 	}
 
@@ -244,7 +244,7 @@ func TestHandleVerifyVault_MissingAPIKey_Subprocess(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, header.Save(dir))
 
-	cmd := exec.Command(os.Args[0], "-test.run=TestHandleVerifyVault_MissingAPIKey_Subprocess")
+	cmd := exec.Command(os.Args[0], "-test.run=TestHandleVerifyVault_MissingPrivateKey_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_VERIFY_NO_KEY=1",
 		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
@@ -532,10 +532,10 @@ func nopCloser(s string) *stringReader { return &stringReader{s: s} }
 // can find it via G8E_TEST_TMP_DIR.
 // ---------------------------------------------------------------------------
 
-func initVaultInDir(t *testing.T, dir, apiKey string) {
+func initVaultInDir(t *testing.T, dir, privateKey string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	header, _, err := vaultpkg.NewVaultHeader(apiKey)
+	header, _, err := vaultpkg.NewVaultHeader([]byte(privateKey))
 	require.NoError(t, err)
 	require.NoError(t, header.Save(dir))
 }
@@ -544,7 +544,7 @@ func TestHandleRekeyVault_Success_VaultDataVerified(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dir := t.TempDir()
 
-	header, _, err := vaultpkg.NewVaultHeader("old-key")
+	header, _, err := vaultpkg.NewVaultHeader([]byte("old-key"))
 	require.NoError(t, err)
 	require.NoError(t, header.Save(dir))
 
@@ -553,9 +553,9 @@ func TestHandleRekeyVault_Success_VaultDataVerified(t *testing.T) {
 	defer v.Close()
 
 	require.True(t, v.IsInitialized())
-	require.NoError(t, v.Rekey("old-key", "new-key"))
-	require.NoError(t, v.VerifyIntegrity("new-key"))
-	require.Error(t, v.VerifyIntegrity("old-key"))
+	require.NoError(t, v.Rekey([]byte("old-key"), []byte("new-key")))
+	require.NoError(t, v.VerifyIntegrity([]byte("new-key")))
+	require.Error(t, v.VerifyIntegrity([]byte("old-key")))
 }
 
 func TestHandleVaultCommand_DataDirResolution(t *testing.T) {
