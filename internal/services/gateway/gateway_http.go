@@ -140,10 +140,10 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 
 	// Trust Portal
 	mux.HandleFunc("/ca.crt", h.handlePKIRoot)
-	mux.HandleFunc("/trust", h.handleTrustScript)
-	mux.HandleFunc("/trust.sh", h.handleTrustScript)
-	mux.HandleFunc("/trust.ps1", h.handleTrustScriptPS1)
-	mux.HandleFunc("/trust.bat", h.handleTrustScriptBat)
+	mux.HandleFunc("/bootstrap", h.handleTrustScript)
+	mux.HandleFunc("/bootstrap-ca", h.handleTrustScript)
+	mux.HandleFunc("/bootstrap-ca.ps1", h.handleTrustScriptPS1)
+	mux.HandleFunc("/bootstrap-ca.bat", h.handleTrustScriptBat)
 	mux.HandleFunc("/deploy", h.handleDeploy)
 
 	// Documentation endpoint (embedded docs)
@@ -433,8 +433,8 @@ func (h *HTTPHandler) handleLandingPage(w http.ResponseWriter, r *http.Request) 
 
         <div class="section">
             <div class="label">Trust & Security</div>
-            <p>To use this operator from your browser or as a BYO client, you must first trust the platform's root certificate. If you see a "Not Secure" warning, please run the trust script:</p>
-            <code>curl -fsSL http://%s:%d/trust | sudo sh</code>
+            <p>To use this operator from your browser or as a BYO client, you must first install the platform's root certificate. If you see a "Not Secure" warning, please run the bootstrap script:</p>
+            <code>curl -fsSL http://%s:%d/bootstrap | sudo sh</code>
             <p><small>(Note: Use the bootstrap port %d for initial trust setup over plain HTTP)</small></p>
         </div>
 

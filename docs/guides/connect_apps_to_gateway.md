@@ -407,16 +407,16 @@ Response:
 }
 ```
 
-### Trust Scripts
+### Bootstrap Scripts
 
-The Gateway provides platform-specific trust scripts:
+The Gateway provides platform-specific bootstrap scripts:
 
 ```bash
 # Unix/Linux
-curl -fsSL http://localhost:8441/trust | sudo sh
+curl -fsSL http://localhost:8441/bootstrap-ca | sudo sh
 
 # Windows PowerShell
-curl -fsSL http://localhost:8441/trust.ps1 | powershell
+curl -fsSL http://localhost:8441/bootstrap-ca.ps1 | powershell
 ```
 
 ### CSR Signing

@@ -173,7 +173,7 @@ _log() { printf "[g8e] %s\n" "$*"; }
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "ERROR: This script must run as root (sudo)."
-    echo "Usage: curl -fsSL http://${HOST}{{.PortSuffix}}/trust | sudo sh"
+    echo "Usage: curl -fsSL http://${HOST}{{.PortSuffix}}/bootstrap-ca | sudo sh"
     exit 1
 fi
 

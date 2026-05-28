@@ -152,7 +152,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 - **SPIFFE URI SAN:** Refactored SPIFFE URI SAN logic to strengthen mTLS and workload identity.
 
 ### Changed
-- **CLI & UX Improvements:** Improved login UX, operator-side UX, and trust script stability. Enhanced build output for Mac and Linux.
+- **CLI & UX Improvements:** Improved login UX, operator-side UX, and bootstrap script stability. Enhanced build output for Mac and Linux.
 - **Protocol Refinement:** Ripped out legacy protobuf definitions, refined boundary structures, and decoupled operator auth from the app layer.
 - **Session Isolation:** Improved session typing and untangled CLI chat sessions to better separate the Gateway and app layer.
 - **Code Quality & Linting:** Comprehensive code quality passes including Go critic/lint fixes, Ruff, and Pyright typing improvements.

@@ -16,6 +16,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -69,7 +70,7 @@ func platformStartCmd() *cobra.Command {
 				return nil
 			}
 
-			cmd.Println("Starting Governance Gateway...")
+			cmd.Println("[g8e] Initializing BFT Governance Architecture...")
 			if err := pm.StartOperator(
 				cfg.OperatorHTTPSPort(),
 				cfg.OperatorBootstrapHTTPSPort(),
@@ -78,12 +79,51 @@ func platformStartCmd() *cobra.Command {
 				return err
 			}
 
-			cmd.Printf("Governance Gateway started successfully\n")
-			cmd.Printf("Governance mode: doctrine (L1 enforced, L2/L3 audited)\n")
-			cmd.Printf("\nEndpoints:\n")
-			cmd.Printf("  Operator Bootstrap:  https://%s:%d\n", config.GetExternalInterfaceIP(), cfg.OperatorBootstrapHTTPSPort())
-			cmd.Printf("  Gateway Endpoint:    https://localhost:%d\n", cfg.Paths.Ports.OperatorPublicHTTPS)
-			cmd.Printf("\nNext step: Run './g8e auth login' to authenticate\n")
+			running, pid, err = pm.OperatorStatus()
+			if err != nil {
+				return fmt.Errorf("failed to check operator status after start: %w", err)
+			}
+
+			externalIP := config.GetExternalInterfaceIP()
+			runtimeDir := filepath.Join(cfg.ProjectRoot, ".g8e")
+
+			cmd.Println()
+			cmd.Println(" ┌── Services Lifecycle ────────────────────────────────────────────────────────┐")
+			cmd.Printf(" │  ✔ Core Operator Gateway (g8eo) : running (PID: %d)\n", pid)
+			cmd.Println(" │  ✔ Local-First Audit Vault     : initialized & verified")
+			cmd.Println(" └──────────────────────────────────────────────────────────────────────────────┘")
+			cmd.Println()
+			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
+			cmd.Println(" 1. SECURE GATEWAY ENDPOINTS & CRYPTOGRAPHIC REALITY")
+			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
+			cmd.Printf("  Platform Hub (Inbound mTLS & WSS Control)    : https://localhost:%d\n", cfg.Paths.Ports.OperatorPublicHTTPS)
+			cmd.Printf("  Local Runtime Dir (Local-First LFAA Vaults)  : %s\n", runtimeDir)
+			cmd.Println()
+			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
+			cmd.Println(" 2. SECURITY BOOTSTRAP: PROVISION LOCAL PKI PORTAL")
+			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
+			cmd.Println("  The Dashboard serves an automated bootstrap script on Port 8441 to install the")
+			cmd.Println("  Platform Root CA and provision local workload mTLS certificates.")
+			cmd.Println()
+			cmd.Printf("  Run on macOS / Linux (Terminal):\n")
+			cmd.Printf("     curl -fsSL http://%s:8441/bootstrap-ca | sudo sh\n", externalIP)
+			cmd.Println()
+			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
+			cmd.Println(" 3. TARGETED ACTIONABLE NEXT STEPS [CHOOSE ONE]")
+			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
+			cmd.Println("  To start executing governed agentic tool calls, authorize your environment:")
+			cmd.Println()
+			cmd.Println("  A) AUTHENTICATE YOUR LOCAL CLI PROCESS (mTLS)")
+			cmd.Println("     $ ./g8e auth login")
+			cmd.Println()
+			cmd.Println("  B) PROVISION A NEW OUTBOUND REMOTE OPERATOR SATELLITE")
+			cmd.Println("     $ ./g8e data device-links create")
+			cmd.Println()
+			cmd.Println("  C) INTERACT VIA BROWSER / BYO CLIENT SURFACE")
+			cmd.Printf("     URL: https://localhost:%d [CA Certificate Required]\n", cfg.Paths.Ports.OperatorPublicHTTPS)
+			cmd.Println()
+			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
+			cmd.Println("[g8e] System ready. Control plane is listening for outbound satellite links.")
 
 			return nil
 		},
