@@ -524,7 +524,12 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 				tlsMode = "auto-TLS"
 			} else {
 				lnToServe = tls.NewListener(ln, s.TLSConfig)
-				tlsMode = "mTLS"
+				// Distinguish between mTLS (requires client cert) and plain TLS (no client cert)
+				if s.TLSConfig.ClientAuth == tls.RequireAndVerifyClientCert {
+					tlsMode = "mTLS"
+				} else {
+					tlsMode = "TLS"
+				}
 			}
 		}
 
