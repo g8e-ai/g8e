@@ -33,7 +33,7 @@ g8e tests run directly on the host using real infrastructure. The test environme
 ./g8e test scenario   # Scenario integration tests
 ```
 
-Validates the Operator and protocol enforcement (`GovernanceEnvelope`, 3-layer governance, Audit Vault). Tests cover pub/sub command dispatch, L1/L2/L3 verification, transaction replay protection, state root validation, and audit vault integrity.
+Validates the Operator and protocol enforcement (`GovernanceEnvelope`, 5-layer governance, Audit Vault). Tests cover pub/sub command dispatch, L1/L2/L3/L4/L5 verification, transaction replay protection, state root validation, and audit vault integrity.
 
 ### Scenario Tests
 
@@ -42,7 +42,7 @@ Validates the Operator and protocol enforcement (`GovernanceEnvelope`, 3-layer g
 ./g8e test scenario --run forge_signature
 ```
 
-Integration tests exercising end-to-end governance workflows across doctrine, consensus, and notary modes. Tests cover Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) verification, transaction replay protection, state root validation, and receipt verification. Requires the Operator to be running.
+Integration tests exercising end-to-end governance workflows across doctrine, consensus, and notary modes. Tests cover the 5-layer verification sequence (L1-L5), transaction replay protection, state root validation, and receipt verification. Requires the Operator to be running.
 
 **Test Types**:
 - **Table-driven scenarios** - JSON fixtures in `test/scenario/fixtures/` covering security gates (bad integrity, hash mismatch, replay, stale state root, L2/L3 validation) and finance workflows
@@ -117,7 +117,7 @@ Defaults from `protocol/constants/ports.json` (canonical source of truth):
 
 - `8440` - Operator mTLS API and Pub/Sub
 - `8441` - Operator Bootstrap (plain HTTP; device-link enrollment)
-- `8442` - Operator Public TLS (browser/BYO bootstrap)
+- `8443` - Operator Public TLS (browser/BYO bootstrap)
 - `8443` - g8ee HTTPS (optional application-layer Engine)
 - `18789` - Insecure MCP Gateway
 

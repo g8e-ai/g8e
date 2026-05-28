@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -177,95 +176,6 @@ func TestNewSecureHTTPClient_InvalidPEM(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DownloadCA
-// ---------------------------------------------------------------------------
-
-func TestDownloadCA_Success(t *testing.T) {
-	t.Parallel()
-	testCA := "-----BEGIN CERTIFICATE-----\ntest-ca-data\n-----END CERTIFICATE-----"
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/.well-known/g8e/pki/root.pem", r.URL.Path)
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(testCA))
-	}))
-	defer server.Close()
-
-	tmpDir := t.TempDir()
-	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
-		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
-		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
-	}
-
-	// Override discovery URL to point to test server by setting the port directly
-	cfg.Paths.Ports.OperatorBootstrapHTTPS = extractPortFromURL(server.URL)
-
-	caPEM, err := DownloadCA(cfg)
-	require.NoError(t, err)
-	assert.Equal(t, testCA, string(caPEM))
-}
-
-func TestDownloadCA_HTTPError(t *testing.T) {
-	t.Parallel()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer server.Close()
-
-	tmpDir := t.TempDir()
-	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
-		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
-		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
-	}
-	cfg.Paths.Ports.OperatorBootstrapHTTPS = extractPortFromURL(server.URL)
-
-	caPEM, err := DownloadCA(cfg)
-	require.Error(t, err)
-	assert.Nil(t, caPEM)
-	assert.Contains(t, err.Error(), "CA download failed with status 404")
-}
-
-func TestDownloadCA_NetworkError(t *testing.T) {
-	t.Parallel()
-	tmpDir := t.TempDir()
-	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
-		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
-		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
-	}
-	// For network error test, we'll use a non-existent URL directly in the function
-	// by setting a port that won't respond
-	cfg.Paths.Ports.OperatorBootstrapHTTPS = 99999
-
-	caPEM, err := DownloadCA(cfg)
-	require.Error(t, err)
-	assert.Nil(t, caPEM)
-}
-
-// ---------------------------------------------------------------------------
-// RequestDeviceLink
-// ---------------------------------------------------------------------------
-// Note: RequestDeviceLink and RegisterDeviceLink use NewSecureHTTPClient internally
-// which requires TLS. These functions are tested via integration/e2e tests with a real Operator.
-
-// ---------------------------------------------------------------------------
-// RegisterDeviceLink
-// ---------------------------------------------------------------------------
-// Note: RegisterDeviceLink uses NewSecureHTTPClient internally which requires TLS.
-// This function is tested via integration/e2e tests with a real Operator.
-
-// ---------------------------------------------------------------------------
 // Bootstrap
 // ---------------------------------------------------------------------------
 // Note: Bootstrap has complex CA download logic that is difficult to test with httptest.
@@ -372,8 +282,8 @@ func TestDeleteCredentials_Success(t *testing.T) {
 	require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), []byte("cli-key"), 0600))
 	require.NoError(t, os.WriteFile(cfg.OperatorCertFile(), []byte("op-cert"), 0600))
 	require.NoError(t, os.WriteFile(cfg.OperatorKeyFile(), []byte("op-key"), 0600))
-	hubBundle := filepath.Join(cfg.CredentialsDir, "hub-bundle.pem")
-	require.NoError(t, os.WriteFile(hubBundle, []byte("hub-bundle"), 0600))
+	hubBundle := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
+	require.NoError(t, os.WriteFile(hubBundle, []byte("g8e-gw-ca-bundle"), 0600))
 
 	err := DeleteCredentials(cfg)
 	require.NoError(t, err)

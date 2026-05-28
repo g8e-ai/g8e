@@ -1160,10 +1160,6 @@ func (s *GatewayDBService) SSEEventsCount() (int64, error) {
 	return count, err
 }
 
-// SSEEventRow is a single row from the sse_events table. Exactly one of the
-// three routing id fields will be populated per row.
-// Deprecated: use models.SSEEventRow
-
 // SSEEventsListSince returns up to `limit` events with id > sinceID, ordered by
 // id ascending. The route MUST set exactly one of WebSessionID, CLISessionID,
 // UserID. SSEEventsListAllSince is the admin-only "all routes" variant.

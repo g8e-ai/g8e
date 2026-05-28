@@ -4,7 +4,7 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-05-25
+Last Updated: 2026-05-28
 Version: v1.0.0
 
 Core terminology for the g8e protocol, Governance Gateway, Governed Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
@@ -17,9 +17,9 @@ A Google protocol for agent-to-agent communication and orchestration. g8e suppor
 
 ---
 
-## Actuator
+## Actuator (L5Actuator)
 
-The L5 execution boundary in the Governed Operator that performs actual command execution after L4 Warden verification. The Actuator enforces the **Two-Strike Circuit Breaker** for risk classification:
+The **L5Actuator** is the execution boundary in the Governed Operator that performs actual command execution after L4 Warden verification. It is the only component permitted to mutate host state. The Actuator enforces the **Two-Strike Circuit Breaker** for risk classification:
 - **Strike 1**: If a command is classified as HIGH risk, the Actuator blocks execution and provides contextual feedback.
 - **Strike 2**: If a second HIGH risk command is proposed in the same turn, the Actuator halts the pipeline requiring human intervention.
 Successful command execution resets the strike counter.
@@ -59,13 +59,13 @@ The central, BFT-governed Policy Decision Point (PDP) running in Gateway mode (-
 
 ## Governed Operator (g8eo)
 
-The host-resident execution agent and Policy Execution Point (PEP). Built as the `g8e` binary from the Go codebase. Running on target hosts, `g8eo` connects outbound-only over mTLS to `g8eg`. It exposes host tools as a Model Context Protocol (MCP) Server, verifies incoming GovernanceEnvelope transactions against local L1/L2/L3 gates via the L4 Warden, executes actions strictly through the L5 Actuator boundary, and records tamper-evident local audit logs (Audit Vault, Scrubbed Vault, and git-backed session ledgers).
+The host-resident execution agent and Policy Execution Point (PEP). Built as the `g8e` binary from the Go codebase. Running on target hosts, `g8eo` connects outbound-only over mTLS to `g8eg`. It exposes host tools as a Model Context Protocol (MCP) Server, verifies incoming GovernanceEnvelope transactions against local L1/L2/L3/L4 gates, executes actions strictly through the L5 Actuator boundary, and records tamper-evident local audit logs (Audit Vault, Scrubbed Vault, and git-backed session ledgers).
 
 ---
 
 ## g8e Protocol
 
-The core substrate protocol defining how mutations flow through the g8e governance system. A typed, signed, state-bound transaction reaches a sovereign host agent that distrusts upstream inputs and refuses to mutate reality unless every independent proof checks out. The protocol uses canonical JSON (protojson) GovernanceEnvelope on the wire, with L1/L2/L3 governance metadata, state binding, replay protection, and cryptographic signing.
+The core substrate protocol defining how mutations flow through the g8e governance system. A typed, signed, state-bound transaction reaches a sovereign host agent that distrusts upstream inputs and refuses to mutate reality unless every independent proof checks out. The protocol uses canonical JSON (protojson) GovernanceEnvelope on the wire, with L1-L5 governance metadata, state binding, replay protection, and cryptographic signing.
 
 ---
 
@@ -75,45 +75,39 @@ A periodic health telemetry message sent by the Governed Operator to the Gateway
 
 ---
 
-## L1 Technical Bedrock (Doctrine)
+## L1 Doctrine (L1Doctrine)
 
-The first and foundational layer of g8e governance. It implements hard-coded technical gates enforced via protobuf field options:
+The foundational layer of g8e governance (Technical Bedrock). It implements hard-coded technical gates enforced via protobuf field options and real-time heuristics:
 - **Forbidden Patterns**: Regex patterns on string fields (e.g., blocking `sudo`, `su`, `rm -rf /`)
-- **MITRE-based threat detection**: Command and MCP argument analysis against ATT&CK indicators
-L1 is foundationally active for every command, regardless of L2 consensus or L3 approval status. Implemented in `L1Doctrine` within the L4 Warden verification flow.
+- **Threat Detection**: Command and MCP argument analysis against MITRE ATT&CK indicators
+L1 is foundationally active for every command and cannot be bypassed.
 
 ---
 
-## L2 Consensus
+## L2 Consensus (L2Consensus)
 
-The second layer of g8e governance. A multi-agent consensus system that produces and votes on command candidates. L2 ensures every command executed is the result of a rigorous consensus process backed by a single L2 Ed25519 signature over the transaction hash, rather than a single model's output. The signature is verified in the L4 Warden. Consensus implementations are application-layer concerns, not protocol requirements.
-
----
-
-## L3 Authorization (Notary)
-
-The third layer of g8e governance, focusing on human oversight. By default, every state-changing command requires explicit user authorization via WebAuthn (passkey) proof. Benign diagnostic commands may be covered by auto-approval policies, but L3 never bypasses the safety requirements of L1 or L2. The L3 proof is verified in the L4 Warden.
+The second layer of g8e governance (Consensus). A multi-agent consensus system that produces and votes on command candidates. L2 ensures every command executed is the result of a rigorous consensus process backed by a single L2 Ed25519 signature over the transaction hash, rather than a single model's output. The signature is verified in the L4 Warden. Consensus implementations are application-layer concerns, not protocol requirements.
 
 ---
 
-## L4 Warden
+## L3 Notary (L3Notary)
+
+The third layer of g8e governance (Authorization), focusing on human oversight. By default, every state-changing command requires explicit user authorization via WebAuthn (passkey) proof or mTLS certificate fingerprint. Benign diagnostic commands may be covered by auto-approval policies, but L3 never bypasses the safety requirements of L1 or L2.
+
+---
+
+## L4 Warden (L4Warden)
 
 The fail-closed transaction verification gate in the Governed Operator that enforces L1/L2/L3 governance before any execution. The Warden performs:
 - Envelope integrity and decoding validation
 - Typed payload validation and action type matching
 - L1 forbidden pattern validation via L1Doctrine
-- Transaction hash verification
+- Transaction hash verification (`id == transaction_hash`)
 - Freshness (expiry) and replay protection (nonce)
 - State root matching
 - L2 signature verification (when required by posture)
-- L3 WebAuthn proof verification (when required by posture)
+- L3 Notary proof verification (when required by posture)
 The Warden rejects transactions that fail any check; only verified transactions proceed to the L5 Actuator for execution.
-
----
-
-## L5 Actuator
-
-The execution boundary in the Governed Operator that performs actual command execution after L4 Warden verification. The Actuator enforces risk classification and the Two-Strike Circuit Breaker. It is the only component that mutates host state.
 
 ---
 
@@ -143,13 +137,13 @@ A cryptographic artifact produced during L2 Consensus verification. It is a SHA-
 
 ## Mutual TLS (mTLS)
 
-Two-way TLS authentication where both client and server verify each other's certificates. Used between Governed Operators and the Governance Gateway to ensure binary authenticity and prevent forged connections. The Gateway operates as a Certificate Authority (CA) issuing operator certificates.
+Two-way TLS authentication where both client and server verify each other's certificates. Used between Governed Operators and the Governance Gateway to ensure binary authenticity and prevent forged connections. The Gateway operates as a Certificate Authority (CA) issuing operator certificates with SPIFFE URI SAN identity.
 
 ---
 
 ## Operator
 
-The compiled Go codebase which generates the `g8e` binary. The term also refers to the Governed Operator (g8eo) role when running on target hosts as the PEP. Operator command/result traffic follows the g8e protocol: canonical JSON GovernanceEnvelope carries typed `operator.proto` payloads and L1/L2/L3 governance metadata over the pub/sub transport.
+The compiled Go codebase which generates the `g8e` binary. The term also refers to the Governed Operator (g8eo) role when running on target hosts as the PEP. Operator command/result traffic follows the g8e protocol: canonical JSON GovernanceEnvelope carries typed `operator.proto` payloads and L1-L5 governance metadata over the pub/sub transport.
 
 ---
 
@@ -179,13 +173,13 @@ The mechanism by which L2 Consensus agents earn or lose standing based on the qu
 
 ## Scrubbed Vault
 
-The local SQLite database on the Governed Operator that stores Sentinel-processed command output and file diffs. Sensitive data (credentials, PII, network identifiers) is replaced with safe placeholders like `[IP_ADDR]`, `[AWS_KEY]`, `[EMAIL]`. AI clients read from this vault rather than raw output.
+The local SQLite database on the Governed Operator that stores output processed by the **Sovereignty Boundary Plane**. Sensitive data (credentials, PII, network identifiers) is replaced with safe placeholders like `{{UEI_N}}`. AI clients read from this vault rather than raw output.
 
 ---
 
-## Sentinel
+## Sovereignty Boundary Plane
 
-The data sovereignty and threat detection system running within the Governed Operator. Sentinel provides pre-execution protection (MITRE ATT&CK-mapped threat detectors) and egress data scrubbing to ensure sensitive information never leaves the host. Scrubbing patterns cover credentials, PII, network identifiers, and cloud resources. Sentinel also includes indirect prompt injection defense to detect command output attempting to manipulate AI behavior.
+The data sovereignty and scrubbing system running within the Governed Operator (PEP). It provides egress data scrubbing to ensure sensitive information never leaves the host. Scrubbing patterns cover credentials, PII, network identifiers, and cloud resources. It also performs local rehydration of tokens just before execution at the L5 Actuator.
 
 ---
 

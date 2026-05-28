@@ -58,7 +58,7 @@ import (
 //
 // Skip conditions:
 //   - Operator not reachable at $OPERATOR_URL (default from paths.json)
-//   - Trust bundle not present at $G8E_PKI_DIR_HOST/trust/hub-bundle.pem
+//   - Trust bundle not present at $G8E_PKI_DIR_HOST/trust/g8e-gw-ca-bundle.pem
 //   - Platform already bootstrapped (403) and no rotation context available
 func TestNativeRealOperator_EndToEnd(t *testing.T) {
 	operatorURL := os.Getenv("OPERATOR_URL")
@@ -86,7 +86,7 @@ func TestNativeRealOperator_EndToEnd(t *testing.T) {
 		pkiDir = override
 	}
 
-	trustBundlePath := filepath.Join(pkiDir, "trust", "hub-bundle.pem")
+	trustBundlePath := filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
 	trustPEM, err := os.ReadFile(trustBundlePath)
 	if err != nil {
 		t.Skipf("Trust bundle not found at %s: %v. Run './g8e platform clean && ./g8e platform start'.", trustBundlePath, err)

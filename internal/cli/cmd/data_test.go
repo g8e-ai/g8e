@@ -52,158 +52,6 @@ func TestDataOperatorsCmd(t *testing.T) {
 	})
 }
 
-func TestDataDeviceLinksCmd(t *testing.T) {
-	t.Run("device-links command has correct use", func(t *testing.T) {
-		cmd := dataDeviceLinksCmd()
-		assert.Equal(t, "device-links", cmd.Use)
-		assert.Contains(t, cmd.Short, "Manage device-link tokens")
-	})
-
-	t.Run("device-links has expected subcommands", func(t *testing.T) {
-		cmd := dataDeviceLinksCmd()
-		expectedSubcommands := []string{"list", "create", "delete"}
-
-		for _, subcmd := range expectedSubcommands {
-			found := false
-			for _, c := range cmd.Commands() {
-				if c.Name() == subcmd {
-					found = true
-					break
-				}
-			}
-			assert.True(t, found, "device-links should have %s subcommand", subcmd)
-		}
-	})
-}
-
-func TestDataDeviceLinksListCmd(t *testing.T) {
-	t.Run("list command has correct use", func(t *testing.T) {
-		cmd := dataDeviceLinksListCmd()
-		assert.Equal(t, "list", cmd.Use)
-		assert.Contains(t, cmd.Short, "List device-link tokens")
-	})
-
-	t.Run("list has user-id flag", func(t *testing.T) {
-		cmd := dataDeviceLinksListCmd()
-		flag := cmd.Flags().Lookup("user-id")
-		assert.NotNil(t, flag)
-	})
-
-	t.Run("list fails without user-id", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
-
-		// Clean up any existing credentials file in the real ~/.g8e directory
-		// to avoid test pollution from previous runs
-		homeDir, err := os.UserHomeDir()
-		require.NoError(t, err)
-		realCredsFile := filepath.Join(homeDir, ".g8e", "credentials")
-		os.Remove(realCredsFile)
-
-		cmd := dataDeviceLinksListCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err = cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not authenticated")
-	})
-}
-
-func TestDataDeviceLinksCreateCmd(t *testing.T) {
-	t.Run("create command has correct use", func(t *testing.T) {
-		cmd := dataDeviceLinksCreateCmd()
-		assert.Equal(t, "create", cmd.Use)
-		assert.Contains(t, cmd.Short, "Create a device-link token")
-	})
-
-	t.Run("create has user-id flag", func(t *testing.T) {
-		cmd := dataDeviceLinksCreateCmd()
-		flag := cmd.Flags().Lookup("user-id")
-		assert.NotNil(t, flag)
-	})
-
-	t.Run("create has count flag", func(t *testing.T) {
-		cmd := dataDeviceLinksCreateCmd()
-		flag := cmd.Flags().Lookup("count")
-		assert.NotNil(t, flag)
-	})
-
-	t.Run("create has ttl flag", func(t *testing.T) {
-		cmd := dataDeviceLinksCreateCmd()
-		flag := cmd.Flags().Lookup("ttl")
-		assert.NotNil(t, flag)
-	})
-
-	t.Run("create fails without user-id", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
-
-		cmd := dataDeviceLinksCreateCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-	})
-}
-
-func TestDataDeviceLinksDeleteCmd(t *testing.T) {
-	t.Run("delete command has correct use", func(t *testing.T) {
-		cmd := dataDeviceLinksDeleteCmd()
-		assert.Equal(t, "delete", cmd.Use)
-		assert.Contains(t, cmd.Short, "Delete a device-link token")
-	})
-
-	t.Run("delete has token flag", func(t *testing.T) {
-		cmd := dataDeviceLinksDeleteCmd()
-		flag := cmd.Flags().Lookup("token")
-		assert.NotNil(t, flag)
-	})
-
-	t.Run("delete has user-id flag", func(t *testing.T) {
-		cmd := dataDeviceLinksDeleteCmd()
-		flag := cmd.Flags().Lookup("user-id")
-		assert.NotNil(t, flag)
-	})
-
-	t.Run("delete fails without user-id when env not set", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
-
-		// Clean up any existing credentials file in the real ~/.g8e directory
-		// to avoid test pollution from previous runs
-		homeDir, err := os.UserHomeDir()
-		require.NoError(t, err)
-		realCredsFile := filepath.Join(homeDir, ".g8e", "credentials")
-		os.Remove(realCredsFile)
-
-		cmd := dataDeviceLinksDeleteCmd()
-		cmd.Flags().Set("token", "test-token")
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		err = cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not authenticated")
-	})
-}
-
 func TestDataSettingsCmd(t *testing.T) {
 	t.Run("settings command has correct use", func(t *testing.T) {
 		cmd := dataSettingsCmd()
@@ -261,9 +109,6 @@ func TestDataCommandsRequireAuthentication(t *testing.T) {
 	}{
 		{"users", dataUsersCmd},
 		{"operators", dataOperatorsCmd},
-		{"device-links list", dataDeviceLinksListCmd},
-		{"device-links create", dataDeviceLinksCreateCmd},
-		{"device-links delete", dataDeviceLinksDeleteCmd},
 		{"settings", dataSettingsCmd},
 		{"store", dataStoreCmd},
 		{"audit list", dataAuditListCmd},
@@ -292,20 +137,6 @@ func TestDataCommandsRequireAuthentication(t *testing.T) {
 }
 
 func TestDataCommandFlags(t *testing.T) {
-	t.Run("device-links create count flag has default", func(t *testing.T) {
-		cmd := dataDeviceLinksCreateCmd()
-		countFlag := cmd.Flags().Lookup("count")
-		assert.NotNil(t, countFlag)
-		assert.Equal(t, "1", countFlag.DefValue)
-	})
-
-	t.Run("device-links create ttl flag has default", func(t *testing.T) {
-		cmd := dataDeviceLinksCreateCmd()
-		ttlFlag := cmd.Flags().Lookup("ttl")
-		assert.NotNil(t, ttlFlag)
-		assert.Equal(t, "3600", ttlFlag.DefValue)
-	})
-
 	t.Run("audit limit flag has default", func(t *testing.T) {
 		cmd := dataAuditListCmd()
 		limitFlag := cmd.Flags().Lookup("limit")
@@ -345,10 +176,10 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 			"ssh_config_path": ".g8e/ssh/config"
 		},
 		"ports": {
-			"insecure_mcp_gateway": 9003,
-			"operator_bootstrap_https": 9001,
-			"operator_https": 9000,
-			"operator_public_https": 9002
+			"insecure_mcp_gateway": 18789,
+			"operator_bootstrap_https": 8441,
+			"operator_https": 8440,
+			"operator_public_https": 8443
 		}
 	}`
 	pathsPath := filepath.Join(constantsDir, "paths.json")
@@ -392,10 +223,11 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 				OperatorHTTPS          int `json:"operator_https"`
 				OperatorPublicHTTPS    int `json:"operator_public_https"`
 			}{
-				InsecureMcpGateway:     9003,
-				OperatorBootstrapHTTPS: 9001,
-				OperatorHTTPS:          9000,
-				OperatorPublicHTTPS:    9002,
+				G8eeHTTPS:              8443,
+				InsecureMcpGateway:     18789,
+				OperatorBootstrapHTTPS: 8441,
+				OperatorHTTPS:          8440,
+				OperatorPublicHTTPS:    8443,
 			},
 		},
 	}

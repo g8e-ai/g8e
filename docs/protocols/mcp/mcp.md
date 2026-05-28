@@ -6,7 +6,7 @@ title: MCP Protocol
 
 Last Updated: 2026-05-25
 
-The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 3-layer BFT verification gauntlet (L1Doctrine/L2Consensus/L3Notary), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
+The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 3-layer BFT verification sequence (L1Doctrine/L2Consensus/L3Notary), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
 ---
 
@@ -233,8 +233,8 @@ Default ports (configurable via flags or paths.json):
 | Port | Purpose | Auth |
 |---|---|---|
 | `8441` | Bootstrap enrollment | TLS (no client cert) |
-| `8442` | Public web session | TLS (no client cert) |
-| `9000-9003` | Operator mTLS API + Pub/Sub | mTLS (RequireAndVerifyClientCert) |
+| `8443` | Public web session | TLS (no client cert) |
+| `8440-8443`, `18789` | Operator mTLS API + Pub/Sub | mTLS (RequireAndVerifyClientCert) |
 
 ### Environment Variables
 

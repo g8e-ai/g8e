@@ -9,7 +9,7 @@
   "host": "localhost",
   "infra": {
     "app_cert_dir": ".g8e/pki/issued/apps",
-    "ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
+    "ca_cert_path": ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
     "db_path": ".g8e/data/g8e.db",
     "docs_dir": ".g8e/docs",
     "pki_dir": ".g8e/pki",
@@ -24,6 +24,6 @@
     "insecure_mcp_gateway": 18789,
     "operator_bootstrap_https": 8441,
     "operator_https": 8440,
-    "operator_public_https": 8442
+    "operator_public_https": 8443
   }
 }

@@ -109,7 +109,7 @@ func TestLoginCmd(t *testing.T) {
 			"host": "localhost",
 			"infra": {
 				"app_cert_dir": ".g8e/pki/app",
-				"ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
+				"ca_cert_path": ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
 				"db_path": ".g8e/data/operator.db",
 				"docs_dir": "docs",
 				"pki_dir": ".g8e/pki",
@@ -120,10 +120,10 @@ func TestLoginCmd(t *testing.T) {
 				"ssh_config_path": ".g8e/ssh/config"
 			},
 			"ports": {
-				"insecure_mcp_gateway": 9003,
-				"operator_bootstrap_https": 9001,
-				"operator_https": 9000,
-				"operator_public_https": 9002
+				"insecure_mcp_gateway": 18789,
+				"operator_bootstrap_https": 8441,
+				"operator_https": 8440,
+				"operator_public_https": 8443
 			}
 		}`
 		pathsPath := filepath.Join(constantsDir, "paths.json")
@@ -178,7 +178,7 @@ func TestLogoutCmd(t *testing.T) {
 			"host": "localhost",
 			"infra": {
 				"app_cert_dir": ".g8e/pki/app",
-				"ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
+				"ca_cert_path": ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
 				"db_path": ".g8e/data/operator.db",
 				"docs_dir": "docs",
 				"pki_dir": ".g8e/pki",
@@ -189,10 +189,10 @@ func TestLogoutCmd(t *testing.T) {
 				"ssh_config_path": ".g8e/ssh/config"
 			},
 			"ports": {
-				"insecure_mcp_gateway": 9003,
-				"operator_bootstrap_https": 9001,
-				"operator_https": 9000,
-				"operator_public_https": 9002
+				"insecure_mcp_gateway": 18789,
+				"operator_bootstrap_https": 8441,
+				"operator_https": 8440,
+				"operator_public_https": 8443
 			}
 		}`
 		pathsPath := filepath.Join(constantsDir, "paths.json")
@@ -294,7 +294,7 @@ func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
 	require.NoError(t, os.MkdirAll(credentialsDir, 0700))
 
 	// Create trust bundle
-	trustBundlePath := filepath.Join(pkiDir, "trust", "hub-bundle.pem")
+	trustBundlePath := filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
 	require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
 	require.NoError(t, os.WriteFile(trustBundlePath, []byte("dummy-trust-bundle"), 0644))
 
@@ -318,10 +318,10 @@ func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
 			"ssh_config_path": ".g8e/ssh/config"
 		},
 		"ports": {
-			"insecure_mcp_gateway": 9003,
-			"operator_bootstrap_https": 9001,
-			"operator_https": 9000,
-			"operator_public_https": 9002
+			"insecure_mcp_gateway": 18789,
+			"operator_bootstrap_https": 8441,
+			"operator_https": 8440,
+			"operator_public_https": 8443
 		}
 	}`
 	pathsPath := filepath.Join(constantsDir, "paths.json")

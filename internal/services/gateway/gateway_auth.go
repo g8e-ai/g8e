@@ -190,7 +190,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 
 		// [PIVOT] MCP & A2A gateways handle their own authentication since they support standard clients
 		// When JWKS is configured, they use JWTAuthMiddleware which requires an invitation for JIT provisioning
-		// When JWKS is not configured, they require mTLS which requires device-link enrollment
+		// When JWKS is not configured, they require mTLS via CSR-based enrollment
 		if strings.HasPrefix(r.URL.Path, "/api/mcp/") || strings.HasPrefix(r.URL.Path, "/api/a2a/") || strings.HasPrefix(r.URL.Path, "/api/approve/") {
 			next.ServeHTTP(w, r)
 			return
@@ -202,41 +202,11 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		// It MUST be accessible without an internal token as it is the first step
 		// of the trust bootstrap.
 		if r.URL.Path == "/api/pki/sign-csr" ||
-			r.URL.Path == "/api/auth/device-link/register" ||
-			r.URL.Path == "/api/auth/device-link/request" ||
+			r.URL.Path == "/api/pki/device-enroll" ||
 			r.URL.Path == "/api/auth/bootstrap" ||
 			r.URL.Path == "/api/auth/bootstrap/status" {
 			next.ServeHTTP(w, r)
 			return
-		}
-
-		// Blob endpoint: allow device-link token authentication for bootstrap
-		// Devices use device-link tokens to download the operator binary
-		if strings.HasPrefix(r.URL.Path, "/blob/") {
-			authHeader := r.Header.Get(constants.HeaderAuthorization)
-			if strings.HasPrefix(authHeader, "Bearer ") {
-				token := strings.TrimPrefix(authHeader, "Bearer ")
-				if strings.HasPrefix(token, "dlk_") && len(token) >= 20 {
-					// Validate device-link token exists and is not expired
-					linkKey := "g8e:device-link:" + token
-					raw, found := s.db.KVGet(linkKey)
-					if found {
-						var linkData map[string]interface{}
-						if err := json.Unmarshal([]byte(raw), &linkData); err == nil {
-							if expiresAt, ok := linkData["expires_at"].(string); ok {
-								if expTime, err := time.Parse(time.RFC3339, expiresAt); err == nil {
-									if expTime.After(time.Now()) {
-										// Token is valid, allow access
-										next.ServeHTTP(w, r)
-										return
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-			// If device-link token validation fails, fall through to mTLS requirement
 		}
 
 		// [PIVOT] Enforce mTLS for all other routes (Phase 6)

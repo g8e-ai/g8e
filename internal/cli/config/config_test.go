@@ -353,18 +353,18 @@ func TestConfig_OperatorBootstrapURL(t *testing.T) {
 					OperatorPublicHTTPS    int `json:"operator_public_https"`
 				}{
 					OperatorBootstrapHTTPS: 8441,
-					OperatorPublicHTTPS:    8442,
+					OperatorPublicHTTPS:    8443,
 				},
 			},
 		}
 
 		result := config.OperatorBootstrapURL()
-		assert.Equal(t, "https://localhost:8442", result)
+		assert.Equal(t, "https://localhost:8443", result)
 	})
 }
 
 func TestConfig_OperatorPublicURL(t *testing.T) {
-	t.Run("returns operator public TLS URL for device-link enrollment", func(t *testing.T) {
+	t.Run("returns operator public TLS URL for CSR-based enrollment", func(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
@@ -375,13 +375,13 @@ func TestConfig_OperatorPublicURL(t *testing.T) {
 					OperatorPublicHTTPS    int `json:"operator_public_https"`
 				}{
 					OperatorBootstrapHTTPS: 8441,
-					OperatorPublicHTTPS:    8442,
+					OperatorPublicHTTPS:    8443,
 				},
 			},
 		}
 
 		result := config.OperatorPublicURL()
-		assert.Equal(t, "https://localhost:8442", result)
+		assert.Equal(t, "https://localhost:8443", result)
 	})
 }
 
@@ -463,7 +463,7 @@ func TestLoadIntegration(t *testing.T) {
 		// Verify port values from embedded defaults
 		assert.Equal(t, 8440, config.OperatorHTTPSPort())
 		assert.Equal(t, 8441, config.OperatorBootstrapHTTPSPort())
-		assert.Equal(t, 8442, config.OperatorPublicHTTPSPort())
+		assert.Equal(t, 8443, config.OperatorPublicHTTPSPort())
 		assert.Equal(t, 8443, config.G8eeHTTPSPort())
 	})
 }

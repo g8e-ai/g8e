@@ -21,7 +21,7 @@ native signing or envelope construction logic.
 
 Practical Coverage:
 1. Protocol Translation: Maps JSON-RPC tools/list and tools/call to typed GovernanceEnvelopes.
-2. 3-Layer Gauntlet: Forces tool calls through L1 (Hard Gates), L2 (Consensus), and L3 (Approval).
+2. 3-Layer Verification: Forces tool calls through L1 (Hard Gates), L2 (Consensus), and L3 (Approval).
 3. Suspension & OOB: Verifies that mutations are suspended, recorded, and only resumed
    after Out-of-Band (OOB) human approval via WebAuthn/Passkey.
 4. Downstream Dispatch: Ensures verified payloads are correctly unwrapped and dispatched
@@ -41,8 +41,10 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -210,14 +212,9 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 	require.Eventually(t, func() bool { return ls.IsReady() }, 5*time.Second, 100*time.Millisecond)
 
-	// 3. Setup client identity
-	token := "dlk_mcp_test"
+	// 3. Setup client identity via CSR enrollment
 	userID := "mcp-user"
-	linkData := models.DeviceLinkData{
-		Token: token, UserID: userID, OrganizationID: "mcp-org", MaxUses: 1, Status: "active", ExpiresAt: time.Now().Add(1 * time.Hour),
-	}
-	linkBytes, _ := json.Marshal(linkData)
-	ls.GetDB().KVSet("g8e:device-link:"+token, string(linkBytes), 3600)
+	organizationID := "mcp-org"
 
 	// Create user with a dummy passkey so VerifyL3Proof passes
 	user := models.User{
@@ -240,37 +237,78 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	ls.GetDB().DocSet("users", userID, userBytes)
 
-	// Register and get cert (public port serves TLS with device-link token auth)
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
-	rootPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
-	hubPEM, _ := os.ReadFile(filepath.Join(pkiDir, "trust", "hub-bundle.pem"))
-	rootPool := x509.NewCertPool()
-	rootPool.AppendCertsFromPEM(rootPEM)
-	rootPool.AppendCertsFromPEM(hubPEM)
-	publicClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
-
+	// Generate CSR for client certificate
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
-	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "mcp-test-client"}}
+	csrTmpl := &x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName:   userID,
+			Organization: []string{organizationID},
+		},
+	}
 	csrDER, _ := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
+	// Create a temporary client cert for initial enrollment (using hub CA)
+	hubCAPEM := testutil.ReadHubCA(t, pkiDir)
+	hubBlock, _ := pem.Decode(hubCAPEM)
+	hubCert, err := x509.ParseCertificate(hubBlock.Bytes)
+	require.NoError(t, err)
+	hubKeyDER, err := sm.GetCAPrivateKey("hub")
+	require.NoError(t, err)
+	hubKey, err := x509.ParseECPrivateKey(hubKeyDER)
+	require.NoError(t, err)
+
+	spiffeURI, err := url.Parse(fmt.Sprintf("spiffe://g8e.local/cli/%s/cli-session-123", userID))
+	require.NoError(t, err)
+	tempCertTemplate := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               csrTmpl.Subject,
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		URIs:                  []*url.URL{spiffeURI},
+	}
+	tempCertDER, _ := x509.CreateCertificate(rand.Reader, tempCertTemplate, hubCert, priv.Public(), hubKey)
+	tempCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tempCertDER})
+
+	// Create mTLS client with temporary cert
+	privBytes, _ := x509.MarshalPKCS8PrivateKey(priv)
+	tempCert, _ := tls.X509KeyPair(tempCertPEM, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
+
+	rootPEM := testutil.ReadRootCA(t, pkiDir)
+	hubPEM := testutil.ReadHubBundle(t, pkiDir)
+	rootPool := x509.NewCertPool()
+	rootPool.AppendCertsFromPEM(rootPEM)
+	rootPool.AppendCertsFromPEM(hubPEM)
+
+	enrollClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs:      rootPool,
+				Certificates: []tls.Certificate{tempCert},
+			},
+		},
+	}
+
+	// Enroll via CSR endpoint
+	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		SystemFingerprint: "mcp-fingerprint",
 		Hostname:          "mcp-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
-	hReq.Header.Set(constants.HeaderDeviceToken, token)
-	hResp, err := publicClient.Do(hReq)
+	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/pki/device-enroll", bytes.NewReader(regBody))
+	hResp, err := enrollClient.Do(hReq)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, hResp.StatusCode)
+	require.Equal(t, http.StatusCreated, hResp.StatusCode)
 	var regResp models.OperatorRegistrationResponse
 	json.NewDecoder(hResp.Body).Decode(&regResp)
 	hResp.Body.Close()
 
-	// Create mTLS client
-	privBytes, _ := x509.MarshalPKCS8PrivateKey(priv)
+	// Create mTLS client with enrolled cert
 	cert, _ := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
 
 	mtlsClient := &http.Client{
@@ -281,9 +319,9 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 			},
 		},
 	}
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 
 	// Set public base URL for approval links
+	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 	mcpGateway.SetPublicBaseURL(publicURL)
 
 	// 4. Test MCP tools/list
@@ -490,13 +528,8 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 
 	require.Eventually(t, func() bool { return ls.IsReady() }, 5*time.Second, 100*time.Millisecond)
 
-	token := "dlk_payload_test"
 	userID := "payload-user"
-	linkData := models.DeviceLinkData{
-		Token: token, UserID: userID, OrganizationID: "payload-org", MaxUses: 1, Status: "active", ExpiresAt: time.Now().Add(1 * time.Hour),
-	}
-	linkBytes, _ := json.Marshal(linkData)
-	ls.GetDB().KVSet("g8e:device-link:"+token, string(linkBytes), 3600)
+	organizationID := "payload-org"
 
 	user := models.User{
 		ID:     userID,
@@ -518,35 +551,78 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	require.NoError(t, err)
 	ls.GetDB().DocSet("users", userID, userBytes)
 
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
-	rootPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
-	hubPEM, _ := os.ReadFile(filepath.Join(pkiDir, "trust", "hub-bundle.pem"))
-	rootPool := x509.NewCertPool()
-	rootPool.AppendCertsFromPEM(rootPEM)
-	rootPool.AppendCertsFromPEM(hubPEM)
-	publicClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
-
+	// Generate CSR for client certificate
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
-	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "payload-test-client"}}
+	csrTmpl := &x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName:   userID,
+			Organization: []string{organizationID},
+		},
+	}
 	csrDER, _ := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
+	// Create a temporary client cert for initial enrollment (using hub CA)
+	hubCAPEM := testutil.ReadHubCA(t, pkiDir)
+	hubBlock, _ := pem.Decode(hubCAPEM)
+	hubCert, err := x509.ParseCertificate(hubBlock.Bytes)
+	require.NoError(t, err)
+	hubKeyDER, err := sm.GetCAPrivateKey("hub")
+	require.NoError(t, err)
+	hubKey, err := x509.ParseECPrivateKey(hubKeyDER)
+	require.NoError(t, err)
+
+	spiffeURI, err := url.Parse(fmt.Sprintf("spiffe://g8e.local/cli/%s/cli-session-123", userID))
+	require.NoError(t, err)
+	tempCertTemplate := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               csrTmpl.Subject,
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		URIs:                  []*url.URL{spiffeURI},
+	}
+	tempCertDER, _ := x509.CreateCertificate(rand.Reader, tempCertTemplate, hubCert, priv.Public(), hubKey)
+	tempCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tempCertDER})
+
+	// Create mTLS client with temporary cert
+	privBytes, _ := x509.MarshalPKCS8PrivateKey(priv)
+	tempCert, _ := tls.X509KeyPair(tempCertPEM, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
+
+	rootPEM := testutil.ReadRootCA(t, pkiDir)
+	hubPEM := testutil.ReadHubBundle(t, pkiDir)
+	rootPool := x509.NewCertPool()
+	rootPool.AppendCertsFromPEM(rootPEM)
+	rootPool.AppendCertsFromPEM(hubPEM)
+
+	enrollClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs:      rootPool,
+				Certificates: []tls.Certificate{tempCert},
+			},
+		},
+	}
+
+	// Enroll via CSR endpoint
+	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		SystemFingerprint: "payload-fingerprint",
 		Hostname:          "payload-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
-	hReq.Header.Set(constants.HeaderDeviceToken, token)
-	hResp, err := publicClient.Do(hReq)
+	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/pki/device-enroll", bytes.NewReader(regBody))
+	hResp, err := enrollClient.Do(hReq)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, hResp.StatusCode)
+	require.Equal(t, http.StatusCreated, hResp.StatusCode)
 	var regResp models.OperatorRegistrationResponse
 	json.NewDecoder(hResp.Body).Decode(&regResp)
 	hResp.Body.Close()
 
-	privBytes, _ := x509.MarshalPKCS8PrivateKey(priv)
+	// Create mTLS client with enrolled cert
 	cert, _ := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
 
 	mtlsClient := &http.Client{
@@ -557,9 +633,9 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 			},
 		},
 	}
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 
 	// Set public base URL for approval links
+	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 	mcpGateway.SetPublicBaseURL(publicURL)
 
 	t.Run("nested object arguments", func(t *testing.T) {
@@ -814,13 +890,8 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 
 	require.Eventually(t, func() bool { return ls.IsReady() }, 5*time.Second, 100*time.Millisecond)
 
-	token := "dlk_error_test"
 	userID := "error-user"
-	linkData := models.DeviceLinkData{
-		Token: token, UserID: userID, OrganizationID: "error-org", MaxUses: 1, Status: "active", ExpiresAt: time.Now().Add(1 * time.Hour),
-	}
-	linkBytes, _ := json.Marshal(linkData)
-	ls.GetDB().KVSet("g8e:device-link:"+token, string(linkBytes), 3600)
+	organizationID := "error-org"
 
 	user := models.User{
 		ID:     userID,
@@ -842,35 +913,78 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	require.NoError(t, err)
 	ls.GetDB().DocSet("users", userID, userBytes)
 
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
-	rootPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
-	hubPEM, _ := os.ReadFile(filepath.Join(pkiDir, "trust", "hub-bundle.pem"))
-	rootPool := x509.NewCertPool()
-	rootPool.AppendCertsFromPEM(rootPEM)
-	rootPool.AppendCertsFromPEM(hubPEM)
-	publicClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
-
+	// Generate CSR for client certificate
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
-	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "error-test-client"}}
+	csrTmpl := &x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName:   userID,
+			Organization: []string{organizationID},
+		},
+	}
 	csrDER, _ := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
+	// Create a temporary client cert for initial enrollment (using hub CA)
+	hubCAPEM := testutil.ReadHubCA(t, pkiDir)
+	hubBlock, _ := pem.Decode(hubCAPEM)
+	hubCert, err := x509.ParseCertificate(hubBlock.Bytes)
+	require.NoError(t, err)
+	hubKeyDER, err := sm.GetCAPrivateKey("hub")
+	require.NoError(t, err)
+	hubKey, err := x509.ParseECPrivateKey(hubKeyDER)
+	require.NoError(t, err)
+
+	spiffeURI, err := url.Parse(fmt.Sprintf("spiffe://g8e.local/cli/%s/cli-session-123", userID))
+	require.NoError(t, err)
+	tempCertTemplate := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               csrTmpl.Subject,
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		URIs:                  []*url.URL{spiffeURI},
+	}
+	tempCertDER, _ := x509.CreateCertificate(rand.Reader, tempCertTemplate, hubCert, priv.Public(), hubKey)
+	tempCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tempCertDER})
+
+	// Create mTLS client with temporary cert
+	privBytes, _ := x509.MarshalPKCS8PrivateKey(priv)
+	tempCert, _ := tls.X509KeyPair(tempCertPEM, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
+
+	rootPEM := testutil.ReadRootCA(t, pkiDir)
+	hubPEM := testutil.ReadHubBundle(t, pkiDir)
+	rootPool := x509.NewCertPool()
+	rootPool.AppendCertsFromPEM(rootPEM)
+	rootPool.AppendCertsFromPEM(hubPEM)
+
+	enrollClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs:      rootPool,
+				Certificates: []tls.Certificate{tempCert},
+			},
+		},
+	}
+
+	// Enroll via CSR endpoint
+	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		SystemFingerprint: "error-fingerprint",
 		Hostname:          "error-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
-	hReq.Header.Set(constants.HeaderDeviceToken, token)
-	hResp, err := publicClient.Do(hReq)
+	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/pki/device-enroll", bytes.NewReader(regBody))
+	hResp, err := enrollClient.Do(hReq)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, hResp.StatusCode)
+	require.Equal(t, http.StatusCreated, hResp.StatusCode)
 	var regResp models.OperatorRegistrationResponse
 	json.NewDecoder(hResp.Body).Decode(&regResp)
 	hResp.Body.Close()
 
-	privBytes, _ := x509.MarshalPKCS8PrivateKey(priv)
+	// Create mTLS client with enrolled cert
 	cert, _ := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
 
 	mtlsClient := &http.Client{
@@ -881,7 +995,6 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 			},
 		},
 	}
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 
 	t.Run("api key rejected", func(t *testing.T) {
 		plainClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}

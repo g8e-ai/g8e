@@ -70,7 +70,6 @@ func RunStream(args []string) {
 		concurrency     int
 		timeoutSec      int
 		endpoint        string
-		deviceToken     string
 		noGit           bool
 		sshConfigArg    string
 		binaryDir       string
@@ -83,7 +82,6 @@ func RunStream(args []string) {
 	fs.IntVar(&concurrency, "concurrency", defaultConcurrency, "Max parallel SSH sessions")
 	fs.IntVar(&timeoutSec, "timeout", int(defaultTimeout.Seconds()), "Per-host dial+inject timeout in seconds")
 	fs.StringVar(&endpoint, "endpoint", "", "Platform endpoint - if set, starts operator on each remote host")
-	fs.StringVar(&deviceToken, "device-token", "", "Device link token (supports single and mass deployment via max_uses)")
 	fs.BoolVar(&noGit, "no-git", false, "Disable ledger")
 	fs.StringVar(&sshConfigArg, "ssh-config", "", "Path to SSH config file (default: ~/.ssh/config)")
 	fs.StringVar(&binaryDir, "binary-dir", getDefaultBinaryDir(), "Directory containing arch-specific operator builds")
@@ -137,7 +135,7 @@ func RunStream(args []string) {
 	}
 
 	// Build operator invocation args for the remote shell
-	operatorArgs := buildOperatorArgs(endpoint, deviceToken, noGit)
+	operatorArgs := buildOperatorArgs(endpoint, noGit)
 
 	dialTimeout := time.Duration(timeoutSec) * time.Second
 
@@ -339,14 +337,11 @@ func collectHosts(positional []string, hostsFile string) ([]string, error) {
 // NOTE: Host-key policy is not passed here because strict mode is enforced on
 // the outgoing dial from g8ep (stream phase). If remote operators ever make
 // their own SSH connections, a --strict arg should be added here.
-func buildOperatorArgs(endpoint, deviceToken string, noGit bool) string {
+func buildOperatorArgs(endpoint string, noGit bool) string {
 	if endpoint == "" {
 		return ""
 	}
 	parts := []string{"-e", shellQuote(endpoint)}
-	if deviceToken != "" {
-		parts = append(parts, "-D", shellQuote(deviceToken))
-	}
 	if noGit {
 		parts = append(parts, "--no-git")
 	}

@@ -30,7 +30,6 @@ import (
 	"os"
 
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -108,7 +107,7 @@ func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 }
 
 // NewSecureHTTPClient creates an HTTP client bound to the Operator's CA trust bundle.
-// This ensures the CLI can validate the Operator's TLS certificate during device-link enrollment.
+// This ensures the CLI can validate the Operator's TLS certificate during CSR-based enrollment.
 func NewSecureHTTPClient(cfg *config.Config) (*http.Client, error) {
 	trustBundlePath := cfg.TrustBundlePath()
 	if trustBundlePath == "" {
@@ -138,160 +137,16 @@ func NewSecureHTTPClient(cfg *config.Config) (*http.Client, error) {
 	return &http.Client{Transport: transport}, nil
 }
 
-func RequestDeviceLink(cfg *config.Config, userID string, count int, ttl int) (*DeviceLinkResponse, error) {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get hostname: %w", err)
-	}
-
-	req := DeviceLinkRequest{
-		UserID:     userID,
-		Name:       fmt.Sprintf("cli-%s", hostname),
-		MaxUses:    count,
-		TTLSeconds: ttl,
-	}
-
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	client, err := NewSecureHTTPClient(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create secure HTTP client: %w", err)
-	}
-
-	url := fmt.Sprintf("%s/api/auth/device-link/request", cfg.OperatorPublicURL())
-	resp, err := client.Post(url, "application/json", bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to request device-link: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var dlResp DeviceLinkResponse
-	if err := json.Unmarshal(respBody, &dlResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	if dlResp.Error != "" {
-		return nil, fmt.Errorf("device-link request failed: %s", dlResp.Error)
-	}
-
-	if dlResp.Token == "" {
-		return nil, fmt.Errorf("device-link response missing token")
-	}
-
-	return &dlResp, nil
-}
-
-func RegisterDeviceLink(cfg *config.Config, token string, operatorCSR, cliCSR string) (*RegistrationResponse, error) {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get hostname: %w", err)
-	}
-
-	username := os.Getenv("USER")
-	if username == "" {
-		username = os.Getenv("LOGNAME")
-	}
-
-	req := RegistrationRequest{
-		SystemFingerprint: fmt.Sprintf("g8e-cli-%s-%s", hostname, username),
-		Hostname:          hostname,
-		OS:                string(constants.PlatformLinux),
-		Arch:              runtime.GOARCH,
-		Username:          username,
-		CSRPEM:            operatorCSR,
-		CLICSRPEM:         cliCSR,
-	}
-
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	client, err := NewSecureHTTPClient(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create secure HTTP client: %w", err)
-	}
-
-	httpReq, err := http.NewRequest("POST", fmt.Sprintf("%s/api/auth/device-link/register", cfg.OperatorPublicURL()), bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set(constants.HeaderDeviceToken, token)
-
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to register: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var regResp RegistrationResponse
-	if err := json.Unmarshal(respBody, &regResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	if regResp.Error != "" {
-		return nil, fmt.Errorf("registration failed: %s", regResp.Error)
-	}
-
-	return &regResp, nil
-}
-
-// DownloadCA downloads the root CA from the discovery endpoint (plain HTTP)
-func DownloadCA(cfg *config.Config) ([]byte, error) {
-	url := fmt.Sprintf("%s/.well-known/g8e/pki/root.pem", cfg.OperatorDiscoveryURL())
-	// #nosec G107 -- url is constructed from validated config.OperatorDiscoveryURL()
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("failed to download CA from %s: %w", url, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("CA download failed with status %d", resp.StatusCode)
-	}
-
-	caPEM, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read CA response: %w", err)
-	}
-
-	return caPEM, nil
-}
-
 func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationResponse, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get hostname: %w", err)
 	}
 
-	// Download CA from discovery endpoint if not already present locally
+	// Require CA to be pre-installed for mTLS bootstrap
 	trustBundlePath := cfg.TrustBundlePath()
 	if _, err := os.Stat(trustBundlePath); os.IsNotExist(err) {
-		caPEM, err := DownloadCA(cfg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to download CA for bootstrap: %w", err)
-		}
-		if err := os.MkdirAll(filepath.Dir(trustBundlePath), 0700); err != nil {
-			return nil, fmt.Errorf("failed to create trust bundle directory: %w", err)
-		}
-		if err := os.WriteFile(trustBundlePath, caPEM, 0600); err != nil {
-			return nil, fmt.Errorf("failed to write trust bundle: %w", err)
-		}
+		return nil, fmt.Errorf("trust bundle not found at %s - install the platform CA manually before bootstrap", trustBundlePath)
 	}
 
 	req := map[string]string{
@@ -389,7 +244,7 @@ func DeleteCredentials(cfg *config.Config) error {
 		cfg.CLIKeyFile(),
 		cfg.OperatorCertFile(),
 		cfg.OperatorKeyFile(),
-		filepath.Join(cfg.CredentialsDir, "hub-bundle.pem"),
+		filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem"),
 	}
 
 	for _, file := range certFiles {

@@ -32,10 +32,10 @@ The Governance Gateway in Gateway mode exposes four logical surfaces. Defaults a
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
 | **Bootstrap** | `<!-- g8e:port:operator_bootstrap -->8441<!-- /g8e:port -->` (plain HTTP) | None | Download trust bundles, device-link enrollment, and CSR signing. |
-| **Public Port** | `<!-- g8e:port:operator_public -->8442<!-- /g8e:port -->` (TLS) | Web session | Browser login, WebAuthn challenge, and PKI discovery. |
+| **Public Port** | `<!-- g8e:port:operator_public -->8443<!-- /g8e:port -->` (TLS) | Web session | Browser login, WebAuthn challenge, and PKI discovery. |
 | **mTLS API + Pub/Sub** | `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->` | mTLS + URI SAN | Central `/api/governance/envelope` mutation endpoint, `/db` persistence, and `/ws/pubsub` real-time event fan-out. |
 
-When the mTLS and Public surfaces share a port, the gateway serves them through a single `MasterRouter` with `tls.VerifyClientCertIfGiven`; per-route handlers enforce mTLS and URI SAN on Gateway routes. WebSocket connections are upgraded natively over the shared gateway.
+Surfaces with different TLS client-auth requirements MUST NOT share a port. Sharing would force `tls.VerifyClientCertIfGiven` and downgrade the mTLS execution boundary to an L7 check. The reference implementation enforces this by validating port assignments during initialization.
 
 ### Core Responsibilities
 - **Unified Persistence:** Replaces external databases with a single `g8e.db` SQLite file in `.g8e/data`.

@@ -23,7 +23,7 @@ and fail-closed L1/L2/L3 governance gates.
 
 Practical Coverage:
 1. Canonical JSON Wire Format: Uses protojson-encoded GovernanceEnvelope on all client paths.
-2. mTLS & Enrollment: Exercises CSR-based enrollment via proper device-link API.
+2. mTLS & Enrollment: Exercises CSR-based enrollment via proper enrollment API.
 3. State Binding: Verifies transactions are bound to StateMerkleRoot.
 4. Fail-Closed L3: Uses mTLS certificate fingerprint for L3 verification (no mock).
 5. Real Execution: Tests actual command execution through Actuator, not simulation.
@@ -42,6 +42,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -135,7 +136,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	// Hub bundle (Root + Hub CA) is available on public port via HTTPS for initial discovery
 	// Instead of insecurely trusting the endpoint, we bootstrap trust from the known PKI dir
 	// which simulates a user pre-installing the Operator's root CA.
-	hubBundlePath := filepath.Join(pkiDir, "trust", "hub-bundle.pem")
+	hubBundlePath := filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
 	require.Eventually(t, func() bool {
 		_, err := os.Stat(hubBundlePath)
 		return err == nil
@@ -153,7 +154,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 			},
 		},
 	}
-	resp, err := secureDiscoveryClient.Get(publicURL + "/.well-known/g8e/pki/hub-bundle.pem")
+	resp, err := secureDiscoveryClient.Get(publicURL + "/.well-known/g8e/pki/g8e-gw-ca-bundle.pem")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -164,49 +165,75 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	rootPool := x509.NewCertPool()
 	require.True(t, rootPool.AppendCertsFromPEM(hubBundlePEM))
 
-	// 2. Create device link for enrollment (test setup via DB)
-	// In production, device links are created via admin API by authorized users.
-	// For test setup, we inject the link directly into the DB.
+	// 2. Create enrollment token for enrollment (test setup via DB)
+	// In production, enrollment tokens are created via admin API by authorized users.
+	// For test setup, we inject the token directly into the DB.
 	userID := "byo-user-test-"
 	orgID := "byo-org-test-"
-	token := "dlk_byo_test_client_token_12345"
-	linkData := models.DeviceLinkData{
-		Token:          token,
-		UserID:         userID,
-		OrganizationID: orgID,
-		MaxUses:        1,
-		Status:         "active",
-		ExpiresAt:      time.Now().Add(1 * time.Hour),
-	}
-	linkBytes, _ := json.Marshal(linkData)
-	err = ls.GetDB().KVSet("g8e:device-link:"+token, string(linkBytes), 3600)
-	require.NoError(t, err)
 
-	// Generate CSR
+	// Generate CSR for client certificate
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	csrTmpl := &x509.CertificateRequest{
 		Subject: pkix.Name{
-			CommonName: "byo-test-client",
+			CommonName:   userID,
+			Organization: []string{orgID},
 		},
 	}
 	csrDER, err := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
 	require.NoError(t, err)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
-	// Submit registration
+	// Create a temporary client cert for initial enrollment (using hub CA)
+	hubCAPEM := testutil.ReadHubCA(t, pkiDir)
+	hubBlock, _ := pem.Decode(hubCAPEM)
+	hubCert, err := x509.ParseCertificate(hubBlock.Bytes)
+	require.NoError(t, err)
+	hubKeyDER, err := sm.GetCAPrivateKey("hub")
+	require.NoError(t, err)
+	hubKey, err := x509.ParseECPrivateKey(hubKeyDER)
+	require.NoError(t, err)
+
+	tempCertTemplate := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               csrTmpl.Subject,
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+	tempCertDER, err := x509.CreateCertificate(rand.Reader, tempCertTemplate, hubCert, priv.Public(), hubKey)
+	require.NoError(t, err)
+	tempCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tempCertDER})
+
+	// Create mTLS client with temporary cert
+	privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
+	require.NoError(t, err)
+	tempCert, err := tls.X509KeyPair(tempCertPEM, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
+	require.NoError(t, err)
+
+	enrollClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs:      rootPool,
+				Certificates: []tls.Certificate{tempCert},
+			},
+		},
+	}
+
+	// Enroll via CSR endpoint
+	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		SystemFingerprint: "byo-fingerprint",
 		Hostname:          "byo-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	req, err := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
+	req, err := http.NewRequest(http.MethodPost, mtlsURL+"/api/pki/device-enroll", bytes.NewReader(regBody))
 	require.NoError(t, err)
-	req.Header.Set(constants.HeaderDeviceToken, token)
 
-	publicClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
-	resp, err = publicClient.Do(req)
+	resp, err = enrollClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)

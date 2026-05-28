@@ -6,7 +6,7 @@ title: A2A Protocol
 
 Last Updated: 2026-05-25
 
-The Operator (g8eo) in gateway mode supports Agent-to-Agent (A2A) protocol integration. A2A agents send HTTP/JSON skill invocation requests to the gateway, which wraps them in the g8e governance envelope, runs them through the 3-layer BFT verification gauntlet (L1Doctrine/L2Consensus/L3Notary), and dispatches verified payloads to downstream A2A servers or to the in-process execution service for local execution.
+The Operator (g8eo) in gateway mode supports Agent-to-Agent (A2A) protocol integration. A2A agents send HTTP/JSON skill invocation requests to the gateway, which wraps them in the g8e governance envelope, runs them through the 3-layer BFT verification sequence (L1Doctrine/L2Consensus/L3Notary), and dispatches verified payloads to downstream A2A servers or to the in-process execution service for local execution.
 
 ---
 
@@ -167,7 +167,7 @@ Default ports (configurable via config or paths.json):
 |---|---|---|
 | `8440` | mTLS API + Pub/Sub | mTLS (RequireAndVerifyClientCert) |
 | `8441` | Bootstrap enrollment | Plain HTTP (no TLS) |
-| `8442` | Public web session | TLS (no client cert) |
+| `8443` | Public web session | TLS (no client cert) |
 
 ### Environment Variables
 
