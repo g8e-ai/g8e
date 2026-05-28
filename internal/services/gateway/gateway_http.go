@@ -126,32 +126,6 @@ func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
 	}
 }
 
-func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
-	mux := http.NewServeMux()
-
-	// Bootstrap routes that do not require client certificates
-	mux.HandleFunc("/health", h.handleHealth)
-	mux.HandleFunc("/.well-known/g8e/pki/root.pem", h.handlePKIRoot)
-	mux.HandleFunc("/.well-known/g8e/pki/hub-bundle.pem", h.handlePKIHubBundle)
-	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.handlePKIFingerprint)
-
-	// Blob endpoint for operator binary download (device-link token auth)
-	mux.HandleFunc("/blob/", h.handleBlob)
-
-	// Trust Portal
-	mux.HandleFunc("/ca.crt", h.handlePKIRoot)
-	mux.HandleFunc("/bootstrap", h.handleTrustScript)
-	mux.HandleFunc("/bootstrap-ca", h.handleTrustScript)
-	mux.HandleFunc("/bootstrap-ca.ps1", h.handleTrustScriptPS1)
-	mux.HandleFunc("/bootstrap-ca.bat", h.handleTrustScriptBat)
-	mux.HandleFunc("/deploy", h.handleDeploy)
-
-	// Documentation endpoint (embedded docs)
-	mux.HandleFunc("/docs/", h.handleDocs)
-
-	return h.pathTraversalGuard(mux)
-}
-
 func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip, _, err := net.SplitHostPort(r.RemoteAddr)

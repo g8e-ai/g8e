@@ -78,7 +78,7 @@ func platformStartCmd() *cobra.Command {
 				return err
 			}
 
-			running, pid, err = pm.OperatorStatus()
+			_, pid, err = pm.OperatorStatus()
 			if err != nil {
 				return fmt.Errorf("failed to check operator status after start: %w", err)
 			}

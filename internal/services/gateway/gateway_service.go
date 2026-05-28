@@ -38,8 +38,6 @@ import (
 type autoTLSListener struct {
 	net.Listener
 	tlsConfig *tls.Config
-	server    *http.Server
-	handler   http.Handler
 	logger    *slog.Logger
 }
 
