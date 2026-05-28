@@ -261,7 +261,6 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	}
 	regBody, _ := json.Marshal(regReq)
 	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
-	hReq.Header.Set(constants.HeaderDeviceToken, token)
 	hResp, err := publicClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, hResp.StatusCode)
@@ -538,7 +537,6 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	}
 	regBody, _ := json.Marshal(regReq)
 	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
-	hReq.Header.Set(constants.HeaderDeviceToken, token)
 	hResp, err := publicClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, hResp.StatusCode)
@@ -862,7 +860,6 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	}
 	regBody, _ := json.Marshal(regReq)
 	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
-	hReq.Header.Set(constants.HeaderDeviceToken, token)
 	hResp, err := publicClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, hResp.StatusCode)

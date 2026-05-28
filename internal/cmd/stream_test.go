@@ -40,47 +40,19 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestBuildOperatorArgs_Empty(t *testing.T) {
-	got := buildOperatorArgs("", "", false)
+	got := buildOperatorArgs("", false)
 	assert.Equal(t, "", got, "no endpoint should produce empty string")
 }
 
 func TestBuildOperatorArgs_EndpointOnly(t *testing.T) {
-	got := buildOperatorArgs("10.0.0.1", "", false)
+	got := buildOperatorArgs("10.0.0.1", false)
 	assert.Equal(t, "-e '10.0.0.1'", got)
 }
 
-func TestBuildOperatorArgs_AllFlags(t *testing.T) {
-	got := buildOperatorArgs("10.0.0.1", "dtok_abc", true)
+func TestBuildOperatorArgs_NoGit(t *testing.T) {
+	got := buildOperatorArgs("10.0.0.1", true)
 	assert.Contains(t, got, "-e '10.0.0.1'")
-	assert.Contains(t, got, "-D 'dtok_abc'")
 	assert.Contains(t, got, "--no-git")
-	assert.NotContains(t, got, "-k")
-}
-
-func TestBuildOperatorArgs_ShellQuoting(t *testing.T) {
-	// Single quotes inside values must be escaped
-	got := buildOperatorArgs("host", "dtok'with'quotes", false)
-	assert.Contains(t, got, `'dtok'\''with'\''quotes'`)
-}
-
-func TestBuildOperatorArgs_DeviceTokenOnly(t *testing.T) {
-	got := buildOperatorArgs("10.0.0.1", "dtok_abc", false)
-	assert.Contains(t, got, "-D 'dtok_abc'")
-	assert.NotContains(t, got, "-k")
-	assert.NotContains(t, got, "--no-git")
-}
-
-func TestBuildOperatorArgs_DeviceTokenWithNoGit(t *testing.T) {
-	got := buildOperatorArgs("10.0.0.1", "dtok_abc", true)
-	assert.Contains(t, got, "-D 'dtok_abc'")
-	assert.Contains(t, got, "--no-git")
-	assert.NotContains(t, got, "-k")
-}
-
-func TestBuildOperatorArgs_NoGitWithoutOtherTokens(t *testing.T) {
-	got := buildOperatorArgs("10.0.0.1", "", true)
-	assert.Contains(t, got, "--no-git")
-	assert.NotContains(t, got, "-D")
 	assert.NotContains(t, got, "-k")
 }
 
@@ -102,53 +74,47 @@ func TestShellQuote_ContainsSingleQuote(t *testing.T) {
 // `stream host1 --key XXX` treated `--key` and `XXX` as additional hosts.
 // ---------------------------------------------------------------------------
 
-func newStreamFlagSet(deviceToken *string, noGit *bool) *flag.FlagSet {
+func newStreamFlagSet(noGit *bool) *flag.FlagSet {
 	fs := flag.NewFlagSet("stream", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	fs.StringVar(deviceToken, "device-token", "", "")
 	fs.BoolVar(noGit, "no-git", false, "")
 	return fs
 }
 
 func TestParseInterleavedArgs_FlagsAfterPositional(t *testing.T) {
-	var deviceToken string
 	var noGit bool
-	fs := newStreamFlagSet(&deviceToken, &noGit)
+	fs := newStreamFlagSet(&noGit)
 
-	hosts, err := parseInterleavedArgs(fs, []string{"bobuntu2", "--device-token", "dlk_abc"})
+	hosts, err := parseInterleavedArgs(fs, []string{"bobuntu2", "--no-git"})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"bobuntu2"}, hosts)
-	assert.Equal(t, "dlk_abc", deviceToken)
+	assert.True(t, noGit)
 }
 
 func TestParseInterleavedArgs_FlagsBetweenPositionals(t *testing.T) {
-	var deviceToken string
 	var noGit bool
-	fs := newStreamFlagSet(&deviceToken, &noGit)
+	fs := newStreamFlagSet(&noGit)
 
 	hosts, err := parseInterleavedArgs(fs,
-		[]string{"host1", "--device-token", "dlk_xyz", "host2", "--no-git", "host3"})
+		[]string{"host1", "--no-git", "host2"})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"host1", "host2", "host3"}, hosts)
-	assert.Equal(t, "dlk_xyz", deviceToken)
+	assert.Equal(t, []string{"host1", "host2"}, hosts)
 	assert.True(t, noGit)
 }
 
 func TestParseInterleavedArgs_FlagsBeforePositional(t *testing.T) {
-	var deviceToken string
 	var noGit bool
-	fs := newStreamFlagSet(&deviceToken, &noGit)
+	fs := newStreamFlagSet(&noGit)
 
-	hosts, err := parseInterleavedArgs(fs, []string{"--device-token", "dtok", "host1", "host2"})
+	hosts, err := parseInterleavedArgs(fs, []string{"--no-git", "host1", "host2"})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"host1", "host2"}, hosts)
-	assert.Equal(t, "dtok", deviceToken)
+	assert.True(t, noGit)
 }
 
 func TestParseInterleavedArgs_NoArgs(t *testing.T) {
-	var deviceToken string
 	var noGit bool
-	fs := newStreamFlagSet(&deviceToken, &noGit)
+	fs := newStreamFlagSet(&noGit)
 
 	hosts, err := parseInterleavedArgs(fs, nil)
 	require.NoError(t, err)
@@ -156,9 +122,8 @@ func TestParseInterleavedArgs_NoArgs(t *testing.T) {
 }
 
 func TestParseInterleavedArgs_UnknownFlagReturnsError(t *testing.T) {
-	var deviceToken string
 	var noGit bool
-	fs := newStreamFlagSet(&deviceToken, &noGit)
+	fs := newStreamFlagSet(&noGit)
 
 	_, err := parseInterleavedArgs(fs, []string{"host1", "--unknownxyz"})
 	require.Error(t, err)

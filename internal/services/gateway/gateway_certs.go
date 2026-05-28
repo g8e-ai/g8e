@@ -43,7 +43,7 @@ import (
 const (
 	rootValidityDays         = 3650
 	intermediateValidityDays = 3650
-	serviceValidityDays      = 1 // 1-day TTL for operator mTLS certificates per device-link auth plan
+	serviceValidityDays      = 1 // 1-day TTL for operator mTLS certificates
 
 	rootCommonName     = "g8e Root CA"
 	hubCommonName      = "g8e Hub Intermediate CA"

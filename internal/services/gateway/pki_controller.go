@@ -23,8 +23,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
-	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -189,85 +187,6 @@ func (c *PKIController) handlePKIRevocationBundle(w http.ResponseWriter, r *http
 		"bundle_json": bundleJSON,
 		"signature":   signature,
 	})
-}
-
-func (c *PKIController) handleAppEnroll(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	if c.appEnrollment == nil {
-		c.responder.Error(w, http.StatusServiceUnavailable, "app enrollment service not available")
-		return
-	}
-
-	authHeader := r.Header.Get("Authorization")
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		c.responder.Error(w, http.StatusUnauthorized, "missing bearer token")
-		return
-	}
-
-	token := strings.TrimPrefix(authHeader, "Bearer ")
-	if !strings.HasPrefix(token, "dlk_") || len(token) < 20 {
-		c.responder.Error(w, http.StatusUnauthorized, "invalid device-link token format")
-		return
-	}
-
-	linkKey := "g8e:device-link:" + token
-	raw, found := c.db.KVGet(linkKey)
-	if !found {
-		c.responder.Error(w, http.StatusUnauthorized, "device-link token not found")
-		return
-	}
-
-	var linkData map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &linkData); err != nil {
-		c.responder.Error(w, http.StatusUnauthorized, "invalid device-link token data")
-		return
-	}
-
-	expiresAt, ok := linkData["expires_at"].(string)
-	if !ok {
-		c.responder.Error(w, http.StatusUnauthorized, "device-link token missing expiry")
-		return
-	}
-
-	expTime, err := time.Parse(time.RFC3339, expiresAt)
-	if err != nil {
-		c.responder.Error(w, http.StatusUnauthorized, "invalid device-link token expiry")
-		return
-	}
-
-	if expTime.Before(time.Now()) {
-		c.responder.Error(w, http.StatusUnauthorized, "device-link token expired")
-		return
-	}
-
-	body, err := c.readBody(r)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
-		return
-	}
-
-	var req AppEnrollRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
-		return
-	}
-
-	resp, err := c.appEnrollment.EnrollApp(req)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	if !resp.Success {
-		c.responder.Error(w, http.StatusBadRequest, resp.Error)
-		return
-	}
-
-	c.responder.JSON(w, http.StatusCreated, resp)
 }
 
 func (c *PKIController) handleDeviceEnroll(w http.ResponseWriter, r *http.Request) {

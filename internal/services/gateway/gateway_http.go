@@ -228,7 +228,6 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	// PKI management routes (require mTLS)
 	mux.HandleFunc("/api/pki/sign-csr", h.pkiController.handlePKISignCSR)
 	mux.HandleFunc("/api/pki/device-enroll", h.pkiController.handleDeviceEnroll)
-	mux.HandleFunc("/api/pki/app-enroll", h.pkiController.handleAppEnroll)
 	mux.HandleFunc("/api/pki/revoke", h.pkiController.handlePKIRevoke)
 	mux.HandleFunc("/api/pki/revocation-bundle", h.pkiController.handlePKIRevocationBundle)
 

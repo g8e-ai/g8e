@@ -101,7 +101,7 @@ type AuthServicesResponse struct {
 }
 
 // RequestBootstrapConfig authenticates with client and receives bootstrap configuration.
-// Uses mTLS authentication (device-link token enrollment path).
+// Uses mTLS authentication (CSR-based enrollment path).
 func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*BootstrapConfig, error) {
 	bs.logger.Info("Authenticating with endpoint...", "endpoint", bs.config.Endpoint)
 

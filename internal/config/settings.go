@@ -29,7 +29,6 @@ type Settings struct {
 	PKIDir            string
 	SecretsDir        string
 	PubSubCACert      string
-	DeviceToken       string
 	LogLevel          string
 	DataDir           string
 	IPService         string
@@ -66,7 +65,6 @@ func LoadSettings() Settings {
 		PKIDir:            readVar(constants.EnvVar.PKIDir),
 		SecretsDir:        readVar(constants.EnvVar.SecretsDir),
 		PubSubCACert:      readVar(constants.EnvVar.PubSubCACert),
-		DeviceToken:       readVar(constants.EnvVar.DeviceToken),
 		LogLevel:          readVar(constants.EnvVar.LogLevel),
 		DataDir:           readVar(constants.EnvVar.DataDir),
 		IPService:         readVar(constants.EnvVar.IPService),

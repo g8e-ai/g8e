@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/responder"
@@ -32,20 +31,14 @@ import (
 )
 
 const (
-	testDeviceLinkTokenPrefix = "dlk_"
-	testMinTokenLength        = 10
-	testOrganizationID        = "org-123"
-	testOperatorID            = "op-456"
-	testUserID                = "user-789"
-	testWorkloadSessionID     = "ws-012"
-	testAppName               = "test-app"
-	testAppType               = "mcp-client"
-	testSerial                = "test-serial-123"
-	testRevocationReason      = "key-compromise"
-)
-
-var (
-	testValidToken = testDeviceLinkTokenPrefix + "test_token_12345"
+	testOrganizationID    = "org-123"
+	testOperatorID        = "op-456"
+	testUserID            = "user-789"
+	testWorkloadSessionID = "ws-012"
+	testAppName           = "test-app"
+	testAppType           = "mcp-client"
+	testSerial            = "test-serial-123"
+	testRevocationReason  = "key-compromise"
 )
 
 type httpTestCase struct {
@@ -98,19 +91,6 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Gate
 
 	controller := newPKIController(cfg, logger, db, pki, appEnrollment, nil, resp)
 	return controller, cfg, db
-}
-
-func createValidDeviceLink(t *testing.T, db *GatewayDBService, token string, expiresAt time.Time) {
-	t.Helper()
-
-	linkData := map[string]interface{}{
-		"expires_at": expiresAt.Format(time.RFC3339),
-		"user_id":    testUserID,
-	}
-	linkJSON, err := json.Marshal(linkData)
-	require.NoError(t, err, "failed to marshal device-link data")
-
-	db.KVSet("g8e:device-link:"+token, string(linkJSON), 0)
 }
 
 func runHTTPTest(t *testing.T, tc httpTestCase, handler func(*httptest.ResponseRecorder, *http.Request)) {
@@ -414,172 +394,6 @@ func TestPKIController_HandlePKIRevocationBundle(t *testing.T) {
 					tc.setup(t, c, nil)
 				}
 				c.handlePKIRevocationBundle(rr, req)
-			})
-		})
-	}
-}
-
-func TestPKIController_HandleAppEnroll(t *testing.T) {
-	validEnrollPayload := map[string]string{
-		"csr_pem":  testutil.GenerateTestCSR(t, "test-operator"),
-		"app_name": testAppName,
-		"app_type": testAppType,
-	}
-
-	tests := []httpTestCase{
-		{
-			name:    "Success - POST enrolls app with valid device-link token",
-			method:  http.MethodPost,
-			body:    mustMarshalJSON(t, validEnrollPayload),
-			headers: map[string]string{"Authorization": "Bearer " + testValidToken},
-			setup: func(t *testing.T, _ *PKIController, db *GatewayDBService) {
-				createValidDeviceLink(t, db, testValidToken, time.Now().Add(1*time.Hour))
-			},
-			expectedStatus: http.StatusCreated,
-			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
-				var resp map[string]interface{}
-				err := json.Unmarshal(rr.Body.Bytes(), &resp)
-				require.NoError(t, err, "failed to unmarshal response")
-				assert.True(t, resp["success"].(bool), "success should be true")
-				assert.NotEmpty(t, resp["app_cert"], "app_cert should not be empty")
-				assert.NotEmpty(t, resp["cert_chain"], "cert_chain should not be empty")
-				assert.NotEmpty(t, resp["app_id"], "app_id should not be empty")
-			},
-		},
-		{
-			name:           "Failure - GET method not allowed",
-			method:         http.MethodGet,
-			expectedStatus: http.StatusMethodNotAllowed,
-			expectedBody:   `{"error":"method not allowed"}`,
-		},
-		{
-			name:   "Failure - App enrollment service not available",
-			method: http.MethodPost,
-			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
-				c.appEnrollment = nil
-			},
-			expectedStatus: http.StatusServiceUnavailable,
-			expectedBody:   `{"error":"app enrollment service not available"}`,
-		},
-		{
-			name:           "Failure - Missing bearer token",
-			method:         http.MethodPost,
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   `{"error":"missing bearer token"}`,
-		},
-		{
-			name:           "Failure - Invalid token format (no dlk_ prefix)",
-			method:         http.MethodPost,
-			headers:        map[string]string{"Authorization": "Bearer invalid_token"},
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   `{"error":"invalid device-link token format"}`,
-		},
-		{
-			name:           "Failure - Token too short",
-			method:         http.MethodPost,
-			headers:        map[string]string{"Authorization": "Bearer dlk_short"},
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   `{"error":"invalid device-link token format"}`,
-		},
-		{
-			name:           "Failure - Device-link token not found",
-			method:         http.MethodPost,
-			headers:        map[string]string{"Authorization": "Bearer dlk_nonexistent_token_12345"},
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   `{"error":"device-link token not found"}`,
-		},
-		{
-			name:    "Failure - Invalid device-link token data",
-			method:  http.MethodPost,
-			headers: map[string]string{"Authorization": "Bearer " + testValidToken},
-			setup: func(t *testing.T, _ *PKIController, db *GatewayDBService) {
-				db.KVSet("g8e:device-link:"+testValidToken, "invalid json", 0)
-			},
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   `{"error":"invalid device-link token data"}`,
-		},
-		{
-			name:    "Failure - Device-link token missing expiry",
-			method:  http.MethodPost,
-			headers: map[string]string{"Authorization": "Bearer " + testValidToken},
-			setup: func(t *testing.T, _ *PKIController, db *GatewayDBService) {
-				linkData := map[string]interface{}{"user_id": testUserID}
-				linkJSON, err := json.Marshal(linkData)
-				require.NoError(t, err, "failed to marshal device-link data")
-				db.KVSet("g8e:device-link:"+testValidToken, string(linkJSON), 0)
-			},
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   `{"error":"device-link token missing expiry"}`,
-		},
-		{
-			name:    "Failure - Invalid device-link token expiry format",
-			method:  http.MethodPost,
-			headers: map[string]string{"Authorization": "Bearer " + testValidToken},
-			setup: func(t *testing.T, _ *PKIController, db *GatewayDBService) {
-				linkData := map[string]interface{}{"expires_at": "invalid-date"}
-				linkJSON, err := json.Marshal(linkData)
-				require.NoError(t, err, "failed to marshal device-link data")
-				db.KVSet("g8e:device-link:"+testValidToken, string(linkJSON), 0)
-			},
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   `{"error":"invalid device-link token expiry"}`,
-		},
-		{
-			name:    "Failure - Device-link token expired",
-			method:  http.MethodPost,
-			headers: map[string]string{"Authorization": "Bearer " + testValidToken},
-			setup: func(t *testing.T, _ *PKIController, db *GatewayDBService) {
-				createValidDeviceLink(t, db, testValidToken, time.Now().Add(-1*time.Hour))
-			},
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   `{"error":"device-link token expired"}`,
-		},
-		{
-			name:    "Failure - Invalid request JSON",
-			method:  http.MethodPost,
-			body:    []byte("invalid json"),
-			headers: map[string]string{"Authorization": "Bearer " + testValidToken},
-			setup: func(t *testing.T, _ *PKIController, db *GatewayDBService) {
-				createValidDeviceLink(t, db, testValidToken, time.Now().Add(1*time.Hour))
-			},
-			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"invalid JSON"}`,
-		},
-		{
-			name:   "Failure - App enrollment validation error",
-			method: http.MethodPost,
-			body: mustMarshalJSON(t, map[string]string{
-				"csr_pem":  "",
-				"app_name": "",
-				"app_type": "",
-			}),
-			headers: map[string]string{"Authorization": "Bearer " + testValidToken},
-			setup: func(t *testing.T, _ *PKIController, db *GatewayDBService) {
-				createValidDeviceLink(t, db, testValidToken, time.Now().Add(1*time.Hour))
-			},
-			expectedStatus: http.StatusBadRequest,
-			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
-				var resp map[string]interface{}
-				err := json.Unmarshal(rr.Body.Bytes(), &resp)
-				require.NoError(t, err, "failed to unmarshal response")
-				if success, ok := resp["success"].(bool); ok {
-					assert.False(t, success, "success should be false")
-				}
-				assert.NotEmpty(t, resp["error"], "error should not be empty")
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
-				c, _, db := setupTestPKIController(t)
-				if tc.setup != nil {
-					tc.setup(t, c, db)
-				}
-				c.handleAppEnroll(rr, req)
 			})
 		})
 	}

@@ -22,7 +22,6 @@ import (
 func TestEnvVarConstants_OperatorKeys(t *testing.T) {
 	assert.Equal(t, "G8E_OPERATOR_SESSION_ID", string(EnvVar.OperatorSessionID))
 	assert.Equal(t, "G8E_OPERATOR_ENDPOINT", string(EnvVar.OperatorEndpoint))
-	assert.Equal(t, "G8E_DEVICE_TOKEN", string(EnvVar.DeviceToken))
 	assert.Equal(t, "G8E_LOG_LEVEL", string(EnvVar.LogLevel))
 	assert.Equal(t, "G8E_LOCAL_STORE_ENABLED", string(EnvVar.LocalStoreEnabled))
 	assert.Equal(t, "G8E_LOCAL_DB_PATH", string(EnvVar.LocalDBPath))

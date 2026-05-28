@@ -40,8 +40,7 @@ const (
 	sessionBindSuffix         = ":bind"
 )
 
-// RegistrationService handles Gateway-native device enrollment.
-// Ported from client/DeviceLinkService and OperatorAuthService.
+// RegistrationService handles Gateway-native device enrollment via CSR-based authentication.
 type RegistrationService struct {
 	db         *GatewayDBService
 	pki        *PKIAuthority
@@ -144,19 +143,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 	return nil
 }
 
-func deviceLinkResponse(link models.DeviceLinkData) *models.DeviceLinkResponse {
-	return &models.DeviceLinkResponse{
-		Success:         true,
-		Token:           link.Token,
-		UserID:          link.UserID,
-		OperatorCommand: "g8e.operator --device-token " + link.Token,
-		Name:            link.Name,
-		MaxUses:         link.MaxUses,
-		ExpiresAt:       link.ExpiresAt,
-	}
-}
-
-// RegisterDeviceCSR handles CSR-based enrollment without device-link tokens.
+// RegisterDeviceCSR handles CSR-based enrollment.
 // Clients must present a valid client certificate (mTLS) and provide CSRs
 // for operator and CLI certificates. The user_id is extracted from the
 // client certificate's SPIFFE URI SAN.
@@ -349,7 +336,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		sanitizedFingerprint,
 		cliCertFingerprint,
 		cliCertSerial,
-		"device_link",
+		"csr",
 	)
 	if err != nil {
 		return nil, err

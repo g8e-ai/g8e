@@ -188,18 +188,6 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	t.Run("Uninitialized token - Native Registration Path - allow without token", func(t *testing.T) {
-		t.Parallel()
-		h.db.DocDelete("settings", "platform_settings")
-
-		req := httptest.NewRequest(http.MethodPost, "/api/auth/device-link/register", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-		// We expect OK here because our mock handler just returns 200 if it passes middleware.
-		// RegistrationService logic is not called because we are testing the middleware layer.
-		assert.Equal(t, http.StatusOK, rr.Code)
-	})
-
 	t.Run("Uninitialized token - deny unauthenticated access", func(t *testing.T) {
 		t.Parallel()
 		h.db.DocDelete("settings", "platform_settings")
@@ -222,52 +210,6 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 
 			assert.JSONEq(t, `{"error":"mTLS client certificate required"}`, rr.Body.String(), "Path %s should require mTLS", path)
 		}
-	})
-
-	t.Run("Blob endpoint with valid device-link token", func(t *testing.T) {
-		t.Parallel()
-		// Create a device-link token
-		token := "dlk_test12345678901234567890"
-		linkData := map[string]interface{}{
-			"token":      token,
-			"user_id":    "test-user",
-			"status":     "active",
-			"created_at": time.Now().UTC().Format(time.RFC3339),
-			"expires_at": time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339),
-		}
-		linkBytes, err := json.Marshal(linkData)
-		require.NoError(t, err)
-		err = h.db.KVSet("g8e:device-link:"+token, string(linkBytes), 3600)
-		require.NoError(t, err)
-
-		// Put a blob in the store
-		err = h.db.BlobPut("operator-binary", "linux-amd64", []byte("test-binary"), "application/octet-stream", 0)
-		require.NoError(t, err)
-
-		// Use the actual router with blob handler
-		router := h.buildRouter()
-		req := httptest.NewRequest(http.MethodGet, "/blob/operator-binary/linux-amd64", nil)
-		req.Header.Set("Authorization", "Bearer "+token)
-		rr := httptest.NewRecorder()
-		router.ServeHTTP(rr, req)
-
-		// Should succeed without mTLS since device-link token is valid
-		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Equal(t, []byte("test-binary"), rr.Body.Bytes())
-	})
-
-	t.Run("Blob endpoint with invalid device-link token", func(t *testing.T) {
-		t.Parallel()
-		// Use the actual router with blob handler
-		router := h.buildRouter()
-		req := httptest.NewRequest(http.MethodGet, "/blob/operator-binary/linux-amd64", nil)
-		req.Header.Set("Authorization", "Bearer dlk_invalid")
-		rr := httptest.NewRecorder()
-		router.ServeHTTP(rr, req)
-
-		// Should require mTLS since token is invalid
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"mTLS client certificate required"}`, rr.Body.String())
 	})
 }
 

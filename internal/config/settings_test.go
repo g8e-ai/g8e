@@ -24,7 +24,6 @@ import (
 func TestLoadSettings_OperatorFields(t *testing.T) {
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorEndpoint), "10.0.0.1")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorSessionID), "sess-abc123")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.DeviceToken), "dtok_xyz")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.LogLevel), "debug")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.DataDir), "/custom/data")
 
@@ -32,7 +31,6 @@ func TestLoadSettings_OperatorFields(t *testing.T) {
 
 	assert.Equal(t, "10.0.0.1", s.OperatorEndpoint)
 	assert.Equal(t, "sess-abc123", s.OperatorSessionID)
-	assert.Equal(t, "dtok_xyz", s.DeviceToken)
 	assert.Equal(t, "debug", s.LogLevel)
 	assert.Equal(t, "/custom/data", s.DataDir)
 }
@@ -95,7 +93,6 @@ func TestLoadSettings_User_USERTakesPriorityOverUSERNAME(t *testing.T) {
 func TestLoadSettings_EmptyWhenEnvNotSet(t *testing.T) {
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorEndpoint), "")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorSessionID), "")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.DeviceToken), "")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.LogLevel), "")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.DataDir), "")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPService), "")
@@ -105,7 +102,6 @@ func TestLoadSettings_EmptyWhenEnvNotSet(t *testing.T) {
 
 	assert.Empty(t, s.OperatorEndpoint)
 	assert.Empty(t, s.OperatorSessionID)
-	assert.Empty(t, s.DeviceToken)
 	assert.Empty(t, s.LogLevel)
 	assert.Empty(t, s.DataDir)
 	assert.Empty(t, s.IPService)
@@ -115,7 +111,6 @@ func TestLoadSettings_EmptyWhenEnvNotSet(t *testing.T) {
 func TestLoadSettings_AllFieldsPresent(t *testing.T) {
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorEndpoint), "e")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorSessionID), "s")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.DeviceToken), "d")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.LogLevel), "info")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.DataDir), "/data")
 	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPService), "https://ip.svc")
@@ -132,7 +127,6 @@ func TestLoadSettings_AllFieldsPresent(t *testing.T) {
 
 	assert.Equal(t, "e", s.OperatorEndpoint)
 	assert.Equal(t, "s", s.OperatorSessionID)
-	assert.Equal(t, "d", s.DeviceToken)
 	assert.Equal(t, "info", s.LogLevel)
 	assert.Equal(t, "/data", s.DataDir)
 	assert.Equal(t, "https://ip.svc", s.IPService)

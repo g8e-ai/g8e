@@ -224,7 +224,6 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}
 	regBody, _ := json.Marshal(regReq)
 	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
-	hReq.Header.Set(constants.HeaderDeviceToken, token)
 	hResp, err := publicClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, hResp.StatusCode)
@@ -437,7 +436,6 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	}
 	regBody, _ := json.Marshal(regReq)
 	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
-	hReq.Header.Set(constants.HeaderDeviceToken, token)
 	hResp, err := publicClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, hResp.StatusCode)
@@ -774,7 +772,6 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	}
 	regBody, _ := json.Marshal(regReq)
 	hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
-	hReq.Header.Set(constants.HeaderDeviceToken, token)
 	hResp, err := publicClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, hResp.StatusCode)

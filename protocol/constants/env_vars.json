@@ -6,7 +6,6 @@
     "CLISessionID": "G8E_CLI_SESSION_ID",
     "DashboardURL": "G8E_DASHBOARD_URL",
     "DataDir": "G8E_DATA_DIR",
-    "DeviceToken": "G8E_DEVICE_TOKEN",
     "DockerGID": "G8E_DOCKER_GID",
     "DocsDir": "G8E_DOCS_DIR",
     "EnableCommandBlacklisting": "G8E_ENABLE_COMMAND_BLACKLISTING",

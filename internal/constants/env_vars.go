@@ -66,7 +66,6 @@ var EnvVar = struct {
 	SecretsDir                 EnvVarKey
 	PubSubCACert               EnvVarKey
 	OperatorSessionID          EnvVarKey
-	DeviceToken                EnvVarKey
 	LogLevel                   EnvVarKey
 	DataDir                    EnvVarKey
 	LocalStoreEnabled          EnvVarKey
@@ -156,7 +155,6 @@ var EnvVar = struct {
 	SecretsDir:                 "G8E_SECRETS_DIR",
 	PubSubCACert:               "G8E_PUBSUB_CA_CERT",
 	OperatorSessionID:          "G8E_OPERATOR_SESSION_ID",
-	DeviceToken:                "G8E_DEVICE_TOKEN",
 	LogLevel:                   "G8E_LOG_LEVEL",
 	DataDir:                    "G8E_DATA_DIR",
 	LocalStoreEnabled:          "G8E_LOCAL_STORE_ENABLED",

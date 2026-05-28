@@ -360,7 +360,7 @@ func TestHeartbeatService_buildProtoHeartbeat(t *testing.T) {
 		heartbeat := svc.Build(models.HeartbeatTypeRequested)
 		_ = svc.buildProtoHeartbeat(heartbeat)
 
-		// API key authentication removed - platform now uses device-link tokens
+		// API key authentication removed - platform now uses mTLS/CSR-based enrollment
 	})
 }
 

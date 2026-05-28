@@ -364,7 +364,7 @@ func TestConfig_OperatorBootstrapURL(t *testing.T) {
 }
 
 func TestConfig_OperatorPublicURL(t *testing.T) {
-	t.Run("returns operator public TLS URL for device-link enrollment", func(t *testing.T) {
+	t.Run("returns operator public TLS URL for CSR-based enrollment", func(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {

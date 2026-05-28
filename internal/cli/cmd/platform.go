@@ -103,13 +103,12 @@ func platformStartCmd() *cobra.Command {
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println("  The Platform serves an automated bootstrap script to install the")
 			cmd.Println("  Platform Root CA and provision local workload mTLS certificates.")
-			cmd.Println("  Note: First connection bypasses cert verification to install the CA.")
 			cmd.Println()
 			cmd.Printf("  Run on macOS / Linux (Terminal):\n")
-			cmd.Printf("     curl -fsSLk https://%s:%d/bootstrap-ca | sudo sh\n", externalIP, cfg.Paths.Ports.G8eeHTTPS)
+			cmd.Printf("     curl -fsSL https://%s:%d/bootstrap-ca | sudo sh\n", externalIP, cfg.Paths.Ports.G8eeHTTPS)
 			cmd.Println()
 			cmd.Printf("  Run on Windows (PowerShell - Administrator):\n")
-			cmd.Printf("     iex (irm https://%s:%d/bootstrap-ca.ps1 -SkipCertificateCheck)\n", externalIP, cfg.Paths.Ports.G8eeHTTPS)
+			cmd.Printf("     iex (irm https://%s:%d/bootstrap-ca.ps1)\n", externalIP, cfg.Paths.Ports.G8eeHTTPS)
 			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println(" 3. TARGETED ACTIONABLE NEXT STEPS [CHOOSE ONE]")
@@ -120,7 +119,7 @@ func platformStartCmd() *cobra.Command {
 			cmd.Println("     $ ./g8e auth login")
 			cmd.Println()
 			cmd.Println("  B) PROVISION A NEW OUTBOUND REMOTE OPERATOR SATELLITE")
-			cmd.Println("     $ ./g8e data device-links create")
+			cmd.Println("     $ ./g8e security pki enroll")
 			cmd.Println()
 			cmd.Println("  C) INTERACT VIA BROWSER / BYO CLIENT SURFACE")
 			cmd.Printf("     URL: https://localhost:%d [CA Certificate Required]\n", cfg.Paths.Ports.G8eeHTTPS)
@@ -387,7 +386,7 @@ func platformCleanCmd() *cobra.Command {
 			}
 
 			if !force {
-				cmd.Println("This command will:")
+				cmd.Println("WARNING: This command will:")
 				cmd.Println("  1. Stop all running g8e services")
 				cmd.Println("  2. Completely delete the entire runtime directory")
 				cmd.Println("  3. Delete all SQLite databases, bootstrap secrets, logs, AND TLS/PKI certificates/keys")

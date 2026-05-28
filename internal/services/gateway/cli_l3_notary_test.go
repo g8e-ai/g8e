@@ -167,7 +167,7 @@ func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
 		IdleExpiresAt:     time.Now().UTC().Add(24 * time.Hour),
 		SessionType:       string(constants.SessionTypeCLI),
 		IsActive:          true,
-		LoginMethod:       "device_link",
+		LoginMethod:       "csr",
 	}
 	cliSessionBytes, _ := json.Marshal(cliSession)
 	require.NoError(t, db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
@@ -304,7 +304,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 		IdleExpiresAt:     time.Now().UTC().Add(24 * time.Hour),
 		SessionType:       string(constants.SessionTypeCLI),
 		IsActive:          true,
-		LoginMethod:       "device_link",
+		LoginMethod:       "csr",
 	}
 	cliSessionBytes, _ := json.Marshal(cliSession)
 	require.NoError(t, db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
@@ -387,7 +387,7 @@ func TestCompositeL3Verifier_DelegatesToCLI(t *testing.T) {
 		IdleExpiresAt:     time.Now().UTC().Add(24 * time.Hour),
 		SessionType:       string(constants.SessionTypeCLI),
 		IsActive:          true,
-		LoginMethod:       "device_link",
+		LoginMethod:       "csr",
 	}
 	cliSessionBytes, _ := json.Marshal(cliSession)
 	require.NoError(t, db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))

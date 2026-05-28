@@ -94,7 +94,7 @@ type DeviceLinkClaim struct {
 	ClaimedAt         time.Time `json:"claimed_at"`
 }
 
-// OperatorRegistrationRequest is the inbound body for /api/auth/device-link/register.
+// OperatorRegistrationRequest is the inbound body for /api/auth/device-link/register (CSR-based enrollment).
 type OperatorRegistrationRequest struct {
 	CSR               string `json:"csr_pem"`
 	CLICSR            string `json:"cli_csr_pem,omitempty"`
@@ -106,7 +106,7 @@ type OperatorRegistrationRequest struct {
 	IPAddress         string `json:"ip_address,omitempty"`
 }
 
-// OperatorRegistrationResponse is the response for /api/auth/device-link/register.
+// OperatorRegistrationResponse is the response for /api/auth/device-link/register (CSR-based enrollment).
 //
 // OperatorSessionID and CLISessionID are strictly disjoint session types:
 //   - operator_session_id authenticates the host agent and is bound to the
@@ -353,15 +353,15 @@ type CLISession struct {
 // User represents a platform user with passkey credentials.
 //
 // Zero-PII Architecture: This struct contains NO personally identifiable information.
-// The platform persists only the device-link token and public key (passkey credentials).
-// Email and name are NOT stored - users are identified solely by their device-link
-// enrollment and cryptographic credentials.
+// The platform persists only the public key (passkey credentials).
+// Email and name are NOT stored - users are identified solely by their
+// cryptographic credentials.
 //
 // IsBootstrap identifies the ephemeral local-owner identity created by
 // `./g8e platform start -a` over loopback. It is *not* a privilege tier - it
 // marks an identity that exists purely to make a fresh local install usable
 // without ceremony, and that is retired automatically the first time a real
-// device-link login completes.
+// mTLS login completes.
 type User struct {
 	ID                 string              `json:"id"`
 	PasskeyCredentials []PasskeyCredential `json:"passkey_credentials,omitempty"`

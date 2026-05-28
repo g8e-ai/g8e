@@ -23,7 +23,7 @@ and fail-closed L1/L2/L3 governance gates.
 
 Practical Coverage:
 1. Canonical JSON Wire Format: Uses protojson-encoded GovernanceEnvelope on all client paths.
-2. mTLS & Enrollment: Exercises CSR-based enrollment via proper device-link API.
+2. mTLS & Enrollment: Exercises CSR-based enrollment via proper enrollment API.
 3. State Binding: Verifies transactions are bound to StateMerkleRoot.
 4. Fail-Closed L3: Uses mTLS certificate fingerprint for L3 verification (no mock).
 5. Real Execution: Tests actual command execution through Actuator, not simulation.
@@ -164,13 +164,13 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	rootPool := x509.NewCertPool()
 	require.True(t, rootPool.AppendCertsFromPEM(hubBundlePEM))
 
-	// 2. Create device link for enrollment (test setup via DB)
-	// In production, device links are created via admin API by authorized users.
-	// For test setup, we inject the link directly into the DB.
+	// 2. Create enrollment token for enrollment (test setup via DB)
+	// In production, enrollment tokens are created via admin API by authorized users.
+	// For test setup, we inject the token directly into the DB.
 	userID := "byo-user-test-"
 	orgID := "byo-org-test-"
-	token := "dlk_byo_test_client_token_12345"
-	linkData := models.DeviceLinkData{
+	token := "enroll_byo_test_client_token_12345"
+	tokenData := models.DeviceLinkData{
 		Token:          token,
 		UserID:         userID,
 		OrganizationID: orgID,
@@ -178,8 +178,8 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 		Status:         "active",
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
 	}
-	linkBytes, _ := json.Marshal(linkData)
-	err = ls.GetDB().KVSet("g8e:device-link:"+token, string(linkBytes), 3600)
+	tokenBytes, _ := json.Marshal(tokenData)
+	err = ls.GetDB().KVSet("g8e:device-link:"+token, string(tokenBytes), 3600)
 	require.NoError(t, err)
 
 	// Generate CSR
