@@ -229,3 +229,112 @@ func TestAuthError_Is(t *testing.T) {
 	otherErr := &AuthError{}
 	assert.True(t, otherErr.Is(err))
 }
+
+func TestPublicRouteRegistry_ExactPaths(t *testing.T) {
+	t.Parallel()
+
+	registry := NewPublicRouteRegistry(false)
+
+	// Test exact public paths
+	publicPaths := []string{
+		"/health",
+		"/api/pki/sign-csr",
+		"/api/pki/device-enroll",
+		"/api/auth/bootstrap",
+		"/api/auth/bootstrap/status",
+	}
+
+	for _, path := range publicPaths {
+		assert.True(t, registry.IsPublic(path), "Path %s should be public", path)
+	}
+
+	// Test that slight variations are not public
+	assert.False(t, registry.IsPublic("/healthz"), "/healthz should not be public")
+	assert.False(t, registry.IsPublic("/api/pki/sign-csr/"), "/api/pki/sign-csr/ should not be public")
+	assert.False(t, registry.IsPublic("/api/auth/bootstrap/extra"), "/api/auth/bootstrap/extra should not be public")
+}
+
+func TestPublicRouteRegistry_Prefixes(t *testing.T) {
+	t.Parallel()
+
+	registry := NewPublicRouteRegistry(false)
+
+	// Test prefix-based public paths
+	publicPrefixPaths := []string{
+		"/.well-known/g8e/pki/",
+		"/.well-known/g8e/pki/g8e-gw-ca-bundle.pem",
+		"/.well-known/g8e/pki/fingerprint",
+		"/.well-known/g8e/pki/some/deep/path",
+	}
+
+	for _, path := range publicPrefixPaths {
+		assert.True(t, registry.IsPublic(path), "Path %s should be public (prefix match)", path)
+	}
+
+	// Test that paths outside the prefix are not public
+	assert.False(t, registry.IsPublic("/.well-known/other/pki/"), "/.well-known/other/pki/ should not be public")
+	assert.False(t, registry.IsPublic("/api/pki/"), "/api/pki/ should not be public")
+}
+
+func TestPublicRouteRegistry_JWKSEnabled(t *testing.T) {
+	t.Parallel()
+
+	// Registry with JWKS enabled
+	registryWithJWKS := NewPublicRouteRegistry(true)
+
+	jwksPaths := []string{
+		"/api/auth/passkey/jit-123",
+		"/api/auth/passkey/jit-abc",
+		"/api/mcp/tools",
+		"/api/mcp/resources",
+		"/api/a2a/agents",
+		"/api/a2a/tasks",
+	}
+
+	for _, path := range jwksPaths {
+		assert.True(t, registryWithJWKS.IsPublic(path), "Path %s should be public with JWKS enabled", path)
+	}
+
+	// Registry without JWKS
+	registryWithoutJWKS := NewPublicRouteRegistry(false)
+
+	for _, path := range jwksPaths {
+		assert.False(t, registryWithoutJWKS.IsPublic(path), "Path %s should not be public without JWKS", path)
+	}
+}
+
+func TestPublicRouteRegistry_NonPublicPaths(t *testing.T) {
+	t.Parallel()
+
+	registry := NewPublicRouteRegistry(false)
+
+	// Test paths that should never be public
+	privatePaths := []string{
+		"/api/governance/envelope",
+		"/_query",
+		"/api/users",
+		"/api/operators",
+		"/ws/",
+		"/api/db",
+		"/api/device-links",
+	}
+
+	for _, path := range privatePaths {
+		assert.False(t, registry.IsPublic(path), "Path %s should not be public", path)
+	}
+}
+
+func TestPublicRouteRegistry_CanonicalCoverage(t *testing.T) {
+	t.Parallel()
+
+	registry := NewPublicRouteRegistry(false)
+
+	// Ensure all previously hardcoded public routes are covered
+	// This test prevents regression when the registry is modified
+	assert.True(t, registry.IsPublic("/health"), "Health check must be public")
+	assert.True(t, registry.IsPublic("/.well-known/g8e/pki/"), "PKI prefix must be public")
+	assert.True(t, registry.IsPublic("/api/pki/sign-csr"), "CSR signing must be public")
+	assert.True(t, registry.IsPublic("/api/pki/device-enroll"), "Device enrollment must be public")
+	assert.True(t, registry.IsPublic("/api/auth/bootstrap"), "Bootstrap must be public")
+	assert.True(t, registry.IsPublic("/api/auth/bootstrap/status"), "Bootstrap status must be public")
+}

@@ -42,6 +42,70 @@ const (
 	bindingPersonaKey contextKey = "binding_persona"
 )
 
+// PublicRouteRegistry defines routes that bypass authentication.
+// Exact paths are matched precisely. Prefixes allow any path under the prefix.
+// This centralized registry eliminates fragile HasPrefix duplication.
+type PublicRouteRegistry struct {
+	exactPaths  map[string]struct{}
+	prefixes    map[string]struct{}
+	jwksEnabled bool
+}
+
+// NewPublicRouteRegistry creates a registry with the canonical public routes.
+func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
+	r := &PublicRouteRegistry{
+		exactPaths:  make(map[string]struct{}),
+		prefixes:    make(map[string]struct{}),
+		jwksEnabled: jwksEnabled,
+	}
+
+	// Health check (always public)
+	r.addExact("/health")
+
+	// PKI bootstrap routes (public material only)
+	r.addPrefix("/.well-known/g8e/pki/")
+
+	// Protocol entry points (CSR enrollment, bootstrap)
+	r.addExact("/api/pki/sign-csr")
+	r.addExact("/api/pki/device-enroll")
+	r.addExact("/api/auth/bootstrap")
+	r.addExact("/api/auth/bootstrap/status")
+
+	// JIT passkey bootstrap (only when JWKS is configured)
+	if jwksEnabled {
+		r.addPrefix("/api/auth/passkey/jit-")
+		r.addPrefix("/api/mcp/")
+		r.addPrefix("/api/a2a/")
+	}
+
+	return r
+}
+
+func (r *PublicRouteRegistry) addExact(path string) {
+	r.exactPaths[path] = struct{}{}
+}
+
+func (r *PublicRouteRegistry) addPrefix(prefix string) {
+	r.prefixes[prefix] = struct{}{}
+}
+
+// IsPublic returns true if the path is registered as a public route.
+func (r *PublicRouteRegistry) IsPublic(path string) bool {
+	// Check exact matches first
+	if _, ok := r.exactPaths[path]; ok {
+		return true
+	}
+
+	// Check prefix matches
+	for prefix := range r.prefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // AuthError represents a structured authentication error.
 type AuthError struct {
 	Message string `json:"error"`
@@ -72,6 +136,8 @@ type AuthService struct {
 	jwks    *JWKSProvider
 	jwtRole string
 
+	publicRoutes *PublicRouteRegistry
+
 	// Rate limiting state for app policies
 	muLimiters sync.Mutex
 	limiters   map[string]*rate.Limiter
@@ -79,17 +145,19 @@ type AuthService struct {
 
 // NewAuthService creates a new AuthService.
 func NewAuthService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, personaSvc *PersonaService, responder *responder.Responder, secretsDir string, jwks *JWKSProvider, jwtRole string) *AuthService {
+	jwksEnabled := jwks != nil
 	return &AuthService{
-		db:         db,
-		pki:        pki,
-		logger:     logger,
-		userSvc:    userSvc,
-		personaSvc: personaSvc,
-		responder:  responder,
-		secretsDir: secretsDir,
-		jwks:       jwks,
-		jwtRole:    jwtRole,
-		limiters:   make(map[string]*rate.Limiter),
+		db:           db,
+		pki:          pki,
+		logger:       logger,
+		userSvc:      userSvc,
+		personaSvc:   personaSvc,
+		responder:    responder,
+		secretsDir:   secretsDir,
+		jwks:         jwks,
+		jwtRole:      jwtRole,
+		publicRoutes: NewPublicRouteRegistry(jwksEnabled),
+		limiters:     make(map[string]*rate.Limiter),
 	}
 }
 
@@ -188,35 +256,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 // publicBypassMiddleware handles routes that are accessible without any authentication.
 func (s *AuthService) publicBypassMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Always allow health check without a token
-		if r.URL.Path == "/health" {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// [PIVOT] Support public protocol auth surface (Phase 4)
-		// These unauthenticated PKI routes return only public material and fingerprints.
-		if strings.HasPrefix(r.URL.Path, "/.well-known/g8e/pki/") {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// JIT passkey bootstrap: when JWKS is configured, allow JIT-specific passkey registration through JWTAuthMiddleware
-		// This unblocks OIDC/JIT users who have zero credentials and cannot reach WebSessionAuth
-		if s.HasJWKS() && strings.HasPrefix(r.URL.Path, "/api/auth/passkey/jit-") {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// These routes are new protocol entry points.
-		// Native Registration Path (Phase 4)
-		// This endpoint is the new sovereign entry point for enrolling binaries.
-		// It MUST be accessible without an internal token as it is the first step
-		// of the trust bootstrap.
-		if r.URL.Path == "/api/pki/sign-csr" ||
-			r.URL.Path == "/api/pki/device-enroll" ||
-			r.URL.Path == "/api/auth/bootstrap" ||
-			r.URL.Path == "/api/auth/bootstrap/status" {
+		if s.publicRoutes.IsPublic(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -228,17 +268,7 @@ func (s *AuthService) publicBypassMiddleware(next http.Handler) http.Handler {
 // mtlsMiddleware enforces mTLS and verifies certificate revocation.
 func (s *AuthService) mtlsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// To maintain the exact same logic as before, we check if the request
-		// was one of the bypass routes.
-		if r.URL.Path == "/health" ||
-			strings.HasPrefix(r.URL.Path, "/.well-known/g8e/pki/") ||
-			(s.HasJWKS() && (strings.HasPrefix(r.URL.Path, "/api/auth/passkey/jit-") ||
-				strings.HasPrefix(r.URL.Path, "/api/mcp/") ||
-				strings.HasPrefix(r.URL.Path, "/api/a2a/"))) ||
-			r.URL.Path == "/api/pki/sign-csr" ||
-			r.URL.Path == "/api/pki/device-enroll" ||
-			r.URL.Path == "/api/auth/bootstrap" ||
-			r.URL.Path == "/api/auth/bootstrap/status" {
+		if s.publicRoutes.IsPublic(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -268,15 +298,7 @@ func (s *AuthService) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Skip auth check for bypass routes. These routes either need no auth
 		// or have their own auth middleware (like JWTAuthMiddleware for MCP/A2A).
-		if r.URL.Path == "/health" ||
-			strings.HasPrefix(r.URL.Path, "/.well-known/g8e/pki/") ||
-			(s.HasJWKS() && (strings.HasPrefix(r.URL.Path, "/api/auth/passkey/jit-") ||
-				strings.HasPrefix(r.URL.Path, "/api/mcp/") ||
-				strings.HasPrefix(r.URL.Path, "/api/a2a/"))) ||
-			r.URL.Path == "/api/pki/sign-csr" ||
-			r.URL.Path == "/api/pki/device-enroll" ||
-			r.URL.Path == "/api/auth/bootstrap" ||
-			r.URL.Path == "/api/auth/bootstrap/status" {
+		if s.publicRoutes.IsPublic(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
