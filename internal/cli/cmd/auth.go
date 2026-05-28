@@ -40,6 +40,9 @@ func authCmd() *cobra.Command {
 }
 
 func loginCmd() *cobra.Command {
+	var count int
+	var ttl int
+
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Authenticate and save operator session",
@@ -186,6 +189,9 @@ func loginCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().IntVar(&count, "count", 1, "Number of sessions to create")
+	cmd.Flags().IntVar(&ttl, "ttl", 3600, "Session TTL in seconds")
 
 	return cmd
 }

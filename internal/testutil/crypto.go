@@ -22,6 +22,8 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -113,4 +115,119 @@ func GenerateTestECPrivateKey(t *testing.T) string {
 	}))
 
 	return keyPEM
+}
+
+// PKICertPaths holds the standard PKI directory structure paths.
+type PKICertPaths struct {
+	RootCA          string
+	HubCA           string
+	OperatorCA      string
+	BootstrapCA     string
+	TrustBundle     string
+	HubBundle       string
+	OperatorBundle  string
+	BootstrapBundle string
+}
+
+// GetPKICertPaths returns the standard PKI certificate paths for a given PKI directory.
+// This centralizes path construction and eliminates hardcoded paths in tests.
+func GetPKICertPaths(pkiDir string) PKICertPaths {
+	return PKICertPaths{
+		RootCA:          filepath.Join(pkiDir, "root", "root_ca.crt"),
+		HubCA:           filepath.Join(pkiDir, "authorities", "hub_ca.crt"),
+		OperatorCA:      filepath.Join(pkiDir, "authorities", "operator_ca.crt"),
+		BootstrapCA:     filepath.Join(pkiDir, "authorities", "bootstrap_ca.crt"),
+		TrustBundle:     filepath.Join(pkiDir, "trust", "root.pem"),
+		HubBundle:       filepath.Join(pkiDir, "trust", "hub-bundle.pem"),
+		OperatorBundle:  filepath.Join(pkiDir, "trust", "operator-bundle.pem"),
+		BootstrapBundle: filepath.Join(pkiDir, "trust", "bootstrap-bundle.pem"),
+	}
+}
+
+// ReadCACert reads a CA certificate from the given path with graceful error handling.
+// If the file doesn't exist, it returns a clear error message indicating which CA is missing.
+// This prevents tests from failing with generic "file not found" errors.
+func ReadCACert(t *testing.T, path, caName string) []byte {
+	t.Helper()
+
+	certPEM, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			require.NoError(t, err, "CA certificate '%s' not found at %s. Ensure PKI is initialized before accessing certificates.", caName, path)
+		}
+		require.NoError(t, err, "failed to read CA certificate '%s' from %s", caName, path)
+	}
+
+	if len(certPEM) == 0 {
+		require.NotEmpty(t, certPEM, "CA certificate '%s' at %s is empty", caName, path)
+	}
+
+	return certPEM
+}
+
+// ReadRootCA reads the root CA certificate from the PKI directory.
+func ReadRootCA(t *testing.T, pkiDir string) []byte {
+	t.Helper()
+	paths := GetPKICertPaths(pkiDir)
+	return ReadCACert(t, paths.RootCA, "root")
+}
+
+// ReadHubCA reads the hub CA certificate from the PKI directory.
+func ReadHubCA(t *testing.T, pkiDir string) []byte {
+	t.Helper()
+	paths := GetPKICertPaths(pkiDir)
+	return ReadCACert(t, paths.HubCA, "hub")
+}
+
+// ReadOperatorCA reads the operator CA certificate from the PKI directory.
+func ReadOperatorCA(t *testing.T, pkiDir string) []byte {
+	t.Helper()
+	paths := GetPKICertPaths(pkiDir)
+	return ReadCACert(t, paths.OperatorCA, "operator")
+}
+
+// ReadBootstrapCA reads the bootstrap CA certificate from the PKI directory.
+func ReadBootstrapCA(t *testing.T, pkiDir string) []byte {
+	t.Helper()
+	paths := GetPKICertPaths(pkiDir)
+	return ReadCACert(t, paths.BootstrapCA, "bootstrap")
+}
+
+// ReadTrustBundle reads the root trust bundle from the PKI directory.
+func ReadTrustBundle(t *testing.T, pkiDir string) []byte {
+	t.Helper()
+	paths := GetPKICertPaths(pkiDir)
+	return ReadCACert(t, paths.TrustBundle, "root trust bundle")
+}
+
+// ReadHubBundle reads the hub trust bundle from the PKI directory.
+func ReadHubBundle(t *testing.T, pkiDir string) []byte {
+	t.Helper()
+	paths := GetPKICertPaths(pkiDir)
+	return ReadCACert(t, paths.HubBundle, "hub trust bundle")
+}
+
+// RequirePKIInitialized checks that the PKI directory structure exists and contains
+// expected certificates. This is useful for tests that depend on a pre-initialized PKI.
+func RequirePKIInitialized(t *testing.T, pkiDir string) {
+	t.Helper()
+
+	paths := GetPKICertPaths(pkiDir)
+
+	// Check that critical directories exist
+	dirs := []string{
+		filepath.Join(pkiDir, "root"),
+		filepath.Join(pkiDir, "authorities"),
+		filepath.Join(pkiDir, "trust"),
+	}
+
+	for _, dir := range dirs {
+		info, err := os.Stat(dir)
+		require.NoError(t, err, "PKI directory %s does not exist", dir)
+		require.True(t, info.IsDir(), "PKI path %s is not a directory", dir)
+	}
+
+	// Check that root CA exists (required for all operations)
+	_, err := os.Stat(paths.RootCA)
+	require.NoError(t, err, "Root CA certificate does not exist at %s. PKI may not be initialized.", paths.RootCA)
 }

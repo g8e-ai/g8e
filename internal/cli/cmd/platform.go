@@ -100,7 +100,7 @@ func platformStartCmd() *cobra.Command {
 			cmd.Println(" 1. SECURE GATEWAY ENDPOINTS & CRYPTOGRAPHIC REALITY")
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Printf("  Control Plane (mTLS/WSS)                     : https://localhost:%d\n", cfg.Paths.Ports.OperatorPublicHTTPS)
-			cmd.Printf("  Operator Bootstrap (Device-Link Enrollment)  : https://%s:%d\n", externalIP, cfg.Paths.Ports.OperatorPublicHTTPS)
+			cmd.Printf("  Operator Bootstrap (CSR Enrollment)          : https://%s:%d\n", externalIP, cfg.Paths.Ports.OperatorPublicHTTPS)
 			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println(" 2. ZERO-TRUST BOOTSTRAP: PROVISION LOCAL PKI")

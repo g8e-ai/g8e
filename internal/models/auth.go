@@ -94,7 +94,7 @@ type DeviceLinkClaim struct {
 	ClaimedAt         time.Time `json:"claimed_at"`
 }
 
-// OperatorRegistrationRequest is the inbound body for /api/auth/device-link/register (CSR-based enrollment).
+// OperatorRegistrationRequest is the inbound body for /api/pki/device-enroll (CSR-based enrollment).
 type OperatorRegistrationRequest struct {
 	CSR               string `json:"csr_pem"`
 	CLICSR            string `json:"cli_csr_pem,omitempty"`
@@ -106,7 +106,7 @@ type OperatorRegistrationRequest struct {
 	IPAddress         string `json:"ip_address,omitempty"`
 }
 
-// OperatorRegistrationResponse is the response for /api/auth/device-link/register (CSR-based enrollment).
+// OperatorRegistrationResponse is the response for /api/pki/device-enroll (CSR-based enrollment).
 //
 // OperatorSessionID and CLISessionID are strictly disjoint session types:
 //   - operator_session_id authenticates the host agent and is bound to the

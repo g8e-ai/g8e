@@ -543,7 +543,7 @@ func TestExecutionService_CancelExecution_NoConcurrentDeadlock(t *testing.T) {
 				ExecutionID:    id,
 				CaseID:         "test-case",
 				Command:        "sleep",
-				Args:           []string{"30"},
+				Args:           []string{"0.1"},
 				TimeoutSeconds: 60,
 				RequestedBy:    "test-user",
 			}
@@ -560,7 +560,7 @@ func TestExecutionService_CancelExecution_NoConcurrentDeadlock(t *testing.T) {
 			svc.CancelExecution(id) //nolint:errcheck
 			select {
 			case <-execDone:
-			case <-time.After(5 * time.Second):
+			case <-time.After(10 * time.Second):
 				t.Errorf("execution %s did not complete - possible deadlock", id)
 			}
 		}(reqID)

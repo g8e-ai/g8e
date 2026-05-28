@@ -72,10 +72,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify root CA cert exists
-		rootCertPath := filepath.Join(pkiDir, "root", "root_ca.crt")
-
-		certPEM, err := os.ReadFile(rootCertPath)
-		require.NoError(t, err)
+		certPEM := testutil.ReadRootCA(t, pkiDir)
 		assert.NotEmpty(t, certPEM)
 
 		// Verify private key is stored in keystore, not as PEM file
@@ -89,7 +86,8 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		assert.NotEmpty(t, keyDER)
 
 		// Verify cert file permissions
-		certInfo, err := os.Stat(rootCertPath)
+		paths := testutil.GetPKICertPaths(pkiDir)
+		certInfo, err := os.Stat(paths.RootCA)
 		require.NoError(t, err)
 		assert.Equal(t, os.FileMode(0644), certInfo.Mode().Perm())
 	})
@@ -107,7 +105,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify all intermediate CAs
-		intermediates := []string{"hub_ca", "operator_ca", "bootstrap_ca"}
+		intermediates := []string{"hub_ca", "operator_ca"}
 		for _, name := range intermediates {
 			certPath := filepath.Join(pkiDir, "authorities", name+".crt")
 			keyPath := filepath.Join(pkiDir, "authorities", name+".key")
@@ -173,7 +171,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify trust bundles
-		bundles := []string{"root.pem", "hub-bundle.pem", "operator-bundle.pem", "bootstrap-bundle.pem"}
+		bundles := []string{"root.pem", "hub-bundle.pem", "operator-bundle.pem"}
 		for _, bundle := range bundles {
 			bundlePath := filepath.Join(pkiDir, "trust", bundle)
 			_, err := os.Stat(bundlePath)
@@ -219,8 +217,7 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 
 	t.Run("Root CA is self-signed", func(t *testing.T) {
 		t.Parallel()
-		rootCertPEM, err := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
-		require.NoError(t, err)
+		rootCertPEM := testutil.ReadRootCA(t, pkiDir)
 
 		block, _ := pem.Decode(rootCertPEM)
 		require.NotNil(t, block)
@@ -236,8 +233,8 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 
 	t.Run("Intermediate CA chain validity", func(t *testing.T) {
 		t.Parallel()
-		rootCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
-		hubCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "authorities", "hub_ca.crt"))
+		rootCertPEM := testutil.ReadRootCA(t, pkiDir)
+		hubCertPEM := testutil.ReadHubCA(t, pkiDir)
 
 		rootBlock, _ := pem.Decode(rootCertPEM)
 		hubBlock, _ := pem.Decode(hubCertPEM)
@@ -253,8 +250,9 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 
 	t.Run("Service certificate chain validity", func(t *testing.T) {
 		t.Parallel()
-		hubCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "authorities", "hub_ca.crt"))
-		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
+		hubCertPEM := testutil.ReadHubCA(t, pkiDir)
+		serviceCertPEM, err := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
+		require.NoError(t, err)
 
 		hubBlock, _ := pem.Decode(hubCertPEM)
 		serviceBlock, _ := pem.Decode(serviceCertPEM)
@@ -283,31 +281,31 @@ func TestPKIAuthority_IssuerSeparation(t *testing.T) {
 
 	t.Run("Distinct intermediate CAs", func(t *testing.T) {
 		t.Parallel()
-		hubCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "authorities", "hub_ca.crt"))
-		operatorCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "authorities", "operator_ca.crt"))
-		bootstrapCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "authorities", "bootstrap_ca.crt"))
+		hubCertPEM := testutil.ReadHubCA(t, pkiDir)
+		operatorCertPEM := testutil.ReadOperatorCA(t, pkiDir)
 
 		hubBlock, _ := pem.Decode(hubCertPEM)
+		require.NotNil(t, hubBlock, "hub CA PEM decode failed")
 		operatorBlock, _ := pem.Decode(operatorCertPEM)
-		bootstrapBlock, _ := pem.Decode(bootstrapCertPEM)
+		require.NotNil(t, operatorBlock, "operator CA PEM decode failed")
 
-		hubCert, _ := x509.ParseCertificate(hubBlock.Bytes)
-		operatorCert, _ := x509.ParseCertificate(operatorBlock.Bytes)
-		bootstrapCert, _ := x509.ParseCertificate(bootstrapBlock.Bytes)
+		hubCert, err := x509.ParseCertificate(hubBlock.Bytes)
+		require.NoError(t, err)
+		operatorCert, err := x509.ParseCertificate(operatorBlock.Bytes)
+		require.NoError(t, err)
 
 		// Verify each has a distinct CommonName
 		assert.NotEqual(t, hubCert.Subject.CommonName, operatorCert.Subject.CommonName)
-		assert.NotEqual(t, hubCert.Subject.CommonName, bootstrapCert.Subject.CommonName)
-		assert.NotEqual(t, operatorCert.Subject.CommonName, bootstrapCert.Subject.CommonName)
 
 		// Verify all are signed by the same root
-		rootCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
+		rootCertPEM := testutil.ReadRootCA(t, pkiDir)
 		rootBlock, _ := pem.Decode(rootCertPEM)
-		rootCert, _ := x509.ParseCertificate(rootBlock.Bytes)
+		require.NotNil(t, rootBlock, "root CA PEM decode failed")
+		rootCert, err := x509.ParseCertificate(rootBlock.Bytes)
+		require.NoError(t, err)
 
 		assert.Equal(t, rootCert.Subject.CommonName, hubCert.Issuer.CommonName)
 		assert.Equal(t, rootCert.Subject.CommonName, operatorCert.Issuer.CommonName)
-		assert.Equal(t, rootCert.Subject.CommonName, bootstrapCert.Issuer.CommonName)
 	})
 }
 
@@ -325,7 +323,8 @@ func TestPKIAuthority_URISAN(t *testing.T) {
 
 	t.Run("Service certificate has SPIFFE URI SAN", func(t *testing.T) {
 		t.Parallel()
-		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
+		serviceCertPEM, err := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
+		require.NoError(t, err)
 		block, _ := pem.Decode(serviceCertPEM)
 		serviceCert, _ := x509.ParseCertificate(block.Bytes)
 
@@ -360,7 +359,7 @@ func TestPKIAuthority_ValidityPeriods(t *testing.T) {
 
 	t.Run("Root CA validity period", func(t *testing.T) {
 		t.Parallel()
-		rootCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
+		rootCertPEM := testutil.ReadRootCA(t, pkiDir)
 		block, _ := pem.Decode(rootCertPEM)
 		rootCert, _ := x509.ParseCertificate(block.Bytes)
 
@@ -373,7 +372,7 @@ func TestPKIAuthority_ValidityPeriods(t *testing.T) {
 
 	t.Run("Intermediate CA validity period", func(t *testing.T) {
 		t.Parallel()
-		hubCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "authorities", "hub_ca.crt"))
+		hubCertPEM := testutil.ReadHubCA(t, pkiDir)
 		block, _ := pem.Decode(hubCertPEM)
 		hubCert, _ := x509.ParseCertificate(block.Bytes)
 
@@ -385,7 +384,8 @@ func TestPKIAuthority_ValidityPeriods(t *testing.T) {
 
 	t.Run("Service certificate validity period", func(t *testing.T) {
 		t.Parallel()
-		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
+		serviceCertPEM, err := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
+		require.NoError(t, err)
 		block, _ := pem.Decode(serviceCertPEM)
 		serviceCert, _ := x509.ParseCertificate(block.Bytes)
 
@@ -410,7 +410,7 @@ func TestPKIAuthority_EKU(t *testing.T) {
 
 	t.Run("CA has correct KeyUsage", func(t *testing.T) {
 		t.Parallel()
-		rootCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
+		rootCertPEM := testutil.ReadRootCA(t, pkiDir)
 		block, _ := pem.Decode(rootCertPEM)
 		rootCert, _ := x509.ParseCertificate(block.Bytes)
 
@@ -420,7 +420,8 @@ func TestPKIAuthority_EKU(t *testing.T) {
 
 	t.Run("Service certificate has correct EKU", func(t *testing.T) {
 		t.Parallel()
-		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
+		serviceCertPEM, err := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
+		require.NoError(t, err)
 		block, _ := pem.Decode(serviceCertPEM)
 		serviceCert, _ := x509.ParseCertificate(block.Bytes)
 
@@ -505,7 +506,7 @@ func TestPKIAuthority_ReuseExisting(t *testing.T) {
 	require.NoError(t, err)
 
 	// Read root cert fingerprint
-	rootCertPEM1, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
+	rootCertPEM1 := testutil.ReadRootCA(t, pkiDir)
 	block1, _ := pem.Decode(rootCertPEM1)
 	cert1, _ := x509.ParseCertificate(block1.Bytes)
 	serial1 := cert1.SerialNumber
@@ -516,7 +517,7 @@ func TestPKIAuthority_ReuseExisting(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify same cert is used (not regenerated)
-	rootCertPEM2, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
+	rootCertPEM2 := testutil.ReadRootCA(t, pkiDir)
 	block2, _ := pem.Decode(rootCertPEM2)
 	cert2, _ := x509.ParseCertificate(block2.Bytes)
 	serial2 := cert2.SerialNumber
