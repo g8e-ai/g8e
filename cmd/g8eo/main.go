@@ -1023,9 +1023,11 @@ func runMCPServe(endpointURL, pkiDir, logLevel string) {
 	caPool.AppendCertsFromPEM(caCert)
 
 	tlsConfig := &tls.Config{
-		MinVersion:   tls.VersionTLS12,
+		MinVersion:   tls.VersionTLS13,
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      caPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    caPool,
 	}
 
 	transport := &http.Transport{
