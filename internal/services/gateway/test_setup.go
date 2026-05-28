@@ -1,0 +1,118 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package gateway
+
+import (
+	"log/slog"
+	"os"
+	"testing"
+
+	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/services/keystore"
+	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/stretchr/testify/require"
+)
+
+// TestInfrastructure holds common test setup components shared across gateway tests.
+type TestInfrastructure struct {
+	Cfg         *config.Config
+	Logger      *slog.Logger
+	DB          *GatewayDBService
+	Pubsub      *PubSubBroker
+	SecretMgr   *SecretManager
+	PKI         *PKIAuthority
+	UserSvc     *UserService
+	PersonaSvc  *PersonaService
+	Responder   *responder.Responder
+	Auth        *AuthService
+	SessionSvc  *SessionService
+	Reg         *RegistrationService
+	Passkey     *PasskeyService
+	DBDir       string
+	PKIDir      string
+	SecretsDir  string
+	KeystoreDir string
+}
+
+// setupTestInfrastructure creates common test infrastructure for gateway tests.
+// It initializes DB, PKI, auth services, and other shared components.
+func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfrastructure {
+	t.Helper()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	os.RemoveAll(secretsDir)
+	os.MkdirAll(secretsDir, 0755)
+
+	pubsub := NewPubSubBroker(logger)
+	t.Cleanup(func() { pubsub.Close() })
+
+	if resetKeystoreStorage {
+		keystore.ResetTestStorage()
+	}
+
+	keystoreDir := t.TempDir()
+	backend, err := keystore.NewTestBackend()
+	require.NoError(t, err)
+	ks, err := keystore.NewWithBackend(keystoreDir, logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+	require.NoError(t, ks.EnsurePermissions())
+	sm := &SecretManager{
+		db:         db.db,
+		secretsDir: t.TempDir(),
+		logger:     logger,
+		keystore:   ks,
+	}
+
+	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
+	err = pki.EnsurePKI(nil)
+	require.NoError(t, err)
+
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	resp := responder.New(logger)
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "")
+	sessionSvc := NewSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+
+	return &TestInfrastructure{
+		Cfg:         cfg,
+		Logger:      logger,
+		DB:          db,
+		Pubsub:      pubsub,
+		SecretMgr:   sm,
+		PKI:         pki,
+		UserSvc:     userSvc,
+		PersonaSvc:  personaSvc,
+		Responder:   resp,
+		Auth:        auth,
+		SessionSvc:  sessionSvc,
+		Reg:         reg,
+		Passkey:     passkey,
+		DBDir:       dbDir,
+		PKIDir:      pkiDir,
+		SecretsDir:  secretsDir,
+		KeystoreDir: keystoreDir,
+	}
+}

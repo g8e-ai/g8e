@@ -72,7 +72,6 @@ The Gateway exposes four logical protocol surfaces. Each surface serves a specif
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **Bootstrap** | 8441 (plain HTTP) | None | Trust bundle download, device-link enrollment, CSR signing, trust scripts |
 | **Public Port** | 8443 (TLS) | Web session | Browser login, WebAuthn challenge, PKI discovery, OOB approval UI |
 | **mTLS API + Pub/Sub** | 8440 (TLS) | mTLS + URI SAN | Governance envelopes, MCP/A2A APIs, document store, WebSocket pub/sub |
 
@@ -81,11 +80,8 @@ The Gateway exposes four logical protocol surfaces. Each surface serves a specif
 The Gateway enforces strict port separation for security:
 - **mTLS only**: `tls.RequireAndVerifyClientCert` for strict mutual TLS on the execution boundary
 - **Public only**: TLS without client certificate requirement for browser-based access
-- **Bootstrap only**: Plain HTTP (no TLS) for trust anchor download
 
 Port mixing is prohibited. The gateway fails startup if incompatible surfaces (e.g., mTLS and Public) are assigned to the same port, as this would force a downgrade to `VerifyClientCertIfGiven` and weaken the execution boundary to an L7 check.
-
-Bootstrap must remain on a dedicated port to preserve plain HTTP trust anchor download.
 
 Ports can be customized via CLI flags or environment variables.
 
@@ -314,9 +310,8 @@ Generate a client certificate for CLI operations:
 
 This:
 1. Generates a CSR (Certificate Signing Request)
-2. Submits it to the Gateway's bootstrap endpoint
-3. Receives a signed client certificate with SPIFFE URI SAN
-4. Stores it in `.g8e/pki/client.crt`
+2. Receives a signed client certificate with SPIFFE URI SAN
+3. Stores it in `.g8e/pki/client.crt`
 
 CLI sessions use the mTLS certificate fingerprint as L3 proof via CLIL3Notary.
 
@@ -383,41 +378,6 @@ This ensures no implicit JIT provisioning occurs without owner approval.
 ---
 
 ## PKI and Trust
-
-### Trust Bundle Download
-
-Download the Gateway's trust bundle for BYO clients:
-
-```bash
-curl http://localhost:8441/.well-known/g8e/pki/hub-bundle.pem -o trust-bundle.pem
-```
-
-### CA Fingerprint
-
-Verify the Gateway's identity via CA fingerprint:
-
-```bash
-curl http://localhost:8441/.well-known/g8e/pki/fingerprint
-```
-
-Response:
-```json
-{
-  "root_ca": "sha256:fingerprint"
-}
-```
-
-### Bootstrap Scripts
-
-The Gateway provides platform-specific bootstrap scripts:
-
-```bash
-# Unix/Linux
-curl -fsSL http://localhost:8441/bootstrap-ca | sudo sh
-
-# Windows PowerShell
-iex (irm http://localhost:8441/bootstrap-ca.ps1)
-```
 
 ### CSR Signing
 

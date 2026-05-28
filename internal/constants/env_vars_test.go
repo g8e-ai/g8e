@@ -42,5 +42,4 @@ func TestEnvVarConstants_SystemEnvVars(t *testing.T) {
 	assert.Equal(t, "USER", string(EnvVar.User))
 	assert.Equal(t, "USERNAME", string(EnvVar.Username))
 	assert.Equal(t, "LOGNAME", string(EnvVar.LogName))
-	assert.Equal(t, "G8E_INSECURE_MCP_TOKEN", string(EnvVar.InsecureMcpToken))
 }

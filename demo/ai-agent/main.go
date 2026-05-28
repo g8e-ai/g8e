@@ -19,11 +19,17 @@ func main() {
 	var llm llms.Model
 	var err error
 
-	// Default to Google Gemini unless USE_OLLAMA is set
-	if os.Getenv("USE_OLLAMA") == "true" {
-		fmt.Println("Initializing Ollama LLM...")
+	// Use Ollama if OLLAMA_ENDPOINT is provided, otherwise default to Gemini
+	ollamaURL := os.Getenv("OLLAMA_ENDPOINT")
+	if ollamaURL != "" {
+		ollamaModel := os.Getenv("OLLAMA_MODEL")
+		if ollamaModel == "" {
+			ollamaModel = "llama3"
+		}
+		fmt.Printf("Initializing Ollama LLM (model: %s)...\n", ollamaModel)
 		llm, err = ollama.New(
-			ollama.WithModel("llama3"), // Default to llama3 or customize via options
+			ollama.WithModel(ollamaModel),
+			ollama.WithServerURL(ollamaURL),
 		)
 		if err != nil {
 			log.Fatalf("Failed to initialize Ollama: %v", err)
@@ -32,15 +38,19 @@ func main() {
 		// Default: Google Gemini
 		if os.Getenv("GEMINI_API_KEY") == "" {
 			fmt.Println("Please set GEMINI_API_KEY environment variable to use the default Gemini model.")
-			fmt.Println("Alternatively, set USE_OLLAMA='true' to use a local Ollama model.")
+			fmt.Println("Alternatively, set OLLAMA_ENDPOINT to use an Ollama endpoint.")
 			os.Exit(1)
 		}
 
-		fmt.Println("Initializing Google Gemini LLM...")
+		geminiModel := os.Getenv("GEMINI_MODEL")
+		if geminiModel == "" {
+			geminiModel = "gemini-1.5-flash"
+		}
+		fmt.Printf("Initializing Google Gemini LLM (model: %s)...\n", geminiModel)
 		llm, err = googleai.New(
 			ctx,
 			googleai.WithAPIKey(os.Getenv("GEMINI_API_KEY")),
-			googleai.WithDefaultModel("gemini-1.5-flash"),
+			googleai.WithDefaultModel(geminiModel),
 		)
 		if err != nil {
 			log.Fatalf("Failed to initialize Google Gemini: %v", err)
@@ -62,9 +72,9 @@ func main() {
 	if vertexProject != "" && vertexLocation != "" && vertexDataStore != "" {
 		fmt.Println("Adding Vertex AI Search tool...")
 		vertexTool := &VertexAISearchTool{
-			ProjectID:  vertexProject,
-			Location:   vertexLocation,
-			DataStore:  vertexDataStore,
+			ProjectID: vertexProject,
+			Location:  vertexLocation,
+			DataStore: vertexDataStore,
 		}
 		agentTools = append(agentTools, vertexTool)
 	} else {
@@ -88,7 +98,7 @@ func main() {
 	question := "Search for the latest internal guidelines on employee benefits. If you can't search, what is 2314 * 123?"
 	fmt.Printf("\nQuestion: %s\n\n", question)
 	fmt.Println("Agent is thinking (this may take a moment)...")
-	
+
 	result, err := chains.Run(ctx, executor, question)
 	if err != nil {
 		log.Fatalf("Failed to run agent: %v", err)

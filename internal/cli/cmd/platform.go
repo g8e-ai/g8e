@@ -70,7 +70,7 @@ func platformStartCmd() *cobra.Command {
 				return nil
 			}
 
-			cmd.Println("[g8e] Initializing BFT Governance Architecture...")
+			cmd.Println("[g8e] Initializing Governance Gateway...")
 			if err := pm.StartOperator(
 				cfg.OperatorHTTPSPort(),
 				cfg.Paths.Ports.OperatorPublicHTTPS,

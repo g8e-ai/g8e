@@ -392,12 +392,6 @@ func (ls *GatewayService) GetHTTPPort() int {
 	return p
 }
 
-// GetWSSPort returns the assigned port for the WSS server.
-// Deprecated: WSS is merged into HTTP; callers should use GetHTTPPort.
-func (ls *GatewayService) GetWSSPort() int {
-	return ls.GetHTTPPort()
-}
-
 // GetPublicPort returns the assigned port for the public server.
 func (ls *GatewayService) GetPublicPort() int {
 	if ls.publicServer == nil || ls.publicServer.Addr == "" {

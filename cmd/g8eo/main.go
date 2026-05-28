@@ -280,9 +280,6 @@ func main() {
 	}
 
 	if insecureMode {
-		if insecureToken == "" {
-			insecureToken = settings.InsecureMcpToken
-		}
 		runInsecureMode(insecureURL, insecureToken, insecureNodeID, insecureDisplayName, settings.Path, logLevel)
 		return
 	}
