@@ -97,13 +97,13 @@ Default ports are sourced from `internal/constants/ports.go`:
 |---|---|---|---|
 | **mTLS API + Pub/Sub** | `8440` (mTLS) | mTLS + URI SAN | `/api/governance/envelope`, `/db/*`, `/kv/*`, `/blob/*`, `/pubsub/publish`, and `/ws/pubsub` real-time fan-out. |
 | **Bootstrap** | `8441` (TLS) | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/bootstrap-ca`, device-link enrollment, CSR signing. |
-| **Public Port** | `8442` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery for browser/BYO bootstrap. |
+| **Public Port** | `8443` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery for browser/BYO bootstrap. |
 
 #### Port Constraints
 
 - **mTLS Surface** (`8440`): Requires `tls.RequireAndVerifyClientCert`. This is the primary execution boundary.
 - **Bootstrap Surface** (`8441`): Serves plain TLS (without client-cert) to allow enrollment.
-- **Public Surface** (`8442`): Serves TLS with WebAuthn/Passkey authentication for browser-based access.
+- **Public Surface** (`8443`): Serves TLS with WebAuthn/Passkey authentication for browser-based access.
 - **Collision Prevention**: The gateway fails startup if incompatible surfaces (e.g., mTLS and Public) are assigned to the same port, as this would force a downgrade to `VerifyClientCertIfGiven`.
 
 ---

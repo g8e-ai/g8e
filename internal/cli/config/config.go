@@ -210,7 +210,7 @@ func (c *Config) OperatorHTTPURL() string {
 	return fmt.Sprintf("https://localhost:%d", c.OperatorHTTPSPort())
 }
 
-// OperatorPublicURL returns the Public TLS port (8442) for device-link enrollment
+// OperatorPublicURL returns the Public TLS port (8443) for device-link enrollment
 func (c *Config) OperatorPublicURL() string {
 	return fmt.Sprintf("https://localhost:%d", c.Paths.Ports.OperatorPublicHTTPS)
 }

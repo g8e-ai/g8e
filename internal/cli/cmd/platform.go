@@ -109,7 +109,7 @@ func platformStartCmd() *cobra.Command {
 			cmd.Printf("     curl -fsSLk https://%s:%d/bootstrap-ca | sudo sh\n", externalIP, cfg.Paths.Ports.G8eeHTTPS)
 			cmd.Println()
 			cmd.Printf("  Run on Windows (PowerShell - Administrator):\n")
-			cmd.Printf("     iwr -Uri https://%s:%d/bootstrap-ca -UseBasicParsing -SkipCertificateCheck | iex\n", externalIP, cfg.Paths.Ports.G8eeHTTPS)
+			cmd.Printf("     iex (irm https://%s:%d/bootstrap-ca.ps1 -SkipCertificateCheck)\n", externalIP, cfg.Paths.Ports.G8eeHTTPS)
 			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println(" 3. TARGETED ACTIONABLE NEXT STEPS [CHOOSE ONE]")

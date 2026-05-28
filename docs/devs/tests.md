@@ -117,7 +117,7 @@ Defaults from `protocol/constants/ports.json` (canonical source of truth):
 
 - `8440` - Operator mTLS API and Pub/Sub
 - `8441` - Operator Bootstrap (plain HTTP; device-link enrollment)
-- `8442` - Operator Public TLS (browser/BYO bootstrap)
+- `8443` - Operator Public TLS (browser/BYO bootstrap)
 - `8443` - g8ee HTTPS (optional application-layer Engine)
 - `18789` - Insecure MCP Gateway
 

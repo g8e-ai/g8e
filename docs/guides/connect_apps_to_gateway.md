@@ -73,7 +73,7 @@ The Gateway exposes four logical protocol surfaces. Each surface serves a specif
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
 | **Bootstrap** | 8441 (plain HTTP) | None | Trust bundle download, device-link enrollment, CSR signing, trust scripts |
-| **Public Port** | 8442 (TLS) | Web session | Browser login, WebAuthn challenge, PKI discovery, OOB approval UI |
+| **Public Port** | 8443 (TLS) | Web session | Browser login, WebAuthn challenge, PKI discovery, OOB approval UI |
 | **mTLS API + Pub/Sub** | 8440 (TLS) | mTLS + URI SAN | Governance envelopes, MCP/A2A APIs, document store, WebSocket pub/sub |
 
 ### Port Multiplexing
@@ -324,7 +324,7 @@ CLI sessions use the mTLS certificate fingerprint as L3 proof via CLIL3Notary.
 
 For web-based interactions:
 
-1. Navigate to `https://localhost:8442` (public port)
+1. Navigate to `https://localhost:8443` (public port)
 2. Follow on-screen prompts to register a security key
 3. Use the key for subsequent authentication
 
@@ -416,7 +416,7 @@ The Gateway provides platform-specific bootstrap scripts:
 curl -fsSL http://localhost:8441/bootstrap-ca | sudo sh
 
 # Windows PowerShell
-curl -fsSL http://localhost:8441/bootstrap-ca.ps1 | powershell
+iex (irm http://localhost:8441/bootstrap-ca.ps1)
 ```
 
 ### CSR Signing
@@ -445,7 +445,7 @@ When a standard AI client requests a mutation without L3 proof, the Gateway susp
 
 1. Client submits MCP/A2A request without L3 signature
 2. Gateway stores transaction in `suspended_transactions` table
-3. Gateway returns approval URL: `https://localhost:8442/approve/{tx_hash}`
+3. Gateway returns approval URL: `https://localhost:8443/approve/{tx_hash}`
 4. User opens URL in browser and authenticates with passkey
 5. User approves transaction via WebAuthn
 6. Gateway attaches L3 proof and resumes verification
@@ -456,14 +456,14 @@ When a standard AI client requests a mutation without L3 proof, the Gateway susp
 List suspended transactions:
 
 ```bash
-curl https://localhost:8442/api/suspended-transactions \
+curl https://localhost:8443/api/suspended-transactions \
   --cookie "web_session=..."
 ```
 
 Approve a transaction:
 
 ```bash
-curl -X POST https://localhost:8442/api/approve/{tx_hash} \
+curl -X POST https://localhost:8443/api/approve/{tx_hash} \
   --cookie "web_session=..." \
   -H "Content-Type: application/json" \
   -d '{"action": "approve"}'

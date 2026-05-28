@@ -123,7 +123,7 @@ func TestLoginCmd(t *testing.T) {
 				"insecure_mcp_gateway": 18789,
 				"operator_bootstrap_https": 8441,
 				"operator_https": 8440,
-				"operator_public_https": 8442
+				"operator_public_https": 8443
 			}
 		}`
 		pathsPath := filepath.Join(constantsDir, "paths.json")
@@ -192,7 +192,7 @@ func TestLogoutCmd(t *testing.T) {
 				"insecure_mcp_gateway": 18789,
 				"operator_bootstrap_https": 8441,
 				"operator_https": 8440,
-				"operator_public_https": 8442
+				"operator_public_https": 8443
 			}
 		}`
 		pathsPath := filepath.Join(constantsDir, "paths.json")

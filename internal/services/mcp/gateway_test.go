@@ -24,14 +24,16 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
+
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/responder"
 	"github.com/g8e-ai/g8e/internal/services/governance"
@@ -175,7 +177,7 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 		suspendedStore:  store,
 		signingKey:      privKey,
 		keyID:           "test-key",
-		publicBaseURL:   "https://localhost:8442",
+		publicBaseURL:   fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
 		maxPayloadBytes: 10 * 1024 * 1024, // 10MB
 	}
 
@@ -194,7 +196,7 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 		require.Equal(t, "test-tool", tx.ToolName)
 		require.Equal(t, `{"foo":"bar"}`, string(tx.ToolArguments))
 	}
-	expectedJSON := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Execution paused. Please visit https://localhost:8442/approve/%s to authorize via WebAuthn, then retry."}]}}`, txHash)
+	expectedJSON := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Execution paused. Please visit https://localhost:%d/approve/%s to authorize via WebAuthn, then retry."}]}}`, constants.Ports.OperatorPublicHttps, txHash)
 	require.JSONEq(t, expectedJSON, w.Body.String())
 }
 
@@ -1208,7 +1210,7 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 		store := &fakeSuspendedStore{}
 		g := &GatewayService{
 			suspendedStore:  store,
-			publicBaseURL:   "https://localhost:8442",
+			publicBaseURL:   fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
 			maxPayloadBytes: 10 * 1024 * 1024,
 		}
 
@@ -1226,7 +1228,7 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 		t.Parallel()
 		g := &GatewayService{
 			suspendedStore:  nil,
-			publicBaseURL:   "https://localhost:8442",
+			publicBaseURL:   fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
 			maxPayloadBytes: 10 * 1024 * 1024,
 		}
 
@@ -1879,7 +1881,7 @@ func TestGatewayService_HandleA2aCall(t *testing.T) {
 			signingKey:        privKey,
 			keyID:             "test-key",
 			stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-			publicBaseURL:     "https://localhost:8442",
+			publicBaseURL:     fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
 			maxPayloadBytes:   10 * 1024 * 1024,
 		}
 
@@ -1930,7 +1932,7 @@ func TestGatewayService_HandleA2aCall(t *testing.T) {
 			suspendedStore:  store,
 			signingKey:      privKey,
 			keyID:           "test-key",
-			publicBaseURL:   "https://localhost:8442",
+			publicBaseURL:   fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
 			maxPayloadBytes: 10 * 1024 * 1024,
 		}
 

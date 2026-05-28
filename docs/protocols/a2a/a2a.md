@@ -167,7 +167,7 @@ Default ports (configurable via config or paths.json):
 |---|---|---|
 | `8440` | mTLS API + Pub/Sub | mTLS (RequireAndVerifyClientCert) |
 | `8441` | Bootstrap enrollment | Plain HTTP (no TLS) |
-| `8442` | Public web session | TLS (no client cert) |
+| `8443` | Public web session | TLS (no client cert) |
 
 ### Environment Variables
 

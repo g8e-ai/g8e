@@ -70,7 +70,7 @@ To start the gateway, run the g8e binary with a gateway mode flag:
 - `--notary` — Gateway mode: L1/L2/L3 strictly enforced
 - `--http-listen-port <port>` — HTTPS port for mTLS API (default: 8440)
 - `--bootstrap-listen-port <port>` — Bootstrap TLS port for device-link enrollment (default: 8441)
-- `--public-listen-port <port>` — Public browser/BYO bootstrap port (default: 8442)
+- `--public-listen-port <port>` — Public browser/BYO bootstrap port (default: 8443)
 - `--data-dir <dir>` — Data directory for SQLite database (default: .g8e/data in working directory)
 - `--pki-dir <dir>` — Directory for TLS certificates (default: .g8e/pki)
 - `--secrets-dir <dir>` — Directory for platform secrets (default: .g8e/secrets)

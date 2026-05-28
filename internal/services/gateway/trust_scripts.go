@@ -424,6 +424,7 @@ exec ./g8e.operator --device-token "$_token" --endpoint "$G8E_HOST"{{.PortFlags}
 }
 
 // WindowsPowerShellTrustScript returns a PowerShell script for Windows.
+// Designed to be invoked via: iex (irm https://host:port/bootstrap-ca.ps1)
 func WindowsPowerShellTrustScript(host string, port int, publicPort int) string {
 	host = sanitizeHost(host)
 	portSuffix := ""
