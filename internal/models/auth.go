@@ -170,7 +170,7 @@ type OperatorDocumentGo struct {
 
 // MarshalJSON implements json.Marshaler with default enum values.
 // Ensures OperatorType and CloudSubtype are defaulted before serialization
-// to eliminate the need for coercion logic in downstream consumers (e.g., Python engine).
+// to eliminate the need for coercion logic in downstream consumers (e.g., Python agent).
 func (o *OperatorDocumentGo) MarshalJSON() ([]byte, error) {
 	type Alias OperatorDocumentGo
 	defaulted := &struct {

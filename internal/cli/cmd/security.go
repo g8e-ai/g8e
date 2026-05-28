@@ -116,7 +116,6 @@ func securityValidateCmd() *cobra.Command {
 				constants.Ports.OperatorHttps,
 				constants.Ports.OperatorBootstrapHttps,
 				constants.Ports.OperatorPublicHttps,
-				constants.Ports.G8eeHttps,
 			}
 			for _, port := range ports {
 				addr := fmt.Sprintf("127.0.0.1:%d", port)

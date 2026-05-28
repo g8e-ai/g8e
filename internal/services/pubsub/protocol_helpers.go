@@ -26,11 +26,11 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 // mapProtoToPayloadType maps a protobuf message to its canonical g8e payload type string.
-// This ensures synchronization with g8ee Pydantic models (services/g8ee/app/models/pubsub_messages.py).
+// This ensures synchronization with agent Pydantic models.
 func mapProtoToPayloadType(msg proto.Message) string {
 	switch m := msg.(type) {
 	case *operatorv1.CommandResult:
@@ -108,7 +108,7 @@ func BuildUniversalResultEnvelope(
 		_ = json.Unmarshal(jsonBytes, &intentData)
 	}
 
-	// Inject canonical payload_type for consumer discriminator-based parsing (e.g., g8ee Pydantic)
+	// Inject canonical payload_type for consumer discriminator-based parsing (e.g., agent Pydantic)
 	if intentData != nil {
 		if _, ok := intentData["payload_type"]; !ok {
 			intentData["payload_type"] = mapProtoToPayloadType(payload)

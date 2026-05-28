@@ -15,13 +15,13 @@ package constants
 
 import "fmt"
 
-// Channel naming convention (shared across client, g8ee, g8eo):
+// Channel naming convention (shared across client, agent, g8eo):
 // Canonical values defined in protocol/constants/channels.json (the source of truth).
-// g8ee and client are also consumers of that same JSON file.
+// Agent and client are also consumers of that same JSON file.
 //
-//	cmd:{operator_id}:{operator_session_id}       g8ee -> Operator
-//	results:{operator_id}:{operator_session_id}    Operator -> g8ee
-//	heartbeat:{operator_id}:{operator_session_id}  Operator -> g8ee
+//	cmd:{operator_id}:{operator_session_id}       Agent -> Operator
+//	results:{operator_id}:{operator_session_id}    Operator -> Agent
+//	heartbeat:{operator_id}:{operator_session_id}  Operator -> Agent
 
 // CmdChannel returns the command channel for an g8e.
 func CmdChannel(operatorID, operatorSessionID string) string {

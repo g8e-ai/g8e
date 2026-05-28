@@ -354,7 +354,6 @@ func isDirectDBMutationAllowed(collection string) bool {
 		constants.CollectionConsoleAudit:
 		return true
 	// Governed collections must use POST /api/governance/envelope
-	// See: .local.dev/docs/plans/engine_gateway_secure_link.md §2
 	case constants.CollectionCases,
 		constants.CollectionInvestigations,
 		constants.CollectionTasks,

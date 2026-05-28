@@ -179,7 +179,7 @@ func signedEnvelope(
 		ProtocolVersion:   "1.0",
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(30 * time.Minute)), // Increased to 30m for chaos runs
-		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
+		SourceComponent:   commonv1.Component_COMPONENT_AGENT,
 		OperatorId:        "chaos-operator",
 		OperatorSessionId: sessionID,
 		ActionType:        actionType,

@@ -91,7 +91,7 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg
 		ProtocolVersion:   "1.0",
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
-		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
+		SourceComponent:   commonv1.Component_COMPONENT_AGENT,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "session-1",
 		ActionType:        string(constants.ActionTypeFsList),

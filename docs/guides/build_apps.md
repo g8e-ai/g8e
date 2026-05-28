@@ -298,14 +298,14 @@ Applications must validate the state root returned by the Gateway (via health en
 
 ## Reference Implementation
 
-The reference g8e-compatible agentic ensemble (g8ee) demonstrates a maximal application implementation. It includes:
+A reference g8e-compatible agentic ensemble demonstrates a maximal application implementation. It includes:
 
 - Internal consensus mechanism for L2 signature generation
 - Envelope construction and submission
 - Receipt verification and consumption
 - MCP/A2A integration
 
-Refer to the g8ee source code for a complete example of a g8e-compatible application.
+Refer to the reference ensemble source code for a complete example of a g8e-compatible application.
 
 ---
 

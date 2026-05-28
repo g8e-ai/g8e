@@ -505,7 +505,7 @@ func (m *SecretManager) StoreServicePrivateKey(name string, keyDER []byte) error
 }
 
 // GetServicePrivateKey retrieves a service or app certificate private key from the keystore.
-// name should be the service/app identifier (e.g., "operator-gateway", "g8ee").
+// name should be the service/app identifier (e.g., "operator-gateway", "agent").
 func (m *SecretManager) GetServicePrivateKey(name string) ([]byte, error) {
 	hash := sha256.Sum256([]byte(name))
 	keystoreName := fmt.Sprintf("service_%x_key", hash)
@@ -517,7 +517,7 @@ func (m *SecretManager) GetServicePrivateKey(name string) ([]byte, error) {
 }
 
 // DeleteServicePrivateKey deletes a service or app certificate private key from the keystore.
-// name should be the service/app identifier (e.g., "operator-gateway", "g8ee").
+// name should be the service/app identifier (e.g., "operator-gateway", "agent").
 func (m *SecretManager) DeleteServicePrivateKey(name string) error {
 	hash := sha256.Sum256([]byte(name))
 	keystoreName := fmt.Sprintf("service_%x_key", hash)

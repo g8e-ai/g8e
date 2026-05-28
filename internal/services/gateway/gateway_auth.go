@@ -441,11 +441,6 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 		for _, uri := range cert.URIs {
 			uriStr := uri.String()
 			if strings.HasPrefix(uriStr, "spiffe://"+protocol.TrustDomain+"/app/") {
-				if uriStr == "spiffe://"+protocol.TrustDomain+"/app/g8ee" {
-					next.ServeHTTP(w, r)
-					return true
-				}
-
 				appID := uriStr
 				doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
 				if err != nil || doc == nil {

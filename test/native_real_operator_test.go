@@ -256,7 +256,7 @@ func TestNativeRealOperator_EndToEnd(t *testing.T) {
 		envelope := &commonv1.GovernanceEnvelope{
 			Timestamp:         timestamppb.Now(),
 			ExpiresAt:         timestamppb.New(time.Now().Add(5 * time.Minute)),
-			SourceComponent:   commonv1.Component_COMPONENT_G8EE,
+			SourceComponent:   commonv1.Component_COMPONENT_AGENT,
 			OperatorId:        regResp.OperatorID,
 			OperatorSessionId: regResp.OperatorSessionID,
 			EventType:         string(constants.EventOperatorCommandRequested),
@@ -340,7 +340,7 @@ func TestNativeRealOperator_EndToEnd(t *testing.T) {
 		envelope := &commonv1.GovernanceEnvelope{
 			Timestamp:         timestamppb.Now(),
 			ExpiresAt:         timestamppb.New(time.Now().Add(5 * time.Minute)),
-			SourceComponent:   commonv1.Component_COMPONENT_G8EE,
+			SourceComponent:   commonv1.Component_COMPONENT_AGENT,
 			OperatorId:        regResp.OperatorID,
 			OperatorSessionId: regResp.OperatorSessionID,
 			EventType:         string(constants.EventOperatorCommandRequested),
@@ -405,7 +405,7 @@ func TestNativeRealOperator_EndToEnd(t *testing.T) {
 		envelope := &commonv1.GovernanceEnvelope{
 			Timestamp:         timestamppb.Now(),
 			ExpiresAt:         timestamppb.New(time.Now().Add(5 * time.Minute)),
-			SourceComponent:   commonv1.Component_COMPONENT_G8EE,
+			SourceComponent:   commonv1.Component_COMPONENT_AGENT,
 			OperatorId:        regResp.OperatorID,
 			OperatorSessionId: regResp.OperatorSessionID,
 			EventType:         string(constants.EventOperatorFileEditRequested),

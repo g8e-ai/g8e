@@ -808,7 +808,7 @@ func handleVerifyVault(vault *vault.Vault, privateKey []byte, logger *slog.Logge
 // runInsecureMode starts the Operator in INSECURE MCP gateway mode.
 // The Operator connects to an MCP gateway via WebSocket without any governance.
 // This mode bypasses all L1/L2/L3 verification and is DANGEROUS.
-// No g8e infrastructure (g8ee, client) is required.
+// No g8e infrastructure (agent, client) is required.
 func runInsecureMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {

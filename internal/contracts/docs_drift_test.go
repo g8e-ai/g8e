@@ -123,7 +123,6 @@ func TestDocsNoStaleTerms(t *testing.T) {
 		"Reality Portal",
 		"Sentinel daemon",
 		"mandatory g8ed",
-		"mandatory g8ee",
 	}
 
 	err := filepath.Walk(docsDir, func(path string, info os.FileInfo, err error) error {

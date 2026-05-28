@@ -85,7 +85,7 @@ type LoadOptions struct {
 type GatewayConfig struct {
 	Enabled          bool
 	Posture          GatewayPosture // Governance enforcement posture (doctrine, consensus, notary)
-	HTTPPort         int            // TLS/HTTPS port for internal g8ee/client traffic (default: from paths.json)
+	HTTPPort         int            // TLS/HTTPS port for internal agent/client traffic (default: from paths.json)
 	BootstrapPort    int            // Plain-TLS port for bootstrap routes (/.well-known/, /api/pki/device-enroll for CSR enrollment) (default: from paths.json)
 	PublicPort       int            // Plain-TLS port for browser-based auth and setup (default: from paths.json)
 	DataDir          string         // Root directory for SQLite database (default: .g8e/data in working directory)

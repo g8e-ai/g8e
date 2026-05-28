@@ -78,7 +78,6 @@ type PathsConfig struct {
 		SSHConfigPath        string `json:"ssh_config_path"`
 	} `json:"infra"`
 	Ports struct {
-		G8eeHTTPS              int `json:"g8ee_https"`
 		InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 		OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 		OperatorHTTPS          int `json:"operator_https"`
@@ -200,10 +199,6 @@ func (c *Config) OperatorBootstrapHTTPSPort() int {
 
 func (c *Config) OperatorPublicHTTPSPort() int {
 	return c.Paths.Ports.OperatorPublicHTTPS
-}
-
-func (c *Config) G8eeHTTPSPort() int {
-	return c.Paths.Ports.G8eeHTTPS
 }
 
 func (c *Config) OperatorHTTPURL() string {

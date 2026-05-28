@@ -53,7 +53,7 @@ func GatewaySchema() string {
 
 // GatewayDBService provides the unified SQLite persistence layer for gateway mode.
 // Three subsystems:
-//   - Document store: collection/id based CRUD (replaces client+g8ee separate SQLite DBs)
+//   - Document store: collection/id based CRUD (replaces client+agent separate SQLite DBs)
 //   - KV store with TTL: key/value with optional expiration
 //   - SSE event buffer: per-session event ring buffer
 type GatewayDBService struct {

@@ -103,7 +103,7 @@ Every mutation passes through sequential verification layers at the Operator bou
 
 ## Status: v1.0.2 — Core Substrate
 
-g8e is the mandatory governance substrate. The Engine (g8ee) and Dashboard (g8ed) are optional application-layer adapters.
+g8e is the mandatory governance substrate. Agent ensembles and Dashboard (g8ed) are optional application-layer adapters.
 
 **Operational Today**
 - **Universal Protocol Translation**: Intercept MCP/A2A tool calls into signed envelopes.

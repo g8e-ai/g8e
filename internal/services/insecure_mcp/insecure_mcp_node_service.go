@@ -132,7 +132,7 @@ const (
 
 // InsecureMcpNodeService connects the g8e Operator to an MCP gateway without governance.
 // It advertises system.run and system.which, executes shell commands on request,
-// and streams results back - with no g8e infrastructure dependency (no g8ee Ensemble,
+// and streams results back - with no g8e infrastructure dependency (no agent ensemble,
 // no client, no pub/sub, no auth bootstrap, NO L1/L2/L3 VERIFICATION).
 type InsecureMcpNodeService struct {
 	gatewayURL  string

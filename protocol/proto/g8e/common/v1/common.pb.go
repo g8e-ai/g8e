@@ -42,7 +42,7 @@ type Component int32
 
 const (
 	Component_COMPONENT_UNSPECIFIED Component = 0
-	Component_COMPONENT_G8EE        Component = 1
+	Component_COMPONENT_AGENT       Component = 1
 	Component_COMPONENT_G8EO        Component = 2
 	Component_COMPONENT_CLIENT      Component = 3
 )
@@ -51,13 +51,13 @@ const (
 var (
 	Component_name = map[int32]string{
 		0: "COMPONENT_UNSPECIFIED",
-		1: "COMPONENT_G8EE",
+		1: "COMPONENT_AGENT",
 		2: "COMPONENT_G8EO",
 		3: "COMPONENT_CLIENT",
 	}
 	Component_value = map[string]int32{
 		"COMPONENT_UNSPECIFIED": 0,
-		"COMPONENT_G8EE":        1,
+		"COMPONENT_AGENT":       1,
 		"COMPONENT_G8EO":        2,
 		"COMPONENT_CLIENT":      3,
 	}
@@ -733,10 +733,10 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\atask_id\x18\x11 \x01(\tR\x06taskId\x12-\n" +
 	"\x12system_fingerprint\x18\x12 \x01(\tR\x11systemFingerprint\x12\x1b\n" +
 	"\ttenant_id\x18\x17 \x01(\tR\btenantId\x12'\n" +
-	"\x0fbinding_persona\x18\x18 \x01(\tR\x0ebindingPersona*d\n" +
+	"\x0fbinding_persona\x18\x18 \x01(\tR\x0ebindingPersona*e\n" +
 	"\tComponent\x12\x19\n" +
-	"\x15COMPONENT_UNSPECIFIED\x10\x00\x12\x12\n" +
-	"\x0eCOMPONENT_G8EE\x10\x01\x12\x12\n" +
+	"\x15COMPONENT_UNSPECIFIED\x10\x00\x12\x13\n" +
+	"\x0fCOMPONENT_AGENT\x10\x01\x12\x12\n" +
 	"\x0eCOMPONENT_G8EO\x10\x02\x12\x14\n" +
 	"\x10COMPONENT_CLIENT\x10\x03:N\n" +
 	"\x12forbidden_patterns\x12\x1d.google.protobuf.FieldOptions\x18ц\x03 \x01(\tR\x11forbiddenPatternsB=Z;github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1;commonv1b\x06proto3"

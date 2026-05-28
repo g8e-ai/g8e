@@ -337,11 +337,11 @@ func TestGovernanceEnvelope_Integration(t *testing.T) {
 }
 
 func TestConstants_Ports(t *testing.T) {
-	if constants.Ports.G8eeHttps <= 0 {
-		t.Error("G8eeHttps port should be positive")
+	if constants.Ports.OperatorPublicHttps <= 0 {
+		t.Error("OperatorPublicHttps port should be positive")
 	}
 
-	if constants.Ports.G8eeHttps > 65535 {
-		t.Error("G8eeHttps port should be valid (< 65536)")
+	if constants.Ports.OperatorPublicHttps > 65535 {
+		t.Error("OperatorPublicHttps port should be valid (< 65536)")
 	}
 }
