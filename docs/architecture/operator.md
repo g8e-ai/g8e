@@ -4,7 +4,7 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-05-25
+Last Updated: 2026-05-28
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -25,7 +25,7 @@ The Operator is the only component capable of mutating the host. It executes rem
 
 ---
 
-## 2. The 5-Layer Governance Gauntlet
+## 2. 5-Layer Verification Sequence
 
 When a command targets an Operator, it progresses through a strict, fail-closed pipeline consisting of five distinct layers of verification and execution:
 
@@ -88,7 +88,7 @@ The host is the authoritative source of truth for all mutations.
 
 - **Sovereignty Boundary Plane**: Data sovereignty is enforced at the boundary. Sensitive data is scrubbed before leaving the host and replaced with tokens (`{{UEI_N}}`). These tokens are rehydrated by the `L5Actuator` only at the moment of execution.
 - **Strict Canonical JSON**: While schemas are defined in Protobuf, the wire format for all client-facing surfaces is strictly canonical JSON (`protojson`) for maximum ecosystem compatibility.
-- **No Backward Compatibility**: The Operator enforces the current strict 3-Layer governance protocol. Legacy formats, HMAC fallbacks, and unsigned inputs are rejected. 
+- **Strict Protocol Enforcement**: The Operator enforces the current 5-layer verification protocol. Outdated formats, HMAC fallbacks, and unsigned inputs are rejected.
 
 ---
 
@@ -97,7 +97,7 @@ The host is the authoritative source of truth for all mutations.
 The reference implementation (`g8eo`) currently supports:
 
 - **Universal Protocol Translation** — Functional MCP and A2A gateway mapping standard tool calls to signed `GovernanceEnvelope` mutations.
-- **Fail-Closed 5-Layer Gauntlet** — L1 (Doctrine), L2 (Consensus), and L4 (Warden) gates are fully enforced on every transaction.
+- **Fail-Closed 5-Layer Verification** — L1 (Doctrine), L2 (Consensus), and L4 (Warden) gates are fully enforced on every transaction.
 - **Outbound-Only mTLS Connectivity** — Dial-out reverse tunnels with zero inbound port requirements.
 - **Local-First Audit Vault** — Git-backed ledger and fail-closed SQLite audit vault enforcing session existence for all writes.
 - **Deterministic Hash Binding** — SHA-256 transaction hash integrity enforced across all wire formats.
@@ -111,19 +111,19 @@ The reference implementation (`g8eo`) currently supports:
 
 | Concern | Authoritative file |
 |---|---|
-| Ingress Verification (`L4Warden`) | `internal/services/governance/l4_warden.go` |
-| Execution Boundary (`L5Actuator`) | `internal/services/governance/l5_actuator.go` |
-| Sovereignty (Data Scrubbing) | `internal/services/sovereignty/boundary.go` |
-| Technical Bedrock (`L1Doctrine`) | `internal/services/governance/l1_doctrine.go` |
-| Consensus (`L2Consensus`) | `internal/services/governance/l2_consensus.go` |
-| Notary (`L3Notary`) | `internal/services/governance/l3_notary.go` |
-| Local Audit Vault | `internal/services/storage/audit_vault.go` |
-| Native Git Ledger | `internal/services/storage/ledger.go` |
-| Operator Entrypoint | `cmd/g8eo/main.go` |
-| Protocol Definitions | `protocol/proto/g8e/common/v1/common.proto` |
-| Operator Protocol | `protocol/proto/g8e/operator/v1/operator.proto` |
-| Workload Identity | `protocol/workload_identity.go` |
-| Event Constants | `protocol/constants/events.json` |
-| Port Constants | `protocol/constants/ports.json` |
+| Ingress Verification (`L4Warden`) | `/home/bob/g8e/internal/services/governance/l4_warden.go` |
+| Execution Boundary (`L5Actuator`) | `/home/bob/g8e/internal/services/governance/l5_actuator.go` |
+| Sovereignty (Data Scrubbing) | `/home/bob/g8e/internal/services/sovereignty/boundary.go` |
+| Technical Bedrock (`L1Doctrine`) | `/home/bob/g8e/internal/services/governance/l1_doctrine.go` |
+| Consensus (`L2Consensus`) | `/home/bob/g8e/internal/services/governance/l2_consensus.go` |
+| Notary (`L3Notary`) | `/home/bob/g8e/internal/services/governance/l3_notary.go` |
+| Local Audit Vault | `/home/bob/g8e/internal/services/storage/audit_vault.go` |
+| Native Git Ledger | `/home/bob/g8e/internal/services/storage/ledger.go` |
+| Operator Entrypoint | `/home/bob/g8e/cmd/g8eo/main.go` |
+| Protocol Definitions | `/home/bob/g8e/protocol/proto/g8e/common/v1/common.proto` |
+| Operator Protocol | `/home/bob/g8e/protocol/proto/g8e/operator/v1/operator.proto` |
+| Workload Identity | `/home/bob/g8e/protocol/workload_identity.go` |
+| Event Constants | `/home/bob/g8e/protocol/constants/events.json` |
+| Port Constants | `/home/bob/g8e/protocol/constants/ports.json` |
 
 See also: [g8e Protocol](./protocol.md), [Governance Gateway](./gateway.md).

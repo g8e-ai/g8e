@@ -129,7 +129,6 @@ func TestDataCommandSubcommands(t *testing.T) {
 		expectedSubcommands := []string{
 			"users",
 			"operators",
-			"device-links",
 			"settings",
 			"store",
 			"audit",

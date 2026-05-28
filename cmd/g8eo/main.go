@@ -41,7 +41,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services"
-	auth "github.com/g8e-ai/g8e/internal/services/auth"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	gateway "github.com/g8e-ai/g8e/internal/services/gateway"
 	insecure_mcp "github.com/g8e-ai/g8e/internal/services/insecure_mcp"
@@ -93,7 +92,6 @@ func main() {
 	}
 
 	var privateKey string
-	var deviceToken string
 	var endpointURL string
 	var trustBundlePath string
 	var workingDir string
@@ -133,7 +131,6 @@ func main() {
 	var mcpServe bool
 	flag.BoolVar(&mcpServe, "mcp-serve", false, "Expose MCP gateway over stdio (JSON-RPC)")
 	flag.StringVar(&privateKey, "k", "", "Private key")
-	flag.StringVar(&deviceToken, "D", "", "Device link token for operator deployment")
 	flag.StringVar(&endpointURL, "e", "", "Endpoint (hostname or IP)")
 	flag.BoolVar(&cloudMode, "c", true, "Cloud mode")
 	flag.StringVar(&cloudProvider, "p", "", "Cloud provider")
@@ -143,9 +140,8 @@ func main() {
 	flag.BoolVar(&showVersion, "v", false, "Version")
 	flag.IntVar(&httpPort, "http-port", constants.Ports.OperatorHttps, "HTTPS port for auth/bootstrap via operator proxy (default: from paths.json)")
 	flag.StringVar(&privateKey, "key", "", "Private key")
-	flag.StringVar(&deviceToken, "device-token", "", "Device link token for operator deployment")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
-	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: .g8e/pki/hub-bundle.pem or fetch from /.well-known/g8e/pki/hub-bundle.pem)")
+	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: .g8e/pki/g8e-gw-ca-bundle.pem or fetch from /.well-known/g8e/pki/g8e-gw-ca-bundle.pem)")
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory operator was launched from)")
 	flag.BoolVar(&cloudMode, string(constants.OperatorTypeCloud), true, "Cloud mode")
 	flag.StringVar(&cloudProvider, "provider", "", "Cloud provider")
@@ -158,7 +154,7 @@ func main() {
 	flag.BoolVar(&consensusMode, "consensus", false, "Gateway mode: L1/L2 enforced, L3 audited")
 	flag.BoolVar(&notaryMode, "notary", false, "Gateway mode: L1/L2/L3 strictly enforced")
 	flag.IntVar(&gatewayHTTPPort, "http-listen-port", constants.Ports.OperatorHttps, "HTTPS port for mTLS API (default: from paths.json)")
-	flag.IntVar(&gatewayBootstrapPort, "bootstrap-listen-port", constants.Ports.OperatorBootstrapHttps, "Bootstrap TLS port for device-link enrollment (default: from paths.json)")
+	flag.IntVar(&gatewayBootstrapPort, "bootstrap-listen-port", constants.Ports.OperatorBootstrapHttps, "Bootstrap TLS port for CSR enrollment (default: from paths.json)")
 	flag.IntVar(&gatewayPublicPort, "public-listen-port", constants.Ports.OperatorPublicHttps, "Public browser/BYO bootstrap port (default: from paths.json)")
 	flag.StringVar(&gatewayDataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
 	flag.StringVar(&gatewayPKIDir, "pki-dir", "", "Directory for TLS certificates (default: .g8e/pki)")
@@ -185,7 +181,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Platform Commands:\n")
 		fmt.Fprintf(os.Stderr, "  platform    Platform lifecycle (start, stop, status, logs)\n")
 		fmt.Fprintf(os.Stderr, "  apps        Application lifecycle (start, stop, status, logs)\n")
-		fmt.Fprintf(os.Stderr, "  auth        Authentication (login, logout, device-link)\n")
+		fmt.Fprintf(os.Stderr, "  auth        Authentication (login, logout)\n")
 		fmt.Fprintf(os.Stderr, "  data        Data operations (export, import, query)\n")
 		fmt.Fprintf(os.Stderr, "  evals       Run evaluation suites\n")
 		fmt.Fprintf(os.Stderr, "  security    Security operations (pki, certificates)\n")
@@ -193,9 +189,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  vars        Environment variable management\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -k, --key <key>         Private key (or set G8E_OPERATOR_PRIVATE_KEY)\n")
-		fmt.Fprintf(os.Stderr, "  -D, --device-token <tok> Device link token for operator deployment\n")
 		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running operator\n")
-		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: .g8e/pki/hub-bundle.pem or fetch from /.well-known/g8e/pki/hub-bundle.pem)\n")
+		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: .g8e/pki/g8e-gw-ca-bundle.pem or fetch from /.well-known/g8e/pki/g8e-gw-ca-bundle.pem)\n")
 		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory operator was launched from)\n")
 		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")
 		fmt.Fprintf(os.Stderr, "      --http-port <port>    HTTPS port to dial for auth/bootstrap (default: %d)\n", constants.Ports.OperatorHttps)
@@ -212,7 +207,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  --consensus               Gateway mode: L1/L2 enforced, L3 audited\n")
 		fmt.Fprintf(os.Stderr, "  --notary                  Gateway mode: L1/L2/L3 strictly enforced\n")
 		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for mTLS API (default: %d)\n", constants.Ports.OperatorHttps)
-		fmt.Fprintf(os.Stderr, "  --bootstrap-listen-port <port> Bootstrap TLS port for device-link enrollment (default: %d)\n", constants.Ports.OperatorBootstrapHttps)
+		fmt.Fprintf(os.Stderr, "  --bootstrap-listen-port <port> Bootstrap TLS port for CSR-based enrollment (default: %d)\n", constants.Ports.OperatorBootstrapHttps)
 		fmt.Fprintf(os.Stderr, "  --public-listen-port <port> Public browser/BYO bootstrap port (default: %d)\n", constants.Ports.OperatorPublicHttps)
 		fmt.Fprintf(os.Stderr, "  --data-dir <dir>            Data directory for SQLite (default: .g8e/data in working directory)\n")
 		fmt.Fprintf(os.Stderr, "  --pki-dir <dir>             Directory for TLS certificates (default: .g8e/pki)\n")
@@ -280,9 +275,6 @@ func main() {
 	}
 
 	if insecureMode {
-		if insecureToken == "" {
-			insecureToken = settings.InsecureMcpToken
-		}
 		runInsecureMode(insecureURL, insecureToken, insecureNodeID, insecureDisplayName, settings.Path, logLevel)
 		return
 	}
@@ -306,12 +298,12 @@ func main() {
 
 	// Load trust bundle for TLS verification. Priority:
 	// 1. Explicit --trust-bundle path
-	// 2. Local PKI directory (.g8e/pki/hub-bundle.pem)
-	// 3. Fetch from Operator /.well-known/g8e/pki/hub-bundle.pem endpoint
+	// 2. Local PKI directory (.g8e/pki/g8e-gw-ca-bundle.pem)
+	// 3. Fetch from Operator /.well-known/g8e/pki/g8e-gw-ca-bundle.pem endpoint
 	trustLoaded := loadTrustBundle(logger, trustBundlePath, workingDir)
 	if !trustLoaded {
 		if endpointURL != "" {
-			trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/hub-bundle.pem", endpointURL, constants.Ports.OperatorBootstrapHttps)
+			trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/g8e-gw-ca-bundle.pem", endpointURL, constants.Ports.OperatorBootstrapHttps)
 			logger.Info("Fetching trust bundle from Operator PKI endpoint", "url", trustURL)
 			if err := certs.FetchAndSetCA(context.Background(), trustURL); err != nil {
 				logger.Error("Failed to fetch trust bundle from Operator", "url", trustURL, string(constants.ConnectionStateError), err)
@@ -326,30 +318,6 @@ func main() {
 		}
 	}
 	logger.Info("Trust bundle loaded")
-
-	var deviceAuthResult *auth.DeviceAuthResult
-
-	if deviceToken == "" {
-		deviceToken = settings.DeviceToken
-	}
-	if deviceToken != "" {
-		logger.Info("Device link token provided, authenticating...")
-		deviceResult, err := auth.AuthenticateWithDeviceToken(deviceToken, operatorEndpoint, logger, settings.User)
-		if err != nil {
-			logger.Error("Device link authentication failed", string(constants.ConnectionStateError), err)
-			fmt.Fprintf(os.Stderr, "Device authentication failed: %v\n", err)
-			os.Exit(constants.ExitAuthFailure)
-		}
-		logger.Info("Device authentication successful", "operator_id", deviceResult.OperatorID)
-
-		// Store device result for later bootstrap config application
-		deviceAuthResult = deviceResult
-	}
-
-	if deviceAuthResult != nil && deviceAuthResult.Config != nil {
-		logger.Info("Applying bootstrap config from device-link registration")
-		// We still need to apply other config fields (like certs) once 'cfg' is created
-	}
 
 	if logLevel == "info" {
 		if settings.LogLevel != "" {
@@ -395,21 +363,6 @@ func main() {
 	}
 
 	cfg.Version = version
-
-	// Apply remaining bootstrap config from device-link registration if available
-	if deviceAuthResult != nil && deviceAuthResult.Config != nil {
-		logger.Info("Applying remaining bootstrap config from device-link registration")
-		bootstrapService, err := auth.NewBootstrapService(cfg, logger)
-		if err != nil {
-			logger.Error("Failed to create bootstrap service", string(constants.ConnectionStateError), err)
-			os.Exit(constants.ExitConfigError)
-		}
-		if err := bootstrapService.ApplyBootstrapConfig(deviceAuthResult.Config); err != nil {
-			logger.Error("Failed to apply bootstrap config", string(constants.ConnectionStateError), err)
-			os.Exit(constants.ExitCodeFromError(err))
-		}
-		logger.Info("Bootstrap config applied successfully")
-	}
 
 	if cfg.CloudMode {
 		logger.Info("Cloud Operator mode enabled", "provider", cfg.CloudProvider)
@@ -461,7 +414,7 @@ func printVersion() {
 
 // loadTrustBundle attempts to read a trust bundle from:
 // 1. Explicit path provided via --trust-bundle
-// 2. Working directory PKI path (.g8e/pki/hub-bundle.pem)
+// 2. Working directory PKI path (.g8e/pki/g8e-gw-ca-bundle.pem)
 // Returns true on the first valid PEM found, which is installed via
 // certs.SetCA. Returns false if no valid trust bundle is found.
 func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string) bool {
@@ -472,7 +425,7 @@ func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string) bool 
 	}
 
 	if workingDir != "" {
-		pkiPath := filepath.Join(workingDir, ".g8e", "pki", "hub-bundle.pem")
+		pkiPath := filepath.Join(workingDir, ".g8e", "pki", "g8e-gw-ca-bundle.pem")
 		pathsToCheck = append(pathsToCheck, pkiPath)
 	}
 
@@ -1003,10 +956,10 @@ func runMCPServe(endpointURL, pkiDir, logLevel string) {
 	trustBundle := os.Getenv("G8E_TRUST_BUNDLE")
 	if trustBundle == "" {
 		if pkiDir != "" {
-			trustBundle = filepath.Join(pkiDir, "trust", "hub-bundle.pem")
+			trustBundle = filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
 		} else {
 			// fallback
-			trustBundle = ".g8e/pki/trust/hub-bundle.pem"
+			trustBundle = ".g8e/pki/trust/g8e-gw-ca-bundle.pem"
 		}
 	}
 
@@ -1026,9 +979,11 @@ func runMCPServe(endpointURL, pkiDir, logLevel string) {
 	caPool.AppendCertsFromPEM(caCert)
 
 	tlsConfig := &tls.Config{
-		MinVersion:   tls.VersionTLS12,
+		MinVersion:   tls.VersionTLS13,
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      caPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    caPool,
 	}
 
 	transport := &http.Transport{

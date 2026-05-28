@@ -21,7 +21,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	clierrors "github.com/g8e-ai/g8e/internal/cli/errors"
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -29,7 +28,7 @@ func authCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth",
 		Short: "Authentication and session management",
-		Long:  `Manage mTLS enrollment, device-link tokens, and operator sessions.`,
+		Long:  `Manage mTLS enrollment and operator sessions via CSR-based authentication.`,
 	}
 
 	cmd.AddCommand(
@@ -47,7 +46,7 @@ func loginCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Authenticate and save operator session",
-		Long:  `Authenticate and save mTLS credentials to ~/.g8e/credentials. The first login automatically bootstraps the platform.`,
+		Long:  `Authenticate and save mTLS credentials to ~/.g8e/credentials. The first login automatically bootstraps the platform via CSR-based enrollment.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
@@ -60,7 +59,7 @@ func loginCmd() *cobra.Command {
 
 			trustBundle := cfg.TrustBundlePath()
 			if _, err := os.Stat(trustBundle); os.IsNotExist(err) {
-				return fmt.Errorf("trust bundle not found at %s - start the platform first: ./g8e platform start", trustBundle)
+				return fmt.Errorf("trust bundle not found at %s - install the platform CA manually before login", trustBundle)
 			}
 
 			// Check if platform is already bootstrapped
@@ -104,7 +103,7 @@ func loginCmd() *cobra.Command {
 				}
 
 				if regResp.HubTrustBundle != "" {
-					hubBundlePath := filepath.Join(cfg.CredentialsDir, "hub-bundle.pem")
+					hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
 					if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0600); err != nil {
 						return fmt.Errorf("failed to save hub trust bundle: %w", err)
 					}
@@ -130,23 +129,8 @@ func loginCmd() *cobra.Command {
 				return nil
 			}
 
-			// Normal device-link flow for subsequent logins
-			userID := uuid.New().String()
-			cmd.Printf("Requesting device-link token for user %s...\n", userID)
-			dlResp, err := auth.RequestDeviceLink(cfg, userID, count, ttl)
-			if err != nil {
-				return err
-			}
-			ttlStr := fmt.Sprintf("%dh", ttl/3600)
-			cmd.Printf("Device-link token obtained: %s (count=%d, ttl=%s)\n", dlResp.Token, count, ttlStr)
-
-			externalIP := config.GetExternalInterfaceIP()
-			bootstrapPort := cfg.OperatorBootstrapHTTPSPort()
-			bootstrapURL := fmt.Sprintf("http://%s:%d", externalIP, bootstrapPort)
-			cmd.Println("\nTo launch the Operator on a remote system:")
-			cmd.Printf("  curl -fsSL %s/g8e | sh -s -- %s\n", bootstrapURL, dlResp.Token)
-			cmd.Printf("  G8E_TOKEN=%s curl -fsSL %s/g8e | sh\n", dlResp.Token, bootstrapURL)
-			cmd.Println()
+			// Platform already bootstrapped - CSR-based re-enrollment
+			cmd.Println("Platform already bootstrapped. Re-enrolling via CSR...")
 
 			cmd.Println("Generating keys and CSRs...")
 			hostname, _ := os.Hostname()
@@ -160,8 +144,8 @@ func loginCmd() *cobra.Command {
 				return fmt.Errorf("failed to generate CLI CSR: %w", err)
 			}
 
-			cmd.Println("Registering with operator...")
-			regResp, err := auth.RegisterDeviceLink(cfg, dlResp.Token, opCSR, cliCSR)
+			cmd.Println("Re-enrolling with operator...")
+			regResp, err := auth.Bootstrap(cfg, opCSR, cliCSR)
 			if err != nil {
 				return err
 			}
@@ -179,7 +163,7 @@ func loginCmd() *cobra.Command {
 			}
 
 			if regResp.HubTrustBundle != "" {
-				hubBundlePath := filepath.Join(cfg.CredentialsDir, "hub-bundle.pem")
+				hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
 				if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0600); err != nil {
 					return fmt.Errorf("failed to save hub trust bundle: %w", err)
 				}
@@ -187,7 +171,7 @@ func loginCmd() *cobra.Command {
 
 			creds := &auth.Credentials{
 				OperatorSessionID: regResp.OperatorSessionID,
-				UserID:            dlResp.UserID,
+				UserID:            regResp.UserID,
 				OperatorID:        regResp.OperatorID,
 				CLISessionID:      regResp.CLISessionID,
 			}
@@ -196,7 +180,8 @@ func loginCmd() *cobra.Command {
 				return fmt.Errorf("failed to save credentials: %w", err)
 			}
 
-			cmd.Printf("\nAuthenticated as user %s\n", userID)
+			cmd.Printf("\nRe-enrollment complete\n")
+			cmd.Printf("User ID: %s\n", regResp.UserID)
 			cmd.Printf("Operator Session ID: %s\n", regResp.OperatorSessionID)
 			cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
 			cmd.Printf("Operator ID: %s\n", regResp.OperatorID)
@@ -205,8 +190,8 @@ func loginCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().IntVar(&count, "count", 1, "Number of device-link uses")
-	cmd.Flags().IntVar(&ttl, "ttl", 3600, "Device-link token TTL in seconds")
+	cmd.Flags().IntVar(&count, "count", 1, "Number of sessions to create")
+	cmd.Flags().IntVar(&ttl, "ttl", 3600, "Session TTL in seconds")
 
 	return cmd
 }

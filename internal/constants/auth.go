@@ -59,7 +59,6 @@ const (
 	HeaderContentLength                 = "Content-Length"
 	HeaderContentType                   = "Content-Type"
 	HeaderCookie                        = "Cookie"
-	HeaderDeviceToken                   = "X-G8E-Device-Token"
 	HeaderExecutionID                   = "X-G8E-Execution-ID"
 	HeaderInvestigationID               = "X-G8E-Investigation-ID"
 	HeaderLastEventID                   = "Last-Event-ID"

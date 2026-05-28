@@ -24,7 +24,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 )
@@ -40,13 +39,6 @@ type Operator struct {
 	Status       string `json:"status"`
 }
 
-type DeviceLink struct {
-	Token   string `json:"token"`
-	Status  string `json:"status"`
-	Uses    int    `json:"uses"`
-	MaxUses int    `json:"max_uses"`
-}
-
 type QueryFilter struct {
 	Field string      `json:"field"`
 	Op    string      `json:"op"`
@@ -55,16 +47,6 @@ type QueryFilter struct {
 
 type QueryRequest struct {
 	Filters []QueryFilter `json:"filters"`
-}
-
-type DeviceLinkCreateRequest struct {
-	UserID     string `json:"user_id"`
-	MaxUses    int    `json:"max_uses"`
-	TTLSeconds int    `json:"ttl_seconds"`
-}
-
-type DeviceLinkCreateResponse struct {
-	Token string `json:"token"`
 }
 
 type SettingsResponse struct {
@@ -80,13 +62,12 @@ func dataCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "data",
 		Short: "Administer the local substrate over mTLS",
-		Long:  `Data management commands for users, operators, device-links, and settings.`,
+		Long:  `Data management commands for users, operators, settings, and audit.`,
 	}
 
 	cmd.AddCommand(
 		dataUsersCmd(),
 		dataOperatorsCmd(),
-		dataDeviceLinksCmd(),
 		dataSettingsCmd(),
 		dataStoreCmd(),
 		dataAuditCmd(),
@@ -166,177 +147,6 @@ func dataOperatorsCmd() *cobra.Command {
 			return nil
 		},
 	}
-	return cmd
-}
-
-func dataDeviceLinksCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "device-links",
-		Short: "Manage device-link tokens",
-	}
-
-	cmd.AddCommand(
-		dataDeviceLinksListCmd(),
-		dataDeviceLinksCreateCmd(),
-		dataDeviceLinksDeleteCmd(),
-	)
-
-	return cmd
-}
-
-func dataDeviceLinksListCmd() *cobra.Command {
-	var userID string
-
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List device-link tokens",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			queryUserID := userID
-			if queryUserID == "" {
-				queryUserID = uuid.New().String()
-			}
-
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			client, err := api.NewClient(cfg)
-			if err != nil {
-				return err
-			}
-
-			query := QueryRequest{
-				Filters: []QueryFilter{
-					{Field: "user_id", Op: "==", Value: queryUserID},
-				},
-			}
-
-			resp, err := client.Post("/db/device_links/_query", query)
-			if err != nil {
-				return err
-			}
-
-			var links []DeviceLink
-			if err := json.Unmarshal(resp, &links); err != nil {
-				return fmt.Errorf("failed to parse response: %w", err)
-			}
-
-			cmd.Printf("Device Links for user %s (%d total)\n", queryUserID, len(links))
-			cmd.Println(strings.Repeat("=", 110))
-			for _, link := range links {
-				cmd.Printf("  %s  status=%s  uses=%d/%d\n", link.Token, link.Status, link.Uses, link.MaxUses)
-			}
-
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVar(&userID, "user-id", "", "User ID (auto-generated if not provided)")
-
-	return cmd
-}
-
-func dataDeviceLinksCreateCmd() *cobra.Command {
-	var userID string
-	var count int
-	var ttl int
-
-	cmd := &cobra.Command{
-		Use:   string(constants.FileOperationCreate),
-		Short: "Create a device-link token",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			if userID == "" {
-				userID = uuid.New().String()
-			}
-
-			client, err := api.NewClient(cfg)
-			if err != nil {
-				return err
-			}
-
-			req := DeviceLinkCreateRequest{
-				UserID:     userID,
-				MaxUses:    count,
-				TTLSeconds: ttl,
-			}
-
-			resp, err := client.Post("/api/device-links", req)
-			if err != nil {
-				return err
-			}
-
-			var result DeviceLinkCreateResponse
-			if err := json.Unmarshal(resp, &result); err != nil {
-				return fmt.Errorf("failed to parse response: %w", err)
-			}
-
-			if result.Token == "" {
-				return fmt.Errorf("response missing token field")
-			}
-
-			cmd.Printf("Device-link token created: %s\n", result.Token)
-			cmd.Printf("User ID: %s\n", userID)
-			cmd.Printf("Max uses: %d\n", count)
-			cmd.Printf("TTL: %d seconds\n", ttl)
-
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVar(&userID, "user-id", "", "User ID (auto-generated if not provided)")
-	cmd.Flags().IntVar(&count, "count", 1, "Number of uses")
-	cmd.Flags().IntVar(&ttl, "ttl", 3600, "TTL in seconds")
-
-	return cmd
-}
-
-func dataDeviceLinksDeleteCmd() *cobra.Command {
-	var token string
-	var userID string
-
-	cmd := &cobra.Command{
-		Use:   "delete",
-		Short: "Delete a device-link token",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			client, err := api.NewClient(cfg)
-			if err != nil {
-				return err
-			}
-
-			if token == "" {
-				return fmt.Errorf("--token is required")
-			}
-
-			if userID == "" {
-				userID = uuid.New().String()
-			}
-
-			path := fmt.Sprintf("/api/device-links/%s?user_id=%s", token, userID)
-			_, err = client.Delete(path)
-			if err != nil {
-				return err
-			}
-
-			cmd.Printf("Device-link token deleted: %s\n", token)
-
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVar(&token, "token", "", "Token to delete (required)")
-	cmd.Flags().StringVar(&userID, "user-id", "", "User ID (auto-generated if not provided)")
-
 	return cmd
 }
 

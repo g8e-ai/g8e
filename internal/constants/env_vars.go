@@ -65,10 +65,7 @@ var EnvVar = struct {
 	PKIDir                     EnvVarKey
 	SecretsDir                 EnvVarKey
 	PubSubCACert               EnvVarKey
-	SSLCertFile                EnvVarKey
 	OperatorSessionID          EnvVarKey
-	InternalAuthToken          EnvVarKey
-	DeviceToken                EnvVarKey
 	LogLevel                   EnvVarKey
 	DataDir                    EnvVarKey
 	LocalStoreEnabled          EnvVarKey
@@ -77,7 +74,6 @@ var EnvVar = struct {
 	LocalStoreRetentionDays    EnvVarKey
 	IPService                  EnvVarKey
 	IPResolver                 EnvVarKey
-	InsecureMcpToken           EnvVarKey
 	Shell                      EnvVarKey
 	Lang                       EnvVarKey
 	Term                       EnvVarKey
@@ -158,10 +154,7 @@ var EnvVar = struct {
 	PKIDir:                     "G8E_PKI_DIR",
 	SecretsDir:                 "G8E_SECRETS_DIR",
 	PubSubCACert:               "G8E_PUBSUB_CA_CERT",
-	SSLCertFile:                "G8E_SSL_CERT_FILE",
 	OperatorSessionID:          "G8E_OPERATOR_SESSION_ID",
-	InternalAuthToken:          "G8E_INTERNAL_AUTH_TOKEN",
-	DeviceToken:                "G8E_DEVICE_TOKEN",
 	LogLevel:                   "G8E_LOG_LEVEL",
 	DataDir:                    "G8E_DATA_DIR",
 	LocalStoreEnabled:          "G8E_LOCAL_STORE_ENABLED",
@@ -170,7 +163,6 @@ var EnvVar = struct {
 	LocalStoreRetentionDays:    "G8E_LOCAL_STORE_RETENTION_DAYS",
 	IPService:                  "G8E_IP_SERVICE",
 	IPResolver:                 "G8E_IP_RESOLVER",
-	InsecureMcpToken:           "G8E_INSECURE_MCP_TOKEN",
 	Shell:                      "SHELL",
 	Lang:                       "LANG",
 	Term:                       "TERM",

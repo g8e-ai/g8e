@@ -5,7 +5,7 @@ This document defines the technical standards, architectural invariants, and con
 ## Core Architectural Invariants
 
 1. **Human agency is absolute.** Every state-changing operation surfaces its own approval prompt. Automatic Function Calling is permanently disabled.
-2. **3-layer governance bedrock.** Doctrine (L1Doctrine) hard gates (forbidden patterns) via protobuf reflection; Consensus (L2Consensus) multi-agent consensus with reputation staking; Notary (L3Notary) human-in-the-loop with hardware-bound WebAuthn proofs (auto-approval for benign diagnostics only after Doctrine (L1Doctrine)+Consensus (L2Consensus) pass).
+2. **5-layer verification sequence.** L1 Technical Bedrock (L1Doctrine) hard gates via protobuf reflection; L2 Consensus (L2Consensus) multi-agent consensus; L3 Notary (L3Notary) human-in-the-loop WebAuthn proofs; L4 Warden (L4Warden) pre-dispatch verification; L5 Actuator (L5Actuator) sovereign execution boundary and signed receipts.
 3. **Data sovereignty.** Raw command output and file contents stay on the Operator host, encrypted, and never persist platform-side. Platform state is host-native under `.g8e/`.
 4. **Security by structure.** All changes adhere to the Security Review Checklist. The Operator is the only execution boundary.
 5. **BYO Frontend.** The platform is UI-less by design. The **CLI (`./g8e`) is the default out-of-the-box UI**. The Operator provides a minimal bootstrap web interface, but primary interaction is via the CLI or BYO clients.
@@ -108,7 +108,7 @@ All runtime state is rooted at `./.g8e/`.
 
 AI agents tend to wrap poorly understood code in new abstractions. This is strictly forbidden.
 
-1. **Rip and replace.** When existing code violates contracts or is structurally unsound, replace it correctly. Do not route around it with a wrapper. **No backwards compatibility** is maintained for broken data structures or legacy shims.
+1. **Rip and replace.** When existing code violates contracts or is structurally unsound, replace it correctly. Do not route around it with a wrapper. No compatibility is maintained for broken data structures or outdated shims.
 2. **Prohibited patterns.** `ensure*()`, `getOrCreate*()`, `Any` in type signatures, and `map[string]interface{}` for known shapes are hard stops. Functions do exactly one thing: reads read, writes write.
 3. **No defensive guards.** Never add defensive code at the call site to handle unexpected values. Hunt down the root cause and fix it at the source.
 
@@ -116,7 +116,7 @@ AI agents tend to wrap poorly understood code in new abstractions. This is stric
 
 ### General Principles
 - **Industry Standards**: We adhere to modern, strict industry standards for every language we use.
-- **Latest Versions**: Always use the latest stable versions of languages (Go 1.26+, Python 3.14+), libraries, and update methods. Avoid deprecated APIs and legacy patterns.
+- **Latest Versions**: Always use the latest stable versions of languages (Go 1.26+, Python 3.14+), libraries, and update methods. Avoid deprecated APIs and outdated patterns.
 - **Fail-Closed**: If a security check, validation, or critical dependency fails, the system must halt immediately.
 - **Explicit over Implicit**: No magic, no hidden side effects, and no "guessing" user intent.
 - **Zero Tech Debt**: Every PR must leave the codebase cleaner than it was found.

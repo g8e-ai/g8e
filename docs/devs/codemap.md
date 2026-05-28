@@ -1,6 +1,6 @@
 # g8e Codemap
 
-Structural reference. For protocol semantics see [protocol.md](protocol.md), for gateway architecture see [gateway.md](gateway.md), for operator details see [operator.md](operator.md).
+Structural reference. For protocol semantics see [/home/bob/g8e/docs/architecture/protocol.md](/home/bob/g8e/docs/architecture/protocol.md), for gateway architecture see [/home/bob/g8e/docs/architecture/gateway.md](/home/bob/g8e/docs/architecture/gateway.md), for operator details see [/home/bob/g8e/docs/architecture/operator.md](/home/bob/g8e/docs/architecture/operator.md).
 
 ## Dependency Graph
 
@@ -134,16 +134,16 @@ The core of the operator. `g8eo.go` orchestrates Outbound mode; `gateway/` orche
 services/
 ├── g8eo.go                         # Outbound mode orchestrator
 │
-├── governance/                     # L1-L5 verification gauntlet
+├── governance/                     # L1-L5 verification sequence
 │   ├── processor.go                #   EnvelopeProcessor interface
-│   ├── l1_doctrine.go              #   L1: forbidden patterns, threat analysis
-│   ├── l2_consensus.go             #   L2: Ed25519 consensus signature verification
-│   ├── l3_notary.go                #   L3: L3Notary interface + outboundL3Notary (CLI approval)
-│   ├── l4_warden.go                #   L4: fail-closed verification gate
-│   ├── l5_actuator.go              #   L5: execution boundary, receipt signer
+│   ├── l1_doctrine.go              #   L1: Technical Bedrock (Hard Gates)
+│   ├── l2_consensus.go             #   L2: Consensus (Distributed Agreement)
+│   ├── l3_notary.go                #   L3: Notary (Authorization)
+│   ├── l4_warden.go                #   L4: Warden (Pre-dispatch Gate)
+│   ├── l5_actuator.go              #   L5: Actuator (Execution Boundary)
 │   └── mocks/                      #   Test mocks
 │
-├── gateway/                        # Gateway mode orchestrator
+├── gateway/                        # Gateway mode orchestrator (PDP)
 │   ├── gateway_service.go          #   Top-level init, GovernanceDeps assembly
 │   ├── gateway_db.go               #   SQLite canonical state
 │   ├── gateway_auth.go             #   Authentication / authorization
@@ -193,8 +193,8 @@ services/
 │   ├── tls_errors.go               #   TLS error classification
 │   ├── l2_verifier.go              #   L2 signature verification
 │   ├── protocol_helpers.go         #   Envelope helpers
-│   ├── g8es_pubsub_client.go       #   OperatorPubSubClient (outbound mode)
-│   └── inprocess_client.go         #   InProcessPubSubClient (gateway loopback)
+│   ├── g8es_pubsub_client.go       #   Operator pub/sub client (outbound mode)
+│   └── inprocess_client.go         #   In-process pub/sub client (gateway loopback)
 │
 ├── mcp/                            # MCP/A2A protocol translation
 │   ├── gateway.go                  #   JSON-RPC to GovernanceEnvelope
@@ -202,12 +202,13 @@ services/
 │   └── models.go                   #   SuspendedTransaction model
 │
 ├── sovereignty/
-│   └── boundary.go                 #   Secret detection, PII redaction, rehydration
+│   └── boundary.go                 #   Sovereignty Boundary Plane: data scrubbing/rehydration
 │
 ├── auth/
 │   ├── bootstrap.go                #   Device-link token auth + bootstrap config
 │   ├── device_auth.go
-│   └── fingerprint.go
+│   ├── fingerprint.go
+│   └── sessions.go
 │
 ├── keystore/
 │   ├── keystore.go                 #   Keystore interface
@@ -281,7 +282,7 @@ test/
 
 ```text
 .g8e/
-├── pki/                            # Certificates, keys, hub-bundle.pem
+├── pki/                            # Certificates, keys, g8e-gw-ca-bundle.pem
 ├── data/                           # SQLite databases (audit vault, gateway DB, local store)
 ├── ledger/                         # Git-backed ledger (go-git)
 │   └── sessions/{id}/.git          # Session-scoped repos

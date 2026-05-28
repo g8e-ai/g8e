@@ -16,18 +16,83 @@ package testutil
 import (
 	"crypto/x509"
 	"encoding/pem"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
-	"github.com/g8e-ai/g8e/internal/services/gateway"
+	"github.com/gorilla/websocket"
+	"github.com/stretchr/testify/require"
 )
+
+// ---------------------------------------------------------------------------
+// Minimal PubSubBroker - inlined to avoid import cycle with gateway package
+// ---------------------------------------------------------------------------
+
+type testPubSubBroker struct {
+	logger      *slog.Logger
+	subscribers map[string]map[*testSubscriber]struct{}
+	mu          sync.RWMutex
+}
+
+type testSubscriber struct {
+	conn *websocket.Conn
+	mu   sync.Mutex
+}
+
+var testWSUpgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
+func newTestPubSubBroker(logger *slog.Logger) *testPubSubBroker {
+	return &testPubSubBroker{
+		logger:      logger,
+		subscribers: make(map[string]map[*testSubscriber]struct{}),
+	}
+}
+
+func (b *testPubSubBroker) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	conn, err := testWSUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		b.logger.Error("WebSocket upgrade failed", "error", err)
+		return
+	}
+	defer conn.Close()
+
+	sub := &testSubscriber{conn: conn}
+
+	// Handle subscribe/unsubscribe messages
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+
+		b.mu.Lock()
+		channel := string(msg)
+		if b.subscribers[channel] == nil {
+			b.subscribers[channel] = make(map[*testSubscriber]struct{})
+		}
+		b.subscribers[channel][sub] = struct{}{}
+		b.mu.Unlock()
+	}
+}
+
+func (b *testPubSubBroker) Close() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, subs := range b.subscribers {
+		for sub := range subs {
+			sub.conn.Close()
+		}
+	}
+	b.subscribers = make(map[string]map[*testSubscriber]struct{})
+}
 
 // ---------------------------------------------------------------------------
 // Helpers - minimal in-process TLS pub/sub server for unit tests
@@ -45,9 +110,10 @@ import (
 func newTLSPubSubServer(t *testing.T) string {
 	t.Helper()
 
-	broker := gateway.NewPubSubBroker(NewTestLogger())
+	broker := newTestPubSubBroker(NewTestLogger())
 	srv := httptest.NewTLSServer(http.HandlerFunc(broker.HandleWebSocket))
 	t.Cleanup(srv.Close)
+	t.Cleanup(broker.Close)
 
 	// Extract the server's leaf certificate and temporarily set it as the
 	// trusted CA so httpclient.WebSocketDialer() accepts the connection.

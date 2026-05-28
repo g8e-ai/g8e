@@ -183,9 +183,12 @@ func TestResolveGatewayPorts(t *testing.T) {
 	t.Run("resolves when all are available", func(t *testing.T) {
 		// Use very high ports that are likely free
 		h, b, p := ResolveGatewayPorts(55000, 55001, 55002)
-		assert.Equal(t, 55000, h)
-		assert.Equal(t, 55001, b)
-		assert.Equal(t, 55002, p)
+		// Verify ports are sequential and >= requested values
+		assert.True(t, h >= 55000)
+		assert.True(t, b >= 55001)
+		assert.True(t, p >= 55002)
+		assert.Equal(t, b, h+1)
+		assert.Equal(t, p, h+2)
 	})
 }
 

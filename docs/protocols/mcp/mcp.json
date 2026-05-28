@@ -12,7 +12,7 @@
       "properties": {
         "tool_name": {
           "type": "string",
-          "description": "The MCP tool name (e.g., 'fs_read', 'drop_table'). Forbidden patterns here block the gauntlet at L1 before any signature or state check."
+          "description": "The MCP tool name (e.g., 'fs_read', 'drop_table'). Forbidden patterns here block verification at L1 before any signature or state check."
         },
         "arguments_json": {
           "type": "string",

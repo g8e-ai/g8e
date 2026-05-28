@@ -590,7 +590,6 @@ func TestProtocolHeadersMatchGoConstants(t *testing.T) {
 		assert.Equal(t, fmt.Sprintf("%v", h.Headers["XForwardedProto"].Value), string(constants.HeaderXForwardedProto))
 		assert.Equal(t, fmt.Sprintf("%v", h.Headers["XForwardedHost"].Value), string(constants.HeaderXForwardedHost))
 		assert.Equal(t, fmt.Sprintf("%v", h.Headers["XRequestTimestamp"].Value), string(constants.HeaderXRequestTimestamp))
-		assert.Equal(t, fmt.Sprintf("%v", h.Headers["DeviceToken"].Value), string(constants.HeaderDeviceToken))
 	})
 }
 

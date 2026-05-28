@@ -4,13 +4,13 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-05-25
+Last Updated: 2026-05-28
 
 ## Overview
 
-The **g8e Protocol** is a zero-trust execution substrate for agentic infrastructure. It defines a typed, signed, state-bound transaction envelope that admits payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain) through a fail-closed verification gauntlet.
+The **g8e Protocol** is a zero-trust execution substrate for agentic infrastructure. It defines a typed, signed, state-bound transaction envelope that admits payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain) through a fail-closed verification pipeline.
 
-The protocol wraps standard JSON-RPC tools as unverified payloads (the "what") inside a strict, canonical `GovernanceEnvelope` (the "how"). The envelope carries cryptographic proofs that must pass independent verification layers before any execution occurs.
+The protocol wraps standard JSON-RPC tools as unverified payloads (the "what") inside a strict, canonical `GovernanceEnvelope` (the "how"). The envelope carries cryptographic proofs that must pass the 5-layer verification sequence before any execution occurs.
 
 ### Core Invariants
 
@@ -29,27 +29,25 @@ The `GovernanceEnvelope` is the single canonical container for every mutation. I
 
 See [GovernanceEnvelope Schema](../protocols/g8e/g8e.md#governanceenvelope-schema) for detailed field specifications.
 
-### 3-Layer Governance
+### 5-Layer Verification Sequence
 
-Every mutation must pass three independent layers in order. A failure at any layer is an immediate rejection.
+Every mutation must pass through a strict, fail-closed pipeline of five independent layers. A failure at any layer results in immediate rejection.
 
-- **L1 Doctrine**: Technical Bedrock - Static, deterministic checks enforced before any code executes (forbidden patterns, threat detection, allow/deny lists).
-- **L2 Consensus**: Distributed Agreement - Cryptographic proof that an independent ensemble agreed on the instruction (Ed25519 signature verification).
-- **L3 Notary**: Human Authorization - Hardware-bound proof of human presence (WebAuthn for web sessions, mTLS fingerprint for CLI sessions).
+- **L1 Doctrine** (L1Doctrine): Technical Bedrock - Static analysis and forbidden pattern enforcement (e.g., `sudo`, `rm -rf /`).
+- **L2 Consensus** (L2Consensus): Distributed Agreement - Multi-agent verification via Ed25519 signatures from an independent ensemble.
+- **L3 Notary** (L3Notary): Human Authorization - Hardware-bound proof of human presence (WebAuthn/Passkey).
+- **L4 Warden** (L4Warden): Pre-dispatch Verification - Integrity, freshness (expiry/nonce), and state-root matching.
+- **L5 Actuator** (L5Actuator): Execution Boundary - Single fail-closed dispatch path that signs and emits `ActionReceipts`.
 
-See [3-Layer Governance](../protocols/g8e/g8e.md#3-layer-governance) for detailed implementation specifications.
-
-### Transaction Lifecycle
+## Transaction Lifecycle
 
 The transaction lifecycle follows a strict sequence from intent to audited execution:
 
 1. **Request Phase**: Client generates typed payload, embeds in envelope, attaches L2/L3 signatures, submits to Gateway.
-2. **Verification Phase**: Operator executes integrity, freshness, state binding, L1/L2/L3 checks at L4Warden.
-3. **Execution & Receipt Phase**: L5Actuator signs executing receipt, dispatches payload, updates receipt with final status, publishes result.
+2. **Verification Phase**: Operator executes integrity, freshness, state binding, and the 5-layer verification checks at **L4Warden**.
+3. **Execution & Receipt Phase**: **L5Actuator** signs executing receipt, dispatches payload, updates receipt with final status, publishes result.
 
-See [Transaction Lifecycle](../protocols/g8e/g8e.md#transaction-lifecycle) for detailed phase specifications.
-
-### Session Management
+## Session Management
 
 The protocol enforces strict separation between session types to guarantee context integrity:
 
@@ -57,9 +55,7 @@ The protocol enforces strict separation between session types to guarantee conte
 - **CLI Session** (`cli_session_id`): BYO/CLI client, authenticated via mTLS with CLI cert URI SAN.
 - **Web Session** (`web_session_id`): Browser frontend, authenticated via Passkey (WebAuthn).
 
-See [Session Management](../protocols/g8e/g8e.md#session-management) for detailed session specifications.
-
-### Error Handling
+## Error Handling
 
 Protocol errors follow standardized JSON-RPC codes for MCP/A2A client compatibility:
 
@@ -74,16 +70,14 @@ Protocol errors follow standardized JSON-RPC codes for MCP/A2A client compatibil
 | `-32006` | `ErrCodeL2SignatureInvalid`| L2 Consensus signature is missing, invalid, or from an untrusted key. |
 | `-32007` | `ErrCodeL3ProofInvalid` | L3 Notary proof is missing or failed verification. |
 | `-32008` | `ErrCodePayloadDecodeFailed`| Failed to decode the base64 `payload` into its typed protobuf message. |
+| `-32100` | `ErrCodeResourceNotFound` | Requested resource (e.g., file, session) not found. |
+| `-32101` | `ErrCodeGatewayNotReady` | Gateway is still bootstrapping or in an error state. |
 
-See [Error Handling](../protocols/g8e/g8e.md#error-handling) for complete error code reference.
-
-### Host Sovereignty & Data Audit
+## Host Sovereignty & Data Audit
 
 - **Multi-Ledger Architecture**: Each operator session owns an isolated, encrypted git repository tracking all mutations with `LedgerHashBefore` and `LedgerHashAfter`.
 - **Fail-Closed Audit Vault**: SQLite-backed service mandates valid session identifiers and rejects malformed events. If audit logging fails, execution is aborted.
 - **Sovereignty Boundary**: Output scrubbing is performed at the execution boundary to redact tokens, keys, and PII before any data leaves the host.
-
-See [Host Sovereignty & Data Audit](../protocols/g8e/g8e.md#host-sovereignty-data-audit) for detailed specifications.
 
 ## Deep-Dive Reference
 

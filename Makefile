@@ -70,6 +70,12 @@ help:
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean         Remove all build artifacts and runtime state"
+	@echo ""
+	@echo "Demo:"
+	@echo "  demo          Build and run the AI agent demo"
+	@echo "  demo-build    Build the AI agent demo binary"
+	@echo "  demo-run      Run the AI agent demo (requires build first)"
+	@echo "  demo-clean    Remove demo build artifacts"
 
 # =============================================================================
 # PROTOCOL GENERATION
@@ -305,6 +311,32 @@ clean:
 	@rm -rf build/
 	@rm -f *.sha256
 	@echo "Clean complete."
+
+# =============================================================================
+# DEMO
+# =============================================================================
+DEMO_DIR := demo/ai-agent
+DEMO_BIN := $(DEMO_DIR)/demo-agent
+
+.PHONY: demo
+demo: demo-build demo-run
+
+.PHONY: demo-build
+demo-build:
+	@echo "Building AI agent demo..."
+	@cd $(DEMO_DIR) && go build -o demo-agent .
+	@echo "Demo binary built: $(DEMO_BIN)"
+
+.PHONY: demo-run
+demo-run:
+	@echo "Running AI agent demo..."
+	@cd $(DEMO_DIR) && ./demo-agent
+
+.PHONY: demo-clean
+demo-clean:
+	@echo "Cleaning demo build artifacts..."
+	@rm -f $(DEMO_BIN)
+	@echo "Demo clean complete."
 
 
 # =============================================================================

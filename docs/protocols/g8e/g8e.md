@@ -4,9 +4,9 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-05-25
+Last Updated: 2026-05-28
 
-The g8e Protocol is a zero-trust execution substrate and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through a 3-layer governance hierarchy (L1 Doctrine, L2 Consensus, L3 Notary).
+The g8e Protocol is a zero-trust execution substrate and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer Governance Gauntlet (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator).
 
 ---
 
@@ -30,8 +30,8 @@ The g8e Protocol does not compete with tool-calling standards. Instead, it wraps
 1. **Inbound**: Client ecosystem generates typed payload (e.g., `CommandRequested`, `McpCallRequested`)
 2. **Envelope Construction**: Payload embedded in `GovernanceEnvelope` with `nonce`, `expires_at`, `state_merkle_root`
 3. **Governance Proofs**: L2 Consensus signature and L3 Notary proof attached over `transaction_hash`
-4. **Verification**: Envelope passes through L1/L2/L3 verification gates at L4Warden
-5. **Execution**: Verified payload dispatched to L5Actuator for execution
+4. **Verification**: Envelope passes through the 5-Layer Governance Gauntlet (L1/L2/L3/L4)
+5. **Execution**: Verified payload dispatched to L5Actuator for execution and receipt issuance
 
 ---
 
@@ -104,14 +104,14 @@ The transaction lifecycle follows a strict sequence from intent to audited execu
 
 ### Verification Phase (L4Warden)
 
-The `L4Warden` operates as the primary validation gate, executing the following checks sequentially:
+The `L4Warden` operates as the primary pre-dispatch validation gate, executing the following checks sequentially:
 
 1. **Integrity**: Enforces `id == transaction_hash == SHA256(canonical_fields)`
 2. **Freshness**: Verifies `expires_at` and ensures the `nonce` is not in the replay store
 3. **State Binding**: Validates that the `state_merkle_root` matches the local ledger root
 4. **L1 Doctrine**: Scans the decoded typed payload against reflected `forbidden_patterns` and threat rules
 5. **L2 Consensus**: Verifies the Ed25519 signature against the Operator's trusted `SignerStore`
-6. **L3 Posture**: Validates the WebAuthn proof or applies explicit auto-approval policy for the action
+6. **L3 Notary**: Validates the WebAuthn proof or applies explicit auto-approval policy for the action
 
 ### Execution & Receipt Phase (L5Actuator)
 
@@ -122,33 +122,40 @@ The `L4Warden` operates as the primary validation gate, executing the following 
 
 ---
 
-## 3-Layer Governance
+## 5-Layer Governance Gauntlet
 
-Every mutation must pass three independent layers in order. A failure at any layer is an immediate rejection.
+Every mutation must pass through five independent layers in order. A failure at any layer is an immediate rejection.
 
 ### L1 Doctrine: Technical Bedrock
-
 Static, deterministic checks enforced before any code executes. Validated using doctrines sourced from `protocol/constants/doctrine/doctrine_registry.json`.
-
 - **Forbidden Patterns**: The custom protobuf field option `(g8e.common.v1.forbidden_patterns)` is reflected at runtime to scan typed payloads
 - **Threat Detection**: L1 Doctrine analyzes command inputs for MITRE ATT&CK patterns, reverse shells, and injection vectors
 - **Allow/Deny Lists**: Enforces per-host policy and user settings
 
 ### L2 Consensus: Distributed Agreement
-
 A cryptographic proof that an independent ensemble agreed on the instruction.
-
 - An Ed25519 signature is generated over `transaction_hash | decision`
 - Verified against the Operator-owned `SignerStore`
 - Gateway mode may sign locally (`gateway_signed=true`) for single-agent MCP clients
 
 ### L3 Notary: Human Authorization
-
 Hardware-bound proof of human presence.
-
 - **Web Sessions**: Real WebAuthn/FIDO2 proof with the transaction hash as the assertion challenge
 - **CLI Sessions**: Authenticates via mTLS certificates with SPIFFE URI SANs. The L3 proof is the SHA-256 fingerprint of the mTLS certificate
 - **Auto-Approval**: Explicit policy permits auto-approval for benign diagnostic verbs. Auto-approval never bypasses L1 or L2 gates
+
+### L4 Warden: Pre-dispatch Verification
+The central Policy Execution Point (PEP) that validates the entire transaction proof before dispatch.
+- **Stateless Validation**: Verifies structural integrity, payload decoding, and L1Doctrine compliance
+- **Cryptographic Integrity**: Validates `transaction_hash` and signatures
+- **Freshness & Replay**: Verifies `expires_at` and the `nonce` replay store
+- **State Binding**: Compares `state_merkle_root` against the host ledger
+
+### L5 Actuator: Execution Boundary
+The single fail-closed execution target that dispatches the verified payload and issues signed receipts.
+- **Rehydration**: Sensitive tokens scrubbed by the Sovereignty Boundary Plane are re-injected
+- **Native Dispatch**: Executes the typed payload (bash, file edit, tool call)
+- **Signed Action Receipts**: Issues an immutable `ActionReceipt` proof of execution and result
 
 ---
 
@@ -211,6 +218,8 @@ Protocol errors follow standardized JSON-RPC codes (defined in `internal/respond
 | `-32006` | `ErrCodeL2SignatureInvalid`| L2 Consensus signature is missing, invalid, or from an untrusted key |
 | `-32007` | `ErrCodeL3ProofInvalid` | L3 Notary proof is missing or failed verification |
 | `-32008` | `ErrCodePayloadDecodeFailed`| Failed to decode the base64 `payload` into its typed protobuf message |
+| `-32100` | `ErrCodeResourceNotFound` | Requested resource (e.g., file, session) not found |
+| `-32101` | `ErrCodeGatewayNotReady` | Gateway is still bootstrapping or in an error state |
 
 ---
 

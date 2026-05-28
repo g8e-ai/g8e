@@ -725,7 +725,7 @@ func setupMTLSClient(t *testing.T, operatorURL string) (*http.Client, string, er
 	}
 
 	// Load trust bundle
-	trustBundlePath := filepath.Join(pkiDir, "trust", "hub-bundle.pem")
+	trustBundlePath := filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
 	trustPEM, err := os.ReadFile(trustBundlePath)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to read trust bundle: %w", err)

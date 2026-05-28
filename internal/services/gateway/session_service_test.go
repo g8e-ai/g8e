@@ -88,7 +88,7 @@ func TestSessionService_PersistSessions_EmptyFields(t *testing.T) {
 	systemFingerprint := ""
 	certFingerprint := ""
 	certSerial := ""
-	loginMethod := "device-link"
+	loginMethod := "csr"
 
 	err := svc.PersistSessions(cliSessionID, operatorSessionID, userID, orgID, operatorID, systemFingerprint, certFingerprint, certSerial, loginMethod)
 	require.NoError(t, err)
@@ -133,7 +133,7 @@ func TestSessionService_PersistSessions_OverwritesExisting(t *testing.T) {
 	newSystemFingerprint := "fp-updated"
 	newCertFingerprint := "cert-fp-updated"
 	newCertSerial := "serial-updated"
-	newLoginMethod := "device-link"
+	newLoginMethod := "csr"
 
 	err = svc.PersistSessions(cliSessionID, operatorSessionID, userID, orgID, operatorID, newSystemFingerprint, newCertFingerprint, newCertSerial, newLoginMethod)
 	require.NoError(t, err)

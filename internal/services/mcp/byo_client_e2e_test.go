@@ -17,8 +17,10 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -77,7 +80,7 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 		signingKey:        privKey,
 		keyID:             "byo-test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		publicBaseURL:     "https://localhost:8442",
+		publicBaseURL:     fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
 		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
 	}
 
@@ -154,7 +157,7 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 		CredentialId:      "webauthn-cred-byo-123",
 		Signature:         "simulated-webauthn-sig",
 		AuthenticatorData: "auth-data",
-		ClientDataJson:    `{"type":"webauthn.get","challenge":"challenge","origin":"https://localhost:8442"}`,
+		ClientDataJson:    fmt.Sprintf(`{"type":"webauthn.get","challenge":"challenge","origin":"https://localhost:%d"}`, constants.Ports.OperatorPublicHttps),
 	}
 
 	// Step 4: Resume transaction with L3 proof
@@ -269,7 +272,7 @@ func TestBYOClientA2AEndToEndProof(t *testing.T) {
 		signingKey:        privKey,
 		keyID:             "a2a-test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		publicBaseURL:     "https://localhost:8442",
+		publicBaseURL:     fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
 		maxPayloadBytes:   10 * 1024 * 1024,
 	}
 

@@ -16,6 +16,7 @@ package models
 import (
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -57,7 +58,7 @@ func TestRuntimeConfig(t *testing.T) {
 			LocalStorageEnabled: true,
 			NoGit:               false,
 			LogLevel:            "info",
-			HTTPPort:            9000,
+			HTTPPort:            constants.Ports.OperatorHttps,
 		}
 
 		assert.True(t, config.CloudMode)
@@ -65,7 +66,7 @@ func TestRuntimeConfig(t *testing.T) {
 		assert.True(t, config.LocalStorageEnabled)
 		assert.False(t, config.NoGit)
 		assert.Equal(t, "info", config.LogLevel)
-		assert.Equal(t, 9000, config.HTTPPort)
+		assert.Equal(t, constants.Ports.OperatorHttps, config.HTTPPort)
 	})
 
 	t.Run("creates config for local mode", func(t *testing.T) {
@@ -74,7 +75,7 @@ func TestRuntimeConfig(t *testing.T) {
 			LocalStorageEnabled: true,
 			NoGit:               false,
 			LogLevel:            "debug",
-			HTTPPort:            9000,
+			HTTPPort:            constants.Ports.OperatorHttps,
 		}
 
 		assert.False(t, config.CloudMode)

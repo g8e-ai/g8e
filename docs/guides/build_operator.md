@@ -12,7 +12,7 @@ Version: v1.0.0
 
 ## Overview
 
-A g8e-compatible Governed Operator implements the host-side Policy Execution Point (PEP) of the substrate. It receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
+A g8e-compatible Governed Operator implements the host-side Policy Execution Point (PEP) of the substrate. It receives transactions, enforces the 5-layer verification sequence, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
 The reference implementation is a single Go codebase that compiles into the `g8e` binary. The same binary serves both Governance Gateway (PDP) and g8e Operator (PEP) roles, selected via command-line flags. Custom operator implementations must implement the same protocol contracts and invariants.
 
@@ -71,7 +71,7 @@ The operator must act as a universal protocol translator:
 - **Canonical JSON**: Use protojson (canonical JSON) as the wire format for all client-facing interactions.
 - **Typed Payload Mapping**: Map native JSON-RPC requests directly to governed ActionType mutations.
 
-#### 2. Ingress Verification (L4Warden)
+#### 2. Verification Sequence (L1-L4)
 
 The operator must implement a singular verification gate that enforces:
 
@@ -81,6 +81,7 @@ The operator must implement a singular verification gate that enforces:
 - **L1Doctrine (Hard Gates)**: Enforce technical bedrock threat detection rules, forbidden patterns, and MITRE ATT&CK heuristics on the typed payload.
 - **L2Consensus**: Verify 5-agent intent consensus signatures against a locally trusted SignerStore.
 - **L3Notary**: Validate authorization proofs (mTLS certificate fingerprints for CLI sessions, WebAuthn proofs for web sessions).
+- **L4Warden**: Pre-dispatch verification of all preceding proofs and state roots.
 
 Any verification failure must result in a typed rejection and audit entry. No fallback paths or silent retries.
 
@@ -152,9 +153,9 @@ The operator must implement data sovereignty:
 
 While schemas are defined via Protobuf, the canonical wire format for the operator's client-facing surfaces must be strictly canonical JSON (protojson). This guarantees ecosystem compatibility without breaking determinism for the transaction_hash.
 
-### No Backward Compatibility
+### Strict Protocol Enforcement
 
-The operator must drop stale JSON formats, raw HMAC structures, and legacy relay fallbacks. A transaction either fully complies with the current strict 3-Layer governance protocol, or it is rejected.
+The operator must drop stale JSON formats, raw HMAC structures, and outdated relay fallbacks. A transaction either fully complies with the current strict 5-layer verification protocol, or it is rejected.
 
 ---
 

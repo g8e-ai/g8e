@@ -201,4 +201,4 @@ Note: The test database and audit vault use in-memory storage that is cleaned up
 
 ## The Theater
 
-Under `-v`, the test prints a full gauntlet trace including receipt details. The same test that gates the pipeline is the demo - no duplicate maintenance.
+Under `-v`, the test prints a full verification trace including receipt details. The same test that gates the pipeline is the demo - no duplicate maintenance.

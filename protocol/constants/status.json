@@ -919,60 +919,6 @@
         "value": "inactive"
       }
     },
-    "device_link_status": {
-      "active": {
-        "_go_const": "DeviceLinkStatusActive",
-        "_python_const": "ACTIVE",
-        "value": "active"
-      },
-      "exhausted": {
-        "_go_const": "DeviceLinkStatusExhausted",
-        "_python_const": "EXHAUSTED",
-        "value": "exhausted"
-      },
-      "expired": {
-        "_go_const": "DeviceLinkStatusExpired",
-        "_python_const": "EXPIRED",
-        "value": "expired"
-      },
-      "pending": {
-        "_go_const": "DeviceLinkStatusPending",
-        "_python_const": "PENDING",
-        "value": "pending"
-      },
-      "revoked": {
-        "_go_const": "DeviceLinkStatusRevoked",
-        "_python_const": "REVOKED",
-        "value": "revoked"
-      },
-      "used": {
-        "_go_const": "DeviceLinkStatusUsed",
-        "_python_const": "USED",
-        "value": "used"
-      }
-    },
-    "device_link_success": {
-      "Device link created successfully": {
-        "_go_const": "DeviceLinkSuccessCreated",
-        "_python_const": "CREATED",
-        "value": "Device link created successfully"
-      },
-      "Device link deleted successfully": {
-        "_go_const": "DeviceLinkSuccessDeleted",
-        "_python_const": "DELETED",
-        "value": "Device link deleted successfully"
-      },
-      "Device link revoked successfully": {
-        "_go_const": "DeviceLinkSuccessRevoked",
-        "_python_const": "REVOKED",
-        "value": "Device link revoked successfully"
-      },
-      "Device links listed successfully": {
-        "_go_const": "DeviceLinkSuccessListed",
-        "_python_const": "LISTED",
-        "value": "Device links listed successfully"
-      }
-    },
     "download_audit_event_type": {
       "download_token_failed": {
         "_go_const": "DownloadAuditEventTypeDownloadTokenFailed",

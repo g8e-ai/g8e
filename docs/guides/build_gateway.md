@@ -69,8 +69,7 @@ To start the gateway, run the g8e binary with a gateway mode flag:
 - `--consensus` — Gateway mode: L1/L2 enforced, L3 audited
 - `--notary` — Gateway mode: L1/L2/L3 strictly enforced
 - `--http-listen-port <port>` — HTTPS port for mTLS API (default: 8440)
-- `--bootstrap-listen-port <port>` — Bootstrap TLS port for device-link enrollment (default: 8441)
-- `--public-listen-port <port>` — Public browser/BYO bootstrap port (default: 8442)
+- `--public-listen-port <port>` — Public browser/BYO bootstrap port (default: 8443)
 - `--data-dir <dir>` — Data directory for SQLite database (default: .g8e/data in working directory)
 - `--pki-dir <dir>` — Directory for TLS certificates (default: .g8e/pki)
 - `--secrets-dir <dir>` — Directory for platform secrets (default: .g8e/secrets)
@@ -120,11 +119,6 @@ The gateway must serve as the Pub/Sub broker:
 The gateway must expose HTTP endpoints:
 
 - **Envelope Submission**: `POST /api/governance/envelope` for canonical JSON GovernanceEnvelope transactions.
-- **Trust Bundle Distribution**: `GET /.well-known/g8e/pki/hub-bundle.pem` for CA certificates.
-- **Root CA**: `GET /.well-known/g8e/pki/root.pem` for the root CA certificate.
-- **PKI Fingerprint**: `GET /.well-known/g8e/pki/fingerprint` for the root CA SHA-256 fingerprint.
-- **Device-Link Enrollment**: `POST /api/auth/device-link/request` and `POST /api/auth/device-link/register` for operator enrollment.
-- **CSR Signing**: `POST /api/pki/sign-csr` for signing CSRs during enrollment.
 - **App Enrollment**: `POST /api/pki/app-enroll` for external app enrollment (device-link token required).
 - **Certificate Revocation**: `POST /api/pki/revoke` for certificate revocation.
 - **Revocation Bundle**: `GET /api/pki/revocation-bundle` for the signed revocation list.
@@ -175,11 +169,10 @@ Session routing must be disjoint. A web_session_id can never receive events inte
 
 ### Multiplexed Port Contract
 
-The gateway must support three logical protocol surfaces with distinct authentication requirements:
+The gateway must support two logical protocol surfaces with distinct authentication requirements:
 
 | Surface | Auth | Purpose |
 |---|---|---|
-| **Bootstrap** | None (plain HTTP) | Trust bundle download, device-link enrollment, CSR signing |
 | **Public Port** | TLS (no client cert) | Browser login, WebAuthn challenge, PKI discovery |
 | **mTLS API + Pub/Sub** | TLS + RequireAndVerifyClientCert | Envelope submission, persistence, pub/sub |
 

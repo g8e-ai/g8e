@@ -64,10 +64,6 @@
       "_go_const": "HeaderCookie",
       "value": "Cookie"
     },
-    "DeviceToken": {
-      "_go_const": "HeaderDeviceToken",
-      "value": "X-G8E-Device-Token"
-    },
     "ExecutionID": {
       "_go_const": "HeaderExecutionID",
       "value": "X-G8E-Execution-ID"

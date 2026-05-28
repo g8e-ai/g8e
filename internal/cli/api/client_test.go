@@ -135,17 +135,17 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 			"ssh_config_path": "/tmp/ssh/config"
 		},
 		"ports": {
-			"insecure_mcp_gateway": 9000,
-			"operator_bootstrap_https": 9001,
-			"operator_https": 9002,
-			"operator_public_https": 9003
+			"insecure_mcp_gateway": 18789,
+			"operator_bootstrap_https": 8441,
+			"operator_https": 8440,
+			"operator_public_https": 8443
 		}
 	}`
 	pathsPath := filepath.Join(constantsDir, "paths.json")
 	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 
 	caCertPEM := generateTestCA(t)
-	trustBundlePath := filepath.Join(projectRoot, ".g8e", "pki", "trust", "hub-bundle.pem")
+	trustBundlePath := filepath.Join(projectRoot, ".g8e", "pki", "trust", "g8e-gw-ca-bundle.pem")
 	require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
 	require.NoError(t, os.WriteFile(trustBundlePath, caCertPEM, 0644))
 

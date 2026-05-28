@@ -1,6 +1,6 @@
 # g8e: Data-Sovereign Runtime Governance for Autonomous Execution
 
-**A self-hosted, air-gap capable substrate that enforces fail-closed authority over AI tool calls through a sequential technical, consensus, and human verification gauntlet.**
+**A self-hosted, air-gap capable substrate that enforces fail-closed authority over AI tool calls through sequential technical, consensus, and human verification layers.**
 
 [Getting Started](guides/getting_started.md){ .md-button .md-button--primary } [Position Paper](core/position_paper.md){ .md-button }
 
@@ -21,27 +21,35 @@ sequenceDiagram
     Operator->>Gateway: Open outbound-only mTLS tunnel
     Operator->>Gateway: Fetch pending GovernanceEnvelope
 
-    Note over Operator: Run gauntlet — Doctrine, Consensus, Notary, Warden<br/>(fail-closed)<br/>Execute via Actuator<br/>Anchor to local audit vault
+    Note over Operator: Run verification layers — Doctrine, Consensus, Notary, Warden<br/>(fail-closed)<br/>Execute via Actuator<br/>Anchor to local audit vault
 
     Operator->>Gateway: Push Sovereignty-scrubbed signed receipt
     Gateway->>Principal: Return final safe output
 ```
 
-## 3-Layer Governance
+## 5-Layer Governance Verification
 
-Every mutation passes a fail-closed execution gauntlet at the host boundary.
+Every mutation passes a fail-closed verification pipeline at the host boundary.
 
-=== "L1: Technical Bedrock"
+=== "L1: Technical Bedrock (L1Doctrine)"
 
 Static analysis and forbidden pattern enforcement. The action violates no hard technical policy before it reaches consensus.
 
-=== "L2: Consensus"
+=== "L2: Consensus (L2Consensus)"
 
 Multi-model Byzantine Fault Tolerant Tribunal. Independent, heterogeneous models co-sign every mutation with Ed25519 cryptographic signatures.
 
-=== "L3: Authorization"
+=== "L3: Notary (L3Notary)"
 
 WebAuthn/FIDO2 hardware-bound proof of human presence. A human authorizes the exact transaction using its hash as the challenge.
+
+=== "L4: Warden (L4Warden)"
+
+Pre-dispatch verification gate. Enforces transaction integrity, freshness (expiry/nonce), and state-root matching.
+
+=== "L5: Actuator (L5Actuator)"
+
+Sovereign execution boundary. The single fail-closed dispatch path that issues signed Action Receipts.
 
 ## Quick Links
 

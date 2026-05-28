@@ -6,12 +6,12 @@
 
 g8e is a ~20MB, zero-dependency binary that provides agentic governance and state-mutation control. It functions as both the **control plane** (host-local policy decision) and the **data plane** (exclusive mutation executor). 
 
-It dials out via mTLS and listens on nothing. Every AI-proposed action clears a fail-closed gauntlet on the host and is committed to a git-backed ledger before execution. Only scrubbed projections leave the host; raw data never crosses the wire.
+It dials out via mTLS and listens on nothing. Every AI-proposed action clears a fail-closed verification pipeline on the host and is committed to a git-backed ledger before execution. Only scrubbed projections leave the host; raw data never crosses the wire.
 
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev)
-[![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v100--core-substrate)
+[![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v102--core-substrate)
 [![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/core/position_paper.md)
 
 [Getting Started](docs/guides/getting_started.md) · [The two roles](#the-two-roles) · [Mental Model](#the-mental-model) · [Protocol](#the-protocol-invariants) · [Docs](#documentation)
@@ -82,11 +82,11 @@ Every mutation passes through sequential verification layers at the Operator bou
 
 | Layer | Name | Mechanism | What it proves |
 | :---: | --- | --- | --- |
-| **L1** | **Doctrine** | Forbidden patterns + MITRE heuristics | No hard gate violations (privesc, destruction). |
-| **L2** | **Consensus** | Ed25519 k-of-n over transaction hash | Independent model ensemble co-signed intent. |
-| **L3** | **Notary** | WebAuthn / mTLS cert fingerprint | Human authorized *this exact* transaction hash. |
-| **L4** | **Warden** | Fail-closed pre-dispatch gate | Hash, freshness, state root, and signer trust. |
-| **L5** | **Actuator** | Atomic dispatch + signed receipt | The only code path allowed to mutate the host. |
+| **L1** | **L1Doctrine** | Forbidden patterns + MITRE heuristics | No hard gate violations (privesc, destruction). |
+| **L2** | **L2Consensus** | Ed25519 k-of-n over transaction hash | Independent model ensemble co-signed intent. |
+| **L3** | **L3Notary** | WebAuthn / mTLS cert fingerprint | Human authorized *this exact* transaction hash. |
+| **L4** | **L4Warden** | Fail-closed pre-dispatch gate | Hash, freshness, state root, and signer trust. |
+| **L5** | **L5Actuator** | Atomic dispatch + signed receipt | The only code path allowed to mutate the host. |
 
 ---
 
@@ -101,19 +101,19 @@ Every mutation passes through sequential verification layers at the Operator bou
 
 ---
 
-## Status: v1.0.0 — Core Substrate
+## Status: v1.0.2 — Core Substrate
 
 g8e is the mandatory governance substrate. The Engine (g8ee) and Dashboard (g8ed) are optional application-layer adapters.
 
 **Operational Today**
 - **Universal Protocol Translation**: Intercept MCP/A2A tool calls into signed envelopes.
-- **BFT Governance**: Fail-closed L1/L2/L4 verification paths.
+- **BFT Governance**: Fail-closed L1/L2/L3/L4 verification paths.
 - **Sovereign Execution**: Git-backed ledger and host-local audit vault.
 - **mTLS Reverse Tunnels**: Secure connectivity for firewalled/air-gapped hosts.
+- **L3 Notary**: Out-of-band human-in-the-loop authorization (CLI/WebAuthn).
 - **Data Sovereignty**: Automated PII scrubbing and local forensic persistence.
 
 **In Development**
-- **L3 Notary**: Hardware-bound WebAuthn/FIDO2 support.
 - **RBAC**: Granular role-based access control.
 - **Complex Policy**: Dynamic intent allowlisting and advanced L1 heuristics.
 - **Multi-tenancy**: Organization partitioning and tenant isolation.

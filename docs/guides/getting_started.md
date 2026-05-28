@@ -26,11 +26,11 @@ The Governance Gateway serves as the central Policy Decision Point (PDP). It pro
 - **Admission APIs**: Exposes HTTP endpoints for envelope submission, device-link enrollment, and trust bundle distribution.
 - **Protocol Translation**: Translates standard MCP (Model Context Protocol) and A2A (Agent-to-Agent) requests into canonical JSON GovernanceEnvelope format.
 
-The Gateway runs in one of three modes, each enforcing different layers of the 3-Layer Governance model:
+The Gateway runs in one of three modes, each enforcing different layers of the 5-layer verification sequence:
 
 - **Doctrine Mode**: Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures not required.
 - **Consensus Mode**: Enforces L1 and L2 (multi-model Byzantine consensus). L3 signature not required.
-- **Notary Mode**: Enforces L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2). This is the most secure mode.
+- **Notary Mode**: Enforces L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2). L4 and L5 are always active for execution. This is the most secure mode.
 
 ### Governed Operator (g8eo)
 
@@ -48,10 +48,12 @@ The Operator distrusts all upstream inputs. It validates every envelope independ
 
 1. **Client Submission**: An AI client submits a mutation request via MCP or A2A protocol to the Gateway.
 2. **Envelope Construction**: The Gateway wraps the request in a canonical JSON GovernanceEnvelope with typed payload, transaction hash, nonce, expiry, and state root.
-3. **Verification Gauntlet**: The Gateway enforces the 3-Layer BFT verification:
+3. **Verification Sequence**: The platform enforces the 5-layer verification sequence:
    - L1 (Technical Bedrock): Forbidden patterns, blacklist, whitelist checks.
    - L2 (Consensus): Multi-model Byzantine consensus signatures (in consensus/notary modes).
-   - L3 (Authorization): Human-in-the-loop approval via WebAuthn (in notary mode).
+   - L3 (Notary): Human-in-the-loop approval via WebAuthn (in notary mode).
+   - L4 (Warden): Pre-dispatch integrity and state-root verification.
+   - L5 (Actuator): Sovereign execution boundary and signed receipt issuance.
 4. **Dispatch**: Verified envelopes are dispatched over the Pub/Sub broker to target Operators.
 5. **Execution**: The Operator receives the envelope, re-verifies all proofs, and executes the mutation through the Actuator.
 6. **Receipt**: The Operator emits a signed receipt and writes an audit entry to the local Git-backed vault.
@@ -60,86 +62,81 @@ The Operator distrusts all upstream inputs. It validates every envelope independ
 
 ## Quick Start
 
-**Prerequisites:** Go 1.26+ (required) · Python 3.14+ (optional, only for g8e-compatible agentic ensembles)
+**Prerequisites:** Go 1.26+ · (Optional) Python 3.14+ for agent ensembles.
 
-### 1. Get the Code
+### 1. Build g8e
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
-```
-
-### 2. Build the Binaries
-
-```bash
 make build
 ```
 
-This produces the `g8e` binary. The same `g8e` binary runs in two modes: Gateway mode (Policy Decision Point) and Operator mode (Policy Execution Point).
+This produces the `g8e` binary. It is self-contained and manages both Gateway (PDP) and Operator (PEP) roles.
 
-**Self-Contained Deployment**: The compiled binary is fully self-sovereign and requires no source tree, configuration files, or specific directory structure. It can be copied to any directory and run from there. All paths are resolved relative to the current working directory unless explicitly overridden by flags. Path configuration is embedded directly in the binary via go:embed and is the sole source of truth.
+### 2. Initialize Gateway
 
-### 3. Start the Governance Gateway
+Start the Sovereign Governance Gateway in **Doctrine Mode** (L1 enforced):
 
 ```bash
 ./g8e platform start
 ```
 
-This starts the Gateway in doctrine mode (L1 enforced, L2/L3 audited). Follow the CLI prompts to initialize the PKI hierarchy and Gateway state.
+### 3. Authenticate & Bootstrap
 
-### 4. Authenticate
-
-The first login automatically bootstraps the platform, creating the first user and issuing mTLS certificates:
+The first login bootstraps the PKI hierarchy and issues your initial mTLS certificates:
 
 ```bash
 ./g8e auth login
 ```
 
-This authenticates and saves mTLS credentials to `~/.g8e/credentials`. Subsequent logins use device-link token enrollment.
+Credentials and trust material are stored in `~/.g8e/pki` and `~/.g8e/secrets`.
 
-### 6. Start a Governed Operator
+### 4. Deploy an Operator
 
-For local development with MCP server mode:
+For local AI client integration (e.g., Cursor, Claude Code) via stdio-based MCP:
 
 ```bash
 ./g8e --mcp-serve
 ```
 
-For remote deployment, generate a device-link token on the Gateway:
+For remote host enforcement, generate an enrollment token:
 
 ```bash
-./g8e data device-links create --user-id "prod-db-node"
+./g8e data device-links create --user-id "prod-node-01"
 ```
 
-Then start the Operator on the remote host with the token:
+Then start the Operator on the target host:
 
 ```bash
 ./g8e --device-token <token> --endpoint <gateway-ip>
 ```
 
-### 7. Use as Protocol Translator
+---
 
-The Gateway automatically translates MCP and A2A requests. AI clients can connect directly to the Gateway's HTTP API:
+## 5-Layer Verification Sequence
 
-```bash
-curl -X POST https://localhost:8440/api/governance/envelope \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key \
-  -H "Content-Type: application/json" \
-  -d '{"event_type": "g8e.v1.operator.command.requested", "payload": "..."}'
-```
+g8e enforces a hierarchical defense-in-depth model:
 
-For stdio-based MCP (required by editors like Cursor or Claude Code):
+| Layer | Name | Mechanism | Enforcement |
+| :--- | :--- | :--- | :--- |
+| **L1** | **Technical Bedrock** | Pattern matching, allow/denylists | Hard gate (always active) |
+| **L2** | **Consensus** | Multi-model BFT agreement | Consensus/Notary modes |
+| **L3** | **Notary** | Human-in-the-loop (WebAuthn) | Notary mode |
+| **L4** | **Warden** | Pre-dispatch verification | Always active |
+| **L5** | **Actuator** | Execution boundary | Always active |
 
-```bash
-./g8e --mcp-serve
-```
+## Protocol Integration
+
+### MCP (Model Context Protocol)
+Connect AI agents to the Operator's toolset. The Operator translates JSON-RPC requests into signed Governance Envelopes before execution.
+
+### A2A (Agent-to-Agent)
+Gateway-mediated communication between sovereign agents. Every interaction is state-bound and audit-logged to the local Git ledger.
 
 ---
 
 ## Next Steps
 
-- **[Build Gateway](build_gateway.md)** — Build a custom g8e-compatible Governance Gateway.
-- **[Connect Apps to Gateway](connect_apps_to_gateway.md)** — Connect to, authenticate, use, maintain, and pull reports from a Gateway.
-- **[Build Operator](build_operator.md)** — Build a custom g8e-compatible Governed Operator.
-- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Deploy and use a Governed Operator.
-- **[Build Apps](build_apps.md)** — Build g8e-compatible applications using a Gateway.
+- **[Architecture](../devs/codemap.md)** — Deep dive into the substrate components.
+- **[CLI Reference](../devs/devs.md)** — Comprehensive command documentation.
+- **[Security Model](../architecture/auth.md)** — PKI, mTLS, and WebAuthn details.

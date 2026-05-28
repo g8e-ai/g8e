@@ -23,7 +23,7 @@ Report privately to: **security@lateraluslabs.com**
 Include as much of the following as you can:
 
 - Description of the vulnerability and its potential impact
-- Affected component(s): Governance Gateway (PDP), g8e Operator (PEP), g8e Protocol (Common), Application Adapters (`g8ee`, `g8ed`)
+- Affected component(s): Governance Gateway (PDP), g8e Operator (PEP), g8e Protocol
 - Steps to reproduce or a minimal proof-of-concept
 - Your assessment of severity (Critical / High / Medium / Low)
 - Whether you believe the issue is currently being exploited
@@ -49,8 +49,8 @@ We will not pursue legal action against researchers acting in good faith under t
 
 ### In Scope
 
-- **Governance Gateway (PDP)** — `GovernanceEnvelope` parsing, deterministic transaction hash binding, L1-L4 verification logic (Doctrine, Consensus, Notary, Warden)
-- **g8e Operator (PEP)** — execution boundary (L5 Actuator), mTLS tunnel, `AuditVaultService`, Sovereignty Boundary Plane (scrubbing)
+- **Governance Gateway (PDP)** — `GovernanceEnvelope` parsing, deterministic transaction hash binding, L1-L4 verification logic (Doctrine, Consensus, Notary, Warden), WebAuthn/Passkey L3 brokerage
+- **g8e Operator (PEP)** — execution boundary (L5 Actuator), signed `ActionReceipt` issuance, mTLS tunnel, `AuditVaultService`, Sovereignty Boundary Plane (scrubbing, rehydration)
 - **g8e Protocol** — Protobuf schemas (`common.proto`, `operator.proto`), canonical JSON (protojson) serialization, envelope integrity
 - **Authentication** — WebAuthn/FIDO2 L3 Notary flow, Ed25519 signature verification (L2 Consensus, L4 Warden, L5 Actuator), replay protection (Nonce)
 - **CLI and bootstrap** — `g8e login`, device-link token generation, mTLS credential and PKI handling

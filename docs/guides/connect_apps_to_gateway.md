@@ -72,8 +72,7 @@ The Gateway exposes four logical protocol surfaces. Each surface serves a specif
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **Bootstrap** | 8441 (plain HTTP) | None | Trust bundle download, device-link enrollment, CSR signing, trust scripts |
-| **Public Port** | 8442 (TLS) | Web session | Browser login, WebAuthn challenge, PKI discovery, OOB approval UI |
+| **Public Port** | 8443 (TLS) | Web session | Browser login, WebAuthn challenge, PKI discovery, OOB approval UI |
 | **mTLS API + Pub/Sub** | 8440 (TLS) | mTLS + URI SAN | Governance envelopes, MCP/A2A APIs, document store, WebSocket pub/sub |
 
 ### Port Multiplexing
@@ -81,11 +80,8 @@ The Gateway exposes four logical protocol surfaces. Each surface serves a specif
 The Gateway enforces strict port separation for security:
 - **mTLS only**: `tls.RequireAndVerifyClientCert` for strict mutual TLS on the execution boundary
 - **Public only**: TLS without client certificate requirement for browser-based access
-- **Bootstrap only**: Plain HTTP (no TLS) for trust anchor download
 
 Port mixing is prohibited. The gateway fails startup if incompatible surfaces (e.g., mTLS and Public) are assigned to the same port, as this would force a downgrade to `VerifyClientCertIfGiven` and weaken the execution boundary to an L7 check.
-
-Bootstrap must remain on a dedicated port to preserve plain HTTP trust anchor download.
 
 Ports can be customized via CLI flags or environment variables.
 
@@ -314,9 +310,8 @@ Generate a client certificate for CLI operations:
 
 This:
 1. Generates a CSR (Certificate Signing Request)
-2. Submits it to the Gateway's bootstrap endpoint
-3. Receives a signed client certificate with SPIFFE URI SAN
-4. Stores it in `.g8e/pki/client.crt`
+2. Receives a signed client certificate with SPIFFE URI SAN
+3. Stores it in `.g8e/pki/client.crt`
 
 CLI sessions use the mTLS certificate fingerprint as L3 proof via CLIL3Notary.
 
@@ -324,7 +319,7 @@ CLI sessions use the mTLS certificate fingerprint as L3 proof via CLIL3Notary.
 
 For web-based interactions:
 
-1. Navigate to `https://localhost:8442` (public port)
+1. Navigate to `https://localhost:8443` (public port)
 2. Follow on-screen prompts to register a security key
 3. Use the key for subsequent authentication
 
@@ -384,44 +379,30 @@ This ensures no implicit JIT provisioning occurs without owner approval.
 
 ## PKI and Trust
 
-### Trust Bundle Download
+### Device Enrollment (CSR-based)
 
-Download the Gateway's trust bundle for BYO clients:
-
-```bash
-curl http://localhost:8441/.well-known/g8e/pki/hub-bundle.pem -o trust-bundle.pem
-```
-
-### CA Fingerprint
-
-Verify the Gateway's identity via CA fingerprint:
+Enroll a device using CSR-based enrollment with mTLS authentication. The user_id is extracted from the client certificate's SPIFFE URI SAN:
 
 ```bash
-curl http://localhost:8441/.well-known/g8e/pki/fingerprint
+curl -X POST https://localhost:8440/api/pki/device-enroll \
+  --cert .g8e/pki/client.crt \
+  --key .g8e/pki/client.key \
+  -H "Content-Type: application/json" \
+  -d '{
+    "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----...",
+    "cli_csr_pem": "-----BEGIN CERTIFICATE REQUEST-----...",
+    "system_fingerprint": "fp-123",
+    "hostname": "my-host",
+    "os": "linux",
+    "arch": "amd64",
+    "username": "user",
+    "ip_address": "192.168.1.1"
+  }'
 ```
 
-Response:
-```json
-{
-  "root_ca": "sha256:fingerprint"
-}
-```
+### CSR Signing (Low-level)
 
-### Trust Scripts
-
-The Gateway provides platform-specific trust scripts:
-
-```bash
-# Unix/Linux
-curl -fsSL http://localhost:8441/trust | sudo sh
-
-# Windows PowerShell
-curl -fsSL http://localhost:8441/trust.ps1 | powershell
-```
-
-### CSR Signing
-
-Submit a CSR for certificate issuance:
+Submit a CSR for low-level certificate issuance (for advanced use cases):
 
 ```bash
 curl -X POST https://localhost:8440/api/pki/sign-csr \
@@ -445,7 +426,7 @@ When a standard AI client requests a mutation without L3 proof, the Gateway susp
 
 1. Client submits MCP/A2A request without L3 signature
 2. Gateway stores transaction in `suspended_transactions` table
-3. Gateway returns approval URL: `https://localhost:8442/approve/{tx_hash}`
+3. Gateway returns approval URL: `https://localhost:8443/approve/{tx_hash}`
 4. User opens URL in browser and authenticates with passkey
 5. User approves transaction via WebAuthn
 6. Gateway attaches L3 proof and resumes verification
@@ -456,14 +437,14 @@ When a standard AI client requests a mutation without L3 proof, the Gateway susp
 List suspended transactions:
 
 ```bash
-curl https://localhost:8442/api/suspended-transactions \
+curl https://localhost:8443/api/suspended-transactions \
   --cookie "web_session=..."
 ```
 
 Approve a transaction:
 
 ```bash
-curl -X POST https://localhost:8442/api/approve/{tx_hash} \
+curl -X POST https://localhost:8443/api/approve/{tx_hash} \
   --cookie "web_session=..." \
   -H "Content-Type: application/json" \
   -d '{"action": "approve"}'

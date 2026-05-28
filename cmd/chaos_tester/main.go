@@ -870,10 +870,7 @@ func printDemoQueries(dbPath string) {
 	fmt.Printf("# 6. View operators\n")
 	fmt.Printf("./g8e data operators\n\n")
 
-	fmt.Printf("# 7. View device-links\n")
-	fmt.Printf("./g8e data device-links list --user-id <user-id>\n\n")
-
-	fmt.Printf("# 8. Direct SQLite access for offline analysis\n")
+	fmt.Printf("# 7. Direct SQLite access for offline analysis\n")
 	fmt.Printf("# sqlite3 '%s'\n", dbPath)
 	fmt.Printf("#   SELECT category, outcome, COUNT(*) FROM chaos_events GROUP BY category, outcome;\n\n")
 }

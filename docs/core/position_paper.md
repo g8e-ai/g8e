@@ -13,7 +13,7 @@ parent: Architecture
 
 ## Abstract
 
-We argue that the architecture wrapped around autonomous agents must shift from *"trust but verify"* to *"verify, then execute."* Capability protocols — MCP, A2A, OpenAI-style tool calls — prove an agent *can* act. They establish no authority over whether it *should*. g8e supplies the missing admission boundary: a typed, signed, state-bound transaction that must clear a fail-closed verification gauntlet at the host before any side effect occurs.
+We argue that the architecture wrapped around autonomous agents must shift from *"trust but verify"* to *"verify, then execute."* Capability protocols — MCP, A2A, OpenAI-style tool calls — prove an agent *can* act. They establish no authority over whether it *should*. g8e supplies the missing admission boundary: a typed, signed, state-bound transaction that must clear a fail-closed verification pipeline at the host before any side effect occurs.
 
 The central claim of this paper is that **safe autonomous execution is a Byzantine agreement problem layered on top of a human-intent problem, and the two cannot be collapsed into one validator.** Machine-checkable *consistency* and human-checkable *intent* are orthogonal competencies. Authority safe to execute is the conjunction of both proofs, bound cryptographically to a single transaction, verified locally against sovereign state. Neither signature alone is sufficient.
 

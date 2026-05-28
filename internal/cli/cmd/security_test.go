@@ -65,7 +65,7 @@ func TestSecurityValidateWithTestEnvironment(t *testing.T) {
 		// Create dummy files
 		require.NoError(t, os.WriteFile(filepath.Join(pkiDir, "root", "root_ca.crt"), []byte("dummy cert"), 0644))
 		require.NoError(t, os.WriteFile(filepath.Join(pkiDir, "root", "root_ca.key"), []byte("dummy key"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(pkiDir, "trust", "hub-bundle.pem"), []byte("dummy bundle"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem"), []byte("dummy bundle"), 0644))
 		require.NoError(t, os.WriteFile(filepath.Join(pkiDir, "warden_pub.pem"), []byte("dummy warden"), 0644))
 
 		// Create secrets

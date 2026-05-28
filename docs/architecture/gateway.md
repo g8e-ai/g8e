@@ -1,3 +1,7 @@
+---
+title: Governance Gateway
+---
+
 # g8e Gateway - Governance Gateway
 
 The g8e Protocol substrate is composed of two logically distinct roles, both implemented by the reference `g8e` binary:
@@ -89,26 +93,24 @@ By passing `--doctrine`, `--consensus`, or `--notary`, the binary transforms int
 
 ### Port Topology
 
-The Governance Gateway exposes three logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements **must not** share a port.
+The Governance Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements **must not** share a port.
 
 Default ports are sourced from `internal/constants/ports.go`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
 | **mTLS API + Pub/Sub** | `8440` (mTLS) | mTLS + URI SAN | `/api/governance/envelope`, `/db/*`, `/kv/*`, `/blob/*`, `/pubsub/publish`, and `/ws/pubsub` real-time fan-out. |
-| **Bootstrap** | `8441` (TLS) | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/trust`, device-link enrollment, CSR signing. |
-| **Public Port** | `8442` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery for browser/BYO bootstrap. |
+| **Public Port** | `8443` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery for browser/BYO bootstrap. |
 
 #### Port Constraints
 
 - **mTLS Surface** (`8440`): Requires `tls.RequireAndVerifyClientCert`. This is the primary execution boundary.
-- **Bootstrap Surface** (`8441`): Serves plain TLS (without client-cert) to allow enrollment.
-- **Public Surface** (`8442`): Serves TLS with WebAuthn/Passkey authentication for browser-based access.
+- **Public Surface** (`8443`): Serves TLS with WebAuthn/Passkey authentication for browser-based access.
 - **Collision Prevention**: The gateway fails startup if incompatible surfaces (e.g., mTLS and Public) are assigned to the same port, as this would force a downgrade to `VerifyClientCertIfGiven`.
 
 ---
 
-## The 5-Layer Governance Gauntlet
+## 5-Layer Verification Sequence
 
 Every transaction submitted to `POST /api/governance/envelope` must pass through the following layers:
 
@@ -198,19 +200,19 @@ This architecture ensures the Operator never requires outbound internet access t
 
 | Concern | File |
 |---|---|
-| Gateway mode entry | `cmd/g8eo/main.go` (runGatewayMode) |
-| Gateway service | `internal/services/gateway/gateway_service.go` |
-| Coordination Store | `internal/services/gateway/gateway_db.go` |
-| Pub/Sub broker | `internal/services/gateway/gateway_pubsub.go` |
-| L1 Doctrine | `internal/services/governance/l1_doctrine.go` |
-| L2 Consensus | `internal/services/governance/l2_consensus.go` |
-| L3 Notary | `internal/services/governance/l3_notary.go` |
-| L4 Warden | `internal/services/governance/l4_warden.go` |
-| L5 Actuator | `internal/services/governance/l5_actuator.go` |
-| PKI / CertStore | `internal/services/gateway/gateway_certs.go` |
-| Secret Manager | `internal/services/gateway/secret_manager.go` |
-| Workload identity | `protocol/workload_identity.go` |
-| Collections registry | `internal/constants/collections.go` |
+| Gateway mode entry | `/home/bob/g8e/cmd/g8eo/main.go` (runGatewayMode) |
+| Gateway service | `/home/bob/g8e/internal/services/gateway/gateway_service.go` |
+| Coordination Store | `/home/bob/g8e/internal/services/gateway/gateway_db.go` |
+| Pub/Sub broker | `/home/bob/g8e/internal/services/gateway/gateway_pubsub.go` |
+| L1 Doctrine | `/home/bob/g8e/internal/services/governance/l1_doctrine.go` |
+| L2 Consensus | `/home/bob/g8e/internal/services/governance/l2_consensus.go` |
+| L3 Notary | `/home/bob/g8e/internal/services/governance/l3_notary.go` |
+| L4 Warden | `/home/bob/g8e/internal/services/governance/l4_warden.go` |
+| L5 Actuator | `/home/bob/g8e/internal/services/governance/l5_actuator.go` |
+| PKI / CertStore | `/home/bob/g8e/internal/services/gateway/gateway_certs.go` |
+| Secret Manager | `/home/bob/g8e/internal/services/gateway/secret_manager.go` |
+| Workload identity | `/home/bob/g8e/protocol/workload_identity.go` |
+| Collections registry | `/home/bob/g8e/internal/constants/collections.go` |
 
 ---
 
