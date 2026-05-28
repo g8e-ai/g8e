@@ -86,8 +86,11 @@ func TestDBControllerHandleDB(t *testing.T) {
 		reqGet := httptest.NewRequest(http.MethodGet, "/db/settings/u1", nil)
 		rrGet := httptest.NewRecorder()
 		dbController.handleDB(rrGet, reqGet)
+		assert.Equal(t, http.StatusOK, rrGet.Code)
+
 		var doc map[string]interface{}
-		json.Unmarshal(rrGet.Body.Bytes(), doc)
+		err := json.Unmarshal(rrGet.Body.Bytes(), &doc)
+		require.NoError(t, err)
 		assert.Equal(t, "alice", doc["name"])
 		assert.Equal(t, "admin", doc["role"])
 	})
@@ -431,12 +434,32 @@ func TestDBControllerHandleBlob(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
-	t.Run("Namespace_delete_not_allowed_method", func(t *testing.T) {
+	t.Run("Namespace_delete_deletes_all_blobs_in_namespace", func(t *testing.T) {
 		t.Parallel()
-		req := httptest.NewRequest(http.MethodDelete, "/blob/ns1/b1", nil)
-		rr := httptest.NewRecorder()
-		dbController.handleBlob(rr, req)
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+		// First create some blobs in the namespace
+		content := []byte("blob-data")
+		reqPut1 := httptest.NewRequest(http.MethodPut, "/blob/ns1/b1", bytes.NewReader(content))
+		reqPut1.Header.Set("Content-Type", "text/plain")
+		rrPut1 := httptest.NewRecorder()
+		dbController.handleBlob(rrPut1, reqPut1)
+		assert.Equal(t, http.StatusOK, rrPut1.Code)
+
+		reqPut2 := httptest.NewRequest(http.MethodPut, "/blob/ns1/b2", bytes.NewReader(content))
+		reqPut2.Header.Set("Content-Type", "text/plain")
+		rrPut2 := httptest.NewRecorder()
+		dbController.handleBlob(rrPut2, reqPut2)
+		assert.Equal(t, http.StatusOK, rrPut2.Code)
+
+		// Delete the namespace
+		reqDel := httptest.NewRequest(http.MethodDelete, "/blob/ns1", nil)
+		rrDel := httptest.NewRecorder()
+		dbController.handleBlob(rrDel, reqDel)
+		assert.Equal(t, http.StatusOK, rrDel.Code)
+
+		var resp models.BlobDeleteResponse
+		err := json.Unmarshal(rrDel.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), resp.Deleted)
 	})
 
 	t.Run("Missing_Content-Type", func(t *testing.T) {
