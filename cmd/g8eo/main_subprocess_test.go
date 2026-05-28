@@ -248,7 +248,6 @@ func TestHandleVerifyVault_MissingPrivateKey_Subprocess(t *testing.T) {
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_VERIFY_NO_KEY=1",
 		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
-		"G8E_OPERATOR_API_KEY=",
 	)
 	err = cmd.Run()
 
@@ -358,7 +357,6 @@ func TestHandleVaultCommand_VerifyVault_NotInitialized_Subprocess(t *testing.T) 
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_VAULTCMD_VERIFY=1",
 		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
-		"G8E_OPERATOR_API_KEY=",
 	)
 	err := cmd.Run()
 	assert.NoError(t, err, "verify on uninitialized vault must exit 0")

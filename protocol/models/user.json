@@ -47,26 +47,6 @@
       }
     },
 
-    "api_keys": {
-      "g8e_key": {
-        "type": "string",
-        "required": false,
-        "description": "User's download/frontend API key. One per user. Used for operator download and frontend API calls. Prefixed with platform API key prefix."
-      },
-      "g8e_key_created_at": {
-        "type": "string",
-        "format": "iso8601",
-        "required": false,
-        "description": "Timestamp when the g8e_key was first created."
-      },
-      "g8e_key_updated_at": {
-        "type": "string",
-        "format": "iso8601",
-        "required": false,
-        "description": "Timestamp when the g8e_key was last refreshed/rotated. Null if never refreshed."
-      }
-    },
-
     "operator_linkage": {
       "operator_id": {
         "type": "string",

@@ -100,7 +100,8 @@ func TestRequestHTTPAuth_Success(t *testing.T) {
 		require.Equal(t, "POST", r.Method)
 		require.Equal(t, "/api/auth/operator", r.URL.Path)
 		require.Equal(t, "application/json", r.Header.Get(constants.HeaderContentType))
-		require.NotEmpty(t, r.Header.Get(constants.HeaderAuthorization))
+		// mTLS authentication - no Authorization header expected
+		require.Empty(t, r.Header.Get(constants.HeaderAuthorization))
 
 		resp := AuthServicesResponse{
 			Success:           true,

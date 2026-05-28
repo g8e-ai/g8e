@@ -61,7 +61,6 @@ func TestExecutionRequestPayload(t *testing.T) {
 			Args:             []string{"-la"},
 			TimeoutSeconds:   30,
 			RequestedBy:      "user@example.com",
-			APIKey:           "api-key",
 			WorkingDirectory: &workDir,
 		}
 
