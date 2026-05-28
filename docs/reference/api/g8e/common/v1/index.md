@@ -145,6 +145,7 @@ Notary (L3Notary) Governance: Authorization (Human-in-the-loop)
 | signature | [string](#string) |  |  |
 | credential_id | [string](#string) |  |  |
 | mtls_cert_fingerprint | [string](#string) |  | CLI mTLS proof: fingerprint of the CLI certificate used for authentication Used when the L3Notary proof is based on mTLS certificate validation rather than WebAuthn |
+| cli_signature | [string](#string) |  | CLI signature: signature over transaction_hash using the CLI/operator private key |
 
 
 

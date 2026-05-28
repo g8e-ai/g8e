@@ -111,7 +111,6 @@ CREATE TABLE IF NOT EXISTS nonces (
 );
 CREATE INDEX IF NOT EXISTS idx_nonces_expires ON nonces(expires_at);
 
--- Suspended transactions: transactions awaiting L3 human approval
 CREATE TABLE IF NOT EXISTS suspended_transactions (
     transaction_hash TEXT PRIMARY KEY,
     envelope TEXT NOT NULL,
@@ -120,7 +119,12 @@ CREATE TABLE IF NOT EXISTS suspended_transactions (
     tool_name TEXT NOT NULL,
     tool_arguments TEXT,
     user_id TEXT,
-    operator_id TEXT
+    operator_id TEXT,
+    approved INTEGER DEFAULT 0,
+    approved_at TEXT,
+    approved_by TEXT,
+    approval_signature TEXT,
+    expected_cert_fingerprint TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_suspended_expires ON suspended_transactions(expires_at);
 

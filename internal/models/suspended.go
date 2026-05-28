@@ -20,12 +20,17 @@ import (
 
 // SuspendedTransaction represents a transaction awaiting L3 human approval.
 type SuspendedTransaction struct {
-	TransactionHash string
-	Envelope        json.RawMessage
-	CreatedAt       time.Time
-	ExpiresAt       time.Time
-	ToolName        string
-	ToolArguments   json.RawMessage
-	UserID          string
-	OperatorID      string
+	TransactionHash         string
+	Envelope                json.RawMessage
+	CreatedAt               time.Time
+	ExpiresAt               time.Time
+	ToolName                string
+	ToolArguments           json.RawMessage
+	UserID                  string
+	OperatorID              string
+	Approved                bool
+	ApprovedAt              *time.Time
+	ApprovedBy              string // CLI session ID or user ID of approver
+	ApprovalSignature       string // Signature over transaction_hash by approver
+	ExpectedCertFingerprint string // Expected mTLS cert fingerprint for verification
 }

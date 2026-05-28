@@ -1352,14 +1352,26 @@ func (s *GatewayDBService) StoreSuspendedTransaction(tx *models.SuspendedTransac
 		toolArgsStr = string(tx.ToolArguments)
 	}
 
+	var approvedAtStr *string
+	if tx.ApprovedAt != nil {
+		ts := sqliteutil.FormatTimestamp(*tx.ApprovedAt)
+		approvedAtStr = &ts
+	}
+
 	_, err := s.db.ExecWithRetry(
 		`INSERT INTO suspended_transactions 
-		 (transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		 (transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(transaction_hash) DO UPDATE SET
 		   envelope = excluded.envelope,
-		   expires_at = excluded.expires_at`,
+		   expires_at = excluded.expires_at,
+		   approved = excluded.approved,
+		   approved_at = excluded.approved_at,
+		   approved_by = excluded.approved_by,
+		   approval_signature = excluded.approval_signature,
+		   expected_cert_fingerprint = excluded.expected_cert_fingerprint`,
 		tx.TransactionHash, string(tx.Envelope), now, expires, tx.ToolName, toolArgsStr, tx.UserID, tx.OperatorID,
+		tx.Approved, approvedAtStr, tx.ApprovedBy, tx.ApprovalSignature, tx.ExpectedCertFingerprint,
 	)
 	return err
 }
@@ -1367,11 +1379,13 @@ func (s *GatewayDBService) StoreSuspendedTransaction(tx *models.SuspendedTransac
 // GetSuspendedTransaction retrieves a suspended transaction by hash.
 // Returns (nil, false) if not found or expired.
 func (s *GatewayDBService) GetSuspendedTransaction(txHash string) (*models.SuspendedTransaction, bool) {
-	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID string
+	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID, approvedBy, approvalSignature, expectedCertFingerprint string
+	var approved int
+	var approvedAtStr sql.NullString
 	err := s.db.QueryRowWithRetry(
-		"SELECT envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE transaction_hash = ? AND expires_at > ?",
+		"SELECT envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint FROM suspended_transactions WHERE transaction_hash = ? AND expires_at > ?",
 		txHash, sqliteutil.NowTimestamp(),
-	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID)
+	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID, &approved, &approvedAtStr, &approvedBy, &approvalSignature, &expectedCertFingerprint)
 	if err != nil {
 		return nil, false
 	}
@@ -1390,15 +1404,29 @@ func (s *GatewayDBService) GetSuspendedTransaction(txHash string) (*models.Suspe
 		toolArgs = json.RawMessage(toolArgsStr)
 	}
 
+	var approvedAt *time.Time
+	if approvedAtStr.Valid {
+		ts, err := sqliteutil.ParseTimestamp(approvedAtStr.String)
+		if err != nil {
+			return nil, false
+		}
+		approvedAt = &ts
+	}
+
 	return &models.SuspendedTransaction{
-		TransactionHash: txHash,
-		Envelope:        json.RawMessage(envelopeStr),
-		CreatedAt:       createdAt,
-		ExpiresAt:       expiresAt,
-		ToolName:        toolName,
-		ToolArguments:   toolArgs,
-		UserID:          userID,
-		OperatorID:      operatorID,
+		TransactionHash:         txHash,
+		Envelope:                json.RawMessage(envelopeStr),
+		CreatedAt:               createdAt,
+		ExpiresAt:               expiresAt,
+		ToolName:                toolName,
+		ToolArguments:           toolArgs,
+		UserID:                  userID,
+		OperatorID:              operatorID,
+		Approved:                approved == 1,
+		ApprovedAt:              approvedAt,
+		ApprovedBy:              approvedBy,
+		ApprovalSignature:       approvalSignature,
+		ExpectedCertFingerprint: expectedCertFingerprint,
 	}, true
 }
 
@@ -1467,6 +1495,34 @@ func (s *GatewayDBService) ListSuspendedTransactions(userID string) ([]*models.S
 	}
 
 	return transactions, nil
+}
+
+// ApproveSuspendedTransaction marks a suspended transaction as approved with cryptographic signature.
+// This is called by the CLI approval command when a human approves a transaction.
+func (s *GatewayDBService) ApproveSuspendedTransaction(txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error {
+	now := time.Now().UTC()
+	nowStr := sqliteutil.FormatTimestamp(now)
+
+	result, err := s.db.ExecWithRetry(
+		`UPDATE suspended_transactions 
+		 SET approved = 1, approved_at = ?, approved_by = ?, approval_signature = ?, expected_cert_fingerprint = ?
+		 WHERE transaction_hash = ? AND expires_at > ?`,
+		nowStr, approvedBy, approvalSignature, expectedCertFingerprint, txHash, sqliteutil.NowTimestamp(),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to approve suspended transaction: %w", err)
+	}
+
+	// Check if any row was actually updated
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("transaction not found or expired")
+	}
+
+	return nil
 }
 
 // DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.

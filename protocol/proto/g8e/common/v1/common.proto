@@ -57,6 +57,8 @@ message L3Proof {
   // CLI mTLS proof: fingerprint of the CLI certificate used for authentication
   // Used when the L3Notary proof is based on mTLS certificate validation rather than WebAuthn
   string mtls_cert_fingerprint = 5 [json_name = "mtlsCertFingerprint"];
+  // CLI signature: signature over transaction_hash using the CLI/operator private key
+  string cli_signature = 6 [json_name = "cliSignature"];
 }
 
 message L3Metadata {

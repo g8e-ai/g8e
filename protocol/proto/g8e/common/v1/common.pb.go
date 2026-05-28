@@ -214,8 +214,10 @@ type L3Proof struct {
 	// CLI mTLS proof: fingerprint of the CLI certificate used for authentication
 	// Used when the L3Notary proof is based on mTLS certificate validation rather than WebAuthn
 	MtlsCertFingerprint string `protobuf:"bytes,5,opt,name=mtls_cert_fingerprint,json=mtlsCertFingerprint,proto3" json:"mtls_cert_fingerprint,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// CLI signature: signature over transaction_hash using the CLI/operator private key
+	CliSignature  string `protobuf:"bytes,6,opt,name=cli_signature,json=cliSignature,proto3" json:"cli_signature,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *L3Proof) Reset() {
@@ -279,6 +281,13 @@ func (x *L3Proof) GetCredentialId() string {
 func (x *L3Proof) GetMtlsCertFingerprint() string {
 	if x != nil {
 		return x.MtlsCertFingerprint
+	}
+	return ""
+}
+
+func (x *L3Proof) GetCliSignature() string {
+	if x != nil {
+		return x.CliSignature
 	}
 	return ""
 }
@@ -675,13 +684,14 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"L2Metadata\x12/\n" +
 	"\x13consensus_signature\x18\x01 \x01(\tR\x12consensusSignature\x12\x1b\n" +
 	"\tagent_ids\x18\x02 \x03(\tR\bagentIds\x12\x15\n" +
-	"\x06key_id\x18\x03 \x01(\tR\x05keyId\"\xd9\x01\n" +
+	"\x06key_id\x18\x03 \x01(\tR\x05keyId\"\xfe\x01\n" +
 	"\aL3Proof\x12(\n" +
 	"\x10client_data_json\x18\x01 \x01(\tR\x0eclientDataJSON\x12-\n" +
 	"\x12authenticator_data\x18\x02 \x01(\tR\x11authenticatorData\x12\x1c\n" +
 	"\tsignature\x18\x03 \x01(\tR\tsignature\x12#\n" +
 	"\rcredential_id\x18\x04 \x01(\tR\fcredentialId\x122\n" +
-	"\x15mtls_cert_fingerprint\x18\x05 \x01(\tR\x13mtlsCertFingerprint\"_\n" +
+	"\x15mtls_cert_fingerprint\x18\x05 \x01(\tR\x13mtlsCertFingerprint\x12#\n" +
+	"\rcli_signature\x18\x06 \x01(\tR\fcliSignature\"_\n" +
 	"\n" +
 	"L3Metadata\x12,\n" +
 	"\x05proof\x18\x01 \x01(\v2\x16.g8e.common.v1.L3ProofR\x05proof\x12#\n" +
