@@ -240,7 +240,7 @@ func TestHandleVerifyVault_MissingPrivateKey_Subprocess(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	header, _, err := vaultpkg.NewVaultHeader("some-key")
+	header, _, err := vaultpkg.NewVaultHeader([]byte("some-key"))
 	require.NoError(t, err)
 	require.NoError(t, header.Save(dir))
 
@@ -302,7 +302,7 @@ func TestHandleResetVault_WrongConfirmation_Subprocess(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	header, _, err := vaultpkg.NewVaultHeader("some-key")
+	header, _, err := vaultpkg.NewVaultHeader([]byte("some-key"))
 	require.NoError(t, err)
 	require.NoError(t, header.Save(dir))
 

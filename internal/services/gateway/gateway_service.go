@@ -17,7 +17,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -62,7 +61,7 @@ type GatewayService struct {
 }
 
 // NewGatewayService creates a new gateway mode service.
-func NewGatewayService(cfg *config.Config, logger *slog.Logger, docsFS fs.FS) (*GatewayService, error) {
+func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService, error) {
 	db, err := OpenGatewayDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, logger, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
@@ -145,7 +144,7 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger, docsFS fs.FS) (*
 		responder: res,
 	}
 
-	if err := ls.initHandlersAndServers(docsFS); err != nil {
+	if err := ls.initHandlersAndServers(); err != nil {
 		return nil, fmt.Errorf("failed to initialize handlers and servers: %w", err)
 	}
 
@@ -192,14 +191,14 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 		responder: res,
 	}
 
-	if err := ls.initHandlersAndServers(nil); err != nil {
+	if err := ls.initHandlersAndServers(); err != nil {
 		return nil, fmt.Errorf("failed to initialize handlers and servers: %w", err)
 	}
 
 	return ls, nil
 }
 
-func (ls *GatewayService) initHandlersAndServers(docsFS fs.FS) error {
+func (ls *GatewayService) initHandlersAndServers() error {
 	cfg := ls.cfg
 	logger := ls.logger
 	db := ls.db
@@ -233,7 +232,7 @@ func (ls *GatewayService) initHandlersAndServers(docsFS fs.FS) error {
 		AppEnrollment:     appEnrollment,
 		IsReady:           ls.IsReady,
 		IsGovernanceReady: ls.IsGovernanceReady,
-		DocsFS:            docsFS,
+		DocsFS:            nil,
 	})
 
 	// Build a map of ports to identify port assignments.

@@ -370,7 +370,7 @@ func TestHandleVerifyVault_MissingPrivateKey_VaultInitialized(t *testing.T) {
 	require.NoError(t, err)
 	defer v.Close()
 
-	header, _, err := vault.NewVaultHeader("initial-key")
+	header, _, err := vault.NewVaultHeader([]byte("initial-key"))
 	require.NoError(t, err)
 	require.NoError(t, header.Save(dir))
 
@@ -404,7 +404,7 @@ func TestHandleResetVault_Initialized_ResetDestroysData(t *testing.T) {
 	require.NoError(t, err)
 	defer v.Close()
 
-	header, _, err := vault.NewVaultHeader("some-key")
+	header, _, err := vault.NewVaultHeader([]byte("some-key"))
 	require.NoError(t, err)
 	require.NoError(t, header.Save(dir))
 	require.True(t, v.IsInitialized())
@@ -457,7 +457,7 @@ func TestHandleVaultLifecycle(t *testing.T) {
 
 	require.False(t, v.IsInitialized())
 
-	header, _, err := vault.NewVaultHeader("initial-api-key")
+	header, _, err := vault.NewVaultHeader([]byte("initial-api-key"))
 	require.NoError(t, err)
 	require.NoError(t, header.Save(dir))
 

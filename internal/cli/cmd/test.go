@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 )
@@ -469,7 +470,7 @@ func cleanOldVaults(vaultDir string, days int, cmd *cobra.Command) error {
 
 func testSummaryCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "summary",
+		Use:   string(constants.StreamStatusSummary),
 		Short: "Show summary of all integration test results",
 		Long:  `Aggregate and display test results from all test vaults in .g8e/test-vault/`,
 		RunE: func(cmd *cobra.Command, args []string) error {

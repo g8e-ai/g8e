@@ -152,11 +152,10 @@ PLATFORMS := linux/amd64 linux/arm64 linux/386
 build:
 	@echo "Building g8e..."
 	@mkdir -p bin
-	@echo "Preparing build directory for docs embedding..."
+	@echo "Preparing build directory..."
 	@rm -rf .build/cmd/g8eo
 	@mkdir -p .build/cmd/g8eo
 	@cp -r cmd/g8eo/* .build/cmd/g8eo/
-	@cp -r docs .build/cmd/g8eo/docs
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
@@ -175,11 +174,10 @@ build:
 build-compressed: upx-install
 	@echo "Building g8e with compression for $(PLATFORMS)..."
 	@mkdir -p bin
-	@echo "Preparing build directory for docs embedding..."
+	@echo "Preparing build directory..."
 	@rm -rf .build/cmd/g8eo
 	@mkdir -p .build/cmd/g8eo
 	@cp -r cmd/g8eo/* .build/cmd/g8eo/
-	@cp -r docs .build/cmd/g8eo/docs
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
