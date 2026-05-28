@@ -318,10 +318,10 @@ func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
 			"ssh_config_path": ".g8e/ssh/config"
 		},
 		"ports": {
-			"insecure_mcp_gateway": 9003,
-			"operator_bootstrap_https": 9001,
-			"operator_https": 9000,
-			"operator_public_https": 9002
+			"insecure_mcp_gateway": 18789,
+			"operator_bootstrap_https": 8441,
+			"operator_https": 8440,
+			"operator_public_https": 8443
 		}
 	}`
 	pathsPath := filepath.Join(constantsDir, "paths.json")

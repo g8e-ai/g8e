@@ -234,7 +234,7 @@ Default ports (configurable via flags or paths.json):
 |---|---|---|
 | `8441` | Bootstrap enrollment | TLS (no client cert) |
 | `8442` | Public web session | TLS (no client cert) |
-| `9000-9003` | Operator mTLS API + Pub/Sub | mTLS (RequireAndVerifyClientCert) |
+| `8440-8443`, `18789` | Operator mTLS API + Pub/Sub | mTLS (RequireAndVerifyClientCert) |
 
 ### Environment Variables
 

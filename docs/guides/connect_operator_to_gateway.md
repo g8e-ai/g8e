@@ -134,7 +134,7 @@ AI clients can connect to the operator's MCP endpoint:
 
 ```bash
 # For HTTP-based MCP
-curl -X POST http://localhost:9000/tools/call \
+curl -X POST http://localhost:8440/tools/call \
   -H "Content-Type: application/json" \
   -d '{"tool": "shell.execute", "arguments": {"command": "ls -la"}}'
 ```
@@ -144,7 +144,7 @@ curl -X POST http://localhost:9000/tools/call \
 A2A skill invocations are similarly translated:
 
 ```bash
-curl -X POST http://localhost:9000/skills/execute \
+curl -X POST http://localhost:8440/skills/execute \
   -H "Content-Type: application/json" \
   -d '{"skill": "file.read", "parameters": {"path": "/etc/hosts"}}'
 ```
@@ -154,7 +154,7 @@ curl -X POST http://localhost:9000/skills/execute \
 For direct envelope submission to the operator:
 
 ```bash
-curl -X POST http://localhost:9000/api/governance/envelope \
+curl -X POST http://localhost:8440/api/governance/envelope \
   -H "Content-Type: application/json" \
   -d @envelope.json
 ```

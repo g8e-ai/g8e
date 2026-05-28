@@ -392,10 +392,11 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 				OperatorHTTPS          int `json:"operator_https"`
 				OperatorPublicHTTPS    int `json:"operator_public_https"`
 			}{
-				InsecureMcpGateway:     9003,
-				OperatorBootstrapHTTPS: 9001,
-				OperatorHTTPS:          9000,
-				OperatorPublicHTTPS:    9002,
+				G8eeHTTPS:              8443,
+				InsecureMcpGateway:     18789,
+				OperatorBootstrapHTTPS: 8441,
+				OperatorHTTPS:          8440,
+				OperatorPublicHTTPS:    8443,
 			},
 		},
 	}
