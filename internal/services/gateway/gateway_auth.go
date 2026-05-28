@@ -196,6 +196,13 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// JIT passkey bootstrap: when JWKS is configured, allow JIT-specific passkey registration through JWTAuthMiddleware
+		// This unblocks OIDC/JIT users who have zero credentials and cannot reach WebSessionAuth
+		if s.HasJWKS() && strings.HasPrefix(r.URL.Path, "/api/auth/passkey/jit-") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		// These routes are new protocol entry points.
 		// Native Registration Path (Phase 4)
 		// This endpoint is the new sovereign entry point for enrolling binaries.
@@ -399,9 +406,6 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				}
 			}
 		}
-
-		// API keys are no longer a valid mutation authority.
-		// They are only used for registration, which is handled in the bypass above.
 
 		// For WebSockets, return a plain text error for 401.
 		// Handshake fails if a JSON body is returned instead of just the 401 status.

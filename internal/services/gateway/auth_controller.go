@@ -108,6 +108,25 @@ func (c *AuthController) handlePasskeyRegisterChallenge(w http.ResponseWriter, r
 		return
 	}
 
+	// JIT passkey bootstrap: enforce first-credential-only when coming through JIT routes.
+	// These routes are mounted behind JWTAuthMiddleware in the public router.
+	// This prevents a stolen JWT from silently adding attacker-controlled authenticators.
+	if strings.Contains(r.URL.Path, "/jit-") {
+		user, err := c.userSvc.GetByID(req.UserID)
+		if err != nil {
+			c.responder.Error(w, http.StatusInternalServerError, "failed to fetch user")
+			return
+		}
+		if user == nil {
+			c.responder.Error(w, http.StatusNotFound, "user not found")
+			return
+		}
+		if len(user.PasskeyCredentials) > 0 {
+			c.responder.Error(w, http.StatusForbidden, "first-credential registration only; user already has credentials, require step-up via existing passkey or mTLS")
+			return
+		}
+	}
+
 	options, err := c.passkey.GenerateRegistrationChallenge(req.UserID, req.UserName)
 	if err != nil {
 		c.logger.Warn("Passkey register challenge failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
@@ -154,6 +173,25 @@ func (c *AuthController) handlePasskeyRegisterVerify(w http.ResponseWriter, r *h
 	if req.UserID == "" {
 		c.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
+	}
+
+	// JIT passkey bootstrap: enforce first-credential-only when coming through JIT routes.
+	// These routes are mounted behind JWTAuthMiddleware in the public router.
+	// This prevents a stolen JWT from silently adding attacker-controlled authenticators.
+	if strings.Contains(r.URL.Path, "/jit-") {
+		user, err := c.userSvc.GetByID(req.UserID)
+		if err != nil {
+			c.responder.Error(w, http.StatusInternalServerError, "failed to fetch user")
+			return
+		}
+		if user == nil {
+			c.responder.Error(w, http.StatusNotFound, "user not found")
+			return
+		}
+		if len(user.PasskeyCredentials) > 0 {
+			c.responder.Error(w, http.StatusForbidden, "first-credential registration only; user already has credentials, require step-up via existing passkey or mTLS")
+			return
+		}
 	}
 
 	cred, err := c.passkey.VerifyRegistration(req.UserID, r)

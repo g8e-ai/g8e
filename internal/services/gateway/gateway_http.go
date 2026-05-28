@@ -283,16 +283,20 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 		mcpHandler = h.auth.JWTAuthMiddleware(mcpRateLimited)
 		mux.Handle("/api/mcp/", mcpHandler)
 		mux.Handle("/api/a2a/", mcpHandler)
+
+		// JIT passkey bootstrap: allow first-credential registration via JWT
+		// This unblocks OIDC/JIT users who have zero credentials and cannot reach WebSessionAuth
+		jwtPasskeyMux := http.NewServeMux()
+		jwtPasskeyMux.HandleFunc("/api/auth/passkey/jit-register-challenge", h.authController.handlePasskeyRegisterChallenge)
+		jwtPasskeyMux.HandleFunc("/api/auth/passkey/jit-register-verify", h.authController.handlePasskeyRegisterVerify)
+		mux.Handle("/api/auth/passkey/jit-register-challenge", h.auth.JWTAuthMiddleware(jwtPasskeyMux))
+		mux.Handle("/api/auth/passkey/jit-register-verify", h.auth.JWTAuthMiddleware(jwtPasskeyMux))
 	}
 
 	// Browser-facing data routes (require web session cookie)
 	authedMux := http.NewServeMux()
 	authedMux.HandleFunc("/api/user/me", h.authController.handleUserMe)
 	authedMux.HandleFunc("/api/auth/web-session", h.authController.handleWebSession)
-
-	// [PIVOT] Move passkey registration to public authed mux so bootstrapped users can register
-	authedMux.HandleFunc("/api/auth/passkey/register-challenge", h.authController.handlePasskeyRegisterChallenge)
-	authedMux.HandleFunc("/api/auth/passkey/register-verify", h.authController.handlePasskeyRegisterVerify)
 
 	// OOB Approval UI for suspended MCP/A2A transactions
 	mux.HandleFunc("/approve/", h.authController.handleApprovalPage)
@@ -302,7 +306,6 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// Wrap authed routes in WebSessionAuth middleware
 	mux.Handle("/api/user/", h.auth.WebSessionAuth(authedMux, h.db))
 	mux.Handle("/api/auth/web-session", h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle("/api/auth/passkey/", h.auth.WebSessionAuth(authedMux, h.db))
 	mux.Handle("/api/approve/", h.auth.WebSessionAuth(authedMux, h.db))
 
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
