@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.2] - 2026-05-28
+
+### Added
+- **TLS 1.3 Enforcement:** Strict requirement for TLS 1.3 across all substrate communications; removed support for legacy TLS 1.2.
+- **CSR-Based Enrollment:** Transitioned to Certificate Signing Requests (CSR) for all device and workload enrollment flows, enhancing identity verification.
+- **Single-Port Multiplexing:** Unified HTTP/HTTPS router in the Gateway allows multiple services (Admin, MCP, A2A, PKI) to share a single port via strict SNI and mTLS routing.
+- **PKI Revocation:** New `PKIController` implements certificate revocation and signed revocation bundle generation for fail-closed identity management.
+- **Ecosystem Demos:** New LangChain agent demo showcasing the "Bring Your Own Agent" (BYOA) substrate integration pattern.
+
+### Changed
+- **Substrate Hardening:** Significant refactoring of Gateway and Operator services to improve maintainability and strictly enforce mTLS execution boundaries.
+- **Bootstrap UX:** Renamed "CA Trust" to "Bootstrap" and improved startup output to better direct users toward the `g8e login` flow.
+- **L1/L3 Governance:** Enhanced L1 Doctrine payload verification and unified L3 Approval brokerage for both WebAuthn and CLI sessions.
+- **Legacy Cleanup:** Completed removal of legacy API-key-only authentication paths in favor of first-class PKI/mTLS.
+
+### Fixed
+- **Workload Identity:** Standardized SPIFFE-compatible URI SANs for all substrate-issued certificates.
+- **Audit Vault:** Hardened audit event write paths to strictly reject unattributed or malformed events.
+- **Integration Tests:** Significant reliability improvements to MCP/A2A and BYO-client end-to-end test suites.
+
+---
+
 ## [1.0.1] - 2026-05-27
 
 ### Breaking Changes
