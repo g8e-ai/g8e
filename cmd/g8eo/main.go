@@ -65,17 +65,16 @@ func main() {
 		return
 	}
 
-	// Check for CLI subcommands (platform, apps, auth, data, test, evals, security, setup, vars)
+	// Check for CLI subcommands (platform, apps, auth, data, evals, security, setup, vars)
 	cliSubcommands := map[string]bool{
-		"platform":                        true,
-		"apps":                            true,
-		"auth":                            true,
-		"data":                            true,
-		string(constants.EnvironmentTest): true,
-		"evals":                           true,
-		"security":                        true,
-		"setup":                           true,
-		"vars":                            true,
+		"platform": true,
+		"apps":     true,
+		"auth":     true,
+		"data":     true,
+		"evals":    true,
+		"security": true,
+		"setup":    true,
+		"vars":     true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
@@ -188,7 +187,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  apps        Application lifecycle (start, stop, status, logs)\n")
 		fmt.Fprintf(os.Stderr, "  auth        Authentication (login, logout, device-link)\n")
 		fmt.Fprintf(os.Stderr, "  data        Data operations (export, import, query)\n")
-		fmt.Fprintf(os.Stderr, "  test        Run tests (g8eo, g8ee, integration)\n")
 		fmt.Fprintf(os.Stderr, "  evals       Run evaluation suites\n")
 		fmt.Fprintf(os.Stderr, "  security    Security operations (pki, certificates)\n")
 		fmt.Fprintf(os.Stderr, "  setup       Initial setup and configuration\n")
