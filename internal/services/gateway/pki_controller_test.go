@@ -31,6 +31,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	testDeviceLinkTokenPrefix = "dlk_"
+	testMinTokenLength        = 10
+	testOrganizationID        = "org-123"
+	testOperatorID            = "op-456"
+	testUserID                = "user-789"
+	testWorkloadSessionID     = "ws-012"
+	testAppName               = "test-app"
+	testAppType               = "mcp-client"
+	testSerial                = "test-serial-123"
+	testRevocationReason      = "key-compromise"
+)
+
+var (
+	testValidToken = testDeviceLinkTokenPrefix + "test_token_12345"
+)
+
+type httpTestCase struct {
+	name           string
+	method         string
+	body           []byte
+	headers        map[string]string
+	setup          func(*testing.T, *PKIController, *GatewayDBService)
+	expectedStatus int
+	expectedBody   string
+	validateResp   func(*testing.T, *httptest.ResponseRecorder)
+}
+
 func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *GatewayDBService) {
 	t.Helper()
 	cfg := testutil.NewTestConfig(t)
@@ -39,19 +67,22 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Gate
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
+
 	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
-	require.NoError(t, err)
+	require.NoError(t, err, "failed to open gateway DB service")
 	t.Cleanup(func() { db.Close() })
 
-	os.RemoveAll(secretsDir)
-	os.MkdirAll(secretsDir, 0755)
+	require.NoError(t, os.RemoveAll(secretsDir), "failed to clean secrets dir")
+	require.NoError(t, os.MkdirAll(secretsDir, 0755), "failed to create secrets dir")
 
 	backend, err := keystore.NewTestBackend()
-	require.NoError(t, err)
+	require.NoError(t, err, "failed to create test keystore backend")
+
 	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
-	require.NoError(t, err)
-	require.NoError(t, ks.Initialize())
-	require.NoError(t, ks.EnsurePermissions())
+	require.NoError(t, err, "failed to create keystore")
+	require.NoError(t, ks.Initialize(), "failed to initialize keystore")
+	require.NoError(t, ks.EnsurePermissions(), "failed to ensure keystore permissions")
+
 	sm := &SecretManager{
 		db:         db.db,
 		secretsDir: t.TempDir(),
@@ -60,8 +91,7 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Gate
 	}
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
-	err = pki.EnsurePKI(nil)
-	require.NoError(t, err)
+	require.NoError(t, pki.EnsurePKI(nil), "failed to ensure PKI")
 
 	appEnrollment := NewAppEnrollmentService(db, pki, logger)
 	resp := responder.New(logger)
@@ -70,574 +100,489 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Gate
 	return controller, cfg, db
 }
 
+func createValidDeviceLink(t *testing.T, db *GatewayDBService, token string, expiresAt time.Time) {
+	t.Helper()
+
+	linkData := map[string]interface{}{
+		"expires_at": expiresAt.Format(time.RFC3339),
+		"user_id":    testUserID,
+	}
+	linkJSON, err := json.Marshal(linkData)
+	require.NoError(t, err, "failed to marshal device-link data")
+
+	db.KVSet("g8e:device-link:"+token, string(linkJSON), 0)
+}
+
+func runHTTPTest(t *testing.T, tc httpTestCase, handler func(*httptest.ResponseRecorder, *http.Request)) {
+	t.Helper()
+
+	c, _, db := setupTestPKIController(t)
+
+	if tc.setup != nil {
+		tc.setup(t, c, db)
+	}
+
+	req := httptest.NewRequest(tc.method, "/api/pki/test", bytes.NewReader(tc.body))
+	for k, v := range tc.headers {
+		req.Header.Set(k, v)
+	}
+
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+
+	assert.Equal(t, tc.expectedStatus, rr.Code, "expected status code mismatch")
+
+	if tc.expectedBody != "" {
+		assert.JSONEq(t, tc.expectedBody, rr.Body.String(), "expected body mismatch")
+	}
+
+	if tc.validateResp != nil {
+		tc.validateResp(t, rr)
+	}
+}
+
 func TestPKIController_HandlePKIHubBundle(t *testing.T) {
-	t.Run("Success - GET returns PEM bundle", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
+	tests := []httpTestCase{
+		{
+			name:           "Success - GET returns PEM bundle",
+			method:         http.MethodGet,
+			expectedStatus: http.StatusOK,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				assert.Equal(t, "application/x-pem-file", rr.Header().Get("Content-Type"))
+				assert.Equal(t, "nosniff", rr.Header().Get("X-Content-Type-Options"))
+				assert.Equal(t, "DENY", rr.Header().Get("X-Frame-Options"))
+				assert.NotEmpty(t, rr.Body.Bytes(), "response body should not be empty")
+				assert.Contains(t, rr.Body.String(), "BEGIN CERTIFICATE", "body should contain PEM certificate")
+			},
+		},
+		{
+			name:           "Failure - POST method not allowed",
+			method:         http.MethodPost,
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedBody:   `{"error":"method not allowed"}`,
+		},
+		{
+			name:   "Failure - PKI error returns 500",
+			method: http.MethodGet,
+			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+				c.pki = &PKIAuthority{}
+			},
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody:   `{"error":"failed to read hub bundle"}`,
+		},
+	}
 
-		req := httptest.NewRequest(http.MethodGet, "/api/pki/hub-bundle", nil)
-		rr := httptest.NewRecorder()
-
-		c.handlePKIHubBundle(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Equal(t, "application/x-pem-file", rr.Header().Get("Content-Type"))
-		assert.Equal(t, "nosniff", rr.Header().Get("X-Content-Type-Options"))
-		assert.Equal(t, "DENY", rr.Header().Get("X-Frame-Options"))
-		assert.NotEmpty(t, rr.Body.Bytes())
-		assert.Contains(t, string(rr.Body.Bytes()), "BEGIN CERTIFICATE")
-	})
-
-	t.Run("Failure - POST method not allowed", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/hub-bundle", nil)
-		rr := httptest.NewRecorder()
-
-		c.handlePKIHubBundle(rr, req)
-
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
-		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - PKI error returns 500", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		c.pki = &PKIAuthority{}
-
-		req := httptest.NewRequest(http.MethodGet, "/api/pki/hub-bundle", nil)
-		rr := httptest.NewRecorder()
-
-		c.handlePKIHubBundle(rr, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rr.Code)
-		assert.JSONEq(t, `{"error":"failed to read hub bundle"}`, rr.Body.String())
-	})
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
+				c, _, _ := setupTestPKIController(t)
+				if tc.setup != nil {
+					tc.setup(t, c, nil)
+				}
+				c.handlePKIHubBundle(rr, req)
+			})
+		})
+	}
 }
 
 func TestPKIController_HandlePKIFingerprint(t *testing.T) {
-	t.Run("Success - GET returns SHA256 fingerprint", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
+	tests := []httpTestCase{
+		{
+			name:           "Success - GET returns SHA256 fingerprint",
+			method:         http.MethodGet,
+			expectedStatus: http.StatusOK,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var resp map[string]string
+				err := json.Unmarshal(rr.Body.Bytes(), &resp)
+				require.NoError(t, err, "failed to unmarshal response")
+				assert.NotEmpty(t, resp["root_ca"], "root_ca fingerprint should not be empty")
+				assert.Contains(t, resp["root_ca"], "sha256:", "fingerprint should contain sha256 prefix")
+			},
+		},
+		{
+			name:           "Failure - POST method not allowed",
+			method:         http.MethodPost,
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedBody:   `{"error":"method not allowed"}`,
+		},
+		{
+			name:   "Failure - Root CA file not found",
+			method: http.MethodGet,
+			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+				c.pki = &PKIAuthority{}
+			},
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody:   `{"error":"failed to read root CA"}`,
+		},
+		{
+			name:   "Failure - Invalid PEM format",
+			method: http.MethodGet,
+			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+				pkiDir := c.pki.PKIDir()
+				rootPath := filepath.Join(pkiDir, "root", "root_ca.crt")
+				err := os.WriteFile(rootPath, []byte("invalid pem data"), 0644)
+				require.NoError(t, err, "failed to write invalid PEM data")
+			},
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody:   `{"error":"invalid root CA PEM"}`,
+		},
+	}
 
-		req := httptest.NewRequest(http.MethodGet, "/api/pki/fingerprint", nil)
-		rr := httptest.NewRecorder()
-
-		c.handlePKIFingerprint(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]string
-		err := json.Unmarshal(rr.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.NotEmpty(t, resp["root_ca"])
-		assert.Contains(t, resp["root_ca"], "sha256:")
-	})
-
-	t.Run("Failure - POST method not allowed", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/fingerprint", nil)
-		rr := httptest.NewRecorder()
-
-		c.handlePKIFingerprint(rr, req)
-
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
-		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - Root CA file not found", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		c.pki = &PKIAuthority{}
-
-		req := httptest.NewRequest(http.MethodGet, "/api/pki/fingerprint", nil)
-		rr := httptest.NewRecorder()
-
-		c.handlePKIFingerprint(rr, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rr.Code)
-		assert.JSONEq(t, `{"error":"failed to read root CA"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - Invalid PEM format", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		pkiDir := c.pki.PKIDir()
-		rootPath := filepath.Join(pkiDir, "root", "root_ca.crt")
-		err := os.WriteFile(rootPath, []byte("invalid pem data"), 0644)
-		require.NoError(t, err)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/pki/fingerprint", nil)
-		rr := httptest.NewRecorder()
-
-		c.handlePKIFingerprint(rr, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rr.Code)
-		assert.JSONEq(t, `{"error":"invalid root CA PEM"}`, rr.Body.String())
-	})
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
+				c, _, _ := setupTestPKIController(t)
+				if tc.setup != nil {
+					tc.setup(t, c, nil)
+				}
+				c.handlePKIFingerprint(rr, req)
+			})
+		})
+	}
 }
 
 func TestPKIController_HandlePKISignCSR(t *testing.T) {
-	t.Run("Success - POST signs CSR and returns cert", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
+	validCSRPayload := map[string]string{
+		"csr_pem":             generateTestCSR(t),
+		"leaf_type":           "operator",
+		"organization_id":     testOrganizationID,
+		"operator_id":         testOperatorID,
+		"user_id":             testUserID,
+		"workload_session_id": testWorkloadSessionID,
+	}
 
-		csr := generateTestCSR(t)
-		body := map[string]string{
-			"csr_pem":             csr,
-			"leaf_type":           "operator",
-			"organization_id":     "org-123",
-			"operator_id":         "op-456",
-			"user_id":             "user-789",
-			"workload_session_id": "ws-012",
-		}
-		b, _ := json.Marshal(body)
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/sign-csr", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
+	tests := []httpTestCase{
+		{
+			name:           "Success - POST signs CSR and returns cert",
+			method:         http.MethodPost,
+			body:           mustMarshalJSON(t, validCSRPayload),
+			expectedStatus: http.StatusOK,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var resp map[string]string
+				err := json.Unmarshal(rr.Body.Bytes(), &resp)
+				require.NoError(t, err, "failed to unmarshal response")
+				assert.NotEmpty(t, resp["certificate_pem"], "certificate_pem should not be empty")
+				assert.NotEmpty(t, resp["certificate_chain_pem"], "certificate_chain_pem should not be empty")
+				assert.Contains(t, resp["certificate_pem"], "BEGIN CERTIFICATE", "certificate should contain PEM header")
+			},
+		},
+		{
+			name:           "Failure - GET method not allowed",
+			method:         http.MethodGet,
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedBody:   `{"error":"method not allowed"}`,
+		},
+		{
+			name:           "Failure - Invalid JSON",
+			method:         http.MethodPost,
+			body:           []byte("invalid json"),
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error":"invalid JSON"}`,
+		},
+		{
+			name:   "Failure - PKI signing error",
+			method: http.MethodPost,
+			body: mustMarshalJSON(t, map[string]string{
+				"csr_pem":   "invalid csr",
+				"leaf_type": "operator",
+			}),
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
 
-		c.handlePKISignCSR(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]string
-		err := json.Unmarshal(rr.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.NotEmpty(t, resp["certificate_pem"])
-		assert.NotEmpty(t, resp["certificate_chain_pem"])
-		assert.Contains(t, resp["certificate_pem"], "BEGIN CERTIFICATE")
-	})
-
-	t.Run("Failure - GET method not allowed", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/pki/sign-csr", nil)
-		rr := httptest.NewRecorder()
-
-		c.handlePKISignCSR(rr, req)
-
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
-		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - Invalid JSON", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/sign-csr", bytes.NewReader([]byte("invalid json")))
-		rr := httptest.NewRecorder()
-
-		c.handlePKISignCSR(rr, req)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"invalid JSON"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - PKI signing error", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		body := map[string]string{
-			"csr_pem":   "invalid csr",
-			"leaf_type": "operator",
-		}
-		b, _ := json.Marshal(body)
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/sign-csr", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
-
-		c.handlePKISignCSR(rr, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rr.Code)
-	})
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
+				c, _, _ := setupTestPKIController(t)
+				if tc.setup != nil {
+					tc.setup(t, c, nil)
+				}
+				c.handlePKISignCSR(rr, req)
+			})
+		})
+	}
 }
 
 func TestPKIController_HandlePKIRevoke(t *testing.T) {
-	t.Run("Success - POST revokes certificate", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
+	validRevokePayload := map[string]string{
+		"serial": testSerial,
+		"reason": testRevocationReason,
+	}
 
-		body := map[string]string{
-			"serial": "test-serial-123",
-			"reason": "key-compromise",
-		}
-		b, _ := json.Marshal(body)
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/revoke", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
+	tests := []httpTestCase{
+		{
+			name:           "Success - POST revokes certificate",
+			method:         http.MethodPost,
+			body:           mustMarshalJSON(t, validRevokePayload),
+			expectedStatus: http.StatusOK,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var resp map[string]interface{}
+				err := json.Unmarshal(rr.Body.Bytes(), &resp)
+				require.NoError(t, err, "failed to unmarshal response")
+				assert.Equal(t, "ok", resp["status"], "status should be ok")
+			},
+		},
+		{
+			name:           "Failure - GET method not allowed",
+			method:         http.MethodGet,
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedBody:   `{"error":"method not allowed"}`,
+		},
+		{
+			name:           "Failure - Invalid JSON",
+			method:         http.MethodPost,
+			body:           []byte("invalid json"),
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error":"invalid JSON"}`,
+		},
+		{
+			name:           "Failure - Missing serial",
+			method:         http.MethodPost,
+			body:           mustMarshalJSON(t, map[string]string{"reason": testRevocationReason}),
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error":"serial required"}`,
+		},
+		{
+			name:   "Failure - PKI revocation error",
+			method: http.MethodPost,
+			body:   mustMarshalJSON(t, validRevokePayload),
+			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+				c.pki = &PKIAuthority{}
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
 
-		c.handlePKIRevoke(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
-		err := json.Unmarshal(rr.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.Equal(t, "ok", resp["status"])
-	})
-
-	t.Run("Failure - GET method not allowed", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/pki/revoke", nil)
-		rr := httptest.NewRecorder()
-
-		c.handlePKIRevoke(rr, req)
-
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
-		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - Invalid JSON", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/revoke", bytes.NewReader([]byte("invalid json")))
-		rr := httptest.NewRecorder()
-
-		c.handlePKIRevoke(rr, req)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"invalid JSON"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - Missing serial", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		body := map[string]string{
-			"reason": "key-compromise",
-		}
-		b, _ := json.Marshal(body)
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/revoke", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
-
-		c.handlePKIRevoke(rr, req)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"serial required"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - PKI revocation error", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		c.pki = &PKIAuthority{}
-
-		body := map[string]string{
-			"serial": "test-serial",
-			"reason": "key-compromise",
-		}
-		b, _ := json.Marshal(body)
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/revoke", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
-
-		c.handlePKIRevoke(rr, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rr.Code)
-	})
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
+				c, _, _ := setupTestPKIController(t)
+				if tc.setup != nil {
+					tc.setup(t, c, nil)
+				}
+				c.handlePKIRevoke(rr, req)
+			})
+		})
+	}
 }
 
 func TestPKIController_HandlePKIRevocationBundle(t *testing.T) {
-	t.Run("Success - GET returns revocation bundle", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
+	tests := []httpTestCase{
+		{
+			name:           "Success - GET returns revocation bundle",
+			method:         http.MethodGet,
+			expectedStatus: http.StatusOK,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var resp map[string]string
+				err := json.Unmarshal(rr.Body.Bytes(), &resp)
+				require.NoError(t, err, "failed to unmarshal response")
+				assert.NotEmpty(t, resp["bundle_json"], "bundle_json should not be empty")
+				assert.NotEmpty(t, resp["signature"], "signature should not be empty")
+			},
+		},
+		{
+			name:           "Failure - POST method not allowed",
+			method:         http.MethodPost,
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedBody:   `{"error":"method not allowed"}`,
+		},
+		{
+			name:   "Failure - PKI bundle generation error",
+			method: http.MethodGet,
+			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+				c.pki = &PKIAuthority{}
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
 
-		req := httptest.NewRequest(http.MethodGet, "/api/pki/revocation-bundle", nil)
-		rr := httptest.NewRecorder()
-
-		c.handlePKIRevocationBundle(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]string
-		err := json.Unmarshal(rr.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.NotEmpty(t, resp["bundle_json"])
-		assert.NotEmpty(t, resp["signature"])
-	})
-
-	t.Run("Failure - POST method not allowed", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/revocation-bundle", nil)
-		rr := httptest.NewRecorder()
-
-		c.handlePKIRevocationBundle(rr, req)
-
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
-		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - PKI bundle generation error", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		c.pki = &PKIAuthority{}
-
-		req := httptest.NewRequest(http.MethodGet, "/api/pki/revocation-bundle", nil)
-		rr := httptest.NewRecorder()
-
-		c.handlePKIRevocationBundle(rr, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rr.Code)
-	})
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
+				c, _, _ := setupTestPKIController(t)
+				if tc.setup != nil {
+					tc.setup(t, c, nil)
+				}
+				c.handlePKIRevocationBundle(rr, req)
+			})
+		})
+	}
 }
 
 func TestPKIController_HandleAppEnroll(t *testing.T) {
-	t.Run("Success - POST enrolls app with valid device-link token", func(t *testing.T) {
-		t.Parallel()
-		c, _, db := setupTestPKIController(t)
+	validEnrollPayload := map[string]string{
+		"csr_pem":  generateTestCSR(t),
+		"app_name": testAppName,
+		"app_type": testAppType,
+	}
 
-		token := "dlk_test_token_12345"
-		linkData := map[string]interface{}{
-			"expires_at": time.Now().Add(1 * time.Hour).Format(time.RFC3339),
-			"user_id":    "user-123",
-		}
-		linkJSON, _ := json.Marshal(linkData)
-		db.KVSet("g8e:device-link:"+token, string(linkJSON), 0)
+	tests := []httpTestCase{
+		{
+			name:    "Success - POST enrolls app with valid device-link token",
+			method:  http.MethodPost,
+			body:    mustMarshalJSON(t, validEnrollPayload),
+			headers: map[string]string{"Authorization": "Bearer " + testValidToken},
+			setup: func(t *testing.T, _ *PKIController, db *GatewayDBService) {
+				createValidDeviceLink(t, db, testValidToken, time.Now().Add(1*time.Hour))
+			},
+			expectedStatus: http.StatusCreated,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var resp map[string]interface{}
+				err := json.Unmarshal(rr.Body.Bytes(), &resp)
+				require.NoError(t, err, "failed to unmarshal response")
+				assert.True(t, resp["success"].(bool), "success should be true")
+				assert.NotEmpty(t, resp["app_cert"], "app_cert should not be empty")
+				assert.NotEmpty(t, resp["cert_chain"], "cert_chain should not be empty")
+				assert.NotEmpty(t, resp["app_id"], "app_id should not be empty")
+			},
+		},
+		{
+			name:           "Failure - GET method not allowed",
+			method:         http.MethodGet,
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedBody:   `{"error":"method not allowed"}`,
+		},
+		{
+			name:   "Failure - App enrollment service not available",
+			method: http.MethodPost,
+			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+				c.appEnrollment = nil
+			},
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedBody:   `{"error":"app enrollment service not available"}`,
+		},
+		{
+			name:           "Failure - Missing bearer token",
+			method:         http.MethodPost,
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   `{"error":"missing bearer token"}`,
+		},
+		{
+			name:           "Failure - Invalid token format (no dlk_ prefix)",
+			method:         http.MethodPost,
+			headers:        map[string]string{"Authorization": "Bearer invalid_token"},
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   `{"error":"invalid device-link token format"}`,
+		},
+		{
+			name:           "Failure - Token too short",
+			method:         http.MethodPost,
+			headers:        map[string]string{"Authorization": "Bearer dlk_short"},
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   `{"error":"invalid device-link token format"}`,
+		},
+		{
+			name:           "Failure - Device-link token not found",
+			method:         http.MethodPost,
+			headers:        map[string]string{"Authorization": "Bearer dlk_nonexistent_token_12345"},
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   `{"error":"device-link token not found"}`,
+		},
+		{
+			name:    "Failure - Invalid device-link token data",
+			method:  http.MethodPost,
+			headers: map[string]string{"Authorization": "Bearer " + testValidToken},
+			setup: func(t *testing.T, _ *PKIController, db *GatewayDBService) {
+				db.KVSet("g8e:device-link:"+testValidToken, "invalid json", 0)
+			},
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   `{"error":"invalid device-link token data"}`,
+		},
+		{
+			name:    "Failure - Device-link token missing expiry",
+			method:  http.MethodPost,
+			headers: map[string]string{"Authorization": "Bearer " + testValidToken},
+			setup: func(t *testing.T, _ *PKIController, db *GatewayDBService) {
+				linkData := map[string]interface{}{"user_id": testUserID}
+				linkJSON, err := json.Marshal(linkData)
+				require.NoError(t, err, "failed to marshal device-link data")
+				db.KVSet("g8e:device-link:"+testValidToken, string(linkJSON), 0)
+			},
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   `{"error":"device-link token missing expiry"}`,
+		},
+		{
+			name:    "Failure - Invalid device-link token expiry format",
+			method:  http.MethodPost,
+			headers: map[string]string{"Authorization": "Bearer " + testValidToken},
+			setup: func(t *testing.T, _ *PKIController, db *GatewayDBService) {
+				linkData := map[string]interface{}{"expires_at": "invalid-date"}
+				linkJSON, err := json.Marshal(linkData)
+				require.NoError(t, err, "failed to marshal device-link data")
+				db.KVSet("g8e:device-link:"+testValidToken, string(linkJSON), 0)
+			},
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   `{"error":"invalid device-link token expiry"}`,
+		},
+		{
+			name:    "Failure - Device-link token expired",
+			method:  http.MethodPost,
+			headers: map[string]string{"Authorization": "Bearer " + testValidToken},
+			setup: func(t *testing.T, _ *PKIController, db *GatewayDBService) {
+				createValidDeviceLink(t, db, testValidToken, time.Now().Add(-1*time.Hour))
+			},
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   `{"error":"device-link token expired"}`,
+		},
+		{
+			name:    "Failure - Invalid request JSON",
+			method:  http.MethodPost,
+			body:    []byte("invalid json"),
+			headers: map[string]string{"Authorization": "Bearer " + testValidToken},
+			setup: func(t *testing.T, _ *PKIController, db *GatewayDBService) {
+				createValidDeviceLink(t, db, testValidToken, time.Now().Add(1*time.Hour))
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error":"invalid JSON"}`,
+		},
+		{
+			name:   "Failure - App enrollment validation error",
+			method: http.MethodPost,
+			body: mustMarshalJSON(t, map[string]string{
+				"csr_pem":  "",
+				"app_name": "",
+				"app_type": "",
+			}),
+			headers: map[string]string{"Authorization": "Bearer " + testValidToken},
+			setup: func(t *testing.T, _ *PKIController, db *GatewayDBService) {
+				createValidDeviceLink(t, db, testValidToken, time.Now().Add(1*time.Hour))
+			},
+			expectedStatus: http.StatusBadRequest,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var resp map[string]interface{}
+				err := json.Unmarshal(rr.Body.Bytes(), &resp)
+				require.NoError(t, err, "failed to unmarshal response")
+				if success, ok := resp["success"].(bool); ok {
+					assert.False(t, success, "success should be false")
+				}
+				assert.NotEmpty(t, resp["error"], "error should not be empty")
+			},
+		},
+	}
 
-		csr := generateTestCSR(t)
-		body := map[string]string{
-			"csr_pem":  csr,
-			"app_name": "test-app",
-			"app_type": "mcp-client",
-		}
-		b, _ := json.Marshal(body)
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/app-enroll", bytes.NewReader(b))
-		req.Header.Set("Authorization", "Bearer "+token)
-		rr := httptest.NewRecorder()
-
-		c.handleAppEnroll(rr, req)
-
-		assert.Equal(t, http.StatusCreated, rr.Code)
-		var resp map[string]interface{}
-		err := json.Unmarshal(rr.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
-		assert.NotEmpty(t, resp["app_cert"])
-		assert.NotEmpty(t, resp["cert_chain"])
-		assert.NotEmpty(t, resp["app_id"])
-	})
-
-	t.Run("Failure - GET method not allowed", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/pki/app-enroll", nil)
-		rr := httptest.NewRecorder()
-
-		c.handleAppEnroll(rr, req)
-
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
-		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - App enrollment service not available", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		c.appEnrollment = nil
-
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/app-enroll", nil)
-		rr := httptest.NewRecorder()
-
-		c.handleAppEnroll(rr, req)
-
-		assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
-		assert.JSONEq(t, `{"error":"app enrollment service not available"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - Missing bearer token", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/app-enroll", nil)
-		rr := httptest.NewRecorder()
-
-		c.handleAppEnroll(rr, req)
-
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"missing bearer token"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - Invalid token format (no dlk_ prefix)", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/app-enroll", nil)
-		req.Header.Set("Authorization", "Bearer invalid_token")
-		rr := httptest.NewRecorder()
-
-		c.handleAppEnroll(rr, req)
-
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"invalid device-link token format"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - Token too short", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/app-enroll", nil)
-		req.Header.Set("Authorization", "Bearer dlk_short")
-		rr := httptest.NewRecorder()
-
-		c.handleAppEnroll(rr, req)
-
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"invalid device-link token format"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - Device-link token not found", func(t *testing.T) {
-		t.Parallel()
-		c, _, _ := setupTestPKIController(t)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/app-enroll", nil)
-		req.Header.Set("Authorization", "Bearer dlk_nonexistent_token_12345")
-		rr := httptest.NewRecorder()
-
-		c.handleAppEnroll(rr, req)
-
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"device-link token not found"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - Invalid device-link token data", func(t *testing.T) {
-		t.Parallel()
-		c, _, db := setupTestPKIController(t)
-
-		token := "dlk_test_token_12345"
-		db.KVSet("g8e:device-link:"+token, "invalid json", 0)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/app-enroll", nil)
-		req.Header.Set("Authorization", "Bearer "+token)
-		rr := httptest.NewRecorder()
-
-		c.handleAppEnroll(rr, req)
-
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"invalid device-link token data"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - Device-link token missing expiry", func(t *testing.T) {
-		t.Parallel()
-		c, _, db := setupTestPKIController(t)
-
-		token := "dlk_test_token_12345"
-		linkData := map[string]interface{}{
-			"user_id": "user-123",
-		}
-		linkJSON, _ := json.Marshal(linkData)
-		db.KVSet("g8e:device-link:"+token, string(linkJSON), 0)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/app-enroll", nil)
-		req.Header.Set("Authorization", "Bearer "+token)
-		rr := httptest.NewRecorder()
-
-		c.handleAppEnroll(rr, req)
-
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"device-link token missing expiry"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - Invalid device-link token expiry format", func(t *testing.T) {
-		t.Parallel()
-		c, _, db := setupTestPKIController(t)
-
-		token := "dlk_test_token_12345"
-		linkData := map[string]interface{}{
-			"expires_at": "invalid-date",
-		}
-		linkJSON, _ := json.Marshal(linkData)
-		db.KVSet("g8e:device-link:"+token, string(linkJSON), 0)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/app-enroll", nil)
-		req.Header.Set("Authorization", "Bearer "+token)
-		rr := httptest.NewRecorder()
-
-		c.handleAppEnroll(rr, req)
-
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"invalid device-link token expiry"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - Device-link token expired", func(t *testing.T) {
-		t.Parallel()
-		c, _, db := setupTestPKIController(t)
-
-		token := "dlk_test_token_12345"
-		linkData := map[string]interface{}{
-			"expires_at": time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
-		}
-		linkJSON, _ := json.Marshal(linkData)
-		db.KVSet("g8e:device-link:"+token, string(linkJSON), 0)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/app-enroll", nil)
-		req.Header.Set("Authorization", "Bearer "+token)
-		rr := httptest.NewRecorder()
-
-		c.handleAppEnroll(rr, req)
-
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"device-link token expired"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - Invalid request JSON", func(t *testing.T) {
-		t.Parallel()
-		c, _, db := setupTestPKIController(t)
-
-		token := "dlk_test_token_12345"
-		linkData := map[string]interface{}{
-			"expires_at": time.Now().Add(1 * time.Hour).Format(time.RFC3339),
-		}
-		linkJSON, _ := json.Marshal(linkData)
-		db.KVSet("g8e:device-link:"+token, string(linkJSON), 0)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/app-enroll", bytes.NewReader([]byte("invalid json")))
-		req.Header.Set("Authorization", "Bearer "+token)
-		rr := httptest.NewRecorder()
-
-		c.handleAppEnroll(rr, req)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"invalid JSON"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - App enrollment validation error", func(t *testing.T) {
-		t.Parallel()
-		c, _, db := setupTestPKIController(t)
-
-		token := "dlk_test_token_12345"
-		linkData := map[string]interface{}{
-			"expires_at": time.Now().Add(1 * time.Hour).Format(time.RFC3339),
-		}
-		linkJSON, _ := json.Marshal(linkData)
-		db.KVSet("g8e:device-link:"+token, string(linkJSON), 0)
-
-		body := map[string]string{
-			"csr_pem":  "",
-			"app_name": "",
-			"app_type": "",
-		}
-		b, _ := json.Marshal(body)
-		req := httptest.NewRequest(http.MethodPost, "/api/pki/app-enroll", bytes.NewReader(b))
-		req.Header.Set("Authorization", "Bearer "+token)
-		rr := httptest.NewRecorder()
-
-		c.handleAppEnroll(rr, req)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		var resp map[string]interface{}
-		err := json.Unmarshal(rr.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		if success, ok := resp["success"].(bool); ok {
-			assert.False(t, success)
-		}
-		assert.NotEmpty(t, resp["error"])
-	})
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
+				c, _, db := setupTestPKIController(t)
+				if tc.setup != nil {
+					tc.setup(t, c, db)
+				}
+				c.handleAppEnroll(rr, req)
+			})
+		})
+	}
 }
 
 func TestPKIController_ReadBody(t *testing.T) {
@@ -649,8 +594,8 @@ func TestPKIController_ReadBody(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/test", bytes.NewReader(body))
 
 		read, err := c.readBody(req)
-		require.NoError(t, err)
-		assert.Equal(t, body, read)
+		require.NoError(t, err, "failed to read body")
+		assert.Equal(t, body, read, "read body should match input")
 	})
 
 	t.Run("Failure - Body exceeds max payload", func(t *testing.T) {
@@ -661,6 +606,13 @@ func TestPKIController_ReadBody(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/test", bytes.NewReader(largeBody))
 
 		_, err := c.readBody(req)
-		assert.Error(t, err)
+		assert.Error(t, err, "should return error for oversized body")
 	})
+}
+
+func mustMarshalJSON(t *testing.T, v interface{}) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	require.NoError(t, err, "failed to marshal JSON")
+	return b
 }
