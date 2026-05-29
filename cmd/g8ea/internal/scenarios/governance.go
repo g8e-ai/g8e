@@ -7,15 +7,15 @@ import (
 	"context"
 	"errors"
 
-	"github.com/g8e-ai/g8e/cmd/auditor/internal/g8e"
+	clientpkg "github.com/g8e-ai/g8e/cmd/g8ea/internal/client"
 )
 
 // GovKit carries the mock cryptographic actors the governance scenarios need.
 // main builds it once (minting keys, registering trusted signers) and injects
 // it before running the consensus/notary block.
 type GovKit struct {
-	Ensemble   *g8e.Ensemble
-	Principal  *g8e.Principal
+	Ensemble   *clientpkg.Ensemble
+	Principal  *clientpkg.Principal
 	L3Mode     string // "mock" | "suspend"
 	OperatorID string
 }
@@ -26,15 +26,15 @@ var kit *GovKit
 func SetGovKit(k *GovKit) { kit = k }
 
 var (
-	ensembleProducer = g8e.Persona{ID: "ensemble-producer", UserAgent: "g8e-ensemble/1.x (maximal)"}
-	principalActor   = g8e.Persona{ID: "principal", UserAgent: "g8e-principal/1.x (L3 notary)"}
+	ensembleProducer = clientpkg.Persona{ID: "ensemble-producer", UserAgent: "g8e-ensemble/1.x (maximal)"}
+	principalActor   = clientpkg.Persona{ID: "principal", UserAgent: "g8e-principal/1.x (L3 notary)"}
 )
 
 func governanceScenarios() []Scenario {
 	return []Scenario{
 		{
 			Name: "consensus", Title: "L2 consensus envelope (mock ensemble co-sign)", Persona: ensembleProducer, RequiresPosture: Consensus,
-			Run: func(ctx context.Context, c *g8e.Client, r *Result) error {
+			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil {
 					return errors.New("gov kit not initialized (call SetGovKit)")
 				}
@@ -46,7 +46,7 @@ func governanceScenarios() []Scenario {
 				r.note("mock ensemble: %d agents co-signed transaction_hash|true with key %q",
 					kit.Ensemble.AgentCount(), kit.Ensemble.KeyID)
 
-				txHash, status, _, err := c.SubmitMaximal(ctx, ensembleProducer, g8e.MaximalEnvelope{
+				txHash, status, _, err := c.SubmitMaximal(ctx, ensembleProducer, clientpkg.MaximalEnvelope{
 					OperatorID:     kit.OperatorID,
 					ToolName:       "fs_list",
 					ArgumentsJSON:  `{"path":"."}`,
@@ -65,7 +65,7 @@ func governanceScenarios() []Scenario {
 		},
 		{
 			Name: "envelope-maximal", Title: "Official notary envelope: L2 consensus + principal L3 signing", Persona: ensembleProducer, RequiresPosture: Notary,
-			Run: func(ctx context.Context, c *g8e.Client, r *Result) error {
+			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
 					return errors.New("gov kit not initialized (need ensemble + principal)")
 				}
@@ -75,7 +75,7 @@ func governanceScenarios() []Scenario {
 				}
 				r.note("bound to state root %s", short(root))
 
-				m := g8e.MaximalEnvelope{
+				m := clientpkg.MaximalEnvelope{
 					OperatorID:     kit.OperatorID,
 					ToolName:       "fs_list",
 					ArgumentsJSON:  `{"path":"."}`,
@@ -128,7 +128,7 @@ func governanceScenarios() []Scenario {
 
 func suspendedFromBody(body []byte) (string, bool) {
 	// Reuse the JSON-RPC suspension detector by wrapping the raw body as Result.
-	return g8e.Suspended(&g8e.JSONRPCResponse{Result: body})
+	return clientpkg.Suspended(&clientpkg.JSONRPCResponse{Result: body})
 }
 
 func short(s string) string {

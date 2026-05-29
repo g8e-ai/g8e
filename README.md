@@ -80,6 +80,46 @@ graph TD
 
 Every mutation passes through sequential verification layers at the Operator boundary. Failed transactions are rejected and audited immediately.
 
+```mermaid
+graph TD
+    Start["Signed GovernanceEnvelope<br/>(Incoming Transaction)"]
+
+    subgraph Verification ["Operator Verification - protocol-mandated"]
+        direction TB
+        L1{"L1: Technical Bedrock<br/>Forbidden Patterns?"}
+        L2{"L2: Consensus<br/>Tribunal Signature?"}
+        L3{"L3: Authorization<br/>Human Presence?"}
+        State{"State Check<br/>Merkle Root Fresh?"}
+        L4{"L4: Warden<br/>Pre-dispatch Gate"}
+        
+        FailClosed["Fail Closed<br/>Typed Rejection + Audit Entry"]
+        Actuator["L5: Actuator<br/>Execute + Signed Receipt"]
+        LocalVault([Local Audit Vault])
+
+        L1 -- "Passed" --> L2
+        L1 -- "Violated" ----> FailClosed
+        
+        L2 -- "Passed" --> L3
+        L2 -- "Invalid/Missing" ---> FailClosed
+        
+        L3 -- "Authorized" --> State
+        L3 -- "Denied" --> FailClosed
+        
+        State -- "Fresh" --> L4
+        State -- "Stale" --> FailClosed
+
+        L4 -- "Verified" --> Actuator
+        L4 -- "Failed" --> FailClosed
+
+        Actuator --> LocalVault
+        FailClosed --> LocalVault
+    end
+
+    LocalVault --> Done["Recorded · Signed · Audited"]
+
+    Start --> L1
+```
+
 | Layer | Name | Mechanism | What it proves |
 | :---: | --- | --- | --- |
 | **L1** | **L1Doctrine** | Forbidden patterns + MITRE heuristics | No hard gate violations (privesc, destruction). |
@@ -87,6 +127,54 @@ Every mutation passes through sequential verification layers at the Operator bou
 | **L3** | **L3Notary** | WebAuthn / mTLS cert fingerprint | Human authorized *this exact* transaction hash. |
 | **L4** | **L4Warden** | Fail-closed pre-dispatch gate | Hash, freshness, state root, and signer trust. |
 | **L5** | **L5Actuator** | Atomic dispatch + signed receipt | The only code path allowed to mutate the host. |
+
+---
+
+## Optional AI Engine (g8ee)
+
+The reference AI Engine (`g8ee`) is an optional application-layer adapter that produces signed GovernanceEnvelope transactions. It implements a multi-layered agentic hierarchy for high-fidelity intent translation.
+
+```mermaid
+graph TD
+    classDef principal fill:#f9d0c4,stroke:#333,stroke-width:2px,color:#000;
+    classDef engine fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#000;
+    classDef protocol fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000;
+
+    Principal(("Principal (Human / Agent)")):::principal
+
+    subgraph Engine ["g8ee AI Engine (Application Layer)"]
+        direction TB
+        Triage["Triage Agent (Intent & Posture)"]:::engine
+        Reasoner["Sage / Dash (Reasoning Path)"]:::engine
+        
+        subgraph Tribunal ["Tribunal (L2 Producer)"]
+            direction TB
+            Panel["5-Member Agent Panel"]:::engine
+            Warden["Warden (Two-Strike Circuit Breaker)"]:::engine
+            Auditor["Auditor (L2 Verifier)"]:::engine
+            
+            Panel --> Warden
+            Warden --> Auditor
+        end
+        
+        Triage --> Reasoner
+        Reasoner --> Panel
+        
+        %% Short Circuits (Feedback Loops)
+        Warden -. "Risk Feedback (Short Circuit)" .-> Reasoner
+        Auditor -. "Rejection / Revision (Short Circuit)" .-> Reasoner
+    end
+
+    Principal -- "Initiates Intent" --> Triage
+    Auditor -- "Produces L2 Signed Intent" --> Protocol["g8e Protocol Envelope"]:::protocol
+```
+
+**Agentic Hierarchy Components:**
+- **Triage & Dash:** Specialized agents for routing, posture assessment, and high-speed trivial responses.
+- **Sage (Reasoning Engine):** Primary interpreter of user intent. Sage stakes reputation on proposals but **cannot execute**; it must submit intent to the Tribunal.
+- **Tribunal (Consensus):** Isolated agents generating command proposals from unique perspectives. Requires consensus (2/5 or 5/5) to proceed. If consensus fails, it loops back to Sage for refinement.
+- **Warden (Circuit Breaker):** Heuristic blocker that rejects "off-the-wall" proposals. Rejections trigger a loop back to Sage to improve intent translation.
+- **Auditor (History & Grounding):** Final verification layer. Reviews the full investigation history to ensure progressive accuracy before signing the protocol envelope.
 
 ---
 

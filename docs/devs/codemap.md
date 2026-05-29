@@ -95,8 +95,8 @@ Each subdirectory produces one binary. All import `internal/` and `protocol/`.
 cmd/
 ├── g8e/main.go                     # Platform CLI (delegates to internal/cli/cmd)
 ├── g8eo/main.go                    # Operator binary (multi-mode: gateway, mcp-serve, insecure, outbound)
-├── chaos_tester/main.go            # Chaos / fuzz testing harness
-└── governance-ping/main.go         # GovernanceEnvelope protocol ping utility
+├── g8ea/main.go                    # Auditor (universal agent emulator for Gateway/Operator)
+└── chaos_tester/main.go            # Chaos / fuzz testing harness
 ```
 
 ## internal/

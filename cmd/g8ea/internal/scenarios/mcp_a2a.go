@@ -9,25 +9,25 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/g8e-ai/g8e/cmd/auditor/internal/g8e"
+	clientpkg "github.com/g8e-ai/g8e/cmd/g8ea/internal/client"
 )
 
 // Personas — the real-world tools Phantom pretends to be. This is the ONLY
 // fiction in the system; the Gateway and Operator are real throughout.
 var (
-	claudeDesktop  = g8e.Persona{ID: "claude-desktop", UserAgent: "Claude-Desktop/1.x (MCP)"}
-	cursor         = g8e.Persona{ID: "cursor", UserAgent: "Cursor/0.x (MCP-advanced)"}
-	enterpriseTool = g8e.Persona{ID: "enterprise-agent", UserAgent: "AcmeSecAgent/2.x (MCP+mTLS)"}
-	a2aPeer        = g8e.Persona{ID: "a2a-peer", UserAgent: "A2A-Peer/1.x (JSON)"}
-	a2aSecure      = g8e.Persona{ID: "a2a-secure-peer", UserAgent: "A2A-Peer/1.x (mTLS)"}
-	a2aProto       = g8e.Persona{ID: "protobuf-agent", UserAgent: "A2A-Peer/1.x (protobuf)"}
+	claudeDesktop  = clientpkg.Persona{ID: "claude-desktop", UserAgent: "Claude-Desktop/1.x (MCP)"}
+	cursor         = clientpkg.Persona{ID: "cursor", UserAgent: "Cursor/0.x (MCP-advanced)"}
+	enterpriseTool = clientpkg.Persona{ID: "enterprise-agent", UserAgent: "AcmeSecAgent/2.x (MCP+mTLS)"}
+	a2aPeer        = clientpkg.Persona{ID: "a2a-peer", UserAgent: "A2A-Peer/1.x (JSON)"}
+	a2aSecure      = clientpkg.Persona{ID: "a2a-secure-peer", UserAgent: "A2A-Peer/1.x (mTLS)"}
+	a2aProto       = clientpkg.Persona{ID: "protobuf-agent", UserAgent: "A2A-Peer/1.x (protobuf)"}
 )
 
 func mcpScenarios() []Scenario {
 	return []Scenario{
 		{
 			Name: "mcp-plain", Title: "Plain MCP tool call", Persona: claudeDesktop, RequiresPosture: Doctrine,
-			Run: func(ctx context.Context, c *g8e.Client, r *Result) error {
+			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				// Discover the host tools the Operator exposes, then make one
 				// benign read-only call. Pure MCP, no governance extras.
 				list, err := c.MCPToolsList(ctx, claudeDesktop)
@@ -44,7 +44,7 @@ func mcpScenarios() []Scenario {
 		},
 		{
 			Name: "mcp-advanced", Title: "Advanced MCP: resources, prompts, chained calls", Persona: cursor, RequiresPosture: Doctrine,
-			Run: func(ctx context.Context, c *g8e.Client, r *Result) error {
+			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if _, err := c.MCPResourcesList(ctx, cursor); err != nil {
 					return err
 				}
@@ -70,7 +70,7 @@ func mcpScenarios() []Scenario {
 		},
 		{
 			Name: "mcp-secured", Title: "MCP with simple security (mTLS/API key + L1 gate)", Persona: enterpriseTool, RequiresPosture: Doctrine,
-			Run: func(ctx context.Context, c *g8e.Client, r *Result) error {
+			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				// (a) an authenticated, benign call that should pass L1.
 				if _, err := c.MCPToolsCall(ctx, enterpriseTool, "fs_list", map[string]any{"path": "/tmp"}); err != nil {
 					return err
@@ -97,7 +97,7 @@ func a2aScenarios() []Scenario {
 	return []Scenario{
 		{
 			Name: "a2a-plain", Title: "Plain A2A skill invocation", Persona: a2aPeer, RequiresPosture: Doctrine,
-			Run: func(ctx context.Context, c *g8e.Client, r *Result) error {
+			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				_, err := c.A2ACall(ctx, a2aPeer, "list_directory",
 					map[string]any{"path": "."}, execID("a2a-plain"))
 				return err
@@ -105,7 +105,7 @@ func a2aScenarios() []Scenario {
 		},
 		{
 			Name: "a2a-secured", Title: "A2A with simple security (mTLS + L1 skill gate)", Persona: a2aSecure, RequiresPosture: Doctrine,
-			Run: func(ctx context.Context, c *g8e.Client, r *Result) error {
+			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if _, err := c.A2ACall(ctx, a2aSecure, "read_file",
 					map[string]any{"path": "/etc/hostname"}, execID("a2a-secured-ok")); err != nil {
 					return err
@@ -127,7 +127,7 @@ func a2aScenarios() []Scenario {
 		},
 		{
 			Name: "a2a-protobuf", Title: "A2A carrying a typed protobuf payload", Persona: a2aProto, RequiresPosture: Doctrine,
-			Run: func(ctx context.Context, c *g8e.Client, r *Result) error {
+			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				// Same skill, but the task payload is a marshaled A2ACallRequested
 				// (typed, schema-checked, deterministic) rather than loose JSON.
 				inner, _ := json.Marshal(map[string]any{"path": ".", "recursive": false})
@@ -146,7 +146,7 @@ func a2aScenarios() []Scenario {
 
 func execID(tag string) string { return fmt.Sprintf("%s-%d", tag, time.Now().UnixNano()) }
 
-func apiKeyNote(c *g8e.Client) string {
+func apiKeyNote(c *clientpkg.Client) string {
 	if c.Config().Auth.APIKey != "" {
 		return " + API key"
 	}
@@ -156,7 +156,7 @@ func apiKeyNote(c *g8e.Client) string {
 // firstTool pulls a tool name out of a tools/list response, tolerating the
 // common shapes {"tools":[{"name":...}]} / {"result":{"tools":[...]}}. Falls
 // back to def so the demo still does something useful on an unexpected shape.
-func firstTool(resp *g8e.JSONRPCResponse, def string) string {
+func firstTool(resp *clientpkg.JSONRPCResponse, def string) string {
 	if resp == nil || len(resp.Result) == 0 {
 		return def
 	}

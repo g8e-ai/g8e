@@ -14,16 +14,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/cmd/auditor/internal/g8e"
-	"github.com/g8e-ai/g8e/cmd/auditor/internal/scenarios"
+	clientpkg "github.com/g8e-ai/g8e/cmd/g8ea/internal/client"
+	"github.com/g8e-ai/g8e/cmd/g8ea/internal/scenarios"
 )
 
 type Report struct {
-	GeneratedAt       time.Time          `json:"generated_at"`
-	Gateway           string             `json:"gateway"`
-	OperatorSessionID string             `json:"operator_session_id"`
-	Results           []scenarios.Result `json:"results"`
-	Receipts          []g8e.Receipt      `json:"receipts"`
+	GeneratedAt       time.Time           `json:"generated_at"`
+	Gateway           string              `json:"gateway"`
+	OperatorSessionID string              `json:"operator_session_id"`
+	Results           []scenarios.Result  `json:"results"`
+	Receipts          []clientpkg.Receipt `json:"receipts"`
 }
 
 // Write emits report.json and report.md into dir, returning their paths.
@@ -99,8 +99,8 @@ func markdown(rep Report) string {
 	return b.String()
 }
 
-func indexReceipts(rs []g8e.Receipt) map[string]g8e.Receipt {
-	m := make(map[string]g8e.Receipt, len(rs))
+func indexReceipts(rs []clientpkg.Receipt) map[string]clientpkg.Receipt {
+	m := make(map[string]clientpkg.Receipt, len(rs))
 	for _, r := range rs {
 		if r.TransactionHash != "" {
 			m[r.TransactionHash] = r
@@ -109,7 +109,7 @@ func indexReceipts(rs []g8e.Receipt) map[string]g8e.Receipt {
 	return m
 }
 
-func txMatch(hashes []string, idx map[string]g8e.Receipt) string {
+func txMatch(hashes []string, idx map[string]clientpkg.Receipt) string {
 	if len(hashes) == 0 {
 		return "—"
 	}

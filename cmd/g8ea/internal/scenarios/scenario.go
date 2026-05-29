@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/g8e-ai/g8e/cmd/auditor/internal/g8e"
+	clientpkg "github.com/g8e-ai/g8e/cmd/g8ea/internal/client"
 )
 
 // Posture is the Gateway enforcement mode a scenario needs.
@@ -30,17 +30,17 @@ const (
 
 // Result is the detailed, auditable record of one scenario run.
 type Result struct {
-	Name            string         `json:"name"`
-	Title           string         `json:"title"`
-	Persona         string         `json:"persona"`
-	RequiresPosture Posture        `json:"requires_posture"`
-	StartedAt       time.Time      `json:"started_at"`
-	DurationMS      int64          `json:"duration_ms"`
-	Exchanges       []g8e.Exchange `json:"exchanges"`
-	TxHashes        []string       `json:"tx_hashes,omitempty"`
-	Notes           []string       `json:"notes,omitempty"`
-	OK              bool           `json:"ok"`
-	Err             string         `json:"error,omitempty"`
+	Name            string               `json:"name"`
+	Title           string               `json:"title"`
+	Persona         string               `json:"persona"`
+	RequiresPosture Posture              `json:"requires_posture"`
+	StartedAt       time.Time            `json:"started_at"`
+	DurationMS      int64                `json:"duration_ms"`
+	Exchanges       []clientpkg.Exchange `json:"exchanges"`
+	TxHashes        []string             `json:"tx_hashes,omitempty"`
+	Notes           []string             `json:"notes,omitempty"`
+	OK              bool                 `json:"ok"`
+	Err             string               `json:"error,omitempty"`
 }
 
 func (r *Result) note(f string, a ...any) { r.Notes = append(r.Notes, fmt.Sprintf(f, a...)) }
@@ -55,9 +55,9 @@ func (r *Result) tx(h string) {
 type Scenario struct {
 	Name            string
 	Title           string
-	Persona         g8e.Persona
+	Persona         clientpkg.Persona
 	RequiresPosture Posture
-	Run             func(ctx context.Context, c *g8e.Client, r *Result) error
+	Run             func(ctx context.Context, c *clientpkg.Client, r *Result) error
 }
 
 // Registry is the ordered demo script. The first block runs under doctrine;
@@ -81,7 +81,7 @@ func Find(name string) (Scenario, bool) {
 }
 
 // Execute runs a single scenario against the client and returns its Result.
-func Execute(ctx context.Context, c *g8e.Client, sc Scenario) Result {
+func Execute(ctx context.Context, c *clientpkg.Client, sc Scenario) Result {
 	r := Result{
 		Name:            sc.Name,
 		Title:           sc.Title,

@@ -77,8 +77,8 @@ help:
 	@echo "  demo-run      Run the AI agent demo (requires build first)"
 	@echo "  demo-clean    Remove demo build artifacts"
 	@echo ""
-	@echo "Auditor:"
-	@echo "  test-auditor  Build and run the auditor test suite"
+	@echo "Governance Auditor:"
+	@echo "  test-g8ea    Build and run the g8ea test suite"
 
 # =============================================================================
 # PROTOCOL GENERATION
@@ -340,17 +340,17 @@ demo-clean:
 	@echo "Demo clean complete."
 
 # =============================================================================
-# AUDITOR
+# G8EA (Governance Auditor)
 # =============================================================================
-AUDITOR_DIR := cmd/auditor
-AUDITOR_BIN := $(AUDITOR_DIR)/auditor
+G8EA_DIR := cmd/g8ea
+G8EA_BIN := $(G8EA_DIR)/g8ea
 
-.PHONY: test-auditor
-test-auditor:
-	@echo "Building auditor..."
-	@cd $(AUDITOR_DIR) && go build -o auditor .
-	@echo "Auditor binary built: $(AUDITOR_BIN)"
-	@echo "To run auditor: ./$(AUDITOR_BIN) list"
+.PHONY: test-g8ea
+test-g8ea:
+	@echo "Building g8ea..."
+	@cd $(G8EA_DIR) && go build -o g8ea .
+	@echo "g8ea binary built: $(G8EA_BIN)"
+	@echo "To run g8ea: ./$(G8EA_BIN) list"
 
 
 # =============================================================================

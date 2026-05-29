@@ -16,10 +16,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/cmd/auditor/internal/config"
-	"github.com/g8e-ai/g8e/cmd/auditor/internal/g8e"
-	"github.com/g8e-ai/g8e/cmd/auditor/internal/report"
-	"github.com/g8e-ai/g8e/cmd/auditor/internal/scenarios"
+	"github.com/g8e-ai/g8e/cmd/g8ea/internal/client"
+	clientpkg "github.com/g8e-ai/g8e/cmd/g8ea/internal/client"
+	"github.com/g8e-ai/g8e/cmd/g8ea/internal/config"
+	"github.com/g8e-ai/g8e/cmd/g8ea/internal/harness"
+	"github.com/g8e-ai/g8e/cmd/g8ea/internal/report"
+	"github.com/g8e-ai/g8e/cmd/g8ea/internal/scenarios"
 )
 
 func main() {
@@ -37,6 +39,8 @@ func main() {
 		os.Exit(cmdRun(args))
 	case "audit":
 		os.Exit(cmdAudit(args))
+	case "self-test":
+		os.Exit(cmdSelfTest(args))
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -53,6 +57,7 @@ usage:
   auditor list
   auditor run   [flags] [scenario ...]
   auditor audit [flags]
+  auditor self-test [flags]    Start self-contained gateway+operator and run tests
 
 run flags:
   --phase doctrine|notary|all   which block to run (default: all)
@@ -71,6 +76,11 @@ common flags:
   --insecure                    skip TLS verify (local dev only)
   --out DIR                     report output dir (default ./phantom-out)
   --verbose                     echo each request/response
+
+self-test flags:
+  --phase doctrine|notary|all   which block to run (default: doctrine)
+  --gateway-binary PATH         Path to g8e gateway binary (default ./cmd/g8eo/g8eo)
+  --operator-binary PATH        Path to g8e operator binary (default ./cmd/g8eo/g8eo)
 `)
 }
 
@@ -121,7 +131,7 @@ func cmdRun(args []string) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	client, err := g8e.New(cfg)
+	client, err := clientpkg.New(cfg)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "client:", err)
 		return 1
@@ -183,7 +193,7 @@ func cmdAudit(args []string) int {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	client, err := g8e.New(cfg)
+	client, err := clientpkg.New(cfg)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "client:", err)
 		return 1
@@ -251,12 +261,12 @@ func needsGovKit(ss []scenarios.Scenario) bool {
 
 // setupGovKit mints the mock ensemble + principal keys, registers them as
 // trusted signers (best-effort), and injects the kit into the scenarios pkg.
-func setupGovKit(ctx context.Context, client *g8e.Client, cfg config.Config) error {
-	ens, err := g8e.NewEnsemble(cfg.ConsensusKeyID, cfg.EnsembleSize)
+func setupGovKit(ctx context.Context, client *client.Client, cfg config.Config) error {
+	ens, err := clientpkg.NewEnsemble(cfg.ConsensusKeyID, cfg.EnsembleSize)
 	if err != nil {
 		return err
 	}
-	prin, err := g8e.NewPrincipal(cfg.PrincipalKeyID)
+	prin, err := clientpkg.NewPrincipal(cfg.PrincipalKeyID)
 	if err != nil {
 		return err
 	}
@@ -302,4 +312,96 @@ func trunc(s string, n int) string {
 		return s
 	}
 	return s[:n]
+}
+
+// cmdSelfTest runs the auditor in self-contained mode with its own gateway+operator.
+func cmdSelfTest(args []string) int {
+	fs := flag.NewFlagSet("self-test", flag.ExitOnError)
+	phase := fs.String("phase", "doctrine", "doctrine|notary|all")
+	gatewayBinary := fs.String("gateway-binary", "./cmd/g8eo/g8eo", "Path to g8e gateway binary")
+	operatorBinary := fs.String("operator-binary", "./cmd/g8eo/g8eo", "Path to g8e operator binary")
+	_ = fs.Parse(args)
+
+	fmt.Println("Starting self-contained test harness...")
+
+	// Create test harness
+	cfg := harness.DefaultConfig()
+	cfg.GatewayBinary = *gatewayBinary
+	cfg.OperatorBinary = *operatorBinary
+	cfg.Posture = *phase
+
+	h, err := harness.New(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create harness: %v\n", err)
+		return 1
+	}
+	defer h.Stop()
+
+	// Start gateway and operator
+	if err := h.Start(cfg.Posture); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start harness: %v\n", err)
+		return 1
+	}
+
+	// Configure auditor to use the test harness
+	auditorCfg := config.Default()
+	auditorCfg.MTLSBaseURL = h.GatewayURL()
+	auditorCfg.PublicBaseURL = h.PublicURL()
+	auditorCfg.Auth.ClientCert = h.ClientCertPath
+	auditorCfg.Auth.ClientKey = h.ClientKeyPath
+	auditorCfg.Auth.CABundle = h.CACertPath
+	auditorCfg.Auth.Insecure = true // Skip TLS verify for self-signed test certs
+	auditorCfg.OutDir = "./phantom-out-self-test"
+
+	// Create client
+	client, err := clientpkg.New(auditorCfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create client: %v\n", err)
+		return 1
+	}
+
+	// Select scenarios based on phase
+	selected := selectScenarios(*phase, []string{})
+	if len(selected) == 0 {
+		fmt.Fprintln(os.Stderr, "no scenarios selected")
+		return 1
+	}
+
+	// Setup gov kit if needed
+	if needsGovKit(selected) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := setupGovKit(ctx, client, auditorCfg); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: gov kit setup: %v\n", err)
+		}
+	}
+
+	// Run scenarios
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	results := make([]scenarios.Result, 0, len(selected))
+	for _, s := range selected {
+		results = append(results, scenarios.Execute(ctx, client, s))
+	}
+
+	// Audit results
+	opSession := client.DiscoverOperatorSession(ctx)
+	receipts, _, _ := client.AuditReceipts(ctx, opSession)
+
+	rep := report.Report{
+		GeneratedAt:       time.Now(),
+		Gateway:           auditorCfg.MTLSBaseURL,
+		OperatorSessionID: opSession,
+		Results:           results,
+		Receipts:          receipts,
+	}
+	jsonPath, mdPath, err := report.Write(auditorCfg.OutDir, rep)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "report: %v\n", err)
+		return 1
+	}
+
+	printSummary(results, jsonPath, mdPath)
+	return 0
 }
