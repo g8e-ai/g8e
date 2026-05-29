@@ -16,6 +16,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -67,7 +68,9 @@ func TestLoginCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "trust bundle not found")
+		// Since we're in an empty temp dir, the trust bundle at .g8e/pki/trust/g8e-gw-ca-bundle.pem won't exist.
+		// However, auth.CheckOperatorRunning(cfg) is called first.
+		assert.Contains(t, err.Error(), "operator is not running")
 	})
 
 	t.Run("login fails when operator not running", func(t *testing.T) {
@@ -85,7 +88,7 @@ func TestLoginCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to check bootstrap status")
+		assert.Contains(t, err.Error(), "operator is not running")
 	})
 
 	t.Run("login fails when trust bundle missing", func(t *testing.T) {
@@ -138,7 +141,13 @@ func TestLoginCmd(t *testing.T) {
 		os.Chdir(tmpDir)
 		defer os.Chdir(originalWd)
 
-		err := cmd.RunE(cmd, []string{})
+		// Start a fake listener on 8440 to get past CheckOperatorRunning
+		ln, err := net.Listen("tcp", "localhost:8440")
+		if err == nil {
+			defer ln.Close()
+		}
+
+		err = cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "trust bundle not found")
 	})
