@@ -193,12 +193,6 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	govEnvMux.HandleFunc("/api/v1/governance/envelopes", h.handleGovernanceEnvelope)
 	govEnvHandler := h.rateLimitMiddleware(govEnvMux)
 
-	// Health check (available internally)
-	mux.HandleFunc("/health", h.handleHealth)
-
-	// Documentation endpoint (embedded docs)
-	mux.HandleFunc("/docs/", h.handleDocs)
-
 	// Authenticated routes (require mTLS)
 	mux.HandleFunc("/api/v1/data/settings", h.dbController.handleDataSettings)
 	mux.HandleFunc("/api/v1/operators", h.operatorController.handleListOperators)
@@ -230,7 +224,6 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/v1/kv/", h.dbController.handleKV)
 	mux.HandleFunc("/api/v1/pubsub/publish", h.dbController.handlePubSubPublish)
 	mux.Handle("/api/v1/pubsub/stream", h.auth.WebSocketAuth(http.HandlerFunc(h.pubsub.HandleWebSocket)))
-	mux.HandleFunc("/api/v1/blobs/", h.dbController.handleBlob)
 
 	// PKI management routes (require mTLS)
 	mux.HandleFunc("/api/v1/pki/csr/sign", h.pkiController.handlePKICSRSign)
@@ -267,10 +260,10 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 
 	// Landing page and health
 	mux.HandleFunc("/", h.handleLandingPage)
-	mux.HandleFunc("/public/auth/login/verify", h.authController.handlePublicAuthLoginVerify)
-	mux.HandleFunc("/public/auth/logout", h.authController.handlePublicAuthLogout)
-	mux.HandleFunc("/public/auth/bootstrap", h.authController.handlePublicAuthBootstrap)
-	mux.HandleFunc("/public/auth/bootstrap/status", h.authController.handleBootstrapStatus)
+	mux.HandleFunc("/api/v1/auth/login/verify", h.authController.handlePublicAuthLoginVerify)
+	mux.HandleFunc("/api/v1/auth/logout", h.authController.handlePublicAuthLogout)
+	mux.HandleFunc("/api/v1/auth/bootstrap", h.authController.handlePublicAuthBootstrap)
+	mux.HandleFunc("/api/v1/auth/bootstrap/status", h.authController.handleBootstrapStatus)
 
 	// MCP/A2A Ingress routes with JWT authentication for remote clients
 	mcpMux := http.NewServeMux()
@@ -309,7 +302,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	authedMux.HandleFunc("/api/v1/auth/sessions/me", h.authController.handleWebSession)
 
 	// OOB Approval UI for suspended MCP/A2A transactions
-	mux.HandleFunc("/public/approve/", h.authController.handleApprovalPage)
+	mux.HandleFunc("/api/v1/approve/", h.authController.handleApprovalPage)
 	authedMux.HandleFunc("/api/v1/approvals/", h.authController.handleApprovalAction)
 	authedMux.HandleFunc("/api/v1/approvals", h.authController.handleListSuspendedTransactions)
 

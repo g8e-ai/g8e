@@ -66,16 +66,19 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	r.addPrefix("/.well-known/g8e/pki/")
 
 	// Protocol entry points (CSR enrollment, bootstrap)
-	r.addExact("/api/pki/sign-csr")
-	r.addExact("/api/pki/device-enroll")
-	r.addExact("/api/auth/bootstrap")
-	r.addExact("/api/auth/bootstrap/status")
+	r.addExact("/api/v1/pki/csr/sign")
+	r.addExact("/api/v1/pki/devices/enroll")
+	r.addExact("/api/v1/auth/bootstrap")
+	r.addExact("/api/v1/auth/bootstrap/status")
+	r.addExact("/api/v1/auth/login/verify")
+	r.addExact("/api/v1/auth/logout")
+	r.addPrefix("/api/v1/approve/")
 
 	// JIT passkey bootstrap (only when JWKS is configured)
 	if jwksEnabled {
-		r.addPrefix("/api/auth/passkey/jit-")
-		r.addPrefix("/api/mcp/")
-		r.addPrefix("/api/a2a/")
+		r.addPrefix("/api/v1/auth/passkeys/jit-")
+		r.addPrefix("/api/v1/mcp/")
+		r.addPrefix("/api/v1/a2a/")
 	}
 
 	return r

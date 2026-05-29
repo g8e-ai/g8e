@@ -618,7 +618,7 @@ func (c *AuthController) handleApprovalPage(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Extract transaction hash from URL path
-	txHash := strings.TrimPrefix(r.URL.Path, "/public/approve/")
+	txHash := strings.TrimPrefix(r.URL.Path, "/api/v1/approve/")
 	if txHash == "" {
 		http.Error(w, "transaction hash required", http.StatusBadRequest)
 		return

@@ -238,10 +238,12 @@ func TestPublicRouteRegistry_ExactPaths(t *testing.T) {
 	// Test exact public paths
 	publicPaths := []string{
 		"/health",
-		"/api/pki/sign-csr",
-		"/api/pki/device-enroll",
-		"/api/auth/bootstrap",
-		"/api/auth/bootstrap/status",
+		"/api/v1/pki/csr/sign",
+		"/api/v1/pki/devices/enroll",
+		"/api/v1/auth/bootstrap",
+		"/api/v1/auth/bootstrap/status",
+		"/api/v1/auth/login/verify",
+		"/api/v1/auth/logout",
 	}
 
 	for _, path := range publicPaths {
@@ -250,8 +252,8 @@ func TestPublicRouteRegistry_ExactPaths(t *testing.T) {
 
 	// Test that slight variations are not public
 	assert.False(t, registry.IsPublic("/healthz"), "/healthz should not be public")
-	assert.False(t, registry.IsPublic("/api/pki/sign-csr/"), "/api/pki/sign-csr/ should not be public")
-	assert.False(t, registry.IsPublic("/api/auth/bootstrap/extra"), "/api/auth/bootstrap/extra should not be public")
+	assert.False(t, registry.IsPublic("/api/v1/pki/csr/sign/"), "/api/v1/pki/csr/sign/ should not be public")
+	assert.False(t, registry.IsPublic("/api/v1/auth/bootstrap/extra"), "/api/v1/auth/bootstrap/extra should not be public")
 }
 
 func TestPublicRouteRegistry_Prefixes(t *testing.T) {
@@ -273,7 +275,7 @@ func TestPublicRouteRegistry_Prefixes(t *testing.T) {
 
 	// Test that paths outside the prefix are not public
 	assert.False(t, registry.IsPublic("/.well-known/other/pki/"), "/.well-known/other/pki/ should not be public")
-	assert.False(t, registry.IsPublic("/api/pki/"), "/api/pki/ should not be public")
+	assert.False(t, registry.IsPublic("/api/v1/pki/"), "/api/v1/pki/ should not be public")
 }
 
 func TestPublicRouteRegistry_JWKSEnabled(t *testing.T) {
@@ -283,12 +285,12 @@ func TestPublicRouteRegistry_JWKSEnabled(t *testing.T) {
 	registryWithJWKS := NewPublicRouteRegistry(true)
 
 	jwksPaths := []string{
-		"/api/auth/passkey/jit-123",
-		"/api/auth/passkey/jit-abc",
-		"/api/mcp/tools",
-		"/api/mcp/resources",
-		"/api/a2a/agents",
-		"/api/a2a/tasks",
+		"/api/v1/auth/passkeys/jit-123",
+		"/api/v1/auth/passkeys/jit-abc",
+		"/api/v1/mcp/tools",
+		"/api/v1/mcp/resources",
+		"/api/v1/a2a/agents",
+		"/api/v1/a2a/tasks",
 	}
 
 	for _, path := range jwksPaths {
@@ -332,10 +334,12 @@ func TestPublicRouteRegistry_CanonicalCoverage(t *testing.T) {
 	// This test prevents regression when the registry is modified
 	assert.True(t, registry.IsPublic("/health"), "Health check must be public")
 	assert.True(t, registry.IsPublic("/.well-known/g8e/pki/"), "PKI prefix must be public")
-	assert.True(t, registry.IsPublic("/api/pki/sign-csr"), "CSR signing must be public")
-	assert.True(t, registry.IsPublic("/api/pki/device-enroll"), "Device enrollment must be public")
-	assert.True(t, registry.IsPublic("/api/auth/bootstrap"), "Bootstrap must be public")
-	assert.True(t, registry.IsPublic("/api/auth/bootstrap/status"), "Bootstrap status must be public")
+	assert.True(t, registry.IsPublic("/api/v1/pki/csr/sign"), "CSR signing must be public")
+	assert.True(t, registry.IsPublic("/api/v1/pki/devices/enroll"), "Device enrollment must be public")
+	assert.True(t, registry.IsPublic("/api/v1/auth/bootstrap"), "Bootstrap must be public")
+	assert.True(t, registry.IsPublic("/api/v1/auth/bootstrap/status"), "Bootstrap status must be public")
+	assert.True(t, registry.IsPublic("/api/v1/auth/login/verify"), "Login verify must be public")
+	assert.True(t, registry.IsPublic("/api/v1/auth/logout"), "Logout must be public")
 }
 
 // TestAuthIntegrity_AppPolicyDenyByDefault verifies that app identities without
