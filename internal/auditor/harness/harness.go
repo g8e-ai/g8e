@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // TestHarness manages self-contained gateway and operator instances.
@@ -251,7 +253,7 @@ func (h *TestHarness) waitForPort(port int, timeout time.Duration) error {
 
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		conn, err := tls.Dial("tcp", fmt.Sprintf("localhost:%d", port), &tls.Config{
+		conn, err := tls.Dial(string(constants.NetworkProtocolTCP), fmt.Sprintf("localhost:%d", port), &tls.Config{
 			RootCAs:    caCertPool,
 			MinVersion: tls.VersionTLS13,
 		})

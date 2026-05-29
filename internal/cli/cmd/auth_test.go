@@ -15,8 +15,6 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
-	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -64,7 +62,7 @@ func TestLoginCmd(t *testing.T) {
 		originalWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
+		t.Cleanup(func() { os.Chdir(originalWd) })
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
@@ -75,22 +73,23 @@ func TestLoginCmd(t *testing.T) {
 
 	t.Run("login fails when operator not running", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		setupTestConfig(t, tmpDir)
+		cfg := setupTestConfig(t, tmpDir)
 
-		cmd := loginCmd()
+		// Use injectable config loader for hermetic test with unique port
+		cmd := loginCmdWithConfig(func(_ string) (*config.Config, error) {
+			return cfg, nil
+		})
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
 		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
+		t.Cleanup(func() { os.Chdir(originalWd) })
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		// The test uses a dummy trust bundle, so NewSecureHTTPClient fails to parse it.
-		// This happens during CheckBootstrapStatus before the operator running check.
-		assert.Contains(t, err.Error(), "failed to parse CA certificates")
+		assert.Contains(t, err.Error(), "operator is not running")
 	})
 
 	t.Run("login fails when trust bundle missing", func(t *testing.T) {
@@ -127,7 +126,7 @@ func TestLoginCmd(t *testing.T) {
 			"ports": {
 				"insecure_mcp_gateway": 18789,
 				"operator_bootstrap_https": 8441,
-				"operator_https": 8440,
+				"operator_https": 48440,
 				"operator_public_https": 8443
 			}
 		}`
@@ -141,15 +140,9 @@ func TestLoginCmd(t *testing.T) {
 
 		originalWd, _ := os.Getwd()
 		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
+		t.Cleanup(func() { os.Chdir(originalWd) })
 
-		// Start a fake listener on 8440 to get past CheckOperatorRunning
-		ln, err := net.Listen("tcp", "localhost:8440")
-		if err == nil {
-			defer ln.Close()
-		}
-
-		err = cmd.RunE(cmd, []string{})
+		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "trust bundle not found")
 	})
@@ -172,7 +165,7 @@ func TestLogoutCmd(t *testing.T) {
 		originalWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
+		t.Cleanup(func() { os.Chdir(originalWd) })
 
 		// Set up minimal config structure so config loads, then auth fails
 		runtimeDir := filepath.Join(tmpDir, ".g8e")
@@ -202,7 +195,7 @@ func TestLogoutCmd(t *testing.T) {
 			"ports": {
 				"insecure_mcp_gateway": 18789,
 				"operator_bootstrap_https": 8441,
-				"operator_https": 8440,
+				"operator_https": 48440,
 				"operator_public_https": 8443
 			}
 		}`
@@ -309,16 +302,13 @@ func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
 	require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
 	require.NoError(t, os.WriteFile(trustBundlePath, []byte("dummy-trust-bundle"), 0644))
 
-	// Create minimal paths.json structure
-	protocolDir := filepath.Join(tmpDir, "protocol")
-	constantsDir := filepath.Join(protocolDir, "constants")
-	require.NoError(t, os.MkdirAll(constantsDir, 0755))
-
+	// Use LoadWithPaths with a unique port for hermetic test execution
+	// This ensures the test does not depend on any running operator
 	pathsJSON := `{
 		"host": "localhost",
 		"infra": {
 			"app_cert_dir": ".g8e/pki/app",
-			"ca_cert_path": ".g8e/pki/root/root_ca.crt",
+			"ca_cert_path": ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
 			"db_path": ".g8e/data/operator.db",
 			"docs_dir": "docs",
 			"pki_dir": ".g8e/pki",
@@ -331,30 +321,12 @@ func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
 		"ports": {
 			"insecure_mcp_gateway": 18789,
 			"operator_bootstrap_https": 8441,
-			"operator_https": 8440,
+			"operator_https": 58440,
 			"operator_public_https": 8443
 		}
 	}`
-	pathsPath := filepath.Join(constantsDir, "paths.json")
-	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 
-	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     runtimeDir,
-		PKIDir:         pkiDir,
-		SecretsDir:     secretsDir,
-		CredentialsDir: credentialsDir,
-	}
-
-	// Load paths.json to complete the config
-	pathsData, err := os.ReadFile(pathsPath)
-	if err != nil {
-		require.NoError(t, err)
-	}
-
-	var paths config.PathsConfig
-	require.NoError(t, json.Unmarshal(pathsData, &paths))
-	cfg.Paths = &paths
-
+	cfg, err := config.LoadWithPaths(tmpDir, []byte(pathsJSON))
+	require.NoError(t, err)
 	return cfg
 }

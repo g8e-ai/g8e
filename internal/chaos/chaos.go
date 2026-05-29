@@ -298,7 +298,7 @@ func (c *chaosExecutionHandler) ExecuteVerifiedTransaction(_ context.Context, ev
 	if eventType == constants.Event.Operator.FileEdit.Requested && c.ledger != nil {
 		req := &operatorv1.FileEditRequested{}
 		if err := proto.Unmarshal(msg.Payload, req); err == nil {
-			slog.Info("Chaos simulating file mutation in ledger", "file", req.FilePath)
+			slog.Info("Chaos simulating file mutation in ledger", "filepath", req.FilePath, "category", string(constants.ToolDisplayCategoryFile))
 			// Simulate the two-phase ledger commit
 			res, err := c.ledger.LedgerFileWrite(msg.OperatorSessionID, req.FilePath)
 			if err != nil {
@@ -312,7 +312,7 @@ func (c *chaosExecutionHandler) ExecuteVerifiedTransaction(_ context.Context, ev
 				if err != nil {
 					slog.Error("CompleteMirrorWrite failed", "error", err)
 				} else {
-					slog.Info("Chaos ledger mutation complete", "file", req.FilePath)
+					slog.Info("Chaos ledger mutation complete", "filepath", req.FilePath, "category", string(constants.ToolDisplayCategoryFile))
 					// Note: State root updates disabled in chaos test to avoid race conditions
 					// that cause hash verification failures in parallel execution
 					count := c.mutationCount.Add(1)

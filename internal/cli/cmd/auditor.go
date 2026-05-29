@@ -28,6 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/auditor/harness"
 	"github.com/g8e-ai/g8e/internal/auditor/report"
 	"github.com/g8e-ai/g8e/internal/auditor/scenarios"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 var (
@@ -428,7 +429,7 @@ func printAuditorSummary(results []scenarios.Result, jsonPath, mdPath string) {
 	for _, r := range results {
 		status := "FAIL"
 		if r.OK {
-			status = "ok"
+			status = string(constants.GatewayModeStatusOK)
 			ok++
 		}
 		fmt.Printf("  %-18s %-9s %-18s %s\n", r.Name, r.RequiresPosture, r.Persona, status)
