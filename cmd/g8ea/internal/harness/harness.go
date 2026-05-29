@@ -207,12 +207,16 @@ func (h *TestHarness) Stop() {
 	}
 
 	if h.gatewayCmd != nil {
-		h.gatewayCmd.Process.Kill()
-		h.gatewayCmd.Wait()
+		if err := h.gatewayCmd.Process.Kill(); err != nil {
+			log.Printf("warning: failed to kill gateway: %v", err)
+		}
+		_ = h.gatewayCmd.Wait()
 	}
 	if h.operatorCmd != nil {
-		h.operatorCmd.Process.Kill()
-		h.operatorCmd.Wait()
+		if err := h.operatorCmd.Process.Kill(); err != nil {
+			log.Printf("warning: failed to kill operator: %v", err)
+		}
+		_ = h.operatorCmd.Wait()
 	}
 
 	if h.tempDir != "" {

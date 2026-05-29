@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/cmd/g8ea/internal/client"
 	clientpkg "github.com/g8e-ai/g8e/cmd/g8ea/internal/client"
 	"github.com/g8e-ai/g8e/cmd/g8ea/internal/config"
 	"github.com/g8e-ai/g8e/cmd/g8ea/internal/harness"
@@ -261,7 +260,7 @@ func needsGovKit(ss []scenarios.Scenario) bool {
 
 // setupGovKit mints the mock ensemble + principal keys, registers them as
 // trusted signers (best-effort), and injects the kit into the scenarios pkg.
-func setupGovKit(ctx context.Context, client *client.Client, cfg config.Config) error {
+func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Config) error {
 	ens, err := clientpkg.NewEnsemble(cfg.ConsensusKeyID, cfg.EnsembleSize)
 	if err != nil {
 		return err
