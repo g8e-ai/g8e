@@ -63,6 +63,7 @@ func testCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(
+		testCiCmd(),
 		testUnitCmd(),
 		testIntegrationCmd(),
 		testChaosCmd(),
@@ -70,6 +71,101 @@ func testCmd() *cobra.Command {
 		testReviewCmd(),
 		testSummaryCmd(),
 	)
+
+	return cmd
+}
+
+func testCiCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "ci",
+		Short: "Run CI pipeline locally (mirrors GitHub Actions)",
+		Long:  `Run the full CI pipeline locally: proto generation, linting, vulncheck, and substrate tests with platform start/stop and coverage enforcement.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			cmd.Println("=== Running CI pipeline locally ===")
+			cmd.Println("\n=== Proto generation ===")
+			protoCmd := exec.Command("make", "proto")
+			protoCmd.Stdout = os.Stdout
+			protoCmd.Stderr = os.Stderr
+			protoCmd.Dir = cfg.ProjectRoot
+			if err := protoCmd.Run(); err != nil {
+				return fmt.Errorf("proto generation failed: %w", err)
+			}
+
+			cmd.Println("\n=== Linting ===")
+			lintCmd := exec.Command("make", "lint")
+			lintCmd.Stdout = os.Stdout
+			lintCmd.Stderr = os.Stderr
+			lintCmd.Dir = cfg.ProjectRoot
+			if err := lintCmd.Run(); err != nil {
+				return fmt.Errorf("linting failed: %w", err)
+			}
+
+			cmd.Println("\n=== Vulncheck ===")
+			vulnCmd := exec.Command("make", "vulncheck")
+			vulnCmd.Stdout = os.Stdout
+			vulnCmd.Stderr = os.Stderr
+			vulnCmd.Dir = cfg.ProjectRoot
+			if err := vulnCmd.Run(); err != nil {
+				return fmt.Errorf("vulncheck failed: %w", err)
+			}
+
+			cmd.Println("\n=== Substrate tests ===")
+			// Set G8E_STRICT_CONSTANTS_LINT for CI parity
+			os.Setenv("G8E_STRICT_CONSTANTS_LINT", "1")
+
+			// Start platform
+			startCmd := exec.Command("./bin/g8e", "platform", "start")
+			startCmd.Stdout = os.Stdout
+			startCmd.Stderr = os.Stderr
+			startCmd.Dir = cfg.ProjectRoot
+			if err := startCmd.Run(); err != nil {
+				return fmt.Errorf("platform start failed: %w", err)
+			}
+
+			// Run tests with same package filtering as CI
+			packages := "$(go list ./... | grep -v mocks | grep -v \"^github.com/g8e-ai/g8e/cmd/\" | grep -v \"^github.com/g8e-ai/g8e/internal/testutil/\" | grep -v \"^github.com/g8e-ai/g8e/test/\" | grep -v \"^github.com/g8e-ai/g8e/internal/protocol/proto/\")"
+			testCmd := exec.Command("bash", "-c", fmt.Sprintf("go test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic %s", packages))
+			testCmd.Stdout = os.Stdout
+			testCmd.Stderr = os.Stderr
+			testCmd.Dir = cfg.ProjectRoot
+			testFailed := false
+			if err := testCmd.Run(); err != nil {
+				testFailed = true
+				cmd.Printf("Tests failed: %v\n", err)
+			}
+
+			// Stop platform
+			stopCmd := exec.Command("./bin/g8e", "platform", "stop")
+			stopCmd.Stdout = os.Stdout
+			stopCmd.Stderr = os.Stderr
+			stopCmd.Dir = cfg.ProjectRoot
+			if err := stopCmd.Run(); err != nil {
+				return fmt.Errorf("platform stop failed: %w", err)
+			}
+
+			if testFailed {
+				return fmt.Errorf("substrate tests failed")
+			}
+
+			// Check coverage threshold
+			cmd.Println("\n=== Coverage check ===")
+			coverageCmd := exec.Command("bash", "-c", "COVERAGE=$(go tool cover -func=coverage.out | grep -v \"internal/protocol/proto\" | grep -v mocks | grep -v \"^github.com/g8e-ai/g8e/cmd/\" | grep -v \"^github.com/g8e-ai/g8e/internal/testutil/\" | grep -v \"^github.com/g8e-ai/g8e/test/\" | tail -1 | awk '{print $3}' | sed 's/%//'); if [ $(echo \"$COVERAGE < 60\" | bc -l) -eq 1 ]; then echo \"Coverage $COVERAGE% is below 60% threshold\"; exit 1; fi; echo \"Coverage $COVERAGE% meets 60% threshold\"")
+			coverageCmd.Stdout = os.Stdout
+			coverageCmd.Stderr = os.Stderr
+			coverageCmd.Dir = cfg.ProjectRoot
+			if err := coverageCmd.Run(); err != nil {
+				return fmt.Errorf("coverage check failed: %w", err)
+			}
+
+			cmd.Println("\n=== CI pipeline complete ===")
+			return nil
+		},
+	}
 
 	return cmd
 }

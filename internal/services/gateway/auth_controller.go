@@ -95,7 +95,7 @@ func (c *AuthController) handleAuthPasskeysRegisterChallenge(w http.ResponseWrit
 	}
 
 	// [PIVOT] Enforce session-to-user binding for public browser registration
-	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
+	if ctxUserID, ok := r.Context().Value(userIDKey).(string); ok {
 		if req.UserID != "" && req.UserID != ctxUserID {
 			c.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
@@ -162,7 +162,7 @@ func (c *AuthController) handleAuthPasskeysRegisterVerify(w http.ResponseWriter,
 	}
 
 	// [PIVOT] Enforce session-to-user binding for public browser registration
-	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
+	if ctxUserID, ok := r.Context().Value(userIDKey).(string); ok {
 		if req.UserID != "" && req.UserID != ctxUserID {
 			c.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
@@ -231,7 +231,7 @@ func (c *AuthController) handleAuthPasskeysAuthenticateChallenge(w http.Response
 	}
 
 	userID := req.UserID
-	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
+	if ctxUserID, ok := r.Context().Value(userIDKey).(string); ok {
 		if userID != "" && userID != ctxUserID {
 			c.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
@@ -283,7 +283,7 @@ func (c *AuthController) handleAuthPasskeysAuthenticateVerify(w http.ResponseWri
 	}
 
 	userID := req.UserID
-	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
+	if ctxUserID, ok := r.Context().Value(userIDKey).(string); ok {
 		if userID != "" && userID != ctxUserID {
 			c.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
@@ -1162,7 +1162,7 @@ func (c *AuthController) handleBootstrapStatus(w http.ResponseWriter, r *http.Re
 }
 
 func (c *AuthController) handleUserMe(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value("user_id").(string)
+	userID, ok := r.Context().Value(userIDKey).(string)
 	if !ok {
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -1185,7 +1185,7 @@ func (c *AuthController) handleUserMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AuthController) handleWebSession(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value("user_id").(string)
+	userID, ok := r.Context().Value(userIDKey).(string)
 	if !ok {
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return

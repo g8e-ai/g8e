@@ -46,9 +46,9 @@ func TestSessionWebBindKey(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
+		name      string
 		sessionID string
-		expected string
+		expected  string
 	}{
 		{"Valid session ID", "web-session-123", "g8e:session:web:web-session-123:bind"},
 		{"Empty session ID", "", "g8e:session:web::bind"},
@@ -68,9 +68,9 @@ func TestSessionOperatorBindKey(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
+		name      string
 		sessionID string
-		expected string
+		expected  string
 	}{
 		{"Valid session ID", "op-session-456", "g8e:session:operator:op-session-456:bind"},
 		{"Empty session ID", "", "g8e:session:operator::bind"},

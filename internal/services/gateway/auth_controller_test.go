@@ -366,7 +366,7 @@ func TestHandleAuthPasskeysRegisterChallenge(t *testing.T) {
 		}
 		b, _ := json.Marshal(body)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/challenge", bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), "user_id", user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleAuthPasskeysRegisterChallenge(rr, req)
@@ -386,7 +386,7 @@ func TestHandleAuthPasskeysRegisterChallenge(t *testing.T) {
 		}
 		b, _ := json.Marshal(body)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/challenge", bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), "user_id", user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleAuthPasskeysRegisterChallenge(rr, req)
@@ -529,7 +529,7 @@ func TestHandleAuthPasskeysAuthenticateChallenge(t *testing.T) {
 		}
 		b, _ := json.Marshal(body)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/challenge", bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), "user_id", user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleAuthPasskeysAuthenticateChallenge(rr, req)
@@ -548,7 +548,7 @@ func TestHandleAuthPasskeysAuthenticateChallenge(t *testing.T) {
 		}
 		b, _ := json.Marshal(body)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/challenge", bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), "user_id", user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleAuthPasskeysAuthenticateChallenge(rr, req)
@@ -606,7 +606,7 @@ func TestHandleAuthPasskeysAuthenticateVerify(t *testing.T) {
 		}
 		b, _ := json.Marshal(body)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/verify", bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), "user_id", user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleAuthPasskeysAuthenticateVerify(rr, req)
@@ -626,7 +626,7 @@ func TestHandleAuthPasskeysAuthenticateVerify(t *testing.T) {
 		}
 		b, _ := json.Marshal(body)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/verify", bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), "user_id", user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleAuthPasskeysAuthenticateVerify(rr, req)
@@ -1139,7 +1139,7 @@ func TestHandleUserMe(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-		req = req.WithContext(context.WithValue(req.Context(), "user_id", user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleUserMe(rr, req)
@@ -1156,7 +1156,7 @@ func TestHandleUserMe(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-		req = req.WithContext(context.WithValue(req.Context(), "user_id", "nonexistent-user"))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, "nonexistent-user"))
 		rr := httptest.NewRecorder()
 
 		c.handleUserMe(rr, req)
@@ -1186,7 +1186,7 @@ func TestHandleWebSession(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/websession", nil)
-		req = req.WithContext(context.WithValue(req.Context(), "user_id", user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		req.AddCookie(&http.Cookie{Name: "g8e_session", Value: "test-session-id"})
 		rr := httptest.NewRecorder()
 
@@ -1208,7 +1208,7 @@ func TestHandleWebSession(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/websession", nil)
-		req = req.WithContext(context.WithValue(req.Context(), "user_id", user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleWebSession(rr, req)
