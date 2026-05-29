@@ -755,6 +755,83 @@ func blobSegmentValid(s string) bool {
 
 const maxBlobBodySize = 50 * 1024 * 1024
 
+// blobNamespaceAllowed checks if a namespace is in the allowlist for direct mutations.
+// This is a governance boundary: only allowlisted namespaces can be mutated directly.
+// All other namespaces must go through the governance envelope path.
+func blobNamespaceAllowed(namespace string) bool {
+	// Allowlist of namespaces that can be mutated directly.
+	// These are ephemeral caches or client-uploaded artifacts that do not
+	// require full governance envelope processing.
+	allowedNamespaces := map[string]bool{
+		"temp":    true, // Temporary cache
+		"uploads": true, // Client-uploaded files
+		"cache":   true, // Ephemeral cache
+		"scratch": true, // Scratch space
+	}
+	return allowedNamespaces[namespace]
+}
+
+// extractCallerIdentity extracts the caller's identity from the request context.
+// Returns user_id, app_id, operator_session_id, cli_session_id.
+func (c *DBController) extractCallerIdentity(r *http.Request) (string, string, string, string) {
+	userID, _ := r.Context().Value(userIDKey).(string)
+	appID, _ := r.Context().Value(appIDKey).(string)
+	operatorSessionID := c.auth.ExtractOperatorSessionID(r)
+	cliSessionID := r.Header.Get(constants.HeaderCLISessionID)
+	return userID, appID, operatorSessionID, cliSessionID
+}
+
+// verifyBlobOwnership checks if the caller is authorized to mutate the given namespace.
+// This enforces per-namespace ownership to prevent cross-tenant blob access.
+// Allowlisted namespaces (temp, cache, uploads, scratch) are accessible by any authenticated user.
+func (c *DBController) verifyBlobOwnership(r *http.Request, namespace string) error {
+	userID, appID, operatorSessionID, cliSessionID := c.extractCallerIdentity(r)
+
+	// If no identity is present, reject
+	if userID == "" && appID == "" && operatorSessionID == "" && cliSessionID == "" {
+		return fmt.Errorf("unauthorized: no identity present")
+	}
+
+	// Allowlisted namespaces are accessible by any authenticated identity
+	if blobNamespaceAllowed(namespace) {
+		return nil
+	}
+
+	// For app identities, check if the app is authorized for this namespace
+	if appID != "" {
+		// Apps can only write to their own namespace (app/<app_id>)
+		expectedNamespace := "app/" + appID
+		if namespace != expectedNamespace {
+			return fmt.Errorf("unauthorized: app can only write to its own namespace (expected %s, got %s)", expectedNamespace, namespace)
+		}
+		return nil
+	}
+
+	// For operator/CLI identities, check if the namespace is user-scoped
+	if operatorSessionID != "" || cliSessionID != "" {
+		if userID == "" {
+			return fmt.Errorf("unauthorized: operator/CLI identity without user_id")
+		}
+		// Operators/CLI can only write to user-scoped namespaces
+		expectedNamespace := "user/" + userID
+		if namespace != expectedNamespace {
+			return fmt.Errorf("unauthorized: user can only write to their own namespace (expected %s, got %s)", expectedNamespace, namespace)
+		}
+		return nil
+	}
+
+	// For user identities (web session), check user-scoped namespace
+	if userID != "" {
+		expectedNamespace := "user/" + userID
+		if namespace != expectedNamespace {
+			return fmt.Errorf("unauthorized: user can only write to their own namespace (expected %s, got %s)", expectedNamespace, namespace)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("unauthorized: unknown identity type")
+}
+
 func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/blob/")
 	if path == "" {
@@ -774,11 +851,23 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
+		// Check if namespace is allowlisted for direct mutations
+		if !blobNamespaceAllowed(namespace) {
+			c.responder.Error(w, http.StatusConflict, "submit via POST /api/governance/envelope")
+			return
+		}
+		// Enforce ownership for namespace deletion
+		if err := c.verifyBlobOwnership(r, namespace); err != nil {
+			c.logger.Warn("Blob namespace delete: ownership check failed", "namespace", namespace, "error", err)
+			c.responder.Error(w, http.StatusForbidden, err.Error())
+			return
+		}
 		count, err := c.db.BlobDeleteNamespace(namespace)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		c.logger.Info("Blob namespace deleted", "namespace", namespace, "count", count)
 		c.responder.JSON(w, http.StatusOK, models.BlobDeleteResponse{Deleted: count})
 		return
 	}
@@ -815,6 +904,19 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodPut:
+		// Check if namespace is allowlisted for direct mutations
+		if !blobNamespaceAllowed(namespace) {
+			c.responder.Error(w, http.StatusConflict, "submit via POST /api/governance/envelope")
+			return
+		}
+
+		// Enforce ownership for blob writes
+		if err := c.verifyBlobOwnership(r, namespace); err != nil {
+			c.logger.Warn("Blob put: ownership check failed", "namespace", namespace, "blob_id", blobID, "error", err)
+			c.responder.Error(w, http.StatusForbidden, err.Error())
+			return
+		}
+
 		contentType := r.Header.Get("Content-Type")
 		if contentType == "" {
 			c.responder.Error(w, http.StatusBadRequest, "Content-Type header required")
@@ -849,6 +951,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		c.logger.Info("Blob stored", "namespace", namespace, "blob_id", blobID, "size", len(body), "content_type", contentType)
 		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	case http.MethodGet:
@@ -884,6 +987,19 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case http.MethodDelete:
+		// Check if namespace is allowlisted for direct mutations
+		if !blobNamespaceAllowed(namespace) {
+			c.responder.Error(w, http.StatusConflict, "submit via POST /api/governance/envelope")
+			return
+		}
+
+		// Enforce ownership for blob deletion
+		if err := c.verifyBlobOwnership(r, namespace); err != nil {
+			c.logger.Warn("Blob delete: ownership check failed", "namespace", namespace, "blob_id", blobID, "error", err)
+			c.responder.Error(w, http.StatusForbidden, err.Error())
+			return
+		}
+
 		deleted, err := c.db.BlobDelete(namespace, blobID)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
@@ -893,6 +1009,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusNotFound, "blob not found")
 			return
 		}
+		c.logger.Info("Blob deleted", "namespace", namespace, "blob_id", blobID)
 		c.responder.JSON(w, http.StatusOK, models.BlobDeleteResponse{Deleted: 1})
 
 	default:

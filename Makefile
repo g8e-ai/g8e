@@ -260,9 +260,15 @@ update-golden:
 # LINT & QUALITY
 # =============================================================================
 .PHONY: lint
-lint: vulncheck validate-doctrines
+lint: lint-no-embedded-newlines vulncheck validate-doctrines
 	@golangci-lint run
 	@echo "All linting and quality checks complete."
+
+.PHONY: lint-no-embedded-newlines
+lint-no-embedded-newlines:
+	@echo "Checking for compilation errors (including embedded newlines)..."
+	@go build ./... || { echo "Error: Go build failed. This may be caused by embedded newlines or other syntax errors."; exit 1; }
+	@echo "Build successful - no embedded newlines or syntax errors detected."
 
 .PHONY: vulncheck
 vulncheck:

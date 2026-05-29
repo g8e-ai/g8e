@@ -62,10 +62,12 @@ func NewRegistrationService(db *GatewayDBService, pki *PKIAuthority, logger *slo
 	}
 }
 
+// sessionWebBindKey returns the KV key for binding a web session to operator sessions.
 func sessionWebBindKey(webSessionID string) string {
 	return sessionWebBindPrefix + webSessionID + sessionBindSuffix
 }
 
+// sessionOperatorBindKey returns the KV key for binding an operator session to a web session.
 func sessionOperatorBindKey(operatorSessionID string) string {
 	return sessionOperatorBindPrefix + operatorSessionID + sessionBindSuffix
 }

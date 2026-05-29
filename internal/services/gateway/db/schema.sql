@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS sse_events (
     user_id TEXT,
     event_type TEXT NOT NULL,
     payload TEXT NOT NULL,
+    producer_id TEXT,
     created_at TEXT NOT NULL,
     CHECK (
         (CASE WHEN web_session_id IS NULL THEN 0 ELSE 1 END)

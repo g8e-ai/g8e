@@ -130,6 +130,11 @@ func (s *GatewayDBService) initTestSchema(secretsDir string) error {
 	if err != nil {
 		return err
 	}
+	// Migration: Add producer_id column to sse_events table if it doesn't exist
+	_, err = s.db.ExecWithRetry("ALTER TABLE sse_events ADD COLUMN producer_id TEXT")
+	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		s.logger.Warn("Failed to add producer_id column to sse_events (may already exist)", "error", err)
+	}
 	backend, err := keystore.NewTestBackend()
 	if err != nil {
 		return err
@@ -333,6 +338,12 @@ func (s *GatewayDBService) initSchema(secretsDir string) error {
 	_, err := s.db.ExecWithRetry(gatewaySchema)
 	if err != nil {
 		return err
+	}
+
+	// Migration: Add producer_id column to sse_events table if it doesn't exist
+	_, err = s.db.ExecWithRetry("ALTER TABLE sse_events ADD COLUMN producer_id TEXT")
+	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		s.logger.Warn("Failed to add producer_id column to sse_events (may already exist)", "error", err)
 	}
 
 	sm, err := NewSecretManager(s.db, secretsDir, s.logger)
@@ -1122,15 +1133,16 @@ func (r SSERoute) validate() error {
 }
 
 // SSEEventsAppend inserts a row into the sse_events table. The route MUST set
-// exactly one of WebSessionID, CLISessionID, UserID.
-func (s *GatewayDBService) SSEEventsAppend(route SSERoute, eventType, payload string) error {
+// exactly one of WebSessionID, CLISessionID, UserID. The producer_id is the
+// app identity (SPIFFE ID) that produced the event for attribution.
+func (s *GatewayDBService) SSEEventsAppend(route SSERoute, eventType, payload, producerID string) error {
 	if err := route.validate(); err != nil {
 		return err
 	}
 	now := sqliteutil.NowTimestamp()
 	_, err := s.db.ExecWithRetry(
-		"INSERT INTO sse_events (web_session_id, cli_session_id, user_id, event_type, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-		nullIfEmpty(route.WebSessionID), nullIfEmpty(route.CLISessionID), nullIfEmpty(route.UserID), eventType, payload, now,
+		"INSERT INTO sse_events (web_session_id, cli_session_id, user_id, event_type, payload, producer_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		nullIfEmpty(route.WebSessionID), nullIfEmpty(route.CLISessionID), nullIfEmpty(route.UserID), eventType, payload, nullIfEmpty(producerID), now,
 	)
 	return err
 }

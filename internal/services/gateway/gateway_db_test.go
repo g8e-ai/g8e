@@ -661,9 +661,9 @@ func TestSSEEventsAppendAndCount(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"hello"}`))
-	require.NoError(t, db.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"world"}`))
-	require.NoError(t, db.SSEEventsAppend(SSERoute{CLISessionID: "sess-2"}, "DONE", `{}`))
+	require.NoError(t, db.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"hello"}`, ""))
+	require.NoError(t, db.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"world"}`, ""))
+	require.NoError(t, db.SSEEventsAppend(SSERoute{CLISessionID: "sess-2"}, "DONE", `{}`, ""))
 
 	count, err := db.SSEEventsCount()
 	require.NoError(t, err)
@@ -674,8 +674,8 @@ func TestSSEEventsWipe_DeletesAllRows(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"a"}`))
-	require.NoError(t, db.SSEEventsAppend(SSERoute{CLISessionID: "sess-2"}, "DONE", `{}`))
+	require.NoError(t, db.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"a"}`, ""))
+	require.NoError(t, db.SSEEventsAppend(SSERoute{CLISessionID: "sess-2"}, "DONE", `{}`, ""))
 
 	deleted, err := db.SSEEventsWipe()
 	require.NoError(t, err)

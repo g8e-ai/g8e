@@ -338,3 +338,25 @@ func TestPublicRouteRegistry_CanonicalCoverage(t *testing.T) {
 	assert.True(t, registry.IsPublic("/api/auth/bootstrap"), "Bootstrap must be public")
 	assert.True(t, registry.IsPublic("/api/auth/bootstrap/status"), "Bootstrap status must be public")
 }
+
+// TestAuthIntegrity_AppPolicyDenyByDefault verifies that app identities without
+// an AppPolicy are denied access (deny-by-default enforcement).
+// This is a regression test for Finding 2: MCP/A2A ingress when JWKS omitted.
+func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	dbDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	// Create an app identity without an AppPolicy
+	appID := "spiffe://g8e.local/app/test-app-no-policy"
+
+	// Try to get AppPolicy for this app - should return nil (deny-by-default)
+	policy, err := db.GetAppPolicy(appID)
+	require.NoError(t, err)
+	assert.Nil(t, policy, "App without policy should have nil policy (deny-by-default)")
+}

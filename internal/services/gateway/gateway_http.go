@@ -35,6 +35,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/responder"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
+	"github.com/g8e-ai/g8e/protocol"
 	"golang.org/x/time/rate"
 )
 
@@ -173,11 +174,13 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mcpRateLimited := h.rateLimitMiddleware(mcpMux)
 
 	// Apply JWT middleware only when JWKS is configured (for external IdP auth)
-	// When JWKS is not configured, mTLS authentication is used via main middleware
+	// When JWKS is not configured, MCP/A2A routes go through main middleware which enforces mTLS + AppPolicy
 	var mcpHandler http.Handler
 	if h.auth != nil && h.auth.HasJWKS() {
 		mcpHandler = h.auth.JWTAuthMiddleware(mcpRateLimited)
 	} else {
+		// When JWKS is not configured, MCP/A2A must use mTLS + AppPolicy via main middleware
+		// The main middleware (enforced at router level) handles mTLS, identity binding, and AppPolicy
 		mcpHandler = mcpRateLimited
 	}
 
@@ -731,6 +734,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	}
 
 	cert := r.TLS.PeerCertificates[0]
+	appID := ""
 	isAppWorkload := false
 	for _, uri := range cert.URIs {
 		// Only g8e-compatible agentic ensembles are authorized to push SSE events, as they act as the centralized event broker
@@ -738,6 +742,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		// except operator identities (g8eo, g8eg).
 		if strings.HasPrefix(uri.Path, "/app/") && uri.Path != "/app/g8eo" && uri.Path != "/app/g8eg" {
 			isAppWorkload = true
+			appID = uri.String()
 			break
 		}
 	}
@@ -779,10 +784,113 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		inner.Type = string(constants.SystemHealthUnknown)
 	}
 
-	if err := h.db.SSEEventsAppend(route, inner.Type, string(body)); err != nil {
+	if err := h.db.SSEEventsAppend(route, inner.Type, string(body), appID); err != nil {
 		h.logger.Error("SSE push: failed to append event", string(constants.ConnectionStateError), err, "type", inner.Type)
 		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	// Authorization: Enforce producer-to-target ownership.
+	// The app identity extracted from the peer certificate must be associated with the target.
+	if route.WebSessionID != "" {
+		webBindKey := sessionWebBindKey(route.WebSessionID)
+		raw, found := h.db.KVGet(webBindKey)
+		if !found {
+			h.logger.Warn("SSE push: target web session has no bound operators", "web_session_id", route.WebSessionID, "app_id", appID)
+			h.responder.Error(w, http.StatusForbidden, "target session not found or not bound")
+			return
+		}
+		var operatorSessionIDs []string
+		if err := json.Unmarshal([]byte(raw), &operatorSessionIDs); err != nil {
+			h.logger.Error("SSE push: failed to parse web session bindings", "web_session_id", route.WebSessionID, "error", err)
+			h.responder.Error(w, http.StatusInternalServerError, "failed to verify session ownership")
+			return
+		}
+
+		// Check if any bound operator session is associated with this appID
+		authorized := false
+		for _, opSessID := range operatorSessionIDs {
+			opDoc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), opSessID)
+			if err != nil || opDoc == nil {
+				continue
+			}
+			// AppID format in this context is the SPIFFE ID string
+			if opDoc.ID == appID || strings.HasSuffix(appID, "/app/"+opSessID) {
+				authorized = true
+				break
+			}
+			// Alternative: check if the app is explicitly allowed by the operator's policy or if it's the engine
+			// For now, we'll keep it simple: if the app is spiffe://g8e.local/app/<operator_id>, it's authorized.
+			// MatchesApp(spiffeID, operatorID) from workload_identity.go
+			wid := protocol.NewWorkloadIdentity()
+			if wid.MatchesApp(appID, opDoc.ID) {
+				authorized = true
+				break
+			}
+		}
+
+		if !authorized {
+			h.logger.Warn("SSE push: app not authorized for target web session", "app_id", appID, "web_session_id", route.WebSessionID)
+			h.responder.Error(w, http.StatusForbidden, "unauthorized for target session")
+			return
+		}
+	} else if route.CLISessionID != "" {
+		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
+		if err != nil || doc == nil {
+			h.logger.Warn("SSE push: target CLI session not found", "cli_session_id", route.CLISessionID, "app_id", appID)
+			h.responder.Error(w, http.StatusForbidden, "target session not found")
+			return
+		}
+		var cliSess models.CLISession
+		b, _ := json.Marshal(doc.Data)
+		if err := json.Unmarshal(b, &cliSess); err != nil {
+			h.logger.Error("SSE push: failed to parse CLI session", "cli_session_id", route.CLISessionID, "error", err)
+			h.responder.Error(w, http.StatusInternalServerError, "failed to verify session ownership")
+			return
+		}
+
+		// Verify app owns the operator session bound to this CLI session
+		opDoc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), cliSess.OperatorSessionID)
+		if err != nil || opDoc == nil {
+			h.logger.Warn("SSE push: operator session for CLI session not found", "operator_session_id", cliSess.OperatorSessionID, "cli_session_id", route.CLISessionID)
+			h.responder.Error(w, http.StatusForbidden, "operator session not found")
+			return
+		}
+
+		wid := protocol.NewWorkloadIdentity()
+		if !wid.MatchesApp(appID, opDoc.ID) {
+			h.logger.Warn("SSE push: app not authorized for target CLI session", "app_id", appID, "cli_session_id", route.CLISessionID)
+			h.responder.Error(w, http.StatusForbidden, "unauthorized for target session")
+			return
+		}
+	} else if route.UserID != "" {
+		// User-scoped pushes: app must be authorized for AT LEAST ONE session belonging to the user.
+		// We check if the app identity corresponds to an operator owned by this user.
+		filters := []models.DocFilter{
+			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", route.UserID))},
+		}
+		docs, err := h.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 100)
+		if err != nil || len(docs) == 0 {
+			h.logger.Warn("SSE push: user has no operators", "user_id", route.UserID, "app_id", appID)
+			h.responder.Error(w, http.StatusForbidden, "unauthorized for target user")
+			return
+		}
+
+		// Check if the app is authorized for any of the user's operators
+		authorized := false
+		wid := protocol.NewWorkloadIdentity()
+		for _, doc := range docs {
+			if wid.MatchesApp(appID, doc.ID) {
+				authorized = true
+				break
+			}
+		}
+
+		if !authorized {
+			h.logger.Warn("SSE push: app not authorized for target user", "app_id", appID, "user_id", route.UserID)
+			h.responder.Error(w, http.StatusForbidden, "unauthorized for target user")
+			return
+		}
 	}
 
 	// Publish to pub/sub for real-time streaming
