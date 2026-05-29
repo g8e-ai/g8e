@@ -156,7 +156,7 @@ Planned scenarios from the original specification:
 - **Same Knife (#1)**: One intent, three producer variants, assert identical verdict
 - **Go Around It (#3)**: Assert the only mutation path is the Actuator
 - **Runaway (#4)**: Doctrine forbidden-pattern fixture
-- **Worm Enrolls (#5)**: Device-link token validation
+- **Worm Enrolls (#5)**: CSR-based enrollment validation
 - **Hand Me the Proof (#7)**: Receipt chain validation with scorecard
 - **Pull the Cable (#2)**: Transport fault-injection (requires `-tags=integration,partition`)
 

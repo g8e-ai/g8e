@@ -119,7 +119,7 @@ The gateway must serve as the Pub/Sub broker:
 The gateway must expose HTTP endpoints:
 
 - **Envelope Submission**: `POST /api/governance/envelope` for canonical JSON GovernanceEnvelope transactions.
-- **App Enrollment**: `POST /api/pki/app-enroll` for external app enrollment (device-link token required).
+- **App Enrollment**: `POST /api/pki/app-enroll` for external app enrollment (invitation-based JIT required).
 - **Certificate Revocation**: `POST /api/pki/revoke` for certificate revocation.
 - **Revocation Bundle**: `GET /api/pki/revocation-bundle` for the signed revocation list.
 

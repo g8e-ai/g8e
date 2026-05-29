@@ -154,7 +154,7 @@ services/
 │   ├── cli_l3_notary.go            #   CLIL3Notary: L3 via mTLS certs
 │   ├── composite_l3_verifier.go    #   Delegates L3 to PasskeyService or CLIL3Notary
 │   ├── passkey_service.go          #   WebAuthn/FIDO2 passkey ops
-│   ├── registration_service.go     #   Device-link enrollment
+│   ├── registration_service.go     #   CSR-based enrollment
 │   ├── secret_manager.go           #   Signing key storage
 │   ├── trust_scripts.go            #   PKI trust bootstrap
 │   ├── user_service.go

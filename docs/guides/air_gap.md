@@ -31,7 +31,7 @@ The Governance Gateway in Gateway mode exposes four logical surfaces. Defaults a
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **Bootstrap** | `<!-- g8e:port:operator_bootstrap -->8441<!-- /g8e:port -->` (plain HTTP) | None | Download trust bundles, device-link enrollment, and CSR signing. |
+| **Bootstrap** | `<!-- g8e:port:operator_bootstrap -->8441<!-- /g8e:port -->` (plain HTTP) | None | Download trust bundles and CSR signing. |
 | **Public Port** | `<!-- g8e:port:operator_public -->8443<!-- /g8e:port -->` (TLS) | Web session | Browser login, WebAuthn challenge, and PKI discovery. |
 | **mTLS API + Pub/Sub** | `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->` | mTLS + URI SAN | Central `/api/governance/envelope` mutation endpoint, `/db` persistence, and `/ws/pubsub` real-time event fan-out. |
 

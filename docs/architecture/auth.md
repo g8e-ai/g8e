@@ -35,7 +35,7 @@ The Governance Gateway enforces TLS 1.3 for all L7 communication.
 Clients enroll in the platform using a Certificate Signing Request (CSR) bootstrap flow:
 1.  **CA Discovery**: Clients fetch the platform's root CA bundle from `/.well-known/g8e/pki/g8e-gw-ca-bundle.pem`.
 2.  **CSR Submission**: Clients generate a local key pair (ECDSA P-384) and submit a CSR to `/api/pki/sign-csr`.
-3.  **Registration**: For new devices, a `Device Link` token or Invitation is used to bind the new certificate to a user identity.
+3.  **Registration**: The Gateway validates the CSR and binds the certificate to a user identity via invitation-based JIT provisioning.
 4.  **Session Issuance**: Upon successful enrollment, the Gateway issues an `operator_session_id` or `cli_session_id`.
 
 ## 2. 5-Layer Verification Sequence

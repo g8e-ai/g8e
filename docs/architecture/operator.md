@@ -59,6 +59,30 @@ The **L5Actuator** is the singular execution boundary permitted to mutate host s
 ### Universal Protocol Translator
 By exposing standard MCP and A2A interfaces (`--mcp-serve`), the Operator acts as the admission gate for BYO (Bring-Your-Own) AI clients. It isolates the complex requirements of the `GovernanceEnvelope` (such as transaction hashing and L2/L3 signature collection) behind a standardized tool-calling facade, mapping native JSON-RPC requests directly to governed `ActionType` mutations.
 
+### Native Tool Execution
+The Operator compiles native tool playbooks directly into the binary to provide memory-safe, boundary-enforced execution for common operational tasks. These tools execute within the Operator's execution boundary locally, without proxying to downstream MCP servers. AI agents interact with clean JSON schemas while the internal memory-safe execution layer enforces hard boundaries.
+
+#### Database Triage & Performance Playbook
+- **db_discover_topology**: Automatically scans database schemas, tables, and column data types, returning a highly compressed JSON map. AI agents need this first to prevent hallucinated queries.
+- **db_query_validate**: Intercepts any AI-generated SQL and runs it through EXPLAIN QUERY PLAN natively. If the engine flags an unindexed, full-table scan on a production dataset, the binary rejects the task before execution.
+- **db_isolated_read**: Executes SELECT statements using a database handle opened strictly with SQLITE_OPEN_READONLY. This prevents the AI from executing destructive injections (e.g., ; DROP TABLE...).
+- **db_index_triage**: Queries internal fragmentation statistics and indexes to diagnose slow queries without letting the AI guess the performance bottleneck.
+
+#### Telemetry & Log Digestion Playbook
+- **log_stream_filter**: Reads native log paths or standard buffers, applies a regex match requested by the AI, runs the matched chunks through the scrubbing engine to redact secrets/PII, and pushes only the sanitized fragments.
+- **sys_oom_detect**: Directly parses /var/log/dmesg or system logs to scan for Out-Of-Memory (OOM) killer events, process kills, or core panic dumps, isolating the exact failing PID.
+- **config_diff_mask**: Compares application configuration states against environmental baselines. It strips out actual passwords, tokens, and salts inside the binary before outputting the structural differences to the AI.
+
+#### Resource & Process Governance Playbook
+- **proc_metric_top**: Directly parses the Linux /proc filesystem in memory to extract process IDs, memory maps, and CPU tracking. It returns a tightly structured JSON array of the top resource-hogging processes.
+- **fs_disk_profile**: Recursively calculates directory sizes natively (equivalent to an optimized du --max-depth=2) starting from an approved path root. It instantly isolates unrotated log files or bloated tmp directories.
+- **proc_signal_safe**: Allows the AI to send explicit termination signals (SIGTERM, SIGKILL) to a process, but enforces a strict binary-level denylist (e.g., rejecting attempts to kill PID 1, system init, or the operator binary itself).
+
+#### Network & Connectivity Validation Playbook
+- **net_socket_audit**: Directly inspects active network sockets (/proc/net/tcp and /proc/net/udp) to map established connections and confirm if expected internal microservices are actually listening.
+- **net_endpoint_ping**: Initiates native TCP handshakes or ICMP requests to defined target host/port combinations to verify local network routing and DNS resolution performance.
+- **net_http_probe**: Performs a lightweight native HTTP request (similar to curl -I) to internal API endpoints, returning only the status codes, headers, and latency metrics while discarding heavy response payloads.
+
 ### Identity, PKI, and mTLS
 The Operator establishes workload identity bound to SPIFFE-style URI SANs, strictly enforced over mutual TLS (mTLS):
 - **Operator Identity**: `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>`
@@ -69,9 +93,9 @@ Revocation is checked on every handshake. Every `ActionReceipt` is signed by a h
 
 ### JWT Authentication Isolation
 The Operator is fully isolated from Identity Providers (IdP). The Gateway handles all JWT validation, user provisioning, and role mapping. JIT provisioning is **owner-controlled** and requires an active invitation:
-- **Owner-Centric Model**: All authentication requires owner approval via device links. The platform owner creates invitations for specific identities (IdP `sub` or email) before JIT provisioning can occur.
+- **Owner-Centric Model**: All authentication requires owner approval via invitations. The platform owner creates invitations for specific identities (IdP `sub` or email) before JIT provisioning can occur.
 - **Invitation-Based JIT**: When a JWT is presented, the Gateway validates the signature and checks for an active invitation. If no invitation exists, authentication is rejected (403 Forbidden). If a valid invitation exists, the user is provisioned and bound to the owner's organization, then the invitation is consumed.
-- **Strict TTL**: Device links and sessions have a 1-hour TTL by default. Long-lived access requires programmatic renewal or re-authentication via the device-link flow.
+- **Strict TTL**: Sessions have a 1-hour TTL by default. Long-lived access requires programmatic renewal or re-authentication.
 - **Gateway Responsibility**: The Gateway validates inbound `Authorization: Bearer <JWT>` tokens, performs invitation-gated JIT user provisioning, maps JWT roles to Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
 - **Operator Responsibility**: The Operator receives only the pre-validated, enriched security metadata in the envelope. It decodes `tenant_id` and `binding_persona` from the envelope, propagates them into the execution context, and applies Persona-based data scrubbing (column masks, redaction) before returning results.
 - **No IdP Dependency**: The Operator never requires outbound internet access to verify tokens or manage user state. This enables air-gapped and high-security deployments where the Operator has no external network connectivity.
@@ -119,6 +143,8 @@ The reference implementation (`g8eo`) currently supports:
 | Notary (`L3Notary`) | `/home/bob/g8e/internal/services/governance/l3_notary.go` |
 | Local Audit Vault | `/home/bob/g8e/internal/services/storage/audit_vault.go` |
 | Native Git Ledger | `/home/bob/g8e/internal/services/storage/ledger.go` |
+| Native Tools | `/home/bob/g8e/internal/services/mcp/native_tools.go` |
+| Native Tool Handlers | `/home/bob/g8e/internal/services/mcp/native_handlers.go` |
 | Operator Entrypoint | `/home/bob/g8e/cmd/g8eo/main.go` |
 | Protocol Definitions | `/home/bob/g8e/protocol/proto/g8e/common/v1/common.proto` |
 | Operator Protocol | `/home/bob/g8e/protocol/proto/g8e/operator/v1/operator.proto` |

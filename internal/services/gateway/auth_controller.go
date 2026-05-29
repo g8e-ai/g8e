@@ -73,7 +73,7 @@ func (c *AuthController) readBody(r *http.Request) ([]byte, error) {
 // Passkey / L3 Brokerage Handlers
 // =============================================================================
 
-func (c *AuthController) handlePasskeyRegisterChallenge(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handleAuthPasskeysRegisterChallenge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -140,7 +140,7 @@ func (c *AuthController) handlePasskeyRegisterChallenge(w http.ResponseWriter, r
 	})
 }
 
-func (c *AuthController) handlePasskeyRegisterVerify(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handleAuthPasskeysRegisterVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -210,7 +210,7 @@ func (c *AuthController) handlePasskeyRegisterVerify(w http.ResponseWriter, r *h
 	})
 }
 
-func (c *AuthController) handlePasskeyAuthChallenge(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handleAuthPasskeysAuthenticateChallenge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -261,7 +261,7 @@ func (c *AuthController) handlePasskeyAuthChallenge(w http.ResponseWriter, r *ht
 	})
 }
 
-func (c *AuthController) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handleAuthPasskeysAuthenticateVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -327,7 +327,7 @@ func (c *AuthController) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.
 	})
 }
 
-func (c *AuthController) handlePasskeyCredentials(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handleAuthPasskeys(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -352,7 +352,7 @@ func (c *AuthController) handlePasskeyCredentials(w http.ResponseWriter, r *http
 	})
 }
 
-func (c *AuthController) handlePasskeyRevokeCredential(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handleAuthPasskeysRevoke(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -364,7 +364,7 @@ func (c *AuthController) handlePasskeyRevokeCredential(w http.ResponseWriter, r 
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/api/auth/passkey/credentials/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/auth/passkeys/")
 	if path == "" {
 		c.responder.Error(w, http.StatusBadRequest, "credential_id required")
 		return
@@ -420,8 +420,8 @@ func (c *AuthController) handleUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AuthController) handleApprovalAction(w http.ResponseWriter, r *http.Request) {
-	// Path format: /api/approve/{txHash} or /api/approve/{txHash}/{action}
-	path := strings.TrimPrefix(r.URL.Path, "/api/approve/")
+	// Path format: /api/v1/approvals/{txHash} or /api/v1/approvals/{txHash}/{action}
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/approvals/")
 	parts := strings.Split(path, "/")
 	if len(parts) < 1 {
 		c.responder.Error(w, http.StatusBadRequest, "invalid request path")
@@ -618,7 +618,7 @@ func (c *AuthController) handleApprovalPage(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Extract transaction hash from URL path
-	txHash := strings.TrimPrefix(r.URL.Path, "/approve/")
+	txHash := strings.TrimPrefix(r.URL.Path, "/public/approve/")
 	if txHash == "" {
 		http.Error(w, "transaction hash required", http.StatusBadRequest)
 		return
@@ -850,7 +850,7 @@ func (c *AuthController) handleListSuspendedTransactions(w http.ResponseWriter, 
 // Browser Auth Handlers (Public Router)
 // =============================================================================
 
-func (c *AuthController) handleAuthLoginVerify(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handlePublicAuthLoginVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -901,7 +901,7 @@ func (c *AuthController) handleAuthLoginVerify(w http.ResponseWriter, r *http.Re
 	})
 }
 
-func (c *AuthController) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("g8e_session")
 	if err == nil {
 		// Best effort delete web session from DB
@@ -922,7 +922,7 @@ func (c *AuthController) handleAuthLogout(w http.ResponseWriter, r *http.Request
 	c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }
 
-func (c *AuthController) handleBootstrap(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return

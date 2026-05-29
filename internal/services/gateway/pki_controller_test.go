@@ -161,7 +161,7 @@ func TestPKIController_HandlePKIHubBundle(t *testing.T) {
 				if tc.setup != nil {
 					tc.setup(t, c, nil)
 				}
-				c.handlePKIHubBundle(rr, req)
+				c.handlePKICABundle(rr, req)
 			})
 		})
 	}
@@ -283,13 +283,13 @@ func TestPKIController_HandlePKISignCSR(t *testing.T) {
 				if tc.setup != nil {
 					tc.setup(t, c, nil)
 				}
-				c.handlePKISignCSR(rr, req)
+				c.handlePKICSRSign(rr, req)
 			})
 		})
 	}
 }
 
-func TestPKIController_HandlePKIRevoke(t *testing.T) {
+func TestPKIController_HandlePKICertificatesRevoke(t *testing.T) {
 	validRevokePayload := map[string]string{
 		"serial": testSerial,
 		"reason": testRevocationReason,
@@ -348,7 +348,7 @@ func TestPKIController_HandlePKIRevoke(t *testing.T) {
 				if tc.setup != nil {
 					tc.setup(t, c, nil)
 				}
-				c.handlePKIRevoke(rr, req)
+				c.handlePKICertificatesRevoke(rr, req)
 			})
 		})
 	}

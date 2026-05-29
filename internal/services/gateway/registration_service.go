@@ -207,11 +207,7 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 	}
 
 	// Complete registration with CSR
-	linkData := &models.DeviceLinkData{
-		UserID:         userID,
-		OrganizationID: organizationID,
-	}
-	resp, err := s.completeRegistration(operator, linkData, req, sanitizedFingerprint)
+	resp, err := s.completeRegistration(operator, userID, organizationID, req, sanitizedFingerprint)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +236,7 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 }
 
 // completeRegistration performs the common registration logic after operator slot is resolved.
-func (s *RegistrationService) completeRegistration(operator *models.OperatorDocumentGo, linkData *models.DeviceLinkData, req models.OperatorRegistrationRequest, sanitizedFingerprint string) (*models.OperatorRegistrationResponse, error) {
+func (s *RegistrationService) completeRegistration(operator *models.OperatorDocumentGo, userID, organizationID string, req models.OperatorRegistrationRequest, sanitizedFingerprint string) (*models.OperatorRegistrationResponse, error) {
 	// Create operator session
 	operatorSessionID := uuid.NewString()
 	operatorSessionSummary := &models.SessionSummary{
@@ -271,11 +267,10 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 			return nil, fmt.Errorf("invalid CSR PEM format")
 		}
 
-		// Use operator.OrganizationID instead of linkData.OrganizationID to ensure
-		// the certificate SPIFFE ID matches the operator document in the database
+		// Use operator.OrganizationID, fallback to provided organizationID
 		orgID := operator.OrganizationID
 		if orgID == "" {
-			orgID = linkData.OrganizationID
+			orgID = organizationID
 		}
 		certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, orgID, operator.ID, "", operatorSessionID)
 		if err != nil {
@@ -298,7 +293,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		}
 
 		var err error
-		cliCertPEM, cliCertChainPEM, err = s.pki.SignCSR(req.CLICSR, constants.LeafTypeCLI, "", "", linkData.UserID, cliSessionID)
+		cliCertPEM, cliCertChainPEM, err = s.pki.SignCSR(req.CLICSR, constants.LeafTypeCLI, "", "", userID, cliSessionID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign CLI CSR: %w", err)
 		}
@@ -332,8 +327,8 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	err = s.sessionSvc.PersistSessions(
 		cliSessionID,
 		operatorSessionID,
-		linkData.UserID,
-		linkData.OrganizationID,
+		userID,
+		organizationID,
 		operator.ID,
 		sanitizedFingerprint,
 		cliCertFingerprint,

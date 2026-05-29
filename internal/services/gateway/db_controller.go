@@ -14,8 +14,6 @@
 package gateway
 
 import (
-	"crypto/ed25519"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -61,7 +59,7 @@ func (c *DBController) readBody(r *http.Request) ([]byte, error) {
 	return io.ReadAll(r.Body)
 }
 
-func (c *DBController) handleSettings(w http.ResponseWriter, r *http.Request) {
+func (c *DBController) handleDataSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		doc, err := c.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
@@ -96,8 +94,8 @@ func (c *DBController) handleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *DBController) handleDB(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/db/")
+func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/data/")
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) == 0 || parts[0] == "" {
 		c.responder.Error(w, http.StatusBadRequest, "collection required")
@@ -355,7 +353,7 @@ func (c *DBController) handleAuditReceiptsExport(w http.ResponseWriter, r *http.
 	}
 }
 
-func (c *DBController) handleTrustedSigners(w http.ResponseWriter, r *http.Request) {
+func (c *DBController) handleGovernanceSigners(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		signers, err := c.db.ListTrustedSigners()
@@ -394,8 +392,8 @@ func (c *DBController) handleTrustedSigners(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-func (c *DBController) handleTrustedSignerByID(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/api/governance/signers/")
+func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/api/v1/governance/signers/")
 	if id == "" || strings.Contains(id, "/") {
 		c.responder.Error(w, http.StatusBadRequest, "invalid signer id")
 		return
@@ -432,146 +430,8 @@ func (c *DBController) handleTrustedSignerByID(w http.ResponseWriter, r *http.Re
 	}
 }
 
-func (c *DBController) handleAppPolicySigner(w http.ResponseWriter, r *http.Request) {
-	appID := strings.TrimPrefix(r.URL.Path, "/api/admin/app-policies/")
-	appID = strings.TrimSuffix(appID, "/signer")
-	appID = strings.TrimSuffix(appID, "/")
-	if appID == "" {
-		c.responder.Error(w, http.StatusBadRequest, "app_id required")
-		return
-	}
-
-	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	userID, ok := r.Context().Value(userIDKey).(string)
-	if !ok || userID == "" {
-		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	user, err := c.userSvc.GetByID(userID)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
-		return
-	}
-	if user == nil || !user.IsBootstrap {
-		c.responder.Error(w, http.StatusForbidden, "admin-only: bootstrap user required")
-		return
-	}
-
-	policyDoc, err := c.db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, "failed to check app policy")
-		return
-	}
-	if policyDoc == nil {
-		c.responder.Error(w, http.StatusForbidden, "app policy not found (deny-all default)")
-		return
-	}
-
-	body, err := c.readBody(r)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
-		return
-	}
-
-	var req struct {
-		PublicKey string `json:"public_key_hex"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
-		return
-	}
-	if req.PublicKey == "" {
-		c.responder.Error(w, http.StatusBadRequest, "public_key_hex required")
-		return
-	}
-
-	pubKeyBytes, err := hex.DecodeString(req.PublicKey)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid hex public key")
-		return
-	}
-	if len(pubKeyBytes) != ed25519.PublicKeySize {
-		c.responder.Error(w, http.StatusBadRequest, "invalid public key size")
-		return
-	}
-
-	signer := models.TrustedSigner{
-		ID:        appID,
-		PublicKey: req.PublicKey,
-		AddedAt:   time.Now().UTC(),
-		Enabled:   true,
-	}
-
-	if err := c.db.AddTrustedSigner(signer); err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	c.logger.Info("External app L2 signer registered by admin", "app_id", appID)
-	c.responder.JSON(w, http.StatusCreated, models.StatusResponse{Status: constants.GatewayModeStatusOK})
-}
-
-func (c *DBController) handleRevokeApp(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	userID, ok := r.Context().Value(userIDKey).(string)
-	if !ok || userID == "" {
-		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	user, err := c.userSvc.GetByID(userID)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
-		return
-	}
-	if user == nil || !user.IsBootstrap {
-		c.responder.Error(w, http.StatusForbidden, "admin-only: bootstrap user required")
-		return
-	}
-
-	body, err := c.readBody(r)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
-		return
-	}
-
-	var req struct {
-		AppID string `json:"app_id"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
-		return
-	}
-	if req.AppID == "" {
-		c.responder.Error(w, http.StatusBadRequest, "app_id required")
-		return
-	}
-
-	_, err = c.db.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), req.AppID)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, "failed to delete app policy")
-		return
-	}
-
-	_, err = c.db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), req.AppID)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, "failed to delete trusted signer")
-		return
-	}
-
-	c.logger.Info("External app revoked by admin", "app_id", req.AppID)
-	c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
-}
-
 func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/kv/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/kv/")
 	if path == "" {
 		c.responder.Error(w, http.StatusBadRequest, "key required")
 		return
@@ -833,7 +693,7 @@ func (c *DBController) verifyBlobOwnership(r *http.Request, namespace string) er
 }
 
 func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/blob/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/blobs/")
 	if path == "" {
 		c.responder.Error(w, http.StatusBadRequest, "namespace required")
 		return

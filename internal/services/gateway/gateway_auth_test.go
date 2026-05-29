@@ -316,7 +316,6 @@ func TestPublicRouteRegistry_NonPublicPaths(t *testing.T) {
 		"/api/operators",
 		"/ws/",
 		"/api/db",
-		"/api/device-links",
 	}
 
 	for _, path := range privatePaths {

@@ -118,7 +118,7 @@ func platformStartCmd() *cobra.Command {
 			cmd.Println(" 3. TARGETED ACTIONABLE NEXT STEPS")
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println("  [Local CLI Auth]    : ./g8e auth login")
-			cmd.Println("  [Bind Satellite]    : ./g8e security pki enroll --device-token <TOKEN>")
+			cmd.Println("  [Bind Satellite]    : ./g8e security pki enroll")
 			cmd.Println("  [View Live Ledger]  : ./g8e platform logs --follow")
 			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")

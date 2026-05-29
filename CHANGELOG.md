@@ -241,7 +241,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 - **Interactive Platform Manager:** New interactive menu for platform management, simplifying setup, environment configuration, and e2e testing.
 
 ### Changed
-- **Evals Refactor:** Streamlined evaluation device token management to be runtime-configurable.
+- **Evals Refactor:** Streamlined evaluation management to be runtime-configurable.
 - **Improved Setup:** Enhanced environment variable handling and validation during bootstrap.
 
 ### Fixed
@@ -251,7 +251,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 
 ### Added
 - **Ollama Model Query:** Added support for querying available Ollama models during setup with improved UI feedback.
-- **Runtime Device Tokens:** Evals device tokens are now set at runtime instead of build time for improved security and flexibility.
+- **Runtime Configuration:** Evals configuration is now set at runtime instead of build time for improved security and flexibility.
 - **Host-Native Testing:** Platform now runs component tests host-native without Docker, improving test reliability and CI performance.
 
 ### Changed
