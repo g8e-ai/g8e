@@ -158,21 +158,18 @@ PLATFORMS := linux/amd64 linux/arm64 linux/386
 build:
 	@echo "Building g8e..."
 	@mkdir -p bin
-	@echo "Preparing build directory..."
-	@rm -rf .build/cmd/g8eo
-	@mkdir -p .build/cmd/g8eo
-	@cp -r cmd/g8eo/* .build/cmd/g8eo/
+	@echo "Building from: cmd/g8eo"
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
 	PLATFORM=$$(uname -s)_$$(uname -m); \
-	if go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./.build/cmd/g8eo; then \
-		rm -rf .build; \
+	echo "Building output: bin/g8e"; \
+	if go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo; then \
 		ln -sf bin/g8e g8e; \
 		sha256sum bin/g8e > bin/g8e.sha256; \
-		echo "Build complete. Checksum: bin/g8e.sha256"; \
+		echo "Build complete. Output: bin/g8e"; \
+		echo "Checksum: bin/g8e.sha256"; \
 	else \
-		rm -rf .build; \
 		exit 1; \
 	fi
 
@@ -180,10 +177,6 @@ build:
 build-compressed: upx-install
 	@echo "Building g8e with compression for $(PLATFORMS)..."
 	@mkdir -p bin
-	@echo "Preparing build directory..."
-	@rm -rf .build/cmd/g8eo
-	@mkdir -p .build/cmd/g8eo
-	@cp -r cmd/g8eo/* .build/cmd/g8eo/
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
@@ -192,12 +185,11 @@ build-compressed: upx-install
 		GOARCH=$${platform#*/}; \
 		BINARY=bin/g8e-$$GOOS-$$GOARCH; \
 		echo "Building $$platform -> $$BINARY..."; \
-		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$platform" -o $$BINARY ./.build/cmd/g8eo || exit 1; \
+		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$platform" -o $$BINARY ./cmd/g8eo || exit 1; \
 		echo "Compressing $$BINARY with UPX..."; \
 		$(UPX) --best --lzma $$BINARY; \
 		sha256sum $$BINARY > $$BINARY.sha256; \
 	done
-	@rm -rf .build
 	@HOST_OS=$$(go env GOOS); \
 	HOST_ARCH=$$(go env GOARCH); \
 	if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH ]; then \
