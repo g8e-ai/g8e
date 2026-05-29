@@ -309,16 +309,19 @@ func testChaosCmd() *cobra.Command {
 			}
 
 			cmd.Println("Running chaos tests...")
-			chaosPath := filepath.Join(cfg.ProjectRoot, "cmd", "chaos_tester")
-			goArgs := []string{"run", chaosPath}
+			chaosArgs := []string{"chaos"}
 			if count > 0 {
-				goArgs = append(goArgs, "--count", fmt.Sprintf("%d", count))
+				chaosArgs = append(chaosArgs, "--count", fmt.Sprintf("%d", count))
 			}
-			goCmd := exec.Command("go", goArgs...)
-			goCmd.Stdout = os.Stdout
-			goCmd.Stderr = os.Stderr
-			goCmd.Dir = cfg.ProjectRoot
-			return goCmd.Run()
+			g8ePath := filepath.Join(cfg.ProjectRoot, "bin", "g8e")
+			if _, err := os.Stat(g8ePath); os.IsNotExist(err) {
+				g8ePath = filepath.Join(cfg.ProjectRoot, "g8e")
+			}
+			chaosCmd := exec.Command(g8ePath, chaosArgs...)
+			chaosCmd.Stdout = os.Stdout
+			chaosCmd.Stderr = os.Stderr
+			chaosCmd.Dir = cfg.ProjectRoot
+			return chaosCmd.Run()
 		},
 	}
 

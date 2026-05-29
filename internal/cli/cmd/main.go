@@ -38,6 +38,8 @@ The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
 		dataCmd(),
 		testCmd(),
 		securityCmd(),
+		auditorCmd(),
+		chaosCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {

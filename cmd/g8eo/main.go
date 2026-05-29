@@ -75,6 +75,8 @@ func main() {
 		"setup":    true,
 		"vars":     true,
 		"test":     true,
+		"auditor":  true,
+		"chaos":    true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
@@ -933,24 +935,16 @@ func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID stri
 
 // runMCPServe runs the MCP stdio JSON-RPC proxy to the Operator's mTLS HTTP API.
 func runMCPServe(endpointURL, pkiDir, logLevel string) {
-	// 1. Resolve mTLS certificates
+	// 1. Resolve mTLS certificates - must be explicitly provided via environment variables
 	cliCertFile := os.Getenv("G8E_CLI_CERT")
 	if cliCertFile == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to get user home directory: %v\n", err)
-			os.Exit(1)
-		}
-		cliCertFile = filepath.Join(home, ".g8e", "cli.crt")
+		fmt.Fprintf(os.Stderr, "Error: G8E_CLI_CERT environment variable is required for MCP serve mode\n")
+		os.Exit(1)
 	}
 	cliKeyFile := os.Getenv("G8E_CLI_KEY")
 	if cliKeyFile == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to get user home directory: %v\n", err)
-			os.Exit(1)
-		}
-		cliKeyFile = filepath.Join(home, ".g8e", "cli.key")
+		fmt.Fprintf(os.Stderr, "Error: G8E_CLI_KEY environment variable is required for MCP serve mode\n")
+		os.Exit(1)
 	}
 
 	// 2. Resolve trust bundle

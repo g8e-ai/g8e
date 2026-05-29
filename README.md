@@ -211,7 +211,7 @@ g8e is the mandatory governance substrate. Agent ensembles and Dashboard (g8ed) 
 ## Documentation
 
 - **[Getting Started](docs/guides/getting_started.md)** · **[Position Paper](docs/core/position_paper.md)**
-- **[Protocol](docs/architecture/protocol.md)** · **[Operator (g8eo)](docs/architecture/operator.md)** · **[Gateway (g8eg)](docs/architecture/gateway.md)**
+- **[Protocol](docs/architecture/g8e.md)** · **[Operator (g8eo)](docs/architecture/operator.md)** · **[Gateway (g8eg)](docs/architecture/gateway.md)**
 - **[Guides](docs/guides/)** · **[Reference](docs/reference/)** · **[Contributing](CONTRIBUTING.md)**
 
 ---

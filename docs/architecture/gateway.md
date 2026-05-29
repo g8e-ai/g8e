@@ -14,14 +14,14 @@ The g8e Protocol substrate is composed of two logically distinct roles, both imp
 ## Core Principles
 
 - **5-Layer Governance Bedrock**: Every transaction must pass through five mandatory, fail-closed layers:
-    - **L1 Doctrine**: Technical bedrock (Hard Gates, threat detection).
-    - **L2 Consensus**: Multi-agent verification (Ed25519 signatures from independent consensus agents).
-    - **L3 Notary**: Human-in-the-loop authorization (WebAuthn/Passkey).
-    - **L4 Warden**: Pre-dispatch verification gate (Hash, Expiry, Nonce, State Root).
-    - **L5 Actuator**: Execution boundary (Single fail-closed dispatch path, signed ActionReceipts).
+    - **L1Doctrine**: Technical bedrock (Hard Gates, threat detection).
+    - **L2Consensus**: Multi-agent verification (Ed25519 signatures from independent consensus agents).
+    - **L3Notary**: Human-in-the-loop authorization (WebAuthn/Passkey or mTLS certificate fingerprint).
+    - **L4Warden**: Pre-dispatch verification gate (Hash, Expiry, Nonce, State Root).
+    - **L5Actuator**: Execution boundary (Single fail-closed dispatch path, signed ActionReceipts).
 - **mTLS-Everywhere**: All communication is strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts.
 - **Local-First Audit (LFAA)**: The target host remains the source of truth for command history and file mutations, stored in a tamper-evident local ledger.
-- **Canonical JSON (GovernanceEnvelope)**: Every mutation action is governed by a canonical JSON `GovernanceEnvelope`. This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
+- **Canonical JSON (GovernanceEnvelope)**: Every mutation action is governed by a canonical JSON `GovernanceEnvelope` (protojson). This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
 - **Transaction Invariants**: Every transaction is identified by a deterministic `transaction_hash` computed from its content. The envelope `id` must match this hash for the transaction to be valid.
 - **Protocol vs Implementation**: The protocol is the Gateway. Conforming implementations of the Governance Gateway and g8e Operator enforce these invariants.
 - **Sovereign Authority (PKI)**: The Governance Gateway owns the platform's PKI and is the only entity permitted to sign certificates.
@@ -41,11 +41,11 @@ flowchart TD
     subgraph Hub ["Governance Gateway (PDP)"]
         direction TB
         subgraph Layers ["5-Layer Governance"]
-            L1["L1 Doctrine"]
-            L2["L2 Consensus"]
-            L3["L3 Notary"]
-            L4["L4 Warden"]
-            L5["L5 Actuator"]
+            L1["L1Doctrine"]
+            L2["L2Consensus"]
+            L3["L3Notary"]
+            L4["L4Warden"]
+            L5["L5Actuator"]
             
             L1 --> L2 --> L3 --> L4 --> L5
         end
@@ -83,28 +83,30 @@ By passing `--doctrine`, `--consensus`, or `--notary`, the binary transforms int
     - **Consensus** (`--consensus`): L1/L2 enforced, L3 audited.
     - **Notary** (`--notary`): L1/L2/L3 strictly enforced.
 - **Capabilities**:
-    - **Gateway API** - `POST /api/governance/envelope` is the only customer-facing mutation entry point.
-    - **Document Store** - JSON document CRUD on a Collection/ID pattern.
-    - **KV Store** - TTL-aware ephemeral state with `GLOB` pattern scanning.
-    - **Blob Store** - Binary persistence for attachments and certificate material.
-    - **Pub/Sub Broker** - High-performance WebSocket fan-out. Mutation channels (`cmd:*`) are governed.
+    - **Gateway API** - `POST /api/v1/governance/envelopes` is the only customer-facing mutation entry point.
+    - **Document Store** - JSON document CRUD on a Collection/ID pattern via `/api/v1/db/*`.
+    - **KV Store** - TTL-aware ephemeral state with `GLOB` pattern scanning via `/api/v1/kv/*`.
+    - **Blob Store** - Binary persistence for attachments and certificate material via `/api/v1/blob/*`.
+    - **Pub/Sub Broker** - High-performance WebSocket fan-out via `/ws/v1/pubsub`. Mutation channels (`cmd:*`) are governed.
     - **Root CA / PKI** - Issues mTLS certificates via CSR-based enrollment with SPIFFE URI SAN identity.
     - **Audit Authority** - Append-only encrypted log of every event and signed `ActionReceipt`.
 
 ### Port Topology
 
-The Governance Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements **must not** share a port.
+The Governance Gateway exposes three logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements **must not** share a port.
 
 Default ports are sourced from `internal/constants/ports.go`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **mTLS API + Pub/Sub** | `8440` (mTLS) | mTLS + URI SAN | `/api/governance/envelope`, `/db/*`, `/kv/*`, `/blob/*`, `/pubsub/publish`, and `/ws/pubsub` real-time fan-out. |
+| **mTLS API + Pub/Sub** | `8440` (mTLS) | mTLS + URI SAN | `/api/v1/governance/envelopes`, `/api/v1/db/*`, `/api/v1/kv/*`, `/api/v1/blob/*`, `/api/v1/pubsub/publish`, and `/ws/v1/pubsub` real-time fan-out. |
+| **Bootstrap Port** | `8441` (TLS) | CSR Enrollment | Certificate Signing Requests, CA bundle discovery, and initial provisioning. |
 | **Public Port** | `8443` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery for browser/BYO bootstrap. |
 
 #### Port Constraints
 
 - **mTLS Surface** (`8440`): Requires `tls.RequireAndVerifyClientCert`. This is the primary execution boundary.
+- **Bootstrap Surface** (`8441`): Requires `tls.RequireAndVerifyClientCert` (for re-enrollment) or anonymous TLS (for initial CSR).
 - **Public Surface** (`8443`): Serves TLS with WebAuthn/Passkey authentication for browser-based access.
 - **Collision Prevention**: The gateway fails startup if incompatible surfaces (e.g., mTLS and Public) are assigned to the same port, as this would force a downgrade to `VerifyClientCertIfGiven`.
 
@@ -112,20 +114,20 @@ Default ports are sourced from `internal/constants/ports.go`:
 
 ## 5-Layer Verification Sequence
 
-Every transaction submitted to `POST /api/governance/envelope` must pass through the following layers:
+Every transaction submitted to `POST /api/v1/governance/envelopes` must pass through the following layers:
 
-### L1 Doctrine (Hard Gates)
+### L1Doctrine (Hard Gates)
 The technical bedrock. Enforces forbidden patterns (e.g., `sudo`, `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.
 
-### L2 Consensus
-A Byzantine Fault Tolerant consensus layer where independent agents verify the intent and safety of the command. In Gateway mode, this can be configured to require Ed25519 signatures from trusted consensus agents. The specific consensus implementation (e.g., Tribunal) is an application-layer concern.
+### L2Consensus (Tribunal)
+A Byzantine Fault Tolerant consensus layer where independent agents verify the intent and safety of the command. In Gateway mode, this requires Ed25519 signatures from trusted consensus agents. The specific consensus implementation (e.g., Tribunal) is an application-layer concern that provides the signatures.
 
-### L3 Notary (Human Authorization)
+### L3Notary (Human Authorization)
 The human-in-the-loop layer. Requires a cryptographic proof of human intent.
-- **BYO Clients**: Use WebAuthn/Passkey proofs.
-- **CLI Sessions**: Use mTLS certificate fingerprints bound to the session.
+- **BYO Clients**: Use WebAuthn/Passkey proofs (FIDO2).
+- **CLI Sessions**: Use mTLS certificate fingerprints or Ed25519 signatures bound to the session.
 
-### L4 Warden (Pre-Dispatch Verification)
+### L4Warden (Pre-Dispatch Verification)
 The final pre-execution check. Verifies:
 - **Transaction Hash**: `envelope.id` must match computed hash of content.
 - **Expiry**: `expires_at` must be in the future.
@@ -133,7 +135,7 @@ The final pre-execution check. Verifies:
 - **State Root**: `state_merkle_root` (if provided) must match the Gateway's current state root.
 - **Signer Trust**: Verifies L2/L3 signatures against trusted keys.
 
-### L5 Actuator (Execution Boundary)
+### L5Actuator (Execution Boundary)
 The single fail-closed dispatch path.
 - **Execution**: Dispatches the verified payload to the downstream execution handler (e.g., MCP server).
 - **Audit**: Persists a `console_audit` record and a signed `ActionReceipt`.
@@ -204,11 +206,11 @@ This architecture ensures the Operator never requires outbound internet access t
 | Gateway service | `/home/bob/g8e/internal/services/gateway/gateway_service.go` |
 | Coordination Store | `/home/bob/g8e/internal/services/gateway/gateway_db.go` |
 | Pub/Sub broker | `/home/bob/g8e/internal/services/gateway/gateway_pubsub.go` |
-| L1 Doctrine | `/home/bob/g8e/internal/services/governance/l1_doctrine.go` |
-| L2 Consensus | `/home/bob/g8e/internal/services/governance/l2_consensus.go` |
-| L3 Notary | `/home/bob/g8e/internal/services/governance/l3_notary.go` |
-| L4 Warden | `/home/bob/g8e/internal/services/governance/l4_warden.go` |
-| L5 Actuator | `/home/bob/g8e/internal/services/governance/l5_actuator.go` |
+| L1Doctrine | `/home/bob/g8e/internal/services/governance/l1_doctrine.go` |
+| L2Consensus | `/home/bob/g8e/internal/services/governance/l2_consensus.go` |
+| L3Notary | `/home/bob/g8e/internal/services/governance/l3_notary.go` |
+| L4Warden | `/home/bob/g8e/internal/services/governance/l4_warden.go` |
+| L5Actuator | `/home/bob/g8e/internal/services/governance/l5_actuator.go` |
 | PKI / CertStore | `/home/bob/g8e/internal/services/gateway/gateway_certs.go` |
 | Secret Manager | `/home/bob/g8e/internal/services/gateway/secret_manager.go` |
 | Workload identity | `/home/bob/g8e/protocol/workload_identity.go` |
@@ -233,5 +235,5 @@ This architecture ensures the Operator never requires outbound internet access t
 
 ## Related Documentation
 
-- [**g8e Protocol**](./protocol.md) - The wire contract and governance hierarchy.
+- [**g8e Protocol**](./g8e.md) - The wire contract and governance hierarchy.
 - [**g8e Operator**](./operator.md) - Sovereign host-side execution agent and MCP server.

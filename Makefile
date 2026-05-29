@@ -71,14 +71,14 @@ help:
 	@echo "Cleanup:"
 	@echo "  clean         Remove all build artifacts and runtime state"
 	@echo ""
-	@echo "Demo:"
-	@echo "  demo          Build and run the AI agent demo"
-	@echo "  demo-build    Build the AI agent demo binary"
-	@echo "  demo-run      Run the AI agent demo (requires build first)"
-	@echo "  demo-clean    Remove demo build artifacts"
+	@echo "Governance Auditor (via CLI):"
+	@echo "  ./g8e auditor list              List available scenarios"
+	@echo "  ./g8e auditor run              Run scenarios against a real Gateway/Operator"
+	@echo "  ./g8e auditor audit            Audit signed receipts from the Operator"
+	@echo "  ./g8e auditor self-test        Start self-contained gateway+operator and run tests"
 	@echo ""
-	@echo "Governance Auditor:"
-	@echo "  test-g8ea    Build and run the g8ea test suite"
+	@echo "Chaos Tester (via CLI):"
+	@echo "  ./g8e chaos --count N          Generate governance events against the audit stack"
 
 # =============================================================================
 # PROTOCOL GENERATION
@@ -312,45 +312,6 @@ clean:
 	@rm -rf build/
 	@rm -f *.sha256
 	@echo "Clean complete."
-
-# =============================================================================
-# DEMO
-# =============================================================================
-DEMO_DIR := demo/ai-agent
-DEMO_BIN := $(DEMO_DIR)/demo-agent
-
-.PHONY: demo
-demo: demo-build demo-run
-
-.PHONY: demo-build
-demo-build:
-	@echo "Building AI agent demo..."
-	@cd $(DEMO_DIR) && go build -o demo-agent .
-	@echo "Demo binary built: $(DEMO_BIN)"
-
-.PHONY: demo-run
-demo-run:
-	@echo "Running AI agent demo..."
-	@cd $(DEMO_DIR) && ./demo-agent
-
-.PHONY: demo-clean
-demo-clean:
-	@echo "Cleaning demo build artifacts..."
-	@rm -f $(DEMO_BIN)
-	@echo "Demo clean complete."
-
-# =============================================================================
-# G8EA (Governance Auditor)
-# =============================================================================
-G8EA_DIR := cmd/g8ea
-G8EA_BIN := $(G8EA_DIR)/g8ea
-
-.PHONY: test-g8ea
-test-g8ea:
-	@echo "Building g8ea..."
-	@cd $(G8EA_DIR) && go build -o g8ea .
-	@echo "g8ea binary built: $(G8EA_BIN)"
-	@echo "To run g8ea: ./$(G8EA_BIN) list"
 
 
 # =============================================================================

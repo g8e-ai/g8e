@@ -1,6 +1,6 @@
 # g8e Codemap
 
-Structural reference. For protocol semantics see [/home/bob/g8e/docs/architecture/protocol.md](/home/bob/g8e/docs/architecture/protocol.md), for gateway architecture see [/home/bob/g8e/docs/architecture/gateway.md](/home/bob/g8e/docs/architecture/gateway.md), for operator details see [/home/bob/g8e/docs/architecture/operator.md](/home/bob/g8e/docs/architecture/operator.md).
+Structural reference. For protocol semantics see [/home/bob/g8e/docs/architecture/g8e.md](/home/bob/g8e/docs/architecture/g8e.md), for gateway architecture see [/home/bob/g8e/docs/architecture/gateway.md](/home/bob/g8e/docs/architecture/gateway.md), for operator details see [/home/bob/g8e/docs/architecture/operator.md](/home/bob/g8e/docs/architecture/operator.md).
 
 ## Dependency Graph
 
@@ -94,9 +94,7 @@ Each subdirectory produces one binary. All import `internal/` and `protocol/`.
 ```text
 cmd/
 ├── g8e/main.go                     # Platform CLI (delegates to internal/cli/cmd)
-├── g8eo/main.go                    # Operator binary (multi-mode: gateway, mcp-serve, insecure, outbound)
-├── g8ea/main.go                    # Auditor (universal agent emulator for Gateway/Operator)
-└── chaos_tester/main.go            # Chaos / fuzz testing harness
+└── g8eo/main.go                    # Operator binary (multi-mode: gateway, mcp-serve, insecure, outbound)
 ```
 
 ## internal/

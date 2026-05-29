@@ -10,7 +10,7 @@ The g8e security model is founded on two core pillars:
 
 ## 1. Authentication & Workload Identity
 
-g8e uses an internal PKI (Public Key Infrastructure) to issue and manage certificates. The **Governance Gateway** acts as the Certificate Authority (CA).
+g8e uses an internal PKI (Public Key Infrastructure) to issue and manage certificates. The **Governance Gateway** (PDP) acts as the Certificate Authority (CA).
 
 ### Workload Identity (SPIFFE)
 
@@ -21,13 +21,13 @@ Every component in the system is assigned a SPIFFE ID, which is embedded as a Un
 | **Operator** | `spiffe://g8e.local/operator/<org_id>/<operator_id>/<operator_session_id>` |
 | **CLI / BYO** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` |
 | **App / Agent** | `spiffe://g8e.local/app/<operator_id>` |
-| **Gateway Hub** | `spiffe://g8e.local/hub/operator-listen` |
+| **Gateway / Hub** | `spiffe://g8e.local/hub/operator-listen` |
 
 ### mTLS Enforcement
 
 The Governance Gateway enforces TLS 1.3 for all L7 communication.
 -   **Strict mTLS**: The gateway requires and verifies client certificates (`tls.RequireAndVerifyClientCert`).
--   **Revocation**: The `PKIAuthority` service supports certificate revocation via the `RevokeCertificate` method. Revoked certificates are tracked in the `revoked_certificates` collection and checked during session validation.
+-   **Revocation**: Certificates are checked against a `revoked_certificates` collection. Revocation is enforced at the Gateway.
 -   **Identity Binding**: Middleware verifies that the SPIFFE ID in the client certificate matches the identity claims (e.g., `operator_session_id`) inside the `GovernanceEnvelope`.
 
 ### Enrollment & Bootstrap (CSR-based)
@@ -38,54 +38,51 @@ Clients enroll in the platform using a Certificate Signing Request (CSR) bootstr
 3.  **Registration**: The Gateway validates the CSR and binds the certificate to a user identity via invitation-based JIT provisioning.
 4.  **Session Issuance**: Upon successful enrollment, the Gateway issues an `operator_session_id` or `cli_session_id`.
 
-## 2. 5-Layer Verification Sequence
+## 2. 5-Layer Verification Sequence (The Gauntlet)
 
-g8e uses a 5-layer governance model enforced by the **Governance Substrate**. This model replaces traditional RBAC with a cryptographic proof-of-intent verification sequence.
+g8e implements a deterministic 5-layer governance sequence. Every mutation must pass through all active layers before execution.
 
 ### Layer 1: Technical Bedrock (L1Doctrine)
-*Implementation: `/home/bob/g8e/internal/services/governance/l1_doctrine.go`*
+*Implementation: `internal/services/governance/l1_doctrine.go`*
 
-L1 is the foundational layer that executes deterministic security rules. It is always active and cannot be bypassed.
--   **Forbidden Patterns**: Uses Protobuf field options (`(g8e.common.v1).forbidden_patterns`) to reject strings like `sudo`, `rm -rf /`, etc.
--   **MITRE Threat Detection**: Analyzes payloads against MITRE ATT&CK patterns (e.g., discovery, persistence, exfiltration).
--   **Hard Gates**: Rejects any transaction that violates doctrine before it reaches L2 or L3.
+L1 is the foundational layer that executes deterministic security rules.
+-   **Forbidden Patterns**: Uses Protobuf field options (`forbidden_patterns`) to reject strings like `sudo`, `rm -rf /`, etc.
+-   **MITRE Threat Detection**: Analyzes payloads against MITRE ATT&CK patterns.
+-   **Hard Gates**: Rejects transactions immediately upon violation; cannot be bypassed by L2 or L3.
 
 ### Layer 2: Consensus (L2Consensus)
-*Implementation: `/home/bob/g8e/internal/services/governance/l4_warden.go` (verifyL2Posture)*
+*Implementation: `internal/services/governance/l2_consensus.go`*
 
-L2 provides cryptographic signature verification for consensus-based authorization.
--   **Ed25519 Signatures**: Verifies ED25519 signatures on the envelope's `governance.l2.consensus_signature` field.
--   **Trusted Signers**: Loads trusted L2 signer public keys from a `SignerStore` (filesystem or in-memory).
--   **Posture-Aware Enforcement**: Depending on the configured governance posture, L2 signatures may be optional (Doctrine posture) or required (Consensus/Notary postures).
--   **App Policy Bypass**: External applications with `AppPolicy` can bypass L3 requirements for specific intents via `auto_approve_intents`.
+L2 provides multi-agent cryptographic verification of intent.
+-   **Ed25519 Signatures**: Verifies ED25519 signatures over the `transaction_hash|decision`.
+-   **Trusted Signers**: Requires signatures from trusted agents listed in the `SignerStore`.
+-   **Posture-Aware Enforcement**: Based on the `GovernancePosture`, L2 signatures may be required.
 
 ### Layer 3: Notary (Authorization)
-*Implementation: `/home/bob/g8e/internal/services/governance/l3_notary.go`*
+*Implementation: `internal/services/governance/l3_notary.go`*
 
-L3 is the final human-in-the-loop gate, ensuring explicit human authorization for mutations.
--   **Suspension**: The Gateway suspends any transaction requiring L3 approval, storing it in the `suspended_transactions` pool.
--   **Out-of-Band (OOB) Approval**: The user approves the transaction via:
-    - WebAuthn/Passkey-secured approval page at `/approve/{txHash}`
-    - HTTP API endpoint at `/api/approve/{txHash}` for programmatic approval
--   **L3 Proof Binding**: A successful approval generates an `L3Proof` containing a WebAuthn signature or mTLS certificate fingerprint, cryptographically bound to the `transaction_hash`.
+L3 ensures explicit human authorization for mutations.
+-   **Suspension**: The Gateway suspends transactions requiring L3 approval, storing them in the `suspended_transactions` pool.
+-   **Out-of-Band (OOB) Approval**: The user approves via WebAuthn/Passkey at `/approve/{txHash}` or mTLS certificate fingerprint.
+-   **L3Proof**: A successful approval generates an `L3Proof` cryptographically bound to the `transaction_hash`.
 
 ### Layer 4: Warden (Pre-dispatch Verification)
-*Implementation: `/home/bob/g8e/internal/services/governance/l4_warden.go`*
+*Implementation: `internal/services/governance/l4_warden.go`*
 
-The Warden performs a strict sequence of checks on every `GovernanceEnvelope`:
-1.  **Stateless Validation**: Verifies structural integrity, payload decoding, and L1Doctrine compliance.
-2.  **Hash Verification**: Recomputes the `transaction_hash` from the envelope fields and verifies it matches the `id`.
-3.  **Stateful Validation**: Checks for expiration (`expires_at`) and verifies the `state_merkle_root` matches the current system state.
-4.  **Replay Protection**: Verifies the `nonce` has not been used before using the `ReplayStore`.
-5.  **Posture Enforcement**: Enforces the presence and validity of L2 signatures and L3 proofs based on the configured posture.
+The Warden is the final fail-closed gate before execution. It verifies:
+1.  **Structural Integrity**:Structural integrity, payload decoding, and L1Doctrine compliance.
+2.  **Hash Verification**: `id` and `transaction_hash` must match the recomputed SHA-256 hash.
+3.  **State Root Consistency**: `state_merkle_root` must match the current system state.
+4.  **Replay Protection**: Verifies the `nonce` using the `ReplayStore`.
+5.  **Posture Enforcement**: Enforces L2 and L3 requirements based on the configured `GovernancePosture`.
 
 ### Layer 5: Actuator (Execution Boundary)
-*Implementation: `/home/bob/g8e/internal/services/governance/l5_actuator.go`*
+*Implementation: `internal/services/governance/l5_actuator.go`*
 
-Once verified, the **L5 Actuator** executes the payload within a sovereign boundary.
--   **Rehydration**: Sensitive tokens (PII, API keys) scrubbed by the `Sovereignty Boundary Plane` are re-injected just before execution.
--   **Egress Dispatch**: Dispatches the verified payload to downstream executors (Shell, MCP servers, A2A agents).
--   **Signed Action Receipts**: Upon completion, the Actuator issues an `ActionReceipt` signed by the Operator's identity, providing an immutable proof of execution and result.
+The Actuator represents the execution boundary and final audit commitment.
+-   **Egress Dispatch**: Dispatches the verified payload to downstream executors (Shell, MCP, A2A).
+-   **Action Receipts**: Issues a signed `ActionReceipt` providing immutable proof of the outcome.
+-   **Commitment**: Records the transaction in the `AuditVaultService` and chains it to the ledger.
 
 ## 3. Governance Postures
 
@@ -93,12 +90,13 @@ Postures define which layers of the bedrock are enforced as "fail-closed" gates.
 
 | Posture | L1 (Doctrine) | L2 (Consensus) | L3 (Notary) | Use Case |
 | :--- | :---: | :---: | :---: | :--- |
-| **Doctrine** | Required | Optional | Optional | Local development / Diagnostics |
-| **Consensus** | Required | Required | Optional | Automated pipelines / Trusted agent ensembles |
-| **Notary** | Required | Required | Required | **Production / High-stakes environment (Default)** |
+| **Doctrine** | Required | Optional | Optional | Local Dev / CI |
+| **Consensus** | Required | Required | Optional | Automated Workflows |
+| **Notary** | Required | Required | Required | **Production (Default)** |
 
 ## 4. Sovereignty Boundary Plane
 
-The **Sovereignty Boundary Plane** handles data privacy through the transformation of the `GovernanceEnvelope`:
--   **Scrubbing**: Private data is replaced with opaque tokens before the envelope is sent to external LLMs for reasoning.
--   **Deterministic Rehydration**: The L5 Actuator performs local rehydration of tokens, ensuring that the LLM never sees raw secrets while the execution remains fully governed.
+Handling sensitive data without leaking it to upstream models:
+-   **Scrubbing**: Private data is replaced with opaque tokens before sending to external LLMs.
+-   **Deterministic Rehydration**: The L5 Actuator performs local rehydration of tokens just before execution.
+-   **Data Sovereignty**: Raw secrets never leave the sovereign host environment.
