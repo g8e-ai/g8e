@@ -487,7 +487,7 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 				operatorID := r.Header.Get(constants.HeaderOperatorID)
 				certFingerprint := extractCertFingerprint(r)
 
-				g.storeSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
+				g.StoreSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
 
 				approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 				return CallToolResult{
@@ -889,7 +889,7 @@ func (g *GatewayService) HandleToolsCallSSE(w http.ResponseWriter, r *http.Reque
 			operatorID := r.Header.Get(constants.HeaderOperatorID)
 			certFingerprint := extractCertFingerprint(r)
 
-			g.storeSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
+			g.StoreSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
 
 			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 			g.responder.RPCResponse(w, req.ID, CallToolResult{
@@ -1059,7 +1059,7 @@ func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 				operatorID := r.Header.Get(constants.HeaderOperatorID)
 				certFingerprint := extractCertFingerprint(r)
 
-				g.storeSuspendedTransaction(hash, envelopeBytes, req.SkillName, req.PayloadJSON, userID, operatorID, certFingerprint)
+				g.StoreSuspendedTransaction(hash, envelopeBytes, req.SkillName, req.PayloadJSON, userID, operatorID, certFingerprint)
 
 				approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 				return A2ASuspensionResponse{
@@ -1141,8 +1141,8 @@ func extractCertFingerprint(r *http.Request) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// storeSuspendedTransaction stores a transaction awaiting L3 approval.
-func (g *GatewayService) storeSuspendedTransaction(txHash string, envelope []byte, toolName string, toolArgs json.RawMessage, userID, operatorID string, certFingerprint string) {
+// StoreSuspendedTransaction stores a transaction awaiting L3 approval.
+func (g *GatewayService) StoreSuspendedTransaction(txHash string, envelope []byte, toolName string, toolArgs json.RawMessage, userID, operatorID string, certFingerprint string) {
 	if g.suspendedStore == nil {
 		return
 	}
@@ -1170,8 +1170,8 @@ func (g *GatewayService) GetSuspendedTransaction(txHash string) (*models.Suspend
 	return g.suspendedStore.GetSuspendedTransaction(txHash)
 }
 
-// deleteSuspendedTransaction removes a suspended transaction after approval/rejection.
-func (g *GatewayService) deleteSuspendedTransaction(txHash string) {
+// DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.
+func (g *GatewayService) DeleteSuspendedTransaction(txHash string) {
 	if g.suspendedStore == nil {
 		return
 	}
@@ -1230,7 +1230,7 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 	}
 
 	// Successful execution - remove from the suspension list.
-	g.deleteSuspendedTransaction(txHash)
+	g.DeleteSuspendedTransaction(txHash)
 	return receipt, nil
 }
 

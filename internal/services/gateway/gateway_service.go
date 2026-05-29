@@ -231,7 +231,6 @@ func (ls *GatewayService) initHandlersAndServers() error {
 		AppEnrollment:     appEnrollment,
 		IsReady:           ls.IsReady,
 		IsGovernanceReady: ls.IsGovernanceReady,
-		DocsFS:            nil,
 	})
 
 	// Build a map of ports to identify port assignments.

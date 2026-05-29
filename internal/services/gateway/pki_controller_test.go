@@ -424,6 +424,42 @@ func TestPKIController_ReadBody(t *testing.T) {
 	})
 }
 
+func TestNewPKIController(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+	db := &GatewayDBService{}
+	pki := &PKIAuthority{}
+	appEnrollment := &AppEnrollmentService{}
+	registration := &RegistrationService{}
+	responder := &responder.Responder{}
+
+	controller := newPKIController(cfg, logger, db, pki, appEnrollment, registration, responder)
+
+	assert.NotNil(t, controller)
+	assert.Equal(t, cfg, controller.cfg)
+	assert.Equal(t, logger, controller.logger)
+	assert.Equal(t, db, controller.db)
+	assert.Equal(t, pki, controller.pki)
+	assert.Equal(t, appEnrollment, controller.appEnrollment)
+	assert.Equal(t, registration, controller.registration)
+	assert.Equal(t, responder, controller.responder)
+}
+
+func TestPKIController_HandlePKICABundle(t *testing.T) {
+	t.Parallel()
+	c, _, _ := setupTestPKIController(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/ca-bundle", nil)
+	rr := httptest.NewRecorder()
+
+	c.handlePKICABundle(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "application/x-pem-file", rr.Header().Get("Content-Type"))
+	assert.NotEmpty(t, rr.Body.Bytes())
+}
+
 func mustMarshalJSON(t *testing.T, v interface{}) []byte {
 	t.Helper()
 	b, err := json.Marshal(v)

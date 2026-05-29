@@ -25,6 +25,41 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestNewUserService(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	dbDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	userSvc := NewUserService(db, logger)
+
+	require.NotNil(t, userSvc)
+	require.Equal(t, db, userSvc.db)
+	require.Equal(t, logger, userSvc.logger)
+}
+
+func TestUserService_CreateUser(t *testing.T) {
+	t.Run("Success - creates regular user", func(t *testing.T) {
+		t.Parallel()
+		logger := testutil.NewTestLogger()
+		dbDir := t.TempDir()
+		secretsDir := t.TempDir()
+		db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.Close() })
+
+		userSvc := NewUserService(db, logger)
+		user, err := userSvc.CreateUser()
+		require.NoError(t, err)
+		require.NotNil(t, user)
+		require.False(t, user.IsBootstrap)
+		require.Equal(t, constants.UserStatusActive, user.Status)
+	})
+}
+
 func TestUserService_CreateBootstrapUser(t *testing.T) {
 	t.Run("Success - creates bootstrap user", func(t *testing.T) {
 		t.Parallel()

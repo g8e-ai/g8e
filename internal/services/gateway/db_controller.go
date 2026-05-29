@@ -78,6 +78,10 @@ func (c *DBController) handleDataSettings(w http.ResponseWriter, r *http.Request
 			c.responder.Error(w, http.StatusBadRequest, "invalid body")
 			return
 		}
+		if !json.Valid(body) {
+			c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+			return
+		}
 		var err2 error
 		if r.Method == http.MethodPut {
 			err2 = c.db.DocSet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))

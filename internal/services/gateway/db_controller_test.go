@@ -873,3 +873,308 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 		assert.Error(t, err, "Request without identity should be rejected")
 	})
 }
+
+func TestDBControllerHandleDataSettings(t *testing.T) {
+	dbController, db := setupTestDBController(t)
+
+	t.Run("GET - success", func(t *testing.T) {
+		t.Parallel()
+		// First create settings
+		settings := map[string]string{"mode": "test"}
+		err := db.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
+		require.NoError(t, err)
+		t.Cleanup(func() { db.DocDelete("settings", "platform_settings") })
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/data/settings", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleDataSettings(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), "test")
+	})
+
+	t.Run("PUT - success", func(t *testing.T) {
+		t.Parallel()
+		settings := map[string]string{"mode": "production"}
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/data/settings", bytes.NewReader(mustDocJSON(t, settings)))
+		rr := httptest.NewRecorder()
+		dbController.handleDataSettings(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		t.Cleanup(func() { db.DocDelete("settings", "platform_settings") })
+	})
+
+	t.Run("PATCH - success", func(t *testing.T) {
+		t.Parallel()
+		// First create settings
+		settings := map[string]string{"mode": "test"}
+		err := db.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
+		require.NoError(t, err)
+
+		patch := map[string]string{"mode": "production"}
+		req := httptest.NewRequest(http.MethodPatch, "/api/v1/data/settings", bytes.NewReader(mustDocJSON(t, patch)))
+		rr := httptest.NewRecorder()
+		dbController.handleDataSettings(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		t.Cleanup(func() { db.DocDelete("settings", "platform_settings") })
+	})
+
+	t.Run("Method Not Allowed", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/data/settings", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleDataSettings(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/data/settings", strings.NewReader("{invalid}"))
+		rr := httptest.NewRecorder()
+		dbController.handleDataSettings(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+}
+
+func TestDBControllerHandleAuditReceipts(t *testing.T) {
+	dbController, _ := setupTestDBController(t)
+
+	t.Run("Method Not Allowed", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/audit/receipts", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditReceipts(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("GET by tx_id - not found", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts?tx_id=nonexistent", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditReceipts(rr, req)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("GET list - success with defaults", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditReceipts(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"success":true`)
+	})
+
+	t.Run("GET list - with operator_session_id", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts?operator_session_id=op-123", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditReceipts(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("GET list - with limit and offset", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts?limit=10&offset=5", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditReceipts(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+}
+
+func TestDBControllerHandleAuditReceiptsExport(t *testing.T) {
+	dbController, _ := setupTestDBController(t)
+
+	t.Run("Method Not Allowed", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/audit/receipts/export", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditReceiptsExport(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("GET - success with defaults", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts/export", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditReceiptsExport(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, "application/x-ndjson", rr.Header().Get("Content-Type"))
+	})
+
+	t.Run("GET - with since parameter RFC3339", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts/export?since=2026-01-01T00:00:00Z", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditReceiptsExport(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("GET - with since parameter timestamp", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts/export?since=1704067200000", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditReceiptsExport(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("GET - with limit", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts/export?limit=50", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditReceiptsExport(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+}
+
+func TestDBControllerHandleGovernanceSigners(t *testing.T) {
+	dbController, db := setupTestDBController(t)
+
+	t.Run("GET - success", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleGovernanceSigners(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"success":true`)
+	})
+
+	t.Run("POST - success", func(t *testing.T) {
+		t.Parallel()
+		signer := models.TrustedSigner{
+			ID:        "test-signer-1",
+			PublicKey: strings.Repeat("a", 64),
+			AddedAt:   time.Now().UTC(),
+			Enabled:   true,
+		}
+		body, _ := json.Marshal(signer)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/governance/signers", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		dbController.handleGovernanceSigners(rr, req)
+		assert.Equal(t, http.StatusCreated, rr.Code)
+		t.Cleanup(func() { db.DocDelete("trusted_signers", "test-signer-1") })
+	})
+
+	t.Run("POST - missing id", func(t *testing.T) {
+		t.Parallel()
+		signer := models.TrustedSigner{
+			PublicKey: strings.Repeat("a", 64),
+		}
+		body, _ := json.Marshal(signer)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/governance/signers", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		dbController.handleGovernanceSigners(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "id and public_key_hex required")
+	})
+
+	t.Run("POST - missing public_key", func(t *testing.T) {
+		t.Parallel()
+		signer := models.TrustedSigner{
+			ID: "test-signer-2",
+		}
+		body, _ := json.Marshal(signer)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/governance/signers", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		dbController.handleGovernanceSigners(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "id and public_key_hex required")
+	})
+
+	t.Run("POST - invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/governance/signers", strings.NewReader("{invalid}"))
+		rr := httptest.NewRecorder()
+		dbController.handleGovernanceSigners(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("Method Not Allowed", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/governance/signers", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleGovernanceSigners(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+}
+
+func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
+	dbController, db := setupTestDBController(t)
+
+	t.Run("GET - not found", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers/nonexistent", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleGovernanceSignerByID(rr, req)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("GET - success", func(t *testing.T) {
+		t.Parallel()
+		// First create a signer
+		signer := models.TrustedSigner{
+			ID:        "test-signer-get",
+			PublicKey: strings.Repeat("b", 64),
+			AddedAt:   time.Now().UTC(),
+			Enabled:   true,
+		}
+		signerBytes, _ := json.Marshal(signer)
+		err := db.DocSet("trusted_signers", "test-signer-get", signerBytes)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.DocDelete("trusted_signers", "test-signer-get") })
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers/test-signer-get", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleGovernanceSignerByID(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), "test-signer-get")
+	})
+
+	t.Run("DELETE - success", func(t *testing.T) {
+		t.Parallel()
+		// First create a signer
+		signer := models.TrustedSigner{
+			ID:        "test-signer-delete",
+			PublicKey: strings.Repeat("c", 64),
+			AddedAt:   time.Now().UTC(),
+			Enabled:   true,
+		}
+		signerBytes, _ := json.Marshal(signer)
+		err := db.DocSet("trusted_signers", "test-signer-delete", signerBytes)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/governance/signers/test-signer-delete", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleGovernanceSignerByID(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("DELETE - not found", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/governance/signers/nonexistent", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleGovernanceSignerByID(rr, req)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("Invalid signer id - empty", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers/", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleGovernanceSignerByID(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("Invalid signer id - contains slash", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers/invalid/id", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleGovernanceSignerByID(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("Method Not Allowed", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/governance/signers/test-id", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleGovernanceSignerByID(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+}

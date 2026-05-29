@@ -82,6 +82,16 @@ func TestGatewayService_StateManagement(t *testing.T) {
 		assert.False(t, ls.IsReady())
 	})
 
+	t.Run("IsRunning returns false when not running", func(t *testing.T) {
+		t.Parallel()
+		assert.False(t, ls.IsRunning())
+	})
+
+	t.Run("IsReady returns false when not ready", func(t *testing.T) {
+		t.Parallel()
+		assert.False(t, ls.IsReady())
+	})
+
 	t.Run("State getters are thread-safe", func(t *testing.T) {
 		t.Parallel()
 		// Test that we can call state methods concurrently

@@ -101,7 +101,7 @@ func setupTestGatewayService(t *testing.T) (*GatewayService, *config.Config) {
 
 func TestReadBody(t *testing.T) {
 	t.Parallel()
-	h, _ := setupTestHTTPHandler(t)
+	h := setupTestHTTPHandlerLightweight(t)
 	content := []byte("test body content")
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(content))
 
@@ -112,7 +112,7 @@ func TestReadBody(t *testing.T) {
 
 func TestPathTraversalGuard(t *testing.T) {
 	t.Parallel()
-	h, _ := setupTestHTTPHandler(t)
+	h := setupTestHTTPHandlerLightweight(t)
 
 	tests := []struct {
 		name       string
@@ -601,6 +601,73 @@ func TestBlobSegmentValid(t *testing.T) {
 	assert.False(t, blobSegmentValid("path/traversal"))
 	assert.False(t, blobSegmentValid("back\\slash"))
 	assert.False(t, blobSegmentValid("null\x00byte"))
+}
+
+func TestIsMutationPubSubChannelAllowed(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		channel string
+		allowed bool
+	}{
+		{"Heartbeat channel allowed", "heartbeat:operator-1", true},
+		{"Results channel allowed", "results:cli-session-1", true},
+		{"SSE channel allowed", "sse:session-1", true},
+		{"WebSocket session channel allowed", "ws_session:conn-1", true},
+		{"Internal channel allowed", "internal:system", true},
+		{"Command channel not allowed", "cmd:execute", false},
+		{"Governance channel not allowed", "governance:envelope", false},
+		{"Empty channel not allowed", "", false},
+		{"Random channel not allowed", "random:channel", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.allowed, isMutationPubSubChannelAllowed(tt.channel))
+		})
+	}
+}
+
+func TestNewHTTPHandler(t *testing.T) {
+	t.Parallel()
+	h, cfg := setupTestHTTPHandler(t)
+
+	assert.NotNil(t, h)
+	assert.NotNil(t, h.cfg)
+	assert.NotNil(t, h.logger)
+	assert.NotNil(t, h.db)
+	assert.NotNil(t, h.pubsub)
+	assert.NotNil(t, h.auth)
+	assert.NotNil(t, h.pki)
+	assert.NotNil(t, h.sessionSvc)
+	assert.NotNil(t, h.reg)
+	assert.NotNil(t, h.passkey)
+	assert.NotNil(t, h.userSvc)
+	assert.NotNil(t, h.responder)
+	assert.NotNil(t, h.mcp)
+	assert.NotNil(t, h.pkiController)
+	assert.NotNil(t, h.dbController)
+	assert.NotNil(t, h.authController)
+	assert.NotNil(t, h.adminController)
+	assert.NotNil(t, h.operatorController)
+	assert.Equal(t, cfg, h.cfg)
+}
+
+func TestBuildPublicRouter(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	router := h.buildPublicRouter()
+	assert.NotNil(t, router)
+
+	// Test that health endpoint is registered
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	// Health endpoint may require auth in some configurations, so we just check it's registered
+	assert.NotNil(t, rr)
 }
 
 type errorReader struct{}

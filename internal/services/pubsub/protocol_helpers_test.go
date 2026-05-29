@@ -109,6 +109,55 @@ func TestMapProtoToPayloadType(t *testing.T) {
 		assert.Equal(t, "heartbeat", result)
 	})
 
+	t.Run("maps FetchFileHistoryResult with success=false to fetch_file_history_error", func(t *testing.T) {
+		t.Parallel()
+		msg := &operatorv1.FetchFileHistoryResult{Success: false}
+		result := mapProtoToPayloadType(msg)
+		assert.Equal(t, "fetch_file_history_error", result)
+	})
+
+	t.Run("maps FetchFileHistoryResult with success=true to fetch_file_history_success", func(t *testing.T) {
+		t.Parallel()
+		msg := &operatorv1.FetchFileHistoryResult{Success: true}
+		result := mapProtoToPayloadType(msg)
+		assert.Equal(t, "fetch_file_history_success", result)
+	})
+
+	t.Run("maps RestoreFileResult with success=false to restore_file_error", func(t *testing.T) {
+		t.Parallel()
+		msg := &operatorv1.RestoreFileResult{Success: false}
+		result := mapProtoToPayloadType(msg)
+		assert.Equal(t, "restore_file_error", result)
+	})
+
+	t.Run("maps RestoreFileResult with success=true to restore_file_success", func(t *testing.T) {
+		t.Parallel()
+		msg := &operatorv1.RestoreFileResult{Success: true}
+		result := mapProtoToPayloadType(msg)
+		assert.Equal(t, "restore_file_success", result)
+	})
+
+	t.Run("maps FetchFileDiffResult with success=false to fetch_file_diff_error", func(t *testing.T) {
+		t.Parallel()
+		msg := &operatorv1.FetchFileDiffResult{Success: false}
+		result := mapProtoToPayloadType(msg)
+		assert.Equal(t, "fetch_file_diff_error", result)
+	})
+
+	t.Run("maps FetchFileDiffResult with success=true and diff to fetch_file_diff_by_id_success", func(t *testing.T) {
+		t.Parallel()
+		msg := &operatorv1.FetchFileDiffResult{Success: true, Diff: &operatorv1.FileDiffEntry{}}
+		result := mapProtoToPayloadType(msg)
+		assert.Equal(t, "fetch_file_diff_by_id_success", result)
+	})
+
+	t.Run("maps FetchFileDiffResult with success=true and no diff to fetch_file_diff_by_session_success", func(t *testing.T) {
+		t.Parallel()
+		msg := &operatorv1.FetchFileDiffResult{Success: true, Diff: nil}
+		result := mapProtoToPayloadType(msg)
+		assert.Equal(t, "fetch_file_diff_by_session_success", result)
+	})
+
 	t.Run("maps unknown type to unknown", func(t *testing.T) {
 		t.Parallel()
 		msg := &operatorv1.ShutdownRequested{}

@@ -116,3 +116,19 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 		KeystoreDir: keystoreDir,
 	}
 }
+
+// setupTestHTTPHandlerLightweight creates a minimal HTTPHandler for testing
+// handler methods that don't require full infrastructure (e.g., readBody, pathTraversalGuard).
+// This is significantly faster than setupTestHTTPHandler for unit testing simple handler logic.
+func setupTestHTTPHandlerLightweight(t *testing.T) *HTTPHandler {
+	t.Helper()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+
+	h := &HTTPHandler{
+		cfg:    cfg,
+		logger: logger,
+	}
+
+	return h
+}

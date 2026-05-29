@@ -363,3 +363,170 @@ func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, policy, "App without policy should have nil policy (deny-by-default)")
 }
+
+func TestAuthService_Middleware_PublicBypass(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	res := responder.New(logger)
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("success"))
+	})
+
+	middleware := auth.Middleware(handler)
+
+	// Test public route bypass
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "success", rr.Body.String())
+}
+
+func TestAuthService_Middleware_MTLSRequired(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	res := responder.New(logger)
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := auth.Middleware(handler)
+
+	// Test mTLS required for non-public route
+	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.Contains(t, rr.Body.String(), "mTLS client certificate required")
+}
+
+func TestAuthService_WebSessionAuth_MissingCookie(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	res := responder.New(logger)
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := auth.WebSessionAuth(handler, db)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.Contains(t, rr.Body.String(), "web session cookie required")
+}
+
+func TestAuthService_WebSessionAuth_InvalidSession(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	res := responder.New(logger)
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := auth.WebSessionAuth(handler, db)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	req.AddCookie(&http.Cookie{Name: "g8e_session", Value: "nonexistent-session"})
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.Contains(t, rr.Body.String(), "web session not found")
+}
+
+func TestAuthService_HasJWKS(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	res := responder.New(logger)
+
+	// Without JWKS
+	authWithout := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	assert.False(t, authWithout.HasJWKS())
+
+	// With JWKS (mock)
+	jwks := &JWKSProvider{}
+	authWith := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", jwks, "", "", "")
+	assert.True(t, authWith.HasJWKS())
+}
+
+func TestAuthService_JWTAuthMiddleware_NotConfigured(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	res := responder.New(logger)
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := auth.JWTAuthMiddleware(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/mcp/tools", nil)
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
+	assert.Contains(t, rr.Body.String(), "JWT authentication not configured")
+}
+
+func TestAuthService_JWTAuthMiddleware_MissingBearer(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	res := responder.New(logger)
+	jwks := &JWKSProvider{}
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", jwks, "", "", "")
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := auth.JWTAuthMiddleware(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/mcp/tools", nil)
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.Contains(t, rr.Body.String(), "missing JWT bearer token")
+}
