@@ -239,10 +239,21 @@ func (h *TestHarness) PublicURL() string {
 
 // waitForPort blocks until a port is accepting connections.
 func (h *TestHarness) waitForPort(port int, timeout time.Duration) error {
+	caCert, err := os.ReadFile(h.CACertPath)
+	if err != nil {
+		return fmt.Errorf("read CA cert: %w", err)
+	}
+
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(caCert) {
+		return fmt.Errorf("failed to parse CA cert")
+	}
+
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		conn, err := tls.Dial("tcp", fmt.Sprintf("localhost:%d", port), &tls.Config{
-			InsecureSkipVerify: true,
+			RootCAs:    caCertPool,
+			MinVersion: tls.VersionTLS13,
 		})
 		if err == nil {
 			conn.Close()
