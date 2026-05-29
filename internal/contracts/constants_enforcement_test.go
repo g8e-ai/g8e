@@ -153,6 +153,7 @@ var allowlistedValues = map[string]bool{
 	"stream":    true, // flag set name
 	"user":      true, // SSH config key
 	"operator":  true, // process name
+	"start":     true, // CLI command name
 }
 
 // constantInfo tracks where a constant value is defined

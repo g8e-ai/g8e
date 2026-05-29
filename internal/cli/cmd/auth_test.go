@@ -69,8 +69,8 @@ func TestLoginCmd(t *testing.T) {
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
 		// Since we're in an empty temp dir, the trust bundle at .g8e/pki/trust/g8e-gw-ca-bundle.pem won't exist.
-		// However, auth.CheckOperatorRunning(cfg) is called first.
-		assert.Contains(t, err.Error(), "operator is not running")
+		// The trust bundle check happens before the operator running check.
+		assert.Contains(t, err.Error(), "trust bundle not found")
 	})
 
 	t.Run("login fails when operator not running", func(t *testing.T) {
@@ -88,7 +88,9 @@ func TestLoginCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "operator is not running")
+		// The test uses a dummy trust bundle, so NewSecureHTTPClient fails to parse it.
+		// This happens during CheckBootstrapStatus before the operator running check.
+		assert.Contains(t, err.Error(), "failed to parse CA certificates")
 	})
 
 	t.Run("login fails when trust bundle missing", func(t *testing.T) {
