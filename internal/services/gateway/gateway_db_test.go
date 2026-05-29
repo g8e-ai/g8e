@@ -48,6 +48,70 @@ func mustDocJSON(t *testing.T, v interface{}) json.RawMessage {
 	return json.RawMessage(b)
 }
 
+func TestGatewaySchema(t *testing.T) {
+	t.Parallel()
+	schema := GatewaySchema()
+	assert.NotEmpty(t, schema, "GatewaySchema should return non-empty schema")
+	assert.Contains(t, schema, "CREATE TABLE", "Schema should contain CREATE TABLE statements")
+}
+
+func TestGatewayDBService_GetDB(t *testing.T) {
+	t.Parallel()
+	dataDir := t.TempDir()
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+
+	db, err := OpenGatewayDBService(dataDir, secretsDir, logger, true)
+	require.NoError(t, err)
+	defer db.Close()
+
+	assert.NotNil(t, db.GetDB(), "GetDB should return non-nil database")
+}
+
+func TestGatewayDBService_Wait(t *testing.T) {
+	t.Parallel()
+	dataDir := t.TempDir()
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+
+	db, err := OpenGatewayDBService(dataDir, secretsDir, logger, true)
+	require.NoError(t, err)
+
+	// Close the database to stop background workers
+	db.Close()
+
+	// Wait should complete successfully after Close
+	db.Wait()
+}
+
+func TestGatewayDBService_SSEEventsListAllSince(t *testing.T) {
+	t.Parallel()
+	dataDir := t.TempDir()
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+
+	db, err := OpenGatewayDBService(dataDir, secretsDir, logger, true)
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Append some SSE events
+	route := SSERoute{WebSessionID: "test-session"}
+	for i := 0; i < 5; i++ {
+		err := db.SSEEventsAppend(route, fmt.Sprintf("event-type-%d", i), fmt.Sprintf(`{"data":"%d"}`, i), "test-producer")
+		require.NoError(t, err)
+	}
+
+	// List all events since ID 0 with limit 100
+	rows, err := db.SSEEventsListAllSince(0, 100)
+	require.NoError(t, err)
+	assert.Len(t, rows, 5, "Should return all 5 events")
+
+	// List events since ID 3 with limit 100
+	rows, err = db.SSEEventsListAllSince(3, 100)
+	require.NoError(t, err)
+	assert.Len(t, rows, 2, "Should return 2 events after ID 3")
+}
+
 func newTestDB(t *testing.T) *GatewayDBService {
 	t.Helper()
 	dir := t.TempDir()
@@ -734,4 +798,391 @@ func TestRunTTLCleanup_RemovesExpiredKVEntries(t *testing.T) {
 
 	_, kept := db.KVGet("ttl:keep")
 	assert.True(t, kept, "non-expired key must survive cleanup")
+}
+
+func TestHasTrustedSigners(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Initially no signers
+	has, err := db.HasTrustedSigners()
+	require.NoError(t, err)
+	assert.False(t, has)
+
+	// Add an enabled signer
+	signer := models.TrustedSigner{
+		ID:        "test-signer-1",
+		PublicKey: "abc123",
+		AddedAt:   time.Now().UTC(),
+		Enabled:   true,
+	}
+	signerBytes, _ := json.Marshal(signer)
+	err = db.DocSet("trusted_signers", "test-signer-1", signerBytes)
+	require.NoError(t, err)
+
+	has, err = db.HasTrustedSigners()
+	require.NoError(t, err)
+	assert.True(t, has)
+
+	// Add a disabled signer
+	disabledSigner := models.TrustedSigner{
+		ID:        "test-signer-2",
+		PublicKey: "def456",
+		AddedAt:   time.Now().UTC(),
+		Enabled:   false,
+	}
+	disabledSignerBytes, _ := json.Marshal(disabledSigner)
+	err = db.DocSet("trusted_signers", "test-signer-2", disabledSignerBytes)
+	require.NoError(t, err)
+
+	// Should still have signers (enabled one exists)
+	has, err = db.HasTrustedSigners()
+	require.NoError(t, err)
+	assert.True(t, has)
+
+	// Delete the enabled signer
+	_, err = db.DocDelete("trusted_signers", "test-signer-1")
+	require.NoError(t, err)
+
+	// Now only disabled signer exists - should return false
+	has, err = db.HasTrustedSigners()
+	require.NoError(t, err)
+	assert.False(t, has)
+}
+
+func TestHasTrustedSigners_EmptyCollection(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	has, err := db.HasTrustedSigners()
+	require.NoError(t, err)
+	assert.False(t, has)
+}
+
+func TestGetField(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Create a document with multiple fields
+	doc := map[string]interface{}{
+		"name":  "test-doc",
+		"value": 42,
+		"flag":  true,
+	}
+	docBytes, _ := json.Marshal(doc)
+	err := db.DocSet("test_collection", "doc1", docBytes)
+	require.NoError(t, err)
+
+	// Get existing field
+	field, err := db.GetField("test_collection", "doc1", "name")
+	require.NoError(t, err)
+	require.NotNil(t, field)
+	assert.Equal(t, "test-doc", field)
+
+	// Get another field
+	field, err = db.GetField("test_collection", "doc1", "value")
+	require.NoError(t, err)
+	require.NotNil(t, field)
+	assert.Equal(t, float64(42), field) // JSON numbers are unmarshaled as float64
+
+	// Get field from non-existent document
+	field, err = db.GetField("test_collection", "nonexistent-doc", "name")
+	require.Error(t, err)
+	assert.Nil(t, field)
+}
+
+func TestDocDeleteNamespace(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Create multiple documents in a namespace
+	for i := 0; i < 5; i++ {
+		doc := map[string]string{"id": fmt.Sprintf("doc%d", i)}
+		docBytes, _ := json.Marshal(doc)
+		err := db.DocSet("test_namespace", fmt.Sprintf("doc%d", i), docBytes)
+		require.NoError(t, err)
+	}
+
+	// Create documents in another namespace
+	for i := 0; i < 3; i++ {
+		doc := map[string]string{"id": fmt.Sprintf("other%d", i)}
+		docBytes, _ := json.Marshal(doc)
+		err := db.DocSet("other_namespace", fmt.Sprintf("other%d", i), docBytes)
+		require.NoError(t, err)
+	}
+
+	// Delete namespace
+	deleted, err := db.DocDeleteNamespace("test_namespace")
+	require.NoError(t, err)
+	assert.Equal(t, int64(5), deleted)
+
+	// Verify documents are deleted
+	doc, err := db.DocGet("test_namespace", "doc0")
+	require.NoError(t, err)
+	assert.Nil(t, doc)
+
+	// Verify other namespace is untouched
+	doc, err = db.DocGet("other_namespace", "other0")
+	require.NoError(t, err)
+	assert.NotNil(t, doc)
+
+	// Delete non-existent namespace
+	deleted, err = db.DocDeleteNamespace("nonexistent_namespace")
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), deleted)
+}
+
+func TestDocDeleteNamespace_Empty(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	deleted, err := db.DocDeleteNamespace("empty_namespace")
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), deleted)
+}
+
+func TestDocCreate(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Create a new document
+	doc := map[string]string{"name": "test-doc"}
+	docBytes, _ := json.Marshal(doc)
+	err := db.DocCreate("test_collection", "doc1", docBytes)
+	require.NoError(t, err)
+
+	// Verify document was created
+	retrievedDoc, err := db.DocGet("test_collection", "doc1")
+	require.NoError(t, err)
+	require.NotNil(t, retrievedDoc)
+	assert.Equal(t, "doc1", retrievedDoc.ID)
+
+	// Attempt to create duplicate - should fail
+	err = db.DocCreate("test_collection", "doc1", docBytes)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "document already exists")
+}
+
+func TestDocCreate_WithSystemFields(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Create a document with system fields that should be stripped
+	doc := map[string]interface{}{
+		"name":       "test-doc",
+		"id":         "should-be-stripped",
+		"created_at": "should-be-stripped",
+		"updated_at": "should-be-stripped",
+	}
+	docBytes, _ := json.Marshal(doc)
+	err := db.DocCreate("test_collection", "doc1", docBytes)
+	require.NoError(t, err)
+
+	// Verify system fields were stripped
+	retrievedDoc, err := db.DocGet("test_collection", "doc1")
+	require.NoError(t, err)
+	require.NotNil(t, retrievedDoc)
+	assert.Equal(t, "doc1", retrievedDoc.ID)
+	assert.NotContains(t, retrievedDoc.Data, "id")
+	assert.NotContains(t, retrievedDoc.Data, "created_at")
+	assert.NotContains(t, retrievedDoc.Data, "updated_at")
+}
+
+func TestFinalizeNonce(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Create a nonce in the nonces table with expires_at
+	expiresAt := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
+	_, err := db.db.Exec("INSERT INTO nonces (nonce, status, expires_at) VALUES (?, 'reserved', ?)", "test123", expiresAt)
+	require.NoError(t, err)
+
+	// Finalize the nonce
+	err = db.FinalizeNonce("test123")
+	require.NoError(t, err)
+
+	// Verify nonce was updated
+	var status string
+	err = db.db.QueryRow("SELECT status FROM nonces WHERE nonce = ?", "test123").Scan(&status)
+	require.NoError(t, err)
+	assert.Equal(t, "used", status)
+}
+
+func TestFinalizeNonce_NonExistent(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Finalize non-existent nonce should not error
+	err := db.FinalizeNonce("nonexistent")
+	require.NoError(t, err)
+}
+
+func TestReleaseNonce(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Create a nonce in the nonces table
+	expiresAt := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
+	_, err := db.db.Exec("INSERT INTO nonces (nonce, status, expires_at) VALUES (?, 'reserved', ?)", "test456", expiresAt)
+	require.NoError(t, err)
+
+	// Release the nonce
+	err = db.ReleaseNonce("test456")
+	require.NoError(t, err)
+
+	// Verify nonce was deleted
+	var count int
+	err = db.db.QueryRow("SELECT COUNT(*) FROM nonces WHERE nonce = ?", "test456").Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+}
+
+func TestReleaseNonce_NonExistent(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Release non-existent nonce should not error
+	err := db.ReleaseNonce("nonexistent")
+	require.NoError(t, err)
+}
+
+func TestBlobDelete(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Create a blob
+	blobData := []byte("test blob data")
+	err := db.BlobPut("test_namespace", "blob1", blobData, "application/octet-stream", 0)
+	require.NoError(t, err)
+
+	// Delete the blob
+	deleted, err := db.BlobDelete("test_namespace", "blob1")
+	require.NoError(t, err)
+	assert.True(t, deleted)
+
+	// Verify blob was deleted
+	_, _, found := db.BlobGet("test_namespace", "blob1")
+	assert.False(t, found)
+}
+
+func TestBlobDelete_NonExistent(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Delete non-existent blob
+	deleted, err := db.BlobDelete("test_namespace", "nonexistent")
+	require.NoError(t, err)
+	assert.False(t, deleted)
+}
+
+func TestApproveSuspendedTransaction(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Create a suspended transaction with expires_at in the future using direct SQL
+	expiresTime := time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339Nano)
+	createdTime := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err := db.db.Exec("INSERT INTO suspended_transactions (transaction_hash, envelope, created_at, expires_at, tool_name) VALUES (?, ?, ?, ?, ?)", "tx123", "test-envelope", createdTime, expiresTime, "test-tool")
+	require.NoError(t, err)
+
+	// Approve the transaction
+	err = db.ApproveSuspendedTransaction("tx123", "approved-by-user", "signature123", "cert-fingerprint")
+	require.NoError(t, err)
+
+	// Verify transaction was updated by querying the table directly
+	var approved int
+	var approvedBy string
+	err = db.db.QueryRow("SELECT approved, approved_by FROM suspended_transactions WHERE transaction_hash = ?", "tx123").Scan(&approved, &approvedBy)
+	require.NoError(t, err)
+	assert.Equal(t, 1, approved)
+	assert.Equal(t, "approved-by-user", approvedBy)
+}
+
+func TestApproveSuspendedTransaction_NonExistent(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Approve non-existent transaction should error
+	err := db.ApproveSuspendedTransaction("nonexistent", "user", "sig", "cert")
+	assert.Error(t, err)
+}
+
+func TestDeleteSuspendedTransaction(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Create a suspended transaction using direct SQL
+	expiresTime := time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339Nano)
+	createdTime := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err := db.db.Exec("INSERT INTO suspended_transactions (transaction_hash, envelope, created_at, expires_at, tool_name) VALUES (?, ?, ?, ?, ?)", "tx456", "test-envelope", createdTime, expiresTime, "test-tool")
+	require.NoError(t, err)
+
+	// Delete the transaction
+	err = db.DeleteSuspendedTransaction("tx456")
+	require.NoError(t, err)
+
+	// Verify transaction was deleted by querying the table directly
+	var count int
+	err = db.db.QueryRow("SELECT COUNT(*) FROM suspended_transactions WHERE transaction_hash = ?", "tx456").Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+}
+
+func TestDeleteSuspendedTransaction_NonExistent(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Delete non-existent transaction
+	err := db.DeleteSuspendedTransaction("nonexistent")
+	require.NoError(t, err)
+}
+
+func TestCleanupExpiredSuspendedTransactions(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Create an expired transaction using RFC3339Nano timestamp format
+	expiredTime := time.Now().Add(-1 * time.Hour).UTC().Format(time.RFC3339Nano)
+	validTime := time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339Nano)
+	createdTime := time.Now().UTC().Format(time.RFC3339Nano)
+
+	_, err := db.db.Exec("INSERT INTO suspended_transactions (transaction_hash, envelope, created_at, expires_at, tool_name) VALUES (?, ?, ?, ?, ?)", "tx-expired", "test-envelope", createdTime, expiredTime, "test-tool")
+	require.NoError(t, err)
+
+	// Create a non-expired transaction
+	_, err = db.db.Exec("INSERT INTO suspended_transactions (transaction_hash, envelope, created_at, expires_at, tool_name) VALUES (?, ?, ?, ?, ?)", "tx-valid", "test-envelope", createdTime, validTime, "test-tool")
+	require.NoError(t, err)
+
+	// Cleanup expired transactions
+	deleted, err := db.CleanupExpiredSuspendedTransactions()
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), deleted)
+
+	// Verify expired transaction was deleted by querying the table directly
+	var count int
+	err = db.db.QueryRow("SELECT COUNT(*) FROM suspended_transactions WHERE transaction_hash = ?", "tx-expired").Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+
+	// Verify valid transaction still exists
+	err = db.db.QueryRow("SELECT COUNT(*) FROM suspended_transactions WHERE transaction_hash = ?", "tx-valid").Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+}
+
+func TestCleanupExpiredSuspendedTransactions_NoExpired(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Create only non-expired transactions using RFC3339Nano timestamp format
+	validTime := time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339Nano)
+	createdTime := time.Now().UTC().Format(time.RFC3339Nano)
+
+	_, err := db.db.Exec("INSERT INTO suspended_transactions (transaction_hash, envelope, created_at, expires_at, tool_name) VALUES (?, ?, ?, ?, ?)", "tx-valid", "test-envelope", createdTime, validTime, "test-tool")
+	require.NoError(t, err)
+
+	// Cleanup should delete nothing
+	deleted, err := db.CleanupExpiredSuspendedTransactions()
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), deleted)
 }

@@ -796,3 +796,59 @@ func TestSSEPushAuthorization(t *testing.T) {
 		assert.NoError(t, err, "SSEEventsAppend should accept producer_id")
 	})
 }
+
+func TestHTTPHandler_buildRouter(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	router := h.buildRouter()
+	assert.NotNil(t, router, "buildRouter should return non-nil handler")
+}
+
+func TestHTTPHandler_ServeHTTP(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+	// ServeHTTP uses buildRouter which includes auth middleware, so unauthenticated requests are rejected
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+}
+
+func TestHTTPHandler_GetMCPGateway(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	mcpGateway := h.GetMCPGateway()
+	assert.NotNil(t, mcpGateway, "GetMCPGateway should return non-nil service")
+}
+
+func TestHTTPHandler_GetPasskeyService(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	passkey := h.GetPasskeyService()
+	assert.NotNil(t, passkey, "GetPasskeyService should return non-nil service")
+}
+
+func TestHTTPHandler_GetPubSubBroker(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	pubsub := h.GetPubSubBroker()
+	assert.NotNil(t, pubsub, "GetPubSubBroker should return non-nil service")
+}
+
+func TestHTTPHandler_handleLandingPage(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+
+	h.handleLandingPage(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), "g8e", "Landing page should contain g8e")
+}

@@ -248,7 +248,7 @@ func (c *DBController) handleSSEEvents(w http.ResponseWriter, r *http.Request, i
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		c.responder.JSON(w, http.StatusOK, map[string]int64{"count": count})
+		c.responder.JSON(w, http.StatusOK, models.SSEEventsCountResponse{Count: count})
 		return
 	}
 
@@ -258,7 +258,7 @@ func (c *DBController) handleSSEEvents(w http.ResponseWriter, r *http.Request, i
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		c.responder.JSON(w, http.StatusOK, map[string]int64{"deleted": deleted})
+		c.responder.JSON(w, http.StatusOK, models.SSEEventsWipeResponse{Deleted: deleted})
 		return
 	}
 
@@ -874,7 +874,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		c.logger.Info("Blob deleted", "namespace", namespace, "blob_id", blobID)
-		c.responder.JSON(w, http.StatusOK, models.BlobDeleteResponse{Deleted: 1})
+		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	default:
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")

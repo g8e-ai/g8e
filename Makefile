@@ -76,6 +76,9 @@ help:
 	@echo "  demo-build    Build the AI agent demo binary"
 	@echo "  demo-run      Run the AI agent demo (requires build first)"
 	@echo "  demo-clean    Remove demo build artifacts"
+	@echo ""
+	@echo "Auditor:"
+	@echo "  test-auditor  Build and run the auditor test suite"
 
 # =============================================================================
 # PROTOCOL GENERATION
@@ -335,6 +338,19 @@ demo-clean:
 	@echo "Cleaning demo build artifacts..."
 	@rm -f $(DEMO_BIN)
 	@echo "Demo clean complete."
+
+# =============================================================================
+# AUDITOR
+# =============================================================================
+AUDITOR_DIR := cmd/auditor
+AUDITOR_BIN := $(AUDITOR_DIR)/auditor
+
+.PHONY: test-auditor
+test-auditor:
+	@echo "Building auditor..."
+	@cd $(AUDITOR_DIR) && go build -o auditor .
+	@echo "Auditor binary built: $(AUDITOR_BIN)"
+	@echo "To run auditor: ./$(AUDITOR_BIN) list"
 
 
 # =============================================================================
