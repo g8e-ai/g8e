@@ -154,7 +154,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 			},
 		},
 	}
-	resp, err := secureDiscoveryClient.Get(publicURL + "/.well-known/g8e/pki/g8e-gw-ca-bundle.pem")
+	resp, err := secureDiscoveryClient.Get(publicURL + "/.well-known/g8e/pki/ca-bundle")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -384,7 +384,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	// Submit the envelope via the canonical governed mutation entry.
 	dataJSON, err := protojson.Marshal(envelope)
 	require.NoError(t, err)
-	httpReq, err := http.NewRequest(http.MethodPost, mtlsURL+"/api/governance/envelope", bytes.NewReader(dataJSON))
+	httpReq, err := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/governance/envelopes", bytes.NewReader(dataJSON))
 	require.NoError(t, err)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set(constants.HeaderAuthorization, "Bearer "+regResp.OperatorSessionID)

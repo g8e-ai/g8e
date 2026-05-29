@@ -190,7 +190,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	// Call an MCP endpoint that generates an envelope
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/mcp/v1/tools/call", bytes.NewBufferString(reqBody))
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/mcp/tools/call", bytes.NewBufferString(reqBody))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -326,7 +326,7 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 
 	t.Run("JIT user with zero credentials can complete register-challenge with valid JWT", func(t *testing.T) {
 		reqBody := `{"user_id":"jit-user-001","user_name":"JIT User"}`
-		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/auth/passkey/jit-register-challenge", bytes.NewBufferString(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/auth/passkeys/jit-register/challenge", bytes.NewBufferString(reqBody))
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Content-Type", "application/json")
 
@@ -355,7 +355,7 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 		expiredToken := generateSignedJWT(t, privKey, expiredClaims)
 
 		reqBody := `{"user_id":"jit-user-001","user_name":"JIT User"}`
-		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/auth/passkey/jit-register-challenge", bytes.NewBufferString(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/auth/passkeys/jit-register/challenge", bytes.NewBufferString(reqBody))
 		req.Header.Set("Authorization", "Bearer "+expiredToken)
 		req.Header.Set("Content-Type", "application/json")
 
@@ -369,7 +369,7 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 
 	t.Run("JIT user with zero credentials rejected with no JWT", func(t *testing.T) {
 		reqBody := `{"user_id":"jit-user-001","user_name":"JIT User"}`
-		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/auth/passkey/jit-register-challenge", bytes.NewBufferString(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/auth/passkeys/jit-register/challenge", bytes.NewBufferString(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 
 		client := &http.Client{}
@@ -502,7 +502,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 
 	t.Run("After one credential exists, JWT-only path is rejected and step-up required", func(t *testing.T) {
 		reqBody := `{"user_id":"stepup-user-001","user_name":"Stepup User"}`
-		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/auth/passkey/jit-register-challenge", bytes.NewBufferString(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/auth/passkeys/jit-register/challenge", bytes.NewBufferString(reqBody))
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Content-Type", "application/json")
 

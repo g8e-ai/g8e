@@ -326,7 +326,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 	// 4. Test MCP tools/list
 	t.Run("tools/list", func(t *testing.T) {
-		resp, err := mtlsClient.Get(mtlsURL + "/api/mcp/v1/tools/list")
+		resp, err := mtlsClient.Get(mtlsURL + "/api/v1/mcp/tools/list")
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -341,7 +341,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 	// 4.5 Test MCP resources/list
 	t.Run("resources/list", func(t *testing.T) {
-		resp, err := mtlsClient.Get(mtlsURL + "/api/mcp/v1/resources/list")
+		resp, err := mtlsClient.Get(mtlsURL + "/api/v1/mcp/resources/list")
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -356,7 +356,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 	// 4.6 Test MCP prompts/list
 	t.Run("prompts/list", func(t *testing.T) {
-		resp, err := mtlsClient.Get(mtlsURL + "/api/mcp/v1/prompts/list")
+		resp, err := mtlsClient.Get(mtlsURL + "/api/v1/mcp/prompts/list")
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -386,7 +386,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -660,7 +660,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -693,7 +693,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -724,7 +724,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -754,7 +754,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -784,7 +784,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -1011,7 +1011,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		reqBody, _ := json.Marshal(callReq)
 
 		// Test with API key in header
-		req, _ := http.NewRequest("POST", mtlsURL+"/api/mcp/v1/tools/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest("POST", mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-API-Key", "test-api-key")
 
@@ -1036,7 +1036,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(params)
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -1053,7 +1053,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(params)
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -1067,7 +1067,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(map[string]interface{}{})
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -1075,7 +1075,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 
 	t.Run("malformed JSON", func(t *testing.T) {
 		reqBody := `{invalid json`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader([]byte(reqBody)))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -1104,7 +1104,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(params)
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -1123,7 +1123,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		paramsBytes, _ := json.Marshal(params)
 		callReq.Params = paramsBytes
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader(reqBody))
+		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)

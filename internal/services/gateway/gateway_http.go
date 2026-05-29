@@ -39,7 +39,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-const governanceEnvelopeRedirectError = "submit via POST /api/governance/envelope"
+const governanceEnvelopeRedirectError = "submit via POST /api/v1/governance/envelopes"
 
 // HTTPHandlerDependencies groups all dependencies for HTTPHandler to reduce constructor bloat.
 type HTTPHandlerDependencies struct {
