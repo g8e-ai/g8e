@@ -263,7 +263,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 		Hostname:          "a2a-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/pki/device-enroll", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/pki/devices/enroll", bytes.NewReader(regBody))
 	hResp, err := enrollClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, hResp.StatusCode)
@@ -284,6 +284,11 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}
 	mtlsURL = fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 
+	// Helper function to add Authorization header
+	authHeader := func(req *http.Request) {
+		req.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
+	}
+
 	// Set public base URL for approval links
 	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 	mcpGateway.SetPublicBaseURL(publicURL)
@@ -301,7 +306,10 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/a2a/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -514,7 +522,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		Hostname:          "a2a-payload-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/pki/device-enroll", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/pki/devices/enroll", bytes.NewReader(regBody))
 	hResp, err := enrollClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, hResp.StatusCode)
@@ -537,6 +545,11 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 	mcpGateway.SetPublicBaseURL(publicURL)
 
+	// Helper function to add Authorization header
+	authHeader := func(req *http.Request) {
+		req.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
+	}
+
 	t.Run("nested payload structure", func(t *testing.T) {
 		callReq := map[string]interface{}{
 			"jsonrpc": "2.0",
@@ -558,7 +571,10 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/a2a/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -588,7 +604,10 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/a2a/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -618,7 +637,10 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/a2a/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -645,7 +667,10 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/a2a/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -672,7 +697,10 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/a2a/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -700,7 +728,10 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/a2a/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -889,7 +920,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 		Hostname:          "a2a-error-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/pki/device-enroll", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/pki/devices/enroll", bytes.NewReader(regBody))
 	hResp, err := enrollClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, hResp.StatusCode)
@@ -912,6 +943,11 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 	mcpGateway.SetPublicBaseURL(publicURL)
 
+	// Helper function to add Authorization header
+	authHeader := func(req *http.Request) {
+		req.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
+	}
+
 	t.Run("api key rejected", func(t *testing.T) {
 		plainClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"skill_name":"test"}}`
@@ -932,7 +968,10 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	})
 	t.Run("invalid JSON-RPC version", func(t *testing.T) {
 		reqBody := `{"jsonrpc":"1.0","id":1,"method":"a2a/call","params":{"skill_name":"test"}}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/a2a/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader([]byte(reqBody)))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -940,7 +979,10 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 
 	t.Run("missing method", func(t *testing.T) {
 		reqBody := `{"jsonrpc":"2.0","id":1,"params":{"skill_name":"test"}}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/a2a/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader([]byte(reqBody)))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -948,7 +990,10 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 
 	t.Run("unknown method", func(t *testing.T) {
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"unknown_method","params":{}}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/a2a/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader([]byte(reqBody)))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -956,7 +1001,10 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 
 	t.Run("malformed JSON", func(t *testing.T) {
 		reqBody := `{invalid json`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/a2a/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader([]byte(reqBody)))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -975,7 +1023,10 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 
 	t.Run("missing skill_name", func(t *testing.T) {
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"payload":{}}}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/a2a/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader([]byte(reqBody)))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -983,7 +1034,10 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 
 	t.Run("invalid payload JSON", func(t *testing.T) {
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"skill_name":"test","payload":"{invalid}"}}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/a2a/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader([]byte(reqBody)))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -991,7 +1045,10 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 
 	t.Run("missing params", func(t *testing.T) {
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"a2a/call"}`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/a2a/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader([]byte(reqBody)))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)

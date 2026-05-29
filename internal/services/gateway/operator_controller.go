@@ -26,11 +26,11 @@ import (
 
 // OperatorController handles operator lifecycle endpoints.
 type OperatorController struct {
-	cfg         *config.Config
-	logger      *slog.Logger
-	reg         *RegistrationService
-	auth        *AuthService
-	responder   *responder.Responder
+	cfg       *config.Config
+	logger    *slog.Logger
+	reg       *RegistrationService
+	auth      *AuthService
+	responder *responder.Responder
 }
 
 func newOperatorController(cfg *config.Config, logger *slog.Logger, reg *RegistrationService, auth *AuthService, responder *responder.Responder) *OperatorController {

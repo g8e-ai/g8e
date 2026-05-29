@@ -300,7 +300,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		Hostname:          "mcp-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/pki/device-enroll", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/pki/devices/enroll", bytes.NewReader(regBody))
 	hResp, err := enrollClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, hResp.StatusCode)
@@ -324,9 +324,16 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 	mcpGateway.SetPublicBaseURL(publicURL)
 
+	// Helper function to add Authorization header
+	authHeader := func(req *http.Request) {
+		req.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
+	}
+
 	// 4. Test MCP tools/list
 	t.Run("tools/list", func(t *testing.T) {
-		resp, err := mtlsClient.Get(mtlsURL + "/api/v1/mcp/tools/list")
+		req, _ := http.NewRequest(http.MethodGet, mtlsURL+"/api/v1/mcp/tools/list", nil)
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -341,7 +348,9 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 	// 4.5 Test MCP resources/list
 	t.Run("resources/list", func(t *testing.T) {
-		resp, err := mtlsClient.Get(mtlsURL + "/api/v1/mcp/resources/list")
+		req, _ := http.NewRequest(http.MethodGet, mtlsURL+"/api/v1/mcp/resources/list", nil)
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -356,7 +365,9 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 	// 4.6 Test MCP prompts/list
 	t.Run("prompts/list", func(t *testing.T) {
-		resp, err := mtlsClient.Get(mtlsURL + "/api/v1/mcp/prompts/list")
+		req, _ := http.NewRequest(http.MethodGet, mtlsURL+"/api/v1/mcp/prompts/list", nil)
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -386,7 +397,10 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -614,7 +628,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		Hostname:          "payload-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/pki/device-enroll", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/pki/devices/enroll", bytes.NewReader(regBody))
 	hResp, err := enrollClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, hResp.StatusCode)
@@ -638,6 +652,11 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 	mcpGateway.SetPublicBaseURL(publicURL)
 
+	// Helper function to add Authorization header
+	authHeader := func(req *http.Request) {
+		req.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
+	}
+
 	t.Run("nested object arguments", func(t *testing.T) {
 		callReq := mcp.JSONRPCRequest{
 			JSONRPC: "2.0",
@@ -660,7 +679,10 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -693,7 +715,10 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -724,7 +749,10 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -754,7 +782,10 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -784,7 +815,10 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -976,7 +1010,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		Hostname:          "error-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/pki/device-enroll", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/pki/devices/enroll", bytes.NewReader(regBody))
 	hResp, err := enrollClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, hResp.StatusCode)
@@ -994,6 +1028,11 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 				Certificates: []tls.Certificate{cert},
 			},
 		},
+	}
+
+	// Helper function to add Authorization header
+	authHeader := func(req *http.Request) {
+		req.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
 	}
 
 	t.Run("api key rejected", func(t *testing.T) {
@@ -1036,7 +1075,10 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(params)
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -1053,7 +1095,10 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(params)
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -1067,7 +1112,10 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(map[string]interface{}{})
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -1075,7 +1123,10 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 
 	t.Run("malformed JSON", func(t *testing.T) {
 		reqBody := `{invalid json`
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader([]byte(reqBody)))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader([]byte(reqBody)))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -1104,7 +1155,10 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(params)
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -1123,7 +1177,10 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		paramsBytes, _ := json.Marshal(params)
 		callReq.Params = paramsBytes
 		reqBody, _ := json.Marshal(callReq)
-		resp, err := mtlsClient.Post(mtlsURL+"/api/v1/mcp/tools/call", "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		authHeader(req)
+		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
