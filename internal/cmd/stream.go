@@ -400,7 +400,6 @@ FLAGS
   --concurrency <N>             Max parallel SSH sessions (default: 50)
   --timeout <secs>              Per-host dial+inject timeout (default: 60)
   --endpoint <host>             Platform endpoint: starts operator if set
-  --device-token <tok>          Device link token (single or mass deployment via max_uses)
   --no-git                      Disable ledger on remote operator
   --ssh-config <path>           SSH config path (default: ~/.ssh/config)
   --binary-dir <path>           Operator build dir (default: /home/g8e)
@@ -412,11 +411,11 @@ OUTPUT
 EXAMPLES
   # Inject to 3 hosts, start operator on each
   g8e.operator stream host1 host2 host3 \
-    --endpoint 10.0.0.1 --device-token dlk_xxx
+    --endpoint 10.0.0.1
 
-  # 1,000-node mass deployment from a file (device link with max_uses=1000)
+  # 1,000-node mass deployment from a file
   g8e.operator stream --hosts /etc/g8e/fleet.txt \
-    --concurrency 100 --endpoint 10.0.0.1 --device-token dlk_xxx
+    --concurrency 100 --endpoint 10.0.0.1
 
   # Inject only (start manually on each remote)
   g8e.operator stream --hosts hosts.txt

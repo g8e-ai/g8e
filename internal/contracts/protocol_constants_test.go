@@ -279,7 +279,6 @@ type protocolVersionStabilityValues struct {
 }
 
 type protocolComponentNameValues struct {
-	G8EE   protocolLeaf `json:"g8ee"`
 	G8EO   protocolLeaf `json:"g8eo"`
 	CLIENT protocolLeaf `json:"client"`
 }
@@ -454,7 +453,6 @@ func loadEnvVarsJSON(t *testing.T) protocolEnvVarsJSON {
 type protocolAPIPathsJSON struct {
 	InternalPrefix string            `json:"internal_prefix"`
 	OperatorPrefix string            `json:"operator_prefix"`
-	G8ee           map[string]string `json:"g8ee"`
 	Client         map[string]string `json:"client"`
 }
 
@@ -480,14 +478,6 @@ func TestProtocolAPIPathsMatchGoConstants(t *testing.T) {
 	t.Run("client.sse", func(t *testing.T) {
 		assert.Equal(t, ap.Client["sse_events"], constants.APIPaths.Client["sse_events"])
 		assert.Equal(t, ap.Client["sse_stream"], constants.APIPaths.Client["sse_stream"])
-	})
-
-	t.Run("g8ee", func(t *testing.T) {
-		for key, expected := range ap.G8ee {
-			actual, ok := constants.APIPaths.G8ee[key]
-			assert.True(t, ok, "g8ee route key %s must exist in Go constants", key)
-			assert.Equal(t, expected, actual, "g8ee route %s mismatch", key)
-		}
 	})
 
 	t.Run("client", func(t *testing.T) {

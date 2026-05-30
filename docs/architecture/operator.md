@@ -4,14 +4,14 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-05-28
+Last Updated: 2026-05-29
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
-The reference Operator is **`g8eo`** (built as the `g8e` binary). It functions as a sovereign, **Governed Operator** and **Model Context Protocol (MCP) Server**, serving as the Policy Execution Point (PEP). The exact same compiled Go codebase is used to power both sides of the governance boundary:
+The reference implementation of a g8e-compliant Policy Execution Point (PEP) is the **`g8eo`** service (built within the `g8e` binary). It functions as both a **Governed Operator** and a **Model Context Protocol (MCP) Server**. The same Go codebase provides the logic for both the Governance Gateway (PDP) and the g8e Operator (PEP), differentiated by runtime configuration:
 
-- **Governance Gateway (PDP)**: When run in Gateway mode (`--doctrine`, `--consensus`, `--notary`), it acts as the central Policy Decision Point (PDP) with platform persistence and in-process pub/sub brokering.
-- **g8e Operator (PEP)**: When run as a host agent, it acts as the Policy Execution Point (PEP) and MCP server.
+- **Governance Gateway (PDP)**: When run in Gateway mode (utilizing `L1Doctrine`, `L2Consensus`, and `L3Notary` as a central authority), it acts as the central Policy Decision Point (PDP) with platform persistence and pub/sub brokering.
+- **g8e Operator (PEP)**: When run as a host agent, it acts as the Policy Execution Point (PEP) and MCP server, enforcing local verification before host mutation.
 
 This document focuses on the **Governed Operator** (PEP) role.
 
@@ -21,7 +21,7 @@ This document focuses on the **Governed Operator** (PEP) role.
 
 The core invariant of the Operator is absolute defense-in-depth: a typed, signed, state-bound transaction reaches a sovereign host agent that distrusts upstream inputs and refuses to mutate reality unless every independent proof checks out. 
 
-The Operator is the only component capable of mutating the host. It executes remote-operations work—running shell commands, editing files, interacting with cloud CLIs, and reading file history—but only after translating the request into a canonical governance transaction and verifying it locally.
+The Operator is the only component capable of mutating the host. It executes remote operations, such as running shell commands, editing files, interacting with cloud CLIs, and reading file history, but only after translating the request into a canonical `GovernanceEnvelope` transaction and verifying it locally.
 
 ---
 
@@ -30,25 +30,25 @@ The Operator is the only component capable of mutating the host. It executes rem
 When a command targets an Operator, it progresses through a strict, fail-closed pipeline consisting of five distinct layers of verification and execution:
 
 ### L1: Doctrine (Technical Bedrock)
-The **L1Doctrine** layer provides foundational hard gates. It utilizes Protobuf field-option extensions (`forbidden_patterns`) to block malicious strings and executes real-time MITRE ATT&CK heuristics to detect threats like reverse shells, privilege escalation, and destructive disk operations. L1 is the first line of defense and cannot be bypassed.
+The **L1Doctrine** layer provides foundational hard gates. It utilizes Protobuf field-option extensions (`forbidden_patterns`) to block malicious strings at the schema level and executes real-time MITRE ATT&CK heuristics to detect threats like reverse shells, privilege escalation, and destructive disk operations. L1 is the first line of defense, cannot be bypassed, and is defined in `@/home/bob/g8e/internal/services/governance/l1_doctrine.go`.
 
 ### L2: Consensus
-The **L2Consensus** layer verifies the intent of the request via a Byzantine Fault Tolerant (BFT) quorum. It validates Ed25519 signatures from independent reasoning agents against the Operator's locally trusted `SignerStore`. This ensures that no single upstream agent can unilaterally mutate the host. The specific consensus implementation (e.g., Tribunal) is an application-layer concern.
+The **L2Consensus** layer verifies the intent of the request via a Byzantine Fault Tolerant (BFT) quorum. It validates Ed25519 signatures from independent reasoning agents (the **Tribunal**) against the Operator's locally trusted `SignerStore`. This ensures that no single upstream agent can unilaterally mutate the host. The consensus mechanism is defined in `@/home/bob/g8e/internal/services/governance/l2_consensus.go`.
 
 ### L3: Notary (Authorization)
-The **L3Notary** layer enforces human-in-the-loop authorization. For web-based sessions, it validates FIDO2/WebAuthn (Passkey) proofs. For CLI or BYO client sessions, it validates mTLS certificate fingerprints. Mutations are blocked until a valid L3 proof is presented, unless specifically exempted by an `AutoApprove` policy for benign diagnostic commands.
+The **L3Notary** layer enforces human-in-the-loop authorization. For web-based sessions, it validates FIDO2/WebAuthn (Passkey) proofs. For CLI or BYO client sessions, it validates mTLS certificate fingerprints and cryptographic signatures over the transaction hash. Mutations are blocked until a valid L3 proof is presented, unless specifically exempted by an `AutoApprove` policy for benign diagnostic commands. The notary verification logic is defined in `@/home/bob/g8e/internal/services/governance/l3_notary.go`.
 
 ### L4: Warden (Pre-dispatch Gate)
-The **L4Warden** is the final verification gate before execution. It enforces:
+The **L4Warden** is the final verification gate before execution, defined in `@/home/bob/g8e/internal/services/governance/l4_warden.go`. It enforces:
 1. **Integrity**: Validates that `id == transaction_hash == SHA256(canonical_fields)`. The wire format is canonical JSON (`protojson`), but the signing basis is a deterministic hash of normalized fields.
 2. **Freshness**: Enforces `expires_at` and checks for replay attacks via a local `ReplayStore`.
 3. **State Binding**: Validates that the `state_merkle_root` matches the host's current ledger root.
 4. **Quorum**: Confirms that L1, L2, and L3 proofs meet the current **Governance Posture** (`doctrine`, `consensus`, or `notary`).
 
 ### L5: Actuator (Execution Boundary)
-The **L5Actuator** is the singular execution boundary permitted to mutate host state. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model**:
+The **L5Actuator** is the singular execution boundary permitted to mutate host state, defined in `@/home/bob/g8e/internal/services/governance/l5_actuator.go`. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model**:
 1. **Pre-execution**: Signs an `ActionReceipt` with status `EXECUTING` and commits it to the local `AuditVaultService`.
-2. **Rehydration**: Restores sensitive data (PII, credentials) that was scrubbed upstream, using local tokens from the **Sovereignty Boundary Plane**.
+2. **Rehydration**: Restores sensitive data (PII, credentials) that was scrubbed upstream by the **Sovereignty Boundary Plane**, using local tokens.
 3. **Execution**: Dispatches to the handler and captures the output.
 4. **Post-execution**: Signs a final `ActionReceipt` with status `COMPLETED` or `FAILED`, captures the new `state_root_after`, and publishes the signed result back to the Gateway.
 
@@ -57,7 +57,31 @@ The **L5Actuator** is the singular execution boundary permitted to mutate host s
 ## 3. Core Subsystems
 
 ### Universal Protocol Translator
-By exposing standard MCP and A2A interfaces (`--mcp-serve`), the Operator acts as the admission gate for BYO (Bring-Your-Own) AI clients. It isolates the complex requirements of the `GovernanceEnvelope` (such as transaction hashing and L2/L3 signature collection) behind a standardized tool-calling facade, mapping native JSON-RPC requests directly to governed `ActionType` mutations.
+By exposing standard MCP and A2A interfaces, the Operator acts as the admission gate for BYO (Bring-Your-Own) AI clients. It isolates the complex requirements of the `GovernanceEnvelope` (such as transaction hashing and L2/L3 signature collection) behind a standardized tool-calling facade, mapping native JSON-RPC/HTTP requests directly to governed mutations.
+
+### Native Tool Execution
+The Operator compiles native tool playbooks directly into the binary to provide memory-safe, boundary-enforced execution for common operational tasks. These tools execute within the Operator's execution boundary locally, without proxying to downstream MCP servers. AI agents interact with clean JSON schemas while the internal memory-safe execution layer enforces hard boundaries.
+
+#### Database Triage & Performance Playbook
+- **db_discover_topology**: Automatically scans database schemas, tables, and column data types, returning a highly compressed JSON map. AI agents need this first to prevent hallucinated queries.
+- **db_query_validate**: Intercepts any AI-generated SQL and runs it through EXPLAIN QUERY PLAN natively. If the engine flags an unindexed, full-table scan on a production dataset, the binary rejects the task before execution.
+- **db_isolated_read**: Executes SELECT statements using a database handle opened strictly with SQLITE_OPEN_READONLY. This prevents the AI from executing destructive injections (e.g., ; DROP TABLE...).
+- **db_index_triage**: Queries internal fragmentation statistics and indexes to diagnose slow queries without letting the AI guess the performance bottleneck.
+
+#### Telemetry & Log Digestion Playbook
+- **log_stream_filter**: Reads native log paths or standard buffers, applies a regex match requested by the AI, runs the matched chunks through the scrubbing engine to redact secrets/PII, and pushes only the sanitized fragments.
+- **sys_oom_detect**: Directly parses /var/log/dmesg or system logs to scan for Out-Of-Memory (OOM) killer events, process kills, or core panic dumps, isolating the exact failing PID.
+- **config_diff_mask**: Compares application configuration states against environmental baselines. It strips out actual passwords, tokens, and salts inside the binary before outputting the structural differences to the AI.
+
+#### Resource & Process Governance Playbook
+- **proc_metric_top**: Directly parses the Linux /proc filesystem in memory to extract process IDs, memory maps, and CPU tracking. It returns a tightly structured JSON array of the top resource-hogging processes.
+- **fs_disk_profile**: Recursively calculates directory sizes natively (equivalent to an optimized du --max-depth=2) starting from an approved path root. It instantly isolates unrotated log files or bloated tmp directories.
+- **proc_signal_safe**: Allows the AI to send explicit termination signals (SIGTERM, SIGKILL) to a process, but enforces a strict binary-level denylist (e.g., rejecting attempts to kill PID 1, system init, or the operator binary itself).
+
+#### Network & Connectivity Validation Playbook
+- **net_socket_audit**: Directly inspects active network sockets (/proc/net/tcp and /proc/net/udp) to map established connections and confirm if expected internal microservices are actually listening.
+- **net_endpoint_ping**: Initiates native TCP handshakes or ICMP requests to defined target host/port combinations to verify local network routing and DNS resolution performance.
+- **net_http_probe**: Performs a lightweight native HTTP request (similar to curl -I) to internal API endpoints, returning only the status codes, headers, and latency metrics while discarding heavy response payloads.
 
 ### Identity, PKI, and mTLS
 The Operator establishes workload identity bound to SPIFFE-style URI SANs, strictly enforced over mutual TLS (mTLS):
@@ -69,9 +93,9 @@ Revocation is checked on every handshake. Every `ActionReceipt` is signed by a h
 
 ### JWT Authentication Isolation
 The Operator is fully isolated from Identity Providers (IdP). The Gateway handles all JWT validation, user provisioning, and role mapping. JIT provisioning is **owner-controlled** and requires an active invitation:
-- **Owner-Centric Model**: All authentication requires owner approval via device links. The platform owner creates invitations for specific identities (IdP `sub` or email) before JIT provisioning can occur.
+- **Owner-Centric Model**: All authentication requires owner approval via invitations. The platform owner creates invitations for specific identities (IdP `sub` or email) before JIT provisioning can occur.
 - **Invitation-Based JIT**: When a JWT is presented, the Gateway validates the signature and checks for an active invitation. If no invitation exists, authentication is rejected (403 Forbidden). If a valid invitation exists, the user is provisioned and bound to the owner's organization, then the invitation is consumed.
-- **Strict TTL**: Device links and sessions have a 1-hour TTL by default. Long-lived access requires programmatic renewal or re-authentication via the device-link flow.
+- **Strict TTL**: Sessions have a 1-hour TTL by default. Long-lived access requires programmatic renewal or re-authentication.
 - **Gateway Responsibility**: The Gateway validates inbound `Authorization: Bearer <JWT>` tokens, performs invitation-gated JIT user provisioning, maps JWT roles to Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
 - **Operator Responsibility**: The Operator receives only the pre-validated, enriched security metadata in the envelope. It decodes `tenant_id` and `binding_persona` from the envelope, propagates them into the execution context, and applies Persona-based data scrubbing (column masks, redaction) before returning results.
 - **No IdP Dependency**: The Operator never requires outbound internet access to verify tokens or manage user state. This enables air-gapped and high-security deployments where the Operator has no external network connectivity.
@@ -96,14 +120,14 @@ The host is the authoritative source of truth for all mutations.
 
 The reference implementation (`g8eo`) currently supports:
 
-- **Universal Protocol Translation** — Functional MCP and A2A gateway mapping standard tool calls to signed `GovernanceEnvelope` mutations.
-- **Fail-Closed 5-Layer Verification** — L1 (Doctrine), L2 (Consensus), and L4 (Warden) gates are fully enforced on every transaction.
-- **Outbound-Only mTLS Connectivity** — Dial-out reverse tunnels with zero inbound port requirements.
-- **Local-First Audit Vault** — Git-backed ledger and fail-closed SQLite audit vault enforcing session existence for all writes.
-- **Deterministic Hash Binding** — SHA-256 transaction hash integrity enforced across all wire formats.
-- **Sovereignty Boundary** — Automated scrubbing and rehydration of sensitive data during the execution lifecycle.
-- **Host-Unique Signing** — Cryptographic Action Receipts signed by host-specific keys.
-- **Zero-Dependency Binary** — Statically compiled Go binary for air-gapped and high-security deployments.
+- **Universal Protocol Translation**: Functional MCP and A2A gateway mapping standard tool calls to signed `GovernanceEnvelope` mutations.
+- **Fail-Closed 5-Layer Verification**: L1 (Doctrine), L2 (Consensus), and L4 (Warden) gates are fully enforced on every transaction.
+- **Outbound-Only mTLS Connectivity**: Dial-out reverse tunnels with zero inbound port requirements.
+- **Local-First Audit Vault**: Git-backed ledger and fail-closed SQLite audit vault enforcing session existence for all writes.
+- **Deterministic Hash Binding**: SHA-256 transaction hash integrity enforced across all wire formats.
+- **Sovereignty Boundary**: Automated scrubbing and rehydration of sensitive data during the execution lifecycle.
+- **Host-Unique Signing**: Cryptographic Action Receipts signed by host-specific keys.
+- **Zero-Dependency Binary**: Statically compiled Go binary for air-gapped and high-security deployments.
 
 ---
 
@@ -111,19 +135,21 @@ The reference implementation (`g8eo`) currently supports:
 
 | Concern | Authoritative file |
 |---|---|
-| Ingress Verification (`L4Warden`) | `/home/bob/g8e/internal/services/governance/l4_warden.go` |
-| Execution Boundary (`L5Actuator`) | `/home/bob/g8e/internal/services/governance/l5_actuator.go` |
-| Sovereignty (Data Scrubbing) | `/home/bob/g8e/internal/services/sovereignty/boundary.go` |
-| Technical Bedrock (`L1Doctrine`) | `/home/bob/g8e/internal/services/governance/l1_doctrine.go` |
-| Consensus (`L2Consensus`) | `/home/bob/g8e/internal/services/governance/l2_consensus.go` |
-| Notary (`L3Notary`) | `/home/bob/g8e/internal/services/governance/l3_notary.go` |
-| Local Audit Vault | `/home/bob/g8e/internal/services/storage/audit_vault.go` |
-| Native Git Ledger | `/home/bob/g8e/internal/services/storage/ledger.go` |
-| Operator Entrypoint | `/home/bob/g8e/cmd/g8eo/main.go` |
-| Protocol Definitions | `/home/bob/g8e/protocol/proto/g8e/common/v1/common.proto` |
-| Operator Protocol | `/home/bob/g8e/protocol/proto/g8e/operator/v1/operator.proto` |
-| Workload Identity | `/home/bob/g8e/protocol/workload_identity.go` |
-| Event Constants | `/home/bob/g8e/protocol/constants/events.json` |
-| Port Constants | `/home/bob/g8e/protocol/constants/ports.json` |
+| Ingress Verification (`L4Warden`) | `@/home/bob/g8e/internal/services/governance/l4_warden.go` |
+| Execution Boundary (`L5Actuator`) | `@/home/bob/g8e/internal/services/governance/l5_actuator.go` |
+| Sovereignty (Data Scrubbing) | `@/home/bob/g8e/internal/services/sovereignty/boundary.go` |
+| Technical Bedrock (`L1Doctrine`) | `@/home/bob/g8e/internal/services/governance/l1_doctrine.go` |
+| Consensus (`L2Consensus`) | `@/home/bob/g8e/internal/services/governance/l2_consensus.go` |
+| Notary (`L3Notary`) | `@/home/bob/g8e/internal/services/governance/l3_notary.go` |
+| Local Audit Vault | `@/home/bob/g8e/internal/services/storage/audit_vault.go` |
+| Native Git Ledger | `@/home/bob/g8e/internal/services/storage/ledger.go` |
+| Native Tools | `@/home/bob/g8e/internal/services/mcp/native_tools.go` |
+| Native Tool Handlers | `@/home/bob/g8e/internal/services/mcp/native_handlers.go` |
+| Operator Entrypoint | `@/home/bob/g8e/cmd/g8eo/main.go` |
+| Protocol Definitions | `@/home/bob/g8e/protocol/proto/g8e/common/v1/common.proto` |
+| Operator Protocol | `@/home/bob/g8e/protocol/proto/g8e/operator/v1/operator.proto` |
+| Workload Identity | `@/home/bob/g8e/protocol/workload_identity.go` |
+| Event Constants | `@/home/bob/g8e/protocol/constants/events.json` |
+| Port Constants | `@/home/bob/g8e/protocol/constants/ports.json` |
 
-See also: [g8e Protocol](./protocol.md), [Governance Gateway](./gateway.md).
+See also: [g8e Protocol](./g8e.md), [Governance Gateway](./gateway.md).

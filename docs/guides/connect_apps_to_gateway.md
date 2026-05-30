@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to a Governance Gateway
 
-Last Updated: 2026-05-26
-Version: v1.0.0
+Last Updated: 2026-05-29
+Version: v1.0.3
 
 ---
 
@@ -27,10 +27,10 @@ Initialize the platform runtime:
 ```
 
 This creates the `.g8e` directory structure:
-- `.g8e/pki/` — PKI hierarchy (CA, certificates, keys)
-- `.g8e/data/` — SQLite database for Gateway persistence
-- `.g8e/logs/` — Gateway logs
-- `.g8e/secrets/` — Encrypted vault for platform secrets
+- `.g8e/pki/` - PKI hierarchy (CA, certificates, keys)
+- `.g8e/data/` - SQLite database for Gateway persistence
+- `.g8e/logs/` - Gateway logs
+- `.g8e/secrets/` - Encrypted vault for platform secrets
 
 ### Starting the Gateway
 
@@ -325,55 +325,34 @@ For web-based interactions:
 
 Web sessions use WebAuthn signatures as L3 proof via PasskeyService.
 
-### Device-Link Enrollment
+### CSR-Based Enrollment
 
-All authentication to the Gateway requires owner-approved device links. The platform enforces a strict owner-centric model where every entity (operator, MCP server, AI client, user) must authenticate via a device link created by the platform owner.
+All authentication to the Gateway requires owner-approved invitations. The platform enforces a strict owner-centric model where every entity (operator, MCP server, AI client, user) must authenticate via invitation-based JIT provisioning.
 
-#### Owner-Centric Device-Link Model
+#### Owner-Centric Invitation Model
 
-- **Platform Owner**: The first human to authenticate via device-link becomes the Platform Owner
-- **Universal Requirement**: All entities must use device links for authentication
-- **Strict TTL**: Device links and sessions have a 1-hour TTL by default
-- **Owner Approval**: Only users with the `owner` role can create device links
+- **Platform Owner**: The first human to authenticate becomes the Platform Owner
+- **Universal Requirement**: All entities must use invitations for JIT provisioning
+- **Strict TTL**: Sessions have a 1-hour TTL by default
+- **Owner Approval**: Only users with the `owner` role can create invitations
 
-#### Creating Device Links
+#### Creating Invitations
 
-Generate a device-link token for operator enrollment:
-
-```bash
-./g8e auth device-link create --name "prod-db-node" --ttl 3600
-```
-
-For MCP servers or AI clients, create a device link via the admin API:
-
-```bash
-./g8e data device-links create --name "mcp-server-1" --max-uses 1 --ttl 3600
-```
-
-#### Device-Link Authentication Flow
-
-1. **Owner creates device link**: Owner generates a token with specific TTL and max-uses
-2. **Client requests enrollment**: Client presents device-link token during registration
-3. **Gateway validates**: Gateway checks token exists, is not expired, and has remaining uses
-4. **Session issuance**: Gateway issues short-lived mTLS certificate (1-day TTL) and session (1-hour TTL)
-5. **Session renewal**: Client must re-authenticate via device-link or session renewal before expiry
-
-#### JIT User Provisioning with Invitations
-
-For external IdP authentication (JWT), users must have an active invitation:
+Generate an invitation for external IdP authentication:
 
 ```bash
 ./g8e data invitations create --sub "user@example.com" --roles "user" --ttl 3600
 ```
 
-When a JWT is presented:
-- Gateway validates JWT signature
-- Gateway extracts `sub` claim and checks for active invitation
-- If no invitation exists, authentication is rejected (403 Forbidden)
-- If invitation exists, user is provisioned and bound to owner's organization
-- Invitation is consumed after successful provisioning
+#### Invitation-Based JIT Authentication Flow
 
-This ensures no implicit JIT provisioning occurs without owner approval.
+1. **Owner creates invitation**: Owner generates an invitation with specific TTL and roles
+2. **Client requests enrollment**: Client presents JWT with `sub` claim during registration
+3. **Gateway validates**: Gateway checks JWT signature and verifies invitation exists for the `sub`
+4. **User provisioning**: If invitation exists, user is provisioned and bound to owner's organization
+5. **Invitation consumption**: Invitation is consumed after successful provisioning
+6. **Session issuance**: Gateway issues short-lived mTLS certificate (1-day TTL) and session (1-hour TTL)
+7. **Session renewal**: Client must re-authenticate before expiry
 
 ---
 
@@ -577,9 +556,9 @@ If downstream MCP/A2A server is unavailable, the Gateway circuit breaker activat
 
 ## Next Steps
 
-- **[Build Operator](build_operator.md)** — Build a custom g8e-compatible Governed Operator
-- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Deploy and use a Governed Operator
-- **[Build Apps](build_apps.md)** — Build g8e-compatible applications using a Gateway
-- **[MCP Protocol](../protocols/mcp/mcp.md)** — Detailed MCP protocol specification
-- **[A2A Protocol](../protocols/a2a/a2a.md)** — Detailed A2A protocol specification
-- **[Gateway Architecture](../architecture/gateway.md)** — Gateway architecture and internals
+- **[Build Operator](build_operator.md)** - Build a custom g8e-compatible Governed Operator
+- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** - Deploy and use a Governed Operator
+- **[Build Apps](build_apps.md)** - Build g8e-compatible applications using a Gateway
+- **[MCP Protocol](../protocols/mcp/mcp.md)** - Detailed MCP protocol specification
+- **[A2A Protocol](../protocols/a2a/a2a.md)** - Detailed A2A protocol specification
+- **[Gateway Architecture](../architecture/gateway.md)** - Gateway architecture and internals

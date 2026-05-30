@@ -91,7 +91,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
 	resp := responder.New(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "")
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "", "", "")
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
@@ -115,4 +115,20 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 		SecretsDir:  secretsDir,
 		KeystoreDir: keystoreDir,
 	}
+}
+
+// setupTestHTTPHandlerLightweight creates a minimal HTTPHandler for testing
+// handler methods that don't require full infrastructure (e.g., readBody, pathTraversalGuard).
+// This is significantly faster than setupTestHTTPHandler for unit testing simple handler logic.
+func setupTestHTTPHandlerLightweight(t *testing.T) *HTTPHandler {
+	t.Helper()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+
+	h := &HTTPHandler{
+		cfg:    cfg,
+		logger: logger,
+	}
+
+	return h
 }

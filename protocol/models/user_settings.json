@@ -1,13 +1,13 @@
 {
-  "_comment": "Canonical UserSettings document shape. client is the authority - it creates and updates this document in the settings collection. g8ee reads it at request time via UserSettingsDocument.model_validate(). Settings are grouped into nested sub-objects (llm, search, eval_judge) that map directly to g8ee Pydantic models.",
+  "_comment": "Canonical UserSettings document shape. client is the authority - it creates and updates this document in the settings collection. The g8e-compatible ensemble reads it at request time. Settings are grouped into nested sub-objects (llm, search, eval_judge).",
 
   "_authority": "client",
-  "_consumers": ["g8ee (Python - reads at request time to build per-user G8eeUserSettings)"],
+  "_consumers": ["agent"],
   "_collection": "settings",
   "_document_id": "user_settings_{user_id}",
 
   "user_settings": {
-    "_description": "Per-user settings document. Top-level fields include user_id and timestamps from G8eIdentifiableModel. The settings object contains nested groups consumed by g8ee typed models.",
+    "_description": "Per-user settings document. Top-level fields include user_id and timestamps from G8eIdentifiableModel. The settings object contains nested groups.",
 
     "user_id": {
       "type": "string",
@@ -17,7 +17,7 @@
 
     "settings": {
       "llm": {
-        "_description": "Maps to g8ee LLMSettings model. Keys use model field names and aliases.",
+        "_description": "Maps to LLMSettings model.",
         "provider":              { "type": "string",  "required": false, "values": ["openai", "ollama", "gemini", "anthropic"] },
         "llm_model":             { "type": "string",  "required": false, "description": "Primary LLM model name (alias for primary_model)." },
         "llm_assistant_model":   { "type": "string",  "required": false, "description": "Assistant LLM model name (alias for assistant_model)." },
@@ -34,7 +34,7 @@
         "llm_command_gen_passes":   { "type": "integer", "required": false }
       },
       "search": {
-        "_description": "Maps to g8ee SearchSettings model.",
+        "_description": "Maps to SearchSettings model.",
         "enabled":    { "type": "boolean", "required": false },
         "project_id": { "type": "string",  "required": false },
         "engine_id":  { "type": "string",  "required": false },
@@ -42,7 +42,7 @@
         "api_key":    { "type": "string",  "required": false }
       },
       "eval_judge": {
-        "_description": "Maps to g8ee EvalJudgeSettings model. Keys use alias names.",
+        "_description": "Maps to EvalJudgeSettings model. Keys use alias names.",
         "eval_judge_model":       { "type": "string",  "required": false },
         "eval_judge_max_tokens":  { "type": "integer", "required": false }
       }

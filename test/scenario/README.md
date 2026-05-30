@@ -1,6 +1,6 @@
 # Scenario-Based Integration Testing Framework
 
-This framework provides table-driven integration tests for the g8e governance substrate. It tests the real admission path (TransactionVerifier + Actuator) against a fixture matrix of security scenarios, asserting deterministic verdicts and diffing signed receipts against golden files.
+This framework provides table-driven integration tests for the g8e governance platform. It tests the real admission path (TransactionVerifier + Actuator) against a fixture matrix of security scenarios, asserting deterministic verdicts and diffing signed receipts against golden files.
 
 ## Architecture
 
@@ -117,7 +117,7 @@ The framework automatically diffs signed receipts against golden files in `test/
 
 ## Database Persistence
 
-The framework uses real SQLite databases (no mocks) to verify receipt persistence. This ensures the substrate actually writes receipts to the audit store as expected in production.
+The framework uses real SQLite databases (no mocks) to verify receipt persistence. This ensures the platform actually writes receipts to the audit store as expected in production.
 
 ### Database Setup
 
@@ -156,7 +156,7 @@ Planned scenarios from the original specification:
 - **Same Knife (#1)**: One intent, three producer variants, assert identical verdict
 - **Go Around It (#3)**: Assert the only mutation path is the Actuator
 - **Runaway (#4)**: Doctrine forbidden-pattern fixture
-- **Worm Enrolls (#5)**: Device-link token validation
+- **Worm Enrolls (#5)**: CSR-based enrollment validation
 - **Hand Me the Proof (#7)**: Receipt chain validation with scorecard
 - **Pull the Cable (#2)**: Transport fault-injection (requires `-tags=integration,partition`)
 

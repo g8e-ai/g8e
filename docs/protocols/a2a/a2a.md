@@ -4,7 +4,7 @@ title: A2A Protocol
 
 # A2A Protocol
 
-Last Updated: 2026-05-25
+Last Updated: 2026-05-29
 
 The Operator (g8eo) in gateway mode supports Agent-to-Agent (A2A) protocol integration. A2A agents send HTTP/JSON skill invocation requests to the gateway, which wraps them in the g8e governance envelope, runs them through the 3-layer BFT verification sequence (L1Doctrine/L2Consensus/L3Notary), and dispatches verified payloads to downstream A2A servers or to the in-process execution service for local execution.
 
@@ -221,6 +221,6 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 
 ## Related Documentation
 
-- [**g8e Protocol**](../../architecture/protocol.md) - The wire contract and governance hierarchy
+- [**g8e Protocol**](../../architecture/g8e.md) - The wire contract and governance hierarchy
 - [**Operator (g8eo)**](../../architecture/operator.md) - Operator architecture and gateway mode
 - [**MCP Protocol**](../mcp/mcp.md) - MCP protocol specification and integration

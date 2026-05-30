@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-05-25
-Version: v1.0.0
+Last Updated: 2026-05-29
+Version: v1.0.3
 
 ---
 
@@ -14,7 +14,7 @@ Version: v1.0.0
 
 A g8e-compatible application functions strictly as a GovernanceEnvelope producer and receipt consumer. It maintains no privileged communication channels, never interacts directly with the host system, and communicates with the Gateway (Operator in gateway mode) exclusively through public ingress paths.
 
-Security operations including Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) verification gates, replay defense, state binding, cryptographic audit, and human-in-the-loop authorization are fully delegated to the Gateway substrate. The application provides only the components the protocol cannot intrinsically supply: the mutation intent and optionally, consensus evidence.
+Security operations including Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) verification gates, replay defense, state binding, cryptographic audit, and human-in-the-loop authorization are fully delegated to the Gateway platform. The application provides only the components the protocol cannot intrinsically supply: the mutation intent and optionally, consensus evidence.
 
 ---
 
@@ -298,14 +298,14 @@ Applications must validate the state root returned by the Gateway (via health en
 
 ## Reference Implementation
 
-The reference g8e-compatible agentic ensemble (g8ee) demonstrates a maximal application implementation. It includes:
+A reference g8e-compatible agentic ensemble demonstrates a maximal application implementation. It includes:
 
 - Internal consensus mechanism for L2 signature generation
 - Envelope construction and submission
 - Receipt verification and consumption
 - MCP/A2A integration
 
-Refer to the g8ee source code for a complete example of a g8e-compatible application.
+Refer to the reference ensemble source code for a complete example of a g8e-compatible application.
 
 ---
 

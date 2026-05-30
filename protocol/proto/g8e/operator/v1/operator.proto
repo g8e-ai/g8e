@@ -384,7 +384,7 @@ message EvalAnswerRequested {
 // server.
 message McpCallRequested {
   // The MCP tool name (e.g., "fs_read", "drop_table"). Forbidden patterns
-  // here block the gauntlet at L1 before any signature or state check.
+  // here block the interlock sequence at L1 before any signature or state check.
   string tool_name = 1 [(g8e.common.v1.forbidden_patterns) = "(?i)^(sudo|su)$,(?i)^rm[ _-]?rf[ _-]?root$,(?i)^drop[ _-]?database$"];
 
   // JSON-encoded arguments object exactly as the MCP client supplied it.

@@ -18,12 +18,10 @@ var Ports = struct {
 	OperatorHttps          int
 	OperatorBootstrapHttps int
 	OperatorPublicHttps    int
-	G8eeHttps              int
 	InsecureMcpGateway     int
 }{
 	OperatorHttps:          8440,
 	OperatorBootstrapHttps: 8441,
 	OperatorPublicHttps:    8443,
-	G8eeHttps:              8443,
 	InsecureMcpGateway:     18789,
 }

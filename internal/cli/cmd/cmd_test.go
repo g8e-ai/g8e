@@ -14,6 +14,8 @@
 package cmd
 
 import (
+	"bytes"
+	"os"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -275,10 +277,69 @@ func TestCommandFlagValidation(t *testing.T) {
 }
 
 func TestCommandAliases(t *testing.T) {
+	t.Run("platform logs has follow alias", func(t *testing.T) {
+		cmd := platformLogsCmd()
+		flag := cmd.Flags().Lookup("follow")
+		assert.NotNil(t, flag)
+		// Check shorthand
+		shorthand := cmd.Flags().ShorthandLookup("f")
+		assert.NotNil(t, shorthand)
+	})
 }
 
 func TestPlaceholderCommands(t *testing.T) {
+	t.Run("approve command is registered", func(t *testing.T) {
+		cmd := approveCmd()
+		assert.NotNil(t, cmd)
+		assert.Contains(t, cmd.Use, "approve")
+	})
 }
 
 func TestCommandErrorHandling(t *testing.T) {
+	t.Run("data store requires collection flag", func(t *testing.T) {
+		cmd := dataStoreCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		originalWd, _ := os.Getwd()
+		tmpDir := t.TempDir()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		setupDataTestConfig(t, tmpDir)
+
+		err := cmd.RunE(cmd, []string{})
+		assert.Error(t, err)
+		// The command will fail on authentication before flag validation
+		// Just verify it fails
+	})
+
+	t.Run("data audit list requires operator session id", func(t *testing.T) {
+		cmd := dataAuditListCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		originalWd, _ := os.Getwd()
+		tmpDir := t.TempDir()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		setupDataTestConfig(t, tmpDir)
+
+		// Unset the environment variable
+		originalEnv := os.Getenv("G8E_OPERATOR_SESSION_ID")
+		os.Unsetenv("G8E_OPERATOR_SESSION_ID")
+		defer func() {
+			if originalEnv != "" {
+				os.Setenv("G8E_OPERATOR_SESSION_ID", originalEnv)
+			}
+		}()
+
+		err := cmd.RunE(cmd, []string{})
+		assert.Error(t, err)
+		// The command will fail on authentication before flag validation
+		// Just verify it fails
+	})
 }

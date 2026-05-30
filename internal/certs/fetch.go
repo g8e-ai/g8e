@@ -23,7 +23,7 @@ import (
 )
 
 // FetchAndSetCA fetches the hub trust bundle from the given URL
-// (e.g. https://host/.well-known/g8e/pki/g8e-gw-ca-bundle.pem), validates it is a non-empty PEM block,
+// (e.g. https://host/.well-known/g8e/pki/ca-bundle), validates it is a non-empty PEM block,
 // and stores it via SetCA for use by all subsequent TLS connections.
 //
 // This is the bootstrap step that establishes trust. The trust bundle endpoint is

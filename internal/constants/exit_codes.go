@@ -25,7 +25,7 @@ const (
 	ExitGeneralError = 1
 
 	// ExitAuthFailure indicates authentication with g8e failed
-	// (invalid/expired device link token, deleted Operator slot)
+	// (deleted Operator slot, invalid credentials)
 	ExitAuthFailure = 2
 
 	// ExitPermissionDenied indicates a filesystem permission error
@@ -85,8 +85,6 @@ func ExitCodeFromError(err error) int {
 	// Check for authentication errors
 	if containsAny(errStr, []string{
 		"authentication failed",
-		"invalid device link token",
-		"device link token expired",
 		"unauthorized",
 		"401",
 	}) {

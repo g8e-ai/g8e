@@ -52,7 +52,7 @@ The unified `g8e` binary is the single entry point for all platform operations. 
 **CLI Subcommands:**
 - **Platform Management (`./g8e platform`)**: Orchestrates the Gateway lifecycle via native Go process management.
 - **Auth & PKI (`./g8e auth`)**: Establishes identity, generates CSRs, and verifies certificate chains.
-- **Data & Admin (`./g8e data`)**: Administers the local substrate over mTLS (users, operators, device-links, settings).
+- **Data & Admin (`./g8e data`)**: Administers the local platform over mTLS (users, operators, settings).
 - **Test Orchestration (`./g8e test`)**: Orchestrates Go test execution suites.
 - **Security (`./g8e security`)**: Validation checks.
 - **Environment (`./g8e vars`)**: Environment variable management.
@@ -156,7 +156,7 @@ g8e is designed to be a testing environment and production environment at the sa
 4. **mTLS by Default.** Most communication requires mTLS. The test runner handles certificate injection from `.g8e/pki`.
 
 ### Test Runners
-All substrate tests are orchestrated via the `./g8e` CLI. **Never call `go test` directly for substrate tests.**
+All platform tests are orchestrated via the `./g8e` CLI. **Never call `go test` directly for platform tests.**
 
 | Command | Runner | Framework | Primary Use |
 |---|---|---|---|

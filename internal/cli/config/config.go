@@ -78,7 +78,6 @@ type PathsConfig struct {
 		SSHConfigPath        string `json:"ssh_config_path"`
 	} `json:"infra"`
 	Ports struct {
-		G8eeHTTPS              int `json:"g8ee_https"`
 		InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 		OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 		OperatorHTTPS          int `json:"operator_https"`
@@ -115,6 +114,73 @@ func Load(projectRoot string) (*Config, error) {
 
 	// Always use embedded default paths configuration
 	pathsData := defaultPathsJSON
+
+	var paths PathsConfig
+	if err := json.Unmarshal(pathsData, &paths); err != nil {
+		return nil, fmt.Errorf("%w: %w", clierrors.ErrFailedToParsePaths, err)
+	}
+
+	// Resolve all relative paths in infra section relative to projectRoot
+	if paths.Infra.AppCertDir != "" && !filepath.IsAbs(paths.Infra.AppCertDir) {
+		paths.Infra.AppCertDir = filepath.Join(projectRoot, paths.Infra.AppCertDir)
+	}
+	if paths.Infra.CACertPath != "" && !filepath.IsAbs(paths.Infra.CACertPath) {
+		paths.Infra.CACertPath = filepath.Join(projectRoot, paths.Infra.CACertPath)
+	}
+	if paths.Infra.DBPath != "" && !filepath.IsAbs(paths.Infra.DBPath) {
+		paths.Infra.DBPath = filepath.Join(projectRoot, paths.Infra.DBPath)
+	}
+	if paths.Infra.DocsDir != "" && !filepath.IsAbs(paths.Infra.DocsDir) {
+		paths.Infra.DocsDir = filepath.Join(projectRoot, paths.Infra.DocsDir)
+	}
+	if paths.Infra.PKIDir != "" && !filepath.IsAbs(paths.Infra.PKIDir) {
+		paths.Infra.PKIDir = filepath.Join(projectRoot, paths.Infra.PKIDir)
+	}
+	if paths.Infra.ProtocolConstantsDir != "" && !filepath.IsAbs(paths.Infra.ProtocolConstantsDir) {
+		paths.Infra.ProtocolConstantsDir = filepath.Join(projectRoot, paths.Infra.ProtocolConstantsDir)
+	}
+	if paths.Infra.ProtocolDir != "" && !filepath.IsAbs(paths.Infra.ProtocolDir) {
+		paths.Infra.ProtocolDir = filepath.Join(projectRoot, paths.Infra.ProtocolDir)
+	}
+	if paths.Infra.ProtocolModelsDir != "" && !filepath.IsAbs(paths.Infra.ProtocolModelsDir) {
+		paths.Infra.ProtocolModelsDir = filepath.Join(projectRoot, paths.Infra.ProtocolModelsDir)
+	}
+	if paths.Infra.SecretsDir != "" && !filepath.IsAbs(paths.Infra.SecretsDir) {
+		paths.Infra.SecretsDir = filepath.Join(projectRoot, paths.Infra.SecretsDir)
+	}
+	if paths.Infra.SSHConfigPath != "" && !filepath.IsAbs(paths.Infra.SSHConfigPath) {
+		paths.Infra.SSHConfigPath = filepath.Join(projectRoot, paths.Infra.SSHConfigPath)
+	}
+
+	return &Config{
+		ProjectRoot:    projectRoot,
+		RuntimeDir:     runtimeDir,
+		PKIDir:         pkiDir,
+		SecretsDir:     secretsDir,
+		CredentialsDir: credentialsDir,
+		Paths:          &paths,
+	}, nil
+}
+
+// LoadWithPaths loads config with custom paths configuration for testing.
+// This allows hermetic test environments without relying on disk paths.
+func LoadWithPaths(projectRoot string, pathsData []byte) (*Config, error) {
+	if projectRoot == "" {
+		var err error
+		projectRoot, err = os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get working directory: %w", err)
+		}
+	}
+
+	runtimeDir := filepath.Join(projectRoot, DefaultRuntimeDir)
+	pkiDir := filepath.Join(projectRoot, DefaultPKIDir)
+	secretsDir := filepath.Join(projectRoot, DefaultSecretsDir)
+
+	credentialsDir, err := expandPath(DefaultCredentialsDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to expand credentials directory: %w", err)
+	}
 
 	var paths PathsConfig
 	if err := json.Unmarshal(pathsData, &paths); err != nil {
@@ -200,10 +266,6 @@ func (c *Config) OperatorBootstrapHTTPSPort() int {
 
 func (c *Config) OperatorPublicHTTPSPort() int {
 	return c.Paths.Ports.OperatorPublicHTTPS
-}
-
-func (c *Config) G8eeHTTPSPort() int {
-	return c.Paths.Ports.G8eeHTTPS
 }
 
 func (c *Config) OperatorHTTPURL() string {

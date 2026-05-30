@@ -40,6 +40,10 @@ func authCmd() *cobra.Command {
 }
 
 func loginCmd() *cobra.Command {
+	return loginCmdWithConfig(config.Load)
+}
+
+func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
 	var count int
 	var ttl int
 
@@ -48,18 +52,18 @@ func loginCmd() *cobra.Command {
 		Short: "Authenticate and save operator session",
 		Long:  `Authenticate and save mTLS credentials to ~/.g8e/credentials. The first login automatically bootstraps the platform via CSR-based enrollment.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			if err := auth.CheckOperatorRunning(cfg); err != nil {
-				return err
 			}
 
 			trustBundle := cfg.TrustBundlePath()
 			if _, err := os.Stat(trustBundle); os.IsNotExist(err) {
 				return fmt.Errorf("trust bundle not found at %s - install the platform CA manually before login", trustBundle)
+			}
+
+			if err := auth.CheckOperatorRunning(cfg); err != nil {
+				return err
 			}
 
 			// Check if platform is already bootstrapped

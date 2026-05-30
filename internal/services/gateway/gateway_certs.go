@@ -586,7 +586,7 @@ func (pki *PKIAuthority) loadCertificatePair(certPath, keyPath string, cert **x5
 		case strings.Contains(certPath, "operator-gateway.crt"):
 			serviceName = "operator-gateway"
 		case strings.Contains(certPath, "issued/apps/"):
-			// Extract app name from path like "issued/apps/g8ee.crt"
+			// Extract app name from path like "issued/apps/agent.crt"
 			base := filepath.Base(certPath)
 			serviceName = strings.TrimSuffix(base, ".crt")
 		default:

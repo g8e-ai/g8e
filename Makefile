@@ -43,7 +43,7 @@ help:
 	@echo ""
 	@echo "CI/CD (Local):"
 	@echo "  ci            Run full CI pipeline locally (mirrors GitHub Actions)"
-	@echo "  ci-substrate  Run substrate-only CI (g8eo, protocol, proto, docs)"
+	@echo "  ci-platform   Run platform-only CI (g8eo, protocol, proto, docs)"
 	@echo ""
 	@echo "Protocol Generation:"
 	@echo "  generate      Generate all protocol artifacts (proto)"
@@ -71,11 +71,14 @@ help:
 	@echo "Cleanup:"
 	@echo "  clean         Remove all build artifacts and runtime state"
 	@echo ""
-	@echo "Demo:"
-	@echo "  demo          Build and run the AI agent demo"
-	@echo "  demo-build    Build the AI agent demo binary"
-	@echo "  demo-run      Run the AI agent demo (requires build first)"
-	@echo "  demo-clean    Remove demo build artifacts"
+	@echo "Governance Auditor (via CLI):"
+	@echo "  ./g8e auditor list              List available scenarios"
+	@echo "  ./g8e auditor run              Run scenarios against a real Gateway/Operator"
+	@echo "  ./g8e auditor audit            Audit signed receipts from the Operator"
+	@echo "  ./g8e auditor self-test        Start self-contained gateway+operator and run tests"
+	@echo ""
+	@echo "Chaos Tester (via CLI):"
+	@echo "  ./g8e chaos --count N          Generate governance events against the audit stack"
 
 # =============================================================================
 # PROTOCOL GENERATION
@@ -158,21 +161,18 @@ PLATFORMS := linux/amd64 linux/arm64 linux/386
 build:
 	@echo "Building g8e..."
 	@mkdir -p bin
-	@echo "Preparing build directory..."
-	@rm -rf .build/cmd/g8eo
-	@mkdir -p .build/cmd/g8eo
-	@cp -r cmd/g8eo/* .build/cmd/g8eo/
+	@echo "Building from: cmd/g8eo"
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
 	PLATFORM=$$(uname -s)_$$(uname -m); \
-	if go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./.build/cmd/g8eo; then \
-		rm -rf .build; \
+	echo "Building output: bin/g8e"; \
+	if go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo; then \
 		ln -sf bin/g8e g8e; \
 		sha256sum bin/g8e > bin/g8e.sha256; \
-		echo "Build complete. Checksum: bin/g8e.sha256"; \
+		echo "Build complete. Output: bin/g8e"; \
+		echo "Checksum: bin/g8e.sha256"; \
 	else \
-		rm -rf .build; \
 		exit 1; \
 	fi
 
@@ -180,10 +180,6 @@ build:
 build-compressed: upx-install
 	@echo "Building g8e with compression for $(PLATFORMS)..."
 	@mkdir -p bin
-	@echo "Preparing build directory..."
-	@rm -rf .build/cmd/g8eo
-	@mkdir -p .build/cmd/g8eo
-	@cp -r cmd/g8eo/* .build/cmd/g8eo/
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
@@ -192,12 +188,11 @@ build-compressed: upx-install
 		GOARCH=$${platform#*/}; \
 		BINARY=bin/g8e-$$GOOS-$$GOARCH; \
 		echo "Building $$platform -> $$BINARY..."; \
-		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$platform" -o $$BINARY ./.build/cmd/g8eo || exit 1; \
+		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$platform" -o $$BINARY ./cmd/g8eo || exit 1; \
 		echo "Compressing $$BINARY with UPX..."; \
 		$(UPX) --best --lzma $$BINARY; \
 		sha256sum $$BINARY > $$BINARY.sha256; \
 	done
-	@rm -rf .build
 	@HOST_OS=$$(go env GOOS); \
 	HOST_ARCH=$$(go env GOARCH); \
 	if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH ]; then \
@@ -260,9 +255,15 @@ update-golden:
 # LINT & QUALITY
 # =============================================================================
 .PHONY: lint
-lint: vulncheck validate-doctrines
+lint: lint-no-embedded-newlines vulncheck validate-doctrines
 	@golangci-lint run
 	@echo "All linting and quality checks complete."
+
+.PHONY: lint-no-embedded-newlines
+lint-no-embedded-newlines:
+	@echo "Checking for compilation errors (including embedded newlines)..."
+	@go build ./... || { echo "Error: Go build failed. This may be caused by embedded newlines or other syntax errors."; exit 1; }
+	@echo "Build successful - no embedded newlines or syntax errors detected."
 
 .PHONY: vulncheck
 vulncheck:
@@ -312,43 +313,17 @@ clean:
 	@rm -f *.sha256
 	@echo "Clean complete."
 
-# =============================================================================
-# DEMO
-# =============================================================================
-DEMO_DIR := demo/ai-agent
-DEMO_BIN := $(DEMO_DIR)/demo-agent
-
-.PHONY: demo
-demo: demo-build demo-run
-
-.PHONY: demo-build
-demo-build:
-	@echo "Building AI agent demo..."
-	@cd $(DEMO_DIR) && go build -o demo-agent .
-	@echo "Demo binary built: $(DEMO_BIN)"
-
-.PHONY: demo-run
-demo-run:
-	@echo "Running AI agent demo..."
-	@cd $(DEMO_DIR) && ./demo-agent
-
-.PHONY: demo-clean
-demo-clean:
-	@echo "Cleaning demo build artifacts..."
-	@rm -f $(DEMO_BIN)
-	@echo "Demo clean complete."
-
 
 # =============================================================================
 # CI/CD (LOCAL)
 # =============================================================================
 .PHONY: ci
-ci: ci-substrate
+ci: ci-platform
 	@echo "CI complete."
 
-.PHONY: ci-substrate
-ci-substrate: _ci-verify-proto _ci-lint _ci-vulncheck _ci-test
-	@echo "Substrate CI complete."
+.PHONY: ci-platform
+ci-platform: _ci-verify-proto _ci-lint _ci-vulncheck _ci-test
+	@echo "Platform CI complete."
 
 .PHONY: _ci-verify-proto
 _ci-verify-proto:

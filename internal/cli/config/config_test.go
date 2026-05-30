@@ -283,7 +283,6 @@ func TestConfig_OperatorHTTPSPort(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					G8eeHTTPS              int `json:"g8ee_https"`
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -304,7 +303,6 @@ func TestConfig_OperatorBootstrapHTTPSPort(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					G8eeHTTPS              int `json:"g8ee_https"`
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -325,7 +323,6 @@ func TestConfig_OperatorHTTPURL(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					G8eeHTTPS              int `json:"g8ee_https"`
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -346,7 +343,6 @@ func TestConfig_OperatorBootstrapURL(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					G8eeHTTPS              int `json:"g8ee_https"`
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -368,7 +364,6 @@ func TestConfig_OperatorPublicURL(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					G8eeHTTPS              int `json:"g8ee_https"`
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -390,7 +385,6 @@ func TestConfig_OperatorDiscoveryURL(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					G8eeHTTPS              int `json:"g8ee_https"`
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -464,6 +458,5 @@ func TestLoadIntegration(t *testing.T) {
 		assert.Equal(t, 8440, config.OperatorHTTPSPort())
 		assert.Equal(t, 8441, config.OperatorBootstrapHTTPSPort())
 		assert.Equal(t, 8443, config.OperatorPublicHTTPSPort())
-		assert.Equal(t, 8443, config.G8eeHTTPSPort())
 	})
 }

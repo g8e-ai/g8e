@@ -197,6 +197,16 @@ type SSEEventsResponse struct {
 	Count  int           `json:"count"`
 }
 
+// SSEEventsCountResponse is the typed response for GET /api/internal/sse/events/count.
+type SSEEventsCountResponse struct {
+	Count int64 `json:"count"`
+}
+
+// SSEEventsWipeResponse is the typed response for DELETE /api/internal/sse/events.
+type SSEEventsWipeResponse struct {
+	Deleted int64 `json:"deleted"`
+}
+
 // ReauthResponse is the typed response for POST /api/operators/reauth.
 type ReauthResponse struct {
 	Success  bool                `json:"success"`

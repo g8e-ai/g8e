@@ -15,7 +15,9 @@ import (
 type JWTClaims struct {
 	Sub      string `json:"sub"`
 	Iss      string `json:"iss"`
+	Aud      string `json:"aud"`
 	Exp      int64  `json:"exp"`
+	Nbf      int64  `json:"nbf"`
 	Iat      int64  `json:"iat"`
 	TenantID string `json:"tenant_id"`
 }
@@ -58,7 +60,7 @@ func extractRoles(payloadBytes []byte, roleClaim string) []string {
 	return nil
 }
 
-func ParseAndVerifyJWT(tokenString string, jwks *JWKSProvider, roleClaim string) (*NativeJWT, error) {
+func ParseAndVerifyJWT(tokenString string, jwks *JWKSProvider, roleClaim string, expectedIssuer, expectedAudience string) (*NativeJWT, error) {
 	parts := strings.Split(tokenString, ".")
 	if len(parts) != 3 {
 		return nil, errors.New("invalid JWT format")
@@ -101,6 +103,24 @@ func ParseAndVerifyJWT(tokenString string, jwks *JWKSProvider, roleClaim string)
 	now := time.Now().Unix()
 	if claims.Exp != 0 && now > claims.Exp {
 		return nil, errors.New("token is expired")
+	}
+
+	// Validate not-before with 60-second clock skew allowance
+	if claims.Nbf != 0 {
+		nbfWithSkew := claims.Nbf - 60
+		if now < nbfWithSkew {
+			return nil, errors.New("token is not yet valid (nbf)")
+		}
+	}
+
+	// Validate issuer if expected
+	if expectedIssuer != "" && claims.Iss != expectedIssuer {
+		return nil, fmt.Errorf("token issuer mismatch: expected %s, got %s", expectedIssuer, claims.Iss)
+	}
+
+	// Validate audience if expected
+	if expectedAudience != "" && claims.Aud != expectedAudience {
+		return nil, fmt.Errorf("token audience mismatch: expected %s, got %s", expectedAudience, claims.Aud)
 	}
 
 	pubKey, err := jwks.GetKey(header.Kid)

@@ -73,7 +73,7 @@ func (c *AuthController) readBody(r *http.Request) ([]byte, error) {
 // Passkey / L3 Brokerage Handlers
 // =============================================================================
 
-func (c *AuthController) handlePasskeyRegisterChallenge(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handleAuthPasskeysRegisterChallenge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -95,7 +95,7 @@ func (c *AuthController) handlePasskeyRegisterChallenge(w http.ResponseWriter, r
 	}
 
 	// [PIVOT] Enforce session-to-user binding for public browser registration
-	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
+	if ctxUserID, ok := r.Context().Value(userIDKey).(string); ok {
 		if req.UserID != "" && req.UserID != ctxUserID {
 			c.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
@@ -106,6 +106,25 @@ func (c *AuthController) handlePasskeyRegisterChallenge(w http.ResponseWriter, r
 	if req.UserID == "" {
 		c.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
+	}
+
+	// JIT passkey bootstrap: enforce first-credential-only when coming through JIT routes.
+	// These routes are mounted behind JWTAuthMiddleware in the public router.
+	// This prevents a stolen JWT from silently adding attacker-controlled authenticators.
+	if strings.Contains(r.URL.Path, "/jit-") {
+		user, err := c.userSvc.GetByID(req.UserID)
+		if err != nil {
+			c.responder.Error(w, http.StatusInternalServerError, "failed to fetch user")
+			return
+		}
+		if user == nil {
+			c.responder.Error(w, http.StatusNotFound, "user not found")
+			return
+		}
+		if len(user.PasskeyCredentials) > 0 {
+			c.responder.Error(w, http.StatusForbidden, "first-credential registration only; user already has credentials, require step-up via existing passkey or mTLS")
+			return
+		}
 	}
 
 	options, err := c.passkey.GenerateRegistrationChallenge(req.UserID, req.UserName)
@@ -121,7 +140,7 @@ func (c *AuthController) handlePasskeyRegisterChallenge(w http.ResponseWriter, r
 	})
 }
 
-func (c *AuthController) handlePasskeyRegisterVerify(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handleAuthPasskeysRegisterVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -143,7 +162,7 @@ func (c *AuthController) handlePasskeyRegisterVerify(w http.ResponseWriter, r *h
 	}
 
 	// [PIVOT] Enforce session-to-user binding for public browser registration
-	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
+	if ctxUserID, ok := r.Context().Value(userIDKey).(string); ok {
 		if req.UserID != "" && req.UserID != ctxUserID {
 			c.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
@@ -154,6 +173,25 @@ func (c *AuthController) handlePasskeyRegisterVerify(w http.ResponseWriter, r *h
 	if req.UserID == "" {
 		c.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
+	}
+
+	// JIT passkey bootstrap: enforce first-credential-only when coming through JIT routes.
+	// These routes are mounted behind JWTAuthMiddleware in the public router.
+	// This prevents a stolen JWT from silently adding attacker-controlled authenticators.
+	if strings.Contains(r.URL.Path, "/jit-") {
+		user, err := c.userSvc.GetByID(req.UserID)
+		if err != nil {
+			c.responder.Error(w, http.StatusInternalServerError, "failed to fetch user")
+			return
+		}
+		if user == nil {
+			c.responder.Error(w, http.StatusNotFound, "user not found")
+			return
+		}
+		if len(user.PasskeyCredentials) > 0 {
+			c.responder.Error(w, http.StatusForbidden, "first-credential registration only; user already has credentials, require step-up via existing passkey or mTLS")
+			return
+		}
 	}
 
 	cred, err := c.passkey.VerifyRegistration(req.UserID, r)
@@ -172,7 +210,7 @@ func (c *AuthController) handlePasskeyRegisterVerify(w http.ResponseWriter, r *h
 	})
 }
 
-func (c *AuthController) handlePasskeyAuthChallenge(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handleAuthPasskeysAuthenticateChallenge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -193,7 +231,7 @@ func (c *AuthController) handlePasskeyAuthChallenge(w http.ResponseWriter, r *ht
 	}
 
 	userID := req.UserID
-	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
+	if ctxUserID, ok := r.Context().Value(userIDKey).(string); ok {
 		if userID != "" && userID != ctxUserID {
 			c.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
@@ -223,7 +261,7 @@ func (c *AuthController) handlePasskeyAuthChallenge(w http.ResponseWriter, r *ht
 	})
 }
 
-func (c *AuthController) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handleAuthPasskeysAuthenticateVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -245,7 +283,7 @@ func (c *AuthController) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.
 	}
 
 	userID := req.UserID
-	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
+	if ctxUserID, ok := r.Context().Value(userIDKey).(string); ok {
 		if userID != "" && userID != ctxUserID {
 			c.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
@@ -289,7 +327,7 @@ func (c *AuthController) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.
 	})
 }
 
-func (c *AuthController) handlePasskeyCredentials(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handleAuthPasskeys(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -314,7 +352,7 @@ func (c *AuthController) handlePasskeyCredentials(w http.ResponseWriter, r *http
 	})
 }
 
-func (c *AuthController) handlePasskeyRevokeCredential(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handleAuthPasskeysRevoke(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -326,7 +364,7 @@ func (c *AuthController) handlePasskeyRevokeCredential(w http.ResponseWriter, r 
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/api/auth/passkey/credentials/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/auth/passkeys/")
 	if path == "" {
 		c.responder.Error(w, http.StatusBadRequest, "credential_id required")
 		return
@@ -382,8 +420,8 @@ func (c *AuthController) handleUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AuthController) handleApprovalAction(w http.ResponseWriter, r *http.Request) {
-	// Path format: /api/approve/{txHash} or /api/approve/{txHash}/{action}
-	path := strings.TrimPrefix(r.URL.Path, "/api/approve/")
+	// Path format: /api/v1/approvals/{txHash} or /api/v1/approvals/{txHash}/{action}
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/approvals/")
 	parts := strings.Split(path, "/")
 	if len(parts) < 1 {
 		c.responder.Error(w, http.StatusBadRequest, "invalid request path")
@@ -528,10 +566,16 @@ func (c *AuthController) handleCLIApproval(w http.ResponseWriter, r *http.Reques
 	}
 
 	var req struct {
+		CliSignature        string `json:"cli_signature"`
 		MtlsCertFingerprint string `json:"mtls_cert_fingerprint"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if req.CliSignature == "" {
+		c.responder.Error(w, http.StatusBadRequest, "cli_signature required")
 		return
 	}
 
@@ -540,9 +584,16 @@ func (c *AuthController) handleCLIApproval(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Create L3 proof with mtls_cert_fingerprint for CLI approval
+	// Persist the approval with signature before resuming
+	if err := c.db.ApproveSuspendedTransaction(txHash, userID, req.CliSignature, req.MtlsCertFingerprint); err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to approve transaction: %v", err))
+		return
+	}
+
+	// Create L3 proof with mtls_cert_fingerprint and cli_signature for CLI approval
 	proof := &commonv1.L3Proof{
 		MtlsCertFingerprint: req.MtlsCertFingerprint,
+		CliSignature:        req.CliSignature,
 	}
 
 	// Resume the transaction with the proof
@@ -567,7 +618,7 @@ func (c *AuthController) handleApprovalPage(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Extract transaction hash from URL path
-	txHash := strings.TrimPrefix(r.URL.Path, "/approve/")
+	txHash := strings.TrimPrefix(r.URL.Path, "/api/v1/approve/")
 	if txHash == "" {
 		http.Error(w, "transaction hash required", http.StatusBadRequest)
 		return
@@ -799,7 +850,7 @@ func (c *AuthController) handleListSuspendedTransactions(w http.ResponseWriter, 
 // Browser Auth Handlers (Public Router)
 // =============================================================================
 
-func (c *AuthController) handleAuthLoginVerify(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handlePublicAuthLoginVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -850,7 +901,7 @@ func (c *AuthController) handleAuthLoginVerify(w http.ResponseWriter, r *http.Re
 	})
 }
 
-func (c *AuthController) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("g8e_session")
 	if err == nil {
 		// Best effort delete web session from DB
@@ -871,7 +922,7 @@ func (c *AuthController) handleAuthLogout(w http.ResponseWriter, r *http.Request
 	c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }
 
-func (c *AuthController) handleBootstrap(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -1111,7 +1162,7 @@ func (c *AuthController) handleBootstrapStatus(w http.ResponseWriter, r *http.Re
 }
 
 func (c *AuthController) handleUserMe(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value("user_id").(string)
+	userID, ok := r.Context().Value(userIDKey).(string)
 	if !ok {
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -1134,7 +1185,7 @@ func (c *AuthController) handleUserMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AuthController) handleWebSession(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value("user_id").(string)
+	userID, ok := r.Context().Value(userIDKey).(string)
 	if !ok {
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return

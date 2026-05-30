@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Operator to a Governance Gateway
 
-Last Updated: 2026-05-25
-Version: v1.0.0
+Last Updated: 2026-05-29
+Version: v1.0.3
 
 ---
 
@@ -32,25 +32,21 @@ This starts the Gateway in doctrine mode (L1 enforced, L2/L3 audited).
 
 For distributed infrastructure, deploy the operator on remote hosts:
 
-#### 1. Generate Device-Link Token
+#### 1. CSR-Based Enrollment
 
-On the Gateway, generate a device-link token for the remote host:
+On the Gateway, generate a CSR for the remote host:
 
 ```bash
-./g8e data device-links create --user-id "prod-db-node"
+./g8e security pki enroll --endpoint <gateway-ip>
 ```
 
-#### 2. Copy Binary and Token
+#### 2. Copy Binary and Certificates
 
-Copy the `g8e` binary and the device-link token to the remote host.
+Copy the `g8e` binary and the issued certificates to the remote host.
 
 #### 3. Start the Operator
 
-On the remote host, start the operator with the token:
-
-```bash
-./g8e --device-token <token> --endpoint <gateway-ip>
-```
+On the remote host, start the operator with the certificates:
 
 The operator will:
 - Establish an outbound-only mTLS tunnel to the Gateway
@@ -79,24 +75,6 @@ Specify the Gateway endpoint via the `--endpoint` flag:
 ```bash
 ./g8e --endpoint gateway.example.com
 ```
-
-### Device-Link Token
-
-Specify the device-link token via the `--device-token` flag:
-
-```bash
-./g8e --device-token <token>
-```
-
-### Working Directory
-
-Specify the working directory via the `--working-dir` flag:
-
-```bash
-./g8e --working-dir /var/lib/g8e
-```
-
-This defaults to the current working directory. All data is stored in `.g8e/` within this directory.
 
 ### PKI Directory
 
@@ -191,10 +169,10 @@ Stop:
 
 ### Certificate Renewal
 
-When the mTLS certificate expires, re-authenticate using the device-link token:
+When the mTLS certificate expires, re-enroll using CSR-based enrollment:
 
 ```bash
-./g8e auth login
+./g8e security pki enroll --endpoint <gateway-ip>
 ```
 
 ---
@@ -203,7 +181,7 @@ When the mTLS certificate expires, re-authenticate using the device-link token:
 
 For custom g8e-compatible operator implementations, connection follows the same operational pattern:
 
-1. **Enroll with Gateway**: Use device-link token and CSR-based enrollment to obtain mTLS certificates.
+1. **Enroll with Gateway**: Use CSR-based enrollment to obtain mTLS certificates.
 2. **Configure Runtime**: Set up the runtime directory, PKI directory, and audit vault.
 3. **Configure Gateway URL**: Specify the Gateway endpoint for outbound mTLS connection.
 4. **Start Operator**: Launch the operator in standard mode or MCP mode.
@@ -213,7 +191,7 @@ For custom g8e-compatible operator implementations, connection follows the same 
 ### Configuration
 
 Custom operators should support configuration via:
-- CLI flags for runtime parameters (gateway URL, device token, paths)
+- CLI flags for runtime parameters (gateway URL, paths)
 - Environment variables for deployment-specific settings
 - Configuration files for complex deployments
 
@@ -237,10 +215,10 @@ Verify Gateway is reachable:
 curl -k https://<gateway-ip>:8440/healthz
 ```
 
-Verify device-link token is valid:
+Verify certificates are valid:
 
 ```bash
-./g8e data device-links list
+./g8e data operators list
 ```
 
 Check operator logs for connection errors:

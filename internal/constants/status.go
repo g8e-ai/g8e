@@ -105,18 +105,6 @@ const (
 	UserStatusDisabled UserStatus = "disabled"
 )
 
-// DeviceLinkStatus is a typed string for device link status.
-type DeviceLinkStatus string
-
-const (
-	DeviceLinkStatusActive    DeviceLinkStatus = "active"
-	DeviceLinkStatusExhausted DeviceLinkStatus = "exhausted"
-	DeviceLinkStatusExpired   DeviceLinkStatus = "expired"
-	DeviceLinkStatusPending   DeviceLinkStatus = "pending"
-	DeviceLinkStatusRevoked   DeviceLinkStatus = "revoked"
-	DeviceLinkStatusUsed      DeviceLinkStatus = "used"
-)
-
 // AuthProvider is a typed string for auth provider.
 type AuthProvider string
 

@@ -1,6 +1,6 @@
 # g8e Codemap
 
-Structural reference. For protocol semantics see [/home/bob/g8e/docs/architecture/protocol.md](/home/bob/g8e/docs/architecture/protocol.md), for gateway architecture see [/home/bob/g8e/docs/architecture/gateway.md](/home/bob/g8e/docs/architecture/gateway.md), for operator details see [/home/bob/g8e/docs/architecture/operator.md](/home/bob/g8e/docs/architecture/operator.md).
+Structural reference. For protocol semantics see [/home/bob/g8e/docs/architecture/g8e.md](/home/bob/g8e/docs/architecture/g8e.md), for gateway architecture see [/home/bob/g8e/docs/architecture/gateway.md](/home/bob/g8e/docs/architecture/gateway.md), for operator details see [/home/bob/g8e/docs/architecture/operator.md](/home/bob/g8e/docs/architecture/operator.md).
 
 ## Dependency Graph
 
@@ -94,9 +94,7 @@ Each subdirectory produces one binary. All import `internal/` and `protocol/`.
 ```text
 cmd/
 ├── g8e/main.go                     # Platform CLI (delegates to internal/cli/cmd)
-├── g8eo/main.go                    # Operator binary (multi-mode: gateway, mcp-serve, insecure, outbound)
-├── chaos_tester/main.go            # Chaos / fuzz testing harness
-└── governance-ping/main.go         # GovernanceEnvelope protocol ping utility
+└── g8eo/main.go                    # Operator binary (multi-mode: gateway, mcp-serve, insecure, outbound)
 ```
 
 ## internal/
@@ -154,7 +152,7 @@ services/
 │   ├── cli_l3_notary.go            #   CLIL3Notary: L3 via mTLS certs
 │   ├── composite_l3_verifier.go    #   Delegates L3 to PasskeyService or CLIL3Notary
 │   ├── passkey_service.go          #   WebAuthn/FIDO2 passkey ops
-│   ├── registration_service.go     #   Device-link enrollment
+│   ├── registration_service.go     #   CSR-based enrollment
 │   ├── secret_manager.go           #   Signing key storage
 │   ├── trust_scripts.go            #   PKI trust bootstrap
 │   ├── user_service.go

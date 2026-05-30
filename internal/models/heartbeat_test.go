@@ -86,11 +86,11 @@ func TestHeartbeatCapabilityFlags(t *testing.T) {
 func TestHeartbeatVersionInfo(t *testing.T) {
 	t.Run("creates valid version info", func(t *testing.T) {
 		info := &HeartbeatVersionInfo{
-			OperatorVersion: "v1.0.0",
+			OperatorVersion: "v1.0.3",
 			Status:          constants.VersionStabilityStable,
 		}
 
-		assert.Equal(t, "v1.0.0", info.OperatorVersion)
+		assert.Equal(t, "v1.0.3", info.OperatorVersion)
 		assert.Equal(t, constants.VersionStabilityStable, info.Status)
 	})
 }
@@ -238,7 +238,7 @@ func TestHeartbeat(t *testing.T) {
 				InternalIP: "192.168.1.1",
 			},
 			VersionInfo: HeartbeatVersionInfo{
-				OperatorVersion: "v1.0.0",
+				OperatorVersion: "v1.0.3",
 				Status:          constants.VersionStabilityStable,
 			},
 			UptimeInfo: HeartbeatUptimeInfo{

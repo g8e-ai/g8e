@@ -7,23 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.3] - 2026-05-29
+
+### Overview
+
+v1.0.3 removes all remaining g8ee application-layer coupling from the Gateway and protocol definitions. The Gateway routing layer uses dedicated controllers for admin and operator lifecycle, and a CLI approval command enables out-of-band L3 transaction authorization. Security hardening includes fixes for outbound L3 notary verification and JIT user lockout prevention.
+
+### Breaking Changes
+
+* **g8ee API paths removed** - All g8ee-specific API paths removed from `protocol/constants/api_paths.json` and `internal/constants/api_paths.go`. The `g8ee` and `g8ee_full` path groups are deleted along with the `GetG8eePath()` helper function.
+* **Device-link CLI commands removed** - The `g8e data device-links` command group (create, delete, list) is removed. Device-link token management is no longer exposed via CLI.
+* **g8ee environment variables removed** - All g8ee-related environment variables and configuration entries removed from platform code.
+* **Public endpoint renaming** - Gateway public endpoints renamed for clarity. Documentation and tests updated to reflect new endpoint names.
+* **Protocol model cleanup** - Protocol models (agent_activity_metadata, case, conversation, investigation, operator_document, reputation_commitment, reputation_state, security_constraints, stake_resolution, tool_results, user, user_settings) updated to remove g8ee-specific field references.
+
+### Added
+
+* **CLI approval command:** The `./g8e approve <transaction_hash>` command enables out-of-band L3 transaction approval. Users sign suspended transaction hashes with their CLI private key and submit cryptographic proofs to the Gateway for authorization.
+* **PublicRouteRegistry:** A centralized public route registry in `gateway_auth.go` eliminates fragile `HasPrefix` duplication across middleware. Exact paths and prefixes are registered in one location for maintainability.
+* **AdminController:** A dedicated controller for admin-only endpoints, including app policy management. Separates admin concerns from auth and operator controllers.
+* **OperatorController:** A dedicated controller for operator lifecycle endpoints (registration, binding, session management). Provides clear separation of operator management concerns.
+* **JIT user lockout defense:** A one-time valid JWT mechanism prevents JIT user lockout during enrollment. Users receive a temporary valid JWT if enrollment fails, ensuring they can recover access.
+* **Enhanced gateway security:** Multiple security hardening improvements include stricter request validation, improved error handling, and enhanced authentication checks.
+
+### Changed
+
+* **Gateway routing refactor:** Gateway HTTP routing uses dedicated controllers. Admin, auth, and operator concerns are separated into distinct controller packages with clear responsibilities.
+* **L3 notary outbound fix:** L3 notary verification for outbound transactions is fixed. Suspended transaction handling and receipt generation correctly handle outbound mutation flows.
+* **Test coverage expansion:** Extensive test coverage improvements across gateway services include comprehensive integration tests for JWT authentication, CLI approval, public route registry, and controller endpoints.
+* **Build process simplification:** The `cp` command is removed from the build process in Makefile. Binary compilation is streamlined to eliminate unnecessary file operations.
+* **Documentation updates:** CLI documentation, architecture docs, and guides reflect the platform-only architecture. g8ee-specific references and device-link command documentation are removed.
+* **Protocol constants regeneration:** Protocol constants are regenerated after g8ee path removal. Generated Go constants are updated to match protocol JSON definitions.
+
+### Fixed
+
+* **Outbound L3 notary bug:** L3 notary correctly verifies and signs outbound transactions. The previous implementation did not properly handle suspended transaction states for outbound mutations.
+* **Gateway security vulnerabilities:** Multiple security issues in gateway authentication and request handling are fixed. Validation of user inputs, session tokens, and request boundaries is improved.
+* **CLI approval integration:** CLI approval command integration with Gateway JWT authentication is fixed. The approval flow correctly validates CLI signatures and updates suspended transaction state.
+* **Test isolation issues:** Test isolation problems in gateway integration tests are fixed. Tests properly clean up database state and avoid cross-test contamination.
+* **Public route matching:** Public route matching logic correctly handles both exact paths and prefixes. The previous implementation had edge cases where authenticated routes were incorrectly exposed.
+
+### Security
+
+* **JIT user lockout prevention:** A one-time valid JWT mechanism prevents users from being locked out during JIT enrollment failures. Ensures a recovery path for authentication errors.
+* **L3 notary hardening:** Outbound transaction verification strictly enforces L3 signature requirements. Suspended transactions cannot bypass L3 checks.
+* **Gateway request validation:** Enhanced request validation prevents malformed or malicious requests from reaching internal services. Stricter bounds checking on payload sizes and field values is implemented.
+* **Public route registry:** Centralized public route definition eliminates accidental exposure of authenticated endpoints. All public routes are explicitly registered and auditable.
+
+---
+
 ## [1.0.2] - 2026-05-28
 
 ### Added
-- **TLS 1.3 Enforcement:** Strict requirement for TLS 1.3 across all substrate communications; removed support for legacy TLS 1.2.
+- **TLS 1.3 Enforcement:** Strict requirement for TLS 1.3 across all platform communications; removed support for legacy TLS 1.2.
 - **CSR-Based Enrollment:** Transitioned to Certificate Signing Requests (CSR) for all device and workload enrollment flows, enhancing identity verification.
 - **Single-Port Multiplexing:** Unified HTTP/HTTPS router in the Gateway allows multiple services (Admin, MCP, A2A, PKI) to share a single port via strict SNI and mTLS routing.
 - **PKI Revocation:** New `PKIController` implements certificate revocation and signed revocation bundle generation for fail-closed identity management.
-- **Ecosystem Demos:** New LangChain agent demo showcasing the "Bring Your Own Agent" (BYOA) substrate integration pattern.
+- **Ecosystem Demos:** New LangChain agent demo showcasing the "Bring Your Own Agent" (BYOA) platform integration pattern.
 
 ### Changed
-- **Substrate Hardening:** Significant refactoring of Gateway and Operator services to improve maintainability and strictly enforce mTLS execution boundaries.
+- **Platform Hardening:** Significant refactoring of Gateway and Operator services to improve maintainability and strictly enforce mTLS execution boundaries.
 - **Bootstrap UX:** Renamed "CA Trust" to "Bootstrap" and improved startup output to better direct users toward the `g8e login` flow.
 - **L1/L3 Governance:** Enhanced L1 Doctrine payload verification and unified L3 Approval brokerage for both WebAuthn and CLI sessions.
 - **Legacy Cleanup:** Completed removal of legacy API-key-only authentication paths in favor of first-class PKI/mTLS.
 
 ### Fixed
-- **Workload Identity:** Standardized SPIFFE-compatible URI SANs for all substrate-issued certificates.
+- **Workload Identity:** Standardized SPIFFE-compatible URI SANs for all platform-issued certificates.
 - **Audit Vault:** Hardened audit event write paths to strictly reject unattributed or malformed events.
 - **Integration Tests:** Significant reliability improvements to MCP/A2A and BYO-client end-to-end test suites.
 
@@ -59,15 +108,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Overview
 
-v1.0.0 completes the substrate-first architecture. The g8ee application layer is excised from the
-substrate entirely; the Sentinel component is dissolved into the governance protocol layers; and the
+v1.0.0 completes the platform-first architecture. The g8ee application layer is excised from the
+platform entirely; the Sentinel component is dissolved into the governance protocol layers; and the
 codebase is restructured so `services/g8eo` is the root module. The platform is now a pure, host-sovereign
-governance substrate: typed, signed, state-bound transactions enforced through fail-closed L1/L2/L3/L4/L5
+governance platform: typed, signed, state-bound transactions enforced through fail-closed L1/L2/L3/L4/L5
 gates with no optional application-layer coupling in the critical path.
 
 ### Breaking Changes
 
-* **g8ee removed from substrate** - g8ee is no longer part of the substrate. All `services/g8ee`
+* **g8ee removed from platform** - g8ee is no longer part of the platform. All `services/g8ee`
   references, root Makefile targets, and environment variable dependencies are gone. Run g8ee
   separately as an optional application adapter.
 * **Sentinel dissolved** - Sentinel no longer exists as a standalone component. Threat detection
@@ -76,14 +125,15 @@ gates with no optional application-layer coupling in the critical path.
   Boundary Plane, invoked at L5 Actuator egress and before audit publishing. The raw audit vault is
   removed; all audit data now passes through Sentinel-moderated (`SentinelModerateRaw`) storage.
 * **Repository root is now the g8eo module** - `services/g8eo/` content promoted to root. `go.mod`,
-  `go.sum`, and all `internal/` packages now live at the repo root. `cmd/g8eo`, `cmd/chaos_tester`,
-  `cmd/uap-ping` are top-level `cmd/` entries.
+  `go.sum`, and all `internal/` packages now live at the repo root. `cmd/g8eo` is the sole
+  top-level `cmd/` entry. The auditor and chaos tester are now CLI subcommands (`./g8e auditor`,
+  `./g8e chaos`).
 * **`web_session_id` → `cli_session_id`** - Session ID field renamed across all logging, events, and
   generated constants to reflect CLI-first architecture.
 * **Cursor-based queries removed** - All cursor-based database query patterns eliminated in favor of
   direct indexed access.
 * **Demo profiles removed** - Docker-based demo profiles (`acme-corp`, `fleet`, `nginx`, `pnfs`) and
-  the `evals/` Python harness are removed. Demos and evals are no longer bundled with the substrate.
+  the `evals/` Python harness are removed. Demos and evals are no longer bundled with the platform.
 
 ### Added
 
@@ -130,12 +180,12 @@ gates with no optional application-layer coupling in the critical path.
 
 ### Removed
 
-* `services/g8ee/` - Entire Engine application layer removed from the substrate repository.
+* `services/g8ee/` - Entire Engine application layer removed from the platform repository.
 * `evals/` - Python evaluation harness removed.
 * `demo/` - All Docker-based demo profiles removed.
 * Raw audit vault - `VaultModerateRaw` replaced by `SentinelModerateRaw`; unmoderated raw storage path eliminated.
 * Vendored `gotestsum` - Removed in favor of direct tooling.
-* Shell script entrypoints - `entrypoint.sh` remnants and substrate shell scripts removed; replaced by the Go CLI package.
+* Shell script entrypoints - `entrypoint.sh` remnants and platform shell scripts removed; replaced by the Go CLI package.
 
 ### Security
 
@@ -145,7 +195,7 @@ gates with no optional application-layer coupling in the critical path.
 * **mTLS for non-native apps** - App enrollment service extends mTLS enforcement to heterogeneous clients.
 * **SPIFFE URI SAN hardening** - Fragile SPIFFE parsing that accepted malformed URIs on valid inputs fixed.
 * **Unprotected transaction fix** - DB transactions that could expose inconsistent state under concurrency now properly bounded.
-* **Receipt tampering detection** - Scenario tests verify the substrate rejects tampered receipts across all governance layers.
+* **Receipt tampering detection** - Scenario tests verify the platform rejects tampered receipts across all governance layers.
 
 ---
 
@@ -241,7 +291,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 - **Interactive Platform Manager:** New interactive menu for platform management, simplifying setup, environment configuration, and e2e testing.
 
 ### Changed
-- **Evals Refactor:** Streamlined evaluation device token management to be runtime-configurable.
+- **Evals Refactor:** Streamlined evaluation management to be runtime-configurable.
 - **Improved Setup:** Enhanced environment variable handling and validation during bootstrap.
 
 ### Fixed
@@ -251,7 +301,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 
 ### Added
 - **Ollama Model Query:** Added support for querying available Ollama models during setup with improved UI feedback.
-- **Runtime Device Tokens:** Evals device tokens are now set at runtime instead of build time for improved security and flexibility.
+- **Runtime Configuration:** Evals configuration is now set at runtime instead of build time for improved security and flexibility.
 - **Host-Native Testing:** Platform now runs component tests host-native without Docker, improving test reliability and CI performance.
 
 ### Changed
