@@ -806,8 +806,8 @@ func showVaultReceipts(vaultPath string, cmd *cobra.Command) error {
 		          executed_at_ms 
 		          FROM receipts ORDER BY executed_at_ms DESC`
 
-		cmd.Println("Transaction ID | Scenario/Mode | Status | Summary | Action Type")
-		cmd.Println(strings.Repeat("-", 112))
+		cmd.Printf("%-20s %-20s %-12s %-30s %-20s\n", "Transaction ID", "Scenario/Mode", "Status", "Summary", "Action Type")
+		cmd.Println(strings.Repeat("-", 110))
 
 		totalCount := 0
 		for _, entry := range entries {
@@ -883,7 +883,7 @@ func showVaultReceipts(vaultPath string, cmd *cobra.Command) error {
 						signerKeyID = signerKeyID[:17] + "..."
 					}
 
-					cmd.Printf("%s | %s | %s | %s | %s\n", txID, scenarioMode, statusStr, summary, actionType)
+					cmd.Printf("%-20s %-20s %-12s %-30s %-20s\n", txID, scenarioMode, statusStr, summary, actionType)
 					totalCount++
 				}
 				rows.Close()
