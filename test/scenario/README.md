@@ -197,21 +197,51 @@ Receipt:
   Executed At: 1716624000000
 ```
 
-## Viewing the Local Ledger
+## Viewing the Local Ledger and Audit Vault
 
-The audit vault persists a git ledger at `.g8e/test-vault/{timestamp}-{test-name}/ledger/` for post-test inspection. The test logs the vault path when created:
+The audit vault persists a git ledger and SQLite database at `.g8e/test-vault/{timestamp}-{test-name}/` for post-test inspection. The test logs the vault path when created:
 
 ```
-Test vault created at: /home/bob/g8e/.g8e/test-vault/20260524-120000-TestScenarios/l2_invalid
+Test vault created at: /home/bob/g8e/.g8e/test-vault/20260524-120000-TestScenarios
 ```
 
-To view the ledger:
+### Using the CLI to Inspect Test Vaults
+
+The g8e CLI provides commands to inspect test vaults without requiring a running Operator:
+
+```bash
+# List all available test vaults
+./g8e test review --list
+
+# Show action receipts from a specific vault
+./g8e test review --vault-path .g8e/test-vault/20260524-120000-TestScenarios --receipts
+
+# Show git ledger from a specific vault
+./g8e test review --vault-path .g8e/test-vault/20260524-120000-TestScenarios --ledger
+
+# Execute custom SQL queries on the vault database
+./g8e test review --vault-path .g8e/test-vault/20260524-120000-TestScenarios --query "SELECT * FROM action_receipts;"
+
+# Inspect vault structure (list tables)
+./g8e test review --vault-path .g8e/test-vault/20260524-120000-TestScenarios
+
+# Clean old vaults (older than N days)
+./g8e test review --clean-old 7
+
+# Clean all vaults
+./g8e test review --clean
+```
+
+### Manual Inspection
+
+You can also manually inspect the vault using standard tools:
 
 ```bash
 # Navigate to the test vault directory
-cd .g8e/test-vault/{timestamp}-{test-name}/ledger
+cd .g8e/test-vault/{timestamp}-{test-name}
 
 # View git log of audit events
+cd ledger
 git log --oneline
 
 # View a specific commit's details
@@ -219,6 +249,10 @@ git show <commit-hash>
 
 # View the full diff of a commit
 git show <commit-hash> --stat
+
+# Query the SQLite database directly
+sqlite3 audit_vault.db ".tables"
+sqlite3 audit_vault.db "SELECT * FROM action_receipts;"
 ```
 
 The ledger contains all audit events written during the test, including transaction receipts and state changes. This allows detailed inspection of the audit trail after test completion.

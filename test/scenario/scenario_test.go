@@ -81,6 +81,9 @@ func TestMain(m *testing.M) {
 	// Print the scenario matrix
 	PrintScenarioMatrix()
 
+	// Print vault inspection commands
+	PrintVaultInspectionCommands()
+
 	os.Exit(code)
 }
 

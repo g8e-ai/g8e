@@ -346,6 +346,59 @@ func PrintScenarioMatrix() {
 	fmt.Printf("\n%d scenarios: %d PASS, %d SKIP, %d FAIL\n", total, passed, skipped, failed)
 }
 
+// PrintVaultInspectionCommands prints example commands to inspect the test vault.
+func PrintVaultInspectionCommands() {
+	repoRoot, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	// Navigate from test/ to repo root
+	for i := 0; i < 2; i++ {
+		repoRoot = filepath.Dir(repoRoot)
+	}
+
+	vaultDir := filepath.Join(repoRoot, ".g8e", "test-vault")
+	entries, err := os.ReadDir(vaultDir)
+	if err != nil {
+		return
+	}
+
+	// Find the most recent test vault
+	var latestVault string
+	var latestModTime int64
+	for _, entry := range entries {
+		if entry.IsDir() && entry.Name() != "README.md" {
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			if info.ModTime().Unix() > latestModTime {
+				latestModTime = info.ModTime().Unix()
+				latestVault = entry.Name()
+			}
+		}
+	}
+
+	if latestVault == "" {
+		return
+	}
+
+	vaultPath := filepath.Join(".g8e", "test-vault", latestVault)
+
+	fmt.Println("\n" + strings.Repeat("=", 70))
+	fmt.Println("TEST VAULT INSPECTION")
+	fmt.Println(strings.Repeat("=", 70))
+	fmt.Printf("Latest test vault: %s\n\n", vaultPath)
+	fmt.Println("Example commands to view results:")
+	fmt.Printf("  ./g8e test review --list\n")
+	fmt.Printf("  ./g8e test review --vault-path %s --aggregate\n", vaultPath)
+	fmt.Printf("  ./g8e test review --vault-path %s --receipts\n", vaultPath)
+	fmt.Printf("  ./g8e test review --vault-path %s --ledger\n", vaultPath)
+	fmt.Printf("  ./g8e test review --vault-path %s --query \"SELECT * FROM receipts;\"\n", vaultPath)
+	fmt.Println()
+}
+
 func calculateStatus(s Scenario, expected Outcome, result Result) (TestStatus, string) {
 	if expected.Verdict == VerdictAccept {
 		if result.Error == nil {
