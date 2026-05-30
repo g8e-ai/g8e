@@ -311,6 +311,9 @@ clean:
 	@rm -f g8e
 	@rm -rf build/
 	@rm -f *.sha256
+	@rm -f *.test
+	@rm -f coverage.out
+	@rm -f buf
 	@echo "Clean complete."
 
 
