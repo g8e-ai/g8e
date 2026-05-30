@@ -237,3 +237,77 @@ func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Re
 
 	c.responder.JSON(w, http.StatusCreated, resp)
 }
+
+func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	script := `#!/bin/sh
+set -e
+
+GATEWAY_HOST="${GATEWAY_HOST:-localhost}"
+GATEWAY_PORT="${GATEWAY_PORT:-8441}"
+CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}/.well-known/g8e/pki/ca-bundle"
+CA_PATH="/usr/local/share/ca-certificates/g8e-gateway-ca.crt"
+
+echo "[g8e] Fetching platform CA bundle from ${CA_BUNDLE_URL}..."
+curl -fsSL "${CA_BUNDLE_URL}" -o "${CA_PATH}"
+
+if [ ! -f "${CA_PATH}" ]; then
+    echo "[g8e] ERROR: Failed to download CA bundle"
+    exit 1
+fi
+
+echo "[g8e] Installing CA bundle to system trust store..."
+update-ca-certificates
+
+echo "[g8e] CA bundle installed successfully"
+echo "[g8e] You can now use: ./g8e auth login"
+`
+
+	w.Header().Set("Content-Type", "application/x-sh")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(script))
+}
+
+func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	script := `$ErrorActionPreference = "Stop"
+
+$GatewayHost = if ($env:GATEWAY_HOST) { $env:GATEWAY_HOST } else { "localhost" }
+$GatewayPort = if ($env:GATEWAY_PORT) { $env:GATEWAY_PORT } else { "8441" }
+$CABundleUrl = "http://${GatewayHost}:${GatewayPort}/.well-known/g8e/pki/ca-bundle"
+$TempPath = "$env:TEMP\g8e-gateway-ca.crt"
+$CertStorePath = "Cert:\LocalMachine\Root"
+
+Write-Host "[g8e] Fetching platform CA bundle from ${CABundleUrl}..."
+Invoke-RestMethod -Uri $CABundleUrl -OutFile $TempPath
+
+if (-not (Test-Path $TempPath)) {
+    Write-Host "[g8e] ERROR: Failed to download CA bundle"
+    exit 1
+}
+
+Write-Host "[g8e] Installing CA bundle to system trust store..."
+Import-Certificate -FilePath $TempPath -CertStoreLocation $CertStorePath
+
+Write-Host "[g8e] CA bundle installed successfully"
+Write-Host "[g8e] You can now use: .\g8e.exe auth login"
+
+Remove-Item $TempPath -Force
+`
+
+	w.Header().Set("Content-Type", "application/x-powershell")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(script))
+}

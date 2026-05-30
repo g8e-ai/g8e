@@ -130,12 +130,6 @@ func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationRes
 		return nil, fmt.Errorf("failed to get hostname: %w", err)
 	}
 
-	// Require CA to be pre-installed for mTLS bootstrap
-	trustBundlePath := cfg.TrustBundlePath()
-	if _, err := os.Stat(trustBundlePath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("trust bundle not found at %s - install the platform CA manually before bootstrap", trustBundlePath)
-	}
-
 	req := map[string]string{
 		"csr_pem":            operatorCSR,
 		"cli_csr_pem":        cliCSR,
@@ -147,7 +141,8 @@ func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationRes
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/v1/auth/bootstrap", cfg.OperatorPublicURL())
+	// Use bootstrap port (plain HTTP) for initial bootstrap
+	url := fmt.Sprintf("%s/api/v1/auth/bootstrap", cfg.OperatorDiscoveryURL())
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -155,12 +150,8 @@ func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationRes
 
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	// Use secure client with CA binding (no InsecureSkipVerify)
-	client, err := NewSecureHTTPClient(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create secure HTTP client: %w", err)
-	}
-
+	// Use plain HTTP client for bootstrap (no TLS required)
+	client := &http.Client{}
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to bootstrap: %w", err)
@@ -378,13 +369,9 @@ func CheckOperatorRunningAtURL(operatorURL string) error {
 
 // CheckBootstrapStatus returns whether the platform has been bootstrapped
 func CheckBootstrapStatus(cfg *config.Config) (bool, error) {
-	client, err := NewSecureHTTPClient(cfg)
-	if err != nil {
-		return false, fmt.Errorf("failed to create secure HTTP client: %w", err)
-	}
-
-	url := fmt.Sprintf("%s/api/v1/auth/bootstrap/status", cfg.OperatorPublicURL())
-	resp, err := client.Get(url)
+	// Use bootstrap port (plain HTTP) for status check
+	url := fmt.Sprintf("%s/api/v1/auth/bootstrap/status", cfg.OperatorDiscoveryURL())
+	resp, err := http.Get(url)
 	if err != nil {
 		return false, fmt.Errorf("failed to check bootstrap status: %w", err)
 	}

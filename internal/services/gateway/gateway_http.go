@@ -307,6 +307,20 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }
 
+func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
+	mux := http.NewServeMux()
+
+	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
+	mux.HandleFunc("/api/v1/auth/bootstrap", h.authController.handlePublicAuthBootstrap)
+	mux.HandleFunc("/api/v1/auth/bootstrap/status", h.authController.handleBootstrapStatus)
+	mux.HandleFunc("/.well-known/g8e/pki/ca-bundle", h.pkiController.handlePKICABundle)
+	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.pkiController.handlePKIFingerprint)
+	mux.HandleFunc("/bootstrap-ca", h.pkiController.handleTrustScriptLinux)
+	mux.HandleFunc("/bootstrap-ca.ps1", h.pkiController.handleTrustScriptWindows)
+
+	return h.pathTraversalGuard(h.auth.Middleware(mux))
+}
+
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.buildRouter().ServeHTTP(w, r)
 }

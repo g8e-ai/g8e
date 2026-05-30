@@ -39,18 +39,19 @@ type GatewayService struct {
 	cfg    *config.Config
 	logger *slog.Logger
 
-	db           *GatewayDBService
-	pubsub       *PubSubBroker
-	auth         *AuthService
-	pki          *PKIAuthority
-	reg          *RegistrationService
-	passkey      *PasskeyService
-	userSvc      *UserService
-	sessionSvc   *SessionService
-	mcpGateway   *mcp.GatewayService
-	responder    *responder.Responder
-	server       *http.Server
-	publicServer *http.Server
+	db              *GatewayDBService
+	pubsub          *PubSubBroker
+	auth            *AuthService
+	pki             *PKIAuthority
+	reg             *RegistrationService
+	passkey         *PasskeyService
+	userSvc         *UserService
+	sessionSvc      *SessionService
+	mcpGateway      *mcp.GatewayService
+	responder       *responder.Responder
+	server          *http.Server
+	publicServer    *http.Server
+	bootstrapServer *http.Server
 
 	handler *HTTPHandler
 
@@ -234,9 +235,11 @@ func (ls *GatewayService) initHandlersAndServers() error {
 	})
 
 	// Build a map of ports to identify port assignments.
-	// All surfaces now use mTLS (RequireAndVerifyClientCert).
+	// Bootstrap port uses plain HTTP for initial CA discovery and bootstrap.
+	// All other surfaces use mTLS (RequireAndVerifyClientCert).
 	portUsage := make(map[int][]string)
 	portUsage[cfg.Gateway.HTTPPort] = append(portUsage[cfg.Gateway.HTTPPort], "HTTP")
+	portUsage[cfg.Gateway.BootstrapPort] = append(portUsage[cfg.Gateway.BootstrapPort], "Bootstrap")
 	portUsage[cfg.Gateway.PublicPort] = append(portUsage[cfg.Gateway.PublicPort], "Public")
 
 	// Validate up front so collisions fail during init.
@@ -280,6 +283,18 @@ func (ls *GatewayService) initHandlersAndServers() error {
 		Addr:              fmt.Sprintf(":%d", cfg.Gateway.PublicPort),
 		Handler:           ls.handler.buildPublicRouter(),
 		TLSConfig:         tlsConfig,
+		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
+		ReadTimeout:       cfg.Gateway.ReadTimeout,
+		WriteTimeout:      cfg.Gateway.WriteTimeout,
+		IdleTimeout:       cfg.Gateway.IdleTimeout,
+		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
+	}
+
+	// Bootstrap server: plain HTTP for CA discovery and initial bootstrap
+	// Serves /api/v1/auth/bootstrap and /api/v1/auth/bootstrap/status
+	ls.bootstrapServer = &http.Server{
+		Addr:              fmt.Sprintf(":%d", cfg.Gateway.BootstrapPort),
+		Handler:           ls.handler.buildBootstrapRouter(),
 		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
 		ReadTimeout:       cfg.Gateway.ReadTimeout,
 		WriteTimeout:      cfg.Gateway.WriteTimeout,
@@ -411,6 +426,11 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	if ls.server != nil {
 		uniqueServers[ls.server] = "HTTP"
 	}
+	if ls.bootstrapServer != nil {
+		if _, ok := uniqueServers[ls.bootstrapServer]; !ok {
+			uniqueServers[ls.bootstrapServer] = "Bootstrap"
+		}
+	}
 	if ls.publicServer != nil {
 		if _, ok := uniqueServers[ls.publicServer]; !ok {
 			uniqueServers[ls.publicServer] = "Public"
@@ -501,6 +521,13 @@ func (ls *GatewayService) Stop(ctx context.Context) error {
 			return fmt.Errorf("shutdown timeout exceeded")
 		}
 		ls.logger.Error("HTTP server shutdown error", string(constants.ConnectionStateError), err)
+	}
+	if err := ls.bootstrapServer.Shutdown(shutdownCtx); err != nil {
+		if shutdownCtx.Err() == context.DeadlineExceeded {
+			ls.logger.Error("Bootstrap server shutdown timeout - forcing exit to prevent zombie process")
+			return fmt.Errorf("shutdown timeout exceeded")
+		}
+		ls.logger.Error("Bootstrap server shutdown error", string(constants.ConnectionStateError), err)
 	}
 	if err := ls.publicServer.Shutdown(shutdownCtx); err != nil {
 		if shutdownCtx.Err() == context.DeadlineExceeded {
