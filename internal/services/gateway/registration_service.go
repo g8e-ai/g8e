@@ -341,6 +341,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 
 	return &models.OperatorRegistrationResponse{
 		Success:                true,
+		UserID:                 userID,
 		OperatorID:             operator.ID,
 		OperatorSessionID:      operatorSessionID,
 		CLISessionID:           cliSessionID,

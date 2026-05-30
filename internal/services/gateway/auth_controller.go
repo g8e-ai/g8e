@@ -1134,6 +1134,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 		response["cli_session_id"] = cliSessionID
 		response["cli_cert"] = cliCertPEM
 		response["cli_cert_chain"] = cliCertChainPEM
+		response["user_id"] = user.ID
 
 		c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user and CLI cert", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", cliSessionID[:8])
 	} else {

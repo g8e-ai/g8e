@@ -188,7 +188,7 @@ func (pki *PKIAuthority) ensureRootCA() error {
 
 	needRoot := !fileExists(rootCertPath)
 	if !needRoot {
-		if err := pki.loadCertificatePair(rootCertPath, "", &pki.rootCert, &pki.rootKey); err != nil {
+		if err := pki.loadCACertificate(rootCertPath, &pki.rootCert); err != nil {
 			pki.logger.Warn("[PKI] Failed to load root CA, regenerating", string(constants.ConnectionStateError), err)
 			needRoot = true
 		}
@@ -209,13 +209,16 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	hubCertPath := filepath.Join(pki.pkiDir, "authorities", "hub_ca.crt")
 	needHub := !fileExists(hubCertPath)
 	if !needHub {
-		if err := pki.loadCertificatePair(hubCertPath, "", &pki.hubCert, &pki.hubKey); err != nil {
+		if err := pki.loadCACertificate(hubCertPath, &pki.hubCert); err != nil {
 			pki.logger.Warn("[PKI] Failed to load hub CA, regenerating", string(constants.ConnectionStateError), err)
 			needHub = true
 		}
 	}
 	if needHub {
 		pki.logger.Info("[PKI] Generating hub intermediate CA")
+		if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
+			return fmt.Errorf("load root CA private key for intermediate generation: %w", err)
+		}
 		if err := pki.generateIntermediateCA("", hubCertPath, pki.rootCert, pki.rootKey, hubCommonName); err != nil {
 			return err
 		}
@@ -225,13 +228,16 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	operatorCertPath := filepath.Join(pki.pkiDir, "authorities", "operator_ca.crt")
 	needOperator := !fileExists(operatorCertPath)
 	if !needOperator {
-		if err := pki.loadCertificatePair(operatorCertPath, "", &pki.operatorCert, &pki.operatorKey); err != nil {
+		if err := pki.loadCACertificate(operatorCertPath, &pki.operatorCert); err != nil {
 			pki.logger.Warn("[PKI] Failed to load operator CA, regenerating", string(constants.ConnectionStateError), err)
 			needOperator = true
 		}
 	}
 	if needOperator {
 		pki.logger.Info("[PKI] Generating operator intermediate CA")
+		if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
+			return fmt.Errorf("load root CA private key for intermediate generation: %w", err)
+		}
 		if err := pki.generateIntermediateCA("", operatorCertPath, pki.rootCert, pki.rootKey, operatorCommonName); err != nil {
 			return err
 		}
@@ -285,6 +291,12 @@ func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
 
 	if needService {
 		pki.logger.Info("[PKI] Generating operator-gateway service certificate")
+		// Load hub CA private key on-demand for service cert generation
+		if pki.hubKey == nil {
+			if err := pki.loadCAPrivateKey("hub", &pki.hubKey); err != nil {
+				return fmt.Errorf("load hub CA private key for service cert generation: %w", err)
+			}
+		}
 		if err := pki.generateServiceCert(extraIPs); err != nil {
 			return err
 		}
@@ -475,8 +487,15 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 	pki.mu.Lock()
 	defer pki.mu.Unlock()
 
-	if pki.operatorCert == nil || pki.operatorKey == nil {
+	if pki.operatorCert == nil {
 		return "", "", fmt.Errorf("operator CA not loaded - call EnsurePKI first")
+	}
+
+	// Load operator CA private key on-demand for signing
+	if pki.operatorKey == nil {
+		if err := pki.loadCAPrivateKey(string(constants.UserRoleOperator), &pki.operatorKey); err != nil {
+			return "", "", fmt.Errorf("load operator CA private key for signing: %w", err)
+		}
 	}
 
 	block, _ := pem.Decode([]byte(csrPEM))
@@ -542,6 +561,44 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 }
 
 // ─── private helpers ──────────────────────────────────────────────────────────
+
+func (pki *PKIAuthority) loadCACertificate(certPath string, cert **x509.Certificate) error {
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		return err
+	}
+
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return fmt.Errorf("invalid cert PEM")
+	}
+	parsedCert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return err
+	}
+
+	*cert = parsedCert
+	return nil
+}
+
+func (pki *PKIAuthority) loadCAPrivateKey(caType string, key **ecdsa.PrivateKey) error {
+	if pki.secretManager == nil {
+		return fmt.Errorf("SecretManager is required for CA private key loading")
+	}
+
+	keyDER, err := pki.secretManager.GetCAPrivateKey(caType)
+	if err != nil {
+		return fmt.Errorf("load %s CA private key from keystore: %w", caType, err)
+	}
+
+	parsedKey, err := x509.ParseECPrivateKey(keyDER)
+	if err != nil {
+		return fmt.Errorf("parse %s CA private key: %w", caType, err)
+	}
+
+	*key = parsedKey
+	return nil
+}
 
 func (pki *PKIAuthority) loadCertificatePair(certPath, keyPath string, cert **x509.Certificate, key **ecdsa.PrivateKey) error {
 	certPEM, err := os.ReadFile(certPath)

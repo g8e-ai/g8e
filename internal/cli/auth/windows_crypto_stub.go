@@ -23,20 +23,20 @@ import (
 
 // GenerateWindowsCSR is a stub for non-Windows platforms.
 func GenerateWindowsCSR(commonName string, useTPM bool) (string, *ecdsa.PrivateKey, error) {
-	return "", nil, fmt.Errorf("Windows-specific enrollment is only available on Windows")
+	return "", nil, fmt.Errorf("windows-specific enrollment is only available on Windows")
 }
 
 // ImportCertificateToWindowsStore is a stub for non-Windows platforms.
 func ImportCertificateToWindowsStore(certPEM string) error {
-	return fmt.Errorf("Windows cert store import is only available on Windows")
+	return fmt.Errorf("windows cert store import is only available on Windows")
 }
 
 // SignWithWindowsHello is a stub for non-Windows platforms.
 func SignWithWindowsHello(transactionHash []byte) ([]byte, error) {
-	return nil, fmt.Errorf("Windows Hello signing is only available on Windows")
+	return nil, fmt.Errorf("windows Hello signing is only available on Windows")
 }
 
 // SignWithWindowsHelloUsingCert is a stub for non-Windows platforms.
 func SignWithWindowsHelloUsingCert(transactionHash []byte, certThumbprint string) ([]byte, error) {
-	return nil, fmt.Errorf("Windows Hello signing is only available on Windows")
+	return nil, fmt.Errorf("windows Hello signing is only available on Windows")
 }

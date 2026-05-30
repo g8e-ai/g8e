@@ -48,6 +48,7 @@ type OperatorRegistrationRequest struct {
 // event stream - the Gateway refuses to do so.
 type OperatorRegistrationResponse struct {
 	Success                bool            `json:"success"`
+	UserID                 string          `json:"user_id,omitempty"`
 	OperatorSessionID      string          `json:"operator_session_id,omitempty"`
 	CLISessionID           string          `json:"cli_session_id,omitempty"`
 	OperatorID             string          `json:"operator_id,omitempty"`

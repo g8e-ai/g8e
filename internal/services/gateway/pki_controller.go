@@ -20,6 +20,7 @@ import (
 	"encoding/pem"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -244,11 +245,23 @@ func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	host := "localhost"
+	port := "8441"
+	if r.Host != "" {
+		host, port, _ = net.SplitHostPort(r.Host)
+		if host == "" {
+			host = "localhost"
+		}
+		if port == "" {
+			port = "8441"
+		}
+	}
+
 	script := `#!/bin/sh
 set -e
 
-GATEWAY_HOST="${GATEWAY_HOST:-localhost}"
-GATEWAY_PORT="${GATEWAY_PORT:-8441}"
+GATEWAY_HOST="${GATEWAY_HOST:-` + host + `}"
+GATEWAY_PORT="${GATEWAY_PORT:-` + port + `}"
 CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}/.well-known/g8e/pki/ca-bundle"
 CA_PATH="/usr/local/share/ca-certificates/g8e-gateway-ca.crt"
 
@@ -280,10 +293,22 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 		return
 	}
 
+	host := "localhost"
+	port := "8441"
+	if r.Host != "" {
+		host, port, _ = net.SplitHostPort(r.Host)
+		if host == "" {
+			host = "localhost"
+		}
+		if port == "" {
+			port = "8441"
+		}
+	}
+
 	script := `$ErrorActionPreference = "Stop"
 
-$GatewayHost = if ($env:GATEWAY_HOST) { $env:GATEWAY_HOST } else { "localhost" }
-$GatewayPort = if ($env:GATEWAY_PORT) { $env:GATEWAY_PORT } else { "8441" }
+$GatewayHost = if ($env:GATEWAY_HOST) { $env:GATEWAY_HOST } else { "` + host + `" }
+$GatewayPort = if ($env:GATEWAY_PORT) { $env:GATEWAY_PORT } else { "` + port + `" }
 $CABundleUrl = "http://${GatewayHost}:${GatewayPort}/.well-known/g8e/pki/ca-bundle"
 $TempPath = "$env:TEMP\g8e-gateway-ca.crt"
 $CertStorePath = "Cert:\LocalMachine\Root"

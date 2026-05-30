@@ -214,7 +214,21 @@ func TestLogoutCmd(t *testing.T) {
 
 	t.Run("logout succeeds when no session exists", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		cfg := setupTestConfig(t, tmpDir)
+
+		// Set HOME to tmpDir to ensure credentials are read from temp directory
+		originalHome := os.Getenv("HOME")
+		os.Setenv("HOME", tmpDir)
+		defer os.Setenv("HOME", originalHome)
+
+		// Create a simple config that points to tmpDir for credentials
+		// Avoid using setupTestConfig which creates a conflicting .g8e directory
+		cfg := &config.Config{
+			ProjectRoot:    tmpDir,
+			RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
+			PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
+			SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+			CredentialsDir: tmpDir,
+		}
 
 		// Verify no credentials exist in test config
 		creds, err := auth.LoadCredentials(cfg)
