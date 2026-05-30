@@ -5,123 +5,132 @@ parent: Architecture
 
 # Air-Gap Architecture
 
-Last Updated: 2026-05-25
-Version: v1.0.0
+Last Updated: 2026-05-29
+Version: v1.1.0
 
-g8e is designed for high-security environments where internet connectivity is strictly prohibited. The platform supports fully air-gapped deployments with **zero runtime internet dependencies**, achieving this through a self-contained substrate (g8e Protocol and g8e Operator), Go module dependencies, and optional local LLM inference.
-
----
-
-## Zero-Trust Privacy Principle
-
-The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In this mode, the platform operates as a completely sealed unit:
-
-- **No Telemetry:** Zero outbound usage, health, or error data is sent to Lateralus Labs.
-- **Local Assets:** All frontend assets (fonts, icons, JS libraries) are served locally by the **agentic ensemble**.
-- **Local Persistence:** All platform state, including chat history, settings, and secrets, is stored in a unified SQLite database managed by the Governance Gateway (`g8eg`) in Gateway mode.
+The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the Governance Gateway (`g8eg`), the g8e Operator (`g8eo`), local Go dependencies, and local model inference.
 
 ---
 
-## The Platform Backbone: Governance Gateway (g8eg)
+## Privacy and Data Sovereignty
 
-In an air-gapped deployment, the platform requires a local "Hub" for persistence and messaging. This is provided by running the Governance Gateway (`g8eg` / `g8e` binary) in **Gateway mode** (--doctrine, --consensus, or --notary). In this mode, the Governance Gateway acts as the platform's central persistence and messaging backbone rather than an outbound execution agent.
+In an air-gapped configuration, the platform restricts all outbound communication and retains all data locally:
 
-### Architecture & Ports
-The Governance Gateway in Gateway mode exposes four logical surfaces. Defaults are sourced from `internal/constants/paths.go`. The TLS surfaces multiplex onto a single port when configured equal; Bootstrap must remain on its own port to be served as plain HTTP.
-
-| Surface | Port (default) | Auth | Purpose |
-|---|---|---|---|
-| **Bootstrap** | `<!-- g8e:port:operator_bootstrap -->8441<!-- /g8e:port -->` (plain HTTP) | None | Download trust bundles and CSR signing. |
-| **Public Port** | `<!-- g8e:port:operator_public -->8443<!-- /g8e:port -->` (TLS) | Web session | Browser login, WebAuthn challenge, and PKI discovery. |
-| **mTLS API + Pub/Sub** | `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->` | mTLS + URI SAN | Central `/api/governance/envelope` mutation endpoint, `/db` persistence, and `/ws/pubsub` real-time event fan-out. |
-
-Surfaces with different TLS client-auth requirements MUST NOT share a port. Sharing would force `tls.VerifyClientCertIfGiven` and downgrade the mTLS execution boundary to an L7 check. The reference implementation enforces this by validating port assignments during initialization.
-
-### Core Responsibilities
-- **Unified Persistence:** Replaces external databases with a single `g8e.db` SQLite file in `.g8e/data`.
-- **Internal PKI:** Acts as the platform's Certificate Authority (CA), auto-generating ECDSA P-384 TLS certificates for all inter-component traffic.
-- **Secret Management:** Provides an encrypted Vault for storing external service credentials (e.g., LLM provider API keys) and internal tokens without external dependencies.
-- **Messaging:** Serves as the central Pub/Sub broker for all compliant clients.
+- **No Telemetry**: The platform disables all outbound telemetry, usage statistics, and error reporting.
+- **Local Assets**: All user interface assets, fonts, icons, and libraries are served locally by platform services.
+- **Local Persistence**: All platform state, including session records, configuration settings, and cryptographic keys, resides in a unified local SQLite database managed by the Governance Gateway (`g8eg`). The database path is defined in `@/home/bob/g8e/internal/constants/paths.go` as `.g8e/data/g8e.db`.
 
 ---
 
-## The PEP: Governed Operator (g8eo)
+## Governance Gateway (g8eg) Role
 
-To execute mutations on the local air-gapped host, a **Governed Operator (`g8eo` / `g8e`)** daemon runs in standard mode on the target machine:
-- Connects outbound-only over local mTLS WSS to the local `g8eg` gateway.
-- Subscribes to command events, processes them via local L5Actuator boundaries, and writes history to a host-local ledger.
-- Exposes tools to standard local clients as a Model Context Protocol (MCP) Server.
+In an air-gapped deployment, the Governance Gateway (`g8eg`) operates as the central Policy Decision Point (PDP). Running the `g8e` binary in gateway mode activates persistence and messaging services on the local host.
 
----
+### Port Configuration and Communication Surfaces
 
-## Local LLM Inference
+The gateway exposes three logical communication surfaces. Canonical ports are defined in `@/home/bob/g8e/internal/constants/ports.go` and `@/home/bob/g8e/protocol/constants/ports.json`.
 
-For air-gapped reasoning, g8e supports external local inference via BYO agentic clients using llama.cpp or other local LLM servers.
+| Surface | Port (default) | Authentication | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Bootstrap** | `8441` (Plain HTTP) | None | Serves local trust bundles and handles Certificate Signing Request (CSR) enrollment. |
+| **Public Surface** | `8443` (TLS) | `web_session_id` | Browser management interface, WebAuthn passkey registration, and PKI discovery. |
+| **mTLS API & Pub/Sub** | `8440` (mTLS) | mTLS + URI SAN | Receives `GovernanceEnvelope` mutation payloads, handles `/db` persistence, and runs `/ws/pubsub` streaming. |
 
-- **BYO Client:** HTTP client to external `llama.cpp` server via OpenAI-compatible API.
-- **Default Model:** `Gemma 4 E2B` (optimized for local reasoning).
-- **Interface:** Configured via `llamacpp_endpoint` setting (default: `http://localhost:11444`).
-- **Provisioning:** Model GGUF files must be pre-staged on the external llama.cpp server. The Ensemble does not download models; it is a client only.
+Surfaces with conflicting TLS client-authentication requirements do not share a network port. Sharing ports forces the use of `tls.VerifyClientCertIfGiven`, which degrades the mTLS execution boundary. The initialization sequence validates port isolation and fails if configurations overlap.
 
----
+### Core Functional Capabilities
 
-## Build-Time vs. Runtime
-
-| Phase | Internet Requirement | Air-Gap Strategy |
-|---|---|---|
-| **Build** | Required (Default) | Use the `setup` workflow on a connected machine to cache all base images and vendor dependencies. |
-| **Runtime** | **None** | All components communicate exclusively over the internal `g8e-network` or localhost. |
-
-### Vendoring & Dependency Management
-
-**Direct Dependency Invariant:** All package manifests must reflect only direct imports. Transitive dependencies are not explicitly listed.
-
-**Gateway (Go):**
-- 100% vendored in `vendor/`.
-- Build tools declared in `go.mod` (protoc-gen-go, protoc-gen-go-grpc, protoc-gen-doc).
-- Protocol generation uses local `buf` and `protoc` (no remote BSR dependency).
-
-**Python Runtime (BYO Agentic Clients):**
-- BYO agentic clients may use Python for LLM integration (fastapi, uvicorn, google-genai, anthropic, openai, protobuf, grpcio, sqlalchemy, alembic, tenacity, python-dateutil).
-- No vendoring; use pre-staged virtual environment or Docker image provided by the client.
-
-**Protocol Package:**
-- Python bindings in `protocol/python/g8e_protocol/` generated from `.proto` files.
-- Build dependency: `grpcio-tools` for Python stub generation.
-
-**Evals Suite:**
-- Dependencies in `evals/pyproject.toml` (httpx, pydantic).
-- Separate from runtime agentic ensemble dependencies.
-
-**Build-Time Tools:**
-- `buf` (Buf CLI) for protobuf schema management.
-- `protoc-gen-go`, `protoc-gen-go-grpc` for Go stubs.
-- `grpcio-tools` for Python stubs.
-- These tools are not required at runtime.
+- **State Persistence**: All system state is stored locally within a single SQLite database file as defined in `@/home/bob/g8e/internal/constants/paths.go`.
+- **Local Public Key Infrastructure (PKI)**: The gateway generates a local Certificate Authority (CA) using ECDSA P-384 keys to issue and rotate TLS certificates for local services.
+- **Secret Storage**: An internal encrypted vault stores local credentials and access tokens, removing any requirement for external key managers.
+- **Event Brokerage**: A local websocket pub/sub server manages communication between the gateway and connected clients.
 
 ---
 
-## Deployment Workflow
+## Policy Execution Point: g8e Operator (g8eo)
 
-### 1. Preparation (Connected Environment)
-1. **Bootstrap Platform:** Run `./g8e platform setup` on a connected machine to cache dependencies and build binaries.
-2. **Download Model:** Obtain the `Gemma 4 E2B` GGUF model file.
-3. **Export Assets:** Bundle the `.g8e` runtime directory and component binaries.
+The g8e Operator (`g8eo`) operates as the host-side Policy Execution Point (PEP). In an air-gapped deployment, the operator runs as a daemon on the target host and initiates a local mTLS connection to the Governance Gateway (`g8eg`).
 
-### 2. Implementation (Air-Gapped Host)
-1. **Stage Binaries:** Place the `g8e` binary and component source/images on the host.
-2. **Stage External LLM Server:** Deploy llama.cpp server with pre-staged `.gguf` model files on the host or adjacent network.
-3. **Configure:**
-   - Set `search.enabled` to `false` in `SearchSettings`.
-   - Set `llamacpp_endpoint` to the external llama.cpp server URL (default: `http://localhost:11444`).
-   - Ensure `llm_primary_provider` is set to `llamacpp`.
-4. **Launch:** `./g8e platform start`
+Every transaction or mutation payload wrapped in a `GovernanceEnvelope` undergoes sequential verification across the five-layer interlock sequence before execution on the host:
+
+1. **L1 Doctrine**: Technical Bedrock (Hard Gates) performs threat analysis, command blacklist checks, and pattern matching, defined in `@/home/bob/g8e/internal/services/governance/l1_doctrine.go`.
+2. **L2 Consensus**: Multi-agent consensus signature verification validates the cryptographic signatures on the transaction using Ed25519, defined in `@/home/bob/g8e/internal/services/governance/l2_consensus.go`.
+3. **L3 Notary**: Human-in-the-loop authorization verifies approvals via WebAuthn passkeys or cryptographically signed CLI proofs, defined in `@/home/bob/g8e/internal/services/governance/l3_notary.go`.
+4. **L4 Warden**: Pre-dispatch verification gates validate replay prevention, expiration, transaction nonces, and the state Merkle root, defined in `@/home/bob/g8e/internal/services/governance/l4_warden.go`.
+5. **L5 Actuator**: Isolated boundary tool dispatch executes the validated operation via Model Context Protocol (MCP) or Agent2Agent (A2A), producing a cryptographically signed transaction receipt, defined in `@/home/bob/g8e/internal/services/governance/l5_actuator.go`.
+
+Verified operations are logged to a host-local ledger, and the operator exposes local tools as a standalone Model Context Protocol (MCP) server.
+
+---
+
+## Local Model Inference
+
+For environments without external API access, the platform integrates with local inference engines (such as `llama.cpp`) hosted on the same loopback interface or a local network segment.
+
+- **Downstream Integration**: BYO clients connect to the inference engine using an OpenAI-compatible API.
+- **Reference Model**: The platform defaults to `Gemma 4 E2B` for local transaction and payload generation.
+- **Configuration Endpoint**: Connection strings point to the local server via the `llamacpp_endpoint` configuration setting, which defaults to `http://localhost:11444`.
+- **Model Provisioning**: GGUF format model files are pre-staged directly on the local inference server. The platform does not download or cache model binaries at runtime.
+
+---
+
+## Build-Time versus Runtime Requirements
+
+| Development Phase | Network Requirements | Air-Gap Isolation Strategy |
+| :--- | :--- | :--- |
+| **Build Phase** | External network access required. | Compile and resolve dependencies on a connected build host prior to deployment. |
+| **Runtime Phase** | Zero external network access required. | All communications occur over localhost interfaces or private local networks. |
+
+### Dependency Resolution and Build Tools
+
+To ensure a self-contained installation, the build process packages all required components offline:
+
+- **Go Dependencies**: The core platform compiles into a single binary, resolving dependencies defined in `@/home/bob/g8e/go.mod`.
+- **Protocol Generation**: Protobuf compilation is performed offline using local tools without relying on the remote Buf Schema Registry (BSR). Configuration details are defined in `@/home/bob/g8e/buf.gen.yaml` and `@/home/bob/g8e/Makefile`.
+- **Build-Time Tooling**: Protobuf stub generation requires `buf`, `protoc-gen-go`, and `protoc-gen-go-grpc` during the build phase. These binaries are not required on the target runtime host.
+
+---
+
+## Deployment and Setup Workflow
+
+Implementing an air-gapped deployment requires a connected staging host to resolve dependencies and compile the binaries before transfer to the target host.
+
+### 1. Preparation on a Connected Host
+
+1. **Compile Binaries**: Execute compilation targets for the target architecture on the staging machine:
+   ```bash
+   make build
+   ```
+   Or for compressed release bundles:
+   ```bash
+   make build-compressed
+   ```
+2. **Package Runtime Configurations**: Archive the build artifacts and the protocol schemas:
+   - The compiled `bin/g8e` binary.
+   - The protocol configuration files under the `@/home/bob/g8e/protocol/` directory.
+
+### 2. Implementation on the Air-Gapped Target Host
+
+1. **Stage Binaries and Schemas**: Copy the compiled `g8e` binary and the schema directories to the target directory. Ensure the `g8e` binary is executable.
+2. **Stage Downstream Servers**: If integrating with downstream servers, deploy the target MCP or A2A services on the local loopback or isolated network.
+3. **Configure Downstream Endpoints**: Export environment variables or configure options to target downstream services:
+   - Set `G8E_MCP_DOWNSTREAM_URL` to point to your local MCP server.
+   - Set `G8E_A2A_DOWNSTREAM_URL` to point to your local Agent2Agent server.
+4. **Initialize the Gateway**:
+   ```bash
+   ./g8e platform start
+   ```
+5. **Establish Local Session**: Log in to establish local credentials:
+   ```bash
+   ./g8e auth login
+   ```
 
 ---
 
 ## Security Invariants
 
-1. **No Outbound Dialing:** In Gateway mode, the Governance Gateway (`g8eg`) is forbidden from initiating connections to any address outside the local platform.
-2. **Mutual Trust:** All internal traffic between the Governance Gateway, BYO agentic clients, and the Operator is encrypted using the Operator's internal CA.
-3. **Data Sovereignty:** All audit logs, chat history, and telemetry remain strictly on the host's filesystem in the `.g8e` directory.
-4. **Fail-Closed Privacy:** If a component requires an external resource that is unavailable, it must fail with a clear error rather than attempting a fallback to insecure or public endpoints.
+1. **Isolated Boundaries**: In gateway mode, the Governance Gateway (`g8eg`) does not initiate outbound connections to any external network addresses.
+2. **Mutual Cryptographic Trust**: All traffic between the Governance Gateway (`g8eg`), connected clients, and the g8e Operator (`g8eo`) is encrypted and authenticated using mutual TLS (mTLS) issued by the local Certificate Authority.
+3. **Local Sovereignty**: All audit logs, transactions, and state records remain strictly on the host filesystem inside the local `.g8e` directory, as defined in `@/home/bob/g8e/internal/constants/paths.go`.
+4. **Fail-Closed Design**: If any component requires a missing or unavailable external resource, it terminates immediately with a clear error instead of attempting unencrypted or insecure fallbacks.
+

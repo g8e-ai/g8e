@@ -11,7 +11,7 @@ It dials out via mTLS and listens on nothing. Every AI-proposed action clears a 
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev)
-[![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v102--core-substrate)
+[![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v102--core-platform)
 [![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/core/position_paper.md)
 
 [Getting Started](docs/guides/getting_started.md) · [The two roles](#the-two-roles) · [Mental Model](#the-mental-model) · [Protocol](#the-protocol-invariants) · [Docs](#documentation)
@@ -72,6 +72,31 @@ graph TD
     C1 --> GW
     C2 --> GW
     O1 -. "outbound-only mTLS" .-> GW
+```
+
+### Execution Flow
+
+The sequence of a governed transaction execution:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Principal as Principal<br/>(Human / AI Agent)
+    participant Ensemble as Producer<br/>(g8e-compatible agentic ensemble / BYO / MCP client)
+    participant Gateway as Governance Gateway<br/>(g8eg)
+    participant Operator as Governed Operator<br/>(g8eo)
+
+    Principal->>Ensemble: Submit intent (MCP / A2A / tool call)
+    Note over Ensemble: Reach Consensus (L2)<br/>Wrap in signed GovernanceEnvelope
+    Ensemble->>Gateway: Submit envelope for admission
+
+    Operator->>Gateway: Open outbound-only mTLS tunnel
+    Operator->>Gateway: Fetch pending GovernanceEnvelope
+
+    Note over Operator: Run verification layers — Doctrine, Consensus, Notary, Warden<br/>(fail-closed)<br/>Execute via Actuator<br/>Anchor to local audit vault
+
+    Operator->>Gateway: Push Sovereignty-scrubbed signed receipt
+    Gateway->>Principal: Return final safe output
 ```
 
 ---
@@ -189,9 +214,9 @@ graph TD
 
 ---
 
-## Status: v1.0.2 — Core Substrate
+## Status: v1.0.2 — Core Platform
 
-g8e is the mandatory governance substrate. Agent ensembles and Dashboard (g8ed) are optional application-layer adapters.
+g8e is the mandatory governance platform. Agent ensembles and Dashboard (g8ed) are optional application-layer adapters.
 
 **Operational Today**
 - **Universal Protocol Translation**: Intercept MCP/A2A tool calls into signed envelopes.

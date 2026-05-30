@@ -43,7 +43,7 @@ help:
 	@echo ""
 	@echo "CI/CD (Local):"
 	@echo "  ci            Run full CI pipeline locally (mirrors GitHub Actions)"
-	@echo "  ci-substrate  Run substrate-only CI (g8eo, protocol, proto, docs)"
+	@echo "  ci-platform   Run platform-only CI (g8eo, protocol, proto, docs)"
 	@echo ""
 	@echo "Protocol Generation:"
 	@echo "  generate      Generate all protocol artifacts (proto)"
@@ -318,12 +318,12 @@ clean:
 # CI/CD (LOCAL)
 # =============================================================================
 .PHONY: ci
-ci: ci-substrate
+ci: ci-platform
 	@echo "CI complete."
 
-.PHONY: ci-substrate
-ci-substrate: _ci-verify-proto _ci-lint _ci-vulncheck _ci-test
-	@echo "Substrate CI complete."
+.PHONY: ci-platform
+ci-platform: _ci-verify-proto _ci-lint _ci-vulncheck _ci-test
+	@echo "Platform CI complete."
 
 .PHONY: _ci-verify-proto
 _ci-verify-proto:

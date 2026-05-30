@@ -10,20 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.2] - 2026-05-28
 
 ### Added
-- **TLS 1.3 Enforcement:** Strict requirement for TLS 1.3 across all substrate communications; removed support for legacy TLS 1.2.
+- **TLS 1.3 Enforcement:** Strict requirement for TLS 1.3 across all platform communications; removed support for legacy TLS 1.2.
 - **CSR-Based Enrollment:** Transitioned to Certificate Signing Requests (CSR) for all device and workload enrollment flows, enhancing identity verification.
 - **Single-Port Multiplexing:** Unified HTTP/HTTPS router in the Gateway allows multiple services (Admin, MCP, A2A, PKI) to share a single port via strict SNI and mTLS routing.
 - **PKI Revocation:** New `PKIController` implements certificate revocation and signed revocation bundle generation for fail-closed identity management.
-- **Ecosystem Demos:** New LangChain agent demo showcasing the "Bring Your Own Agent" (BYOA) substrate integration pattern.
+- **Ecosystem Demos:** New LangChain agent demo showcasing the "Bring Your Own Agent" (BYOA) platform integration pattern.
 
 ### Changed
-- **Substrate Hardening:** Significant refactoring of Gateway and Operator services to improve maintainability and strictly enforce mTLS execution boundaries.
+- **Platform Hardening:** Significant refactoring of Gateway and Operator services to improve maintainability and strictly enforce mTLS execution boundaries.
 - **Bootstrap UX:** Renamed "CA Trust" to "Bootstrap" and improved startup output to better direct users toward the `g8e login` flow.
 - **L1/L3 Governance:** Enhanced L1 Doctrine payload verification and unified L3 Approval brokerage for both WebAuthn and CLI sessions.
 - **Legacy Cleanup:** Completed removal of legacy API-key-only authentication paths in favor of first-class PKI/mTLS.
 
 ### Fixed
-- **Workload Identity:** Standardized SPIFFE-compatible URI SANs for all substrate-issued certificates.
+- **Workload Identity:** Standardized SPIFFE-compatible URI SANs for all platform-issued certificates.
 - **Audit Vault:** Hardened audit event write paths to strictly reject unattributed or malformed events.
 - **Integration Tests:** Significant reliability improvements to MCP/A2A and BYO-client end-to-end test suites.
 
@@ -59,15 +59,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Overview
 
-v1.0.0 completes the substrate-first architecture. The g8ee application layer is excised from the
-substrate entirely; the Sentinel component is dissolved into the governance protocol layers; and the
+v1.0.0 completes the platform-first architecture. The g8ee application layer is excised from the
+platform entirely; the Sentinel component is dissolved into the governance protocol layers; and the
 codebase is restructured so `services/g8eo` is the root module. The platform is now a pure, host-sovereign
-governance substrate: typed, signed, state-bound transactions enforced through fail-closed L1/L2/L3/L4/L5
+governance platform: typed, signed, state-bound transactions enforced through fail-closed L1/L2/L3/L4/L5
 gates with no optional application-layer coupling in the critical path.
 
 ### Breaking Changes
 
-* **g8ee removed from substrate** - g8ee is no longer part of the substrate. All `services/g8ee`
+* **g8ee removed from platform** - g8ee is no longer part of the platform. All `services/g8ee`
   references, root Makefile targets, and environment variable dependencies are gone. Run g8ee
   separately as an optional application adapter.
 * **Sentinel dissolved** - Sentinel no longer exists as a standalone component. Threat detection
@@ -84,7 +84,7 @@ gates with no optional application-layer coupling in the critical path.
 * **Cursor-based queries removed** - All cursor-based database query patterns eliminated in favor of
   direct indexed access.
 * **Demo profiles removed** - Docker-based demo profiles (`acme-corp`, `fleet`, `nginx`, `pnfs`) and
-  the `evals/` Python harness are removed. Demos and evals are no longer bundled with the substrate.
+  the `evals/` Python harness are removed. Demos and evals are no longer bundled with the platform.
 
 ### Added
 
@@ -131,12 +131,12 @@ gates with no optional application-layer coupling in the critical path.
 
 ### Removed
 
-* `services/g8ee/` - Entire Engine application layer removed from the substrate repository.
+* `services/g8ee/` - Entire Engine application layer removed from the platform repository.
 * `evals/` - Python evaluation harness removed.
 * `demo/` - All Docker-based demo profiles removed.
 * Raw audit vault - `VaultModerateRaw` replaced by `SentinelModerateRaw`; unmoderated raw storage path eliminated.
 * Vendored `gotestsum` - Removed in favor of direct tooling.
-* Shell script entrypoints - `entrypoint.sh` remnants and substrate shell scripts removed; replaced by the Go CLI package.
+* Shell script entrypoints - `entrypoint.sh` remnants and platform shell scripts removed; replaced by the Go CLI package.
 
 ### Security
 
@@ -146,7 +146,7 @@ gates with no optional application-layer coupling in the critical path.
 * **mTLS for non-native apps** - App enrollment service extends mTLS enforcement to heterogeneous clients.
 * **SPIFFE URI SAN hardening** - Fragile SPIFFE parsing that accepted malformed URIs on valid inputs fixed.
 * **Unprotected transaction fix** - DB transactions that could expose inconsistent state under concurrency now properly bounded.
-* **Receipt tampering detection** - Scenario tests verify the substrate rejects tampered receipts across all governance layers.
+* **Receipt tampering detection** - Scenario tests verify the platform rejects tampered receipts across all governance layers.
 
 ---
 

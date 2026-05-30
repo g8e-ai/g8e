@@ -21,7 +21,7 @@ This document focuses on the **Governed Operator** (PEP) role.
 
 The core invariant of the Operator is absolute defense-in-depth: a typed, signed, state-bound transaction reaches a sovereign host agent that distrusts upstream inputs and refuses to mutate reality unless every independent proof checks out. 
 
-The Operator is the only component capable of mutating the host. It executes remote-operations—running shell commands, editing files, interacting with cloud CLIs, and reading file history—but only after translating the request into a canonical `GovernanceEnvelope` (UAP) transaction and verifying it locally.
+The Operator is the only component capable of mutating the host. It executes remote operations, such as running shell commands, editing files, interacting with cloud CLIs, and reading file history, but only after translating the request into a canonical `GovernanceEnvelope` transaction and verifying it locally.
 
 ---
 
@@ -30,23 +30,23 @@ The Operator is the only component capable of mutating the host. It executes rem
 When a command targets an Operator, it progresses through a strict, fail-closed pipeline consisting of five distinct layers of verification and execution:
 
 ### L1: Doctrine (Technical Bedrock)
-The **L1Doctrine** layer provides foundational hard gates. It utilize Protobuf field-option extensions (`forbidden_patterns`) to block malicious strings at the schema level and executes real-time MITRE ATT&CK heuristics to detect threats like reverse shells, privilege escalation, and destructive disk operations. L1 is the first line of defense and cannot be bypassed.
+The **L1Doctrine** layer provides foundational hard gates. It utilizes Protobuf field-option extensions (`forbidden_patterns`) to block malicious strings at the schema level and executes real-time MITRE ATT&CK heuristics to detect threats like reverse shells, privilege escalation, and destructive disk operations. L1 is the first line of defense, cannot be bypassed, and is defined in `@/home/bob/g8e/internal/services/governance/l1_doctrine.go`.
 
 ### L2: Consensus
-The **L2Consensus** layer verifies the intent of the request via a Byzantine Fault Tolerant (BFT) quorum. It validates Ed25519 signatures from independent reasoning agents (the **Tribunal**) against the Operator's locally trusted `SignerStore`. This ensures that no single upstream agent can unilaterally mutate the host.
+The **L2Consensus** layer verifies the intent of the request via a Byzantine Fault Tolerant (BFT) quorum. It validates Ed25519 signatures from independent reasoning agents (the **Tribunal**) against the Operator's locally trusted `SignerStore`. This ensures that no single upstream agent can unilaterally mutate the host. The consensus mechanism is defined in `@/home/bob/g8e/internal/services/governance/l2_consensus.go`.
 
 ### L3: Notary (Authorization)
-The **L3Notary** layer enforces human-in-the-loop authorization. For web-based sessions, it validates FIDO2/WebAuthn (Passkey) proofs. For CLI or BYO client sessions, it validates mTLS certificate fingerprints and cryptographic signatures over the transaction hash. Mutations are blocked until a valid L3 proof is presented, unless specifically exempted by an `AutoApprove` policy for benign diagnostic commands.
+The **L3Notary** layer enforces human-in-the-loop authorization. For web-based sessions, it validates FIDO2/WebAuthn (Passkey) proofs. For CLI or BYO client sessions, it validates mTLS certificate fingerprints and cryptographic signatures over the transaction hash. Mutations are blocked until a valid L3 proof is presented, unless specifically exempted by an `AutoApprove` policy for benign diagnostic commands. The notary verification logic is defined in `@/home/bob/g8e/internal/services/governance/l3_notary.go`.
 
 ### L4: Warden (Pre-dispatch Gate)
-The **L4Warden** is the final verification gate before execution. It enforces:
+The **L4Warden** is the final verification gate before execution, defined in `@/home/bob/g8e/internal/services/governance/l4_warden.go`. It enforces:
 1. **Integrity**: Validates that `id == transaction_hash == SHA256(canonical_fields)`. The wire format is canonical JSON (`protojson`), but the signing basis is a deterministic hash of normalized fields.
 2. **Freshness**: Enforces `expires_at` and checks for replay attacks via a local `ReplayStore`.
 3. **State Binding**: Validates that the `state_merkle_root` matches the host's current ledger root.
 4. **Quorum**: Confirms that L1, L2, and L3 proofs meet the current **Governance Posture** (`doctrine`, `consensus`, or `notary`).
 
 ### L5: Actuator (Execution Boundary)
-The **L5Actuator** is the singular execution boundary permitted to mutate host state. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model**:
+The **L5Actuator** is the singular execution boundary permitted to mutate host state, defined in `@/home/bob/g8e/internal/services/governance/l5_actuator.go`. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model**:
 1. **Pre-execution**: Signs an `ActionReceipt` with status `EXECUTING` and commits it to the local `AuditVaultService`.
 2. **Rehydration**: Restores sensitive data (PII, credentials) that was scrubbed upstream by the **Sovereignty Boundary Plane**, using local tokens.
 3. **Execution**: Dispatches to the handler and captures the output.
@@ -120,14 +120,14 @@ The host is the authoritative source of truth for all mutations.
 
 The reference implementation (`g8eo`) currently supports:
 
-- **Universal Protocol Translation** — Functional MCP and A2A gateway mapping standard tool calls to signed `GovernanceEnvelope` mutations.
-- **Fail-Closed 5-Layer Verification** — L1 (Doctrine), L2 (Consensus), and L4 (Warden) gates are fully enforced on every transaction.
-- **Outbound-Only mTLS Connectivity** — Dial-out reverse tunnels with zero inbound port requirements.
-- **Local-First Audit Vault** — Git-backed ledger and fail-closed SQLite audit vault enforcing session existence for all writes.
-- **Deterministic Hash Binding** — SHA-256 transaction hash integrity enforced across all wire formats.
-- **Sovereignty Boundary** — Automated scrubbing and rehydration of sensitive data during the execution lifecycle.
-- **Host-Unique Signing** — Cryptographic Action Receipts signed by host-specific keys.
-- **Zero-Dependency Binary** — Statically compiled Go binary for air-gapped and high-security deployments.
+- **Universal Protocol Translation**: Functional MCP and A2A gateway mapping standard tool calls to signed `GovernanceEnvelope` mutations.
+- **Fail-Closed 5-Layer Verification**: L1 (Doctrine), L2 (Consensus), and L4 (Warden) gates are fully enforced on every transaction.
+- **Outbound-Only mTLS Connectivity**: Dial-out reverse tunnels with zero inbound port requirements.
+- **Local-First Audit Vault**: Git-backed ledger and fail-closed SQLite audit vault enforcing session existence for all writes.
+- **Deterministic Hash Binding**: SHA-256 transaction hash integrity enforced across all wire formats.
+- **Sovereignty Boundary**: Automated scrubbing and rehydration of sensitive data during the execution lifecycle.
+- **Host-Unique Signing**: Cryptographic Action Receipts signed by host-specific keys.
+- **Zero-Dependency Binary**: Statically compiled Go binary for air-gapped and high-security deployments.
 
 ---
 
@@ -135,21 +135,21 @@ The reference implementation (`g8eo`) currently supports:
 
 | Concern | Authoritative file |
 |---|---|
-| Ingress Verification (`L4Warden`) | `internal/services/governance/l4_warden.go` |
-| Execution Boundary (`L5Actuator`) | `internal/services/governance/l5_actuator.go` |
-| Sovereignty (Data Scrubbing) | `internal/services/sovereignty/boundary.go` |
-| Technical Bedrock (`L1Doctrine`) | `internal/services/governance/l1_doctrine.go` |
-| Consensus (`L2Consensus`) | `internal/services/governance/l2_consensus.go` |
-| Notary (`L3Notary`) | `internal/services/governance/l3_notary.go` |
-| Local Audit Vault | `internal/services/storage/audit_vault.go` |
-| Native Git Ledger | `internal/services/storage/ledger.go` |
-| Native Tools | `internal/services/mcp/native_tools.go` |
-| Native Tool Handlers | `internal/services/mcp/native_handlers.go` |
-| Operator Entrypoint | `cmd/g8eo/main.go` |
-| Protocol Definitions | `protocol/proto/g8e/common/v1/common.proto` |
-| Operator Protocol | `protocol/proto/g8e/operator/v1/operator.proto` |
-| Workload Identity | `protocol/workload_identity.go` |
-| Event Constants | `protocol/constants/events.json` |
-| Port Constants | `protocol/constants/ports.json` |
+| Ingress Verification (`L4Warden`) | `@/home/bob/g8e/internal/services/governance/l4_warden.go` |
+| Execution Boundary (`L5Actuator`) | `@/home/bob/g8e/internal/services/governance/l5_actuator.go` |
+| Sovereignty (Data Scrubbing) | `@/home/bob/g8e/internal/services/sovereignty/boundary.go` |
+| Technical Bedrock (`L1Doctrine`) | `@/home/bob/g8e/internal/services/governance/l1_doctrine.go` |
+| Consensus (`L2Consensus`) | `@/home/bob/g8e/internal/services/governance/l2_consensus.go` |
+| Notary (`L3Notary`) | `@/home/bob/g8e/internal/services/governance/l3_notary.go` |
+| Local Audit Vault | `@/home/bob/g8e/internal/services/storage/audit_vault.go` |
+| Native Git Ledger | `@/home/bob/g8e/internal/services/storage/ledger.go` |
+| Native Tools | `@/home/bob/g8e/internal/services/mcp/native_tools.go` |
+| Native Tool Handlers | `@/home/bob/g8e/internal/services/mcp/native_handlers.go` |
+| Operator Entrypoint | `@/home/bob/g8e/cmd/g8eo/main.go` |
+| Protocol Definitions | `@/home/bob/g8e/protocol/proto/g8e/common/v1/common.proto` |
+| Operator Protocol | `@/home/bob/g8e/protocol/proto/g8e/operator/v1/operator.proto` |
+| Workload Identity | `@/home/bob/g8e/protocol/workload_identity.go` |
+| Event Constants | `@/home/bob/g8e/protocol/constants/events.json` |
+| Port Constants | `@/home/bob/g8e/protocol/constants/ports.json` |
 
 See also: [g8e Protocol](./g8e.md), [Governance Gateway](./gateway.md).

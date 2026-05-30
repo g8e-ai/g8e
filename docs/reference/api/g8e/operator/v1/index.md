@@ -1329,7 +1329,7 @@ server.
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| tool_name | [string](#string) |  | The MCP tool name (e.g., &#34;fs_read&#34;, &#34;drop_table&#34;). Forbidden patterns here block the gauntlet at L1 before any signature or state check. |
+| tool_name | [string](#string) |  | The MCP tool name (e.g., &#34;fs_read&#34;, &#34;drop_table&#34;). Forbidden patterns here block the interlock sequence at L1 before any signature or state check. |
 | arguments_json | [string](#string) |  | JSON-encoded arguments object exactly as the MCP client supplied it. Stored as a string (not Struct) so the canonical hash is computed over the bytes the client signed, with no normalization ambiguity. |
 | execution_id | [string](#string) |  | Optional client-supplied invocation id surfaced back in the result. |
 

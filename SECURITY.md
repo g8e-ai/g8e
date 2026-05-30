@@ -1,6 +1,6 @@
 # Security Policy
 
-**Project:** g8e — Byzantine Fault Tolerant Governance Substrate  
+**Project:** g8e — Byzantine Fault Tolerant Governance Platform  
 **Maintained by:** [Lateralus Labs](https://lateraluslabs.com)
 
 ---
@@ -72,7 +72,7 @@ The following are structural properties of g8e, provided to help researchers und
 - **Sovereign Execution Boundary.** The `g8e Operator` (PEP) acts as the sovereign boundary. It refuses to mutate host reality unless a transaction carries a valid L2 signature (Tribunal consensus) and, where required, an L3 proof (Human-in-the-loop).
 - **No ambient execution authority.** No component holds standing permission to mutate state. Authority is granted strictly per-transaction via the `GovernanceEnvelope`, verified independently at the PEP.
 - **Local audit sovereignty.** Raw forensic material is stored locally in the `AuditVaultService`. The Sovereignty Boundary Plane scrubs all outbound data before delivery to remote clients or AI systems.
-- **mTLS everywhere.** All substrate communication (Operator-to-Gateway) requires mutual TLS. Unauthenticated or unverified connections are rejected.
+- **mTLS everywhere.** All platform communication (Operator-to-Gateway) requires mutual TLS. Unauthenticated or unverified connections are rejected.
 - **State & Replay Protection.** Transactions are bound to a `state_merkle_root`, protected by a unique `nonce`, and carry a temporal `expires_at` deadline.
 
 If your finding demonstrates a bypass of any of these properties, treat it as **Critical**.

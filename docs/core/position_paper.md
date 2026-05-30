@@ -3,7 +3,7 @@ title: Position Paper
 parent: Architecture
 ---
 
-# The Sovereign Execution Substrate
+# The Sovereign Execution Platform
 
 ### Co-validation, heterogeneous consensus, and the case for free and open AI runtime governance
 
@@ -48,7 +48,7 @@ $$
 
 The conjunction matters more than either conjunct. Defense in depth is usually described as a sum — more layers, more chances to catch something. Co-validation is a **product**: an unsafe action executes only if it passes a consistency check it should fail *and* an intent check it should fail, where the two checks draw their errors from different distributions because they are testing different properties. We make this precise in §4.
 
-This is also why g8e is *agnostic by construction* — agent-agnostic, model-agnostic, platform-agnostic, domain-agnostic. The verifier never asks *who* produced an action or *what it is for*. It asks only whether the two proofs are present and valid, bound to this transaction, against this host's current state. Agnosticism is not a feature bolted on for market reach. It is the consequence of a trust model that checks mathematics rather than provenance. A substrate that trusted certain vendors more than others would have smuggled a privileged channel back in, and the whole point is that no privileged channel exists.
+This is also why g8e is *agnostic by construction* — agent-agnostic, model-agnostic, platform-agnostic, domain-agnostic. The verifier never asks *who* produced an action or *what it is for*. It asks only whether the two proofs are present and valid, bound to this transaction, against this host's current state. Agnosticism is not a feature bolted on for market reach. It is the consequence of a trust model that checks mathematics rather than provenance. A platform that trusted certain vendors more than others would have smuggled a privileged channel back in, and the whole point is that no privileged channel exists.
 
 ---
 
@@ -191,7 +191,7 @@ The reasoning is straightforward. The benefit of an agent *not* mutating reality
 
 There is a second, sharper reason. You cannot trust a governance layer you cannot inspect and cannot self-host. A closed, proprietary governance vendor is an unaudited authority sitting in the most sensitive position in the stack — precisely the trusted third party that zero-trust architecture is built to abolish. An auditing system that is itself unauditable is a contradiction. The only credible guarantee is source you can read, a binary you can compile, and a deployment you can run inside your own perimeter with no outbound dependency. Open source is not g8e's distribution strategy. It is the only configuration in which the security claims are checkable, and therefore the only configuration in which they are true.
 
-Accountability for autonomous action — the ability to say *who authorized this, on what basis, against what state, and prove it later* — is becoming civic infrastructure. Civic infrastructure behind a paywall is a two-tier safety regime, where well-funded actors are governed and everyone else is not. That is not a safe world; it is an unevenly dangerous one. This is why the substrate is Apache-2.0, single-binary, and air-gap-capable, and why it will stay that way. Everyone must have access to free and open AI agent runtime governance and auditing, or the governed world is only ever a subset of the world.
+Accountability for autonomous action — the ability to say *who authorized this, on what basis, against what state, and prove it later* — is becoming civic infrastructure. Civic infrastructure behind a paywall is a two-tier safety regime, where well-funded actors are governed and everyone else is not. That is not a safe world; it is an unevenly dangerous one. This is why the platform is Apache-2.0, single-binary, and air-gap-capable, and why it will stay that way. Everyone must have access to free and open AI agent runtime governance and auditing, or the governed world is only ever a subset of the world.
 
 ---
 
@@ -203,7 +203,7 @@ The future work extends co-validation outward without changing its shape: Operat
 
 > A typed, signed, state-bound transaction reaches a sovereign host agent that refuses to mutate reality unless every independent proof — machine consistency, human intent, freshness, and state — checks out, locally, and is recorded before the fact.
 
-g8e is not an agent. It is the substrate on which agents must run to be viable in production infrastructure, and which must be free for that infrastructure to be safe. The architecture's bet is that the future of autonomous systems is not *trust but verify*. It is *verify, then execute* — and the right to verify belongs to everyone.
+g8e is not an agent. It is the platform on which agents must run to be viable in production infrastructure, and which must be free for that infrastructure to be safe. The architecture's bet is that the future of autonomous systems is not *trust but verify*. It is *verify, then execute* — and the right to verify belongs to everyone.
 
 ---
 

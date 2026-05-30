@@ -27,10 +27,10 @@ Initialize the platform runtime:
 ```
 
 This creates the `.g8e` directory structure:
-- `.g8e/pki/` — PKI hierarchy (CA, certificates, keys)
-- `.g8e/data/` — SQLite database for Gateway persistence
-- `.g8e/logs/` — Gateway logs
-- `.g8e/secrets/` — Encrypted vault for platform secrets
+- `.g8e/pki/` - PKI hierarchy (CA, certificates, keys)
+- `.g8e/data/` - SQLite database for Gateway persistence
+- `.g8e/logs/` - Gateway logs
+- `.g8e/secrets/` - Encrypted vault for platform secrets
 
 ### Starting the Gateway
 
@@ -556,9 +556,9 @@ If downstream MCP/A2A server is unavailable, the Gateway circuit breaker activat
 
 ## Next Steps
 
-- **[Build Operator](build_operator.md)** — Build a custom g8e-compatible Governed Operator
-- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Deploy and use a Governed Operator
-- **[Build Apps](build_apps.md)** — Build g8e-compatible applications using a Gateway
-- **[MCP Protocol](../protocols/mcp/mcp.md)** — Detailed MCP protocol specification
-- **[A2A Protocol](../protocols/a2a/a2a.md)** — Detailed A2A protocol specification
-- **[Gateway Architecture](../architecture/gateway.md)** — Gateway architecture and internals
+- **[Build Operator](build_operator.md)** - Build a custom g8e-compatible Governed Operator
+- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** - Deploy and use a Governed Operator
+- **[Build Apps](build_apps.md)** - Build g8e-compatible applications using a Gateway
+- **[MCP Protocol](../protocols/mcp/mcp.md)** - Detailed MCP protocol specification
+- **[A2A Protocol](../protocols/a2a/a2a.md)** - Detailed A2A protocol specification
+- **[Gateway Architecture](../architecture/gateway.md)** - Gateway architecture and internals

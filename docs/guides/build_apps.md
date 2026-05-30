@@ -14,7 +14,7 @@ Version: v1.0.0
 
 A g8e-compatible application functions strictly as a GovernanceEnvelope producer and receipt consumer. It maintains no privileged communication channels, never interacts directly with the host system, and communicates with the Gateway (Operator in gateway mode) exclusively through public ingress paths.
 
-Security operations including Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) verification gates, replay defense, state binding, cryptographic audit, and human-in-the-loop authorization are fully delegated to the Gateway substrate. The application provides only the components the protocol cannot intrinsically supply: the mutation intent and optionally, consensus evidence.
+Security operations including Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) verification gates, replay defense, state binding, cryptographic audit, and human-in-the-loop authorization are fully delegated to the Gateway platform. The application provides only the components the protocol cannot intrinsically supply: the mutation intent and optionally, consensus evidence.
 
 ---
 

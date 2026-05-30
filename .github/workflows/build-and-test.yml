@@ -90,7 +90,7 @@ jobs:
           govulncheck ./...
 
   test:
-    name: CI / Substrate Tests
+    name: CI / Platform Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -105,7 +105,7 @@ jobs:
       - name: Build CLI
         run: make build
 
-      - name: Run substrate tests
+      - name: Run platform tests
         run: make _ci-test
 
       - name: Show Operator logs

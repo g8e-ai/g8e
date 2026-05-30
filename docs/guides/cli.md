@@ -4,7 +4,7 @@ This reference is auto-generated from the Cobra CLI help output.
 
 ## g8e Root Help
 ```
-g8e is a zero-trust execution substrate for agentic infrastructure.
+g8e is a zero-trust execution platform for agentic infrastructure.
 The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).
 
 Usage:
@@ -12,7 +12,7 @@ Usage:
 
 Available Commands:
   auth        Authentication and session management
-  data        Administer the local substrate over mTLS
+  data        Administer the local platform over mTLS
   help        Help about any command
   platform    Manage the Governance Gateway (g8eg) lifecycle
   security    Security validation checks
@@ -368,7 +368,7 @@ Flags:
 
 ### test ci
 ```
-Runs make ci which includes proto generation, linting, vulncheck, and substrate tests with platform start/stop and coverage enforcement. This is the canonical way to replicate CI locally.
+Runs make ci which includes proto generation, linting, vulncheck, and platform tests with platform start/stop and coverage enforcement. This is the canonical way to replicate CI locally.
 
 Usage:
   g8e test ci [flags]

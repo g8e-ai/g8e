@@ -79,7 +79,7 @@ func testCiCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ci",
 		Short: "Run CI pipeline locally (mirrors GitHub Actions)",
-		Long:  `Run the full CI pipeline locally: proto generation, linting, vulncheck, and substrate tests with platform start/stop and coverage enforcement.`,
+		Long:  `Run the full CI pipeline locally: proto generation, linting, vulncheck, and platform tests with platform start/stop and coverage enforcement.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
@@ -114,7 +114,7 @@ func testCiCmd() *cobra.Command {
 				return fmt.Errorf("vulncheck failed: %w", err)
 			}
 
-			cmd.Println("\n=== Substrate tests ===")
+			cmd.Println("\n=== Platform tests ===")
 			// Set G8E_STRICT_CONSTANTS_LINT for CI parity
 			os.Setenv("G8E_STRICT_CONSTANTS_LINT", "1")
 
@@ -149,7 +149,7 @@ func testCiCmd() *cobra.Command {
 			}
 
 			if testFailed {
-				return fmt.Errorf("substrate tests failed")
+				return fmt.Errorf("platform tests failed")
 			}
 
 			// Check coverage threshold

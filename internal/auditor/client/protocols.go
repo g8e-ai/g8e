@@ -58,7 +58,7 @@ func (c *Client) MCPToolsList(ctx context.Context, p Persona) (*JSONRPCResponse,
 }
 
 // MCPToolsCall invokes a tool. The Gateway wraps this into a governed MCP_CALL
-// envelope, runs the gauntlet, and dispatches to the real Operator.
+// envelope, runs the interlock sequence, and dispatches to the real Operator.
 func (c *Client) MCPToolsCall(ctx context.Context, p Persona, tool string, args map[string]any) (*JSONRPCResponse, error) {
 	return c.rpc(ctx, p, "/api/mcp/v1/tools/call", "tools/call", map[string]any{
 		"name":      tool,

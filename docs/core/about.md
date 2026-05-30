@@ -5,7 +5,7 @@ parent: Architecture
 
 # About g8e
 
-g8e is a zero-trust execution substrate for agentic infrastructure. It provides a governed mechanism for AI systems, clients, and agents to interact with host systems via standardized tool protocols.
+g8e is a zero-trust execution platform for agentic infrastructure. It provides a governed mechanism for AI systems, clients, and agents to interact with host systems via standardized tool protocols.
 
 The core invariant is narrow: every mutation is a typed, signed, state-bound `GovernanceEnvelope` serialized as canonical JSON. Every envelope must clear a fail-closed verification pipeline of Doctrine (L1Doctrine), Consensus (L2Consensus), Notary (L3Notary), and Warden (L4Warden) before the Actuator (L5Actuator) executes.
 

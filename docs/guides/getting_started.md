@@ -12,9 +12,9 @@ Version: v1.0.0
 
 ## Protocol Overview
 
-g8e is a zero-trust execution substrate for agentic infrastructure. The platform enforces a core invariant: a typed, signed, state-bound transaction reaches a sovereign host agent that distrusts upstream inputs and refuses to mutate reality unless every independent proof checks out.
+g8e is a zero-trust execution platform for agentic infrastructure. The platform enforces a core invariant: a typed, signed, state-bound transaction reaches a sovereign host agent that distrusts upstream inputs and refuses to mutate reality unless every independent proof checks out.
 
-The substrate consists of two mandatory components:
+The platform consists of two mandatory components:
 
 ### Governance Gateway (g8eg)
 
@@ -131,6 +131,6 @@ Gateway-mediated communication between sovereign agents. Every interaction is st
 
 ## Next Steps
 
-- **[Architecture](../devs/codemap.md)** — Deep dive into the substrate components.
+- **[Architecture](../devs/codemap.md)** — Deep dive into the platform components.
 - **[CLI Reference](../devs/devs.md)** — Comprehensive command documentation.
 - **[Security Model](../architecture/auth.md)** — PKI, mTLS, and WebAuthn details.

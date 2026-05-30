@@ -12,7 +12,7 @@ Version: v1.0.0
 
 ## Overview
 
-A g8e-compatible Governed Operator implements the host-side Policy Execution Point (PEP) of the substrate. It receives transactions, enforces the 5-layer verification sequence, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
+A g8e-compatible Governed Operator implements the host-side Policy Execution Point (PEP) of the platform. It receives transactions, enforces the 5-layer verification sequence, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
 The reference implementation is a single Go codebase that compiles into the `g8e` binary. The same binary serves both Governance Gateway (PDP) and g8e Operator (PEP) roles, selected via command-line flags. Custom operator implementations must implement the same protocol contracts and invariants.
 
@@ -173,7 +173,7 @@ Refer to `protocol/proto/g8e/` for the canonical schema definitions.
 
 ## Testing
 
-A custom operator implementation must pass the substrate test suite to claim g8e compatibility:
+A custom operator implementation must pass the platform test suite to claim g8e compatibility:
 
 ```bash
 ./g8e test g8eo

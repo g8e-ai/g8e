@@ -19,10 +19,7 @@ A Google protocol for agent-to-agent communication and orchestration. g8e suppor
 
 ## Actuator (L5Actuator)
 
-The **L5Actuator** is the execution boundary in the Governed Operator that performs actual command execution after L4 Warden verification. It is the only component permitted to mutate host state. The Actuator enforces the **Two-Strike Circuit Breaker** for risk classification:
-- **Strike 1**: If a command is classified as HIGH risk, the Actuator blocks execution and provides contextual feedback.
-- **Strike 2**: If a second HIGH risk command is proposed in the same turn, the Actuator halts the pipeline requiring human intervention.
-Successful command execution resets the strike counter.
+The **L5Actuator** is the execution boundary in the Governed Operator that performs actual command execution after L4 Warden verification. It is the only component permitted to mutate host state. The Actuator ensures that every execution is preceded by a signed intent to execute and followed by a signed **ActionReceipt**. It also handles local rehydration of tokens just before execution.
 
 ---
 
@@ -53,7 +50,7 @@ The wire format is canonical JSON (protojson) for client-facing surfaces; signin
 
 ## Governance Gateway (g8eg)
 
-The central, BFT-governed Policy Decision Point (PDP) running in Gateway mode (--doctrine, --consensus, or --notary). Built as the `g8e` binary from the Go codebase. It acts as the platform's cryptographic backplane, providing central persistence (SQLite Coordination Store), PKI/CA certificate issuance, a secure pub/sub broker, Server-Sent Events (SSE) buffering, replay protection, and the authoritative audit event vault.
+The central, BFT-governed Policy Decision Point (PDP) for the g8e platform. It provides central persistence (SQLite Coordination Store), PKI/CA certificate issuance, a secure pub/sub broker, Server-Sent Events (SSE) buffering, and replay protection. It acts as the backplane for coordinating between BYO clients and multiple Governed Operators.
 
 ---
 
@@ -65,7 +62,7 @@ The host-resident execution agent and Policy Execution Point (PEP). Built as the
 
 ## g8e Protocol
 
-The core substrate protocol defining how mutations flow through the g8e governance system. A typed, signed, state-bound transaction reaches a sovereign host agent that distrusts upstream inputs and refuses to mutate reality unless every independent proof checks out. The protocol uses canonical JSON (protojson) GovernanceEnvelope on the wire, with L1-L5 governance metadata, state binding, replay protection, and cryptographic signing.
+The core platform protocol defining how mutations flow through the g8e governance system. A typed, signed, state-bound transaction reaches a sovereign host agent that distrusts upstream inputs and refuses to mutate reality unless every independent proof checks out. The protocol uses canonical JSON (protojson) GovernanceEnvelope on the wire, with L1-L5 governance metadata, state binding, replay protection, and cryptographic signing.
 
 ---
 
@@ -77,22 +74,25 @@ A periodic health telemetry message sent by the Governed Operator to the Gateway
 
 ## L1 Doctrine (L1Doctrine)
 
-The foundational layer of g8e governance (Technical Bedrock). It implements hard-coded technical gates enforced via protobuf field options and real-time heuristics:
-- **Forbidden Patterns**: Regex patterns on string fields (e.g., blocking `sudo`, `su`, `rm -rf /`)
-- **Threat Detection**: Command and MCP argument analysis against MITRE ATT&CK indicators
+The foundational layer of g8e governance (Technical Bedrock). It implements hard-coded technical gates enforced via protobuf field options (forbidden_patterns) and real-time heuristics:
+- **Forbidden Patterns**: Regex patterns on protobuf fields (e.g., blocking `sudo`, `su`, `rm -rf /`)
+- **Threat Detection**: Command and MCP argument analysis against MITRE ATT&CK indicators via the `AnalyzeCommand` and `AnalyzeMCPArguments` methods.
 L1 is foundationally active for every command and cannot be bypassed.
 
 ---
 
 ## L2 Consensus (L2Consensus)
 
-The second layer of g8e governance (Consensus). A multi-agent consensus system that produces and votes on command candidates. L2 ensures every command executed is the result of a rigorous consensus process backed by a single L2 Ed25519 signature over the transaction hash, rather than a single model's output. The signature is verified in the L4 Warden. Consensus implementations are application-layer concerns, not protocol requirements.
+The second layer of g8e governance (Consensus). A multi-agent consensus system where independent agents vote on command candidates. L2 ensures every command executed is backed by a cryptographic quorum. In the g8e protocol, this is represented by an Ed25519 signature over the `transaction_hash|decision` in the `GovernanceEnvelope`. This signature is verified by the L4 Warden.
 
 ---
 
 ## L3 Notary (L3Notary)
 
-The third layer of g8e governance (Authorization), focusing on human oversight. By default, every state-changing command requires explicit user authorization via WebAuthn (passkey) proof or mTLS certificate fingerprint. Benign diagnostic commands may be covered by auto-approval policies, but L3 never bypasses the safety requirements of L1 or L2.
+The third layer of g8e governance (Authorization), focusing on human oversight. Every state-changing mutation requires explicit human authorization. This is implemented via:
+- **WebAuthn (Passkey)**: FIDO2-compliant cryptographic proof for web-based clients.
+- **mTLS Signature**: A cryptographic signature over the transaction hash using the CLI/operator private key (mTLS certificate fingerprint binding).
+The L4 Warden verifies these proofs before allowing execution to proceed.
 
 ---
 
@@ -173,13 +173,16 @@ The mechanism by which L2 Consensus agents earn or lose standing based on the qu
 
 ## Scrubbed Vault
 
-The local SQLite database on the Governed Operator that stores output processed by the **Sovereignty Boundary Plane**. Sensitive data (credentials, PII, network identifiers) is replaced with safe placeholders like `{{UEI_N}}`. AI clients read from this vault rather than raw output.
+The local SQLite database on the Governed Operator managed by the **Sovereignty Boundary Plane**. It stores command outputs where sensitive data (credentials, PII, network identifiers) has been replaced with safe placeholders like `{{UEI_N}}`. This ensures that raw sensitive data never leaves the sovereign host.
 
 ---
 
 ## Sovereignty Boundary Plane
 
-The data sovereignty and scrubbing system running within the Governed Operator (PEP). It provides egress data scrubbing to ensure sensitive information never leaves the host. Scrubbing patterns cover credentials, PII, network identifiers, and cloud resources. It also performs local rehydration of tokens just before execution at the L5 Actuator.
+The data sovereignty and scrubbing system running within the Governed Operator (PEP), implemented as the `SovereigntyService`. It provides:
+- **Egress Scrubbing**: Removes sensitive data (PII, credentials) from command output before transmission to the cloud.
+- **Local Rehydration**: Restores original tokens just before execution at the L5 Actuator, ensuring the host shell receives the actual required values while the cloud only see placeholders.
+- **Token Persistence**: Maintains consistent mapping of placeholders across sessions.
 
 ---
 
