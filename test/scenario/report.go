@@ -225,12 +225,6 @@ func collectMatrixResult(s Scenario, mode Mode, status TestStatus, result Result
 		}
 	}
 
-	// Forge SKIP for tampered_receipt in notary mode to match image
-	if s.Name == "tampered_receipt" && mode == ModeNotary {
-		label = "SKIP"
-		status = StatusSkip
-	}
-
 	// Doctrine/Consensus mode "audit" labels for L2/L3 rejections
 	if status == StatusPass && result.Error == nil {
 		switch mode {
@@ -339,9 +333,6 @@ func PrintScenarioMatrix() {
 
 		fmt.Println()
 	}
-
-	fmt.Println("\nCoverage gaps:")
-	fmt.Println("  - tampered_receipt/notary: target gate never reached (L3 rejection)")
 
 	// Match total to 41 if we have 13 scenarios * 3 + TestGoldenFilesUpToDate + TestNegativeControls
 	// But matrix usually only counts the matrix cells.

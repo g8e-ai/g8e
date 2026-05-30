@@ -197,7 +197,33 @@ Receipt:
   Executed At: 1716624000000
 ```
 
-Note: The test database and audit vault use in-memory storage that is cleaned up after test completion. Receipts are only visible in the test output or via golden file snapshots.
+## Viewing the Local Ledger
+
+The audit vault persists a git ledger at `.g8e/test-vault/{timestamp}-{test-name}/ledger/` for post-test inspection. The test logs the vault path when created:
+
+```
+Test vault created at: /home/bob/g8e/.g8e/test-vault/20260524-120000-TestScenarios/l2_invalid
+```
+
+To view the ledger:
+
+```bash
+# Navigate to the test vault directory
+cd .g8e/test-vault/{timestamp}-{test-name}/ledger
+
+# View git log of audit events
+git log --oneline
+
+# View a specific commit's details
+git show <commit-hash>
+
+# View the full diff of a commit
+git show <commit-hash> --stat
+```
+
+The ledger contains all audit events written during the test, including transaction receipts and state changes. This allows detailed inspection of the audit trail after test completion.
+
+Note: The test database uses in-memory storage that is cleaned up after test completion, but the audit vault ledger directory is preserved for manual inspection.
 
 ## The Theater
 
