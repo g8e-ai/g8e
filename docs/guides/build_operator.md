@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a Governed Operator
 
-Last Updated: 2026-05-26
-Version: v1.0.0
+Last Updated: 2026-05-29
+Version: v1.0.3
 
 ---
 

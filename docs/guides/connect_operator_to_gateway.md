@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Operator to a Governance Gateway
 
-Last Updated: 2026-05-25
-Version: v1.0.0
+Last Updated: 2026-05-29
+Version: v1.0.3
 
 ---
 

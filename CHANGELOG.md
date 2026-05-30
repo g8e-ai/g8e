@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.3] - 2026-05-29
+
+### Overview
+
+v1.0.3 removes all remaining g8ee application-layer coupling from the Gateway and protocol definitions. The Gateway routing layer uses dedicated controllers for admin and operator lifecycle, and a CLI approval command enables out-of-band L3 transaction authorization. Security hardening includes fixes for outbound L3 notary verification and JIT user lockout prevention.
+
+### Breaking Changes
+
+* **g8ee API paths removed** - All g8ee-specific API paths removed from `protocol/constants/api_paths.json` and `internal/constants/api_paths.go`. The `g8ee` and `g8ee_full` path groups are deleted along with the `GetG8eePath()` helper function.
+* **Device-link CLI commands removed** - The `g8e data device-links` command group (create, delete, list) is removed. Device-link token management is no longer exposed via CLI.
+* **g8ee environment variables removed** - All g8ee-related environment variables and configuration entries removed from platform code.
+* **Public endpoint renaming** - Gateway public endpoints renamed for clarity. Documentation and tests updated to reflect new endpoint names.
+* **Protocol model cleanup** - Protocol models (agent_activity_metadata, case, conversation, investigation, operator_document, reputation_commitment, reputation_state, security_constraints, stake_resolution, tool_results, user, user_settings) updated to remove g8ee-specific field references.
+
+### Added
+
+* **CLI approval command:** The `./g8e approve <transaction_hash>` command enables out-of-band L3 transaction approval. Users sign suspended transaction hashes with their CLI private key and submit cryptographic proofs to the Gateway for authorization.
+* **PublicRouteRegistry:** A centralized public route registry in `gateway_auth.go` eliminates fragile `HasPrefix` duplication across middleware. Exact paths and prefixes are registered in one location for maintainability.
+* **AdminController:** A dedicated controller for admin-only endpoints, including app policy management. Separates admin concerns from auth and operator controllers.
+* **OperatorController:** A dedicated controller for operator lifecycle endpoints (registration, binding, session management). Provides clear separation of operator management concerns.
+* **JIT user lockout defense:** A one-time valid JWT mechanism prevents JIT user lockout during enrollment. Users receive a temporary valid JWT if enrollment fails, ensuring they can recover access.
+* **Enhanced gateway security:** Multiple security hardening improvements include stricter request validation, improved error handling, and enhanced authentication checks.
+
+### Changed
+
+* **Gateway routing refactor:** Gateway HTTP routing uses dedicated controllers. Admin, auth, and operator concerns are separated into distinct controller packages with clear responsibilities.
+* **L3 notary outbound fix:** L3 notary verification for outbound transactions is fixed. Suspended transaction handling and receipt generation correctly handle outbound mutation flows.
+* **Test coverage expansion:** Extensive test coverage improvements across gateway services include comprehensive integration tests for JWT authentication, CLI approval, public route registry, and controller endpoints.
+* **Build process simplification:** The `cp` command is removed from the build process in Makefile. Binary compilation is streamlined to eliminate unnecessary file operations.
+* **Documentation updates:** CLI documentation, architecture docs, and guides reflect the platform-only architecture. g8ee-specific references and device-link command documentation are removed.
+* **Protocol constants regeneration:** Protocol constants are regenerated after g8ee path removal. Generated Go constants are updated to match protocol JSON definitions.
+
+### Fixed
+
+* **Outbound L3 notary bug:** L3 notary correctly verifies and signs outbound transactions. The previous implementation did not properly handle suspended transaction states for outbound mutations.
+* **Gateway security vulnerabilities:** Multiple security issues in gateway authentication and request handling are fixed. Validation of user inputs, session tokens, and request boundaries is improved.
+* **CLI approval integration:** CLI approval command integration with Gateway JWT authentication is fixed. The approval flow correctly validates CLI signatures and updates suspended transaction state.
+* **Test isolation issues:** Test isolation problems in gateway integration tests are fixed. Tests properly clean up database state and avoid cross-test contamination.
+* **Public route matching:** Public route matching logic correctly handles both exact paths and prefixes. The previous implementation had edge cases where authenticated routes were incorrectly exposed.
+
+### Security
+
+* **JIT user lockout prevention:** A one-time valid JWT mechanism prevents users from being locked out during JIT enrollment failures. Ensures a recovery path for authentication errors.
+* **L3 notary hardening:** Outbound transaction verification strictly enforces L3 signature requirements. Suspended transactions cannot bypass L3 checks.
+* **Gateway request validation:** Enhanced request validation prevents malformed or malicious requests from reaching internal services. Stricter bounds checking on payload sizes and field values is implemented.
+* **Public route registry:** Centralized public route definition eliminates accidental exposure of authenticated endpoints. All public routes are explicitly registered and auditable.
+
+---
+
 ## [1.0.2] - 2026-05-28
 
 ### Added

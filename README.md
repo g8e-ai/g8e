@@ -214,7 +214,7 @@ graph TD
 
 ---
 
-## Status: v1.0.2 — Core Platform
+## Status: v1.0.3 — Core Platform
 
 g8e is the mandatory governance platform. Agent ensembles and Dashboard (g8ed) are optional application-layer adapters.
 
