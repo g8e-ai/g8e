@@ -40,6 +40,17 @@ Clients enroll in the platform using a Certificate Signing Request (CSR) bootstr
 3. **Registration**: The Governance Gateway (g8eg) validates the CSR and binds the certificate to a user identity via invitation-based Just-In-Time (JIT) provisioning.
 4. **Session Issuance**: Upon successful enrollment, the Governance Gateway (g8eg) issues a specific `operator_session_id` or `cli_session_id`.
 
+### Windows Certificate Store Enrollment
+
+Windows users can enroll via the Windows Certificate Store for seamless browser authentication:
+1. **CLI Enrollment**: Run `./g8e auth enroll-windows [--tpm]` to generate an ECDSA P-384 keypair in the Windows Personal store.
+2. **CSR Signing**: The CLI submits a CSR to the Gateway and receives a signed certificate with SPIFFE URI SAN.
+3. **Certificate Import**: The signed certificate is imported to `Cert:\CurrentUser\My` in the Windows Certificate Store.
+4. **Browser Authentication**: Chrome and Edge automatically present certificates from the Windows Personal store when the Gateway issues a TLS CertificateRequest.
+5. **Session Binding**: The Gateway extracts the SPIFFE URI SAN from the client certificate and creates a `web_session_id` bound to the user identity.
+
+**TPM-Backed Keys**: The `--tpm` flag uses the Microsoft Platform Crypto Provider KSP to generate keys backed by Windows Hello for Business, providing hardware-bound L3 presence proofs.
+
 ---
 
 ## 2. 5-Layer Verification Sequence (Interlock)

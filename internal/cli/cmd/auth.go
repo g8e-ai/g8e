@@ -34,6 +34,7 @@ func authCmd() *cobra.Command {
 	cmd.AddCommand(
 		loginCmd(),
 		logoutCmd(),
+		enrollWindowsCmd(),
 	)
 
 	return cmd
@@ -133,8 +134,8 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 				return nil
 			}
 
-			// Platform already bootstrapped - CSR-based re-enrollment
-			cmd.Println("Platform already bootstrapped. Re-enrolling via CSR...")
+			// Platform already bootstrapped - CSR-based re-enrollment with mTLS
+			cmd.Println("Platform already bootstrapped. Re-enrolling via CSR with mTLS...")
 
 			cmd.Println("Generating keys and CSRs...")
 			hostname, _ := os.Hostname()
@@ -149,7 +150,7 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 			}
 
 			cmd.Println("Re-enrolling with operator...")
-			regResp, err := auth.Bootstrap(cfg, opCSR, cliCSR)
+			regResp, err := auth.ReEnroll(cfg, opCSR, cliCSR)
 			if err != nil {
 				return err
 			}
@@ -228,5 +229,103 @@ func logoutCmd() *cobra.Command {
 			return nil
 		},
 	}
+	return cmd
+}
+
+func enrollWindowsCmd() *cobra.Command {
+	var useTPM bool
+
+	cmd := &cobra.Command{
+		Use:   "enroll-windows",
+		Short: "Enroll via Windows Certificate Store (Windows only)",
+		Long:  `Generate an ECDSA P-384 keypair in the Windows Certificate Store, submit a CSR to the Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert. Use --tpm for TPM-backed keys via Windows Hello for Business.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			trustBundle := cfg.TrustBundlePath()
+			if _, err := os.Stat(trustBundle); os.IsNotExist(err) {
+				return fmt.Errorf("trust bundle not found at %s - install the platform CA manually before enrollment", trustBundle)
+			}
+
+			if err := auth.CheckOperatorRunning(cfg); err != nil {
+				return err
+			}
+
+			// Check if platform is already bootstrapped
+			bootstrapped, err := auth.CheckBootstrapStatus(cfg)
+			if err != nil {
+				return fmt.Errorf("failed to check bootstrap status: %w", err)
+			}
+
+			cmd.Println("Generating ECDSA P-384 keypair in Windows Certificate Store...")
+			hostname, _ := os.Hostname()
+			csr, privKey, err := auth.GenerateWindowsCSR(fmt.Sprintf("g8e-windows-%s", hostname), useTPM)
+			if err != nil {
+				return fmt.Errorf("failed to generate Windows CSR: %w", err)
+			}
+
+			var regResp *auth.RegistrationResponse
+			if !bootstrapped {
+				cmd.Println("Submitting CSR to Gateway for bootstrap...")
+				regResp, err = auth.Bootstrap(cfg, csr, "")
+				if err != nil {
+					return fmt.Errorf("failed to submit CSR: %w", err)
+				}
+			} else {
+				cmd.Println("Platform already bootstrapped. Re-enrolling via CSR with mTLS...")
+				regResp, err = auth.ReEnroll(cfg, csr, "")
+				if err != nil {
+					return fmt.Errorf("failed to re-enroll: %w", err)
+				}
+			}
+
+			if regResp.OperatorCert == "" {
+				return fmt.Errorf("unexpected response: missing certificate")
+			}
+
+			cmd.Println("Importing signed certificate to Windows Certificate Store...")
+			if err := auth.ImportCertificateToWindowsStore(regResp.OperatorCert); err != nil {
+				cmd.Printf("Warning: failed to import to Windows store: %v\n", err)
+				cmd.Println("Certificate will be saved to local filesystem instead")
+			}
+
+			if err := auth.SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, privKey, cfg.OperatorCertFile(), cfg.OperatorKeyFile()); err != nil {
+				return fmt.Errorf("failed to save certificate locally: %w", err)
+			}
+
+			if regResp.HubTrustBundle != "" {
+				hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
+				if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0600); err != nil {
+					return fmt.Errorf("failed to save hub trust bundle: %w", err)
+				}
+			}
+
+			creds := &auth.Credentials{
+				OperatorSessionID: regResp.OperatorSessionID,
+				UserID:            regResp.UserID,
+				OperatorID:        regResp.OperatorID,
+				CLISessionID:      regResp.CLISessionID,
+			}
+
+			if err := auth.SaveCredentials(cfg, creds); err != nil {
+				return fmt.Errorf("failed to save credentials: %w", err)
+			}
+
+			cmd.Printf("\nWindows enrollment complete\n")
+			cmd.Printf("User ID: %s\n", regResp.UserID)
+			cmd.Printf("Operator Session ID: %s\n", regResp.OperatorSessionID)
+			cmd.Printf("Operator ID: %s\n", regResp.OperatorID)
+			cmd.Println("\nNEXT STEP: Close and reopen your browser.")
+			cmd.Println("Chrome/Edge will automatically present your certificate from the Windows Certificate Store.")
+
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVar(&useTPM, "tpm", false, "Use TPM-backed key via Windows Hello for Business")
+
 	return cmd
 }

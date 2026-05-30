@@ -147,7 +147,7 @@ func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationRes
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/auth/bootstrap", cfg.OperatorPublicURL())
+	url := fmt.Sprintf("%s/api/v1/auth/bootstrap", cfg.OperatorPublicURL())
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -179,6 +179,86 @@ func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationRes
 
 	if regResp.Error != "" {
 		return nil, fmt.Errorf("bootstrap failed: %s", regResp.Error)
+	}
+
+	return &regResp, nil
+}
+
+// ReEnroll performs CSR-based re-enrollment using existing mTLS credentials.
+// This is used when the platform is already bootstrapped and the CLI has valid certificates.
+func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationResponse, error) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get hostname: %w", err)
+	}
+
+	// Load existing CLI certificate for mTLS
+	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
+	if err != nil {
+		return nil, fmt.Errorf("failed to load CLI certificate: %w", err)
+	}
+
+	// Load CA trust bundle
+	trustBundlePath := cfg.TrustBundlePath()
+	caPEM, err := os.ReadFile(trustBundlePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read trust bundle: %w", err)
+	}
+
+	caPool := x509.NewCertPool()
+	if !caPool.AppendCertsFromPEM(caPEM) {
+		return nil, fmt.Errorf("failed to parse CA certificates")
+	}
+
+	tlsConfig := &tls.Config{
+		RootCAs:      caPool,
+		Certificates: []tls.Certificate{cliCert},
+		MinVersion:   tls.VersionTLS13,
+	}
+
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+
+	client := &http.Client{Transport: transport}
+
+	req := map[string]string{
+		"csr_pem":            operatorCSR,
+		"cli_csr_pem":        cliCSR,
+		"system_fingerprint": fmt.Sprintf("g8e-cli-%s", hostname),
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/api/v1/pki/devices/enroll", cfg.OperatorPublicURL())
+	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to re-enroll: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var regResp RegistrationResponse
+	if err := json.Unmarshal(respBody, &regResp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if regResp.Error != "" {
+		return nil, fmt.Errorf("re-enrollment failed: %s", regResp.Error)
 	}
 
 	return &regResp, nil
@@ -303,7 +383,7 @@ func CheckBootstrapStatus(cfg *config.Config) (bool, error) {
 		return false, fmt.Errorf("failed to create secure HTTP client: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/auth/bootstrap/status", cfg.OperatorPublicURL())
+	url := fmt.Sprintf("%s/api/v1/auth/bootstrap/status", cfg.OperatorPublicURL())
 	resp, err := client.Get(url)
 	if err != nil {
 		return false, fmt.Errorf("failed to check bootstrap status: %w", err)

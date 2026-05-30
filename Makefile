@@ -98,6 +98,22 @@ proto: buf-install protoc-install
 	fi
 	@echo "Protobuf generation complete."
 
+.PHONY: proto-python
+proto-python:
+	@echo "Generating Python Protobuf code..."
+	@if command -v python3 &> /dev/null; then \
+		python3 -m grpc_tools.protoc \
+			--python_out=protocol/python/g8e_protocol \
+			--proto_path=protocol/proto \
+			protocol/proto/g8e/common/v1/common.proto \
+			protocol/proto/g8e/operator/v1/operator.proto \
+			protocol/proto/g8e/pubsub/v1/pubsub.proto; \
+	else \
+		echo "Error: python3 not found. Install grpc_tools.protoc." >&2; \
+		exit 1; \
+	fi
+	@echo "Python Protobuf generation complete."
+
 .PHONY: proto-force
 proto-force: buf-install
 	@echo "Force generating Protobuf code..."

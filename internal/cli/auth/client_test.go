@@ -182,6 +182,16 @@ func TestNewSecureHTTPClient_InvalidPEM(t *testing.T) {
 // This function is tested via integration/e2e tests with a real Operator.
 
 // ---------------------------------------------------------------------------
+// ReEnroll
+// ---------------------------------------------------------------------------
+// Note: ReEnroll requires mTLS with existing certificates and is tested via integration tests.
+
+// ---------------------------------------------------------------------------
+// CheckBootstrapStatus
+// ---------------------------------------------------------------------------
+// Note: CheckBootstrapStatus requires TLS and is tested via integration tests.
+
+// ---------------------------------------------------------------------------
 // SaveCredentials / LoadCredentials
 // ---------------------------------------------------------------------------
 

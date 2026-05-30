@@ -1,0 +1,95 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Release Python Protocol Package
+
+on:
+  push:
+    tags:
+      - 'protocol/v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Release Python Protocol
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build package
+        working-directory: ./protocol/python
+        run: |
+          python -m build
+
+      - name: Check package
+        working-directory: ./protocol/python
+        run: |
+          twine check dist/*
+
+      - name: Tag version
+        id: tag_version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/protocol/v}
+          echo "version=${TAG}" >> $GITHUB_OUTPUT
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        working-directory: ./protocol/python
+        run: |
+          twine upload dist/*
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag_version.outputs.tag }}
+          release_name: g8e-protocol Python v${{ steps.tag_version.outputs.version }}
+          body: |
+            ## g8e-protocol Python Package v${{ steps.tag_version.outputs.version }}
+
+            Official Python protocol library for the g8e zero-trust execution substrate.
+
+            ### Installation
+
+            ```bash
+            pip install g8e-protocol==${{ steps.tag_version.outputs.version }}
+            ```
+
+            ### Changes
+
+            See [CHANGELOG.md](https://github.com/g8e-ai/g8e/blob/main/CHANGELOG.md) for details.
+          draft: false
+          prerelease: false
