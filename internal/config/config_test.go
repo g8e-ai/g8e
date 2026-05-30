@@ -90,10 +90,10 @@ func TestLoad_FieldPassthrough(t *testing.T) {
 func TestLoad_HTTPPortOverride(t *testing.T) {
 	cfg, err := Load(LoadOptions{
 		OperatorEndpoint: constants.DefaultEndpoint,
-		HTTPPort:         constants.Ports.G8eeHttps,
+		HTTPPort:         constants.Ports.OperatorHttps,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, constants.Ports.G8eeHttps, cfg.HTTPPort)
+	assert.Equal(t, constants.Ports.OperatorHttps, cfg.HTTPPort)
 }
 
 func TestLoad_TLSServerName(t *testing.T) {

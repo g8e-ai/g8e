@@ -37,19 +37,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 )
 
-type DeviceLinkRequest struct {
-	UserID     string `json:"user_id"`
-	Name       string `json:"name"`
-	MaxUses    int    `json:"max_uses"`
-	TTLSeconds int    `json:"ttl_seconds"`
-}
-
-type DeviceLinkResponse struct {
-	Token  string `json:"token"`
-	UserID string `json:"user_id"`
-	Error  string `json:"error,omitempty"`
-}
-
 type RegistrationRequest struct {
 	SystemFingerprint string `json:"system_fingerprint"`
 	Hostname          string `json:"hostname"`

@@ -3157,7 +3157,7 @@ func (x *EvalAnswerRequested) GetModel() string {
 type McpCallRequested struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The MCP tool name (e.g., "fs_read", "drop_table"). Forbidden patterns
-	// here block the gauntlet at L1 before any signature or state check.
+	// here block the interlock sequence at L1 before any signature or state check.
 	ToolName string `protobuf:"bytes,1,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
 	// JSON-encoded arguments object exactly as the MCP client supplied it.
 	// Stored as a string (not Struct) so the canonical hash is computed over

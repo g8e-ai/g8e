@@ -22,78 +22,6 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
-// DeviceLinkData represents a device link for operator enrollment.
-// Authority: services/client/models/auth_models.js::DeviceLinkData
-type DeviceLinkData struct {
-	Token          string                     `json:"token"`
-	UserID         string                     `json:"user_id"`
-	OrganizationID string                     `json:"organization_id,omitempty"`
-	OperatorID     string                     `json:"operator_id,omitempty"`
-	WebSessionID   string                     `json:"web_session_id,omitempty"`
-	Name           string                     `json:"name,omitempty"`
-	MaxUses        int                        `json:"max_uses"`
-	Uses           int                        `json:"uses"`
-	Status         constants.DeviceLinkStatus `json:"status"`
-	CreatedAt      time.Time                  `json:"created_at"`
-	ExpiresAt      time.Time                  `json:"expires_at"`
-	UsedAt         *time.Time                 `json:"used_at,omitempty"`
-	RevokedAt      *time.Time                 `json:"revoked_at,omitempty"`
-	DeviceInfo     *DeviceLinkInfo            `json:"device_info,omitempty"`
-	Claims         []DeviceLinkClaim          `json:"claims,omitempty"`
-}
-
-type CreateDeviceLinkRequest struct {
-	UserID         string `json:"user_id"`
-	OrganizationID string `json:"organization_id,omitempty"`
-	OperatorID     string `json:"operator_id,omitempty"`
-	WebSessionID   string `json:"web_session_id,omitempty"`
-	Name           string `json:"name,omitempty"`
-	MaxUses        int    `json:"max_uses,omitempty"`
-	TTLSeconds     int    `json:"ttl_seconds,omitempty"`
-}
-
-type DeviceLinkResponse struct {
-	Success         bool      `json:"success"`
-	Token           string    `json:"token"`
-	UserID          string    `json:"user_id,omitempty"`
-	OperatorCommand string    `json:"operator_command"`
-	Name            string    `json:"name,omitempty"`
-	MaxUses         int       `json:"max_uses,omitempty"`
-	ExpiresAt       time.Time `json:"expires_at"`
-}
-
-type DeviceLinkListItem struct {
-	Token     string                     `json:"token"`
-	Name      string                     `json:"name,omitempty"`
-	MaxUses   int                        `json:"max_uses"`
-	Uses      int                        `json:"uses"`
-	Status    constants.DeviceLinkStatus `json:"status"`
-	CreatedAt time.Time                  `json:"created_at"`
-	ExpiresAt time.Time                  `json:"expires_at"`
-}
-
-type DeviceLinkListResponse struct {
-	Success bool                 `json:"success"`
-	Links   []DeviceLinkListItem `json:"links"`
-}
-
-// DeviceLinkInfo captures the device details of the first user of a link.
-type DeviceLinkInfo struct {
-	SystemFingerprint string `json:"system_fingerprint"`
-	Hostname          string `json:"hostname"`
-	OS                string `json:"os"`
-	Arch              string `json:"arch"`
-	Username          string `json:"username"`
-}
-
-// DeviceLinkClaim records which operator ID claimed a slot via a multi-use link.
-type DeviceLinkClaim struct {
-	SystemFingerprint string    `json:"system_fingerprint"`
-	Hostname          string    `json:"hostname"`
-	OperatorID        string    `json:"operator_id"`
-	ClaimedAt         time.Time `json:"claimed_at"`
-}
-
 // OperatorRegistrationRequest is the inbound body for /api/pki/device-enroll (CSR-based enrollment).
 type OperatorRegistrationRequest struct {
 	CSR               string `json:"csr_pem"`
@@ -170,7 +98,7 @@ type OperatorDocumentGo struct {
 
 // MarshalJSON implements json.Marshaler with default enum values.
 // Ensures OperatorType and CloudSubtype are defaulted before serialization
-// to eliminate the need for coercion logic in downstream consumers (e.g., Python engine).
+// to eliminate the need for coercion logic in downstream consumers (e.g., Python agent).
 func (o *OperatorDocumentGo) MarshalJSON() ([]byte, error) {
 	type Alias OperatorDocumentGo
 	defaulted := &struct {

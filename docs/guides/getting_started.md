@@ -5,25 +5,25 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-05-26
-Version: v1.0.0
+Last Updated: 2026-05-29
+Version: v1.0.3
 
 ---
 
 ## Protocol Overview
 
-g8e is a zero-trust execution substrate for agentic infrastructure. The platform enforces a core invariant: a typed, signed, state-bound transaction reaches a sovereign host agent that distrusts upstream inputs and refuses to mutate reality unless every independent proof checks out.
+g8e is a zero-trust execution platform for agentic infrastructure. The platform enforces a core invariant: a typed, signed, state-bound transaction reaches a sovereign host agent that distrusts upstream inputs and refuses to mutate reality unless every independent proof checks out.
 
-The substrate consists of two mandatory components:
+The platform consists of two mandatory components:
 
 ### Governance Gateway (g8eg)
 
 The Governance Gateway serves as the central Policy Decision Point (PDP). It provides:
 
 - **PKI and Trust Management**: Acts as the platform Certificate Authority, issuing and revoking mTLS certificates bound to URI SANs for workload identity.
-- **Persistence Layer**: Maintains the canonical state store via SQLite, including user accounts, device-link tokens, operator registrations, and governance state.
+- **Persistence Layer**: Maintains the canonical state store via SQLite, including user accounts, operator registrations, and governance state.
 - **Messaging Broker**: Serves as the Pub/Sub broker for real-time event fan-out between clients and operators.
-- **Admission APIs**: Exposes HTTP endpoints for envelope submission, device-link enrollment, and trust bundle distribution.
+- **Admission APIs**: Exposes HTTP endpoints for envelope submission and trust bundle distribution.
 - **Protocol Translation**: Translates standard MCP (Model Context Protocol) and A2A (Agent-to-Agent) requests into canonical JSON GovernanceEnvelope format.
 
 The Gateway runs in one of three modes, each enforcing different layers of the 5-layer verification sequence:
@@ -99,16 +99,10 @@ For local AI client integration (e.g., Cursor, Claude Code) via stdio-based MCP:
 ./g8e --mcp-serve
 ```
 
-For remote host enforcement, generate an enrollment token:
+For remote host enforcement, use CSR-based enrollment:
 
 ```bash
-./g8e data device-links create --user-id "prod-node-01"
-```
-
-Then start the Operator on the target host:
-
-```bash
-./g8e --device-token <token> --endpoint <gateway-ip>
+./g8e security pki enroll --endpoint <gateway-ip>
 ```
 
 ---
@@ -137,6 +131,6 @@ Gateway-mediated communication between sovereign agents. Every interaction is st
 
 ## Next Steps
 
-- **[Architecture](../devs/codemap.md)** — Deep dive into the substrate components.
+- **[Architecture](../devs/codemap.md)** — Deep dive into the platform components.
 - **[CLI Reference](../devs/devs.md)** — Comprehensive command documentation.
 - **[Security Model](../architecture/auth.md)** — PKI, mTLS, and WebAuthn details.

@@ -2,7 +2,7 @@
 
 This page covers common setup failures for contributors working on g8e from a
 fresh checkout. The platform runs host-native; Docker is not required for
-substrate development.
+platform development.
 
 ## First checks
 

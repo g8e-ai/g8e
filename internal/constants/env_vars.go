@@ -22,13 +22,10 @@ var EnvVar = struct {
 	OperatorBootstrapHTTPSPort EnvVarKey
 	OperatorPublicHTTPSPort    EnvVarKey
 	OperatorWSSPort            EnvVarKey
-	G8EEHTTPSPort              EnvVarKey
 	PIDDir                     EnvVarKey
 	LogDir                     EnvVarKey
 	OperatorPIDFile            EnvVarKey
 	OperatorLogFile            EnvVarKey
-	G8EEPIDFile                EnvVarKey
-	G8EELogFile                EnvVarKey
 	LogMaxBackups              EnvVarKey
 	LLMaxTokens                EnvVarKey
 	LLMCommandGenEnabled       EnvVarKey
@@ -57,7 +54,6 @@ var EnvVar = struct {
 	Environment                EnvVarKey
 	UploadPath                 EnvVarKey
 	DocsDir                    EnvVarKey
-	G8EEURL                    EnvVarKey
 	DashboardURL               EnvVarKey
 	OperatorEndpoint           EnvVarKey
 	EnableCommandWhitelisting  EnvVarKey
@@ -111,13 +107,10 @@ var EnvVar = struct {
 	OperatorBootstrapHTTPSPort: "G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT",
 	OperatorPublicHTTPSPort:    "G8E_OPERATOR_PUBLIC_HTTPS_PORT",
 	OperatorWSSPort:            "G8E_OPERATOR_PUBLIC_WSS_PORT",
-	G8EEHTTPSPort:              "G8E_G8EE_HTTPS_PORT",
 	PIDDir:                     "G8E_PID_DIR",
 	LogDir:                     "G8E_LOG_DIR",
 	OperatorPIDFile:            "G8E_OPERATOR_PID_FILE",
 	OperatorLogFile:            "G8E_OPERATOR_LOG_FILE",
-	G8EEPIDFile:                "G8E_G8EE_PID_FILE",
-	G8EELogFile:                "G8E_G8EE_LOG_FILE",
 	LogMaxBackups:              "G8E_LOG_MAX_BACKUPS",
 	LLMaxTokens:                "G8E_LLM_MAX_TOKENS",
 	LLMCommandGenEnabled:       "G8E_LLM_COMMAND_GEN_ENABLED",
@@ -146,7 +139,6 @@ var EnvVar = struct {
 	Environment:                "G8E_ENVIRONMENT",
 	UploadPath:                 "G8E_UPLOAD_PATH",
 	DocsDir:                    "G8E_DOCS_DIR",
-	G8EEURL:                    "G8E_G8EE_URL",
 	DashboardURL:               "G8E_DASHBOARD_URL",
 	OperatorEndpoint:           "G8E_OPERATOR_ENDPOINT",
 	EnableCommandWhitelisting:  "G8E_ENABLE_COMMAND_WHITELISTING",

@@ -149,7 +149,7 @@ func TestHealthResponse(t *testing.T) {
 		resp := &HealthResponse{
 			Status:          constants.GatewayModeMode,
 			Mode:            constants.GatewayModeMode,
-			Version:         "v1.0.0",
+			Version:         "v1.0.3",
 			GovernanceReady: true,
 			StateMerkleRoot: "root123",
 		}

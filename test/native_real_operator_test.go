@@ -51,7 +51,7 @@ import (
 //
 // This test demonstrates the complete native protocol flow:
 // 1. Bootstrap against running Gateway with CSR
-// 2. Submit native GovernanceEnvelope via /api/governance/envelope
+// 2. Submit native GovernanceEnvelope via /api/v1/governance/envelopes
 // 3. Receive execution results via WebSocket Pub/Sub
 // 4. Verify real file operations through actual Operator
 // 5. Verify L1 doctrine enforcement through actual Operator
@@ -120,7 +120,7 @@ func TestNativeRealOperator_EndToEnd(t *testing.T) {
 		Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}},
 	}
 
-	httpReq, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/api/auth/bootstrap", constants.Ports.OperatorBootstrapHttps), bytes.NewReader(reqBody))
+	httpReq, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/api/v1/auth/bootstrap", constants.Ports.OperatorBootstrapHttps), bytes.NewReader(reqBody))
 	require.NoError(t, err)
 	httpReq.Header.Set("Content-Type", "application/json")
 
@@ -256,7 +256,7 @@ func TestNativeRealOperator_EndToEnd(t *testing.T) {
 		envelope := &commonv1.GovernanceEnvelope{
 			Timestamp:         timestamppb.Now(),
 			ExpiresAt:         timestamppb.New(time.Now().Add(5 * time.Minute)),
-			SourceComponent:   commonv1.Component_COMPONENT_G8EE,
+			SourceComponent:   commonv1.Component_COMPONENT_AGENT,
 			OperatorId:        regResp.OperatorID,
 			OperatorSessionId: regResp.OperatorSessionID,
 			EventType:         string(constants.EventOperatorCommandRequested),
@@ -287,7 +287,7 @@ func TestNativeRealOperator_EndToEnd(t *testing.T) {
 		dataJSON, err := protojson.Marshal(envelope)
 		require.NoError(t, err)
 
-		envReq, err := http.NewRequest(http.MethodPost, operatorURL+"/api/governance/envelope", bytes.NewReader(dataJSON))
+		envReq, err := http.NewRequest(http.MethodPost, operatorURL+"/api/v1/governance/envelopes", bytes.NewReader(dataJSON))
 		require.NoError(t, err)
 		envReq.Header.Set("Content-Type", "application/json")
 		envReq.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
@@ -340,7 +340,7 @@ func TestNativeRealOperator_EndToEnd(t *testing.T) {
 		envelope := &commonv1.GovernanceEnvelope{
 			Timestamp:         timestamppb.Now(),
 			ExpiresAt:         timestamppb.New(time.Now().Add(5 * time.Minute)),
-			SourceComponent:   commonv1.Component_COMPONENT_G8EE,
+			SourceComponent:   commonv1.Component_COMPONENT_AGENT,
 			OperatorId:        regResp.OperatorID,
 			OperatorSessionId: regResp.OperatorSessionID,
 			EventType:         string(constants.EventOperatorCommandRequested),
@@ -371,7 +371,7 @@ func TestNativeRealOperator_EndToEnd(t *testing.T) {
 		dataJSON, err := protojson.Marshal(envelope)
 		require.NoError(t, err)
 
-		envReq, err := http.NewRequest(http.MethodPost, operatorURL+"/api/governance/envelope", bytes.NewReader(dataJSON))
+		envReq, err := http.NewRequest(http.MethodPost, operatorURL+"/api/v1/governance/envelopes", bytes.NewReader(dataJSON))
 		require.NoError(t, err)
 		envReq.Header.Set("Content-Type", "application/json")
 		envReq.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
@@ -405,7 +405,7 @@ func TestNativeRealOperator_EndToEnd(t *testing.T) {
 		envelope := &commonv1.GovernanceEnvelope{
 			Timestamp:         timestamppb.Now(),
 			ExpiresAt:         timestamppb.New(time.Now().Add(5 * time.Minute)),
-			SourceComponent:   commonv1.Component_COMPONENT_G8EE,
+			SourceComponent:   commonv1.Component_COMPONENT_AGENT,
 			OperatorId:        regResp.OperatorID,
 			OperatorSessionId: regResp.OperatorSessionID,
 			EventType:         string(constants.EventOperatorFileEditRequested),
@@ -436,7 +436,7 @@ func TestNativeRealOperator_EndToEnd(t *testing.T) {
 		dataJSON, err := protojson.Marshal(envelope)
 		require.NoError(t, err)
 
-		envReq, err := http.NewRequest(http.MethodPost, operatorURL+"/api/governance/envelope", bytes.NewReader(dataJSON))
+		envReq, err := http.NewRequest(http.MethodPost, operatorURL+"/api/v1/governance/envelopes", bytes.NewReader(dataJSON))
 		require.NoError(t, err)
 		envReq.Header.Set("Content-Type", "application/json")
 		envReq.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)

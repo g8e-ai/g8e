@@ -11,7 +11,7 @@ It dials out via mTLS and listens on nothing. Every AI-proposed action clears a 
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev)
-[![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v102--core-substrate)
+[![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v102--core-platform)
 [![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/core/position_paper.md)
 
 [Getting Started](docs/guides/getting_started.md) · [The two roles](#the-two-roles) · [Mental Model](#the-mental-model) · [Protocol](#the-protocol-invariants) · [Docs](#documentation)
@@ -74,11 +74,76 @@ graph TD
     O1 -. "outbound-only mTLS" .-> GW
 ```
 
+### Execution Flow
+
+The sequence of a governed transaction execution:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Principal as Principal<br/>(Human / AI Agent)
+    participant Ensemble as Producer<br/>(g8e-compatible agentic ensemble / BYO / MCP client)
+    participant Gateway as Governance Gateway<br/>(g8eg)
+    participant Operator as Governed Operator<br/>(g8eo)
+
+    Principal->>Ensemble: Submit intent (MCP / A2A / tool call)
+    Note over Ensemble: Reach Consensus (L2)<br/>Wrap in signed GovernanceEnvelope
+    Ensemble->>Gateway: Submit envelope for admission
+
+    Operator->>Gateway: Open outbound-only mTLS tunnel
+    Operator->>Gateway: Fetch pending GovernanceEnvelope
+
+    Note over Operator: Run verification layers — Doctrine, Consensus, Notary, Warden<br/>(fail-closed)<br/>Execute via Actuator<br/>Anchor to local audit vault
+
+    Operator->>Gateway: Push Sovereignty-scrubbed signed receipt
+    Gateway->>Principal: Return final safe output
+```
+
 ---
 
 ## Governance Layers
 
 Every mutation passes through sequential verification layers at the Operator boundary. Failed transactions are rejected and audited immediately.
+
+```mermaid
+graph TD
+    Start["Signed GovernanceEnvelope<br/>(Incoming Transaction)"]
+
+    subgraph Verification ["Operator Verification - protocol-mandated"]
+        direction TB
+        L1{"L1: Technical Bedrock<br/>Forbidden Patterns?"}
+        L2{"L2: Consensus<br/>Tribunal Signature?"}
+        L3{"L3: Authorization<br/>Human Presence?"}
+        State{"State Check<br/>Merkle Root Fresh?"}
+        L4{"L4: Warden<br/>Pre-dispatch Gate"}
+        
+        FailClosed["Fail Closed<br/>Typed Rejection + Audit Entry"]
+        Actuator["L5: Actuator<br/>Execute + Signed Receipt"]
+        LocalVault([Local Audit Vault])
+
+        L1 -- "Passed" --> L2
+        L1 -- "Violated" ----> FailClosed
+        
+        L2 -- "Passed" --> L3
+        L2 -- "Invalid/Missing" ---> FailClosed
+        
+        L3 -- "Authorized" --> State
+        L3 -- "Denied" --> FailClosed
+        
+        State -- "Fresh" --> L4
+        State -- "Stale" --> FailClosed
+
+        L4 -- "Verified" --> Actuator
+        L4 -- "Failed" --> FailClosed
+
+        Actuator --> LocalVault
+        FailClosed --> LocalVault
+    end
+
+    LocalVault --> Done["Recorded · Signed · Audited"]
+
+    Start --> L1
+```
 
 | Layer | Name | Mechanism | What it proves |
 | :---: | --- | --- | --- |
@@ -87,6 +152,54 @@ Every mutation passes through sequential verification layers at the Operator bou
 | **L3** | **L3Notary** | WebAuthn / mTLS cert fingerprint | Human authorized *this exact* transaction hash. |
 | **L4** | **L4Warden** | Fail-closed pre-dispatch gate | Hash, freshness, state root, and signer trust. |
 | **L5** | **L5Actuator** | Atomic dispatch + signed receipt | The only code path allowed to mutate the host. |
+
+---
+
+## Optional AI Engine (g8ee)
+
+The reference AI Engine (`g8ee`) is an optional application-layer adapter that produces signed GovernanceEnvelope transactions. It implements a multi-layered agentic hierarchy for high-fidelity intent translation.
+
+```mermaid
+graph TD
+    classDef principal fill:#f9d0c4,stroke:#333,stroke-width:2px,color:#000;
+    classDef engine fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#000;
+    classDef protocol fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000;
+
+    Principal(("Principal (Human / Agent)")):::principal
+
+    subgraph Engine ["g8ee AI Engine (Application Layer)"]
+        direction TB
+        Triage["Triage Agent (Intent & Posture)"]:::engine
+        Reasoner["Sage / Dash (Reasoning Path)"]:::engine
+        
+        subgraph Tribunal ["Tribunal (L2 Producer)"]
+            direction TB
+            Panel["5-Member Agent Panel"]:::engine
+            Warden["Warden (Two-Strike Circuit Breaker)"]:::engine
+            Auditor["Auditor (L2 Verifier)"]:::engine
+            
+            Panel --> Warden
+            Warden --> Auditor
+        end
+        
+        Triage --> Reasoner
+        Reasoner --> Panel
+        
+        %% Short Circuits (Feedback Loops)
+        Warden -. "Risk Feedback (Short Circuit)" .-> Reasoner
+        Auditor -. "Rejection / Revision (Short Circuit)" .-> Reasoner
+    end
+
+    Principal -- "Initiates Intent" --> Triage
+    Auditor -- "Produces L2 Signed Intent" --> Protocol["g8e Protocol Envelope"]:::protocol
+```
+
+**Agentic Hierarchy Components:**
+- **Triage & Dash:** Specialized agents for routing, posture assessment, and high-speed trivial responses.
+- **Sage (Reasoning Engine):** Primary interpreter of user intent. Sage stakes reputation on proposals but **cannot execute**; it must submit intent to the Tribunal.
+- **Tribunal (Consensus):** Isolated agents generating command proposals from unique perspectives. Requires consensus (2/5 or 5/5) to proceed. If consensus fails, it loops back to Sage for refinement.
+- **Warden (Circuit Breaker):** Heuristic blocker that rejects "off-the-wall" proposals. Rejections trigger a loop back to Sage to improve intent translation.
+- **Auditor (History & Grounding):** Final verification layer. Reviews the full investigation history to ensure progressive accuracy before signing the protocol envelope.
 
 ---
 
@@ -101,9 +214,9 @@ Every mutation passes through sequential verification layers at the Operator bou
 
 ---
 
-## Status: v1.0.2 — Core Substrate
+## Status: v1.0.3 — Core Platform
 
-g8e is the mandatory governance substrate. The Engine (g8ee) and Dashboard (g8ed) are optional application-layer adapters.
+g8e is the mandatory governance platform. Agent ensembles and Dashboard (g8ed) are optional application-layer adapters.
 
 **Operational Today**
 - **Universal Protocol Translation**: Intercept MCP/A2A tool calls into signed envelopes.
@@ -123,7 +236,7 @@ g8e is the mandatory governance substrate. The Engine (g8ee) and Dashboard (g8ed
 ## Documentation
 
 - **[Getting Started](docs/guides/getting_started.md)** · **[Position Paper](docs/core/position_paper.md)**
-- **[Protocol](docs/architecture/protocol.md)** · **[Operator (g8eo)](docs/architecture/operator.md)** · **[Gateway (g8eg)](docs/architecture/gateway.md)**
+- **[Protocol](docs/architecture/g8e.md)** · **[Operator (g8eo)](docs/architecture/operator.md)** · **[Gateway (g8eg)](docs/architecture/gateway.md)**
 - **[Guides](docs/guides/)** · **[Reference](docs/reference/)** · **[Contributing](CONTRIBUTING.md)**
 
 ---

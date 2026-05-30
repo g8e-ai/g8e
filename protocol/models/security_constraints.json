@@ -1,12 +1,12 @@
 {
-  "_comment": "Canonical security constraints model for g8e. Defines system paths, forbidden patterns, and other security-related constants used across components. Authority: G8EE. Consumers: g8ee (response_analyzer.py, validators).",
+  "_comment": "Canonical security constraints model for g8e. Defines system paths, forbidden patterns, and other security-related constants used across components.",
 
   "_description": "Security constraints including forbidden system paths, high-risk file patterns, and related security constants used by AI response analysis and command validation.",
 
   "system_path_prefixes": {
     "_description": "Path prefixes that indicate system directories. Operations on files in these paths are treated as high-risk.",
-    "_authority": "g8ee",
-    "_consumers": ["g8ee (response_analyzer.py)"],
+    "_authority": "protocol",
+    "_consumers": ["agent"],
     "prefixes": [
       "/etc/",
       "/usr/",
@@ -21,8 +21,8 @@
 
   "high_risk_system_files": {
     "_description": "Specific system files that are considered high-risk to modify.",
-    "_authority": "g8ee",
-    "_consumers": ["g8ee (response_analyzer.py)"],
+    "_authority": "protocol",
+    "_consumers": ["agent"],
     "files": [
       "/etc/passwd",
       "/etc/shadow",
@@ -36,8 +36,8 @@
 
   "forbidden_directories": {
     "_description": "Directories that are forbidden for command execution or file operations. These are global restrictions applied regardless of whitelist/blacklist configuration.",
-    "_authority": "g8ee",
-    "_consumers": ["g8ee (whitelist_validator.py, response_analyzer.py)"],
+    "_authority": "protocol",
+    "_consumers": ["agent"],
     "directories": [
       "/etc",
       "/boot",
@@ -48,8 +48,8 @@
 
   "forbidden_command_patterns": {
     "_description": "Command patterns that are globally forbidden. These are applied as a last-resort safety net.",
-    "_authority": "g8ee",
-    "_consumers": ["g8ee (safety.py, settings.py)"],
+    "_authority": "protocol",
+    "_consumers": ["agent"],
     "patterns": [
       "sudo",
       "su ",

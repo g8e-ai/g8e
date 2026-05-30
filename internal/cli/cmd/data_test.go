@@ -217,13 +217,11 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 				SSHConfigPath:        filepath.Join(tmpDir, ".g8e", "ssh", "config"),
 			},
 			Ports: struct {
-				G8eeHTTPS              int `json:"g8ee_https"`
 				InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 				OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 				OperatorHTTPS          int `json:"operator_https"`
 				OperatorPublicHTTPS    int `json:"operator_public_https"`
 			}{
-				G8eeHTTPS:              8443,
 				InsecureMcpGateway:     18789,
 				OperatorBootstrapHTTPS: 8441,
 				OperatorHTTPS:          8440,

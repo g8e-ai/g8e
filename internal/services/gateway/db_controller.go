@@ -14,8 +14,6 @@
 package gateway
 
 import (
-	"crypto/ed25519"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -61,7 +59,7 @@ func (c *DBController) readBody(r *http.Request) ([]byte, error) {
 	return io.ReadAll(r.Body)
 }
 
-func (c *DBController) handleSettings(w http.ResponseWriter, r *http.Request) {
+func (c *DBController) handleDataSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		doc, err := c.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
@@ -80,6 +78,10 @@ func (c *DBController) handleSettings(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusBadRequest, "invalid body")
 			return
 		}
+		if !json.Valid(body) {
+			c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+			return
+		}
 		var err2 error
 		if r.Method == http.MethodPut {
 			err2 = c.db.DocSet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
@@ -96,8 +98,8 @@ func (c *DBController) handleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *DBController) handleDB(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/db/")
+func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/data/")
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) == 0 || parts[0] == "" {
 		c.responder.Error(w, http.StatusBadRequest, "collection required")
@@ -140,7 +142,7 @@ func (c *DBController) handleDB(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPut:
 		if !isDirectDBMutationAllowed(collection) {
-			c.responder.Error(w, http.StatusConflict, "submit via POST /api/governance/envelope")
+			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
 			return
 		}
 		body, err := c.readBody(r)
@@ -164,7 +166,7 @@ func (c *DBController) handleDB(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPatch:
 		if !isDirectDBMutationAllowed(collection) {
-			c.responder.Error(w, http.StatusConflict, "submit via POST /api/governance/envelope")
+			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
 			return
 		}
 		body, err := c.readBody(r)
@@ -193,7 +195,7 @@ func (c *DBController) handleDB(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodDelete:
 		if !isDirectDBMutationAllowed(collection) {
-			c.responder.Error(w, http.StatusConflict, "submit via POST /api/governance/envelope")
+			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
 			return
 		}
 		deleted, err := c.db.DocDelete(collection, id)
@@ -246,7 +248,7 @@ func (c *DBController) handleSSEEvents(w http.ResponseWriter, r *http.Request, i
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		c.responder.JSON(w, http.StatusOK, map[string]int64{"count": count})
+		c.responder.JSON(w, http.StatusOK, models.SSEEventsCountResponse{Count: count})
 		return
 	}
 
@@ -256,7 +258,7 @@ func (c *DBController) handleSSEEvents(w http.ResponseWriter, r *http.Request, i
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		c.responder.JSON(w, http.StatusOK, map[string]int64{"deleted": deleted})
+		c.responder.JSON(w, http.StatusOK, models.SSEEventsWipeResponse{Deleted: deleted})
 		return
 	}
 
@@ -355,7 +357,7 @@ func (c *DBController) handleAuditReceiptsExport(w http.ResponseWriter, r *http.
 	}
 }
 
-func (c *DBController) handleTrustedSigners(w http.ResponseWriter, r *http.Request) {
+func (c *DBController) handleGovernanceSigners(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		signers, err := c.db.ListTrustedSigners()
@@ -394,8 +396,8 @@ func (c *DBController) handleTrustedSigners(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-func (c *DBController) handleTrustedSignerByID(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/api/governance/signers/")
+func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/api/v1/governance/signers/")
 	if id == "" || strings.Contains(id, "/") {
 		c.responder.Error(w, http.StatusBadRequest, "invalid signer id")
 		return
@@ -432,146 +434,8 @@ func (c *DBController) handleTrustedSignerByID(w http.ResponseWriter, r *http.Re
 	}
 }
 
-func (c *DBController) handleAppPolicySigner(w http.ResponseWriter, r *http.Request) {
-	appID := strings.TrimPrefix(r.URL.Path, "/api/admin/app-policies/")
-	appID = strings.TrimSuffix(appID, "/signer")
-	appID = strings.TrimSuffix(appID, "/")
-	if appID == "" {
-		c.responder.Error(w, http.StatusBadRequest, "app_id required")
-		return
-	}
-
-	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	userID, ok := r.Context().Value(userIDKey).(string)
-	if !ok || userID == "" {
-		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	user, err := c.userSvc.GetByID(userID)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
-		return
-	}
-	if user == nil || !user.IsBootstrap {
-		c.responder.Error(w, http.StatusForbidden, "admin-only: bootstrap user required")
-		return
-	}
-
-	policyDoc, err := c.db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, "failed to check app policy")
-		return
-	}
-	if policyDoc == nil {
-		c.responder.Error(w, http.StatusForbidden, "app policy not found (deny-all default)")
-		return
-	}
-
-	body, err := c.readBody(r)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
-		return
-	}
-
-	var req struct {
-		PublicKey string `json:"public_key_hex"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
-		return
-	}
-	if req.PublicKey == "" {
-		c.responder.Error(w, http.StatusBadRequest, "public_key_hex required")
-		return
-	}
-
-	pubKeyBytes, err := hex.DecodeString(req.PublicKey)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid hex public key")
-		return
-	}
-	if len(pubKeyBytes) != ed25519.PublicKeySize {
-		c.responder.Error(w, http.StatusBadRequest, "invalid public key size")
-		return
-	}
-
-	signer := models.TrustedSigner{
-		ID:        appID,
-		PublicKey: req.PublicKey,
-		AddedAt:   time.Now().UTC(),
-		Enabled:   true,
-	}
-
-	if err := c.db.AddTrustedSigner(signer); err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	c.logger.Info("External app L2 signer registered by admin", "app_id", appID)
-	c.responder.JSON(w, http.StatusCreated, models.StatusResponse{Status: constants.GatewayModeStatusOK})
-}
-
-func (c *DBController) handleRevokeApp(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	userID, ok := r.Context().Value(userIDKey).(string)
-	if !ok || userID == "" {
-		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	user, err := c.userSvc.GetByID(userID)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
-		return
-	}
-	if user == nil || !user.IsBootstrap {
-		c.responder.Error(w, http.StatusForbidden, "admin-only: bootstrap user required")
-		return
-	}
-
-	body, err := c.readBody(r)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
-		return
-	}
-
-	var req struct {
-		AppID string `json:"app_id"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
-		return
-	}
-	if req.AppID == "" {
-		c.responder.Error(w, http.StatusBadRequest, "app_id required")
-		return
-	}
-
-	_, err = c.db.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), req.AppID)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, "failed to delete app policy")
-		return
-	}
-
-	_, err = c.db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), req.AppID)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, "failed to delete trusted signer")
-		return
-	}
-
-	c.logger.Info("External app revoked by admin", "app_id", req.AppID)
-	c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
-}
-
 func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/kv/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/kv/")
 	if path == "" {
 		c.responder.Error(w, http.StatusBadRequest, "key required")
 		return
@@ -755,8 +619,85 @@ func blobSegmentValid(s string) bool {
 
 const maxBlobBodySize = 50 * 1024 * 1024
 
+// blobNamespaceAllowed checks if a namespace is in the allowlist for direct mutations.
+// This is a governance boundary: only allowlisted namespaces can be mutated directly.
+// All other namespaces must go through the governance envelope path.
+func blobNamespaceAllowed(namespace string) bool {
+	// Allowlist of namespaces that can be mutated directly.
+	// These are ephemeral caches or client-uploaded artifacts that do not
+	// require full governance envelope processing.
+	allowedNamespaces := map[string]bool{
+		"temp":    true, // Temporary cache
+		"uploads": true, // Client-uploaded files
+		"cache":   true, // Ephemeral cache
+		"scratch": true, // Scratch space
+	}
+	return allowedNamespaces[namespace]
+}
+
+// extractCallerIdentity extracts the caller's identity from the request context.
+// Returns user_id, app_id, operator_session_id, cli_session_id.
+func (c *DBController) extractCallerIdentity(r *http.Request) (string, string, string, string) {
+	userID, _ := r.Context().Value(userIDKey).(string)
+	appID, _ := r.Context().Value(appIDKey).(string)
+	operatorSessionID := c.auth.ExtractOperatorSessionID(r)
+	cliSessionID := r.Header.Get(constants.HeaderCLISessionID)
+	return userID, appID, operatorSessionID, cliSessionID
+}
+
+// verifyBlobOwnership checks if the caller is authorized to mutate the given namespace.
+// This enforces per-namespace ownership to prevent cross-tenant blob access.
+// Allowlisted namespaces (temp, cache, uploads, scratch) are accessible by any authenticated user.
+func (c *DBController) verifyBlobOwnership(r *http.Request, namespace string) error {
+	userID, appID, operatorSessionID, cliSessionID := c.extractCallerIdentity(r)
+
+	// If no identity is present, reject
+	if userID == "" && appID == "" && operatorSessionID == "" && cliSessionID == "" {
+		return fmt.Errorf("unauthorized: no identity present")
+	}
+
+	// Allowlisted namespaces are accessible by any authenticated identity
+	if blobNamespaceAllowed(namespace) {
+		return nil
+	}
+
+	// For app identities, check if the app is authorized for this namespace
+	if appID != "" {
+		// Apps can only write to their own namespace (app/<app_id>)
+		expectedNamespace := "app/" + appID
+		if namespace != expectedNamespace {
+			return fmt.Errorf("unauthorized: app can only write to its own namespace (expected %s, got %s)", expectedNamespace, namespace)
+		}
+		return nil
+	}
+
+	// For operator/CLI identities, check if the namespace is user-scoped
+	if operatorSessionID != "" || cliSessionID != "" {
+		if userID == "" {
+			return fmt.Errorf("unauthorized: operator/CLI identity without user_id")
+		}
+		// Operators/CLI can only write to user-scoped namespaces
+		expectedNamespace := "user/" + userID
+		if namespace != expectedNamespace {
+			return fmt.Errorf("unauthorized: user can only write to their own namespace (expected %s, got %s)", expectedNamespace, namespace)
+		}
+		return nil
+	}
+
+	// For user identities (web session), check user-scoped namespace
+	if userID != "" {
+		expectedNamespace := "user/" + userID
+		if namespace != expectedNamespace {
+			return fmt.Errorf("unauthorized: user can only write to their own namespace (expected %s, got %s)", expectedNamespace, namespace)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("unauthorized: unknown identity type")
+}
+
 func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/blob/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/blobs/")
 	if path == "" {
 		c.responder.Error(w, http.StatusBadRequest, "namespace required")
 		return
@@ -774,11 +715,23 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
+		// Check if namespace is allowlisted for direct mutations
+		if !blobNamespaceAllowed(namespace) {
+			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
+			return
+		}
+		// Enforce ownership for namespace deletion
+		if err := c.verifyBlobOwnership(r, namespace); err != nil {
+			c.logger.Warn("Blob namespace delete: ownership check failed", "namespace", namespace, "error", err)
+			c.responder.Error(w, http.StatusForbidden, err.Error())
+			return
+		}
 		count, err := c.db.BlobDeleteNamespace(namespace)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		c.logger.Info("Blob namespace deleted", "namespace", namespace, "count", count)
 		c.responder.JSON(w, http.StatusOK, models.BlobDeleteResponse{Deleted: count})
 		return
 	}
@@ -815,6 +768,19 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodPut:
+		// Check if namespace is allowlisted for direct mutations
+		if !blobNamespaceAllowed(namespace) {
+			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
+			return
+		}
+
+		// Enforce ownership for blob writes
+		if err := c.verifyBlobOwnership(r, namespace); err != nil {
+			c.logger.Warn("Blob put: ownership check failed", "namespace", namespace, "blob_id", blobID, "error", err)
+			c.responder.Error(w, http.StatusForbidden, err.Error())
+			return
+		}
+
 		contentType := r.Header.Get("Content-Type")
 		if contentType == "" {
 			c.responder.Error(w, http.StatusBadRequest, "Content-Type header required")
@@ -849,6 +815,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		c.logger.Info("Blob stored", "namespace", namespace, "blob_id", blobID, "size", len(body), "content_type", contentType)
 		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	case http.MethodGet:
@@ -884,6 +851,19 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case http.MethodDelete:
+		// Check if namespace is allowlisted for direct mutations
+		if !blobNamespaceAllowed(namespace) {
+			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
+			return
+		}
+
+		// Enforce ownership for blob deletion
+		if err := c.verifyBlobOwnership(r, namespace); err != nil {
+			c.logger.Warn("Blob delete: ownership check failed", "namespace", namespace, "blob_id", blobID, "error", err)
+			c.responder.Error(w, http.StatusForbidden, err.Error())
+			return
+		}
+
 		deleted, err := c.db.BlobDelete(namespace, blobID)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
@@ -893,7 +873,8 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusNotFound, "blob not found")
 			return
 		}
-		c.responder.JSON(w, http.StatusOK, models.BlobDeleteResponse{Deleted: 1})
+		c.logger.Info("Blob deleted", "namespace", namespace, "blob_id", blobID)
+		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	default:
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")

@@ -37,7 +37,7 @@ func (ls *GatewayService) SetEnvelopeProcessor(p governance.EnvelopeProcessor) {
 // verifyEnvelopeIdentityBinding enforces transport-to-envelope identity binding
 // (Plan §2). It extracts the mTLS certificate's URI SANs and verifies they match
 // the envelope's internal identity claims (operator_session_id, operator_id, source_component).
-// This prevents an Engine cert from impersonating another workload's envelope.
+// This prevents an Agent cert from impersonating another workload's envelope.
 func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 	// Ensure mTLS is present
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
@@ -144,7 +144,7 @@ func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Re
 
 	// Transport-to-envelope identity binding (Plan §2)
 	// Extract mTLS certificate URI SANs and verify they match the envelope's
-	// internal identity claims. This prevents an Engine cert from impersonating
+	// internal identity claims. This prevents an Agent cert from impersonating
 	// another workload's envelope.
 	// Skip identity binding if no TLS is present (test mode)
 	if r.TLS != nil {

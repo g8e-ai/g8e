@@ -61,7 +61,7 @@ type QueryRequestWithLimit struct {
 func dataCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "data",
-		Short: "Administer the local substrate over mTLS",
+		Short: "Administer the local platform over mTLS",
 		Long:  `Data management commands for users, operators, settings, and audit.`,
 	}
 

@@ -21,10 +21,11 @@ import (
 // MockOperatorPubSubClient is a test double for OperatorPubSubClient.
 // It records published messages and allows tests to inject incoming messages.
 type MockOperatorPubSubClient struct {
-	mu          sync.Mutex
-	published   []MockPublishedMsg
-	subscribers map[string][]chan []byte
-	closed      bool
+	mu           sync.Mutex
+	published    []MockPublishedMsg
+	subscribers  map[string][]chan []byte
+	closed       bool
+	publishError bool
 }
 
 // MockPublishedMsg records a single Publish call
@@ -53,6 +54,9 @@ func (m *MockOperatorPubSubClient) Subscribe(_ context.Context, channel string) 
 func (m *MockOperatorPubSubClient) Publish(_ context.Context, channel string, data []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.publishError {
+		return context.Canceled
+	}
 	m.published = append(m.published, MockPublishedMsg{Channel: channel, Data: data})
 	for _, ch := range m.subscribers[channel] {
 		select {
@@ -120,4 +124,11 @@ func (m *MockOperatorPubSubClient) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.published = nil
+}
+
+// SetPublishError sets whether Publish should return an error
+func (m *MockOperatorPubSubClient) SetPublishError(shouldError bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.publishError = shouldError
 }

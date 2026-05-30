@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -35,10 +34,11 @@ import (
 	"github.com/g8e-ai/g8e/internal/responder"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
+	"github.com/g8e-ai/g8e/protocol"
 	"golang.org/x/time/rate"
 )
 
-const governanceEnvelopeRedirectError = "submit via POST /api/governance/envelope"
+const governanceEnvelopeRedirectError = "submit via POST /api/v1/governance/envelopes"
 
 // HTTPHandlerDependencies groups all dependencies for HTTPHandler to reduce constructor bloat.
 type HTTPHandlerDependencies struct {
@@ -57,7 +57,6 @@ type HTTPHandlerDependencies struct {
 	AppEnrollment     *AppEnrollmentService
 	IsReady           func() bool
 	IsGovernanceReady func() bool
-	DocsFS            fs.FS
 }
 
 func (h *HTTPHandler) readBody(r *http.Request) ([]byte, error) {
@@ -89,16 +88,15 @@ type HTTPHandler struct {
 	envProc governance.EnvelopeProcessor
 
 	// Controllers for domain-specific endpoints
-	pkiController  *PKIController
-	dbController   *DBController
-	authController *AuthController
+	pkiController      *PKIController
+	dbController       *DBController
+	authController     *AuthController
+	adminController    *AdminController
+	operatorController *OperatorController
 
 	// Rate limiting state
 	muLimiters sync.Mutex
 	limiters   map[string]*rate.Limiter
-
-	// docsFS is the embedded documentation filesystem
-	docsFS fs.FS
 }
 
 func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
@@ -119,13 +117,14 @@ func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
 		isReady:           deps.IsReady,
 		isGovernanceReady: deps.IsGovernanceReady,
 		limiters:          make(map[string]*rate.Limiter),
-		docsFS:            deps.DocsFS,
 	}
 
 	// Initialize controllers
 	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.DB, deps.PKI, deps.AppEnrollment, deps.Reg, deps.Responder)
 	h.dbController = newDBController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Pubsub, deps.UserSvc, deps.Responder)
 	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.SessionSvc, deps.MCPGateway, deps.Responder)
+	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.DB, deps.UserSvc, deps.Responder)
+	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
 
 	return h
 }
@@ -160,87 +159,85 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 
 	// MCP Ingress routes with rate limiting
 	mcpMux := http.NewServeMux()
-	mcpMux.HandleFunc("/api/mcp/v1/tools/list", h.mcp.HandleToolsList)
-	mcpMux.HandleFunc("/api/mcp/v1/tools/call", h.mcp.HandleToolsCall)
-	mcpMux.HandleFunc("/api/mcp/v1/tools/call/sse", h.mcp.HandleToolsCallSSE)
-	mcpMux.HandleFunc("/api/mcp/v1/resources/list", h.mcp.HandleResourcesList)
-	mcpMux.HandleFunc("/api/mcp/v1/resources/read", h.mcp.HandleResourcesRead)
-	mcpMux.HandleFunc("/api/mcp/v1/prompts/list", h.mcp.HandlePromptsList)
-	mcpMux.HandleFunc("/api/mcp/v1/prompts/get", h.mcp.HandlePromptsGet)
-	mcpMux.HandleFunc("/api/a2a/v1/call", h.mcp.HandleA2aCall)
+	mcpMux.HandleFunc("/api/v1/mcp/tools/list", h.mcp.HandleToolsList)
+	mcpMux.HandleFunc("/api/v1/mcp/tools/call", h.mcp.HandleToolsCall)
+	mcpMux.HandleFunc("/api/v1/mcp/tools/call/sse", h.mcp.HandleToolsCallSSE)
+	mcpMux.HandleFunc("/api/v1/mcp/resources/list", h.mcp.HandleResourcesList)
+	mcpMux.HandleFunc("/api/v1/mcp/resources/read", h.mcp.HandleResourcesRead)
+	mcpMux.HandleFunc("/api/v1/mcp/prompts/list", h.mcp.HandlePromptsList)
+	mcpMux.HandleFunc("/api/v1/mcp/prompts/get", h.mcp.HandlePromptsGet)
+	mcpMux.HandleFunc("/api/v1/a2a/call", h.mcp.HandleA2aCall)
 
 	// Wrap MCP/A2A with Rate Limiting
 	mcpRateLimited := h.rateLimitMiddleware(mcpMux)
 
 	// Apply JWT middleware only when JWKS is configured (for external IdP auth)
-	// When JWKS is not configured, mTLS authentication is used via main middleware
+	// When JWKS is not configured, MCP/A2A routes go through main middleware which enforces mTLS + AppPolicy
 	var mcpHandler http.Handler
 	if h.auth != nil && h.auth.HasJWKS() {
 		mcpHandler = h.auth.JWTAuthMiddleware(mcpRateLimited)
 	} else {
+		// When JWKS is not configured, MCP/A2A must use mTLS + AppPolicy via main middleware
+		// The main middleware (enforced at router level) handles mTLS, identity binding, and AppPolicy
 		mcpHandler = mcpRateLimited
 	}
 
 	// Rate-limited mux for core governance envelope (uses mTLS via main middleware)
 	govEnvMux := http.NewServeMux()
-	govEnvMux.HandleFunc("/api/governance/envelope", h.handleGovernanceEnvelope)
+	govEnvMux.HandleFunc("/api/v1/governance/envelopes", h.handleGovernanceEnvelope)
 	govEnvHandler := h.rateLimitMiddleware(govEnvMux)
 
-	// Health check (available internally)
-	mux.HandleFunc("/health", h.handleHealth)
-
-	// Documentation endpoint (embedded docs)
-	mux.HandleFunc("/docs/", h.handleDocs)
-
 	// Authenticated routes (require mTLS)
-	mux.HandleFunc("/api/settings", h.dbController.handleSettings)
-	mux.HandleFunc("/api/operators", h.handleOperators)
-	mux.HandleFunc("/api/operators/terminate", h.handleTerminateOperator)
-	mux.HandleFunc("/api/operators/reauth", h.handleReauth)
-	mux.HandleFunc("/api/operators/bind", h.handleBindOperators)
-	mux.HandleFunc("/api/operators/unbind", h.handleUnbindOperators)
-	mux.HandleFunc("/api/operators/target", h.handleSetTargetContext)
-	mux.HandleFunc("/api/governance/signers", h.dbController.handleTrustedSigners)
-	mux.HandleFunc("/api/governance/signers/", h.dbController.handleTrustedSignerByID)
-	mux.HandleFunc("/api/admin/app-policies/", h.dbController.handleAppPolicySigner)
-	mux.HandleFunc("/api/admin/revoke-app", h.dbController.handleRevokeApp)
+	mux.HandleFunc("/api/v1/data/settings", h.dbController.handleDataSettings)
+	mux.HandleFunc("/api/v1/operators", h.operatorController.handleListOperators)
+	mux.HandleFunc("/api/v1/operators/", h.operatorController.handleTerminateOperator)
+	mux.HandleFunc("/api/v1/operators/bind", h.operatorController.handleBindOperators)
+	mux.HandleFunc("/api/v1/operators/unbind", h.operatorController.handleUnbindOperators)
+	mux.HandleFunc("/api/v1/operators/target", h.operatorController.handleSetTargetContext)
+	mux.HandleFunc("/api/v1/operators/reauth", h.operatorController.handleReauth)
+	mux.HandleFunc("/api/v1/governance/signers", h.dbController.handleGovernanceSigners)
+	mux.HandleFunc("/api/v1/governance/signers/", h.dbController.handleGovernanceSignerByID)
+	mux.HandleFunc("/api/v1/admin/app-policies/", h.adminController.handleAppPolicySigner)
+	mux.HandleFunc("/api/v1/admin/apps/revoke", h.adminController.handleRevokeApp)
 
 	// Register rate-limited MCP routes
-	mux.Handle("/api/governance/envelope", govEnvHandler)
-	mux.Handle("/api/mcp/", mcpHandler)
-	mux.Handle("/api/a2a/", mcpHandler)
+	mux.Handle("/api/v1/governance/envelopes", govEnvHandler)
+	mux.Handle("/api/v1/mcp/", mcpHandler)
+	mux.Handle("/api/v1/a2a/", mcpHandler)
 
-	mux.HandleFunc("/api/audit/receipts", h.dbController.handleAuditReceipts)
-	mux.HandleFunc("/api/audit/receipts/export", h.dbController.handleAuditReceiptsExport)
+	mux.HandleFunc("/api/v1/audit/receipts", h.dbController.handleAuditReceipts)
+	mux.HandleFunc("/api/v1/audit/receipts/export", h.dbController.handleAuditReceiptsExport)
 
 	// Internal SSE event bridge (used by g8e-compatible agentic ensembles to publish typed events
 	// for browser/CLI subscribers to consume). Producers are authenticated by
-	// mTLS app identity; consumers poll /api/internal/sse/events or stream /api/internal/sse/stream.
-	mux.HandleFunc("/api/internal/sse/push", h.handleInternalSSEPush)
-	mux.HandleFunc("/api/internal/sse/events", h.handleInternalSSEEvents)
-	mux.HandleFunc("/api/internal/sse/stream", h.handleInternalSSEStream)
-	mux.HandleFunc("/db/", h.dbController.handleDB)
-	mux.HandleFunc("/kv/", h.dbController.handleKV)
-	mux.HandleFunc("/pubsub/publish", h.dbController.handlePubSubPublish)
-	mux.Handle("/ws/pubsub", h.auth.WebSocketAuth(http.HandlerFunc(h.pubsub.HandleWebSocket)))
-	mux.HandleFunc("/blob/", h.dbController.handleBlob)
+	// mTLS app identity; consumers poll /api/v1/sse/events or stream /api/v1/sse/stream.
+	mux.HandleFunc("/api/v1/sse/push", h.handleInternalSSEPush)
+	mux.HandleFunc("/api/v1/sse/events", h.handleInternalSSEEvents)
+	mux.HandleFunc("/api/v1/sse/stream", h.handleInternalSSEStream)
+	mux.HandleFunc("/api/v1/data/", h.dbController.handleDataDB)
+	mux.HandleFunc("/api/v1/kv/", h.dbController.handleKV)
+	mux.HandleFunc("/api/v1/pubsub/publish", h.dbController.handlePubSubPublish)
+	mux.Handle("/api/v1/pubsub/stream", h.auth.WebSocketAuth(http.HandlerFunc(h.pubsub.HandleWebSocket)))
 
 	// PKI management routes (require mTLS)
-	mux.HandleFunc("/api/pki/sign-csr", h.pkiController.handlePKISignCSR)
-	mux.HandleFunc("/api/pki/device-enroll", h.pkiController.handleDeviceEnroll)
-	mux.HandleFunc("/api/pki/revoke", h.pkiController.handlePKIRevoke)
-	mux.HandleFunc("/api/pki/revocation-bundle", h.pkiController.handlePKIRevocationBundle)
+	mux.HandleFunc("/api/v1/pki/csr/sign", h.pkiController.handlePKICSRSign)
+	mux.HandleFunc("/api/v1/pki/devices/enroll", h.pkiController.handlePKIDevicesEnroll)
+	mux.HandleFunc("/api/v1/pki/certificates/revoke", h.pkiController.handlePKICertificatesRevoke)
+	mux.HandleFunc("/api/v1/pki/revocation-bundle", h.pkiController.handlePKIRevocationBundle)
 
 	// User management routes (require mTLS)
-	mux.HandleFunc("/api/users", h.authController.handleUsers)
+	mux.HandleFunc("/api/v1/users", h.authController.handleUsers)
 
 	// Passkey / L3 Brokerage Routes (require mTLS)
-	mux.HandleFunc("/api/auth/passkey/register-challenge", h.authController.handlePasskeyRegisterChallenge)
-	mux.HandleFunc("/api/auth/passkey/register-verify", h.authController.handlePasskeyRegisterVerify)
-	mux.HandleFunc("/api/auth/passkey/auth-challenge", h.authController.handlePasskeyAuthChallenge)
-	mux.HandleFunc("/api/auth/passkey/auth-verify", h.authController.handlePasskeyAuthVerify)
-	mux.HandleFunc("/api/auth/passkey/credentials", h.authController.handlePasskeyCredentials)
-	mux.HandleFunc("/api/auth/passkey/credentials/", h.authController.handlePasskeyRevokeCredential)
+	mux.HandleFunc("/api/v1/auth/passkeys/register/challenge", h.authController.handleAuthPasskeysRegisterChallenge)
+	mux.HandleFunc("/api/v1/auth/passkeys/register/verify", h.authController.handleAuthPasskeysRegisterVerify)
+	mux.HandleFunc("/api/v1/auth/passkeys/authenticate/challenge", h.authController.handleAuthPasskeysAuthenticateChallenge)
+	mux.HandleFunc("/api/v1/auth/passkeys/authenticate/verify", h.authController.handleAuthPasskeysAuthenticateVerify)
+	mux.HandleFunc("/api/v1/auth/passkeys", h.authController.handleAuthPasskeys)
+	mux.HandleFunc("/api/v1/auth/passkeys/", h.authController.handleAuthPasskeysRevoke)
+
+	// Approval routes (require mTLS)
+	mux.HandleFunc("/api/v1/approvals/", h.authController.handleApprovalAction)
 
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }
@@ -250,28 +247,27 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 
 	// Bootstrap routes (CA discovery, trust scripts) - now on public HTTPS
 	mux.HandleFunc("/health", h.handleHealth)
-	mux.HandleFunc("/.well-known/g8e/pki/g8e-gw-ca-bundle.pem", h.pkiController.handlePKIHubBundle)
+	mux.HandleFunc("/.well-known/g8e/pki/ca-bundle", h.pkiController.handlePKICABundle)
 	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.pkiController.handlePKIFingerprint)
-	mux.HandleFunc("/blob/", h.dbController.handleBlob)
-	mux.HandleFunc("/docs/", h.handleDocs)
+	mux.HandleFunc("/api/v1/blobs/", h.dbController.handleBlob)
 
 	// Landing page and health
 	mux.HandleFunc("/", h.handleLandingPage)
-	mux.HandleFunc("/api/auth/login/verify", h.authController.handleAuthLoginVerify)
-	mux.HandleFunc("/api/auth/logout", h.authController.handleAuthLogout)
-	mux.HandleFunc("/api/auth/bootstrap", h.authController.handleBootstrap)
-	mux.HandleFunc("/api/auth/bootstrap/status", h.authController.handleBootstrapStatus)
+	mux.HandleFunc("/api/v1/auth/login/verify", h.authController.handlePublicAuthLoginVerify)
+	mux.HandleFunc("/api/v1/auth/logout", h.authController.handlePublicAuthLogout)
+	mux.HandleFunc("/api/v1/auth/bootstrap", h.authController.handlePublicAuthBootstrap)
+	mux.HandleFunc("/api/v1/auth/bootstrap/status", h.authController.handleBootstrapStatus)
 
 	// MCP/A2A Ingress routes with JWT authentication for remote clients
 	mcpMux := http.NewServeMux()
-	mcpMux.HandleFunc("/api/mcp/v1/tools/list", h.mcp.HandleToolsList)
-	mcpMux.HandleFunc("/api/mcp/v1/tools/call", h.mcp.HandleToolsCall)
-	mcpMux.HandleFunc("/api/mcp/v1/tools/call/sse", h.mcp.HandleToolsCallSSE)
-	mcpMux.HandleFunc("/api/mcp/v1/resources/list", h.mcp.HandleResourcesList)
-	mcpMux.HandleFunc("/api/mcp/v1/resources/read", h.mcp.HandleResourcesRead)
-	mcpMux.HandleFunc("/api/mcp/v1/prompts/list", h.mcp.HandlePromptsList)
-	mcpMux.HandleFunc("/api/mcp/v1/prompts/get", h.mcp.HandlePromptsGet)
-	mcpMux.HandleFunc("/api/a2a/v1/call", h.mcp.HandleA2aCall)
+	mcpMux.HandleFunc("/api/v1/mcp/tools/list", h.mcp.HandleToolsList)
+	mcpMux.HandleFunc("/api/v1/mcp/tools/call", h.mcp.HandleToolsCall)
+	mcpMux.HandleFunc("/api/v1/mcp/tools/call/sse", h.mcp.HandleToolsCallSSE)
+	mcpMux.HandleFunc("/api/v1/mcp/resources/list", h.mcp.HandleResourcesList)
+	mcpMux.HandleFunc("/api/v1/mcp/resources/read", h.mcp.HandleResourcesRead)
+	mcpMux.HandleFunc("/api/v1/mcp/prompts/list", h.mcp.HandlePromptsList)
+	mcpMux.HandleFunc("/api/v1/mcp/prompts/get", h.mcp.HandlePromptsGet)
+	mcpMux.HandleFunc("/api/v1/a2a/call", h.mcp.HandleA2aCall)
 
 	// Wrap MCP/A2A with Rate Limiting
 	mcpRateLimited := h.rateLimitMiddleware(mcpMux)
@@ -281,29 +277,32 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	var mcpHandler http.Handler
 	if h.auth != nil && h.auth.HasJWKS() {
 		mcpHandler = h.auth.JWTAuthMiddleware(mcpRateLimited)
-		mux.Handle("/api/mcp/", mcpHandler)
-		mux.Handle("/api/a2a/", mcpHandler)
+		mux.Handle("/api/v1/mcp/", mcpHandler)
+		mux.Handle("/api/v1/a2a/", mcpHandler)
+
+		// JIT passkey bootstrap: allow first-credential registration via JWT
+		// This unblocks OIDC/JIT users who have zero credentials and cannot reach WebSessionAuth
+		jwtPasskeyMux := http.NewServeMux()
+		jwtPasskeyMux.HandleFunc("/api/v1/auth/passkeys/jit-register/challenge", h.authController.handleAuthPasskeysRegisterChallenge)
+		jwtPasskeyMux.HandleFunc("/api/v1/auth/passkeys/jit-register/verify", h.authController.handleAuthPasskeysRegisterVerify)
+		mux.Handle("/api/v1/auth/passkeys/jit-register/challenge", h.auth.JWTAuthMiddleware(jwtPasskeyMux))
+		mux.Handle("/api/v1/auth/passkeys/jit-register/verify", h.auth.JWTAuthMiddleware(jwtPasskeyMux))
 	}
 
 	// Browser-facing data routes (require web session cookie)
 	authedMux := http.NewServeMux()
-	authedMux.HandleFunc("/api/user/me", h.authController.handleUserMe)
-	authedMux.HandleFunc("/api/auth/web-session", h.authController.handleWebSession)
-
-	// [PIVOT] Move passkey registration to public authed mux so bootstrapped users can register
-	authedMux.HandleFunc("/api/auth/passkey/register-challenge", h.authController.handlePasskeyRegisterChallenge)
-	authedMux.HandleFunc("/api/auth/passkey/register-verify", h.authController.handlePasskeyRegisterVerify)
+	authedMux.HandleFunc("/api/v1/users/me", h.authController.handleUserMe)
+	authedMux.HandleFunc("/api/v1/auth/sessions/me", h.authController.handleWebSession)
 
 	// OOB Approval UI for suspended MCP/A2A transactions
-	mux.HandleFunc("/approve/", h.authController.handleApprovalPage)
-	authedMux.HandleFunc("/api/approve/", h.authController.handleApprovalAction)
-	authedMux.HandleFunc("/api/suspended-transactions", h.authController.handleListSuspendedTransactions)
+	mux.HandleFunc("/api/v1/approve/", h.authController.handleApprovalPage)
+	authedMux.HandleFunc("/api/v1/approvals/", h.authController.handleApprovalAction)
+	authedMux.HandleFunc("/api/v1/approvals", h.authController.handleListSuspendedTransactions)
 
 	// Wrap authed routes in WebSessionAuth middleware
-	mux.Handle("/api/user/", h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle("/api/auth/web-session", h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle("/api/auth/passkey/", h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle("/api/approve/", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/v1/users/", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/v1/auth/sessions/", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/v1/approvals", h.auth.WebSessionAuth(authedMux, h.db))
 
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }
@@ -351,7 +350,6 @@ func isDirectDBMutationAllowed(collection string) bool {
 		constants.CollectionConsoleAudit:
 		return true
 	// Governed collections must use POST /api/governance/envelope
-	// See: .local.dev/docs/plans/engine_gateway_secure_link.md §2
 	case constants.CollectionCases,
 		constants.CollectionInvestigations,
 		constants.CollectionTasks,
@@ -481,223 +479,16 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *HTTPHandler) handleDocs(w http.ResponseWriter, r *http.Request) {
-	if h.docsFS == nil {
-		h.responder.Error(w, http.StatusServiceUnavailable, "documentation not available")
-		return
-	}
-
-	path := strings.TrimPrefix(r.URL.Path, "/docs/")
-	if path == "" {
-		path = "index.md"
-	}
-
-	if !strings.HasSuffix(path, ".md") {
-		path = path + ".md"
-	}
-
-	file, err := h.docsFS.Open("docs/" + path)
-	if err != nil {
-		h.responder.Error(w, http.StatusNotFound, "document not found")
-		return
-	}
-	defer file.Close()
-
-	content, err := io.ReadAll(file)
-	if err != nil {
-		h.responder.Error(w, http.StatusInternalServerError, "failed to read document")
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(content)
-}
-
 // =============================================================================
-// /db/{collection}/{id} - Document Store
+// /api/v1/sse/push, /api/v1/sse/events - Internal SSE event bridge
 //
-// GET    /db/{collection}/{id}       → get document
-// PUT    /db/{collection}/{id}       → set (create/replace) document
-// PATCH  /db/{collection}/{id}       → update (merge) document
-// DELETE /db/{collection}/{id}       → delete document
-// POST   /db/{collection}/_query     → query documents
-// =============================================================================
-
-func (h *HTTPHandler) handleOperators(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	userID := r.URL.Query().Get("user_id")
-	if userID == "" {
-		h.responder.Error(w, http.StatusBadRequest, "user_id required")
-		return
-	}
-	slots, err := h.reg.ListOperatorSlots(userID)
-	if err != nil {
-		h.responder.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	h.responder.JSON(w, http.StatusOK, models.OperatorSlotResponse{Success: true, Operators: slots})
-}
-
-func (h *HTTPHandler) handleTerminateOperator(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	body, err := h.readBody(r)
-	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "invalid body")
-		return
-	}
-	var req models.TerminateOperatorRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-	if req.OperatorID == "" {
-		h.responder.Error(w, http.StatusBadRequest, "operator_id required")
-		return
-	}
-	if req.UserID == "" {
-		h.responder.Error(w, http.StatusBadRequest, "user_id required")
-		return
-	}
-	if err := h.reg.TerminateOperator(req.OperatorID, req.UserID, req.Reason); err != nil {
-		h.responder.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	h.responder.JSON(w, http.StatusOK, models.TerminateOperatorResponse{Success: true, Message: "Operator terminated"})
-}
-
-func (h *HTTPHandler) handleBindOperators(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	body, err := h.readBody(r)
-	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "invalid body")
-		return
-	}
-	var req models.BindOperatorsRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-
-	// Validate ownership
-	userID := r.URL.Query().Get("user_id")
-	if userID != "" && req.UserID != userID {
-		h.responder.Error(w, http.StatusForbidden, "user_id mismatch")
-		return
-	}
-
-	resp, err := h.reg.BindOperators(req)
-	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	h.responder.JSON(w, http.StatusOK, resp)
-}
-
-func (h *HTTPHandler) handleUnbindOperators(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	body, err := h.readBody(r)
-	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "invalid body")
-		return
-	}
-	var req models.UnbindOperatorsRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-
-	// Validate ownership
-	userID := r.URL.Query().Get("user_id")
-	if userID != "" && req.UserID != userID {
-		h.responder.Error(w, http.StatusForbidden, "user_id mismatch")
-		return
-	}
-
-	resp, err := h.reg.UnbindOperators(req)
-	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	h.responder.JSON(w, http.StatusOK, resp)
-}
-
-func (h *HTTPHandler) handleSetTargetContext(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	body, err := h.readBody(r)
-	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "invalid body")
-		return
-	}
-	var req models.SetTargetContextRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-
-	// Validate ownership
-	userID := r.URL.Query().Get("user_id")
-	if userID != "" && req.UserID != userID {
-		h.responder.Error(w, http.StatusForbidden, "user_id mismatch")
-		return
-	}
-
-	resp, err := h.reg.SetTargetContext(req)
-	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	h.responder.JSON(w, http.StatusOK, resp)
-}
-
-func (h *HTTPHandler) handleReauth(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	// Reauth is basically a session refresh. For now, we validate the current session.
-	sessionID := h.auth.ExtractOperatorSessionID(r)
-	if sessionID == "" {
-		h.responder.Error(w, http.StatusUnauthorized, "missing session id")
-		return
-	}
-	op, err := h.auth.ValidateOperatorSession(sessionID)
-	if err != nil {
-		h.responder.Error(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-	h.responder.JSON(w, http.StatusOK, models.ReauthResponse{
-		Success:  true,
-		Operator: op,
-	})
-}
-
-// =============================================================================
-// /api/internal/sse/push, /api/internal/sse/events - Internal SSE event bridge
-//
-// POST /api/internal/sse/push     → Producer (g8e-compatible agentic ensemble) appends an event.
-//                                   Body MUST set exactly one of
-//                                   web_session_id, cli_session_id, user_id.
-// GET  /api/internal/sse/events   → Consumer (CLI / dashboard) polls events.
-//                                   Query string MUST set exactly one of
-//                                   web_session_id, cli_session_id, user_id,
-//                                   plus since_id=N and limit=K.
+// POST /api/v1/sse/push     → Producer (g8e-compatible agentic ensemble) appends an event.
+//                            Body MUST set exactly one of
+//                            web_session_id, cli_session_id, user_id.
+// GET  /api/v1/sse/events   → Consumer (CLI / dashboard) polls events.
+//                            Query string MUST set exactly one of
+//                            web_session_id, cli_session_id, user_id,
+//                            plus since_id=N and limit=K.
 //
 // The Gateway refuses to talk about a bare session id - every routing
 // target is tagged at the type level so a web_session_id can never be
@@ -729,6 +520,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	}
 
 	cert := r.TLS.PeerCertificates[0]
+	appID := ""
 	isAppWorkload := false
 	for _, uri := range cert.URIs {
 		// Only g8e-compatible agentic ensembles are authorized to push SSE events, as they act as the centralized event broker
@@ -736,6 +528,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		// except operator identities (g8eo, g8eg).
 		if strings.HasPrefix(uri.Path, "/app/") && uri.Path != "/app/g8eo" && uri.Path != "/app/g8eg" {
 			isAppWorkload = true
+			appID = uri.String()
 			break
 		}
 	}
@@ -777,10 +570,113 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		inner.Type = string(constants.SystemHealthUnknown)
 	}
 
-	if err := h.db.SSEEventsAppend(route, inner.Type, string(body)); err != nil {
+	if err := h.db.SSEEventsAppend(route, inner.Type, string(body), appID); err != nil {
 		h.logger.Error("SSE push: failed to append event", string(constants.ConnectionStateError), err, "type", inner.Type)
 		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	// Authorization: Enforce producer-to-target ownership.
+	// The app identity extracted from the peer certificate must be associated with the target.
+	if route.WebSessionID != "" {
+		webBindKey := sessionWebBindKey(route.WebSessionID)
+		raw, found := h.db.KVGet(webBindKey)
+		if !found {
+			h.logger.Warn("SSE push: target web session has no bound operators", "web_session_id", route.WebSessionID, "app_id", appID)
+			h.responder.Error(w, http.StatusForbidden, "target session not found or not bound")
+			return
+		}
+		var operatorSessionIDs []string
+		if err := json.Unmarshal([]byte(raw), &operatorSessionIDs); err != nil {
+			h.logger.Error("SSE push: failed to parse web session bindings", "web_session_id", route.WebSessionID, "error", err)
+			h.responder.Error(w, http.StatusInternalServerError, "failed to verify session ownership")
+			return
+		}
+
+		// Check if any bound operator session is associated with this appID
+		authorized := false
+		for _, opSessID := range operatorSessionIDs {
+			opDoc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), opSessID)
+			if err != nil || opDoc == nil {
+				continue
+			}
+			// AppID format in this context is the SPIFFE ID string
+			if opDoc.ID == appID || strings.HasSuffix(appID, "/app/"+opSessID) {
+				authorized = true
+				break
+			}
+			// Alternative: check if the app is explicitly allowed by the operator's policy or if it's the engine
+			// For now, we'll keep it simple: if the app is spiffe://g8e.local/app/<operator_id>, it's authorized.
+			// MatchesApp(spiffeID, operatorID) from workload_identity.go
+			wid := protocol.NewWorkloadIdentity()
+			if wid.MatchesApp(appID, opDoc.ID) {
+				authorized = true
+				break
+			}
+		}
+
+		if !authorized {
+			h.logger.Warn("SSE push: app not authorized for target web session", "app_id", appID, "web_session_id", route.WebSessionID)
+			h.responder.Error(w, http.StatusForbidden, "unauthorized for target session")
+			return
+		}
+	} else if route.CLISessionID != "" {
+		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
+		if err != nil || doc == nil {
+			h.logger.Warn("SSE push: target CLI session not found", "cli_session_id", route.CLISessionID, "app_id", appID)
+			h.responder.Error(w, http.StatusForbidden, "target session not found")
+			return
+		}
+		var cliSess models.CLISession
+		b, _ := json.Marshal(doc.Data)
+		if err := json.Unmarshal(b, &cliSess); err != nil {
+			h.logger.Error("SSE push: failed to parse CLI session", "cli_session_id", route.CLISessionID, "error", err)
+			h.responder.Error(w, http.StatusInternalServerError, "failed to verify session ownership")
+			return
+		}
+
+		// Verify app owns the operator session bound to this CLI session
+		opDoc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), cliSess.OperatorSessionID)
+		if err != nil || opDoc == nil {
+			h.logger.Warn("SSE push: operator session for CLI session not found", "operator_session_id", cliSess.OperatorSessionID, "cli_session_id", route.CLISessionID)
+			h.responder.Error(w, http.StatusForbidden, "operator session not found")
+			return
+		}
+
+		wid := protocol.NewWorkloadIdentity()
+		if !wid.MatchesApp(appID, opDoc.ID) {
+			h.logger.Warn("SSE push: app not authorized for target CLI session", "app_id", appID, "cli_session_id", route.CLISessionID)
+			h.responder.Error(w, http.StatusForbidden, "unauthorized for target session")
+			return
+		}
+	} else if route.UserID != "" {
+		// User-scoped pushes: app must be authorized for AT LEAST ONE session belonging to the user.
+		// We check if the app identity corresponds to an operator owned by this user.
+		filters := []models.DocFilter{
+			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", route.UserID))},
+		}
+		docs, err := h.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 100)
+		if err != nil || len(docs) == 0 {
+			h.logger.Warn("SSE push: user has no operators", "user_id", route.UserID, "app_id", appID)
+			h.responder.Error(w, http.StatusForbidden, "unauthorized for target user")
+			return
+		}
+
+		// Check if the app is authorized for any of the user's operators
+		authorized := false
+		wid := protocol.NewWorkloadIdentity()
+		for _, doc := range docs {
+			if wid.MatchesApp(appID, doc.ID) {
+				authorized = true
+				break
+			}
+		}
+
+		if !authorized {
+			h.logger.Warn("SSE push: app not authorized for target user", "app_id", appID, "user_id", route.UserID)
+			h.responder.Error(w, http.StatusForbidden, "unauthorized for target user")
+			return
+		}
 	}
 
 	// Publish to pub/sub for real-time streaming

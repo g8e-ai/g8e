@@ -29,6 +29,82 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestPKIAuthority_VerifyCertificate(t *testing.T) {
+	t.Parallel()
+	t.Run("Nil certificate is rejected", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.VerifyCertificate(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no certificate provided")
+	})
+
+	t.Run("Valid certificate is accepted", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.EnsurePKI(nil)
+		require.NoError(t, err)
+
+		// Load the service certificate
+		certPEM, err := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
+		require.NoError(t, err)
+
+		block, _ := pem.Decode(certPEM)
+		require.NotNil(t, block)
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		require.NoError(t, err)
+
+		// Verify the certificate is not revoked
+		err = pki.VerifyCertificate(cert)
+		assert.NoError(t, err)
+	})
+
+	t.Run("Revoked certificate is rejected", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.EnsurePKI(nil)
+		require.NoError(t, err)
+
+		// Load the service certificate
+		certPEM, err := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
+		require.NoError(t, err)
+
+		block, _ := pem.Decode(certPEM)
+		require.NotNil(t, block)
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		require.NoError(t, err)
+
+		// Revoke the certificate
+		err = pki.RevokeCertificate(cert.SerialNumber.String(), "test revocation")
+		require.NoError(t, err)
+
+		// Verify the certificate is now rejected
+		err = pki.VerifyCertificate(cert)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "certificate is revoked")
+	})
+}
+
 func TestPKIAuthority_EnsurePKI(t *testing.T) {
 	t.Parallel()
 	t.Run("Full PKI hierarchy initialization", func(t *testing.T) {

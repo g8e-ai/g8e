@@ -234,6 +234,17 @@ var localStoreMigrations = []sqliteutil.Migration{
 		CREATE INDEX IF NOT EXISTS idx_suspended_expires_at ON suspended_transactions(expires_at);
 		`,
 	},
+	{
+		Version:     4,
+		Description: "Add approval decision state to suspended_transactions",
+		SQL: `
+		ALTER TABLE suspended_transactions ADD COLUMN approved INTEGER DEFAULT 0;
+		ALTER TABLE suspended_transactions ADD COLUMN approved_at TEXT;
+		ALTER TABLE suspended_transactions ADD COLUMN approved_by TEXT;
+		ALTER TABLE suspended_transactions ADD COLUMN approval_signature TEXT;
+		ALTER TABLE suspended_transactions ADD COLUMN expected_cert_fingerprint TEXT;
+		`,
+	},
 }
 
 // StoreExecution stores a command execution result locally.
@@ -936,6 +947,12 @@ type SuspendedTransaction struct {
 	ToolArguments   []byte
 	UserID          string
 	OperatorID      string
+	// Approval decision state (Finding 8)
+	Approved                bool
+	ApprovedAt              *time.Time
+	ApprovedBy              string
+	ApprovalSignature       string
+	ExpectedCertFingerprint string
 }
 
 // StoreSuspendedTransaction stores a transaction awaiting L3 approval.
@@ -946,12 +963,25 @@ func (ls *LocalStoreService) StoreSuspendedTransaction(tx *SuspendedTransaction)
 	query := `
 	INSERT INTO suspended_transactions (
 		transaction_hash, envelope, created_at, expires_at,
-		tool_name, tool_arguments, user_id, operator_id
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		tool_name, tool_arguments, user_id, operator_id,
+		approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(transaction_hash) DO UPDATE SET
 		envelope = excluded.envelope,
-		expires_at = excluded.expires_at
+		expires_at = excluded.expires_at,
+		approved = excluded.approved,
+		approved_at = excluded.approved_at,
+		approved_by = excluded.approved_by,
+		approval_signature = excluded.approval_signature,
+		expected_cert_fingerprint = excluded.expected_cert_fingerprint
 	`
+
+	var approvedAtStr *string
+	if tx.ApprovedAt != nil {
+		ts := sqliteutil.FormatTimestamp(*tx.ApprovedAt)
+		approvedAtStr = &ts
+	}
+
 	_, err := ls.db.ExecWithRetry(
 		query,
 		tx.TransactionHash,
@@ -962,6 +992,11 @@ func (ls *LocalStoreService) StoreSuspendedTransaction(tx *SuspendedTransaction)
 		string(tx.ToolArguments),
 		tx.UserID,
 		tx.OperatorID,
+		tx.Approved,
+		approvedAtStr,
+		tx.ApprovedBy,
+		tx.ApprovalSignature,
+		tx.ExpectedCertFingerprint,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to store suspended transaction: %w", err)
@@ -975,11 +1010,13 @@ func (ls *LocalStoreService) GetSuspendedTransaction(txHash string) (*SuspendedT
 	if ls == nil || ls.db == nil {
 		return nil, false
 	}
-	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID sql.NullString
+	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID, approvedBy, approvalSignature, expectedCertFingerprint sql.NullString
+	var approved int
+	var approvedAtStr sql.NullString
 	err := ls.db.QueryRowWithRetry(
-		"SELECT envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE transaction_hash = ? AND expires_at > ?",
+		"SELECT envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint FROM suspended_transactions WHERE transaction_hash = ? AND expires_at > ?",
 		txHash, sqliteutil.NowTimestamp(),
-	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID)
+	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID, &approved, &approvedAtStr, &approvedBy, &approvalSignature, &expectedCertFingerprint)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, false
@@ -996,15 +1033,26 @@ func (ls *LocalStoreService) GetSuspendedTransaction(txHash string) (*SuspendedT
 		toolArgs = []byte(toolArgsStr.String)
 	}
 
+	var approvedAt *time.Time
+	if approvedAtStr.Valid {
+		ts, _ := sqliteutil.ParseTimestamp(approvedAtStr.String)
+		approvedAt = &ts
+	}
+
 	return &SuspendedTransaction{
-		TransactionHash: txHash,
-		Envelope:        []byte(envelopeStr.String),
-		CreatedAt:       createdAt,
-		ExpiresAt:       expiresAt,
-		ToolName:        toolName.String,
-		ToolArguments:   toolArgs,
-		UserID:          userID.String,
-		OperatorID:      operatorID.String,
+		TransactionHash:         txHash,
+		Envelope:                []byte(envelopeStr.String),
+		CreatedAt:               createdAt,
+		ExpiresAt:               expiresAt,
+		ToolName:                toolName.String,
+		ToolArguments:           toolArgs,
+		UserID:                  userID.String,
+		OperatorID:              operatorID.String,
+		Approved:                approved == 1,
+		ApprovedAt:              approvedAt,
+		ApprovedBy:              approvedBy.String,
+		ApprovalSignature:       approvalSignature.String,
+		ExpectedCertFingerprint: expectedCertFingerprint.String,
 	}, true
 }
 
@@ -1019,27 +1067,32 @@ func (ls *LocalStoreService) ListSuspendedTransactions(userID string) ([]*Suspen
 	var args []interface{}
 
 	if userID != "" {
-		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC"
+		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC"
 		args = []interface{}{userID, sqliteutil.NowTimestamp()}
 	} else {
-		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC"
+		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC"
 		args = []interface{}{sqliteutil.NowTimestamp()}
 	}
 
 	type suspendedTxRow struct {
-		txHash       sql.NullString
-		envelopeStr  sql.NullString
-		createdAtStr sql.NullString
-		expiresAtStr sql.NullString
-		toolName     sql.NullString
-		toolArgsStr  sql.NullString
-		userID       sql.NullString
-		operatorID   sql.NullString
+		txHash                  sql.NullString
+		envelopeStr             sql.NullString
+		createdAtStr            sql.NullString
+		expiresAtStr            sql.NullString
+		toolName                sql.NullString
+		toolArgsStr             sql.NullString
+		userID                  sql.NullString
+		operatorID              sql.NullString
+		approved                int
+		approvedAtStr           sql.NullString
+		approvedBy              sql.NullString
+		approvalSignature       sql.NullString
+		expectedCertFingerprint sql.NullString
 	}
 
 	rows, err := sqliteutil.MaterializeRows(ls.db, query, args, func(r *sql.Rows) (suspendedTxRow, error) {
 		var row suspendedTxRow
-		err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID)
+		err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID, &row.approved, &row.approvedAtStr, &row.approvedBy, &row.approvalSignature, &row.expectedCertFingerprint)
 		return row, err
 	})
 	if err != nil {
@@ -1056,19 +1109,64 @@ func (ls *LocalStoreService) ListSuspendedTransactions(userID string) ([]*Suspen
 			toolArgs = []byte(row.toolArgsStr.String)
 		}
 
+		var approvedAt *time.Time
+		if row.approvedAtStr.Valid {
+			ts, _ := sqliteutil.ParseTimestamp(row.approvedAtStr.String)
+			approvedAt = &ts
+		}
+
 		transactions = append(transactions, &SuspendedTransaction{
-			TransactionHash: row.txHash.String,
-			Envelope:        []byte(row.envelopeStr.String),
-			CreatedAt:       createdAt,
-			ExpiresAt:       expiresAt,
-			ToolName:        row.toolName.String,
-			ToolArguments:   toolArgs,
-			UserID:          row.userID.String,
-			OperatorID:      row.operatorID.String,
+			TransactionHash:         row.txHash.String,
+			Envelope:                []byte(row.envelopeStr.String),
+			CreatedAt:               createdAt,
+			ExpiresAt:               expiresAt,
+			ToolName:                row.toolName.String,
+			ToolArguments:           toolArgs,
+			UserID:                  row.userID.String,
+			OperatorID:              row.operatorID.String,
+			Approved:                row.approved == 1,
+			ApprovedAt:              approvedAt,
+			ApprovedBy:              row.approvedBy.String,
+			ApprovalSignature:       row.approvalSignature.String,
+			ExpectedCertFingerprint: row.expectedCertFingerprint.String,
 		})
 	}
 
 	return transactions, nil
+}
+
+// ApproveSuspendedTransaction marks a suspended transaction as approved with cryptographic signature.
+// This is called by the CLI approval command when a human approves a transaction.
+func (ls *LocalStoreService) ApproveSuspendedTransaction(txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error {
+	if ls == nil || ls.db == nil {
+		return fmt.Errorf("local store not initialized")
+	}
+	ls.wg.Add(1)
+	defer ls.wg.Done()
+
+	now := time.Now().UTC()
+	nowStr := sqliteutil.FormatTimestamp(now)
+
+	result, err := ls.db.ExecWithRetry(
+		`UPDATE suspended_transactions 
+		 SET approved = 1, approved_at = ?, approved_by = ?, approval_signature = ?, expected_cert_fingerprint = ?
+		 WHERE transaction_hash = ? AND expires_at > ?`,
+		nowStr, approvedBy, approvalSignature, expectedCertFingerprint, txHash, sqliteutil.NowTimestamp(),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to approve suspended transaction: %w", err)
+	}
+
+	// Check if any row was actually updated
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("transaction not found or expired")
+	}
+
+	return nil
 }
 
 // DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.

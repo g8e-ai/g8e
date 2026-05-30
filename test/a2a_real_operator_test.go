@@ -110,7 +110,7 @@ func TestA2ARealOperator_Smoke(t *testing.T) {
 		Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}},
 	}
 
-	httpReq, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/api/auth/bootstrap", constants.Ports.OperatorBootstrapHttps), bytes.NewReader(reqBody))
+	httpReq, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/api/v1/auth/bootstrap", constants.Ports.OperatorBootstrapHttps), bytes.NewReader(reqBody))
 	require.NoError(t, err)
 	httpReq.Header.Set("Content-Type", "application/json")
 
@@ -158,7 +158,7 @@ func TestA2ARealOperator_Smoke(t *testing.T) {
 	}
 
 	reqBody2, _ := json.Marshal(a2aCallReq)
-	callReq, err := http.NewRequest(http.MethodPost, operatorURL+"/api/a2a/v1/call", bytes.NewReader(reqBody2))
+	callReq, err := http.NewRequest(http.MethodPost, operatorURL+"/api/v1/a2a/call", bytes.NewReader(reqBody2))
 	require.NoError(t, err)
 	callReq.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
 	callReq.Header.Set("X-G8E-CLI-Session-ID", regResp.CLISessionID)

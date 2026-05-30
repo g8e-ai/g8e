@@ -58,7 +58,7 @@ func (c *PKIController) readBody(r *http.Request) ([]byte, error) {
 	return io.ReadAll(r.Body)
 }
 
-func (c *PKIController) handlePKIHubBundle(w http.ResponseWriter, r *http.Request) {
+func (c *PKIController) handlePKICABundle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -100,7 +100,7 @@ func (c *PKIController) handlePKIFingerprint(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-func (c *PKIController) handlePKISignCSR(w http.ResponseWriter, r *http.Request) {
+func (c *PKIController) handlePKICSRSign(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -137,7 +137,7 @@ func (c *PKIController) handlePKISignCSR(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-func (c *PKIController) handlePKIRevoke(w http.ResponseWriter, r *http.Request) {
+func (c *PKIController) handlePKICertificatesRevoke(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -189,7 +189,7 @@ func (c *PKIController) handlePKIRevocationBundle(w http.ResponseWriter, r *http
 	})
 }
 
-func (c *PKIController) handleDeviceEnroll(w http.ResponseWriter, r *http.Request) {
+func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return

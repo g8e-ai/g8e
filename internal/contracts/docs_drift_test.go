@@ -109,7 +109,7 @@ func TestEventsDocsAlignment(t *testing.T) {
 		canonicalEvents[entry.Value] = true
 	}
 
-	// Note: events documentation is in docs/architecture/protocol.md
+	// Note: events documentation is in docs/architecture/g8e.md
 	// This test is a placeholder for verifying documented events match the registry.
 	// For now, we verify the protocol file is valid and contains events.
 	assert.NotEmpty(t, canonicalEvents, "events.json must contain event definitions")
@@ -123,7 +123,6 @@ func TestDocsNoStaleTerms(t *testing.T) {
 		"Reality Portal",
 		"Sentinel daemon",
 		"mandatory g8ed",
-		"mandatory g8ee",
 	}
 
 	err := filepath.Walk(docsDir, func(path string, info os.FileInfo, err error) error {

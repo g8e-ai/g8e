@@ -4,7 +4,7 @@ This reference is auto-generated from the Cobra CLI help output.
 
 ## g8e Root Help
 ```
-g8e is a zero-trust execution substrate for agentic infrastructure.
+g8e is a zero-trust execution platform for agentic infrastructure.
 The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).
 
 Usage:
@@ -12,7 +12,7 @@ Usage:
 
 Available Commands:
   auth        Authentication and session management
-  data        Administer the local substrate over mTLS
+  data        Administer the local platform over mTLS
   help        Help about any command
   platform    Manage the Governance Gateway (g8eg) lifecycle
   security    Security validation checks
@@ -157,7 +157,7 @@ Flags:
 
 ## auth
 ```
-Manage mTLS enrollment, device-link tokens, and operator sessions.
+Manage mTLS enrollment and operator sessions.
 
 Usage:
   g8e auth [command]
@@ -180,9 +180,7 @@ Usage:
   g8e auth login [flags]
 
 Flags:
-      --count int   Number of device-link uses (default 1)
-  -h, --help        help for login
-      --ttl int     Device-link token TTL in seconds (default 3600)
+  -h, --help   help for login
 ```
 
 ### auth logout
@@ -198,14 +196,13 @@ Flags:
 
 ## data
 ```
-Data management commands for users, operators, device-links, and settings.
+Data management commands for users, operators, and settings.
 
 Usage:
   g8e data [command]
 
 Available Commands:
   audit        Query audit vault
-  device-links Manage device-link tokens
   operators    Manage operator instances
   settings     Manage Gateway settings
   store        Manage document storage
@@ -237,63 +234,6 @@ Usage:
 
 Flags:
   -h, --help   help for operators
-```
-
-### data device-links
-```
-Manage device-link tokens
-
-Usage:
-  g8e data device-links [command]
-
-Available Commands:
-  create      Create a device-link token
-  delete      Delete a device-link token
-  list        List device-link tokens
-
-Flags:
-  -h, --help   help for device-links
-
-Use "g8e data device-links [command] --help" for more information about a command.
-```
-
-#### data device-links list
-```
-List device-link tokens
-
-Usage:
-  g8e data device-links list [flags]
-
-Flags:
-  -h, --help             help for list
-      --user-id string   User ID (auto-generated if not provided)
-```
-
-#### data device-links create
-```
-Create a device-link token
-
-Usage:
-  g8e data device-links create [flags]
-
-Flags:
-      --count int        Number of uses (default 1)
-  -h, --help             help for create
-      --ttl int          TTL in seconds (default 3600)
-      --user-id string   User ID (auto-generated if not provided)
-```
-
-#### data device-links delete
-```
-Delete a device-link token
-
-Usage:
-  g8e data device-links delete [flags]
-
-Flags:
-  -h, --help             help for delete
-      --token string     Token to delete (required)
-      --user-id string   User ID (auto-generated if not provided)
 ```
 
 ### data settings
@@ -428,7 +368,7 @@ Flags:
 
 ### test ci
 ```
-Runs make ci which includes proto generation, linting, vulncheck, and substrate tests with platform start/stop and coverage enforcement. This is the canonical way to replicate CI locally.
+Runs make ci which includes proto generation, linting, vulncheck, and platform tests with platform start/stop and coverage enforcement. This is the canonical way to replicate CI locally.
 
 Usage:
   g8e test ci [flags]

@@ -212,14 +212,70 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		client := NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
+		req := &operatorv1.FetchFileDiffRequested{DiffId: "diff-1"}
+		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
-			Payload: []byte("{}"),
+			Payload: payload,
 		}
 		svc.HandleFetchFileDiffRequest(context.Background(), msg)
 
 		published := client.LastPublished()
 		require.NotNil(t, published)
 		assert.Contains(t, string(published.Data), "local storage not available")
+	})
+
+	t.Run("rejects invalid protobuf payload when local store is available", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		svc := NewHistoryService(cfg, logger, client)
+
+		// Set localStore directly since there's no setter method
+		localStoreCfg := &storage.LocalStoreConfig{
+			Enabled: true,
+			DBPath:  ":memory:",
+		}
+		localStore, err := storage.NewLocalStoreService(localStoreCfg, logger, nil, nil)
+		require.NoError(t, err)
+		svc.localStore = localStore
+
+		msg := &PubSubCommandMessage{
+			Payload: []byte("invalid protobuf"),
+		}
+		svc.HandleFetchFileDiffRequest(context.Background(), msg)
+
+		published := client.LastPublished()
+		require.NotNil(t, published)
+		assert.Contains(t, string(published.Data), "invalid request payload")
+	})
+
+	t.Run("rejects when neither diff_id nor operator_session_id provided", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		svc := NewHistoryService(cfg, logger, client)
+
+		// Set localStore directly since there's no setter method
+		localStoreCfg := &storage.LocalStoreConfig{
+			Enabled: true,
+			DBPath:  ":memory:",
+		}
+		localStore, err := storage.NewLocalStoreService(localStoreCfg, logger, nil, nil)
+		require.NoError(t, err)
+		svc.localStore = localStore
+
+		req := &operatorv1.FetchFileDiffRequested{}
+		payload, _ := proto.Marshal(req)
+		msg := &PubSubCommandMessage{
+			Payload: payload,
+		}
+		svc.HandleFetchFileDiffRequest(context.Background(), msg)
+
+		published := client.LastPublished()
+		require.NotNil(t, published)
+		assert.Contains(t, string(published.Data), "either diff_id or operator_session_id is required")
 	})
 }
 

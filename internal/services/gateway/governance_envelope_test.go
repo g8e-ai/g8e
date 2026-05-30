@@ -297,7 +297,7 @@ func TestVerifyEnvelopeIdentityBinding_MatchingAppSPIFFEID_ReturnsNil(t *testing
 			URIs: []*url.URL{spiffeURL},
 		}},
 	}
-	envelope := []byte(`{"operator_id":"op-1","source_component":"g8ee"}`)
+	envelope := []byte(`{"operator_id":"op-1","source_component":"agent"}`)
 	err := verifyEnvelopeIdentityBinding(req, envelope)
 	require.NoError(t, err)
 }

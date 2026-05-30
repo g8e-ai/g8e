@@ -1,10 +1,10 @@
 # Contributing to g8e
 
-g8e is a zero-trust execution substrate for agentic infrastructure. We welcome contributions that strengthen the platform's security invariants, improve protocol compliance, and expand the ecosystem of BYO clients and agents.
+g8e is a zero-trust execution platform for agentic infrastructure. We welcome contributions that strengthen the platform's security invariants, improve protocol compliance, and expand the ecosystem of BYO clients and agents.
 
 ## Architectural Foundation
 
-Before contributing, ensure you understand the core substrate architecture:
+Before contributing, ensure you understand the core platform architecture:
 
 - **Governance Gateway (g8eg)**: The central, BFT-governed Policy Decision Point (PDP).
 - **g8e Operator (g8eo)**: The host-side Policy Execution Point (PEP) and MCP server.

@@ -159,7 +159,6 @@ Source component identifier
 | Name | Number | Description |
 | ---- | ------ | ----------- |
 | COMPONENT_UNSPECIFIED | 0 |  |
-| COMPONENT_G8EE | 1 |  |
 | COMPONENT_G8EO | 2 |  |
 | COMPONENT_CLIENT | 3 |  |
 

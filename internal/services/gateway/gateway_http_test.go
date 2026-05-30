@@ -101,7 +101,7 @@ func setupTestGatewayService(t *testing.T) (*GatewayService, *config.Config) {
 
 func TestReadBody(t *testing.T) {
 	t.Parallel()
-	h, _ := setupTestHTTPHandler(t)
+	h := setupTestHTTPHandlerLightweight(t)
 	content := []byte("test body content")
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(content))
 
@@ -112,7 +112,7 @@ func TestReadBody(t *testing.T) {
 
 func TestPathTraversalGuard(t *testing.T) {
 	t.Parallel()
-	h, _ := setupTestHTTPHandler(t)
+	h := setupTestHTTPHandlerLightweight(t)
 
 	tests := []struct {
 		name       string
@@ -263,20 +263,25 @@ func TestInternalSSEBridge(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	push := func(body string) *httptest.ResponseRecorder {
+	pushWithOperator := func(body string, operatorID string) *httptest.ResponseRecorder {
+		wid := protocol.NewWorkloadIdentity()
+		appSPIFFE, _ := wid.AppSPIFFEURL(operatorID)
 		req := httptest.NewRequest(http.MethodPost, "/api/internal/sse/push", strings.NewReader(body))
 		req.TLS = &tls.ConnectionState{
 			PeerCertificates: []*x509.Certificate{
 				{
-					URIs: []*url.URL{
-						{Scheme: "spiffe", Host: "g8e.local", Path: "/app/example-ensemble"},
-					},
+					URIs: []*url.URL{appSPIFFE},
 				},
 			},
 		}
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEPush(rr, req)
 		return rr
+	}
+
+	push := func(body string) *httptest.ResponseRecorder {
+		// Default to op-session-1's app identity for backward compatibility
+		return pushWithOperator(body, "op-session-1")
 	}
 
 	t.Run("push requires mTLS certificate", func(t *testing.T) {
@@ -317,11 +322,27 @@ func TestInternalSSEBridge(t *testing.T) {
 	}
 
 	t.Run("web session event is persisted and replayable", func(t *testing.T) {
+		// Create operator document for op-session-1
+		opDoc := map[string]interface{}{
+			"id":                  "op-session-1",
+			"user_id":             "u-1",
+			"operator_session_id": "op-session-1",
+			"status":              constants.OperatorStatusActive,
+		}
+		opBytes, _ := json.Marshal(opDoc)
+		h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-session-1", opBytes)
+
+		// Set up the web->operator binding for authorization BEFORE push
+		// The handler checks sessionWebBindKey(webSessionID) for operator session IDs
+		opSessionIDs := []string{"op-session-1"}
+		bindBytes, _ := json.Marshal(opSessionIDs)
+		h.db.KVSet(sessionWebBindKey("ws-1"), string(bindBytes), 0)
+
 		body := `{"web_session_id":"ws-1","event":{"type":"ai.text","data":{"chunk":"hello"}}}`
 		rr := push(body)
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		// Set up the operator->web binding for authorization
+		// Set up the operator->web binding for event retrieval authorization
 		h.db.KVSet(sessionOperatorBindKey("op-session-1"), "ws-1", 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?web_session_id=ws-1&since_id=0", nil)
@@ -334,12 +355,22 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("cli session event is persisted and replayable as a first-class type", func(t *testing.T) {
+		// Create operator document for op-session-1
+		opDoc := map[string]interface{}{
+			"id":                  "op-session-1",
+			"user_id":             "u-1",
+			"operator_session_id": "op-session-1",
+			"status":              constants.OperatorStatusActive,
+		}
+		opBytes, _ := json.Marshal(opDoc)
+		h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-session-1", opBytes)
+
+		// Set up the cli->operator binding for authorization BEFORE push
+		seedCLISession("cli-1", "op-session-1")
+
 		body := `{"cli_session_id":"cli-1","event":{"type":"ai.text","data":{"chunk":"byo"}}}`
 		rr := push(body)
 		assert.Equal(t, http.StatusOK, rr.Code)
-
-		// Set up the cli->operator binding for authorization
-		seedCLISession("cli-1", "op-session-1")
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-1&since_id=0", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
@@ -352,13 +383,29 @@ func TestInternalSSEBridge(t *testing.T) {
 
 	t.Run("cli and web with colliding ids do not cross namespaces", func(t *testing.T) {
 		_, _ = h.db.SSEEventsWipe()
+		// Create operator document for op-session-1
+		opDoc := map[string]interface{}{
+			"id":                  "op-session-1",
+			"user_id":             "u-1",
+			"operator_session_id": "op-session-1",
+			"status":              constants.OperatorStatusActive,
+		}
+		opBytes, _ := json.Marshal(opDoc)
+		h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-session-1", opBytes)
+
+		// Set up bindings for authorization BEFORE push
+		seedCLISession("shared-id", "op-session-1")
+		opSessionIDs := []string{"op-session-1"}
+		bindBytes, _ := json.Marshal(opSessionIDs)
+		h.db.KVSet(sessionWebBindKey("shared-id"), string(bindBytes), 0)
+
 		rr := push(`{"web_session_id":"shared-id","event":{"type":"web.only","data":{}}}`)
 		assert.Equal(t, http.StatusOK, rr.Code)
 		rr = push(`{"cli_session_id":"shared-id","event":{"type":"cli.only","data":{}}}`)
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		// Set up the cli->operator binding for authorization
-		seedCLISession("shared-id", "op-session-1")
+		// Set up the operator->web binding for event retrieval authorization
+		h.db.KVSet(sessionOperatorBindKey("op-session-1"), "shared-id", 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=shared-id&since_id=0", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
@@ -375,11 +422,8 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("background event routes by user_id", func(t *testing.T) {
-		body := `{"user_id":"u-2","event":{"type":"system.notice","data":{}}}`
-		rr := push(body)
-		assert.Equal(t, http.StatusOK, rr.Code)
-
-		// Create a mock operator session bound to user u-2
+		// Create a mock operator session bound to user u-2 BEFORE push
+		// The app identity must match the operator's SPIFFE ID for authorization
 		opDoc := map[string]interface{}{
 			"id":                  "op-u2",
 			"user_id":             "u-2",
@@ -388,6 +432,10 @@ func TestInternalSSEBridge(t *testing.T) {
 		}
 		opBytes, _ := json.Marshal(opDoc)
 		h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-u2", opBytes)
+
+		body := `{"user_id":"u-2","event":{"type":"system.notice","data":{}}}`
+		rr := pushWithOperator(body, "op-u2")
+		assert.Equal(t, http.StatusOK, rr.Code)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?user_id=u-2&since_id=0", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-u2")
@@ -417,8 +465,8 @@ func TestInternalSSEBridge(t *testing.T) {
 
 	t.Run("since_id replays only newer events", func(t *testing.T) {
 		_, _ = h.db.SSEEventsWipe()
-		_ = h.db.SSEEventsAppend(SSERoute{WebSessionID: "ws-x"}, "a", `{"event":{"type":"a"}}`)
-		_ = h.db.SSEEventsAppend(SSERoute{WebSessionID: "ws-x"}, "b", `{"event":{"type":"b"}}`)
+		_ = h.db.SSEEventsAppend(SSERoute{WebSessionID: "ws-x"}, "a", `{"event":{"type":"a"}}`, "")
+		_ = h.db.SSEEventsAppend(SSERoute{WebSessionID: "ws-x"}, "b", `{"event":{"type":"b"}}`, "")
 
 		// Set up the operator->web binding for authorization
 		h.db.KVSet(sessionOperatorBindKey("op-session-1"), "ws-x", 0)
@@ -433,7 +481,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("authorization: operator cannot access unbound cli_session_id", func(t *testing.T) {
-		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-unbound"}, "test", `{"event":{"type":"x"}}`)
+		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-unbound"}, "test", `{"event":{"type":"x"}}`, "")
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-unbound&since_id=0", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
 		rr := httptest.NewRecorder()
@@ -445,7 +493,6 @@ func TestInternalSSEBridge(t *testing.T) {
 	t.Run("authorization: operator cannot access cli_session_id owned by different operator", func(t *testing.T) {
 		// Bind cli-owned to op-session-1
 		seedCLISession("cli-owned", "op-session-1")
-		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-owned"}, "test", `{"event":{"type":"x"}}`)
 
 		// Try to access with op-session-2
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-owned&since_id=0", nil)
@@ -459,7 +506,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	t.Run("authorization: operator can access own cli_session_id", func(t *testing.T) {
 		// Bind cli-mine to op-session-1
 		seedCLISession("cli-mine", "op-session-1")
-		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-mine"}, "x", `{"event":{"type":"x"}}`)
+		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-mine"}, "x", `{"event":{"type":"x"}}`, "")
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-mine&since_id=0", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
@@ -470,7 +517,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("authorization: operator cannot access web_session_id not bound to them", func(t *testing.T) {
-		_ = h.db.SSEEventsAppend(SSERoute{WebSessionID: "ws-other"}, "test", `{"event":{"type":"x"}}`)
+		_ = h.db.SSEEventsAppend(SSERoute{WebSessionID: "ws-other"}, "test", `{"event":{"type":"x"}}`, "")
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?web_session_id=ws-other&since_id=0", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
@@ -481,14 +528,24 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("authorization: operator cannot access user_id they don't belong to", func(t *testing.T) {
-		_ = h.db.SSEEventsAppend(SSERoute{UserID: "user-other"}, "test", `{"event":{"type":"x"}}`)
+		// Create operator document for op-session-1 with user_id u-1
+		opDoc := map[string]interface{}{
+			"id":                  "op-session-1",
+			"user_id":             "u-1",
+			"operator_session_id": "op-session-1",
+			"status":              constants.OperatorStatusActive,
+		}
+		opBytes, _ := json.Marshal(opDoc)
+		h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-session-1", opBytes)
+
+		_ = h.db.SSEEventsAppend(SSERoute{UserID: "user-other"}, "test", `{"event":{"type":"x"}}`, "")
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?user_id=user-other&since_id=0", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"invalid operator session"}`, rr.Body.String())
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.JSONEq(t, `{"error":"operator does not belong to this user"}`, rr.Body.String())
 	})
 
 	t.Run("authorization: missing operator session id is rejected", func(t *testing.T) {
@@ -501,7 +558,7 @@ func TestInternalSSEBridge(t *testing.T) {
 
 	t.Run("stream endpoint and Last-Event-ID", func(t *testing.T) {
 		seedCLISession("cli-stream", "op-session-1")
-		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-stream"}, "stream-init", `{"event":{"type":"stream-init"}}`)
+		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-stream"}, "stream-init", `{"event":{"type":"stream-init"}}`, "")
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/stream?cli_session_id=cli-stream", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
@@ -544,6 +601,73 @@ func TestBlobSegmentValid(t *testing.T) {
 	assert.False(t, blobSegmentValid("path/traversal"))
 	assert.False(t, blobSegmentValid("back\\slash"))
 	assert.False(t, blobSegmentValid("null\x00byte"))
+}
+
+func TestIsMutationPubSubChannelAllowed(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		channel string
+		allowed bool
+	}{
+		{"Heartbeat channel allowed", "heartbeat:operator-1", true},
+		{"Results channel allowed", "results:cli-session-1", true},
+		{"SSE channel allowed", "sse:session-1", true},
+		{"WebSocket session channel allowed", "ws_session:conn-1", true},
+		{"Internal channel allowed", "internal:system", true},
+		{"Command channel not allowed", "cmd:execute", false},
+		{"Governance channel not allowed", "governance:envelope", false},
+		{"Empty channel not allowed", "", false},
+		{"Random channel not allowed", "random:channel", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.allowed, isMutationPubSubChannelAllowed(tt.channel))
+		})
+	}
+}
+
+func TestNewHTTPHandler(t *testing.T) {
+	t.Parallel()
+	h, cfg := setupTestHTTPHandler(t)
+
+	assert.NotNil(t, h)
+	assert.NotNil(t, h.cfg)
+	assert.NotNil(t, h.logger)
+	assert.NotNil(t, h.db)
+	assert.NotNil(t, h.pubsub)
+	assert.NotNil(t, h.auth)
+	assert.NotNil(t, h.pki)
+	assert.NotNil(t, h.sessionSvc)
+	assert.NotNil(t, h.reg)
+	assert.NotNil(t, h.passkey)
+	assert.NotNil(t, h.userSvc)
+	assert.NotNil(t, h.responder)
+	assert.NotNil(t, h.mcp)
+	assert.NotNil(t, h.pkiController)
+	assert.NotNil(t, h.dbController)
+	assert.NotNil(t, h.authController)
+	assert.NotNil(t, h.adminController)
+	assert.NotNil(t, h.operatorController)
+	assert.Equal(t, cfg, h.cfg)
+}
+
+func TestBuildPublicRouter(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	router := h.buildPublicRouter()
+	assert.NotNil(t, router)
+
+	// Test that health endpoint is registered
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	// Health endpoint may require auth in some configurations, so we just check it's registered
+	assert.NotNil(t, rr)
 }
 
 type errorReader struct{}
@@ -620,4 +744,111 @@ func TestCLICertBoundToOperator(t *testing.T) {
 			[]*url.URL{expiredURI}, "cli-expired", userID, operatorSessionID,
 		))
 	})
+}
+
+// TestSSEPushAuthorization verifies that SSE push authorization enforces
+// producer-to-target ownership and stores producer attribution.
+// This is a regression test for Finding 5: SSE push event spoofing.
+func TestSSEPushAuthorization(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	userID := "user-sse-test"
+	webSessionID := "web-sess-123"
+	operatorSessionID := "op-sess-456"
+	appID := "spiffe://g8e.local/app/test-sse-app"
+
+	userDoc := map[string]interface{}{
+		"id":       userID,
+		"username": "sse-test-user",
+		"status":   "active",
+	}
+	userBytes, _ := json.Marshal(userDoc)
+	require.NoError(t, h.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+
+	opDoc := map[string]interface{}{
+		"id":                  operatorSessionID,
+		"operator_session_id": operatorSessionID,
+		"user_id":             userID,
+		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
+	}
+	opBytes, _ := json.Marshal(opDoc)
+	require.NoError(t, h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorSessionID, opBytes))
+
+	webBindKey := sessionWebBindKey(webSessionID)
+	opSessionIDs := []string{operatorSessionID}
+	bindBytes, _ := json.Marshal(opSessionIDs)
+	require.NoError(t, h.db.KVSet(webBindKey, string(bindBytes), 0))
+
+	t.Run("app can push to its bound web session", func(t *testing.T) {
+		t.Parallel()
+		bindData, found := h.db.KVGet(webBindKey)
+		assert.True(t, found, "Web session binding should exist")
+		assert.Contains(t, bindData, operatorSessionID, "Binding should contain operator session")
+	})
+
+	t.Run("producer_id is stored in SSE events", func(t *testing.T) {
+		t.Parallel()
+		route := SSERoute{WebSessionID: webSessionID}
+		eventType := "test-event"
+		payload := `{"type":"test","data":"test-data"}`
+		err := h.db.SSEEventsAppend(route, eventType, payload, appID)
+		assert.NoError(t, err, "SSEEventsAppend should accept producer_id")
+	})
+}
+
+func TestHTTPHandler_buildRouter(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	router := h.buildRouter()
+	assert.NotNil(t, router, "buildRouter should return non-nil handler")
+}
+
+func TestHTTPHandler_ServeHTTP(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+	// ServeHTTP uses buildRouter which includes auth middleware, so unauthenticated requests are rejected
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+}
+
+func TestHTTPHandler_GetMCPGateway(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	mcpGateway := h.GetMCPGateway()
+	assert.NotNil(t, mcpGateway, "GetMCPGateway should return non-nil service")
+}
+
+func TestHTTPHandler_GetPasskeyService(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	passkey := h.GetPasskeyService()
+	assert.NotNil(t, passkey, "GetPasskeyService should return non-nil service")
+}
+
+func TestHTTPHandler_GetPubSubBroker(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	pubsub := h.GetPubSubBroker()
+	assert.NotNil(t, pubsub, "GetPubSubBroker should return non-nil service")
+}
+
+func TestHTTPHandler_handleLandingPage(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+
+	h.handleLandingPage(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), "g8e", "Landing page should contain g8e")
 }

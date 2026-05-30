@@ -42,6 +42,73 @@ const (
 	bindingPersonaKey contextKey = "binding_persona"
 )
 
+// PublicRouteRegistry defines routes that bypass authentication.
+// Exact paths are matched precisely. Prefixes allow any path under the prefix.
+// This centralized registry eliminates fragile HasPrefix duplication.
+type PublicRouteRegistry struct {
+	exactPaths  map[string]struct{}
+	prefixes    map[string]struct{}
+	jwksEnabled bool
+}
+
+// NewPublicRouteRegistry creates a registry with the canonical public routes.
+func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
+	r := &PublicRouteRegistry{
+		exactPaths:  make(map[string]struct{}),
+		prefixes:    make(map[string]struct{}),
+		jwksEnabled: jwksEnabled,
+	}
+
+	// Health check (always public)
+	r.addExact("/health")
+
+	// PKI bootstrap routes (public material only)
+	r.addPrefix("/.well-known/g8e/pki/")
+
+	// Protocol entry points (CSR enrollment, bootstrap)
+	r.addExact("/api/v1/pki/csr/sign")
+	r.addExact("/api/v1/pki/devices/enroll")
+	r.addExact("/api/v1/auth/bootstrap")
+	r.addExact("/api/v1/auth/bootstrap/status")
+	r.addExact("/api/v1/auth/login/verify")
+	r.addExact("/api/v1/auth/logout")
+	r.addPrefix("/api/v1/approve/")
+
+	// JIT passkey bootstrap (only when JWKS is configured)
+	if jwksEnabled {
+		r.addPrefix("/api/v1/auth/passkeys/jit-")
+		r.addPrefix("/api/v1/mcp/")
+		r.addPrefix("/api/v1/a2a/")
+	}
+
+	return r
+}
+
+func (r *PublicRouteRegistry) addExact(path string) {
+	r.exactPaths[path] = struct{}{}
+}
+
+func (r *PublicRouteRegistry) addPrefix(prefix string) {
+	r.prefixes[prefix] = struct{}{}
+}
+
+// IsPublic returns true if the path is registered as a public route.
+func (r *PublicRouteRegistry) IsPublic(path string) bool {
+	// Check exact matches first
+	if _, ok := r.exactPaths[path]; ok {
+		return true
+	}
+
+	// Check prefix matches
+	for prefix := range r.prefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // AuthError represents a structured authentication error.
 type AuthError struct {
 	Message string `json:"error"`
@@ -69,8 +136,12 @@ type AuthService struct {
 	responder  *responder.Responder
 	secretsDir string
 
-	jwks    *JWKSProvider
-	jwtRole string
+	jwks        *JWKSProvider
+	jwtRole     string
+	jwtIssuer   string
+	jwtAudience string
+
+	publicRoutes *PublicRouteRegistry
 
 	// Rate limiting state for app policies
 	muLimiters sync.Mutex
@@ -78,18 +149,22 @@ type AuthService struct {
 }
 
 // NewAuthService creates a new AuthService.
-func NewAuthService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, personaSvc *PersonaService, responder *responder.Responder, secretsDir string, jwks *JWKSProvider, jwtRole string) *AuthService {
+func NewAuthService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, personaSvc *PersonaService, responder *responder.Responder, secretsDir string, jwks *JWKSProvider, jwtRole, jwtIssuer, jwtAudience string) *AuthService {
+	jwksEnabled := jwks != nil
 	return &AuthService{
-		db:         db,
-		pki:        pki,
-		logger:     logger,
-		userSvc:    userSvc,
-		personaSvc: personaSvc,
-		responder:  responder,
-		secretsDir: secretsDir,
-		jwks:       jwks,
-		jwtRole:    jwtRole,
-		limiters:   make(map[string]*rate.Limiter),
+		db:           db,
+		pki:          pki,
+		logger:       logger,
+		userSvc:      userSvc,
+		personaSvc:   personaSvc,
+		responder:    responder,
+		secretsDir:   secretsDir,
+		jwks:         jwks,
+		jwtRole:      jwtRole,
+		jwtIssuer:    jwtIssuer,
+		jwtAudience:  jwtAudience,
+		publicRoutes: NewPublicRouteRegistry(jwksEnabled),
+		limiters:     make(map[string]*rate.Limiter),
 	}
 }
 
@@ -173,45 +248,39 @@ func (s *AuthService) ExtractOperatorSessionID(r *http.Request) string {
 }
 
 // Middleware returns an http.Handler that authenticates requests.
+// It chains multiple single-responsibility middlewares:
+// 1. publicBypassMiddleware (unauthenticated routes)
+// 2. mtlsMiddleware (mTLS enforcement and revocation)
+// 3. authMiddleware (Operator, CLI, or App authentication)
 func (s *AuthService) Middleware(next http.Handler) http.Handler {
+	return s.publicBypassMiddleware(
+		s.mtlsMiddleware(
+			s.authMiddleware(next),
+		),
+	)
+}
+
+// publicBypassMiddleware handles routes that are accessible without any authentication.
+func (s *AuthService) publicBypassMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Always allow health check without a token
-		if r.URL.Path == "/health" {
+		if s.publicRoutes.IsPublic(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		// [PIVOT] Support public protocol auth surface (Phase 4)
-		// These unauthenticated PKI routes return only public material and fingerprints.
-		if strings.HasPrefix(r.URL.Path, "/.well-known/g8e/pki/") {
-			next.ServeHTTP(w, r)
-			return
-		}
+		next.ServeHTTP(w, r)
+	})
+}
 
-		// [PIVOT] MCP & A2A gateways handle their own authentication since they support standard clients
-		// When JWKS is configured, they use JWTAuthMiddleware which requires an invitation for JIT provisioning
-		// When JWKS is not configured, they require mTLS via CSR-based enrollment
-		if strings.HasPrefix(r.URL.Path, "/api/mcp/") || strings.HasPrefix(r.URL.Path, "/api/a2a/") || strings.HasPrefix(r.URL.Path, "/api/approve/") {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// These routes are new protocol entry points.
-		// Native Registration Path (Phase 4)
-		// This endpoint is the new sovereign entry point for enrolling binaries.
-		// It MUST be accessible without an internal token as it is the first step
-		// of the trust bootstrap.
-		if r.URL.Path == "/api/pki/sign-csr" ||
-			r.URL.Path == "/api/pki/device-enroll" ||
-			r.URL.Path == "/api/auth/bootstrap" ||
-			r.URL.Path == "/api/auth/bootstrap/status" {
+// mtlsMiddleware enforces mTLS and verifies certificate revocation.
+func (s *AuthService) mtlsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.publicRoutes.IsPublic(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
 
 		// [PIVOT] Enforce mTLS for all other routes (Phase 6)
-		// The mTLS gateway uses tls.RequireAndVerifyClientCert; reaching L7
-		// without a peer cert means an internal misroute, not a client error.
 		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 			s.logger.Warn("mTLS required but no client certificate provided", "path", r.URL.Path)
 			s.responder.Error(w, http.StatusUnauthorized, "mTLS client certificate required")
@@ -227,184 +296,40 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// We prioritize session auth for operators.
-		// [PIVOT] Prefer standard Authorization: Bearer <token> header (Plan §4.6)
-		operatorSessionID := s.ExtractOperatorSessionID(r)
+		next.ServeHTTP(w, r)
+	})
+}
 
+// authMiddleware handles authentication for Operator, CLI, and App identities.
+func (s *AuthService) authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Skip auth check for bypass routes. These routes either need no auth
+		// or have their own auth middleware (like JWTAuthMiddleware for MCP/A2A).
+		if s.publicRoutes.IsPublic(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// We prioritize session auth for operators.
+		operatorSessionID := s.ExtractOperatorSessionID(r)
 		cliSessionID := r.Header.Get(constants.HeaderCLISessionID)
 
 		switch {
 		case operatorSessionID != "":
-			op, err := s.ValidateOperatorSession(operatorSessionID)
-			if err == nil {
-				// [PIVOT] Verify URI SAN identity (Phase 6)
-				// The client cert must bind to the same operator session, OR
-				// to a CLI session owned by this operator session. CLI clients
-				// (./g8e login) hold a CLI cert and authenticate with their
-				// linked operator session via Bearer; they MUST be allowed to
-				// reach internal APIs scoped by cli_session_id.
-				// SPIFFE ID formats: protocol.WorkloadIdentity.OperatorSPIFFEID()
-				// and protocol.WorkloadIdentity.CLISPIFFEID().
-				if len(r.TLS.PeerCertificates) > 0 {
-					wid := protocol.NewWorkloadIdentity()
-					cert := r.TLS.PeerCertificates[0]
-					match := false
-					for _, uri := range cert.URIs {
-						if wid.MatchesOperator(uri.String(), op.OrganizationID, op.ID, operatorSessionID) {
-							match = true
-							break
-						}
-					}
-					if !match && cliSessionID != "" {
-						match = s.cliCertBoundToOperator(cert.URIs, cliSessionID, op.UserID, operatorSessionID)
-					}
-					if !match {
-						s.logger.Warn("mTLS URI SAN mismatch for operator session", "path", r.URL.Path, "operator_id", op.ID, "operator_session_id", operatorSessionID)
-						s.responder.Error(w, http.StatusForbidden, "mTLS identity mismatch")
-						return
-					}
-				}
-
-				next.ServeHTTP(w, r)
-				return
-			}
-			s.logger.Warn("Invalid operator session attempt", "operator_session_id", operatorSessionID[:8]+"...", string(constants.ConnectionStateError), err)
-
-			// If it's a structured AuthError, return it properly
-			if ae, ok := err.(*AuthError); ok {
-				s.responder.Error(w, ae.Status, ae.Message) // Note: responder.Error wraps it in {"error": ...}
+			if s.handleOperatorAuth(w, r, operatorSessionID, cliSessionID, next) {
 				return
 			}
 		case cliSessionID != "":
-			// CLI authentication via CLI session ID and CLI certificate
-			// Verify the CLI certificate matches the CLI session ID
-			// SPIFFE ID format: protocol.WorkloadIdentity.CLISPIFFEID()
-			if len(r.TLS.PeerCertificates) > 0 {
-				wid := protocol.NewWorkloadIdentity()
-				cert := r.TLS.PeerCertificates[0]
-
-				// [PIVOT] Verify CLI session and lookup UserID (Plan §4.6)
-				cliDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
-				if err != nil {
-					s.logger.Error("failed to load CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
-					s.responder.Error(w, http.StatusInternalServerError, "failed to load session")
-					return
-				}
-				if cliDoc == nil {
-					s.logger.Warn("CLI session not found", "cli_session_id", cliSessionID)
-					s.responder.Error(w, http.StatusUnauthorized, "invalid CLI session")
-					return
-				}
-
-				var cliSession models.CLISession
-				b, _ := json.Marshal(cliDoc.Data)
-				if err := json.Unmarshal(b, &cliSession); err != nil {
-					s.logger.Error("failed to parse CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
-					s.responder.Error(w, http.StatusInternalServerError, "failed to parse session")
-					return
-				}
-
-				// Check expiry
-				if !cliSession.ExpiresAt.IsZero() && cliSession.ExpiresAt.Before(time.Now()) {
-					s.logger.Warn("CLI session expired", "cli_session_id", cliSessionID)
-					s.responder.Error(w, http.StatusUnauthorized, "CLI session expired")
-					return
-				}
-
-				// Check if the linked user is active
-				if s.userSvc != nil && cliSession.UserID != "" {
-					user, err := s.userSvc.GetByID(cliSession.UserID)
-					if err != nil {
-						s.logger.Error("failed to load user for CLI session", "user_id", cliSession.UserID, string(constants.ConnectionStateError), err)
-						s.responder.Error(w, http.StatusInternalServerError, "identity validation failed")
-						return
-					}
-					if user != nil && !user.IsActive() {
-						s.logger.Warn("CLI session identity disabled", "user_id", cliSession.UserID)
-						s.responder.Error(w, http.StatusForbidden, "identity disabled")
-						return
-					}
-				}
-
-				// Verify the CLI certificate matches the CLI session ID
-				// SPIFFE ID format: protocol.WorkloadIdentity.CLISPIFFEID()
-				match := false
-				for _, uri := range cert.URIs {
-					if wid.MatchesCLI(uri.String(), cliSession.UserID, cliSessionID) {
-						match = true
-						break
-					}
-				}
-				if !match {
-					s.logger.Warn("mTLS URI SAN mismatch for CLI session", "path", r.URL.Path, "cli_session_id", cliSessionID)
-					s.responder.Error(w, http.StatusForbidden, "mTLS identity mismatch")
-					return
-				}
+			if s.handleCLIAuth(w, r, cliSessionID, next) {
+				return
 			}
-
-			next.ServeHTTP(w, r)
-			return
 		default:
-			// [PIVOT] System/App Authentication via URI SAN (Phase 6)
-			// If no session ID is provided, we check if the certificate belongs to a trusted system app.
-			// Note: /_query requires operator session authentication - no app bypass allowed.
-			// SPIFFE ID format: protocol.WorkloadIdentity.AppSPIFFEID()
-			if len(r.TLS.PeerCertificates) > 0 {
-				cert := r.TLS.PeerCertificates[0]
-				for _, uri := range cert.URIs {
-					uriStr := uri.String()
-					if strings.HasPrefix(uriStr, "spiffe://"+protocol.TrustDomain+"/app/") {
-						// g8e-compatible agentic ensembles are native platform components, they bypass the external AppPolicy check
-						if uriStr == "spiffe://"+protocol.TrustDomain+"/app/g8ee" {
-							next.ServeHTTP(w, r)
-							return
-						}
-
-						// For external apps, verify an explicit AppPolicy exists and applies to this path
-						appID := uriStr
-						doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
-						if err != nil || doc == nil {
-							s.logger.Warn("App policy not found (deny-all default)", "app_id", appID)
-							s.responder.Error(w, http.StatusForbidden, "app policy not found")
-							return
-						}
-
-						var policy models.AppPolicy
-						data, _ := json.Marshal(doc.Data)
-						if err := json.Unmarshal(data, &policy); err != nil {
-							s.logger.Error("Failed to parse app policy", "app_id", appID, "error", err)
-							s.responder.Error(w, http.StatusInternalServerError, "invalid app policy")
-							return
-						}
-
-						// The /_query and /api/governance/envelope endpoints require a human operator session
-						// External apps cannot use the direct query or envelope endpoints directly.
-						if strings.HasPrefix(r.URL.Path, "/_query") || strings.HasPrefix(r.URL.Path, "/api/governance/envelope") {
-							s.responder.Error(w, http.StatusForbidden, "external apps cannot access privileged endpoints")
-							return
-						}
-
-						// Enforce AppPolicy rules
-						if err := s.enforceAppPolicy(r, &policy, appID); err != nil {
-							s.logger.Warn("App policy enforcement failed", "app_id", appID, "error", err)
-							s.responder.Error(w, http.StatusForbidden, err.Error())
-							return
-						}
-
-						// Stamp context with app identity for downstream MCP/A2A endpoints
-						ctx := context.WithValue(r.Context(), appIDKey, appID)
-						next.ServeHTTP(w, r.WithContext(ctx))
-						return
-					}
-				}
+			if s.handleAppAuth(w, r, next) {
+				return
 			}
 		}
 
-		// API keys are no longer a valid mutation authority.
-		// They are only used for registration, which is handled in the bypass above.
-
 		// For WebSockets, return a plain text error for 401.
-		// Handshake fails if a JSON body is returned instead of just the 401 status.
 		if strings.HasPrefix(r.URL.Path, "/ws/") {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
@@ -412,6 +337,151 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 
 		s.responder.Error(w, http.StatusUnauthorized, "protocol authentication required")
 	})
+}
+
+// handleOperatorAuth handles authentication for operator sessions.
+// Returns true if the request was handled (either succeeded or failed with error).
+func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request, operatorSessionID, cliSessionID string, next http.Handler) bool {
+	op, err := s.ValidateOperatorSession(operatorSessionID)
+	if err == nil {
+		if len(r.TLS.PeerCertificates) > 0 {
+			wid := protocol.NewWorkloadIdentity()
+			cert := r.TLS.PeerCertificates[0]
+			match := false
+			for _, uri := range cert.URIs {
+				if wid.MatchesOperator(uri.String(), op.OrganizationID, op.ID, operatorSessionID) {
+					match = true
+					break
+				}
+			}
+			if !match && cliSessionID != "" {
+				match = s.cliCertBoundToOperator(cert.URIs, cliSessionID, op.UserID, operatorSessionID)
+			}
+			if !match {
+				s.logger.Warn("mTLS URI SAN mismatch for operator session", "path", r.URL.Path, "operator_id", op.ID, "operator_session_id", operatorSessionID)
+				s.responder.Error(w, http.StatusForbidden, "mTLS identity mismatch")
+				return true
+			}
+		}
+
+		next.ServeHTTP(w, r)
+		return true
+	}
+
+	s.logger.Warn("Invalid operator session attempt", "operator_session_id", operatorSessionID[:8]+"...", string(constants.ConnectionStateError), err)
+
+	if ae, ok := err.(*AuthError); ok {
+		s.responder.Error(w, ae.Status, ae.Message)
+		return true
+	}
+	return false
+}
+
+// handleCLIAuth handles authentication for CLI sessions.
+func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliSessionID string, next http.Handler) bool {
+	if len(r.TLS.PeerCertificates) > 0 {
+		wid := protocol.NewWorkloadIdentity()
+		cert := r.TLS.PeerCertificates[0]
+
+		cliDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		if err != nil {
+			s.logger.Error("failed to load CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
+			s.responder.Error(w, http.StatusInternalServerError, "failed to load session")
+			return true
+		}
+		if cliDoc == nil {
+			s.logger.Warn("CLI session not found", "cli_session_id", cliSessionID)
+			s.responder.Error(w, http.StatusUnauthorized, "invalid CLI session")
+			return true
+		}
+
+		var cliSession models.CLISession
+		b, _ := json.Marshal(cliDoc.Data)
+		if err := json.Unmarshal(b, &cliSession); err != nil {
+			s.logger.Error("failed to parse CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
+			s.responder.Error(w, http.StatusInternalServerError, "failed to parse session")
+			return true
+		}
+
+		if !cliSession.ExpiresAt.IsZero() && cliSession.ExpiresAt.Before(time.Now()) {
+			s.logger.Warn("CLI session expired", "cli_session_id", cliSessionID)
+			s.responder.Error(w, http.StatusUnauthorized, "CLI session expired")
+			return true
+		}
+
+		if s.userSvc != nil && cliSession.UserID != "" {
+			user, err := s.userSvc.GetByID(cliSession.UserID)
+			if err != nil {
+				s.logger.Error("failed to load user for CLI session", "user_id", cliSession.UserID, string(constants.ConnectionStateError), err)
+				s.responder.Error(w, http.StatusInternalServerError, "identity validation failed")
+				return true
+			}
+			if user != nil && !user.IsActive() {
+				s.logger.Warn("CLI session identity disabled", "user_id", cliSession.UserID)
+				s.responder.Error(w, http.StatusForbidden, "identity disabled")
+				return true
+			}
+		}
+
+		match := false
+		for _, uri := range cert.URIs {
+			if wid.MatchesCLI(uri.String(), cliSession.UserID, cliSessionID) {
+				match = true
+				break
+			}
+		}
+		if !match {
+			s.logger.Warn("mTLS URI SAN mismatch for CLI session", "path", r.URL.Path, "cli_session_id", cliSessionID)
+			s.responder.Error(w, http.StatusForbidden, "mTLS identity mismatch")
+			return true
+		}
+	}
+
+	next.ServeHTTP(w, r)
+	return true
+}
+
+// handleAppAuth handles authentication for system and external apps via URI SAN.
+func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next http.Handler) bool {
+	if len(r.TLS.PeerCertificates) > 0 {
+		cert := r.TLS.PeerCertificates[0]
+		for _, uri := range cert.URIs {
+			uriStr := uri.String()
+			if strings.HasPrefix(uriStr, "spiffe://"+protocol.TrustDomain+"/app/") {
+				appID := uriStr
+				doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+				if err != nil || doc == nil {
+					s.logger.Warn("App policy not found (deny-all default)", "app_id", appID)
+					s.responder.Error(w, http.StatusForbidden, "app policy not found")
+					return true
+				}
+
+				var policy models.AppPolicy
+				data, _ := json.Marshal(doc.Data)
+				if err := json.Unmarshal(data, &policy); err != nil {
+					s.logger.Error("Failed to parse app policy", "app_id", appID, "error", err)
+					s.responder.Error(w, http.StatusInternalServerError, "invalid app policy")
+					return true
+				}
+
+				if strings.HasPrefix(r.URL.Path, "/_query") || strings.HasPrefix(r.URL.Path, "/api/governance/envelope") {
+					s.responder.Error(w, http.StatusForbidden, "external apps cannot access privileged endpoints")
+					return true
+				}
+
+				if err := s.enforceAppPolicy(r, &policy, appID); err != nil {
+					s.logger.Warn("App policy enforcement failed", "app_id", appID, "error", err)
+					s.responder.Error(w, http.StatusForbidden, err.Error())
+					return true
+				}
+
+				ctx := context.WithValue(r.Context(), appIDKey, appID)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // getOrCreateLimiter returns a rate limiter for the given app ID, creating one if needed.
@@ -604,7 +674,7 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		jwt, err := ParseAndVerifyJWT(tokenString, s.jwks, s.jwtRole)
+		jwt, err := ParseAndVerifyJWT(tokenString, s.jwks, s.jwtRole, s.jwtIssuer, s.jwtAudience)
 		if err != nil {
 			s.logger.Warn("JWT validation failed", "error", err)
 			s.responder.Error(w, http.StatusUnauthorized, "invalid JWT token")

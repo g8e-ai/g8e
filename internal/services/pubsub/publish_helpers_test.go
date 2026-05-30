@@ -148,6 +148,36 @@ func TestPublishLFAATypedResponseTo(t *testing.T) {
 		publishLFAATypedResponseTo(context.Background(), client, cfg, logger, msg, constants.Event.Operator.Command.Completed, payload)
 		// Should log error and not panic
 	})
+
+	t.Run("handles publish error gracefully", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		client.SetPublishError(true)
+
+		msg := &PubSubCommandMessage{
+			ID:                "msg-1",
+			EventType:         constants.Event.Operator.Command.Requested,
+			CaseID:            "case-1",
+			InvestigationID:   "investigation-1",
+			OperatorSessionID: "session-1",
+			WebSessionID:      "web-session-1",
+			CLISessionID:      "cli-session-1",
+			Payload: mustMarshalProto(t, &operatorv1.CommandRequested{
+				Command:     "ls -la",
+				ExecutionId: "exec-123",
+			}),
+		}
+
+		payload := &operatorv1.CommandResult{
+			ExecutionId: "exec-123",
+			Status:      operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		}
+
+		publishLFAATypedResponseTo(context.Background(), client, cfg, logger, msg, constants.Event.Operator.Command.Completed, payload)
+		// Should log error and not panic
+	})
 }
 
 func TestPublishLFAAErrorTo(t *testing.T) {
@@ -173,5 +203,27 @@ func TestPublishLFAAErrorTo(t *testing.T) {
 		published := client.LastPublished()
 		require.NotNil(t, published)
 		assert.NotEmpty(t, published.Data)
+	})
+
+	t.Run("handles publish error gracefully", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		client.SetPublishError(true)
+
+		msg := &PubSubCommandMessage{
+			ID:                "msg-1",
+			EventType:         constants.Event.Operator.Command.Requested,
+			CaseID:            "case-1",
+			InvestigationID:   "investigation-1",
+			OperatorSessionID: "session-1",
+			WebSessionID:      "web-session-1",
+			CLISessionID:      "cli-session-1",
+			Payload:           []byte("invalid protobuf"),
+		}
+
+		publishLFAAErrorTo(context.Background(), client, cfg, logger, msg, constants.Event.Operator.Command.Failed, "test error")
+		// Should log error and not panic
 	})
 }

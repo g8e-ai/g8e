@@ -17,6 +17,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
@@ -428,4 +429,319 @@ func TestCompositeL3Verifier_DelegatesToPasskey(t *testing.T) {
 	require.Error(t, err)
 	require.False(t, ok)
 	require.Contains(t, err.Error(), "failed to parse credential assertion")
+}
+
+func TestVerifyCLICertificate(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	dbDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	userSvc := NewUserService(db, logger)
+	sessionSvc := NewSessionService(db, logger)
+	notary := NewCLIL3Notary(db, nil, logger, userSvc, sessionSvc)
+
+	t.Run("nil certificate", func(t *testing.T) {
+		t.Parallel()
+		err := notary.VerifyCLICertificate(nil, "cli-session-123", "user-123")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "certificate is nil")
+	})
+
+	t.Run("expired certificate", func(t *testing.T) {
+		t.Parallel()
+		priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		template := x509.Certificate{
+			SerialNumber: big.NewInt(1),
+			Subject: pkix.Name{
+				CommonName: "test-cert",
+			},
+			NotBefore: time.Now().Add(-48 * time.Hour),
+			NotAfter:  time.Now().Add(-24 * time.Hour),
+		}
+
+		certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+		require.NoError(t, err)
+
+		cert, err := x509.ParseCertificate(certBytes)
+		require.NoError(t, err)
+
+		err = notary.VerifyCLICertificate(cert, "cli-session-123", "user-123")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "certificate expired")
+	})
+
+	t.Run("certificate not yet valid", func(t *testing.T) {
+		t.Parallel()
+		priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		template := x509.Certificate{
+			SerialNumber: big.NewInt(1),
+			Subject: pkix.Name{
+				CommonName: "test-cert",
+			},
+			NotBefore: time.Now().Add(24 * time.Hour),
+			NotAfter:  time.Now().Add(48 * time.Hour),
+		}
+
+		certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+		require.NoError(t, err)
+
+		cert, err := x509.ParseCertificate(certBytes)
+		require.NoError(t, err)
+
+		err = notary.VerifyCLICertificate(cert, "cli-session-123", "user-123")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "certificate not yet valid")
+	})
+
+	t.Run("missing SPIFFE URI SAN", func(t *testing.T) {
+		t.Parallel()
+		priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		template := x509.Certificate{
+			SerialNumber: big.NewInt(1),
+			Subject: pkix.Name{
+				CommonName: "test-cert",
+			},
+			NotBefore: time.Now(),
+			NotAfter:  time.Now().Add(24 * time.Hour),
+			URIs:      []*url.URL{},
+		}
+
+		certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+		require.NoError(t, err)
+
+		cert, err := x509.ParseCertificate(certBytes)
+		require.NoError(t, err)
+
+		err = notary.VerifyCLICertificate(cert, "cli-session-123", "user-123")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "SPIFFE URI SAN does not match")
+	})
+
+	t.Run("valid certificate with matching SPIFFE URI", func(t *testing.T) {
+		t.Parallel()
+		priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		cliURI, err := url.Parse("spiffe://g8e.local/cli/user-123/cli-session-456")
+		require.NoError(t, err)
+
+		template := x509.Certificate{
+			SerialNumber: big.NewInt(1),
+			Subject: pkix.Name{
+				CommonName: "test-cli-cert",
+			},
+			NotBefore: time.Now(),
+			NotAfter:  time.Now().Add(24 * time.Hour),
+			URIs:      []*url.URL{cliURI},
+		}
+
+		certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+		require.NoError(t, err)
+
+		cert, err := x509.ParseCertificate(certBytes)
+		require.NoError(t, err)
+
+		err = notary.VerifyCLICertificate(cert, "cli-session-456", "user-123")
+		require.NoError(t, err)
+	})
+}
+
+func TestVerifyCertificate(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	dbDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	userSvc := NewUserService(db, logger)
+	sessionSvc := NewSessionService(db, logger)
+	notary := NewCLIL3Notary(db, nil, logger, userSvc, sessionSvc)
+
+	t.Run("PKI authority not configured", func(t *testing.T) {
+		t.Parallel()
+		priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		template := x509.Certificate{
+			SerialNumber: big.NewInt(1),
+			Subject: pkix.Name{
+				CommonName: "test-cert",
+			},
+			NotBefore: time.Now(),
+			NotAfter:  time.Now().Add(24 * time.Hour),
+		}
+
+		certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+		require.NoError(t, err)
+
+		cert, err := x509.ParseCertificate(certBytes)
+		require.NoError(t, err)
+
+		err = notary.VerifyCertificate(cert)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "PKI authority not configured")
+	})
+}
+
+func TestCreateL3ProofFromCert(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil certificate", func(t *testing.T) {
+		t.Parallel()
+		proof := CreateL3ProofFromCert(nil)
+		require.Nil(t, proof)
+	})
+
+	t.Run("valid certificate", func(t *testing.T) {
+		t.Parallel()
+		priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		template := x509.Certificate{
+			SerialNumber: big.NewInt(1),
+			Subject: pkix.Name{
+				CommonName: "test-cert",
+			},
+			NotBefore: time.Now(),
+			NotAfter:  time.Now().Add(24 * time.Hour),
+		}
+
+		certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+		require.NoError(t, err)
+
+		cert, err := x509.ParseCertificate(certBytes)
+		require.NoError(t, err)
+
+		proof := CreateL3ProofFromCert(cert)
+		require.NotNil(t, proof)
+		require.NotEmpty(t, proof.MtlsCertFingerprint)
+		require.Len(t, proof.MtlsCertFingerprint, 64) // SHA-256 hex encoded
+	})
+}
+
+func TestCreateL3ProofFromTLSState(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil TLS state", func(t *testing.T) {
+		t.Parallel()
+		proof := CreateL3ProofFromTLSState(nil)
+		require.Nil(t, proof)
+	})
+
+	t.Run("TLS state with no peer certificates", func(t *testing.T) {
+		t.Parallel()
+		tlsState := &tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{},
+		}
+		proof := CreateL3ProofFromTLSState(tlsState)
+		require.Nil(t, proof)
+	})
+
+	t.Run("TLS state with peer certificate", func(t *testing.T) {
+		t.Parallel()
+		priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		template := x509.Certificate{
+			SerialNumber: big.NewInt(1),
+			Subject: pkix.Name{
+				CommonName: "test-cert",
+			},
+			NotBefore: time.Now(),
+			NotAfter:  time.Now().Add(24 * time.Hour),
+		}
+
+		certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+		require.NoError(t, err)
+
+		cert, err := x509.ParseCertificate(certBytes)
+		require.NoError(t, err)
+
+		tlsState := &tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{cert},
+		}
+		proof := CreateL3ProofFromTLSState(tlsState)
+		require.NotNil(t, proof)
+		require.NotEmpty(t, proof.MtlsCertFingerprint)
+	})
+}
+
+func TestParseSPIFFEURIFromCert(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil certificate", func(t *testing.T) {
+		t.Parallel()
+		uri, err := ParseSPIFFEURIFromCert(nil)
+		require.Error(t, err)
+		require.Nil(t, uri)
+		require.Contains(t, err.Error(), "certificate is nil")
+	})
+
+	t.Run("certificate with no SPIFFE URI", func(t *testing.T) {
+		t.Parallel()
+		priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		template := x509.Certificate{
+			SerialNumber: big.NewInt(1),
+			Subject: pkix.Name{
+				CommonName: "test-cert",
+			},
+			NotBefore: time.Now(),
+			NotAfter:  time.Now().Add(24 * time.Hour),
+			URIs:      []*url.URL{},
+		}
+
+		certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+		require.NoError(t, err)
+
+		cert, err := x509.ParseCertificate(certBytes)
+		require.NoError(t, err)
+
+		uri, err := ParseSPIFFEURIFromCert(cert)
+		require.Error(t, err)
+		require.Nil(t, uri)
+		require.Contains(t, err.Error(), "no SPIFFE URI found")
+	})
+
+	t.Run("certificate with SPIFFE URI", func(t *testing.T) {
+		t.Parallel()
+		priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		spiffeURI, err := url.Parse("spiffe://g8e.local/cli/user-123/cli-session-456")
+		require.NoError(t, err)
+
+		template := x509.Certificate{
+			SerialNumber: big.NewInt(1),
+			Subject: pkix.Name{
+				CommonName: "test-cert",
+			},
+			NotBefore: time.Now(),
+			NotAfter:  time.Now().Add(24 * time.Hour),
+			URIs:      []*url.URL{spiffeURI},
+		}
+
+		certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+		require.NoError(t, err)
+
+		cert, err := x509.ParseCertificate(certBytes)
+		require.NoError(t, err)
+
+		uri, err := ParseSPIFFEURIFromCert(cert)
+		require.NoError(t, err)
+		require.NotNil(t, uri)
+		require.Equal(t, "spiffe", uri.Scheme)
+		require.Equal(t, "g8e.local", uri.Host)
+	})
 }

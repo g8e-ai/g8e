@@ -88,6 +88,11 @@ target/
 
 # --- g8e Specific Binaries ---
 buf
+# Go binaries in cmd/ directories
+cmd/g8ea/g8ea
+cmd/g8eo/g8eo
+cmd/chaos_tester/chaos_tester
+cmd/auditor/auditor
 
 # --- Build-time artifacts ---
 # Temporary build directory for docs embedding

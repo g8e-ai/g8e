@@ -1,6 +1,5 @@
 version: "2"
 run:
-  modules-download-mode: readonly
   allow-parallel-runners: true
 linters:
   default: none

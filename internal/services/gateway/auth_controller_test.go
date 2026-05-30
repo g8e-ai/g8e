@@ -15,16 +15,20 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/responder"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
@@ -66,7 +70,7 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
 	resp := responder.New(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "")
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "", "", "")
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
@@ -98,7 +102,7 @@ func TestHandleBootstrap(t *testing.T) {
 		req.RemoteAddr = "127.0.0.1:12345"
 		rr := httptest.NewRecorder()
 
-		c.handleBootstrap(rr, req)
+		c.handlePublicAuthBootstrap(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 		var resp map[string]interface{}
@@ -130,7 +134,7 @@ func TestHandleBootstrap(t *testing.T) {
 		req.RemoteAddr = "192.168.1.1:12345"
 		rr := httptest.NewRecorder()
 
-		c.handleBootstrap(rr, req)
+		c.handlePublicAuthBootstrap(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
 		assert.JSONEq(t, `{"error":"CSR auto-issue only available over loopback"}`, rr.Body.String())
@@ -156,7 +160,7 @@ func TestHandleBootstrap(t *testing.T) {
 		req.RemoteAddr = "127.0.0.1:12345"
 		rr := httptest.NewRecorder()
 
-		c.handleBootstrap(rr, req)
+		c.handlePublicAuthBootstrap(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 		var resp map[string]interface{}
@@ -185,7 +189,7 @@ func TestHandleBootstrap(t *testing.T) {
 		req.RemoteAddr = "127.0.0.1:12345"
 		rr := httptest.NewRecorder()
 
-		c.handleBootstrap(rr, req)
+		c.handlePublicAuthBootstrap(rr, req)
 
 		assert.Equal(t, http.StatusConflict, rr.Code)
 		assert.JSONEq(t, `{"error":"bootstrap user is disabled, cannot rotate"}`, rr.Body.String())
@@ -203,7 +207,7 @@ func TestHandleBootstrap(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", bytes.NewReader(b))
 		rr := httptest.NewRecorder()
 
-		c.handleBootstrap(rr, req)
+		c.handlePublicAuthBootstrap(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
 		assert.JSONEq(t, `{"error":"bootstrap only available for initial setup"}`, rr.Body.String())
@@ -240,5 +244,1094 @@ func TestHandleBootstrapStatus(t *testing.T) {
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.Equal(t, true, resp["bootstrapped"])
+	})
+}
+
+func TestHandleAuthPasskeysRegisterChallenge(t *testing.T) {
+	t.Run("Success - valid request", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		body := map[string]string{
+			"user_id":   user.ID,
+			"user_name": "test-user",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.NotEmpty(t, resp["options"])
+	})
+
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys/register/challenge", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/challenge", strings.NewReader("{invalid}"))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("Failure - missing user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{
+			"user_name": "test-user",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user_id required")
+	})
+
+	t.Run("Success - JIT route with first credential", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		body := map[string]string{
+			"user_id":   user.ID,
+			"user_name": "test-user",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/jit-register/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Failure - JIT route with existing credentials", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		// Add a fake credential to simulate existing credentials
+		user.PasskeyCredentials = []models.PasskeyCredential{{ID: []byte("existing-cred")}}
+		updatedUser, _ := json.Marshal(user)
+		c.db.DocSet("users", user.ID, updatedUser)
+
+		body := map[string]string{
+			"user_id":   user.ID,
+			"user_name": "test-user",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/jit-register/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "first-credential registration only")
+	})
+
+	t.Run("Success - session context user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		body := map[string]string{
+			"user_id":   "",
+			"user_name": "test-user",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/challenge", bytes.NewReader(b))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Failure - session user_id mismatch", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		body := map[string]string{
+			"user_id":   "other-user-id",
+			"user_name": "test-user",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/challenge", bytes.NewReader(b))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user_id mismatch")
+	})
+}
+
+func TestHandleAuthPasskeysRegisterVerify(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys/register/verify", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRegisterVerify(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/verify", strings.NewReader("{invalid}"))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRegisterVerify(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("Failure - missing user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/verify", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRegisterVerify(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user_id required")
+	})
+
+	t.Run("Failure - JIT route with existing credentials", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		// Add a fake credential to simulate existing credentials
+		user.PasskeyCredentials = []models.PasskeyCredential{{ID: []byte("existing-cred")}}
+		updatedUser, _ := json.Marshal(user)
+		c.db.DocSet("users", user.ID, updatedUser)
+
+		body := map[string]string{
+			"user_id": user.ID,
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/jit-register/verify", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRegisterVerify(rr, req)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "first-credential registration only")
+	})
+}
+
+func TestHandleAuthPasskeysAuthenticateChallenge(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys/authenticate/challenge", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysAuthenticateChallenge(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/challenge", strings.NewReader("{invalid}"))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysAuthenticateChallenge(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("Failure - missing user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysAuthenticateChallenge(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user_id required")
+	})
+
+	t.Run("Failure - no passkeys registered", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		body := map[string]string{
+			"user_id": user.ID,
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysAuthenticateChallenge(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.False(t, resp["success"].(bool))
+		assert.Contains(t, resp["error"].(string), "Found no credentials")
+	})
+
+	t.Run("Success - session context user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		body := map[string]string{
+			"user_id": "",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/challenge", bytes.NewReader(b))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysAuthenticateChallenge(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Failure - session user_id mismatch", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		body := map[string]string{
+			"user_id": "other-user-id",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/challenge", bytes.NewReader(b))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysAuthenticateChallenge(rr, req)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user_id mismatch")
+	})
+}
+
+func TestHandleAuthPasskeysAuthenticateVerify(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys/authenticate/verify", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysAuthenticateVerify(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/verify", strings.NewReader("{invalid}"))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysAuthenticateVerify(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("Failure - missing user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/verify", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysAuthenticateVerify(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user_id required")
+	})
+
+	t.Run("Success - session context user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		body := map[string]string{
+			"user_id": "",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/verify", bytes.NewReader(b))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysAuthenticateVerify(rr, req)
+
+		// Will fail verification since no real assertion response, but should get past validation
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Failure - session user_id mismatch", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		body := map[string]string{
+			"user_id": "other-user-id",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/verify", bytes.NewReader(b))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysAuthenticateVerify(rr, req)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user_id mismatch")
+	})
+}
+
+func TestHandleAuthPasskeys(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeys(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - missing user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeys(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user_id required")
+	})
+
+	t.Run("Success - list credentials", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys?user_id="+user.ID, nil)
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeys(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		// Credentials may be nil or empty slice when no credentials exist
+		creds, ok := resp["credentials"]
+		assert.True(t, ok)
+		if creds != nil {
+			assert.IsType(t, []interface{}{}, creds)
+		}
+	})
+}
+
+func TestHandleAuthPasskeysRevoke(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys/cred-id", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRevoke(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - missing user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/passkeys/cred-id", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRevoke(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user_id required")
+	})
+
+	t.Run("Failure - missing credential_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/passkeys/?user_id="+user.ID, nil)
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRevoke(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "credential_id required")
+	})
+
+	t.Run("Success - revoke credential", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/passkeys/test-cred-id?user_id="+user.ID, nil)
+		rr := httptest.NewRecorder()
+
+		c.handleAuthPasskeysRevoke(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.False(t, resp["found"].(bool)) // No credential exists
+	})
+}
+
+func TestHandleApprovalAction(t *testing.T) {
+	t.Run("Failure - unauthorized", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/txhash123", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleApprovalAction(rr, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.Contains(t, rr.Body.String(), "unauthorized")
+	})
+
+	t.Run("Failure - transaction not found", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/nonexistent-tx", nil)
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleApprovalAction(rr, req)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+		assert.Contains(t, rr.Body.String(), "transaction not found")
+	})
+}
+
+func TestHandleApprovalChallenge(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/txhash123/challenge", nil)
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleApprovalChallenge(rr, req, "txhash123", user.ID)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - transaction not found", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/nonexistent/challenge", nil)
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleApprovalChallenge(rr, req, "nonexistent", user.ID)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+		assert.Contains(t, rr.Body.String(), "transaction not found")
+	})
+
+	t.Run("Failure - transaction belongs to another user", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user1, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+		user2, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		// Create a suspended transaction for user1 via DB
+		txHash := "txhash123"
+		suspendedTx := &models.SuspendedTransaction{
+			TransactionHash: txHash,
+			UserID:          user1.ID,
+			ToolName:        "test-tool",
+			ToolArguments:   []byte("{}"),
+			ExpiresAt:       time.Now().Add(5 * time.Minute),
+		}
+		c.db.StoreSuspendedTransaction(suspendedTx)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/"+txHash+"/challenge", nil)
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user2.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleApprovalChallenge(rr, req, txHash, user2.ID)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "transaction belongs to another user")
+	})
+}
+
+func TestHandleApprovalVerify(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/txhash123/verify", nil)
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleApprovalVerify(rr, req, "txhash123", user.ID)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - transaction not found", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/nonexistent/verify", strings.NewReader("{}"))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleApprovalVerify(rr, req, "nonexistent", user.ID)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+		assert.Contains(t, rr.Body.String(), "transaction not found")
+	})
+
+	t.Run("Failure - invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		txHash := "txhash123"
+		suspendedTx := &models.SuspendedTransaction{
+			TransactionHash: txHash,
+			UserID:          user.ID,
+			ToolName:        "test-tool",
+			ToolArguments:   []byte("{}"),
+			ExpiresAt:       time.Now().Add(5 * time.Minute),
+		}
+		c.db.StoreSuspendedTransaction(suspendedTx)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash+"/verify", strings.NewReader("{invalid}"))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleApprovalVerify(rr, req, txHash, user.ID)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+}
+
+func TestHandleCLIApproval(t *testing.T) {
+	t.Run("Failure - transaction not found", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		body := map[string]string{
+			"cli_signature":         "sig123",
+			"mtls_cert_fingerprint": "fp123",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/nonexistent", bytes.NewReader(b))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIApproval(rr, req, "nonexistent", user.ID)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+		assert.Contains(t, rr.Body.String(), "transaction not found")
+	})
+
+	t.Run("Failure - missing cli_signature", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		txHash := "txhash123"
+		suspendedTx := &models.SuspendedTransaction{
+			TransactionHash: txHash,
+			UserID:          user.ID,
+			ToolName:        "test-tool",
+			ToolArguments:   []byte("{}"),
+			ExpiresAt:       time.Now().Add(5 * time.Minute),
+		}
+		c.db.StoreSuspendedTransaction(suspendedTx)
+
+		body := map[string]string{
+			"mtls_cert_fingerprint": "fp123",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash, bytes.NewReader(b))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIApproval(rr, req, txHash, user.ID)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "cli_signature required")
+	})
+
+	t.Run("Failure - missing mtls_cert_fingerprint", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		txHash := "txhash123"
+		suspendedTx := &models.SuspendedTransaction{
+			TransactionHash: txHash,
+			UserID:          user.ID,
+			ToolName:        "test-tool",
+			ToolArguments:   []byte("{}"),
+			ExpiresAt:       time.Now().Add(5 * time.Minute),
+		}
+		c.db.StoreSuspendedTransaction(suspendedTx)
+
+		body := map[string]string{
+			"cli_signature": "sig123",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash, bytes.NewReader(b))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIApproval(rr, req, txHash, user.ID)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "mtls_cert_fingerprint required")
+	})
+}
+
+func TestHandleApprovalPage(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/approve/txhash123", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleApprovalPage(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - missing transaction hash", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approve/", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleApprovalPage(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "transaction hash required")
+	})
+
+	t.Run("Failure - transaction not found", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approve/nonexistent", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleApprovalPage(rr, req)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+		assert.Contains(t, rr.Body.String(), "transaction not found")
+	})
+
+	t.Run("Success - returns HTML page", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		txHash := "txhash123"
+		suspendedTx := &models.SuspendedTransaction{
+			TransactionHash: txHash,
+			UserID:          user.ID,
+			ToolName:        "test-tool",
+			ToolArguments:   []byte(`{"arg":"value"}`),
+			ExpiresAt:       time.Now().Add(5 * time.Minute),
+		}
+		c.db.StoreSuspendedTransaction(suspendedTx)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approve/"+txHash, nil)
+		rr := httptest.NewRecorder()
+
+		c.handleApprovalPage(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, "text/html; charset=utf-8", rr.Header().Get("Content-Type"))
+		assert.Contains(t, rr.Body.String(), "Approve Transaction")
+		assert.Contains(t, rr.Body.String(), txHash)
+		assert.Contains(t, rr.Body.String(), "test-tool")
+	})
+}
+
+func TestHandleListSuspendedTransactions(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleListSuspendedTransactions(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - unauthorized", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleListSuspendedTransactions(rr, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.Contains(t, rr.Body.String(), "unauthorized")
+	})
+
+	t.Run("Success - empty list", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals", nil)
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleListSuspendedTransactions(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		// When empty, transactions may be null or empty array
+		transactions, ok := resp["transactions"].([]interface{})
+		if !ok {
+			// If null, that's acceptable for empty list
+			assert.Nil(t, resp["transactions"])
+		} else {
+			assert.Len(t, transactions, 0)
+		}
+	})
+
+	t.Run("Success - with query user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals?user_id="+user.ID, nil)
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleListSuspendedTransactions(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		// When empty, transactions may be null or empty array
+		transactions, ok := resp["transactions"].([]interface{})
+		if !ok {
+			// If null, that's acceptable for empty list
+			assert.Nil(t, resp["transactions"])
+		} else {
+			assert.Len(t, transactions, 0)
+		}
+	})
+}
+
+func TestHandleUserMe(t *testing.T) {
+	t.Run("Failure - missing user_id in context", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleUserMe(rr, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.Contains(t, rr.Body.String(), "unauthorized")
+	})
+
+	t.Run("Success - returns user data", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleUserMe(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.NotNil(t, resp["user"])
+	})
+
+	t.Run("Failure - user not found", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, "nonexistent-user"))
+		rr := httptest.NewRecorder()
+
+		c.handleUserMe(rr, req)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user not found")
+	})
+}
+
+func TestHandleWebSession(t *testing.T) {
+	t.Run("Failure - missing user_id in context", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/websession", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleWebSession(rr, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.Contains(t, rr.Body.String(), "unauthorized")
+	})
+
+	t.Run("Success - returns session data with cookie", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/websession", nil)
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req.AddCookie(&http.Cookie{Name: "g8e_session", Value: "test-session-id"})
+		rr := httptest.NewRecorder()
+
+		c.handleWebSession(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.Equal(t, user.ID, resp["user_id"])
+		assert.Equal(t, "test-session-id", resp["web_session_id"])
+	})
+
+	t.Run("Success - returns session data without cookie", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/websession", nil)
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleWebSession(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.Equal(t, user.ID, resp["user_id"])
+		assert.Equal(t, "", resp["web_session_id"])
+	})
+}
+
+func TestHandleUsers(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleUsers(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/users", strings.NewReader("{invalid}"))
+		rr := httptest.NewRecorder()
+
+		c.handleUsers(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid JSON")
+	})
+
+	t.Run("Success - creates user", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{
+			"name": "Test User",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleUsers(rr, req)
+
+		assert.Equal(t, http.StatusCreated, rr.Code)
+		var resp map[string]interface{}
+		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.NotEmpty(t, resp["user_id"])
+	})
+}
+
+func TestHandlePublicAuthLoginVerify(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/login/verify", nil)
+		rr := httptest.NewRecorder()
+
+		c.handlePublicAuthLoginVerify(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login/verify", strings.NewReader("{invalid}"))
+		rr := httptest.NewRecorder()
+
+		c.handlePublicAuthLoginVerify(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid JSON")
+	})
+
+	t.Run("Failure - missing user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login/verify", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handlePublicAuthLoginVerify(rr, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user not found")
+	})
+}
+
+func TestHandlePublicAuthLogout(t *testing.T) {
+	t.Run("Success - clears cookie", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+		req.AddCookie(&http.Cookie{Name: "g8e_session", Value: "test-session"})
+		rr := httptest.NewRecorder()
+
+		c.handlePublicAuthLogout(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		cookies := rr.Result().Cookies()
+		assert.Len(t, cookies, 1)
+		assert.Equal(t, "g8e_session", cookies[0].Name)
+		assert.Equal(t, -1, cookies[0].MaxAge)
+	})
+
+	t.Run("Success - no cookie present", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+		rr := httptest.NewRecorder()
+
+		c.handlePublicAuthLogout(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 }

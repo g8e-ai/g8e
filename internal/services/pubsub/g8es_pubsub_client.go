@@ -45,9 +45,9 @@ type PubSubClient interface {
 // It provides Subscribe (receive) and Publish (send) over the channel
 // naming convention:
 //
-//	cmd:{operator_id}:{operator_session_id}       (g8ee → Operator)
-//	results:{operator_id}:{operator_session_id}    (Operator → g8ee)
-//	heartbeat:{operator_id}:{operator_session_id}  (Operator → g8ee)
+//	cmd:{operator_id}:{operator_session_id}       (Agent → Operator)
+//	results:{operator_id}:{operator_session_id}    (Operator → Agent)
+//	heartbeat:{operator_id}:{operator_session_id}  (Operator → Agent)
 
 // pubSubWriteTimeout bounds every WebSocket write so a half-open TCP
 // connection cannot block publishes (including heartbeats) indefinitely while

@@ -267,7 +267,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		assert.Equal(t, "case-456", env.CaseId)
 		assert.Equal(t, "msg-123", env.Id)
 
-		// Verify payload_type was injected into IntentData for g8ee Pydantic
+		// Verify payload_type was injected into IntentData for agent Pydantic
 		require.NotNil(t, env.IntentData)
 		assert.Equal(t, "execution_result", env.IntentData.Fields["payload_type"].GetStringValue())
 

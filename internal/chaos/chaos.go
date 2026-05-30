@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// chaos_tester generates a realistic distribution of governance events against
+// chaos generates a realistic distribution of governance events against
 // the local g8e audit stack.  It bypasses network/TLS by driving the
 // TransactionVerifier + Actuator stack directly in-process, which is the same
 // path exercised by the live operator when payloads arrive over pub/sub.
@@ -21,18 +21,12 @@
 //	70%  Good Actor  – valid sig, safe intent (FS_LIST)       → EXECUTED
 //	20%  Prompt Inj  – valid sig, L1 forbidden cmd (sudo/rm)  → REJECTED (L1)
 //	10%  MitM        – corrupted transaction hash              → REJECTED (hash mismatch)
-//
-// Usage:
-//
-//	cd /home/bob/g8e
-//	go run ./cmd/chaos_tester [--count=100] [--data-dir=.g8e/data] [--pki-dir=.g8e/pki]
-package main
+package chaos
 
 import (
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
@@ -64,11 +58,12 @@ const (
 
 // ── flags ─────────────────────────────────────────────────────────────────────
 
-var (
-	flagCount   = flag.Int("count", 100, "number of payloads to fire")
-	flagDataDir = flag.String("data-dir", "", "audit vault data dir (default: <project-root>/.g8e/test-vault/<timestamp>)")
-	flagPKIDir  = flag.String("pki-dir", "", "PKI dir for trusted_signers (default: <cwd>/.g8e/pki)")
-)
+// Config holds the configuration for chaos testing
+type Config struct {
+	Count   int
+	DataDir string
+	PKIDir  string
+}
 
 // ── payload categories ────────────────────────────────────────────────────────
 
@@ -179,7 +174,7 @@ func signedEnvelope(
 		ProtocolVersion:   "1.0",
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(30 * time.Minute)), // Increased to 30m for chaos runs
-		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
+		SourceComponent:   commonv1.Component_COMPONENT_AGENT,
 		OperatorId:        "chaos-operator",
 		OperatorSessionId: sessionID,
 		ActionType:        actionType,
@@ -303,7 +298,7 @@ func (c *chaosExecutionHandler) ExecuteVerifiedTransaction(_ context.Context, ev
 	if eventType == constants.Event.Operator.FileEdit.Requested && c.ledger != nil {
 		req := &operatorv1.FileEditRequested{}
 		if err := proto.Unmarshal(msg.Payload, req); err == nil {
-			slog.Info("Chaos simulating file mutation in ledger", "file", req.FilePath)
+			slog.Info("Chaos simulating file mutation in ledger", "filepath", req.FilePath, "category", string(constants.ToolDisplayCategoryFile))
 			// Simulate the two-phase ledger commit
 			res, err := c.ledger.LedgerFileWrite(msg.OperatorSessionID, req.FilePath)
 			if err != nil {
@@ -317,7 +312,7 @@ func (c *chaosExecutionHandler) ExecuteVerifiedTransaction(_ context.Context, ev
 				if err != nil {
 					slog.Error("CompleteMirrorWrite failed", "error", err)
 				} else {
-					slog.Info("Chaos ledger mutation complete", "file", req.FilePath)
+					slog.Info("Chaos ledger mutation complete", "filepath", req.FilePath, "category", string(constants.ToolDisplayCategoryFile))
 					// Note: State root updates disabled in chaos test to avoid race conditions
 					// that cause hash verification failures in parallel execution
 					count := c.mutationCount.Add(1)
@@ -344,9 +339,8 @@ type counters struct {
 
 // ── main ──────────────────────────────────────────────────────────────────────
 
-func main() {
-	flag.Parse()
-
+// Run executes the chaos test with the given configuration
+func Run(cfg Config) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	cwd, err := os.Getwd()
@@ -363,7 +357,7 @@ func main() {
 	}
 
 	// Use shared test vault directory for persistent inspection
-	dataDir := *flagDataDir
+	dataDir := cfg.DataDir
 	var testVaultDir string
 	if dataDir == "" {
 		testVaultDir = filepath.Join(projectRoot, ".g8e", "test-vault")
@@ -387,13 +381,13 @@ func main() {
 		}
 	}
 
-	pkiDir := *flagPKIDir
+	pkiDir := cfg.PKIDir
 	if pkiDir == "" {
 		pkiDir = filepath.Join(projectRoot, ".g8e", "pki")
 	}
 
 	logArgs := []any{
-		"count", *flagCount,
+		"count", cfg.Count,
 		"data_dir", dataDir,
 		"pki_dir", pkiDir,
 		"project_root", projectRoot,
@@ -504,7 +498,7 @@ func main() {
 
 	// ── phase 1: generate and count payloads by category ───────────────────────
 	r := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())) //nolint:gosec // deterministic chaos testing
-	payloads := make([]category, *flagCount)
+	payloads := make([]category, cfg.Count)
 	var generatedCounters struct {
 		goodActor    int
 		promptInj    int
@@ -512,7 +506,7 @@ func main() {
 		fileMutation int
 	}
 
-	for i := 0; i < *flagCount; i++ {
+	for i := 0; i < cfg.Count; i++ {
 		cat := pickCategory(r)
 		payloads[i] = cat
 		switch cat {
@@ -529,7 +523,7 @@ func main() {
 
 	// Print expected outcomes based on generated categories
 	fmt.Printf("\n=== Phase 1: Payload Generation Complete ===\n")
-	fmt.Printf("Total payloads generated : %d\n", *flagCount)
+	fmt.Printf("Total payloads generated : %d\n", cfg.Count)
 	fmt.Printf("\n")
 	fmt.Printf("Expected Outcomes:\n")
 	fmt.Printf("  SAFE_EXECUTIONS (catGoodActor)    : %d → Expected: EXECUTED\n", generatedCounters.goodActor)
@@ -541,9 +535,9 @@ func main() {
 	expectedExecuted := generatedCounters.goodActor + generatedCounters.fileMutation
 	expectedL1Blocked := generatedCounters.promptInj
 	expectedHashFail := generatedCounters.mitM
-	fmt.Printf("  EXECUTED       : %d (%.0f%%)\n", expectedExecuted, pct(int64(expectedExecuted), int64(*flagCount)))
-	fmt.Printf("  L1_BLOCKED     : %d (%.0f%%)\n", expectedL1Blocked, pct(int64(expectedL1Blocked), int64(*flagCount)))
-	fmt.Printf("  HASH_FAIL      : %d (%.0f%%)\n", expectedHashFail, pct(int64(expectedHashFail), int64(*flagCount)))
+	fmt.Printf("  EXECUTED       : %d (%.0f%%)\n", expectedExecuted, pct(int64(expectedExecuted), int64(cfg.Count)))
+	fmt.Printf("  L1_BLOCKED     : %d (%.0f%%)\n", expectedL1Blocked, pct(int64(expectedL1Blocked), int64(cfg.Count)))
+	fmt.Printf("  HASH_FAIL      : %d (%.0f%%)\n", expectedHashFail, pct(int64(expectedHashFail), int64(cfg.Count)))
 	fmt.Printf("\n")
 	fmt.Printf("=== Phase 2: Running payloads through protocol ===\n")
 
@@ -611,12 +605,12 @@ func main() {
 	}
 	fmt.Printf("------------------------|-------|------------------|--------|----------\n")
 
-	successRate := pct(executed+l1Blocked+hashFail, int64(*flagCount))
+	successRate := pct(executed+l1Blocked+hashFail, int64(cfg.Count))
 	matchTotal := "✓"
-	if int(total) != *flagCount {
+	if int(total) != cfg.Count {
 		matchTotal = "✗"
 	}
-	fmt.Printf("%-23s | %5d | %-16s | %6d | %s (%.0f%% success)\n", "TOTAL", *flagCount, "", int(total), matchTotal, successRate)
+	fmt.Printf("%-23s | %5d | %-16s | %6d | %s (%.0f%% success)\n", "TOTAL", cfg.Count, "", int(total), matchTotal, successRate)
 
 	fmt.Printf("\nNote: Results are probabilistic (~60/20/10/10 distribution) and will vary by run.\n")
 	fmt.Printf("Use './g8e test summary' to see aggregate results across all test runs.\n")

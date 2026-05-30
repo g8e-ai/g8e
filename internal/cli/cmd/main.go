@@ -24,7 +24,7 @@ func Execute() {
 	rootCmd := &cobra.Command{
 		Use:   "g8e",
 		Short: "g8e Platform Manager - CLI for the Governance Gateway and Governed Operator",
-		Long: `g8e is a zero-trust execution substrate for agentic infrastructure.
+		Long: `g8e is a zero-trust execution platform for agentic infrastructure.
 The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
 		CompletionOptions: cobra.CompletionOptions{
 			DisableDefaultCmd: true,
@@ -34,9 +34,12 @@ The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
 	rootCmd.AddCommand(
 		platformCmd(),
 		authCmd(),
+		approveCmd(),
 		dataCmd(),
 		testCmd(),
 		securityCmd(),
+		auditorCmd(),
+		chaosCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {

@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-05-25
+Last Updated: 2026-05-29
 
 g8e tests run directly on the host using real infrastructure. The test environment is the production environment. If it does not work in tests, it will not work in production.
 
@@ -116,9 +116,8 @@ This creates the first user and issues mTLS certificates for the Operator and CL
 Defaults from `protocol/constants/ports.json` (canonical source of truth):
 
 - `8440` - Operator mTLS API and Pub/Sub
-- `8441` - Operator Bootstrap (plain HTTP; device-link enrollment)
+- `8441` - Operator Bootstrap (plain HTTP; CSR signing)
 - `8443` - Operator Public TLS (browser/BYO bootstrap)
-- `8443` - g8ee HTTPS (optional application-layer Engine)
 - `18789` - Insecure MCP Gateway
 
 All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NET_BIND_SERVICE` to the Operator binary or front with an external port redirect.

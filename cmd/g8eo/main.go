@@ -64,7 +64,7 @@ func main() {
 		return
 	}
 
-	// Check for CLI subcommands (platform, apps, auth, data, evals, security, setup, vars)
+	// Check for CLI subcommands (platform, apps, auth, data, evals, security, setup, vars, test)
 	cliSubcommands := map[string]bool{
 		"platform": true,
 		"apps":     true,
@@ -74,6 +74,9 @@ func main() {
 		"security": true,
 		"setup":    true,
 		"vars":     true,
+		"test":     true,
+		"auditor":  true,
+		"chaos":    true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
@@ -141,7 +144,7 @@ func main() {
 	flag.IntVar(&httpPort, "http-port", constants.Ports.OperatorHttps, "HTTPS port for auth/bootstrap via operator proxy (default: from paths.json)")
 	flag.StringVar(&privateKey, "key", "", "Private key")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
-	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: .g8e/pki/g8e-gw-ca-bundle.pem or fetch from /.well-known/g8e/pki/g8e-gw-ca-bundle.pem)")
+	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: .g8e/pki/ca-bundle.pem or fetch from /.well-known/g8e/pki/ca-bundle)")
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory operator was launched from)")
 	flag.BoolVar(&cloudMode, string(constants.OperatorTypeCloud), true, "Cloud mode")
 	flag.StringVar(&cloudProvider, "provider", "", "Cloud provider")
@@ -190,7 +193,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -k, --key <key>         Private key (or set G8E_OPERATOR_PRIVATE_KEY)\n")
 		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running operator\n")
-		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: .g8e/pki/g8e-gw-ca-bundle.pem or fetch from /.well-known/g8e/pki/g8e-gw-ca-bundle.pem)\n")
+		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: .g8e/pki/ca-bundle.pem or fetch from /.well-known/g8e/pki/ca-bundle)\n")
 		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory operator was launched from)\n")
 		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")
 		fmt.Fprintf(os.Stderr, "      --http-port <port>    HTTPS port to dial for auth/bootstrap (default: %d)\n", constants.Ports.OperatorHttps)
@@ -298,12 +301,12 @@ func main() {
 
 	// Load trust bundle for TLS verification. Priority:
 	// 1. Explicit --trust-bundle path
-	// 2. Local PKI directory (.g8e/pki/g8e-gw-ca-bundle.pem)
-	// 3. Fetch from Operator /.well-known/g8e/pki/g8e-gw-ca-bundle.pem endpoint
+	// 2. Local PKI directory (.g8e/pki/ca-bundle.pem)
+	// 3. Fetch from Operator /.well-known/g8e/pki/ca-bundle endpoint
 	trustLoaded := loadTrustBundle(logger, trustBundlePath, workingDir)
 	if !trustLoaded {
 		if endpointURL != "" {
-			trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/g8e-gw-ca-bundle.pem", endpointURL, constants.Ports.OperatorBootstrapHttps)
+			trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/ca-bundle", endpointURL, constants.Ports.OperatorBootstrapHttps)
 			logger.Info("Fetching trust bundle from Operator PKI endpoint", "url", trustURL)
 			if err := certs.FetchAndSetCA(context.Background(), trustURL); err != nil {
 				logger.Error("Failed to fetch trust bundle from Operator", "url", trustURL, string(constants.ConnectionStateError), err)
@@ -808,7 +811,7 @@ func handleVerifyVault(vault *vault.Vault, privateKey []byte, logger *slog.Logge
 // runInsecureMode starts the Operator in INSECURE MCP gateway mode.
 // The Operator connects to an MCP gateway via WebSocket without any governance.
 // This mode bypasses all L1/L2/L3 verification and is DANGEROUS.
-// No g8e infrastructure (g8ee, client) is required.
+// No g8e infrastructure (agent, client) is required.
 func runInsecureMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
@@ -932,24 +935,16 @@ func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID stri
 
 // runMCPServe runs the MCP stdio JSON-RPC proxy to the Operator's mTLS HTTP API.
 func runMCPServe(endpointURL, pkiDir, logLevel string) {
-	// 1. Resolve mTLS certificates
+	// 1. Resolve mTLS certificates - must be explicitly provided via environment variables
 	cliCertFile := os.Getenv("G8E_CLI_CERT")
 	if cliCertFile == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to get user home directory: %v\n", err)
-			os.Exit(1)
-		}
-		cliCertFile = filepath.Join(home, ".g8e", "cli.crt")
+		fmt.Fprintf(os.Stderr, "Error: G8E_CLI_CERT environment variable is required for MCP serve mode\n")
+		os.Exit(1)
 	}
 	cliKeyFile := os.Getenv("G8E_CLI_KEY")
 	if cliKeyFile == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to get user home directory: %v\n", err)
-			os.Exit(1)
-		}
-		cliKeyFile = filepath.Join(home, ".g8e", "cli.key")
+		fmt.Fprintf(os.Stderr, "Error: G8E_CLI_KEY environment variable is required for MCP serve mode\n")
+		os.Exit(1)
 	}
 
 	// 2. Resolve trust bundle

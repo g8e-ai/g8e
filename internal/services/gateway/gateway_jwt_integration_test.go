@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/responder"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
@@ -135,7 +136,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	_, err = userSvc.CreateInvitation("tenant-abc", "user-1234", "bootstrap", []string{"admin"}, 24*time.Hour)
 	require.NoError(t, err)
 	resp := responder.New(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim)
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 	// Apply JWT configuration to AuthService's provider
 
 	sessionSvc := NewSessionService(db, logger)
@@ -171,7 +172,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	cfg.Gateway.RateLimitRPS = 1000
 	cfg.Gateway.RateLimitBurst = 1000
-	ts := httptest.NewServer(h.buildRouter())
+	ts := httptest.NewServer(h.buildPublicRouter())
 	t.Cleanup(func() { ts.Close() })
 
 	// Give the AuthService JWKS provider time to fetch or fetch lazily
@@ -189,7 +190,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	// Call an MCP endpoint that generates an envelope
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/mcp/v1/tools/call", bytes.NewBufferString(reqBody))
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/mcp/tools/call", bytes.NewBufferString(reqBody))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -225,4 +226,418 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	require.NotNil(t, user)
 	assert.Equal(t, "user-1234", user.ID)
 	assert.True(t, user.IsActive())
+}
+
+func TestGateway_JITPasskeyBootstrap(t *testing.T) {
+	privKey, idpServer := setupTestIdP(t)
+
+	cfg := testutil.NewTestConfig(t)
+	cfg.Gateway.JWKSURL = idpServer.URL + "/.well-known/jwks.json"
+	cfg.Gateway.JWTRoleClaim = "roles"
+
+	logger := testutil.NewTestLogger()
+
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	os.RemoveAll(secretsDir)
+	os.MkdirAll(secretsDir, 0755)
+
+	pubsub := NewPubSubBroker(logger)
+	t.Cleanup(func() { pubsub.Close() })
+
+	backend, err := keystore.NewTestBackend()
+	require.NoError(t, err)
+	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+	require.NoError(t, ks.EnsurePermissions())
+	sm := &SecretManager{
+		db:         db.db,
+		secretsDir: secretsDir,
+		logger:     logger,
+		keystore:   ks,
+	}
+
+	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
+	err = pki.EnsurePKI(nil)
+	require.NoError(t, err)
+
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	require.NoError(t, personaSvc.GetOrCreateDefaultPersonas())
+
+	// Create an invitation for JIT provisioning
+	_, err = userSvc.CreateInvitation("tenant-abc", "jit-user-001", "bootstrap", []string{"admin"}, 24*time.Hour)
+	require.NoError(t, err)
+	resp := responder.New(logger)
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
+
+	sessionSvc := NewSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+
+	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
+		Logger:          logger,
+		Responder:       resp,
+		SuspendedStore:  db,
+		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+	})
+
+	mockEnvProc := &mockEnvelopeProcessor{}
+	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
+
+	h := newHTTPHandler(HTTPHandlerDependencies{
+		Cfg:               cfg,
+		Logger:            logger,
+		DB:                db,
+		Pubsub:            pubsub,
+		Auth:              auth,
+		PKI:               pki,
+		SessionSvc:        sessionSvc,
+		Reg:               reg,
+		Passkey:           passkey,
+		UserSvc:           userSvc,
+		Responder:         resp,
+		MCPGateway:        mcpGateway,
+		IsReady:           func() bool { return true },
+		IsGovernanceReady: func() bool { return true },
+	})
+
+	cfg.Gateway.RateLimitRPS = 1000
+	cfg.Gateway.RateLimitBurst = 1000
+	ts := httptest.NewServer(h.buildPublicRouter())
+	t.Cleanup(func() { ts.Close() })
+
+	// Generate a valid JWT for the JIT user
+	claims := map[string]interface{}{
+		"sub":       "jit-user-001",
+		"iss":       "test-idp",
+		"exp":       time.Now().Add(1 * time.Hour).Unix(),
+		"iat":       time.Now().Unix(),
+		"tenant_id": "tenant-abc",
+		"roles":     []string{"admin"},
+	}
+	token := generateSignedJWT(t, privKey, claims)
+
+	t.Run("JIT user with zero credentials can complete register-challenge with valid JWT", func(t *testing.T) {
+		reqBody := `{"user_id":"jit-user-001","user_name":"JIT User"}`
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/auth/passkeys/jit-register/challenge", bytes.NewBufferString(reqBody))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{}
+		res, err := client.Do(req)
+		require.NoError(t, err)
+		defer res.Body.Close()
+
+		assert.Equal(t, http.StatusOK, res.StatusCode, "Should allow first-credential registration via JWT")
+
+		var respBody map[string]interface{}
+		json.NewDecoder(res.Body).Decode(&respBody)
+		assert.True(t, respBody["success"].(bool))
+		assert.NotNil(t, respBody["options"])
+	})
+
+	t.Run("JIT user with zero credentials rejected with expired JWT", func(t *testing.T) {
+		expiredClaims := map[string]interface{}{
+			"sub":       "jit-user-001",
+			"iss":       "test-idp",
+			"exp":       time.Now().Add(-1 * time.Hour).Unix(),
+			"iat":       time.Now().Add(-2 * time.Hour).Unix(),
+			"tenant_id": "tenant-abc",
+			"roles":     []string{"admin"},
+		}
+		expiredToken := generateSignedJWT(t, privKey, expiredClaims)
+
+		reqBody := `{"user_id":"jit-user-001","user_name":"JIT User"}`
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/auth/passkeys/jit-register/challenge", bytes.NewBufferString(reqBody))
+		req.Header.Set("Authorization", "Bearer "+expiredToken)
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{}
+		res, err := client.Do(req)
+		require.NoError(t, err)
+		defer res.Body.Close()
+
+		assert.Equal(t, http.StatusUnauthorized, res.StatusCode, "Should reject expired JWT")
+	})
+
+	t.Run("JIT user with zero credentials rejected with no JWT", func(t *testing.T) {
+		reqBody := `{"user_id":"jit-user-001","user_name":"JIT User"}`
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/auth/passkeys/jit-register/challenge", bytes.NewBufferString(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{}
+		res, err := client.Do(req)
+		require.NoError(t, err)
+		defer res.Body.Close()
+
+		assert.Equal(t, http.StatusUnauthorized, res.StatusCode, "Should reject request without JWT")
+	})
+}
+
+func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
+	privKey, idpServer := setupTestIdP(t)
+
+	cfg := testutil.NewTestConfig(t)
+	cfg.Gateway.JWKSURL = idpServer.URL + "/.well-known/jwks.json"
+	cfg.Gateway.JWTRoleClaim = "roles"
+
+	logger := testutil.NewTestLogger()
+
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	os.RemoveAll(secretsDir)
+	os.MkdirAll(secretsDir, 0755)
+
+	pubsub := NewPubSubBroker(logger)
+	t.Cleanup(func() { pubsub.Close() })
+
+	backend, err := keystore.NewTestBackend()
+	require.NoError(t, err)
+	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+	require.NoError(t, ks.EnsurePermissions())
+	sm := &SecretManager{
+		db:         db.db,
+		secretsDir: secretsDir,
+		logger:     logger,
+		keystore:   ks,
+	}
+
+	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
+	err = pki.EnsurePKI(nil)
+	require.NoError(t, err)
+
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	require.NoError(t, personaSvc.GetOrCreateDefaultPersonas())
+
+	// Create an invitation for JIT provisioning
+	_, err = userSvc.CreateInvitation("tenant-abc", "stepup-user-001", "bootstrap", []string{"admin"}, 24*time.Hour)
+	require.NoError(t, err)
+	resp := responder.New(logger)
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
+
+	sessionSvc := NewSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+
+	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
+		Logger:          logger,
+		Responder:       resp,
+		SuspendedStore:  db,
+		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+	})
+
+	mockEnvProc := &mockEnvelopeProcessor{}
+	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
+
+	h := newHTTPHandler(HTTPHandlerDependencies{
+		Cfg:               cfg,
+		Logger:            logger,
+		DB:                db,
+		Pubsub:            pubsub,
+		Auth:              auth,
+		PKI:               pki,
+		SessionSvc:        sessionSvc,
+		Reg:               reg,
+		Passkey:           passkey,
+		UserSvc:           userSvc,
+		Responder:         resp,
+		MCPGateway:        mcpGateway,
+		IsReady:           func() bool { return true },
+		IsGovernanceReady: func() bool { return true },
+	})
+
+	cfg.Gateway.RateLimitRPS = 1000
+	cfg.Gateway.RateLimitBurst = 1000
+	ts := httptest.NewServer(h.buildPublicRouter())
+	t.Cleanup(func() { ts.Close() })
+
+	// First, JIT provision the user via JWT
+	claims := map[string]interface{}{
+		"sub":       "stepup-user-001",
+		"iss":       "test-idp",
+		"exp":       time.Now().Add(1 * time.Hour).Unix(),
+		"iat":       time.Now().Unix(),
+		"tenant_id": "tenant-abc",
+		"roles":     []string{"admin"},
+	}
+	token := generateSignedJWT(t, privKey, claims)
+
+	// Add a mock passkey credential directly to the user to simulate first credential already registered
+	user, err := userSvc.GetOrCreateBySub("stepup-user-001")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+
+	// Manually add a credential to simulate having already registered one
+	user.PasskeyCredentials = []models.PasskeyCredential{
+		{
+			ID:              []byte("mock-credential-id"),
+			PublicKey:       []byte("mock-public-key"),
+			AttestationType: "none",
+			Authenticator: models.Authenticator{
+				AAGUID:       []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+				SignCount:    0,
+				CloneWarning: false,
+			},
+		},
+	}
+	_, err = userSvc.UpdateUser(user.ID, map[string]interface{}{
+		"passkey_credentials": user.PasskeyCredentials,
+	})
+	require.NoError(t, err)
+
+	t.Run("After one credential exists, JWT-only path is rejected and step-up required", func(t *testing.T) {
+		reqBody := `{"user_id":"stepup-user-001","user_name":"Stepup User"}`
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/auth/passkeys/jit-register/challenge", bytes.NewBufferString(reqBody))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{}
+		res, err := client.Do(req)
+		require.NoError(t, err)
+		defer res.Body.Close()
+
+		assert.Equal(t, http.StatusForbidden, res.StatusCode, "Should reject JWT-only registration when user already has credentials")
+
+		var respBody map[string]interface{}
+		json.NewDecoder(res.Body).Decode(&respBody)
+		assert.Contains(t, respBody["error"], "first-credential registration only")
+	})
+}
+
+func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
+	t.Parallel()
+	privKey, idpServer := setupTestIdP(t)
+	defer idpServer.Close()
+
+	cfg := testutil.NewTestConfig(t)
+	cfg.Gateway.JWKSURL = idpServer.URL + "/.well-known/jwks.json"
+	cfg.Gateway.JWTIssuer = "https://test-idp.example.com"
+	cfg.Gateway.JWTAudience = "g8e-gateway"
+
+	logger := testutil.NewTestLogger()
+
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	os.RemoveAll(secretsDir)
+	os.MkdirAll(secretsDir, 0755)
+
+	backend, err := keystore.NewTestBackend()
+	require.NoError(t, err)
+	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+	require.NoError(t, ks.EnsurePermissions())
+
+	sm, err := NewSecretManager(db.db, secretsDir, logger)
+	require.NoError(t, err)
+
+	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
+	err = pki.EnsurePKI(nil)
+	require.NoError(t, err)
+
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	require.NoError(t, personaSvc.GetOrCreateDefaultPersonas())
+
+	resp := responder.New(logger)
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
+
+	t.Run("Token with wrong aud is rejected", func(t *testing.T) {
+		claims := map[string]interface{}{
+			"sub": "user-123",
+			"iss": "https://test-idp.example.com",
+			"aud": "wrong-audience",
+			"exp": time.Now().Add(1 * time.Hour).Unix(),
+			"iat": time.Now().Unix(),
+		}
+		token := generateSignedJWT(t, privKey, claims)
+
+		_, err := ParseAndVerifyJWT(token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "audience mismatch")
+	})
+
+	t.Run("Token with wrong iss is rejected", func(t *testing.T) {
+		claims := map[string]interface{}{
+			"sub": "user-123",
+			"iss": "https://wrong-issuer.example.com",
+			"aud": "g8e-gateway",
+			"exp": time.Now().Add(1 * time.Hour).Unix(),
+			"iat": time.Now().Unix(),
+		}
+		token := generateSignedJWT(t, privKey, claims)
+
+		_, err := ParseAndVerifyJWT(token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "issuer mismatch")
+	})
+
+	t.Run("Token with nbf in the future is rejected", func(t *testing.T) {
+		claims := map[string]interface{}{
+			"sub": "user-123",
+			"iss": "https://test-idp.example.com",
+			"aud": "g8e-gateway",
+			"exp": time.Now().Add(1 * time.Hour).Unix(),
+			"nbf": time.Now().Add(5 * time.Minute).Unix(),
+			"iat": time.Now().Unix(),
+		}
+		token := generateSignedJWT(t, privKey, claims)
+
+		_, err := ParseAndVerifyJWT(token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not yet valid")
+	})
+
+	t.Run("Token with correct iss, aud, and nbf is accepted", func(t *testing.T) {
+		claims := map[string]interface{}{
+			"sub": "user-123",
+			"iss": "https://test-idp.example.com",
+			"aud": "g8e-gateway",
+			"exp": time.Now().Add(1 * time.Hour).Unix(),
+			"nbf": time.Now().Add(-1 * time.Minute).Unix(),
+			"iat": time.Now().Unix(),
+		}
+		token := generateSignedJWT(t, privKey, claims)
+
+		jwt, err := ParseAndVerifyJWT(token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
+		assert.NoError(t, err)
+		assert.Equal(t, "user-123", jwt.Claims.Sub)
+		assert.Equal(t, "https://test-idp.example.com", jwt.Claims.Iss)
+		assert.Equal(t, "g8e-gateway", jwt.Claims.Aud)
+	})
+
+	t.Run("Token without iss/aud/nbf is accepted when not configured", func(t *testing.T) {
+		authNoValidation := NewAuthService(db, pki, testutil.NewTestLogger(), userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
+
+		claims := map[string]interface{}{
+			"sub": "user-123",
+			"exp": time.Now().Add(1 * time.Hour).Unix(),
+			"iat": time.Now().Unix(),
+		}
+		token := generateSignedJWT(t, privKey, claims)
+
+		jwt, err := ParseAndVerifyJWT(token, authNoValidation.jwks, authNoValidation.jwtRole, authNoValidation.jwtIssuer, authNoValidation.jwtAudience)
+		assert.NoError(t, err)
+		assert.Equal(t, "user-123", jwt.Claims.Sub)
+	})
 }

@@ -5,14 +5,14 @@ parent: Guides
 
 # Build a Governance Gateway
 
-Last Updated: 2026-05-26
-Version: v1.0.0
+Last Updated: 2026-05-29
+Version: v1.0.3
 
 ---
 
 ## Overview
 
-A g8e-compatible Governance Gateway implements the central Policy Decision Point (PDP) of the substrate. It provides PKI management, persistence, messaging, admission APIs, and protocol translation for MCP/A2A requests.
+A g8e-compatible Governance Gateway implements the central Policy Decision Point (PDP) of the platform. It provides PKI management, persistence, messaging, admission APIs, and protocol translation for MCP/A2A requests.
 
 The reference implementation is the g8e binary running in gateway mode. The same `g8e` binary operates in two modes: Operator mode (connects to a remote gateway) and Gateway mode (acts as the platform's central persistence and pub/sub broker). Custom gateway implementations must implement the same protocol contracts and invariants.
 
@@ -119,7 +119,7 @@ The gateway must serve as the Pub/Sub broker:
 The gateway must expose HTTP endpoints:
 
 - **Envelope Submission**: `POST /api/governance/envelope` for canonical JSON GovernanceEnvelope transactions.
-- **App Enrollment**: `POST /api/pki/app-enroll` for external app enrollment (device-link token required).
+- **App Enrollment**: `POST /api/pki/app-enroll` for external app enrollment (invitation-based JIT required).
 - **Certificate Revocation**: `POST /api/pki/revoke` for certificate revocation.
 - **Revocation Bundle**: `GET /api/pki/revocation-bundle` for the signed revocation list.
 
@@ -194,7 +194,7 @@ Refer to `protocol/proto/g8e/` for the canonical schema definitions.
 
 ## Testing
 
-A custom gateway implementation must pass the substrate test suite to claim g8e compatibility:
+A custom gateway implementation must pass the platform test suite to claim g8e compatibility:
 
 ```bash
 ./g8e test g8eo

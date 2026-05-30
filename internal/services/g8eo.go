@@ -421,7 +421,7 @@ func printOperatorStartupBanner(cfg *config.Config) {
 	fmt.Println("────────────────────────────────────────────────────────────────────────────────")
 	fmt.Println(" CAPABILITIES & EXPOSED TOOLING")
 	fmt.Println("────────────────────────────────────────────────────────────────────────────────")
-	fmt.Println(" The following agentic capabilities are mounted to this execution substrate.")
+	fmt.Println(" The following agentic capabilities are mounted to this execution platform.")
 	fmt.Println(" All state-mutating actions require cryptographic intent verification.")
 	fmt.Println()
 	fmt.Println("  - system.run      [GRANTED: Requires L1 Signature]")

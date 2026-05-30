@@ -1,10 +1,4 @@
 {
-  "g8ee": {
-    "app_dir": "/app/services/g8ee",
-    "cert_name": "g8ee",
-    "config_dir": "/app/services/g8ee/config",
-    "tests_dir": "/app/services/g8ee/tests"
-  },
   "host": "localhost",
   "infra": {
     "app_cert_dir": ".g8e/pki/issued/apps",
@@ -19,7 +13,6 @@
     "ssh_config_path": "/etc/g8e/ssh_config"
   },
   "ports": {
-    "g8ee_https": 8443,
     "insecure_mcp_gateway": 18789,
     "operator_bootstrap_https": 8441,
     "operator_https": 8440,

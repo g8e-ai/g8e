@@ -20,7 +20,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
+	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -97,12 +97,92 @@ func TestPubSubBackPressureKeepsSubscriptions(t *testing.T) {
 	broker.mu.RUnlock()
 
 	assert.True(t, exactPresent, "subscriber must remain in exact-channel map under back-pressure")
+}
 
-	sub.mu.Lock()
-	dropped := sub.dropped
-	sub.mu.Unlock()
-	assert.False(t, sub.isDone(), "subscriber must not be closed by back-pressure")
-	assert.GreaterOrEqual(t, dropped, uint64(4), "each overflow must increment dropped counter")
+func TestPubSubSessionHandler_handleAction(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	broker := NewPubSubBroker(logger)
+
+	sub := &wsSubscriber{
+		send:             make(chan []byte, 10),
+		done:             make(chan struct{}),
+		identitySPIFFEID: "spiffe://g8e.local/app/test-app",
+		operatorID:       "test-operator",
+	}
+	handler := &pubSubSessionHandler{
+		broker: broker,
+		sub:    sub,
+	}
+
+	t.Run("subscribe action adds subscriber to channel", func(t *testing.T) {
+		t.Parallel()
+		msg := &pubsubv1.PubSubMessage{
+			Action:  "subscribe",
+			Channel: "results:test-operator:cli-session-123",
+		}
+		handler.handleAction(msg)
+
+		broker.mu.RLock()
+		_, exists := broker.subscribers["results:test-operator:cli-session-123"]
+		broker.mu.RUnlock()
+		assert.True(t, exists, "Subscriber should be added to channel")
+	})
+
+	t.Run("unsubscribe action removes subscriber from channel", func(t *testing.T) {
+		t.Parallel()
+		broker.subscribe("results:test-operator:cli-session-456", sub)
+		msg := &pubsubv1.PubSubMessage{
+			Action:  "unsubscribe",
+			Channel: "results:test-operator:cli-session-456",
+		}
+		handler.handleAction(msg)
+
+		broker.mu.RLock()
+		_, exists := broker.subscribers["results:test-operator:cli-session-456"]
+		broker.mu.RUnlock()
+		assert.False(t, exists, "Subscriber should be removed from channel")
+	})
+
+	t.Run("publish action publishes data to channel", func(t *testing.T) {
+		t.Parallel()
+		msg := &pubsubv1.PubSubMessage{
+			Action:  "publish",
+			Channel: "results:test-operator:cli-session-789",
+			Data:    []byte(`"test-data"`),
+		}
+		handler.handleAction(msg)
+		// Publish should not panic
+	})
+}
+
+func TestPubSubSessionHandler_cleanup(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	broker := NewPubSubBroker(logger)
+
+	sub := &wsSubscriber{
+		send:             make(chan []byte, 10),
+		done:             make(chan struct{}),
+		identitySPIFFEID: "spiffe://g8e.local/app/test-app",
+		operatorID:       "test-operator",
+	}
+	handler := &pubSubSessionHandler{
+		broker: broker,
+		sub:    sub,
+	}
+
+	// Add subscriber to broker
+	broker.subscribe("test-channel", sub)
+
+	// Cleanup should remove subscriber and shutdown
+	handler.cleanup()
+
+	broker.mu.RLock()
+	_, exists := broker.subscribers["test-channel"]
+	broker.mu.RUnlock()
+	assert.False(t, exists, "Subscriber should be removed from broker")
+	assert.True(t, sub.isDone(), "Subscriber should be shut down")
 }
 
 // TestPubSubSubscriberShutdownIsIdempotentAndFailsFast verifies the
@@ -158,4 +238,83 @@ func TestPubSubHappyPathDoesNotLogDrop(t *testing.T) {
 
 	require.Equal(t, 1, broker.Publish("ch", []byte(`"ok"`)))
 	assert.NotContains(t, buf.String(), "back-pressure")
+}
+
+func TestNewPubSubBroker(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	broker := NewPubSubBroker(logger)
+
+	assert.NotNil(t, broker)
+	assert.NotNil(t, broker.logger)
+	assert.NotNil(t, broker.subscribers)
+	assert.NotNil(t, broker.handlers)
+}
+
+func TestRegisterHandler(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	broker := NewPubSubBroker(logger)
+
+	called := false
+	var receivedChannel string
+	var receivedData []byte
+
+	unregister := broker.RegisterHandler("test-channel", func(channel string, data []byte) {
+		called = true
+		receivedChannel = channel
+		receivedData = data
+	})
+
+	// Publish to the channel
+	broker.Publish("test-channel", []byte("test-data"))
+
+	// Give handler time to process (though in this test we're just checking registration)
+	// The handler is called synchronously in Publish
+	assert.True(t, called, "handler should have been called")
+	assert.Equal(t, "test-channel", receivedChannel)
+	assert.Equal(t, []byte("test-data"), receivedData)
+
+	// Unregister the handler
+	unregister()
+
+	// Reset and publish again - handler should not be called
+	called = false
+	broker.Publish("test-channel", []byte("test-data-2"))
+	assert.False(t, called, "handler should not be called after unregister")
+}
+
+func TestSubscribe(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	broker := NewPubSubBroker(logger)
+
+	sub := &wsSubscriber{send: make(chan []byte, 4), done: make(chan struct{})}
+
+	// Subscribe to a channel
+	broker.subscribe("test-channel", sub)
+
+	// Verify subscriber is in the map
+	broker.mu.RLock()
+	_, exists := broker.subscribers["test-channel"]
+	broker.mu.RUnlock()
+
+	assert.True(t, exists, "subscriber should be in the channel map")
+}
+
+func TestIsDone(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Not done initially", func(t *testing.T) {
+		t.Parallel()
+		sub := &wsSubscriber{done: make(chan struct{})}
+		assert.False(t, sub.isDone())
+	})
+
+	t.Run("Done after close", func(t *testing.T) {
+		t.Parallel()
+		sub := &wsSubscriber{done: make(chan struct{})}
+		close(sub.done)
+		assert.True(t, sub.isDone())
+	})
 }

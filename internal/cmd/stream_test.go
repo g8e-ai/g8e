@@ -801,7 +801,6 @@ func TestPrintStreamUsage_ContainsKeywords(t *testing.T) {
 	assert.Contains(t, output, "--concurrency")
 	assert.Contains(t, output, "--timeout")
 	assert.Contains(t, output, "--endpoint")
-	assert.Contains(t, output, "--device-token")
 	assert.Contains(t, output, "EXAMPLES")
 }
 
