@@ -10,7 +10,7 @@ It dials out via mTLS and listens on nothing. Every AI-proposed action clears a 
 
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev)
+[![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev)
 [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v102--core-platform)
 [![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/core/position_paper.md)
 
@@ -25,13 +25,20 @@ It dials out via mTLS and listens on nothing. Every AI-proposed action clears a 
 Get g8e online in under 60 seconds.
 
 ```bash
-# 1. Start the Governance Gateway (g8eg)
+# 1. Clone the repository
+git clone https://github.com/g8e-ai/g8e.git
+cd g8e
+
+# 2. Build the binary
+make build
+
+# 3. Start the Governance Gateway (g8eg)
 ./g8e gw start
 
-# 2. Authenticate (first login automatically bootstraps the platform)
+# 4. Authenticate (first login automatically bootstraps the platform)
 ./g8e auth login
 
-# 3. Verify the status
+# 5. Verify the status
 ./g8e gw status
 ```
 

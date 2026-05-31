@@ -42,7 +42,8 @@ import (
 const (
 	rootValidityDays         = 3650
 	intermediateValidityDays = 3650
-	serviceValidityDays      = 1 // 1-day TTL for operator mTLS certificates
+	servingCertValidityDays  = 90 // 90-day TTL for gateway serving certificate
+	leafCertValidityDays     = 7  // 7-day TTL for operator/cli leaf certificates
 
 	rootCommonName     = "g8e Root CA"
 	hubCommonName      = "g8e Hub Intermediate CA"
@@ -100,7 +101,6 @@ func (pki *PKIAuthority) EnsurePKI(extraIPs []net.IP) error {
 		filepath.Join(pki.pkiDir, "root"),
 		filepath.Join(pki.pkiDir, "authorities"),
 		filepath.Join(pki.pkiDir, "issued", "hub"),
-		filepath.Join(pki.pkiDir, "issued", "apps"),
 		filepath.Join(pki.pkiDir, "trust"),
 		filepath.Join(pki.pkiDir, "revocation"),
 	}
@@ -123,11 +123,6 @@ func (pki *PKIAuthority) EnsurePKI(extraIPs []net.IP) error {
 	// Generate or load operator-gateway service certificate
 	if err := pki.ensureServiceCert(extraIPs); err != nil {
 		return fmt.Errorf("service certificate setup failed: %w", err)
-	}
-
-	// Generate or load certificates for reference ensembles
-	if err := pki.ensureAppCerts(); err != nil {
-		return fmt.Errorf("app certificates setup failed: %w", err)
 	}
 
 	// Generate trust bundles
@@ -193,7 +188,7 @@ func (pki *PKIAuthority) ensureRootCA() error {
 	}
 
 	pki.logger.Info("[PKI] Generating root CA")
-	return pki.generateRootCA("", rootCertPath)
+	return pki.generateRootCA(rootCertPath)
 }
 
 func (pki *PKIAuthority) ensureIntermediateCAs() error {
@@ -208,7 +203,7 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 		if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
 			return fmt.Errorf("load root CA private key for intermediate generation: %w", err)
 		}
-		if err := pki.generateIntermediateCA("", hubCertPath, pki.rootCert, pki.rootKey, hubCommonName); err != nil {
+		if err := pki.generateIntermediateCA(hubCertPath, pki.rootCert, pki.rootKey, hubCommonName); err != nil {
 			return err
 		}
 	}
@@ -224,7 +219,7 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 		if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
 			return fmt.Errorf("load root CA private key for intermediate generation: %w", err)
 		}
-		if err := pki.generateIntermediateCA("", operatorCertPath, pki.rootCert, pki.rootKey, operatorCommonName); err != nil {
+		if err := pki.generateIntermediateCA(operatorCertPath, pki.rootCert, pki.rootKey, operatorCommonName); err != nil {
 			return err
 		}
 	}
@@ -381,43 +376,72 @@ func (pki *PKIAuthority) RevokeCertificate(serial string, reason string) error {
 	return pki.db.DocSet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial, body)
 }
 
-// GenerateRevocationBundle creates a signed JSON bundle of all revoked certificate serials.
-func (pki *PKIAuthority) GenerateRevocationBundle() (bundleJSON string, signature string, err error) {
+// GenerateCRL creates a standard X.509 Certificate Revocation List (CRL) signed by the operator intermediate CA.
+// The CRL contains all revoked certificate serials from the database.
+func (pki *PKIAuthority) GenerateCRL() (crlDER []byte, err error) {
 	pki.mu.RLock()
 	defer pki.mu.RUnlock()
 
 	if pki.db == nil {
-		return "", "", fmt.Errorf("database not available")
+		return nil, fmt.Errorf("database not available")
+	}
+
+	if pki.operatorCert == nil || pki.operatorKey == nil {
+		return nil, fmt.Errorf("operator CA not loaded - call EnsurePKI first")
 	}
 
 	docs, err := pki.db.DocQuery(marshaler.CollectionName(constants.CollectionRevokedCertificates), nil, "revoked_at", 0)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 
-	revoked := make([]string, 0, len(docs))
+	// Build revoked certificate list for CRL
+	revokedCerts := []pkix.RevokedCertificate{}
+	now := time.Now().UTC()
+
 	for _, doc := range docs {
-		revoked = append(revoked, doc.ID)
+		serial, ok := new(big.Int).SetString(doc.ID, 10)
+		if !ok {
+			pki.logger.Warn("[PKI] Invalid serial in revocation list", "serial", doc.ID)
+			continue
+		}
+
+		// Parse revocation time if available, otherwise use current time
+		var revokedAt time.Time
+		wireData := doc.ForWire()
+		if revokedAtRaw, ok := wireData["revoked_at"]; ok {
+			var revokedAtStr string
+			if err := json.Unmarshal(revokedAtRaw, &revokedAtStr); err == nil {
+				revokedAt, _ = time.Parse(time.RFC3339, revokedAtStr)
+			}
+		}
+		if revokedAt.IsZero() {
+			revokedAt = now
+		}
+
+		revokedCerts = append(revokedCerts, pkix.RevokedCertificate{
+			SerialNumber:   serial,
+			RevocationTime: revokedAt,
+		})
 	}
 
-	bundle := map[string]interface{}{
-		"revoked_serials": revoked,
-		"generated_at":    time.Now().UTC(),
-		"trust_domain":    protocol.TrustDomain,
+	// Create CRL template
+	crlTemplate := &x509.RevocationList{
+		SignatureAlgorithm:  x509.ECDSAWithSHA256,
+		RevokedCertificates: revokedCerts,
+		Number:              big.NewInt(1), // Simple version number
+		ThisUpdate:          now,
+		NextUpdate:          now.Add(24 * time.Hour), // CRL valid for 24 hours
 	}
 
-	bundleBytes, err := json.Marshal(bundle)
+	// Generate CRL signed by operator intermediate CA
+	crlDER, err = x509.CreateRevocationList(rand.Reader, crlTemplate, pki.operatorCert, pki.operatorKey)
 	if err != nil {
-		return "", "", err
+		return nil, fmt.Errorf("failed to create CRL: %w", err)
 	}
 
-	// Sign the bundle with the hub intermediate key
-	sig, err := pki.signData(bundleBytes, pki.hubKey)
-	if err != nil {
-		return "", "", err
-	}
-
-	return string(bundleBytes), sig, nil
+	pki.logger.Info("[PKI] Generated CRL", "revoked_count", len(revokedCerts))
+	return crlDER, nil
 }
 
 // IsRevoked checks if a certificate serial is in the revocation list.
@@ -498,6 +522,11 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 		return "", "", fmt.Errorf("CSR signature check failed: %w", err)
 	}
 
+	// Enforce P-256 curve policy for all leaf certificates
+	if !isCurveP256(csr.PublicKey) {
+		return "", "", fmt.Errorf("CSR public key must use P-256 curve, got %T", csr.PublicKey)
+	}
+
 	serial, err := randomSerial()
 	if err != nil {
 		return "", "", err
@@ -508,7 +537,7 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 		SerialNumber: serial,
 		Subject:      csr.Subject,
 		NotBefore:    now.Add(-1 * time.Minute),
-		NotAfter:     now.Add(time.Duration(serviceValidityDays) * 24 * time.Hour),
+		NotAfter:     now.Add(time.Duration(leafCertValidityDays) * 24 * time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		DNSNames:     csr.DNSNames,
@@ -586,8 +615,8 @@ func (pki *PKIAuthority) loadCAPrivateKey(caType string, key **ecdsa.PrivateKey)
 	return nil
 }
 
-func (pki *PKIAuthority) generateRootCA(keyPath, certPath string) error {
-	rootKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+func (pki *PKIAuthority) generateRootCA(certPath string) error {
+	rootKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return err
 	}
@@ -623,7 +652,7 @@ func (pki *PKIAuthority) generateRootCA(keyPath, certPath string) error {
 		return err
 	}
 
-	if err := writePEMFile(certPath, "CERTIFICATE", certDER, 0644); err != nil {
+	if err := writePublicPEMFile(certPath, "CERTIFICATE", certDER); err != nil {
 		return err
 	}
 
@@ -643,8 +672,8 @@ func (pki *PKIAuthority) generateRootCA(keyPath, certPath string) error {
 	return nil
 }
 
-func (pki *PKIAuthority) generateIntermediateCA(keyPath, certPath string, parentCert *x509.Certificate, parentKey *ecdsa.PrivateKey, commonName string) error {
-	intermediateKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+func (pki *PKIAuthority) generateIntermediateCA(certPath string, parentCert *x509.Certificate, parentKey *ecdsa.PrivateKey, commonName string) error {
+	intermediateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return err
 	}
@@ -680,7 +709,7 @@ func (pki *PKIAuthority) generateIntermediateCA(keyPath, certPath string, parent
 		return err
 	}
 
-	if err := writePEMFile(certPath, "CERTIFICATE", certDER, 0644); err != nil {
+	if err := writePublicPEMFile(certPath, "CERTIFICATE", certDER); err != nil {
 		return err
 	}
 
@@ -721,12 +750,6 @@ func (pki *PKIAuthority) generateIntermediateCA(keyPath, certPath string, parent
 	return nil
 }
 
-func (pki *PKIAuthority) ensureAppCerts() error {
-	// No first-class app certificates are generated at the protocol level.
-	// g8e-compatible agentic ensembles use the SignCSR API for certificate issuance.
-	return nil
-}
-
 func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.crt")
 
@@ -734,7 +757,7 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 		return fmt.Errorf("hub CA not loaded - call EnsurePKI first")
 	}
 
-	serviceKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	serviceKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return err
 	}
@@ -760,7 +783,7 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 			Country:      []string{"US"},
 		},
 		NotBefore:             now.Add(-1 * time.Minute),
-		NotAfter:              now.Add(time.Duration(serviceValidityDays) * 24 * time.Hour),
+		NotAfter:              now.Add(time.Duration(servingCertValidityDays) * 24 * time.Hour),
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		DNSNames:              dnsNames,
@@ -785,7 +808,7 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 		return fmt.Errorf("failed to write chain: %w", err)
 	}
 
-	if err := writePEMFile(serviceCertPath, "CERTIFICATE", certDER, 0644); err != nil {
+	if err := writePublicPEMFile(serviceCertPath, "CERTIFICATE", certDER); err != nil {
 		return err
 	}
 
@@ -808,6 +831,9 @@ func randomSerial() (*big.Int, error) {
 	return rand.Int(rand.Reader, limit)
 }
 
+// writePEMFile writes a PEM-encoded file with the specified mode.
+// Use writePublicPEMFile for public certificates/bundles (0644).
+// Use writeSensitivePEMFile for sensitive data like chains (0600).
 func writePEMFile(path, pemType string, der []byte, mode os.FileMode) (err error) {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
 	if err != nil {
@@ -820,6 +846,16 @@ func writePEMFile(path, pemType string, der []byte, mode os.FileMode) (err error
 		}
 	}()
 	return pem.Encode(f, &pem.Block{Type: pemType, Bytes: der})
+}
+
+// writePublicPEMFile writes a public certificate or bundle with 0644 permissions.
+func writePublicPEMFile(path, pemType string, der []byte) error {
+	return writePEMFile(path, pemType, der, 0644)
+}
+
+// writeSensitivePEMFile writes sensitive data (e.g., certificate chains) with 0600 permissions.
+func writeSensitivePEMFile(path, pemType string, der []byte) error {
+	return writePEMFile(path, pemType, der, 0600)
 }
 
 func fileExists(path string) bool {
@@ -836,4 +872,59 @@ func isExpiringSoon(cert tls.Certificate) bool {
 		return true
 	}
 	return time.Until(x509Cert.NotAfter) < 30*24*time.Hour
+}
+
+// isCurveP256 checks if a public key uses the P-256 elliptic curve.
+func isCurveP256(pubKey interface{}) bool {
+	if pk, ok := pubKey.(*ecdsa.PublicKey); ok {
+		return pk.Curve == elliptic.P256()
+	}
+	return false
+}
+
+// RenewServiceCert renews the operator-gateway service certificate if it is expiring soon.
+// This is called by the background renewal loop in the gateway service.
+func (pki *PKIAuthority) RenewServiceCert(extraIPs []net.IP) error {
+	pki.mu.Lock()
+	defer pki.mu.Unlock()
+
+	// Check if current cert is expiring soon
+	if !isExpiringSoon(pki.serviceCert) {
+		return nil
+	}
+
+	pki.logger.Info("[PKI] Service certificate expiring soon, renewing")
+
+	// Load hub CA private key on-demand for service cert generation
+	if pki.hubKey == nil {
+		if err := pki.loadCAPrivateKey("hub", &pki.hubKey); err != nil {
+			return fmt.Errorf("load hub CA private key for service cert renewal: %w", err)
+		}
+	}
+
+	// Generate new service certificate
+	if err := pki.generateServiceCert(extraIPs); err != nil {
+		return fmt.Errorf("failed to generate new service certificate: %w", err)
+	}
+
+	// Load the newly generated certificate and key
+	chainPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.chain.pem")
+	chainPEM, err := os.ReadFile(chainPath)
+	if err != nil {
+		return fmt.Errorf("failed to load renewed service cert chain: %w", err)
+	}
+	keyDER, err := pki.secretManager.GetServicePrivateKey("operator-gateway")
+	if err != nil {
+		return fmt.Errorf("failed to load renewed service private key from keystore: %w", err)
+	}
+	tlsCert, err := tls.X509KeyPair(chainPEM, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}))
+	if err != nil {
+		return fmt.Errorf("failed to construct renewed service certificate: %w", err)
+	}
+
+	// Atomically swap the service certificate
+	pki.serviceCert = tlsCert
+
+	pki.logger.Info("[PKI] Service certificate renewed successfully")
+	return nil
 }

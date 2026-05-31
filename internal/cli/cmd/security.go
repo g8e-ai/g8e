@@ -210,7 +210,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 			}
 
 			cmd.Printf("Enrolling with Gateway at %s...\n", endpoint)
-			regResp, err := auth.EnrollWithGateway(cfg, endpoint, opCSR, cliCSR)
+			regResp, err := auth.EnrollWithGateway(cfg, endpoint, opCSR, cliCSR, "")
 			if err != nil {
 				return fmt.Errorf("failed to enroll: %w", err)
 			}

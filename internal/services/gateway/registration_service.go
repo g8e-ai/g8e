@@ -161,6 +161,9 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 	if req.CSR == "" {
 		return nil, fmt.Errorf("operator CSR is required")
 	}
+	if req.CLICSR == "" {
+		return nil, fmt.Errorf("CLI CSR is required for distinct SPIFFE identity")
+	}
 
 	// Sanitize fingerprint
 	sanitizedFingerprint := strings.ToLower(strings.Trim(req.SystemFingerprint, " \t\n\r"))
@@ -278,41 +281,29 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		}
 		update["operator_cert"] = certPEM
 		update["operator_cert_chain"] = chainPEM
-		update["operator_cert_serial"] = ""
+		update["operator_cert_serial"] = calculateSerialFromPEM(certPEM)
 	} else {
 		return nil, fmt.Errorf("CSR required for device registration")
 	}
 
-	// CLI certificate generation (optional for backwards compatibility)
-	// If the client provides a CLI CSR, generate a CLI certificate with distinct SPIFFE identity
+	// CLI certificate generation - CLI CSR is mandatory for distinct SPIFFE identity
 	var cliCertPEM, cliCertChainPEM, cliCertFingerprint, cliCertSerial string
-	if req.CLICSR != "" {
-		block, _ := pem.Decode([]byte(req.CLICSR))
-		if block == nil || block.Type != "CERTIFICATE REQUEST" {
-			return nil, fmt.Errorf("invalid CLI CSR PEM format")
-		}
-
-		var err error
-		cliCertPEM, cliCertChainPEM, err = s.pki.SignCSR(req.CLICSR, constants.LeafTypeCLI, "", "", userID, cliSessionID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to sign CLI CSR: %w", err)
-		}
-		// Calculate fingerprint and serial from the issued CLI certificate
-		cliCertFingerprint = calculateFingerprintFromPEM(cliCertPEM)
-		cliCertSerial = calculateSerialFromPEM(cliCertPEM)
-	} else {
-		// [SPIFFE-DRIFT] Fallback: If no CLI CSR provided, the CLI cert returned MUST be
-		// the operator cert for backwards compatibility with older binaries, even though
-		// they will fail modern /cli/ path checks.
-		// NOTE: New protocol requires CLI CSR for distinct /cli/ SPIFFE ID.
-		cliCertPEM = update["operator_cert"].(string)
-		cliCertChainPEM = update["operator_cert_chain"].(string)
-		cliCertFingerprint = calculateFingerprintFromPEM(cliCertPEM)
-		cliCertSerial = calculateSerialFromPEM(cliCertPEM)
+	block, _ := pem.Decode([]byte(req.CLICSR))
+	if block == nil || block.Type != "CERTIFICATE REQUEST" {
+		return nil, fmt.Errorf("invalid CLI CSR PEM format")
 	}
 
+	var err error
+	cliCertPEM, cliCertChainPEM, err = s.pki.SignCSR(req.CLICSR, constants.LeafTypeCLI, "", "", userID, cliSessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign CLI CSR: %w", err)
+	}
+	// Calculate fingerprint and serial from the issued CLI certificate
+	cliCertFingerprint = calculateFingerprintFromPEM(cliCertPEM)
+	cliCertSerial = calculateSerialFromPEM(cliCertPEM)
+
 	updateBytes, _ := json.Marshal(update)
-	_, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operator.ID, updateBytes)
+	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operator.ID, updateBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update operator status: %w", err)
 	}

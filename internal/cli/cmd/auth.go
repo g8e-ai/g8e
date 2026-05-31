@@ -16,6 +16,8 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -82,7 +84,7 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 				}
 
 				cmd.Println("Bootstrapping with operator...")
-				regResp, err := auth.Bootstrap(cfg, opCSR, cliCSR)
+				regResp, err := auth.Bootstrap(cfg, opCSR, cliCSR, "")
 				if err != nil {
 					return err
 				}
@@ -100,7 +102,8 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 				}
 
 				if regResp.HubTrustBundle != "" {
-					hubBundlePath := cfg.TrustBundlePath()
+					// Save CA bundle to credentials directory alongside client certs
+					hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
 					if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
 						return fmt.Errorf("failed to save hub trust bundle: %w", err)
 					}
@@ -126,8 +129,17 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 				return nil
 			}
 
-			// Platform already bootstrapped - CSR-based re-enrollment with mTLS
-			cmd.Println("Gateway already bootstrapped. Re-enrolling client via CSR with mTLS...")
+			// Platform already bootstrapped - attempt CSR-based re-enrollment with mTLS
+			cmd.Println("Gateway already bootstrapped. Attempting re-enrollment via CSR with mTLS...")
+
+			// Check if certificates are expiring soon and auto-renew if needed
+			cmd.Println("Checking certificate expiry...")
+			if err := auth.AutoRenewCertificate(cfg, "cli", ""); err != nil {
+				return fmt.Errorf("CLI certificate auto-renewal failed: %w", err)
+			}
+			if err := auth.AutoRenewCertificate(cfg, "operator", ""); err != nil {
+				return fmt.Errorf("operator certificate auto-renewal failed: %w", err)
+			}
 
 			cmd.Println("Generating keys and CSRs...")
 			hostname, _ := os.Hostname()
@@ -142,8 +154,13 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 			}
 
 			cmd.Println("Re-enrolling with operator...")
-			regResp, err := auth.ReEnroll(cfg, opCSR, cliCSR)
+			regResp, err := auth.ReEnroll(cfg, opCSR, cliCSR, "")
 			if err != nil {
+				// Check if this is a TLS verification error (stale trust bundle after gateway PKI regeneration)
+				if strings.Contains(err.Error(), "certificate signed by unknown authority") ||
+					strings.Contains(err.Error(), "x509: certificate") {
+					return fmt.Errorf("mTLS re-enrollment failed: trust bundle is stale (gateway PKI was regenerated). To recover, run: ./g8e auth logout && ./g8e auth login. Original error: %w", err)
+				}
 				return err
 			}
 
@@ -160,7 +177,8 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 			}
 
 			if regResp.HubTrustBundle != "" {
-				hubBundlePath := cfg.TrustBundlePath()
+				// Save CA bundle to credentials directory alongside client certs
+				hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
 				if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
 					return fmt.Errorf("failed to save hub trust bundle: %w", err)
 				}
@@ -254,14 +272,19 @@ func enrollWindowsCmd() *cobra.Command {
 			var regResp *auth.RegistrationResponse
 			if !bootstrapped {
 				cmd.Println("Submitting CSR to Gateway for bootstrap...")
-				regResp, err = auth.Bootstrap(cfg, csr, "")
+				regResp, err = auth.Bootstrap(cfg, csr, "", "")
 				if err != nil {
 					return fmt.Errorf("failed to submit CSR: %w", err)
 				}
 			} else {
-				cmd.Println("Platform already bootstrapped. Re-enrolling via CSR with mTLS...")
-				regResp, err = auth.ReEnroll(cfg, csr, "")
+				cmd.Println("Platform already bootstrapped. Attempting re-enrollment via CSR with mTLS...")
+				regResp, err = auth.ReEnroll(cfg, csr, "", "")
 				if err != nil {
+					// Check if this is a TLS verification error (stale trust bundle after gateway PKI regeneration)
+					if strings.Contains(err.Error(), "certificate signed by unknown authority") ||
+						strings.Contains(err.Error(), "x509: certificate") {
+						return fmt.Errorf("mTLS re-enrollment failed: trust bundle is stale (gateway PKI was regenerated). To recover, run: ./g8e auth logout && ./g8e auth enroll-windows. Original error: %w", err)
+					}
 					return fmt.Errorf("failed to re-enroll: %w", err)
 				}
 			}
@@ -281,7 +304,8 @@ func enrollWindowsCmd() *cobra.Command {
 			}
 
 			if regResp.HubTrustBundle != "" {
-				hubBundlePath := cfg.TrustBundlePath()
+				// Save CA bundle to credentials directory alongside client certs
+				hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
 				if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
 					return fmt.Errorf("failed to save hub trust bundle: %w", err)
 				}

@@ -62,6 +62,7 @@ var APIPaths = struct {
 	PKIDevicesEnroll      string `json:"pki_devices_enroll"`
 	PKICertificatesRevoke string `json:"pki_certificates_revoke"`
 	PKIRevocationBundle   string `json:"pki_revocation_bundle"`
+	PKICRL                string `json:"pki_crl"`
 	PKICABundle           string `json:"pki_ca_bundle"`
 	PKIFingerprint        string `json:"pki_fingerprint"`
 	// Audit routes
@@ -159,6 +160,7 @@ var APIPaths = struct {
 	PKIDevicesEnroll:      "/api/v1/pki/devices/enroll",
 	PKICertificatesRevoke: "/api/v1/pki/certificates/revoke",
 	PKIRevocationBundle:   "/api/v1/pki/revocation-bundle",
+	PKICRL:                "/.well-known/g8e/pki/crl",
 	PKICABundle:           "/.well-known/g8e/pki/ca-bundle",
 	PKIFingerprint:        "/.well-known/g8e/pki/fingerprint",
 	// Audit routes

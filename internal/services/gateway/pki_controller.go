@@ -178,16 +178,18 @@ func (c *PKIController) handlePKIRevocationBundle(w http.ResponseWriter, r *http
 		return
 	}
 
-	bundleJSON, signature, err := c.pki.GenerateRevocationBundle()
+	crlDER, err := c.pki.GenerateCRL()
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.responder.JSON(w, http.StatusOK, map[string]string{
-		"bundle_json": bundleJSON,
-		"signature":   signature,
-	})
+	// Return CRL as DER-encoded binary
+	w.Header().Set("Content-Type", "application/pkix-crl")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(crlDER)
 }
 
 func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Request) {

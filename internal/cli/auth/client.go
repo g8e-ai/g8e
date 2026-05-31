@@ -18,9 +18,11 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -28,13 +30,12 @@ import (
 	"net"
 	"net/http"
 	"os"
-
 	"path/filepath"
 	"strings"
-
-	"github.com/g8e-ai/g8e/internal/constants"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 type RegistrationRequest struct {
@@ -125,7 +126,62 @@ func NewSecureHTTPClient(cfg *config.Config) (*http.Client, error) {
 	return &http.Client{Transport: transport}, nil
 }
 
-func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationResponse, error) {
+// FetchRootCAFingerprint fetches the root CA fingerprint from the gateway.
+// This is used for OOB pinning verification during bootstrap.
+func FetchRootCAFingerprint(cfg *config.Config) (string, error) {
+	fingerprintURL := fmt.Sprintf("%s/.well-known/g8e/pki/fingerprint", cfg.OperatorDiscoveryURL())
+	resp, err := http.Get(fingerprintURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch root CA fingerprint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("fingerprint fetch returned HTTP %d", resp.StatusCode)
+	}
+
+	var fpResp struct {
+		RootCA string `json:"root_ca"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&fpResp); err != nil {
+		return "", fmt.Errorf("failed to decode fingerprint response: %w", err)
+	}
+
+	return fpResp.RootCA, nil
+}
+
+// VerifyCAFingerprint verifies that a PEM-encoded CA bundle matches the expected fingerprint.
+// The fingerprint should be in the format "sha256:<hex>" or just hex.
+func VerifyCAFingerprint(caPEM []byte, expectedFingerprint string) error {
+	if expectedFingerprint == "" {
+		return nil
+	}
+
+	// Normalize fingerprint: strip "sha256:" prefix if present
+	expectedFP := strings.TrimPrefix(expectedFingerprint, "sha256:")
+
+	// Parse the PEM to extract the DER-encoded certificate
+	block, _ := pem.Decode(caPEM)
+	if block == nil {
+		return fmt.Errorf("failed to decode CA PEM")
+	}
+
+	if block.Type != "CERTIFICATE" {
+		return fmt.Errorf("PEM block is not a certificate (type: %s)", block.Type)
+	}
+
+	// Compute SHA-256 hash of the DER-encoded certificate
+	hash := sha256.Sum256(block.Bytes)
+	actualFP := hex.EncodeToString(hash[:])
+
+	if actualFP != expectedFP {
+		return fmt.Errorf("CA fingerprint mismatch: expected %s, got %s", expectedFP, actualFP)
+	}
+
+	return nil
+}
+
+func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint string) (*RegistrationResponse, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get hostname: %w", err)
@@ -173,12 +229,19 @@ func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationRes
 		return nil, fmt.Errorf("bootstrap failed: %s", regResp.Error)
 	}
 
+	// Verify CA bundle fingerprint if pin is provided
+	if caFingerprint != "" && regResp.HubTrustBundle != "" {
+		if err := VerifyCAFingerprint([]byte(regResp.HubTrustBundle), caFingerprint); err != nil {
+			return nil, fmt.Errorf("CA fingerprint verification failed: %w", err)
+		}
+	}
+
 	return &regResp, nil
 }
 
 // ReEnroll performs CSR-based re-enrollment using existing mTLS credentials.
 // This is used when the platform is already bootstrapped and the CLI has valid certificates.
-func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationResponse, error) {
+func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint string) (*RegistrationResponse, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get hostname: %w", err)
@@ -204,6 +267,13 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationResp
 
 	if len(currentTrustBundle) == 0 {
 		return nil, fmt.Errorf("fetched trust bundle is empty")
+	}
+
+	// Verify CA bundle fingerprint if pin is provided
+	if caFingerprint != "" {
+		if err := VerifyCAFingerprint(currentTrustBundle, caFingerprint); err != nil {
+			return nil, fmt.Errorf("CA fingerprint verification failed: %w", err)
+		}
 	}
 
 	// Update local trust bundle with current version from operator
@@ -436,9 +506,127 @@ func CheckBootstrapStatus(cfg *config.Config) (bool, error) {
 	return statusResp.Bootstrapped, nil
 }
 
+// parseCertPEM parses a PEM-encoded certificate file and returns the x509 certificate.
+func parseCertPEM(certFile string) (*x509.Certificate, error) {
+	certPEM, err := os.ReadFile(certFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read certificate file: %w", err)
+	}
+
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return nil, fmt.Errorf("failed to decode PEM block from certificate file")
+	}
+
+	if block.Type != "CERTIFICATE" {
+		return nil, fmt.Errorf("PEM block is not a certificate (type: %s)", block.Type)
+	}
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse certificate: %w", err)
+	}
+
+	return cert, nil
+}
+
+// isCertExpiringSoon checks if a certificate is expiring within the renewal threshold.
+// The threshold is set to 24 hours before expiry to allow ample time for renewal.
+func isCertExpiringSoon(cert *x509.Certificate) bool {
+	renewalThreshold := 24 * time.Hour
+	timeUntilExpiry := time.Until(cert.NotAfter)
+	return timeUntilExpiry <= renewalThreshold
+}
+
+// CheckCertExpiry checks if the local CLI or operator certificate is expiring soon.
+// Returns true if the certificate is expiring within the renewal threshold.
+func CheckCertExpiry(certFile string) (bool, error) {
+	cert, err := parseCertPEM(certFile)
+	if err != nil {
+		return false, err
+	}
+
+	return isCertExpiringSoon(cert), nil
+}
+
+// AutoRenewCertificate performs automatic re-enrollment if the certificate is expiring soon.
+// This is a fail-closed operation: if renewal fails, it returns an error rather than falling back.
+func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint string) error {
+	var certFile string
+	switch certType {
+	case "cli":
+		certFile = cfg.CLICertFile()
+	case "operator":
+		certFile = cfg.OperatorCertFile()
+	default:
+		return fmt.Errorf("unknown certificate type: %s", certType)
+	}
+
+	expiringSoon, err := CheckCertExpiry(certFile)
+	if err != nil {
+		return fmt.Errorf("failed to check certificate expiry: %w", err)
+	}
+
+	if !expiringSoon {
+		return nil
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		return fmt.Errorf("failed to get hostname: %w", err)
+	}
+
+	opCSR, opKey, err := GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
+	if err != nil {
+		return fmt.Errorf("failed to generate operator CSR: %w", err)
+	}
+
+	cliCSR, cliKey, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
+	if err != nil {
+		return fmt.Errorf("failed to generate CLI CSR: %w", err)
+	}
+
+	regResp, err := ReEnroll(cfg, opCSR, cliCSR, caFingerprint)
+	if err != nil {
+		return fmt.Errorf("automatic re-enrollment failed: %w", err)
+	}
+
+	if regResp.OperatorSessionID == "" || regResp.OperatorID == "" || regResp.OperatorCert == "" || regResp.CLISessionID == "" || regResp.CLICert == "" {
+		return fmt.Errorf("unexpected re-enrollment response (missing required fields)")
+	}
+
+	if err := SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
+		return fmt.Errorf("failed to save renewed CLI credentials: %w", err)
+	}
+
+	if err := SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey, cfg.OperatorCertFile(), cfg.OperatorKeyFile()); err != nil {
+		return fmt.Errorf("failed to save renewed operator credentials: %w", err)
+	}
+
+	if regResp.HubTrustBundle != "" {
+		hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
+		if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
+			return fmt.Errorf("failed to save renewed hub trust bundle: %w", err)
+		}
+	}
+
+	creds := &Credentials{
+		OperatorSessionID: regResp.OperatorSessionID,
+		UserID:            regResp.UserID,
+		OperatorID:        regResp.OperatorID,
+		CLISessionID:      regResp.CLISessionID,
+	}
+
+	if err := SaveCredentials(cfg, creds); err != nil {
+		return fmt.Errorf("failed to save renewed credentials: %w", err)
+	}
+
+	return nil
+}
+
 // EnrollWithGateway enrolls a device with a remote Gateway via CSR-based enrollment.
 // This is used for deploying operators on remote hosts that need to connect to a central Gateway.
-func EnrollWithGateway(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR string) (*RegistrationResponse, error) {
+func EnrollWithGateway(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR string, caFingerprint string) (*RegistrationResponse, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get hostname: %w", err)
@@ -491,6 +679,13 @@ func EnrollWithGateway(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR 
 
 	if !regResp.Success {
 		return nil, fmt.Errorf("enrollment failed: %s", regResp.Error)
+	}
+
+	// Verify CA bundle fingerprint if pin is provided
+	if caFingerprint != "" && regResp.HubTrustBundle != "" {
+		if err := VerifyCAFingerprint([]byte(regResp.HubTrustBundle), caFingerprint); err != nil {
+			return nil, fmt.Errorf("CA fingerprint verification failed: %w", err)
+		}
 	}
 
 	return &regResp, nil

@@ -14,10 +14,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
@@ -25,6 +30,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -54,6 +60,265 @@ var (
 	buildTime string = string(constants.SystemHealthUnknown)
 	platform  string = string(constants.SystemHealthUnknown)
 )
+
+// parseCertPEM parses a PEM-encoded certificate file and returns the x509 certificate.
+func parseCertPEM(certFile string) (*x509.Certificate, error) {
+	certPEM, err := os.ReadFile(certFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read certificate file: %w", err)
+	}
+
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return nil, fmt.Errorf("failed to decode PEM block from certificate file")
+	}
+
+	if block.Type != "CERTIFICATE" {
+		return nil, fmt.Errorf("PEM block is not a certificate (type: %s)", block.Type)
+	}
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse certificate: %w", err)
+	}
+
+	return cert, nil
+}
+
+// isCertExpiringSoon checks if a certificate is expiring within the renewal threshold.
+// The threshold is set to 24 hours before expiry to allow ample time for renewal.
+func isCertExpiringSoon(cert *x509.Certificate) bool {
+	renewalThreshold := 24 * time.Hour
+	timeUntilExpiry := time.Until(cert.NotAfter)
+	return timeUntilExpiry <= renewalThreshold
+}
+
+// generateCSR generates a new ECDSA P-256 keypair and CSR for the given common name.
+func generateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to generate ECDSA key: %w", err)
+	}
+
+	template := x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName:   commonName,
+			Organization: []string{"g8e"},
+		},
+	}
+
+	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create CSR: %w", err)
+	}
+
+	csrPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE REQUEST",
+		Bytes: csrBytes,
+	})
+
+	return string(csrPEM), privKey, nil
+}
+
+// renewOperatorCertificate performs automatic re-enrollment for the operator certificate.
+// This is a fail-closed operation: if renewal fails, it returns an error.
+func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile string) error {
+	expiringSoon, err := func() (bool, error) {
+		cert, err := parseCertPEM(clientCertFile)
+		if err != nil {
+			return false, err
+		}
+		return isCertExpiringSoon(cert), nil
+	}()
+	if err != nil {
+		return fmt.Errorf("failed to check certificate expiry: %w", err)
+	}
+
+	if !expiringSoon {
+		return nil
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		return fmt.Errorf("failed to get hostname: %w", err)
+	}
+
+	opCSR, opKey, err := generateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
+	if err != nil {
+		return fmt.Errorf("failed to generate operator CSR: %w", err)
+	}
+
+	cliCSR, _, err := generateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
+	if err != nil {
+		return fmt.Errorf("failed to generate CLI CSR: %w", err)
+	}
+
+	// Load existing CLI certificate for mTLS
+	cliCert, err := tls.LoadX509KeyPair(clientCertFile, clientKeyFile)
+	if err != nil {
+		return fmt.Errorf("failed to load CLI certificate: %w", err)
+	}
+
+	// Fetch current trust bundle from operator
+	trustBundleURL := fmt.Sprintf("%s/.well-known/g8e/pki/ca-bundle", cfg.Endpoint)
+	trustBundleResp, err := http.Get(trustBundleURL)
+	if err != nil {
+		return fmt.Errorf("failed to fetch trust bundle: %w", err)
+	}
+	defer trustBundleResp.Body.Close()
+
+	if trustBundleResp.StatusCode != http.StatusOK {
+		return fmt.Errorf("trust bundle fetch returned HTTP %d", trustBundleResp.StatusCode)
+	}
+
+	currentTrustBundle, err := io.ReadAll(trustBundleResp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read trust bundle: %w", err)
+	}
+
+	if len(currentTrustBundle) == 0 {
+		return fmt.Errorf("fetched trust bundle is empty")
+	}
+
+	// Update local trust bundle
+	trustBundlePath := filepath.Join(filepath.Dir(clientCertFile), "g8e-gw-ca-bundle.pem")
+	if err := os.WriteFile(trustBundlePath, currentTrustBundle, 0644); err != nil {
+		return fmt.Errorf("failed to write trust bundle: %w", err)
+	}
+
+	// Create mTLS client
+	caPool := x509.NewCertPool()
+	if !caPool.AppendCertsFromPEM(currentTrustBundle) {
+		return fmt.Errorf("failed to parse CA certificates")
+	}
+
+	tlsConfig := &tls.Config{
+		RootCAs:      caPool,
+		Certificates: []tls.Certificate{cliCert},
+		MinVersion:   tls.VersionTLS13,
+	}
+
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+
+	client := &http.Client{Transport: transport}
+
+	// Submit re-enrollment request
+	reqBody := map[string]string{
+		"csr_pem":            opCSR,
+		"cli_csr_pem":        cliCSR,
+		"system_fingerprint": fmt.Sprintf("g8e-operator-%s", hostname),
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	enrollURL := fmt.Sprintf("%s/api/v1/pki/devices/enroll", cfg.Endpoint)
+	httpReq, err := http.NewRequest("POST", enrollURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to re-enroll: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("re-enrollment failed with HTTP %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var regResp struct {
+		OperatorCert      string `json:"operator_cert"`
+		OperatorCertChain string `json:"operator_cert_chain,omitempty"`
+		CLICert           string `json:"cli_cert"`
+		CLICertChain      string `json:"cli_cert_chain,omitempty"`
+		HubTrustBundle    string `json:"hub_trust_bundle,omitempty"`
+		Error             string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(respBody, &regResp); err != nil {
+		return fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if regResp.Error != "" {
+		return fmt.Errorf("re-enrollment failed: %s", regResp.Error)
+	}
+
+	if regResp.OperatorCert == "" || regResp.CLICert == "" {
+		return fmt.Errorf("unexpected re-enrollment response (missing required fields)")
+	}
+
+	// Save renewed certificates
+	keyBytes, err := x509.MarshalECPrivateKey(opKey)
+	if err != nil {
+		return fmt.Errorf("failed to marshal operator private key: %w", err)
+	}
+
+	keyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: keyBytes,
+	})
+
+	if err := os.WriteFile(clientKeyFile, keyPEM, 0600); err != nil {
+		return fmt.Errorf("failed to write operator key: %w", err)
+	}
+
+	certContent := regResp.OperatorCert
+	if regResp.OperatorCertChain != "" {
+		certContent += "\n" + regResp.OperatorCertChain
+	}
+
+	if err := os.WriteFile(clientCertFile, []byte(certContent), 0600); err != nil {
+		return fmt.Errorf("failed to write operator cert: %w", err)
+	}
+
+	// Update the global client certificate
+	newCert, err := tls.X509KeyPair([]byte(certContent), keyPEM)
+	if err != nil {
+		return fmt.Errorf("failed to load renewed certificate: %w", err)
+	}
+
+	certs.SetClientCertificate(newCert)
+
+	return nil
+}
+
+// runClientCertRenewalLoop runs a background goroutine that periodically checks
+// and renews the client certificate if it is expiring soon.
+func runClientCertRenewalLoop(ctx context.Context, cfg *config.Config, clientCertFile, clientKeyFile string, logger *slog.Logger) {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	// Check immediately on startup
+	if err := renewOperatorCertificate(cfg, clientCertFile, clientKeyFile); err != nil {
+		logger.Error("Failed to renew client certificate on startup", string(constants.ConnectionStateError), err)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("Client certificate renewal loop stopped")
+			return
+		case <-ticker.C:
+			if err := renewOperatorCertificate(cfg, clientCertFile, clientKeyFile); err != nil {
+				logger.Error("Failed to renew client certificate", string(constants.ConnectionStateError), err)
+			} else {
+				logger.Info("Client certificate renewal check completed")
+			}
+		}
+	}
+}
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == string(constants.ApprovalTypeStream) {
@@ -306,7 +571,7 @@ func main() {
 		if endpointURL != "" {
 			trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/ca-bundle", endpointURL, constants.Ports.OperatorBootstrapHttps)
 			logger.Info("Fetching trust bundle from Operator PKI endpoint", "url", trustURL)
-			if err := certs.FetchAndSetCA(context.Background(), trustURL); err != nil {
+			if err := certs.FetchAndSetCA(context.Background(), trustURL, ""); err != nil {
 				logger.Error("Failed to fetch trust bundle from Operator", "url", trustURL, string(constants.ConnectionStateError), err)
 				fmt.Fprintf(os.Stderr, "Failed to fetch trust bundle from Operator: %v\n", err)
 				fmt.Fprintf(os.Stderr, "  Ensure the platform is running: ./g8e platform start\n")
@@ -412,6 +677,11 @@ func main() {
 			os.Exit(constants.ExitCodeFromError(err))
 		}
 	}()
+
+	// Start background client certificate renewal loop
+	if clientCert != "" && privateKey != "" {
+		go runClientCertRenewalLoop(ctx, cfg, clientCert, privateKey, logger)
+	}
 
 	sig := <-sigChan
 	logger.Info("Received signal, shutting down", "signal", sig.String())

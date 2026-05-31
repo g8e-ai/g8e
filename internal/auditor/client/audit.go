@@ -9,6 +9,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+
+	"github.com/g8e-ai/g8e/internal/cli/auth"
+	"github.com/g8e-ai/g8e/internal/cli/config"
 )
 
 // Receipt is a lenient view of an Operator-signed ActionReceipt as exposed by
@@ -79,7 +82,36 @@ func (c *Client) ExportReceipts(ctx context.Context, operatorSessionID string) (
 // DiscoverOperatorSession best-effort reads /api/operators to find a live
 // operator session id when the user didn't pin one.
 func (c *Client) DiscoverOperatorSession(ctx context.Context) string {
-	_, body, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodGet, c.cfg.MTLSBaseURL+"/api/operators", nil)
+	// If operator session ID is already pinned in config, use it
+	if c.cfg.OperatorSessionID != "" {
+		return c.cfg.OperatorSessionID
+	}
+
+	// Try to load user_id and operator_session_id from CLI credentials
+	userID := ""
+	operatorSessionID := ""
+	if c.cfg.UseCLIConfig {
+		cliCfg, err := config.Load("")
+		if err == nil && cliCfg != nil {
+			creds, err := auth.LoadCredentials(cliCfg)
+			if err == nil && creds != nil {
+				userID = creds.UserID
+				operatorSessionID = creds.OperatorSessionID
+			}
+		}
+	}
+
+	// If we already have the operator session ID from credentials, return it directly
+	if operatorSessionID != "" {
+		return operatorSessionID
+	}
+
+	url := c.cfg.MTLSBaseURL + "/api/operators"
+	if userID != "" {
+		url += "?user_id=" + userID
+	}
+
+	_, body, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodGet, url, nil)
 	if err != nil || !json.Valid(body) {
 		return ""
 	}

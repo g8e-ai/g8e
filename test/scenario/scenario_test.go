@@ -21,10 +21,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/auditor/client"
 	"github.com/g8e-ai/g8e/internal/auditor/config"
+	"github.com/g8e-ai/g8e/internal/cli/auth"
 	cliconfig "github.com/g8e-ai/g8e/internal/cli/config"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -49,8 +51,20 @@ type TestContext struct {
 func setupTestContext(t *testing.T) *TestContext {
 	t.Helper()
 
-	// Load CLI config to get ports and paths
-	cliCfg, err := cliconfig.Load("")
+	// Load CLI config to get ports and paths (use project root, not test directory)
+	projectRoot, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	// Navigate to project root (test/scenario -> g8e root)
+	for len(projectRoot) > 0 && filepath.Base(projectRoot) != "g8e" {
+		projectRoot = filepath.Dir(projectRoot)
+		if projectRoot == "/" || projectRoot == "." {
+			t.Fatalf("could not find g8e project root from %s", projectRoot)
+		}
+	}
+
+	cliCfg, err := cliconfig.Load(projectRoot)
 	if err != nil {
 		t.Fatalf("failed to load CLI config: %v", err)
 	}
@@ -58,15 +72,21 @@ func setupTestContext(t *testing.T) *TestContext {
 	// Paths to local PKI material (bootstrapped via ./g8e auth login)
 	clientCertPath := cliCfg.CLICertFile()
 	clientKeyPath := cliCfg.CLIKeyFile()
-	caBundlePath := cliCfg.TrustBundlePath()
+	// Use the CA bundle saved to credentials directory during auth login
+	// This is the CA that actually signed the client cert
+	caBundlePath := filepath.Join(cliCfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
 
 	// Verify certificates exist
 	if _, err := os.Stat(clientCertPath); os.IsNotExist(err) {
 		t.Fatalf("client cert not found at %s - run './g8e auth login' first", clientCertPath)
 	}
+	if _, err := os.Stat(caBundlePath); os.IsNotExist(err) {
+		t.Fatalf("CA bundle not found at %s - run './g8e auth login' first", caBundlePath)
+	}
 
 	// Create auditor client for HTTP submission
 	auditorCfg := config.Default()
+	auditorCfg.UseCLIConfig = false // Don't auto-load from CLI config, we set paths explicitly
 	auditorCfg.MTLSBaseURL = fmt.Sprintf("https://localhost:%d", cliCfg.Paths.Ports.OperatorHTTPS)
 	auditorCfg.PublicBaseURL = fmt.Sprintf("https://localhost:%d", cliCfg.Paths.Ports.OperatorPublicHTTPS)
 	auditorCfg.Auth.ClientCert = clientCertPath
@@ -74,16 +94,26 @@ func setupTestContext(t *testing.T) *TestContext {
 	auditorCfg.Auth.CABundle = caBundlePath
 	auditorCfg.Auth.Insecure = false
 
+	// Load operator session ID from CLI credentials
+	creds, err := auth.LoadCredentials(cliCfg)
+	if err != nil {
+		t.Fatalf("failed to load CLI credentials: %v", err)
+	}
+	if creds == nil {
+		t.Fatalf("no CLI credentials found - run './g8e auth login' first")
+	}
+	auditorCfg.OperatorSessionID = creds.OperatorSessionID
+
 	testClient, err := client.New(auditorCfg)
 	if err != nil {
 		t.Fatalf("failed to create auditor client: %v", err)
 	}
 
-	// Discover live operator session
+	// Discover live operator session (should use the one we loaded)
 	ctx := context.Background()
 	operatorSessionID := testClient.DiscoverOperatorSession(ctx)
 	if operatorSessionID == "" {
-		t.Fatal("failed to discover live operator session - is the platform running? (./g8e platform start)")
+		t.Fatal("failed to discover live operator session - is the platform running? (./g8e gw start)")
 	}
 
 	// Generate test client keys for signing (these are for L2 consensus simulation in tests)

@@ -14,8 +14,10 @@
 package auth
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"net"
@@ -24,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -481,4 +484,254 @@ func TestCheckOperatorRunning_URLWithoutProtocol(t *testing.T) {
 	err := CheckOperatorRunningAtURL("localhost:8440")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid operator URL")
+}
+
+// ---------------------------------------------------------------------------
+// parseCertPEM
+// ---------------------------------------------------------------------------
+
+func TestParseCertPEM_Success(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	certFile := filepath.Join(tmpDir, "cert.pem")
+
+	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
+	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
+
+	cert, err := parseCertPEM(certFile)
+	require.NoError(t, err)
+	require.NotNil(t, cert)
+	assert.Equal(t, "test-cert", cert.Subject.CommonName)
+}
+
+func TestParseCertPEM_InvalidPEM(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	certFile := filepath.Join(tmpDir, "cert.pem")
+
+	require.NoError(t, os.WriteFile(certFile, []byte("invalid-pem-data"), 0600))
+
+	cert, err := parseCertPEM(certFile)
+	require.Error(t, err)
+	assert.Nil(t, cert)
+	assert.Contains(t, err.Error(), "failed to decode PEM block")
+}
+
+func TestParseCertPEM_NonCertificatePEM(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	certFile := filepath.Join(tmpDir, "cert.pem")
+
+	// Write a private key PEM instead of a certificate
+	privKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: []byte("dummy-key-data"),
+	})
+	require.NoError(t, os.WriteFile(certFile, privKeyPEM, 0600))
+
+	cert, err := parseCertPEM(certFile)
+	require.Error(t, err)
+	assert.Nil(t, cert)
+	assert.Contains(t, err.Error(), "PEM block is not a certificate")
+}
+
+// ---------------------------------------------------------------------------
+// isCertExpiringSoon
+// ---------------------------------------------------------------------------
+
+func TestIsCertExpiringSoon_Expiring(t *testing.T) {
+	t.Parallel()
+	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
+	block, _ := pem.Decode([]byte(certPEM))
+	require.NotNil(t, block)
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
+
+	// Modify the certificate to expire in 12 hours
+	cert.NotAfter = time.Now().Add(12 * time.Hour)
+
+	expiring := isCertExpiringSoon(cert)
+	assert.True(t, expiring, "Certificate expiring in 12 hours should be considered expiring soon")
+}
+
+func TestIsCertExpiringSoon_NotExpiring(t *testing.T) {
+	t.Parallel()
+	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
+	block, _ := pem.Decode([]byte(certPEM))
+	require.NotNil(t, block)
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
+
+	// Modify the certificate to expire in 48 hours
+	cert.NotAfter = time.Now().Add(48 * time.Hour)
+
+	expiring := isCertExpiringSoon(cert)
+	assert.False(t, expiring, "Certificate expiring in 48 hours should not be considered expiring soon")
+}
+
+func TestIsCertExpiringSoon_ExactlyAtThreshold(t *testing.T) {
+	t.Parallel()
+	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
+	block, _ := pem.Decode([]byte(certPEM))
+	require.NotNil(t, block)
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
+
+	// Modify the certificate to expire exactly at the threshold (24 hours)
+	cert.NotAfter = time.Now().Add(24 * time.Hour)
+
+	expiring := isCertExpiringSoon(cert)
+	assert.True(t, expiring, "Certificate expiring exactly at threshold should be considered expiring soon")
+}
+
+// ---------------------------------------------------------------------------
+// CheckCertExpiry
+// ---------------------------------------------------------------------------
+
+func TestCheckCertExpiry_Expiring(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	certFile := filepath.Join(tmpDir, "cert.pem")
+
+	// Note: The isCertExpiringSoon function is tested separately with modified certificates.
+	// This test verifies that CheckCertExpiry correctly parses a valid certificate.
+	// Since we cannot easily create a certificate with a custom expiry in the test harness,
+	// we test the happy path here and rely on isCertExpiringSoon tests for expiry logic.
+	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
+	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
+
+	expiring, err := CheckCertExpiry(certFile)
+	require.NoError(t, err)
+	// Default test certificates have long validity, so this should be false
+	assert.False(t, expiring)
+}
+
+func TestCheckCertExpiry_NotExpiring(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	certFile := filepath.Join(tmpDir, "cert.pem")
+
+	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
+	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
+
+	expiring, err := CheckCertExpiry(certFile)
+	require.NoError(t, err)
+	assert.False(t, expiring)
+}
+
+func TestCheckCertExpiry_InvalidFile(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	certFile := filepath.Join(tmpDir, "cert.pem")
+
+	require.NoError(t, os.WriteFile(certFile, []byte("invalid-pem"), 0600))
+
+	expiring, err := CheckCertExpiry(certFile)
+	require.Error(t, err)
+	assert.False(t, expiring)
+}
+
+// ---------------------------------------------------------------------------
+// AutoRenewCertificate
+// ---------------------------------------------------------------------------
+
+func TestAutoRenewCertificate_NotExpiring(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
+	}
+
+	// Create a valid certificate that is not expiring
+	certFile := cfg.CLICertFile()
+	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), 0700))
+	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
+	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
+
+	err := AutoRenewCertificate(cfg, "cli", "")
+	require.NoError(t, err)
+}
+
+func TestAutoRenewCertificate_UnknownCertType(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+	}
+
+	err := AutoRenewCertificate(cfg, "unknown-type", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown certificate type")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4: Bootstrap trust hardening - fingerprint verification
+// ---------------------------------------------------------------------------
+
+func TestVerifyCAFingerprint_Match(t *testing.T) {
+	t.Parallel()
+	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
+
+	// Compute the actual fingerprint
+	block, _ := pem.Decode([]byte(certPEM))
+	require.NotNil(t, block)
+	hash := sha256.Sum256(block.Bytes)
+	expectedFP := hex.EncodeToString(hash[:])
+
+	// Test with sha256: prefix
+	err := VerifyCAFingerprint([]byte(certPEM), "sha256:"+expectedFP)
+	require.NoError(t, err)
+
+	// Test without prefix
+	err = VerifyCAFingerprint([]byte(certPEM), expectedFP)
+	require.NoError(t, err)
+}
+
+func TestVerifyCAFingerprint_Mismatch(t *testing.T) {
+	t.Parallel()
+	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
+
+	err := VerifyCAFingerprint([]byte(certPEM), "sha256:deadbeef")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CA fingerprint mismatch")
+}
+
+func TestVerifyCAFingerprint_EmptyPin(t *testing.T) {
+	t.Parallel()
+	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
+
+	// Empty fingerprint should pass (no verification)
+	err := VerifyCAFingerprint([]byte(certPEM), "")
+	require.NoError(t, err)
+}
+
+func TestVerifyCAFingerprint_InvalidPEM(t *testing.T) {
+	t.Parallel()
+	err := VerifyCAFingerprint([]byte("not valid pem"), "sha256:deadbeef")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to decode CA PEM")
+}
+
+func TestVerifyCAFingerprint_NonCertificatePEM(t *testing.T) {
+	t.Parallel()
+	keyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: []byte("dummy"),
+	})
+
+	err := VerifyCAFingerprint(keyPEM, "sha256:deadbeef")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "PEM block is not a certificate")
 }

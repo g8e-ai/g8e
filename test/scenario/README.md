@@ -18,6 +18,15 @@ test/scenario/
 
 ## Running the Tests
 
+### Prerequisites
+
+Before running scenario integration tests, ensure:
+
+1. The Gateway is running: `./g8e gw start`
+2. You have authenticated with the Gateway: `./g8e auth login`
+
+If you have recently run `./g8e gw clean`, you must re-authenticate before running tests, as the PKI hierarchy is regenerated and existing CLI credentials become invalid.
+
 ### Local Development
 
 ```bash

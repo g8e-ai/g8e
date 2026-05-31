@@ -55,6 +55,8 @@ type GatewayService struct {
 
 	handler *HTTPHandler
 
+	extraIPs []net.IP
+
 	mu      sync.Mutex
 	running bool
 	ready   bool
@@ -135,6 +137,7 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 		passkey:    passkey,
 		userSvc:    userSvc,
 		sessionSvc: sessionSvc,
+		extraIPs:   extraIPs,
 		mcpGateway: mcp.NewGatewayService(mcp.Dependencies{
 			Logger:          logger,
 			Responder:       res,
@@ -182,6 +185,7 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 		passkey:    passkey,
 		userSvc:    userSvc,
 		sessionSvc: sessionSvc,
+		extraIPs:   nil, // Test configuration does not use extra IPs
 		mcpGateway: mcp.NewGatewayService(mcp.Dependencies{
 			Logger:          logger,
 			Responder:       res,
@@ -428,6 +432,9 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	// Start background maintenance for MCP gateway
 	go ls.mcpGateway.RunMaintenance(ctx)
 
+	// Start background service certificate renewal loop
+	go ls.runServiceCertRenewalLoop(ctx)
+
 	errChan := make(chan error, 4)
 	readyChan := make(chan struct{}, 4)
 
@@ -558,4 +565,27 @@ func (ls *GatewayService) Stop(ctx context.Context) error {
 	ls.running = false
 	ls.logger.Info("Gateway service stopped")
 	return nil
+}
+
+// runServiceCertRenewalLoop runs a background goroutine that periodically checks
+// and renews the service certificate if it is expiring soon.
+func (ls *GatewayService) runServiceCertRenewalLoop(ctx context.Context) {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	// Check immediately on startup
+	if err := ls.pki.RenewServiceCert(ls.extraIPs); err != nil {
+		ls.logger.Error("Failed to renew service certificate on startup", string(constants.ConnectionStateError), err)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := ls.pki.RenewServiceCert(ls.extraIPs); err != nil {
+				ls.logger.Error("Failed to renew service certificate", string(constants.ConnectionStateError), err)
+			}
+		}
+	}
 }

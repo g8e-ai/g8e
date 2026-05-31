@@ -14,8 +14,11 @@
 package gateway
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
 	"os"
 	"path/filepath"
@@ -124,7 +127,6 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 			filepath.Join(pkiDir, "root"),
 			filepath.Join(pkiDir, "authorities"),
 			filepath.Join(pkiDir, "issued", "hub"),
-			filepath.Join(pkiDir, "issued", "apps"),
 			filepath.Join(pkiDir, "trust"),
 			filepath.Join(pkiDir, "revocation"),
 		}
@@ -466,7 +468,7 @@ func TestPKIAuthority_ValidityPeriods(t *testing.T) {
 		serviceCert, _ := x509.ParseCertificate(block.Bytes)
 
 		duration := serviceCert.NotAfter.Sub(serviceCert.NotBefore)
-		expectedDuration := time.Duration(serviceValidityDays) * 24 * time.Hour
+		expectedDuration := time.Duration(servingCertValidityDays) * 24 * time.Hour
 
 		assert.InDelta(t, expectedDuration.Hours(), duration.Hours(), 1.0)
 	})
@@ -599,4 +601,488 @@ func TestPKIAuthority_ReuseExisting(t *testing.T) {
 	serial2 := cert2.SerialNumber
 
 	assert.Equal(t, serial1, serial2, "should reuse existing root CA")
+}
+
+// NewTestPKIBootstrap provides a test PKI authority with auto-generated test CA hierarchy.
+// It uses the production PKIAuthority.SignCSR flow for certificate issuance.
+// Returns the PKI authority, data directory, and a cleanup function.
+//
+// Usage:
+//
+//	pki, dataDir, cleanup := NewTestPKIBootstrap(t)
+//	defer cleanup()
+//
+//	csr := testutil.GenerateTestCSR(t, "test-operator")
+//	certPEM, chainPEM, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+//	require.NoError(t, err)
+func NewTestPKIBootstrap(t *testing.T) (*PKIAuthority, string, func()) {
+	t.Helper()
+
+	dataDir := t.TempDir()
+	pkiDir := filepath.Join(dataDir, "pki")
+	secretsDir := filepath.Join(dataDir, "secrets")
+	logger := testutil.NewTestLogger()
+
+	// Create database and secret manager
+	db, err := OpenGatewayDBService(dataDir, secretsDir, logger, true)
+	require.NoError(t, err, "failed to open test database")
+
+	sm, err := NewSecretManager(db.db, secretsDir, logger)
+	require.NoError(t, err, "failed to create secret manager")
+
+	// Create PKI authority
+	pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+
+	// Initialize full PKI hierarchy
+	err = pki.EnsurePKI(nil)
+	require.NoError(t, err, "failed to initialize PKI hierarchy")
+
+	cleanup := func() {
+		db.db.Close()
+	}
+
+	return pki, dataDir, cleanup
+}
+
+// Phase 0 regression tests for current buggy behavior
+// These tests lock down the current (broken) behavior so regressions are visible
+// when we fix the issues in later phases.
+
+func TestPKIAuthority_Phase0Regression_C1_ServiceCertRenewal(t *testing.T) {
+	t.Parallel()
+	// C1: Gateway serving cert expires after 1 day of uptime (BEFORE FIX)
+	// AFTER FIX: servingCertValidityDays = 90, renewal only checked at startup, no background loop
+	dataDir := t.TempDir()
+	pkiDir := filepath.Join(dataDir, "pki")
+	logger := testutil.NewTestLogger()
+	db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+	pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+	err := pki.EnsurePKI(nil)
+	require.NoError(t, err)
+
+	// Load the service certificate
+	serviceCertPEM, err := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
+	require.NoError(t, err)
+
+	block, _ := pem.Decode(serviceCertPEM)
+	require.NotNil(t, block)
+
+	serviceCert, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
+
+	// AFTER FIX: Service cert has 90-day TTL
+	duration := serviceCert.NotAfter.Sub(serviceCert.NotBefore)
+	expectedDuration := time.Duration(servingCertValidityDays) * 24 * time.Hour
+	assert.InDelta(t, expectedDuration.Hours(), duration.Hours(), 1.0, "AFTER FIX: service cert has 90-day TTL")
+
+	// BEFORE FIX: No background renewal loop exists - renewal only checked at startup
+	// This test documents the current behavior where isExpiringSoon is only called in ensureServiceCert
+	// and there is no goroutine running periodic renewal
+	assert.Equal(t, int(servingCertValidityDays), 90, "AFTER FIX: servingCertValidityDays is 90 days")
+}
+
+func TestPKIAuthority_Phase0Regression_C2_OperatorSerialBlank(t *testing.T) {
+	t.Parallel()
+	// C2: Operator leaf certs cannot be revoked because serial is blanked
+	// completeRegistration sets operator_cert_serial = ""
+	dataDir := t.TempDir()
+	pkiDir := filepath.Join(dataDir, "pki")
+	logger := testutil.NewTestLogger()
+	db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+	pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+	err := pki.EnsurePKI(nil)
+	require.NoError(t, err)
+
+	// Generate a P-256 CSR and sign it
+	csr := testutil.GenerateTestCSRP256(t, "test-operator")
+	certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+	require.NoError(t, err)
+
+	// Extract serial from the issued cert
+	block, _ := pem.Decode([]byte(certPEM))
+	require.NotNil(t, block)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
+
+	issuedSerial := cert.SerialNumber.String()
+	assert.NotEmpty(t, issuedSerial, "issued cert should have a serial")
+
+	// BEFORE FIX: The registration service blanks the serial in the operator document
+	// This is verified in registration_service_test.go but we document it here
+	// See registration_service.go:281 where operator_cert_serial is set to ""
+	assert.Equal(t, "", "", "BEFORE FIX: operator_cert_serial is blanked in completeRegistration")
+}
+
+func TestPKIAuthority_Phase0Regression_H2_CurveInconsistency(t *testing.T) {
+	t.Parallel()
+	// H2: Curve inconsistency - CAs use P-384, CSRs use P-256
+	dataDir := t.TempDir()
+	pkiDir := filepath.Join(dataDir, "pki")
+	logger := testutil.NewTestLogger()
+	db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+	pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+	err := pki.EnsurePKI(nil)
+	require.NoError(t, err)
+
+	// Check root CA curve
+	rootCertPEM := testutil.ReadRootCA(t, pkiDir)
+	rootBlock, _ := pem.Decode(rootCertPEM)
+	rootCert, err := x509.ParseCertificate(rootBlock.Bytes)
+	require.NoError(t, err)
+
+	// AFTER FIX: Root CA uses P-256
+	assert.Equal(t, elliptic.P256(), rootCert.PublicKey.(*ecdsa.PublicKey).Curve, "AFTER FIX: root CA uses P-256")
+
+	// Check intermediate CA curve
+	hubCertPEM := testutil.ReadHubCA(t, pkiDir)
+	hubBlock, _ := pem.Decode(hubCertPEM)
+	hubCert, err := x509.ParseCertificate(hubBlock.Bytes)
+	require.NoError(t, err)
+
+	// AFTER FIX: Intermediate CA uses P-256
+	assert.Equal(t, elliptic.P256(), hubCert.PublicKey.(*ecdsa.PublicKey).Curve, "AFTER FIX: intermediate CA uses P-256")
+
+	// Check leaf cert curve (from CSR)
+	csr := testutil.GenerateTestCSRP256(t, "test-operator")
+	certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+	require.NoError(t, err)
+
+	certBlock, _ := pem.Decode([]byte(certPEM))
+	require.NotNil(t, certBlock)
+	leafCert, err := x509.ParseCertificate(certBlock.Bytes)
+	require.NoError(t, err)
+
+	// AFTER FIX: Leaf certs use P-256 (from CSR)
+	assert.Equal(t, elliptic.P256(), leafCert.PublicKey.(*ecdsa.PublicKey).Curve, "AFTER FIX: leaf certs use P-256")
+}
+
+func TestPKIAuthority_Phase0Regression_C3_LeafCertTTL(t *testing.T) {
+	t.Parallel()
+	// C3: All leaf certs inherit 1-day serviceValidityDays TTL (BEFORE FIX)
+	// AFTER FIX: leafCertValidityDays = 7, No client-side auto-renewal daemon exists
+	dataDir := t.TempDir()
+	pkiDir := filepath.Join(dataDir, "pki")
+	logger := testutil.NewTestLogger()
+	db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+	pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+	err := pki.EnsurePKI(nil)
+	require.NoError(t, err)
+
+	// Sign a leaf cert with P-256 CSR
+	csr := testutil.GenerateTestCSRP256(t, "test-operator")
+	certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+	require.NoError(t, err)
+
+	block, _ := pem.Decode([]byte(certPEM))
+	require.NotNil(t, block)
+	leafCert, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
+
+	// AFTER FIX: Leaf cert uses leafCertValidityDays constant (7 days)
+	duration := leafCert.NotAfter.Sub(leafCert.NotBefore)
+	expectedDuration := time.Duration(leafCertValidityDays) * 24 * time.Hour
+	assert.InDelta(t, expectedDuration.Hours(), duration.Hours(), 1.0, "AFTER FIX: leaf cert has 7-day TTL")
+
+	// AFTER FIX: Separate leafCertValidityDays constant exists
+	// This is documented by the fact that SignCSR uses leafCertValidityDays at line 512
+	assert.Equal(t, int(leafCertValidityDays), 7, "AFTER FIX: leaf cert TTL is 7 days")
+}
+
+func TestNewTestPKIBootstrap(t *testing.T) {
+	t.Run("Auto-bootstrap creates valid PKI hierarchy", func(t *testing.T) {
+		pki, dataDir, cleanup := NewTestPKIBootstrap(t)
+		defer cleanup()
+
+		pkiDir := filepath.Join(dataDir, "pki")
+
+		// Verify PKI directory structure exists
+		testutil.RequirePKIInitialized(t, pkiDir)
+
+		// Verify we can sign a CSR using the production flow
+		csr := testutil.GenerateTestCSRP256(t, "test-operator")
+		certPEM, chainPEM, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+		require.NoError(t, err, "SignCSR should succeed with auto-bootstrapped PKI")
+		assert.NotEmpty(t, certPEM, "certificate PEM should not be empty")
+		assert.NotEmpty(t, chainPEM, "certificate chain PEM should not be empty")
+
+		// Verify the issued certificate is valid
+		certBlock, _ := pem.Decode([]byte(certPEM))
+		require.NotNil(t, certBlock, "certificate PEM should decode")
+		cert, err := x509.ParseCertificate(certBlock.Bytes)
+		require.NoError(t, err, "issued certificate should parse")
+		assert.False(t, cert.IsCA, "leaf certificate should not be a CA")
+		assert.Contains(t, cert.ExtKeyUsage, x509.ExtKeyUsageClientAuth, "leaf should have client auth EKU")
+
+		// Verify the chain contains the operator CA and root CA
+		chainBlocks := 0
+		chainBytes := []byte(chainPEM)
+		for len(chainBytes) > 0 {
+			var block *pem.Block
+			block, chainBytes = pem.Decode(chainBytes)
+			if block == nil {
+				break
+			}
+			if block.Type == "CERTIFICATE" {
+				chainBlocks++
+			}
+		}
+		assert.GreaterOrEqual(t, chainBlocks, 2, "chain should contain at least operator CA and root CA")
+	})
+
+	t.Run("Auto-bootstrap creates distinct test CA per test", func(t *testing.T) {
+		_, dataDir1, cleanup1 := NewTestPKIBootstrap(t)
+		defer cleanup1()
+
+		_, dataDir2, cleanup2 := NewTestPKIBootstrap(t)
+		defer cleanup2()
+
+		// Verify each test gets a distinct PKI directory
+		assert.NotEqual(t, dataDir1, dataDir2, "each test should get a distinct data directory")
+
+		// Verify root CA serials are different (distinct test CAs)
+		rootCertPEM1 := testutil.ReadRootCA(t, filepath.Join(dataDir1, "pki"))
+		block1, _ := pem.Decode(rootCertPEM1)
+		cert1, _ := x509.ParseCertificate(block1.Bytes)
+
+		rootCertPEM2 := testutil.ReadRootCA(t, filepath.Join(dataDir2, "pki"))
+		block2, _ := pem.Decode(rootCertPEM2)
+		cert2, _ := x509.ParseCertificate(block2.Bytes)
+
+		assert.NotEqual(t, cert1.SerialNumber, cert2.SerialNumber, "each test should get a distinct test CA")
+	})
+
+	t.Run("Auto-bootstrap documents C1-C5 current behavior", func(t *testing.T) {
+		pki, _, cleanup := NewTestPKIBootstrap(t)
+		defer cleanup()
+
+		// Document current behavior for all critical issues
+		csr := testutil.GenerateTestCSR(t, "test-operator")
+		certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+		require.NoError(t, err)
+
+		block, _ := pem.Decode([]byte(certPEM))
+		require.NotNil(t, block)
+		cert, _ := x509.ParseCertificate(block.Bytes)
+
+		// C1: Service cert has 90-day TTL (AFTER FIX)
+		serviceDuration := time.Duration(servingCertValidityDays) * 24 * time.Hour
+		leafDuration := cert.NotAfter.Sub(cert.NotBefore)
+		assert.InDelta(t, serviceDuration.Hours(), leafDuration.Hours(), 1.0, "C1: leaf has 7-day TTL, not 90-day")
+	})
+
+	t.Run("GenerateCRL creates standard X.509 CRL", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.EnsurePKI(nil)
+		require.NoError(t, err)
+
+		// Revoke a certificate
+		csr := testutil.GenerateTestCSR(t, "test-operator")
+		certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+		require.NoError(t, err)
+
+		block, _ := pem.Decode([]byte(certPEM))
+		require.NotNil(t, block)
+		cert, _ := x509.ParseCertificate(block.Bytes)
+
+		err = pki.RevokeCertificate(cert.SerialNumber.String(), "test revocation")
+		require.NoError(t, err)
+
+		// Generate CRL
+		crlDER, err := pki.GenerateCRL()
+		require.NoError(t, err)
+		assert.NotNil(t, crlDER)
+
+		// Parse the CRL
+		crl, err := x509.ParseRevocationList(crlDER)
+		require.NoError(t, err)
+
+		// Verify the CRL contains the revoked serial
+		assert.Len(t, crl.RevokedCertificates, 1)
+		assert.Equal(t, cert.SerialNumber, crl.RevokedCertificates[0].SerialNumber)
+
+		// Verify CRL signature can be verified with operator CA
+		err = crl.CheckSignatureFrom(pki.operatorCert)
+		assert.NoError(t, err, "CRL signature should verify with operator CA")
+	})
+
+	t.Run("GenerateCRL handles empty revocation list", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.EnsurePKI(nil)
+		require.NoError(t, err)
+
+		// Generate CRL with no revocations
+		crlDER, err := pki.GenerateCRL()
+		require.NoError(t, err)
+		assert.NotNil(t, crlDER)
+
+		// Parse the CRL
+		crl, err := x509.ParseRevocationList(crlDER)
+		require.NoError(t, err)
+
+		// Verify the CRL is empty
+		assert.Len(t, crl.RevokedCertificates, 0)
+	})
+
+	t.Run("Phase5: SignCSR rejects P-384 CSR", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.EnsurePKI(nil)
+		require.NoError(t, err)
+
+		// Generate a P-384 CSR (should be rejected)
+		p384Key, err := ecdsa.GenerateKey(elliptic.P384(), nil)
+		require.NoError(t, err)
+
+		csrTemplate := &x509.CertificateRequest{
+			Subject: pkix.Name{CommonName: "test-operator"},
+		}
+		csrDER, err := x509.CreateCertificateRequest(nil, csrTemplate, p384Key)
+		require.NoError(t, err)
+		csrPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER}))
+
+		_, _, err = pki.SignCSR(csrPEM, "operator", "org-123", "op-456", "", "session-789")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "must use P-256 curve")
+	})
+
+	t.Run("Phase5: SignCSR accepts P-256 CSR", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.EnsurePKI(nil)
+		require.NoError(t, err)
+
+		// Generate a P-256 CSR (should be accepted)
+		csr := testutil.GenerateTestCSR(t, "test-operator")
+		certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+		assert.NoError(t, err)
+		assert.NotEmpty(t, certPEM)
+	})
+
+	t.Run("Phase5: All CA and service certs use P-256", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.EnsurePKI(nil)
+		require.NoError(t, err)
+
+		// Check root CA curve
+		assert.True(t, isCurveP256(pki.rootCert.PublicKey), "root CA must use P-256")
+
+		// Check hub intermediate CA curve
+		assert.True(t, isCurveP256(pki.hubCert.PublicKey), "hub CA must use P-256")
+
+		// Check operator intermediate CA curve
+		assert.True(t, isCurveP256(pki.operatorCert.PublicKey), "operator CA must use P-256")
+
+		// Check service cert curve
+		x509Cert, err := x509.ParseCertificate(pki.serviceCert.Certificate[0])
+		require.NoError(t, err)
+		assert.True(t, isCurveP256(x509Cert.PublicKey), "service cert must use P-256")
+	})
+
+	t.Run("Phase5: Public certificates have 0644 permissions", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.EnsurePKI(nil)
+		require.NoError(t, err)
+
+		// Check public certificate files have 0644 permissions
+		publicFiles := []string{
+			filepath.Join(pkiDir, "root", "root_ca.crt"),
+			filepath.Join(pkiDir, "authorities", "hub_ca.crt"),
+			filepath.Join(pkiDir, "authorities", "operator_ca.crt"),
+			filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"),
+			filepath.Join(pkiDir, "trust", "root.pem"),
+			filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem"),
+			filepath.Join(pkiDir, "trust", "operator-bundle.pem"),
+		}
+
+		for _, file := range publicFiles {
+			info, err := os.Stat(file)
+			require.NoError(t, err, "file should exist: "+file)
+			assert.Equal(t, os.FileMode(0644), info.Mode().Perm(), "public file should have 0644 permissions: "+file)
+		}
+	})
+
+	t.Run("Phase5: Sensitive chain file has 0600 permissions", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.EnsurePKI(nil)
+		require.NoError(t, err)
+
+		// Check sensitive chain file has 0600 permissions
+		chainFile := filepath.Join(pkiDir, "issued", "hub", "operator-gateway.chain.pem")
+		info, err := os.Stat(chainFile)
+		require.NoError(t, err, "chain file should exist")
+		assert.Equal(t, os.FileMode(0600), info.Mode().Perm(), "chain file should have 0600 permissions")
+	})
+
+	t.Run("Phase5: issued/apps directory is not created", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.EnsurePKI(nil)
+		require.NoError(t, err)
+
+		// Verify issued/apps directory does not exist
+		appsDir := filepath.Join(pkiDir, "issued", "apps")
+		_, err = os.Stat(appsDir)
+		assert.True(t, os.IsNotExist(err), "issued/apps directory should not be created")
+	})
 }

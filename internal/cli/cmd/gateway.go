@@ -453,6 +453,9 @@ func gatewayCleanCmd() *cobra.Command {
 				cmd.Println("  2. Completely delete the entire runtime directory")
 				cmd.Println("  3. Delete all SQLite databases, bootstrap secrets, logs, AND TLS/PKI certificates/keys")
 				cmd.Println("  4. All trust routes and credentials will be permanently destroyed")
+				cmd.Println()
+				cmd.Println("IMPORTANT: Your CLI credentials will become invalid after this operation.")
+				cmd.Println("You will need to run './g8e auth login' again after restarting the gateway.")
 				cmd.Print("\nContinue? [y/N]: ")
 				var response string
 				_, _ = fmt.Scanln(&response)
