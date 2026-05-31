@@ -242,8 +242,7 @@ func runAuditorSelfTest(cmd *cobra.Command, args []string) {
 	fmt.Println("Starting self-contained test harness...")
 
 	cfg := harness.DefaultConfig()
-	cfg.GatewayBinary = auditorMTLSURL
-	cfg.OperatorBinary = auditorPublicURL
+	cfg.Binary = auditorMTLSURL
 	cfg.Posture = auditorPhase
 
 	h, err := harness.New(cfg)
@@ -258,13 +257,20 @@ func runAuditorSelfTest(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	// Enroll test client through real gateway PKI
+	certPath, keyPath, caBundlePath, err := h.EnrollTestClient("test-user", "test-cli-session")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to enroll test client: %v\n", err)
+		os.Exit(1)
+	}
+
 	auditorCfg := config.Default()
 	auditorCfg.MTLSBaseURL = h.GatewayURL()
 	auditorCfg.PublicBaseURL = h.PublicURL()
-	auditorCfg.Auth.ClientCert = h.ClientCertPath
-	auditorCfg.Auth.ClientKey = h.ClientKeyPath
-	auditorCfg.Auth.CABundle = h.CACertPath
-	auditorCfg.Auth.Insecure = true
+	auditorCfg.Auth.ClientCert = certPath
+	auditorCfg.Auth.ClientKey = keyPath
+	auditorCfg.Auth.CABundle = caBundlePath
+	auditorCfg.Auth.Insecure = false
 	auditorCfg.OutDir = "./phantom-out-self-test"
 
 	client, err := clientpkg.New(auditorCfg)

@@ -6,6 +6,7 @@
 package harness
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -13,10 +14,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"log"
-	"math/big"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,54 +30,61 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// TestHarness manages self-contained gateway and operator instances.
+// TestHarness manages a self-contained gateway instance in gateway mode.
 type TestHarness struct {
-	mu             sync.Mutex
-	tempDir        string
-	gatewayCmd     *exec.Cmd
-	operatorCmd    *exec.Cmd
-	ctx            context.Context
-	cancel         context.CancelFunc
-	ready          bool
-	GatewayPort    int
-	OperatorPort   int
-	PublicPort     int
-	DataDir        string
-	PKIDir         string
-	SecretsDir     string
-	CACertPath     string
-	ClientCertPath string
-	ClientKeyPath  string
-	GatewayBinary  string
-	OperatorBinary string
+	mu            sync.Mutex
+	tempDir       string
+	gatewayCmd    *exec.Cmd
+	ctx           context.Context
+	cancel        context.CancelFunc
+	ready         bool
+	GatewayPort   int
+	BootstrapPort int
+	PublicPort    int
+	DataDir       string
+	PKIDir        string
+	SecretsDir    string
+	Binary        string
 }
 
 // Config holds configuration for the test harness.
 type Config struct {
-	GatewayPort    int
-	OperatorPort   int
-	PublicPort     int
-	GatewayBinary  string
-	OperatorBinary string
-	Posture        string // "doctrine", "consensus", or "notary"
+	GatewayPort   int
+	BootstrapPort int
+	PublicPort    int
+	Binary        string
+	Posture       string // "doctrine", "consensus", or "notary"
 }
 
 // DefaultConfig returns a default test harness configuration.
 func DefaultConfig() Config {
 	return Config{
-		GatewayPort:    18440, // Non-standard port to avoid conflicts
-		OperatorPort:   18441,
-		PublicPort:     18442,
-		GatewayBinary:  "./bin/g8e",
-		OperatorBinary: "./bin/g8e",
-		Posture:        "doctrine", // L1 enforced, L2/L3 audited (fastest for tests)
+		GatewayPort:   18440, // Non-standard port to avoid conflicts
+		BootstrapPort: 18441,
+		PublicPort:    18442,
+		Binary:        "./bin/g8e",
+		Posture:       "doctrine", // L1 enforced, L2/L3 audited (fastest for tests)
 	}
 }
 
 // New creates a new test harness with temporary PKI material.
 func New(cfg Config) (*TestHarness, error) {
-	tempDir, err := os.MkdirTemp("", "g8ea-harness-*")
+	// Create temp directory in current working directory instead of /tmp
+	wd, err := os.Getwd()
 	if err != nil {
+		return nil, fmt.Errorf("get working directory: %w", err)
+	}
+
+	// Generate unique suffix using timestamp and random bytes
+	randomBytes := make([]byte, 2)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return nil, fmt.Errorf("generate random bytes: %w", err)
+	}
+	randomNum := int(randomBytes[0])<<8 | int(randomBytes[1])
+	uniqueSuffix := fmt.Sprintf("%d-%d", time.Now().UnixNano(), randomNum%10000)
+	tempDir := filepath.Join(wd, fmt.Sprintf(".g8e-harness-%s", uniqueSuffix))
+
+	if err := os.MkdirAll(tempDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
 
@@ -94,47 +105,23 @@ func New(cfg Config) (*TestHarness, error) {
 		return nil, fmt.Errorf("create secrets dir: %w", err)
 	}
 
-	// Generate test PKI
-	caCertPath, caKeyPath, err := generateCA(pkiDir)
-	if err != nil {
-		os.RemoveAll(tempDir)
-		return nil, fmt.Errorf("generate CA: %w", err)
-	}
-
-	// Generate server certs for gateway and operator (using same hostname for localhost testing)
-	_, _, err = generateServerCert(pkiDir, caCertPath, caKeyPath, "localhost")
-	if err != nil {
-		os.RemoveAll(tempDir)
-		return nil, fmt.Errorf("generate server cert: %w", err)
-	}
-
-	clientCertPath, clientKeyPath, err := generateClientCert(pkiDir, caCertPath, caKeyPath, "auditor-client")
-	if err != nil {
-		os.RemoveAll(tempDir)
-		return nil, fmt.Errorf("generate client cert: %w", err)
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &TestHarness{
-		tempDir:        tempDir,
-		ctx:            ctx,
-		cancel:         cancel,
-		GatewayPort:    cfg.GatewayPort,
-		OperatorPort:   cfg.OperatorPort,
-		PublicPort:     cfg.PublicPort,
-		DataDir:        dataDir,
-		PKIDir:         pkiDir,
-		SecretsDir:     secretsDir,
-		CACertPath:     caCertPath,
-		ClientCertPath: clientCertPath,
-		ClientKeyPath:  clientKeyPath,
-		GatewayBinary:  cfg.GatewayBinary,
-		OperatorBinary: cfg.OperatorBinary,
+		tempDir:       tempDir,
+		ctx:           ctx,
+		cancel:        cancel,
+		GatewayPort:   cfg.GatewayPort,
+		BootstrapPort: cfg.BootstrapPort,
+		PublicPort:    cfg.PublicPort,
+		DataDir:       dataDir,
+		PKIDir:        pkiDir,
+		SecretsDir:    secretsDir,
+		Binary:        cfg.Binary,
 	}, nil
 }
 
-// Start launches both gateway and operator subprocesses.
+// Start launches the gateway in gateway mode (operator + gateway in one process).
 func (h *TestHarness) Start(posture string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -143,35 +130,11 @@ func (h *TestHarness) Start(posture string) error {
 		return fmt.Errorf("harness already started")
 	}
 
-	// Start operator first (gateway needs to connect to it)
-	operatorArgs := []string{
-		"--http-port", fmt.Sprintf("%d", h.OperatorPort),
-		"--working-dir", h.tempDir,
-		"--data-dir", h.DataDir,
-		"--pki-dir", h.PKIDir,
-		"--secrets-dir", h.SecretsDir,
-		"--log", "error", // Minimal logging for tests
-	}
-
-	h.operatorCmd = exec.CommandContext(h.ctx, h.OperatorBinary, operatorArgs...)
-	h.operatorCmd.Stdout = nil
-	h.operatorCmd.Stderr = nil
-
-	if err := h.operatorCmd.Start(); err != nil {
-		return fmt.Errorf("start operator: %w", err)
-	}
-
-	// Wait for operator to be ready
-	if err := h.waitForPort(h.OperatorPort, 10*time.Second); err != nil {
-		h.Stop()
-		return fmt.Errorf("operator not ready: %w", err)
-	}
-
-	// Start gateway
+	// Start gateway in gateway mode (operator + gateway combined)
 	gatewayArgs := []string{
 		"--" + posture, // --doctrine, --consensus, or --notary
 		"--http-listen-port", fmt.Sprintf("%d", h.GatewayPort),
-		"--bootstrap-listen-port", fmt.Sprintf("%d", h.OperatorPort),
+		"--bootstrap-listen-port", fmt.Sprintf("%d", h.BootstrapPort),
 		"--public-listen-port", fmt.Sprintf("%d", h.PublicPort),
 		"--data-dir", h.DataDir,
 		"--pki-dir", h.PKIDir,
@@ -179,12 +142,16 @@ func (h *TestHarness) Start(posture string) error {
 		"--log", "error",
 	}
 
-	h.gatewayCmd = exec.CommandContext(h.ctx, h.GatewayBinary, gatewayArgs...)
-	h.gatewayCmd.Stdout = nil
-	h.gatewayCmd.Stderr = nil
+	h.gatewayCmd = exec.CommandContext(h.ctx, h.Binary, gatewayArgs...)
+	if os.Getenv("G8E_TEST_VERBOSE") == "1" {
+		h.gatewayCmd.Stdout = os.Stdout
+		h.gatewayCmd.Stderr = os.Stderr
+	} else {
+		h.gatewayCmd.Stdout = nil
+		h.gatewayCmd.Stderr = nil
+	}
 
 	if err := h.gatewayCmd.Start(); err != nil {
-		h.Stop()
 		return fmt.Errorf("start gateway: %w", err)
 	}
 
@@ -194,12 +161,18 @@ func (h *TestHarness) Start(posture string) error {
 		return fmt.Errorf("gateway not ready: %w", err)
 	}
 
+	// Wait for public port to be ready (PKI endpoint is here)
+	if err := h.waitForPort(h.PublicPort, 15*time.Second); err != nil {
+		h.Stop()
+		return fmt.Errorf("public port not ready: %w", err)
+	}
+
 	h.ready = true
-	log.Printf("Test harness ready: gateway on %d, operator on %d", h.GatewayPort, h.OperatorPort)
+	log.Printf("Test harness ready: gateway on %d, public on %d", h.GatewayPort, h.PublicPort)
 	return nil
 }
 
-// Stop terminates both subprocesses and cleans up temp files.
+// Stop terminates the gateway subprocess and cleans up temp files.
 func (h *TestHarness) Stop() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -213,12 +186,6 @@ func (h *TestHarness) Stop() {
 			log.Printf("warning: failed to kill gateway: %v", err)
 		}
 		_ = h.gatewayCmd.Wait()
-	}
-	if h.operatorCmd != nil {
-		if err := h.operatorCmd.Process.Kill(); err != nil {
-			log.Printf("warning: failed to kill operator: %v", err)
-		}
-		_ = h.operatorCmd.Wait()
 	}
 
 	if h.tempDir != "" {
@@ -239,16 +206,50 @@ func (h *TestHarness) PublicURL() string {
 	return fmt.Sprintf("https://localhost:%d", h.PublicPort)
 }
 
+func (h *TestHarness) waitForTrustBundle(timeout time.Duration) (string, error) {
+	trustBundlePath := filepath.Join(h.PKIDir, "trust", "g8e-gw-ca-bundle.pem")
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(trustBundlePath); err == nil {
+			return trustBundlePath, nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return "", fmt.Errorf("trust bundle not found at %s after %v", trustBundlePath, timeout)
+}
+
+func (h *TestHarness) waitForPKIEndpoint(timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/.well-known/g8e/pki/ca-bundle", h.PublicPort))
+		if err == nil && resp.StatusCode == http.StatusOK {
+			resp.Body.Close()
+			return nil
+		}
+		if resp != nil {
+			resp.Body.Close()
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return fmt.Errorf("PKI endpoint not ready after %v", timeout)
+}
+
 // waitForPort blocks until a port is accepting connections.
 func (h *TestHarness) waitForPort(port int, timeout time.Duration) error {
-	caCert, err := os.ReadFile(h.CACertPath)
+	// Use the gateway's trust bundle for CA verification
+	trustBundlePath, err := h.waitForTrustBundle(timeout)
 	if err != nil {
-		return fmt.Errorf("read CA cert: %w", err)
+		return fmt.Errorf("trust bundle not ready: %w", err)
+	}
+
+	caCert, err := os.ReadFile(trustBundlePath)
+	if err != nil {
+		return fmt.Errorf("read trust bundle: %w", err)
 	}
 
 	caCertPool := x509.NewCertPool()
 	if !caCertPool.AppendCertsFromPEM(caCert) {
-		return fmt.Errorf("failed to parse CA cert")
+		return fmt.Errorf("failed to parse trust bundle")
 	}
 
 	deadline := time.Now().Add(timeout)
@@ -266,200 +267,135 @@ func (h *TestHarness) waitForPort(port int, timeout time.Duration) error {
 	return fmt.Errorf("port %d not ready after %v", port, timeout)
 }
 
-// generateCA creates a test CA certificate and key.
-func generateCA(dir string) (certPath, keyPath string, err error) {
+// EnrollTestClient generates a CSR and enrolls it with the gateway's real PKI system.
+// Returns paths to the client cert, key, and CA bundle.
+func (h *TestHarness) EnrollTestClient(userID, sessionID string) (certPath, keyPath, caBundlePath string, err error) {
+	// Wait for trust bundle file to exist (PKI authority must finish initialization)
+	trustBundlePath, err := h.waitForTrustBundle(15 * time.Second)
+	if err != nil {
+		return "", "", "", fmt.Errorf("trust bundle not ready: %w", err)
+	}
+
+	// Then wait for PKI HTTP endpoint to be responsive
+	if err := h.waitForPKIEndpoint(10 * time.Second); err != nil {
+		return "", "", "", fmt.Errorf("PKI endpoint not ready: %w", err)
+	}
+
+	// Generate client key and CSR
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return "", "", fmt.Errorf("generate CA key: %w", err)
+		return "", "", "", fmt.Errorf("generate client key: %w", err)
 	}
 
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	if err != nil {
-		return "", "", fmt.Errorf("generate serial: %w", err)
-	}
-
-	template := x509.Certificate{
-		SerialNumber: serial,
+	csrTemplate := x509.CertificateRequest{
 		Subject: pkix.Name{
 			Organization: []string{"g8e Test Harness"},
-			CommonName:   "g8e Test CA",
+			CommonName:   "test-auditor-client",
 		},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
-		BasicConstraintsValid: true,
-		IsCA:                  true,
+		DNSNames:    []string{"localhost"},
+		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
 	}
 
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &csrTemplate, priv)
 	if err != nil {
-		return "", "", fmt.Errorf("create CA cert: %w", err)
+		return "", "", "", fmt.Errorf("create CSR: %w", err)
 	}
 
-	certPath = filepath.Join(dir, "ca.crt")
-	keyPath = filepath.Join(dir, "ca.key")
+	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrBytes})
 
-	if err := writePEM(certPath, "CERTIFICATE", derBytes); err != nil {
-		return "", "", err
+	// Submit CSR to gateway's real PKI signing endpoint
+	signURL := fmt.Sprintf("https://localhost:%d/api/v1/pki/csr/sign", h.GatewayPort)
+	signReq := map[string]string{
+		"csr_pem":             string(csrPEM),
+		"leaf_type":           "cli",
+		"user_id":             userID,
+		"workload_session_id": sessionID,
 	}
-	if err := writeKeyPEM(keyPath, priv); err != nil {
-		return "", "", err
-	}
+	reqBody, _ := json.Marshal(signReq)
 
-	return certPath, keyPath, nil
-}
-
-// generateServerCert creates a server certificate signed by the CA.
-func generateServerCert(dir, caCertPath, caKeyPath, hostname string) (certPath, keyPath string, err error) {
-	caKey, err := readKeyPEM(caKeyPath)
+	// Use the trust bundle for TLS verification
+	caCert, err := os.ReadFile(trustBundlePath)
 	if err != nil {
-		return "", "", fmt.Errorf("read CA key: %w", err)
+		return "", "", "", fmt.Errorf("read trust bundle: %w", err)
 	}
 
-	caCert, err := readPEM(caCertPath)
-	if err != nil {
-		return "", "", fmt.Errorf("read CA cert: %w", err)
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(caCert) {
+		return "", "", "", fmt.Errorf("failed to parse trust bundle")
 	}
 
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return "", "", fmt.Errorf("generate server key: %w", err)
-	}
-
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	if err != nil {
-		return "", "", fmt.Errorf("generate serial: %w", err)
-	}
-
-	template := x509.Certificate{
-		SerialNumber: serial,
-		Subject: pkix.Name{
-			Organization: []string{"g8e Test Harness"},
-			CommonName:   hostname,
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs:            caCertPool,
+				InsecureSkipVerify: false,
+				MinVersion:         tls.VersionTLS13,
+			},
 		},
-		NotBefore:   time.Now(),
-		NotAfter:    time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:    x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		DNSNames:    []string{hostname},
+		Timeout: 30 * time.Second,
 	}
 
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, caCert, &priv.PublicKey, caKey)
+	maxRetries := 5
+	baseDelay := 100 * time.Millisecond
+	var resp *http.Response
+	var reqErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		resp, reqErr = client.Post(signURL, "application/json", bytes.NewReader(reqBody))
+		if reqErr == nil {
+			if resp.StatusCode == http.StatusOK {
+				break
+			}
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+				body, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				return "", "", "", fmt.Errorf("CSR signing failed: status %d, body: %s", resp.StatusCode, string(body))
+			}
+			resp.Body.Close()
+		}
+
+		if attempt < maxRetries-1 {
+			delay := baseDelay * time.Duration(1<<uint(attempt))
+			time.Sleep(delay)
+		}
+	}
+	if reqErr != nil {
+		return "", "", "", fmt.Errorf("submit CSR to gateway: %w", reqErr)
+	}
+	if resp == nil {
+		return "", "", "", fmt.Errorf("submit CSR to gateway: response was nil")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", "", "", fmt.Errorf("CSR signing failed: status %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var signResp struct {
+		CertificatePEM      string `json:"certificate_pem"`
+		CertificateChainPEM string `json:"certificate_chain_pem"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&signResp); err != nil {
+		return "", "", "", fmt.Errorf("decode sign response: %w", err)
+	}
+
+	// Save client cert and key
+	certPath = filepath.Join(h.tempDir, "test-client.crt")
+	keyPath = filepath.Join(h.tempDir, "test-client.key")
+
+	if err := os.WriteFile(certPath, []byte(signResp.CertificatePEM), 0600); err != nil {
+		return "", "", "", fmt.Errorf("write client cert: %w", err)
+	}
+
+	keyDER, err := x509.MarshalPKCS8PrivateKey(priv)
 	if err != nil {
-		return "", "", fmt.Errorf("create server cert: %w", err)
+		return "", "", "", fmt.Errorf("marshal private key: %w", err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	if err := os.WriteFile(keyPath, keyPEM, 0600); err != nil {
+		return "", "", "", fmt.Errorf("write client key: %w", err)
 	}
 
-	certPath = filepath.Join(dir, hostname+".crt")
-	keyPath = filepath.Join(dir, hostname+".key")
-
-	if err := writePEM(certPath, "CERTIFICATE", derBytes); err != nil {
-		return "", "", err
-	}
-	if err := writeKeyPEM(keyPath, priv); err != nil {
-		return "", "", err
-	}
-
-	return certPath, keyPath, nil
-}
-
-// generateClientCert creates a client certificate signed by the CA.
-func generateClientCert(dir, caCertPath, caKeyPath, cn string) (certPath, keyPath string, err error) {
-	caKey, err := readKeyPEM(caKeyPath)
-	if err != nil {
-		return "", "", fmt.Errorf("read CA key: %w", err)
-	}
-
-	caCert, err := readPEM(caCertPath)
-	if err != nil {
-		return "", "", fmt.Errorf("read CA cert: %w", err)
-	}
-
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return "", "", fmt.Errorf("generate client key: %w", err)
-	}
-
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	if err != nil {
-		return "", "", fmt.Errorf("generate serial: %w", err)
-	}
-
-	template := x509.Certificate{
-		SerialNumber: serial,
-		Subject: pkix.Name{
-			Organization: []string{"g8e Test Harness"},
-			CommonName:   cn,
-		},
-		NotBefore:   time.Now(),
-		NotAfter:    time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:    x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-	}
-
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, caCert, &priv.PublicKey, caKey)
-	if err != nil {
-		return "", "", fmt.Errorf("create client cert: %w", err)
-	}
-
-	certPath = filepath.Join(dir, cn+".crt")
-	keyPath = filepath.Join(dir, cn+".key")
-
-	if err := writePEM(certPath, "CERTIFICATE", derBytes); err != nil {
-		return "", "", err
-	}
-	if err := writeKeyPEM(keyPath, priv); err != nil {
-		return "", "", err
-	}
-
-	return certPath, keyPath, nil
-}
-
-func writePEM(path, typ string, derBytes []byte) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return pem.Encode(f, &pem.Block{Type: typ, Bytes: derBytes})
-}
-
-func writeKeyPEM(path string, key *ecdsa.PrivateKey) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	privBytes, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		return err
-	}
-	return pem.Encode(f, &pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
-}
-
-func readPEM(path string) (*x509.Certificate, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return nil, fmt.Errorf("no PEM block found")
-	}
-	return x509.ParseCertificate(block.Bytes)
-}
-
-func readKeyPEM(path string) (*ecdsa.PrivateKey, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return nil, fmt.Errorf("no PEM block found")
-	}
-	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, err
-	}
-	return key.(*ecdsa.PrivateKey), nil
+	return certPath, keyPath, trustBundlePath, nil
 }

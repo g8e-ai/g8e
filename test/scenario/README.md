@@ -113,7 +113,7 @@ This prevents flaky tests due to wall time or state drift.
 
 ## Golden File Diffing
 
-The framework automatically diffs signed receipts against golden files in `test/scenario/golden/{scenario}_{mode}.golden.json`. When a scenario accepts an envelope, the receipt is serialized to JSON and compared against the golden snapshot. Set `G8E_UPDATE_GOLDEN=1` to refresh golden files after intentional changes.
+The framework automatically diffs signed receipts against golden files in `test/scenario/golden/{scenario}_{mode}.golden.json`. When a scenario accepts an envelope, the receipt is serialized to JSON and compared against the golden snapshot. Golden files are auto-created if missing and auto-updated on mismatch.
 
 ## Database Persistence
 

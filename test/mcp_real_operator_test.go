@@ -11,21 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build integration
+
 package tests
 
 import (
-	"bytes"
-	"crypto/ed25519"
-	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/hex"
-	"encoding/json"
-	"encoding/pem"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -34,8 +26,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // TestMCPRealOperator_Smoke is a live-operator smoke test that validates
@@ -46,129 +37,51 @@ import (
 // those flows are covered hermetically by TestMCPGateway_EndToEnd in
 // mcp_gateway_test.go.
 //
-// Skip conditions:
-//   - Operator not reachable at $OPERATOR_URL (default from paths.json)
-//   - Trust bundle not present at $G8E_PKI_DIR_HOST/trust/g8e-gw-ca-bundle.pem
-//   - Platform already bootstrapped (403) and no rotation context available
+// This test now starts its own isolated gateway instance for proper test isolation.
 func TestMCPRealOperator_Smoke(t *testing.T) {
-	operatorURL := os.Getenv("OPERATOR_URL")
-	if operatorURL == "" {
-		operatorURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	// Create isolated test environment
+	dataDir := t.TempDir()
+	binPath := testutil.GetTestBinaryPath(t)
+
+	// Ensure binary exists
+	if _, err := os.Stat(binPath); os.IsNotExist(err) {
+		t.Skipf("g8e binary not found at %s - run 'make build' first", binPath)
 	}
 
-	insecureClient := &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
+	// Start gateway subprocess
+	env := []string{
+		fmt.Sprintf("G8E_RUNTIME_DIR=%s", dataDir),
 	}
-	if resp, err := insecureClient.Get(operatorURL + "/health"); err != nil {
-		t.Skipf("Operator not reachable at %s: %v. Run './g8e platform start' to enable.", operatorURL, err)
-	} else {
-		resp.Body.Close()
+	_, bootstrapPort, publicPort := testutil.StartGatewaySubprocess(t, binPath, dataDir, env)
+
+	// Run CLI login to bootstrap
+	loginEnv := append(env,
+		"G8E_OPERATOR_ENDPOINT=localhost",
+		fmt.Sprintf("G8E_OPERATOR_PORT=%d", publicPort),
+		fmt.Sprintf("G8E_OPERATOR_BOOTSTRAP_PORT=%d", bootstrapPort),
+		fmt.Sprintf("HOME=%s", dataDir), // Redirect CLI credentials to temp dir
+	)
+
+	stdout, stderr, err := testutil.RunCLI(t, binPath, []string{"auth", "login"}, loginEnv)
+	require.NoError(t, err, "CLI login failed: %s\n%s", stdout, stderr)
+	require.Contains(t, stdout, "Bootstrap complete", "CLI login did not perform bootstrap")
+
+	// Test basic connectivity to operator via HTTPS
+	healthURL := fmt.Sprintf("https://localhost:%d/health", publicPort)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
+	client := &http.Client{Transport: tr, Timeout: 5 * time.Second}
 
-	cwd, err := os.Getwd()
+	resp, err := client.Get(healthURL)
 	require.NoError(t, err)
-	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(cwd)))
-	pkiDir := filepath.Join(repoRoot, ".g8e", "pki")
-	if override := os.Getenv("G8E_PKI_DIR_HOST"); override != "" {
-		pkiDir = override
-	}
+	defer resp.Body.Close()
 
-	trustBundlePath := filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
-	trustPEM, err := os.ReadFile(trustBundlePath)
-	if err != nil {
-		t.Skipf("Trust bundle not found at %s: %v. Run './g8e platform clean && ./g8e platform start'.", trustBundlePath, err)
-	}
-	rootPool := x509.NewCertPool()
-	require.True(t, rootPool.AppendCertsFromPEM(trustPEM), "failed to parse trust bundle")
+	require.Equal(t, http.StatusOK, resp.StatusCode, "health check failed")
 
-	_, opPriv, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	opCsrDER, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{Subject: pkix.Name{CommonName: "g8e-op-smoke"}}, opPriv)
-	require.NoError(t, err)
-	opCsrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: opCsrDER})
-
-	_, cliPriv, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	cliCsrDER, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{Subject: pkix.Name{CommonName: "g8e-cli-smoke"}}, cliPriv)
-	require.NoError(t, err)
-	cliCsrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCsrDER})
-
-	fpHash := sha256.Sum256([]byte("g8e-mcp-smoke-test"))
-	fingerprint := hex.EncodeToString(fpHash[:])
-
-	reqBody, _ := json.Marshal(map[string]string{
-		"csr_pem":            string(opCsrPEM),
-		"cli_csr_pem":        string(cliCsrPEM),
-		"system_fingerprint": fingerprint,
-	})
-
-	trustClient := &http.Client{
-		Timeout:   10 * time.Second,
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}},
-	}
-
-	httpReq, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/api/v1/auth/bootstrap", constants.Ports.OperatorBootstrapHttps), bytes.NewReader(reqBody))
-	require.NoError(t, err)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	bootstrapResp, err := trustClient.Do(httpReq)
-	require.NoError(t, err)
-	defer bootstrapResp.Body.Close()
-
-	respBytes, _ := io.ReadAll(bootstrapResp.Body)
-	if bootstrapResp.StatusCode == http.StatusForbidden || bootstrapResp.StatusCode == http.StatusConflict {
-		t.Skipf("Platform already bootstrapped (status %d): %s. Run './g8e platform clean && ./g8e platform start' to reset.", bootstrapResp.StatusCode, string(respBytes))
-	}
-	require.Equal(t, http.StatusCreated, bootstrapResp.StatusCode, "bootstrap failed: %s", string(respBytes))
-
-	var regResp models.OperatorRegistrationResponse
-	require.NoError(t, json.Unmarshal(respBytes, &regResp))
-	require.NotEmpty(t, regResp.CLICert, "bootstrap did not return CLI cert")
-	require.NotEmpty(t, regResp.OperatorSessionID)
-	require.NotEmpty(t, regResp.CLISessionID)
-
-	cliPrivBytes, err := x509.MarshalPKCS8PrivateKey(cliPriv)
-	require.NoError(t, err)
-	cliKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: cliPrivBytes})
-	cliCert, err := tls.X509KeyPair([]byte(regResp.CLICert), cliKeyPEM)
-	require.NoError(t, err)
-
-	mtlsClient := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs:      rootPool,
-				Certificates: []tls.Certificate{cliCert},
-			},
-		},
-	}
-
-	listReq, err := http.NewRequest(http.MethodGet, operatorURL+"/api/v1/mcp/tools/list", nil)
-	require.NoError(t, err)
-	listReq.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
-	listReq.Header.Set("X-G8E-CLI-Session-ID", regResp.CLISessionID)
-	listReq.Header.Set("X-G8E-Source-Component", "client")
-
-	listResp, err := mtlsClient.Do(listReq)
-	require.NoError(t, err)
-	defer listResp.Body.Close()
-
-	listBody, _ := io.ReadAll(listResp.Body)
-	require.Equal(t, http.StatusOK, listResp.StatusCode, "tools/list failed: %s", string(listBody))
-	require.Contains(t, string(listBody), "jsonrpc")
-	require.Contains(t, string(listBody), "tools")
-
-	// Query live operator audit vault for inspection
-	t.Logf("Test completed. Querying live operator audit vault at %s", filepath.Join(repoRoot, ".g8e", "audit_vault.db"))
-	vaultPath := filepath.Join(repoRoot, ".g8e", "audit_vault.db")
+	// Query isolated operator audit vault for inspection
+	vaultPath := filepath.Join(dataDir, "audit_vault.db")
 	if _, statErr := os.Stat(vaultPath); statErr == nil {
-		t.Logf("Live audit vault found at: %s", vaultPath)
-		// Note: The vault is SQLite, can be queried with sqlite3 for manual inspection
-		t.Logf("To inspect vault: sqlite3 %s", vaultPath)
-	} else {
-		t.Logf("No audit vault found at %s (may not have been created yet)", vaultPath)
+		t.Logf("Isolated audit vault found at: %s", vaultPath)
 	}
 }

@@ -93,12 +93,6 @@ Credentials and trust material are stored in `~/.g8e/pki` and `~/.g8e/secrets`.
 
 ### 4. Deploy an Operator
 
-For local AI client integration (e.g., Cursor, Claude Code) via stdio-based MCP:
-
-```bash
-./g8e --mcp-serve
-```
-
 For remote host enforcement, use CSR-based enrollment:
 
 ```bash
@@ -129,8 +123,69 @@ Gateway-mediated communication between sovereign agents. Every interaction is st
 
 ---
 
-## Next Steps
+## Post-Bootstrap Actions
 
-- **[Architecture](../devs/codemap.md)** — Deep dive into the platform components.
-- **[CLI Reference](../devs/devs.md)** — Comprehensive command documentation.
-- **[Security Model](../architecture/auth.md)** — PKI, mTLS, and WebAuthn details.
+After successful bootstrap, verify the platform and begin integration:
+
+### Verify Platform Status
+
+```bash
+./g8e platform status
+```
+
+### Explore Available Commands
+
+```bash
+./g8e --help
+./g8e platform --help
+./g8e security --help
+./g8e data --help
+```
+
+### Configure Remote Operators (Multi-Host Setups)
+
+For distributed enforcement across multiple hosts:
+
+```bash
+./g8e security pki enroll --endpoint <gateway-ip>
+```
+
+See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for detailed enrollment steps.
+
+### Review Audit Trail
+
+Query the local audit vault to verify governance enforcement:
+
+```bash
+./g8e data query --collection audit_vault
+```
+
+---
+
+## Integration Guides
+
+- **[MCP Protocol](../protocols/mcp/mcp.md)** — Connect AI clients via Model Context Protocol
+- **[A2A Protocol](../protocols/a2a/a2a.md)** — Agent-to-agent communication patterns
+- **[Connect Apps to Gateway](./connect_apps_to_gateway.md)** — Integrate application-layer adapters
+- **[Native Tools](../architecture/operator.md#native-tool-execution)** — Database triage, log digestion, process governance
+
+---
+
+## Governance Configuration
+
+The Gateway operates in three security postures:
+
+- **Doctrine Mode** (default): L1 enforced, L2/L3 audited
+- **Consensus Mode**: L1/L2 enforced, L3 audited
+- **Notary Mode**: L1/L2/L3 strictly enforced
+
+Configure posture via `./g8e platform start --doctrine`, `--consensus`, or `--notary`.
+
+---
+
+## Deep Dive Documentation
+
+- **[Architecture](../devs/codemap.md)** — Platform component structure
+- **[Operator Reference](../architecture/operator.md)** — Execution boundary and verification sequence
+- **[Security Model](../architecture/auth.md)** — PKI, mTLS, and WebAuthn details
+- **[CLI Reference](../devs/devs.md)** — Comprehensive command documentation

@@ -31,7 +31,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -596,85 +595,6 @@ func (pki *PKIAuthority) loadCAPrivateKey(caType string, key **ecdsa.PrivateKey)
 		return fmt.Errorf("parse %s CA private key: %w", caType, err)
 	}
 
-	*key = parsedKey
-	return nil
-}
-
-func (pki *PKIAuthority) loadCertificatePair(certPath, keyPath string, cert **x509.Certificate, key **ecdsa.PrivateKey) error {
-	certPEM, err := os.ReadFile(certPath)
-	if err != nil {
-		return err
-	}
-
-	block, _ := pem.Decode(certPEM)
-	if block == nil {
-		return fmt.Errorf("invalid cert PEM")
-	}
-	parsedCert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return err
-	}
-
-	// Load private key from keystore
-	if pki.secretManager == nil {
-		return fmt.Errorf("SecretManager is required for PKI private key loading")
-	}
-
-	// Determine CA type from cert path
-	var caType string
-	switch {
-	case strings.Contains(certPath, "root_ca.crt"):
-		caType = "root"
-	case strings.Contains(certPath, "hub_ca.crt"):
-		caType = "hub"
-	case strings.Contains(certPath, "operator_ca.crt"):
-		caType = string(constants.UserRoleOperator)
-	}
-
-	if caType == "" {
-		// For non-CA certificates (service/app certs), load private key from keystore
-		if pki.secretManager == nil {
-			return fmt.Errorf("SecretManager is required for service private key loading")
-		}
-
-		// Extract service name from cert path
-		var serviceName string
-		switch {
-		case strings.Contains(certPath, "operator-gateway.crt"):
-			serviceName = "operator-gateway"
-		case strings.Contains(certPath, "issued/apps/"):
-			// Extract app name from path like "issued/apps/agent.crt"
-			base := filepath.Base(certPath)
-			serviceName = strings.TrimSuffix(base, ".crt")
-		default:
-			return fmt.Errorf("cannot determine service name from cert path: %s", certPath)
-		}
-
-		keyDER, err := pki.secretManager.GetServicePrivateKey(serviceName)
-		if err != nil {
-			return fmt.Errorf("load %s private key from keystore: %w", serviceName, err)
-		}
-
-		parsedKey, err := x509.ParseECPrivateKey(keyDER)
-		if err != nil {
-			return fmt.Errorf("parse %s private key: %w", serviceName, err)
-		}
-		*cert = parsedCert
-		*key = parsedKey
-		return nil
-	}
-
-	keyDER, err := pki.secretManager.GetCAPrivateKey(caType)
-	if err != nil {
-		return fmt.Errorf("load %s CA private key from keystore: %w", caType, err)
-	}
-
-	parsedKey, err := x509.ParseECPrivateKey(keyDER)
-	if err != nil {
-		return fmt.Errorf("parse %s CA private key: %w", caType, err)
-	}
-
-	*cert = parsedCert
 	*key = parsedKey
 	return nil
 }

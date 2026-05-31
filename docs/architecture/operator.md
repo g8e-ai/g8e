@@ -131,7 +131,80 @@ The reference implementation (`g8eo`) currently supports:
 
 ---
 
-## 6. Implementation Reference
+## 6. Post-Bootstrap Workflow
+
+After completing platform bootstrap via `./g8e auth login`, follow this workflow to begin using the Operator:
+
+### 1. Verify Gateway Health
+
+Confirm the Governance Gateway is running and accessible:
+
+```bash
+./g8e platform status
+```
+
+### 2. Enroll Remote Operators (Multi-Host Setups)
+
+For distributed enforcement across multiple hosts, enroll each remote operator:
+
+```bash
+./g8e security pki enroll --endpoint <gateway-ip>
+```
+
+Each operator receives a unique SPIFFE workload identity bound to its mTLS certificate.
+
+### 3. Configure AI Client Integration
+
+Configure your AI client to connect to the Gateway's MCP endpoints:
+- **Cursor**: Configure MCP server to the Gateway's HTTP endpoint
+- **Claude Code**: Add MCP server configuration pointing to the Gateway
+- **Custom BYO Clients**: Use the MCP or A2A protocol endpoints documented in [Protocol Integration](#protocol-integration)
+
+### 4. Test with a Simple Mutation
+
+Execute a benign diagnostic command to verify the verification sequence:
+
+```bash
+# Via MCP client: request a tool call
+# Example: db_discover_topology or sys_oom_detect
+```
+
+The Operator will:
+1. Translate the request into a GovernanceEnvelope
+2. Enforce L1 (Technical Bedrock) checks
+3. Verify L2 (Consensus) signatures if in consensus/notary mode
+4. Require L3 (Notary) approval if in notary mode
+5. Execute through the Actuator boundary
+6. Emit a signed ActionReceipt
+
+### 6. Review Audit Trail
+
+Query the local audit vault to verify governance enforcement:
+
+```bash
+./g8e data query --collection audit_vault
+```
+
+Each entry includes:
+- Transaction hash
+- L1/L2/L3 verification status
+- Signed ActionReceipt
+- State root before/after
+- Operator session ID
+
+### 7. Explore Native Tools
+
+The Operator compiles native tool playbooks for common operational tasks:
+- **Database Triage**: Schema discovery, query validation, isolated reads
+- **Log Digestion**: Stream filtering, OOM detection, config diffing
+- **Process Governance**: Resource profiling, safe signal handling
+- **Network Validation**: Socket auditing, endpoint probing, HTTP health checks
+
+See [Native Tool Execution](#native-tool-execution) for the complete tool catalog.
+
+---
+
+## 7. Implementation Reference
 
 | Concern | Authoritative file |
 |---|---|

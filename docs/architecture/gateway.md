@@ -34,7 +34,7 @@ The g8e Protocol platform is composed of two logically distinct roles, both impl
 The g8e platform is built on the g8e Protocol. Conforming gateway and operator implementations make that protocol live.
 
 - **Governance Gateway (g8eg)** (PDP): The `g8e` binary run in **Gateway mode** (`--doctrine`, `--consensus`, or `--notary`). It acts as the platform's backbone; protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority.
-- **g8e Operator (g8eo)** (PEP): The `g8e` binary run in **Standard Mode** or **MCP Mode** (`--mcp-serve`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease.
+- **g8e Operator (g8eo)** (PEP): The `g8e` binary run in **Standard Mode**. It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease. Gateway mode operators automatically expose MCP endpoints.
 
 ```mermaid
 flowchart TD

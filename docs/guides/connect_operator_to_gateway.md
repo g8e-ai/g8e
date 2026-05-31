@@ -56,14 +56,6 @@ The operator will:
 
 ### MCP Mode
 
-For editor integrations that require stdio-based MCP (Cursor, Claude Code):
-
-```bash
-./g8e --mcp-serve
-```
-
-This spins up a local proxy that forwards stdio JSON-RPC calls to the Gateway's mTLS API.
-
 ---
 
 ## Operator Configuration

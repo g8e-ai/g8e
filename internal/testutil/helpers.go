@@ -14,12 +14,17 @@
 package testutil
 
 import (
+	"bytes"
 	"crypto/ed25519"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -29,6 +34,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
+	"github.com/stretchr/testify/require"
 )
 
 // configCounter generates monotonically increasing IDs within a single test binary
@@ -131,4 +137,123 @@ func TempFile(t *testing.T, path string) {
 			t.Logf("TempFile cleanup: failed to remove %s: %v", path, err)
 		}
 	})
+}
+
+// GetFreePort returns a free TCP port.
+func GetFreePort(t *testing.T) int {
+	t.Helper()
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to resolve tcp addr: %v", err)
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		t.Fatalf("failed to listen on tcp: %v", err)
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port
+}
+
+// RunCLI executes the g8e binary with the given arguments and environment.
+func RunCLI(t *testing.T, binPath string, args []string, env []string) (string, string, error) {
+	t.Helper()
+	cmd := exec.Command(binPath, args...)
+	cmd.Env = append(os.Environ(), env...)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	return stdout.String(), stderr.String(), err
+}
+
+// GetTestBinaryPath returns the path to the g8e binary for integration tests.
+// It checks the G8E_TEST_BINARY_PATH environment variable first, then falls back
+// to a relative path from the repository root (../bin/g8e).
+func GetTestBinaryPath(t *testing.T) string {
+	t.Helper()
+
+	if path := os.Getenv("G8E_TEST_BINARY_PATH"); path != "" {
+		if filepath.IsAbs(path) {
+			return path
+		}
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			t.Fatalf("failed to resolve absolute path for G8E_TEST_BINARY_PATH=%s: %v", path, err)
+		}
+		return absPath
+	}
+
+	// Fallback to relative path from test directory
+	relPath := filepath.Join("..", "bin", "g8e")
+	absPath, err := filepath.Abs(relPath)
+	if err != nil {
+		t.Fatalf("failed to resolve absolute path for %s: %v", relPath, err)
+	}
+	return absPath
+}
+
+// StartGatewaySubprocess starts the g8e binary in gateway mode as a subprocess.
+func StartGatewaySubprocess(t *testing.T, binPath string, dataDir string, env []string) (int, int, int) {
+	t.Helper()
+
+	httpPort := GetFreePort(t)
+	bootstrapPort := GetFreePort(t)
+	publicPort := GetFreePort(t)
+
+	pkiDir := filepath.Join(dataDir, "pki")
+	secretsDir := filepath.Join(dataDir, "secrets")
+
+	args := []string{
+		"--doctrine",
+		"--http-listen-port", fmt.Sprintf("%d", httpPort),
+		"--bootstrap-listen-port", fmt.Sprintf("%d", bootstrapPort),
+		"--public-listen-port", fmt.Sprintf("%d", publicPort),
+		"--data-dir", dataDir,
+		"--pki-dir", pkiDir,
+		"--secrets-dir", secretsDir,
+		"--log", "debug",
+	}
+
+	cmd := exec.Command(binPath, args...)
+	cmd.Env = append(os.Environ(), env...)
+
+	// Buffer output so we can see it if it fails to start
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start gateway subprocess: %v", err)
+	}
+
+	// Register cleanup to kill the process
+	t.Cleanup(func() {
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+		if t.Failed() {
+			t.Logf("Gateway subprocess output:\n%s", output.String())
+		}
+	})
+
+	// Wait for the gateway to be ready by polling the health endpoint
+	healthURL := fmt.Sprintf("https://localhost:%d/health", bootstrapPort)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr, Timeout: 1 * time.Second}
+
+	require.Eventually(t, func() bool {
+		resp, err := client.Get(healthURL)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}, 10*time.Second, 200*time.Millisecond, "Gateway subprocess failed to become healthy")
+
+	return httpPort, bootstrapPort, publicPort
 }

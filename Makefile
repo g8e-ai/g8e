@@ -61,7 +61,6 @@ help:
 	@echo "  test-short    Run short tests with race detection"
 	@echo "  test-coverage Run tests with coverage (enforces 60% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
 	@echo "  test-shuffle  Run all tests with randomized order"
-	@echo "  update-golden Update scenario test golden files"
 	@echo ""
 	@echo "Lint & Quality:"
 	@echo "  lint          Run all linting and quality checks"
@@ -261,11 +260,6 @@ test-coverage:
 test-shuffle:
 	@go test -race -count=1 -shuffle=on -timeout 180s ./...
 
-.PHONY: update-golden
-update-golden:
-	@echo "Updating scenario test golden files..."
-	@G8E_UPDATE_GOLDEN=1 go test -tags=integration -count=1 ./test/scenario -run TestScenarios
-	@echo "Golden files updated."
 
 # =============================================================================
 # LINT & QUALITY

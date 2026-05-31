@@ -15,6 +15,7 @@ package cmd
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -359,6 +360,7 @@ func testScenarioCmd() *cobra.Command {
 			goCmd.Stdout = os.Stdout
 			goCmd.Stderr = os.Stderr
 			goCmd.Dir = cfg.ProjectRoot
+
 			return goCmd.Run()
 		},
 	}
@@ -801,13 +803,26 @@ func showVaultReceipts(vaultPath string, cmd *cobra.Command) error {
 		cmd.Printf("Scenario test vault: %s\n\n", vaultPath)
 		cmd.Println("Aggregating receipts from all scenarios/modes:")
 
+		// Load test results if available
+		type testResult struct {
+			Status string `json:"status"`
+			Label  string `json:"label"`
+		}
+		testResults := make(map[string]map[string]*testResult)
+		testResultsPath := filepath.Join(vaultPath, "test_results.json")
+		if data, err := os.ReadFile(testResultsPath); err == nil {
+			if err := json.Unmarshal(data, &testResults); err == nil {
+				cmd.Printf("Test verdicts loaded from %s\n\n", testResultsPath)
+			}
+		}
+
 		query := `SELECT transaction_id, transaction_hash, status, result_summary, 
 		          state_root_before, state_root_after, action_type, signer_key_id, 
 		          executed_at_ms 
 		          FROM receipts ORDER BY executed_at_ms DESC`
 
-		cmd.Printf("%-20s %-20s %-12s %-30s %-20s\n", "Transaction ID", "Scenario/Mode", "Status", "Summary", "Action Type")
-		cmd.Println(strings.Repeat("-", 110))
+		cmd.Printf("%-20s %-20s %-12s %-12s %-30s %-20s\n", "Transaction ID", "Scenario/Mode", "Test Status", "Receipt Status", "Summary", "Action Type")
+		cmd.Println(strings.Repeat("-", 130))
 
 		totalCount := 0
 		for _, entry := range entries {
@@ -865,6 +880,14 @@ func showVaultReceipts(vaultPath string, cmd *cobra.Command) error {
 						statusStr = "TIMEOUT"
 					}
 
+					// Get test verdict from test_results.json
+					testStatus := "N/A"
+					if modeResults, ok := testResults[entry.Name()]; ok {
+						if modeResult, ok := modeResults[mode]; ok {
+							testStatus = modeResult.Status
+						}
+					}
+
 					// Truncate fields for display
 					if len(txID) > 20 {
 						txID = txID[:17] + "..."
@@ -883,7 +906,9 @@ func showVaultReceipts(vaultPath string, cmd *cobra.Command) error {
 						signerKeyID = signerKeyID[:17] + "..."
 					}
 
-					cmd.Printf("%-20s %-20s %-12s %-30s %-20s\n", txID, scenarioMode, statusStr, summary, actionType)
+					// Display test status (no transformation needed)
+
+					cmd.Printf("%-20s %-20s %-12s %-12s %-30s %-20s\n", txID, scenarioMode, testStatus, statusStr, summary, actionType)
 					totalCount++
 				}
 				rows.Close()

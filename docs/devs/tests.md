@@ -46,7 +46,7 @@ Integration tests exercising end-to-end governance workflows across doctrine, co
 
 **Test Types**:
 - **Table-driven scenarios** - JSON fixtures in `test/scenario/fixtures/` covering security gates (bad integrity, hash mismatch, replay, stale state root, L2/L3 validation) and finance workflows
-- **Golden snapshots** - Deterministic receipt comparison excluding volatile fields (signature, timestamp, signer key). Run with `G8E_UPDATE_GOLDEN=1` to regenerate
+- **Golden snapshots** - Deterministic receipt comparison excluding volatile fields (signature, timestamp, signer key). Golden files auto-create on missing and auto-update on mismatch
 - **Property-based invariants** - Fuzz-style tests verifying core governance invariants (integrity + freshness + state + required-gates must all pass in order)
 - **Concurrency tests** - Double-submit replay detection using goroutines to verify TOCTOU resistance
 - **Negative controls** - Tests that intentionally flip expectations to prove the suite can detect failures

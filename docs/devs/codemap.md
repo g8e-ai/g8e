@@ -94,7 +94,7 @@ Each subdirectory produces one binary. All import `internal/` and `protocol/`.
 ```text
 cmd/
 ├── g8e/main.go                     # Platform CLI (delegates to internal/cli/cmd)
-└── g8eo/main.go                    # Operator binary (multi-mode: gateway, mcp-serve, insecure, outbound)
+└── g8eo/main.go                    # Operator binary (multi-mode: gateway, insecure, outbound)
 ```
 
 ## internal/

@@ -116,6 +116,18 @@ type MaximalEnvelope struct {
 	TTL            time.Duration
 }
 
+// SubmitEnvelope submits a pre-built GovernanceEnvelope directly to the admission API.
+// This is used when the caller has already constructed the envelope (e.g., from fixtures).
+func (c *Client) SubmitEnvelope(ctx context.Context, p Persona, envelope *commonv1.GovernanceEnvelope) (status int, body []byte, err error) {
+	wire, err := protojson.Marshal(envelope)
+	if err != nil {
+		return 0, nil, fmt.Errorf("marshal envelope: %w", err)
+	}
+
+	status, body, err = c.do(ctx, p, http.MethodPost, c.cfg.MTLSBaseURL+"/api/governance/envelope", wire)
+	return status, body, err
+}
+
 // SubmitMaximal builds a real UAPEnvelope wrapping an MCP_CALL, computes the
 // canonical transaction hash with g8e's own hasher, attaches L2 (and optionally
 // mock L3), marshals it as protojson, and POSTs it to the admission API.

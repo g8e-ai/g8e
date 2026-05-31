@@ -74,7 +74,10 @@ func (gatewayRejectingL3Notary) VerifyL3Proof(_ string, _ string, _ string, _ *c
 func mustMarshal(v interface{}) json.RawMessage {
 	b, err := json.Marshal(v)
 	if err != nil {
-		panic(err)
+		// This is a test helper - panic is acceptable for test setup failures
+		// but we should still use t.Fatalf in test context. For now, keep panic
+		// as this is a fixture generation helper used outside test functions.
+		panic(fmt.Sprintf("failed to marshal: %v", err))
 	}
 	return b
 }

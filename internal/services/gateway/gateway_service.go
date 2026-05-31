@@ -345,6 +345,16 @@ func (ls *GatewayService) GetPublicPort() int {
 	return p
 }
 
+// GetBootstrapPort returns the assigned port for the bootstrap server.
+func (ls *GatewayService) GetBootstrapPort() int {
+	if ls.bootstrapServer == nil || ls.bootstrapServer.Addr == "" {
+		return 0
+	}
+	_, portStr, _ := net.SplitHostPort(ls.bootstrapServer.Addr)
+	p, _ := strconv.Atoi(portStr)
+	return p
+}
+
 func (ls *GatewayService) IsRunning() bool {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()

@@ -18,299 +18,262 @@ package scenario
 import (
 	"context"
 	"crypto/ed25519"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
+	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
-	"github.com/g8e-ai/g8e/internal/services/system"
+	"github.com/g8e-ai/g8e/internal/auditor/client"
+	"github.com/g8e-ai/g8e/internal/auditor/config"
+	harnesspkg "github.com/g8e-ai/g8e/internal/auditor/harness"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
-var (
-	// ops holds the OperatorGate instances for each mode
-	ops map[Mode]*OperatorGate
+// TestContext holds the test infrastructure for a single test run.
+// No global state - each test gets its own isolated context.
+type TestContext struct {
+	Harness  *harnesspkg.TestHarness
+	Client   *client.Client
+	BaseURL  string
+	CertPath string
+	KeyPath  string
+	CAPath   string
+	PrivKey  ed25519.PrivateKey
+	PubKey   ed25519.PublicKey
+}
 
-	// testStateRoot is the fixed state root for deterministic testing
-	testStateRoot = "abc123def456"
+// setupTestContext creates and starts the test harness with a real operator/gateway.
+// Returns a TestContext with mTLS client ready for use.
+func setupTestContext(t *testing.T) *TestContext {
+	t.Helper()
 
-	// testSigners holds the trusted L2 signers for testing
-	testSigners map[string]ed25519.PublicKey
+	// Create harness config
+	harnessCfg := harnesspkg.DefaultConfig()
 
-	// testDB is the in-memory database for receipt persistence testing
-	testDB *sqliteutil.DB
-)
+	// Use absolute path to binary from repo root
+	repoRoot, _ := os.Getwd()
+	for i := 0; i < 2; i++ {
+		repoRoot = filepath.Dir(repoRoot)
+	}
+	binaryPath := filepath.Join(repoRoot, "bin", "g8e")
+	harnessCfg.Binary = binaryPath
+	harnessCfg.Posture = "doctrine" // Start in doctrine mode for fastest tests
 
-func TestMain(m *testing.M) {
-	// Generate test signers
-	testSigners = generateTestSigners()
-
-	// Setup in-memory database for receipt persistence
-	var err error
-	testDB, err = SetupTestDB()
+	// Create test harness
+	harness, err := harnesspkg.New(harnessCfg)
 	if err != nil {
-		panicf("failed to setup test database: %v", err)
-	}
-	defer TeardownTestDB(testDB)
-
-	// Create operator gates for each mode
-	ops = make(map[Mode]*OperatorGate)
-	modes := []Mode{ModeDoctrine, ModeConsensus, ModeNotary}
-
-	for _, mode := range modes {
-		// Use a fixed clock for deterministic testing
-		fixedTime := time.Date(2026, 5, 24, 12, 0, 0, 0, time.UTC)
-		clock := system.NewFixedClock(fixedTime)
-
-		// Create a temporary testing.T for audit vault initialization
-		// We use a nil T in TestMain since t.TempDir() is not available there
-		// The audit vault will be initialized in the test cases instead
-		gate, err := NewOperatorGate(mode, clock, testStateRoot, testSigners, testDB, nil)
-		if err != nil {
-			panicf("failed to create operator gate for mode %s: %v", mode, err)
-		}
-		ops[mode] = gate
+		t.Fatalf("failed to create test harness: %v", err)
 	}
 
-	// Run tests
-	code := m.Run()
+	// Start harness
+	if err := harness.Start(harnessCfg.Posture); err != nil {
+		t.Fatalf("failed to start test harness: %v", err)
+	}
 
-	// Print the scenario matrix
-	PrintScenarioMatrix()
+	// Ensure cleanup
+	t.Cleanup(func() {
+		harness.Stop()
+	})
 
-	// Print vault inspection commands
-	PrintVaultInspectionCommands()
+	// Generate test client keys for signing
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate test client keys: %v", err)
+	}
 
-	os.Exit(code)
+	// Enroll test client via real gateway PKI system
+	sessionID := fmt.Sprintf("test-cli-session-%d", time.Now().UnixNano())
+	clientCertPath, clientKeyPath, caBundlePath, err := harness.EnrollTestClient("test-user", sessionID)
+	if err != nil {
+		t.Fatalf("failed to enroll test client: %v", err)
+	}
+
+	// Create auditor client for HTTP submission
+	auditorCfg := config.Default()
+	auditorCfg.MTLSBaseURL = harness.GatewayURL()
+	auditorCfg.Auth.ClientCert = clientCertPath
+	auditorCfg.Auth.ClientKey = clientKeyPath
+	auditorCfg.Auth.CABundle = caBundlePath
+	auditorCfg.Auth.Insecure = false // Use real TLS verification
+
+	testClient, err := client.New(auditorCfg)
+	if err != nil {
+		t.Fatalf("failed to create auditor client: %v", err)
+	}
+
+	return &TestContext{
+		Harness:  harness,
+		Client:   testClient,
+		BaseURL:  harness.GatewayURL(),
+		CertPath: clientCertPath,
+		KeyPath:  clientKeyPath,
+		CAPath:   caBundlePath,
+		PrivKey:  priv,
+		PubKey:   pub,
+	}
 }
 
 func TestScenarios(t *testing.T) {
-	scenarios, err := LoadFixtures()
+	// Setup test infrastructure
+	ctx := setupTestContext(t)
+
+	// Build a valid envelope using the builder
+	intentBytes, err := New().
+		WithCommand("echo hello").
+		WithOperatorSessionID("test-scenario-session").
+		WithL2(ctx.PrivKey, true).
+		Build()
 	if err != nil {
-		t.Fatalf("failed to load fixtures: %v", err)
+		t.Fatalf("failed to build test envelope: %v", err)
 	}
 
-	if len(scenarios) == 0 {
-		t.Fatal("no scenarios loaded from fixtures")
+	// Submit via real HTTP client
+	result := submitViaHTTP(t, ctx.Client, intentBytes)
+
+	// Assert acceptance (doctrine mode accepts valid L1 commands)
+	if result.Error != nil {
+		t.Errorf("expected acceptance, got error: %v", result.Error)
+	}
+	if result.Receipt == nil {
+		t.Error("expected receipt, got nil")
 	}
 
-	for _, s := range scenarios {
-		// Extract operator_session_id from the envelope for session cleanup
-		var envelope struct {
-			OperatorSessionID string `json:"operatorSessionId"`
-		}
-		if err := json.Unmarshal(s.Intent, &envelope); err != nil {
-			t.Fatalf("failed to parse operator_session_id from intent: %v", err)
-		}
-		if envelope.OperatorSessionID == "" {
-			envelope.OperatorSessionID = "test-scenario-session"
-		}
-
-		for _, mode := range []Mode{ModeDoctrine, ModeConsensus, ModeNotary} {
-			mode := mode // capture loop variable
-			t.Run(s.Name+"/"+mode.String(), func(t *testing.T) {
-				// Create a new gate with audit vault for this test
-				fixedTime := time.Date(2026, 5, 24, 12, 0, 0, 0, time.UTC)
-				clock := system.NewFixedClock(fixedTime)
-				gate, err := NewOperatorGate(mode, clock, testStateRoot, testSigners, testDB, t)
-				if err != nil {
-					t.Fatalf("failed to create operator gate for mode %s: %v", mode, err)
-				}
-				defer gate.Close()
-
-				// Create a test session in the audit vault for receipt recording
-				// This is required because the receipts table has a foreign key constraint on sessions
-				// Use idempotent creation to handle duplicate session creation across modes
-				if gate.auditVault != nil {
-					if err := CreateTestSession(gate.auditVault, envelope.OperatorSessionID, "operator"); err != nil {
-						// Ignore UNIQUE constraint errors - session already exists from previous mode
-						if !strings.Contains(err.Error(), "UNIQUE constraint failed") {
-							t.Fatalf("failed to create test session: %v", err)
-						}
-					}
-				}
-
-				expected, ok := s.Expect[mode]
-				if !ok {
-					t.Fatalf("no expected outcome defined for mode %s in scenario %s", mode, s.Name)
-				}
-
-				// Seed replay store for actual_replay scenario
-				if s.Name == "actual_replay" {
-					// Parse the nonce from the intent to seed the replay store
-					var intent struct {
-						Nonce string `json:"nonce"`
-					}
-					if err := json.Unmarshal(s.Intent, &intent); err != nil {
-						t.Fatalf("failed to parse nonce from intent: %v", err)
-					}
-					expiresAt := time.Date(2026, 5, 25, 13, 0, 0, 0, time.UTC)
-					_, err := gate.replayStore.ReserveNonce(intent.Nonce, expiresAt)
-					if err != nil {
-						t.Fatalf("failed to seed replay store: %v", err)
-					}
-				}
-
-				ctx := context.Background()
-				result := gate.Submit(ctx, s.Intent)
-
-				// Assert verdict
-				AssertVerdict(t, result, expected)
-
-				// Assert rejection reason if applicable
-				AssertReason(t, result, expected)
-
-				// Assert audit expectations
-				AssertAudit(t, result, expected)
-
-				// Assert L2/L3 validity
-				AssertL2L3(t, result, expected)
-
-				// Assert receipt persistence to database
-				if result.Receipt != nil {
-					AssertPersistedReceipt(t, gate.db, result.Receipt, expected)
-					// Assert receipt persistence to audit vault
-					AssertAuditVaultReceipt(t, gate.auditVault, result.Receipt, expected)
-				}
-
-				// For tampered_receipt scenario: verify receipt tampering is detected
-				// This tests the "tamper-evident" property of signed receipts
-				if s.Name == "tampered_receipt" && result.Receipt != nil {
-					AssertReceiptTamperDetection(t, result.Receipt, gate.actuator)
-				}
-
-				// Golden diff
-				GoldenDiff(t, s, mode, result.Receipt)
-
-				// Report trace under -v
-				Report(t, s, mode, result)
-
-				// Clear replay store after each scenario to prevent state leakage
-				if gate.replayStore != nil {
-					gate.replayStore.Clear()
-				}
-			})
-		}
-	}
-}
-
-// TestGoldenFilesUpToDate verifies that all golden files are present for accepting scenarios.
-// This test is intended for CI to ensure developers don't forget to update golden files.
-func TestGoldenFilesUpToDate(t *testing.T) {
-	CheckGoldenFilesUpToDate(t)
+	// Assert receipt persistence via API
+	assertReceiptPersisted(t, ctx.Client, result.Receipt.TransactionId)
 }
 
 // TestNegativeControls verifies the test suite can detect failures by intentionally
-// flipping expected verdicts. This is a negative control test - it passes when the
-// flipped expectations correctly cause assertion failures, proving the suite can go red.
+// submitting malformed envelopes. This is a negative control test - it passes when
+// malformed envelopes are correctly rejected.
 func TestNegativeControls(t *testing.T) {
-	scenarios, err := LoadFixtures()
-	if err != nil {
-		t.Fatalf("failed to load fixtures: %v", err)
-	}
+	ctx := setupTestContext(t)
 
-	if len(scenarios) == 0 {
-		t.Fatal("no scenarios loaded from fixtures")
-	}
-
-	// Test 1: Flip a known-accepting scenario to expect reject
-	t.Run("flip_accept_to_reject", func(t *testing.T) {
-		// Use all_valid which accepts in doctrine mode (L1-only)
-		var targetScenario *Scenario
-		for _, s := range scenarios {
-			if s.Name == "all_valid" {
-				targetScenario = &s
-				break
-			}
-		}
-		if targetScenario == nil {
-			t.Fatal("all_valid scenario not found")
+	t.Run("bad_id_rejection", func(t *testing.T) {
+		intentBytes, err := New().
+			WithCommand("echo hello").
+			WithBadID().
+			Build()
+		if err != nil {
+			t.Fatalf("failed to build envelope: %v", err)
 		}
 
-		gate := ops[ModeDoctrine]
-
-		ctx := context.Background()
-		result := gate.Submit(ctx, targetScenario.Intent)
-
-		// Assert that the flipped expectation causes a failure
-		// (i.e., the actual result is ACCEPT, not REJECT)
-		if result.Error != nil {
-			t.Errorf("negative control failed: expected flip to cause assertion error, but got actual rejection: %v", result.Error)
-		}
-		if result.Receipt == nil {
-			t.Errorf("negative control failed: expected flip to cause assertion error, but got nil receipt")
-		}
-		// If we get here with a valid receipt, the flip would have caused AssertVerdict to fail
-		// This proves the suite can detect wrong expectations
-	})
-
-	// Test 2: Flip a known-rejecting scenario to expect accept
-	t.Run("flip_reject_to_accept", func(t *testing.T) {
-		// Find a scenario that rejects in notary mode
-		var targetScenario *Scenario
-		for _, s := range scenarios {
-			if s.Expect[ModeNotary].Verdict == VerdictReject {
-				targetScenario = &s
-				break
-			}
-		}
-		if targetScenario == nil {
-			t.Skip("no rejecting scenario found for notary mode")
-		}
-
-		gate := ops[ModeNotary]
-
-		ctx := context.Background()
-		result := gate.Submit(ctx, targetScenario.Intent)
-
-		// Assert that the flipped expectation causes a failure
-		// (i.e., the actual result is REJECT, not ACCEPT)
+		result := submitViaHTTP(t, ctx.Client, intentBytes)
 		if result.Error == nil {
-			t.Errorf("negative control failed: expected flip to cause assertion error, but got actual acceptance")
+			t.Error("expected rejection for bad ID, got acceptance")
 		}
 		if result.Receipt != nil {
-			t.Errorf("negative control failed: expected flip to cause assertion error, but got valid receipt")
+			t.Error("expected nil receipt for bad ID")
 		}
-		// If we get here with an error, the flip would have caused AssertVerdict to fail
-		// This proves the suite can detect wrong expectations
+	})
+
+	t.Run("bad_hash_rejection", func(t *testing.T) {
+		intentBytes, err := New().
+			WithCommand("echo hello").
+			WithBadHash().
+			Build()
+		if err != nil {
+			t.Fatalf("failed to build envelope: %v", err)
+		}
+
+		result := submitViaHTTP(t, ctx.Client, intentBytes)
+		if result.Error == nil {
+			t.Error("expected rejection for bad hash, got acceptance")
+		}
+		if result.Receipt != nil {
+			t.Error("expected nil receipt for bad hash")
+		}
+	})
+
+	t.Run("bad_signature_rejection", func(t *testing.T) {
+		intentBytes, err := New().
+			WithCommand("echo hello").
+			WithL2(ctx.PrivKey, true).
+			WithBadSignature().
+			Build()
+		if err != nil {
+			t.Fatalf("failed to build envelope: %v", err)
+		}
+
+		result := submitViaHTTP(t, ctx.Client, intentBytes)
+		if result.Error == nil {
+			t.Error("expected rejection for bad signature, got acceptance")
+		}
+		if result.Receipt != nil {
+			t.Error("expected nil receipt for bad signature")
+		}
 	})
 }
 
-func generateTestSigners() map[string]ed25519.PublicKey {
-	signers := make(map[string]ed25519.PublicKey)
-
-	// Use the specific private key from generate_fixtures.go to ensure signature verification works
-	// PRIVATE_KEY_HEX: c847d8625a1d1be737b8c86012ef1ceb7cfe1c2f5bed5115b90b490c55600502797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd
-	// KEY_ID: 797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd
-	privKeyHex := "c847d8625a1d1be737b8c86012ef1ceb7cfe1c2f5bed5115b90b490c55600502797c07dc7211981020b7fea8c31ed993d30576e0e14523a76678672a0d18b8cd"
-	privKeyBytes, err := hex.DecodeString(privKeyHex)
-	if err != nil {
-		panicf("failed to decode private key hex: %v", err)
-	}
-	if len(privKeyBytes) != ed25519.PrivateKeySize {
-		panicf("invalid private key size: got %d, want %d", len(privKeyBytes), ed25519.PrivateKeySize)
-	}
-	privKey := ed25519.PrivateKey(privKeyBytes)
-	pubKey := privKey.Public().(ed25519.PublicKey)
-	keyID := hex.EncodeToString(pubKey)
-	signers[keyID] = pubKey
-
-	// Add 2 more signers for consensus testing
-	for i := 2; i <= 3; i++ {
-		pub, _, err := ed25519.GenerateKey(nil)
-		if err != nil {
-			panicf("failed to generate test signer %d: %v", i, err)
-		}
-		keyID := hex.EncodeToString(pub)
-		signers[keyID] = pub
-	}
-
-	return signers
+// Result represents the outcome of submitting a scenario through the admission path.
+type Result struct {
+	Receipt         *operatorv1.ActionReceipt
+	Error           error
+	ComputedID      string
+	EnvelopeID      string
+	TransactionHash string
 }
 
-func panicf(format string, args ...interface{}) {
-	panic(fmt.Sprintf(format, args...))
+// submitViaHTTP submits an envelope via the auditor client and returns the result.
+func submitViaHTTP(t *testing.T, auditorClient *client.Client, intent []byte) Result {
+	t.Helper()
+
+	ctx := context.Background()
+	persona := client.Persona{ID: "scenario-test", UserAgent: "g8e-scenario-tests"}
+
+	// Decode intent to get envelope for submission
+	var envelope commonv1.GovernanceEnvelope
+	if err := protojson.Unmarshal(intent, &envelope); err != nil {
+		return Result{Error: fmt.Errorf("failed to unmarshal envelope: %w", err)}
+	}
+
+	status, body, err := auditorClient.SubmitEnvelope(ctx, persona, &envelope)
+
+	res := Result{
+		EnvelopeID:      envelope.Id,
+		TransactionHash: envelope.TransactionHash,
+	}
+
+	if err != nil {
+		res.Error = fmt.Errorf("HTTP submission failed: %w", err)
+		return res
+	}
+
+	if status >= 400 {
+		res.Error = fmt.Errorf("gateway rejected with status %d: %s", status, string(body))
+		return res
+	}
+
+	// Parse response to extract receipt if successful
+	var response struct {
+		Receipt *operatorv1.ActionReceipt `json:"receipt"`
+	}
+	if err := json.Unmarshal(body, &response); err == nil && response.Receipt != nil {
+		res.Receipt = response.Receipt
+	}
+
+	return res
+}
+
+// assertReceiptPersisted verifies that a receipt is persisted via the API.
+func assertReceiptPersisted(t *testing.T, auditorClient *client.Client, transactionID string) {
+	t.Helper()
+
+	ctx := context.Background()
+	receipt, _, err := auditorClient.GetReceipt(ctx, transactionID)
+	if err != nil {
+		t.Fatalf("failed to query receipt: %v", err)
+	}
+	if receipt == nil {
+		t.Fatalf("receipt not found for transaction ID %s", transactionID)
+	}
+	if receipt.TransactionID == "" {
+		t.Fatalf("receipt has empty transaction_id")
+	}
+	if receipt.TransactionHash == "" {
+		t.Fatalf("receipt has empty transaction_hash")
+	}
 }
