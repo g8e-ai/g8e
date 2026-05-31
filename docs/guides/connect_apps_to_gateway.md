@@ -37,7 +37,7 @@ This creates the `.g8e` directory structure:
 Start the Gateway:
 
 ```bash
-./g8e platform start
+./g8e gw start
 ```
 
 The Gateway runs in the default mode (doctrine: L1 enforced, L2/L3 signatures not required). To run in different enforcement modes, invoke the binary directly with mode flags:
@@ -90,7 +90,7 @@ Ports can be customized via CLI flags.
 Check Gateway status:
 
 ```bash
-./g8e platform status
+./g8e gw status
 ```
 
 This reports:
@@ -510,7 +510,7 @@ For production deployments:
 Check if ports are already in use:
 
 ```bash
-./g8e platform status
+./g8e gw status
 ```
 
 Verify PKI initialization:

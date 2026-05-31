@@ -25,28 +25,29 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func platformCmd() *cobra.Command {
+func gatewayCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "platform",
-		Short: "Manage the Governance Gateway (g8eg) lifecycle",
-		Long:  `Platform lifecycle commands for starting, stopping, and checking the status of the Governance Gateway.`,
+		Use:     "gw",
+		Aliases: []string{"gateway"},
+		Short:   "Manage the Governance Gateway (g8eg) lifecycle",
+		Long:    `Gateway lifecycle commands for starting, stopping, and checking the status of the Governance Gateway.`,
 	}
 
 	cmd.AddCommand(
-		platformStartCmd(),
-		platformStopCmd(),
-		platformStatusCmd(),
-		platformRestartCmd(),
-		platformLogsCmd(),
-		platformSettingsCmd(),
-		platformResetCmd(),
-		platformCleanCmd(),
+		gatewayStartCmd(),
+		gatewayStopCmd(),
+		gatewayStatusCmd(),
+		gatewayRestartCmd(),
+		gatewayLogsCmd(),
+		gatewaySettingsCmd(),
+		gatewayResetCmd(),
+		gatewayCleanCmd(),
 	)
 
 	return cmd
 }
 
-func platformStartCmd() *cobra.Command {
+func gatewayStartCmd() *cobra.Command {
 	var posture string
 	var httpPort int
 	var bootstrapPort int
@@ -142,7 +143,7 @@ func platformStartCmd() *cobra.Command {
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println("  [Local CLI Auth]    : ./g8e auth login")
 			cmd.Println("  [Bind Satellite]    : ./g8e security pki enroll")
-			cmd.Println("  [View Live Ledger]  : ./g8e platform logs --follow")
+			cmd.Println("  [View Live Ledger]  : ./g8e gateway logs --follow")
 			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println("[g8e] Sovereignty established. Gateway listening for cryptographic consensus.")
@@ -167,7 +168,7 @@ func platformStartCmd() *cobra.Command {
 	return cmd
 }
 
-func platformStopCmd() *cobra.Command {
+func gatewayStopCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop",
 		Short: "Stop the Governance Gateway",
@@ -203,7 +204,7 @@ func platformStopCmd() *cobra.Command {
 	return cmd
 }
 
-func platformStatusCmd() *cobra.Command {
+func gatewayStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Check Gateway health and status",
@@ -240,7 +241,7 @@ func platformStatusCmd() *cobra.Command {
 	return cmd
 }
 
-func platformRestartCmd() *cobra.Command {
+func gatewayRestartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "restart",
 		Short: "Restart the Governance Gateway",
@@ -295,7 +296,7 @@ func platformRestartCmd() *cobra.Command {
 	return cmd
 }
 
-func platformLogsCmd() *cobra.Command {
+func gatewayLogsCmd() *cobra.Command {
 	var follow bool
 
 	cmd := &cobra.Command{
@@ -327,7 +328,7 @@ func platformLogsCmd() *cobra.Command {
 	return cmd
 }
 
-func platformSettingsCmd() *cobra.Command {
+func gatewaySettingsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "settings",
 		Short: "Manage Gateway settings",
@@ -354,7 +355,7 @@ func platformSettingsCmd() *cobra.Command {
 	return cmd
 }
 
-func platformResetCmd() *cobra.Command {
+func gatewayResetCmd() *cobra.Command {
 	var force bool
 
 	cmd := &cobra.Command{
@@ -426,7 +427,7 @@ func platformResetCmd() *cobra.Command {
 	return cmd
 }
 
-func platformCleanCmd() *cobra.Command {
+func gatewayCleanCmd() *cobra.Command {
 	var force bool
 
 	cmd := &cobra.Command{

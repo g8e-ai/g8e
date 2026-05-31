@@ -48,7 +48,7 @@ func (s *UserService) CreateUser() (*models.User, error) {
 }
 
 // CreateBootstrapUser creates the ephemeral local-owner identity used by
-// `./g8e platform start -a`. The resulting user carries IsBootstrap=true so
+// `./g8e gw start -a`. The resulting user carries IsBootstrap=true so
 // the CSR-based registration path can identify and retire it the first time
 // a real identity is provisioned.
 func (s *UserService) CreateBootstrapUser() (*models.User, error) {

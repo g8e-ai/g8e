@@ -46,7 +46,7 @@ import (
 
 // TestNativeToolsIntegration_DatabaseTools tests database native tools
 // with real SQLite databases and audit vault persistence.
-// Requires: ./g8e platform start running with mTLS
+// Requires: ./g8e gw start running with mTLS
 func TestNativeToolsIntegration_DatabaseTools(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
@@ -65,7 +65,7 @@ func TestNativeToolsIntegration_DatabaseTools(t *testing.T) {
 		},
 	}
 	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
-		t.Skipf("Operator not reachable at %s: %v. Run './g8e platform start' to enable.", operatorURL, err)
+		t.Skipf("Operator not reachable at %s: %v. Run './g8e gw start' to enable.", operatorURL, err)
 	} else {
 		resp.Body.Close()
 	}

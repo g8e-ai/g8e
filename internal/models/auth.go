@@ -294,7 +294,7 @@ type CLISession struct {
 // cryptographic credentials.
 //
 // IsBootstrap identifies the ephemeral local-owner identity created by
-// `./g8e platform start -a` over loopback. It is *not* a privilege tier - it
+// `./g8e gw start -a` over loopback. It is *not* a privilege tier - it
 // marks an identity that exists purely to make a fresh local install usable
 // without ceremony, and that is retired automatically the first time a real
 // mTLS login completes.

@@ -23,7 +23,7 @@ This guide covers connecting a Governed Operator to a Governance Gateway and ope
 For development or single-host deployments, start the Gateway locally:
 
 ```bash
-./g8e platform start
+./g8e gw start
 ```
 
 This starts the Gateway in doctrine mode (L1 enforced, L2/L3 audited).
@@ -85,7 +85,7 @@ This defaults to `.g8e/pki` in the current working directory.
 Check status:
 
 ```bash
-./g8e platform status
+./g8e gw status
 ```
 
 This reports:
@@ -148,7 +148,7 @@ Logs are stored in `.g8e/logs/operator.log`.
 Restart:
 
 ```bash
-./g8e platform restart
+./g8e gw restart
 ```
 
 ### Stop
@@ -156,7 +156,7 @@ Restart:
 Stop:
 
 ```bash
-./g8e platform stop
+./g8e gw stop
 ```
 
 ### Certificate Renewal

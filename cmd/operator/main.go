@@ -61,9 +61,10 @@ func main() {
 		return
 	}
 
-	// Check for CLI subcommands (platform, apps, auth, data, evals, security, setup, vars, test)
+	// Check for CLI subcommands (gw, gateway, apps, auth, data, evals, security, setup, vars, test)
 	cliSubcommands := map[string]bool{
-		"platform": true,
+		"gw":       true,
+		"gateway":  true,
 		"apps":     true,
 		"auth":     true,
 		"data":     true,
@@ -184,7 +185,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Usage: g8e [options]\n")
 		fmt.Fprintf(os.Stderr, "   or: g8e <command> [command-options]\n\n")
 		fmt.Fprintf(os.Stderr, "Platform Commands:\n")
-		fmt.Fprintf(os.Stderr, "  platform    Platform lifecycle (start, stop, status, logs)\n")
+		fmt.Fprintf(os.Stderr, "  gw          Gateway lifecycle (start, stop, status, logs)\n")
 		fmt.Fprintf(os.Stderr, "  apps        Application lifecycle (start, stop, status, logs)\n")
 		fmt.Fprintf(os.Stderr, "  auth        Authentication (login, logout)\n")
 		fmt.Fprintf(os.Stderr, "  data        Data operations (export, import, query)\n")

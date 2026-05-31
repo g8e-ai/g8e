@@ -140,7 +140,7 @@ After completing platform bootstrap via `./g8e auth login`, follow this workflow
 Confirm the Governance Gateway is running and accessible:
 
 ```bash
-./g8e platform status
+./g8e gw status
 ```
 
 ### 2. Enroll Remote Operators (Multi-Host Setups)

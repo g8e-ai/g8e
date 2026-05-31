@@ -154,7 +154,7 @@ gates with no optional application-layer coupling in the critical path.
 * **`protocol/constants/field_paths.json`** - Canonical field path registry added to the protocol module.
 * **Generated constant tracking** - `headers_generated.go` and `status_generated.go` added to the
   constant registry with deterministic sorting for reproducible builds.
-* **`-a` shorthand** - `./g8e platform start -a` shorthand for faster invocation.
+* **`-a` shorthand** - `./g8e gw start -a` shorthand for faster invocation.
 * **Unit/integration test subcommands** - `./g8e test` now exposes distinct `unit` and `integration`
   subcommands for CI granularity.
 

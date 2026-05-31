@@ -78,7 +78,7 @@ This produces the `g8e` binary. It is self-contained and manages both Gateway (P
 Start the Sovereign Governance Gateway in **Doctrine Mode** (L1 enforced):
 
 ```bash
-./g8e platform start
+./g8e gw start
 ```
 
 ### 3. Authenticate & Bootstrap
@@ -130,14 +130,14 @@ After successful bootstrap, verify the platform and begin integration:
 ### Verify Platform Status
 
 ```bash
-./g8e platform status
+./g8e gw status
 ```
 
 ### Explore Available Commands
 
 ```bash
 ./g8e --help
-./g8e platform --help
+./g8e gw --help
 ./g8e security --help
 ./g8e data --help
 ```
@@ -179,7 +179,7 @@ The Gateway operates in three security postures:
 - **Consensus Mode**: L1/L2 enforced, L3 audited
 - **Notary Mode**: L1/L2/L3 strictly enforced
 
-Configure posture via `./g8e platform start --doctrine`, `--consensus`, or `--notary`.
+Configure posture via `./g8e gw start --doctrine`, `--consensus`, or `--notary`.
 
 ---
 

@@ -13,8 +13,8 @@ Usage:
 Available Commands:
   auth        Authentication and session management
   data        Administer the local platform over mTLS
+  gw          Manage the Governance Gateway (g8eg) lifecycle
   help        Help about any command
-  platform    Manage the Governance Gateway (g8eg) lifecycle
   security    Security validation checks
   setup       Bootstrap platform dependencies and configuration
   test        Run test suites
@@ -36,12 +36,15 @@ Flags:
   -h, --help   help for setup
 ```
 
-## platform
+## gw
 ```
-Platform lifecycle commands for starting, stopping, and checking the status of the Governance Gateway.
+Gateway lifecycle commands for starting, stopping, and checking the status of the Governance Gateway.
 
 Usage:
-  g8e platform [command]
+  g8e gw [command]
+
+Aliases:
+  gateway
 
 Available Commands:
   clean       Destructively remove all Gateway state
@@ -54,84 +57,84 @@ Available Commands:
   stop        Stop the Governance Gateway
 
 Flags:
-  -h, --help   help for platform
+  -h, --help   help for gw
 
-Use "g8e platform [command] --help" for more information about a command.
+Use "g8e gw [command] --help" for more information about a command.
 ```
 
-### platform start
+### gw start
 ```
 Start the Governance Gateway
 
 Usage:
-  g8e platform start [flags]
+  g8e gw start [flags]
 
 Flags:
   -h, --help   help for start
 ```
 
-### platform stop
+### gw stop
 ```
 Stop the Governance Gateway
 
 Usage:
-  g8e platform stop [flags]
+  g8e gw stop [flags]
 
 Flags:
   -h, --help   help for stop
 ```
 
-### platform status
+### gw status
 ```
 Check Gateway health and status
 
 Usage:
-  g8e platform status [flags]
+  g8e gw status [flags]
 
 Flags:
   -h, --help   help for status
 ```
 
-### platform restart
+### gw restart
 ```
 Restart the Governance Gateway
 
 Usage:
-  g8e platform restart [flags]
+  g8e gw restart [flags]
 
 Flags:
   -h, --help   help for restart
 ```
 
-### platform logs
+### gw logs
 ```
 View Gateway logs
 
 Usage:
-  g8e platform logs [flags]
+  g8e gw logs [flags]
 
 Flags:
   -f, --follow   Follow log output (like tail -f)
   -h, --help     help for logs
 ```
 
-### platform settings
+### gw settings
 ```
 Manage Gateway settings
 
 Usage:
-  g8e platform settings [flags]
+  g8e gw settings [flags]
 
 Flags:
   -h, --help   help for settings
 ```
 
-### platform reset
+### gw reset
 ```
 Reset Gateway data and secrets (preserves CA)
 
 Usage:
-  g8e platform reset [flags]
+  g8e gw reset [flags]
 
 Flags:
       --force   Skip confirmation prompt
@@ -140,12 +143,12 @@ Flags:
       --yes     Skip confirmation prompt (shorthand)
 ```
 
-### platform clean
+### gw clean
 ```
 Destructively remove all Gateway state
 
 Usage:
-  g8e platform clean [flags]
+  g8e gw clean [flags]
 
 Flags:
       --force   Skip confirmation prompt
