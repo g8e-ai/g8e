@@ -1,6 +1,6 @@
 # g8e-protocol
 
-Official Python protocol library for the g8e zero-trust execution substrate. Provides protocol constants, Pydantic models, and protobuf definitions for building g8e-compatible clients and services.
+Official Python protocol library for the g8e zero-trust execution platform. Provides protocol constants, Pydantic models, and protobuf definitions for building g8e-compatible clients and services.
 
 ## Installation
 

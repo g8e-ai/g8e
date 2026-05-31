@@ -15,7 +15,7 @@ All documentation must maintain a professional systems-engineering tone. Avoid p
 ### Formatting and Punctuation
 - **No Em-Dashes**: Do not use em-dashes (—) under any circumstances. Construct compound clauses and modifiers using commas, semicolons, or single hyphens.
 - **No Emojis**: Maintain a standard engineering publication appearance. Do not use emojis, icons, or descriptive illustrations in headers, bullet points, or body text.
-- **Strict Markdown References**: When referencing files or line ranges in the codebase, you must use the absolute markdown citation syntax. For example, refer to files as `protocol/proto/g8e/common/v1/common.proto` or `internal/services/governance/l1_doctrine.go`. Do not use plain text paths or generic lists.
+- **Strict Markdown References**: When referencing files or line ranges in the codebase, you must use the absolute markdown citation syntax with backticks. Do not use plain text paths or generic lists.
 
 ---
 
@@ -23,23 +23,15 @@ All documentation must maintain a professional systems-engineering tone. Avoid p
 
 Maintain absolute consistency with the authoritative system nomenclature used in the codebase. Never refer to legacy, deprecated, or superseded components in user-facing or developer guides.
 
-| Prohibited or Legacy Term | Authoritative Canonical Term | Functional Role & Repository Context |
-| :--- | :--- | :--- |
-| substrate, framework | **platform** | The g8e execution environment. |
-| Governance Gauntlet, Gauntlet | **interlock sequence** / **chain of proofs** | The multi-layer verification pipeline (L1-L5). |
-| Sentinel, g8es, g8ee, g8ed | **Governance Gateway (g8eg)** / **g8e Operator (g8eo)** | The single Go binary (`g8e`) acting as central PDP (`g8eg`) or host-side PEP (`g8eo`). |
-| UniversalEnvelope, UAP JSON, wire format | **GovernanceEnvelope** | The canonical JSON-serialized container for mutations. |
-| bare session_id | **web_session_id** / **cli_session_id** / **operator_session_id** | The specific, typed session identifier. Bare session IDs are prohibited by the linter. |
-
 ---
 
 ## 3. Source-of-Truth Hierarchy
 
 Before making any documentation updates, you must query and verify the underlying implementation in the codebase. Never guess or speculate on system behavior. Trace system capabilities in this precise order:
 
-1. **Protobuf Schemas**: Read definitions from the `protocol/proto/` directory to verify fields, types, and validation options.
-2. **Constants Registries**: Read the JSON constants in `protocol/constants/` and their generated Go targets in `internal/constants/` to verify endpoint paths, collection names, and identifiers.
-3. **Core Service Implementations**: Analyze Go files within the `internal/services/` directory to confirm current business logic, error propagation, and security gates.
+1. **Protobuf Schemas**: Read schema definitions to verify fields, types, and validation options.
+2. **Constants Registries**: Read constants files to verify endpoint paths, collection names, and identifiers.
+3. **Core Service Implementations**: Analyze service implementations to confirm current business logic, error propagation, and security gates.
 
 ---
 
@@ -47,11 +39,11 @@ Before making any documentation updates, you must query and verify the underlyin
 
 When documenting any security, execution, or transactional pipeline, you must trace the validation sequence sequentially across the five core service layers:
 
-- **L1 Doctrine**: Technical Bedrock (Hard Gates) code pattern matching and threat analysis defined in `internal/services/governance/l1_doctrine.go`.
-- **L2 Consensus**: Multi-agent consensus signature verification using Ed25519 cryptography defined in `internal/services/governance/l2_consensus.go`.
-- **L3 Notary**: Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) defined in `internal/services/governance/l3_notary.go`.
-- **L4 Warden**: Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) defined in `internal/services/governance/l4_warden.go`.
-- **L5 Actuator**: Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production defined in `internal/services/governance/l5_actuator.go`.
+- **L1 Doctrine**: Technical Bedrock (Hard Gates) code pattern matching and threat analysis.
+- **L2 Consensus**: Multi-agent consensus signature verification using Ed25519 cryptography.
+- **L3 Notary**: Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs).
+- **L4 Warden**: Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root).
+- **L5 Actuator**: Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production.
 
 ---
 

@@ -1,6 +1,6 @@
 # g8e Protocol
 
-Official protocol library for the g8e zero-trust execution substrate. Provides typed protobuf definitions, constants, models, and workload identity helpers for building g8e-compatible clients and services.
+Official protocol library for the g8e zero-trust execution platform. Provides typed protobuf definitions, constants, models, and workload identity helpers for building g8e-compatible clients and services.
 
 ## Installation
 

@@ -8,7 +8,7 @@ If you are an AI coding assistant, the authoritative contract is in **[AGENTS.md
 
 ## Platform Overview
 
-g8e is a zero-trust execution substrate for agentic infrastructure. The platform enforces typed, signed, state-bound mutations through a 5-layer verification gauntlet before any host state changes occur.
+g8e is a zero-trust execution platform for agentic infrastructure. The platform enforces typed, signed, state-bound mutations through a 5-layer verification gauntlet before any host state changes occur.
 
 **Key concepts:**
 - **GovernanceEnvelope**: The canonical wire format for all mutations (canonical JSON via protojson)

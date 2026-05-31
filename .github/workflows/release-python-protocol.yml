@@ -80,7 +80,7 @@ jobs:
           body: |
             ## g8e-protocol Python Package v${{ steps.tag_version.outputs.version }}
 
-            Official Python protocol library for the g8e zero-trust execution substrate.
+            Official Python protocol library for the g8e zero-trust execution platform.
 
             ### Installation
 

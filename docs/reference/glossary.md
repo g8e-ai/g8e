@@ -48,21 +48,21 @@ The wire format is canonical JSON (protojson) for client-facing surfaces; signin
 
 ---
 
-## Governance Gateway (g8eg)
+## g8e Gateway
 
-The central, BFT-governed Policy Decision Point (PDP) for the g8e platform. It provides central persistence (SQLite Coordination Store), PKI/CA certificate issuance, a secure pub/sub broker, Server-Sent Events (SSE) buffering, and replay protection. It acts as the backplane for coordinating between BYO clients and multiple Governed Operators.
+A reference implementation of a g8e-compliant Policy Decision Point (PDP).
 
 ---
 
-## Governed Operator (g8eo)
+## g8e Operator
 
-The host-resident execution agent and Policy Execution Point (PEP). Built as the `g8e` binary from the Go codebase. Running on target hosts, `g8eo` connects outbound-only over mTLS to `g8eg`. It exposes host tools as a Model Context Protocol (MCP) Server, verifies incoming GovernanceEnvelope transactions against local L1/L2/L3/L4 gates, executes actions strictly through the L5 Actuator boundary, and records tamper-evident local audit logs (Audit Vault, Scrubbed Vault, and git-backed session ledgers).
+A reference implementation of a g8e-compliant Policy Execution Point (PEP) and MCP server.
 
 ---
 
 ## g8e Protocol
 
-The core platform protocol defining how mutations flow through the g8e governance system. A typed, signed, state-bound transaction reaches a sovereign host agent that distrusts upstream inputs and refuses to mutate reality unless every independent proof checks out. The protocol uses canonical JSON (protojson) GovernanceEnvelope on the wire, with L1-L5 governance metadata, state binding, replay protection, and cryptographic signing.
+The canonical protocol definitions (protobuf schemas, constant registries, governance invariants).
 
 ---
 

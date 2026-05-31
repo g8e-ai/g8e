@@ -63,7 +63,7 @@ jobs:
           body: |
             ## g8e Protocol Go Module v${{ steps.tag_version.outputs.version }}
 
-            Official Go protocol library for the g8e zero-trust execution substrate.
+            Official Go protocol library for the g8e zero-trust execution platform.
 
             ### Installation
 

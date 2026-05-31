@@ -18,5 +18,5 @@
 //   - Workload identity helpers for SPIFFE ID generation and validation
 //   - Protocol constants and models
 //
-// This is the canonical protocol library for the g8e zero-trust execution substrate.
+// This is the canonical protocol library for the g8e zero-trust execution platform.
 package protocol
