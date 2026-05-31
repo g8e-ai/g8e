@@ -16,13 +16,11 @@ package testutil
 import (
 	"bytes"
 	"crypto/ed25519"
-	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,7 +32,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
-	"github.com/stretchr/testify/require"
 )
 
 // configCounter generates monotonically increasing IDs within a single test binary
@@ -59,8 +56,8 @@ func NewTestConfig(t *testing.T) *config.Config {
 	operatorID := fmt.Sprintf("test-op-%s-%d", safeName, n)
 	operatorSessionID := fmt.Sprintf("test-sess-%s-%d", safeName, n)
 	workDir := t.TempDir()
-	pkiDir := filepath.Join(workDir, ".g8e", "pki")
-	secretsDir := filepath.Join(workDir, ".g8e", "secrets")
+	pkiDir := filepath.Join(workDir, constants.Paths.Infra.PkiDir)
+	secretsDir := filepath.Join(workDir, constants.Paths.Infra.SecretsDir)
 	trustedSignersDir := filepath.Join(pkiDir, "trusted_signers")
 	if err := os.MkdirAll(trustedSignersDir, 0700); err != nil {
 		t.Fatalf("failed to create trusted signer directory: %v", err)
@@ -90,7 +87,7 @@ func NewTestConfig(t *testing.T) *config.Config {
 		PKIDir:                  pkiDir,
 		SecretsDir:              secretsDir,
 		LocalStoreEnabled:       true,
-		LocalStoreDBPath:        filepath.Join(workDir, ".g8e", "local_state.db"),
+		LocalStoreDBPath:        filepath.Join(workDir, constants.Paths.Infra.LocalStateDBPath),
 		LocalStoreMaxSizeMB:     1024,
 		LocalStoreRetentionDays: 30,
 	}
@@ -193,67 +190,4 @@ func GetTestBinaryPath(t *testing.T) string {
 		t.Fatalf("failed to resolve absolute path for %s: %v", relPath, err)
 	}
 	return absPath
-}
-
-// StartGatewaySubprocess starts the g8e binary in gateway mode as a subprocess.
-func StartGatewaySubprocess(t *testing.T, binPath string, dataDir string, env []string) (int, int, int) {
-	t.Helper()
-
-	httpPort := GetFreePort(t)
-	bootstrapPort := GetFreePort(t)
-	publicPort := GetFreePort(t)
-
-	pkiDir := filepath.Join(dataDir, "pki")
-	secretsDir := filepath.Join(dataDir, "secrets")
-
-	args := []string{
-		"--doctrine",
-		"--http-listen-port", fmt.Sprintf("%d", httpPort),
-		"--bootstrap-listen-port", fmt.Sprintf("%d", bootstrapPort),
-		"--public-listen-port", fmt.Sprintf("%d", publicPort),
-		"--data-dir", dataDir,
-		"--pki-dir", pkiDir,
-		"--secrets-dir", secretsDir,
-		"--log", "debug",
-	}
-
-	cmd := exec.Command(binPath, args...)
-	cmd.Env = append(os.Environ(), env...)
-
-	// Buffer output so we can see it if it fails to start
-	var output bytes.Buffer
-	cmd.Stdout = &output
-	cmd.Stderr = &output
-
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("failed to start gateway subprocess: %v", err)
-	}
-
-	// Register cleanup to kill the process
-	t.Cleanup(func() {
-		if cmd.Process != nil {
-			cmd.Process.Kill()
-		}
-		if t.Failed() {
-			t.Logf("Gateway subprocess output:\n%s", output.String())
-		}
-	})
-
-	// Wait for the gateway to be ready by polling the health endpoint
-	healthURL := fmt.Sprintf("https://localhost:%d/health", bootstrapPort)
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr, Timeout: 1 * time.Second}
-
-	require.Eventually(t, func() bool {
-		resp, err := client.Get(healthURL)
-		if err != nil {
-			return false
-		}
-		defer resp.Body.Close()
-		return resp.StatusCode == http.StatusOK
-	}, 10*time.Second, 200*time.Millisecond, "Gateway subprocess failed to become healthy")
-
-	return httpPort, bootstrapPort, publicPort
 }

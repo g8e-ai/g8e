@@ -53,7 +53,7 @@ type AuditVaultConfig struct {
 // DefaultAuditVaultConfig returns the default configuration for the audit vault.
 func DefaultAuditVaultConfig() *AuditVaultConfig {
 	return &AuditVaultConfig{
-		DataDir:                   "./.g8e/data",
+		DataDir:                   constants.Paths.Infra.DataDir,
 		DBPath:                    "g8e.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               2048,

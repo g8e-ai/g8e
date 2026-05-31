@@ -110,9 +110,9 @@ func getLinuxMachineID(logger *slog.Logger) (string, error) {
 
 	// Fallback to bare metal/VM logic
 	paths := []string{
-		"/etc/machine-id",
-		"/var/lib/dbus/machine-id",
-		"/proc/sys/kernel/random/boot_id",
+		constants.PathEtcMachineID,
+		constants.PathVarLibDbusMachineID,
+		constants.PathProcSysKernelRandomBootID,
 	}
 
 	for _, path := range paths {
@@ -133,7 +133,7 @@ func getLinuxMachineID(logger *slog.Logger) (string, error) {
 // Returns empty string if not running in a container or if detection fails.
 func getContainerMachineID(logger *slog.Logger) (string, error) {
 	// Method 1: Check for Docker container ID from /proc/self/cgroup (cgroup v1)
-	cgroupData, err := os.ReadFile("/proc/self/cgroup")
+	cgroupData, err := os.ReadFile(constants.PathProcSelfCgroup)
 	if err == nil {
 		cgroupLines := strings.Split(string(cgroupData), "\n")
 		for _, line := range cgroupLines {
@@ -160,7 +160,7 @@ func getContainerMachineID(logger *slog.Logger) (string, error) {
 	}
 
 	// Method 2: Try /proc/self/mountinfo for cgroup v2 (works with Docker and containerd)
-	mountInfoData, err := os.ReadFile("/proc/self/mountinfo")
+	mountInfoData, err := os.ReadFile(constants.PathProcSelfMountinfo)
 	if err == nil {
 		mountInfoLines := strings.Split(string(mountInfoData), "\n")
 		for _, line := range mountInfoLines {
@@ -192,7 +192,7 @@ func getContainerMachineID(logger *slog.Logger) (string, error) {
 	}
 
 	// Method 3: Fallback to /etc/hostname which is unique per container
-	hostname, err := os.ReadFile("/etc/hostname")
+	hostname, err := os.ReadFile(constants.PathEtcHostname)
 	if err == nil {
 		hn := strings.TrimSpace(string(hostname))
 		if hn != "" && hn != "localhost" {
@@ -212,7 +212,7 @@ func isHex(s string) bool {
 
 // getDarwinMachineID uses the system preferences plist as a stable machine identifier on macOS
 func getDarwinMachineID() (string, error) {
-	data, err := os.ReadFile("/Library/Preferences/SystemConfiguration/preferences.plist")
+	data, err := os.ReadFile(constants.PathLibraryPreferencesSystemConfigurationPreferencesPlist)
 	if err != nil {
 		hostname, _ := os.Hostname()
 		return fmt.Sprintf("darwin-%s", hostname), nil

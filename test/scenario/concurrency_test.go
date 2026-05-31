@@ -16,6 +16,7 @@
 package scenario
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"testing"
@@ -28,10 +29,20 @@ func TestConcurrencyReplayDetection(t *testing.T) {
 	// Setup test infrastructure
 	ctx := setupTestContext(t)
 
+	// Fetch current state root to bind envelopes
+	stateRoot, err := ctx.Client.StateRoot(context.Background())
+	if err != nil {
+		t.Fatalf("failed to fetch state root: %v", err)
+	}
+	if stateRoot == "" {
+		t.Fatal("gateway returned empty state root")
+	}
+
 	// Create a valid envelope with a fixed nonce for replay testing
 	intentBytes, err := New().
 		WithCommand("echo hello").
 		WithOperatorSessionID(ctx.OperatorSessionID).
+		WithStateRoot(stateRoot).
 		WithNonce("nonce-concurrency-test-123").
 		WithL2(ctx.PrivKey, true).
 		Build()

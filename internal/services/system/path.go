@@ -33,7 +33,7 @@ func ResolveProjectRoot() string {
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		return "/home/g8e" // Absolute fallback for container/standard environments
+		return "." // Fallback to current working directory
 	}
 
 	// Try to find the root by looking for protocol or .git

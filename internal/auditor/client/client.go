@@ -164,10 +164,10 @@ func attachBody(j *json.RawMessage, raw *string, b []byte) {
 
 // ---- Gateway surfaces -------------------------------------------------------
 
-// StateRoot fetches the current state_merkle_root from /health. Maximal
-// envelopes must bind to this exact root or the Operator drops them (TOCTOU gap).
+// StateRoot fetches the current state_merkle_root from /health on the public surface.
+// Maximal envelopes must bind to this exact root or the Operator drops them (TOCTOU gap).
 func (c *Client) StateRoot(ctx context.Context) (string, error) {
-	_, body, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodGet, c.cfg.MTLSBaseURL+"/health", nil)
+	_, body, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodGet, c.cfg.PublicBaseURL+"/health", nil)
 	if err != nil {
 		return "", err
 	}

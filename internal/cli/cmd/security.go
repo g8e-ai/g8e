@@ -53,10 +53,10 @@ func securityValidateCmd() *cobra.Command {
 			}
 
 			if pkiDir == "" {
-				pkiDir = filepath.Join(cfg.ProjectRoot, ".g8e", "pki")
+				pkiDir = filepath.Join(cfg.ProjectRoot, constants.Paths.Infra.PkiDir)
 			}
 			if secretsDir == "" {
-				secretsDir = filepath.Join(cfg.ProjectRoot, ".g8e", "secrets")
+				secretsDir = filepath.Join(cfg.ProjectRoot, constants.Paths.Infra.SecretsDir)
 			}
 
 			cmd.Println("Running platform security validation...")
@@ -151,8 +151,8 @@ func securityValidateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "PKI directory (default: .g8e/pki)")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Secrets directory (default: .g8e/secrets)")
+	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "PKI directory (default: "+constants.Paths.Infra.PkiDir+")")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Secrets directory (default: "+constants.Paths.Infra.SecretsDir+")")
 
 	return cmd
 }

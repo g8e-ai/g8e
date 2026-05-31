@@ -1,6 +1,6 @@
 # g8e Codemap
 
-Structural reference. For protocol semantics see [/home/bob/g8e/docs/architecture/g8e.md](/home/bob/g8e/docs/architecture/g8e.md), for gateway architecture see [/home/bob/g8e/docs/architecture/gateway.md](/home/bob/g8e/docs/architecture/gateway.md), for operator details see [/home/bob/g8e/docs/architecture/operator.md](/home/bob/g8e/docs/architecture/operator.md).
+Structural reference. For protocol semantics see [docs/architecture/g8e.md](docs/architecture/g8e.md), for gateway architecture see [docs/architecture/gateway.md](docs/architecture/gateway.md), for operator details see [docs/architecture/operator.md](docs/architecture/operator.md).
 
 ## Dependency Graph
 

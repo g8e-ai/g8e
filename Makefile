@@ -16,6 +16,7 @@
 
 SHELL := /bin/bash
 export PATH := $(shell go env GOPATH)/bin:$(HOME)/go/bin:$(PATH)
+TMPDIR ?= /tmp
 .DEFAULT_GOAL := help
 
 # =============================================================================
@@ -139,11 +140,11 @@ buf-install:
 protoc-install:
 	@if ! command -v protoc &> /dev/null; then \
 		echo "Installing protoc $(PROTOC_VERSION)..."; \
-		cd /tmp && curl -fSL https://github.com/protocolbuffers/protobuf/releases/download/$(PROTOC_VERSION)/protoc-35.0-linux-x86_64.zip -o protoc.zip && \
+		cd $(TMPDIR) && curl -fSL https://github.com/protocolbuffers/protobuf/releases/download/$(PROTOC_VERSION)/protoc-35.0-linux-x86_64.zip -o protoc.zip && \
 		unzip -o protoc.zip -d protoc && \
 		sudo cp protoc/bin/protoc /usr/local/bin/protoc && \
 		sudo chmod +x /usr/local/bin/protoc && \
-		rm -rf /tmp/protoc /tmp/protoc.zip; \
+		rm -rf $(TMPDIR)/protoc $(TMPDIR)/protoc.zip; \
 	fi
 	@echo "Verifying protoc version compatibility..."
 	@PROTOC_VERSION=$$($(PROTOC) --version | grep -oE '[0-9]+\.[0-9]+'); \
@@ -159,11 +160,11 @@ protoc-install:
 upx-install:
 	@if ! command -v upx &> /dev/null; then \
 		echo "Installing UPX $(UPX_VERSION)..."; \
-		cd /tmp && curl -fSL https://github.com/upx/upx/releases/download/$(UPX_VERSION)/upx-$(UPX_VERSION:v%=%)-linux_amd64.tar.xz -o upx.tar.xz && \
+		cd $(TMPDIR) && curl -fSL https://github.com/upx/upx/releases/download/$(UPX_VERSION)/upx-$(UPX_VERSION:v%=%)-linux_amd64.tar.xz -o upx.tar.xz && \
 		tar -xf upx.tar.xz && \
 		sudo cp upx-$(UPX_VERSION:v%=%)-linux_amd64/upx /usr/local/bin/upx && \
 		sudo chmod +x /usr/local/bin/upx && \
-		rm -rf /tmp/upx-$(UPX_VERSION:v%=%)-linux_amd64 /tmp/upx.tar.xz; \
+		rm -rf $(TMPDIR)/upx-$(UPX_VERSION:v%=%)-linux_amd64 $(TMPDIR)/upx.tar.xz; \
 	fi
 	@echo "UPX installed."
 
@@ -301,12 +302,12 @@ ingest-doctrines:
 .PHONY: update-doctrines
 update-doctrines:
 	@echo "Updating doctrine sources..."
-	@if [ -d "/tmp/coreruleset" ]; then \
-		cd /tmp/coreruleset && git pull; \
+	@if [ -d "$(TMPDIR)/coreruleset" ]; then \
+		cd $(TMPDIR)/coreruleset && git pull; \
 	else \
-		git clone --depth 1 https://github.com/coreruleset/coreruleset.git /tmp/coreruleset; \
+		git clone --depth 1 https://github.com/coreruleset/coreruleset.git $(TMPDIR)/coreruleset; \
 	fi
-	@curl -sSL https://raw.githubusercontent.com/gitleaks/gitleaks/master/config/gitleaks.toml -o /tmp/gitleaks.toml
+	@curl -sSL https://raw.githubusercontent.com/gitleaks/gitleaks/master/config/gitleaks.toml -o $(TMPDIR)/gitleaks.toml
 	@$(MAKE) ingest-doctrines
 	@echo "Doctrine update complete."
 
@@ -324,6 +325,13 @@ clean:
 	@rm -f *.test
 	@rm -f coverage.out
 	@rm -f buf
+	@rm -rf .g8e-harness-*/
+	@echo "Clean complete."
+
+.PHONY: clean-harness
+clean-harness:
+	@echo "Cleaning up stale harness directories..."
+	@rm -rf .g8e-harness-*/
 	@echo "Clean complete."
 
 

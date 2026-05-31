@@ -115,6 +115,8 @@ func main() {
 	var gatewaySecretsDir string
 	var gatewayPasskeyRpID string
 	var gatewayPasskeyRpName string
+	var gatewayRateLimitRPS float64
+	var gatewayRateLimitBurst int
 	var insecureMode bool
 	var insecureURL string
 	var insecureToken string
@@ -138,7 +140,7 @@ func main() {
 	flag.IntVar(&httpPort, "http-port", constants.Ports.OperatorHttps, "HTTPS port for auth/bootstrap via operator proxy (default: from paths.json)")
 	flag.StringVar(&privateKey, "key", "", "Private key")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
-	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: .g8e/pki/ca-bundle.pem or fetch from /.well-known/g8e/pki/ca-bundle)")
+	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: "+constants.CACertLegacyBundlePath+" or fetch from /.well-known/g8e/pki/ca-bundle)")
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory operator was launched from)")
 	flag.BoolVar(&cloudMode, string(constants.OperatorTypeCloud), true, "Cloud mode")
 	flag.StringVar(&cloudProvider, "provider", "", "Cloud provider")
@@ -153,11 +155,13 @@ func main() {
 	flag.IntVar(&gatewayHTTPPort, "http-listen-port", constants.Ports.OperatorHttps, "HTTPS port for mTLS API (default: from paths.json)")
 	flag.IntVar(&gatewayBootstrapPort, "bootstrap-listen-port", constants.Ports.OperatorBootstrapHttps, "Bootstrap TLS port for CSR enrollment (default: from paths.json)")
 	flag.IntVar(&gatewayPublicPort, "public-listen-port", constants.Ports.OperatorPublicHttps, "Public browser/BYO bootstrap port (default: from paths.json)")
-	flag.StringVar(&gatewayDataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
-	flag.StringVar(&gatewayPKIDir, "pki-dir", "", "Directory for TLS certificates (default: .g8e/pki)")
-	flag.StringVar(&gatewaySecretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
+	flag.StringVar(&gatewayDataDir, "data-dir", "", "Data directory for SQLite database (default: "+constants.Paths.Infra.DataDir+" in working directory)")
+	flag.StringVar(&gatewayPKIDir, "pki-dir", "", "Directory for TLS certificates (default: "+constants.Paths.Infra.PkiDir+")")
+	flag.StringVar(&gatewaySecretsDir, "secrets-dir", "", "Directory for platform secrets (default: "+constants.Paths.Infra.SecretsDir+")")
 	flag.StringVar(&gatewayPasskeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
 	flag.StringVar(&gatewayPasskeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
+	flag.Float64Var(&gatewayRateLimitRPS, "rate-limit-rps", 5.0, "Gateway requests per second limit (set to 0 to disable)")
+	flag.IntVar(&gatewayRateLimitBurst, "rate-limit-burst", 10, "Gateway rate limit burst size")
 	flag.BoolVar(&rekeyVault, "rekey-vault", false, "Re-encrypt vault with new private key (requires --old-key)")
 	flag.StringVar(&oldPrivateKeyStr, "old-key", "", "Old private key for vault re-keying")
 	flag.BoolVar(&verifyVault, "verify-vault", false, "Verify vault integrity")
@@ -187,14 +191,14 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -k, --key <key>         Private key (or set G8E_OPERATOR_PRIVATE_KEY)\n")
 		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running operator\n")
-		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: .g8e/pki/ca-bundle.pem or fetch from /.well-known/g8e/pki/ca-bundle)\n")
+		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: "+constants.CACertLegacyBundlePath+" or fetch from /.well-known/g8e/pki/ca-bundle)\n")
 		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory operator was launched from)\n")
 		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")
 		fmt.Fprintf(os.Stderr, "      --http-port <port>    HTTPS port to dial for auth/bootstrap (default: %d)\n", constants.Ports.OperatorHttps)
 		fmt.Fprintf(os.Stderr, "  -c, --cloud             Cloud Operator mode (for AWS/cloud CLI)\n")
 		fmt.Fprintf(os.Stderr, "  -p, --provider <name>   Cloud provider: aws, gcp, azure\n")
 		fmt.Fprintf(os.Stderr, "  -s, --local-storage     Store audit data locally instead of cloud (default: on)\n")
-		fmt.Fprintf(os.Stderr, "                          When enabled, data is stored in ./.g8e/ relative to launch directory\n")
+		fmt.Fprintf(os.Stderr, "                          When enabled, data is stored in ./%s/ relative to launch directory\n", constants.Paths.Infra.RuntimeDir)
 		fmt.Fprintf(os.Stderr, "  -l, --log <level>       Log level: info, error, debug (default: info)\n")
 		fmt.Fprintf(os.Stderr, "  -G, --no-git            Disable ledger (git-backed file versioning)\n")
 		fmt.Fprintf(os.Stderr, "      --heartbeat-interval <dur> Heartbeat interval (e.g. 60s, 2m); overrides the 30s default\n")
@@ -206,11 +210,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for mTLS API (default: %d)\n", constants.Ports.OperatorHttps)
 		fmt.Fprintf(os.Stderr, "  --bootstrap-listen-port <port> Bootstrap TLS port for CSR-based enrollment (default: %d)\n", constants.Ports.OperatorBootstrapHttps)
 		fmt.Fprintf(os.Stderr, "  --public-listen-port <port> Public browser/BYO bootstrap port (default: %d)\n", constants.Ports.OperatorPublicHttps)
-		fmt.Fprintf(os.Stderr, "  --data-dir <dir>            Data directory for SQLite (default: .g8e/data in working directory)\n")
-		fmt.Fprintf(os.Stderr, "  --pki-dir <dir>             Directory for TLS certificates (default: .g8e/pki)\n")
-		fmt.Fprintf(os.Stderr, "  --secrets-dir <dir>         Directory for platform secrets (default: .g8e/secrets)\n")
+		fmt.Fprintf(os.Stderr, "  --data-dir <dir>            Data directory for SQLite (default: %s in working directory)\n", constants.Paths.Infra.DataDir)
+		fmt.Fprintf(os.Stderr, "  --pki-dir <dir>             Directory for TLS certificates (default: %s)\n", constants.Paths.Infra.PkiDir)
+		fmt.Fprintf(os.Stderr, "  --secrets-dir <dir>         Directory for platform secrets (default: %s)\n", constants.Paths.Infra.SecretsDir)
 		fmt.Fprintf(os.Stderr, "  --passkey-rp-id <id>        RP ID for passkey operations (default: localhost)\n")
 		fmt.Fprintf(os.Stderr, "  --passkey-rp-name <name>    RP Name for passkey operations (default: g8e)\n")
+		fmt.Fprintf(os.Stderr, "  --rate-limit-rps <rps>      Requests per second limit (default: 5.0, set to 0 to disable)\n")
+		fmt.Fprintf(os.Stderr, "  --rate-limit-burst <burst>  Rate limit burst size (default: 10)\n")
 		fmt.Fprintf(os.Stderr, "\nVault Management:\n")
 		fmt.Fprintf(os.Stderr, "  --rekey-vault           Re-encrypt vault with new API key\n")
 		fmt.Fprintf(os.Stderr, "  --old-key <key>         Old API key (required for --rekey-vault)\n")
@@ -262,7 +268,7 @@ func main() {
 	}
 
 	if postureCount > 0 {
-		runGatewayMode(posture, gatewayHTTPPort, gatewayBootstrapPort, gatewayPublicPort, gatewayDataDir, gatewayPKIDir, gatewaySecretsDir, gatewayPasskeyRpID, gatewayPasskeyRpName, logLevel)
+		runGatewayMode(posture, gatewayHTTPPort, gatewayBootstrapPort, gatewayPublicPort, gatewayDataDir, gatewayPKIDir, gatewaySecretsDir, gatewayPasskeyRpID, gatewayPasskeyRpName, gatewayRateLimitRPS, gatewayRateLimitBurst, logLevel)
 		return
 	}
 
@@ -290,7 +296,7 @@ func main() {
 
 	// Load trust bundle for TLS verification. Priority:
 	// 1. Explicit --trust-bundle path
-	// 2. Local PKI directory (.g8e/pki/ca-bundle.pem)
+	// 2. Local PKI directory ("+constants.CACertLegacyBundlePath+")
 	// 3. Fetch from Operator /.well-known/g8e/pki/ca-bundle endpoint
 	trustLoaded := loadTrustBundle(logger, trustBundlePath, workingDir)
 	if !trustLoaded {
@@ -406,7 +412,7 @@ func printVersion() {
 
 // loadTrustBundle attempts to read a trust bundle from:
 // 1. Explicit path provided via --trust-bundle
-// 2. Working directory PKI path (.g8e/pki/g8e-gw-ca-bundle.pem)
+// 2. Working directory PKI path ("+constants.Paths.Infra.CaCertPath+")
 // Returns true on the first valid PEM found, which is installed via
 // certs.SetCA. Returns false if no valid trust bundle is found.
 func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string) bool {
@@ -417,7 +423,7 @@ func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string) bool 
 	}
 
 	if workingDir != "" {
-		pkiPath := filepath.Join(workingDir, ".g8e", "pki", "g8e-gw-ca-bundle.pem")
+		pkiPath := filepath.Join(workingDir, constants.Paths.Infra.CaCertPath)
 		pathsToCheck = append(pathsToCheck, pkiPath)
 	}
 
@@ -536,7 +542,7 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 // runGatewayMode starts the Operator in gateway mode - the platform's central
 // persistence (operator) and pub/sub broker. In this mode, the Operator also
 // runs an in-process command service to act as the sovereign execution Gateway.
-func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, logLevel string) {
+func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
@@ -558,6 +564,8 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		SecretsDir:        secretsDir,
 		PasskeyRpID:       passkeyRpID,
 		PasskeyRpName:     passkeyRpName,
+		RateLimitRPS:      rateLimitRPS,
+		RateLimitBurst:    rateLimitBurst,
 		MCPDownstreamURL:  "",
 		A2ADownstreamURL:  "",
 		AllowTestPortZero: false,
@@ -720,7 +728,7 @@ func handleVaultCommand(rekeyVault, verifyVault, resetVault bool, newPrivateKeyS
 		os.Exit(constants.ExitConfigError)
 	}
 
-	dataDir := filepath.Join(workDir, ".g8e", "data")
+	dataDir := filepath.Join(workDir, constants.Paths.Infra.DataDir)
 	if s := config.LoadSettings().DataDir; s != "" {
 		dataDir = s
 	}

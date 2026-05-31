@@ -21,22 +21,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/g8e-ai/g8e/internal/auditor/client"
 	"github.com/g8e-ai/g8e/internal/auditor/config"
-	harnesspkg "github.com/g8e-ai/g8e/internal/auditor/harness"
+	cliconfig "github.com/g8e-ai/g8e/internal/cli/config"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // TestContext holds the test infrastructure for a single test run.
-// No global state - each test gets its own isolated context.
 type TestContext struct {
-	Harness           *harnesspkg.TestHarness
 	Client            *client.Client
 	BaseURL           string
 	CertPath          string
@@ -48,76 +44,64 @@ type TestContext struct {
 	CLISessionID      string
 }
 
-// setupTestContext creates and starts the test harness with a real operator/gateway.
+// setupTestContext connects to a real running operator/gateway.
 // Returns a TestContext with mTLS client ready for use.
 func setupTestContext(t *testing.T) *TestContext {
 	t.Helper()
 
-	// Create harness config
-	harnessCfg := harnesspkg.DefaultConfig()
-
-	// Use absolute path to binary from repo root
-	repoRoot, _ := os.Getwd()
-	for i := 0; i < 2; i++ {
-		repoRoot = filepath.Dir(repoRoot)
-	}
-	binaryPath := filepath.Join(repoRoot, "bin", "g8e")
-	harnessCfg.Binary = binaryPath
-	harnessCfg.Posture = "doctrine" // Start in doctrine mode for fastest tests
-
-	// Create test harness
-	harness, err := harnesspkg.New(harnessCfg)
+	// Load CLI config to get ports and paths
+	cliCfg, err := cliconfig.Load("")
 	if err != nil {
-		t.Fatalf("failed to create test harness: %v", err)
+		t.Fatalf("failed to load CLI config: %v", err)
 	}
 
-	// Start harness
-	if err := harness.Start(harnessCfg.Posture); err != nil {
-		t.Fatalf("failed to start test harness: %v", err)
-	}
+	// Paths to local PKI material (bootstrapped via ./g8e auth login)
+	clientCertPath := cliCfg.CLICertFile()
+	clientKeyPath := cliCfg.CLIKeyFile()
+	caBundlePath := cliCfg.TrustBundlePath()
 
-	// Ensure cleanup
-	t.Cleanup(func() {
-		harness.Stop()
-	})
-
-	// Generate test client keys for signing
-	pub, priv, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		t.Fatalf("failed to generate test client keys: %v", err)
-	}
-
-	// Enroll test client via real gateway PKI system
-	sessionID := fmt.Sprintf("test-cli-session-%d", time.Now().UnixNano())
-	clientCertPath, clientKeyPath, caBundlePath, operatorSessionID, cliSessionID, err := harness.EnrollTestClient("test-user", sessionID)
-	if err != nil {
-		t.Fatalf("failed to enroll test client: %v", err)
+	// Verify certificates exist
+	if _, err := os.Stat(clientCertPath); os.IsNotExist(err) {
+		t.Fatalf("client cert not found at %s - run './g8e auth login' first", clientCertPath)
 	}
 
 	// Create auditor client for HTTP submission
 	auditorCfg := config.Default()
-	auditorCfg.MTLSBaseURL = harness.GatewayURL()
+	auditorCfg.MTLSBaseURL = fmt.Sprintf("https://localhost:%d", cliCfg.Paths.Ports.OperatorHTTPS)
+	auditorCfg.PublicBaseURL = fmt.Sprintf("https://localhost:%d", cliCfg.Paths.Ports.OperatorPublicHTTPS)
 	auditorCfg.Auth.ClientCert = clientCertPath
 	auditorCfg.Auth.ClientKey = clientKeyPath
 	auditorCfg.Auth.CABundle = caBundlePath
-	auditorCfg.Auth.Insecure = false // Use real TLS verification
+	auditorCfg.Auth.Insecure = false
 
 	testClient, err := client.New(auditorCfg)
 	if err != nil {
 		t.Fatalf("failed to create auditor client: %v", err)
 	}
 
+	// Discover live operator session
+	ctx := context.Background()
+	operatorSessionID := testClient.DiscoverOperatorSession(ctx)
+	if operatorSessionID == "" {
+		t.Fatal("failed to discover live operator session - is the platform running? (./g8e platform start)")
+	}
+
+	// Generate test client keys for signing (these are for L2 consensus simulation in tests)
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate test client keys: %v", err)
+	}
+
 	return &TestContext{
-		Harness:           harness,
 		Client:            testClient,
-		BaseURL:           harness.GatewayURL(),
+		BaseURL:           auditorCfg.MTLSBaseURL,
 		CertPath:          clientCertPath,
 		KeyPath:           clientKeyPath,
 		CAPath:            caBundlePath,
 		PrivKey:           priv,
 		PubKey:            pub,
 		OperatorSessionID: operatorSessionID,
-		CLISessionID:      cliSessionID,
+		CLISessionID:      "test-cli-session", // Can be anything for these tests
 	}
 }
 

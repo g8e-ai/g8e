@@ -116,11 +116,11 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize SecretManager for loading signing keys (Actuator and Consensus)
 	// This must be initialized before LocalStore to provide keystore for encrypted token storage
-	secretsDir := filepath.Join(vs.config.WorkDir, ".g8e", "secrets")
+	secretsDir := filepath.Join(vs.config.WorkDir, constants.Paths.Infra.SecretsDir)
 
 	// Initialize GatewayDBService for canonical state root calculation
 	// This ensures outbound mode uses the same state root schema as gateway mode
-	dataDir := filepath.Join(vs.config.WorkDir, ".g8e")
+	dataDir := filepath.Join(vs.config.WorkDir, constants.Paths.Infra.RuntimeDir)
 	gatewayDB, err := gateway.OpenGatewayDBService(dataDir, secretsDir, vs.logger, false)
 	if err != nil {
 		return fmt.Errorf("failed to initialize gateway database (required for state root calculation): %w", err)

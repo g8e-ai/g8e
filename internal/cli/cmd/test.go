@@ -393,7 +393,7 @@ func testReviewCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			vaultDir := filepath.Join(cfg.ProjectRoot, ".g8e", "test-vault")
+			vaultDir := filepath.Join(cfg.ProjectRoot, constants.Paths.Infra.TestVaultDir)
 
 			if clean {
 				if cleanOld > 0 {
@@ -608,14 +608,14 @@ func testSummaryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   string(constants.StreamStatusSummary),
 		Short: "Show summary of all integration test results",
-		Long:  `Aggregate and display test results from all test vaults in .g8e/test-vault/`,
+		Long:  `Aggregate and display test results from all test vaults in ` + constants.Paths.Infra.TestVaultDir + `/`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			vaultDir := filepath.Join(cfg.ProjectRoot, ".g8e", "test-vault")
+			vaultDir := filepath.Join(cfg.ProjectRoot, constants.Paths.Infra.TestVaultDir)
 			entries, err := os.ReadDir(vaultDir)
 			if err != nil {
 				if os.IsNotExist(err) {

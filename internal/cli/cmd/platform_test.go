@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -204,9 +205,9 @@ func TestPlatformLogsCommand(t *testing.T) {
 }
 
 func setupPlatformTestConfig(t *testing.T, tmpDir string) {
-	runtimeDir := filepath.Join(tmpDir, ".g8e")
-	pkiDir := filepath.Join(runtimeDir, "pki")
-	secretsDir := filepath.Join(runtimeDir, "secrets")
+	runtimeDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
+	pkiDir := filepath.Join(runtimeDir, constants.Paths.Infra.PkiDir)
+	secretsDir := filepath.Join(runtimeDir, constants.Paths.Infra.SecretsDir)
 
 	require.NoError(t, os.MkdirAll(pkiDir, 0755))
 	require.NoError(t, os.MkdirAll(secretsDir, 0700))

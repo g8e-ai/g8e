@@ -390,7 +390,7 @@ func TestHandleVaultCommand_ResetVault_NotInitialized_Subprocess(t *testing.T) {
 func TestRunGatewayMode_BadLogLevel_Subprocess(t *testing.T) {
 	if os.Getenv("G8E_TEST_GATEWAY_BAD_LOG") == "1" {
 		dir := os.Getenv(marshaler.EnvVar(constants.EnvVar.TestTmpDir))
-		runGatewayMode(config.PostureDoctrine, 0, 0, 0, dir, "", "", "", "", "notavalidlevel")
+		runGatewayMode(config.PostureDoctrine, 0, 0, 0, dir, "", "", "", "", 0, 0, "notavalidlevel")
 		return
 	}
 

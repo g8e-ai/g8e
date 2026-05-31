@@ -16,14 +16,14 @@ The platform uses an internal Public Key Infrastructure (PKI) to issue and manag
 
 ### Workload Identity (SPIFFE)
 
-Each system component receives a SPIFFE ID, embedded as a Uniform Resource Identifier (URI) in the Subject Alternative Name (SAN) of its mTLS certificate. The generation logic is defined in `@/home/bob/g8e/protocol/workload_identity.go`.
+Each system component receives a SPIFFE ID, embedded as a Uniform Resource Identifier (URI) in the Subject Alternative Name (SAN) of its mTLS certificate. The generation logic is defined in `protocol/workload_identity.go`.
 
 | Workload Type | SPIFFE ID Format | Reference |
 | :--- | :--- | :--- |
-| **g8e Operator (g8eo)** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` | `@/home/bob/g8e/protocol/workload_identity.go:35-39` |
-| **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` | `@/home/bob/g8e/protocol/workload_identity.go:46-50` |
-| **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` | `@/home/bob/g8e/protocol/workload_identity.go:57-61` |
-| **Governance Gateway (g8eg)** | `spiffe://g8e.local/hub/operator-listen` | `@/home/bob/g8e/protocol/workload_identity.go:68-72` |
+| **g8e Operator (g8eo)** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` | `protocol/workload_identity.go:35-39` |
+| **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` | `protocol/workload_identity.go:46-50` |
+| **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` | `protocol/workload_identity.go:57-61` |
+| **Governance Gateway (g8eg)** | `spiffe://g8e.local/hub/operator-listen` | `protocol/workload_identity.go:68-72` |
 
 ### mTLS Enforcement
 
@@ -55,10 +55,10 @@ Windows users can enroll via the Windows Certificate Store for seamless browser 
 
 ## 2. 5-Layer Verification Sequence (Interlock)
 
-The platform implements a deterministic 5-layer governance sequence. Every mutation must pass through all active layers before execution. The structural schema is defined as `GovernanceEnvelope` in `@/home/bob/g8e/protocol/proto/g8e/common/v1/common.proto:81-115`.
+The platform implements a deterministic 5-layer governance sequence. Every mutation must pass through all active layers before execution. The structural schema is defined as `GovernanceEnvelope` in `protocol/proto/g8e/common/v1/common.proto:81-115`.
 
 ### Layer 1: Technical Bedrock (L1Doctrine)
-*Implementation: `@/home/bob/g8e/internal/services/governance/l1_doctrine.go:35-50`*
+*Implementation: `internal/services/governance/l1_doctrine.go:35-50`*
 
 L1 is the foundational layer that executes deterministic security rules.
 - **Forbidden Patterns**: Uses Protobuf field options (`forbidden_patterns`) to reject strings like `sudo` or `su`.
@@ -66,7 +66,7 @@ L1 is the foundational layer that executes deterministic security rules.
 - **Hard Gates**: Rejects transactions immediately upon violation; cannot be bypassed by L2 or L3.
 
 ### Layer 2: Consensus (L2Consensus)
-*Implementation: `@/home/bob/g8e/internal/services/governance/l2_consensus.go:27-45`*
+*Implementation: `internal/services/governance/l2_consensus.go:27-45`*
 
 L2 provides multi-agent cryptographic verification of intent.
 - **Ed25519 Signatures**: Verifies Ed25519 signatures over the `transaction_hash|decision` format.
@@ -74,7 +74,7 @@ L2 provides multi-agent cryptographic verification of intent.
 - **Posture-Aware Enforcement**: Enforces signature requirements based on the configured `GovernancePosture`.
 
 ### Layer 3: Notary (L3Notary)
-*Implementation: `@/home/bob/g8e/internal/services/governance/l3_notary.go:29-35`*
+*Implementation: `internal/services/governance/l3_notary.go:29-35`*
 
 L3 ensures explicit human authorization for mutations.
 - **Suspension**: The Governance Gateway (g8eg) suspends transactions requiring L3 approval, storing them in the `suspended_transactions` pool.
@@ -82,7 +82,7 @@ L3 ensures explicit human authorization for mutations.
 - **L3Proof**: A successful approval generates an `L3Proof` cryptographically bound to the `transaction_hash`.
 
 ### Layer 4: Warden (L4Warden)
-*Implementation: `@/home/bob/g8e/internal/services/governance/l4_warden.go:306-320`*
+*Implementation: `internal/services/governance/l4_warden.go:306-320`*
 
 The Warden is the final fail-closed gate before execution. It verifies:
 1. **Structural Integrity**: Structural integrity, payload decoding, and L1Doctrine compliance.
@@ -92,7 +92,7 @@ The Warden is the final fail-closed gate before execution. It verifies:
 5. **Posture Enforcement**: Enforces L2 and L3 requirements based on the configured `GovernancePosture`.
 
 ### Layer 5: Actuator (L5Actuator)
-*Implementation: `@/home/bob/g8e/internal/services/governance/l5_actuator.go:51-70`*
+*Implementation: `internal/services/governance/l5_actuator.go:51-70`*
 
 The Actuator represents the execution boundary and final audit commitment.
 - **Egress Dispatch**: Dispatches the verified payload to downstream executors (Shell, MCP, A2A).

@@ -4,13 +4,13 @@
     "app_cert_dir": ".g8e/pki/issued/apps",
     "ca_cert_path": ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
     "db_path": ".g8e/data/g8e.db",
-    "docs_dir": "/docs",
+    "docs_dir": ".g8e/docs",
     "pki_dir": ".g8e/pki",
-    "protocol_constants_dir": "/home/bob/g8e/protocol/constants",
-    "protocol_dir": "/home/bob/g8e/protocol",
-    "protocol_models_dir": "/home/bob/g8e/protocol/models",
+    "protocol_constants_dir": ".g8e/protocol/constants",
+    "protocol_dir": ".g8e/protocol",
+    "protocol_models_dir": ".g8e/protocol/models",
     "secrets_dir": ".g8e/secrets",
-    "ssh_config_path": "/etc/g8e/ssh_config"
+    "ssh_config_path": ".g8e/ssh_config"
   },
   "ports": {
     "insecure_mcp_gateway": 18789,

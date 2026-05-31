@@ -78,7 +78,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		repoRoot = filepath.Dir(repoRoot)
 	}
-	testVaultDir := filepath.Join(repoRoot, ".g8e", "test-vault")
+	testVaultDir := filepath.Join(repoRoot, constants.Paths.Infra.TestVaultDir)
 	if err := os.MkdirAll(testVaultDir, 0755); err != nil {
 		t.Fatalf("failed to create test vault directory: %v", err)
 	}
@@ -341,7 +341,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		repoRoot = filepath.Dir(repoRoot)
 	}
-	testVaultDir := filepath.Join(repoRoot, ".g8e", "test-vault")
+	testVaultDir := filepath.Join(repoRoot, constants.Paths.Infra.TestVaultDir)
 	if err := os.MkdirAll(testVaultDir, 0755); err != nil {
 		t.Fatalf("failed to create test vault directory: %v", err)
 	}
@@ -755,7 +755,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		repoRoot = filepath.Dir(repoRoot)
 	}
-	testVaultDir := filepath.Join(repoRoot, ".g8e", "test-vault")
+	testVaultDir := filepath.Join(repoRoot, constants.Paths.Infra.TestVaultDir)
 	if err := os.MkdirAll(testVaultDir, 0755); err != nil {
 		t.Fatalf("failed to create test vault directory: %v", err)
 	}

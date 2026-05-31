@@ -104,13 +104,13 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	projectRoot := filepath.Join(tempDir, "project")
 	require.NoError(t, os.MkdirAll(projectRoot, 0755))
 
-	runtimeDir := filepath.Join(projectRoot, ".g8e")
+	runtimeDir := filepath.Join(projectRoot, constants.Paths.Infra.RuntimeDir)
 	require.NoError(t, os.MkdirAll(runtimeDir, 0755))
 
-	pkiDir := filepath.Join(projectRoot, ".g8e", "pki")
+	pkiDir := filepath.Join(projectRoot, constants.Paths.Infra.PkiDir)
 	require.NoError(t, os.MkdirAll(pkiDir, 0755))
 
-	secretsDir := filepath.Join(projectRoot, ".g8e", "secrets")
+	secretsDir := filepath.Join(projectRoot, constants.Paths.Infra.SecretsDir)
 	require.NoError(t, os.MkdirAll(secretsDir, 0755))
 
 	credentialsDir := filepath.Join(tempDir, "credentials")
@@ -145,7 +145,7 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 
 	caCertPEM := generateTestCA(t)
-	trustBundlePath := filepath.Join(projectRoot, ".g8e", "pki", "trust", "g8e-gw-ca-bundle.pem")
+	trustBundlePath := filepath.Join(projectRoot, constants.Paths.Infra.CaCertPath)
 	require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
 	require.NoError(t, os.WriteFile(trustBundlePath, caCertPEM, 0644))
 

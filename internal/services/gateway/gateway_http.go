@@ -131,6 +131,11 @@ func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
 
 func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h.cfg.Gateway.RateLimitRPS <= 0 {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		ip, _, err := net.SplitHostPort(r.RemoteAddr)
 		if err != nil {
 			ip = r.RemoteAddr
@@ -309,6 +314,9 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 
 func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux := http.NewServeMux()
+
+	// Health check - available on bootstrap port for initialization monitoring
+	mux.HandleFunc("/health", h.handleHealth)
 
 	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
 	mux.HandleFunc("/api/v1/auth/bootstrap", h.authController.handlePublicAuthBootstrap)

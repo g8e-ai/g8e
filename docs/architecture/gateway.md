@@ -14,11 +14,11 @@ The g8e Protocol platform is composed of two logically distinct roles, both impl
 ## Core Principles
 
 - **5-Layer Governance Bedrock**: Every transaction must pass through five mandatory, fail-closed layers sequentially:
-    - **L1 Doctrine**: Technical Bedrock (Hard Gates) code pattern matching and threat analysis defined in `@/home/bob/g8e/internal/services/governance/l1_doctrine.go`.
-    - **L2 Consensus**: Multi-agent consensus signature verification using Ed25519 cryptography defined in `@/home/bob/g8e/internal/services/governance/l2_consensus.go`.
-    - **L3 Notary**: Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) defined in `@/home/bob/g8e/internal/services/governance/l3_notary.go`.
-    - **L4 Warden**: Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) defined in `@/home/bob/g8e/internal/services/governance/l4_warden.go`.
-    - **L5 Actuator**: Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production defined in `@/home/bob/g8e/internal/services/governance/l5_actuator.go`.
+    - **L1 Doctrine**: Technical Bedrock (Hard Gates) code pattern matching and threat analysis defined in `internal/services/governance/l1_doctrine.go`.
+    - **L2 Consensus**: Multi-agent consensus signature verification using Ed25519 cryptography defined in `internal/services/governance/l2_consensus.go`.
+    - **L3 Notary**: Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) defined in `internal/services/governance/l3_notary.go`.
+    - **L4 Warden**: Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) defined in `internal/services/governance/l4_warden.go`.
+    - **L5 Actuator**: Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production defined in `internal/services/governance/l5_actuator.go`.
 - **mTLS-Everywhere**: All communication is strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts.
 - **Local-First Audit (LFAA)**: The target host remains the source of truth for command history and file mutations, stored in a tamper-evident local ledger.
 - **Canonical JSON (GovernanceEnvelope)**: Every mutation action is governed by a canonical JSON `GovernanceEnvelope` (protojson). This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
@@ -95,7 +95,7 @@ By passing `--doctrine`, `--consensus`, or `--notary`, the binary transforms int
 
 The Governance Gateway (g8eg) exposes three logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port.
 
-Default ports are sourced from `@/home/bob/g8e/internal/constants/ports.go`:
+Default ports are sourced from `internal/constants/ports.go`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
@@ -117,18 +117,18 @@ Default ports are sourced from `@/home/bob/g8e/internal/constants/ports.go`:
 Every transaction submitted to `POST /api/v1/governance/envelopes` must pass through the following layers sequentially:
 
 ### L1 Doctrine (Technical Bedrock)
-Defined in `@/home/bob/g8e/internal/services/governance/l1_doctrine.go`. Enforces forbidden patterns (such as `sudo` or `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.
+Defined in `internal/services/governance/l1_doctrine.go`. Enforces forbidden patterns (such as `sudo` or `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.
 
 ### L2 Consensus (Consensus Verification)
-Defined in `@/home/bob/g8e/internal/services/governance/l2_consensus.go`. Verifies multi-agent consensus signature using Ed25519 cryptography. In Gateway mode, this requires Ed25519 signatures from trusted consensus agents.
+Defined in `internal/services/governance/l2_consensus.go`. Verifies multi-agent consensus signature using Ed25519 cryptography. In Gateway mode, this requires Ed25519 signatures from trusted consensus agents.
 
 ### L3 Notary (Human Authorization)
-Defined in `@/home/bob/g8e/internal/services/governance/l3_notary.go`. Enforces human-in-the-loop authorization using a cryptographic proof of human intent:
+Defined in `internal/services/governance/l3_notary.go`. Enforces human-in-the-loop authorization using a cryptographic proof of human intent:
 - **BYO Clients**: Use WebAuthn or Passkey proofs (FIDO2).
 - **CLI Sessions**: Use mTLS certificate fingerprints or Ed25519 signatures bound to the session.
 
 ### L4 Warden (Pre-Dispatch Gating)
-Defined in `@/home/bob/g8e/internal/services/governance/l4_warden.go`. Enforces final pre-execution verification gates:
+Defined in `internal/services/governance/l4_warden.go`. Enforces final pre-execution verification gates:
 - **Transaction Hash**: The `envelope.id` must match the deterministic transaction hash computed from its content.
 - **Expiry**: The `expires_at` timestamp must be in the future.
 - **Nonce/Replay**: The `nonce` must not have been used previously (sliding-window protection).
@@ -136,7 +136,7 @@ Defined in `@/home/bob/g8e/internal/services/governance/l4_warden.go`. Enforces 
 - **Signer Trust**: Verifies L2 Consensus / L3 Notary signatures against trusted keys.
 
 ### L5 Actuator (Execution and Receipt)
-Defined in `@/home/bob/g8e/internal/services/governance/l5_actuator.go`. Performs isolated boundary tool dispatch (via MCP/A2A) and signed receipt production:
+Defined in `internal/services/governance/l5_actuator.go`. Performs isolated boundary tool dispatch (via MCP/A2A) and signed receipt production:
 - **Execution**: Dispatches the verified payload to the downstream execution handler (such as an MCP server).
 - **Audit**: Persists a `console_audit` record and a signed `ActionReceipt`.
 - **Receipt**: Generates a deterministic, signed receipt containing the result and state transitions.
@@ -202,19 +202,19 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 
 | Concern | File |
 |---|---|
-| Gateway mode entry | `@/home/bob/g8e/cmd/g8eo/main.go` (runGatewayMode) |
-| Gateway service | `@/home/bob/g8e/internal/services/gateway/gateway_service.go` |
-| Coordination Store | `@/home/bob/g8e/internal/services/gateway/gateway_db.go` |
-| Pub/Sub broker | `@/home/bob/g8e/internal/services/gateway/gateway_pubsub.go` |
-| L1 Doctrine | `@/home/bob/g8e/internal/services/governance/l1_doctrine.go` |
-| L2 Consensus | `@/home/bob/g8e/internal/services/governance/l2_consensus.go` |
-| L3 Notary | `@/home/bob/g8e/internal/services/governance/l3_notary.go` |
-| L4 Warden | `@/home/bob/g8e/internal/services/governance/l4_warden.go` |
-| L5 Actuator | `@/home/bob/g8e/internal/services/governance/l5_actuator.go` |
-| PKI / CertStore | `@/home/bob/g8e/internal/services/gateway/gateway_certs.go` |
-| Secret Manager | `@/home/bob/g8e/internal/services/gateway/secret_manager.go` |
-| Workload identity | `@/home/bob/g8e/protocol/workload_identity.go` |
-| Collections registry | `@/home/bob/g8e/internal/constants/collections.go` |
+| Gateway mode entry | `cmd/g8eo/main.go` (runGatewayMode) |
+| Gateway service | `internal/services/gateway/gateway_service.go` |
+| Coordination Store | `internal/services/gateway/gateway_db.go` |
+| Pub/Sub broker | `internal/services/gateway/gateway_pubsub.go` |
+| L1 Doctrine | `internal/services/governance/l1_doctrine.go` |
+| L2 Consensus | `internal/services/governance/l2_consensus.go` |
+| L3 Notary | `internal/services/governance/l3_notary.go` |
+| L4 Warden | `internal/services/governance/l4_warden.go` |
+| L5 Actuator | `internal/services/governance/l5_actuator.go` |
+| PKI / CertStore | `internal/services/gateway/gateway_certs.go` |
+| Secret Manager | `internal/services/gateway/secret_manager.go` |
+| Workload identity | `protocol/workload_identity.go` |
+| Collections registry | `internal/constants/collections.go` |
 
 ---
 

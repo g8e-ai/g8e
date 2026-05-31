@@ -402,7 +402,7 @@ FLAGS
   --endpoint <host>             Platform endpoint: starts operator if set
   --no-git                      Disable ledger on remote operator
   --ssh-config <path>           SSH config path (default: ~/.ssh/config)
-  --binary-dir <path>           Operator build dir (default: /home/g8e)
+  --binary-dir <path>           Operator build dir (default: <project-root>/bin)
 
 OUTPUT
   Per-host status events are written as JSON lines to stdout.

@@ -21,6 +21,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -95,9 +96,9 @@ func TestLoginCmd(t *testing.T) {
 	t.Run("login fails when trust bundle missing", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		// Setup config without trust bundle
-		runtimeDir := filepath.Join(tmpDir, ".g8e")
-		pkiDir := filepath.Join(runtimeDir, "pki")
-		secretsDir := filepath.Join(runtimeDir, "secrets")
+		runtimeDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
+		pkiDir := filepath.Join(runtimeDir, constants.Paths.Infra.PkiDir)
+		secretsDir := filepath.Join(runtimeDir, constants.Paths.Infra.SecretsDir)
 		credentialsDir := filepath.Join(runtimeDir, "credentials")
 
 		require.NoError(t, os.MkdirAll(pkiDir, 0755))
@@ -112,16 +113,16 @@ func TestLoginCmd(t *testing.T) {
 		pathsJSON := `{
 			"host": "localhost",
 			"infra": {
-				"app_cert_dir": ".g8e/pki/app",
+				"app_cert_dir": ".g8e/pki/issued/apps",
 				"ca_cert_path": ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
-				"db_path": ".g8e/data/operator.db",
-				"docs_dir": "docs",
+				"db_path": ".g8e/data/g8e.db",
+				"docs_dir": ".g8e/docs",
 				"pki_dir": ".g8e/pki",
-				"protocol_constants_dir": "protocol/constants",
-				"protocol_dir": "protocol",
-				"protocol_models_dir": "protocol/models",
+				"protocol_constants_dir": ".g8e/protocol/constants",
+				"protocol_dir": ".g8e/protocol",
+				"protocol_models_dir": ".g8e/protocol/models",
 				"secrets_dir": ".g8e/secrets",
-				"ssh_config_path": ".g8e/ssh/config"
+				"ssh_config_path": ".g8e/ssh_config"
 			},
 			"ports": {
 				"insecure_mcp_gateway": 18789,
@@ -181,16 +182,16 @@ func TestLogoutCmd(t *testing.T) {
 		pathsJSON := `{
 			"host": "localhost",
 			"infra": {
-				"app_cert_dir": ".g8e/pki/app",
+				"app_cert_dir": ".g8e/pki/issued/apps",
 				"ca_cert_path": ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
-				"db_path": ".g8e/data/operator.db",
-				"docs_dir": "docs",
+				"db_path": ".g8e/data/g8e.db",
+				"docs_dir": ".g8e/docs",
 				"pki_dir": ".g8e/pki",
-				"protocol_constants_dir": "protocol/constants",
-				"protocol_dir": "protocol",
-				"protocol_models_dir": "protocol/models",
+				"protocol_constants_dir": ".g8e/protocol/constants",
+				"protocol_dir": ".g8e/protocol",
+				"protocol_models_dir": ".g8e/protocol/models",
 				"secrets_dir": ".g8e/secrets",
-				"ssh_config_path": ".g8e/ssh/config"
+				"ssh_config_path": ".g8e/ssh_config"
 			},
 			"ports": {
 				"insecure_mcp_gateway": 18789,
@@ -321,16 +322,16 @@ func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
 	pathsJSON := `{
 		"host": "localhost",
 		"infra": {
-			"app_cert_dir": ".g8e/pki/app",
+			"app_cert_dir": ".g8e/pki/issued/apps",
 			"ca_cert_path": ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
-			"db_path": ".g8e/data/operator.db",
-			"docs_dir": "docs",
+			"db_path": ".g8e/data/g8e.db",
+			"docs_dir": ".g8e/docs",
 			"pki_dir": ".g8e/pki",
-			"protocol_constants_dir": "protocol/constants",
-			"protocol_dir": "protocol",
-			"protocol_models_dir": "protocol/models",
+			"protocol_constants_dir": ".g8e/protocol/constants",
+			"protocol_dir": ".g8e/protocol",
+			"protocol_models_dir": ".g8e/protocol/models",
 			"secrets_dir": ".g8e/secrets",
-			"ssh_config_path": ".g8e/ssh/config"
+			"ssh_config_path": ".g8e/ssh_config"
 		},
 		"ports": {
 			"insecure_mcp_gateway": 18789,

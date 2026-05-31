@@ -8,13 +8,16 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// Auth selects how Phantom authenticates to the Gateway's mTLS surface (8440).
+// Auth selects how Phantom authenticates to the Gateway's mTLS surface.
 // The MCP/A2A routes are exempt from the main mTLS middleware and can also take
-// an API key, but the TLS listener itself still negotiates client certs on 8440,
+// an API key, but the TLS listener itself still negotiates client certs,
 // so a cert is the realistic default.
 type Auth struct {
 	// ClientCert / ClientKey are the BYO-client mTLS material minted by
@@ -32,9 +35,9 @@ type Auth struct {
 // Config is the full Phantom runtime configuration.
 type Config struct {
 	// MTLSBaseURL is the Gateway mTLS API surface (governance envelope, MCP/A2A,
-	// audit). Default https://localhost:8440.
+	// audit).
 	MTLSBaseURL string `json:"mtls_base_url"`
-	// PublicBaseURL is the Gateway public surface (8442) used for the L3
+	// PublicBaseURL is the Gateway public surface used for the L3
 	// suspend/approve out-of-band notary flow.
 	PublicBaseURL string `json:"public_base_url"`
 
@@ -71,8 +74,8 @@ type Config struct {
 // Default returns a config wired for a local two-container dev stack.
 func Default() Config {
 	return Config{
-		MTLSBaseURL:    envOr("PHANTOM_MTLS_URL", "https://localhost:8440"),
-		PublicBaseURL:  envOr("PHANTOM_PUBLIC_URL", "https://localhost:8442"),
+		MTLSBaseURL:    envOr("PHANTOM_MTLS_URL", fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)),
+		PublicBaseURL:  envOr("PHANTOM_PUBLIC_URL", fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps)),
 		EnsembleSize:   3,
 		ConsensusKeyID: "phantom-ensemble",
 		PrincipalKeyID: "phantom-principal",

@@ -18,7 +18,7 @@ In an air-gapped configuration, the platform restricts all outbound communicatio
 
 - **No Telemetry**: The platform disables all outbound telemetry, usage statistics, and error reporting.
 - **Local Assets**: All user interface assets, fonts, icons, and libraries are served locally by platform services.
-- **Local Persistence**: All platform state, including session records, configuration settings, and cryptographic keys, resides in a unified local SQLite database managed by the Governance Gateway (`g8eg`). The database path is defined in `@/home/bob/g8e/internal/constants/paths.go` as `.g8e/data/g8e.db`.
+- **Local Persistence**: All platform state, including session records, configuration settings, and cryptographic keys, resides in a unified local SQLite database managed by the Governance Gateway (`g8eg`). The database path is defined in `internal/constants/paths.go` as `.g8e/data/g8e.db`.
 
 ---
 
@@ -28,7 +28,7 @@ In an air-gapped deployment, the Governance Gateway (`g8eg`) operates as the cen
 
 ### Port Configuration and Communication Surfaces
 
-The gateway exposes three logical communication surfaces. Canonical ports are defined in `@/home/bob/g8e/internal/constants/ports.go` and `@/home/bob/g8e/protocol/constants/ports.json`.
+The gateway exposes three logical communication surfaces. Canonical ports are defined in `internal/constants/ports.go` and `protocol/constants/ports.json`.
 
 | Surface | Port (default) | Authentication | Purpose |
 | :--- | :--- | :--- | :--- |
@@ -40,7 +40,7 @@ Surfaces with conflicting TLS client-authentication requirements do not share a 
 
 ### Core Functional Capabilities
 
-- **State Persistence**: All system state is stored locally within a single SQLite database file as defined in `@/home/bob/g8e/internal/constants/paths.go`.
+- **State Persistence**: All system state is stored locally within a single SQLite database file as defined in `internal/constants/paths.go`.
 - **Local Public Key Infrastructure (PKI)**: The gateway generates a local Certificate Authority (CA) using ECDSA P-384 keys to issue and rotate TLS certificates for local services.
 - **Secret Storage**: An internal encrypted vault stores local credentials and access tokens, removing any requirement for external key managers.
 - **Event Brokerage**: A local websocket pub/sub server manages communication between the gateway and connected clients.
@@ -53,11 +53,11 @@ The g8e Operator (`g8eo`) operates as the host-side Policy Execution Point (PEP)
 
 Every transaction or mutation payload wrapped in a `GovernanceEnvelope` undergoes sequential verification across the five-layer interlock sequence before execution on the host:
 
-1. **L1 Doctrine**: Technical Bedrock (Hard Gates) performs threat analysis, command blacklist checks, and pattern matching, defined in `@/home/bob/g8e/internal/services/governance/l1_doctrine.go`.
-2. **L2 Consensus**: Multi-agent consensus signature verification validates the cryptographic signatures on the transaction using Ed25519, defined in `@/home/bob/g8e/internal/services/governance/l2_consensus.go`.
-3. **L3 Notary**: Human-in-the-loop authorization verifies approvals via WebAuthn passkeys or cryptographically signed CLI proofs, defined in `@/home/bob/g8e/internal/services/governance/l3_notary.go`.
-4. **L4 Warden**: Pre-dispatch verification gates validate replay prevention, expiration, transaction nonces, and the state Merkle root, defined in `@/home/bob/g8e/internal/services/governance/l4_warden.go`.
-5. **L5 Actuator**: Isolated boundary tool dispatch executes the validated operation via Model Context Protocol (MCP) or Agent2Agent (A2A), producing a cryptographically signed transaction receipt, defined in `@/home/bob/g8e/internal/services/governance/l5_actuator.go`.
+1. **L1 Doctrine**: Technical Bedrock (Hard Gates) performs threat analysis, command blacklist checks, and pattern matching, defined in `internal/services/governance/l1_doctrine.go`.
+2. **L2 Consensus**: Multi-agent consensus signature verification validates the cryptographic signatures on the transaction using Ed25519, defined in `internal/services/governance/l2_consensus.go`.
+3. **L3 Notary**: Human-in-the-loop authorization verifies approvals via WebAuthn passkeys or cryptographically signed CLI proofs, defined in `internal/services/governance/l3_notary.go`.
+4. **L4 Warden**: Pre-dispatch verification gates validate replay prevention, expiration, transaction nonces, and the state Merkle root, defined in `internal/services/governance/l4_warden.go`.
+5. **L5 Actuator**: Isolated boundary tool dispatch executes the validated operation via Model Context Protocol (MCP) or Agent2Agent (A2A), producing a cryptographically signed transaction receipt, defined in `internal/services/governance/l5_actuator.go`.
 
 Verified operations are logged to a host-local ledger, and the operator exposes local tools as a standalone Model Context Protocol (MCP) server.
 
@@ -85,8 +85,8 @@ For environments without external API access, the platform integrates with local
 
 To ensure a self-contained installation, the build process packages all required components offline:
 
-- **Go Dependencies**: The core platform compiles into a single binary, resolving dependencies defined in `@/home/bob/g8e/go.mod`.
-- **Protocol Generation**: Protobuf compilation is performed offline using local tools without relying on the remote Buf Schema Registry (BSR). Configuration details are defined in `@/home/bob/g8e/buf.gen.yaml` and `@/home/bob/g8e/Makefile`.
+- **Go Dependencies**: The core platform compiles into a single binary, resolving dependencies defined in `go.mod`.
+- **Protocol Generation**: Protobuf compilation is performed offline using local tools without relying on the remote Buf Schema Registry (BSR). Configuration details are defined in `buf.gen.yaml` and `Makefile`.
 - **Build-Time Tooling**: Protobuf stub generation requires `buf`, `protoc-gen-go`, and `protoc-gen-go-grpc` during the build phase. These binaries are not required on the target runtime host.
 
 ---
@@ -107,7 +107,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
    ```
 2. **Package Runtime Configurations**: Archive the build artifacts and the protocol schemas:
    - The compiled `bin/g8e` binary.
-   - The protocol configuration files under the `@/home/bob/g8e/protocol/` directory.
+   - The protocol configuration files under the `protocol/` directory.
 
 ### 2. Implementation on the Air-Gapped Target Host
 
@@ -131,6 +131,6 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 
 1. **Isolated Boundaries**: In gateway mode, the Governance Gateway (`g8eg`) does not initiate outbound connections to any external network addresses.
 2. **Mutual Cryptographic Trust**: All traffic between the Governance Gateway (`g8eg`), connected clients, and the g8e Operator (`g8eo`) is encrypted and authenticated using mutual TLS (mTLS) issued by the local Certificate Authority.
-3. **Local Sovereignty**: All audit logs, transactions, and state records remain strictly on the host filesystem inside the local `.g8e` directory, as defined in `@/home/bob/g8e/internal/constants/paths.go`.
+3. **Local Sovereignty**: All audit logs, transactions, and state records remain strictly on the host filesystem inside the local `.g8e` directory, as defined in `internal/constants/paths.go`.
 4. **Fail-Closed Design**: If any component requires a missing or unavailable external resource, it terminates immediately with a clear error instead of attempting unencrypted or insecure fallbacks.
 

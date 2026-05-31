@@ -263,8 +263,8 @@ set -e
 GATEWAY_HOST="${GATEWAY_HOST:-` + host + `}"
 GATEWAY_PORT="${GATEWAY_PORT:-` + port + `}"
 CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}/.well-known/g8e/pki/ca-bundle"
-CA_PATH="/usr/local/share/ca-certificates/g8e-gateway-ca.crt"
-OLD_CA_PATHS="/usr/local/share/ca-certificates/g8e*.crt /etc/ssl/certs/g8e*.pem /usr/share/ca-certificates/g8e*.crt"
+CA_PATH="` + constants.GatewayCACertPath + `"
+OLD_CA_PATHS="` + constants.GatewayOldCAPaths + `"
 
 echo "[g8e] Fetching platform CA bundle from ${CA_BUNDLE_URL}..."
 curl -fsSL "${CA_BUNDLE_URL}" -o "${CA_PATH}"

@@ -268,6 +268,9 @@ type GatewayOptions struct {
 	JWTIssuer        string
 	JWTAudience      string
 
+	RateLimitRPS   float64
+	RateLimitBurst int
+
 	// AllowTestPortZero should be true only when called from Go tests; when false,
 	// port 0 is rejected to prevent dynamic port assignment in production.
 	AllowTestPortZero bool
@@ -328,28 +331,28 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	dataDir := opts.DataDir
 	if dataDir == "" {
 		if projectRoot != "" {
-			dataDir = filepath.Join(projectRoot, ".g8e", "data")
+			dataDir = filepath.Join(projectRoot, constants.Paths.Infra.DataDir)
 		} else {
 			cwd, _ := os.Getwd()
-			dataDir = filepath.Join(cwd, ".g8e", "data")
+			dataDir = filepath.Join(cwd, constants.Paths.Infra.DataDir)
 		}
 	}
 	pkiDir := opts.PKIDir
 	if pkiDir == "" {
 		if projectRoot != "" {
-			pkiDir = filepath.Join(projectRoot, ".g8e", "pki")
+			pkiDir = filepath.Join(projectRoot, constants.Paths.Infra.PkiDir)
 		} else {
 			cwd, _ := os.Getwd()
-			pkiDir = filepath.Join(cwd, ".g8e", "pki")
+			pkiDir = filepath.Join(cwd, constants.Paths.Infra.PkiDir)
 		}
 	}
 	secretsDir := opts.SecretsDir
 	if secretsDir == "" {
 		if projectRoot != "" {
-			secretsDir = filepath.Join(projectRoot, ".g8e", "secrets")
+			secretsDir = filepath.Join(projectRoot, constants.Paths.Infra.SecretsDir)
 		} else {
 			cwd, _ := os.Getwd()
-			secretsDir = filepath.Join(cwd, ".g8e", "secrets")
+			secretsDir = filepath.Join(cwd, constants.Paths.Infra.SecretsDir)
 		}
 	}
 
@@ -446,8 +449,8 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			MaxHeaderBytes:    1 << 20, // 1MB
 
 			// Rate limiting defaults
-			RateLimitRPS:   5.0, // 5 requests per second
-			RateLimitBurst: 10,  // Burst of 10
+			RateLimitRPS:   opts.RateLimitRPS,
+			RateLimitBurst: opts.RateLimitBurst,
 
 			// Distributed lock retry defaults
 			LockMaxRetries: 30,                    // 30 retry attempts
@@ -507,7 +510,7 @@ func Load(opts LoadOptions) (*Config, error) {
 		HeartbeatInterval:  heartbeatIntervalOrDefault(opts.HeartbeatInterval),
 
 		// Local storage - all paths anchored to WorkDir
-		LocalStoreDBPath:        filepath.Join(workDir, ".g8e", "local_state.db"),
+		LocalStoreDBPath:        filepath.Join(workDir, constants.Paths.Infra.LocalStateDBPath),
 		LocalStoreMaxSizeMB:     1024,
 		LocalStoreRetentionDays: 30,
 
@@ -531,12 +534,12 @@ func Load(opts LoadOptions) (*Config, error) {
 
 	// Default PKIDir to .g8e/pki if not explicitly set
 	if cfg.PKIDir == "" {
-		cfg.PKIDir = filepath.Join(workDir, ".g8e", "pki")
+		cfg.PKIDir = filepath.Join(workDir, constants.Paths.Infra.PkiDir)
 	}
 
 	// Default SecretsDir to .g8e/secrets if not explicitly set
 	if cfg.SecretsDir == "" {
-		cfg.SecretsDir = filepath.Join(workDir, ".g8e", "secrets")
+		cfg.SecretsDir = filepath.Join(workDir, constants.Paths.Infra.SecretsDir)
 	}
 
 	return cfg, nil

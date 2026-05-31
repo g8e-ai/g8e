@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -115,9 +116,9 @@ func TestNewSecureHTTPClient_Success(t *testing.T) {
 
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
-		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
-		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -139,9 +140,9 @@ func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
-		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
-		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -161,9 +162,9 @@ func TestNewSecureHTTPClient_InvalidPEM(t *testing.T) {
 
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
-		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
-		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -200,9 +201,9 @@ func TestSaveAndLoadCredentials(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
-		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
-		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 	}
 
@@ -230,9 +231,9 @@ func TestLoadCredentials_NotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
-		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
-		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 	}
 
@@ -246,9 +247,9 @@ func TestLoadCredentials_InvalidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
-		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
-		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 	}
 
@@ -271,9 +272,9 @@ func TestDeleteCredentials_Success(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
-		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
-		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 	}
 
@@ -311,9 +312,9 @@ func TestDeleteCredentials_NonExistentFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
-		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
-		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 	}
 
@@ -396,9 +397,9 @@ func TestCheckOperatorRunning_NotRunning(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
-		PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
-		SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}

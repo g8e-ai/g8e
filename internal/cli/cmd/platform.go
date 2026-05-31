@@ -84,7 +84,7 @@ func platformStartCmd() *cobra.Command {
 			}
 
 			externalIP := config.GetExternalInterfaceIP()
-			runtimeDir := filepath.Join(cfg.ProjectRoot, ".g8e")
+			runtimeDir := filepath.Join(cfg.ProjectRoot, constants.Paths.Infra.RuntimeDir)
 			ledgerDir := filepath.Join(runtimeDir, "data", "ledger")
 
 			cmd.Println()

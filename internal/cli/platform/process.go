@@ -49,10 +49,10 @@ type ProcessManager struct {
 }
 
 func NewProcessManager(projectRoot string) (*ProcessManager, error) {
-	runtimeDir := filepath.Join(projectRoot, ".g8e")
-	pkiDir := filepath.Join(runtimeDir, "pki")
-	secretsDir := filepath.Join(runtimeDir, "secrets")
-	dataDir := filepath.Join(runtimeDir, "data")
+	runtimeDir := filepath.Join(projectRoot, constants.Paths.Infra.RuntimeDir)
+	pkiDir := filepath.Join(runtimeDir, constants.Paths.Infra.PkiDir)
+	secretsDir := filepath.Join(runtimeDir, constants.Paths.Infra.SecretsDir)
+	dataDir := filepath.Join(runtimeDir, constants.Paths.Infra.DataDir)
 	logDir := filepath.Join(runtimeDir, "logs")
 	pidDir := filepath.Join(runtimeDir, "pids")
 

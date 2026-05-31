@@ -20,13 +20,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/g8e-ai/g8e/internal/cli/config"
 )
 
 // TestNativeRealOperator_Smoke is a live-operator smoke test that validates
@@ -36,39 +35,23 @@ import (
 // protocol with envelope submission and WebSocket Pub/Sub - those flows
 // are covered hermetically by TestBYOClient_EndToEnd in byo_client_test.go.
 //
-// This test now starts its own isolated gateway instance for proper test isolation.
+// This test requires the platform to be running via `./g8e platform start`
+// and authenticated via `./g8e auth login`.
 func TestNativeRealOperator_Smoke(t *testing.T) {
-	// Create isolated test environment
-	dataDir := t.TempDir()
-	binPath := testutil.GetTestBinaryPath(t)
-
-	// Ensure binary exists
-	if _, err := os.Stat(binPath); os.IsNotExist(err) {
-		t.Skipf("g8e binary not found at %s - run 'make build' first", binPath)
+	// Load CLI config to get ports and paths
+	cliCfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("failed to load CLI config: %v", err)
 	}
 
-	// Start gateway subprocess
-	// We need to pass G8E_RUNTIME_DIR to ensure it stays in our temp dir
-	env := []string{
-		fmt.Sprintf("G8E_RUNTIME_DIR=%s", dataDir),
+	// Verify certificates exist (bootstrapped via ./g8e auth login)
+	clientCertPath := cliCfg.CLICertFile()
+	if _, err := os.Stat(clientCertPath); os.IsNotExist(err) {
+		t.Fatalf("client cert not found at %s - run './g8e auth login' first", clientCertPath)
 	}
-	_, bootstrapPort, publicPort := testutil.StartGatewaySubprocess(t, binPath, dataDir, env)
-
-	// Run CLI login to bootstrap
-	loginEnv := append(env,
-		"G8E_OPERATOR_ENDPOINT=localhost",
-		fmt.Sprintf("G8E_OPERATOR_PORT=%d", publicPort),
-		fmt.Sprintf("G8E_OPERATOR_BOOTSTRAP_PORT=%d", bootstrapPort),
-		fmt.Sprintf("HOME=%s", dataDir), // Redirect CLI credentials to temp dir
-	)
-
-	stdout, stderr, err := testutil.RunCLI(t, binPath, []string{"auth", "login"}, loginEnv)
-	require.NoError(t, err, "CLI login failed: %s\n%s", stdout, stderr)
-	require.Contains(t, stdout, "Bootstrap complete", "CLI login did not perform bootstrap")
 
 	// Test basic connectivity to operator via HTTPS
-	// Health endpoint is on the public server (HTTPS)
-	healthURL := fmt.Sprintf("https://localhost:%d/health", publicPort)
+	healthURL := fmt.Sprintf("https://localhost:%d/health", cliCfg.Paths.Ports.OperatorPublicHTTPS)
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -79,12 +62,4 @@ func TestNativeRealOperator_Smoke(t *testing.T) {
 	defer resp.Body.Close()
 
 	require.Equal(t, http.StatusOK, resp.StatusCode, "health check failed")
-
-	// Query isolated operator audit vault for inspection
-	vaultPath := filepath.Join(dataDir, "audit_vault.db")
-	if _, statErr := os.Stat(vaultPath); statErr == nil {
-		t.Logf("Isolated audit vault found at: %s", vaultPath)
-	} else {
-		t.Logf("No audit vault found at %s", vaultPath)
-	}
 }

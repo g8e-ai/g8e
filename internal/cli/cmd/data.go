@@ -320,7 +320,7 @@ func dataAuditSummaryCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			dbPath := filepath.Join(cfg.ProjectRoot, ".g8e", "data", "g8e.db")
+			dbPath := filepath.Join(cfg.ProjectRoot, constants.Paths.Infra.DataDir, "g8e.db")
 			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 				return fmt.Errorf("audit vault database not found at %s", dbPath)
 			}

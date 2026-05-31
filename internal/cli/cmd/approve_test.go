@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -151,9 +152,9 @@ func TestApproveCmd(t *testing.T) {
 }
 
 func setupApproveTestConfig(t *testing.T, tmpDir string) *config.Config {
-	runtimeDir := filepath.Join(tmpDir, ".g8e")
-	pkiDir := filepath.Join(runtimeDir, "pki")
-	secretsDir := filepath.Join(runtimeDir, "secrets")
+	runtimeDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
+	pkiDir := filepath.Join(runtimeDir, constants.Paths.Infra.PkiDir)
+	secretsDir := filepath.Join(runtimeDir, constants.Paths.Infra.SecretsDir)
 	credentialsDir := filepath.Join(runtimeDir, "credentials")
 
 	require.NoError(t, os.MkdirAll(pkiDir, 0755))

@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestNewProcessManager(t *testing.T) {
@@ -33,12 +35,12 @@ func TestNewProcessManager(t *testing.T) {
 		t.Errorf("expected projectRoot %s, got %s", tmpDir, pm.projectRoot)
 	}
 
-	expectedRuntimeDir := filepath.Join(tmpDir, ".g8e")
+	expectedRuntimeDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
 	if pm.runtimeDir != expectedRuntimeDir {
 		t.Errorf("expected runtimeDir %s, got %s", expectedRuntimeDir, pm.runtimeDir)
 	}
 
-	expectedPKIDir := filepath.Join(expectedRuntimeDir, "pki")
+	expectedPKIDir := filepath.Join(expectedRuntimeDir, constants.Paths.Infra.PkiDir)
 	if pm.pkiDir != expectedPKIDir {
 		t.Errorf("expected pkiDir %s, got %s", expectedPKIDir, pm.pkiDir)
 	}
