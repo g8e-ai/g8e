@@ -54,27 +54,12 @@ func TestLoginCmd(t *testing.T) {
 		assert.NotNil(t, flag)
 	})
 
-	t.Run("login fails with invalid project root", func(t *testing.T) {
-		cmd := loginCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		// Since we're in an empty temp dir, the trust bundle at .g8e/pki/trust/g8e-gw-ca-bundle.pem won't exist.
-		// The trust bundle check happens before the operator running check.
-		assert.Contains(t, err.Error(), "trust bundle not found")
-	})
-
 	t.Run("login fails when operator not running", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := setupTestConfig(t, tmpDir)
+
+		// Create pki/trust dir so the file path is valid for writing if needed
+		require.NoError(t, os.MkdirAll(filepath.Dir(cfg.TrustBundlePath()), 0755))
 
 		// Use injectable config loader for hermetic test with unique port
 		cmd := loginCmdWithConfig(func(_ string) (*config.Config, error) {
@@ -93,59 +78,26 @@ func TestLoginCmd(t *testing.T) {
 		assert.Contains(t, err.Error(), "operator is not running")
 	})
 
-	t.Run("login fails when trust bundle missing", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		// Setup config without trust bundle
-		runtimeDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
-		pkiDir := filepath.Join(runtimeDir, constants.Paths.Infra.PkiDir)
-		secretsDir := filepath.Join(runtimeDir, constants.Paths.Infra.SecretsDir)
-		credentialsDir := filepath.Join(runtimeDir, "credentials")
-
-		require.NoError(t, os.MkdirAll(pkiDir, 0755))
-		require.NoError(t, os.MkdirAll(secretsDir, 0700))
-		require.NoError(t, os.MkdirAll(credentialsDir, 0700))
-
-		// Create minimal paths.json structure
-		protocolDir := filepath.Join(tmpDir, "protocol")
-		constantsDir := filepath.Join(protocolDir, "constants")
-		require.NoError(t, os.MkdirAll(constantsDir, 0755))
-
-		pathsJSON := `{
-			"host": "localhost",
-			"infra": {
-				"app_cert_dir": ".g8e/pki/issued/apps",
-				"ca_cert_path": ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
-				"db_path": ".g8e/data/g8e.db",
-				"docs_dir": ".g8e/docs",
-				"pki_dir": ".g8e/pki",
-				"protocol_constants_dir": ".g8e/protocol/constants",
-				"protocol_dir": ".g8e/protocol",
-				"protocol_models_dir": ".g8e/protocol/models",
-				"secrets_dir": ".g8e/secrets",
-				"ssh_config_path": ".g8e/ssh_config"
-			},
-			"ports": {
-				"insecure_mcp_gateway": 18789,
-				"operator_bootstrap_https": 8441,
-				"operator_https": 48440,
-				"operator_public_https": 8443
-			}
-		}`
-		pathsPath := filepath.Join(constantsDir, "paths.json")
-		require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
-
+	t.Run("login fails with no active session", func(t *testing.T) {
+		// This test was previously testing 'trust bundle not found' but that check is gone.
+		// It now fails because the operator is not running in an empty temp dir.
 		cmd := loginCmd()
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
+		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
+		// Create pki/trust dir so the file path is valid for writing if needed
+		// This prevents "no such file or directory" before we get to the actual error.
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, constants.Paths.Infra.PkiDir, "trust"), 0755))
+
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "trust bundle not found")
+		assert.Contains(t, err.Error(), "operator is not running")
 	})
 }
 
@@ -169,8 +121,8 @@ func TestLogoutCmd(t *testing.T) {
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
 		// Set up minimal config structure so config loads, then auth fails
-		runtimeDir := filepath.Join(tmpDir, ".g8e")
-		credentialsParentDir := filepath.Join(tmpDir, ".g8e")
+		runtimeDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
+		credentialsParentDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
 		require.NoError(t, os.MkdirAll(credentialsParentDir, 0700))
 		require.NoError(t, os.MkdirAll(filepath.Join(runtimeDir, "pki"), 0755))
 
@@ -182,16 +134,16 @@ func TestLogoutCmd(t *testing.T) {
 		pathsJSON := `{
 			"host": "localhost",
 			"infra": {
-				"app_cert_dir": ".g8e/pki/issued/apps",
-				"ca_cert_path": ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
-				"db_path": ".g8e/data/g8e.db",
-				"docs_dir": ".g8e/docs",
-				"pki_dir": ".g8e/pki",
-				"protocol_constants_dir": ".g8e/protocol/constants",
-				"protocol_dir": ".g8e/protocol",
-				"protocol_models_dir": ".g8e/protocol/models",
-				"secrets_dir": ".g8e/secrets",
-				"ssh_config_path": ".g8e/ssh_config"
+				"app_cert_dir": "` + constants.Paths.Infra.AppCertDir + `",
+				"ca_cert_path": "` + constants.Paths.Infra.CaCertPath + `",
+				"db_path": "` + constants.Paths.Infra.DbPath + `",
+				"docs_dir": "` + constants.Paths.Infra.DocsDir + `",
+				"pki_dir": "` + constants.Paths.Infra.PkiDir + `",
+				"protocol_constants_dir": "` + constants.Paths.Infra.ProtocolConstantsDir + `",
+				"protocol_dir": "` + constants.Paths.Infra.ProtocolDir + `",
+				"protocol_models_dir": "` + constants.Paths.Infra.ProtocolModelsDir + `",
+				"secrets_dir": "` + constants.Paths.Infra.SecretsDir + `",
+				"ssh_config_path": "` + constants.Paths.Infra.SshConfigPath + `"
 			},
 			"ports": {
 				"insecure_mcp_gateway": 18789,
@@ -225,9 +177,9 @@ func TestLogoutCmd(t *testing.T) {
 		// Avoid using setupTestConfig which creates a conflicting .g8e directory
 		cfg := &config.Config{
 			ProjectRoot:    tmpDir,
-			RuntimeDir:     filepath.Join(tmpDir, ".g8e"),
-			PKIDir:         filepath.Join(tmpDir, ".g8e", "pki"),
-			SecretsDir:     filepath.Join(tmpDir, ".g8e", "secrets"),
+			RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+			PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+			SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 			CredentialsDir: tmpDir,
 		}
 
@@ -303,9 +255,9 @@ func TestAuthCommandFlags(t *testing.T) {
 }
 
 func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
-	runtimeDir := filepath.Join(tmpDir, ".g8e")
-	pkiDir := filepath.Join(runtimeDir, "pki")
-	secretsDir := filepath.Join(runtimeDir, "secrets")
+	runtimeDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
+	pkiDir := filepath.Join(runtimeDir, constants.Paths.Infra.PkiDir)
+	secretsDir := filepath.Join(runtimeDir, constants.Paths.Infra.SecretsDir)
 	credentialsDir := filepath.Join(runtimeDir, "credentials")
 
 	require.NoError(t, os.MkdirAll(pkiDir, 0755))
@@ -322,16 +274,16 @@ func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
 	pathsJSON := `{
 		"host": "localhost",
 		"infra": {
-			"app_cert_dir": ".g8e/pki/issued/apps",
-			"ca_cert_path": ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
-			"db_path": ".g8e/data/g8e.db",
-			"docs_dir": ".g8e/docs",
-			"pki_dir": ".g8e/pki",
-			"protocol_constants_dir": ".g8e/protocol/constants",
-			"protocol_dir": ".g8e/protocol",
-			"protocol_models_dir": ".g8e/protocol/models",
-			"secrets_dir": ".g8e/secrets",
-			"ssh_config_path": ".g8e/ssh_config"
+			"app_cert_dir": "` + constants.Paths.Infra.AppCertDir + `",
+			"ca_cert_path": "` + constants.Paths.Infra.CaCertPath + `",
+			"db_path": "` + constants.Paths.Infra.DbPath + `",
+			"docs_dir": "` + constants.Paths.Infra.DocsDir + `",
+			"pki_dir": "` + constants.Paths.Infra.PkiDir + `",
+			"protocol_constants_dir": "` + constants.Paths.Infra.ProtocolConstantsDir + `",
+			"protocol_dir": "` + constants.Paths.Infra.ProtocolDir + `",
+			"protocol_models_dir": "` + constants.Paths.Infra.ProtocolModelsDir + `",
+			"secrets_dir": "` + constants.Paths.Infra.SecretsDir + `",
+			"ssh_config_path": "` + constants.Paths.Infra.SshConfigPath + `"
 		},
 		"ports": {
 			"insecure_mcp_gateway": 18789,

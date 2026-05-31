@@ -220,16 +220,16 @@ func setupPlatformTestConfig(t *testing.T, tmpDir string) {
 	pathsJSON := `{
 		"host": "localhost",
 		"infra": {
-			"app_cert_dir": ".g8e/pki/app",
-			"ca_cert_path": ".g8e/pki/root/root_ca.crt",
-			"db_path": ".g8e/data/operator.db",
-			"docs_dir": "docs",
-			"pki_dir": ".g8e/pki",
-			"protocol_constants_dir": "protocol/constants",
-			"protocol_dir": "protocol",
-			"protocol_models_dir": "protocol/models",
-			"secrets_dir": ".g8e/secrets",
-			"ssh_config_path": ".g8e/ssh/config"
+			"app_cert_dir": "` + constants.Paths.Infra.AppCertDir + `",
+			"ca_cert_path": "` + constants.Paths.Infra.CaCertPath + `",
+			"db_path": "` + constants.Paths.Infra.DbPath + `",
+			"docs_dir": "` + constants.Paths.Infra.DocsDir + `",
+			"pki_dir": "` + constants.Paths.Infra.PkiDir + `",
+			"protocol_constants_dir": "` + constants.Paths.Infra.ProtocolConstantsDir + `",
+			"protocol_dir": "` + constants.Paths.Infra.ProtocolDir + `",
+			"protocol_models_dir": "` + constants.Paths.Infra.ProtocolModelsDir + `",
+			"secrets_dir": "` + constants.Paths.Infra.SecretsDir + `",
+			"ssh_config_path": "` + constants.Paths.Infra.SshConfigPath + `"
 		},
 		"ports": {
 			"insecure_mcp_gateway": 18789,

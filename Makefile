@@ -44,7 +44,7 @@ help:
 	@echo ""
 	@echo "CI/CD (Local):"
 	@echo "  ci            Run full CI pipeline locally (mirrors GitHub Actions)"
-	@echo "  ci-platform   Run platform-only CI (g8eo, protocol, proto, docs)"
+	@echo "  ci-platform   Run platform-only CI (operator, protocol, proto, docs)"
 	@echo ""
 	@echo "Protocol Generation:"
 	@echo "  generate      Generate all protocol artifacts (proto)"
@@ -175,47 +175,49 @@ PLATFORMS := linux/amd64 linux/arm64 linux/386
 
 .PHONY: build
 build:
-	@echo "Building g8e..."
-	@mkdir -p bin
-	@echo "Building from: cmd/g8eo"
+	@echo "Building g8e operator..."
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
 	PLATFORM=$$(uname -s)_$$(uname -m); \
-	echo "Building output: bin/g8e"; \
-	if go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo; then \
-		ln -sf bin/g8e g8e; \
-		sha256sum bin/g8e > bin/g8e.sha256; \
-		echo "Build complete. Output: bin/g8e"; \
-		echo "Checksum: bin/g8e.sha256"; \
+	echo "Building output: g8e"; \
+	if go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o g8e ./cmd/operator; then \
+		sha256sum g8e > g8e.sha256; \
+		echo "Build complete. Output: g8e"; \
+		echo "Checksum: g8e.sha256"; \
 	else \
 		exit 1; \
 	fi
 
+.PHONY: docker-build
+docker-build:
+	@echo "Building g8e operator Docker image..."
+	@docker build -f Dockerfile -t g8e:$$(cat VERSION) -t g8e:latest .
+	@echo "Operator image built: g8e:$$(cat VERSION)"
+
 .PHONY: build-compressed
 build-compressed: upx-install
-	@echo "Building g8e with compression for $(PLATFORMS)..."
-	@mkdir -p bin
+	@echo "Building g8e operator with compression for $(PLATFORMS)..."
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
 	for platform in $(PLATFORMS); do \
 		GOOS=$${platform%/*}; \
 		GOARCH=$${platform#*/}; \
-		BINARY=bin/g8e-$$GOOS-$$GOARCH; \
+		BINARY=g8e-$$GOOS-$$GOARCH; \
 		echo "Building $$platform -> $$BINARY..."; \
-		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$platform" -o $$BINARY ./cmd/g8eo || exit 1; \
+		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$platform" -o $$BINARY ./cmd/operator || exit 1; \
 		echo "Compressing $$BINARY with UPX..."; \
 		$(UPX) --best --lzma $$BINARY; \
 		sha256sum $$BINARY > $$BINARY.sha256; \
 	done
 	@HOST_OS=$$(go env GOOS); \
 	HOST_ARCH=$$(go env GOARCH); \
-	if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH ]; then \
-		ln -sf bin/g8e-$$HOST_OS-$$HOST_ARCH g8e; \
-		echo "Created symlink: g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
+	if [ -f g8e-$$HOST_OS-$$HOST_ARCH ]; then \
+		ln -sf g8e-$$HOST_OS-$$HOST_ARCH g8e; \
+		echo "Created symlink: g8e -> g8e-$$HOST_OS-$$HOST_ARCH"; \
 	fi
-	@echo "Compressed multi-platform build complete. Checksums: bin/g8e-*.sha256"
+	@echo "Compressed multi-platform build complete. Checksums: g8e-*.sha256"
 
 # =============================================================================
 # TEST
@@ -318,9 +320,8 @@ update-doctrines:
 clean:
 	@echo "Cleaning up build artifacts and runtime state..."
 	@rm -rf .g8e/
-	@rm -rf bin/
 	@rm -f g8e
-	@rm -rf build/
+	@rm -f g8e-*
 	@rm -f *.sha256
 	@rm -f *.test
 	@rm -f coverage.out
@@ -373,7 +374,7 @@ _ci-vulncheck:
 .PHONY: _ci-test
 _ci-test:
 	@echo "=== test ==="
-	@./bin/g8e platform start
+	@./g8e platform start
 	@G8E_STRICT_CONSTANTS_LINT=1 go test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/")
 	@COVERAGE=$$(go tool cover -func=coverage.out | grep -v "internal/protocol/proto" | grep -v "mocks" | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
 	if [ $$(echo "$$COVERAGE < 60" | bc -l) -eq 1 ]; then \
@@ -381,4 +382,4 @@ _ci-test:
 		exit 1; \
 	fi; \
 	echo "Coverage $$COVERAGE% meets 60% threshold"
-	@./bin/g8e platform stop
+	@./g8e platform stop

@@ -27,6 +27,12 @@ var serverCAMu sync.RWMutex
 // startup via FetchAndSetCA. It is never embedded at build time.
 var serverCAPEM []byte
 
+// clientCertMu guards clientCert.
+var clientCertMu sync.RWMutex
+
+// clientCert holds the mTLS client certificate for Operator outbound connections.
+var clientCert tls.Certificate
+
 // GetRawCA returns the current PEM bytes stored in the CA store. Intended for
 // use in tests to save and restore state around SetCA calls.
 func GetRawCA() []byte {
@@ -59,16 +65,29 @@ func GetServerCARootCAs() (*x509.CertPool, error) {
 	return pool, nil
 }
 
+// SetClientCertificate stores the mTLS client certificate for Operator outbound connections.
+func SetClientCertificate(cert tls.Certificate) {
+	clientCertMu.Lock()
+	defer clientCertMu.Unlock()
+	clientCert = cert
+}
+
+// GetClientCertificate returns the mTLS client certificate.
+func GetClientCertificate() (tls.Certificate, bool) {
+	clientCertMu.RLock()
+	defer clientCertMu.RUnlock()
+	return clientCert, clientCert.PrivateKey != nil
+}
+
 // GetTLSConfig returns a TLS configuration that trusts the hub CA.
-// No client certificate is included - the per-operator mTLS cert is applied
-// after bootstrap via rebuildTransportWithOperatorCert.
+// If a client certificate has been set via SetClientCertificate, it will be included.
 func GetTLSConfig() (*tls.Config, error) {
 	rootCAs, err := GetServerCARootCAs()
 	if err != nil {
 		return nil, err
 	}
 
-	return &tls.Config{
+	cfg := &tls.Config{
 		RootCAs:    rootCAs,
 		MinVersion: tls.VersionTLS13,
 		CurvePreferences: []tls.CurveID{
@@ -76,5 +95,11 @@ func GetTLSConfig() (*tls.Config, error) {
 			tls.CurveP384,
 			tls.CurveP256,
 		},
-	}, nil
+	}
+
+	if cert, ok := GetClientCertificate(); ok {
+		cfg.Certificates = []tls.Certificate{cert}
+	}
+
+	return cfg, nil
 }

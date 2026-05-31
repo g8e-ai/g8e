@@ -60,29 +60,29 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	}
 
 	// Health check (always public)
-	r.addExact("/health")
+	r.addExact(constants.APIPaths.Health)
 
 	// PKI bootstrap routes (public material only)
 	r.addPrefix("/.well-known/g8e/pki/")
 
 	// Trust script endpoints (public for initial bootstrap)
-	r.addExact("/bootstrap-ca")
-	r.addExact("/bootstrap-ca.ps1")
+	r.addExact(constants.APIPaths.BootstrapCALinux)
+	r.addExact(constants.APIPaths.BootstrapCAWindows)
 
 	// Protocol entry points (CSR enrollment, bootstrap)
-	r.addExact("/api/v1/pki/csr/sign")
-	r.addExact("/api/v1/pki/devices/enroll")
-	r.addExact("/api/v1/auth/bootstrap")
-	r.addExact("/api/v1/auth/bootstrap/status")
-	r.addExact("/api/v1/auth/login/verify")
-	r.addExact("/api/v1/auth/logout")
-	r.addPrefix("/api/v1/approve/")
+	r.addExact(constants.APIPaths.PKICSRSign)
+	r.addExact(constants.APIPaths.PKIDevicesEnroll)
+	r.addExact(constants.APIPaths.AuthBootstrap)
+	r.addExact(constants.APIPaths.AuthBootstrapStatus)
+	r.addExact(constants.APIPaths.AuthLoginVerify)
+	r.addExact(constants.APIPaths.AuthLogout)
+	r.addPrefix(constants.APIPaths.ApprovePage)
 
 	// JIT passkey bootstrap (only when JWKS is configured)
 	if jwksEnabled {
-		r.addPrefix("/api/v1/auth/passkeys/jit-")
-		r.addPrefix("/api/v1/mcp/")
-		r.addPrefix("/api/v1/a2a/")
+		r.addPrefix(constants.APIPaths.AuthPasskeysJITPrefix)
+		r.addPrefix(constants.APIPaths.MCPToolsList[:len(constants.APIPaths.MCPToolsList)-len("/list")])
+		r.addPrefix(constants.APIPaths.A2ACall[:len(constants.APIPaths.A2ACall)-len("/call")])
 	}
 
 	return r
@@ -468,7 +468,7 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 					return true
 				}
 
-				if strings.HasPrefix(r.URL.Path, "/_query") || strings.HasPrefix(r.URL.Path, constants.APIPaths.Gateway["governance_envelopes"]) {
+				if strings.HasPrefix(r.URL.Path, "/_query") || strings.HasPrefix(r.URL.Path, constants.APIPaths.GovernanceEnvelopes) {
 					s.responder.Error(w, http.StatusForbidden, "external apps cannot access privileged endpoints")
 					return true
 				}

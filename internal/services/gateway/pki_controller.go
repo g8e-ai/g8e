@@ -263,29 +263,18 @@ set -e
 GATEWAY_HOST="${GATEWAY_HOST:-` + host + `}"
 GATEWAY_PORT="${GATEWAY_PORT:-` + port + `}"
 CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}/.well-known/g8e/pki/ca-bundle"
-CA_PATH="` + constants.GatewayCACertPath + `"
-OLD_CA_PATHS="` + constants.GatewayOldCAPaths + `"
+LOCAL_CA_PATH="` + constants.CACertBundlePath + `"
 
 echo "[g8e] Fetching platform CA bundle from ${CA_BUNDLE_URL}..."
-curl -fsSL "${CA_BUNDLE_URL}" -o "${CA_PATH}"
+mkdir -p "$(dirname "${LOCAL_CA_PATH}")"
+curl -fsSL "${CA_BUNDLE_URL}" -o "${LOCAL_CA_PATH}"
 
-if [ ! -f "${CA_PATH}" ]; then
+if [ ! -f "${LOCAL_CA_PATH}" ]; then
     echo "[g8e] ERROR: Failed to download CA bundle"
     exit 1
 fi
 
-echo "[g8e] Removing any existing g8e certificates from system trust store..."
-for old_path in $OLD_CA_PATHS; do
-    if [ -f "$old_path" ]; then
-        echo "[g8e] Removing old certificate: $old_path"
-        rm -f "$old_path"
-    fi
-done
-
-echo "[g8e] Installing CA bundle to system trust store..."
-update-ca-certificates
-
-echo "[g8e] CA bundle installed successfully"
+echo "[g8e] CA bundle installed to ${LOCAL_CA_PATH}"
 echo "[g8e] You can now use: ./g8e auth login"
 `
 
@@ -319,39 +308,22 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 $GatewayHost = if ($env:GATEWAY_HOST) { $env:GATEWAY_HOST } else { "` + host + `" }
 $GatewayPort = if ($env:GATEWAY_PORT) { $env:GATEWAY_PORT } else { "` + port + `" }
 $CABundleUrl = "http://${GatewayHost}:${GatewayPort}/.well-known/g8e/pki/ca-bundle"
-$TempPath = "$env:TEMP\g8e-gateway-ca.crt"
-$CertStorePath = "Cert:\LocalMachine\Root"
+$LocalCAPath = "` + constants.CACertBundlePath + `"
 
 Write-Host "[g8e] Fetching platform CA bundle from ${CABundleUrl}..."
-Invoke-RestMethod -Uri $CABundleUrl -OutFile $TempPath
+$LocalDir = Split-Path -Parent $LocalCAPath
+if (-not (Test-Path $LocalDir)) {
+    New-Item -ItemType Directory -Path $LocalDir -Force | Out-Null
+}
+Invoke-RestMethod -Uri $CABundleUrl -OutFile $LocalCAPath
 
-if (-not (Test-Path $TempPath)) {
+if (-not (Test-Path $LocalCAPath)) {
     Write-Host "[g8e] ERROR: Failed to download CA bundle"
     exit 1
 }
 
-Write-Host "[g8e] Removing any existing g8e certificates from system trust store..."
-$ExistingCerts = Get-ChildItem -Path $CertStorePath | Where-Object { $_.Subject -like "*g8e*" }
-if ($ExistingCerts) {
-    foreach ($Cert in $ExistingCerts) {
-        Write-Host "[g8e] Removing certificate: $($Cert.Subject)"
-        $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "LocalMachine")
-        $store.Open("ReadWrite")
-        $store.Remove($Cert)
-        $store.Close()
-    }
-    Write-Host "[g8e] Removed $($ExistingCerts.Count) existing g8e certificate(s)"
-} else {
-    Write-Host "[g8e] No existing g8e certificates found"
-}
-
-Write-Host "[g8e] Installing CA bundle to system trust store..."
-Import-Certificate -FilePath $TempPath -CertStoreLocation $CertStorePath
-
-Write-Host "[g8e] CA bundle installed successfully"
+Write-Host "[g8e] CA bundle installed to ${LocalCAPath}"
 Write-Host "[g8e] You can now use: .\g8e.exe auth login"
-
-Remove-Item $TempPath -Force
 `
 
 	w.Header().Set("Content-Type", "application/x-powershell")

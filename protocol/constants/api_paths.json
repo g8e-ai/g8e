@@ -1,15 +1,15 @@
 {
   "client": {
-    "chat": "/chat",
-    "health": "/health",
-    "sse_events": "/internal/sse/events",
-    "sse_stream": "/internal/sse/stream"
+    "chat": "/api/v1/chat",
+    "health": "/api/v1/health",
+    "sse_events": "/api/v1/internal/sse/events",
+    "sse_stream": "/api/v1/internal/sse/stream"
   },
   "client_full": {
-    "chat": "/api/chat",
-    "health": "/api/health",
-    "sse_events": "/api/internal/sse/events",
-    "sse_stream": "/api/internal/sse/stream"
+    "chat": "/api/v1/chat",
+    "health": "/api/v1/health",
+    "sse_events": "/api/v1/internal/sse/events",
+    "sse_stream": "/api/v1/internal/sse/stream"
   },
   "internal_prefix": "/api/v1",
   "operator_prefix": "/api"

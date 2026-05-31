@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0.
 
-// Package config holds everything Phantom needs to dial a real Gateway and
+// Package config holds everything the auditor needs to dial a real Gateway and
 // impersonate arbitrary agents against it. Values come from (in order of
 // precedence): explicit flags > environment > an optional JSON file > defaults.
 package config
@@ -10,8 +10,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
@@ -43,6 +46,9 @@ type Config struct {
 
 	Auth Auth `json:"auth"`
 
+	// UseCLIConfig uses the CLI credentials directory for all paths.
+	UseCLIConfig bool `json:"use_cli_config"`
+
 	// OperatorSessionID scopes audit receipt queries to the real Operator that
 	// executed the work. If empty, Phantom tries to discover it from /api/operators.
 	OperatorSessionID string `json:"operator_session_id"`
@@ -64,7 +70,7 @@ type Config struct {
 	// EnvelopeTTL is how long a maximal envelope is valid before expiry.
 	EnvelopeTTL time.Duration `json:"envelope_ttl"`
 
-	// OutDir is where Phantom writes its detailed run report and receipt export.
+	// OutDir is where the auditor writes its detailed run report and receipt export.
 	OutDir string `json:"out_dir"`
 
 	// Verbose echoes every request/response to stderr as it happens.
@@ -73,22 +79,40 @@ type Config struct {
 
 // Default returns a config wired for a local two-container dev stack.
 func Default() Config {
-	return Config{
-		MTLSBaseURL:    envOr("PHANTOM_MTLS_URL", fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)),
-		PublicBaseURL:  envOr("PHANTOM_PUBLIC_URL", fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps)),
+	cfg := Config{
+		MTLSBaseURL:    envOr("G8E_AUDITOR_MTLS_URL", fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps)),
+		PublicBaseURL:  envOr("G8E_AUDITOR_PUBLIC_URL", fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps)),
 		EnsembleSize:   3,
-		ConsensusKeyID: "phantom-ensemble",
-		PrincipalKeyID: "phantom-principal",
+		ConsensusKeyID: "auditor-ensemble",
+		PrincipalKeyID: "auditor-principal",
 		L3Mode:         "suspend",
 		EnvelopeTTL:    5 * time.Minute,
-		OutDir:         "./phantom-out",
-		Auth: Auth{
-			ClientCert: envOr("PHANTOM_CLIENT_CERT", ".g8e/pki/client.crt"),
-			ClientKey:  envOr("PHANTOM_CLIENT_KEY", ".g8e/pki/client.key"),
-			CABundle:   envOr("PHANTOM_CA_BUNDLE", ".g8e/pki/hub-bundle.pem"),
-			APIKey:     os.Getenv("PHANTOM_API_KEY"),
-		},
+		OutDir:         "./auditor-out",
+		UseCLIConfig:   true,
 	}
+
+	if cfg.UseCLIConfig {
+		cliCfg, _ := config.Load("")
+		if cliCfg != nil {
+			cfg.Auth.ClientCert = cliCfg.CLICertFile()
+			cfg.Auth.ClientKey = cliCfg.CLIKeyFile()
+			cfg.Auth.CABundle = cliCfg.TrustBundlePath()
+		}
+	}
+
+	// Environment variable overrides
+	if cert := os.Getenv("G8E_AUDITOR_CLIENT_CERT"); cert != "" {
+		cfg.Auth.ClientCert = cert
+	}
+	if key := os.Getenv("G8E_AUDITOR_CLIENT_KEY"); key != "" {
+		cfg.Auth.ClientKey = key
+	}
+	if bundle := os.Getenv("G8E_AUDITOR_CA_BUNDLE"); bundle != "" {
+		cfg.Auth.CABundle = bundle
+	}
+	cfg.Auth.APIKey = os.Getenv("G8E_AUDITOR_API_KEY")
+
+	return cfg
 }
 
 // LoadFile overlays a JSON config file onto c (fields present in the file win).
@@ -105,4 +129,18 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func expandPath(path string) string {
+	if path == "" {
+		return path
+	}
+	if strings.HasPrefix(path, "~/") || path == "~" {
+		homeDir, _ := os.UserHomeDir()
+		if path == "~" {
+			return homeDir
+		}
+		path = filepath.Join(homeDir, path[2:])
+	}
+	return os.ExpandEnv(path)
 }

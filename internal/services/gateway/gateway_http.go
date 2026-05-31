@@ -38,7 +38,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-var governanceEnvelopeRedirectError = "submit via POST " + constants.APIPaths.Gateway["governance_envelopes"]
+var governanceEnvelopeRedirectError = "submit via POST " + constants.APIPaths.GovernanceEnvelopes
 
 // HTTPHandlerDependencies groups all dependencies for HTTPHandler to reduce constructor bloat.
 type HTTPHandlerDependencies struct {
@@ -164,14 +164,14 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 
 	// MCP Ingress routes with rate limiting
 	mcpMux := http.NewServeMux()
-	mcpMux.HandleFunc("/api/v1/mcp/tools/list", h.mcp.HandleToolsList)
-	mcpMux.HandleFunc("/api/v1/mcp/tools/call", h.mcp.HandleToolsCall)
-	mcpMux.HandleFunc("/api/v1/mcp/tools/call/sse", h.mcp.HandleToolsCallSSE)
-	mcpMux.HandleFunc("/api/v1/mcp/resources/list", h.mcp.HandleResourcesList)
-	mcpMux.HandleFunc("/api/v1/mcp/resources/read", h.mcp.HandleResourcesRead)
-	mcpMux.HandleFunc("/api/v1/mcp/prompts/list", h.mcp.HandlePromptsList)
-	mcpMux.HandleFunc("/api/v1/mcp/prompts/get", h.mcp.HandlePromptsGet)
-	mcpMux.HandleFunc("/api/v1/a2a/call", h.mcp.HandleA2aCall)
+	mcpMux.HandleFunc(constants.APIPaths.MCPToolsList, h.mcp.HandleToolsList)
+	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCall, h.mcp.HandleToolsCall)
+	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCallSSE, h.mcp.HandleToolsCallSSE)
+	mcpMux.HandleFunc(constants.APIPaths.MCPResourcesList, h.mcp.HandleResourcesList)
+	mcpMux.HandleFunc(constants.APIPaths.MCPResourcesRead, h.mcp.HandleResourcesRead)
+	mcpMux.HandleFunc(constants.APIPaths.MCPPromptsList, h.mcp.HandlePromptsList)
+	mcpMux.HandleFunc(constants.APIPaths.MCPPromptsGet, h.mcp.HandlePromptsGet)
+	mcpMux.HandleFunc(constants.APIPaths.A2ACall, h.mcp.HandleA2aCall)
 
 	// Wrap MCP/A2A with Rate Limiting
 	mcpRateLimited := h.rateLimitMiddleware(mcpMux)
@@ -189,60 +189,60 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 
 	// Rate-limited mux for core governance envelope (uses mTLS via main middleware)
 	govEnvMux := http.NewServeMux()
-	govEnvMux.HandleFunc("/api/v1/governance/envelopes", h.handleGovernanceEnvelope)
+	govEnvMux.HandleFunc(constants.APIPaths.GovernanceEnvelopes, h.handleGovernanceEnvelope)
 	govEnvHandler := h.rateLimitMiddleware(govEnvMux)
 
 	// Authenticated routes (require mTLS)
-	mux.HandleFunc("/api/v1/data/settings", h.dbController.handleDataSettings)
-	mux.HandleFunc("/api/v1/operators", h.operatorController.handleListOperators)
-	mux.HandleFunc("/api/v1/operators/", h.operatorController.handleTerminateOperator)
-	mux.HandleFunc("/api/v1/operators/bind", h.operatorController.handleBindOperators)
-	mux.HandleFunc("/api/v1/operators/unbind", h.operatorController.handleUnbindOperators)
-	mux.HandleFunc("/api/v1/operators/target", h.operatorController.handleSetTargetContext)
-	mux.HandleFunc("/api/v1/operators/reauth", h.operatorController.handleReauth)
-	mux.HandleFunc("/api/v1/governance/signers", h.dbController.handleGovernanceSigners)
-	mux.HandleFunc("/api/v1/governance/signers/", h.dbController.handleGovernanceSignerByID)
-	mux.HandleFunc("/api/v1/admin/app-policies/", h.adminController.handleAppPolicySigner)
-	mux.HandleFunc("/api/v1/admin/apps/revoke", h.adminController.handleRevokeApp)
+	mux.HandleFunc(constants.APIPaths.DataSettings, h.dbController.handleDataSettings)
+	mux.HandleFunc(constants.APIPaths.Operators, h.operatorController.handleListOperators)
+	mux.HandleFunc(constants.APIPaths.OperatorsByID, h.operatorController.handleTerminateOperator)
+	mux.HandleFunc(constants.APIPaths.OperatorsBind, h.operatorController.handleBindOperators)
+	mux.HandleFunc(constants.APIPaths.OperatorsUnbind, h.operatorController.handleUnbindOperators)
+	mux.HandleFunc(constants.APIPaths.OperatorsTarget, h.operatorController.handleSetTargetContext)
+	mux.HandleFunc(constants.APIPaths.OperatorsReauth, h.operatorController.handleReauth)
+	mux.HandleFunc(constants.APIPaths.GovernanceSigners, h.dbController.handleGovernanceSigners)
+	mux.HandleFunc(constants.APIPaths.GovernanceSignersByID, h.dbController.handleGovernanceSignerByID)
+	mux.HandleFunc(constants.APIPaths.AdminAppPoliciesBySigner, h.adminController.handleAppPolicySigner)
+	mux.HandleFunc(constants.APIPaths.AdminAppsRevoke, h.adminController.handleRevokeApp)
 
 	// Register rate-limited MCP routes
-	mux.Handle("/api/v1/governance/envelopes", govEnvHandler)
-	mux.Handle("/api/v1/mcp/", mcpHandler)
-	mux.Handle("/api/v1/a2a/", mcpHandler)
+	mux.Handle(constants.APIPaths.GovernanceEnvelopes, govEnvHandler)
+	mux.Handle(constants.APIPaths.MCPToolsList[:len(constants.APIPaths.MCPToolsList)-len("/list")], mcpHandler)
+	mux.Handle(constants.APIPaths.A2ACall[:len(constants.APIPaths.A2ACall)-len("/call")], mcpHandler)
 
-	mux.HandleFunc("/api/v1/audit/receipts", h.dbController.handleAuditReceipts)
-	mux.HandleFunc("/api/v1/audit/receipts/export", h.dbController.handleAuditReceiptsExport)
+	mux.HandleFunc(constants.APIPaths.AuditReceipts, h.dbController.handleAuditReceipts)
+	mux.HandleFunc(constants.APIPaths.AuditReceiptsExport, h.dbController.handleAuditReceiptsExport)
 
 	// Internal SSE event bridge (used by g8e-compatible agentic ensembles to publish typed events
 	// for browser/CLI subscribers to consume). Producers are authenticated by
 	// mTLS app identity; consumers poll /api/v1/sse/events or stream /api/v1/sse/stream.
-	mux.HandleFunc("/api/v1/sse/push", h.handleInternalSSEPush)
-	mux.HandleFunc("/api/v1/sse/events", h.handleInternalSSEEvents)
-	mux.HandleFunc("/api/v1/sse/stream", h.handleInternalSSEStream)
-	mux.HandleFunc("/api/v1/data/", h.dbController.handleDataDB)
-	mux.HandleFunc("/api/v1/kv/", h.dbController.handleKV)
-	mux.HandleFunc("/api/v1/pubsub/publish", h.dbController.handlePubSubPublish)
-	mux.Handle("/api/v1/pubsub/stream", h.auth.WebSocketAuth(http.HandlerFunc(h.pubsub.HandleWebSocket)))
+	mux.HandleFunc(constants.APIPaths.SSEPush, h.handleInternalSSEPush)
+	mux.HandleFunc(constants.APIPaths.SSEEvents, h.handleInternalSSEEvents)
+	mux.HandleFunc(constants.APIPaths.SSEStream, h.handleInternalSSEStream)
+	mux.HandleFunc(constants.APIPaths.DataDB, h.dbController.handleDataDB)
+	mux.HandleFunc(constants.APIPaths.KV, h.dbController.handleKV)
+	mux.HandleFunc(constants.APIPaths.PubSubPublish, h.dbController.handlePubSubPublish)
+	mux.Handle(constants.APIPaths.PubSubStream, h.auth.WebSocketAuth(http.HandlerFunc(h.pubsub.HandleWebSocket)))
 
 	// PKI management routes (require mTLS)
-	mux.HandleFunc("/api/v1/pki/csr/sign", h.pkiController.handlePKICSRSign)
-	mux.HandleFunc("/api/v1/pki/devices/enroll", h.pkiController.handlePKIDevicesEnroll)
-	mux.HandleFunc("/api/v1/pki/certificates/revoke", h.pkiController.handlePKICertificatesRevoke)
-	mux.HandleFunc("/api/v1/pki/revocation-bundle", h.pkiController.handlePKIRevocationBundle)
+	mux.HandleFunc(constants.APIPaths.PKICSRSign, h.pkiController.handlePKICSRSign)
+	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
+	mux.HandleFunc(constants.APIPaths.PKICertificatesRevoke, h.pkiController.handlePKICertificatesRevoke)
+	mux.HandleFunc(constants.APIPaths.PKIRevocationBundle, h.pkiController.handlePKIRevocationBundle)
 
 	// User management routes (require mTLS)
-	mux.HandleFunc("/api/v1/users", h.authController.handleUsers)
+	mux.HandleFunc(constants.APIPaths.Users, h.authController.handleUsers)
 
 	// Passkey / L3 Brokerage Routes (require mTLS)
-	mux.HandleFunc("/api/v1/auth/passkeys/register/challenge", h.authController.handleAuthPasskeysRegisterChallenge)
-	mux.HandleFunc("/api/v1/auth/passkeys/register/verify", h.authController.handleAuthPasskeysRegisterVerify)
-	mux.HandleFunc("/api/v1/auth/passkeys/authenticate/challenge", h.authController.handleAuthPasskeysAuthenticateChallenge)
-	mux.HandleFunc("/api/v1/auth/passkeys/authenticate/verify", h.authController.handleAuthPasskeysAuthenticateVerify)
-	mux.HandleFunc("/api/v1/auth/passkeys", h.authController.handleAuthPasskeys)
-	mux.HandleFunc("/api/v1/auth/passkeys/", h.authController.handleAuthPasskeysRevoke)
+	mux.HandleFunc(constants.APIPaths.AuthPasskeysRegisterChallenge, h.authController.handleAuthPasskeysRegisterChallenge)
+	mux.HandleFunc(constants.APIPaths.AuthPasskeysRegisterVerify, h.authController.handleAuthPasskeysRegisterVerify)
+	mux.HandleFunc(constants.APIPaths.AuthPasskeysAuthenticateChallenge, h.authController.handleAuthPasskeysAuthenticateChallenge)
+	mux.HandleFunc(constants.APIPaths.AuthPasskeysAuthenticateVerify, h.authController.handleAuthPasskeysAuthenticateVerify)
+	mux.HandleFunc(constants.APIPaths.AuthPasskeys, h.authController.handleAuthPasskeys)
+	mux.HandleFunc(constants.APIPaths.AuthPasskeysByID, h.authController.handleAuthPasskeysRevoke)
 
 	// Approval routes (require mTLS)
-	mux.HandleFunc("/api/v1/approvals/", h.authController.handleApprovalAction)
+	mux.HandleFunc(constants.APIPaths.ApprovalsByID, h.authController.handleApprovalAction)
 
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }
@@ -251,28 +251,28 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	// Bootstrap routes (CA discovery, trust scripts) - now on public HTTPS
-	mux.HandleFunc("/health", h.handleHealth)
-	mux.HandleFunc("/.well-known/g8e/pki/ca-bundle", h.pkiController.handlePKICABundle)
-	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.pkiController.handlePKIFingerprint)
-	mux.HandleFunc("/api/v1/blobs/", h.dbController.handleBlob)
+	mux.HandleFunc(constants.APIPaths.Health, h.handleHealth)
+	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
+	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
+	mux.HandleFunc(constants.APIPaths.DataBlobs, h.dbController.handleBlob)
 
 	// Landing page and health
-	mux.HandleFunc("/", h.handleLandingPage)
-	mux.HandleFunc("/api/v1/auth/login/verify", h.authController.handlePublicAuthLoginVerify)
-	mux.HandleFunc("/api/v1/auth/logout", h.authController.handlePublicAuthLogout)
-	mux.HandleFunc("/api/v1/auth/bootstrap", h.authController.handlePublicAuthBootstrap)
-	mux.HandleFunc("/api/v1/auth/bootstrap/status", h.authController.handleBootstrapStatus)
+	mux.HandleFunc(constants.APIPaths.Landing, h.handleLandingPage)
+	mux.HandleFunc(constants.APIPaths.AuthLoginVerify, h.authController.handlePublicAuthLoginVerify)
+	mux.HandleFunc(constants.APIPaths.AuthLogout, h.authController.handlePublicAuthLogout)
+	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handlePublicAuthBootstrap)
+	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)
 
 	// MCP/A2A Ingress routes with JWT authentication for remote clients
 	mcpMux := http.NewServeMux()
-	mcpMux.HandleFunc("/api/v1/mcp/tools/list", h.mcp.HandleToolsList)
-	mcpMux.HandleFunc("/api/v1/mcp/tools/call", h.mcp.HandleToolsCall)
-	mcpMux.HandleFunc("/api/v1/mcp/tools/call/sse", h.mcp.HandleToolsCallSSE)
-	mcpMux.HandleFunc("/api/v1/mcp/resources/list", h.mcp.HandleResourcesList)
-	mcpMux.HandleFunc("/api/v1/mcp/resources/read", h.mcp.HandleResourcesRead)
-	mcpMux.HandleFunc("/api/v1/mcp/prompts/list", h.mcp.HandlePromptsList)
-	mcpMux.HandleFunc("/api/v1/mcp/prompts/get", h.mcp.HandlePromptsGet)
-	mcpMux.HandleFunc("/api/v1/a2a/call", h.mcp.HandleA2aCall)
+	mcpMux.HandleFunc(constants.APIPaths.MCPToolsList, h.mcp.HandleToolsList)
+	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCall, h.mcp.HandleToolsCall)
+	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCallSSE, h.mcp.HandleToolsCallSSE)
+	mcpMux.HandleFunc(constants.APIPaths.MCPResourcesList, h.mcp.HandleResourcesList)
+	mcpMux.HandleFunc(constants.APIPaths.MCPResourcesRead, h.mcp.HandleResourcesRead)
+	mcpMux.HandleFunc(constants.APIPaths.MCPPromptsList, h.mcp.HandlePromptsList)
+	mcpMux.HandleFunc(constants.APIPaths.MCPPromptsGet, h.mcp.HandlePromptsGet)
+	mcpMux.HandleFunc(constants.APIPaths.A2ACall, h.mcp.HandleA2aCall)
 
 	// Wrap MCP/A2A with Rate Limiting
 	mcpRateLimited := h.rateLimitMiddleware(mcpMux)
@@ -282,32 +282,32 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	var mcpHandler http.Handler
 	if h.auth != nil && h.auth.HasJWKS() {
 		mcpHandler = h.auth.JWTAuthMiddleware(mcpRateLimited)
-		mux.Handle("/api/v1/mcp/", mcpHandler)
-		mux.Handle("/api/v1/a2a/", mcpHandler)
+		mux.Handle(constants.APIPaths.MCPToolsList[:len(constants.APIPaths.MCPToolsList)-len("/list")], mcpHandler)
+		mux.Handle(constants.APIPaths.A2ACall[:len(constants.APIPaths.A2ACall)-len("/call")], mcpHandler)
 
 		// JIT passkey bootstrap: allow first-credential registration via JWT
 		// This unblocks OIDC/JIT users who have zero credentials and cannot reach WebSessionAuth
 		jwtPasskeyMux := http.NewServeMux()
-		jwtPasskeyMux.HandleFunc("/api/v1/auth/passkeys/jit-register/challenge", h.authController.handleAuthPasskeysRegisterChallenge)
-		jwtPasskeyMux.HandleFunc("/api/v1/auth/passkeys/jit-register/verify", h.authController.handleAuthPasskeysRegisterVerify)
-		mux.Handle("/api/v1/auth/passkeys/jit-register/challenge", h.auth.JWTAuthMiddleware(jwtPasskeyMux))
-		mux.Handle("/api/v1/auth/passkeys/jit-register/verify", h.auth.JWTAuthMiddleware(jwtPasskeyMux))
+		jwtPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysJITRegisterChallenge, h.authController.handleAuthPasskeysRegisterChallenge)
+		jwtPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysJITRegisterVerify, h.authController.handleAuthPasskeysRegisterVerify)
+		mux.Handle(constants.APIPaths.AuthPasskeysJITRegisterChallenge, h.auth.JWTAuthMiddleware(jwtPasskeyMux))
+		mux.Handle(constants.APIPaths.AuthPasskeysJITRegisterVerify, h.auth.JWTAuthMiddleware(jwtPasskeyMux))
 	}
 
 	// Browser-facing data routes (require web session cookie)
 	authedMux := http.NewServeMux()
-	authedMux.HandleFunc("/api/v1/users/me", h.authController.handleUserMe)
-	authedMux.HandleFunc("/api/v1/auth/sessions/me", h.authController.handleWebSession)
+	authedMux.HandleFunc(constants.APIPaths.UsersMe, h.authController.handleUserMe)
+	authedMux.HandleFunc(constants.APIPaths.AuthSessionsMe, h.authController.handleWebSession)
 
 	// OOB Approval UI for suspended MCP/A2A transactions
-	mux.HandleFunc("/api/v1/approve/", h.authController.handleApprovalPage)
-	authedMux.HandleFunc("/api/v1/approvals/", h.authController.handleApprovalAction)
-	authedMux.HandleFunc("/api/v1/approvals", h.authController.handleListSuspendedTransactions)
+	mux.HandleFunc(constants.APIPaths.ApprovePage, h.authController.handleApprovalPage)
+	authedMux.HandleFunc(constants.APIPaths.ApprovalsByID, h.authController.handleApprovalAction)
+	authedMux.HandleFunc(constants.APIPaths.Approvals, h.authController.handleListSuspendedTransactions)
 
 	// Wrap authed routes in WebSessionAuth middleware
-	mux.Handle("/api/v1/users/", h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle("/api/v1/auth/sessions/", h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle("/api/v1/approvals", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle(constants.APIPaths.Users[:len(constants.APIPaths.Users)-1], h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle(constants.APIPaths.AuthSessionsMe[:len(constants.APIPaths.AuthSessionsMe)-len("/me")], h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle(constants.APIPaths.Approvals, h.auth.WebSessionAuth(authedMux, h.db))
 
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }
@@ -316,15 +316,15 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	// Health check - available on bootstrap port for initialization monitoring
-	mux.HandleFunc("/health", h.handleHealth)
+	mux.HandleFunc(constants.APIPaths.Health, h.handleHealth)
 
 	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
-	mux.HandleFunc("/api/v1/auth/bootstrap", h.authController.handlePublicAuthBootstrap)
-	mux.HandleFunc("/api/v1/auth/bootstrap/status", h.authController.handleBootstrapStatus)
-	mux.HandleFunc("/.well-known/g8e/pki/ca-bundle", h.pkiController.handlePKICABundle)
-	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.pkiController.handlePKIFingerprint)
-	mux.HandleFunc("/bootstrap-ca", h.pkiController.handleTrustScriptLinux)
-	mux.HandleFunc("/bootstrap-ca.ps1", h.pkiController.handleTrustScriptWindows)
+	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handlePublicAuthBootstrap)
+	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)
+	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
+	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
+	mux.HandleFunc(constants.APIPaths.BootstrapCALinux, h.pkiController.handleTrustScriptLinux)
+	mux.HandleFunc(constants.APIPaths.BootstrapCAWindows, h.pkiController.handleTrustScriptWindows)
 
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }

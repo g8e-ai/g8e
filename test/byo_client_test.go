@@ -273,7 +273,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 
 	// 3. Fetch current state root
-	resp, err = mtlsClient.Get(mtlsURL + "/health")
+	resp, err = mtlsClient.Get(mtlsURL + constants.APIPaths.Health)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -384,7 +384,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	// Submit the envelope via the canonical governed mutation entry.
 	dataJSON, err := protojson.Marshal(envelope)
 	require.NoError(t, err)
-	httpReq, err := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader(dataJSON))
+	httpReq, err := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.GovernanceEnvelopes, bytes.NewReader(dataJSON))
 	require.NoError(t, err)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set(constants.HeaderAuthorization, "Bearer "+regResp.OperatorSessionID)

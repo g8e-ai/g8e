@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/auditor/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // Persona is the identity Phantom wears for a given exchange. This is the ONLY
@@ -71,11 +72,15 @@ func New(cfg config.Config) (*Client, error) {
 		}
 	}
 	if cfg.Auth.ClientCert != "" && cfg.Auth.ClientKey != "" {
-		crt, err := tls.LoadX509KeyPair(cfg.Auth.ClientCert, cfg.Auth.ClientKey)
-		if err != nil {
-			return nil, fmt.Errorf("load client cert: %w", err)
+		if _, err := os.Stat(cfg.Auth.ClientCert); err == nil {
+			if _, err := os.Stat(cfg.Auth.ClientKey); err == nil {
+				crt, err := tls.LoadX509KeyPair(cfg.Auth.ClientCert, cfg.Auth.ClientKey)
+				if err != nil {
+					return nil, fmt.Errorf("load client cert: %w", err)
+				}
+				tlsCfg.Certificates = []tls.Certificate{crt}
+			}
 		}
-		tlsCfg.Certificates = []tls.Certificate{crt}
 	}
 
 	return &Client{
@@ -167,7 +172,7 @@ func attachBody(j *json.RawMessage, raw *string, b []byte) {
 // StateRoot fetches the current state_merkle_root from /health on the public surface.
 // Maximal envelopes must bind to this exact root or the Operator drops them (TOCTOU gap).
 func (c *Client) StateRoot(ctx context.Context) (string, error) {
-	_, body, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodGet, c.cfg.PublicBaseURL+"/health", nil)
+	_, body, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodGet, c.cfg.PublicBaseURL+constants.APIPaths.Health, nil)
 	if err != nil {
 		return "", err
 	}

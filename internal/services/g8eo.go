@@ -171,7 +171,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.config.GitAvailable = gitPath != ""
 
 	auditVaultConfig := storage.DefaultAuditVaultConfig()
-	auditVaultConfig.DataDir = filepath.Join(vs.config.WorkDir, ".g8e", "data")
+	auditVaultConfig.DataDir = filepath.Join(vs.config.WorkDir, constants.Paths.Infra.DataDir)
 	auditVaultConfig.GitPath = gitPath
 	vs.auditVault, err = storage.NewAuditVaultService(auditVaultConfig, vs.logger)
 	if err != nil {

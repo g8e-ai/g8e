@@ -12,7 +12,7 @@ This document defines the technical standards, architectural invariants, and con
 
 ## Development Lifecycle
 
-Components run host-native. **Do not use Docker for primary component development or testing.**
+Components run host-native. Docker is encouraged for end-to-end testing of the operator binary against the local gateway.
 
 ### Setup
 
@@ -91,7 +91,26 @@ The `./g8e platform start` command manages the sequence:
 
 ## State & Data Strategy
 
-All runtime state is rooted at `./.g8e/`.
+### Path Conventions
+
+g8e uses two distinct path categories:
+
+**Repository Source Paths** (relative to git root `/home/bob/g8e/`):
+- `protocol/` - Protobuf schemas and JSON constants (SSOT)
+- `cmd/` - CLI entry points
+- `internal/` - Internal Go packages
+- `pkg/` - Public Go packages
+- `docs/` - Documentation
+
+**Runtime State Paths** (relative to operator working directory, typically `./.g8e/`):
+- `.g8e/` - All runtime state directory
+- `.g8e/pki/` - CA hierarchy and trust bundles
+- `.g8e/secrets/` - Bootstrap secrets
+- `.g8e/data/` - SQLite databases and blobs
+- `.g8e/logs/` - Component logs
+- `.g8e/pids/` - Process IDs
+
+All runtime state is rooted at `./.g8e/` in the operator's working directory. This directory is created on first boot and is separate from the source repository.
 
 | Path | Purpose | `wipe` | `reset` | `clean` |
 |---|---|---|---|---|

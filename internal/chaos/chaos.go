@@ -360,7 +360,7 @@ func Run(cfg Config) {
 	dataDir := cfg.DataDir
 	var testVaultDir string
 	if dataDir == "" {
-		testVaultDir = filepath.Join(projectRoot, ".g8e", "test-vault")
+		testVaultDir = filepath.Join(projectRoot, constants.Paths.Infra.TestVaultDir)
 		if err := os.MkdirAll(testVaultDir, 0755); err != nil {
 			logger.Error("failed to create test vault directory", "error", err)
 			os.Exit(1)
@@ -383,7 +383,7 @@ func Run(cfg Config) {
 
 	pkiDir := cfg.PKIDir
 	if pkiDir == "" {
-		pkiDir = filepath.Join(projectRoot, ".g8e", "pki")
+		pkiDir = filepath.Join(projectRoot, constants.Paths.Infra.PkiDir)
 	}
 
 	logArgs := []any{

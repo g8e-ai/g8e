@@ -125,7 +125,7 @@ func (c *Client) SubmitEnvelope(ctx context.Context, p Persona, envelope *common
 		return 0, nil, fmt.Errorf("marshal envelope: %w", err)
 	}
 
-	status, body, err = c.do(ctx, p, http.MethodPost, c.cfg.MTLSBaseURL+constants.APIPaths.Gateway["governance_envelopes"], wire)
+	status, body, err = c.do(ctx, p, http.MethodPost, c.cfg.MTLSBaseURL+constants.APIPaths.GovernanceEnvelopes, wire)
 	return status, body, err
 }
 
@@ -199,6 +199,6 @@ func (c *Client) SubmitMaximal(ctx context.Context, p Persona, m MaximalEnvelope
 		return txHash, 0, nil, fmt.Errorf("protojson marshal: %w", err)
 	}
 
-	status, body, err = c.do(ctx, p, http.MethodPost, c.cfg.MTLSBaseURL+constants.APIPaths.Gateway["governance_envelopes"], wire)
+	status, body, err = c.do(ctx, p, http.MethodPost, c.cfg.MTLSBaseURL+constants.APIPaths.GovernanceEnvelopes, wire)
 	return txHash, status, body, err
 }

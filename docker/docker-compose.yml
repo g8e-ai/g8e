@@ -1,0 +1,92 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Licensed under the Apache License, Version 2.0
+
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.gateway
+    image: g8e-gateway:latest
+    container_name: g8e-gateway
+    hostname: gateway
+    networks:
+      - g8e-network
+    ports:
+      - "9000:9000"  # HTTPS mTLS API
+      - "9001:9001"  # Bootstrap TLS (CSR enrollment)
+      - "9002:9002"  # Public browser/BYO bootstrap
+    volumes:
+      - gateway-data:/g8e/.g8e/data
+      - gateway-pki:/g8e/.g8e/pki
+      - gateway-secrets:/g8e/.g8e/secrets
+    environment:
+      - G8E_LOG_LEVEL=info
+      - G8E_GATEWAY_HTTP_PORT=9000
+      - G8E_GATEWAY_BOOTSTRAP_PORT=9001
+      - G8E_GATEWAY_PUBLIC_PORT=9002
+      - G8E_DATA_DIR=/g8e/.g8e/data
+      - G8E_PKI_DIR=/g8e/.g8e/pki
+      - G8E_SECRETS_DIR=/g8e/.g8e/secrets
+    healthcheck:
+      test: ["CMD", "/g8e/g8e", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  operator:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.operator
+    image: g8e-operator:latest
+    container_name: g8e-operator
+    hostname: operator
+    networks:
+      - g8e-network
+    ports:
+      - "9010:9000"  # HTTPS mTLS API (offset to avoid conflict with gateway)
+      - "9011:9001"  # Bootstrap TLS (CSR enrollment)
+      - "9012:9002"  # Public browser/BYO bootstrap
+    volumes:
+      - operator-data:/g8e/.g8e/data
+      - operator-pki:/g8e/.g8e/pki
+      - operator-secrets:/g8e/.g8e/secrets
+    environment:
+      - G8E_LOG_LEVEL=info
+      - G8E_LISTEN_HTTP_PORT=9000
+      - G8E_LISTEN_BOOTSTRAP_PORT=9001
+      - G8E_LISTEN_PUBLIC_PORT=9002
+      - G8E_DATA_DIR=/g8e/.g8e/data
+      - G8E_PKI_DIR=/g8e/.g8e/pki
+      - G8E_SECRETS_DIR=/g8e/.g8e/secrets
+      # Gateway endpoint for operator to authenticate with
+      - G8E_GATEWAY_ENDPOINT=https://gateway:9000
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/g8e/g8e", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+networks:
+  g8e-network:
+    driver: bridge
+
+volumes:
+  gateway-data:
+    driver: local
+  gateway-pki:
+    driver: local
+  gateway-secrets:
+    driver: local
+  operator-data:
+    driver: local
+  operator-pki:
+    driver: local
+  operator-secrets:
+    driver: local

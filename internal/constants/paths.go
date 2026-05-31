@@ -135,9 +135,6 @@ const (
 	PathProcSelfCgroup                                        = "/proc/self/cgroup"
 	PathProcSelfMountinfo                                     = "/proc/self/mountinfo"
 	PathLibraryPreferencesSystemConfigurationPreferencesPlist = "/Library/Preferences/SystemConfiguration/preferences.plist"
-	PathUsrLocalShareCaCertificates                           = "/usr/local/share/ca-certificates"
-	PathEtcSslCerts                                           = "/etc/ssl/certs"
-	PathUsrShareCaCertificates                                = "/usr/share/ca-certificates"
 )
 
 // CA certificate path constants
@@ -145,8 +142,6 @@ const (
 	CACertDir              = ".g8e/pki/trust"
 	CACertBundlePath       = ".g8e/pki/trust/g8e-gw-ca-bundle.pem"
 	CACertLegacyBundlePath = ".g8e/pki/ca-bundle.pem"
-	GatewayCACertPath      = "/usr/local/share/ca-certificates/g8e-gateway-ca.crt"
-	GatewayOldCAPaths      = "/usr/local/share/ca-certificates/g8e*.crt /etc/ssl/certs/g8e*.pem /usr/share/ca-certificates/g8e*.crt"
 )
 
 func init() {

@@ -242,13 +242,13 @@ func TestPublicRouteRegistry_ExactPaths(t *testing.T) {
 
 	// Test exact public paths
 	publicPaths := []string{
-		"/health",
-		"/api/v1/pki/csr/sign",
-		"/api/v1/pki/devices/enroll",
-		"/api/v1/auth/bootstrap",
-		"/api/v1/auth/bootstrap/status",
-		"/api/v1/auth/login/verify",
-		"/api/v1/auth/logout",
+		constants.APIPaths.Health,
+		constants.APIPaths.PKICSRSign,
+		constants.APIPaths.PKIDevicesEnroll,
+		constants.APIPaths.AuthBootstrap,
+		constants.APIPaths.AuthBootstrapStatus,
+		constants.APIPaths.AuthLoginVerify,
+		constants.APIPaths.AuthLogout,
 	}
 
 	for _, path := range publicPaths {
@@ -257,8 +257,8 @@ func TestPublicRouteRegistry_ExactPaths(t *testing.T) {
 
 	// Test that slight variations are not public
 	assert.False(t, registry.IsPublic("/healthz"), "/healthz should not be public")
-	assert.False(t, registry.IsPublic("/api/v1/pki/csr/sign/"), "/api/v1/pki/csr/sign/ should not be public")
-	assert.False(t, registry.IsPublic("/api/v1/auth/bootstrap/extra"), "/api/v1/auth/bootstrap/extra should not be public")
+	assert.False(t, registry.IsPublic(constants.APIPaths.PKICSRSign+"/"), constants.APIPaths.PKICSRSign+"/ should not be public")
+	assert.False(t, registry.IsPublic(constants.APIPaths.AuthBootstrap+"/extra"), constants.APIPaths.AuthBootstrap+"/extra should not be public")
 }
 
 func TestPublicRouteRegistry_Prefixes(t *testing.T) {
@@ -289,23 +289,40 @@ func TestPublicRouteRegistry_JWKSEnabled(t *testing.T) {
 	// Registry with JWKS enabled
 	registryWithJWKS := NewPublicRouteRegistry(true)
 
-	jwksPaths := []string{
+	// Test JIT passkey prefix matches
+	jitPaths := []string{
 		"/api/v1/auth/passkeys/jit-123",
 		"/api/v1/auth/passkeys/jit-abc",
-		"/api/v1/mcp/tools",
-		"/api/v1/mcp/resources",
-		"/api/v1/a2a/agents",
-		"/api/v1/a2a/tasks",
+		"/api/v1/auth/passkeys/jit-register/challenge",
+	}
+	for _, path := range jitPaths {
+		assert.True(t, registryWithJWKS.IsPublic(path), "Path %s should be public with JWKS enabled", path)
 	}
 
-	for _, path := range jwksPaths {
+	// Test MCP tools prefix matches
+	mcpPaths := []string{
+		"/api/v1/mcp/tools/list",
+		"/api/v1/mcp/tools/call",
+		"/api/v1/mcp/tools/some-tool",
+	}
+	for _, path := range mcpPaths {
+		assert.True(t, registryWithJWKS.IsPublic(path), "Path %s should be public with JWKS enabled", path)
+	}
+
+	// Test A2A prefix matches
+	a2aPaths := []string{
+		"/api/v1/a2a/call",
+		"/api/v1/a2a/some-endpoint",
+	}
+	for _, path := range a2aPaths {
 		assert.True(t, registryWithJWKS.IsPublic(path), "Path %s should be public with JWKS enabled", path)
 	}
 
 	// Registry without JWKS
 	registryWithoutJWKS := NewPublicRouteRegistry(false)
 
-	for _, path := range jwksPaths {
+	allJWKSPaths := append(jitPaths, append(mcpPaths, a2aPaths...)...)
+	for _, path := range allJWKSPaths {
 		assert.False(t, registryWithoutJWKS.IsPublic(path), "Path %s should not be public without JWKS", path)
 	}
 }
@@ -317,7 +334,7 @@ func TestPublicRouteRegistry_NonPublicPaths(t *testing.T) {
 
 	// Test paths that should never be public
 	privatePaths := []string{
-		constants.APIPaths.Gateway["governance_envelopes"],
+		constants.APIPaths.GovernanceEnvelopes,
 		"/_query",
 		"/api/users",
 		"/api/operators",
@@ -337,7 +354,7 @@ func TestPublicRouteRegistry_CanonicalCoverage(t *testing.T) {
 
 	// Ensure all previously hardcoded public routes are covered
 	// This test prevents regression when the registry is modified
-	assert.True(t, registry.IsPublic("/health"), "Health check must be public")
+	assert.True(t, registry.IsPublic(constants.APIPaths.Health), "Health check must be public")
 	assert.True(t, registry.IsPublic("/.well-known/g8e/pki/"), "PKI prefix must be public")
 	assert.True(t, registry.IsPublic("/api/v1/pki/csr/sign"), "CSR signing must be public")
 	assert.True(t, registry.IsPublic("/api/v1/pki/devices/enroll"), "Device enrollment must be public")
@@ -386,7 +403,7 @@ func TestAuthService_Middleware_PublicBypass(t *testing.T) {
 	middleware := auth.Middleware(handler)
 
 	// Test public route bypass
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
 
 	middleware.ServeHTTP(rr, req)

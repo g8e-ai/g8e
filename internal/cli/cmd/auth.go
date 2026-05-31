@@ -16,7 +16,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -58,11 +57,6 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			trustBundle := cfg.TrustBundlePath()
-			if _, err := os.Stat(trustBundle); os.IsNotExist(err) {
-				return fmt.Errorf("trust bundle not found at %s - install the platform CA manually before login", trustBundle)
-			}
-
 			if err := auth.CheckOperatorRunning(cfg); err != nil {
 				return err
 			}
@@ -73,9 +67,10 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 				return fmt.Errorf("failed to check bootstrap status: %w", err)
 			}
 
+			// If platform is already bootstrapped but local credentials are missing or remote status is false, perform fresh enrollment
 			if !bootstrapped {
-				// First login - perform bootstrap
-				cmd.Println("Platform not bootstrapped. Performing first-time bootstrap...")
+				// This covers both missing local credentials and a non-bootstrapped gateway
+				cmd.Println("Platform not bootstrapped or local credentials missing. Performing first-time bootstrap...")
 
 				cmd.Println("Generating keys and CSRs...")
 				hostname, _ := os.Hostname()
@@ -108,8 +103,8 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 				}
 
 				if regResp.HubTrustBundle != "" {
-					hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
-					if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0600); err != nil {
+					hubBundlePath := cfg.TrustBundlePath()
+					if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
 						return fmt.Errorf("failed to save hub trust bundle: %w", err)
 					}
 				}
@@ -168,8 +163,8 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 			}
 
 			if regResp.HubTrustBundle != "" {
-				hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
-				if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0600); err != nil {
+				hubBundlePath := cfg.TrustBundlePath()
+				if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
 					return fmt.Errorf("failed to save hub trust bundle: %w", err)
 				}
 			}
@@ -245,11 +240,6 @@ func enrollWindowsCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			trustBundle := cfg.TrustBundlePath()
-			if _, err := os.Stat(trustBundle); os.IsNotExist(err) {
-				return fmt.Errorf("trust bundle not found at %s - install the platform CA manually before enrollment", trustBundle)
-			}
-
 			if err := auth.CheckOperatorRunning(cfg); err != nil {
 				return err
 			}
@@ -297,8 +287,8 @@ func enrollWindowsCmd() *cobra.Command {
 			}
 
 			if regResp.HubTrustBundle != "" {
-				hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
-				if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0600); err != nil {
+				hubBundlePath := cfg.TrustBundlePath()
+				if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
 					return fmt.Errorf("failed to save hub trust bundle: %w", err)
 				}
 			}

@@ -12,12 +12,13 @@ g8e tests run directly on the host using real infrastructure. The test environme
 
 ## Test Philosophy
 
-- **Hermetic execution** - Tests run on the host via `./g8e test`. The g8e Operator is a unified binary that operates as Governance Gateway (Policy Decision Point) in gateway mode or as g8e Operator (Policy Execution Point) in cloud mode.
+- **Hermetic execution** - Tests run on the host via `./g8e test` or in Docker for end-to-end testing. The g8e Operator is a unified binary that operates as Governance Gateway (Policy Decision Point) in gateway mode or as g8e Operator (Policy Execution Point) in cloud mode.
 - **Real infrastructure** - Tests use the actual SQLite database, PKI certificates, and pub/sub channels. Platform starts via `./g8e platform start`.
 - **No mocks** - Mocking internal services, database clients, or cross-component communication is prohibited. Integration tests use real wire paths.
 - **mTLS required** - Operator communication requires mTLS. Authentication via `./g8e auth login` issues certificates from `.g8e/pki`.
 - **Reproduce first** - Reproduce bugs with failing tests before fixes.
 - **Contract tests** - Enforce alignment between the Operator and `protocol/` constants/models with typed protobuf assertions.
+- **Docker for E2E** - Docker is encouraged for end-to-end testing of the operator binary against the local gateway to validate real deployment scenarios.
 
 ---
 
@@ -103,6 +104,7 @@ This creates the first user and issues mTLS certificates for the Operator and CL
 - **Coverage** - `--coverage` generates reports.
 - **Concurrency** - Goroutines require explicit cancellation contexts and clear channel ownership.
 - **Integration tags** - Scenario tests require `-tags=integration` to access test fixtures and Operator gate infrastructure.
+- **Path constants** - Tests must use `constants.Paths.Infra.*` constants for runtime state paths (e.g., `constants.Paths.Infra.PkiDir` for `.g8e/pki`). Hardcoded path strings like `.g8e/pki` are prohibited in test code.
 
 ### Lints
 

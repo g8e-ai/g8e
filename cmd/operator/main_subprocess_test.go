@@ -452,7 +452,7 @@ func TestRunInsecureMode_EmptyURL_Subprocess(t *testing.T) {
 func TestMain_PostureFlagsMutualExclusive_Subprocess(t *testing.T) {
 	if os.Getenv("G8E_TEST_POSTURE_MULTIPLE") == "1" {
 		// Simulate main.go flag parsing with multiple posture flags
-		os.Args = []string{"g8e.operator", "--doctrine", "--consensus"}
+		os.Args = []string{"g8e", "--doctrine", "--consensus"}
 		// This will trigger the mutual exclusivity check in main()
 		// Since we can't call main() directly (it would start services),
 		// we test the logic by calling runGatewayMode with invalid state
@@ -558,7 +558,7 @@ func TestHandleRekeyVault_Success_VaultDataVerified(t *testing.T) {
 
 func TestHandleVaultCommand_DataDirResolution(t *testing.T) {
 	dir := t.TempDir()
-	dataDir := filepath.Join(dir, ".g8e", "data")
+	dataDir := filepath.Join(dir, constants.Paths.Infra.DataDir)
 	require.NoError(t, os.MkdirAll(dataDir, 0700))
 
 	logger, err := configureLogger("info")

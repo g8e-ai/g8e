@@ -185,35 +185,25 @@ func (pki *PKIAuthority) PKIDir() string {
 func (pki *PKIAuthority) ensureRootCA() error {
 	rootCertPath := filepath.Join(pki.pkiDir, "root", "root_ca.crt")
 
-	needRoot := !fileExists(rootCertPath)
-	if !needRoot {
+	if fileExists(rootCertPath) {
 		if err := pki.loadCACertificate(rootCertPath, &pki.rootCert); err != nil {
-			pki.logger.Warn("[PKI] Failed to load root CA, regenerating", string(constants.ConnectionStateError), err)
-			needRoot = true
+			return fmt.Errorf("root CA exists but is corrupt: %w", err)
 		}
+		return nil
 	}
 
-	if needRoot {
-		pki.logger.Info("[PKI] Generating root CA")
-		if err := pki.generateRootCA("", rootCertPath); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	pki.logger.Info("[PKI] Generating root CA")
+	return pki.generateRootCA("", rootCertPath)
 }
 
 func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	// Hub Intermediate CA
 	hubCertPath := filepath.Join(pki.pkiDir, "authorities", "hub_ca.crt")
-	needHub := !fileExists(hubCertPath)
-	if !needHub {
+	if fileExists(hubCertPath) {
 		if err := pki.loadCACertificate(hubCertPath, &pki.hubCert); err != nil {
-			pki.logger.Warn("[PKI] Failed to load hub CA, regenerating", string(constants.ConnectionStateError), err)
-			needHub = true
+			return fmt.Errorf("hub CA exists but is corrupt: %w", err)
 		}
-	}
-	if needHub {
+	} else {
 		pki.logger.Info("[PKI] Generating hub intermediate CA")
 		if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
 			return fmt.Errorf("load root CA private key for intermediate generation: %w", err)
@@ -225,14 +215,11 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 
 	// Operator Intermediate CA
 	operatorCertPath := filepath.Join(pki.pkiDir, "authorities", "operator_ca.crt")
-	needOperator := !fileExists(operatorCertPath)
-	if !needOperator {
+	if fileExists(operatorCertPath) {
 		if err := pki.loadCACertificate(operatorCertPath, &pki.operatorCert); err != nil {
-			pki.logger.Warn("[PKI] Failed to load operator CA, regenerating", string(constants.ConnectionStateError), err)
-			needOperator = true
+			return fmt.Errorf("operator CA exists but is corrupt: %w", err)
 		}
-	}
-	if needOperator {
+	} else {
 		pki.logger.Info("[PKI] Generating operator intermediate CA")
 		if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
 			return fmt.Errorf("load root CA private key for intermediate generation: %w", err)
@@ -325,7 +312,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	if err != nil {
 		return fmt.Errorf("failed to read root CA: %w", err)
 	}
-	if err := os.WriteFile(rootBundlePath, rootPEM, 0600); err != nil {
+	if err := os.WriteFile(rootBundlePath, rootPEM, 0644); err != nil {
 		return fmt.Errorf("failed to write root bundle: %w", err)
 	}
 
@@ -343,7 +330,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	hubBundle = append(hubBundle, rootPEM...)
 	hubBundle = append(hubBundle, hubPEM...)
 	hubBundle = append(hubBundle, operatorPEM...)
-	if err := os.WriteFile(hubBundlePath, hubBundle, 0600); err != nil {
+	if err := os.WriteFile(hubBundlePath, hubBundle, 0644); err != nil {
 		return fmt.Errorf("failed to write hub bundle: %w", err)
 	}
 
@@ -352,7 +339,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	operatorBundle := make([]byte, 0, len(rootPEM)+len(operatorPEM))
 	operatorBundle = append(operatorBundle, rootPEM...)
 	operatorBundle = append(operatorBundle, operatorPEM...)
-	if err := os.WriteFile(operatorBundlePath, operatorBundle, 0600); err != nil {
+	if err := os.WriteFile(operatorBundlePath, operatorBundle, 0644); err != nil {
 		return fmt.Errorf("failed to write operator bundle: %w", err)
 	}
 

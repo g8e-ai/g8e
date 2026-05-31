@@ -48,6 +48,7 @@ type RegistrationRequest struct {
 }
 
 type RegistrationResponse struct {
+	Success           bool   `json:"success"`
 	OperatorSessionID string `json:"operator_session_id"`
 	CLISessionID      string `json:"cli_session_id"`
 	OperatorID        string `json:"operator_id"`
@@ -189,8 +190,8 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationResp
 		return nil, fmt.Errorf("failed to load CLI certificate: %w", err)
 	}
 
-	// Load CA trust bundle
-	trustBundlePath := cfg.TrustBundlePath()
+	// Load CA trust bundle from credentials directory (saved during bootstrap)
+	trustBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
 	caPEM, err := os.ReadFile(trustBundlePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read trust bundle: %w", err)
@@ -367,13 +368,24 @@ func CheckOperatorRunningAtURL(operatorURL string) error {
 	return nil
 }
 
-// CheckBootstrapStatus returns whether the platform has been bootstrapped
+// CheckBootstrapStatus returns whether the platform has been bootstrapped and local credentials exist
 func CheckBootstrapStatus(cfg *config.Config) (bool, error) {
-	// Use bootstrap port (plain HTTP) for status check
+	// 1. Check local credential state first
+	credsFile := cfg.CredentialsFile()
+	if _, err := os.Stat(credsFile); os.IsNotExist(err) {
+		return false, nil
+	}
+
+	if _, err := os.Stat(cfg.CLICertFile()); os.IsNotExist(err) {
+		return false, nil
+	}
+
+	// 2. Check remote bootstrap status via bootstrap port (plain HTTP)
 	url := fmt.Sprintf("%s/api/v1/auth/bootstrap/status", cfg.OperatorDiscoveryURL())
 	resp, err := http.Get(url)
 	if err != nil {
-		return false, fmt.Errorf("failed to check bootstrap status: %w", err)
+		// If operator is not reachable, we cannot confirm bootstrap status
+		return false, fmt.Errorf("failed to check remote bootstrap status: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -390,4 +402,63 @@ func CheckBootstrapStatus(cfg *config.Config) (bool, error) {
 	}
 
 	return statusResp.Bootstrapped, nil
+}
+
+// EnrollWithGateway enrolls a device with a remote Gateway via CSR-based enrollment.
+// This is used for deploying operators on remote hosts that need to connect to a central Gateway.
+func EnrollWithGateway(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR string) (*RegistrationResponse, error) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get hostname: %w", err)
+	}
+
+	req := map[string]string{
+		"csr_pem":            operatorCSR,
+		"cli_csr_pem":        cliCSR,
+		"system_fingerprint": fmt.Sprintf("g8e-operator-%s", hostname),
+		"hostname":           hostname,
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Use the bootstrap endpoint for initial enrollment (no mTLS required)
+	url := fmt.Sprintf("http://%s/api/v1/auth/bootstrap", gatewayEndpoint)
+	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	// For initial enrollment without mTLS, use plain HTTP client
+	client := &http.Client{}
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("enrollment failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var regResp RegistrationResponse
+	if err := json.Unmarshal(respBody, &regResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if !regResp.Success {
+		return nil, fmt.Errorf("enrollment failed: %s", regResp.Error)
+	}
+
+	return &regResp, nil
 }

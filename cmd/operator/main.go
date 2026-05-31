@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
@@ -91,6 +92,7 @@ func main() {
 	}
 
 	var privateKey string
+	var clientCert string
 	var endpointURL string
 	var trustBundlePath string
 	var workingDir string
@@ -130,6 +132,7 @@ func main() {
 	var verifyVault bool
 	var resetVault bool
 	flag.StringVar(&privateKey, "k", "", "Private key")
+	flag.StringVar(&clientCert, "cert", "", "Client certificate (for mTLS)")
 	flag.StringVar(&endpointURL, "e", "", "Endpoint (hostname or IP)")
 	flag.BoolVar(&cloudMode, "c", true, "Cloud mode")
 	flag.StringVar(&cloudProvider, "p", "", "Cloud provider")
@@ -139,6 +142,7 @@ func main() {
 	flag.BoolVar(&showVersion, "v", false, "Version")
 	flag.IntVar(&httpPort, "http-port", constants.Ports.OperatorHttps, "HTTPS port for auth/bootstrap via operator proxy (default: from paths.json)")
 	flag.StringVar(&privateKey, "key", "", "Private key")
+	flag.StringVar(&clientCert, "client-cert", "", "Client certificate (for mTLS)")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
 	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: "+constants.CACertLegacyBundlePath+" or fetch from /.well-known/g8e/pki/ca-bundle)")
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory operator was launched from)")
@@ -177,8 +181,8 @@ func main() {
 
 	// Customize usage
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: g8e.operator [options]\n")
-		fmt.Fprintf(os.Stderr, "   or: g8e.operator <command> [command-options]\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: g8e [options]\n")
+		fmt.Fprintf(os.Stderr, "   or: g8e <command> [command-options]\n\n")
 		fmt.Fprintf(os.Stderr, "Platform Commands:\n")
 		fmt.Fprintf(os.Stderr, "  platform    Platform lifecycle (start, stop, status, logs)\n")
 		fmt.Fprintf(os.Stderr, "  apps        Application lifecycle (start, stop, status, logs)\n")
@@ -291,7 +295,7 @@ func main() {
 		operatorEndpoint = strings.TrimSpace(endpointURL)
 	}
 
-	logger.Info("g8e Operator", "version", version, "build", buildID)
+	logger.Info("g8e", "version", version, "build", buildID)
 	logger.Info("Using Operator endpoint", "endpoint", operatorEndpoint)
 
 	// Load trust bundle for TLS verification. Priority:
@@ -327,6 +331,33 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Private key is required (-k or --key)\n")
 		os.Exit(constants.ExitConfigError)
 	}
+
+	if clientCert == "" {
+		fmt.Fprintf(os.Stderr, "Client certificate is required (--cert or --client-cert)\n")
+		os.Exit(constants.ExitConfigError)
+	}
+
+	// Load client certificate for mTLS
+	certPEM, err := os.ReadFile(clientCert)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to read client certificate: %v\n", err)
+		os.Exit(constants.ExitConfigError)
+	}
+
+	keyPEM, err := os.ReadFile(privateKey)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to read private key: %v\n", err)
+		os.Exit(constants.ExitConfigError)
+	}
+
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load client certificate/key pair: %v\n", err)
+		os.Exit(constants.ExitConfigError)
+	}
+
+	// Store cert in global certs package for use by httpclient
+	certs.SetClientCertificate(cert)
 
 	// Resolve the effective working directory: flag overrides launch dir.
 	effectiveWorkDir := launchDir
@@ -386,7 +417,7 @@ func main() {
 
 	go func() {
 		if err := g8eoService.Start(ctx); err != nil {
-			logger.Error("Failed to start g8e Operator", string(constants.ConnectionStateError), err)
+			logger.Error("Failed to start g8e", string(constants.ConnectionStateError), err)
 			os.Exit(constants.ExitCodeFromError(err))
 		}
 	}()
@@ -407,7 +438,7 @@ func main() {
 }
 
 func printVersion() {
-	fmt.Printf("g8e Operator\n  Version:   %s\n  Build ID:  %s\n  Build Time: %s\n  Platform:  %s\n", version, buildID, buildTime, platform)
+	fmt.Printf("g8e\n  Version:   %s\n  Build ID:  %s\n  Build Time: %s\n  Platform:  %s\n", version, buildID, buildTime, platform)
 }
 
 // loadTrustBundle attempts to read a trust bundle from:
@@ -549,7 +580,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		os.Exit(constants.ExitConfigError)
 	}
 
-	logger.Info("g8e Operator - Gateway Mode",
+	logger.Info("g8e - Gateway Mode",
 		"posture", posture,
 		"version", version,
 		"build", buildID)
@@ -757,7 +788,7 @@ func handleVaultCommand(rekeyVault, verifyVault, resetVault bool, newPrivateKeyS
 func handleRekeyVault(vault *vault.Vault, oldPrivateKey, newPrivateKey []byte, logger *slog.Logger) {
 	if len(oldPrivateKey) == 0 {
 		fmt.Fprintf(os.Stderr, "Error: --old-key is required for --rekey-vault\n")
-		fmt.Fprintf(os.Stderr, "Usage: g8e.operator --rekey-vault --old-key <old-key> -k <new-key>\n")
+		fmt.Fprintf(os.Stderr, "Usage: g8e --rekey-vault --old-key <old-key> -k <new-key>\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -829,7 +860,7 @@ func runInsecureMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel s
 		os.Exit(constants.ExitConfigError)
 	}
 
-	logger.Info("g8e Operator - INSECURE MCP Gateway Mode", "version", version, "build", buildID)
+	logger.Info("g8e - INSECURE MCP Gateway Mode", "version", version, "build", buildID)
 
 	svc, err := insecure_mcp.NewInsecureMcpNodeService(
 		cfg.GatewayURL,

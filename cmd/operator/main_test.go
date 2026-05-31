@@ -256,7 +256,7 @@ func TestMain_StreamFlag(t *testing.T) {
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
 
-	os.Args = []string{"g8e.operator", "stream", "--help"}
+	os.Args = []string{"g8e", "stream", "--help"}
 
 	// We just want to ensure it doesn't panic on the branch
 	// Full testing of cmd.RunStream belongs in its own package tests
