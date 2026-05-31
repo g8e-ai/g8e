@@ -225,20 +225,56 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 	return "./g8e", nil
 }
 
-func (pm *ProcessManager) StartOperator(httpPort, publicPort int) error {
+func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel string) error {
 	if err := pm.ensureDirectories(); err != nil {
 		return err
 	}
 
+	// Use provided values or defaults
+	effectiveHTTPPort := httpPort
+	effectiveBootstrapPort := bootstrapPort
+	effectivePublicPort := publicPort
+	effectiveDataDir := dataDir
+	effectivePKIDir := pkiDir
+	effectiveSecretsDir := secretsDir
+	effectivePasskeyRpID := passkeyRpID
+	effectivePasskeyRpName := passkeyRpName
+	effectiveRateLimitRPS := rateLimitRPS
+	effectiveRateLimitBurst := rateLimitBurst
+	effectiveLogLevel := logLevel
+
+	// Use defaults if not provided
+	if effectiveHTTPPort == 0 {
+		effectiveHTTPPort = 9000
+	}
+	if effectiveBootstrapPort == 0 {
+		effectiveBootstrapPort = 9001
+	}
+	if effectivePublicPort == 0 {
+		effectivePublicPort = 8443
+	}
+	if effectiveDataDir == "" {
+		effectiveDataDir = pm.dataDir
+	}
+	if effectivePKIDir == "" {
+		effectivePKIDir = pm.pkiDir
+	}
+	if effectiveSecretsDir == "" {
+		effectiveSecretsDir = pm.secretsDir
+	}
+	if effectiveLogLevel == "" {
+		effectiveLogLevel = "info"
+	}
+
 	// Find the first available port starting from httpPort
-	availableHTTPPort, err := pm.findAvailablePort(httpPort, "Operator HTTP API")
+	availableHTTPPort, err := pm.findAvailablePort(effectiveHTTPPort, "Operator HTTP API")
 	if err != nil {
 		return fmt.Errorf("failed to find available HTTP API port: %w", err)
 	}
 
 	// Calculate offset from original httpPort to maintain port spacing
-	offset := availableHTTPPort - httpPort
-	availablePublicPort := publicPort + offset
+	offset := availableHTTPPort - effectiveHTTPPort
+	availablePublicPort := effectivePublicPort + offset
 
 	// Verify the calculated Public port is available (Bootstrap now shares this port)
 	if err := pm.checkPortAvailable(availablePublicPort, "Operator Public API"); err != nil {
@@ -256,15 +292,31 @@ func (pm *ProcessManager) StartOperator(httpPort, publicPort int) error {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
 
-	cmd := exec.Command(binPath,
-		"--doctrine",
+	args := []string{
+		"--" + posture,
 		"--working-dir", pm.projectRoot,
-		"--data-dir", pm.dataDir,
-		"--pki-dir", pm.pkiDir,
-		"--secrets-dir", pm.secretsDir,
+		"--data-dir", effectiveDataDir,
+		"--pki-dir", effectivePKIDir,
+		"--secrets-dir", effectiveSecretsDir,
 		"--http-listen-port", strconv.Itoa(availableHTTPPort),
 		"--public-listen-port", strconv.Itoa(availablePublicPort),
-	)
+		"--log", effectiveLogLevel,
+	}
+
+	if effectivePasskeyRpID != "" {
+		args = append(args, "--passkey-rp-id", effectivePasskeyRpID)
+	}
+	if effectivePasskeyRpName != "" {
+		args = append(args, "--passkey-rp-name", effectivePasskeyRpName)
+	}
+	if effectiveRateLimitRPS > 0 {
+		args = append(args, "--rate-limit-rps", fmt.Sprintf("%.1f", effectiveRateLimitRPS))
+	}
+	if effectiveRateLimitBurst > 0 {
+		args = append(args, "--rate-limit-burst", strconv.Itoa(effectiveRateLimitBurst))
+	}
+
+	cmd := exec.Command(binPath, args...)
 	cmd.Stdout = logHandle
 	cmd.Stderr = logHandle
 	cmd.SysProcAttr = &syscall.SysProcAttr{

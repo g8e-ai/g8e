@@ -47,6 +47,19 @@ func platformCmd() *cobra.Command {
 }
 
 func platformStartCmd() *cobra.Command {
+	var posture string
+	var httpPort int
+	var bootstrapPort int
+	var publicPort int
+	var dataDir string
+	var pkiDir string
+	var secretsDir string
+	var passkeyRpID string
+	var passkeyRpName string
+	var rateLimitRPS float64
+	var rateLimitBurst int
+	var logLevel string
+
 	cmd := &cobra.Command{
 		Use:   string(constants.ThinkingActionTypeStart),
 		Short: "Start the Governance Gateway",
@@ -72,8 +85,18 @@ func platformStartCmd() *cobra.Command {
 
 			cmd.Println("[g8e] Bootstrapping Sovereign Governance Gateway...")
 			if err := pm.StartOperator(
-				cfg.OperatorHTTPSPort(),
-				cfg.Paths.Ports.OperatorPublicHTTPS,
+				posture,
+				httpPort,
+				bootstrapPort,
+				publicPort,
+				dataDir,
+				pkiDir,
+				secretsDir,
+				passkeyRpID,
+				passkeyRpName,
+				rateLimitRPS,
+				rateLimitBurst,
+				logLevel,
 			); err != nil {
 				return err
 			}
@@ -127,6 +150,19 @@ func platformStartCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVar(&posture, "posture", "doctrine", "Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)")
+	cmd.Flags().IntVar(&httpPort, "http-port", 0, "HTTPS port for mTLS API (default: from paths.json)")
+	cmd.Flags().IntVar(&bootstrapPort, "bootstrap-port", 0, "Bootstrap TLS port for CSR enrollment (default: from paths.json)")
+	cmd.Flags().IntVar(&publicPort, "public-port", 0, "Public browser/BYO bootstrap port (default: from paths.json)")
+	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
+	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "Directory for TLS certificates (default: .g8e/pki)")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
+	cmd.Flags().StringVar(&passkeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
+	cmd.Flags().StringVar(&passkeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
+	cmd.Flags().Float64Var(&rateLimitRPS, "rate-limit-rps", 0, "Gateway requests per second limit (set to 0 to disable)")
+	cmd.Flags().IntVar(&rateLimitBurst, "rate-limit-burst", 0, "Gateway rate limit burst size")
+	cmd.Flags().StringVar(&logLevel, "log", "info", "Log level: info, error, debug")
 
 	return cmd
 }
@@ -233,8 +269,18 @@ func platformRestartCmd() *cobra.Command {
 
 			cmd.Println("Starting Governance Gateway...")
 			if err := pm.StartOperator(
+				"doctrine",
 				cfg.OperatorHTTPSPort(),
+				0,
 				cfg.Paths.Ports.OperatorPublicHTTPS,
+				"",
+				"",
+				"",
+				"",
+				"",
+				0,
+				0,
+				"info",
 			); err != nil {
 				return err
 			}
@@ -348,8 +394,18 @@ func platformResetCmd() *cobra.Command {
 			cmd.Println("Restarting services...")
 
 			if err := pm.StartOperator(
+				"doctrine",
 				cfg.OperatorHTTPSPort(),
+				0,
 				cfg.Paths.Ports.OperatorPublicHTTPS,
+				"",
+				"",
+				"",
+				"",
+				"",
+				0,
+				0,
+				"info",
 			); err != nil {
 				return fmt.Errorf("failed to restart services: %w", err)
 			}
