@@ -117,13 +117,10 @@ running.
 
 ## Path resolution problems
 
-Scripts resolve `G8E_PROJECT_ROOT` from their own location. Avoid invoking
-subscripts directly until the root launcher works:
+Scripts resolve the project root by walking up from the current working directory to find the `.git` directory or `protocol/` directory. Avoid invoking subscripts directly until the root launcher works:
 
 ```bash
 ./g8e platform status
 ```
 
-If you have exported `G8E_PROJECT_ROOT` manually, make sure it points at the
-same checkout you are editing. A stale value can make scripts read constants,
-logs, or generated files from another clone.
+Run commands from the project root directory to ensure correct path resolution.

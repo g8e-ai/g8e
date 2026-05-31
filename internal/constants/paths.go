@@ -148,46 +148,31 @@ func init() {
 	resolvePaths()
 }
 
-// resolvePaths dynamically resolves filesystem paths from environment variables.
-// Priority:
-// 1. Explicit environment variable (e.g., G8E_PROTOCOL_DIR)
-// 2. Relative to G8E_PROJECT_ROOT if set
-// 3. Fallback to hardcoded default (container path)
+// resolvePaths resolves filesystem paths relative to project root.
+// No environment variables are used - all paths are computed from project root.
 func resolvePaths() {
-	projectRoot := os.Getenv("G8E_PROJECT_ROOT")
-	if projectRoot == "" {
-		projectRoot = resolveProjectRoot()
-	}
+	projectRoot := resolveProjectRoot()
 
-	// Resolve ProtocolDir
-	if protocolDir := os.Getenv("G8E_PROTOCOL_DIR"); protocolDir != "" {
-		if filepath.IsAbs(protocolDir) {
-			Paths.Infra.ProtocolDir = protocolDir
-		} else {
-			Paths.Infra.ProtocolDir = filepath.Join(projectRoot, protocolDir)
-		}
-	} else {
-		// Default to protocol/ relative to project root for host-native execution
-		Paths.Infra.ProtocolDir = filepath.Join(projectRoot, "protocol")
-	}
+	// All paths are relative to project root
+	Paths.Infra.DataDir = filepath.Join(projectRoot, ".g8e/data")
+	Paths.Infra.PkiDir = filepath.Join(projectRoot, ".g8e/pki")
+	Paths.Infra.SecretsDir = filepath.Join(projectRoot, ".g8e/secrets")
+	Paths.Infra.ProtocolDir = filepath.Join(projectRoot, "protocol")
 
 	// Update derived paths
 	Paths.Infra.ProtocolConstantsDir = filepath.Join(Paths.Infra.ProtocolDir, "constants")
 	Paths.Infra.ProtocolModelsDir = filepath.Join(Paths.Infra.ProtocolDir, "models")
+	Paths.Infra.DbPath = filepath.Join(Paths.Infra.DataDir, "g8e.db")
+	Paths.Infra.LocalStateDBPath = filepath.Join(Paths.Infra.RuntimeDir, "local_state.db")
+	Paths.Infra.AuditVaultDBPath = filepath.Join(Paths.Infra.DataDir, "audit_vault.db")
+	Paths.Infra.CaCertPath = filepath.Join(Paths.Infra.PkiDir, "trust/g8e-gw-ca-bundle.pem")
+	Paths.Infra.AppCertDir = filepath.Join(Paths.Infra.PkiDir, "issued/apps")
 }
 
 // resolveProjectRoot returns the project root directory.
 // This mirrors the logic in internal/services/system/path.go
 // but is duplicated here to avoid circular dependencies during init.
 func resolveProjectRoot() string {
-	if root := os.Getenv("G8E_PROJECT_ROOT"); root != "" {
-		abs, err := filepath.Abs(root)
-		if err == nil {
-			return abs
-		}
-		return root
-	}
-
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "." // Fallback to current working directory
@@ -211,4 +196,10 @@ func resolveProjectRoot() string {
 	}
 
 	return cwd
+}
+
+// ResolvePathsForTest re-resolves paths for testing purposes.
+// This allows tests to set environment variables and re-resolve paths.
+func ResolvePathsForTest() {
+	resolvePaths()
 }

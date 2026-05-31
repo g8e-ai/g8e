@@ -276,11 +276,7 @@ func dataAuditListCmd() *cobra.Command {
 			}
 
 			if operatorSessionID == "" {
-				operatorSessionID = os.Getenv("G8E_OPERATOR_SESSION_ID")
-			}
-
-			if operatorSessionID == "" {
-				return fmt.Errorf("--operator-session-id or G8E_OPERATOR_SESSION_ID is required")
+				return fmt.Errorf("--operator-session-id is required")
 			}
 
 			query := QueryRequestWithLimit{

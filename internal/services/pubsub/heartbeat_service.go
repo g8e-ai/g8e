@@ -86,7 +86,7 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 			MemoryMB:     system.GetMemoryMB(),
 		},
 		NetworkInfo: models.HeartbeatNetworkInfo{
-			PublicIP:           system.GetPublicIP(hs.config.IPService),
+			PublicIP:           system.GetPublicIP(""),
 			InternalIP:         system.GetLocalIP(""),
 			Interfaces:         system.GetNetworkInterfaces(),
 			ConnectivityStatus: system.GetConnectivityStatus(),

@@ -55,7 +55,6 @@ The unified `g8e` binary is the single entry point for all platform operations. 
 - **Data & Admin (`./g8e data`)**: Administers the local platform over mTLS (users, operators, settings).
 - **Test Orchestration (`./g8e test`)**: Orchestrates Go test execution suites.
 - **Security (`./g8e security`)**: Validation checks.
-- **Environment (`./g8e vars`)**: Environment variable management.
 
 **Technical Invariants:**
 1. **Zero Shell Scripts**: NO shell scripts are used for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary. Constants are generated from JSON SSOT (`protocol/constants/*.json`) via `internal/constants/generate_registry.go`. Tests and code consume protocol constants directly from JSON files (`protocol/constants/*.json`), not by sourcing shell scripts.

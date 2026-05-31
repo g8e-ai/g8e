@@ -36,4 +36,4 @@ EXPOSE 9000 9001 9002
 
 # Gateway mode: L1 enforced, L2/L3 audited (default posture)
 # Override with --consensus or --notary for stricter postures
-ENTRYPOINT ["/g8e/g8e", "--doctrine"]
+ENTRYPOINT ["/g8e/g8e", "--data-dir", "/g8e/.g8e/data", "--pki-dir", "/g8e/.g8e/pki", "--secrets-dir", "/g8e/.g8e/secrets", "--doctrine", "--http-port", "9000", "--bootstrap-port", "9001", "--public-port", "9002"]

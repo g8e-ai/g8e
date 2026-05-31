@@ -113,9 +113,9 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 
 1. **Stage Binaries and Schemas**: Copy the compiled `g8e` binary and the schema directories to the target directory. Ensure the `g8e` binary is executable.
 2. **Stage Downstream Servers**: If integrating with downstream servers, deploy the target MCP or A2A services on the local loopback or isolated network.
-3. **Configure Downstream Endpoints**: Export environment variables or configure options to target downstream services:
-   - Set `G8E_MCP_DOWNSTREAM_URL` to point to your local MCP server.
-   - Set `G8E_A2A_DOWNSTREAM_URL` to point to your local Agent2Agent server.
+3. **Configure Downstream Endpoints**: Use CLI flags to target downstream services:
+   - Use `--mcp-downstream-url` to point to your local MCP server.
+   - Use `--a2a-downstream-url` to point to your local Agent2Agent server.
 4. **Initialize the Gateway**:
    ```bash
    ./g8e platform start

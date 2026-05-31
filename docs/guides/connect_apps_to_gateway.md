@@ -83,7 +83,7 @@ The Gateway enforces strict port separation for security:
 
 Port mixing is prohibited. The gateway fails startup if incompatible surfaces (e.g., mTLS and Public) are assigned to the same port, as this would force a downgrade to `VerifyClientCertIfGiven` and weaken the execution boundary to an L7 check.
 
-Ports can be customized via CLI flags or environment variables.
+Ports can be customized via CLI flags.
 
 ### Health Checks
 
@@ -489,7 +489,6 @@ For custom g8e-compatible gateway implementations, connection follows the same o
 
 Custom gateways must support:
 - CLI flags for runtime parameters (ports, mode, paths)
-- Environment variables for deployment-specific settings
 - Configuration files for complex deployments
 - Multiplexed port handling with optional mTLS
 

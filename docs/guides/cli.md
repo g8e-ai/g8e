@@ -18,7 +18,6 @@ Available Commands:
   security    Security validation checks
   setup       Bootstrap platform dependencies and configuration
   test        Run test suites
-  vars        Environment variable management
 
 Flags:
   -h, --help   help for g8e
@@ -429,71 +428,5 @@ Flags:
   -h, --help                 help for validate
       --pki-dir string       PKI directory (default: .g8e/pki)
       --secrets-dir string   Secrets directory (default: .g8e/secrets)
-```
-
-## vars
-```
-Manage g8e environment variables in .g8e/.env
-
-Usage:
-  g8e vars [command]
-
-Available Commands:
-  get         Display the value of a specific variable
-  list        List all g8e environment variables
-  set         Set a variable in .g8e/.env
-  unset       Remove a variable from .g8e/.env
-
-Flags:
-  -h, --help   help for vars
-
-Use "g8e vars [command] --help" for more information about a command.
-```
-
-### vars list
-```
-List all g8e environment variables
-
-Usage:
-  g8e vars list [flags]
-
-Aliases:
-  list, ls
-
-Flags:
-  -h, --help   help for list
-```
-
-### vars set
-```
-Set a variable in .g8e/.env
-
-Usage:
-  g8e vars set <key> <value> [flags]
-
-Flags:
-  -h, --help   help for set
-```
-
-### vars get
-```
-Display the value of a specific variable
-
-Usage:
-  g8e vars get <key> [flags]
-
-Flags:
-  -h, --help   help for get
-```
-
-### vars unset
-```
-Remove a variable from .g8e/.env
-
-Usage:
-  g8e vars unset <key> [flags]
-
-Flags:
-  -h, --help   help for unset
 ```
 

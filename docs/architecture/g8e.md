@@ -245,12 +245,16 @@ Default ports (configurable via flags or internal/cli/config/paths.json):
 | `8441` | Bootstrap enrollment | Plain HTTP (no TLS) |
 | `8443` | Public web session | TLS (no client cert) |
 
-### Environment Variables
+### Configuration
 
-- `G8E_PKI_DIR`: PKI hierarchy directory (default: `.g8e/pki`)
-- `G8E_DATA_DIR`: SQLite persistence directory (default: `.g8e/data`)
-- `G8E_SECRETS_DIR`: Platform secrets directory (default: `.g8e/secrets`)
-- `G8E_PROTOCOL_DIR`: Protocol constants directory (default: `protocol/`)
+The g8e platform uses **ZERO environment variables** for production configuration. All paths are computed relative to project root, and all configuration is via CLI flags:
+
+- `--data-dir <dir>`: Data directory for SQLite database (default: `.g8e/data` in working directory)
+- `--pki-dir <dir>`: Directory for TLS certificates (default: `.g8e/pki`)
+- `--secrets-dir <dir>`: Directory for platform secrets (default: `.g8e/secrets`)
+- `--http-port <port>`: mTLS API port (default: 8440)
+- `--bootstrap-port <port>`: Bootstrap enrollment port (default: 8441)
+- `--public-port <port>`: Public web session port (default: 8443)
 
 ---
 

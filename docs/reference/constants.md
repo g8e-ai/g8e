@@ -60,7 +60,6 @@ The following files contain Go-specific constants not defined in JSON:
 
 - `paths.go` - Filesystem paths
 - `ports.go` - Network port numbers
-- `env_vars.go` - Environment variable names
 - `api_paths.go` - API route paths
 - `exit_codes.go` - Process exit codes
 - `network.go` - Network-related constants

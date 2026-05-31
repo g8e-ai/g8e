@@ -47,7 +47,7 @@ This will:
 
 1. Gateway starts first and becomes healthy
 2. Operator starts and depends on gateway health
-3. Operator authenticates with gateway via `G8E_GATEWAY_ENDPOINT=https://gateway:9000`
+3. Operator authenticates with gateway (configured via CLI flags)
 
 ### View Logs
 
@@ -73,26 +73,27 @@ docker-compose down -v
 
 ## Configuration
 
-Environment variables can be customized in `docker-compose.yml`:
+The g8e platform uses **ZERO environment variables** for production configuration. All configuration is via CLI flags in the Dockerfile ENTRYPOINT:
 
-**Gateway:**
-- `G8E_LOG_LEVEL`: Log level (default: info)
-- `G8E_GATEWAY_HTTP_PORT`: HTTPS mTLS API port (default: 9000)
-- `G8E_GATEWAY_BOOTSTRAP_PORT`: Bootstrap TLS port (default: 9001)
-- `G8E_GATEWAY_PUBLIC_PORT`: Public bootstrap port (default: 9002)
-- `G8E_DATA_DIR`: Data directory (default: /g8e/.g8e/data)
-- `G8E_PKI_DIR`: PKI directory (default: /g8e/.g8e/pki)
-- `G8E_SECRETS_DIR`: Secrets directory (default: /g8e/.g8e/secrets)
+**Gateway (Dockerfile.gateway):**
+- `--data-dir /g8e/.g8e/data`: Data directory for SQLite database
+- `--pki-dir /g8e/.g8e/pki`: Directory for TLS certificates
+- `--secrets-dir /g8e/.g8e/secrets`: Directory for platform secrets
+- `--doctrine`: L1 enforced, L2/L3 audited (default posture)
+- `--http-port 9000`: HTTPS mTLS API port
+- `--bootstrap-port 9001`: Bootstrap TLS port (CSR enrollment)
+- `--public-port 9002`: Public bootstrap port
 
-**Operator:**
-- `G8E_LOG_LEVEL`: Log level (default: info)
-- `G8E_LISTEN_HTTP_PORT`: HTTPS mTLS API port (default: 9000)
-- `G8E_LISTEN_BOOTSTRAP_PORT`: Bootstrap TLS port (default: 9001)
-- `G8E_LISTEN_PUBLIC_PORT`: Public bootstrap port (default: 9002)
-- `G8E_DATA_DIR`: Data directory (default: /g8e/.g8e/data)
-- `G8E_PKI_DIR`: PKI directory (default: /g8e/.g8e/pki)
-- `G8E_SECRETS_DIR`: Secrets directory (default: /g8e/.g8e/secrets)
-- `G8E_GATEWAY_ENDPOINT`: Gateway endpoint for authentication (default: https://gateway:9000)
+**Operator (Dockerfile.operator):**
+- `--listen`: Operator listen mode
+- `--data-dir /g8e/.g8e/data`: Data directory for SQLite database
+- `--pki-dir /g8e/.g8e/pki`: Directory for TLS certificates
+- `--secrets-dir /g8e/.g8e/secrets`: Directory for platform secrets
+- `--http-listen-port 9000`: HTTPS mTLS API port
+- `--bootstrap-listen-port 9001`: Bootstrap TLS port (CSR enrollment)
+- `--public-listen-port 9002`: Public bootstrap port
+
+To customize configuration, modify the ENTRYPOINT in the respective Dockerfile.
 
 ## Gateway Postures
 

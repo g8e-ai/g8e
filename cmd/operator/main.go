@@ -175,7 +175,7 @@ func main() {
 
 	flag.BoolVar(&insecureMode, "insecure", false, "INSECURE mode: connect to MCP gateway without governance (DANGEROUS - bypasses all L1/L2/L3 verification)")
 	flag.StringVar(&insecureURL, "insecure-url", "", "MCP Gateway WebSocket URL (e.g. ws://"+constants.DefaultEndpoint+":18789)")
-	flag.StringVar(&insecureToken, "insecure-token", "", "MCP Gateway auth token (or set G8E_INSECURE_MCP_TOKEN)")
+	flag.StringVar(&insecureToken, "insecure-token", "", "MCP Gateway auth token")
 	flag.StringVar(&insecureNodeID, "insecure-node-id", "", "Node ID to advertise (default: hostname)")
 	flag.StringVar(&insecureDisplayName, "insecure-name", "", "Display name shown in MCP gateway UI (default: node ID)")
 
@@ -193,7 +193,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  setup       Initial setup and configuration\n")
 		fmt.Fprintf(os.Stderr, "  vars        Environment variable management\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
-		fmt.Fprintf(os.Stderr, "  -k, --key <key>         Private key (or set G8E_OPERATOR_PRIVATE_KEY)\n")
+		fmt.Fprintf(os.Stderr, "  -k, --key <key>         Private key\n")
 		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running operator\n")
 		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: "+constants.CACertLegacyBundlePath+" or fetch from /.well-known/g8e/pki/ca-bundle)\n")
 		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory operator was launched from)\n")
@@ -229,7 +229,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\nInsecure MCP Node Host Mode:\n")
 		fmt.Fprintf(os.Stderr, "  --insecure              Connect to MCP gateway without governance (DANGEROUS - bypasses all L1/L2/L3 verification)\n")
 		fmt.Fprintf(os.Stderr, "  --insecure-url <url>    MCP Gateway WebSocket URL (e.g. ws://"+constants.DefaultEndpoint+":18789)\n")
-		fmt.Fprintf(os.Stderr, "  --insecure-token <tok>  Auth token (or set G8E_INSECURE_MCP_TOKEN)\n")
+		fmt.Fprintf(os.Stderr, "  --insecure-token <tok>  Auth token\n")
 		fmt.Fprintf(os.Stderr, "  --insecure-node-id <id> Node ID advertised to the Gateway (default: hostname)\n")
 		fmt.Fprintf(os.Stderr, "  --insecure-name <name>  Display name shown in MCP gateway UI (default: node ID)\n")
 	}
@@ -277,7 +277,7 @@ func main() {
 	}
 
 	if insecureMode {
-		runInsecureMode(insecureURL, insecureToken, insecureNodeID, insecureDisplayName, settings.Path, logLevel)
+		runInsecureMode(insecureURL, insecureToken, insecureNodeID, insecureDisplayName, os.Getenv("PATH"), logLevel)
 		return
 	}
 
@@ -288,9 +288,6 @@ func main() {
 	}
 
 	operatorEndpoint := constants.DefaultEndpoint
-	if endpointURL == "" {
-		endpointURL = settings.OperatorEndpoint
-	}
 	if strings.TrimSpace(endpointURL) != "" {
 		operatorEndpoint = strings.TrimSpace(endpointURL)
 	}
@@ -320,12 +317,6 @@ func main() {
 		}
 	}
 	logger.Info("Trust bundle loaded")
-
-	if logLevel == "info" {
-		if settings.LogLevel != "" {
-			logLevel = settings.LogLevel
-		}
-	}
 
 	if privateKey == "" {
 		fmt.Fprintf(os.Stderr, "Private key is required (-k or --key)\n")
@@ -378,12 +369,10 @@ func main() {
 		PKIDir:              settings.PKIDir,
 		SecretsDir:          settings.SecretsDir,
 		HeartbeatInterval:   heartbeatInterval,
-		Shell:               settings.Shell,
-		Lang:                settings.Lang,
-		Term:                settings.Term,
-		TZ:                  settings.TZ,
-		IPService:           settings.IPService,
-		IPResolver:          settings.IPResolver,
+		Shell:               os.Getenv("SHELL"),
+		Lang:                os.Getenv("LANG"),
+		Term:                os.Getenv("TERM"),
+		TZ:                  os.Getenv("TZ"),
 		Posture:             "", // Will default to PostureNotary in Load() since L3Notary is nil
 	})
 	if err != nil {

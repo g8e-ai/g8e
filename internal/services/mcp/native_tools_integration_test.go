@@ -711,9 +711,6 @@ func setupMTLSClient(t *testing.T, operatorURL string) (*http.Client, string, er
 	require.NoError(t, err)
 	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(cwd)))
 	pkiDir := filepath.Join(repoRoot, constants.Paths.Infra.PkiDir)
-	if override := os.Getenv("G8E_PKI_DIR_HOST"); override != "" {
-		pkiDir = override
-	}
 
 	// Load client certificate and key
 	certPath := filepath.Join(pkiDir, "client", "client.pem")

@@ -26,7 +26,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/system"
 )
@@ -139,8 +138,6 @@ func RunStream(args []string) {
 
 	dialTimeout := time.Duration(timeoutSec) * time.Second
 
-	settings := config.LoadSettings()
-
 	// Set up context with signal cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -164,7 +161,7 @@ func RunStream(args []string) {
 
 	// Run concurrent streaming
 	wallStart := time.Now()
-	results := runConcurrentStream(ctx, hosts, binaryData, operatorArgs, sshConfigArg, concurrency, dialTimeout, settings.SSHAuthSock, settings.User, sshIdentityFile, sshUser)
+	results := runConcurrentStream(ctx, hosts, binaryData, operatorArgs, sshConfigArg, concurrency, dialTimeout, os.Getenv("SSH_AUTH_SOCK"), os.Getenv("USER"), sshIdentityFile, sshUser)
 
 	// Tally results
 	var succeeded, failed int

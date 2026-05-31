@@ -184,7 +184,6 @@ For custom g8e-compatible operator implementations, connection follows the same 
 
 Custom operators should support configuration via:
 - CLI flags for runtime parameters (gateway URL, paths)
-- Environment variables for deployment-specific settings
 - Configuration files for complex deployments
 
 ### High Availability

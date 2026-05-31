@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -78,7 +77,7 @@ func TestRunStream_NoHosts_Subprocess(t *testing.T) {
 
 func TestRunStream_InvalidArch_Subprocess(t *testing.T) {
 	if os.Getenv("G8E_TEST_STREAM_BAD_ARCH") == "1" {
-		dir := os.Getenv(marshaler.EnvVar(constants.EnvVar.TestTmpDir))
+		dir := os.Getenv("G8E_TEST_TMP_DIR")
 		RunStream([]string{
 			"--arch", "mips",
 			"--binary-dir", dir,
@@ -91,7 +90,7 @@ func TestRunStream_InvalidArch_Subprocess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestRunStream_InvalidArch_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_STREAM_BAD_ARCH=1",
-		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
+		"G8E_TEST_TMP_DIR="+dir,
 	)
 	err := cmd.Run()
 
@@ -106,7 +105,7 @@ func TestRunStream_InvalidArch_Subprocess(t *testing.T) {
 
 func TestRunStream_BinaryMissing_Subprocess(t *testing.T) {
 	if os.Getenv("G8E_TEST_STREAM_NO_BIN") == "1" {
-		dir := os.Getenv(marshaler.EnvVar(constants.EnvVar.TestTmpDir))
+		dir := os.Getenv("G8E_TEST_TMP_DIR")
 		RunStream([]string{
 			"--arch", "amd64",
 			"--binary-dir", dir,
@@ -119,7 +118,7 @@ func TestRunStream_BinaryMissing_Subprocess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestRunStream_BinaryMissing_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_STREAM_NO_BIN=1",
-		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
+		"G8E_TEST_TMP_DIR"+"="+dir,
 	)
 	err := cmd.Run()
 
@@ -150,7 +149,7 @@ func TestRunStream_HelpFlag_Subprocess(t *testing.T) {
 
 func TestRunStream_HostsFileNotFound_Subprocess(t *testing.T) {
 	if os.Getenv("G8E_TEST_STREAM_BAD_HOSTS_FILE") == "1" {
-		dir := os.Getenv(marshaler.EnvVar(constants.EnvVar.TestTmpDir))
+		dir := os.Getenv("G8E_TEST_TMP_DIR")
 		RunStream([]string{
 			"--arch", "amd64",
 			"--binary-dir", dir,
@@ -163,7 +162,7 @@ func TestRunStream_HostsFileNotFound_Subprocess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestRunStream_HostsFileNotFound_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_STREAM_BAD_HOSTS_FILE=1",
-		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
+		"G8E_TEST_TMP_DIR"+"="+dir,
 	)
 	err := cmd.Run()
 
@@ -179,7 +178,7 @@ func TestRunStream_HostsFileNotFound_Subprocess(t *testing.T) {
 
 func TestRunStream_ValidBinary_UnreachableHost_Subprocess(t *testing.T) {
 	if os.Getenv("G8E_TEST_STREAM_UNREACHABLE") == "1" {
-		dir := os.Getenv(marshaler.EnvVar(constants.EnvVar.TestTmpDir))
+		dir := os.Getenv("G8E_TEST_TMP_DIR")
 		binDir := filepath.Join(dir, "linux-amd64")
 		if err := os.MkdirAll(binDir, 0755); err != nil {
 			os.Exit(constants.ExitGeneralError)
@@ -203,7 +202,7 @@ func TestRunStream_ValidBinary_UnreachableHost_Subprocess(t *testing.T) {
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=TestRunStream_ValidBinary_UnreachableHost_Subprocess", "-test.timeout=12s")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_STREAM_UNREACHABLE=1",
-		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
+		"G8E_TEST_TMP_DIR"+"="+dir,
 	)
 	err := cmd.Run()
 

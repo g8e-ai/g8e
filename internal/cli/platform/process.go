@@ -49,6 +49,7 @@ type ProcessManager struct {
 }
 
 func NewProcessManager(projectRoot string) (*ProcessManager, error) {
+	// Use relative paths from constants.Paths, resolve relative to projectRoot
 	runtimeDir := filepath.Join(projectRoot, constants.Paths.Infra.RuntimeDir)
 	pkiDir := filepath.Join(projectRoot, constants.Paths.Infra.PkiDir)
 	secretsDir := filepath.Join(projectRoot, constants.Paths.Infra.SecretsDir)

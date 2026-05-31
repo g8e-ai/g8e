@@ -19,18 +19,8 @@ import (
 )
 
 // ResolveProjectRoot returns the absolute path to the project root.
-// Priority:
-// 1. G8E_PROJECT_ROOT environment variable
-// 2. Fallback: walks up from current working directory until it detects the repository root.
+// Walks up from current working directory until it detects the repository root.
 func ResolveProjectRoot() string {
-	if root := os.Getenv("G8E_PROJECT_ROOT"); root != "" {
-		abs, err := filepath.Abs(root)
-		if err == nil {
-			return abs
-		}
-		return root
-	}
-
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "." // Fallback to current working directory

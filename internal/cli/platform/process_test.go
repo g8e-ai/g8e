@@ -20,12 +20,11 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
-
-	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestNewProcessManager(t *testing.T) {
 	tmpDir := t.TempDir()
+
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -35,12 +34,13 @@ func TestNewProcessManager(t *testing.T) {
 		t.Errorf("expected projectRoot %s, got %s", tmpDir, pm.projectRoot)
 	}
 
-	expectedRuntimeDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
+	// ProcessManager should use paths relative to projectRoot
+	expectedRuntimeDir := filepath.Join(tmpDir, ".g8e")
 	if pm.runtimeDir != expectedRuntimeDir {
 		t.Errorf("expected runtimeDir %s, got %s", expectedRuntimeDir, pm.runtimeDir)
 	}
 
-	expectedPKIDir := filepath.Join(expectedRuntimeDir, constants.Paths.Infra.PkiDir)
+	expectedPKIDir := filepath.Join(tmpDir, ".g8e/pki")
 	if pm.pkiDir != expectedPKIDir {
 		t.Errorf("expected pkiDir %s, got %s", expectedPKIDir, pm.pkiDir)
 	}

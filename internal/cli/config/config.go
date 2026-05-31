@@ -20,7 +20,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	clierrors "github.com/g8e-ai/g8e/internal/cli/errors"
@@ -119,22 +118,6 @@ func Load(projectRoot string) (*Config, error) {
 	var paths PathsConfig
 	if err := json.Unmarshal(pathsData, &paths); err != nil {
 		return nil, fmt.Errorf("%w: %w", clierrors.ErrFailedToParsePaths, err)
-	}
-
-	// Environment variable overrides for ports
-	if portStr := os.Getenv("G8E_OPERATOR_PORT"); portStr != "" {
-		if p, err := strconv.Atoi(portStr); err == nil {
-			paths.Ports.OperatorPublicHTTPS = p
-			paths.Ports.OperatorHTTPS = p // Use the same for both in many test scenarios
-		}
-	}
-	if portStr := os.Getenv("G8E_OPERATOR_BOOTSTRAP_PORT"); portStr != "" {
-		if p, err := strconv.Atoi(portStr); err == nil {
-			paths.Ports.OperatorBootstrapHTTPS = p
-		}
-	}
-	if host := os.Getenv("G8E_OPERATOR_ENDPOINT"); host != "" {
-		paths.Host = host
 	}
 
 	// Resolve all relative paths in infra section relative to projectRoot

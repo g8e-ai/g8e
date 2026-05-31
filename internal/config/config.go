@@ -63,19 +63,17 @@ type LoadOptions struct {
 	PKIDir     string
 	SecretsDir string
 
-	// Monitoring
-	HeartbeatInterval time.Duration // --heartbeat-interval: overrides the 30s default when non-zero
-
 	// Logging
 	LogLevel string // Log level passed to --log flag (info, debug, error)
 
 	// System / process context - sourced from Settings at startup
-	Shell      string // SHELL value
-	Lang       string // LANG value
-	Term       string // TERM value
-	TZ         string // TZ value
-	IPService  string // G8E_IP_SERVICE value
-	IPResolver string // G8E_IP_RESOLVER value
+	Shell string // SHELL value
+	Lang  string // LANG value
+	Term  string // TERM value
+	TZ    string // TZ value
+
+	// Monitoring
+	HeartbeatInterval time.Duration // --heartbeat-interval: overrides the 30s default when non-zero
 }
 
 // GatewayConfig holds configuration for gateway mode.
@@ -216,12 +214,10 @@ type Config struct {
 	GitAvailable bool   // True if a functional git binary was found
 
 	// System / process context - injected from Settings at startup, never read again
-	Shell      string // SHELL env var value (e.g. /bin/bash)
-	Lang       string // LANG env var value
-	Term       string // TERM env var value
-	TZ         string // TZ env var value (IANA timezone name)
-	IPService  string // G8E_IP_SERVICE - URL for public IP detection
-	IPResolver string // G8E_IP_RESOLVER - UDP target for local IP detection
+	Shell string // SHELL env var value (e.g. /bin/bash)
+	Lang  string // LANG env var value
+	Term  string // TERM env var value
+	TZ    string // TZ env var value (IANA timezone name)
 
 	// Governance posture for outbound mode (doctrine, consensus, or notary)
 	// Defaults to "notary" since L3Notary is nil and mutations must fail-closed
@@ -317,43 +313,20 @@ func isPortAvailable(port int) bool {
 // Gateway mode skips all operator-mode validation - no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
 func LoadGateway(opts GatewayOptions) (*Config, error) {
-	projectRoot := FindProjectRoot()
-
 	mcpDownstreamURL := opts.MCPDownstreamURL
-	if mcpDownstreamURL == "" {
-		mcpDownstreamURL = os.Getenv("G8E_MCP_DOWNSTREAM_URL")
-	}
 	a2aDownstreamURL := opts.A2ADownstreamURL
-	if a2aDownstreamURL == "" {
-		a2aDownstreamURL = os.Getenv("G8E_A2A_DOWNSTREAM_URL")
-	}
 
 	dataDir := opts.DataDir
 	if dataDir == "" {
-		if projectRoot != "" {
-			dataDir = filepath.Join(projectRoot, constants.Paths.Infra.DataDir)
-		} else {
-			cwd, _ := os.Getwd()
-			dataDir = filepath.Join(cwd, constants.Paths.Infra.DataDir)
-		}
+		dataDir = constants.Paths.Infra.DataDir
 	}
 	pkiDir := opts.PKIDir
 	if pkiDir == "" {
-		if projectRoot != "" {
-			pkiDir = filepath.Join(projectRoot, constants.Paths.Infra.PkiDir)
-		} else {
-			cwd, _ := os.Getwd()
-			pkiDir = filepath.Join(cwd, constants.Paths.Infra.PkiDir)
-		}
+		pkiDir = constants.Paths.Infra.PkiDir
 	}
 	secretsDir := opts.SecretsDir
 	if secretsDir == "" {
-		if projectRoot != "" {
-			secretsDir = filepath.Join(projectRoot, constants.Paths.Infra.SecretsDir)
-		} else {
-			cwd, _ := os.Getwd()
-			secretsDir = filepath.Join(cwd, constants.Paths.Infra.SecretsDir)
-		}
+		secretsDir = constants.Paths.Infra.SecretsDir
 	}
 
 	// Reject port 0 in production
@@ -398,24 +371,12 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	}
 
 	jwksURL := opts.JWKSURL
-	if jwksURL == "" {
-		jwksURL = os.Getenv("G8E_JWKS_URL")
-	}
 	jwtRoleClaim := opts.JWTRoleClaim
 	if jwtRoleClaim == "" {
-		jwtRoleClaim = os.Getenv("G8E_JWT_ROLE_CLAIM")
-		if jwtRoleClaim == "" {
-			jwtRoleClaim = "roles"
-		}
+		jwtRoleClaim = "roles"
 	}
 	jwtIssuer := opts.JWTIssuer
-	if jwtIssuer == "" {
-		jwtIssuer = os.Getenv("G8E_JWT_ISSUER")
-	}
 	jwtAudience := opts.JWTAudience
-	if jwtAudience == "" {
-		jwtAudience = os.Getenv("G8E_JWT_AUDIENCE")
-	}
 
 	return &Config{
 		ComponentName: constants.ComponentNameG8EOGateway,
@@ -518,12 +479,10 @@ func Load(opts LoadOptions) (*Config, error) {
 		NoGit: opts.NoGit,
 
 		// System / process context
-		Shell:      opts.Shell,
-		Lang:       opts.Lang,
-		Term:       opts.Term,
-		TZ:         opts.TZ,
-		IPService:  opts.IPService,
-		IPResolver: opts.IPResolver,
+		Shell: opts.Shell,
+		Lang:  opts.Lang,
+		Term:  opts.Term,
+		TZ:    opts.TZ,
 
 		// Governance posture - default to notary for outbound mode (L1/L2/L3 strictly enforced)
 		Posture: opts.Posture,

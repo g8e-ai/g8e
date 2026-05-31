@@ -22,56 +22,22 @@ import (
 )
 
 func TestProtocolDir_Resolution(t *testing.T) {
-	t.Run("with G8E_PROJECT_ROOT set", func(t *testing.T) {
-		t.Setenv("G8E_PROJECT_ROOT", "/test/root")
-		t.Setenv("G8E_PROTOCOL_DIR", "")
-		resolvePaths()
-
-		expected := "/test/root/protocol"
-		assert.Equal(t, expected, Paths.Infra.ProtocolDir)
-		assert.Equal(t, expected+"/constants", Paths.Infra.ProtocolConstantsDir)
-		assert.Equal(t, expected+"/models", Paths.Infra.ProtocolModelsDir)
-	})
-
-	t.Run("with G8E_PROTOCOL_DIR absolute", func(t *testing.T) {
-		t.Setenv("G8E_PROTOCOL_DIR", "/custom/protocol")
-		resolvePaths()
-
-		assert.Equal(t, "/custom/protocol", Paths.Infra.ProtocolDir)
-		assert.Equal(t, "/custom/protocol/constants", Paths.Infra.ProtocolConstantsDir)
-		assert.Equal(t, "/custom/protocol/models", Paths.Infra.ProtocolModelsDir)
-	})
-
-	t.Run("with G8E_PROTOCOL_DIR relative", func(t *testing.T) {
-		t.Setenv("G8E_PROJECT_ROOT", "/test/root")
-		t.Setenv("G8E_PROTOCOL_DIR", "custom/protocol")
-		resolvePaths()
-
-		assert.Equal(t, "/test/root/custom/protocol", Paths.Infra.ProtocolDir)
-		assert.Equal(t, "/test/root/custom/protocol/constants", Paths.Infra.ProtocolConstantsDir)
-		assert.Equal(t, "/test/root/custom/protocol/models", Paths.Infra.ProtocolModelsDir)
-	})
-
-	t.Run("G8E_PROTOCOL_DIR takes precedence over G8E_PROJECT_ROOT", func(t *testing.T) {
-		t.Setenv("G8E_PROJECT_ROOT", "/test/root")
-		t.Setenv("G8E_PROTOCOL_DIR", "/override/protocol")
-		resolvePaths()
-
-		assert.Equal(t, "/override/protocol", Paths.Infra.ProtocolDir)
-	})
+	// G8E_PROJECT_ROOT env var was removed - paths are now resolved
+	// solely by walking up from current working directory.
+	// This test is removed as the feature no longer exists.
+	t.Skip("G8E_PROJECT_ROOT env var removed")
 }
 
 func TestResolveProjectRoot(t *testing.T) {
 	t.Run("with G8E_PROJECT_ROOT set", func(t *testing.T) {
-		t.Setenv("G8E_PROJECT_ROOT", "/custom/root")
-		result := resolveProjectRoot()
-		assert.Equal(t, "/custom/root", result)
+		// G8E_PROJECT_ROOT env var was removed - project root is now resolved
+		// solely by walking up from current working directory.
+		t.Skip("G8E_PROJECT_ROOT env var removed")
 	})
 
 	t.Run("resolves to absolute path", func(t *testing.T) {
-		t.Setenv("G8E_PROJECT_ROOT", ".")
-		result := resolveProjectRoot()
-		assert.True(t, filepath.IsAbs(result), "resolveProjectRoot should return absolute path")
+		// G8E_PROJECT_ROOT env var was removed - this test is no longer relevant.
+		t.Skip("G8E_PROJECT_ROOT env var removed")
 	})
 
 	t.Run("walks up to find protocol marker", func(t *testing.T) {
@@ -86,7 +52,7 @@ func TestResolveProjectRoot(t *testing.T) {
 			t.Fatalf("Failed to create subdirs: %v", err)
 		}
 
-		t.Setenv("G8E_PROJECT_ROOT", "")
+		// No env var to unset - walking is the only method
 
 		originalWd, _ := os.Getwd()
 		defer os.Chdir(originalWd)
@@ -111,7 +77,7 @@ func TestResolveProjectRoot(t *testing.T) {
 			t.Fatalf("Failed to create subdirs: %v", err)
 		}
 
-		t.Setenv("G8E_PROJECT_ROOT", "")
+		// No env var to unset - walking is the only method
 
 		originalWd, _ := os.Getwd()
 		defer os.Chdir(originalWd)
@@ -131,7 +97,7 @@ func TestResolveProjectRoot(t *testing.T) {
 			t.Fatalf("Failed to create subdirs: %v", err)
 		}
 
-		t.Setenv("G8E_PROJECT_ROOT", "")
+		// No env var to unset - walking is the only method
 
 		originalWd, _ := os.Getwd()
 		defer os.Chdir(originalWd)

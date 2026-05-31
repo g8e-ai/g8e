@@ -80,8 +80,8 @@ type Config struct {
 // Default returns a config wired for a local two-container dev stack.
 func Default() Config {
 	cfg := Config{
-		MTLSBaseURL:    envOr("G8E_AUDITOR_MTLS_URL", fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps)),
-		PublicBaseURL:  envOr("G8E_AUDITOR_PUBLIC_URL", fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps)),
+		MTLSBaseURL:    fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
+		PublicBaseURL:  fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
 		EnsembleSize:   3,
 		ConsensusKeyID: "auditor-ensemble",
 		PrincipalKeyID: "auditor-principal",
@@ -100,18 +100,6 @@ func Default() Config {
 		}
 	}
 
-	// Environment variable overrides
-	if cert := os.Getenv("G8E_AUDITOR_CLIENT_CERT"); cert != "" {
-		cfg.Auth.ClientCert = cert
-	}
-	if key := os.Getenv("G8E_AUDITOR_CLIENT_KEY"); key != "" {
-		cfg.Auth.ClientKey = key
-	}
-	if bundle := os.Getenv("G8E_AUDITOR_CA_BUNDLE"); bundle != "" {
-		cfg.Auth.CABundle = bundle
-	}
-	cfg.Auth.APIKey = os.Getenv("G8E_AUDITOR_API_KEY")
-
 	return cfg
 }
 
@@ -122,13 +110,6 @@ func (c *Config) LoadFile(path string) error {
 		return err
 	}
 	return json.Unmarshal(b, c)
-}
-
-func envOr(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
 }
 
 func expandPath(path string) string {

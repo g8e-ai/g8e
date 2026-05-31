@@ -35,4 +35,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 EXPOSE 9000 9001 9002
 
 # Operator listen mode
-ENTRYPOINT ["/g8e/g8e", "--listen"]
+ENTRYPOINT ["/g8e/g8e", "--listen", "--data-dir", "/g8e/.g8e/data", "--pki-dir", "/g8e/.g8e/pki", "--secrets-dir", "/g8e/.g8e/secrets", "--http-listen-port", "9000", "--bootstrap-listen-port", "9001", "--public-listen-port", "9002"]
