@@ -192,7 +192,8 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationResp
 	}
 	defer trustBundleResp.Body.Close()
 
-	if trustBundleResp.StatusCode != http.StatusOK {
+	// Accept 2xx status codes as success (200 OK, 201 Created, etc.)
+	if trustBundleResp.StatusCode < http.StatusOK || trustBundleResp.StatusCode >= http.StatusMultipleChoices {
 		return nil, fmt.Errorf("trust bundle fetch returned HTTP %d", trustBundleResp.StatusCode)
 	}
 
@@ -270,8 +271,8 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationResp
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Log response for debugging
-	if resp.StatusCode != http.StatusOK {
+	// Accept 2xx status codes as success (200 OK, 201 Created, etc.)
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return nil, fmt.Errorf("re-enrollment failed with HTTP %d: %s", resp.StatusCode, string(respBody))
 	}
 
@@ -478,7 +479,8 @@ func EnrollWithGateway(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR 
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	// Accept 2xx status codes as success (200 OK, 201 Created, etc.)
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return nil, fmt.Errorf("enrollment failed with status %d: %s", resp.StatusCode, string(respBody))
 	}
 
