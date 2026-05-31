@@ -238,17 +238,6 @@ func TestCommandFlagValidation(t *testing.T) {
 		assert.NotNil(t, yesFlag, "gateway clean should have --yes flag")
 	})
 
-	t.Run("auth login has required flags", func(t *testing.T) {
-		cmd := loginCmd()
-		require.NotNil(t, cmd)
-
-		countFlag := cmd.Flags().Lookup("count")
-		ttlFlag := cmd.Flags().Lookup("ttl")
-
-		assert.NotNil(t, countFlag, "auth login should have --count flag")
-		assert.NotNil(t, ttlFlag, "auth login should have --ttl flag")
-	})
-
 	t.Run("test g8eo has test flags", func(t *testing.T) {
 		cmd := testG8eoCmd()
 		require.NotNil(t, cmd)

@@ -183,7 +183,7 @@ func setupTLSClient(t *testing.T, cfg *config.Config, server *httptest.Server) *
 	var port int
 	_, err = fmt.Sscanf(portStr, "%d", &port)
 	require.NoError(t, err)
-	cfg.Paths.Ports.OperatorHTTPS = port
+	cfg.Paths.Ports.OperatorPublicHTTPS = port
 
 	client, err := NewClient(cfg)
 	require.NoError(t, err)

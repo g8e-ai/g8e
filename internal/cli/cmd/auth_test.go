@@ -301,9 +301,9 @@ func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
 		},
 		"ports": {
 			"insecure_mcp_gateway": 18789,
-			"operator_bootstrap_https": 8441,
+			"operator_bootstrap_https": 18441,
 			"operator_https": 58440,
-			"operator_public_https": 8443
+			"operator_public_https": 18443
 		}
 	}`
 

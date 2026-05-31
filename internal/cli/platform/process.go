@@ -232,7 +232,6 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 
 	// Use provided values or defaults
 	effectiveHTTPPort := httpPort
-	effectiveBootstrapPort := bootstrapPort
 	effectivePublicPort := publicPort
 	effectiveDataDir := dataDir
 	effectivePKIDir := pkiDir
@@ -246,9 +245,6 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 	// Use defaults if not provided
 	if effectiveHTTPPort == 0 {
 		effectiveHTTPPort = 9000
-	}
-	if effectiveBootstrapPort == 0 {
-		effectiveBootstrapPort = 9001
 	}
 	if effectivePublicPort == 0 {
 		effectivePublicPort = 8443
