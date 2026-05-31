@@ -75,6 +75,7 @@ func main() {
 		"test":     true,
 		"auditor":  true,
 		"chaos":    true,
+		"mcp":      true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {

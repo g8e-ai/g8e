@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "g8e-gateway": {
+      "transport": {
+        "type": "stdio",
+        "command": "g8e",
+        "args": ["mcp", "stdio", "--endpoint", "{{GATEWAY_URL}}"]
+      },
+      "capabilities": {
+        "tools": true,
+        "resources": true,
+        "prompts": true
+      },
+      "description": "g8e Gateway - BFT-governed MCP/A2A protocol translator with L1/L2/L3 verification",
+      "notes": [
+        "Uses g8e CLI as stdio bridge for IDE integration (Cursor, Windsurf, Claude Code)",
+        "Requires g8e binary on local workstation and ./g8e auth login completed",
+        "Automatically loads mTLS certificates from .g8e/pki directory",
+        "All tool calls are wrapped in GovernanceEnvelope and verified through the 3-layer governance sequence",
+        "Local 'read_field' tool is available for JIT field resolution from governed collections"
+      ]
+    }
+  }
+}

@@ -100,6 +100,22 @@ This ensures compatibility with JSON-based ecosystems while maintaining typed sc
 
 ## Client Integration
 
+### MCP Client Configuration
+
+To configure an MCP client to connect to the g8e Gateway, use the provided CLI command to generate a ready-to-use configuration:
+
+```bash
+./g8e gw mcp-config
+```
+
+This command outputs a JSON configuration with the correct gateway URL and environment variable placeholders for your mTLS certificates. Set the following environment variables before starting your MCP client:
+
+```bash
+export G8E_CLIENT_CERT_PATH=/path/to/g8e/.g8e/pki/client.crt
+export G8E_CLIENT_KEY_PATH=/path/to/g8e/.g8e/pki/client.key
+export G8E_CA_CERT_PATH=/path/to/g8e/.g8e/pki/ca.crt
+```
+
 ### MCP Client Connection
 
 MCP clients connect to the gateway via:

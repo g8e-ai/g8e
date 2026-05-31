@@ -57,7 +57,7 @@ g8e follows standard MCP topology with integrated BFT governance.
 ```mermaid
 graph TD
     subgraph Clients ["Any AI client — agent-agnostic"]
-        C1["MCP client<br/>(Claude / Cursor / BYO)"]
+        C1["MCP client<br/>(Claude / Cursor / Windsurf)"]
         C2["Agentic ensemble<br/>(A2A / tool calls)"]
     end
 
@@ -69,7 +69,7 @@ graph TD
         O1 --- D1
     end
 
-    C1 --> GW
+    C1 -. "stdio bridge<br/>g8e mcp stdio" .-> GW
     C2 --> GW
     O1 -. "outbound-only mTLS" .-> GW
 ```
