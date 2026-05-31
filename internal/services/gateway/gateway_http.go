@@ -205,10 +205,16 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.Handle(constants.APIPaths.AdminAppPoliciesBySigner, http.HandlerFunc(h.adminController.handleAppPolicySigner))
 	mux.HandleFunc(constants.APIPaths.AdminAppsRevoke, h.adminController.handleRevokeApp)
 
-	// Register rate-limited MCP routes
+	// Register rate-limited MCP routes with full paths
 	mux.Handle(constants.APIPaths.GovernanceEnvelopes, govEnvHandler)
-	mux.Handle(constants.APIPaths.MCPToolsList[:len(constants.APIPaths.MCPToolsList)-len("/list")], mcpHandler)
-	mux.Handle(constants.APIPaths.A2ACall[:len(constants.APIPaths.A2ACall)-len("/call")], mcpHandler)
+	mux.Handle(constants.APIPaths.MCPToolsList, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPToolsCall, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPToolsCallSSE, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPResourcesList, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPResourcesRead, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPPromptsList, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPPromptsGet, mcpHandler)
+	mux.Handle(constants.APIPaths.A2ACall, mcpHandler)
 
 	mux.HandleFunc(constants.APIPaths.AuditReceipts, h.dbController.handleAuditReceipts)
 	mux.HandleFunc(constants.APIPaths.AuditReceiptsExport, h.dbController.handleAuditReceiptsExport)
@@ -283,8 +289,14 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	var mcpHandler http.Handler
 	if h.auth != nil && h.auth.HasJWKS() {
 		mcpHandler = h.auth.JWTAuthMiddleware(mcpRateLimited)
-		mux.Handle(constants.APIPaths.MCPToolsList[:len(constants.APIPaths.MCPToolsList)-len("/list")]+"/", mcpHandler)
-		mux.Handle(constants.APIPaths.A2ACall[:len(constants.APIPaths.A2ACall)-len("/call")]+"/", mcpHandler)
+		mux.Handle(constants.APIPaths.MCPToolsList, mcpHandler)
+		mux.Handle(constants.APIPaths.MCPToolsCall, mcpHandler)
+		mux.Handle(constants.APIPaths.MCPToolsCallSSE, mcpHandler)
+		mux.Handle(constants.APIPaths.MCPResourcesList, mcpHandler)
+		mux.Handle(constants.APIPaths.MCPResourcesRead, mcpHandler)
+		mux.Handle(constants.APIPaths.MCPPromptsList, mcpHandler)
+		mux.Handle(constants.APIPaths.MCPPromptsGet, mcpHandler)
+		mux.Handle(constants.APIPaths.A2ACall, mcpHandler)
 
 		// JIT passkey bootstrap: allow first-credential registration via JWT
 		// This unblocks OIDC/JIT users who have zero credentials and cannot reach WebSessionAuth

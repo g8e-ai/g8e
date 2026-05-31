@@ -173,6 +173,9 @@ func TestLogoutCmd(t *testing.T) {
 		os.Setenv("HOME", tmpDir)
 		defer os.Setenv("HOME", originalHome)
 
+		// Resolve paths for this test's tmpDir
+		constants.ResolvePaths(tmpDir)
+
 		// Create a simple config that points to tmpDir for credentials
 		// Avoid using setupTestConfig which creates a conflicting .g8e directory
 		cfg := &config.Config{
@@ -181,6 +184,31 @@ func TestLogoutCmd(t *testing.T) {
 			PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
 			SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 			CredentialsDir: tmpDir,
+			Paths: &config.PathsConfig{
+				Infra: struct {
+					AppCertDir           string `json:"app_cert_dir"`
+					CACertPath           string `json:"ca_cert_path"`
+					DBPath               string `json:"db_path"`
+					DocsDir              string `json:"docs_dir"`
+					PKIDir               string `json:"pki_dir"`
+					ProtocolConstantsDir string `json:"protocol_constants_dir"`
+					ProtocolDir          string `json:"protocol_dir"`
+					ProtocolModelsDir    string `json:"protocol_models_dir"`
+					SecretsDir           string `json:"secrets_dir"`
+					SSHConfigPath        string `json:"ssh_config_path"`
+				}{
+					CACertPath:           constants.Paths.Infra.CaCertPath,
+					PKIDir:               constants.Paths.Infra.PkiDir,
+					SecretsDir:           constants.Paths.Infra.SecretsDir,
+					AppCertDir:           constants.Paths.Infra.AppCertDir,
+					ProtocolDir:          constants.Paths.Infra.ProtocolDir,
+					ProtocolConstantsDir: constants.Paths.Infra.ProtocolConstantsDir,
+					ProtocolModelsDir:    constants.Paths.Infra.ProtocolModelsDir,
+					DocsDir:              constants.Paths.Infra.DocsDir,
+					SSHConfigPath:        constants.Paths.Infra.SshConfigPath,
+					DBPath:               constants.Paths.Infra.DbPath,
+				},
+			},
 		}
 
 		// Verify no credentials exist in test config

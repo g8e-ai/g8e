@@ -16,7 +16,10 @@ package constants
 import (
 	"os"
 	"path/filepath"
+	"sync"
 )
+
+var pathsMutex sync.Mutex
 
 // Paths defines canonical G8E filesystem paths.
 var Paths = struct {
@@ -148,6 +151,9 @@ const (
 // No environment variables are used - all paths are computed from project root.
 // This replaces the init() function to allow test isolation and proper dependency injection.
 func ResolvePaths(projectRoot string) {
+	pathsMutex.Lock()
+	defer pathsMutex.Unlock()
+
 	// All paths are relative to project root
 	Paths.Infra.RuntimeDir = filepath.Join(projectRoot, ".g8e")
 	Paths.Infra.DataDir = filepath.Join(projectRoot, ".g8e/data")

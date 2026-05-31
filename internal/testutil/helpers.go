@@ -14,7 +14,6 @@
 package testutil
 
 import (
-	"bytes"
 	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
@@ -22,10 +21,8 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -33,20 +30,12 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// configCounter generates monotonically increasing IDs within a single test binary
-// run so that parallel tests never share the same operator/session identity.
-var configCounter atomic.Int64
-
-// NewTestConfig returns a minimal Config for unit tests.
-//
-// Each call produces a unique OperatorID and OperatorSessionId derived from the
-// test name and a process-local counter.  This guarantees that every test gets
-// its own operator pub/sub channels and no cross-test message bleed can occur.
+// NewTestConfig returns a test configuration with isolated workDir.
+// Does NOT modify global constants.Paths to avoid data races in parallel tests.
 func NewTestConfig(t *testing.T) *config.Config {
 	t.Helper()
+	n := time.Now().UnixNano()
 
-	n := configCounter.Add(1)
-	// Sanitize t.Name() so the ID is safe as a channel component.
 	safeName := strings.NewReplacer("/", "-", " ", "_", ":", "-").Replace(t.Name())
 	if len(safeName) > 40 {
 		safeName = safeName[:40]
@@ -56,11 +45,8 @@ func NewTestConfig(t *testing.T) *config.Config {
 	operatorSessionID := fmt.Sprintf("test-sess-%s-%d", safeName, n)
 	workDir := t.TempDir()
 
-	// Resolve paths for this test's workDir
-	constants.ResolvePaths(workDir)
-
-	pkiDir := filepath.Join(workDir, constants.Paths.Infra.PkiDir)
-	secretsDir := filepath.Join(workDir, constants.Paths.Infra.SecretsDir)
+	pkiDir := filepath.Join(workDir, ".g8e/pki")
+	secretsDir := filepath.Join(workDir, ".g8e/secrets")
 	trustedSignersDir := filepath.Join(pkiDir, "trusted_signers")
 	if err := os.MkdirAll(trustedSignersDir, 0700); err != nil {
 		t.Fatalf("failed to create trusted signer directory: %v", err)
@@ -90,7 +76,7 @@ func NewTestConfig(t *testing.T) *config.Config {
 		PKIDir:                  pkiDir,
 		SecretsDir:              secretsDir,
 		LocalStoreEnabled:       true,
-		LocalStoreDBPath:        filepath.Join(workDir, constants.Paths.Infra.LocalStateDBPath),
+		LocalStoreDBPath:        filepath.Join(workDir, ".g8e/local_state.db"),
 		LocalStoreMaxSizeMB:     1024,
 		LocalStoreRetentionDays: 30,
 	}
@@ -147,48 +133,9 @@ func GetFreePort(t *testing.T) int {
 
 	l, err := net.ListenTCP("tcp", addr)
 	if err != nil {
-		t.Fatalf("failed to listen on tcp: %v", err)
+		t.Fatalf("failed to listen on tcp addr: %v", err)
 	}
 	defer l.Close()
+
 	return l.Addr().(*net.TCPAddr).Port
-}
-
-// RunCLI executes the g8e binary with the given arguments and environment.
-func RunCLI(t *testing.T, binPath string, args []string, env []string) (string, string, error) {
-	t.Helper()
-	cmd := exec.Command(binPath, args...)
-	cmd.Env = append(os.Environ(), env...)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
-}
-
-// GetTestBinaryPath returns the path to the g8e binary for integration tests.
-// It checks the G8E_TEST_BINARY_PATH environment variable first, then falls back
-// to a relative path from the repository root (../bin/g8e).
-func GetTestBinaryPath(t *testing.T) string {
-	t.Helper()
-
-	if path := os.Getenv("G8E_TEST_BINARY_PATH"); path != "" {
-		if filepath.IsAbs(path) {
-			return path
-		}
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			t.Fatalf("failed to resolve absolute path for G8E_TEST_BINARY_PATH=%s: %v", path, err)
-		}
-		return absPath
-	}
-
-	// Fallback to relative path from test directory
-	relPath := filepath.Join("..", "bin", "g8e")
-	absPath, err := filepath.Abs(relPath)
-	if err != nil {
-		t.Fatalf("failed to resolve absolute path for %s: %v", relPath, err)
-	}
-	return absPath
 }
