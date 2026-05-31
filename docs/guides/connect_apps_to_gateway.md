@@ -201,7 +201,7 @@ For maximum control, applications can submit canonical JSON `GovernanceEnvelope`
 #### Envelope Submission
 
 ```bash
-curl -X POST https://localhost:8440/api/governance/envelope \
+curl -X POST https://localhost:8440/api/v1/governance/envelopes \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -284,7 +284,7 @@ curl -X POST https://localhost:8440/db/cases/_query \
 
 #### Governed Collections
 
-Direct `/db/` mutations are restricted to platform infrastructure collections. Governed collections (cases, investigations, tasks, memories, reputation_state, etc.) must use `POST /api/governance/envelope` for mutations.
+Direct `/db/` mutations are restricted to platform infrastructure collections. Governed collections (cases, investigations, tasks, memories, reputation_state, etc.) must use `POST /api/v1/governance/envelopes` for mutations.
 
 ---
 

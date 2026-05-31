@@ -21,6 +21,7 @@ import (
 	// hash and wire format match the verifier. GovernanceEnvelope is the alias for
 	// g8e.common.v1.GovernanceEnvelope; GenerateMessageID is the canonical hasher.
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -124,7 +125,7 @@ func (c *Client) SubmitEnvelope(ctx context.Context, p Persona, envelope *common
 		return 0, nil, fmt.Errorf("marshal envelope: %w", err)
 	}
 
-	status, body, err = c.do(ctx, p, http.MethodPost, c.cfg.MTLSBaseURL+"/api/governance/envelope", wire)
+	status, body, err = c.do(ctx, p, http.MethodPost, c.cfg.MTLSBaseURL+constants.APIPaths.Gateway["governance_envelopes"], wire)
 	return status, body, err
 }
 
@@ -198,6 +199,6 @@ func (c *Client) SubmitMaximal(ctx context.Context, p Persona, m MaximalEnvelope
 		return txHash, 0, nil, fmt.Errorf("protojson marshal: %w", err)
 	}
 
-	status, body, err = c.do(ctx, p, http.MethodPost, c.cfg.MTLSBaseURL+"/api/governance/envelope", wire)
+	status, body, err = c.do(ctx, p, http.MethodPost, c.cfg.MTLSBaseURL+constants.APIPaths.Gateway["governance_envelopes"], wire)
 	return txHash, status, body, err
 }

@@ -258,11 +258,13 @@ func runAuditorSelfTest(cmd *cobra.Command, args []string) {
 	}
 
 	// Enroll test client through real gateway PKI
-	certPath, keyPath, caBundlePath, err := h.EnrollTestClient("test-user", "test-cli-session")
+	certPath, keyPath, caBundlePath, operatorSessionID, cliSessionID, err := h.EnrollTestClient("test-user", "test-cli-session")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to enroll test client: %v\n", err)
 		os.Exit(1)
 	}
+	_ = operatorSessionID // Session IDs available for future use
+	_ = cliSessionID
 
 	auditorCfg := config.Default()
 	auditorCfg.MTLSBaseURL = h.GatewayURL()

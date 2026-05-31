@@ -36,14 +36,16 @@ import (
 // TestContext holds the test infrastructure for a single test run.
 // No global state - each test gets its own isolated context.
 type TestContext struct {
-	Harness  *harnesspkg.TestHarness
-	Client   *client.Client
-	BaseURL  string
-	CertPath string
-	KeyPath  string
-	CAPath   string
-	PrivKey  ed25519.PrivateKey
-	PubKey   ed25519.PublicKey
+	Harness           *harnesspkg.TestHarness
+	Client            *client.Client
+	BaseURL           string
+	CertPath          string
+	KeyPath           string
+	CAPath            string
+	PrivKey           ed25519.PrivateKey
+	PubKey            ed25519.PublicKey
+	OperatorSessionID string
+	CLISessionID      string
 }
 
 // setupTestContext creates and starts the test harness with a real operator/gateway.
@@ -87,7 +89,7 @@ func setupTestContext(t *testing.T) *TestContext {
 
 	// Enroll test client via real gateway PKI system
 	sessionID := fmt.Sprintf("test-cli-session-%d", time.Now().UnixNano())
-	clientCertPath, clientKeyPath, caBundlePath, err := harness.EnrollTestClient("test-user", sessionID)
+	clientCertPath, clientKeyPath, caBundlePath, operatorSessionID, cliSessionID, err := harness.EnrollTestClient("test-user", sessionID)
 	if err != nil {
 		t.Fatalf("failed to enroll test client: %v", err)
 	}
@@ -106,14 +108,16 @@ func setupTestContext(t *testing.T) *TestContext {
 	}
 
 	return &TestContext{
-		Harness:  harness,
-		Client:   testClient,
-		BaseURL:  harness.GatewayURL(),
-		CertPath: clientCertPath,
-		KeyPath:  clientKeyPath,
-		CAPath:   caBundlePath,
-		PrivKey:  priv,
-		PubKey:   pub,
+		Harness:           harness,
+		Client:            testClient,
+		BaseURL:           harness.GatewayURL(),
+		CertPath:          clientCertPath,
+		KeyPath:           clientKeyPath,
+		CAPath:            caBundlePath,
+		PrivKey:           priv,
+		PubKey:            pub,
+		OperatorSessionID: operatorSessionID,
+		CLISessionID:      cliSessionID,
 	}
 }
 
@@ -121,10 +125,17 @@ func TestScenarios(t *testing.T) {
 	// Setup test infrastructure
 	ctx := setupTestContext(t)
 
+	// Fetch actual state root from gateway
+	stateRoot, err := ctx.Client.StateRoot(context.Background())
+	if err != nil {
+		t.Fatalf("failed to fetch state root: %v", err)
+	}
+
 	// Build a valid envelope using the builder
 	intentBytes, err := New().
 		WithCommand("echo hello").
-		WithOperatorSessionID("test-scenario-session").
+		WithOperatorSessionID(ctx.OperatorSessionID).
+		WithStateRoot(stateRoot).
 		WithL2(ctx.PrivKey, true).
 		Build()
 	if err != nil {
@@ -132,7 +143,7 @@ func TestScenarios(t *testing.T) {
 	}
 
 	// Submit via real HTTP client
-	result := submitViaHTTP(t, ctx.Client, intentBytes)
+	result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID)
 
 	// Assert acceptance (doctrine mode accepts valid L1 commands)
 	if result.Error != nil {
@@ -140,6 +151,7 @@ func TestScenarios(t *testing.T) {
 	}
 	if result.Receipt == nil {
 		t.Error("expected receipt, got nil")
+		return
 	}
 
 	// Assert receipt persistence via API
@@ -161,7 +173,7 @@ func TestNegativeControls(t *testing.T) {
 			t.Fatalf("failed to build envelope: %v", err)
 		}
 
-		result := submitViaHTTP(t, ctx.Client, intentBytes)
+		result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID)
 		if result.Error == nil {
 			t.Error("expected rejection for bad ID, got acceptance")
 		}
@@ -179,7 +191,7 @@ func TestNegativeControls(t *testing.T) {
 			t.Fatalf("failed to build envelope: %v", err)
 		}
 
-		result := submitViaHTTP(t, ctx.Client, intentBytes)
+		result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID)
 		if result.Error == nil {
 			t.Error("expected rejection for bad hash, got acceptance")
 		}
@@ -198,7 +210,7 @@ func TestNegativeControls(t *testing.T) {
 			t.Fatalf("failed to build envelope: %v", err)
 		}
 
-		result := submitViaHTTP(t, ctx.Client, intentBytes)
+		result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID)
 		if result.Error == nil {
 			t.Error("expected rejection for bad signature, got acceptance")
 		}
@@ -218,11 +230,11 @@ type Result struct {
 }
 
 // submitViaHTTP submits an envelope via the auditor client and returns the result.
-func submitViaHTTP(t *testing.T, auditorClient *client.Client, intent []byte) Result {
+func submitViaHTTP(t *testing.T, auditorClient *client.Client, intent []byte, operatorSessionID string) Result {
 	t.Helper()
 
 	ctx := context.Background()
-	persona := client.Persona{ID: "scenario-test", UserAgent: "g8e-scenario-tests"}
+	persona := client.Persona{ID: "scenario-test", UserAgent: "g8e-scenario-tests", OperatorSessionID: operatorSessionID}
 
 	// Decode intent to get envelope for submission
 	var envelope commonv1.GovernanceEnvelope

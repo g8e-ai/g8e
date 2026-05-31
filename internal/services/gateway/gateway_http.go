@@ -38,7 +38,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-const governanceEnvelopeRedirectError = "submit via POST /api/v1/governance/envelopes"
+var governanceEnvelopeRedirectError = "submit via POST " + constants.APIPaths.Gateway["governance_envelopes"]
 
 // HTTPHandlerDependencies groups all dependencies for HTTPHandler to reduce constructor bloat.
 type HTTPHandlerDependencies struct {
@@ -84,7 +84,7 @@ type HTTPHandler struct {
 	// envProc is the synchronous fail-closed Gateway mutation gate. It is
 	// nil until SetEnvelopeProcessor is called by the boot sequence after
 	// the in-process command service has initialized the verifier and
-	// Actuator. While nil, /api/governance/envelope returns 503.
+	// Actuator. While nil, /api/v1/governance/envelopes returns 503.
 	envProc governance.EnvelopeProcessor
 
 	// Controllers for domain-specific endpoints
@@ -363,7 +363,7 @@ func isDirectDBMutationAllowed(collection string) bool {
 		constants.CollectionTrustedSigners,
 		constants.CollectionConsoleAudit:
 		return true
-	// Governed collections must use POST /api/governance/envelope
+	// Governed collections must use POST /api/v1/governance/envelopes
 	case constants.CollectionCases,
 		constants.CollectionInvestigations,
 		constants.CollectionTasks,

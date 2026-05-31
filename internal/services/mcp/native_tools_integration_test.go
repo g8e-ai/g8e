@@ -780,7 +780,7 @@ func callNativeToolViaEnvelope(t *testing.T, client *http.Client, operatorURL, s
 	require.NoError(t, err)
 
 	// Submit envelope to governance endpoint
-	req, err := http.NewRequest(http.MethodPost, operatorURL+"/api/governance/envelope", bytes.NewReader(envelopeJSON))
+	req, err := http.NewRequest(http.MethodPost, operatorURL+constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader(envelopeJSON))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+sessionID)

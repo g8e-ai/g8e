@@ -221,7 +221,7 @@ func (h *TestHarness) waitForTrustBundle(timeout time.Duration) (string, error) 
 func (h *TestHarness) waitForPKIEndpoint(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/.well-known/g8e/pki/ca-bundle", h.PublicPort))
+		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/.well-known/g8e/pki/ca-bundle", h.BootstrapPort))
 		if err == nil && resp.StatusCode == http.StatusOK {
 			resp.Body.Close()
 			return nil
@@ -267,71 +267,75 @@ func (h *TestHarness) waitForPort(port int, timeout time.Duration) error {
 	return fmt.Errorf("port %d not ready after %v", port, timeout)
 }
 
-// EnrollTestClient generates a CSR and enrolls it with the gateway's real PKI system.
-// Returns paths to the client cert, key, and CA bundle.
-func (h *TestHarness) EnrollTestClient(userID, sessionID string) (certPath, keyPath, caBundlePath string, err error) {
+// EnrollTestClient performs bootstrap enrollment as documented in docs/architecture/auth.md.
+// Generates operator and CLI CSRs, submits to bootstrap endpoint, and returns paths to
+// the client cert, key, CA bundle, and session IDs. The bootstrap endpoint is used for initial setup
+// when no users exist and does not require mTLS.
+func (h *TestHarness) EnrollTestClient(userID, sessionID string) (certPath, keyPath, caBundlePath, operatorSessionID, cliSessionID string, err error) {
 	// Wait for trust bundle file to exist (PKI authority must finish initialization)
 	trustBundlePath, err := h.waitForTrustBundle(15 * time.Second)
 	if err != nil {
-		return "", "", "", fmt.Errorf("trust bundle not ready: %w", err)
+		return "", "", "", "", "", fmt.Errorf("trust bundle not ready: %w", err)
 	}
 
 	// Then wait for PKI HTTP endpoint to be responsive
 	if err := h.waitForPKIEndpoint(10 * time.Second); err != nil {
-		return "", "", "", fmt.Errorf("PKI endpoint not ready: %w", err)
+		return "", "", "", "", "", fmt.Errorf("PKI endpoint not ready: %w", err)
 	}
 
-	// Generate client key and CSR
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	// Generate operator key and CSR
+	operatorPriv, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
-		return "", "", "", fmt.Errorf("generate client key: %w", err)
+		return "", "", "", "", "", fmt.Errorf("generate operator key: %w", err)
 	}
 
-	csrTemplate := x509.CertificateRequest{
+	operatorCSRTemplate := x509.CertificateRequest{
 		Subject: pkix.Name{
 			Organization: []string{"g8e Test Harness"},
-			CommonName:   "test-auditor-client",
+			CommonName:   "test-operator",
 		},
 		DNSNames:    []string{"localhost"},
 		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
 	}
 
-	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &csrTemplate, priv)
+	operatorCSRBytes, err := x509.CreateCertificateRequest(rand.Reader, &operatorCSRTemplate, operatorPriv)
 	if err != nil {
-		return "", "", "", fmt.Errorf("create CSR: %w", err)
+		return "", "", "", "", "", fmt.Errorf("create operator CSR: %w", err)
 	}
+	operatorCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: operatorCSRBytes})
 
-	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrBytes})
-
-	// Submit CSR to gateway's real PKI signing endpoint
-	signURL := fmt.Sprintf("https://localhost:%d/api/v1/pki/csr/sign", h.GatewayPort)
-	signReq := map[string]string{
-		"csr_pem":             string(csrPEM),
-		"leaf_type":           "cli",
-		"user_id":             userID,
-		"workload_session_id": sessionID,
-	}
-	reqBody, _ := json.Marshal(signReq)
-
-	// Use the trust bundle for TLS verification
-	caCert, err := os.ReadFile(trustBundlePath)
+	// Generate CLI key and CSR
+	cliPriv, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
-		return "", "", "", fmt.Errorf("read trust bundle: %w", err)
+		return "", "", "", "", "", fmt.Errorf("generate CLI key: %w", err)
 	}
 
-	caCertPool := x509.NewCertPool()
-	if !caCertPool.AppendCertsFromPEM(caCert) {
-		return "", "", "", fmt.Errorf("failed to parse trust bundle")
+	cliCSRTemplate := x509.CertificateRequest{
+		Subject: pkix.Name{
+			Organization: []string{"g8e Test Harness"},
+			CommonName:   "test-cli",
+		},
+		DNSNames:    []string{"localhost"},
+		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
 	}
+
+	cliCSRBytes, err := x509.CreateCertificateRequest(rand.Reader, &cliCSRTemplate, cliPriv)
+	if err != nil {
+		return "", "", "", "", "", fmt.Errorf("create CLI CSR: %w", err)
+	}
+	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRBytes})
+
+	// Submit to bootstrap endpoint (plain HTTP, no mTLS required for initial setup)
+	bootstrapURL := fmt.Sprintf("http://localhost:%d/api/v1/auth/bootstrap", h.BootstrapPort)
+	bootstrapReq := map[string]string{
+		"name":               "Test Harness User",
+		"csr_pem":            string(operatorCSRPEM),
+		"cli_csr_pem":        string(cliCSRPEM),
+		"system_fingerprint": "test-harness-fingerprint",
+	}
+	reqBody, _ := json.Marshal(bootstrapReq)
 
 	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs:            caCertPool,
-				InsecureSkipVerify: false,
-				MinVersion:         tls.VersionTLS13,
-			},
-		},
 		Timeout: 30 * time.Second,
 	}
 
@@ -341,15 +345,17 @@ func (h *TestHarness) EnrollTestClient(userID, sessionID string) (certPath, keyP
 	var reqErr error
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		resp, reqErr = client.Post(signURL, "application/json", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, bootstrapURL, bytes.NewReader(reqBody))
+		req.RemoteAddr = "127.0.0.1:12345" // Simulate loopback as required by bootstrap
+		resp, reqErr = client.Do(req)
 		if reqErr == nil {
-			if resp.StatusCode == http.StatusOK {
+			if resp.StatusCode == http.StatusCreated {
 				break
 			}
 			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 				body, _ := io.ReadAll(resp.Body)
 				resp.Body.Close()
-				return "", "", "", fmt.Errorf("CSR signing failed: status %d, body: %s", resp.StatusCode, string(body))
+				return "", "", "", "", "", fmt.Errorf("bootstrap failed: status %d, body: %s", resp.StatusCode, string(body))
 			}
 			resp.Body.Close()
 		}
@@ -360,42 +366,62 @@ func (h *TestHarness) EnrollTestClient(userID, sessionID string) (certPath, keyP
 		}
 	}
 	if reqErr != nil {
-		return "", "", "", fmt.Errorf("submit CSR to gateway: %w", reqErr)
+		return "", "", "", "", "", fmt.Errorf("submit bootstrap request: %w", reqErr)
 	}
 	if resp == nil {
-		return "", "", "", fmt.Errorf("submit CSR to gateway: response was nil")
+		return "", "", "", "", "", fmt.Errorf("submit bootstrap request: response was nil")
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return "", "", "", fmt.Errorf("CSR signing failed: status %d, body: %s", resp.StatusCode, string(body))
+		return "", "", "", "", "", fmt.Errorf("bootstrap failed: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	var signResp struct {
-		CertificatePEM      string `json:"certificate_pem"`
-		CertificateChainPEM string `json:"certificate_chain_pem"`
+	var bootstrapResp struct {
+		Success           bool                   `json:"success"`
+		OperatorCert      string                 `json:"operator_cert"`
+		OperatorCertChain string                 `json:"operator_cert_chain"`
+		HubTrustBundle    string                 `json:"hub_trust_bundle"`
+		OperatorSessionID string                 `json:"operator_session_id"`
+		CLISessionID      string                 `json:"cli_session_id"`
+		User              map[string]interface{} `json:"user"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&signResp); err != nil {
-		return "", "", "", fmt.Errorf("decode sign response: %w", err)
+	if err := json.NewDecoder(resp.Body).Decode(&bootstrapResp); err != nil {
+		return "", "", "", "", "", fmt.Errorf("decode bootstrap response: %w", err)
 	}
 
-	// Save client cert and key
+	if !bootstrapResp.Success {
+		return "", "", "", "", "", fmt.Errorf("bootstrap response indicates failure")
+	}
+
+	// Save operator cert and key (for test client mTLS)
+	// Bootstrap returns operator_cert signed from the operator CSR
 	certPath = filepath.Join(h.tempDir, "test-client.crt")
 	keyPath = filepath.Join(h.tempDir, "test-client.key")
 
-	if err := os.WriteFile(certPath, []byte(signResp.CertificatePEM), 0600); err != nil {
-		return "", "", "", fmt.Errorf("write client cert: %w", err)
+	if err := os.WriteFile(certPath, []byte(bootstrapResp.OperatorCert), 0600); err != nil {
+		return "", "", "", "", "", fmt.Errorf("write client cert: %w", err)
 	}
 
-	keyDER, err := x509.MarshalPKCS8PrivateKey(priv)
+	// Save operator private key (matches the operator certificate)
+	operatorKeyDER, err := x509.MarshalPKCS8PrivateKey(operatorPriv)
 	if err != nil {
-		return "", "", "", fmt.Errorf("marshal private key: %w", err)
+		return "", "", "", "", "", fmt.Errorf("marshal operator private key: %w", err)
 	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-	if err := os.WriteFile(keyPath, keyPEM, 0600); err != nil {
-		return "", "", "", fmt.Errorf("write client key: %w", err)
+	operatorKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: operatorKeyDER})
+	if err := os.WriteFile(keyPath, operatorKeyPEM, 0600); err != nil {
+		return "", "", "", "", "", fmt.Errorf("write client key: %w", err)
 	}
 
-	return certPath, keyPath, trustBundlePath, nil
+	// Save hub trust bundle if provided in response
+	if bootstrapResp.HubTrustBundle != "" {
+		hubBundlePath := filepath.Join(h.tempDir, "hub-trust-bundle.pem")
+		if err := os.WriteFile(hubBundlePath, []byte(bootstrapResp.HubTrustBundle), 0600); err != nil {
+			return "", "", "", "", "", fmt.Errorf("write hub trust bundle: %w", err)
+		}
+		return certPath, keyPath, hubBundlePath, bootstrapResp.OperatorSessionID, bootstrapResp.CLISessionID, nil
+	}
+
+	return certPath, keyPath, trustBundlePath, bootstrapResp.OperatorSessionID, bootstrapResp.CLISessionID, nil
 }

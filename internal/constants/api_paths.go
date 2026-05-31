@@ -19,6 +19,7 @@ var APIPaths = struct {
 	OperatorPrefix string            `json:"operator_prefix"`
 	Client         map[string]string `json:"client"`
 	ClientFull     map[string]string `json:"client_full"`
+	Gateway        map[string]string `json:"gateway"`
 }{
 	InternalPrefix: "/api/v1",
 	OperatorPrefix: "/api",
@@ -33,6 +34,9 @@ var APIPaths = struct {
 		"health":     "/api/health",
 		"sse_events": "/api/internal/sse/events",
 		"sse_stream": "/api/internal/sse/stream",
+	},
+	Gateway: map[string]string{
+		"governance_envelopes": "/api/v1/governance/envelopes",
 	},
 }
 

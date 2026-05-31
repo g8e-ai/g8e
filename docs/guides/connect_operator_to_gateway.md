@@ -124,7 +124,7 @@ curl -X POST http://localhost:8440/skills/execute \
 For direct envelope submission to the operator:
 
 ```bash
-curl -X POST http://localhost:8440/api/governance/envelope \
+curl -X POST http://localhost:8440/api/v1/governance/envelopes \
   -H "Content-Type: application/json" \
   -d @envelope.json
 ```

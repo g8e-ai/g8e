@@ -169,7 +169,7 @@ Construct the GovernanceEnvelope:
 Submit the envelope to the Gateway (Operator in gateway mode):
 
 ```bash
-curl -X POST https://localhost:8440/api/governance/envelope \
+curl -X POST https://localhost:8440/api/v1/governance/envelopes \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \

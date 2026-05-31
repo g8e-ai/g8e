@@ -468,7 +468,7 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 					return true
 				}
 
-				if strings.HasPrefix(r.URL.Path, "/_query") || strings.HasPrefix(r.URL.Path, "/api/governance/envelope") {
+				if strings.HasPrefix(r.URL.Path, "/_query") || strings.HasPrefix(r.URL.Path, constants.APIPaths.Gateway["governance_envelopes"]) {
 					s.responder.Error(w, http.StatusForbidden, "external apps cannot access privileged endpoints")
 					return true
 				}

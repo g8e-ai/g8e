@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
@@ -59,7 +60,7 @@ func TestGovernanceEnvelope_NotConfigured_Returns503(t *testing.T) {
 	t.Parallel()
 	h := newGovernanceEnvelopeHandler(t, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader([]byte(`{}`)))
 	w := httptest.NewRecorder()
 
 	h.handleGovernanceEnvelope(w, req)
@@ -86,7 +87,7 @@ func TestGovernanceEnvelope_EmptyBody_Returns400(t *testing.T) {
 	proc := &fakeEnvelopeProcessor{}
 	h := newGovernanceEnvelopeHandler(t, proc)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader(nil))
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader(nil))
 	w := httptest.NewRecorder()
 
 	h.handleGovernanceEnvelope(w, req)
@@ -123,7 +124,7 @@ func TestGovernanceEnvelope_VerificationErrors_Return403(t *testing.T) {
 			proc := &fakeEnvelopeProcessor{err: tc.err}
 			h := newGovernanceEnvelopeHandler(t, proc)
 
-			req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{"id":"x"}`)))
+			req := httptest.NewRequest(http.MethodPost, constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader([]byte(`{"id":"x"}`)))
 			w := httptest.NewRecorder()
 
 			h.handleGovernanceEnvelope(w, req)
@@ -144,7 +145,7 @@ func TestGovernanceEnvelope_DecodeFailure_Returns400(t *testing.T) {
 	proc := &fakeEnvelopeProcessor{err: errors.New("invalid GovernanceEnvelope: unexpected token")}
 	h := newGovernanceEnvelopeHandler(t, proc)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`not-json`)))
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader([]byte(`not-json`)))
 	w := httptest.NewRecorder()
 
 	h.handleGovernanceEnvelope(w, req)
@@ -157,7 +158,7 @@ func TestGovernanceEnvelope_OversizedPayload_Returns400(t *testing.T) {
 	proc := &fakeEnvelopeProcessor{err: errors.New("payload exceeds 1048576 byte limit")}
 	h := newGovernanceEnvelopeHandler(t, proc)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader([]byte(`{}`)))
 	w := httptest.NewRecorder()
 
 	h.handleGovernanceEnvelope(w, req)
@@ -182,7 +183,7 @@ func TestGovernanceEnvelope_Success_Returns200WithSignedReceipt(t *testing.T) {
 	h := newGovernanceEnvelopeHandler(t, proc)
 
 	body := []byte(`{"id":"tx-abc"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
 	h.handleGovernanceEnvelope(w, req)
@@ -217,7 +218,7 @@ func TestGovernanceEnvelope_FailedExecution_StillReturns200(t *testing.T) {
 	proc := &fakeEnvelopeProcessor{receipt: receipt, err: nil}
 	h := newGovernanceEnvelopeHandler(t, proc)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{"id":"tx-fail"}`)))
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader([]byte(`{"id":"tx-fail"}`)))
 	w := httptest.NewRecorder()
 
 	h.handleGovernanceEnvelope(w, req)
@@ -232,7 +233,7 @@ func TestGovernanceEnvelope_NilReceiptNilError_Returns500(t *testing.T) {
 	proc := &fakeEnvelopeProcessor{receipt: nil, err: nil}
 	h := newGovernanceEnvelopeHandler(t, proc)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader([]byte(`{}`)))
 	w := httptest.NewRecorder()
 
 	h.handleGovernanceEnvelope(w, req)
@@ -242,7 +243,7 @@ func TestGovernanceEnvelope_NilReceiptNilError_Returns500(t *testing.T) {
 
 func TestVerifyEnvelopeIdentityBinding_NoMTLS_ReturnsError(t *testing.T) {
 	t.Parallel()
-	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader([]byte(`{}`)))
 	err := verifyEnvelopeIdentityBinding(req, []byte(`{"operator_id":"op-1","operator_session_id":"sess-1"}`))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "mTLS client certificate required")
@@ -250,7 +251,7 @@ func TestVerifyEnvelopeIdentityBinding_NoMTLS_ReturnsError(t *testing.T) {
 
 func TestVerifyEnvelopeIdentityBinding_NoURISAN_ReturnsError(t *testing.T) {
 	t.Parallel()
-	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader([]byte(`{}`)))
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{}},
 	}
@@ -262,7 +263,7 @@ func TestVerifyEnvelopeIdentityBinding_NoURISAN_ReturnsError(t *testing.T) {
 func TestVerifyEnvelopeIdentityBinding_MatchingOperatorSPIFFEID_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	spiffeURL, _ := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
-	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader([]byte(`{}`)))
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{
 			URIs: []*url.URL{spiffeURL},
@@ -276,7 +277,7 @@ func TestVerifyEnvelopeIdentityBinding_MatchingOperatorSPIFFEID_ReturnsNil(t *te
 func TestVerifyEnvelopeIdentityBinding_MismatchedOperatorID_ReturnsError(t *testing.T) {
 	t.Parallel()
 	spiffeURL, _ := url.Parse("spiffe://g8e.local/operator/org-1/op-2/sess-1")
-	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader([]byte(`{}`)))
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{
 			URIs: []*url.URL{spiffeURL},
@@ -291,7 +292,7 @@ func TestVerifyEnvelopeIdentityBinding_MismatchedOperatorID_ReturnsError(t *test
 func TestVerifyEnvelopeIdentityBinding_MatchingAppSPIFFEID_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	spiffeURL, _ := url.Parse("spiffe://g8e.local/app/op-1")
-	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader([]byte(`{}`)))
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{
 			URIs: []*url.URL{spiffeURL},
@@ -305,7 +306,7 @@ func TestVerifyEnvelopeIdentityBinding_MatchingAppSPIFFEID_ReturnsNil(t *testing
 func TestVerifyEnvelopeIdentityBinding_InvalidJSON_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	spiffeURL, _ := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
-	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader([]byte(`{}`)))
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{
 			URIs: []*url.URL{spiffeURL},
@@ -319,7 +320,7 @@ func TestVerifyEnvelopeIdentityBinding_InvalidJSON_ReturnsNil(t *testing.T) {
 func TestVerifyEnvelopeIdentityBinding_NoIdentityFields_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	spiffeURL, _ := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
-	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader([]byte(`{}`)))
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{
 			URIs: []*url.URL{spiffeURL},

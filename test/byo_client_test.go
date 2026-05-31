@@ -384,7 +384,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	// Submit the envelope via the canonical governed mutation entry.
 	dataJSON, err := protojson.Marshal(envelope)
 	require.NoError(t, err)
-	httpReq, err := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/governance/envelopes", bytes.NewReader(dataJSON))
+	httpReq, err := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.Gateway["governance_envelopes"], bytes.NewReader(dataJSON))
 	require.NoError(t, err)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set(constants.HeaderAuthorization, "Bearer "+regResp.OperatorSessionID)

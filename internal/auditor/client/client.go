@@ -30,6 +30,8 @@ type Persona struct {
 	ID string
 	// UserAgent is sent on the wire so the Gateway/audit log attributes the call.
 	UserAgent string
+	// OperatorSessionID is the operator session ID for Bearer token authentication.
+	OperatorSessionID string
 }
 
 // Exchange is a single recorded HTTP round-trip. Slices of these are the spine
@@ -112,6 +114,8 @@ func (c *Client) do(ctx context.Context, p Persona, method, url string, body []b
 	}
 	if c.cfg.Auth.APIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.cfg.Auth.APIKey)
+	} else if p.OperatorSessionID != "" {
+		req.Header.Set("Authorization", "Bearer "+p.OperatorSessionID)
 	}
 
 	resp, err := c.http.Do(req)

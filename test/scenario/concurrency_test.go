@@ -31,7 +31,7 @@ func TestConcurrencyReplayDetection(t *testing.T) {
 	// Create a valid envelope with a fixed nonce for replay testing
 	intentBytes, err := New().
 		WithCommand("echo hello").
-		WithOperatorSessionID("test-concurrency-session").
+		WithOperatorSessionID(ctx.OperatorSessionID).
 		WithNonce("nonce-concurrency-test-123").
 		WithL2(ctx.PrivKey, true).
 		Build()
@@ -47,7 +47,7 @@ func TestConcurrencyReplayDetection(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			result := submitViaHTTP(t, ctx.Client, intentBytes)
+			result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID)
 			results <- result
 		}()
 	}

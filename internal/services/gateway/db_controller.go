@@ -142,7 +142,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPut:
 		if !isDirectDBMutationAllowed(collection) {
-			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
+			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
 		body, err := c.readBody(r)
@@ -166,7 +166,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPatch:
 		if !isDirectDBMutationAllowed(collection) {
-			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
+			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
 		body, err := c.readBody(r)
@@ -195,7 +195,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodDelete:
 		if !isDirectDBMutationAllowed(collection) {
-			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
+			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
 		deleted, err := c.db.DocDelete(collection, id)
@@ -717,7 +717,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 		}
 		// Check if namespace is allowlisted for direct mutations
 		if !blobNamespaceAllowed(namespace) {
-			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
+			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
 		// Enforce ownership for namespace deletion
@@ -770,7 +770,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		// Check if namespace is allowlisted for direct mutations
 		if !blobNamespaceAllowed(namespace) {
-			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
+			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
 
@@ -853,7 +853,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		// Check if namespace is allowlisted for direct mutations
 		if !blobNamespaceAllowed(namespace) {
-			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
+			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
 

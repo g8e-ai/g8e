@@ -317,7 +317,7 @@ func TestPublicRouteRegistry_NonPublicPaths(t *testing.T) {
 
 	// Test paths that should never be public
 	privatePaths := []string{
-		"/api/governance/envelope",
+		constants.APIPaths.Gateway["governance_envelopes"],
 		"/_query",
 		"/api/users",
 		"/api/operators",
