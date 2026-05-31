@@ -44,13 +44,10 @@ func loginCmd() *cobra.Command {
 }
 
 func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
-	var count int
-	var ttl int
-
 	cmd := &cobra.Command{
 		Use:   "login",
-		Short: "Authenticate and save operator session",
-		Long:  `Authenticate and save mTLS credentials to ~/.g8e/credentials. The first login automatically bootstraps the platform via CSR-based enrollment.`,
+		Short: "Authenticate CLI with the running Gateway",
+		Long:  `Authenticate your local CLI with the running Gateway via CSR-based enrollment. Generates client keypairs, submits CSRs to the Gateway's CA, and saves signed mTLS credentials. The Gateway must already be running (use './g8e gw start' first).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -70,7 +67,7 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 			// If platform is already bootstrapped but local credentials are missing or remote status is false, perform fresh enrollment
 			if !bootstrapped {
 				// This covers both missing local credentials and a non-bootstrapped gateway
-				cmd.Println("Platform not bootstrapped or local credentials missing. Performing first-time bootstrap...")
+				cmd.Println("Gateway not bootstrapped or local credentials missing. Performing first-time client enrollment...")
 
 				cmd.Println("Generating keys and CSRs...")
 				hostname, _ := os.Hostname()
@@ -120,7 +117,7 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 					return fmt.Errorf("failed to save credentials: %w", err)
 				}
 
-				cmd.Printf("\nBootstrap complete\n")
+				cmd.Printf("\nClient enrollment complete\n")
 				cmd.Printf("User ID: %s\n", regResp.UserID)
 				cmd.Printf("Operator Session ID: %s\n", regResp.OperatorSessionID)
 				cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
@@ -130,7 +127,7 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 			}
 
 			// Platform already bootstrapped - CSR-based re-enrollment with mTLS
-			cmd.Println("Platform already bootstrapped. Re-enrolling via CSR with mTLS...")
+			cmd.Println("Gateway already bootstrapped. Re-enrolling client via CSR with mTLS...")
 
 			cmd.Println("Generating keys and CSRs...")
 			hostname, _ := os.Hostname()
@@ -180,7 +177,7 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 				return fmt.Errorf("failed to save credentials: %w", err)
 			}
 
-			cmd.Printf("\nRe-enrollment complete\n")
+			cmd.Printf("\nClient re-enrollment complete\n")
 			cmd.Printf("User ID: %s\n", regResp.UserID)
 			cmd.Printf("Operator Session ID: %s\n", regResp.OperatorSessionID)
 			cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
@@ -189,9 +186,6 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 			return nil
 		},
 	}
-
-	cmd.Flags().IntVar(&count, "count", 1, "Number of sessions to create")
-	cmd.Flags().IntVar(&ttl, "ttl", 3600, "Session TTL in seconds")
 
 	return cmd
 }

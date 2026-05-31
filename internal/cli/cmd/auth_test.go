@@ -42,18 +42,6 @@ func TestLoginCmd(t *testing.T) {
 		assert.Contains(t, cmd.Short, "Authenticate")
 	})
 
-	t.Run("login has count flag", func(t *testing.T) {
-		cmd := loginCmd()
-		flag := cmd.Flags().Lookup("count")
-		assert.NotNil(t, flag)
-	})
-
-	t.Run("login has ttl flag", func(t *testing.T) {
-		cmd := loginCmd()
-		flag := cmd.Flags().Lookup("ttl")
-		assert.NotNil(t, flag)
-	})
-
 	t.Run("login fails when operator not running", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := setupTestConfig(t, tmpDir)
@@ -267,18 +255,16 @@ func TestLogoutCmd(t *testing.T) {
 }
 
 func TestAuthCommandFlags(t *testing.T) {
-	t.Run("login count flag has default value", func(t *testing.T) {
+	t.Run("login has no count flag", func(t *testing.T) {
 		cmd := loginCmd()
 		countFlag := cmd.Flags().Lookup("count")
-		assert.NotNil(t, countFlag)
-		assert.Equal(t, "1", countFlag.DefValue)
+		assert.Nil(t, countFlag)
 	})
 
-	t.Run("login ttl flag has default value", func(t *testing.T) {
+	t.Run("login has no ttl flag", func(t *testing.T) {
 		cmd := loginCmd()
 		ttlFlag := cmd.Flags().Lookup("ttl")
-		assert.NotNil(t, ttlFlag)
-		assert.Equal(t, "3600", ttlFlag.DefValue)
+		assert.Nil(t, ttlFlag)
 	})
 }
 

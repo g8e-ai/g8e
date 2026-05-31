@@ -86,7 +86,7 @@ func gatewayStartCmd() *cobra.Command {
 				return nil
 			}
 
-			cmd.Println("[g8e] Bootstrapping Sovereign Governance Gateway...")
+			cmd.Println("[g8e] Starting Governance Gateway service...")
 			if err := pm.StartOperator(
 				posture,
 				httpPort,
@@ -141,15 +141,20 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Printf("      iex (irm http://%s:%d/bootstrap-ca.ps1)\n", externalIP, cfg.Paths.Ports.OperatorBootstrapHTTPS)
 			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			cmd.Println(" 3. TARGETED ACTIONABLE NEXT STEPS")
+			cmd.Println(" 3. CLIENT AUTHENTICATION (REQUIRED FOR CLI ACCESS)")
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			cmd.Println("  [Local CLI Auth]    : ./g8e auth login")
+			cmd.Println("  The Gateway is now running as a zero-trust boundary.")
+			cmd.Println("  To authenticate your local CLI and obtain mTLS credentials:")
+			cmd.Println()
+			cmd.Println("      ./g8e auth login")
+			cmd.Println()
+			cmd.Println("  Other actions:")
 			cmd.Println("  [Bind Satellite]    : ./g8e security pki enroll")
 			cmd.Println("  [View Live Ledger]  : ./g8e gateway logs --follow")
 			cmd.Println("  [MCP Client Config] : ./g8e gw mcp-config")
 			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			cmd.Println("[g8e] Sovereignty established. Gateway listening for cryptographic consensus.")
+			cmd.Println("[g8e] Gateway service started. Run './g8e auth login' to authenticate your CLI.")
 
 			return nil
 		},
