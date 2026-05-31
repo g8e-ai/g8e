@@ -35,8 +35,8 @@ func TestAuditVaultConfig_Default(t *testing.T) {
 
 	config := DefaultAuditVaultConfig()
 
-	// Default DataDir must be CWD-relative - Operator operates where user deploys it
-	assert.Equal(t, constants.Paths.Infra.DataDir, config.DataDir)
+	// Default DataDir is now a relative path - caller must resolve based on workDir
+	assert.Equal(t, ".g8e/data", config.DataDir)
 	assert.Equal(t, "g8e.db", config.DBPath)
 	assert.Equal(t, "ledger", config.LedgerDir)
 	assert.Equal(t, int64(2048), config.MaxDBSizeMB)
@@ -1071,10 +1071,10 @@ func TestAuditVaultService_NilServiceMethods(t *testing.T) {
 
 func TestAuditVaultService_DefaultConfig(t *testing.T) {
 	t.Parallel()
-	// Verify default config uses hardcoded values (no env var overrides)
+	// Verify default config uses relative paths (caller resolves them)
 	// g8eo uses CLI flags only, not environment variables for configuration
 	config := DefaultAuditVaultConfig()
-	assert.Equal(t, constants.Paths.Infra.DataDir, config.DataDir)
+	assert.Equal(t, ".g8e/data", config.DataDir)
 	assert.Equal(t, "g8e.db", config.DBPath)
 	assert.Equal(t, "ledger", config.LedgerDir)
 	assert.Equal(t, int64(2048), config.MaxDBSizeMB)

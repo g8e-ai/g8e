@@ -313,9 +313,14 @@ func isPortAvailable(port int) bool {
 // Gateway mode skips all operator-mode validation - no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
 func LoadGateway(opts GatewayOptions) (*Config, error) {
+	// Resolve paths based on project root before using them
+	projectRoot := FindProjectRoot()
+	constants.ResolvePaths(projectRoot)
+
 	mcpDownstreamURL := opts.MCPDownstreamURL
 	a2aDownstreamURL := opts.A2ADownstreamURL
 
+	// Resolve paths using canonical constants
 	dataDir := opts.DataDir
 	if dataDir == "" {
 		dataDir = constants.Paths.Infra.DataDir
@@ -441,6 +446,9 @@ func Load(opts LoadOptions) (*Config, error) {
 		}
 	}
 
+	// Resolve paths based on project root before using them
+	constants.ResolvePaths(workDir)
+
 	if opts.OperatorEndpoint == "" {
 		return nil, fmt.Errorf("OperatorEndpoint is required")
 	}
@@ -471,7 +479,7 @@ func Load(opts LoadOptions) (*Config, error) {
 		HeartbeatInterval:  heartbeatIntervalOrDefault(opts.HeartbeatInterval),
 
 		// Local storage - all paths anchored to WorkDir
-		LocalStoreDBPath:        filepath.Join(workDir, constants.Paths.Infra.LocalStateDBPath),
+		LocalStoreDBPath:        constants.Paths.Infra.LocalStateDBPath,
 		LocalStoreMaxSizeMB:     1024,
 		LocalStoreRetentionDays: 30,
 
@@ -493,12 +501,12 @@ func Load(opts LoadOptions) (*Config, error) {
 
 	// Default PKIDir to .g8e/pki if not explicitly set
 	if cfg.PKIDir == "" {
-		cfg.PKIDir = filepath.Join(workDir, constants.Paths.Infra.PkiDir)
+		cfg.PKIDir = constants.Paths.Infra.PkiDir
 	}
 
 	// Default SecretsDir to .g8e/secrets if not explicitly set
 	if cfg.SecretsDir == "" {
-		cfg.SecretsDir = filepath.Join(workDir, constants.Paths.Infra.SecretsDir)
+		cfg.SecretsDir = constants.Paths.Infra.SecretsDir
 	}
 
 	return cfg, nil

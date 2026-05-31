@@ -48,6 +48,10 @@ type CollectionFieldPaths struct {
 
 // NewFieldPathRegistry loads the field path schema from the embedded JSON
 func NewFieldPathRegistry(logger *slog.Logger) (*FieldPathRegistry, error) {
+	// Resolve paths before using constants.Paths.Infra.*
+	projectRoot := constants.ResolveProjectRoot()
+	constants.ResolvePaths(projectRoot)
+
 	registry := &FieldPathRegistry{
 		logger:   logger,
 		registry: make(map[string]CollectionFieldPaths),

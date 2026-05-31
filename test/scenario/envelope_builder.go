@@ -99,11 +99,11 @@ func (b *Builder) WithL2(privKey ed25519.PrivateKey, vote bool) *Builder {
 	if b.envelope.Governance == nil {
 		b.envelope.Governance = &commonv1.GovernanceMetadata{}
 	}
-	
+
 	b.envelope.Governance.L2 = &commonv1.L2Metadata{
 		KeyId: hex.EncodeToString(privKey.Public().(ed25519.PublicKey)),
 	}
-	
+
 	// Signature will be computed during Build() after hash is known
 	b.privKey = privKey
 	return b
@@ -136,7 +136,7 @@ func (b *Builder) Build() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate message ID: %w", err)
 	}
-	
+
 	// Set id and transaction_hash if not already set to bad values
 	if b.envelope.Id == "" || b.envelope.Id != "wrongidwrongidwrongidwrongidwrongidwrongidwrongidwrongidwrongid" {
 		b.envelope.Id = hash
@@ -144,7 +144,7 @@ func (b *Builder) Build() ([]byte, error) {
 	if b.envelope.TransactionHash == "" || b.envelope.TransactionHash != "wronghashwronghashwronghashwronghashwronghashwronghashwronghash" {
 		b.envelope.TransactionHash = hash
 	}
-	
+
 	// Compute L2 signature if private key is provided
 	if b.privKey != nil && b.envelope.Governance != nil && b.envelope.Governance.L2 != nil {
 		if b.envelope.Governance.L2.ConsensusSignature == "" || b.envelope.Governance.L2.ConsensusSignature != "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef" {
@@ -152,13 +152,13 @@ func (b *Builder) Build() ([]byte, error) {
 			b.envelope.Governance.L2.ConsensusSignature = hex.EncodeToString(sig)
 		}
 	}
-	
+
 	// Marshal to protojson
 	marshaler := &protojson.MarshalOptions{}
 	jsonBytes, err := marshaler.Marshal(b.envelope)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal envelope: %w", err)
 	}
-	
+
 	return jsonBytes, nil
 }

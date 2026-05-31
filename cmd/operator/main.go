@@ -749,9 +749,6 @@ func handleVaultCommand(rekeyVault, verifyVault, resetVault bool, newPrivateKeyS
 	}
 
 	dataDir := filepath.Join(workDir, constants.Paths.Infra.DataDir)
-	if s := config.LoadSettings().DataDir; s != "" {
-		dataDir = s
-	}
 
 	vault, err := vault.NewVault(&vault.VaultConfig{
 		DataDir: dataDir,

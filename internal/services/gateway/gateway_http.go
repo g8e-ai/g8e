@@ -195,14 +195,14 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	// Authenticated routes (require mTLS)
 	mux.HandleFunc(constants.APIPaths.DataSettings, h.dbController.handleDataSettings)
 	mux.HandleFunc(constants.APIPaths.Operators, h.operatorController.handleListOperators)
-	mux.HandleFunc(constants.APIPaths.OperatorsByID, h.operatorController.handleTerminateOperator)
+	mux.Handle(constants.APIPaths.OperatorsByID, http.HandlerFunc(h.operatorController.handleTerminateOperator))
 	mux.HandleFunc(constants.APIPaths.OperatorsBind, h.operatorController.handleBindOperators)
 	mux.HandleFunc(constants.APIPaths.OperatorsUnbind, h.operatorController.handleUnbindOperators)
 	mux.HandleFunc(constants.APIPaths.OperatorsTarget, h.operatorController.handleSetTargetContext)
 	mux.HandleFunc(constants.APIPaths.OperatorsReauth, h.operatorController.handleReauth)
 	mux.HandleFunc(constants.APIPaths.GovernanceSigners, h.dbController.handleGovernanceSigners)
-	mux.HandleFunc(constants.APIPaths.GovernanceSignersByID, h.dbController.handleGovernanceSignerByID)
-	mux.HandleFunc(constants.APIPaths.AdminAppPoliciesBySigner, h.adminController.handleAppPolicySigner)
+	mux.Handle(constants.APIPaths.GovernanceSignersByID, http.HandlerFunc(h.dbController.handleGovernanceSignerByID))
+	mux.Handle(constants.APIPaths.AdminAppPoliciesBySigner, http.HandlerFunc(h.adminController.handleAppPolicySigner))
 	mux.HandleFunc(constants.APIPaths.AdminAppsRevoke, h.adminController.handleRevokeApp)
 
 	// Register rate-limited MCP routes
@@ -219,8 +219,8 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.SSEPush, h.handleInternalSSEPush)
 	mux.HandleFunc(constants.APIPaths.SSEEvents, h.handleInternalSSEEvents)
 	mux.HandleFunc(constants.APIPaths.SSEStream, h.handleInternalSSEStream)
-	mux.HandleFunc(constants.APIPaths.DataDB, h.dbController.handleDataDB)
-	mux.HandleFunc(constants.APIPaths.KV, h.dbController.handleKV)
+	mux.Handle(constants.APIPaths.DataDB, http.HandlerFunc(h.dbController.handleDataDB))
+	mux.Handle(constants.APIPaths.KV, http.HandlerFunc(h.dbController.handleKV))
 	mux.HandleFunc(constants.APIPaths.PubSubPublish, h.dbController.handlePubSubPublish)
 	mux.Handle(constants.APIPaths.PubSubStream, h.auth.WebSocketAuth(http.HandlerFunc(h.pubsub.HandleWebSocket)))
 
@@ -239,10 +239,10 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthPasskeysAuthenticateChallenge, h.authController.handleAuthPasskeysAuthenticateChallenge)
 	mux.HandleFunc(constants.APIPaths.AuthPasskeysAuthenticateVerify, h.authController.handleAuthPasskeysAuthenticateVerify)
 	mux.HandleFunc(constants.APIPaths.AuthPasskeys, h.authController.handleAuthPasskeys)
-	mux.HandleFunc(constants.APIPaths.AuthPasskeysByID, h.authController.handleAuthPasskeysRevoke)
+	mux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.authController.handleAuthPasskeysRevoke))
 
 	// Approval routes (require mTLS)
-	mux.HandleFunc(constants.APIPaths.ApprovalsByID, h.authController.handleApprovalAction)
+	mux.Handle(constants.APIPaths.ApprovalsByID, http.HandlerFunc(h.authController.handleApprovalAction))
 
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }
@@ -254,7 +254,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.Health, h.handleHealth)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
-	mux.HandleFunc(constants.APIPaths.DataBlobs, h.dbController.handleBlob)
+	mux.Handle(constants.APIPaths.DataBlobs, http.HandlerFunc(h.dbController.handleBlob))
 
 	// Landing page and health
 	mux.HandleFunc(constants.APIPaths.Landing, h.handleLandingPage)
@@ -283,8 +283,8 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	var mcpHandler http.Handler
 	if h.auth != nil && h.auth.HasJWKS() {
 		mcpHandler = h.auth.JWTAuthMiddleware(mcpRateLimited)
-		mux.Handle(constants.APIPaths.MCPToolsList[:len(constants.APIPaths.MCPToolsList)-len("/list")], mcpHandler)
-		mux.Handle(constants.APIPaths.A2ACall[:len(constants.APIPaths.A2ACall)-len("/call")], mcpHandler)
+		mux.Handle(constants.APIPaths.MCPToolsList[:len(constants.APIPaths.MCPToolsList)-len("/list")]+"/", mcpHandler)
+		mux.Handle(constants.APIPaths.A2ACall[:len(constants.APIPaths.A2ACall)-len("/call")]+"/", mcpHandler)
 
 		// JIT passkey bootstrap: allow first-credential registration via JWT
 		// This unblocks OIDC/JIT users who have zero credentials and cannot reach WebSessionAuth
@@ -302,7 +302,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 
 	// OOB Approval UI for suspended MCP/A2A transactions
 	mux.HandleFunc(constants.APIPaths.ApprovePage, h.authController.handleApprovalPage)
-	authedMux.HandleFunc(constants.APIPaths.ApprovalsByID, h.authController.handleApprovalAction)
+	authedMux.Handle(constants.APIPaths.ApprovalsByID, http.HandlerFunc(h.authController.handleApprovalAction))
 	authedMux.HandleFunc(constants.APIPaths.Approvals, h.authController.handleListSuspendedTransactions)
 
 	// Wrap authed routes in WebSessionAuth middleware

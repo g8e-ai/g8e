@@ -10,8 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -110,18 +108,4 @@ func (c *Config) LoadFile(path string) error {
 		return err
 	}
 	return json.Unmarshal(b, c)
-}
-
-func expandPath(path string) string {
-	if path == "" {
-		return path
-	}
-	if strings.HasPrefix(path, "~/") || path == "~" {
-		homeDir, _ := os.UserHomeDir()
-		if path == "~" {
-			return homeDir
-		}
-		path = filepath.Join(homeDir, path[2:])
-	}
-	return os.ExpandEnv(path)
 }

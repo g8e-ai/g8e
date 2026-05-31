@@ -55,6 +55,10 @@ func NewTestConfig(t *testing.T) *config.Config {
 	operatorID := fmt.Sprintf("test-op-%s-%d", safeName, n)
 	operatorSessionID := fmt.Sprintf("test-sess-%s-%d", safeName, n)
 	workDir := t.TempDir()
+
+	// Resolve paths for this test's workDir
+	constants.ResolvePaths(workDir)
+
 	pkiDir := filepath.Join(workDir, constants.Paths.Infra.PkiDir)
 	secretsDir := filepath.Join(workDir, constants.Paths.Infra.SecretsDir)
 	trustedSignersDir := filepath.Join(pkiDir, "trusted_signers")

@@ -61,7 +61,7 @@ func TestResolveProjectRoot(t *testing.T) {
 			t.Fatalf("Failed to chdir: %v", err)
 		}
 
-		result := resolveProjectRoot()
+		result := ResolveProjectRoot()
 		assert.Equal(t, tmpDir, result)
 	})
 
@@ -86,7 +86,7 @@ func TestResolveProjectRoot(t *testing.T) {
 			t.Fatalf("Failed to chdir: %v", err)
 		}
 
-		result := resolveProjectRoot()
+		result := ResolveProjectRoot()
 		assert.Equal(t, tmpDir, result)
 	})
 
@@ -106,7 +106,7 @@ func TestResolveProjectRoot(t *testing.T) {
 			t.Fatalf("Failed to chdir: %v", err)
 		}
 
-		result := resolveProjectRoot()
+		result := ResolveProjectRoot()
 		assert.Equal(t, subDir, result)
 	})
 }

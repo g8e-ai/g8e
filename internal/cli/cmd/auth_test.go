@@ -79,21 +79,21 @@ func TestLoginCmd(t *testing.T) {
 	})
 
 	t.Run("login fails with no active session", func(t *testing.T) {
-		// This test was previously testing 'trust bundle not found' but that check is gone.
-		// It now fails because the operator is not running in an empty temp dir.
-		cmd := loginCmd()
+		// This test verifies that login fails when operator is not running
+		tmpDir := t.TempDir()
+		cfg := setupTestConfig(t, tmpDir)
+
+		// Use injectable config loader for hermetic test with unique port
+		cmd := loginCmdWithConfig(func(_ string) (*config.Config, error) {
+			return cfg, nil
+		})
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
-
-		// Create pki/trust dir so the file path is valid for writing if needed
-		// This prevents "no such file or directory" before we get to the actual error.
-		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, constants.Paths.Infra.PkiDir, "trust"), 0755))
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)

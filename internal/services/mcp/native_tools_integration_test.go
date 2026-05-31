@@ -710,7 +710,11 @@ func setupMTLSClient(t *testing.T, operatorURL string) (*http.Client, string, er
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(cwd)))
-	pkiDir := filepath.Join(repoRoot, constants.Paths.Infra.PkiDir)
+
+	// Resolve paths for this test
+	constants.ResolvePaths(repoRoot)
+
+	pkiDir := constants.Paths.Infra.PkiDir
 
 	// Load client certificate and key
 	certPath := filepath.Join(pkiDir, "client", "client.pem")
@@ -824,7 +828,11 @@ func verifyAuditVaultPersistence(t *testing.T, transactionID, sessionID string) 
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(cwd)))
-	vaultPath := filepath.Join(repoRoot, constants.Paths.Infra.AuditVaultDBPath)
+
+	// Resolve paths for this test
+	constants.ResolvePaths(repoRoot)
+
+	vaultPath := constants.Paths.Infra.AuditVaultDBPath
 
 	db, err := sql.Open("sqlite", vaultPath)
 	require.NoError(t, err)

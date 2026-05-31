@@ -144,16 +144,12 @@ const (
 	CACertLegacyBundlePath = ".g8e/pki/ca-bundle.pem"
 )
 
-func init() {
-	resolvePaths()
-}
-
-// resolvePaths resolves filesystem paths relative to project root.
+// ResolvePaths resolves filesystem paths relative to project root.
 // No environment variables are used - all paths are computed from project root.
-func resolvePaths() {
-	projectRoot := resolveProjectRoot()
-
+// This replaces the init() function to allow test isolation and proper dependency injection.
+func ResolvePaths(projectRoot string) {
 	// All paths are relative to project root
+	Paths.Infra.RuntimeDir = filepath.Join(projectRoot, ".g8e")
 	Paths.Infra.DataDir = filepath.Join(projectRoot, ".g8e/data")
 	Paths.Infra.PkiDir = filepath.Join(projectRoot, ".g8e/pki")
 	Paths.Infra.SecretsDir = filepath.Join(projectRoot, ".g8e/secrets")
@@ -169,10 +165,10 @@ func resolvePaths() {
 	Paths.Infra.AppCertDir = filepath.Join(Paths.Infra.PkiDir, "issued/apps")
 }
 
-// resolveProjectRoot returns the project root directory.
+// ResolveProjectRoot returns the project root directory.
 // This mirrors the logic in internal/services/system/path.go
-// but is duplicated here to avoid circular dependencies during init.
-func resolveProjectRoot() string {
+// but is duplicated here to avoid circular dependencies.
+func ResolveProjectRoot() string {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "." // Fallback to current working directory
@@ -196,10 +192,4 @@ func resolveProjectRoot() string {
 	}
 
 	return cwd
-}
-
-// ResolvePathsForTest re-resolves paths for testing purposes.
-// This allows tests to set environment variables and re-resolve paths.
-func ResolvePathsForTest() {
-	resolvePaths()
 }
