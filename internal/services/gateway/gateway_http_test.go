@@ -668,6 +668,13 @@ func TestBuildPublicRouter(t *testing.T) {
 	router.ServeHTTP(rr, req)
 	// Health endpoint may require auth in some configurations, so we just check it's registered
 	assert.NotNil(t, rr)
+
+	// Test that PKI devices enroll endpoint is registered on public router
+	req = httptest.NewRequest(http.MethodPost, constants.APIPaths.PKIDevicesEnroll, nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	// Endpoint requires mTLS, so we expect 401 Unauthorized, not 404 Not Found
+	assert.NotEqual(t, http.StatusNotFound, rr.Code, "PKIDevicesEnroll should be registered on public router")
 }
 
 type errorReader struct{}

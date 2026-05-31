@@ -276,6 +276,22 @@ func TestDeleteCredentials_Success(t *testing.T) {
 		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
 		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
+		Paths: &config.PathsConfig{
+			Infra: struct {
+				AppCertDir           string `json:"app_cert_dir"`
+				CACertPath           string `json:"ca_cert_path"`
+				DBPath               string `json:"db_path"`
+				DocsDir              string `json:"docs_dir"`
+				PKIDir               string `json:"pki_dir"`
+				ProtocolConstantsDir string `json:"protocol_constants_dir"`
+				ProtocolDir          string `json:"protocol_dir"`
+				ProtocolModelsDir    string `json:"protocol_models_dir"`
+				SecretsDir           string `json:"secrets_dir"`
+				SSHConfigPath        string `json:"ssh_config_path"`
+			}{
+				CACertPath: filepath.Join(tmpDir, ".g8e/pki/trust/g8e-gw-ca-bundle.pem"),
+			},
+		},
 	}
 
 	creds := &Credentials{
@@ -293,7 +309,8 @@ func TestDeleteCredentials_Success(t *testing.T) {
 	require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), []byte("cli-key"), 0600))
 	require.NoError(t, os.WriteFile(cfg.OperatorCertFile(), []byte("op-cert"), 0600))
 	require.NoError(t, os.WriteFile(cfg.OperatorKeyFile(), []byte("op-key"), 0600))
-	hubBundle := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
+	hubBundle := cfg.TrustBundlePath()
+	require.NoError(t, os.MkdirAll(filepath.Dir(hubBundle), 0700))
 	require.NoError(t, os.WriteFile(hubBundle, []byte("g8e-gw-ca-bundle"), 0600))
 
 	err := DeleteCredentials(cfg)
@@ -316,6 +333,22 @@ func TestDeleteCredentials_NonExistentFiles(t *testing.T) {
 		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
 		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
+		Paths: &config.PathsConfig{
+			Infra: struct {
+				AppCertDir           string `json:"app_cert_dir"`
+				CACertPath           string `json:"ca_cert_path"`
+				DBPath               string `json:"db_path"`
+				DocsDir              string `json:"docs_dir"`
+				PKIDir               string `json:"pki_dir"`
+				ProtocolConstantsDir string `json:"protocol_constants_dir"`
+				ProtocolDir          string `json:"protocol_dir"`
+				ProtocolModelsDir    string `json:"protocol_models_dir"`
+				SecretsDir           string `json:"secrets_dir"`
+				SSHConfigPath        string `json:"ssh_config_path"`
+			}{
+				CACertPath: filepath.Join(tmpDir, ".g8e/pki/trust/g8e-gw-ca-bundle.pem"),
+			},
+		},
 	}
 
 	err := DeleteCredentials(cfg)

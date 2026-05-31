@@ -262,6 +262,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthLogout, h.authController.handlePublicAuthLogout)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handlePublicAuthBootstrap)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)
+	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
 
 	// MCP/A2A Ingress routes with JWT authentication for remote clients
 	mcpMux := http.NewServeMux()

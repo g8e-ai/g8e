@@ -184,18 +184,44 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationResp
 		return nil, fmt.Errorf("failed to get hostname: %w", err)
 	}
 
+	// Fetch current trust bundle from operator bootstrap endpoint to handle CA rotation
+	trustBundleURL := fmt.Sprintf("%s/.well-known/g8e/pki/ca-bundle", cfg.OperatorDiscoveryURL())
+	trustBundleResp, err := http.Get(trustBundleURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch trust bundle from operator: %w", err)
+	}
+	defer trustBundleResp.Body.Close()
+
+	if trustBundleResp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("trust bundle fetch returned HTTP %d", trustBundleResp.StatusCode)
+	}
+
+	currentTrustBundle, err := io.ReadAll(trustBundleResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read trust bundle response: %w", err)
+	}
+
+	if len(currentTrustBundle) == 0 {
+		return nil, fmt.Errorf("fetched trust bundle is empty")
+	}
+
+	// Update local trust bundle with current version from operator
+	trustBundlePath := cfg.TrustBundlePath()
+	if err := os.MkdirAll(filepath.Dir(trustBundlePath), 0755); err != nil {
+		return nil, fmt.Errorf("failed to create trust directory: %w", err)
+	}
+	if err := os.WriteFile(trustBundlePath, currentTrustBundle, 0644); err != nil {
+		return nil, fmt.Errorf("failed to write trust bundle: %w", err)
+	}
+
 	// Load existing CLI certificate for mTLS
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
 		return nil, fmt.Errorf("failed to load CLI certificate: %w", err)
 	}
 
-	// Load CA trust bundle from credentials directory (saved during bootstrap)
-	trustBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
-	caPEM, err := os.ReadFile(trustBundlePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read trust bundle: %w", err)
-	}
+	// Use the freshly fetched trust bundle for TLS verification
+	caPEM := currentTrustBundle
 
 	caPool := x509.NewCertPool()
 	if !caPool.AppendCertsFromPEM(caPEM) {
@@ -244,9 +270,14 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string) (*RegistrationResp
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	// Log response for debugging
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("re-enrollment failed with HTTP %d: %s", resp.StatusCode, string(respBody))
+	}
+
 	var regResp RegistrationResponse
 	if err := json.Unmarshal(respBody, &regResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return nil, fmt.Errorf("failed to parse response (status %d): %w\nBody: %s", resp.StatusCode, err, string(respBody))
 	}
 
 	if regResp.Error != "" {
@@ -303,7 +334,7 @@ func DeleteCredentials(cfg *config.Config) error {
 		cfg.CLIKeyFile(),
 		cfg.OperatorCertFile(),
 		cfg.OperatorKeyFile(),
-		filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem"),
+		cfg.TrustBundlePath(),
 	}
 
 	for _, file := range certFiles {
