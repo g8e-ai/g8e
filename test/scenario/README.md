@@ -18,6 +18,15 @@ test/scenario/
 
 ## Running the Tests
 
+### Prerequisites
+
+Before running scenario integration tests, ensure:
+
+1. The Gateway is running: `./g8e gw start`
+2. You have authenticated with the Gateway: `./g8e auth login`
+
+If you have recently run `./g8e gw clean`, you must re-authenticate before running tests, as the PKI hierarchy is regenerated and existing CLI credentials become invalid.
+
 ### Local Development
 
 ```bash
@@ -113,7 +122,7 @@ This prevents flaky tests due to wall time or state drift.
 
 ## Golden File Diffing
 
-The framework automatically diffs signed receipts against golden files in `test/scenario/golden/{scenario}_{mode}.golden.json`. When a scenario accepts an envelope, the receipt is serialized to JSON and compared against the golden snapshot. Set `G8E_UPDATE_GOLDEN=1` to refresh golden files after intentional changes.
+The framework automatically diffs signed receipts against golden files in `test/scenario/golden/{scenario}_{mode}.golden.json`. When a scenario accepts an envelope, the receipt is serialized to JSON and compared against the golden snapshot. Golden files are auto-created if missing and auto-updated on mismatch.
 
 ## Database Persistence
 
@@ -197,7 +206,67 @@ Receipt:
   Executed At: 1716624000000
 ```
 
-Note: The test database and audit vault use in-memory storage that is cleaned up after test completion. Receipts are only visible in the test output or via golden file snapshots.
+## Viewing the Local Ledger and Audit Vault
+
+The audit vault persists a git ledger and SQLite database at `.g8e/test-vault/{timestamp}-{test-name}/` for post-test inspection. The test logs the vault path when created:
+
+```
+Test vault created at: /home/bob/g8e/.g8e/test-vault/20260524-120000-TestScenarios
+```
+
+### Using the CLI to Inspect Test Vaults
+
+The g8e CLI provides commands to inspect test vaults without requiring a running Operator:
+
+```bash
+# List all available test vaults
+./g8e test review --list
+
+# Show action receipts from a specific vault
+./g8e test review --vault-path .g8e/test-vault/20260524-120000-TestScenarios --receipts
+
+# Show git ledger from a specific vault
+./g8e test review --vault-path .g8e/test-vault/20260524-120000-TestScenarios --ledger
+
+# Execute custom SQL queries on the vault database
+./g8e test review --vault-path .g8e/test-vault/20260524-120000-TestScenarios --query "SELECT * FROM action_receipts;"
+
+# Inspect vault structure (list tables)
+./g8e test review --vault-path .g8e/test-vault/20260524-120000-TestScenarios
+
+# Clean old vaults (older than N days)
+./g8e test review --clean-old 7
+
+# Clean all vaults
+./g8e test review --clean
+```
+
+### Manual Inspection
+
+You can also manually inspect the vault using standard tools:
+
+```bash
+# Navigate to the test vault directory
+cd .g8e/test-vault/{timestamp}-{test-name}
+
+# View git log of audit events
+cd ledger
+git log --oneline
+
+# View a specific commit's details
+git show <commit-hash>
+
+# View the full diff of a commit
+git show <commit-hash> --stat
+
+# Query the SQLite database directly
+sqlite3 audit_vault.db ".tables"
+sqlite3 audit_vault.db "SELECT * FROM action_receipts;"
+```
+
+The ledger contains all audit events written during the test, including transaction receipts and state changes. This allows detailed inspection of the audit trail after test completion.
+
+Note: The test database uses in-memory storage that is cleaned up after test completion, but the audit vault ledger directory is preserved for manual inspection.
 
 ## The Theater
 

@@ -5,7 +5,7 @@ parent: Guides
 
 # Build a Governed Operator
 
-Last Updated: 2026-05-29
+Last Updated: 2026-05-31
 Version: v1.0.3
 
 ---
@@ -69,17 +69,17 @@ The operator must act as a universal protocol translator:
 - **MCP Translation**: Accept JSON-RPC MCP tool calls and wrap them in GovernanceEnvelope format.
 - **A2A Translation**: Accept HTTP/JSON A2A skill invocations and wrap them in GovernanceEnvelope format.
 - **Canonical JSON**: Use protojson (canonical JSON) as the wire format for all client-facing interactions.
-- **Typed Payload Mapping**: Map native JSON-RPC requests directly to governed ActionType mutations.
+- **Typed Payload Mapping**: Map native JSON-RPC requests directly to governed ActionType mutations defined in the protocol schemas.
 
 #### 2. Verification Sequence (L1-L4)
 
 The operator must implement a singular verification gate that enforces:
 
-- **Integrity**: Verify `id == transaction_hash == SHA256(canonical_fields)`.
+- **Integrity**: Verify `id == transaction_hash == SHA256(canonical_fields)` computed from the GovernanceEnvelope.
 - **Freshness**: Validate `expires_at` is not passed and `nonce` is not in the replay store.
 - **State Binding**: Verify `state_merkle_root` matches the host's current local ledger root.
 - **L1Doctrine (Hard Gates)**: Enforce technical bedrock threat detection rules, forbidden patterns, and MITRE ATT&CK heuristics on the typed payload.
-- **L2Consensus**: Verify 5-agent intent consensus signatures against a locally trusted SignerStore.
+- **L2Consensus**: Verify 5-agent intent consensus signatures against a locally trusted SignerStore. In doctrine mode, the Gateway may sign locally with `gateway_signed=true` for single-agent MCP clients.
 - **L3Notary**: Validate authorization proofs (mTLS certificate fingerprints for CLI sessions, WebAuthn proofs for web sessions).
 - **L4Warden**: Pre-dispatch verification of all preceding proofs and state roots.
 
@@ -89,7 +89,7 @@ Any verification failure must result in a typed rejection and audit entry. No fa
 
 The operator must implement a single execution boundary permitted to mutate host state:
 
-- **Pre-execution Receipt**: Sign an ActionReceipt with status `EXECUTING` and commit it to the local Audit Vault. Abort execution if this write fails.
+- **Pre-execution Receipt**: Sign an ActionReceipt with status `EXECUTING` and commit it to the AuditVaultService. Abort execution if this write fails.
 - **Execution**: Dispatch the verified payload to the appropriate handler (shell, file edit, etc.).
 - **Sovereignty Boundary**: Process output to scrub sensitive PII, credentials, and connection strings before data leaves the boundary.
 - **Post-execution Receipt**: Update the receipt to `COMPLETED` or `FAILED`, capture the new `state_root_after`, sign the result, and publish it back to the Gateway.
@@ -108,10 +108,10 @@ The operator must establish workload identity via mTLS:
 
 The operator must maintain the host as the authoritative source of truth:
 
-- **Audit Vault**: Append-only, encrypted SQLite log of every event and signed ActionReceipt. Fail-closed: reject events missing a valid operator_session_id.
-- **Scrubbed Vault**: Contains only sovereignty-scrubbed execution logs. This is the only data AI ever reads.
-- **Raw Vault**: Retains the unscrubbed forensic record. Never readable by AI; reserved strictly for customer security audits.
-- **Git-Backed Ledger**: Implement a two-phase commit (LedgerHashBefore / LedgerHashAfter) for file mutations. Mirror files as encrypted blobs and support restoration to any prior state within the session.
+- **AuditVaultService**: Append-only, encrypted SQLite log of every event and signed ActionReceipt. Fail-closed: reject events missing a valid operator_session_id. Supports optional encryption vault for data-at-rest protection.
+- **LedgerService**: Git-backed version control for file mutations. Implements two-phase commit (LedgerHashBefore / LedgerHashAfter) and supports restoration to any prior state within the session.
+- **LocalStoreService**: SQLite storage for command execution results, file diffs, and suspended transactions. Provides token persistence for sovereignty scrubbing.
+- **GatewayDBService**: (Gateway mode only) Unified SQLite persistence for state roots, nonces, trusted signers, app policies, and suspended transactions.
 
 #### 6. Outbound-Only Connectivity
 
@@ -125,8 +125,7 @@ The operator must establish outbound-only connectivity to the Gateway:
 
 The operator must expose tools as a Model Context Protocol server:
 
-- **stdio-based MCP**: Support stdio-based MCP for editor integrations (Cursor, Claude Code).
-- **HTTP-based MCP**: Support HTTP-based MCP for direct API access.
+- **HTTP-based MCP**: Support HTTP-based MCP for all client integrations (IDEs, direct API access).
 - **Tool Registration**: Register available tools with the MCP client.
 
 ### Protocol Invariants
@@ -139,7 +138,7 @@ Your implementation must enforce these core invariants:
 4. **Expiry Enforcement**: Transactions must be rejected if they have expired.
 5. **Fail-Closed Execution**: Any verification failure must result in a typed rejection and audit entry. No fallback paths or silent retries.
 6. **Sovereignty**: Sensitive data must be scrubbed before leaving the execution boundary.
-7. **Local-First Audit**: All audit entries must be written to the host-local vault before execution.
+7. **Local-First Audit**: All audit entries must be written to the host-local AuditVaultService before execution.
 
 ### Sovereignty Boundary Plane
 
@@ -166,6 +165,7 @@ The GovernanceEnvelope schema is defined in the protocol protobuf files. Your im
 1. **Use the canonical protojson wire format** for all client-facing interactions.
 2. **Implement the typed payload validation** defined in the protocol schemas.
 3. **Support the canonical request payload mappings** for all first-class event types.
+4. **Handle the gateway_signed field** to distinguish between full L2 consensus and Gateway-signed transactions (single-agent MCP clients).
 
 Refer to `protocol/proto/g8e/` for the canonical schema definitions.
 
@@ -181,10 +181,10 @@ A custom operator implementation must pass the platform test suite to claim g8e 
 
 This runs Gateway tests covering:
 - Pub/Sub command dispatch
-- Audit vault writes
-- Ledger commits
+- AuditVaultService writes
+- LedgerService commits
 - L1/L2/L3 verification gates
-- Envelope validation
+- GovernanceEnvelope validation
 - State root computation
 - Nonce management
 - PKI operations

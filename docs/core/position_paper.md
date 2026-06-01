@@ -156,7 +156,7 @@ Co-validation and consensus are arguments about who decides. They are worthless 
 Every mutation is a single `GovernanceEnvelope`. A deterministic transaction hash is computed from its normalized fields, and the verifier enforces
 
 $$
-\texttt{id} \;=\; \texttt{transaction\_hash} \;=\; \mathrm{SHA\text{-}256}(\text{canonical fields}).
+\mathtt{id} \;=\; \mathtt{transaction\_hash} \;=\; \mathrm{SHA\text{-}256}(\text{canonical fields}).
 $$
 
 Every proof, including every L2 signature and every L3 assertion, is computed over that hash. This is the property that makes approval action-specific rather than session-specific: a human's WebAuthn assertion authorizes the exact bytes of one transaction and authorizes nothing else, so it cannot be transplanted to a different action, replayed against a later request, or harvested from a live session. Consensus signatures inherit the same rigidity.

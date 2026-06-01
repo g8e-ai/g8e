@@ -119,7 +119,7 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 	}
 
 	// Fetch trust bundle
-	trustBundle, err := s.pki.HubTrustBundle()
+	trustBundle, err := s.pki.GatewayTrustBundle()
 	if err != nil {
 		s.logger.Error("Failed to fetch trust bundle", "error", err)
 		// Non-fatal: continue without trust bundle

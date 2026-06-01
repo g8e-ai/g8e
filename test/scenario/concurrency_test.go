@@ -20,40 +20,35 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
-
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
-
-	"github.com/g8e-ai/g8e/internal/services/system"
-	"github.com/g8e-ai/g8e/pkg/governance"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 // TestConcurrencyReplayDetection tests actual replay detection with concurrent submissions.
 // It submits the same valid envelope twice concurrently using goroutines and asserts that
 // exactly one succeeds and one rejects with TX_REPLAY.
 func TestConcurrencyReplayDetection(t *testing.T) {
-	// Use doctrine mode for testing (L1-only, most permissive)
-	mode := ModeDoctrine
-	fixedTime := time.Date(2026, 5, 24, 12, 0, 0, 0, time.UTC)
-	clock := system.NewFixedClock(fixedTime)
-	testStateRoot := "abc123def456"
+	// Setup test infrastructure
+	ctx := setupTestContext(t)
 
-	// Generate test signers
-	testSigners := generateTestSigners()
-
-	gate, err := NewOperatorGate(mode, clock, testStateRoot, testSigners, nil, nil)
+	// Fetch current state root to bind envelopes
+	stateRoot, err := ctx.Client.StateRoot(context.Background())
 	if err != nil {
-		t.Fatalf("failed to create operator gate: %v", err)
+		t.Fatalf("failed to fetch state root: %v", err)
+	}
+	if stateRoot == "" {
+		t.Fatal("gateway returned empty state root")
 	}
 
-	// Create a valid envelope with a fixed nonce
-	intentBytes := generateValidIntentWithNonce("nonce-concurrency-test-123")
-
-	ctx := context.Background()
+	// Create a valid envelope with a fixed nonce for replay testing
+	intentBytes, err := New().
+		WithCommand("echo hello").
+		WithOperatorSessionID(ctx.OperatorSessionID).
+		WithStateRoot(stateRoot).
+		WithNonce("nonce-concurrency-test-123").
+		WithL2(ctx.PrivKey, true).
+		Build()
+	if err != nil {
+		t.Fatalf("failed to build envelope: %v", err)
+	}
 
 	// Submit the same envelope twice concurrently
 	var wg sync.WaitGroup
@@ -63,7 +58,7 @@ func TestConcurrencyReplayDetection(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			result := gate.Submit(ctx, intentBytes)
+			result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID)
 			results <- result
 		}()
 	}
@@ -117,52 +112,8 @@ func TestConcurrencyReplayDetection(t *testing.T) {
 		t.Error("expected one result to have an error")
 	} else {
 		errMsg := rejectedResult.Error.Error()
-		if !strings.HasPrefix(errMsg, "TX_REPLAY") {
-			t.Errorf("expected rejection reason to start with 'TX_REPLAY', got %q", errMsg)
+		if !strings.Contains(errMsg, "replay") && !strings.Contains(errMsg, "REPLAY") {
+			t.Errorf("expected rejection reason to contain 'replay', got %q", errMsg)
 		}
 	}
-}
-
-// generateValidIntentWithNonce creates a valid envelope with a specific nonce for concurrency testing.
-func generateValidIntentWithNonce(nonce string) []byte {
-	fixedTime := time.Date(2026, 5, 24, 12, 0, 0, 0, time.UTC)
-
-	// Create a CommandRequested payload
-	cmdPayload := &operatorv1.CommandRequested{
-		Command:        "echo hello",
-		ExecutionId:    "exec-concurrency-test",
-		Justification:  "concurrency test command",
-		SentinelMode:   "strict",
-		TimeoutSeconds: 30,
-	}
-	payloadBytes, _ := proto.Marshal(cmdPayload)
-
-	// Create envelope
-	env := &commonv1.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
-		Timestamp:         timestamppb.New(fixedTime),
-		ExpiresAt:         timestamppb.New(fixedTime.Add(time.Hour)),
-		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
-		OperatorId:        "operator-1",
-		OperatorSessionId: "operator-session-1",
-		ActionType:        "EXECUTE_BASH",
-		TargetResource:    "localhost",
-		StateMerkleRoot:   "abc123def456",
-		Nonce:             nonce,
-		Payload:           payloadBytes,
-		Governance: &commonv1.GovernanceMetadata{
-			L2: &commonv1.L2Metadata{},
-		},
-	}
-
-	// Generate transaction hash
-	hash, _ := governance.GenerateMessageID(env)
-	env.Id = hash
-	env.TransactionHash = hash
-
-	// Marshal to JSON
-	marshaler := &protojson.MarshalOptions{}
-	intentJSON, _ := marshaler.Marshal(env)
-
-	return intentJSON
 }

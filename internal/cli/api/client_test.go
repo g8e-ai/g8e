@@ -104,13 +104,13 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	projectRoot := filepath.Join(tempDir, "project")
 	require.NoError(t, os.MkdirAll(projectRoot, 0755))
 
-	runtimeDir := filepath.Join(projectRoot, ".g8e")
+	runtimeDir := filepath.Join(projectRoot, constants.Paths.Infra.RuntimeDir)
 	require.NoError(t, os.MkdirAll(runtimeDir, 0755))
 
-	pkiDir := filepath.Join(projectRoot, ".g8e", "pki")
+	pkiDir := filepath.Join(projectRoot, constants.Paths.Infra.PkiDir)
 	require.NoError(t, os.MkdirAll(pkiDir, 0755))
 
-	secretsDir := filepath.Join(projectRoot, ".g8e", "secrets")
+	secretsDir := filepath.Join(projectRoot, constants.Paths.Infra.SecretsDir)
 	require.NoError(t, os.MkdirAll(secretsDir, 0755))
 
 	credentialsDir := filepath.Join(tempDir, "credentials")
@@ -124,14 +124,14 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 		"host": "localhost",
 		"infra": {
 			"app_cert_dir": "/tmp/app/certs",
-			"ca_cert_path": "pki/ca.crt",
+			"ca_cert_path": ".g8e/pki/trust/g8eg-ca-bundle.pem",
 			"db_path": "/tmp/db",
 			"docs_dir": "/tmp/docs",
-			"pki_dir": "pki",
+			"pki_dir": ".g8e/pki",
 			"protocol_constants_dir": "protocol/constants",
 			"protocol_dir": "protocol",
 			"protocol_models_dir": "protocol/models",
-			"secrets_dir": "secrets",
+			"secrets_dir": ".g8e/secrets",
 			"ssh_config_path": "/tmp/ssh/config"
 		},
 		"ports": {
@@ -145,11 +145,11 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 
 	caCertPEM := generateTestCA(t)
-	trustBundlePath := filepath.Join(projectRoot, ".g8e", "pki", "trust", "g8e-gw-ca-bundle.pem")
+	trustBundlePath := filepath.Join(projectRoot, ".g8e", "pki", "trust", "g8eg-ca-bundle.pem")
 	require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
 	require.NoError(t, os.WriteFile(trustBundlePath, caCertPEM, 0644))
 
-	cfg, err := config.Load(projectRoot)
+	cfg, err := config.LoadWithPaths(projectRoot, []byte(pathsJSON))
 	require.NoError(t, err)
 
 	// Override credentials directory to use temp directory for test isolation
@@ -183,7 +183,7 @@ func setupTLSClient(t *testing.T, cfg *config.Config, server *httptest.Server) *
 	var port int
 	_, err = fmt.Sscanf(portStr, "%d", &port)
 	require.NoError(t, err)
-	cfg.Paths.Ports.OperatorHTTPS = port
+	cfg.Paths.Ports.OperatorPublicHTTPS = port
 
 	client, err := NewClient(cfg)
 	require.NoError(t, err)

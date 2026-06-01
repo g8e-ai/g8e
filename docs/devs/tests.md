@@ -12,12 +12,13 @@ g8e tests run directly on the host using real infrastructure. The test environme
 
 ## Test Philosophy
 
-- **Hermetic execution** - Tests run on the host via `./g8e test`. The g8e Operator is a unified binary that operates as Governance Gateway (Policy Decision Point) in gateway mode or as g8e Operator (Policy Execution Point) in cloud mode.
+- **Hermetic execution** - Tests run on the host via `./g8e test` or in Docker for end-to-end testing. The g8e Operator is a unified binary that operates as Governance Gateway (Policy Decision Point) in gateway mode or as g8e Operator (Policy Execution Point) in cloud mode.
 - **Real infrastructure** - Tests use the actual SQLite database, PKI certificates, and pub/sub channels. Platform starts via `./g8e platform start`.
 - **No mocks** - Mocking internal services, database clients, or cross-component communication is prohibited. Integration tests use real wire paths.
 - **mTLS required** - Operator communication requires mTLS. Authentication via `./g8e auth login` issues certificates from `.g8e/pki`.
 - **Reproduce first** - Reproduce bugs with failing tests before fixes.
 - **Contract tests** - Enforce alignment between the Operator and `protocol/` constants/models with typed protobuf assertions.
+- **Docker for E2E** - Docker is encouraged for end-to-end testing of the operator binary against the local gateway to validate real deployment scenarios.
 
 ---
 
@@ -46,7 +47,7 @@ Integration tests exercising end-to-end governance workflows across doctrine, co
 
 **Test Types**:
 - **Table-driven scenarios** - JSON fixtures in `test/scenario/fixtures/` covering security gates (bad integrity, hash mismatch, replay, stale state root, L2/L3 validation) and finance workflows
-- **Golden snapshots** - Deterministic receipt comparison excluding volatile fields (signature, timestamp, signer key). Run with `G8E_UPDATE_GOLDEN=1` to regenerate
+- **Golden snapshots** - Deterministic receipt comparison excluding volatile fields (signature, timestamp, signer key). Golden files auto-create on missing and auto-update on mismatch
 - **Property-based invariants** - Fuzz-style tests verifying core governance invariants (integrity + freshness + state + required-gates must all pass in order)
 - **Concurrency tests** - Double-submit replay detection using goroutines to verify TOCTOU resistance
 - **Negative controls** - Tests that intentionally flip expectations to prove the suite can detect failures
@@ -91,6 +92,45 @@ If no users exist, the first login automatically bootstraps the platform:
 
 This creates the first user and issues mTLS certificates for the Operator and CLI.
 
+### Trust Bundle Requirements
+
+Live operator integration tests (MCP, A2A, Native) require the canonical trust bundle at `.g8e/pki/trust/g8eg-ca-bundle.pem`. This bundle contains the root CA, hub intermediate CA, and operator intermediate CA certificates.
+
+**Canonical trust bundle path**: `.g8e/pki/trust/g8eg-ca-bundle.pem`
+
+**No legacy bundle paths are accepted**. Tests will fail closed if the canonical bundle is missing or malformed. Do not attempt to use legacy paths such as `.g8e/g8e-gw-ca-bundle.pem` or `.g8e/pki/ca-bundle.pem`.
+
+### Troubleshooting Trust Bundle Issues
+
+If integration tests fail with `x509: certificate signed by unknown authority` or `AppendCertsFromPEM` errors:
+
+1. Verify the canonical trust bundle exists:
+   ```bash
+   ls -la .g8e/pki/trust/g8eg-ca-bundle.pem
+   ```
+
+2. If the bundle is missing or corrupted, regenerate local PKI by explicit developer action:
+   ```bash
+   # Stop the platform
+   ./g8e platform stop
+
+   # Remove the existing PKI directory
+   rm -rf .g8e/pki
+
+   # Restart the platform (this regenerates PKI)
+   ./g8e platform start
+
+   # Re-authenticate to obtain new certificates
+   ./g8e auth login
+   ```
+
+3. Verify the bundle parses correctly:
+   ```bash
+   openssl crl2pkcs7 -nocrl -certfile .g8e/pki/trust/g8eg-ca-bundle.pem
+   ```
+
+Tests do not mutate local PKI state. If trust bundle issues persist, the platform must be restarted and authentication re-performed.
+
 ---
 
 ## Test Implementation
@@ -103,6 +143,7 @@ This creates the first user and issues mTLS certificates for the Operator and CL
 - **Coverage** - `--coverage` generates reports.
 - **Concurrency** - Goroutines require explicit cancellation contexts and clear channel ownership.
 - **Integration tags** - Scenario tests require `-tags=integration` to access test fixtures and Operator gate infrastructure.
+- **Path constants** - Tests must use `constants.Paths.Infra.*` constants for runtime state paths (e.g., `constants.Paths.Infra.PkiDir` for `.g8e/pki`). Hardcoded path strings like `.g8e/pki` are prohibited in test code.
 
 ### Lints
 

@@ -22,6 +22,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	clierrors "github.com/g8e-ai/g8e/internal/cli/errors"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -146,9 +147,9 @@ func TestDataCommandFlags(t *testing.T) {
 }
 
 func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
-	runtimeDir := filepath.Join(tmpDir, ".g8e")
-	pkiDir := filepath.Join(runtimeDir, "pki")
-	secretsDir := filepath.Join(runtimeDir, "secrets")
+	runtimeDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
+	pkiDir := filepath.Join(runtimeDir, constants.Paths.Infra.PkiDir)
+	secretsDir := filepath.Join(runtimeDir, constants.Paths.Infra.SecretsDir)
 	credentialsDir := filepath.Join(runtimeDir, "credentials")
 
 	require.NoError(t, os.MkdirAll(pkiDir, 0755))
@@ -164,16 +165,16 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 	pathsJSON := `{
 		"host": "localhost",
 		"infra": {
-			"app_cert_dir": ".g8e/pki/app",
-			"ca_cert_path": ".g8e/pki/root/root_ca.crt",
-			"db_path": ".g8e/data/operator.db",
-			"docs_dir": "docs",
-			"pki_dir": ".g8e/pki",
-			"protocol_constants_dir": "protocol/constants",
-			"protocol_dir": "protocol",
-			"protocol_models_dir": "protocol/models",
-			"secrets_dir": ".g8e/secrets",
-			"ssh_config_path": ".g8e/ssh/config"
+			"app_cert_dir": "` + constants.Paths.Infra.AppCertDir + `",
+			"ca_cert_path": "` + constants.Paths.Infra.CaCertPath + `",
+			"db_path": "` + constants.Paths.Infra.DbPath + `",
+			"docs_dir": "` + constants.Paths.Infra.DocsDir + `",
+			"pki_dir": "` + constants.Paths.Infra.PkiDir + `",
+			"protocol_constants_dir": "` + constants.Paths.Infra.ProtocolConstantsDir + `",
+			"protocol_dir": "` + constants.Paths.Infra.ProtocolDir + `",
+			"protocol_models_dir": "` + constants.Paths.Infra.ProtocolModelsDir + `",
+			"secrets_dir": "` + constants.Paths.Infra.SecretsDir + `",
+			"ssh_config_path": "` + constants.Paths.Infra.SshConfigPath + `"
 		},
 		"ports": {
 			"insecure_mcp_gateway": 18789,
@@ -205,16 +206,16 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 				SecretsDir           string `json:"secrets_dir"`
 				SSHConfigPath        string `json:"ssh_config_path"`
 			}{
-				AppCertDir:           filepath.Join(tmpDir, ".g8e", "pki", "app"),
-				CACertPath:           filepath.Join(tmpDir, ".g8e", "pki", "root", "root_ca.crt"),
-				DBPath:               filepath.Join(tmpDir, ".g8e", "data", "operator.db"),
-				DocsDir:              "docs",
-				PKIDir:               filepath.Join(tmpDir, ".g8e", "pki"),
-				ProtocolConstantsDir: filepath.Join(tmpDir, "protocol", "constants"),
-				ProtocolDir:          filepath.Join(tmpDir, "protocol"),
-				ProtocolModelsDir:    filepath.Join(tmpDir, "protocol", "models"),
-				SecretsDir:           filepath.Join(tmpDir, ".g8e", "secrets"),
-				SSHConfigPath:        filepath.Join(tmpDir, ".g8e", "ssh", "config"),
+				AppCertDir:           filepath.Join(tmpDir, constants.Paths.Infra.AppCertDir),
+				CACertPath:           filepath.Join(tmpDir, constants.Paths.Infra.CaCertPath),
+				DBPath:               filepath.Join(tmpDir, constants.Paths.Infra.DbPath),
+				DocsDir:              filepath.Join(tmpDir, constants.Paths.Infra.DocsDir),
+				PKIDir:               filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+				ProtocolConstantsDir: filepath.Join(tmpDir, constants.Paths.Infra.ProtocolConstantsDir),
+				ProtocolDir:          filepath.Join(tmpDir, constants.Paths.Infra.ProtocolDir),
+				ProtocolModelsDir:    filepath.Join(tmpDir, constants.Paths.Infra.ProtocolModelsDir),
+				SecretsDir:           filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+				SSHConfigPath:        filepath.Join(tmpDir, constants.Paths.Infra.SshConfigPath),
 			},
 			Ports: struct {
 				InsecureMcpGateway     int `json:"insecure_mcp_gateway"`

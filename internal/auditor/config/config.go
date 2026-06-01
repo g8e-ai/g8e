@@ -1,20 +1,24 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0.
 
-// Package config holds everything Phantom needs to dial a real Gateway and
+// Package config holds everything the auditor needs to dial a real Gateway and
 // impersonate arbitrary agents against it. Values come from (in order of
 // precedence): explicit flags > environment > an optional JSON file > defaults.
 package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// Auth selects how Phantom authenticates to the Gateway's mTLS surface (8440).
+// Auth selects how Phantom authenticates to the Gateway's mTLS surface.
 // The MCP/A2A routes are exempt from the main mTLS middleware and can also take
-// an API key, but the TLS listener itself still negotiates client certs on 8440,
+// an API key, but the TLS listener itself still negotiates client certs,
 // so a cert is the realistic default.
 type Auth struct {
 	// ClientCert / ClientKey are the BYO-client mTLS material minted by
@@ -32,13 +36,16 @@ type Auth struct {
 // Config is the full Phantom runtime configuration.
 type Config struct {
 	// MTLSBaseURL is the Gateway mTLS API surface (governance envelope, MCP/A2A,
-	// audit). Default https://localhost:8440.
+	// audit).
 	MTLSBaseURL string `json:"mtls_base_url"`
-	// PublicBaseURL is the Gateway public surface (8442) used for the L3
+	// PublicBaseURL is the Gateway public surface used for the L3
 	// suspend/approve out-of-band notary flow.
 	PublicBaseURL string `json:"public_base_url"`
 
 	Auth Auth `json:"auth"`
+
+	// UseCLIConfig uses the CLI credentials directory for all paths.
+	UseCLIConfig bool `json:"use_cli_config"`
 
 	// OperatorSessionID scopes audit receipt queries to the real Operator that
 	// executed the work. If empty, Phantom tries to discover it from /api/operators.
@@ -61,7 +68,7 @@ type Config struct {
 	// EnvelopeTTL is how long a maximal envelope is valid before expiry.
 	EnvelopeTTL time.Duration `json:"envelope_ttl"`
 
-	// OutDir is where Phantom writes its detailed run report and receipt export.
+	// OutDir is where the auditor writes its detailed run report and receipt export.
 	OutDir string `json:"out_dir"`
 
 	// Verbose echoes every request/response to stderr as it happens.
@@ -70,22 +77,28 @@ type Config struct {
 
 // Default returns a config wired for a local two-container dev stack.
 func Default() Config {
-	return Config{
-		MTLSBaseURL:    envOr("PHANTOM_MTLS_URL", "https://localhost:8440"),
-		PublicBaseURL:  envOr("PHANTOM_PUBLIC_URL", "https://localhost:8442"),
+	cfg := Config{
+		MTLSBaseURL:    fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
+		PublicBaseURL:  fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
 		EnsembleSize:   3,
-		ConsensusKeyID: "phantom-ensemble",
-		PrincipalKeyID: "phantom-principal",
+		ConsensusKeyID: "auditor-ensemble",
+		PrincipalKeyID: "auditor-principal",
 		L3Mode:         "suspend",
 		EnvelopeTTL:    5 * time.Minute,
-		OutDir:         "./phantom-out",
-		Auth: Auth{
-			ClientCert: envOr("PHANTOM_CLIENT_CERT", ".g8e/pki/client.crt"),
-			ClientKey:  envOr("PHANTOM_CLIENT_KEY", ".g8e/pki/client.key"),
-			CABundle:   envOr("PHANTOM_CA_BUNDLE", ".g8e/pki/hub-bundle.pem"),
-			APIKey:     os.Getenv("PHANTOM_API_KEY"),
-		},
+		OutDir:         "./auditor-out",
+		UseCLIConfig:   true,
 	}
+
+	if cfg.UseCLIConfig {
+		cliCfg, _ := config.Load("")
+		if cliCfg != nil {
+			cfg.Auth.ClientCert = cliCfg.CLICertFile()
+			cfg.Auth.ClientKey = cliCfg.CLIKeyFile()
+			cfg.Auth.CABundle = cliCfg.TrustBundlePath()
+		}
+	}
+
+	return cfg
 }
 
 // LoadFile overlays a JSON config file onto c (fields present in the file win).
@@ -95,11 +108,4 @@ func (c *Config) LoadFile(path string) error {
 		return err
 	}
 	return json.Unmarshal(b, c)
-}
-
-func envOr(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
 }

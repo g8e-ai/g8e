@@ -31,7 +31,9 @@ Practical Coverage:
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
@@ -74,7 +76,10 @@ func (gatewayRejectingL3Notary) VerifyL3Proof(_ string, _ string, _ string, _ *c
 func mustMarshal(v interface{}) json.RawMessage {
 	b, err := json.Marshal(v)
 	if err != nil {
-		panic(err)
+		// This is a test helper - panic is acceptable for test setup failures
+		// but we should still use t.Fatalf in test context. For now, keep panic
+		// as this is a fixture generation helper used outside test functions.
+		panic(fmt.Sprintf("failed to marshal: %v", err))
 	}
 	return b
 }
@@ -87,7 +92,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		repoRoot = filepath.Dir(repoRoot)
 	}
-	testVaultDir := filepath.Join(repoRoot, ".g8e", "test-vault")
+	testVaultDir := filepath.Join(repoRoot, constants.Paths.Infra.TestVaultDir)
 	if err := os.MkdirAll(testVaultDir, 0755); err != nil {
 		t.Fatalf("failed to create test vault directory: %v", err)
 	}
@@ -237,25 +242,41 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	ls.GetDB().DocSet("users", userID, userBytes)
 
-	// Generate CSR for client certificate
-	_, priv, _ := ed25519.GenerateKey(rand.Reader)
+	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
 	csrTmpl := &x509.CertificateRequest{
 		Subject: pkix.Name{
 			CommonName:   userID,
 			Organization: []string{organizationID},
 		},
 	}
-	csrDER, _ := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
+	csrDER, err := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
+	require.NoError(t, err)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
-	// Create a temporary client cert for initial enrollment (using hub CA)
-	hubCAPEM := testutil.ReadHubCA(t, pkiDir)
-	hubBlock, _ := pem.Decode(hubCAPEM)
-	hubCert, err := x509.ParseCertificate(hubBlock.Bytes)
+	// Generate CLI CSR for distinct SPIFFE identity (required by PKI cleanup Phase 3)
+	cliPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
-	hubKeyDER, err := sm.GetCAPrivateKey("hub")
+	cliCSRTmpl := &x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName:   userID + "-cli",
+			Organization: []string{organizationID},
+		},
+	}
+	cliCSRDER, err := x509.CreateCertificateRequest(rand.Reader, cliCSRTmpl, cliPriv)
 	require.NoError(t, err)
-	hubKey, err := x509.ParseECPrivateKey(hubKeyDER)
+	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRDER})
+
+	// Create a temporary client cert for initial enrollment (using operator CA)
+	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + operator only
+	operatorCAPEM := testutil.ReadOperatorCA(t, pkiDir)
+	operatorBlock, _ := pem.Decode(operatorCAPEM)
+	operatorCert, err := x509.ParseCertificate(operatorBlock.Bytes)
+	require.NoError(t, err)
+	operatorKeyDER, err := sm.GetCAPrivateKey("operator")
+	require.NoError(t, err)
+	operatorKey, err := x509.ParseECPrivateKey(operatorKeyDER)
 	require.NoError(t, err)
 
 	spiffeURI, err := url.Parse(fmt.Sprintf("spiffe://g8e.local/cli/%s/cli-session-123", userID))
@@ -270,18 +291,21 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		BasicConstraintsValid: true,
 		URIs:                  []*url.URL{spiffeURI},
 	}
-	tempCertDER, _ := x509.CreateCertificate(rand.Reader, tempCertTemplate, hubCert, priv.Public(), hubKey)
+	tempCertDER, err := x509.CreateCertificate(rand.Reader, tempCertTemplate, operatorCert, priv.Public(), operatorKey)
+	require.NoError(t, err)
 	tempCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tempCertDER})
 
 	// Create mTLS client with temporary cert
-	privBytes, _ := x509.MarshalPKCS8PrivateKey(priv)
-	tempCert, _ := tls.X509KeyPair(tempCertPEM, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
+	privBytes, err := x509.MarshalECPrivateKey(priv)
+	require.NoError(t, err)
+	tempCert, err := tls.X509KeyPair(tempCertPEM, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
+	require.NoError(t, err)
 
 	rootPEM := testutil.ReadRootCA(t, pkiDir)
-	hubPEM := testutil.ReadHubBundle(t, pkiDir)
+	operatorPEM := testutil.ReadOperatorCA(t, pkiDir)
 	rootPool := x509.NewCertPool()
 	rootPool.AppendCertsFromPEM(rootPEM)
-	rootPool.AppendCertsFromPEM(hubPEM)
+	rootPool.AppendCertsFromPEM(operatorPEM)
 
 	enrollClient := &http.Client{
 		Transport: &http.Transport{
@@ -296,6 +320,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
+		CLICSR:            string(cliCSRPEM),
 		SystemFingerprint: "mcp-fingerprint",
 		Hostname:          "mcp-host",
 	}
@@ -309,7 +334,8 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	hResp.Body.Close()
 
 	// Create mTLS client with enrolled cert
-	cert, _ := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
+	cert, err := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
+	require.NoError(t, err)
 
 	mtlsClient := &http.Client{
 		Transport: &http.Transport{
@@ -428,7 +454,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		repoRoot = filepath.Dir(repoRoot)
 	}
-	testVaultDir := filepath.Join(repoRoot, ".g8e", "test-vault")
+	testVaultDir := filepath.Join(repoRoot, constants.Paths.Infra.TestVaultDir)
 	if err := os.MkdirAll(testVaultDir, 0755); err != nil {
 		t.Fatalf("failed to create test vault directory: %v", err)
 	}
@@ -565,25 +591,41 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	require.NoError(t, err)
 	ls.GetDB().DocSet("users", userID, userBytes)
 
-	// Generate CSR for client certificate
-	_, priv, _ := ed25519.GenerateKey(rand.Reader)
+	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
 	csrTmpl := &x509.CertificateRequest{
 		Subject: pkix.Name{
 			CommonName:   userID,
 			Organization: []string{organizationID},
 		},
 	}
-	csrDER, _ := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
+	csrDER, err := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
+	require.NoError(t, err)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
-	// Create a temporary client cert for initial enrollment (using hub CA)
-	hubCAPEM := testutil.ReadHubCA(t, pkiDir)
-	hubBlock, _ := pem.Decode(hubCAPEM)
-	hubCert, err := x509.ParseCertificate(hubBlock.Bytes)
+	// Generate CLI CSR for distinct SPIFFE identity (required by PKI cleanup Phase 3)
+	cliPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
-	hubKeyDER, err := sm.GetCAPrivateKey("hub")
+	cliCSRTmpl := &x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName:   userID + "-cli",
+			Organization: []string{organizationID},
+		},
+	}
+	cliCSRDER, err := x509.CreateCertificateRequest(rand.Reader, cliCSRTmpl, cliPriv)
 	require.NoError(t, err)
-	hubKey, err := x509.ParseECPrivateKey(hubKeyDER)
+	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRDER})
+
+	// Create a temporary client cert for initial enrollment (using operator CA)
+	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + operator only
+	operatorCAPEM := testutil.ReadOperatorCA(t, pkiDir)
+	operatorBlock, _ := pem.Decode(operatorCAPEM)
+	operatorCert, err := x509.ParseCertificate(operatorBlock.Bytes)
+	require.NoError(t, err)
+	operatorKeyDER, err := sm.GetCAPrivateKey("operator")
+	require.NoError(t, err)
+	operatorKey, err := x509.ParseECPrivateKey(operatorKeyDER)
 	require.NoError(t, err)
 
 	spiffeURI, err := url.Parse(fmt.Sprintf("spiffe://g8e.local/cli/%s/cli-session-123", userID))
@@ -598,18 +640,21 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		BasicConstraintsValid: true,
 		URIs:                  []*url.URL{spiffeURI},
 	}
-	tempCertDER, _ := x509.CreateCertificate(rand.Reader, tempCertTemplate, hubCert, priv.Public(), hubKey)
+	tempCertDER, err := x509.CreateCertificate(rand.Reader, tempCertTemplate, operatorCert, priv.Public(), operatorKey)
+	require.NoError(t, err)
 	tempCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tempCertDER})
 
 	// Create mTLS client with temporary cert
-	privBytes, _ := x509.MarshalPKCS8PrivateKey(priv)
-	tempCert, _ := tls.X509KeyPair(tempCertPEM, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
+	privBytes, err := x509.MarshalECPrivateKey(priv)
+	require.NoError(t, err)
+	tempCert, err := tls.X509KeyPair(tempCertPEM, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
+	require.NoError(t, err)
 
 	rootPEM := testutil.ReadRootCA(t, pkiDir)
-	hubPEM := testutil.ReadHubBundle(t, pkiDir)
+	operatorPEM := testutil.ReadOperatorCA(t, pkiDir)
 	rootPool := x509.NewCertPool()
 	rootPool.AppendCertsFromPEM(rootPEM)
-	rootPool.AppendCertsFromPEM(hubPEM)
+	rootPool.AppendCertsFromPEM(operatorPEM)
 
 	enrollClient := &http.Client{
 		Transport: &http.Transport{
@@ -624,6 +669,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
+		CLICSR:            string(cliCSRPEM),
 		SystemFingerprint: "payload-fingerprint",
 		Hostname:          "payload-host",
 	}
@@ -637,7 +683,8 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	hResp.Body.Close()
 
 	// Create mTLS client with enrolled cert
-	cert, _ := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
+	cert, err := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
+	require.NoError(t, err)
 
 	mtlsClient := &http.Client{
 		Transport: &http.Transport{
@@ -844,7 +891,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		repoRoot = filepath.Dir(repoRoot)
 	}
-	testVaultDir := filepath.Join(repoRoot, ".g8e", "test-vault")
+	testVaultDir := filepath.Join(repoRoot, constants.Paths.Infra.TestVaultDir)
 	if err := os.MkdirAll(testVaultDir, 0755); err != nil {
 		t.Fatalf("failed to create test vault directory: %v", err)
 	}
@@ -947,25 +994,41 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	require.NoError(t, err)
 	ls.GetDB().DocSet("users", userID, userBytes)
 
-	// Generate CSR for client certificate
-	_, priv, _ := ed25519.GenerateKey(rand.Reader)
+	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
 	csrTmpl := &x509.CertificateRequest{
 		Subject: pkix.Name{
 			CommonName:   userID,
 			Organization: []string{organizationID},
 		},
 	}
-	csrDER, _ := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
+	csrDER, err := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
+	require.NoError(t, err)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
-	// Create a temporary client cert for initial enrollment (using hub CA)
-	hubCAPEM := testutil.ReadHubCA(t, pkiDir)
-	hubBlock, _ := pem.Decode(hubCAPEM)
-	hubCert, err := x509.ParseCertificate(hubBlock.Bytes)
+	// Generate CLI CSR for distinct SPIFFE identity (required by PKI cleanup Phase 3)
+	cliPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
-	hubKeyDER, err := sm.GetCAPrivateKey("hub")
+	cliCSRTmpl := &x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName:   userID + "-cli",
+			Organization: []string{organizationID},
+		},
+	}
+	cliCSRDER, err := x509.CreateCertificateRequest(rand.Reader, cliCSRTmpl, cliPriv)
 	require.NoError(t, err)
-	hubKey, err := x509.ParseECPrivateKey(hubKeyDER)
+	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRDER})
+
+	// Create a temporary client cert for initial enrollment (using operator CA)
+	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + operator only
+	operatorCAPEM := testutil.ReadOperatorCA(t, pkiDir)
+	operatorBlock, _ := pem.Decode(operatorCAPEM)
+	operatorCert, err := x509.ParseCertificate(operatorBlock.Bytes)
+	require.NoError(t, err)
+	operatorKeyDER, err := sm.GetCAPrivateKey("operator")
+	require.NoError(t, err)
+	operatorKey, err := x509.ParseECPrivateKey(operatorKeyDER)
 	require.NoError(t, err)
 
 	spiffeURI, err := url.Parse(fmt.Sprintf("spiffe://g8e.local/cli/%s/cli-session-123", userID))
@@ -980,18 +1043,21 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		BasicConstraintsValid: true,
 		URIs:                  []*url.URL{spiffeURI},
 	}
-	tempCertDER, _ := x509.CreateCertificate(rand.Reader, tempCertTemplate, hubCert, priv.Public(), hubKey)
+	tempCertDER, err := x509.CreateCertificate(rand.Reader, tempCertTemplate, operatorCert, priv.Public(), operatorKey)
+	require.NoError(t, err)
 	tempCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tempCertDER})
 
 	// Create mTLS client with temporary cert
-	privBytes, _ := x509.MarshalPKCS8PrivateKey(priv)
-	tempCert, _ := tls.X509KeyPair(tempCertPEM, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
+	privBytes, err := x509.MarshalECPrivateKey(priv)
+	require.NoError(t, err)
+	tempCert, err := tls.X509KeyPair(tempCertPEM, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
+	require.NoError(t, err)
 
 	rootPEM := testutil.ReadRootCA(t, pkiDir)
-	hubPEM := testutil.ReadHubBundle(t, pkiDir)
+	operatorPEM := testutil.ReadOperatorCA(t, pkiDir)
 	rootPool := x509.NewCertPool()
 	rootPool.AppendCertsFromPEM(rootPEM)
-	rootPool.AppendCertsFromPEM(hubPEM)
+	rootPool.AppendCertsFromPEM(operatorPEM)
 
 	enrollClient := &http.Client{
 		Transport: &http.Transport{
@@ -1006,6 +1072,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
+		CLICSR:            string(cliCSRPEM),
 		SystemFingerprint: "error-fingerprint",
 		Hostname:          "error-host",
 	}
@@ -1019,7 +1086,8 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	hResp.Body.Close()
 
 	// Create mTLS client with enrolled cert
-	cert, _ := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
+	cert, err := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
+	require.NoError(t, err)
 
 	mtlsClient := &http.Client{
 		Transport: &http.Transport{

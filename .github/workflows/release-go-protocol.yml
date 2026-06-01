@@ -1,0 +1,78 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Release Go Protocol Package
+
+on:
+  push:
+    tags:
+      - 'protocol/v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Release Go Protocol
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Run tests
+        working-directory: ./protocol
+        run: |
+          go test -race -count=1 ./...
+
+      - name: Tag version
+        id: tag_version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/protocol/v}
+          echo "version=${TAG}" >> $GITHUB_OUTPUT
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag_version.outputs.tag }}
+          release_name: g8e Protocol v${{ steps.tag_version.outputs.version }}
+          body: |
+            ## g8e Protocol Go Module v${{ steps.tag_version.outputs.version }}
+
+            Official Go protocol library for the g8e zero-trust execution platform.
+
+            ### Installation
+
+            ```bash
+            go get github.com/g8e-ai/g8e/protocol@v${{ steps.tag_version.outputs.version }}
+            ```
+
+            ### Changes
+
+            See [CHANGELOG.md](https://github.com/g8e-ai/g8e/blob/main/CHANGELOG.md) for details.
+          draft: false
+          prerelease: false

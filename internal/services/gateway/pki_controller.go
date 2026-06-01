@@ -18,8 +18,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -63,9 +65,12 @@ func (c *PKIController) handlePKICABundle(w http.ResponseWriter, r *http.Request
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	pem, err := c.pki.HubTrustBundle()
+	bundlePath := filepath.Join(c.pki.PKIDir(), "trust", "g8eg-ca-bundle.pem")
+	c.logger.Debug("Attempting to read trust bundle", "path", bundlePath, "pki_dir", c.pki.PKIDir())
+	pem, err := c.pki.GatewayTrustBundle()
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, "failed to read hub bundle")
+		c.logger.Error("Failed to read trust bundle", "error", err, "bundle_path", bundlePath, "pki_dir", c.pki.PKIDir())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to read hub bundle: %v", err))
 		return
 	}
 	w.Header().Set(constants.HeaderContentType, "application/x-pem-file")
@@ -177,16 +182,18 @@ func (c *PKIController) handlePKIRevocationBundle(w http.ResponseWriter, r *http
 		return
 	}
 
-	bundleJSON, signature, err := c.pki.GenerateRevocationBundle()
+	crlDER, err := c.pki.GenerateCRL()
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.responder.JSON(w, http.StatusOK, map[string]string{
-		"bundle_json": bundleJSON,
-		"signature":   signature,
-	})
+	// Return CRL as DER-encoded binary
+	w.Header().Set("Content-Type", "application/pkix-crl")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(crlDER)
 }
 
 func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Request) {
@@ -236,4 +243,98 @@ func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Re
 	}
 
 	c.responder.JSON(w, http.StatusCreated, resp)
+}
+
+func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	host := "localhost"
+	port := "8441"
+	if r.Host != "" {
+		host, port, _ = net.SplitHostPort(r.Host)
+		if host == "" {
+			host = "localhost"
+		}
+		if port == "" {
+			port = "8441"
+		}
+	}
+
+	script := `#!/bin/sh
+set -e
+
+GATEWAY_HOST="${GATEWAY_HOST:-` + host + `}"
+GATEWAY_PORT="${GATEWAY_PORT:-` + port + `}"
+CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}/.well-known/g8e/pki/ca-bundle"
+LOCAL_CA_PATH="` + constants.CACertBundlePath + `"
+
+echo "[g8e] Fetching platform CA bundle from ${CA_BUNDLE_URL}..."
+mkdir -p "$(dirname "${LOCAL_CA_PATH}")"
+curl -fsSL "${CA_BUNDLE_URL}" -o "${LOCAL_CA_PATH}"
+
+if [ ! -f "${LOCAL_CA_PATH}" ]; then
+    echo "[g8e] ERROR: Failed to download CA bundle"
+    exit 1
+fi
+
+echo "[g8e] CA bundle installed to ${LOCAL_CA_PATH}"
+echo "[g8e] You can now use: ./g8e auth login"
+`
+
+	w.Header().Set("Content-Type", "application/x-sh")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(script))
+}
+
+func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	host := "localhost"
+	port := "8441"
+	if r.Host != "" {
+		host, port, _ = net.SplitHostPort(r.Host)
+		if host == "" {
+			host = "localhost"
+		}
+		if port == "" {
+			port = "8441"
+		}
+	}
+
+	script := `$ErrorActionPreference = "Stop"
+
+$GatewayHost = if ($env:GATEWAY_HOST) { $env:GATEWAY_HOST } else { "` + host + `" }
+$GatewayPort = if ($env:GATEWAY_PORT) { $env:GATEWAY_PORT } else { "` + port + `" }
+$CABundleUrl = "http://${GatewayHost}:${GatewayPort}/.well-known/g8e/pki/ca-bundle"
+$LocalCAPath = "` + constants.CACertBundlePath + `"
+
+Write-Host "[g8e] Fetching platform CA bundle from ${CABundleUrl}..."
+$LocalDir = Split-Path -Parent $LocalCAPath
+if (-not (Test-Path $LocalDir)) {
+    New-Item -ItemType Directory -Path $LocalDir -Force | Out-Null
+}
+Invoke-RestMethod -Uri $CABundleUrl -OutFile $LocalCAPath
+
+if (-not (Test-Path $LocalCAPath)) {
+    Write-Host "[g8e] ERROR: Failed to download CA bundle"
+    exit 1
+}
+
+Write-Host "[g8e] CA bundle installed to ${LocalCAPath}"
+Write-Host "[g8e] You can now use: .\g8e.exe auth login"
+`
+
+	w.Header().Set("Content-Type", "application/x-powershell")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(script))
 }

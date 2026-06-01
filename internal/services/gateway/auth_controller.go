@@ -364,7 +364,7 @@ func (c *AuthController) handleAuthPasskeysRevoke(w http.ResponseWriter, r *http
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/api/v1/auth/passkeys/")
+	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.AuthPasskeysPrefix)
 	if path == "" {
 		c.responder.Error(w, http.StatusBadRequest, "credential_id required")
 		return
@@ -421,7 +421,7 @@ func (c *AuthController) handleUsers(w http.ResponseWriter, r *http.Request) {
 
 func (c *AuthController) handleApprovalAction(w http.ResponseWriter, r *http.Request) {
 	// Path format: /api/v1/approvals/{txHash} or /api/v1/approvals/{txHash}/{action}
-	path := strings.TrimPrefix(r.URL.Path, "/api/v1/approvals/")
+	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.ApprovalsPrefix)
 	parts := strings.Split(path, "/")
 	if len(parts) < 1 {
 		c.responder.Error(w, http.StatusBadRequest, "invalid request path")
@@ -618,7 +618,7 @@ func (c *AuthController) handleApprovalPage(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Extract transaction hash from URL path
-	txHash := strings.TrimPrefix(r.URL.Path, "/api/v1/approve/")
+	txHash := strings.TrimPrefix(r.URL.Path, constants.APIPaths.ApprovePagePrefix)
 	if txHash == "" {
 		http.Error(w, "transaction hash required", http.StatusBadRequest)
 		return
@@ -1103,7 +1103,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 		}
 
 		// Fetch trust bundle
-		hubBundle, err := c.pki.HubTrustBundle()
+		hubBundle, err := c.pki.GatewayTrustBundle()
 		if err != nil {
 			c.logger.Warn("Failed to fetch hub trust bundle", string(constants.ConnectionStateError), err)
 			// Non-fatal - continue without bundle
@@ -1134,6 +1134,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 		response["cli_session_id"] = cliSessionID
 		response["cli_cert"] = cliCertPEM
 		response["cli_cert_chain"] = cliCertChainPEM
+		response["user_id"] = user.ID
 
 		c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user and CLI cert", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", cliSessionID[:8])
 	} else {

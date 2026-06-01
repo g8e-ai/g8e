@@ -48,13 +48,17 @@ type CollectionFieldPaths struct {
 
 // NewFieldPathRegistry loads the field path schema from the embedded JSON
 func NewFieldPathRegistry(logger *slog.Logger) (*FieldPathRegistry, error) {
+	// Resolve paths without modifying global state to avoid data races
+	projectRoot := constants.ResolveProjectRoot()
+	protocolConstantsDir := filepath.Join(projectRoot, "protocol", "constants")
+
 	registry := &FieldPathRegistry{
 		logger:   logger,
 		registry: make(map[string]CollectionFieldPaths),
 	}
 
 	// Load from protocol constants
-	if err := registry.loadFromConstants(); err != nil {
+	if err := registry.loadFromConstants(protocolConstantsDir); err != nil {
 		return nil, fmt.Errorf("failed to load field path registry: %w", err)
 	}
 
@@ -62,8 +66,8 @@ func NewFieldPathRegistry(logger *slog.Logger) (*FieldPathRegistry, error) {
 }
 
 // loadFromConstants loads field paths from the protocol constants JSON
-func (r *FieldPathRegistry) loadFromConstants() error {
-	fieldPathsPath := filepath.Join(constants.Paths.Infra.ProtocolConstantsDir, "field_paths.json")
+func (r *FieldPathRegistry) loadFromConstants(protocolConstantsDir string) error {
+	fieldPathsPath := filepath.Join(protocolConstantsDir, "field_paths.json")
 	data, err := os.ReadFile(fieldPathsPath)
 	if err != nil {
 		return fmt.Errorf("failed to read field_paths.json from %s: %w", fieldPathsPath, err)

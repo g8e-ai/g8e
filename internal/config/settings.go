@@ -13,69 +13,21 @@
 
 package config
 
-import (
-	"os"
-
-	"github.com/g8e-ai/g8e/internal/constants"
-)
-
-// Settings holds all process-level configuration values read at startup.
-// This is the ONE place in the application that calls os.Getenv.
-// All other code receives these values via dependency injection.
+// Settings is deprecated - g8e uses ZERO environment variables.
+// All configuration is via CLI flags or config files.
+// This struct is kept for backwards compatibility during migration.
 type Settings struct {
-	// g8e operator configuration - mirrors protocol/constants/env_vars.json "g8eo" section
-	OperatorEndpoint  string
-	OperatorSessionID string
-	PKIDir            string
-	SecretsDir        string
-	PubSubCACert      string
-	LogLevel          string
-	DataDir           string
-	IPService         string
-	IPResolver        string
-
-	// System / process environment
-	Shell       string
-	Lang        string
-	Term        string
-	TZ          string
-	Path        string
-	SSHAuthSock string
-	User        string
-	LogName     string
+	// Deprecated: No environment variables are used
+	DataDir         string
+	GatewayEndpoint string
+	PKIDir          string
+	ProtocolDir     string
+	SecretsDir      string
 }
 
-// readVar is the single call site for os.Getenv within this package.
-// All reads are keyed by typed constants.EnvVarKey values - no raw strings.
-func readVar(key constants.EnvVarKey) string {
-	return os.Getenv(string(key))
-}
-
-// LoadSettings reads all process-level configuration consumed by g8eo.
-// It is the single authoritative source - no other package may call os.Getenv.
+// LoadSettings is deprecated - g8e uses ZERO environment variables.
+// Returns empty Settings struct.
+// All configuration should use CLI flags or config files.
 func LoadSettings() Settings {
-	user := readVar(constants.EnvVar.User)
-	if user == "" {
-		user = readVar(constants.EnvVar.Username)
-	}
-
-	return Settings{
-		OperatorEndpoint:  readVar(constants.EnvVar.OperatorEndpoint),
-		OperatorSessionID: readVar(constants.EnvVar.OperatorSessionID),
-		PKIDir:            readVar(constants.EnvVar.PKIDir),
-		SecretsDir:        readVar(constants.EnvVar.SecretsDir),
-		PubSubCACert:      readVar(constants.EnvVar.PubSubCACert),
-		LogLevel:          readVar(constants.EnvVar.LogLevel),
-		DataDir:           readVar(constants.EnvVar.DataDir),
-		IPService:         readVar(constants.EnvVar.IPService),
-		IPResolver:        readVar(constants.EnvVar.IPResolver),
-		Shell:             readVar(constants.EnvVar.Shell),
-		Lang:              readVar(constants.EnvVar.Lang),
-		Term:              readVar(constants.EnvVar.Term),
-		TZ:                readVar(constants.EnvVar.TZ),
-		Path:              readVar(constants.EnvVar.Path),
-		SSHAuthSock:       readVar(constants.EnvVar.SSHAuthSock),
-		User:              user,
-		LogName:           readVar(constants.EnvVar.LogName),
-	}
+	return Settings{}
 }

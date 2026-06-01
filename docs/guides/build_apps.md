@@ -5,16 +5,16 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-05-29
-Version: v1.0.3
+Last Updated: 2026-05-31
+Version: v1.0.4
 
 ---
 
 ## Overview
 
-A g8e-compatible application functions strictly as a GovernanceEnvelope producer and receipt consumer. It maintains no privileged communication channels, never interacts directly with the host system, and communicates with the Gateway (Operator in gateway mode) exclusively through public ingress paths.
+A g8e-compatible application functions strictly as a GovernanceEnvelope producer and receipt consumer. It maintains no privileged communication channels, never interacts directly with the host system, and communicates with the Governance Gateway exclusively through public ingress paths.
 
-Security operations including Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) verification gates, replay defense, state binding, cryptographic audit, and human-in-the-loop authorization are fully delegated to the Gateway platform. The application provides only the components the protocol cannot intrinsically supply: the mutation intent and optionally, consensus evidence.
+Security operations including Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) verification gates, replay defense, state binding, cryptographic audit, and human-in-the-loop authorization are fully delegated to the Governance Gateway. The application provides only the components the protocol cannot intrinsically supply: the mutation intent and optionally, consensus evidence.
 
 ---
 
@@ -47,7 +47,7 @@ Two invariants apply to all g8e applications:
 
 ### Identity and Authentication
 
-Application identity is established via an mTLS/SPIFFE certificate. The application authenticates cryptographically and receives no ambient trust. The Gateway (Operator in gateway mode) evaluates its envelope with identical rigor to any external client.
+Application identity is established via an mTLS/SPIFFE certificate. The application authenticates cryptographically and receives no ambient trust. The Governance Gateway evaluates its envelope with identical rigor to any external client.
 
 ### State Management
 
@@ -106,7 +106,7 @@ This stores the certificate in `.g8e/pki/client.crt` and key in `.g8e/pki/client
 Query the Gateway health endpoint for the current state root:
 
 ```bash
-curl -X GET https://localhost:8440/health \
+curl -X GET https://localhost:8443/api/v1/health \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key
 ```
@@ -166,10 +166,10 @@ Construct the GovernanceEnvelope:
 
 ### Step 6: Submit to Gateway
 
-Submit the envelope to the Gateway (Operator in gateway mode):
+Submit the envelope to the Governance Gateway:
 
 ```bash
-curl -X POST https://localhost:8440/api/governance/envelope \
+curl -X POST https://localhost:8443/api/v1/governance/envelopes \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -225,20 +225,20 @@ Add the L2Consensus signatures to the envelope:
 
 ### Step 3: Submit to Gateway
 
-Submit the envelope with L2 signatures to the Gateway (Operator in gateway mode). The Gateway will verify the signatures as part of the L2Consensus check.
+Submit the envelope with L2 signatures to the Governance Gateway. The Gateway will verify the signatures as part of the L2Consensus check.
 
 ---
 
 ## Protocol Translation Integration
 
-Applications can leverage the Gateway's (Operator in gateway mode) MCP/A2A translation layer instead of constructing envelopes directly.
+Applications can leverage the Governance Gateway's MCP/A2A translation layer instead of constructing envelopes directly.
 
 ### MCP Integration
 
 For MCP-based applications, the Gateway automatically translates JSON-RPC tool calls into GovernanceEnvelope format:
 
 ```bash
-curl -X POST https://localhost:8440/api/mcp/v1/tools/call \
+curl -X POST https://localhost:8443/api/v1/mcp/tools/call \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -250,7 +250,7 @@ curl -X POST https://localhost:8440/api/mcp/v1/tools/call \
 For A2A-based applications, the Gateway automatically translates HTTP/JSON task invocations into GovernanceEnvelope format:
 
 ```bash
-curl -X POST https://localhost:8440/api/a2a/v1/call \
+curl -X POST https://localhost:8443/api/v1/a2a/call \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -261,10 +261,10 @@ curl -X POST https://localhost:8440/api/a2a/v1/call \
 
 ## Testing
 
-Applications should test against the reference Gateway (Operator in gateway mode) to ensure compatibility:
+Applications should test against the reference Governance Gateway to ensure compatibility:
 
 ```bash
-./g8e platform start
+./g8e gw start
 ./g8e test g8eo
 ```
 
@@ -280,11 +280,11 @@ Verify that:
 
 ### No Privileged Channels
 
-Applications must not attempt to establish privileged communication channels with the Gateway (Operator in gateway mode) or Operators. All communication must go through public ingress paths.
+Applications must not attempt to establish privileged communication channels with the Governance Gateway or g8e Operators. All communication must go through public ingress paths.
 
 ### Fail-Closed Behavior
 
-Applications must handle verification failures gracefully. If the Gateway (Operator in gateway mode) rejects an envelope, the application must not retry with modified parameters or attempt fallback paths.
+Applications must handle verification failures gracefully. If the Governance Gateway rejects an envelope, the application must not retry with modified parameters or attempt fallback paths.
 
 ### Certificate Management
 
@@ -292,7 +292,7 @@ Applications must manage their mTLS certificates securely. Certificates should b
 
 ### State Root Validation
 
-Applications must validate the state root returned by the Gateway (via health endpoint) before using it in envelope construction. This prevents man-in-the-middle attacks.
+Applications must validate the state root returned by the Governance Gateway (via health endpoint) before using it in envelope construction. This prevents man-in-the-middle attacks.
 
 ---
 

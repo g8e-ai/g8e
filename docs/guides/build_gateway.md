@@ -5,7 +5,7 @@ parent: Guides
 
 # Build a Governance Gateway
 
-Last Updated: 2026-05-29
+Last Updated: 2026-05-31
 Version: v1.0.3
 
 ---
@@ -68,8 +68,9 @@ To start the gateway, run the g8e binary with a gateway mode flag:
 - `--doctrine` — Gateway mode: L1 enforced, L2/L3 audited (default)
 - `--consensus` — Gateway mode: L1/L2 enforced, L3 audited
 - `--notary` — Gateway mode: L1/L2/L3 strictly enforced
-- `--http-listen-port <port>` — HTTPS port for mTLS API (default: 8440)
-- `--public-listen-port <port>` — Public browser/BYO bootstrap port (default: 8443)
+- `--http-listen-port <port>` — HTTPS port for mTLS API (default: from paths.json)
+- `--bootstrap-listen-port <port>` — Bootstrap TLS port for CSR-based enrollment (default: from paths.json)
+- `--public-listen-port <port>` — Public browser/BYO bootstrap port (default: from paths.json)
 - `--data-dir <dir>` — Data directory for SQLite database (default: .g8e/data in working directory)
 - `--pki-dir <dir>` — Directory for TLS certificates (default: .g8e/pki)
 - `--secrets-dir <dir>` — Directory for platform secrets (default: .g8e/secrets)
@@ -118,10 +119,10 @@ The gateway must serve as the Pub/Sub broker:
 
 The gateway must expose HTTP endpoints:
 
-- **Envelope Submission**: `POST /api/governance/envelope` for canonical JSON GovernanceEnvelope transactions.
-- **App Enrollment**: `POST /api/pki/app-enroll` for external app enrollment (invitation-based JIT required).
-- **Certificate Revocation**: `POST /api/pki/revoke` for certificate revocation.
-- **Revocation Bundle**: `GET /api/pki/revocation-bundle` for the signed revocation list.
+- **Envelope Submission**: `POST /api/v1/governance/envelopes` for canonical JSON GovernanceEnvelope transactions.
+- **Device Enrollment**: `POST /api/v1/pki/devices/enroll` for CSR-based device enrollment (Operator and CLI certificates).
+- **Certificate Revocation**: `POST /api/v1/pki/certificates/revoke` for certificate revocation.
+- **Revocation Bundle**: `GET /api/v1/pki/revocation-bundle` for the signed revocation list.
 
 #### 5. Protocol Translation
 
@@ -210,6 +211,12 @@ This verifies:
 - Nonce management
 - PKI operations
 - MCP/A2A protocol translation
+
+For comprehensive testing including integration tests, use:
+
+```bash
+./g8e test ci
+```
 
 ---
 

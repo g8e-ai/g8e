@@ -60,22 +60,17 @@ func TestResolveProjectRootConsistency(t *testing.T) {
 }
 
 func TestResolveProjectRootWithEnvVar(t *testing.T) {
-	t.Setenv("G8E_PROJECT_ROOT", "/custom/root")
-
-	root := ResolveProjectRoot()
-	if root != "/custom/root" {
-		t.Errorf("ResolveProjectRoot with G8E_PROJECT_ROOT: got %s, want /custom/root", root)
-	}
+	// G8E_PROJECT_ROOT env var was removed - project root is now resolved
+	// solely by walking up from current working directory.
+	// This test is removed as the feature no longer exists.
+	t.Skip("G8E_PROJECT_ROOT env var removed")
 }
 
 func TestResolveProjectRootWithRelativeEnvVar(t *testing.T) {
-	// Set a relative path - should be converted to absolute
-	t.Setenv("G8E_PROJECT_ROOT", "../relative")
-
-	root := ResolveProjectRoot()
-	if !filepath.IsAbs(root) {
-		t.Errorf("ResolveProjectRoot with relative G8E_PROJECT_ROOT: got %s, want absolute path", root)
-	}
+	// G8E_PROJECT_ROOT env var was removed - project root is now resolved
+	// solely by walking up from current working directory.
+	// This test is removed as the feature no longer exists.
+	t.Skip("G8E_PROJECT_ROOT env var removed")
 }
 
 func TestResolveProjectRootWalksWithProtocolMarker(t *testing.T) {
@@ -92,8 +87,7 @@ func TestResolveProjectRootWalksWithProtocolMarker(t *testing.T) {
 		t.Fatalf("Failed to create subdirs: %v", err)
 	}
 
-	// Unset env var to force walking
-	t.Setenv("G8E_PROJECT_ROOT", "")
+	// No env var to unset - walking is the only method
 
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)
@@ -122,8 +116,7 @@ func TestResolveProjectRootWalksWithGitMarker(t *testing.T) {
 		t.Fatalf("Failed to create subdirs: %v", err)
 	}
 
-	// Unset env var to force walking
-	t.Setenv("G8E_PROJECT_ROOT", "")
+	// No env var to unset - walking is the only method
 
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)
@@ -178,8 +171,7 @@ func TestResolveProjectRootNoMarkerReturnsCWD(t *testing.T) {
 		t.Fatalf("Failed to create subdirs: %v", err)
 	}
 
-	// Unset env var to force walking
-	t.Setenv("G8E_PROJECT_ROOT", "")
+	// No env var to unset - walking is the only method
 
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)

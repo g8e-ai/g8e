@@ -61,7 +61,7 @@ func (c *AdminController) handleAppPolicySigner(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	appID := strings.TrimPrefix(r.URL.Path, "/api/v1/admin/app-policies/")
+	appID := strings.TrimPrefix(r.URL.Path, constants.APIPaths.AdminAppPoliciesPrefix)
 	appID = strings.TrimSuffix(appID, "/signers")
 	if appID == "" {
 		c.responder.Error(w, http.StatusBadRequest, "app_id required")

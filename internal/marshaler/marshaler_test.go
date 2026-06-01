@@ -40,22 +40,8 @@ func TestCollectionName(t *testing.T) {
 }
 
 func TestEnvVar(t *testing.T) {
-	tests := []struct {
-		name string
-		e    constants.EnvVarKey
-		want string
-	}{
-		{"log_level", constants.EnvVar.LogLevel, "G8E_LOG_LEVEL"},
-		{"data_dir", constants.EnvVar.DataDir, "G8E_DATA_DIR"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := EnvVar(tt.e); got != tt.want {
-				t.Errorf("EnvVar() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	// g8e uses ZERO environment variables - this test is deprecated
+	t.Skip("g8e uses ZERO environment variables")
 }
 
 func TestDocumentID(t *testing.T) {

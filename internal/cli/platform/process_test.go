@@ -24,6 +24,7 @@ import (
 
 func TestNewProcessManager(t *testing.T) {
 	tmpDir := t.TempDir()
+
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -33,12 +34,13 @@ func TestNewProcessManager(t *testing.T) {
 		t.Errorf("expected projectRoot %s, got %s", tmpDir, pm.projectRoot)
 	}
 
+	// ProcessManager should use paths relative to projectRoot
 	expectedRuntimeDir := filepath.Join(tmpDir, ".g8e")
 	if pm.runtimeDir != expectedRuntimeDir {
 		t.Errorf("expected runtimeDir %s, got %s", expectedRuntimeDir, pm.runtimeDir)
 	}
 
-	expectedPKIDir := filepath.Join(expectedRuntimeDir, "pki")
+	expectedPKIDir := filepath.Join(tmpDir, ".g8e/pki")
 	if pm.pkiDir != expectedPKIDir {
 		t.Errorf("expected pkiDir %s, got %s", expectedPKIDir, pm.pkiDir)
 	}

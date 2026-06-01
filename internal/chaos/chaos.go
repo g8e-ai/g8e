@@ -356,11 +356,14 @@ func Run(cfg Config) {
 		projectRoot = cwd
 	}
 
+	// Resolve paths to ensure constants are initialized
+	constants.ResolvePaths(projectRoot)
+
 	// Use shared test vault directory for persistent inspection
 	dataDir := cfg.DataDir
 	var testVaultDir string
 	if dataDir == "" {
-		testVaultDir = filepath.Join(projectRoot, ".g8e", "test-vault")
+		testVaultDir = constants.Paths.Infra.TestVaultDir
 		if err := os.MkdirAll(testVaultDir, 0755); err != nil {
 			logger.Error("failed to create test vault directory", "error", err)
 			os.Exit(1)
@@ -383,7 +386,7 @@ func Run(cfg Config) {
 
 	pkiDir := cfg.PKIDir
 	if pkiDir == "" {
-		pkiDir = filepath.Join(projectRoot, ".g8e", "pki")
+		pkiDir = constants.Paths.Infra.PkiDir
 	}
 
 	logArgs := []any{

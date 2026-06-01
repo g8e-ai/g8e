@@ -1,0 +1,39 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Licensed under the Apache License, Version 2.0
+
+FROM alpine:3.21
+
+# Install runtime dependencies
+RUN apk add --no-cache ca-certificates tzdata && \
+    rm -rf /var/cache/apk/*
+
+# Create non-root user
+RUN addgroup -g 1000 g8e && \
+    adduser -D -u 1000 -G g8e g8e
+
+# Set up directories
+WORKDIR /g8e
+RUN mkdir -p /g8e/.g8e/pki /g8e/.g8e/secrets /g8e/.g8e/data && \
+    chown -R g8e:g8e /g8e
+
+# Copy pre-built binary from host
+COPY g8e /g8e/g8e
+RUN chmod +x /g8e/g8e && \
+    chown g8e:g8e /g8e/g8e
+
+# Switch to non-root user
+USER g8e
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD g8e --version || exit 1
+
+# Expose gateway ports
+# 9000: HTTPS mTLS API
+# 9001: Bootstrap TLS (CSR enrollment)
+# 9002: Public browser/BYO bootstrap
+EXPOSE 9000 9001 9002
+
+# Gateway mode: L1 enforced, L2/L3 audited (default posture)
+# Override with --consensus or --notary for stricter postures
+ENTRYPOINT ["/g8e/g8e", "--data-dir", "/g8e/.g8e/data", "--pki-dir", "/g8e/.g8e/pki", "--secrets-dir", "/g8e/.g8e/secrets", "--doctrine", "--http-port", "9000", "--bootstrap-port", "9001", "--public-port", "9002"]

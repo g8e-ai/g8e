@@ -162,10 +162,10 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 
 			// If the test requires a CSR, generate it
 			if tt.req.CSR == "" && tt.wantSuccess {
-				tt.req.CSR = testutil.GenerateTestCSR(t, tt.req.AppName)
+				tt.req.CSR = testutil.GenerateTestCSRP256(t, tt.req.AppName)
 			} else if tt.req.CSR == "" && !tt.wantSuccess && tt.wantError != "csr_pem is required" {
 				// For negative tests that need a CSR to validate other fields
-				tt.req.CSR = testutil.GenerateTestCSR(t, tt.req.AppName)
+				tt.req.CSR = testutil.GenerateTestCSRP256(t, tt.req.AppName)
 			}
 
 			// Execute enrollment

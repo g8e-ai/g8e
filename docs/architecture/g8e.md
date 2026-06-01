@@ -4,7 +4,7 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-05-29
+Last Updated: 2026-05-31
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence.
 
@@ -37,7 +37,7 @@ The g8e Protocol does not compete with tool-calling standards. Instead, it wraps
 
 ## GovernanceEnvelope Schema
 
-The `GovernanceEnvelope` is the single canonical container for all g8e mutations. The schema source of truth is @/home/bob/g8e/protocol/proto/g8e/common/v1/common.proto.
+The `GovernanceEnvelope` is the single canonical container for all g8e mutations. The schema source of truth is protocol/proto/g8e/common/v1/common.proto.
 
 ### Envelope Fields
 
@@ -51,7 +51,7 @@ The `GovernanceEnvelope` is the single canonical container for all g8e mutations
 | `operator_session_id` | string | Host-side agent session identifier |
 | `web_session_id` | string | Browser frontend session identifier |
 | `cli_session_id` | string | CLI/BYO client session identifier |
-| `event_type` | string | Canonical event name from @/home/bob/g8e/protocol/constants/events.json |
+| `event_type` | string | Canonical event name from protocol/constants/events.json |
 | `payload` | bytes | Raw protobuf payload containing execution instruction |
 | `intent_data` | google.protobuf.Struct | Structured JSON-first view of intent |
 | `action_type` | string | UAP-compatible action type (e.g., EXECUTE_BASH) |
@@ -65,6 +65,8 @@ The `GovernanceEnvelope` is the single canonical container for all g8e mutations
 | `investigation_id` | string | Optional investigation identifier |
 | `task_id` | string | Optional task identifier |
 | `system_fingerprint` | string | Optional system fingerprint |
+| `tenant_id` | string | Optional tenant identifier |
+| `binding_persona` | string | Optional binding persona |
 
 ### GovernanceMetadata
 
@@ -81,7 +83,7 @@ The `governance` field encapsulates all three governance layers:
 
 All envelopes use canonical JSON (protojson) encoding for client-facing surfaces:
 
-- **Schema source of truth**: `.proto` files in @/home/bob/g8e/protocol/proto/
+- **Schema source of truth**: `.proto` files in protocol/proto/
 - **Wire format**: canonical JSON (protojson)
 - **Signing basis**: deterministic `transaction_hash` computed from normalized envelope fields
 - **Internal storage**: protobuf bytes (implementation detail)
@@ -127,32 +129,32 @@ The `L4Warden` operates as the primary pre-dispatch validation gate, executing t
 Every mutation must pass through five independent layers in order. A failure at any layer is an immediate rejection.
 
 ### L1 Doctrine: Technical Bedrock
-Static, deterministic checks enforced before any code executes. Validated using doctrines sourced from @/home/bob/g8e/protocol/constants/doctrine/doctrine_registry.json. Code pattern matching and threat analysis are defined in @/home/bob/g8e/internal/services/governance/l1_doctrine.go.
+Static, deterministic checks enforced before any code executes. Validated using doctrines sourced from protocol/constants/doctrine/doctrine_registry.json. Code pattern matching and threat analysis are defined in internal/services/governance/l1_doctrine.go.
 - **Forbidden Patterns**: The custom protobuf field option `(g8e.common.v1.forbidden_patterns)` is reflected at runtime to scan typed payloads.
 - **Threat Detection**: L1 Doctrine analyzes command inputs for MITRE ATT&CK patterns, reverse shells, and injection vectors.
 - **Allow/Deny Lists**: Enforces per-host policy and user settings.
 
 ### L2 Consensus: Distributed Agreement
-A cryptographic proof that an independent ensemble agreed on the instruction. Signature verification using Ed25519 cryptography is defined in @/home/bob/g8e/internal/services/governance/l2_consensus.go.
+A cryptographic proof that an independent ensemble agreed on the instruction. Signature verification using Ed25519 cryptography is defined in internal/services/governance/l2_consensus.go.
 - An Ed25519 signature is generated over `transaction_hash | decision`.
 - Verified against the Operator-owned `SignerStore`.
 - Gateway mode may sign locally (`gateway_signed=true`) for single-agent MCP clients.
 
 ### L3 Notary: Human Authorization
-Hardware-bound proof of human presence. Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) is defined in @/home/bob/g8e/internal/services/governance/l3_notary.go.
+Hardware-bound proof of human presence. Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) is defined in internal/services/governance/l3_notary.go.
 - **Web Sessions**: Real WebAuthn/FIDO2 proof with the transaction hash as the assertion challenge.
 - **CLI Sessions**: Authenticates via mTLS certificates with SPIFFE URI SANs. The L3 proof is the SHA-256 fingerprint of the mTLS certificate.
 - **Auto-Approval**: Explicit policy permits auto-approval for benign diagnostic verbs. Auto-approval never bypasses L1 or L2 gates.
 
 ### L4 Warden: Pre-dispatch Verification
-The central Policy Execution Point (PEP) that validates the entire transaction proof before dispatch. Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) is defined in @/home/bob/g8e/internal/services/governance/l4_warden.go.
+The central Policy Execution Point (PEP) that validates the entire transaction proof before dispatch. Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) is defined in internal/services/governance/l4_warden.go.
 - **Stateless Validation**: Verifies structural integrity, payload decoding, and L1Doctrine compliance.
 - **Cryptographic Integrity**: Validates `transaction_hash` and signatures.
 - **Freshness & Replay**: Verifies `expires_at` and the `nonce` replay store.
 - **State Binding**: Compares `state_merkle_root` against the host ledger.
 
 ### L5 Actuator: Execution Boundary
-The single fail-closed execution target that dispatches the verified payload and issues signed receipts. Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production are defined in @/home/bob/g8e/internal/services/governance/l5_actuator.go.
+The single fail-closed execution target that dispatches the verified payload and issues signed receipts. Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production are defined in internal/services/governance/l5_actuator.go.
 - **Rehydration**: Sensitive tokens scrubbed by the Sovereignty Boundary Plane are re-injected.
 - **Native Dispatch**: Executes the typed payload (bash, file edit, tool call).
 - **Signed Action Receipts**: Issues an immutable `ActionReceipt` proof of execution and result.
@@ -161,31 +163,31 @@ The single fail-closed execution target that dispatches the verified payload and
 
 ## Event Types
 
-The protocol defines canonical event types in @/home/bob/g8e/protocol/constants/events.json. Events are categorized by domain:
+The protocol defines canonical event types in protocol/constants/events.json. Events are categorized by domain:
 
 ### AI Agent Events
 - `AiAgentConflictDetected`, `AiAgentConflictResolved`
 - `AiAgentContinueApprovalRequested`, `AiAgentContinueApprovalGranted`, `AiAgentContinueApprovalRejected`
 - `AiLLMChatIterationStarted`, `AiLLMChatIterationCompleted`, `AiLLMChatIterationFailed`
 - `AiLLMChatIterationStreamStarted`, `AiLLMChatIterationStreamDeltaReceived`, `AiLLMChatIterationStreamCompleted`
+- `AiLLMChatIterationStreamFailed`, `AiLLMChatIterationTextChunkReceived`, `AiLLMChatIterationTextCompleted`
 
 ### Command Execution Events
-- `CommandRequested`, `CommandStarted`, `CommandCompleted`, `CommandFailed`
-- `CommandOutputReceived`, `CommandErrorReceived`
+- `OperatorCommandRequested`, `OperatorCommandStarted`, `OperatorCommandCompleted`, `OperatorCommandFailed`
+- `OperatorCommandOutputReceived`, `OperatorCommandResult`
 
 ### File System Events
-- `FileReadRequested`, `FileReadCompleted`, `FileReadFailed`
-- `FileWriteRequested`, `FileWriteCompleted`, `FileWriteFailed`
-- `FileHistoryRequested`, `FileDiffRequested`, `FileRestoreRequested`
+- `OperatorFilesystemReadRequested`, `OperatorFilesystemReadCompleted`, `OperatorFilesystemReadFailed`
+- `OperatorFileEditRequested`, `OperatorFileEditCompleted`, `OperatorFileEditFailed`
+- `OperatorFileHistoryFetchRequested`, `OperatorFileDiffFetchRequested`, `OperatorFileRestoreRequested`
 
 ### Audit & Governance Events
-- `AuditEventRecorded`, `AuditQueryRequested`
-- `GovernanceEnvelopeReceived`, `GovernanceEnvelopeVerified`, `GovernanceEnvelopeRejected`
+- `OperatorAuditCommandRecorded`, `OperatorAuditUserRecorded`
+- `OperatorBootstrapRequested`, `OperatorBootstrapCompleted`, `OperatorBootstrapFailed`
 
 ### MCP/A2A Events
-- `McpCallRequested`, `McpCallCompleted`, `McpCallFailed`
-- `McpResourceReadRequested`, `McpResourceReadCompleted`
-- `A2aCallRequested`, `A2aCallCompleted`, `A2aCallFailed`
+- `OperatorMcpCallRequested`
+- `OperatorA2aCallRequested`
 
 ---
 
@@ -225,19 +227,19 @@ Protocol errors follow standardized JSON-RPC codes for MCP/A2A client compatibil
 
 ## Configuration
 
-### Gateway Modes
+### Gateway Postures
 
-The Operator runs in gateway mode with three posture options:
+The Governance Gateway runs with three posture options:
 
 | Mode | Flag | Purpose |
 |---|---|---|
-| **Doctrine** | `--doctrine` | L1 enforced, L2/L3 audited (default) |
-| **Consensus** | `--consensus` | L1/L2 enforced, L3 audited |
-| **Notary** | `--notary` | L1/L2/L3 strictly enforced |
+| **Doctrine** | `--posture doctrine` | L1 enforced, L2/L3 audited (default) |
+| **Consensus** | `--posture consensus` | L1/L2 enforced, L3 audited |
+| **Notary** | `--posture notary` | L1/L2/L3 strictly enforced |
 
 ### Port Configuration
 
-Default ports (configurable via flags or @/home/bob/g8e/internal/cli/config/paths.json):
+Default ports (configurable via flags or internal/cli/config/paths.json):
 
 | Port | Purpose | Auth |
 |---|---|---|
@@ -245,12 +247,16 @@ Default ports (configurable via flags or @/home/bob/g8e/internal/cli/config/path
 | `8441` | Bootstrap enrollment | Plain HTTP (no TLS) |
 | `8443` | Public web session | TLS (no client cert) |
 
-### Environment Variables
+### Configuration
 
-- `G8E_PKI_DIR`: PKI hierarchy directory (default: `.g8e/pki`)
-- `G8E_DATA_DIR`: SQLite persistence directory (default: `.g8e/data`)
-- `G8E_SECRETS_DIR`: Platform secrets directory (default: `.g8e/secrets`)
-- `G8E_PROTOCOL_DIR`: Protocol constants directory (default: `@/home/bob/g8e/protocol/`)
+The g8e platform uses **ZERO environment variables** for production configuration. All paths are computed relative to project root, and all configuration is via CLI flags:
+
+- `--data-dir <dir>`: Data directory for SQLite database (default: `.g8e/data` in working directory)
+- `--pki-dir <dir>`: Directory for TLS certificates (default: `.g8e/pki`)
+- `--secrets-dir <dir>`: Directory for platform secrets (default: `.g8e/secrets`)
+- `--http-port <port>`: mTLS API port (default: 8440)
+- `--bootstrap-port <port>`: Bootstrap enrollment port (default: 8441)
+- `--public-port <port>`: Public web session port (default: 8443)
 
 ---
 
@@ -274,31 +280,31 @@ Output scrubbing is performed directly at the `L5Actuator` boundary to redact to
 
 | Concern | File |
 |---|---|
-| Protobuf schemas | @/home/bob/g8e/protocol/proto/g8e/common/v1/common.proto |
-| Event registry | @/home/bob/g8e/protocol/constants/events.json |
-| Channel prefixes | @/home/bob/g8e/protocol/constants/channels.json |
-| Envelope types | @/home/bob/g8e/pkg/governance/types.go |
-| Warden logic | @/home/bob/g8e/internal/services/governance/l4_warden.go |
-| Actuator logic | @/home/bob/g8e/internal/services/governance/l5_actuator.go |
-| Audit storage | @/home/bob/g8e/internal/services/storage/audit_vault.go |
-| Ledger storage | @/home/bob/g8e/internal/services/storage/ledger.go |
-| Workload identity | @/home/bob/g8e/protocol/workload_identity.go |
-| Gateway envelope construction | @/home/bob/g8e/internal/services/gateway/governance_envelope.go |
-| Gateway HTTP routing | @/home/bob/g8e/internal/services/gateway/gateway_http.go |
-| Pub/Sub command service | @/home/bob/g8e/internal/services/pubsub/pubsub_commands.go |
-| Pub/Sub results service | @/home/bob/g8e/internal/services/pubsub/pubsub_results.go |
-| MCP/A2A translation | @/home/bob/g8e/internal/services/mcp/gateway.go |
-| Session management | @/home/bob/g8e/internal/services/gateway/session_service.go |
-| CLI L3 verification | @/home/bob/g8e/internal/services/gateway/cli_l3_notary.go |
-| Composite L3 verifier | @/home/bob/g8e/internal/services/gateway/composite_l3_verifier.go |
-| Doctrine registry | @/home/bob/g8e/protocol/constants/doctrine/doctrine_registry.json |
-| MCP vectors doctrine | @/home/bob/g8e/protocol/constants/doctrine/mcp_vectors_doctrine.json |
+| Protobuf schemas | protocol/proto/g8e/common/v1/common.proto |
+| Event registry | protocol/constants/events.json |
+| Channel prefixes | protocol/constants/channels.json |
+| Envelope types | pkg/governance/types.go |
+| Warden logic | internal/services/governance/l4_warden.go |
+| Actuator logic | internal/services/governance/l5_actuator.go |
+| Audit storage | internal/services/storage/audit_vault.go |
+| Ledger storage | internal/services/storage/ledger.go |
+| Workload identity | protocol/workload_identity.go |
+| Gateway envelope construction | internal/services/gateway/governance_envelope.go |
+| Gateway HTTP routing | internal/services/gateway/gateway_http.go |
+| Pub/Sub command service | internal/services/pubsub/pubsub_commands.go |
+| Pub/Sub results service | internal/services/pubsub/pubsub_results.go |
+| MCP/A2A translation | internal/services/mcp/gateway.go |
+| Session management | internal/services/gateway/session_service.go |
+| CLI L3 verification | internal/services/gateway/cli_l3_notary.go |
+| Composite L3 verifier | internal/services/gateway/composite_l3_verifier.go |
+| Doctrine registry | protocol/constants/doctrine/doctrine_registry.json |
+| MCP vectors doctrine | protocol/constants/doctrine/mcp_vectors_doctrine.json |
 
 ---
 
 ## Related Documentation
 
-- [**Operator (g8eo)**](@/home/bob/g8e/docs/architecture/operator.md) - Operator architecture and execution boundary
-- [**Gateway (g8eg)**](@/home/bob/g8e/docs/architecture/gateway.md) - Governance Gateway architecture
-- [**MCP Protocol**](@/home/bob/g8e/docs/protocols/mcp/mcp.md) - MCP protocol specification and integration
-- [**A2A Protocol**](@/home/bob/g8e/docs/protocols/a2a/a2a.md) - A2A protocol specification and integration
+- [**Operator (g8eo)**](docs/architecture/operator.md) - Operator architecture and execution boundary
+- [**Gateway (g8eg)**](docs/architecture/gateway.md) - Governance Gateway architecture
+- [**MCP Protocol**](docs/protocols/mcp/mcp.md) - MCP protocol specification and integration
+- [**A2A Protocol**](docs/protocols/a2a/a2a.md) - A2A protocol specification and integration

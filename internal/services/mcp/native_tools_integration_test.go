@@ -46,7 +46,7 @@ import (
 
 // TestNativeToolsIntegration_DatabaseTools tests database native tools
 // with real SQLite databases and audit vault persistence.
-// Requires: ./g8e platform start running with mTLS
+// Requires: ./g8e gw start running with mTLS
 func TestNativeToolsIntegration_DatabaseTools(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
@@ -64,8 +64,8 @@ func TestNativeToolsIntegration_DatabaseTools(t *testing.T) {
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
-	if resp, err := insecureClient.Get(operatorURL + "/health"); err != nil {
-		t.Skipf("Operator not reachable at %s: %v. Run './g8e platform start' to enable.", operatorURL, err)
+	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
+		t.Skipf("Operator not reachable at %s: %v. Run './g8e gw start' to enable.", operatorURL, err)
 	} else {
 		resp.Body.Close()
 	}
@@ -208,7 +208,7 @@ func TestNativeToolsIntegration_LogTools(t *testing.T) {
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
-	if resp, err := insecureClient.Get(operatorURL + "/health"); err != nil {
+	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
 		t.Skipf("Operator not reachable at %s: %v", operatorURL, err)
 	} else {
 		resp.Body.Close()
@@ -272,7 +272,7 @@ func TestNativeToolsIntegration_ProcessTools(t *testing.T) {
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
-	if resp, err := insecureClient.Get(operatorURL + "/health"); err != nil {
+	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
 		t.Skipf("Operator not reachable at %s: %v", operatorURL, err)
 	} else {
 		resp.Body.Close()
@@ -356,7 +356,7 @@ func TestNativeToolsIntegration_NetworkTools(t *testing.T) {
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
-	if resp, err := insecureClient.Get(operatorURL + "/health"); err != nil {
+	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
 		t.Skipf("Operator not reachable at %s: %v", operatorURL, err)
 	} else {
 		resp.Body.Close()
@@ -400,7 +400,7 @@ func TestNativeToolsIntegration_NetworkTools(t *testing.T) {
 	t.Run("net_http_probe_local_operator", func(t *testing.T) {
 		// Probe the local Operator health endpoint
 		req := NetHTTPProbeRequest{
-			URL:    operatorURL + "/health",
+			URL:    operatorURL + constants.APIPaths.Health,
 			Method: "HEAD",
 		}
 		reqJSON, _ := json.Marshal(req)
@@ -434,7 +434,7 @@ func TestNativeToolsIntegration_Concurrency(t *testing.T) {
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
-	if resp, err := insecureClient.Get(operatorURL + "/health"); err != nil {
+	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
 		t.Skipf("Operator not reachable at %s: %v", operatorURL, err)
 	} else {
 		resp.Body.Close()
@@ -518,7 +518,7 @@ func TestNativeToolsIntegration_PropertyBasedTests(t *testing.T) {
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
-	if resp, err := insecureClient.Get(operatorURL + "/health"); err != nil {
+	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
 		t.Skipf("Operator not reachable at %s: %v", operatorURL, err)
 	} else {
 		resp.Body.Close()
@@ -654,7 +654,7 @@ func TestNativeToolsIntegration_NegativeControls(t *testing.T) {
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
-	if resp, err := insecureClient.Get(operatorURL + "/health"); err != nil {
+	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
 		t.Skipf("Operator not reachable at %s: %v", operatorURL, err)
 	} else {
 		resp.Body.Close()
@@ -710,10 +710,8 @@ func setupMTLSClient(t *testing.T, operatorURL string) (*http.Client, string, er
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(cwd)))
-	pkiDir := filepath.Join(repoRoot, ".g8e", "pki")
-	if override := os.Getenv("G8E_PKI_DIR_HOST"); override != "" {
-		pkiDir = override
-	}
+
+	pkiDir := filepath.Join(repoRoot, constants.Paths.Infra.PkiDir)
 
 	// Load client certificate and key
 	certPath := filepath.Join(pkiDir, "client", "client.pem")
@@ -725,7 +723,7 @@ func setupMTLSClient(t *testing.T, operatorURL string) (*http.Client, string, er
 	}
 
 	// Load trust bundle
-	trustBundlePath := filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
+	trustBundlePath := filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem")
 	trustPEM, err := os.ReadFile(trustBundlePath)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to read trust bundle: %w", err)
@@ -780,7 +778,7 @@ func callNativeToolViaEnvelope(t *testing.T, client *http.Client, operatorURL, s
 	require.NoError(t, err)
 
 	// Submit envelope to governance endpoint
-	req, err := http.NewRequest(http.MethodPost, operatorURL+"/api/governance/envelope", bytes.NewReader(envelopeJSON))
+	req, err := http.NewRequest(http.MethodPost, operatorURL+constants.APIPaths.GovernanceEnvelopes, bytes.NewReader(envelopeJSON))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+sessionID)
@@ -827,7 +825,8 @@ func verifyAuditVaultPersistence(t *testing.T, transactionID, sessionID string) 
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(cwd)))
-	vaultPath := filepath.Join(repoRoot, ".g8e", "audit_vault.db")
+
+	vaultPath := filepath.Join(repoRoot, constants.Paths.Infra.AuditVaultDBPath)
 
 	db, err := sql.Open("sqlite", vaultPath)
 	require.NoError(t, err)

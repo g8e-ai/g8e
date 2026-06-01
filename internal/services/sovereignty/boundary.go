@@ -173,7 +173,7 @@ func (s *SovereigntyService) initializeScrubbers() {
 		&RegexScrubber{
 			name:        "internal_api_key",
 			pattern:     regexp.MustCompile(`\bg8e_[a-z0-9]+_[0-9a-f]{64}\b`),
-			replacement: "[G8E_INTERNAL_API_KEY]",
+			replacement: "[REDACTED_API_KEY]",
 		},
 		// JWT (JSON Web Token) - specific base64.base64.base64 format
 		&RegexScrubber{

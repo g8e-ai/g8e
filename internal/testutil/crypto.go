@@ -30,11 +30,36 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// GenerateTestCSR generates a test CSR for the given common name.
+// GenerateTestCSR generates a test CSR for the given common name using RSA.
 func GenerateTestCSR(t *testing.T, commonName string) string {
 	t.Helper()
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	template := x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName: commonName,
+		},
+	}
+
+	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privateKey)
+	require.NoError(t, err)
+
+	csrPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE REQUEST",
+		Bytes: csrBytes,
+	})
+
+	return string(csrPEM)
+}
+
+// GenerateTestCSRP256 generates a test CSR for the given common name using ECDSA P-256.
+// This matches the actual CLI behavior for CSR generation (see internal/cli/auth/client.go).
+func GenerateTestCSRP256(t *testing.T, commonName string) string {
+	t.Helper()
+
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
 	template := x509.CertificateRequest{
@@ -138,7 +163,7 @@ func GetPKICertPaths(pkiDir string) PKICertPaths {
 		OperatorCA:      filepath.Join(pkiDir, "authorities", "operator_ca.crt"),
 		BootstrapCA:     filepath.Join(pkiDir, "authorities", "bootstrap_ca.crt"),
 		TrustBundle:     filepath.Join(pkiDir, "trust", "root.pem"),
-		HubBundle:       filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem"),
+		HubBundle:       filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem"),
 		OperatorBundle:  filepath.Join(pkiDir, "trust", "operator-bundle.pem"),
 		BootstrapBundle: filepath.Join(pkiDir, "trust", "bootstrap-bundle.pem"),
 	}

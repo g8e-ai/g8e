@@ -306,19 +306,16 @@ func buildAuthMethods(r resolvedHost, sshAuthSock string) []ssh.AuthMethod {
 // buildHostKeyCallback returns a strict known_hosts-backed host-key callback.
 //
 // Strict-only by design: there is no accept-new fallback. The caller MUST have
-// pre-populated ~/.ssh/known_hosts (or set G8E_KNOWN_HOSTS) with every target
-// host's key. Any unknown host fails the SSH handshake immediately. Any I/O
-// error reading the file is returned to the caller, which surfaces it as a
-// per-host streamResult failure rather than silently degrading security.
+// pre-populated ~/.ssh/known_hosts with every target host's key. Any unknown host
+// fails the SSH handshake immediately. Any I/O error reading the file is returned
+// to the caller, which surfaces it as a per-host streamResult failure rather than
+// silently degrading security.
 func buildHostKeyCallback() (ssh.HostKeyCallback, error) {
-	khPath := os.Getenv("G8E_KNOWN_HOSTS")
-	if khPath == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("resolve home directory for known_hosts: %w", err)
-		}
-		khPath = filepath.Join(home, ".ssh", "known_hosts")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolve home directory for known_hosts: %w", err)
 	}
+	khPath := filepath.Join(home, ".ssh", "known_hosts")
 	if _, err := os.Stat(khPath); err != nil {
 		return nil, fmt.Errorf(
 			"known_hosts not found at %s: strict host-key checking requires every target "+

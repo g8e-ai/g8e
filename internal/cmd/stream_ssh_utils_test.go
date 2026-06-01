@@ -32,7 +32,7 @@ func TestBuildHostKeyCallback(t *testing.T) {
 		tempDir := t.TempDir()
 		// Mock home directory by setting HOME env var (os.UserHomeDir respects it on Linux)
 		t.Setenv("HOME", tempDir)
-		t.Setenv("G8E_KNOWN_HOSTS", "")
+		// No env var to unset - ~/.ssh/known_hosts is the only path
 
 		sshDir := filepath.Join(tempDir, ".ssh")
 		require.NoError(t, os.MkdirAll(sshDir, 0700))
@@ -51,7 +51,7 @@ func TestBuildHostKeyCallback(t *testing.T) {
 	t.Run("known_hosts missing, strict mode returns an error (no insecure fallback)", func(t *testing.T) {
 		tempDir := t.TempDir()
 		t.Setenv("HOME", tempDir)
-		t.Setenv("G8E_KNOWN_HOSTS", "")
+		// No env var to unset - ~/.ssh/known_hosts is the only path
 
 		cb, err := buildHostKeyCallback()
 		assert.Nil(t, cb)
@@ -60,23 +60,16 @@ func TestBuildHostKeyCallback(t *testing.T) {
 	})
 
 	t.Run("G8E_KNOWN_HOSTS env var overrides home lookup", func(t *testing.T) {
-		tempDir := t.TempDir()
-		// Point HOME at a directory with NO ~/.ssh/known_hosts to prove the
-		// env override is consulted first.
-		t.Setenv("HOME", tempDir)
-		altPath := filepath.Join(tempDir, "alt_known_hosts")
-		require.NoError(t, os.WriteFile(altPath, []byte(""), 0600))
-		t.Setenv("G8E_KNOWN_HOSTS", altPath)
-
-		cb, err := buildHostKeyCallback()
-		require.NoError(t, err)
-		assert.NotNil(t, cb)
+		// G8E_KNOWN_HOSTS env var was removed - known_hosts path is now
+		// resolved solely from ~/.ssh/known_hosts.
+		// This test is removed as the feature no longer exists.
+		t.Skip("G8E_KNOWN_HOSTS env var removed")
 	})
 
 	t.Run("strict callback rejects unknown host", func(t *testing.T) {
 		tempDir := t.TempDir()
 		t.Setenv("HOME", tempDir)
-		t.Setenv("G8E_KNOWN_HOSTS", "")
+		// No env var to unset - ~/.ssh/known_hosts is the only path
 		sshDir := filepath.Join(tempDir, ".ssh")
 		require.NoError(t, os.MkdirAll(sshDir, 0700))
 		khPath := filepath.Join(sshDir, "known_hosts")

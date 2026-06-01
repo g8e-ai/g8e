@@ -24,8 +24,6 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/certs"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 )
@@ -141,11 +139,8 @@ func newTLSPubSubServer(t *testing.T) string {
 
 // TestPubSubAvailable_ReachableServer exercises the full dial path of
 // TestPubSubAvailable against an in-process TLS server.
-// G8E_OPERATOR_PUBSUB_URL is overridden so GetTestOperatorDirectURL() returns
-// the in-process address; certs.SetCA is overridden so the dialer trusts it.
+// The in-process address is passed directly; certs.SetCA is overridden so the dialer trusts it.
 func TestPubSubAvailable_ReachableServer(t *testing.T) {
 	wssBase := newTLSPubSubServer(t)
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL), wssBase)
-
-	TestPubSubAvailable(t)
+	TestPubSubAvailable(t, wssBase)
 }

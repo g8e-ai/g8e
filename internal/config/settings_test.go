@@ -16,126 +16,16 @@ package config
 import (
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestLoadSettings_OperatorFields(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorEndpoint), "10.0.0.1")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorSessionID), "sess-abc123")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.LogLevel), "debug")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.DataDir), "/custom/data")
-
+func TestLoadSettings_ZeroEnvVars(t *testing.T) {
+	// g8e uses ZERO environment variables
 	s := LoadSettings()
 
-	assert.Equal(t, "10.0.0.1", s.OperatorEndpoint)
-	assert.Equal(t, "sess-abc123", s.OperatorSessionID)
-	assert.Equal(t, "debug", s.LogLevel)
-	assert.Equal(t, "/custom/data", s.DataDir)
-}
-
-func TestLoadSettings_IPFields(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPService), "https://example.com/ip")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPResolver), "1.1.1.1:80")
-
-	s := LoadSettings()
-
-	assert.Equal(t, "https://example.com/ip", s.IPService)
-	assert.Equal(t, "1.1.1.1:80", s.IPResolver)
-}
-
-func TestLoadSettings_SystemEnvVars(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.Shell), "/bin/zsh")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.Lang), "en_US.UTF-8")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.Term), "xterm-256color")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.Path), "/usr/local/bin:/usr/bin")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.SSHAuthSock), "/tmp/ssh-agent.sock")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.LogName), "alice")
-
-	s := LoadSettings()
-
-	assert.Equal(t, "/bin/zsh", s.Shell)
-	assert.Equal(t, "en_US.UTF-8", s.Lang)
-	assert.Equal(t, "xterm-256color", s.Term)
-	assert.Equal(t, "/usr/local/bin:/usr/bin", s.Path)
-	assert.Equal(t, "/tmp/ssh-agent.sock", s.SSHAuthSock)
-	assert.Equal(t, "alice", s.LogName)
-}
-
-func TestLoadSettings_User_FromUSER(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.User), "admin")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.Username), "")
-
-	s := LoadSettings()
-
-	assert.Equal(t, "admin", s.User)
-}
-
-func TestLoadSettings_User_FallsBackToUSERNAME(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.User), "")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.Username), "carol")
-
-	s := LoadSettings()
-
-	assert.Equal(t, "carol", s.User)
-}
-
-func TestLoadSettings_User_USERTakesPriorityOverUSERNAME(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.User), "primary")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.Username), "secondary")
-
-	s := LoadSettings()
-
-	assert.Equal(t, "primary", s.User)
-}
-
-func TestLoadSettings_EmptyWhenEnvNotSet(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorEndpoint), "")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorSessionID), "")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.LogLevel), "")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.DataDir), "")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPService), "")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPResolver), "")
-
-	s := LoadSettings()
-
-	assert.Empty(t, s.OperatorEndpoint)
-	assert.Empty(t, s.OperatorSessionID)
-	assert.Empty(t, s.LogLevel)
 	assert.Empty(t, s.DataDir)
-	assert.Empty(t, s.IPService)
-	assert.Empty(t, s.IPResolver)
-}
-
-func TestLoadSettings_AllFieldsPresent(t *testing.T) {
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorEndpoint), "e")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorSessionID), "s")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.LogLevel), "info")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.DataDir), "/data")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPService), "https://ip.svc")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPResolver), "8.8.8.8:80")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.Shell), "/bin/bash")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.Lang), "C")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.Term), "dumb")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.Path), "/bin")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.SSHAuthSock), "/run/sock")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.User), "root")
-	t.Setenv(marshaler.EnvVar(constants.EnvVar.LogName), "root")
-
-	s := LoadSettings()
-
-	assert.Equal(t, "e", s.OperatorEndpoint)
-	assert.Equal(t, "s", s.OperatorSessionID)
-	assert.Equal(t, "info", s.LogLevel)
-	assert.Equal(t, "/data", s.DataDir)
-	assert.Equal(t, "https://ip.svc", s.IPService)
-	assert.Equal(t, "8.8.8.8:80", s.IPResolver)
-	assert.Equal(t, "/bin/bash", s.Shell)
-	assert.Equal(t, "C", s.Lang)
-	assert.Equal(t, "dumb", s.Term)
-	assert.Equal(t, "/bin", s.Path)
-	assert.Equal(t, "/run/sock", s.SSHAuthSock)
-	assert.Equal(t, "root", s.User)
-	assert.Equal(t, "root", s.LogName)
+	assert.Empty(t, s.GatewayEndpoint)
+	assert.Empty(t, s.PKIDir)
+	assert.Empty(t, s.ProtocolDir)
+	assert.Empty(t, s.SecretsDir)
 }

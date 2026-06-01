@@ -156,7 +156,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 	t.Run("Health bypass", func(t *testing.T) {
 		t.Parallel()
-		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -220,7 +220,7 @@ func TestHandleHealth(t *testing.T) {
 	t.Run("Returns 503 when platform_settings not found", func(t *testing.T) {
 		t.Parallel()
 		h.db.DocDelete("settings", "platform_settings")
-		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 		rr := httptest.NewRecorder()
 
 		h.handleHealth(rr, req)
@@ -235,7 +235,7 @@ func TestHandleHealth(t *testing.T) {
 		}))
 		require.NoError(t, err)
 
-		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 		rr := httptest.NewRecorder()
 
 		h.handleHealth(rr, req)
@@ -663,11 +663,18 @@ func TestBuildPublicRouter(t *testing.T) {
 	assert.NotNil(t, router)
 
 	// Test that health endpoint is registered
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
 	// Health endpoint may require auth in some configurations, so we just check it's registered
 	assert.NotNil(t, rr)
+
+	// Test that PKI devices enroll endpoint is registered on public router
+	req = httptest.NewRequest(http.MethodPost, constants.APIPaths.PKIDevicesEnroll, nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	// Endpoint requires mTLS, so we expect 401 Unauthorized, not 404 Not Found
+	assert.NotEqual(t, http.StatusNotFound, rr.Code, "PKIDevicesEnroll should be registered on public router")
 }
 
 type errorReader struct{}

@@ -99,7 +99,7 @@ func (c *DBController) handleDataSettings(w http.ResponseWriter, r *http.Request
 }
 
 func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/v1/data/")
+	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.DataPrefix)
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) == 0 || parts[0] == "" {
 		c.responder.Error(w, http.StatusBadRequest, "collection required")
@@ -142,7 +142,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPut:
 		if !isDirectDBMutationAllowed(collection) {
-			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
+			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
 		body, err := c.readBody(r)
@@ -166,7 +166,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPatch:
 		if !isDirectDBMutationAllowed(collection) {
-			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
+			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
 		body, err := c.readBody(r)
@@ -195,7 +195,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodDelete:
 		if !isDirectDBMutationAllowed(collection) {
-			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
+			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
 		deleted, err := c.db.DocDelete(collection, id)
@@ -397,7 +397,7 @@ func (c *DBController) handleGovernanceSigners(w http.ResponseWriter, r *http.Re
 }
 
 func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/api/v1/governance/signers/")
+	id := strings.TrimPrefix(r.URL.Path, constants.APIPaths.GovernanceSignersPrefix)
 	if id == "" || strings.Contains(id, "/") {
 		c.responder.Error(w, http.StatusBadRequest, "invalid signer id")
 		return
@@ -435,7 +435,7 @@ func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http
 }
 
 func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/v1/kv/")
+	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.KVPrefix)
 	if path == "" {
 		c.responder.Error(w, http.StatusBadRequest, "key required")
 		return
@@ -697,7 +697,7 @@ func (c *DBController) verifyBlobOwnership(r *http.Request, namespace string) er
 }
 
 func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/v1/blobs/")
+	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.DataBlobsPrefix)
 	if path == "" {
 		c.responder.Error(w, http.StatusBadRequest, "namespace required")
 		return
@@ -717,7 +717,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 		}
 		// Check if namespace is allowlisted for direct mutations
 		if !blobNamespaceAllowed(namespace) {
-			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
+			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
 		// Enforce ownership for namespace deletion
@@ -770,7 +770,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		// Check if namespace is allowlisted for direct mutations
 		if !blobNamespaceAllowed(namespace) {
-			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
+			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
 
@@ -853,7 +853,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		// Check if namespace is allowlisted for direct mutations
 		if !blobNamespaceAllowed(namespace) {
-			c.responder.Error(w, http.StatusConflict, "submit via POST /api/v1/governance/envelopes")
+			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
 

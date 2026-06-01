@@ -1,151 +1,122 @@
 # Constants System
 
-## Single Source of Truth
+## Overview
 
-The g8e constants system maintains a Single Source of Truth (SSOT) in JSON at `protocol/constants/`. All cross-component constants (collections, events, channels, headers, etc.) are defined as JSON files and generated into Go constants via `internal/constants/generate_registry.go`.
+The g8e constants system maintains canonical constant definitions across the platform. Constants are defined in Go source files in `internal/constants/` and referenced by JSON schemas in `protocol/constants/` for protocol documentation and external consumers.
 
-## Generation Flow
+## Constant Categories
 
-```text
-JSON SSOT (protocol/constants/*.json)
-    ↓
-Go Registry (internal/constants/registry.go, status_generated.go, headers_generated.go) via generate_registry.go
-```
+### Database Collections (`collections.go`)
+Canonical collection names for the operator's embedded SQLite database:
+- `CollectionUsers`, `CollectionWebSessions`, `CollectionOperatorSessions`, `CollectionCLISessions`
+- `CollectionLoginAudit`, `CollectionAuthAdminAudit`, `CollectionAccountLocks`
+- `CollectionOrganizations`, `CollectionOperators`, `CollectionOperatorUsage`
+- `CollectionCases`, `CollectionInvestigations`, `CollectionTasks`
+- And additional collections for agent activity, app policies, bound sessions, device links, etc.
 
-### Step 1: JSON Source Files
+### Event Types (`events.go`)
+Typed event identifiers for the pub/sub system:
+- App lifecycle events: `EventAppCaseCreated`, `EventAppCaseUpdated`, `EventAppTaskCreated`
+- Operator events: `EventOperatorHeartbeat`, `EventOperatorCommandRequested`, `EventOperatorCommandCompleted`
+- Governance events: `EventGovernanceEnvelopeReceived`, `EventGovernanceEnvelopeCommitted`
+- Auth events: `EventAuthLoginRequested`, `EventAuthPasskeyRegistered`
+- And hundreds of additional event types across all subsystems
 
-Constants are defined in JSON files within `protocol/constants/`. Each file contains constant values with Go constant naming metadata:
+### API Paths (`api_paths.go`)
+HTTP route paths for the Gateway REST API:
+- Authentication endpoints: `/api/v1/auth/login`, `/api/v1/auth/passkey/register`
+- Operator management: `/api/v1/operators`, `/api/v1/operators/{id}/bind`
+- Governance: `/api/v1/governance/envelope`, `/api/v1/governance/approve`
+- And other API route definitions
 
-```json
-{
-  "collections": {
-    "users": {
-      "value": "users",
-      "_go_const": "CollectionUsers"
-    }
-  }
-}
-```
+### Channels (`channels.go`)
+Pub/sub channel names for inter-component communication:
+- Command channels: `ChannelOperatorCommand`, `ChannelOperatorResult`
+- Heartbeat: `ChannelOperatorHeartbeat`
+- Governance: `ChannelGovernanceEnvelope`, `ChannelGovernanceApproval`
+- And other channel definitions
 
-### Step 2: Registry Generation
+### Intents (`intents.go`)
+Intent classification values for governance posture:
+- Cloud provider intents: `IntentAWSRead`, `IntentAWSPowerUser`, `IntentGCPRead`
+- Kubernetes intents: `IntentK8sRead`, `IntentK8sWrite`
+- System intents: `IntentSystemRead`, `IntentSystemWrite`
+- And other intent classifications
 
-The `generate_registry.go` script reads JSON files from `protocol/constants/` and generates Go registry files (`registry.go`, `status_generated.go`, `headers_generated.go`) that provide runtime access to the constants snapshot.
+### Status Enums (`status.go`)
+Internal enumeration constants:
+- `UserRole`: `UserRoleUnspecified`, `UserRoleAdmin`, `UserRoleOperator`, `UserRoleUser`
+- `OperatorStatus`: `OperatorStatusUnspecified`, `OperatorStatusOnline`, `OperatorStatusOffline`
+- `ExecutionStatus`: `ExecutionStatusUnspecified`, `ExecutionStatusExecuting`, `ExecutionStatusCompleted`, `ExecutionStatusFailed`
+- And other status enums
 
-## Tracked vs Internal Files
+### Headers (`headers.go`)
+HTTP header names used across the platform:
+- Authentication headers: `HeaderAuthorization`, `HeaderXOperatorID`
+- Session headers: `HeaderXWebSessionID`, `HeaderXOperatorSessionID`
+- And other header constants
 
-The constants system distinguishes between files that generate Go constants and internal-only files:
-
-### Files That Generate Go Constants
-
-The following JSON files are processed by `generate_registry.go`:
-
-- `collections.json` - Database collection names
-- `events.json` - Event type identifiers
-- `headers.json` - HTTP header names
-- `channels.json` - Pub/sub channel names
-- `intents.json` - Intent classification values
-- `document_ids.json` - Document ID prefixes
-- `kv_keys.json` - Key-value store key patterns
-- `senders.json` - Message sender identifiers
-- `prompts.json` - Prompt template identifiers
-- `pubsub.json` - Pub/sub protocol constants
-- `status.json` - Internal enums (UserRole, OperatorStatus, ExecutionStatus)
-- `platform.json` - Platform-specific constants
-- `agents.json` - Agent persona details
-- `timestamp.json` - Go-specific format strings
-
-### Internal-Only Files (Not Processed by generate_registry.go)
-
-The following files contain Go-specific constants not defined in JSON:
-
-- `paths.go` - Filesystem paths
-- `ports.go` - Network port numbers
-- `env_vars.go` - Environment variable names
-- `api_paths.go` - API route paths
-- `exit_codes.go` - Process exit codes
+### Additional Constant Files
+- `paths.go` - Filesystem paths for operator data, certificates, ledger
+- `ports.go` - Network port numbers for Gateway, Operator services
+- `exit_codes.go` - Process exit code constants
 - `network.go` - Network-related constants
 - `output.go` - Output format constants
-- `mappings.go` - Mapping structures
+- `mappings.go` - Mapping structures for protocol translation
 - `auth.go` - Authentication-related constants
+- `platform.go` - Platform-specific constants
+- `prompts.go` - Prompt template identifiers
+- `senders.go` - Message sender identifiers
+- `pubsub.go` - Pub/sub protocol constants
+- `document_ids.go` - Document ID prefixes
+- `kv_keys.go` - Key-value store key patterns
+- `env_vars.go` - Environment variable names
+- `timestamp.go` - Go-specific format strings
+- `agents.json` - Agent persona details (JSON reference)
 
-### Registry Validation Tracked Files
+## JSON Reference Files
 
-The `check_registry.go` script validates that constants in the following generated files are registered in `registry.go`:
+The `protocol/constants/` directory contains JSON files that serve as reference documentation and external protocol definitions. These files mirror the Go constants and are used for:
+- Protocol documentation generation
+- External client SDK generation
+- Cross-language protocol compatibility
 
-- `headers_generated.go` (generated from headers.json)
-- `collections.go`
-- `events.go`
-- `channels.go`
-- `intents.go`
-- `document_ids.go`
-- `senders.go`
-- `prompts.go`
-- `pubsub.go`
+Key JSON files:
+- `collections.json` - Collection name definitions
+- `events.json` - Event type definitions
+- `channels.json` - Channel name definitions
+- `intents.json` - Intent classification definitions
+- `status.json` - Status enum definitions
+- `headers.json` - HTTP header definitions
+- `api_paths.json` - API path definitions
+- And other reference JSON files
 
-Note that `kv_keys.json`, `status.json`, `platform.json`, `agents.json`, and `timestamp.json` are excluded from registry validation as they contain internal schemas or data not required in the runtime registry snapshot.
+## Protocol Generation
 
-## Regeneration Commands
-
-### Generate All Constants
-
-```bash
-make constants
-```
-
-This command runs `go run ./internal/constants/generate_registry.go` to generate Go registry files from JSON.
-
-### Generate All Protocol Artifacts
+### Generate Protocol Artifacts
 
 ```bash
 make generate
 ```
 
-Generates both protobuf code and constants.
+This command generates Go Protobuf code from `.proto` files using Buf.
 
-### Clean Generated Constants
-
-```bash
-make clean-constants
-```
-
-Removes generated Go registry files (registry.go, status_generated.go, headers_generated.go).
-
-## Registry Validation
-
-The `check_registry.go` script validates that all tracked Go constants are registered in `registry.go`. This prevents drift between the Go source and the generated registry.
-
-### Run Validation
+### Generate Python Protocol
 
 ```bash
-go run ./internal/constants/check_registry.go
+make proto-python
 ```
 
-The script:
-1. Parses tracked Go constant files (collections.go, events.go, headers_generated.go, channels.go, intents.go, document_ids.go, senders.go, prompts.go, pubsub.go)
-2. Parses `registry.go` to extract registered constants
-3. Reports any missing constants
-4. Exits with code 1 if drift is detected
-
-### Tracked Files Configuration
-
-The `trackedFiles` map in `check_registry.go` defines which files should be validated. Internal-only files (kv_keys.go, status.go, platform.go, agents.go, timestamp.go) are excluded from registry validation as they contain internal schemas or data not required in the runtime registry snapshot.
-
-## Adding New Constants
-
-1. **Add the constant** to the appropriate JSON file in `protocol/constants/`
-2. **Run `make constants`** to regenerate Go registry files
-3. **Run `check_registry.go`** to verify the constant is registered
-4. **Commit both** the JSON source file and the generated files
+Generates Python Protobuf code for the Python protocol SDK.
 
 ## CI Integration
 
-The registry check is enforced in CI via the `registry-check` job in `.github/workflows/build-and-test.yml`. This ensures that any new constant added to a tracked file is properly registered before merging.
+Constants are validated in CI via the `G8E_STRICT_CONSTANTS_LINT` environment variable. When set, the test suite enforces that all constants are properly defined and referenced.
 
-## Generated Files
+## Adding New Constants
 
-The constants pipeline generates the following artifacts:
-
-- Go registry files in `internal/constants/` - Runtime access to constants snapshot (registry.go, status_generated.go, headers_generated.go)
-
-These generated files ensure consistency across the platform's Go components.
+1. **Add the constant** to the appropriate Go file in `internal/constants/`
+2. **Update the corresponding JSON file** in `protocol/constants/` if the constant is part of the public protocol
+3. **Run tests** to verify the constant is properly integrated
+4. **Commit both** the Go source file and any updated JSON reference files
 

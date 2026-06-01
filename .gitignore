@@ -50,7 +50,9 @@ coverage.txt
 # --- Runtime State & Persistence (CRITICAL: DO NOT COMMIT) ---
 .g8e
 .g8e/
+**/.g8e*
 g8e
+g8e.sha256
 .local.dev/
 /data/
 /db/
