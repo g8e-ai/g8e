@@ -223,7 +223,7 @@ func (g *GatewayService) mcpInitialize(params json.RawMessage) initializeResult 
 	return initializeResult{
 		ProtocolVersion: protocolVersion,
 		Capabilities: map[string]interface{}{
-			"tools":     map[string]interface{}{},
+			"tools":     map[string]interface{}{"listChanged": true},
 			"resources": map[string]interface{}{},
 			"prompts":   map[string]interface{}{},
 		},
