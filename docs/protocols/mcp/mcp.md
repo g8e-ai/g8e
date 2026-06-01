@@ -126,38 +126,21 @@ To configure an MCP client to connect to the g8e Gateway with mTLS authenticatio
 ./g8e gw mcp-config
 ```
 
-This command outputs a JSON configuration with the correct gateway URL and environment variable placeholders for your mTLS certificates. Set the following environment variables before starting your MCP client:
-
-```bash
-export G8E_CLIENT_CERT_PATH=/path/to/g8e/.g8e/pki/client.crt
-export G8E_CLIENT_KEY_PATH=/path/to/g8e/.g8e/pki/client.key
-export G8E_CA_CERT_PATH=/path/to/g8e/.g8e/pki/ca.crt
-```
+This command outputs a JSON configuration with the correct gateway URL and certificate paths.
 
 #### Plain HTTP Endpoint (Development/Testing)
 
 For development and testing scenarios, the gateway also provides a plain HTTP endpoint (port 8442) that does not require mTLS credentials. This endpoint has rate limiting and may have different security policies.
 
-A configuration template is available at `docs/protocols/mcp/mcp_http_config.json`. This template provides the schema for configuring MCP clients to use the HTTP endpoint:
+Run the CLI command to generate the configuration:
 
-```json
-{
-  "mcpServers": {
-    "g8e-gateway-http": {
-      "transport": {
-        "type": "http",
-        "url": "http://localhost:8442/api/mcp/v1"
-      },
-      "security": {
-        "mode": "rate-limited",
-        "warning": "Plain HTTP endpoint does not provide mTLS authentication. Use the mTLS endpoint (port 8440) for production workloads."
-      }
-    }
-  }
-}
+```bash
+./g8e gw mcp-config-http
 ```
 
-**Security Note**: The plain HTTP endpoint is intended for development and testing only. Use the mTLS endpoint (port 8440) for production workloads to ensure proper authentication and security.
+This outputs a JSON configuration with the correct gateway URL.
+
+**Security Note**: The plain HTTP endpoint is intended for development and testing only. Use the mTLS endpoint (port 8443) for production workloads to ensure proper authentication and security.
 
 ### MCP Client Connection
 
@@ -306,10 +289,9 @@ Default ports (configurable via flags or paths.json):
 
 | Port | Purpose | Auth |
 |---|---|---|
-| `8440` | Operator mTLS API | mTLS (RequireAndVerifyClientCert) |
+| `8443` | Operator mTLS API | mTLS (RequireAndVerifyClientCert) |
 | `8441` | Bootstrap enrollment | TLS (no client cert) |
-| `8443` | Public web session | TLS (no client cert) |
-| `18789` | Insecure MCP gateway | No TLS (DANGEROUS, only for --insecure mode) |
+| `8442` | Plain HTTP MCP | No TLS (development only) |
 
 ### Configuration
 
@@ -318,9 +300,9 @@ The g8e platform uses **ZERO environment variables** for production configuratio
 - `--data-dir <dir>`: Data directory for SQLite database (default: `.g8e/data` in working directory)
 - `--pki-dir <dir>`: Directory for TLS certificates (default: `.g8e/pki`)
 - `--secrets-dir <dir>`: Directory for platform secrets (default: `.g8e/secrets`)
-- `--http-port <port>`: mTLS API port (default: 8440)
+- `--http-port <port>`: mTLS API port (default: 8443)
 - `--bootstrap-port <port>`: Bootstrap enrollment port (default: 8441)
-- `--public-port <port>`: Public web session port (default: 8443)
+- `--mcp-http-port <port>`: Plain HTTP MCP port (default: 8442)
 
 ### Circuit Breaker
 

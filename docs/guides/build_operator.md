@@ -52,7 +52,31 @@ To build for different target platforms:
 ```bash
 GOOS=linux GOARCH=amd64 make build
 GOOS=darwin GOARCH=arm64 make build
+GOOS=windows GOARCH=amd64 make build
 ```
+
+### Windows Build
+
+On Windows, use the provided PowerShell build script:
+
+```powershell
+.\build.ps1
+```
+
+For cross-compilation from Linux/macOS to Windows:
+
+```bash
+GOOS=windows GOARCH=amd64 make build
+# Output: g8e (rename to g8e.exe on Windows)
+```
+
+The Makefile also includes a dedicated Windows build target:
+
+```bash
+make build-windows
+```
+
+This builds for both amd64 and arm64 architectures without compression to avoid Windows Defender false positives.
 
 ---
 

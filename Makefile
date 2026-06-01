@@ -42,6 +42,8 @@ UPX := $(shell command -v upx 2>/dev/null || echo "/usr/local/bin/upx")
 help:
 	@echo "g8e Platform Root Makefile"
 	@echo ""
+	@echo "Note: On Windows, use build.ps1 instead of make"
+	@echo ""
 	@echo "Platform Commands (via ./g8e):"
 	@echo "  ./g8e gw                    Gateway lifecycle (start, stop, status, logs)"
 	@echo "  ./g8e apps                  Application lifecycle (start, stop, status, logs)"
@@ -66,6 +68,7 @@ help:
 	@echo "Build:"
 	@echo "  build         Build g8e binary"
 	@echo "  build-compressed Build g8e with UPX compression"
+	@echo "  build-windows Build Windows binaries (amd64, arm64)"
 	@echo ""
 	@echo "Test:"
 	@echo "  test                  Run all tests with race detection"

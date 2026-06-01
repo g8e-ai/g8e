@@ -323,9 +323,7 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 	cmd := exec.Command(binPath, args...)
 	cmd.Stdout = logHandle
 	cmd.Stderr = logHandle
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
-	}
+	setProcessGroup(cmd)
 
 	if err := cmd.Start(); err != nil {
 		if closeErr := logHandle.Close(); closeErr != nil {

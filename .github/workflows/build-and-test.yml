@@ -111,3 +111,30 @@ jobs:
       - name: Show Operator logs
         if: failure()
         run: tail -n 200 .g8e/logs/operator-listen.log || true
+
+  test-windows:
+    name: CI / Windows Tests
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - name: Build CLI
+        run: go build -ldflags "-X main.version=${{ github.ref_name }} -X main.buildID=${{ github.sha }} -X main.buildTime=$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ') -X main.platform=windows_amd64" -o g8e.exe ./cmd/operator
+
+      - name: Run unit tests
+        run: go test -race -count=1 -timeout 180s ./...
+
+      - name: Verify Windows build
+        run: |
+          if (-not (Test-Path g8e.exe)) {
+            Write-Error "Windows build failed"
+            exit 1
+          }
+          Write-Host "Windows build successful"

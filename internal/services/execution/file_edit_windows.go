@@ -1,5 +1,3 @@
-//go:build arm64 && !windows
-
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,11 +11,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build windows
+// +build windows
+
 package execution
 
-import "syscall"
+import (
+	"os"
 
-// getNlink returns the Nlink field from Stat_t for arm64 (uint32)
-func getNlink(stat *syscall.Stat_t) uint64 {
-	return uint64(stat.Nlink)
+	"github.com/g8e-ai/g8e/internal/models"
+)
+
+// collectFileOwnership is a no-op on Windows (ownership handled differently)
+func (fes *FileEditService) collectFileOwnership(fileInfo os.FileInfo, stats *models.FileStats) {
+	// Windows file ownership is handled via ACLs, not UID/GID
+	// For now, leave ownership fields nil
 }

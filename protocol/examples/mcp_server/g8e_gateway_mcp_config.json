@@ -1,24 +1,9 @@
 {
   "mcpServers": {
     "g8e-gateway": {
-      "transport": {
-        "type": "http",
-        "url": "{{GATEWAY_URL}}",
-        "headers": {
-          "Content-Type": "application/json"
-        }
-      },
-      "tls": {
-        "clientCertificateEnv": "G8E_CLIENT_CERT_PATH",
-        "clientKeyEnv": "G8E_CLIENT_KEY_PATH",
-        "caCertificateEnv": "G8E_CA_CERT_PATH",
-        "verifyServer": true,
-        "verifyHostname": "{{HOSTNAME}}"
-      },
-      "capabilities": {
-        "tools": true,
-        "resources": true,
-        "prompts": true
+      "serverUrl": "{{GATEWAY_URL}}",
+      "headers": {
+        "Content-Type": "application/json"
       },
       "description": "g8e Gateway - BFT-governed MCP/A2A protocol translator with L1/L2/L3 verification",
       "notes": [

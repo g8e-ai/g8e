@@ -1,4 +1,4 @@
-//go:build unix || linux || darwin
+//go:build unix || linux || (darwin && !windows)
 
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0 (the "License");

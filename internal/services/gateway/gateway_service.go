@@ -584,13 +584,6 @@ func (ls *GatewayService) Stop(ctx context.Context) error {
 		}
 		ls.logger.Error("Public server shutdown error", string(constants.ConnectionStateError), err)
 	}
-	if err := ls.mcpHttpServer.Shutdown(shutdownCtx); err != nil {
-		if shutdownCtx.Err() == context.DeadlineExceeded {
-			ls.logger.Error("MCP HTTP server shutdown timeout - forcing exit to prevent zombie process")
-			return fmt.Errorf("shutdown timeout exceeded")
-		}
-		ls.logger.Error("MCP HTTP server shutdown error", string(constants.ConnectionStateError), err)
-	}
 
 	// Close pub/sub broker (disconnects all WebSocket clients)
 	ls.pubsub.Close()

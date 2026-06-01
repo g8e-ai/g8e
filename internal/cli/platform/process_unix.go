@@ -1,5 +1,3 @@
-//go:build arm64 && !windows
-
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,11 +11,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package execution
+//go:build !windows
+// +build !windows
 
-import "syscall"
+package platform
 
-// getNlink returns the Nlink field from Stat_t for arm64 (uint32)
-func getNlink(stat *syscall.Stat_t) uint64 {
-	return uint64(stat.Nlink)
+import (
+	"os/exec"
+	"syscall"
+)
+
+// setProcessGroup sets the process group for Unix systems
+func setProcessGroup(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
 }

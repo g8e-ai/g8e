@@ -24,6 +24,7 @@ It dials out via mTLS and listens on nothing. Every AI-proposed action clears a 
 
 Get g8e online in under 60 seconds.
 
+**Linux/macOS:**
 ```bash
 # 1. Clone the repository
 git clone https://github.com/g8e-ai/g8e.git
@@ -40,6 +41,25 @@ make build
 
 # 5. Verify the status
 ./g8e gw status
+```
+
+**Windows:**
+```powershell
+# 1. Clone the repository
+git clone https://github.com/g8e-ai/g8e.git
+cd g8e
+
+# 2. Build the binary
+.\build.ps1
+
+# 3. Start the Governance Gateway (g8eg)
+.\g8e.exe gw start
+
+# 4. Authenticate (first login automatically bootstraps the platform)
+.\g8e.exe auth login
+
+# 5. Verify the status
+.\g8e.exe gw status
 ```
 
 See the [Full QuickStart Guide](docs/guides/getting_started.md) for mTLS, enrollment, and CLI configuration.

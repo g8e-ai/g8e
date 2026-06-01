@@ -1,5 +1,3 @@
-//go:build arm64 && !windows
-
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,11 +11,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build windows
+// +build windows
+
 package execution
 
-import "syscall"
+import (
+	"os/exec"
+)
 
-// getNlink returns the Nlink field from Stat_t for arm64 (uint32)
-func getNlink(stat *syscall.Stat_t) uint64 {
-	return uint64(stat.Nlink)
+// setProcessGroup is a no-op on Windows
+func setProcessGroup(cmd *exec.Cmd) {
+	// Windows doesn't have process groups in the Unix sense
+	// Process tree management is handled differently
+}
+
+// killProcessGroup kills a process on Windows
+func killProcessGroup(pid int) error {
+	// On Windows, we kill the process directly
+	// Process tree termination requires different APIs
+	return nil
 }

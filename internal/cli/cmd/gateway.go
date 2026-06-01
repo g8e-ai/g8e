@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -44,6 +43,7 @@ func gatewayCmd() *cobra.Command {
 		gatewayResetCmd(),
 		gatewayCleanCmd(),
 		gatewayMCPConfigCmd(),
+		gatewayMCPHttpConfigCmd(),
 	)
 
 	return cmd
@@ -157,11 +157,6 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println("[g8e] Gateway service started. Run './g8e auth login' to authenticate your CLI.")
-
-			// Generate dynamic mcp_http_config.json with actual IP address
-			if err := generateMCPHttpConfig(cfg, externalIP); err != nil {
-				cmd.Printf("Warning: Failed to generate mcp_http_config.json: %v\n", err)
-			}
 
 			return nil
 		},
@@ -507,44 +502,23 @@ func gatewayMCPConfigCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			templatePath := filepath.Join(cfg.ProjectRoot, "protocol", "examples", "mcp_server", "g8e_gateway_mcp_config.json")
-
-			templateContent, err := os.ReadFile(templatePath)
-			if err != nil {
-				return fmt.Errorf("failed to read MCP config template: %w", err)
-			}
-
-			gatewayURL := fmt.Sprintf("https://localhost:%d/api/mcp/v1", cfg.OperatorHTTPSPort())
-			gatewayHTTPURL := fmt.Sprintf("http://localhost:%d/api/mcp/v1", cfg.OperatorMcpHttpPort())
+			externalIP := config.GetExternalInterfaceIP()
+			gatewayURL := fmt.Sprintf("https://%s:%d/api/v1/mcp", externalIP, cfg.OperatorPublicHTTPSPort())
 			projectRoot := cfg.ProjectRoot
-			hostname := "localhost"
 
-			configStr := string(templateContent)
-			configStr = strings.ReplaceAll(configStr, "{{GATEWAY_URL}}", gatewayURL)
-			configStr = strings.ReplaceAll(configStr, "{{PROJECT_ROOT}}", projectRoot)
-			configStr = strings.ReplaceAll(configStr, "{{HOSTNAME}}", hostname)
-
-			cmd.Println(configStr)
-			cmd.Println()
-			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			cmd.Println("Universal Gateway Configuration")
-			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			cmd.Println("The Gateway provides two MCP endpoints:")
-			cmd.Printf("  1. mTLS Endpoint (recommended): %s\n", gatewayURL)
-			cmd.Printf("  2. Plain HTTP Endpoint: %s\n", gatewayHTTPURL)
-			cmd.Println()
-			cmd.Println("Setup Instructions:")
-			cmd.Println("1. Ensure the Gateway is running: ./g8e gw start")
-			cmd.Println("2. Run ./g8e auth login to obtain mTLS credentials")
-			cmd.Println("3. Set environment variables for your MCP client:")
-			cmd.Printf("   export G8E_CLIENT_CERT_PATH=%s/.g8e/pki/client.crt\n", projectRoot)
-			cmd.Printf("   export G8E_CLIENT_KEY_PATH=%s/.g8e/pki/client.key\n", projectRoot)
-			cmd.Printf("   export G8E_CA_CERT_PATH=%s/.g8e/pki/ca.crt\n", projectRoot)
-			cmd.Println()
-			cmd.Println("4. Copy the JSON configuration above to your MCP client's config file")
-			cmd.Println()
-			cmd.Println("Note: The plain HTTP endpoint does not require mTLS credentials but may have")
-			cmd.Println("      different security policies. Use the mTLS endpoint for production workloads.")
+			cmd.Printf(`{
+  "mcpServers": {
+    "g8e-gateway": {
+      "url": "%s",
+      "env": {
+        "G8E_CLIENT_CERT_PATH": "%s/.g8e/pki/client.crt",
+        "G8E_CLIENT_KEY_PATH": "%s/.g8e/pki/client.key",
+        "G8E_CA_CERT_PATH": "%s/.g8e/pki/ca.crt"
+      }
+    }
+  }
+}
+`, gatewayURL, projectRoot, projectRoot, projectRoot)
 
 			return nil
 		},
@@ -553,22 +527,34 @@ func gatewayMCPConfigCmd() *cobra.Command {
 	return cmd
 }
 
-// generateMCPHttpConfig generates the mcp_http_config.json file with the actual gateway IP address
-func generateMCPHttpConfig(cfg *config.Config, gatewayIP string) error {
-	templatePath := filepath.Join(cfg.ProjectRoot, "docs", "protocols", "mcp", "mcp_http_config.json.template")
-	outputPath := filepath.Join(cfg.ProjectRoot, "docs", "protocols", "mcp", "mcp_http_config.json")
+func gatewayMCPHttpConfigCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mcp-config-http",
+		Short: "Print MCP client configuration for the Gateway plain HTTP endpoint",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
 
-	templateContent, err := os.ReadFile(templatePath)
-	if err != nil {
-		return fmt.Errorf("failed to read MCP HTTP config template: %w", err)
+			externalIP := config.GetExternalInterfaceIP()
+			gatewayHTTPURL := fmt.Sprintf("http://%s:%d/api/v1/mcp", externalIP, cfg.OperatorMcpHttpPort())
+
+			cmd.Printf(`{
+  "mcpServers": {
+    "g8e-gateway": {
+      "serverUrl": "%s",
+      "headers": {
+        "Content-Type": "application/json"
+      }
+    }
+  }
+}
+`, gatewayHTTPURL)
+
+			return nil
+		},
 	}
 
-	configStr := string(templateContent)
-	configStr = strings.ReplaceAll(configStr, "{{GATEWAY_IP}}", gatewayIP)
-
-	if err := os.WriteFile(outputPath, []byte(configStr), 0644); err != nil {
-		return fmt.Errorf("failed to write MCP HTTP config: %w", err)
-	}
-
-	return nil
+	return cmd
 }
