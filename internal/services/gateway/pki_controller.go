@@ -18,6 +18,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -64,9 +65,12 @@ func (c *PKIController) handlePKICABundle(w http.ResponseWriter, r *http.Request
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	pem, err := c.pki.HubTrustBundle()
+	bundlePath := filepath.Join(c.pki.PKIDir(), "trust", "g8eg-ca-bundle.pem")
+	c.logger.Debug("Attempting to read trust bundle", "path", bundlePath, "pki_dir", c.pki.PKIDir())
+	pem, err := c.pki.GatewayTrustBundle()
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, "failed to read hub bundle")
+		c.logger.Error("Failed to read trust bundle", "error", err, "bundle_path", bundlePath, "pki_dir", c.pki.PKIDir())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to read hub bundle: %v", err))
 		return
 	}
 	w.Header().Set(constants.HeaderContentType, "application/x-pem-file")

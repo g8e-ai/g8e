@@ -1103,7 +1103,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 		}
 
 		// Fetch trust bundle
-		hubBundle, err := c.pki.HubTrustBundle()
+		hubBundle, err := c.pki.GatewayTrustBundle()
 		if err != nil {
 			c.logger.Warn("Failed to fetch hub trust bundle", string(constants.ConnectionStateError), err)
 			// Non-fatal - continue without bundle

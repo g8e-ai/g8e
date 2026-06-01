@@ -2,7 +2,7 @@
   "host": "localhost",
   "infra": {
     "app_cert_dir": ".g8e/pki/issued/apps",
-    "ca_cert_path": ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
+    "ca_cert_path": ".g8e/pki/trust/g8eg-ca-bundle.pem",
     "db_path": ".g8e/data/g8e.db",
     "docs_dir": ".g8e/docs",
     "pki_dir": ".g8e/pki",

@@ -317,9 +317,6 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	projectRoot := FindProjectRoot()
 	constants.ResolvePaths(projectRoot)
 
-	mcpDownstreamURL := opts.MCPDownstreamURL
-	a2aDownstreamURL := opts.A2ADownstreamURL
-
 	// Resolve paths using canonical constants
 	dataDir := opts.DataDir
 	if dataDir == "" {
@@ -329,6 +326,9 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	if pkiDir == "" {
 		pkiDir = constants.Paths.Infra.PkiDir
 	}
+
+	mcpDownstreamURL := opts.MCPDownstreamURL
+	a2aDownstreamURL := opts.A2ADownstreamURL
 	secretsDir := opts.SecretsDir
 	if secretsDir == "" {
 		secretsDir = constants.Paths.Infra.SecretsDir
@@ -385,8 +385,6 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 
 	return &Config{
 		ComponentName: constants.ComponentNameG8EOGateway,
-		PKIDir:        pkiDir,     // Also set top-level for services that use Config.PKIDir
-		SecretsDir:    secretsDir, // Also set top-level for services that use Config.SecretsDir
 		Gateway: GatewayConfig{
 			Enabled: true,
 			Posture: posture,
@@ -445,9 +443,6 @@ func Load(opts LoadOptions) (*Config, error) {
 			return nil, fmt.Errorf("invalid --working-dir %q: %w", opts.WorkDir, err)
 		}
 	}
-
-	// Resolve paths based on project root before using them
-	constants.ResolvePaths(workDir)
 
 	if opts.OperatorEndpoint == "" {
 		return nil, fmt.Errorf("OperatorEndpoint is required")

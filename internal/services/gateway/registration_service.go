@@ -309,7 +309,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	}
 
 	// Fetch trust bundle
-	hubBundle, _ := s.pki.HubTrustBundle()
+	hubBundle, _ := s.pki.GatewayTrustBundle()
 
 	// Resolve operator cert and chain from updated doc
 	finalCertPEM := update["operator_cert"].(string)

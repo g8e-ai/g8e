@@ -161,9 +161,6 @@ func TestLogoutCmd(t *testing.T) {
 		os.Setenv("HOME", tmpDir)
 		defer os.Setenv("HOME", originalHome)
 
-		// Resolve paths for this test's tmpDir
-		constants.ResolvePaths(tmpDir)
-
 		// Create a simple config that points to tmpDir for credentials
 		// Avoid using setupTestConfig which creates a conflicting .g8e directory
 		cfg := &config.Config{
@@ -300,7 +297,7 @@ func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
 	require.NoError(t, os.MkdirAll(credentialsDir, 0700))
 
 	// Create trust bundle
-	trustBundlePath := filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
+	trustBundlePath := filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem")
 	require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
 	require.NoError(t, os.WriteFile(trustBundlePath, []byte("dummy-trust-bundle"), 0644))
 

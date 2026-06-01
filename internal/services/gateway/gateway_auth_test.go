@@ -269,7 +269,7 @@ func TestPublicRouteRegistry_Prefixes(t *testing.T) {
 	// Test prefix-based public paths
 	publicPrefixPaths := []string{
 		"/.well-known/g8e/pki/",
-		"/.well-known/g8e/pki/g8e-gw-ca-bundle.pem",
+		"/.well-known/g8e/pki/g8eg-ca-bundle.pem",
 		"/.well-known/g8e/pki/fingerprint",
 		"/.well-known/g8e/pki/some/deep/path",
 	}

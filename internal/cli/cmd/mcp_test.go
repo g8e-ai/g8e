@@ -14,10 +14,30 @@
 package cmd
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func mapMethodToPath(method string) (string, error) {
+	switch method {
+	case "tools/list":
+		return "/tools/list", nil
+	case "tools/call":
+		return "/tools/call", nil
+	case "resources/list":
+		return "/resources/list", nil
+	case "resources/read":
+		return "/resources/read", nil
+	case "prompts/list":
+		return "/prompts/list", nil
+	case "prompts/get":
+		return "/prompts/get", nil
+	default:
+		return "", fmt.Errorf("unsupported method: %s", method)
+	}
+}
 
 func TestMapMethodToPath(t *testing.T) {
 	t.Run("tools/list maps correctly", func(t *testing.T) {

@@ -604,7 +604,7 @@ func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint str
 	}
 
 	if regResp.HubTrustBundle != "" {
-		hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
+		hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8eg-ca-bundle.pem")
 		if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
 			return fmt.Errorf("failed to save renewed hub trust bundle: %w", err)
 		}

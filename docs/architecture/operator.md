@@ -155,32 +155,23 @@ Each operator receives a unique SPIFFE workload identity bound to its mTLS certi
 
 ### 3. Configure AI Client Integration
 
-Configure your AI client to connect to the Gateway's MCP endpoints:
+Configure your AI client to connect to the Gateway's universal HTTP MCP endpoint:
 
-**For IDE Integration (Cursor, Windsurf, Claude Code):**
 ```bash
-# Generate stdio MCP configuration
-./g8e gw mcp-config --transport stdio
-
-# Copy the output to your IDE's MCP config file
-# The g8e CLI will automatically load mTLS certificates from .g8e/pki
-```
-
-**For Direct HTTP Connection (Custom BYO Clients):**
-```bash
-# Generate HTTP MCP configuration
-./g8e gw mcp-config --transport http
+# Generate universal HTTP MCP configuration
+./g8e gw mcp-config
 
 # Set environment variables for mTLS
 export G8E_CLIENT_CERT_PATH=.g8e/pki/client.crt
 export G8E_CLIENT_KEY_PATH=.g8e/pki/client.key
 export G8E_CA_CERT_PATH=.g8e/pki/ca.crt
+
+# Copy the JSON configuration output to your MCP client's config file
 ```
 
 **Protocol Integration:**
-- **Cursor**: Use stdio config via `g8e mcp stdio` bridge
-- **Windsurf**: Use stdio config via `g8e mcp stdio` bridge
-- **Claude Code**: Use stdio config via `g8e mcp stdio` bridge
+- **All Clients**: Use the universal HTTP endpoint with mTLS authentication
+- **IDE Integration (Cursor, Windsurf, Claude Code)**: Configure MCP client with HTTP transport
 - **Custom BYO Clients**: Use HTTP MCP or A2A protocol endpoints
 
 ### 4. Test with a Simple Mutation

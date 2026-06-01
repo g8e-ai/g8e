@@ -103,7 +103,7 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 
 				if regResp.HubTrustBundle != "" {
 					// Save CA bundle to credentials directory alongside client certs
-					hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
+					hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8eg-ca-bundle.pem")
 					if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
 						return fmt.Errorf("failed to save hub trust bundle: %w", err)
 					}
@@ -178,7 +178,7 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 
 			if regResp.HubTrustBundle != "" {
 				// Save CA bundle to credentials directory alongside client certs
-				hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
+				hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8eg-ca-bundle.pem")
 				if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
 					return fmt.Errorf("failed to save hub trust bundle: %w", err)
 				}
@@ -305,7 +305,7 @@ func enrollWindowsCmd() *cobra.Command {
 
 			if regResp.HubTrustBundle != "" {
 				// Save CA bundle to credentials directory alongside client certs
-				hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
+				hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8eg-ca-bundle.pem")
 				if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
 					return fmt.Errorf("failed to save hub trust bundle: %w", err)
 				}

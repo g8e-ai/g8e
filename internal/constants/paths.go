@@ -61,7 +61,7 @@ var Paths = struct {
 		DbPath:               ".g8e/data/g8e.db",
 		PkiDir:               ".g8e/pki",
 		SecretsDir:           ".g8e/secrets",
-		CaCertPath:           ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
+		CaCertPath:           ".g8e/pki/trust/g8eg-ca-bundle.pem",
 		AppCertDir:           ".g8e/pki/issued/apps",
 		DocsDir:              ".g8e/docs",
 		ProtocolDir:          ".g8e/protocol",
@@ -143,13 +143,13 @@ const (
 // CA certificate path constants
 const (
 	CACertDir              = ".g8e/pki/trust"
-	CACertBundlePath       = ".g8e/pki/trust/g8e-gw-ca-bundle.pem"
+	CACertBundlePath       = ".g8e/pki/trust/g8eg-ca-bundle.pem"
 	CACertLegacyBundlePath = ".g8e/pki/ca-bundle.pem"
 )
 
 // ResolvePaths resolves filesystem paths relative to project root.
+// Must be called once at initialization before using any path constants.
 // No environment variables are used - all paths are computed from project root.
-// This replaces the init() function to allow test isolation and proper dependency injection.
 func ResolvePaths(projectRoot string) {
 	pathsMutex.Lock()
 	defer pathsMutex.Unlock()
@@ -167,7 +167,7 @@ func ResolvePaths(projectRoot string) {
 	Paths.Infra.DbPath = filepath.Join(Paths.Infra.DataDir, "g8e.db")
 	Paths.Infra.LocalStateDBPath = filepath.Join(Paths.Infra.RuntimeDir, "local_state.db")
 	Paths.Infra.AuditVaultDBPath = filepath.Join(Paths.Infra.DataDir, "audit_vault.db")
-	Paths.Infra.CaCertPath = filepath.Join(Paths.Infra.PkiDir, "trust/g8e-gw-ca-bundle.pem")
+	Paths.Infra.CaCertPath = filepath.Join(Paths.Infra.PkiDir, "trust/g8eg-ca-bundle.pem")
 	Paths.Infra.AppCertDir = filepath.Join(Paths.Infra.PkiDir, "issued/apps")
 }
 

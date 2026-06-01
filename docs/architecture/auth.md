@@ -32,18 +32,35 @@ The Governance Gateway (g8eg) enforces TLS 1.3 for all L7 communication.
 - **Revocation**: Certificates are checked against a database-backed revoked certificates store. Revocation is enforced at the Gateway.
 - **Identity Binding**: Middleware verifies that the SPIFFE ID in the client certificate matches the specific session identifier (such as `operator_session_id` or `cli_session_id`) inside the `GovernanceEnvelope`.
 
+### PKI Hierarchy & Trust Domain
+
+The platform uses a three-tier PKI hierarchy issued by the Governance Gateway (g8eg):
+
+| Tier | Certificate | Purpose | Validity |
+| :--- | :--- | :--- | :--- |
+| **Root CA** | `g8e Root CA` | Trust anchor for the entire platform | 3650 days |
+| **Hub Intermediate CA** | `g8e Hub Intermediate CA` | Signs the gateway serving certificate | 3650 days |
+| **Operator Intermediate CA** | `g8e Operator Intermediate CA` | Signs all leaf certificates (operator, CLI, app) | 3650 days |
+| **Leaf Certificates** | operator-gateway, operator, CLI, app | End-entity identities for services and clients | 7 days |
+
+**Intermediate Split Rationale**: The hub and operator intermediate CAs are kept separate to enforce a clean blast-radius boundary. The hub intermediate signs only the gateway's serving identity, while the operator intermediate signs delegated workload leaves. This separation allows the operator-issuing key to be rotated or revoked without touching the gateway's serving trust, and vice versa.
+
+**Curve Policy**: All certificates (root, intermediates, serving, and leaves) use ECDSA P-256 for maximum interoperability with SPIFFE/SPIRE and TLS 1.3 stacks.
+
+**Revocation**: Certificate revocation is enforced via a database-backed denylist checked per-request in the mTLS middleware. A standard X.509 CRL signed by the operator intermediate CA is served at `/.well-known/g8e/pki/crl` for external consumption.
+
 ### Enrollment & Bootstrap (CSR-based)
 
 Clients enroll in the platform using a Certificate Signing Request (CSR) bootstrap flow:
 1. **CA Discovery**: Clients fetch the platform root CA bundle from the endpoint `/.well-known/g8e/pki/ca-bundle`.
-2. **CSR Submission**: Clients generate a local ECDSA P-384 key pair and submit a CSR to `/api/v1/pki/csr/sign`.
+2. **CSR Submission**: Clients generate a local ECDSA P-256 key pair and submit a CSR to `/api/v1/pki/csr/sign`.
 3. **Registration**: The Governance Gateway (g8eg) validates the CSR and binds the certificate to a user identity via invitation-based Just-In-Time (JIT) provisioning.
 4. **Session Issuance**: Upon successful enrollment, the Governance Gateway (g8eg) issues a specific `operator_session_id` or `cli_session_id`.
 
 ### Windows Certificate Store Enrollment
 
 Windows users can enroll via the Windows Certificate Store for seamless browser authentication:
-1. **CLI Enrollment**: Run `./g8e auth enroll-windows [--tpm]` to generate an ECDSA P-384 keypair in the Windows Personal store.
+1. **CLI Enrollment**: Run `./g8e auth enroll-windows [--tpm]` to generate an ECDSA P-256 keypair in the Windows Personal store.
 2. **CSR Signing**: The CLI submits a CSR to the Gateway and receives a signed certificate with SPIFFE URI SAN.
 3. **Certificate Import**: The signed certificate is imported to `Cert:\CurrentUser\My` in the Windows Certificate Store.
 4. **Browser Authentication**: Chrome and Edge automatically present certificates from the Windows Personal store when the Gateway issues a TLS CertificateRequest.

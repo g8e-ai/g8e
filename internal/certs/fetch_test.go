@@ -109,7 +109,7 @@ func TestFetchAndSetCA_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := FetchAndSetCA(ctx, srv.URL+"/.well-known/g8e/pki/g8e-gw-ca-bundle.pem", "")
+	err := FetchAndSetCA(ctx, srv.URL+"/.well-known/g8e/pki/g8eg-ca-bundle.pem", "")
 	require.Error(t, err)
 }
 

@@ -125,8 +125,7 @@ The operator must establish outbound-only connectivity to the Gateway:
 
 The operator must expose tools as a Model Context Protocol server:
 
-- **stdio-based MCP**: Support stdio-based MCP for editor integrations (Cursor, Claude Code).
-- **HTTP-based MCP**: Support HTTP-based MCP for direct API access.
+- **HTTP-based MCP**: Support HTTP-based MCP for all client integrations (IDEs, direct API access).
 - **Tool Registration**: Register available tools with the MCP client.
 
 ### Protocol Invariants

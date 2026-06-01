@@ -16,16 +16,11 @@
 package tests
 
 import (
-	"crypto/tls"
 	"fmt"
 	"net/http"
-	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/g8e-ai/g8e/internal/cli/config"
 )
 
 // TestA2ARealOperator_Smoke is a live-operator smoke test that validates
@@ -39,24 +34,11 @@ import (
 // This test requires the platform to be running via `./g8e platform start`
 // and authenticated via `./g8e auth login`.
 func TestA2ARealOperator_Smoke(t *testing.T) {
-	// Load CLI config to get ports and paths
-	cliCfg, err := config.Load("")
-	if err != nil {
-		t.Fatalf("failed to load CLI config: %v", err)
-	}
-
-	// Verify certificates exist (bootstrapped via ./g8e auth login)
-	clientCertPath := cliCfg.CLICertFile()
-	if _, err := os.Stat(clientCertPath); os.IsNotExist(err) {
-		t.Fatalf("client cert not found at %s - run './g8e auth login' first", clientCertPath)
-	}
+	repoRoot := ResolveRepoRootFromTestDir(t)
+	client, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 
 	// Test basic connectivity to operator via HTTPS
 	healthURL := fmt.Sprintf("https://localhost:%d/health", cliCfg.Paths.Ports.OperatorPublicHTTPS)
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr, Timeout: 5 * time.Second}
 
 	resp, err := client.Get(healthURL)
 	require.NoError(t, err)

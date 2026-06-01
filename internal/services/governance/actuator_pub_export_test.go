@@ -18,6 +18,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -66,6 +67,9 @@ func TestActuatorPublicKeyExport(t *testing.T) {
 // exportActuatorPublicKey is a copy of the function in main.go to allow testing.
 // In a real refactor, this should move to internal/services/governance/Actuator.go.
 func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string, logger *slog.Logger) error {
+	if pkiDir == "" {
+		return fmt.Errorf("pkiDir cannot be empty")
+	}
 	if err := os.MkdirAll(pkiDir, 0700); err != nil {
 		return err
 	}

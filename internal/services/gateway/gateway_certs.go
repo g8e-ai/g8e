@@ -17,11 +17,9 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -140,13 +138,11 @@ func (pki *PKIAuthority) TLSConfig() *tls.Config {
 	pki.mu.RLock()
 	defer pki.mu.RUnlock()
 
-	// Create client CA pool from our root and hub authorities
+	// Create client CA pool from root and operator intermediate for client verification
+	// Hub intermediate is excluded as it only signs the gateway serving certificate
 	pool := x509.NewCertPool()
 	if pki.rootCert != nil {
 		pool.AddCert(pki.rootCert)
-	}
-	if pki.hubCert != nil {
-		pool.AddCert(pki.hubCert)
 	}
 	if pki.operatorCert != nil {
 		pool.AddCert(pki.operatorCert)
@@ -165,9 +161,9 @@ func (pki *PKIAuthority) TLSConfig() *tls.Config {
 	}
 }
 
-// TrustBundlePath returns the path to the hub trust bundle.
+// TrustBundlePath returns the path to the gateway trust bundle.
 func (pki *PKIAuthority) TrustBundlePath() string {
-	return filepath.Join(pki.pkiDir, "trust", "g8e-gw-ca-bundle.pem")
+	return filepath.Join(pki.pkiDir, "trust", "g8eg-ca-bundle.pem")
 }
 
 // PKIDir returns the path to the pki directory.
@@ -307,12 +303,12 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	if err != nil {
 		return fmt.Errorf("failed to read root CA: %w", err)
 	}
-	if err := os.WriteFile(rootBundlePath, rootPEM, 0644); err != nil {
+	if err := writePublicPEMBundleFile(rootBundlePath, rootPEM); err != nil {
 		return fmt.Errorf("failed to write root bundle: %w", err)
 	}
 
-	// Hub bundle (root + hub intermediate + operator intermediate)
-	hubBundlePath := filepath.Join(pki.pkiDir, "trust", "g8e-gw-ca-bundle.pem")
+	// Gateway bundle (root + hub intermediate + operator intermediate)
+	gatewayBundlePath := filepath.Join(pki.pkiDir, "trust", "g8eg-ca-bundle.pem")
 	hubPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "hub_ca.crt"))
 	if err != nil {
 		return fmt.Errorf("failed to read hub CA: %w", err)
@@ -325,8 +321,8 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	hubBundle = append(hubBundle, rootPEM...)
 	hubBundle = append(hubBundle, hubPEM...)
 	hubBundle = append(hubBundle, operatorPEM...)
-	if err := os.WriteFile(hubBundlePath, hubBundle, 0644); err != nil {
-		return fmt.Errorf("failed to write hub bundle: %w", err)
+	if err := writePublicPEMBundleFile(gatewayBundlePath, hubBundle); err != nil {
+		return fmt.Errorf("failed to write gateway bundle: %w", err)
 	}
 
 	// Operator bundle (root + operator intermediate)
@@ -334,7 +330,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	operatorBundle := make([]byte, 0, len(rootPEM)+len(operatorPEM))
 	operatorBundle = append(operatorBundle, rootPEM...)
 	operatorBundle = append(operatorBundle, operatorPEM...)
-	if err := os.WriteFile(operatorBundlePath, operatorBundle, 0644); err != nil {
+	if err := writePublicPEMBundleFile(operatorBundlePath, operatorBundle); err != nil {
 		return fmt.Errorf("failed to write operator bundle: %w", err)
 	}
 
@@ -343,18 +339,25 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 		"trust_domain": protocol.TrustDomain,
 	}
 	trustDomainJSON, _ := json.MarshalIndent(trustDomainData, "", "  ")
-	if err := os.WriteFile(filepath.Join(pki.pkiDir, "trust", "trust-domain.json"), trustDomainJSON, 0600); err != nil {
+	if err := writeSensitivePEMFile(filepath.Join(pki.pkiDir, "trust", "trust-domain.json"), "TRUST DOMAIN", trustDomainJSON); err != nil {
 		return fmt.Errorf("failed to write trust-domain.json: %w", err)
 	}
 
 	return nil
 }
 
-// HubTrustBundle returns the full PEM-encoded hub trust bundle (root + hub intermediate).
-func (pki *PKIAuthority) HubTrustBundle() ([]byte, error) {
+// GatewayTrustBundle returns the full PEM-encoded gateway trust bundle (root + hub intermediate + operator intermediate).
+func (pki *PKIAuthority) GatewayTrustBundle() ([]byte, error) {
 	pki.mu.RLock()
 	defer pki.mu.RUnlock()
-	return os.ReadFile(filepath.Join(pki.pkiDir, "trust", "g8e-gw-ca-bundle.pem"))
+	bundlePath := filepath.Join(pki.pkiDir, "trust", "g8eg-ca-bundle.pem")
+	pki.logger.Debug("GatewayTrustBundle reading", "path", bundlePath, "pki_dir", pki.pkiDir)
+	data, err := os.ReadFile(bundlePath)
+	if err != nil {
+		pki.logger.Error("GatewayTrustBundle failed to read", "error", err, "path", bundlePath, "pki_dir", pki.pkiDir)
+		return nil, err
+	}
+	return data, nil
 }
 
 // RevokeCertificate adds a certificate serial to the revocation list.
@@ -474,17 +477,6 @@ func (pki *PKIAuthority) VerifyCertificate(cert *x509.Certificate) error {
 	}
 
 	return nil
-}
-
-func (pki *PKIAuthority) signData(data []byte, key *ecdsa.PrivateKey) (string, error) {
-	hash := sha256.Sum256(data)
-	r, s, err := ecdsa.Sign(rand.Reader, key, hash[:])
-	if err != nil {
-		return "", err
-	}
-
-	sig := append(r.Bytes(), s.Bytes()...)
-	return base64.RawURLEncoding.EncodeToString(sig), nil
 }
 
 // SignCSR signs a certificate signing request using the operator intermediate CA.
@@ -652,7 +644,7 @@ func (pki *PKIAuthority) generateRootCA(certPath string) error {
 		return err
 	}
 
-	if err := writePublicPEMFile(certPath, "CERTIFICATE", certDER); err != nil {
+	if err := writePublicDERCertificateFile(certPath, "CERTIFICATE", certDER); err != nil {
 		return err
 	}
 
@@ -709,7 +701,7 @@ func (pki *PKIAuthority) generateIntermediateCA(certPath string, parentCert *x50
 		return err
 	}
 
-	if err := writePublicPEMFile(certPath, "CERTIFICATE", certDER); err != nil {
+	if err := writePublicDERCertificateFile(certPath, "CERTIFICATE", certDER); err != nil {
 		return err
 	}
 
@@ -804,11 +796,12 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 	chainPEM = append(chainPEM, hubPEM...)
 	chainPEM = append(chainPEM, rootPEM...)
 	chainPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.chain.pem")
+	// Write chain PEM directly without re-encoding (chainPEM is already concatenated PEM blocks)
 	if err := os.WriteFile(chainPath, chainPEM, 0600); err != nil {
 		return fmt.Errorf("failed to write chain: %w", err)
 	}
 
-	if err := writePublicPEMFile(serviceCertPath, "CERTIFICATE", certDER); err != nil {
+	if err := writePublicDERCertificateFile(serviceCertPath, "CERTIFICATE", certDER); err != nil {
 		return err
 	}
 
@@ -832,7 +825,8 @@ func randomSerial() (*big.Int, error) {
 }
 
 // writePEMFile writes a PEM-encoded file with the specified mode.
-// Use writePublicPEMFile for public certificates/bundles (0644).
+// Use writePublicDERCertificateFile for DER-encoded certificates (0644).
+// Use writePublicPEMBundleFile for already-PEM-encoded bundles (0644).
 // Use writeSensitivePEMFile for sensitive data like chains (0600).
 func writePEMFile(path, pemType string, der []byte, mode os.FileMode) (err error) {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
@@ -848,7 +842,26 @@ func writePEMFile(path, pemType string, der []byte, mode os.FileMode) (err error
 	return pem.Encode(f, &pem.Block{Type: pemType, Bytes: der})
 }
 
+// writePublicDERCertificateFile writes a DER-encoded certificate as PEM with 0644 permissions.
+// This wraps DER bytes in a PEM block.
+func writePublicDERCertificateFile(path, pemType string, der []byte) error {
+	return writePEMFile(path, pemType, der, 0644)
+}
+
+// writePublicPEMBundleFile writes already-PEM-encoded bundle bytes directly with 0644 permissions.
+// This does NOT wrap the input in another PEM block; the input must already be valid PEM.
+func writePublicPEMBundleFile(path string, pemBytes []byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(pemBytes)
+	return err
+}
+
 // writePublicPEMFile writes a public certificate or bundle with 0644 permissions.
+// Deprecated: Use writePublicDERCertificateFile for DER input or writePublicPEMBundleFile for PEM input.
 func writePublicPEMFile(path, pemType string, der []byte) error {
 	return writePEMFile(path, pemType, der, 0644)
 }

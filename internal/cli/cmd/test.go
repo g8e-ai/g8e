@@ -388,12 +388,9 @@ func testReviewCmd() *cobra.Command {
 		Short: "Review integration test vault results",
 		Long:  `Inspect and manage persistent test vaults from integration test runs.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			vaultDir := filepath.Join(cfg.ProjectRoot, constants.Paths.Infra.TestVaultDir)
+			projectRoot := constants.ResolveProjectRoot()
+			constants.ResolvePaths(projectRoot)
+			vaultDir := constants.Paths.Infra.TestVaultDir
 
 			if clean {
 				if cleanOld > 0 {
@@ -610,12 +607,9 @@ func testSummaryCmd() *cobra.Command {
 		Short: "Show summary of all integration test results",
 		Long:  `Aggregate and display test results from all test vaults in ` + constants.Paths.Infra.TestVaultDir + `/`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			vaultDir := filepath.Join(cfg.ProjectRoot, constants.Paths.Infra.TestVaultDir)
+			projectRoot := constants.ResolveProjectRoot()
+			constants.ResolvePaths(projectRoot)
+			vaultDir := constants.Paths.Infra.TestVaultDir
 			entries, err := os.ReadDir(vaultDir)
 			if err != nil {
 				if os.IsNotExist(err) {

@@ -74,7 +74,7 @@ func setupTestContext(t *testing.T) *TestContext {
 	clientKeyPath := cliCfg.CLIKeyFile()
 	// Use the CA bundle saved to credentials directory during auth login
 	// This is the CA that actually signed the client cert
-	caBundlePath := filepath.Join(cliCfg.CredentialsDir, "g8e-gw-ca-bundle.pem")
+	caBundlePath := filepath.Join(cliCfg.CredentialsDir, "g8eg-ca-bundle.pem")
 
 	// Verify certificates exist
 	if _, err := os.Stat(clientCertPath); os.IsNotExist(err) {

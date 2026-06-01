@@ -63,7 +63,7 @@ func TestPKIPhase2_CalculateSerialFromPEM(t *testing.T) {
 	require.NoError(t, err)
 
 	// Generate a CSR and sign it
-	csr := testutil.GenerateTestCSR(t, "test-operator")
+	csr := testutil.GenerateTestCSRP256(t, "test-operator")
 	certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
 	require.NoError(t, err)
 
@@ -147,7 +147,7 @@ func TestPKIPhase3_CLI_CSR_Mandatory(t *testing.T) {
 		regSvc := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, cfg)
 
 		// Generate only operator CSR, no CLI CSR
-		opCSR := testutil.GenerateTestCSR(t, "test-operator")
+		opCSR := testutil.GenerateTestCSRP256(t, "test-operator")
 
 		req := models.OperatorRegistrationRequest{
 			SystemFingerprint: "test-fingerprint",

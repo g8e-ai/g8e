@@ -42,6 +42,16 @@ UPX := $(shell command -v upx 2>/dev/null || echo "/usr/local/bin/upx")
 help:
 	@echo "g8e Platform Root Makefile"
 	@echo ""
+	@echo "Platform Commands (via ./g8e):"
+	@echo "  ./g8e gw                    Gateway lifecycle (start, stop, status, logs)"
+	@echo "  ./g8e apps                  Application lifecycle (start, stop, status, logs)"
+	@echo "  ./g8e auth                  Authentication (login, logout)"
+	@echo "  ./g8e data                  Data operations (export, import, query)"
+	@echo "  ./g8e evals                 Run evaluation suites"
+	@echo "  ./g8e security              Security operations (pki, certificates)"
+	@echo "  ./g8e setup                 Initial setup and configuration"
+	@echo "  ./g8e vars                  Environment variable management"
+	@echo ""
 	@echo "CI/CD (Local):"
 	@echo "  ci            Run full CI pipeline locally (mirrors GitHub Actions)"
 	@echo "  ci-platform   Run platform-only CI (operator, protocol, proto, docs)"
@@ -58,10 +68,18 @@ help:
 	@echo "  build-compressed Build g8e with UPX compression"
 	@echo ""
 	@echo "Test:"
-	@echo "  test          Run all tests with race detection"
-	@echo "  test-short    Run short tests with race detection"
-	@echo "  test-coverage Run tests with coverage (enforces 60% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
-	@echo "  test-shuffle  Run all tests with randomized order"
+	@echo "  test                  Run all tests with race detection"
+	@echo "  test-short            Run short tests with race detection"
+	@echo "  test-coverage         Run tests with coverage (enforces 60% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
+	@echo "  test-shuffle          Run all tests with randomized order"
+	@echo "  test-integration      Run integration tests (requires platform running and auth login)"
+	@echo "  test-scenario         Run scenario integration tests (requires platform running)"
+	@echo "  test-gateway          Run gateway tests"
+	@echo "  test-mcp              Run MCP tests"
+	@echo "  test-a2a              Run A2A tests"
+	@echo "  test-universal-gateway Run universal gateway integration tests (requires platform running and auth login)"
+	@echo "  test-byo              Run BYO client tests (requires platform running and auth login)"
+	@echo "  test-native           Run native real operator tests (requires platform running and auth login)"
 	@echo ""
 	@echo "Lint & Quality:"
 	@echo "  lint          Run all linting and quality checks"
@@ -262,6 +280,46 @@ test-coverage:
 .PHONY: test-shuffle
 test-shuffle:
 	@go test -race -count=1 -shuffle=on -timeout 180s ./...
+
+.PHONY: test-integration
+test-integration:
+	@echo "Running integration tests (requires platform running and auth login)..."
+	@go test -tags=integration -race -count=1 -timeout 180s ./test/...
+
+.PHONY: test-scenario
+test-scenario:
+	@echo "Running scenario integration tests (requires platform running)..."
+	@go test -tags=integration -race -count=1 -timeout 180s ./test/scenario/...
+
+.PHONY: test-gateway
+test-gateway:
+	@echo "Running gateway tests..."
+	@go test -race -count=1 -timeout 180s ./test/a2a_gateway_test.go ./test/mcp_gateway_test.go ./test/mcp_stdio_test.go
+
+.PHONY: test-mcp
+test-mcp:
+	@echo "Running MCP tests..."
+	@go test -race -count=1 -timeout 180s ./test/mcp_gateway_test.go ./test/mcp_real_operator_test.go ./test/mcp_stdio_test.go
+
+.PHONY: test-a2a
+test-a2a:
+	@echo "Running A2A tests..."
+	@go test -race -count=1 -timeout 180s ./test/a2a_gateway_test.go ./test/a2a_real_operator_test.go
+
+.PHONY: test-universal-gateway
+test-universal-gateway:
+	@echo "Running universal gateway integration tests (requires platform running and auth login)..."
+	@go test -tags=integration -race -count=1 -timeout 180s ./test/universal_gateway_integration_test.go
+
+.PHONY: test-byo
+test-byo:
+	@echo "Running BYO client tests (requires platform running and auth login)..."
+	@go test -tags=integration -race -count=1 -timeout 180s ./test/byo_client_test.go
+
+.PHONY: test-native
+test-native:
+	@echo "Running native real operator tests (requires platform running and auth login)..."
+	@go test -tags=integration -race -count=1 -timeout 180s ./test/native_real_operator_test.go
 
 
 # =============================================================================

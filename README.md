@@ -76,7 +76,7 @@ graph TD
         O1 --- D1
     end
 
-    C1 -. "stdio bridge<br/>g8e mcp stdio" .-> GW
+    C1 -. "HTTP/mTLS<br/>universal endpoint" .-> GW
     C2 --> GW
     O1 -. "outbound-only mTLS" .-> GW
 ```

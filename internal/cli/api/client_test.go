@@ -124,7 +124,7 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 		"host": "localhost",
 		"infra": {
 			"app_cert_dir": "/tmp/app/certs",
-			"ca_cert_path": ".g8e/pki/trust/g8e-gw-ca-bundle.pem",
+			"ca_cert_path": ".g8e/pki/trust/g8eg-ca-bundle.pem",
 			"db_path": "/tmp/db",
 			"docs_dir": "/tmp/docs",
 			"pki_dir": ".g8e/pki",
@@ -145,7 +145,7 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 
 	caCertPEM := generateTestCA(t)
-	trustBundlePath := filepath.Join(projectRoot, ".g8e", "pki", "trust", "g8e-gw-ca-bundle.pem")
+	trustBundlePath := filepath.Join(projectRoot, ".g8e", "pki", "trust", "g8eg-ca-bundle.pem")
 	require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
 	require.NoError(t, os.WriteFile(trustBundlePath, caCertPEM, 0644))
 

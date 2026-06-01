@@ -49,16 +49,11 @@ func securityValidateCmd() *cobra.Command {
 		Use:   "validate",
 		Short: "Run security validation checks",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
 			if pkiDir == "" {
-				pkiDir = filepath.Join(cfg.ProjectRoot, constants.Paths.Infra.PkiDir)
+				pkiDir = constants.Paths.Infra.PkiDir
 			}
 			if secretsDir == "" {
-				secretsDir = filepath.Join(cfg.ProjectRoot, constants.Paths.Infra.SecretsDir)
+				secretsDir = constants.Paths.Infra.SecretsDir
 			}
 
 			cmd.Println("Running platform security validation...")
@@ -69,7 +64,7 @@ func securityValidateCmd() *cobra.Command {
 			pkiFiles := []string{
 				filepath.Join(pkiDir, "root", "root_ca.crt"),
 				filepath.Join(pkiDir, "root", "root_ca.key"),
-				filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem"),
+				filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem"),
 				filepath.Join(pkiDir, "warden_pub.pem"),
 			}
 			for _, file := range pkiFiles {
@@ -132,7 +127,7 @@ func securityValidateCmd() *cobra.Command {
 
 			// Check TLS configuration
 			cmd.Println("\n=== TLS Configuration ===")
-			trustBundlePath := filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
+			trustBundlePath := filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem")
 			if trustData, err := os.ReadFile(trustBundlePath); err == nil {
 				certPool := x509.NewCertPool()
 				if certPool.AppendCertsFromPEM(trustData) {
@@ -192,9 +187,11 @@ func securityPKIEnrollCmd() *cobra.Command {
 			}
 
 			// Use outputDir if specified, otherwise use project root
-			baseDir := outputDir
-			if baseDir == "" {
-				baseDir = cfg.ProjectRoot
+			var pkiDir string
+			if outputDir != "" {
+				pkiDir = filepath.Join(outputDir, ".g8e/pki")
+			} else {
+				pkiDir = constants.Paths.Infra.PkiDir
 			}
 
 			cmd.Println("Generating CSR for enrollment...")
@@ -219,7 +216,6 @@ func securityPKIEnrollCmd() *cobra.Command {
 				return fmt.Errorf("unexpected response: missing certificate")
 			}
 
-			pkiDir := filepath.Join(baseDir, constants.Paths.Infra.PkiDir)
 			if err := os.MkdirAll(pkiDir, 0700); err != nil {
 				return fmt.Errorf("failed to create PKI directory: %w", err)
 			}
@@ -248,7 +244,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 				if err := os.MkdirAll(trustDir, 0700); err != nil {
 					return fmt.Errorf("failed to create trust directory: %w", err)
 				}
-				bundlePath := filepath.Join(trustDir, "g8e-gw-ca-bundle.pem")
+				bundlePath := filepath.Join(trustDir, "g8eg-ca-bundle.pem")
 				if err := os.WriteFile(bundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
 					return fmt.Errorf("failed to save trust bundle: %w", err)
 				}
@@ -263,7 +259,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 			cmd.Printf("CLI Certificate saved to: %s\n", cliCertPath)
 			cmd.Printf("CLI Key saved to: %s\n", cliKeyPath)
 			if regResp.HubTrustBundle != "" {
-				cmd.Printf("Trust bundle saved to: %s\n", filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem"))
+				cmd.Printf("Trust bundle saved to: %s\n", filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem"))
 			}
 
 			return nil

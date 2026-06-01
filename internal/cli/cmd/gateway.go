@@ -110,7 +110,7 @@ func gatewayStartCmd() *cobra.Command {
 			}
 
 			externalIP := config.GetExternalInterfaceIP()
-			runtimeDir := filepath.Join(cfg.ProjectRoot, constants.Paths.Infra.RuntimeDir)
+			runtimeDir := constants.Paths.Infra.RuntimeDir
 			ledgerDir := filepath.Join(runtimeDir, "data", "ledger")
 
 			cmd.Println()
@@ -487,8 +487,6 @@ func gatewayCleanCmd() *cobra.Command {
 }
 
 func gatewayMCPConfigCmd() *cobra.Command {
-	var transportType string
-
 	cmd := &cobra.Command{
 		Use:   "mcp-config",
 		Short: "Print MCP client configuration for the Gateway",
@@ -498,12 +496,7 @@ func gatewayMCPConfigCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			var templatePath string
-			if transportType == "http" {
-				templatePath = filepath.Join(cfg.ProjectRoot, "protocol", "examples", "mcp_server", "g8e_gateway_mcp_config_http.json")
-			} else {
-				templatePath = filepath.Join(cfg.ProjectRoot, "protocol", "examples", "mcp_server", "g8e_gateway_mcp_config.json")
-			}
+			templatePath := filepath.Join(cfg.ProjectRoot, "protocol", "examples", "mcp_server", "g8e_gateway_mcp_config.json")
 
 			templateContent, err := os.ReadFile(templatePath)
 			if err != nil {
@@ -522,34 +515,24 @@ func gatewayMCPConfigCmd() *cobra.Command {
 			cmd.Println(configStr)
 			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			cmd.Println("MCP Configuration Instructions")
+			cmd.Println("Universal Gateway Configuration")
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-
-			if transportType == "stdio" {
-				cmd.Println("Stdio Mode (IDE Integration):")
-				cmd.Println("1. Ensure g8e binary is on your PATH")
-				cmd.Println("2. Run ./g8e auth login to bootstrap certificates")
-				cmd.Println("3. Copy the JSON configuration above to your IDE's MCP config")
-				cmd.Println("4. The g8e CLI will automatically load mTLS certs from .g8e/pki")
-			} else {
-				cmd.Println("HTTP Mode (Direct Connection):")
-				cmd.Println("1. Set environment variables for your MCP client:")
-				cmd.Printf("   export G8E_CLIENT_CERT_PATH=%s/.g8e/pki/client.crt\n", projectRoot)
-				cmd.Printf("   export G8E_CLIENT_KEY_PATH=%s/.g8e/pki/client.key\n", projectRoot)
-				cmd.Printf("   export G8E_CA_CERT_PATH=%s/.g8e/pki/ca.crt\n", projectRoot)
-				cmd.Println()
-				cmd.Println("2. Copy the JSON configuration above to your MCP client's config file")
-			}
-
+			cmd.Println("The Gateway uses a single HTTP endpoint that auto-detects all payload types.")
 			cmd.Println()
-			cmd.Println("3. Ensure the Gateway is running: ./g8e gw start")
+			cmd.Println("Setup Instructions:")
+			cmd.Println("1. Ensure the Gateway is running: ./g8e gw start")
+			cmd.Println("2. Run ./g8e auth login to obtain mTLS credentials")
+			cmd.Println("3. Set environment variables for your MCP client:")
+			cmd.Printf("   export G8E_CLIENT_CERT_PATH=%s/.g8e/pki/client.crt\n", projectRoot)
+			cmd.Printf("   export G8E_CLIENT_KEY_PATH=%s/.g8e/pki/client.key\n", projectRoot)
+			cmd.Printf("   export G8E_CA_CERT_PATH=%s/.g8e/pki/ca.crt\n", projectRoot)
+			cmd.Println()
+			cmd.Println("4. Copy the JSON configuration above to your MCP client's config file")
 			cmd.Println()
 
 			return nil
 		},
 	}
-
-	cmd.Flags().StringVar(&transportType, "transport", "stdio", "Transport type: stdio (for IDEs) or http (direct)")
 
 	return cmd
 }

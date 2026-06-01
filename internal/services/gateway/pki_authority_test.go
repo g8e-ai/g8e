@@ -248,12 +248,23 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		err := pki.EnsurePKI(nil)
 		require.NoError(t, err)
 
-		// Verify trust bundles
-		bundles := []string{"root.pem", "g8e-gw-ca-bundle.pem", "operator-bundle.pem"}
-		for _, bundle := range bundles {
-			bundlePath := filepath.Join(pkiDir, "trust", bundle)
-			_, err := os.Stat(bundlePath)
-			require.NoError(t, err, "trust bundle %s should exist", bundle)
+		// Verify trust bundles exist and parse correctly
+		bundles := map[string]int{
+			"root.pem":            1, // root only
+			"g8eg-ca-bundle.pem":  3, // root + hub + operator
+			"operator-bundle.pem": 2, // root + operator
+		}
+		for bundleName, expectedCount := range bundles {
+			bundlePath := filepath.Join(pkiDir, "trust", bundleName)
+			bundlePEM, err := os.ReadFile(bundlePath)
+			require.NoError(t, err, "trust bundle %s should exist", bundleName)
+
+			certPool := x509.NewCertPool()
+			ok := certPool.AppendCertsFromPEM(bundlePEM)
+			require.True(t, ok, "trust bundle %s should parse as valid PEM", bundleName)
+
+			actualCount := len(certPool.Subjects())
+			assert.Equal(t, expectedCount, actualCount, "trust bundle %s should contain %d certificates", bundleName, expectedCount)
 		}
 
 		// Verify trust domain metadata
@@ -278,6 +289,46 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		rootCAPath := filepath.Join(pkiDir, "ca.crt")
 		_, err = os.Stat(rootCAPath)
 		assert.True(t, os.IsNotExist(err), "ca.crt must not exist at PKI root")
+	})
+
+	t.Run("Serving certificate verifies against trust bundle", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.EnsurePKI(nil)
+		require.NoError(t, err)
+
+		// Load the serving certificate
+		serviceCertPath := filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt")
+		serviceCertPEM, err := os.ReadFile(serviceCertPath)
+		require.NoError(t, err, "serving certificate should exist")
+
+		serviceCertBlock, _ := pem.Decode(serviceCertPEM)
+		require.NotNil(t, serviceCertBlock, "serving certificate should decode as PEM")
+		serviceCert, err := x509.ParseCertificate(serviceCertBlock.Bytes)
+		require.NoError(t, err, "serving certificate should parse as X.509")
+
+		// Load the trust bundle
+		trustBundlePath := filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem")
+		trustBundlePEM, err := os.ReadFile(trustBundlePath)
+		require.NoError(t, err, "trust bundle should exist")
+
+		trustPool := x509.NewCertPool()
+		ok := trustPool.AppendCertsFromPEM(trustBundlePEM)
+		require.True(t, ok, "trust bundle should parse as valid PEM")
+
+		// Verify the serving certificate against the trust bundle
+		opts := x509.VerifyOptions{
+			Roots: trustPool,
+		}
+		chains, err := serviceCert.Verify(opts)
+		require.NoError(t, err, "serving certificate should verify against trust bundle")
+		assert.NotEmpty(t, chains, "verification should return at least one chain")
 	})
 }
 
@@ -549,7 +600,7 @@ func TestPKIAuthority_TrustBundlePath(t *testing.T) {
 	err := pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
-	expectedPath := filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
+	expectedPath := filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem")
 	actualPath := pki.TrustBundlePath()
 	assert.Equal(t, expectedPath, actualPath)
 
@@ -864,7 +915,7 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		defer cleanup()
 
 		// Document current behavior for all critical issues
-		csr := testutil.GenerateTestCSR(t, "test-operator")
+		csr := testutil.GenerateTestCSRP256(t, "test-operator")
 		certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
 		require.NoError(t, err)
 
@@ -872,10 +923,10 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		require.NotNil(t, block)
 		cert, _ := x509.ParseCertificate(block.Bytes)
 
-		// C1: Service cert has 90-day TTL (AFTER FIX)
-		serviceDuration := time.Duration(servingCertValidityDays) * 24 * time.Hour
+		// C1: Leaf cert has 7-day TTL (AFTER FIX)
 		leafDuration := cert.NotAfter.Sub(cert.NotBefore)
-		assert.InDelta(t, serviceDuration.Hours(), leafDuration.Hours(), 1.0, "C1: leaf has 7-day TTL, not 90-day")
+		expectedLeafDuration := time.Duration(leafCertValidityDays) * 24 * time.Hour
+		assert.InDelta(t, expectedLeafDuration.Hours(), leafDuration.Hours(), 1.0, "C1: leaf has 7-day TTL, not 90-day")
 	})
 
 	t.Run("GenerateCRL creates standard X.509 CRL", func(t *testing.T) {
@@ -891,7 +942,7 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		require.NoError(t, err)
 
 		// Revoke a certificate
-		csr := testutil.GenerateTestCSR(t, "test-operator")
+		csr := testutil.GenerateTestCSRP256(t, "test-operator")
 		certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
 		require.NoError(t, err)
 
@@ -912,8 +963,8 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify the CRL contains the revoked serial
-		assert.Len(t, crl.RevokedCertificates, 1)
-		assert.Equal(t, cert.SerialNumber, crl.RevokedCertificates[0].SerialNumber)
+		assert.Len(t, crl.RevokedCertificateEntries, 1)
+		assert.Equal(t, cert.SerialNumber, crl.RevokedCertificateEntries[0].SerialNumber)
 
 		// Verify CRL signature can be verified with operator CA
 		err = crl.CheckSignatureFrom(pki.operatorCert)
@@ -942,7 +993,7 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify the CRL is empty
-		assert.Len(t, crl.RevokedCertificates, 0)
+		assert.Len(t, crl.RevokedCertificateEntries, 0)
 	})
 
 	t.Run("Phase5: SignCSR rejects P-384 CSR", func(t *testing.T) {
@@ -986,7 +1037,7 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		require.NoError(t, err)
 
 		// Generate a P-256 CSR (should be accepted)
-		csr := testutil.GenerateTestCSR(t, "test-operator")
+		csr := testutil.GenerateTestCSRP256(t, "test-operator")
 		certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
 		assert.NoError(t, err)
 		assert.NotEmpty(t, certPEM)
@@ -1038,7 +1089,7 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 			filepath.Join(pkiDir, "authorities", "operator_ca.crt"),
 			filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"),
 			filepath.Join(pkiDir, "trust", "root.pem"),
-			filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem"),
+			filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem"),
 			filepath.Join(pkiDir, "trust", "operator-bundle.pem"),
 		}
 
@@ -1084,5 +1135,132 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		appsDir := filepath.Join(pkiDir, "issued", "apps")
 		_, err = os.Stat(appsDir)
 		assert.True(t, os.IsNotExist(err), "issued/apps directory should not be created")
+	})
+
+	t.Run("Phase8_1: root.pem parses with 1 certificate", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.EnsurePKI(nil)
+		require.NoError(t, err)
+
+		// Load root.pem bundle
+		rootBundlePath := filepath.Join(pkiDir, "trust", "root.pem")
+		rootPEM, err := os.ReadFile(rootBundlePath)
+		require.NoError(t, err)
+
+		// Parse with x509.NewCertPool().AppendCertsFromPEM
+		pool := x509.NewCertPool()
+		ok := pool.AppendCertsFromPEM(rootPEM)
+		assert.True(t, ok, "root.pem should parse as valid PEM bundle")
+
+		// Verify it contains exactly 1 certificate (root CA)
+		subjects := pool.Subjects()
+		assert.Len(t, subjects, 1, "root.pem should contain exactly 1 certificate")
+	})
+
+	t.Run("Phase8_1: operator-bundle.pem parses with 2 certificates", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.EnsurePKI(nil)
+		require.NoError(t, err)
+
+		// Load operator-bundle.pem
+		operatorBundlePath := filepath.Join(pkiDir, "trust", "operator-bundle.pem")
+		operatorPEM, err := os.ReadFile(operatorBundlePath)
+		require.NoError(t, err)
+
+		// Parse with x509.NewCertPool().AppendCertsFromPEM
+		pool := x509.NewCertPool()
+		ok := pool.AppendCertsFromPEM(operatorPEM)
+		assert.True(t, ok, "operator-bundle.pem should parse as valid PEM bundle")
+
+		// Verify it contains exactly 2 certificates (root + operator intermediate)
+		subjects := pool.Subjects()
+		assert.Len(t, subjects, 2, "operator-bundle.pem should contain exactly 2 certificates (root + operator intermediate)")
+	})
+
+	t.Run("Phase8_1: g8eg-ca-bundle.pem parses with 3 certificates", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.EnsurePKI(nil)
+		require.NoError(t, err)
+
+		// Load g8eg-ca-bundle.pem
+		gatewayBundlePath := filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem")
+		gatewayPEM, err := os.ReadFile(gatewayBundlePath)
+		require.NoError(t, err)
+
+		// Parse with x509.NewCertPool().AppendCertsFromPEM
+		pool := x509.NewCertPool()
+		ok := pool.AppendCertsFromPEM(gatewayPEM)
+		assert.True(t, ok, "g8eg-ca-bundle.pem should parse as valid PEM bundle")
+
+		// Verify it contains exactly 3 certificates (root + hub intermediate + operator intermediate)
+		subjects := pool.Subjects()
+		assert.Len(t, subjects, 3, "g8eg-ca-bundle.pem should contain exactly 3 certificates (root + hub + operator intermediates)")
+	})
+
+	t.Run("Phase8_1: serving certificate verifies against g8eg-ca-bundle.pem", func(t *testing.T) {
+		t.Parallel()
+		dataDir := t.TempDir()
+		pkiDir := filepath.Join(dataDir, "pki")
+		logger := testutil.NewTestLogger()
+		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+
+		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		err := pki.EnsurePKI(nil)
+		require.NoError(t, err)
+
+		// Load the serving certificate
+		serviceCertPath := filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt")
+		certPEM, err := os.ReadFile(serviceCertPath)
+		require.NoError(t, err)
+
+		block, _ := pem.Decode(certPEM)
+		require.NotNil(t, block, "serving certificate should decode as PEM")
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		require.NoError(t, err, "serving certificate should parse as X.509")
+
+		// Load the gateway trust bundle
+		gatewayBundlePath := filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem")
+		gatewayPEM, err := os.ReadFile(gatewayBundlePath)
+		require.NoError(t, err)
+
+		// Parse the trust bundle
+		pool := x509.NewCertPool()
+		ok := pool.AppendCertsFromPEM(gatewayPEM)
+		require.True(t, ok, "g8eg-ca-bundle.pem should parse as valid PEM bundle")
+
+		// Verify the serving certificate against the trust bundle
+		// The serving cert is signed by hub intermediate, which is in the bundle
+		opts := x509.VerifyOptions{
+			Roots:         pool,
+			Intermediates: pool,
+			KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		}
+
+		chains, err := cert.Verify(opts)
+		assert.NoError(t, err, "serving certificate should verify against g8eg-ca-bundle.pem")
+		assert.NotEmpty(t, chains, "verification should return at least one valid chain")
 	})
 }

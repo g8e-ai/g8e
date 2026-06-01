@@ -280,7 +280,7 @@ test/
 
 ```text
 .g8e/
-├── pki/                            # Certificates, keys, g8e-gw-ca-bundle.pem
+├── pki/                            # Certificates, keys, g8eg-ca-bundle.pem
 ├── data/                           # SQLite databases (audit vault, gateway DB, local store)
 ├── ledger/                         # Git-backed ledger (go-git)
 │   └── sessions/{id}/.git          # Session-scoped repos

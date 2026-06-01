@@ -61,17 +61,16 @@ type TLSConfig struct {
 }
 
 /*
-TestMCPStdio_ConfigOutput validates that the gw mcp-config command
-produces valid stdio transport configuration for IDE integration.
+TestMCPGateway_ConfigOutput validates that the gw mcp-config command
+produces valid HTTP transport configuration for universal gateway access.
 
 This test verifies:
-1. Default output uses stdio transport
-2. Command references g8e mcp stdio
-3. HTTP mode produces valid HTTP transport config
-4. Both modes include correct Gateway URL placeholder
+1. Default output uses HTTP transport (universal endpoint)
+2. HTTP transport includes correct Gateway URL placeholder
+3. TLS configuration is present for mTLS
 */
-func TestMCPStdio_ConfigOutput(t *testing.T) {
-	t.Run("stdio mode default", func(t *testing.T) {
+func TestMCPGateway_ConfigOutput(t *testing.T) {
+	t.Run("http mode default", func(t *testing.T) {
 		output, err := runCLICommand("gw", "mcp-config")
 		if err != nil {
 			t.Skipf("CLI config not available (run './g8e auth login' first): %v", err)
@@ -84,63 +83,37 @@ func TestMCPStdio_ConfigOutput(t *testing.T) {
 		gatewayConfig, ok := config.MCPServers["g8e-gateway"]
 		assert.True(t, ok, "should have g8e-gateway config")
 
-		assert.Equal(t, "stdio", gatewayConfig.Transport.Type, "default transport should be stdio")
-		assert.Equal(t, "g8e", gatewayConfig.Transport.Command, "command should be g8e")
-		assert.Len(t, gatewayConfig.Transport.Args, 3, "should have 3 args")
-		assert.Equal(t, "mcp", gatewayConfig.Transport.Args[0])
-		assert.Equal(t, "stdio", gatewayConfig.Transport.Args[1])
-		assert.Contains(t, gatewayConfig.Transport.Args[2], "https://localhost:", "endpoint should include Gateway URL")
-	})
-
-	t.Run("http mode", func(t *testing.T) {
-		output, err := runCLICommand("gw", "mcp-config", "--transport", "http")
-		if err != nil {
-			t.Skipf("CLI config not available (run './g8e auth login' first): %v", err)
-		}
-
-		var config MCPConfig
-		err = json.Unmarshal([]byte(output), &config)
-		assert.NoError(t, err, "output should be valid JSON")
-
-		gatewayConfig, ok := config.MCPServers["g8e-gateway"]
-		assert.True(t, ok, "should have g8e-gateway config")
-
-		assert.Equal(t, "http", gatewayConfig.Transport.Type, "transport should be http")
+		assert.Equal(t, "http", gatewayConfig.Transport.Type, "default transport should be http")
 		assert.Contains(t, gatewayConfig.Transport.URL, "https://localhost:", "url should include Gateway URL")
 		assert.NotNil(t, gatewayConfig.TLS, "should have tls config for http mode")
+		assert.Equal(t, "G8E_CLIENT_CERT_PATH", gatewayConfig.TLS.ClientCertificateEnv)
+		assert.Equal(t, "G8E_CLIENT_KEY_PATH", gatewayConfig.TLS.ClientKeyEnv)
+		assert.Equal(t, "G8E_CA_CERT_PATH", gatewayConfig.TLS.CACertificateEnv)
 	})
 }
 
 /*
-TestMCPStdio_CommandExists validates that the g8e mcp stdio command
-is available and has the correct help text.
+TestMCPGateway_CommandExists validates that the g8e gw mcp-config command
+is available and produces valid output.
 */
-func TestMCPStdio_CommandExists(t *testing.T) {
-	t.Run("mcp command exists", func(t *testing.T) {
-		output, err := runCLICommand("mcp", "--help")
+func TestMCPGateway_CommandExists(t *testing.T) {
+	t.Run("gw mcp-config command exists", func(t *testing.T) {
+		output, err := runCLICommand("gw", "mcp-config")
 		if err != nil {
 			t.Skipf("CLI config not available (run './g8e auth login' first): %v", err)
 		}
-		assert.Contains(t, output, "MCP client utilities")
-		assert.Contains(t, output, "stdio")
-	})
-
-	t.Run("mcp stdio command exists", func(t *testing.T) {
-		output, err := runCLICommand("mcp", "stdio", "--help")
-		if err != nil {
-			t.Skipf("CLI config not available (run './g8e auth login' first): %v", err)
-		}
-		assert.Contains(t, output, "stdio-based MCP client")
-		assert.Contains(t, output, "IDE integration")
-		assert.Contains(t, output, "--endpoint")
+		assert.Contains(t, output, "http")
+		assert.Contains(t, output, "G8E_CLIENT_CERT_PATH")
+		assert.Contains(t, output, "G8E_CLIENT_KEY_PATH")
+		assert.Contains(t, output, "G8E_CA_CERT_PATH")
 	})
 }
 
 /*
-TestMCPStdio_JSONRPCParsing validates that the stdio bridge can parse
-JSON-RPC requests from stdin format.
+TestMCPGateway_JSONRPCParsing validates that the gateway can parse
+JSON-RPC requests from HTTP format.
 */
-func TestMCPStdio_JSONRPCParsing(t *testing.T) {
+func TestMCPGateway_JSONRPCParsing(t *testing.T) {
 	t.Run("valid tools/list request", func(t *testing.T) {
 		req := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`
 		var parsed struct {
@@ -178,25 +151,19 @@ func TestMCPStdio_JSONRPCParsing(t *testing.T) {
 }
 
 /*
-TestMCPStdio_ConfigTemplate validates that the config template files
-exist and contain the expected structure.
+TestMCPGateway_ConfigTemplate validates that the config template file
+exists and contains the expected HTTP transport structure.
 */
-func TestMCPStdio_ConfigTemplate(t *testing.T) {
-	t.Run("stdio template exists", func(t *testing.T) {
-		content, err := readFile("protocol/examples/mcp_server/g8e_gateway_mcp_config.json")
-		assert.NoError(t, err, "stdio template should exist")
-		assert.Contains(t, content, `"type": "stdio"`)
-		assert.Contains(t, content, `"command": "g8e"`)
-		assert.Contains(t, content, `"mcp"`)
-		assert.Contains(t, content, `"stdio"`)
-	})
-
+func TestMCPGateway_ConfigTemplate(t *testing.T) {
 	t.Run("http template exists", func(t *testing.T) {
-		content, err := readFile("protocol/examples/mcp_server/g8e_gateway_mcp_config_http.json")
+		content, err := readFile("protocol/examples/mcp_server/g8e_gateway_mcp_config.json")
 		assert.NoError(t, err, "http template should exist")
 		assert.Contains(t, content, `"type": "http"`)
 		assert.Contains(t, content, `"url"`)
 		assert.Contains(t, content, `"tls"`)
+		assert.Contains(t, content, `"clientCertificateEnv"`)
+		assert.Contains(t, content, `"clientKeyEnv"`)
+		assert.Contains(t, content, `"caCertificateEnv"`)
 	})
 }
 

@@ -163,7 +163,7 @@ func GetPKICertPaths(pkiDir string) PKICertPaths {
 		OperatorCA:      filepath.Join(pkiDir, "authorities", "operator_ca.crt"),
 		BootstrapCA:     filepath.Join(pkiDir, "authorities", "bootstrap_ca.crt"),
 		TrustBundle:     filepath.Join(pkiDir, "trust", "root.pem"),
-		HubBundle:       filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem"),
+		HubBundle:       filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem"),
 		OperatorBundle:  filepath.Join(pkiDir, "trust", "operator-bundle.pem"),
 		BootstrapBundle: filepath.Join(pkiDir, "trust", "bootstrap-bundle.pem"),
 	}

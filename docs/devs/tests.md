@@ -92,6 +92,45 @@ If no users exist, the first login automatically bootstraps the platform:
 
 This creates the first user and issues mTLS certificates for the Operator and CLI.
 
+### Trust Bundle Requirements
+
+Live operator integration tests (MCP, A2A, Native) require the canonical trust bundle at `.g8e/pki/trust/g8eg-ca-bundle.pem`. This bundle contains the root CA, hub intermediate CA, and operator intermediate CA certificates.
+
+**Canonical trust bundle path**: `.g8e/pki/trust/g8eg-ca-bundle.pem`
+
+**No legacy bundle paths are accepted**. Tests will fail closed if the canonical bundle is missing or malformed. Do not attempt to use legacy paths such as `.g8e/g8e-gw-ca-bundle.pem` or `.g8e/pki/ca-bundle.pem`.
+
+### Troubleshooting Trust Bundle Issues
+
+If integration tests fail with `x509: certificate signed by unknown authority` or `AppendCertsFromPEM` errors:
+
+1. Verify the canonical trust bundle exists:
+   ```bash
+   ls -la .g8e/pki/trust/g8eg-ca-bundle.pem
+   ```
+
+2. If the bundle is missing or corrupted, regenerate local PKI by explicit developer action:
+   ```bash
+   # Stop the platform
+   ./g8e platform stop
+
+   # Remove the existing PKI directory
+   rm -rf .g8e/pki
+
+   # Restart the platform (this regenerates PKI)
+   ./g8e platform start
+
+   # Re-authenticate to obtain new certificates
+   ./g8e auth login
+   ```
+
+3. Verify the bundle parses correctly:
+   ```bash
+   openssl crl2pkcs7 -nocrl -certfile .g8e/pki/trust/g8eg-ca-bundle.pem
+   ```
+
+Tests do not mutate local PKI state. If trust bundle issues persist, the platform must be restarted and authentication re-performed.
+
 ---
 
 ## Test Implementation

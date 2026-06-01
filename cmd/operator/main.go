@@ -122,7 +122,7 @@ func generateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 
 // renewOperatorCertificate performs automatic re-enrollment for the operator certificate.
 // This is a fail-closed operation: if renewal fails, it returns an error.
-func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile string) error {
+func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile string, clientIdentity *certs.ClientIdentity) error {
 	expiringSoon, err := func() (bool, error) {
 		cert, err := parseCertPEM(clientCertFile)
 		if err != nil {
@@ -181,7 +181,7 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 	}
 
 	// Update local trust bundle
-	trustBundlePath := filepath.Join(filepath.Dir(clientCertFile), "g8e-gw-ca-bundle.pem")
+	trustBundlePath := filepath.Join(filepath.Dir(clientCertFile), "g8eg-ca-bundle.pem")
 	if err := os.WriteFile(trustBundlePath, currentTrustBundle, 0644); err != nil {
 		return fmt.Errorf("failed to write trust bundle: %w", err)
 	}
@@ -283,12 +283,14 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 		return fmt.Errorf("failed to write operator cert: %w", err)
 	}
 
-	// Update the global client certificate
+	// Update the client certificate via DI
 	newCert, err := tls.X509KeyPair([]byte(certContent), keyPEM)
 	if err != nil {
 		return fmt.Errorf("failed to load renewed certificate: %w", err)
 	}
 
+	clientIdentity.SetCertificate(newCert)
+	// Also set the global for compatibility during migration
 	certs.SetClientCertificate(newCert)
 
 	return nil
@@ -296,12 +298,12 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 
 // runClientCertRenewalLoop runs a background goroutine that periodically checks
 // and renews the client certificate if it is expiring soon.
-func runClientCertRenewalLoop(ctx context.Context, cfg *config.Config, clientCertFile, clientKeyFile string, logger *slog.Logger) {
+func runClientCertRenewalLoop(ctx context.Context, cfg *config.Config, clientCertFile, clientKeyFile string, logger *slog.Logger, clientIdentity *certs.ClientIdentity) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
 	// Check immediately on startup
-	if err := renewOperatorCertificate(cfg, clientCertFile, clientKeyFile); err != nil {
+	if err := renewOperatorCertificate(cfg, clientCertFile, clientKeyFile, clientIdentity); err != nil {
 		logger.Error("Failed to renew client certificate on startup", string(constants.ConnectionStateError), err)
 	}
 
@@ -311,7 +313,7 @@ func runClientCertRenewalLoop(ctx context.Context, cfg *config.Config, clientCer
 			logger.Info("Client certificate renewal loop stopped")
 			return
 		case <-ticker.C:
-			if err := renewOperatorCertificate(cfg, clientCertFile, clientKeyFile); err != nil {
+			if err := renewOperatorCertificate(cfg, clientCertFile, clientKeyFile, clientIdentity); err != nil {
 				logger.Error("Failed to renew client certificate", string(constants.ConnectionStateError), err)
 			} else {
 				logger.Info("Client certificate renewal check completed")
@@ -452,13 +454,14 @@ func main() {
 		fmt.Fprintf(os.Stderr, "   or: g8e <command> [command-options]\n\n")
 		fmt.Fprintf(os.Stderr, "Platform Commands:\n")
 		fmt.Fprintf(os.Stderr, "  gw          Gateway lifecycle (start, stop, status, logs)\n")
-		fmt.Fprintf(os.Stderr, "  apps        Application lifecycle (start, stop, status, logs)\n")
 		fmt.Fprintf(os.Stderr, "  auth        Authentication (login, logout)\n")
+		fmt.Fprintf(os.Stderr, "  approve     Approve suspended L3 transactions\n")
 		fmt.Fprintf(os.Stderr, "  data        Data operations (export, import, query)\n")
-		fmt.Fprintf(os.Stderr, "  evals       Run evaluation suites\n")
+		fmt.Fprintf(os.Stderr, "  test        Run platform tests\n")
 		fmt.Fprintf(os.Stderr, "  security    Security operations (pki, certificates)\n")
-		fmt.Fprintf(os.Stderr, "  setup       Initial setup and configuration\n")
-		fmt.Fprintf(os.Stderr, "  vars        Environment variable management\n\n")
+		fmt.Fprintf(os.Stderr, "  auditor     Governance auditor (list, run, audit, self-test)\n")
+		fmt.Fprintf(os.Stderr, "  chaos       Chaos testing (generate governance events)\n")
+		fmt.Fprintf(os.Stderr, "  mcp         MCP protocol operations\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -k, --key <key>         Private key\n")
 		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running operator\n")
@@ -562,11 +565,15 @@ func main() {
 	logger.Info("g8e", "version", version, "build", buildID)
 	logger.Info("Using Operator endpoint", "endpoint", operatorEndpoint)
 
+	// Instantiate DI types for trust and client identity
+	trustStore := certs.NewTrustStore(nil)
+	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
+
 	// Load trust bundle for TLS verification. Priority:
 	// 1. Explicit --trust-bundle path
 	// 2. Local PKI directory ("+constants.CACertLegacyBundlePath+")
 	// 3. Fetch from Operator /.well-known/g8e/pki/ca-bundle endpoint
-	trustLoaded := loadTrustBundle(logger, trustBundlePath, workingDir)
+	trustLoaded := loadTrustBundle(logger, trustBundlePath, workingDir, trustStore)
 	if !trustLoaded {
 		if endpointURL != "" {
 			trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/ca-bundle", endpointURL, constants.Ports.OperatorBootstrapHttps)
@@ -577,6 +584,8 @@ func main() {
 				fmt.Fprintf(os.Stderr, "  Ensure the platform is running: ./g8e platform start\n")
 				os.Exit(constants.ExitConfigError)
 			}
+			// Also set in trustStore for DI
+			trustStore.SetCA(certs.GetRawCA())
 		} else {
 			logger.Error("No trust bundle available and no endpoint specified")
 			fmt.Fprintf(os.Stderr, "Error: No trust bundle available. Provide --trust-bundle or --endpoint\n")
@@ -584,6 +593,18 @@ func main() {
 		}
 	}
 	logger.Info("Trust bundle loaded")
+
+	// Load initial client certificate if provided
+	if clientCert != "" && privateKey != "" {
+		cert, err := tls.LoadX509KeyPair(clientCert, privateKey)
+		if err != nil {
+			logger.Error("Failed to load client certificate", string(constants.ConnectionStateError), err)
+		} else {
+			clientIdentity.SetCertificate(cert)
+			// Also set the global for compatibility during migration
+			certs.SetClientCertificate(cert)
+		}
+	}
 
 	if privateKey == "" {
 		fmt.Fprintf(os.Stderr, "Private key is required (-k or --key)\n")
@@ -680,7 +701,7 @@ func main() {
 
 	// Start background client certificate renewal loop
 	if clientCert != "" && privateKey != "" {
-		go runClientCertRenewalLoop(ctx, cfg, clientCert, privateKey, logger)
+		go runClientCertRenewalLoop(ctx, cfg, clientCert, privateKey, logger, clientIdentity)
 	}
 
 	sig := <-sigChan
@@ -706,8 +727,8 @@ func printVersion() {
 // 1. Explicit path provided via --trust-bundle
 // 2. Working directory PKI path ("+constants.Paths.Infra.CaCertPath+")
 // Returns true on the first valid PEM found, which is installed via
-// certs.SetCA. Returns false if no valid trust bundle is found.
-func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string) bool {
+// trustStore.SetCA. Returns false if no valid trust bundle is found.
+func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string, trustStore *certs.TrustStore) bool {
 	pathsToCheck := []string{}
 
 	if explicitPath != "" {
@@ -730,6 +751,8 @@ func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string) bool 
 			logger.Warn("CA file exists but contains invalid certificate", "path", path)
 			continue
 		}
+		trustStore.SetCA(pemData)
+		// Also set the global for compatibility during migration
 		certs.SetCA(pemData)
 		logger.Info("CA certificate loaded from local file")
 		return true
@@ -841,6 +864,21 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		os.Exit(constants.ExitConfigError)
 	}
 
+	// Resolve paths to ensure constants are initialized
+	projectRoot := constants.ResolveProjectRoot()
+	constants.ResolvePaths(projectRoot)
+
+	// Apply defaults for empty directory flags (constants are now absolute)
+	if dataDir == "" {
+		dataDir = constants.Paths.Infra.DataDir
+	}
+	if pkiDir == "" {
+		pkiDir = constants.Paths.Infra.PkiDir
+	}
+	if secretsDir == "" {
+		secretsDir = constants.Paths.Infra.SecretsDir
+	}
+
 	logger.Info("g8e - Gateway Mode",
 		"posture", posture,
 		"version", version,
@@ -913,8 +951,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	// Export Actuator public key for receipt verification by evals harness
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
 	if err := exportActuatorPublicKey(cfg.PKIDir, ActuatorPub, ActuatorKeyID, logger); err != nil {
-		logger.Error("Failed to export Actuator public key", string(constants.ConnectionStateError), err)
-		os.Exit(constants.ExitConfigError)
+		logger.Warn("Failed to export Actuator public key for evals harness receipt verification", "error", err)
 	}
 
 	// Loopback Pub/Sub for in-process command dispatch
@@ -1181,6 +1218,9 @@ func handleResetVault(vault *vault.Vault, logger *slog.Logger) {
 // exportActuatorPublicKey writes the Actuator's public key to both PEM and JSON formats
 // in the PKI directory for receipt verification by the evals harness.
 func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string, logger *slog.Logger) error {
+	if pkiDir == "" {
+		return fmt.Errorf("pkiDir cannot be empty")
+	}
 	if err := os.MkdirAll(pkiDir, 0700); err != nil {
 		return fmt.Errorf("create PKI directory: %w", err)
 	}
