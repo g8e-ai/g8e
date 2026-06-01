@@ -58,6 +58,7 @@ linters:
       - third_party$
       - builtin$
       - examples$
+      - docs/protocols/mcp/tool_template\.go$
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
@@ -70,3 +71,4 @@ formatters:
       - third_party$
       - builtin$
       - examples$
+      - docs/protocols/mcp/tool_template\.go$
