@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.4] - 2026-05-31
+
+### Overview
+
+v1.0.4 introduces MCP stdio transport for local agent integration, adds a complete Python protocol package, and significantly hardens PKI/certificate handling. The CLI is reorganized with gateway-focused commands, and test infrastructure is enhanced with universal gateway integration tests and flexible Docker testing options.
+
+### Breaking Changes
+
+* **CLI command renaming** - The `./g8e platform` command group is renamed to `./g8e gw` (gateway). All platform subcommands are now gateway subcommands (e.g., `./g8e platform start` → `./g8e gw start`). Documentation and tests updated to reflect the new command structure.
+* **Scenario test fixture removal** - Hardcoded scenario test fixtures are removed in favor of programmatic fixture generation. The `test/scenario/fixtures/` directory and golden files are eliminated; fixtures are now generated dynamically via `envelope_builder.go`.
+
+### Added
+
+* **MCP stdio transport** - Full stdio-based MCP transport implementation with JSON-RPC handling. New `internal/cli/cmd/mcp.go` command enables local agent integration via stdio, complementing existing HTTP transport. Includes comprehensive JSON-RPC type definitions and validation.
+* **Python protocol package** - Complete Python protocol implementation in `protocol/python/` with constants, models (base, context, events, internal_api, settings), and examples. Enables Python clients to use typed protocol definitions without Go dependencies.
+* **Protocol examples** - Added three new protocol examples: governance envelope usage, MCP server configuration, and workload identity implementation. Examples demonstrate proper protocol usage for integration patterns.
+* **Universal gateway integration test** - New `test/universal_gateway_integration_test.go` (707 lines) provides comprehensive integration testing across all gateway transports (A2A, MCP HTTP, MCP stdio) with shared test infrastructure.
+* **PKI authority hardening** - Enhanced PKI authority with improved certificate enrollment, trust bundle handling, and comprehensive test coverage (490+ new test lines). Certificate fetch logic is hardened with better error handling and validation.
+* **Docker flexible testing** - Added Docker-based testing options alongside native host testing. Enables CI/CD pipelines to choose between native and Docker test execution based on environment constraints.
+* **CLI auth client** - New `internal/cli/auth/client.go` provides dedicated authentication client with comprehensive test coverage. Improves separation of concerns in CLI authentication flows.
+
+### Changed
+
+* **Gateway command reorganization** - All `platform` CLI commands renamed to `gw` (gateway) for clarity. This includes start, stop, status, and logs commands. The change better reflects the platform's gateway-first architecture.
+* **mTLS auth flow** - Fixed mTLS authentication flow to properly pull down trust bundle before enrollment. Previous implementation had race conditions where enrollment could attempt before trust bundle was available.
+* **Platform startup improvements** - Enhanced `./g8e gw start` with better error handling, clearer status messages, and improved process management. Startup sequence now validates prerequisites before launching services.
+* **Path refactoring** - Standardized path handling across `internal/constants/paths.go`, `internal/config/config.go`, and service packages. Eliminates duplicate path resolution logic and improves consistency.
+* **Test infrastructure consolidation** - Integration test helper functions consolidated into `test/integration_helper.go`. Reduces code duplication across A2A, MCP, and native operator tests.
+* **Scenario test simplification** - Scenario test framework refactored to use programmatic fixture generation instead of hardcoded JSON fixtures. Improves maintainability and reduces fixture drift.
+* **Documentation cleanup** - Removed AI-focused language from documentation, improved developer guides, and clarified architectural descriptions. Protocol module now includes comprehensive LICENSE and README.
+
+### Fixed
+
+* **PKI regeneration bug** - Fixed certificate regeneration logic that could cause stale certificates to persist. PKI authority now properly invalidates and regenerates certificates on demand.
+* **Receipts table output** - Fixed formatting and data integrity issues in receipts table output. Ledger results now display correctly with proper field alignment.
+* **Authentication login flow** - Fixed CLI authentication login flow with improved error messages and better handling of edge cases in enrollment sequences.
+* **Native test stability** - Fixed stability issues in native operator tests by improving test isolation and cleanup procedures.
+* **Trust script execution** - Fixed trust management script execution issues. Script now properly handles certificate trust operations across different platforms.
+
+### Security
+
+* **PKI trust bundle handling** - Enhanced trust bundle download and validation to prevent man-in-the-middle attacks during enrollment. Trust bundles are now verified before use.
+* **Certificate enrollment hardening** - Certificate enrollment flow now strictly validates certificate chains and SANs before accepting new certificates.
+* **mTLS boundary enforcement** - Improved mTLS boundary enforcement across gateway services with stricter certificate validation and session management.
+
+---
+
 ## [1.0.3] - 2026-05-29
 
 ### Overview
