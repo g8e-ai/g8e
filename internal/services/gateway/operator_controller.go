@@ -207,8 +207,36 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 		c.responder.Error(w, http.StatusUnauthorized, err.Error())
 		return
 	}
-	c.responder.JSON(w, http.StatusOK, models.ReauthResponse{
-		Success:  true,
-		Operator: op,
+
+	// Read request body to get RuntimeConfig (operator sends its config)
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	var req struct {
+		RuntimeConfig *models.RuntimeConfig `json:"runtime_config"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		// If body is empty or invalid, continue with nil RuntimeConfig
+	}
+
+	// Build BootstrapConfig with default values
+	bootstrapConfig := map[string]interface{}{
+		"max_concurrent_tasks":       25,
+		"max_memory_mb":              2048,
+		"heartbeat_interval_seconds": 30,
+		"operator_session_id":        op.OperatorSessionID,
+		"operator_id":                op.ID,
+		"user_id":                    op.UserID,
+	}
+
+	// Return response in format expected by operator (AuthServicesResponse)
+	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
+		"success":             true,
+		"operator_session_id": op.OperatorSessionID,
+		"operator_id":         op.ID,
+		"user_id":             op.UserID,
+		"config":              bootstrapConfig,
 	})
 }

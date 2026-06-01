@@ -29,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/responder"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
+	"github.com/g8e-ai/g8e/internal/services/network"
 )
 
 // GatewayService is the top-level orchestrator for gateway mode (operator).
@@ -92,27 +93,41 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, jwksProvider, cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
 	sessionSvc := NewSessionService(db, logger)
 
+	// Detect network identity for certificate generation
+	netDetector := network.NewDetector(logger)
+	netIdentity, err := netDetector.DetectAll(context.Background())
 	var extraIPs []net.IP
-	if ifaces, err := net.Interfaces(); err == nil {
-		for _, iface := range ifaces {
-			addrs, _ := iface.Addrs()
-			for _, addr := range addrs {
-				var ip net.IP
-				switch v := addr.(type) {
-				case *net.IPNet:
-					ip = v.IP
-				case *net.IPAddr:
-					ip = v.IP
-				}
-				if ip != nil && !ip.IsLoopback() && ip.To4() != nil {
-					extraIPs = append(extraIPs, ip)
+	if err != nil {
+		logger.Warn("Failed to detect full network identity, falling back to basic IP detection", "error", err)
+		// Fallback to basic IP detection
+		if ifaces, err := net.Interfaces(); err == nil {
+			for _, iface := range ifaces {
+				addrs, _ := iface.Addrs()
+				for _, addr := range addrs {
+					var ip net.IP
+					switch v := addr.(type) {
+					case *net.IPNet:
+						ip = v.IP
+					case *net.IPAddr:
+						ip = v.IP
+					}
+					if ip != nil && !ip.IsLoopback() && ip.To4() != nil {
+						extraIPs = append(extraIPs, ip)
+					}
 				}
 			}
 		}
-	}
-
-	if err := pki.EnsurePKI(extraIPs); err != nil {
-		return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
+		if err := pki.EnsurePKI(extraIPs); err != nil {
+			return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
+		}
+	} else {
+		// Use detected network identity for PKI
+		extraIPs = netIdentity.GetAllIPs()
+		extraDNSNames := netIdentity.GetAllDNSNames()
+		if err := pki.EnsurePKIWithNames(extraIPs, extraDNSNames); err != nil {
+			return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
+		}
+		logger.Info("Network identity detected for certificate", "dns_names", len(extraDNSNames), "ips", len(extraIPs))
 	}
 
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
@@ -605,7 +620,7 @@ func (ls *GatewayService) runServiceCertRenewalLoop(ctx context.Context) {
 	defer ticker.Stop()
 
 	// Check immediately on startup
-	if err := ls.pki.RenewServiceCert(ls.extraIPs); err != nil {
+	if err := ls.renewServiceCertWithIdentity(ctx); err != nil {
 		ls.logger.Error("Failed to renew service certificate on startup", string(constants.ConnectionStateError), err)
 	}
 
@@ -614,9 +629,25 @@ func (ls *GatewayService) runServiceCertRenewalLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := ls.pki.RenewServiceCert(ls.extraIPs); err != nil {
+			if err := ls.renewServiceCertWithIdentity(ctx); err != nil {
 				ls.logger.Error("Failed to renew service certificate", string(constants.ConnectionStateError), err)
 			}
 		}
 	}
+}
+
+// renewServiceCertWithIdentity renews the service certificate with current network identity.
+func (ls *GatewayService) renewServiceCertWithIdentity(ctx context.Context) error {
+	// Detect current network identity
+	netDetector := network.NewDetector(ls.logger)
+	netIdentity, err := netDetector.DetectAll(ctx)
+	if err != nil {
+		ls.logger.Warn("Failed to detect network identity for renewal, using cached IPs", "error", err)
+		return ls.pki.RenewServiceCert(ls.extraIPs)
+	}
+
+	// Use detected identity for renewal
+	extraIPs := netIdentity.GetAllIPs()
+	extraDNSNames := netIdentity.GetAllDNSNames()
+	return ls.pki.RenewServiceCertWithNames(extraIPs, extraDNSNames)
 }

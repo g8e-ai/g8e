@@ -92,6 +92,8 @@ func getMachineID(logger *slog.Logger) (string, error) {
 		return getLinuxMachineID(logger)
 	case constants.PlatformDarwin:
 		return getDarwinMachineID()
+	case constants.PlatformWindows:
+		return getWindowsMachineID(logger)
 	default:
 		return "", fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}

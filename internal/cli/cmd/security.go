@@ -14,9 +14,7 @@
 package cmd
 
 import (
-	"bytes"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -263,29 +261,6 @@ func securityPKIEnrollCmd() *cobra.Command {
 			if regResp.HubTrustBundle != "" {
 				cmd.Printf("Trust bundle saved to: %s\n", filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem"))
 			}
-
-			cmd.Printf("\n=== MCP Server Configuration ===\n")
-
-			// Use remote server URL format since operator is started automatically
-			mcpConfig := map[string]interface{}{
-				"mcpServers": map[string]interface{}{
-					"g8e-gateway": map[string]interface{}{
-						"serverUrl": fmt.Sprintf("http://%s/mcp", endpoint),
-						"headers": map[string]string{
-							"Content-Type": "application/json",
-						},
-					},
-				},
-			}
-
-			var buf bytes.Buffer
-			encoder := json.NewEncoder(&buf)
-			encoder.SetEscapeHTML(false)
-			encoder.SetIndent("", "  ")
-			if err := encoder.Encode(mcpConfig); err != nil {
-				return fmt.Errorf("failed to marshal MCP config: %w", err)
-			}
-			cmd.Print(buf.String())
 
 			return nil
 		},

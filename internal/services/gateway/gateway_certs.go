@@ -91,6 +91,12 @@ func newPKIAuthority(dataDir, pkiDir string, db *GatewayDBService, secretManager
 
 // EnsurePKI initializes the full PKI hierarchy. Must be called before TLSConfig().
 func (pki *PKIAuthority) EnsurePKI(extraIPs []net.IP) error {
+	return pki.EnsurePKIWithNames(extraIPs, nil)
+}
+
+// EnsurePKIWithNames initializes the full PKI hierarchy with custom DNS names.
+// Must be called before TLSConfig().
+func (pki *PKIAuthority) EnsurePKIWithNames(extraIPs []net.IP, extraDNSNames []string) error {
 	pki.mu.Lock()
 	defer pki.mu.Unlock()
 
@@ -119,7 +125,7 @@ func (pki *PKIAuthority) EnsurePKI(extraIPs []net.IP) error {
 	}
 
 	// Generate or load operator-gateway service certificate
-	if err := pki.ensureServiceCert(extraIPs); err != nil {
+	if err := pki.ensureServiceCertWithNames(extraIPs, extraDNSNames); err != nil {
 		return fmt.Errorf("service certificate setup failed: %w", err)
 	}
 
@@ -224,6 +230,10 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 }
 
 func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
+	return pki.ensureServiceCertWithNames(extraIPs, nil)
+}
+
+func (pki *PKIAuthority) ensureServiceCertWithNames(extraIPs []net.IP, extraDNSNames []string) error {
 	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.crt")
 	chainPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.chain.pem")
 
@@ -274,7 +284,7 @@ func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
 				return fmt.Errorf("load hub CA private key for service cert generation: %w", err)
 			}
 		}
-		if err := pki.generateServiceCert(extraIPs); err != nil {
+		if err := pki.generateServiceCertWithNames(extraIPs, extraDNSNames); err != nil {
 			return err
 		}
 		// Load the newly generated certificate and key
@@ -747,6 +757,10 @@ func (pki *PKIAuthority) generateIntermediateCA(certPath string, parentCert *x50
 }
 
 func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
+	return pki.generateServiceCertWithNames(extraIPs, nil)
+}
+
+func (pki *PKIAuthority) generateServiceCertWithNames(extraIPs []net.IP, extraDNSNames []string) error {
 	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.crt")
 
 	if pki.hubCert == nil || pki.hubKey == nil {
@@ -764,6 +778,10 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 	}
 
 	dnsNames := []string{"localhost", "g8e.local", string(constants.SessionTypeOperator)}
+	// Add extra DNS names from network identity detection
+	if extraDNSNames != nil {
+		dnsNames = append(dnsNames, extraDNSNames...)
+	}
 	ipAddresses := append([]net.IP{net.ParseIP("127.0.0.1")}, extraIPs...)
 
 	// Add URI SAN for workload identity
@@ -896,6 +914,12 @@ func isCurveP256(pubKey interface{}) bool {
 // RenewServiceCert renews the operator-gateway service certificate if it is expiring soon.
 // This is called by the background renewal loop in the gateway service.
 func (pki *PKIAuthority) RenewServiceCert(extraIPs []net.IP) error {
+	return pki.RenewServiceCertWithNames(extraIPs, nil)
+}
+
+// RenewServiceCertWithNames renews the operator-gateway service certificate with custom DNS names.
+// This is called by the background renewal loop in the gateway service.
+func (pki *PKIAuthority) RenewServiceCertWithNames(extraIPs []net.IP, extraDNSNames []string) error {
 	pki.mu.Lock()
 	defer pki.mu.Unlock()
 
@@ -914,7 +938,7 @@ func (pki *PKIAuthority) RenewServiceCert(extraIPs []net.IP) error {
 	}
 
 	// Generate new service certificate
-	if err := pki.generateServiceCert(extraIPs); err != nil {
+	if err := pki.generateServiceCertWithNames(extraIPs, extraDNSNames); err != nil {
 		return fmt.Errorf("failed to generate new service certificate: %w", err)
 	}
 

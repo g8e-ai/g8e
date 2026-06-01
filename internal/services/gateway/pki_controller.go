@@ -358,7 +358,7 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 		"# Start the operator\n" +
 		"Write-Host \"[g8e] Starting operator with endpoint ${GatewayHost}...\"\n" +
 		"Write-Host \"[g8e] The operator will run in this terminal. Press Ctrl+C to stop.\"\n" +
-		".\\$BinaryName -e $GatewayHost\n"
+		"& .\\$BinaryName -e $GatewayHost\n"
 
 	w.Header().Set("Content-Type", "application/x-powershell")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
