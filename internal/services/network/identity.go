@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -38,7 +39,7 @@ type NetworkIdentity struct {
 	Windows      WindowsIdentity
 }
 
-// HostAlias represents an entry from /etc/hosts pointing to this machine.
+// HostAlias represents an entry from the hosts file pointing to this machine.
 type HostAlias struct {
 	IP      string
 	Aliases []string
@@ -101,12 +102,12 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 		}
 	}()
 
-	// Detect /etc/hosts aliases
+	// Detect hosts file aliases
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		if aliases, err := d.detectEtcHosts(); err != nil {
-			d.logger.Warn("Failed to detect /etc/hosts aliases", "error", err)
+			d.logger.Warn("Failed to detect hosts file aliases", "error", err)
 		} else {
 			mu.Lock()
 			identity.EtcHosts = aliases
@@ -256,7 +257,15 @@ func (d *Detector) detectHostnames() ([]string, error) {
 	return hostnames, nil
 }
 
-// detectEtcHosts parses /etc/hosts for aliases pointing to this machine's IPs.
+// getHostsFilePath returns the OS-specific hosts file path.
+func getHostsFilePath() string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(os.Getenv("SystemRoot"), "System32", "drivers", "etc", "hosts")
+	}
+	return "/etc/hosts"
+}
+
+// detectEtcHosts parses the hosts file for aliases pointing to this machine's IPs.
 func (d *Detector) detectEtcHosts() ([]HostAlias, error) {
 	var aliases []HostAlias
 
@@ -271,10 +280,11 @@ func (d *Detector) detectEtcHosts() ([]HostAlias, error) {
 		localIPSet[ip] = true
 	}
 
-	// Parse /etc/hosts
-	file, err := os.Open("/etc/hosts")
+	// Parse hosts file (OS-specific path)
+	hostsPath := getHostsFilePath()
+	file, err := os.Open(hostsPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open /etc/hosts: %w", err)
+		return nil, fmt.Errorf("failed to open hosts file %s: %w", hostsPath, err)
 	}
 	defer file.Close()
 
@@ -564,7 +574,11 @@ func (ni *NetworkIdentity) FormatForDisplay() string {
 		for _, alias := range ni.EtcHosts {
 			hostEntries = append(hostEntries, fmt.Sprintf("%s → %s", alias.IP, strings.Join(alias.Aliases, ", ")))
 		}
-		lines = append(lines, "  /etc/hosts   "+strings.Join(hostEntries, ", "))
+		hostsLabel := "/etc/hosts"
+		if runtime.GOOS == "windows" {
+			hostsLabel = "hosts"
+		}
+		lines = append(lines, "  "+hostsLabel+"   "+strings.Join(hostEntries, ", "))
 	}
 
 	if len(ni.MDNSNames) > 0 {

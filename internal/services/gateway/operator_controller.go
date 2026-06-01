@@ -217,8 +217,11 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 	var req struct {
 		RuntimeConfig *models.RuntimeConfig `json:"runtime_config"`
 	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		// If body is empty or invalid, continue with nil RuntimeConfig
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, &req); err != nil {
+			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+			return
+		}
 	}
 
 	// Build BootstrapConfig with default values

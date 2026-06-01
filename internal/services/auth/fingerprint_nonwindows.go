@@ -24,5 +24,5 @@ import (
 // getWindowsMachineID is a stub for non-Windows platforms
 // This should never be called on non-Windows platforms
 func getWindowsMachineID(logger *slog.Logger) (string, error) {
-	return "", fmt.Errorf("Windows machine ID not available on this platform")
+	return "", fmt.Errorf("windows machine ID not available on this platform")
 }

@@ -249,11 +249,6 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 
 	return nil
 }
-
-func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
-	return pki.ensureServiceCertWithNames(extraIPs, nil)
-}
-
 func (pki *PKIAuthority) ensureServiceCertWithNames(extraIPs []net.IP, extraDNSNames []string) error {
 	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.crt")
 	chainPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.chain.pem")
@@ -816,11 +811,6 @@ func (pki *PKIAuthority) generateIntermediateCA(certPath string, parentCert *x50
 
 	return nil
 }
-
-func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
-	return pki.generateServiceCertWithNames(extraIPs, nil)
-}
-
 func (pki *PKIAuthority) generateServiceCertWithNames(extraIPs []net.IP, extraDNSNames []string) error {
 	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.crt")
 

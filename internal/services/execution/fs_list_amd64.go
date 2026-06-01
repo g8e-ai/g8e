@@ -19,5 +19,5 @@ import "syscall"
 
 // getNlink returns the Nlink field from Stat_t for amd64 (uint16)
 func getNlink(stat *syscall.Stat_t) uint64 {
-	return uint64(stat.Nlink)
+	return stat.Nlink
 }
