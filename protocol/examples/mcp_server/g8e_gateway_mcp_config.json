@@ -8,10 +8,7 @@
       "description": "g8e Gateway - BFT-governed MCP/A2A protocol translator with L1/L2/L3 verification",
       "notes": [
         "Universal HTTP endpoint - no stdio bridge required",
-        "Requires mTLS client certificate issued by the g8e Gateway CA",
-        "Obtain client certificate via: ./g8e auth login",
-        "Set environment variables: G8E_CLIENT_CERT_PATH, G8E_CLIENT_KEY_PATH, G8E_CA_CERT_PATH",
-        "Example: export G8E_CLIENT_CERT_PATH={{PROJECT_ROOT}}/.g8e/pki/client.crt",
+        "Operator is started automatically after enrollment via the Windows trust script",
         "All tool calls are wrapped in GovernanceEnvelope and verified through the 3-layer governance sequence",
         "Local 'read_field' tool is available for JIT field resolution from governed collections"
       ]

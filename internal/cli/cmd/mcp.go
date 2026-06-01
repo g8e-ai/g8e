@@ -25,12 +25,20 @@ import (
 
 // mcpCmd implements the MCP stdio transport mode
 func mcpCmd() *cobra.Command {
+	var endpoint string
+	var pkiDir string
+
 	cmd := &cobra.Command{
 		Use:   "mcp",
 		Short: "MCP protocol operations (stdio transport)",
 		Long:  `Run g8e as an MCP server using stdio transport for local agent integration.`,
-		RunE:  runMCPStdio,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runMCPStdio(cmd, args, endpoint, pkiDir)
+		},
 	}
+
+	cmd.Flags().StringVar(&endpoint, "endpoint", "", "Gateway endpoint (required)")
+	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "PKI directory (required)")
 
 	return cmd
 }
@@ -71,9 +79,19 @@ type Tool struct {
 }
 
 // runMCPStdio implements the MCP stdio transport
-func runMCPStdio(cmd *cobra.Command, args []string) error {
+func runMCPStdio(cmd *cobra.Command, args []string, endpoint string, pkiDir string) error {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	logger.Info("g8e MCP stdio server starting")
+
+	if endpoint == "" {
+		logger.Error("--endpoint flag is required")
+		return fmt.Errorf("--endpoint flag is required")
+	}
+	if pkiDir == "" {
+		logger.Error("--pki-dir flag is required")
+		return fmt.Errorf("--pki-dir flag is required")
+	}
+
+	logger.Info("g8e MCP stdio server starting", "endpoint", endpoint, "pkiDir", pkiDir)
 
 	scanner := bufio.NewScanner(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)

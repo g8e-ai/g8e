@@ -242,7 +242,7 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 
 	// Use defaults if not provided
 	if effectiveHTTPPort == 0 {
-		effectiveHTTPPort = 9000
+		effectiveHTTPPort = constants.Ports.OperatorHttps
 	}
 	if effectivePublicPort == 0 {
 		effectivePublicPort = 8443

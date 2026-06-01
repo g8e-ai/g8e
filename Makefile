@@ -223,11 +223,15 @@ build:
 		if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH.exe ]; then \
 			ln -sf g8e-$$HOST_OS-$$HOST_ARCH.exe bin/g8e; \
 			echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH.exe"; \
+			cp bin/g8e-$$HOST_OS-$$HOST_ARCH.exe g8e.exe; \
+			echo "Copied to root: g8e.exe"; \
 		fi; \
 	else \
 		if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH ]; then \
 			ln -sf g8e-$$HOST_OS-$$HOST_ARCH bin/g8e; \
 			echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
+			cp bin/g8e-$$HOST_OS-$$HOST_ARCH g8e; \
+			echo "Copied to root: g8e"; \
 		fi; \
 	fi
 	@echo "Multi-platform build complete. Checksums: bin/g8e-*.sha256"

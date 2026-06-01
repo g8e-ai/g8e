@@ -597,25 +597,73 @@ func main() {
 	}
 	logger.Info("Trust bundle loaded")
 
-	// Load initial client certificate if provided
-	if clientCert != "" && privateKey != "" {
-		cert, err := tls.LoadX509KeyPair(clientCert, privateKey)
-		if err != nil {
-			logger.Error("Failed to load client certificate", string(constants.ConnectionStateError), err)
+	// Resolve default client certificate paths if not explicitly provided
+	// Priority: 1. Explicit flags, 2. Project-local .g8e/pki/operator.*, 3. Project-local .g8e/pki/client.*, 4. User home ~/.g8e/operator.*
+	if privateKey == "" {
+		// Try project-local operator key (created by enrollment)
+		projectOperatorKey := filepath.Join(launchDir, ".g8e/pki/operator.key")
+		if _, err := os.Stat(projectOperatorKey); err == nil {
+			privateKey = projectOperatorKey
+			logger.Info("Using default operator key from project directory", "path", privateKey)
 		} else {
-			clientIdentity.SetCertificate(cert)
-			// Also set the global for compatibility during migration
-			certs.SetClientCertificate(cert)
+			// Try project-local client key
+			projectKey := filepath.Join(launchDir, ".g8e/pki/client.key")
+			if _, err := os.Stat(projectKey); err == nil {
+				privateKey = projectKey
+				logger.Info("Using default client key from project directory", "path", privateKey)
+			} else {
+				// Try user home operator key
+				homeDir, err := os.UserHomeDir()
+				if err == nil {
+					homeKey := filepath.Join(homeDir, ".g8e/operator.key")
+					if _, err := os.Stat(homeKey); err == nil {
+						privateKey = homeKey
+						logger.Info("Using default operator key from home directory", "path", privateKey)
+					}
+				}
+			}
+		}
+	}
+
+	if clientCert == "" {
+		// Try project-local operator cert (created by enrollment)
+		projectOperatorCert := filepath.Join(launchDir, ".g8e/pki/operator.crt")
+		if _, err := os.Stat(projectOperatorCert); err == nil {
+			clientCert = projectOperatorCert
+			logger.Info("Using default operator certificate from project directory", "path", clientCert)
+		} else {
+			// Try project-local client cert
+			projectCert := filepath.Join(launchDir, ".g8e/pki/client.crt")
+			if _, err := os.Stat(projectCert); err == nil {
+				clientCert = projectCert
+				logger.Info("Using default client certificate from project directory", "path", clientCert)
+			} else {
+				// Try user home operator cert
+				homeDir, err := os.UserHomeDir()
+				if err == nil {
+					homeCert := filepath.Join(homeDir, ".g8e/operator.crt")
+					if _, err := os.Stat(homeCert); err == nil {
+						clientCert = homeCert
+						logger.Info("Using default operator certificate from home directory", "path", clientCert)
+					}
+				}
+			}
 		}
 	}
 
 	if privateKey == "" {
-		fmt.Fprintf(os.Stderr, "Private key is required (-k or --key)\n")
+		fmt.Fprintf(os.Stderr, "Private key is required (-k or --key). Expected locations:\n")
+		fmt.Fprintf(os.Stderr, "  - .g8e/pki/operator.key (project directory)\n")
+		fmt.Fprintf(os.Stderr, "  - .g8e/pki/client.key (project directory)\n")
+		fmt.Fprintf(os.Stderr, "  - ~/.g8e/operator.key (home directory)\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
 	if clientCert == "" {
-		fmt.Fprintf(os.Stderr, "Client certificate is required (--cert or --client-cert)\n")
+		fmt.Fprintf(os.Stderr, "Client certificate is required (--cert or --client-cert). Expected locations:\n")
+		fmt.Fprintf(os.Stderr, "  - .g8e/pki/operator.crt (project directory)\n")
+		fmt.Fprintf(os.Stderr, "  - .g8e/pki/client.crt (project directory)\n")
+		fmt.Fprintf(os.Stderr, "  - ~/.g8e/operator.crt (home directory)\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -638,7 +686,8 @@ func main() {
 		os.Exit(constants.ExitConfigError)
 	}
 
-	// Store cert in global certs package for use by httpclient
+	clientIdentity.SetCertificate(cert)
+	// Also set the global for compatibility during migration
 	certs.SetClientCertificate(cert)
 
 	// Resolve the effective working directory: flag overrides launch dir.

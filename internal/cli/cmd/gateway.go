@@ -375,11 +375,6 @@ func gatewayResetCmd() *cobra.Command {
 		Use:   string(constants.HistoryEventTypeReset),
 		Short: "Reset Gateway data and secrets (preserves CA)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
 			if !force {
 				cmd.Println("This command will:")
 				cmd.Println("  1. Stop all running g8e services")
@@ -395,41 +390,33 @@ func gatewayResetCmd() *cobra.Command {
 				}
 			}
 
-			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
-			if err != nil {
-				return fmt.Errorf("failed to create process manager: %w", err)
+			stopCmd := gatewayStopCmd()
+			stopCmd.SetArgs([]string{})
+			stopCmd.SetOut(cmd.OutOrStdout())
+			stopCmd.SetErr(cmd.ErrOrStderr())
+			stopCmd.SetIn(cmd.InOrStdin())
+			if err := stopCmd.Execute(); err != nil {
+				return fmt.Errorf("failed to stop gateway: %w", err)
 			}
 
-			if err := pm.Reset(); err != nil {
-				return err
+			cleanCmd := gatewayCleanCmd()
+			cleanCmd.SetArgs([]string{"--force"})
+			cleanCmd.SetOut(cmd.OutOrStdout())
+			cleanCmd.SetErr(cmd.ErrOrStderr())
+			cleanCmd.SetIn(cmd.InOrStdin())
+			if err := cleanCmd.Execute(); err != nil {
+				return fmt.Errorf("failed to clean gateway: %w", err)
 			}
 
-			cmd.Println("Reset complete. Data wiped.")
-			cmd.Println("Restarting services...")
-
-			if err := pm.StartOperator(
-				"doctrine",
-				cfg.OperatorHTTPSPort(),
-				0,
-				cfg.Paths.Ports.OperatorPublicHTTPS,
-				0,
-				"",
-				"",
-				"",
-				"",
-				"",
-				0,
-				0,
-				"info",
-			); err != nil {
-				return fmt.Errorf("failed to restart services: %w", err)
+			startCmd := gatewayStartCmd()
+			startCmd.SetArgs([]string{})
+			startCmd.SetOut(cmd.OutOrStdout())
+			startCmd.SetErr(cmd.ErrOrStderr())
+			startCmd.SetIn(cmd.InOrStdin())
+			if err := startCmd.Execute(); err != nil {
+				return fmt.Errorf("failed to start gateway: %w", err)
 			}
 
-			cmd.Println("Services restarted successfully")
-			cmd.Printf("Governance mode: doctrine (L1 enforced, L2/L3 audited)\n")
-			cmd.Printf("\nEndpoints:\n")
-			cmd.Printf("  Public API: https://localhost:%d (Bootstrap + browser/BYO)\n", cfg.Paths.Ports.OperatorPublicHTTPS)
-			cmd.Printf("\nNext step: Run './g8e auth login' to authenticate\n")
 			return nil
 		},
 	}
@@ -504,21 +491,18 @@ func gatewayMCPConfigCmd() *cobra.Command {
 
 			externalIP := config.GetExternalInterfaceIP()
 			gatewayURL := fmt.Sprintf("https://%s:%d/api/v1/mcp", externalIP, cfg.OperatorPublicHTTPSPort())
-			projectRoot := cfg.ProjectRoot
 
 			cmd.Printf(`{
   "mcpServers": {
     "g8e-gateway": {
-      "url": "%s",
-      "env": {
-        "G8E_CLIENT_CERT_PATH": "%s/.g8e/pki/client.crt",
-        "G8E_CLIENT_KEY_PATH": "%s/.g8e/pki/client.key",
-        "G8E_CA_CERT_PATH": "%s/.g8e/pki/ca.crt"
+      "serverUrl": "%s",
+      "headers": {
+        "Content-Type": "application/json"
       }
     }
   }
 }
-`, gatewayURL, projectRoot, projectRoot, projectRoot)
+`, gatewayURL)
 
 			return nil
 		},
