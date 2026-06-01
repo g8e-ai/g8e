@@ -513,6 +513,12 @@ func main() {
 
 	flag.Parse()
 
+	// Show help if no arguments provided
+	if len(os.Args) == 1 {
+		flag.Usage()
+		os.Exit(0)
+	}
+
 	if showVersion {
 		printVersion()
 		os.Exit(constants.ExitSuccess)
