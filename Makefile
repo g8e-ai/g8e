@@ -251,7 +251,7 @@ build-windows:
 	for arch in amd64 arm64; do \
 		BINARY=bin/g8e-windows-$$arch.exe; \
 		echo "Building windows/$$arch -> $$BINARY..."; \
-		GOOS=windows GOARCH=$$arch go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=windows_$$arch -s -w -H=windowsgui" -o $$BINARY ./cmd/operator || exit 1; \
+		GOOS=windows GOARCH=$$arch go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=windows_$$arch -s -w" -o $$BINARY ./cmd/operator || exit 1; \
 		sha256sum $$BINARY > $$BINARY.sha256; \
 	done
 	@echo "Windows build complete. To avoid Defender false positives:"

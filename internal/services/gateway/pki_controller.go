@@ -309,32 +309,104 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 		}
 	}
 
-	script := `$ErrorActionPreference = "Stop"
-
-$GatewayHost = if ($env:GATEWAY_HOST) { $env:GATEWAY_HOST } else { "` + host + `" }
-$GatewayPort = if ($env:GATEWAY_PORT) { $env:GATEWAY_PORT } else { "` + port + `" }
-$CABundleUrl = "http://${GatewayHost}:${GatewayPort}/.well-known/g8e/pki/ca-bundle"
-$LocalCAPath = "` + constants.CACertBundlePath + `"
-
-Write-Host "[g8e] Fetching platform CA bundle from ${CABundleUrl}..."
-$LocalDir = Split-Path -Parent $LocalCAPath
-if (-not (Test-Path $LocalDir)) {
-    New-Item -ItemType Directory -Path $LocalDir -Force | Out-Null
-}
-Invoke-RestMethod -Uri $CABundleUrl -OutFile $LocalCAPath
-
-if (-not (Test-Path $LocalCAPath)) {
-    Write-Host "[g8e] ERROR: Failed to download CA bundle"
-    exit 1
-}
-
-Write-Host "[g8e] CA bundle installed to ${LocalCAPath}"
-Write-Host "[g8e] You can now use: .\g8e.exe auth login"
-`
+	script := "$ErrorActionPreference = \"Continue\"\n\n" +
+		"$GatewayHost = if ($env:GATEWAY_HOST) { $env:GATEWAY_HOST } else { \"" + host + "\" }\n" +
+		"$GatewayPort = if ($env:GATEWAY_PORT) { $env:GATEWAY_PORT } else { \"" + port + "\" }\n" +
+		"$CABundleUrl = \"http://${GatewayHost}:${GatewayPort}/.well-known/g8e/pki/ca-bundle\"\n" +
+		"$LocalCAPath = \"" + constants.CACertBundlePath + "\"\n" +
+		"$BinaryName = \"g8e-windows-amd64.exe\"\n" +
+		"$BinaryUrl = \"http://${GatewayHost}:${GatewayPort}/.well-known/g8e/binary/g8e-windows-amd64.exe\"\n\n" +
+		"Write-Host \"[g8e] Fetching platform CA bundle from ${CABundleUrl}...\"\n" +
+		"$LocalDir = Split-Path -Parent $LocalCAPath\n" +
+		"if (-not (Test-Path $LocalDir)) {\n" +
+		"    New-Item -ItemType Directory -Path $LocalDir -Force | Out-Null\n" +
+		"}\n" +
+		"try {\n" +
+		"    Invoke-RestMethod -Uri $CABundleUrl -OutFile $LocalCAPath\n" +
+		"} catch {\n" +
+		"    Write-Host \"[g8e] ERROR: Failed to download CA bundle: $_\"\n" +
+		"    return\n" +
+		"}\n\n" +
+		"if (-not (Test-Path $LocalCAPath)) {\n" +
+		"    Write-Host \"[g8e] ERROR: Failed to download CA bundle\"\n" +
+		"    return\n" +
+		"}\n\n" +
+		"Write-Host \"[g8e] CA bundle installed to ${LocalCAPath}\"\n\n" +
+		"# Download g8e binary\n" +
+		"Write-Host \"[g8e] Downloading g8e binary from ${BinaryUrl}...\"\n" +
+		"try {\n" +
+		"    Invoke-RestMethod -Uri $BinaryUrl -OutFile $BinaryName\n" +
+		"} catch {\n" +
+		"    Write-Host \"[g8e] ERROR: Failed to download g8e binary: $_\"\n" +
+		"    return\n" +
+		"}\n" +
+		"\n" +
+		"if (-not (Test-Path $BinaryName)) {\n" +
+		"    Write-Host \"[g8e] ERROR: Failed to download g8e binary\"\n" +
+		"    return\n" +
+		"}\n\n" +
+		"Write-Host \"[g8e] Binary downloaded to ${BinaryName}\"\n\n" +
+		"# Run enrollment\n" +
+		"Write-Host \"[g8e] Running PKI enrollment with endpoint ${GatewayHost}:${GatewayPort}...\"\n" +
+		"& .\\$BinaryName security pki enroll --endpoint \"${GatewayHost}:${GatewayPort}\"\n" +
+		"\n" +
+		"if ($LASTEXITCODE -ne 0) {\n" +
+		"    Write-Host \"[g8e] ERROR: Enrollment failed with exit code ${LASTEXITCODE}\"\n" +
+		"    return\n" +
+		"}\n\n" +
+		"Write-Host \"[g8e] Enrollment complete\"\n"
 
 	w.Header().Set("Content-Type", "application/x-powershell")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(script))
+}
+
+func (c *PKIController) handleTrustScriptWindowsAlias(w http.ResponseWriter, r *http.Request) {
+	c.handleTrustScriptWindows(w, r)
+}
+
+func (c *PKIController) handleBinaryDownload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	// Extract filename from URL path
+	filename := filepath.Base(r.URL.Path)
+	if filename == "" || filename == "." {
+		c.responder.Error(w, http.StatusBadRequest, "invalid filename")
+		return
+	}
+
+	// Try multiple binary locations in order
+	possiblePaths := []string{
+		filepath.Join("bin", filename),                      // Project root bin directory
+		filepath.Join(c.pki.PKIDir(), "binaries", filename), // PKI binaries directory
+	}
+
+	var binaryPath string
+	var fileInfo os.FileInfo
+	var err error
+
+	for _, path := range possiblePaths {
+		fileInfo, err = os.Stat(path)
+		if err == nil && !fileInfo.IsDir() {
+			binaryPath = path
+			break
+		}
+	}
+
+	if binaryPath == "" {
+		c.responder.Error(w, http.StatusNotFound, fmt.Sprintf("binary not found: %s (checked bin/ and .g8e/pki/binaries/)", filename))
+		return
+	}
+
+	// Serve the file
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
+	http.ServeFile(w, r, binaryPath)
 }
