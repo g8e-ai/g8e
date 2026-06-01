@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.5] - 2026-05-31
+
+### Fixed
+
+* **Version mismatch** - Fixed VERSION file to show correct version in binary. The v1.0.4 release was tagged before VERSION was updated, causing the binary to show v1.0.3. This release ensures VERSION is properly synchronized with the release tag.
+
+---
+
 ## [1.0.4] - 2026-05-31
 
 ### Overview
