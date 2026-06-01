@@ -37,6 +37,121 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestIsLoopbackOrigin(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		origin   string
+		expected bool
+	}{
+		{"http://localhost:8080", true},
+		{"http://localhost", true},
+		{"https://localhost:443", true},
+		{"http://127.0.0.1:8080", true},
+		{"http://127.0.0.1", true},
+		{"http://127.0.0.2:8080", true},
+		{"http://[::1]:8080", true},
+		{"http://[::1]", true},
+		{"http://example.com:8080", false},
+		{"http://192.168.1.1:8080", false},
+		{"http://10.0.0.1:8080", false},
+		{"invalid-url", false},
+		{"", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.origin, func(t *testing.T) {
+			t.Parallel()
+			result := isLoopbackOrigin(tc.origin)
+			assert.Equal(t, tc.expected, result, "Origin %s should return %v", tc.origin, tc.expected)
+		})
+	}
+}
+
+func TestMCPOriginGuard(t *testing.T) {
+	t.Parallel()
+	infra := setupTestInfrastructure(t, false)
+
+	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
+		Logger:          infra.Logger,
+		Responder:       infra.Responder,
+		SuspendedStore:  infra.DB,
+		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
+	})
+	h := newHTTPHandler(HTTPHandlerDependencies{
+		Cfg:               infra.Cfg,
+		Logger:            infra.Logger,
+		DB:                infra.DB,
+		Pubsub:            infra.Pubsub,
+		Auth:              infra.Auth,
+		PKI:               infra.PKI,
+		SessionSvc:        infra.SessionSvc,
+		Reg:               infra.Reg,
+		Passkey:           infra.Passkey,
+		UserSvc:           infra.UserSvc,
+		Responder:         infra.Responder,
+		MCPGateway:        mcpGateway,
+		AppEnrollment:     nil,
+		IsReady:           func() bool { return true },
+		IsGovernanceReady: func() bool { return true },
+	})
+
+	router := h.buildMCPHttpRouter()
+
+	cases := []struct {
+		name           string
+		origin         string
+		expectedStatus int
+	}{
+		{
+			name:           "no origin header allowed",
+			origin:         "",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "localhost origin allowed",
+			origin:         "http://localhost:8080",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "127.0.0.1 origin allowed",
+			origin:         "http://127.0.0.1:8080",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "::1 origin allowed",
+			origin:         "http://[::1]:8080",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "external origin rejected",
+			origin:         "http://example.com:8080",
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			name:           "private IP origin rejected",
+			origin:         "http://192.168.1.1:8080",
+			expectedStatus: http.StatusForbidden,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
+			if tc.origin != "" {
+				req.Header.Set("Origin", tc.origin)
+			}
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, tc.expectedStatus, w.Code, "Expected status %d for origin %s", tc.expectedStatus, tc.origin)
+		})
+	}
+}
+
 func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
@@ -756,6 +871,92 @@ func TestCLICertBoundToOperator(t *testing.T) {
 // TestSSEPushAuthorization verifies that SSE push authorization enforces
 // producer-to-target ownership and stores producer attribution.
 // This is a regression test for Finding 5: SSE push event spoofing.
+func TestMCPEndpointIntegration(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	router := h.buildMCPHttpRouter()
+
+	t.Run("initialize handshake succeeds", func(t *testing.T) {
+		t.Parallel()
+		reqBody := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var respBody map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &respBody)
+		require.NoError(t, err)
+
+		require.Equal(t, float64(1), respBody["id"])
+		result := respBody["result"].(map[string]interface{})
+		require.Equal(t, "2025-06-18", result["protocolVersion"])
+	})
+
+	t.Run("ping echoes ID", func(t *testing.T) {
+		t.Parallel()
+		reqBody := `{"jsonrpc":"2.0","id":42,"method":"ping"}`
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var respBody map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &respBody)
+		require.NoError(t, err)
+
+		require.Equal(t, float64(42), respBody["id"])
+		require.NotNil(t, respBody["result"])
+	})
+
+	t.Run("tools/list returns tools", func(t *testing.T) {
+		t.Parallel()
+		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var respBody map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &respBody)
+		require.NoError(t, err)
+
+		require.Equal(t, float64(1), respBody["id"])
+		result := respBody["result"].(map[string]interface{})
+		require.Contains(t, result, "tools")
+	})
+
+	t.Run("notification returns 202", func(t *testing.T) {
+		t.Parallel()
+		reqBody := `{"jsonrpc":"2.0","method":"notifications/initialized"}`
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusAccepted, w.Code)
+		require.Empty(t, w.Body.Bytes())
+	})
+
+	t.Run("GET method not allowed", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusMethodNotAllowed, w.Code)
+		require.Equal(t, "POST", w.Header().Get("Allow"))
+	})
+}
+
 func TestSSEPushAuthorization(t *testing.T) {
 	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)

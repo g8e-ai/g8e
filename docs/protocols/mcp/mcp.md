@@ -152,6 +152,27 @@ This outputs a JSON configuration with the correct gateway URL.
 
 **Security Note**: The plain HTTP endpoint is intended for development and testing only. Use the mTLS endpoint (port 8443) for production workloads to ensure proper authentication and security.
 
+#### Claude Code Custom Connector Registration
+
+The g8e Gateway provides a unified MCP Streamable HTTP endpoint at `/mcp` that is compatible with Claude Code custom connectors. This endpoint implements the standard MCP JSON-RPC 2.0 protocol with method dispatch, ID echoing, and notification handling.
+
+To register the g8e Gateway as a custom connector in Claude Code:
+
+```bash
+claude mcp add --transport http g8e http://localhost:8442/mcp
+```
+
+Replace `8442` with your configured `--mcp-http-port` if different from the default.
+
+The unified `/mcp` endpoint supports:
+- **Initialize handshake**: Protocol version negotiation and capability exchange
+- **Method dispatch**: All MCP methods (tools/list, tools/call, resources/list, prompts/list, etc.)
+- **ID echoing**: Preserves client request IDs for request-response correlation
+- **Notification handling**: Accepts notifications (e.g., `notifications/initialized`) with 202 Accepted
+- **Origin validation**: DNS-rebinding protection via Origin header validation (rejects non-loopback origins)
+
+**Note**: The `/mcp` endpoint is available on all three gateway surfaces (mTLS port 8440, public TLS port 8443, and plain HTTP port 8442). For Claude Code, use the plain HTTP port (8442) for development or the public TLS port (8443) with JWT authentication for production.
+
 ### MCP Client Connection
 
 MCP clients connect to the gateway via:

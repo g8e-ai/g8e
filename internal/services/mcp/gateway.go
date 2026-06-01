@@ -433,88 +433,97 @@ func (g *GatewayService) handleMCPRequest(w http.ResponseWriter, r *http.Request
 
 func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request) {
 	g.handleMCPRequest(w, r, "tools/call", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
-		var callParams CallToolRequest
-		if err := json.Unmarshal(params, &callParams); err != nil {
-			return nil, fmt.Errorf("invalid tools/call params: %w", err)
-		}
-
-		if callParams.Name == "" {
-			return nil, errors.New("tool name required")
-		}
-
-		// Handle read_field tool locally (JIT field resolution)
-		if callParams.Name == "read_field" {
-			return g.handleReadField(ctx, callParams.Arguments)
-		}
-
-		// Handle native tools within Operator's execution boundary
-		if g.isNativeTool(callParams.Name) {
-			return g.nativeToolHandler.HandleTool(ctx, callParams.Name, callParams.Arguments)
-		}
-
-		argumentsJSON := "{}"
-		if len(callParams.Arguments) > 0 {
-			var probe interface{}
-			if err := json.Unmarshal(callParams.Arguments, &probe); err != nil {
-				return nil, errors.New("invalid tool arguments: must be a valid JSON object")
-			}
-			argumentsJSON = string(callParams.Arguments)
-		}
-
-		mcpPayload := &operatorv1.McpCallRequested{
-			ToolName:      callParams.Name,
-			ArgumentsJson: argumentsJSON,
-			ExecutionId:   uuid.New().String(),
-		}
-		payloadBytes, err := proto.Marshal(mcpPayload)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal MCP payload: %w", err)
-		}
-
-		hash, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-			actionType:     constants.ActionTypeMcpCall,
-			targetResource: callParams.Name,
-			payloadBytes:   payloadBytes,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
-		if err != nil {
-			if errors.Is(err, governance.ErrL3ProofMissing) {
-				userID := r.Header.Get(constants.HeaderUserID)
-				operatorID := r.Header.Get(constants.HeaderOperatorID)
-				certFingerprint := extractCertFingerprint(r)
-
-				g.StoreSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
-
-				approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
-				return CallToolResult{
-					Content: []TextContent{
-						{
-							Type: "text",
-							Text: fmt.Sprintf("Execution paused. Please visit %s to authorize via WebAuthn, then retry.", approvalURL),
-						},
-					},
-				}, nil
-			}
-			return nil, err
-		}
-
-		mcpRes := CallToolResult{
-			Content: []TextContent{
-				{
-					Type: "text",
-					Text: receipt.ResultSummary,
-				},
-			},
-		}
-		if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
-			mcpRes.IsError = true
-		}
-		return mcpRes, nil
+		return g.callTool(ctx, r, params)
 	})
+}
+
+// callTool executes a governed MCP tools/call. It is shared by the per-method
+// REST handler (HandleToolsCall) and the unified Streamable HTTP dispatcher
+// (HandleMCP). The *http.Request is used only to extract identity headers and
+// the client certificate fingerprint when a transaction is suspended for L3
+// approval.
+func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params json.RawMessage) (interface{}, error) {
+	var callParams CallToolRequest
+	if err := json.Unmarshal(params, &callParams); err != nil {
+		return nil, fmt.Errorf("invalid tools/call params: %w", err)
+	}
+
+	if callParams.Name == "" {
+		return nil, errors.New("tool name required")
+	}
+
+	// Handle read_field tool locally (JIT field resolution)
+	if callParams.Name == "read_field" {
+		return g.handleReadField(ctx, callParams.Arguments)
+	}
+
+	// Handle native tools within Operator's execution boundary
+	if g.isNativeTool(callParams.Name) {
+		return g.nativeToolHandler.HandleTool(ctx, callParams.Name, callParams.Arguments)
+	}
+
+	argumentsJSON := "{}"
+	if len(callParams.Arguments) > 0 {
+		var probe interface{}
+		if err := json.Unmarshal(callParams.Arguments, &probe); err != nil {
+			return nil, errors.New("invalid tool arguments: must be a valid JSON object")
+		}
+		argumentsJSON = string(callParams.Arguments)
+	}
+
+	mcpPayload := &operatorv1.McpCallRequested{
+		ToolName:      callParams.Name,
+		ArgumentsJson: argumentsJSON,
+		ExecutionId:   uuid.New().String(),
+	}
+	payloadBytes, err := proto.Marshal(mcpPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal MCP payload: %w", err)
+	}
+
+	hash, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
+		actionType:     constants.ActionTypeMcpCall,
+		targetResource: callParams.Name,
+		payloadBytes:   payloadBytes,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
+	if err != nil {
+		if errors.Is(err, governance.ErrL3ProofMissing) {
+			userID := r.Header.Get(constants.HeaderUserID)
+			operatorID := r.Header.Get(constants.HeaderOperatorID)
+			certFingerprint := extractCertFingerprint(r)
+
+			g.StoreSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
+
+			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
+			return CallToolResult{
+				Content: []TextContent{
+					{
+						Type: "text",
+						Text: fmt.Sprintf("Execution paused. Please visit %s to authorize via WebAuthn, then retry.", approvalURL),
+					},
+				},
+			}, nil
+		}
+		return nil, err
+	}
+
+	mcpRes := CallToolResult{
+		Content: []TextContent{
+			{
+				Type: "text",
+				Text: receipt.ResultSummary,
+			},
+		},
+	}
+	if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
+		mcpRes.IsError = true
+	}
+	return mcpRes, nil
 }
 
 // handleReadField processes the read_field tool with governed access controls
@@ -622,51 +631,57 @@ func (g *GatewayService) scanForForbiddenPatterns(value interface{}) error {
 
 func (g *GatewayService) HandleResourcesRead(w http.ResponseWriter, r *http.Request) {
 	g.handleMCPRequest(w, r, "resources/read", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
-		var readParams ReadResourceRequest
-		if err := json.Unmarshal(params, &readParams); err != nil {
-			return nil, fmt.Errorf("invalid resources/read params: %w", err)
-		}
-
-		if readParams.URI == "" {
-			return nil, errors.New("uri required")
-		}
-
-		mcpPayload := &operatorv1.McpResourceReadRequested{
-			Uri:         readParams.URI,
-			ExecutionId: uuid.New().String(),
-		}
-		payloadBytes, err := proto.Marshal(mcpPayload)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal MCP payload: %w", err)
-		}
-
-		_, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-			actionType:     constants.ActionTypeMcpResourceRead,
-			targetResource: readParams.URI,
-			payloadBytes:   payloadBytes,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
-		if err != nil {
-			return nil, err
-		}
-
-		mcpRes := ReadResourceResult{
-			Contents: []TextContent{
-				{
-					Type: "text",
-					Text: receipt.ResultSummary,
-				},
-			},
-		}
-		if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
-			mcpRes.Contents[0].Text = fmt.Sprintf("Error: %s", receipt.ResultSummary)
-		}
-		return mcpRes, nil
+		return g.readResource(ctx, params)
 	})
+}
+
+// readResource executes a governed MCP resources/read. Shared by the per-method
+// REST handler (HandleResourcesRead) and the unified dispatcher (HandleMCP).
+func (g *GatewayService) readResource(ctx context.Context, params json.RawMessage) (interface{}, error) {
+	var readParams ReadResourceRequest
+	if err := json.Unmarshal(params, &readParams); err != nil {
+		return nil, fmt.Errorf("invalid resources/read params: %w", err)
+	}
+
+	if readParams.URI == "" {
+		return nil, errors.New("uri required")
+	}
+
+	mcpPayload := &operatorv1.McpResourceReadRequested{
+		Uri:         readParams.URI,
+		ExecutionId: uuid.New().String(),
+	}
+	payloadBytes, err := proto.Marshal(mcpPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal MCP payload: %w", err)
+	}
+
+	_, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
+		actionType:     constants.ActionTypeMcpResourceRead,
+		targetResource: readParams.URI,
+		payloadBytes:   payloadBytes,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	mcpRes := ReadResourceResult{
+		Contents: []TextContent{
+			{
+				Type: "text",
+				Text: receipt.ResultSummary,
+			},
+		},
+	}
+	if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
+		mcpRes.Contents[0].Text = fmt.Sprintf("Error: %s", receipt.ResultSummary)
+	}
+	return mcpRes, nil
 }
 
 func (g *GatewayService) HandlePromptsList(w http.ResponseWriter, r *http.Request) {
@@ -735,55 +750,61 @@ func (g *GatewayService) HandlePromptsList(w http.ResponseWriter, r *http.Reques
 
 func (g *GatewayService) HandlePromptsGet(w http.ResponseWriter, r *http.Request) {
 	g.handleMCPRequest(w, r, "prompts/get", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
-		var getParams GetPromptRequest
-		if err := json.Unmarshal(params, &getParams); err != nil {
-			return nil, fmt.Errorf("invalid prompts/get params: %w", err)
-		}
+		return g.getPrompt(ctx, params)
+	})
+}
 
-		if getParams.Name == "" {
-			return nil, errors.New("name required")
-		}
+// getPrompt executes a governed MCP prompts/get. Shared by the per-method REST
+// handler (HandlePromptsGet) and the unified dispatcher (HandleMCP).
+func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) (interface{}, error) {
+	var getParams GetPromptRequest
+	if err := json.Unmarshal(params, &getParams); err != nil {
+		return nil, fmt.Errorf("invalid prompts/get params: %w", err)
+	}
 
-		mcpPayload := &operatorv1.McpPromptGetRequested{
-			Name:        getParams.Name,
-			ExecutionId: uuid.New().String(),
-		}
-		payloadBytes, err := proto.Marshal(mcpPayload)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal MCP payload: %w", err)
-		}
+	if getParams.Name == "" {
+		return nil, errors.New("name required")
+	}
 
-		_, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-			actionType:     constants.ActionTypeMcpPromptGet,
-			targetResource: getParams.Name,
-			payloadBytes:   payloadBytes,
-		})
-		if err != nil {
-			return nil, err
-		}
+	mcpPayload := &operatorv1.McpPromptGetRequested{
+		Name:        getParams.Name,
+		ExecutionId: uuid.New().String(),
+	}
+	payloadBytes, err := proto.Marshal(mcpPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal MCP payload: %w", err)
+	}
 
-		receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
-		if err != nil {
-			return nil, err
-		}
+	_, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
+		actionType:     constants.ActionTypeMcpPromptGet,
+		targetResource: getParams.Name,
+		payloadBytes:   payloadBytes,
+	})
+	if err != nil {
+		return nil, err
+	}
 
-		mcpRes := GetPromptResult{
-			Description: receipt.ResultSummary,
-			Messages: []PromptMessage{
-				{
-					Role: string(constants.UserRoleUser),
-					Content: TextContent{
-						Type: "text",
-						Text: receipt.ResultSummary,
-					},
+	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	mcpRes := GetPromptResult{
+		Description: receipt.ResultSummary,
+		Messages: []PromptMessage{
+			{
+				Role: string(constants.UserRoleUser),
+				Content: TextContent{
+					Type: "text",
+					Text: receipt.ResultSummary,
 				},
 			},
-		}
-		if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
-			mcpRes.Description = fmt.Sprintf("Error: %s", receipt.ResultSummary)
-		}
-		return mcpRes, nil
-	})
+		},
+	}
+	if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
+		mcpRes.Description = fmt.Sprintf("Error: %s", receipt.ResultSummary)
+	}
+	return mcpRes, nil
 }
 
 func (g *GatewayService) HandleToolsCallSSE(w http.ResponseWriter, r *http.Request) {
@@ -1015,69 +1036,75 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 
 func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 	g.handleMCPRequest(w, r, "a2a/call", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
-		var req struct {
-			SkillName   string          `json:"skill_name"`
-			PayloadJSON json.RawMessage `json:"payload"`
-			ExecutionID string          `json:"execution_id,omitempty"`
-		}
-		if err := json.Unmarshal(params, &req); err != nil {
-			return nil, fmt.Errorf("invalid a2a/call params: %w", err)
-		}
-
-		if req.SkillName == "" {
-			return nil, errors.New("skill_name required")
-		}
-
-		payloadStr := "{}"
-		if len(req.PayloadJSON) > 0 {
-			payloadStr = string(req.PayloadJSON)
-		}
-
-		a2aPayload := &operatorv1.A2ACallRequested{
-			SkillName:   req.SkillName,
-			PayloadJson: payloadStr,
-			ExecutionId: req.ExecutionID,
-		}
-		payloadBytes, err := proto.Marshal(a2aPayload)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal A2A payload: %w", err)
-		}
-
-		hash, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-			actionType:     constants.ActionTypeA2aCall,
-			targetResource: req.SkillName,
-			payloadBytes:   payloadBytes,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
-		if err != nil {
-			if errors.Is(err, governance.ErrL3ProofMissing) || errors.Is(err, governance.ErrL3ProofInvalid) {
-				userID := r.Header.Get(constants.HeaderUserID)
-				operatorID := r.Header.Get(constants.HeaderOperatorID)
-				certFingerprint := extractCertFingerprint(r)
-
-				g.StoreSuspendedTransaction(hash, envelopeBytes, req.SkillName, req.PayloadJSON, userID, operatorID, certFingerprint)
-
-				approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
-				return A2ASuspensionResponse{
-					ID:          hash,
-					Status:      "suspended",
-					TxHash:      hash,
-					ApprovalURL: approvalURL,
-					Message:     "Execution paused for L3 authorization",
-				}, nil
-			}
-			return nil, err
-		}
-
-		return A2ASuccessResponse{
-			ID:     hash,
-			Result: receipt,
-		}, nil
+		return g.a2aCall(ctx, r, params)
 	})
+}
+
+// a2aCall executes a governed A2A skill invocation. Shared by the per-method
+// REST handler (HandleA2aCall) and the unified dispatcher (HandleMCP).
+func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params json.RawMessage) (interface{}, error) {
+	var req struct {
+		SkillName   string          `json:"skill_name"`
+		PayloadJSON json.RawMessage `json:"payload"`
+		ExecutionID string          `json:"execution_id,omitempty"`
+	}
+	if err := json.Unmarshal(params, &req); err != nil {
+		return nil, fmt.Errorf("invalid a2a/call params: %w", err)
+	}
+
+	if req.SkillName == "" {
+		return nil, errors.New("skill_name required")
+	}
+
+	payloadStr := "{}"
+	if len(req.PayloadJSON) > 0 {
+		payloadStr = string(req.PayloadJSON)
+	}
+
+	a2aPayload := &operatorv1.A2ACallRequested{
+		SkillName:   req.SkillName,
+		PayloadJson: payloadStr,
+		ExecutionId: req.ExecutionID,
+	}
+	payloadBytes, err := proto.Marshal(a2aPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal A2A payload: %w", err)
+	}
+
+	hash, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
+		actionType:     constants.ActionTypeA2aCall,
+		targetResource: req.SkillName,
+		payloadBytes:   payloadBytes,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
+	if err != nil {
+		if errors.Is(err, governance.ErrL3ProofMissing) || errors.Is(err, governance.ErrL3ProofInvalid) {
+			userID := r.Header.Get(constants.HeaderUserID)
+			operatorID := r.Header.Get(constants.HeaderOperatorID)
+			certFingerprint := extractCertFingerprint(r)
+
+			g.StoreSuspendedTransaction(hash, envelopeBytes, req.SkillName, req.PayloadJSON, userID, operatorID, certFingerprint)
+
+			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
+			return A2ASuspensionResponse{
+				ID:          hash,
+				Status:      "suspended",
+				TxHash:      hash,
+				ApprovalURL: approvalURL,
+				Message:     "Execution paused for L3 authorization",
+			}, nil
+		}
+		return nil, err
+	}
+
+	return A2ASuccessResponse{
+		ID:     hash,
+		Result: receipt,
+	}, nil
 }
 
 // mapGatewayError maps governance verification errors to granular JSON-RPC codes.
