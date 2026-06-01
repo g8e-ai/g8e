@@ -4,9 +4,9 @@ title: A2A Protocol
 
 # A2A Protocol
 
-Last Updated: 2026-05-29
+Last Updated: 2026-05-31
 
-The Operator (g8eo) in gateway mode supports Agent-to-Agent (A2A) protocol integration. A2A agents send HTTP/JSON skill invocation requests to the gateway, which wraps them in the g8e governance envelope, runs them through the 3-layer BFT verification sequence (L1Doctrine/L2Consensus/L3Notary), and dispatches verified payloads to downstream A2A servers or to the in-process execution service for local execution.
+The g8e Operator in gateway mode supports Agent-to-Agent (A2A) protocol integration. A2A agents send HTTP/JSON skill invocation requests to the Governance Gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer verification sequence (L1Doctrine, L2Consensus, L3Notary, L4Warden, L5Actuator), and dispatches verified payloads to downstream A2A servers or to the in-process execution service for local execution.
 
 ---
 
@@ -24,12 +24,12 @@ A2A requests follow an HTTP/JSON pattern:
 
 ### Gateway Integration
 
-The gateway translates A2A skill invocations into governance envelopes:
+The Governance Gateway translates A2A skill invocations into governance envelopes:
 
 1. **Inbound**: A2A agent sends HTTP/JSON skill invocation to gateway
 2. **Envelope Construction**: Gateway wraps payload in `GovernanceEnvelope` with action type `A2A_CALL`
-3. **Verification**: Envelope passes through L1/L2/L3 verification gates
-4. **Dispatch**: Verified envelope forwarded to downstream A2A server or local execution
+3. **Verification**: Envelope passes through L1/L2/L3/L4 verification gates
+4. **Dispatch**: Verified envelope forwarded to L5Actuator for execution to downstream A2A server or local execution
 
 ---
 
@@ -95,9 +95,22 @@ Skill discovery is not currently implemented. The A2A downstream URL is configur
 
 Bring-your-own clients can integrate by:
 
-1. Submitting standard A2A requests to the Gateway HTTP endpoints
-2. Receiving GovernanceEnvelope responses with verification proofs
+1. Submitting standard A2A requests to the Governance Gateway HTTP endpoints
+2. Receiving `A2ASuccessResponse` or `A2ASuspensionResponse` with verification proofs
 3. Trusting the Gateway's cryptographic guarantees without implementing full protocol
+
+#### Response Types
+
+- **A2ASuccessResponse**: Returned when A2A call succeeds
+  - `id`: Transaction hash
+  - `result`: ActionReceipt with execution status and result summary
+
+- **A2ASuspensionResponse**: Returned when A2A call is suspended for L3 approval
+  - `id`: Transaction hash
+  - `status`: "suspended"
+  - `tx_hash`: Transaction hash
+  - `approval_url`: URL for WebAuthn authorization
+  - `message`: "Execution paused for L3 authorization"
 
 ---
 
@@ -135,29 +148,29 @@ A2A protocol errors follow gateway error conventions:
 
 ### Error Mapping
 
-Gateway verification errors are mapped to JSON-RPC error codes via `mapGatewayError`:
+Gateway verification errors are mapped to g8e custom JSON-RPC error codes via `mapGatewayError`:
 
-- **Invalid envelope**: `-32600` (Invalid Request) - malformed GovernanceEnvelope
-- **Payload decode failed**: `-32602` (Invalid params) - protobuf unmarshaling error
-- **Hash mismatch**: `-32603` (Internal error) - transaction_hash validation failure
-- **L1 rejection**: `-32603` (Internal error) - forbidden pattern violation
-- **L2 rejection**: `-32603` (Internal error) - signature verification failure
-- **L3 rejection**: `-32001` (Unauthorized) - missing or invalid L3 proof
-- **Downstream unavailable**: `-32603` (Internal error) - circuit breaker open
+- **Invalid envelope**: `-32000` (ErrCodeInvalidEnvelope) - malformed GovernanceEnvelope, missing ID, or unknown action type
+- **Payload decode failed**: `-32008` (ErrCodePayloadDecodeFailed) - protobuf unmarshaling error
+- **Hash mismatch**: `-32001` (ErrCodeHashMismatch) - transaction_hash validation failure
+- **L1 rejection**: `-32000` (ErrCodeInvalidEnvelope) - forbidden pattern violation
+- **L2 rejection**: `-32001` (ErrCodeHashMismatch) - signature verification failure
+- **L3 rejection**: `-32001` (ErrCodeHashMismatch) - missing or invalid L3 proof
+- **Downstream unavailable**: `-32003` (Internal error) - circuit breaker open
 
 ---
 
 ## Configuration
 
-### Gateway Modes
+### Gateway Postures
 
-The Gateway supports three governance postures (configured via CLI flags):
+The Governance Gateway supports three governance postures (configured via CLI flags):
 
-| Mode | Posture | Purpose |
+| Posture | Configuration | Purpose |
 |---|---|---|
-| **Doctrine** | `doctrine` | L1 enforced, L2/L3 signature not required (default) |
-| **Consensus** | `consensus` | L1/L2 enforced, L3 signature not required |
-| **Notary** | `notary` | L1/L2/L3 strictly enforced (default for outbound mode) |
+| **PostureDoctrine** | `doctrine` | L1 enforced, L2/L3 signature not required (default) |
+| **PostureConsensus** | `consensus` | L1/L2 enforced, L3 signature not required |
+| **PostureNotary** | `notary` | L1/L2/L3 strictly enforced (default for outbound mode) |
 
 ### Port Configuration
 
@@ -208,7 +221,7 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 
 | Concern | File |
 |---|---|
-| Gateway entry | `cmd/g8eo/main.go` (runGatewayMode) |
+| Gateway entry | `cmd/operator/main.go` (runGatewayMode) |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | HTTP routing | `internal/services/gateway/gateway_http.go` |
 | A2A translation | `internal/services/mcp/gateway.go` (HandleA2aCall) |
@@ -221,6 +234,7 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 | Composite L3 verifier | `internal/services/gateway/composite_l3_verifier.go` |
 | Error mapping | `internal/services/mcp/gateway.go` (mapGatewayError) |
 | Circuit breaker | `internal/services/mcp/gateway.go` (isCircuitOpen, recordFailure, recordSuccess) |
+| Response models | `internal/services/mcp/models.go` (A2ASuccessResponse, A2ASuspensionResponse) |
 
 ---
 

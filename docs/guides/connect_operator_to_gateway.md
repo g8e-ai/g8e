@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Operator to a Governance Gateway
 
-Last Updated: 2026-05-29
-Version: v1.0.3
+Last Updated: 2026-05-31
+Version: v1.0.4
 
 ---
 
@@ -54,15 +54,13 @@ The operator will:
 - Execute mutations through the L1/L2/L3 verification layers
 - Write audit entries to the local Git-backed vault
 
-### MCP Mode
-
 ---
 
 ## Operator Configuration
 
 ### Gateway Endpoint
 
-Specify the Gateway endpoint via the `--endpoint` flag:
+Specify the Gateway endpoint via the `--endpoint` flag when starting the operator:
 
 ```bash
 ./g8e --endpoint gateway.example.com
@@ -70,10 +68,10 @@ Specify the Gateway endpoint via the `--endpoint` flag:
 
 ### PKI Directory
 
-Specify the PKI directory via the `--pki-dir` flag:
+Specify the PKI directory via the `--pki-dir` flag when starting the Gateway:
 
 ```bash
-./g8e --pki-dir /etc/g8e/pki
+./g8e gw start --pki-dir /etc/g8e/pki
 ```
 
 This defaults to `.g8e/pki` in the current working directory.
@@ -100,31 +98,25 @@ This reports:
 
 ### MCP Tool Calls
 
-AI clients can connect to the operator's MCP endpoint:
+AI clients can connect to the Gateway's MCP endpoint:
 
 ```bash
 # For HTTP-based MCP
-curl -X POST http://localhost:8440/tools/call \
+curl -X POST https://localhost:8440/api/v1/mcp/tools/call \
+  --cert .g8e/pki/client.crt \
+  --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
-  -d '{"tool": "shell.execute", "arguments": {"command": "ls -la"}}'
-```
-
-### A2A Skill Invocations
-
-A2A skill invocations are similarly translated:
-
-```bash
-curl -X POST http://localhost:8440/skills/execute \
-  -H "Content-Type: application/json" \
-  -d '{"skill": "file.read", "parameters": {"path": "/etc/hosts"}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shell.execute","arguments":{"command":"ls -la"}}}'
 ```
 
 ### Direct Envelope Submission
 
-For direct envelope submission to the operator:
+For direct envelope submission to the Gateway:
 
 ```bash
-curl -X POST http://localhost:8440/api/v1/governance/envelopes \
+curl -X POST https://localhost:8440/api/v1/governance/envelopes \
+  --cert .g8e/pki/client.crt \
+  --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
   -d @envelope.json
 ```
@@ -135,13 +127,11 @@ curl -X POST http://localhost:8440/api/v1/governance/envelopes \
 
 ### Log Management
 
-View operator logs:
+View Gateway logs:
 
 ```bash
-tail -f .g8e/logs/operator.log
+./g8e gw logs --follow
 ```
-
-Logs are stored in `.g8e/logs/operator.log`.
 
 ### Restart
 
@@ -161,7 +151,13 @@ Stop:
 
 ### Certificate Renewal
 
-When the mTLS certificate expires, re-enroll using CSR-based enrollment:
+When the mTLS certificate expires, re-authenticate using:
+
+```bash
+./g8e auth login
+```
+
+For remote device enrollment, use CSR-based enrollment:
 
 ```bash
 ./g8e security pki enroll --endpoint <gateway-ip>
@@ -176,7 +172,7 @@ For custom g8e-compatible operator implementations, connection follows the same 
 1. **Enroll with Gateway**: Use CSR-based enrollment to obtain mTLS certificates.
 2. **Configure Runtime**: Set up the runtime directory, PKI directory, and audit vault.
 3. **Configure Gateway URL**: Specify the Gateway endpoint for outbound mTLS connection.
-4. **Start Operator**: Launch the operator in standard mode or MCP mode.
+4. **Start Operator**: Launch the operator in standard mode.
 5. **Verify Connection**: Confirm the operator is subscribed to the Pub/Sub broker.
 6. **Monitor Health**: Implement health checks for the operator process and Gateway connection.
 
@@ -203,7 +199,7 @@ For production deployments, consider:
 Verify Gateway is reachable:
 
 ```bash
-curl -k https://<gateway-ip>:8440/healthz
+curl -k https://<gateway-ip>:8440/api/v1/health
 ```
 
 Verify certificates are valid:
@@ -212,10 +208,10 @@ Verify certificates are valid:
 ./g8e data operators list
 ```
 
-Check operator logs for connection errors:
+Check Gateway logs for connection errors:
 
 ```bash
-tail -f .g8e/logs/operator.log
+./g8e gw logs --follow
 ```
 
 ### Certificate Errors
@@ -240,17 +236,25 @@ Verify audit vault directory exists:
 ls -la .g8e/data/
 ```
 
-Check operator logs for audit vault write errors.
+Check Gateway logs for audit vault write errors:
+
+```bash
+./g8e gw logs --follow
+```
 
 ### Pub/Sub Subscription Failures
 
-Verify Gateway Pub/Sub broker is running:
+Verify Gateway is running:
 
 ```bash
-./g8e platform status
+./g8e gw status
 ```
 
-Check operator logs for subscription errors.
+Check Gateway logs for subscription errors:
+
+```bash
+./g8e gw logs --follow
+```
 
 ---
 

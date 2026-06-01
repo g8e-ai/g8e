@@ -72,18 +72,18 @@ Windows users can enroll via the Windows Certificate Store for seamless browser 
 
 ## 2. 5-Layer Verification Sequence (Interlock)
 
-The platform implements a deterministic 5-layer governance sequence. Every mutation must pass through all active layers before execution. The structural schema is defined as `GovernanceEnvelope` in `protocol/proto/g8e/common/v1/common.proto:81-115`.
+The platform implements a deterministic 5-layer governance sequence. Every mutation must pass through all active layers before execution. The structural schema is defined as `GovernanceEnvelope` in `protocol/proto/g8e/common/v1/common.proto:79-115`.
 
 ### Layer 1: Technical Bedrock (L1Doctrine)
-*Implementation: `internal/services/governance/l1_doctrine.go:35-50`*
+*Implementation: `internal/services/governance/l1_doctrine.go:29-44`*
 
 L1 is the foundational layer that executes deterministic security rules.
-- **Forbidden Patterns**: Uses Protobuf field options (`forbidden_patterns`) to reject strings like `sudo` or `su`.
-- **MITRE Threat Detection**: Analyzes payloads against MITRE ATT&CK patterns.
+- **Forbidden Patterns**: Uses Protobuf field options (`forbidden_patterns`) to reject strings matching dangerous patterns.
+- **MITRE Threat Detection**: Analyzes payloads against MITRE ATT&CK patterns for reverse shells, privilege escalation, credential access, and other threats.
 - **Hard Gates**: Rejects transactions immediately upon violation; cannot be bypassed by L2 or L3.
 
 ### Layer 2: Consensus (L2Consensus)
-*Implementation: `internal/services/governance/l2_consensus.go:27-45`*
+*Implementation: `internal/services/governance/l2_consensus.go:27-42`*
 
 L2 provides multi-agent cryptographic verification of intent.
 - **Ed25519 Signatures**: Verifies Ed25519 signatures over the `transaction_hash|decision` format.
@@ -91,21 +91,21 @@ L2 provides multi-agent cryptographic verification of intent.
 - **Posture-Aware Enforcement**: Enforces signature requirements based on the configured `GovernancePosture`.
 
 ### Layer 3: Notary (L3Notary)
-*Implementation: `internal/services/governance/l3_notary.go:29-35`*
+*Implementation: `internal/services/governance/l3_notary.go:29-50`*
 
 L3 ensures explicit human authorization for mutations.
 - **Suspension**: The Governance Gateway (g8eg) suspends transactions requiring L3 approval, storing them in the `suspended_transactions` pool.
-- **Out-of-Band (OOB) Approval**: The user approves via WebAuthn/Passkey at the `/api/v1/approve/{txHash}` endpoint, or via mTLS certificate fingerprint.
-- **L3Proof**: A successful approval generates an `L3Proof` cryptographically bound to the `transaction_hash`.
+- **Out-of-Band (OOB) Approval**: The user approves via CLI command (`g8e approve <tx_hash>`) with cryptographic signature over the transaction hash, or via mTLS certificate fingerprint.
+- **L3Proof**: A successful approval generates an `L3Proof` containing the CLI signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
 
 ### Layer 4: Warden (L4Warden)
 *Implementation: `internal/services/governance/l4_warden.go:306-320`*
 
 The Warden is the final fail-closed gate before execution. It verifies:
 1. **Structural Integrity**: Structural integrity, payload decoding, and L1Doctrine compliance.
-2. **Hash Verification**: Matches the `id` and `transaction_hash` fields against the recomputed SHA-256 hash.
+2. **Hash Verification**: Matches the `id` and `transaction_hash` fields against the recomputed hash.
 3. **State Root Consistency**: Ensures the `state_merkle_root` matches the current platform state.
-4. **Replay Protection**: Verifies the `nonce` using the `ReplayStore`.
+4. **Replay Protection**: Verifies the `nonce` using the `ReplayStore` with early reservation.
 5. **Posture Enforcement**: Enforces L2 and L3 requirements based on the configured `GovernancePosture`.
 
 ### Layer 5: Actuator (L5Actuator)
@@ -113,6 +113,7 @@ The Warden is the final fail-closed gate before execution. It verifies:
 
 The Actuator represents the execution boundary and final audit commitment.
 - **Egress Dispatch**: Dispatches the verified payload to downstream executors (Shell, MCP, A2A).
+- **Sovereignty Rehydration**: Rehydrates scrubbed payloads with original sensitive data just before execution.
 - **Action Receipts**: Issues a signed `ActionReceipt` providing immutable proof of the outcome.
 - **Commitment**: Records the transaction in the `AuditVaultService` and chains it to the ledger.
 
@@ -134,5 +135,5 @@ Postures define which layers of the bedrock are enforced as fail-closed gates.
 
 Handling sensitive data without leaking it to upstream models is handled by the Sovereignty Boundary Plane:
 - **Scrubbing**: Private data is replaced with opaque tokens before sending to external LLMs.
-- **Deterministic Rehydration**: The L5 Actuator performs local rehydration of tokens just before execution.
+- **Deterministic Rehydration**: The L5 Actuator performs local rehydration of tokens just before execution via `RehydratePayload`.
 - **Data Sovereignty**: Raw secrets never leave the sovereign host environment.

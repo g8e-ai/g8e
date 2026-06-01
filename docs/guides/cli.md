@@ -1,6 +1,6 @@
 # CLI Reference
 
-This reference is auto-generated from the Cobra CLI help output.
+This reference documents the g8e CLI commands for managing the Governance Gateway (g8eg) and Governed Operator (g8eo).
 
 ## g8e Root Help
 ```
@@ -11,12 +11,14 @@ Usage:
   g8e [command]
 
 Available Commands:
+  approve     Approve a suspended L3 transaction with CLI signature
   auth        Authentication and session management
+  auditor     Universal agent emulator for a real g8e Gateway/Operator
+  chaos       Generate realistic governance events against the local g8e audit stack
   data        Administer the local platform over mTLS
   gw          Manage the Governance Gateway (g8eg) lifecycle
   help        Help about any command
   security    Security validation checks
-  setup       Bootstrap platform dependencies and configuration
   test        Run test suites
 
 Flags:
@@ -25,16 +27,6 @@ Flags:
 Use "g8e [command] --help" for more information about a command.
 ```
 
-## setup
-```
-Setup checks for required dependencies (Go, Python), generates protocol artifacts, and builds services.
-
-Usage:
-  g8e setup [flags]
-
-Flags:
-  -h, --help   help for setup
-```
 
 ## gw
 ```
@@ -49,6 +41,7 @@ Aliases:
 Available Commands:
   clean       Destructively remove all Gateway state
   logs        View Gateway logs
+  mcp-config  Print MCP client configuration for the Gateway
   reset       Reset Gateway data and secrets (preserves CA)
   restart     Restart the Governance Gateway
   settings    Manage Gateway settings
@@ -157,6 +150,17 @@ Flags:
       --yes     Skip confirmation prompt (shorthand)
 ```
 
+### gw mcp-config
+```
+Print MCP client configuration for the Gateway
+
+Usage:
+  g8e gw mcp-config [flags]
+
+Flags:
+  -h, --help   help for mcp-config
+```
+
 ## auth
 ```
 Manage mTLS enrollment and operator sessions.
@@ -165,8 +169,9 @@ Usage:
   g8e auth [command]
 
 Available Commands:
-  login       Authenticate and save operator session
-  logout      Clear local operator session and credentials
+  login           Authenticate and save operator session
+  logout          Clear local operator session and credentials
+  enroll-windows  Enroll via Windows Certificate Store (Windows only)
 
 Flags:
   -h, --help   help for auth
@@ -176,7 +181,7 @@ Use "g8e auth [command] --help" for more information about a command.
 
 ### auth login
 ```
-Authenticate and save mTLS credentials to ~/.g8e/credentials. The first login automatically bootstraps the platform.
+Authenticate CLI with the running Gateway via CSR-based enrollment. Generates client keypairs, submits CSRs to the Gateway's CA, and saves signed mTLS credentials. The Gateway must already be running (use './g8e gw start' first).
 
 Usage:
   g8e auth login [flags]
@@ -194,6 +199,18 @@ Usage:
 
 Flags:
   -h, --help   help for logout
+```
+
+### auth enroll-windows
+```
+Enroll via Windows Certificate Store (Windows only). Generate an ECDSA P-384 keypair in the Windows Certificate Store, submit a CSR to the Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert.
+
+Usage:
+  g8e auth enroll-windows [flags]
+
+Flags:
+      --tpm   Use TPM-backed key via Windows Hello for Business
+  -h, --help   help for enroll-windows
 ```
 
 ## data
@@ -312,12 +329,11 @@ Usage:
   g8e test [command]
 
 Available Commands:
-  chaos       Run chaos engineering tests
   ci          Run full CI test suite (mirrors GitHub Actions exactly)
-  g8eo        Run Gateway (g8eo) tests
   integration Run integration tests
   review      Review integration test vault results
   scenario    Run scenario integration tests
+  summary     Show summary of all integration test results
   unit        Run unit tests
 
 Flags:
@@ -353,24 +369,10 @@ Flags:
       --run string   Run specific scenario (e.g., forge_signature)
 ```
 
-### test g8eo
-```
-Run Gateway (g8eo) tests
-
-Usage:
-  g8e test g8eo [flags]
-
-Flags:
-      --coverage     Generate coverage report
-  -h, --help         help for g8eo
-      --race         Enable race detector (default true)
-      --run string   Run specific test (regex)
-      --v            Verbose output
-```
 
 ### test ci
 ```
-Runs make ci which includes proto generation, linting, vulncheck, and platform tests with platform start/stop and coverage enforcement. This is the canonical way to replicate CI locally.
+Run the full CI pipeline locally: proto generation, linting, vulncheck, and platform tests with platform start/stop and coverage enforcement.
 
 Usage:
   g8e test ci [flags]
@@ -379,17 +381,6 @@ Flags:
   -h, --help   help for ci
 ```
 
-### test chaos
-```
-Run chaos engineering tests
-
-Usage:
-  g8e test chaos [flags]
-
-Flags:
-      --count int   Number of payloads to fire (default: 100)
-  -h, --help        help for chaos
-```
 
 ### test scenario
 ```
@@ -404,6 +395,17 @@ Flags:
   -v, --verbose      Verbose output
 ```
 
+### test summary
+```
+Show summary of all integration test results
+
+Usage:
+  g8e test summary [flags]
+
+Flags:
+  -h, --help   help for summary
+```
+
 ## security
 ```
 Run security validation and PKI verification checks.
@@ -412,6 +414,7 @@ Usage:
   g8e security [command]
 
 Available Commands:
+  pki         PKI management
   validate    Run security validation checks
 
 Flags:
@@ -433,3 +436,135 @@ Flags:
       --secrets-dir string   Secrets directory (default: .g8e/secrets)
 ```
 
+### security pki
+```
+PKI management
+
+Usage:
+  g8e security pki [command]
+
+Available Commands:
+  enroll      Enroll a device with the Gateway via CSR
+
+Flags:
+  -h, --help   help for pki
+
+Use "g8e security pki [command] --help" for more information about a command.
+```
+
+#### security pki enroll
+```
+Enroll a device with the Gateway via CSR. Generate a CSR and enroll with the Gateway to obtain mTLS certificates.
+
+Usage:
+  g8e security pki enroll [flags]
+
+Flags:
+      --endpoint string    Gateway endpoint (e.g., 192.168.1.62:8441)
+  -h, --help                help for enroll
+      --output-dir string   Output directory for certificates (default: project root)
+```
+
+## approve
+```
+Approve a suspended L3 transaction with CLI signature. Approve a suspended transaction by signing the transaction hash with the CLI private key and submitting the cryptographic proof to the Gateway.
+
+Usage:
+  g8e approve <transaction_hash> [flags]
+
+Flags:
+  -h, --help   help for approve
+```
+
+## auditor
+```
+Universal agent emulator for a real g8e Gateway/Operator. auditor impersonates arbitrary AI tools and agents against a REAL g8e Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the Operator's signed receipts.
+
+Usage:
+  g8e auditor [command]
+
+Available Commands:
+  audit       Audit signed receipts from the Operator
+  list        List available scenarios
+  run         Run scenarios against a real Gateway/Operator
+
+Flags:
+  -h, --help   help for auditor
+
+Use "g8e auditor [command] --help" for more information about a command.
+```
+
+### auditor list
+```
+List available scenarios
+
+Usage:
+  g8e auditor list [flags]
+
+Flags:
+  -h, --help   help for list
+```
+
+### auditor run
+```
+Run scenarios against a real Gateway/Operator
+
+Usage:
+  g8e auditor run [flags] [scenario ...]
+
+Flags:
+      --api-key string           operator API key for MCP/A2A surface
+      --ca string                gateway CA bundle PEM
+      --cert string              client cert PEM
+      --config string            JSON config overlay
+      --ensemble int             mock consensus voters (default 3)
+      --insecure                 skip TLS verify (local dev only)
+      --key string               client key PEM
+      --l3-mode string           mock|suspend
+      --mtls-url string          Gateway mTLS surface
+      --out string               report output dir
+      --operator-session string   scope audit to a specific operator session
+      --phase string             doctrine|notary|all (default "all")
+      --public-url string        Gateway public surface for OOB approve
+  -h, --help                     help for run
+      --verbose                  echo each request/response
+```
+
+### auditor audit
+```
+Audit signed receipts from the Operator
+
+Usage:
+  g8e auditor audit [flags]
+
+Flags:
+      --api-key string           operator API key
+      --ca string                gateway CA bundle PEM
+      --cert string              client cert PEM
+      --config string            JSON config overlay
+      --insecure                 skip TLS verify
+      --key string               client key PEM
+      --mtls-url string          Gateway mTLS surface
+      --out string               report output dir
+      --operator-session string   operator session id
+      --public-url string        Gateway public surface
+  -h, --help                     help for audit
+```
+
+## chaos
+```
+Generate realistic governance events against the local g8e audit stack. chaos generates a realistic distribution of governance events against the local g8e audit stack. It bypasses network/TLS by driving the TransactionVerifier + Actuator stack directly in-process, which is the same path exercised by the live operator when payloads arrive over pub/sub.
+
+Distribution:
+  70%  Good Actor  – valid sig, safe intent (FS_LIST)       → EXECUTED
+  20%  Prompt Inj  – valid sig, L1 forbidden cmd (sudo/rm)  → REJECTED (L1)
+  10%  MitM        – corrupted transaction hash              → REJECTED (hash mismatch)
+
+Usage:
+  g8e chaos [flags]
+
+Flags:
+      --count int      number of payloads to fire (default 100)
+      --data-dir string audit vault data dir (default: <project-root>/.g8e/test-vault/<timestamp>)
+  -h, --help            help for chaos
+      --pki-dir string  PKI dir for trusted_signers (default: <cwd>/.g8e/pki)

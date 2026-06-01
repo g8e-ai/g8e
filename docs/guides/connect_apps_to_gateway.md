@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to a Governance Gateway
 
-Last Updated: 2026-05-29
-Version: v1.0.3
+Last Updated: 2026-05-31
+Version: v1.0.4
 
 ---
 
@@ -20,10 +20,10 @@ This guide covers connecting applications to the g8e Governance Gateway. The Gat
 
 ### Initialization
 
-Initialize the platform runtime:
+Start the Gateway to initialize the platform runtime:
 
 ```bash
-./g8e setup
+./g8e gw start
 ```
 
 This creates the `.g8e` directory structure:
@@ -40,22 +40,22 @@ Start the Gateway:
 ./g8e gw start
 ```
 
-The Gateway runs in the default mode (doctrine: L1 enforced, L2/L3 signatures not required). To run in different enforcement modes, invoke the binary directly with mode flags:
+The Gateway runs in the default mode (doctrine: L1 enforced, L2/L3 audited). To run in different enforcement modes, use the `--posture` flag:
 
 #### Doctrine Mode (Default)
 
-Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures not required.
+Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures are audited but not required.
 
 ```bash
-./g8e --doctrine
+./g8e gw start --posture doctrine
 ```
 
 #### Consensus Mode
 
-Enforces L1 and L2 (multi-model Byzantine consensus). L3 signature not required.
+Enforces L1 and L2 (multi-model Byzantine consensus). L3 signature is audited but not required.
 
 ```bash
-./g8e --consensus
+./g8e gw start --posture consensus
 ```
 
 #### Notary Mode
@@ -63,7 +63,7 @@ Enforces L1 and L2 (multi-model Byzantine consensus). L3 signature not required.
 Enforces L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2). This is the most secure mode.
 
 ```bash
-./g8e --notary
+./g8e gw start --posture notary
 ```
 
 ### Gateway Ports
@@ -111,18 +111,18 @@ MCP is a JSON-RPC 2.0 protocol for AI tool invocation. The Gateway translates MC
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/mcp/v1/tools/list` | POST/GET | List available tools |
-| `/api/mcp/v1/tools/call` | POST | Invoke a tool |
-| `/api/mcp/v1/tools/call/sse` | POST | Invoke tool with SSE streaming |
-| `/api/mcp/v1/resources/list` | POST/GET | List available resources |
-| `/api/mcp/v1/resources/read` | POST | Read a resource |
-| `/api/mcp/v1/prompts/list` | POST/GET | List prompt templates |
-| `/api/mcp/v1/prompts/get` | POST | Get a prompt template |
+| `/api/v1/mcp/tools/list` | POST/GET | List available tools |
+| `/api/v1/mcp/tools/call` | POST | Invoke a tool |
+| `/api/v1/mcp/tools/call/sse` | POST | Invoke tool with SSE streaming |
+| `/api/v1/mcp/resources/list` | POST/GET | List available resources |
+| `/api/v1/mcp/resources/read` | POST | Read a resource |
+| `/api/v1/mcp/prompts/list` | POST/GET | List prompt templates |
+| `/api/v1/mcp/prompts/get` | POST | Get a prompt template |
 
 #### MCP Tool Invocation
 
 ```bash
-curl -X POST https://localhost:8440/api/mcp/v1/tools/call \
+curl -X POST https://localhost:8440/api/v1/mcp/tools/call \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -170,12 +170,12 @@ A2A is an HTTP/JSON protocol for agent skill invocation. The Gateway wraps A2A s
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/a2a/v1/call` | POST | Invoke an A2A skill |
+| `/api/v1/a2a/call` | POST | Invoke an A2A skill |
 
 #### A2A Skill Invocation
 
 ```bash
-curl -X POST https://localhost:8440/api/a2a/v1/call \
+curl -X POST https://localhost:8440/api/v1/a2a/call \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -248,31 +248,31 @@ The Gateway provides a JSON document store with CRUD operations and query suppor
 
 ```bash
 # Get document
-curl https://localhost:8440/db/cases/case-123 \
+curl https://localhost:8440/api/v1/data/cases/case-123 \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key
 
 # Set document
-curl -X PUT https://localhost:8440/db/cases/case-123 \
+curl -X PUT https://localhost:8440/api/v1/data/cases/case-123 \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
   -d '{"status": "open", "priority": "high"}'
 
 # Update document (merge)
-curl -X PATCH https://localhost:8440/db/cases/case-123 \
+curl -X PATCH https://localhost:8440/api/v1/data/cases/case-123 \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
   -d '{"priority": "critical"}'
 
 # Delete document
-curl -X DELETE https://localhost:8440/db/cases/case-123 \
+curl -X DELETE https://localhost:8440/api/v1/data/cases/case-123 \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key
 
 # Query documents
-curl -X POST https://localhost:8440/db/cases/_query \
+curl -X POST https://localhost:8440/api/v1/data/cases/_query \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -284,7 +284,7 @@ curl -X POST https://localhost:8440/db/cases/_query \
 
 #### Governed Collections
 
-Direct `/db/` mutations are restricted to platform infrastructure collections. Governed collections (cases, investigations, tasks, memories, reputation_state, etc.) must use `POST /api/v1/governance/envelopes` for mutations.
+Direct `/api/v1/data/` mutations are restricted to platform infrastructure collections. Governed collections (cases, investigations, tasks, memories, reputation_state, reputation_commitments, stake_resolutions, agent_activity_metadata, etc.) must use `POST /api/v1/governance/envelopes` for mutations.
 
 ---
 
@@ -363,7 +363,7 @@ Generate an invitation for external IdP authentication:
 Enroll a device using CSR-based enrollment with mTLS authentication. The user_id is extracted from the client certificate's SPIFFE URI SAN:
 
 ```bash
-curl -X POST https://localhost:8440/api/pki/device-enroll \
+curl -X POST https://localhost:8440/api/v1/pki/devices/enroll \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -384,7 +384,7 @@ curl -X POST https://localhost:8440/api/pki/device-enroll \
 Submit a CSR for low-level certificate issuance (for advanced use cases):
 
 ```bash
-curl -X POST https://localhost:8440/api/pki/sign-csr \
+curl -X POST https://localhost:8440/api/v1/pki/csr/sign \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -416,14 +416,14 @@ When a standard AI client requests a mutation without L3 proof, the Gateway susp
 List suspended transactions:
 
 ```bash
-curl https://localhost:8443/api/suspended-transactions \
+curl https://localhost:8443/api/v1/approvals \
   --cookie "web_session=..."
 ```
 
 Approve a transaction:
 
 ```bash
-curl -X POST https://localhost:8443/api/approve/{tx_hash} \
+curl -X POST https://localhost:8443/api/v1/approvals/{tx_hash} \
   --cookie "web_session=..." \
   -H "Content-Type: application/json" \
   -d '{"action": "approve"}'
@@ -436,7 +436,7 @@ curl -X POST https://localhost:8443/api/approve/{tx_hash} \
 ### Query Audit Receipts
 
 ```bash
-curl https://localhost:8440/api/audit/receipts?operator_session_id=op-session-abc \
+curl https://localhost:8440/api/v1/audit/receipts?operator_session_id=op-session-abc \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key
 ```
@@ -444,7 +444,7 @@ curl https://localhost:8440/api/audit/receipts?operator_session_id=op-session-ab
 ### Export Audit Receipts
 
 ```bash
-curl https://localhost:8440/api/audit/receipts/export?operator_session_id=op-session-abc \
+curl https://localhost:8440/api/v1/audit/receipts/export?operator_session_id=op-session-abc \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -o audit-export.json
@@ -454,22 +454,6 @@ curl https://localhost:8440/api/audit/receipts/export?operator_session_id=op-ses
 
 ```bash
 ./g8e data audit list --operator-session-id <session-id> --limit 100
-```
-
----
-
-## Certificate Management
-
-View device-link tokens:
-
-```bash
-./g8e data device-links list
-```
-
-Delete a device-link token:
-
-```bash
-./g8e data device-links delete --token <token>
 ```
 
 ---
@@ -530,21 +514,15 @@ ls -la .g8e/pki/client.crt
 Re-run login if certificate is missing or expired:
 
 ```bash
-./g8e login
+./g8e auth login
 ```
 
 ### Operator Connection Issues
 
-Verify device-link token is valid:
-
-```bash
-./g8e data device-links list
-```
-
 Check Gateway is listening on the mTLS port:
 
 ```bash
-curl -k https://localhost:8440/health
+curl -k https://localhost:8440/api/v1/health
 ```
 
 ### Circuit Breaker Active

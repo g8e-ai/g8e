@@ -4,7 +4,7 @@
 
 **Verify, then execute.**
 
-g8e is a ~20MB, zero-dependency binary that provides agentic governance and state-mutation control. It functions as both the **control plane** (host-local policy decision) and the **data plane** (exclusive mutation executor). 
+g8e is a ~20MB compressed, statically-compiled binary that provides agentic governance and state-mutation control. It functions as both the **control plane** (host-local policy decision) and the **data plane** (exclusive mutation executor). 
 
 It dials out via mTLS and listens on nothing. Every AI-proposed action clears a fail-closed verification pipeline on the host and is committed to a git-backed ledger before execution. Only scrubbed projections leave the host; raw data never crosses the wire.
 
@@ -54,6 +54,8 @@ g8e is one binary. Run it in Gateway mode or Operator mode — same artifact, co
 - **As the Operator (g8eo)**, it's the authority. Run on the host, it dials out to the Gateway, pulls down signed work, and makes up its own mind — re-verifying every proof against its own local state and trusting nothing upstream, the Gateway included. It's the only thing on that box allowed to change state, the only place raw data ever lives, and the local, git-backed record of everything that happened. Decision and execution, both on the host, in one binary.
 
 **The split is the entire point**: the Gateway proposes, the Operator disposes. A compromised Gateway can lie about what to run; it can't make a host run it. The binding go/no-go always happens on the machine that owns the consequences — locally, against local state, recorded before the side effect. There is no trusted middle to compromise, because nothing in the middle has the final word.
+
+*Learn more: [Gateway Architecture](docs/architecture/gateway.md) · [Operator Architecture](docs/architecture/operator.md) · [Auth Architecture](docs/architecture/auth.md)*
 
 ---
 
@@ -105,6 +107,8 @@ sequenceDiagram
     Operator->>Gateway: Push Sovereignty-scrubbed signed receipt
     Gateway->>Principal: Return final safe output
 ```
+
+*Learn more: [Protocol Specification](docs/architecture/g8e.md) · [MCP Protocol](docs/protocols/mcp/mcp.md) · [A2A Protocol](docs/protocols/a2a/a2a.md)*
 
 ---
 
@@ -160,6 +164,8 @@ graph TD
 | **L4** | **L4Warden** | Fail-closed pre-dispatch gate | Hash, freshness, state root, and signer trust. |
 | **L5** | **L5Actuator** | Atomic dispatch + signed receipt | The only code path allowed to mutate the host. |
 
+*Learn more: [Governance Protocol](docs/architecture/g8e.md) · [Constants Reference](docs/reference/constants.md) · [Glossary](docs/reference/glossary.md)*
+
 ---
 
 ## Optional AI Engine (g8ee)
@@ -208,6 +214,8 @@ graph TD
 - **Warden (Circuit Breaker):** Heuristic blocker that rejects "off-the-wall" proposals. Rejections trigger a loop back to Sage to improve intent translation.
 - **Auditor (History & Grounding):** Final verification layer. Reviews the full investigation history to ensure progressive accuracy before signing the protocol envelope.
 
+*Learn more: [Build Applications](docs/guides/build_apps.md) · [Connect Apps to Gateway](docs/guides/connect_apps_to_gateway.md) · [Developer Docs](docs/devs/)*
+
 ---
 
 ## The Protocol Invariants
@@ -218,6 +226,8 @@ graph TD
 - **Outbound-Only mTLS**: Operators dial out; zero inbound ports required on the host.
 - **Sovereignty Boundary**: Automated scrubbing/rehydration ensures raw data never leaves the host.
 - **No Backward Compatibility**: Rip and replace. Stale formats or unsigned inputs are rejected.
+
+*Learn more: [Protocol Specification](docs/architecture/g8e.md) · [API Reference](docs/reference/api/) · [Constants](docs/reference/constants.md)*
 
 ---
 
@@ -243,8 +253,13 @@ g8e is the mandatory governance platform. Agent ensembles and Dashboard (g8ed) a
 ## Documentation
 
 - **[Getting Started](docs/guides/getting_started.md)** · **[Position Paper](docs/core/position_paper.md)**
-- **[Protocol](docs/architecture/g8e.md)** · **[Operator (g8eo)](docs/architecture/operator.md)** · **[Gateway (g8eg)](docs/architecture/gateway.md)**
-- **[Guides](docs/guides/)** · **[Reference](docs/reference/)** · **[Contributing](CONTRIBUTING.md)**
+- **[Protocol](docs/architecture/g8e.md)** · **[Operator (g8eo)](docs/architecture/operator.md)** · **[Gateway (g8eg)](docs/architecture/gateway.md)** · **[Auth](docs/architecture/auth.md)**
+- **[MCP Protocol](docs/protocols/mcp/mcp.md)** · **[A2A Protocol](docs/protocols/a2a/a2a.md)**
+- **[CLI Guide](docs/guides/cli.md)** · **[Air Gap Deployment](docs/guides/air_gap.md)**
+- **[Build Gateway](docs/guides/build_gateway.md)** · **[Build Operator](docs/guides/build_operator.md)**
+- **[Connect Apps to Gateway](docs/guides/connect_apps_to_gateway.md)** · **[Connect Operator to Gateway](docs/guides/connect_operator_to_gateway.md)**
+- **[Glossary](docs/reference/glossary.md)** · **[Constants](docs/reference/constants.md)** · **[API Reference](docs/reference/api/)**
+- **[Developer Docs](docs/devs/)** · **[Contributing](CONTRIBUTING.md)**
 
 ---
 

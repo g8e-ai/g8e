@@ -100,15 +100,15 @@ Default ports are sourced from `internal/constants/ports.go`:
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
 | **mTLS API + Pub/Sub** | `8440` (mTLS) | mTLS + URI SAN | `/api/v1/governance/envelopes`, `/api/v1/db/*`, `/api/v1/kv/*`, `/api/v1/blob/*`, `/api/v1/pubsub/publish`, and `/ws/v1/pubsub` real-time fan-out. |
-| **Bootstrap Port** | `8441` (TLS) | CSR Enrollment | Certificate Signing Requests, CA bundle discovery, and initial provisioning. |
-| **Public Port** | `8443` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery for browser/BYO bootstrap. |
+| **Bootstrap Port** | `8441` (plain HTTP) | CSR Enrollment | Certificate Signing Requests, CA bundle discovery, and initial provisioning. |
+| **Public Port** | `8443` (mTLS) | mTLS + URI SAN | Public mTLS surface for external app enrollment and BYO bootstrap. |
 
 #### Port Constraints
 
 - **mTLS Surface** (`8440`): Requires `tls.RequireAndVerifyClientCert`. This is the primary execution boundary.
-- **Bootstrap Surface** (`8441`): Requires `tls.RequireAndVerifyClientCert` (for re-enrollment) or anonymous TLS (for initial CSR).
-- **Public Surface** (`8443`): Serves TLS with WebAuthn/Passkey authentication for browser-based access.
-- **Collision Prevention**: The gateway fails startup if incompatible surfaces (e.g., mTLS and Public) are assigned to the same port, as this forces a downgrade to `VerifyClientCertIfGiven`.
+- **Bootstrap Surface** (`8441`): Serves plain HTTP for initial CA discovery and bootstrap (no TLS).
+- **Public Surface** (`8443`): Requires `tls.RequireAndVerifyClientCert` for mTLS-based external app enrollment.
+- **Collision Prevention**: The gateway fails startup if incompatible surfaces (e.g., mTLS and Bootstrap) are assigned to the same port, as this forces a downgrade to `VerifyClientCertIfGiven`.
 
 ---
 
@@ -202,7 +202,7 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 
 | Concern | File |
 |---|---|
-| Gateway mode entry | `cmd/g8eo/main.go` (runGatewayMode) |
+| Gateway mode entry | `cmd/operator/main.go` (runGatewayMode) |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | Coordination Store | `internal/services/gateway/gateway_db.go` |
 | Pub/Sub broker | `internal/services/gateway/gateway_pubsub.go` |
@@ -223,13 +223,14 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | Collection | Description |
 |---|---|
 | **Authentication & Sessions** | `users`, `web_sessions`, `operator_sessions`, `cli_sessions`, `bound_sessions`, `passkey_challenges` |
-| **Organizations & Tenants** | `organizations` |
+| **Organizations & Tenants** | `organizations`, `invitations` |
 | **Audit & Security** | `login_audit`, `auth_admin_audit`, `account_locks`, `console_audit`, `revoked_certificates` |
 | **Operators & Usage** | `operators`, `operator_usage` |
 | **Cases & Investigations** | `cases`, `investigations`, `tasks` |
-| **Governance & Reputation** | `reputation_state`, `reputation_commitments`, `stake_resolutions` |
-| **AI & Context** | `memories`, `agent_activity_metadata` |
+| **Governance & Reputation** | `reputation_state`, `reputation_commitments`, `stake_resolutions`, `trusted_signers`, `app_policies` |
+| **AI & Context** | `memories`, `agent_activity_metadata`, `personas` |
 | **Configuration** | `settings` |
+| **Testing** | `chaos_events` |
 
 ---
 

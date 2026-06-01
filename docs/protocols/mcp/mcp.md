@@ -4,9 +4,9 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-05-29
+Last Updated: 2026-05-31
 
-The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 3-layer BFT verification sequence (L1Doctrine/L2Consensus/L3Notary), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
+The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
 ---
 
@@ -28,7 +28,7 @@ The gateway translates MCP tool invocations into governance envelopes:
 
 1. **Inbound**: MCP client sends JSON-RPC tool invocation to gateway
 2. **Envelope Construction**: Gateway wraps payload in `GovernanceEnvelope` with action type `MCP_CALL`, `MCP_RESOURCE_READ`, `MCP_RESOURCE_LIST`, `MCP_PROMPT_GET`, or `MCP_PROMPT_LIST`
-3. **Verification**: Envelope passes through L1/L2/L3 verification gates
+3. **Verification**: Envelope passes through L1/L2/L3/L4/L5 verification gates
 4. **Dispatch**: Verified envelope forwarded to downstream MCP server or local execution
 
 ### Local Tool Execution
@@ -36,6 +36,20 @@ The gateway translates MCP tool invocations into governance envelopes:
 The gateway handles certain tools locally without downstream proxy:
 
 - **read_field**: JIT field resolution from governed collections with L1 field path validation, L3 session validation, and audit vault logging. Requires `collection`, `document_id`, `field_path`, and `operator_session_id` parameters.
+- **Native tools**: The Operator includes 13 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
+  - `db_discover_topology`: Scans database schemas, tables, and column data types
+  - `db_query_validate`: Validates SQL queries using EXPLAIN QUERY PLAN
+  - `db_isolated_read`: Executes SELECT statements in read-only mode
+  - `db_index_triage`: Queries fragmentation statistics and indexes
+  - `log_stream_filter`: Reads log files with regex filtering and secret scrubbing
+  - `sys_oom_detect`: Scans system logs for OOM killer events
+  - `config_diff_mask`: Compares configuration files with secret masking
+  - `proc_metric_top`: Parses /proc to extract top resource-consuming processes
+  - `fs_disk_profile`: Recursively calculates directory sizes
+  - `proc_signal_safe`: Sends signals to processes with denylist enforcement
+  - `net_socket_audit`: Inspects active network sockets
+  - `net_endpoint_ping`: Performs TCP handshake or ICMP ping
+  - `net_http_probe`: Performs lightweight HTTP requests
 
 ---
 
@@ -125,7 +139,7 @@ MCP clients connect to the gateway via:
 
 ### Tool Invocation
 
-Invoke MCP tools via JSON-RPC POST to `/api/mcp/v1/tools/call` or `/api/mcp/v1/tools/call/sse` for streaming:
+Invoke MCP tools via JSON-RPC POST to `/api/v1/mcp/tools/call` or `/api/v1/mcp/tools/call/sse` for streaming:
 
 ```json
 {
@@ -186,6 +200,21 @@ The Gateway applies L1 forbidden pattern checks to tool names before forwarding 
 - **Composite verifier**: CompositeL3Verifier handles both web and CLI session types
 - **Auto-approval**: Benign diagnostic commands may skip human prompt after L1/L2 pass
 
+### L4 Warden (Pre-Dispatch Verification)
+
+- **Transaction hash verification**: Validates the deterministic transaction hash
+- **Expiry checking**: Rejects expired transactions
+- **Replay detection**: Prevents transaction replay via nonce tracking
+- **State root validation**: Verifies state root consistency
+- **L1/L2/L3 verification**: Orchestrates all previous layer verifications
+
+### L5 Actuator (Execution Boundary)
+
+- **Fail-closed dispatch**: Single execution path for verified envelopes
+- **Signed ActionReceipts**: Returns signed receipts for all executed mutations
+- **Native tool execution**: Executes native tools within Operator's execution boundary
+- **Downstream proxy**: Forwards verified calls to downstream MCP servers
+
 ---
 
 ## Error Handling
@@ -236,11 +265,11 @@ When L3 proof is missing (`ErrL3ProofMissing`), the gateway suspends the transac
 
 The Operator runs in gateway mode with three posture options:
 
-| Mode | Flag | Purpose |
+| Mode | Posture | Purpose |
 |---|---|---|
-| **Doctrine** | `--doctrine` | L1 enforced, L2/L3 audited (default) |
-| **Consensus** | `--consensus` | L1/L2 enforced, L3 audited |
-| **Notary** | `--notary` | L1/L2/L3 strictly enforced |
+| **Doctrine** | `PostureDoctrine` | L1 enforced, L2/L3 audited (default) |
+| **Consensus** | `PostureConsensus` | L1/L2 enforced, L3 audited |
+| **Notary** | `PostureNotary` | L1/L2/L3 strictly enforced |
 
 ### Port Configuration
 
@@ -248,9 +277,10 @@ Default ports (configurable via flags or paths.json):
 
 | Port | Purpose | Auth |
 |---|---|---|
+| `8440` | Operator mTLS API | mTLS (RequireAndVerifyClientCert) |
 | `8441` | Bootstrap enrollment | TLS (no client cert) |
 | `8443` | Public web session | TLS (no client cert) |
-| `8440-8443`, `18789` | Operator mTLS API + Pub/Sub | mTLS (RequireAndVerifyClientCert) |
+| `18789` | Insecure MCP gateway | No TLS (DANGEROUS, only for --insecure mode) |
 
 ### Configuration
 
@@ -291,11 +321,13 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 
 | Concern | File |
 |---|---|
-| Gateway entry | `cmd/g8eo/main.go` (runGatewayMode) |
+| Gateway entry | `cmd/operator/main.go` (runGatewayMode) |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | HTTP routing | `internal/services/gateway/gateway_http.go` |
 | MCP/A2A translation | `internal/services/mcp/gateway.go` |
 | MCP models | `internal/services/mcp/models.go` |
+| Native tool handlers | `internal/services/mcp/native_handlers.go` |
+| Native tool definitions | `internal/services/mcp/native_tools.go` |
 | Field path registry | `internal/services/mcp/field_parser.go` |
 | Envelope construction | `internal/services/mcp/gateway.go` (processGatewayTransaction) |
 | Transaction verification | `internal/services/governance/l4_warden.go` |

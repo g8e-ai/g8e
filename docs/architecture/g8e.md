@@ -4,7 +4,7 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-05-29
+Last Updated: 2026-05-31
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence.
 
@@ -65,6 +65,8 @@ The `GovernanceEnvelope` is the single canonical container for all g8e mutations
 | `investigation_id` | string | Optional investigation identifier |
 | `task_id` | string | Optional task identifier |
 | `system_fingerprint` | string | Optional system fingerprint |
+| `tenant_id` | string | Optional tenant identifier |
+| `binding_persona` | string | Optional binding persona |
 
 ### GovernanceMetadata
 
@@ -168,24 +170,24 @@ The protocol defines canonical event types in protocol/constants/events.json. Ev
 - `AiAgentContinueApprovalRequested`, `AiAgentContinueApprovalGranted`, `AiAgentContinueApprovalRejected`
 - `AiLLMChatIterationStarted`, `AiLLMChatIterationCompleted`, `AiLLMChatIterationFailed`
 - `AiLLMChatIterationStreamStarted`, `AiLLMChatIterationStreamDeltaReceived`, `AiLLMChatIterationStreamCompleted`
+- `AiLLMChatIterationStreamFailed`, `AiLLMChatIterationTextChunkReceived`, `AiLLMChatIterationTextCompleted`
 
 ### Command Execution Events
-- `CommandRequested`, `CommandStarted`, `CommandCompleted`, `CommandFailed`
-- `CommandOutputReceived`, `CommandErrorReceived`
+- `OperatorCommandRequested`, `OperatorCommandStarted`, `OperatorCommandCompleted`, `OperatorCommandFailed`
+- `OperatorCommandOutputReceived`, `OperatorCommandResult`
 
 ### File System Events
-- `FileReadRequested`, `FileReadCompleted`, `FileReadFailed`
-- `FileWriteRequested`, `FileWriteCompleted`, `FileWriteFailed`
-- `FileHistoryRequested`, `FileDiffRequested`, `FileRestoreRequested`
+- `OperatorFilesystemReadRequested`, `OperatorFilesystemReadCompleted`, `OperatorFilesystemReadFailed`
+- `OperatorFileEditRequested`, `OperatorFileEditCompleted`, `OperatorFileEditFailed`
+- `OperatorFileHistoryFetchRequested`, `OperatorFileDiffFetchRequested`, `OperatorFileRestoreRequested`
 
 ### Audit & Governance Events
-- `AuditEventRecorded`, `AuditQueryRequested`
-- `GovernanceEnvelopeReceived`, `GovernanceEnvelopeVerified`, `GovernanceEnvelopeRejected`
+- `OperatorAuditCommandRecorded`, `OperatorAuditUserRecorded`
+- `OperatorBootstrapRequested`, `OperatorBootstrapCompleted`, `OperatorBootstrapFailed`
 
 ### MCP/A2A Events
-- `McpCallRequested`, `McpCallCompleted`, `McpCallFailed`
-- `McpResourceReadRequested`, `McpResourceReadCompleted`
-- `A2aCallRequested`, `A2aCallCompleted`, `A2aCallFailed`
+- `OperatorMcpCallRequested`
+- `OperatorA2aCallRequested`
 
 ---
 
@@ -225,15 +227,15 @@ Protocol errors follow standardized JSON-RPC codes for MCP/A2A client compatibil
 
 ## Configuration
 
-### Gateway Modes
+### Gateway Postures
 
-The Operator runs in gateway mode with three posture options:
+The Governance Gateway runs with three posture options:
 
 | Mode | Flag | Purpose |
 |---|---|---|
-| **Doctrine** | `--doctrine` | L1 enforced, L2/L3 audited (default) |
-| **Consensus** | `--consensus` | L1/L2 enforced, L3 audited |
-| **Notary** | `--notary` | L1/L2/L3 strictly enforced |
+| **Doctrine** | `--posture doctrine` | L1 enforced, L2/L3 audited (default) |
+| **Consensus** | `--posture consensus` | L1/L2 enforced, L3 audited |
+| **Notary** | `--posture notary` | L1/L2/L3 strictly enforced |
 
 ### Port Configuration
 

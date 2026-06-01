@@ -27,10 +27,20 @@ g8e/
 ├── protocol/                       # Protocol definitions (shared truth)
 ├── test/                           # Integration / E2E tests
 ├── docs/                           # Architecture and user docs
+├── docker/                         # Docker configurations
+├── .github/                        # GitHub workflows and templates
 ├── Makefile                        # Build orchestration
 ├── go.mod / go.sum
 ├── buf.gen.yaml                    # Buf protobuf generation config
-└── VERSION
+├── .golangci.yml                   # Linting configuration
+├── .gitignore
+├── VERSION
+├── CHANGELOG.md
+├── CODE_OF_CONDUCT.md
+├── CONTRIBUTING.md
+├── LICENSE
+├── README.md
+└── SECURITY.md
 ```
 
 ## protocol/
@@ -44,7 +54,11 @@ protocol/
 │   ├── operator/v1/operator.proto  # Command/result payloads, ActionReceipt, CommitmentAttestation, PKI, passkey, MCP/A2A
 │   └── pubsub/v1/pubsub.proto     # PubSubMessage, PubSubEvent
 ├── constants/
-│   ├── doctrine/                   # L1 doctrine registries (gitleaks, OWASP CRS, MCP vectors)
+│   ├── doctrine/                   # L1 doctrine registries
+│   │   ├── doctrine_registry.json
+│   │   ├── gitleaks_doctrine.json
+│   │   ├── mcp_vectors_doctrine.json
+│   │   └── owasp_crs_doctrine.json
 │   ├── agents.json
 │   ├── api_paths.json
 │   ├── channels.json
@@ -56,7 +70,6 @@ protocol/
 │   ├── headers.json
 │   ├── intents.json
 │   ├── kv_keys.json
-│   ├── paths.json
 │   ├── platform.json
 │   ├── ports.json
 │   ├── prompts.json
@@ -81,6 +94,17 @@ protocol/
 │   ├── user.json
 │   ├── user_settings.json
 │   └── errors.py
+├── docs/                           # Protocol documentation
+│   └── reference/
+│       └── api/
+├── examples/                       # Protocol usage examples
+│   ├── governance_envelope/
+│   ├── mcp_server/
+│   └── workload_identity/
+├── python/                         # Python protocol bindings
+│   ├── examples/
+│   └── g8e_protocol/
+│       └── models/
 ├── test-fixtures/
 ├── workload_identity.go
 ├── Makefile
@@ -93,8 +117,8 @@ Each subdirectory produces one binary. All import `internal/` and `protocol/`.
 
 ```text
 cmd/
-├── g8e/main.go                     # Platform CLI (delegates to internal/cli/cmd)
-└── g8eo/main.go                    # Operator binary (multi-mode: gateway, insecure, outbound)
+└── operator/
+    └── main.go                     # g8e operator binary (multi-mode: gateway, insecure, outbound)
 ```
 
 ## internal/
@@ -103,17 +127,27 @@ All private. Nothing here is importable by external modules.
 
 ```text
 internal/
+├── auditor/                        # Governance auditor
+│   ├── client/
+│   ├── config/
+│   ├── report/
+│   └── scenarios/
 ├── certs/                          # Embedded trust bundles, cert loading
-├── cli/                            # Platform CLI (cmd/g8e delegates here)
+├── chaos/                          # Chaos testing utilities
+├── cli/                            # Platform CLI
 │   ├── api/                        #   HTTP client for operator communication
 │   ├── auth/                       #   Authentication client
-│   ├── cmd/                        #   Subcommands: platform, auth, data, security, setup, test, vars
+│   ├── cmd/                        #   Subcommands
 │   ├── config/                     #   CLI configuration
-│   └── platform/                   #   Platform process management
+│   ├── errors/                     #   CLI error handling
+│   ├── jsonrpc/                    #   JSON-RPC client
+│   ├── platform/                   #   Platform process management
+│   └── stdio/                      #   Stdio handling
 ├── cmd/                            # Stream command handling (subprocess, SSH)
 ├── config/                         # Config loading and validation
 ├── constants/                      # Generated Go constants from protocol/constants/*.json
 ├── contracts/                      # Protocol contract tests (constants enforcement, docs drift)
+├── docs/                           # Internal documentation
 ├── httpclient/                     # Outbound HTTP client
 ├── interfaces/                     # Shared interface definitions
 ├── marshaler/                      # GovernanceEnvelope marshal/unmarshal
@@ -154,11 +188,17 @@ services/
 │   ├── passkey_service.go          #   WebAuthn/FIDO2 passkey ops
 │   ├── registration_service.go     #   CSR-based enrollment
 │   ├── secret_manager.go           #   Signing key storage
-│   ├── trust_scripts.go            #   PKI trust bootstrap
 │   ├── user_service.go
 │   ├── session_service.go
 │   ├── app_enrollment_service.go
-│   └── pki/                        #   PKI dir structure (authorities, issued, revocation, root, trust)
+│   ├── admin_controller.go
+│   ├── auth_controller.go
+│   ├── db_controller.go
+│   ├── invitation_service.go
+│   ├── jwks.go
+│   ├── jwt_native.go
+│   ├── operator_controller.go
+│   └── pki_controller.go
 │
 ├── execution/                      # Command execution
 │   ├── execution.go                #   Shell execution with concurrency control
@@ -166,7 +206,9 @@ services/
 │   ├── file_edit_unix.go
 │   ├── fs_grep.go                  #   Filesystem search
 │   ├── fs_list.go                  #   Directory listing
-│   └── fs_list_unix.go
+│   ├── fs_list_386.go
+│   ├── fs_list_amd64.go
+│   └── fs_list_arm64.go
 │
 ├── storage/                        # Local-first audit architecture
 │   ├── audit_vault.go              #   SQLite audit vault (receipts, events, sessions)
@@ -197,16 +239,16 @@ services/
 ├── mcp/                            # MCP/A2A protocol translation
 │   ├── gateway.go                  #   JSON-RPC to GovernanceEnvelope
 │   ├── field_parser.go             #   Field path parsing for suspended txns
-│   └── models.go                   #   SuspendedTransaction model
+│   ├── models.go                   #   SuspendedTransaction model
+│   ├── native_handlers.go
+│   └── native_tools.go
 │
 ├── sovereignty/
 │   └── boundary.go                 #   Sovereignty Boundary Plane: data scrubbing/rehydration
 │
 ├── auth/
 │   ├── bootstrap.go                #   Device-link token auth + bootstrap config
-│   ├── device_auth.go
-│   ├── fingerprint.go
-│   └── sessions.go
+│   └── fingerprint.go
 │
 ├── keystore/
 │   ├── keystore.go                 #   Keystore interface
@@ -258,22 +300,18 @@ test/
 ├── a2a_gateway_test.go             # A2A gateway integration
 ├── a2a_real_operator_test.go       # Real operator A2A tests
 ├── byo_client_test.go              # BYO client integration
+├── integration_helper.go           # Integration test helpers
 ├── mcp_gateway_test.go             # MCP gateway tests
 ├── mcp_real_operator_test.go       # Real operator MCP tests
+├── mcp_stdio_test.go               # MCP stdio tests
+├── native_real_operator_test.go    # Native real operator tests
+├── universal_gateway_integration_test.go # Universal gateway integration tests
 └── scenario/
     ├── scenario.go                 # Scenario runner framework
-    ├── runner.go
-    ├── db_setup.go
-    ├── generate_fixtures.go
-    ├── generate_gate_fixtures.go
-    ├── generate_l1_pattern.go
-    ├── report.go
-    ├── scenario_test.go
-    ├── concurrency_test.go
-    ├── fuzz_test.go
-    ├── receipt_verification_test.go
-    ├── fixtures/                   # Test fixture data
-    └── golden/                     # Golden file outputs
+    ├── scenario_test.go            # Scenario tests
+    ├── concurrency_test.go         # Concurrency tests
+    ├── envelope_builder.go         # Envelope construction helpers
+    └── README.md                   # Scenario documentation
 ```
 
 ## Runtime Storage Layout
@@ -291,16 +329,36 @@ test/
 ## Build Targets
 
 ```makefile
-make build              # bin/g8e operator binary
-make generate           # proto + constants generation
-make proto              # Buf protobuf codegen
-make constants          # Go constants from JSON
-make test-g8eo          # All tests (race detection)
-make lint-g8eo          # golangci-lint
-make vulncheck-g8eo     # govulncheck
-make ci                 # Full CI pipeline
-make clean              # Remove artifacts + runtime state
-make docs-build         # MkDocs site
-make docs-cli           # CLI reference generation
-make validate-doctrines # Doctrine JSON schema check
+make build              # Build g8e operator binary
+make build-compressed   # Build with UPX compression for multiple platforms
+make docker-build       # Build g8e operator Docker image
+make generate           # Generate all protocol artifacts (proto)
+make proto              # Generate all Protobuf code (Go)
+make proto-python       # Generate Python Protobuf code
+make proto-force        # Force generate Protobuf code
+make buf-install        # Install Buf CLI locally
+make protoc-install     # Install protoc compiler
+make upx-install        # Install UPX compressor
+make test               # Run all tests with race detection
+make test-short         # Run short tests with race detection
+make test-coverage      # Run tests with coverage (enforces 60% threshold)
+make test-shuffle       # Run all tests with randomized order
+make test-integration   # Run integration tests (requires platform running and auth login)
+make test-scenario      # Run scenario integration tests (requires platform running)
+make test-gateway       # Run gateway tests
+make test-mcp           # Run MCP tests
+make test-a2a           # Run A2A tests
+make test-universal-gateway # Run universal gateway integration tests
+make test-byo           # Run BYO client tests (requires platform running and auth login)
+make test-native        # Run native real operator tests
+make lint               # Run all linting and quality checks
+make lint-no-embedded-newlines # Check for compilation errors
+make vulncheck          # Run vulnerability check
+make validate-doctrines # Validate doctrine JSON schema
+make ingest-doctrines   # Doctrine ingestion (deprecated)
+make update-doctrines   # Update doctrine sources
+make clean              # Remove all build artifacts and runtime state
+make clean-harness      # Clean up stale harness directories
+make ci                 # Run full CI pipeline locally
+make ci-platform        # Run platform-only CI (operator, protocol, proto, docs)
 ```

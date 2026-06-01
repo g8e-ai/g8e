@@ -5,7 +5,7 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-05-29
+Last Updated: 2026-05-31
 Version: v1.0.3
 
 ---
@@ -16,7 +16,7 @@ g8e is a zero-trust execution platform for agentic infrastructure. The platform 
 
 The platform consists of two mandatory components:
 
-### Governance Gateway (g8eg)
+### Governance Gateway
 
 The Governance Gateway serves as the central Policy Decision Point (PDP). It provides:
 
@@ -28,15 +28,15 @@ The Governance Gateway serves as the central Policy Decision Point (PDP). It pro
 
 The Gateway runs in one of three modes, each enforcing different layers of the 5-layer verification sequence:
 
-- **Doctrine Mode**: Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures not required.
-- **Consensus Mode**: Enforces L1 and L2 (multi-model Byzantine consensus). L3 signature not required.
-- **Notary Mode**: Enforces L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2). L4 and L5 are always active for execution. This is the most secure mode.
+- **Doctrine Mode**: Enforces L1Doctrine (technical bedrock: forbidden patterns, blacklist, whitelist). L2/L3 signatures not required.
+- **Consensus Mode**: Enforces L1Doctrine and L2Consensus (multi-model Byzantine consensus). L3 signature not required.
+- **Notary Mode**: Enforces L1Doctrine, L2Consensus, and L3Notary (human-in-the-loop via WebAuthn/FIDO2). L4Warden and L5Actuator are always active for execution. This is the most secure mode.
 
-### Governed Operator (g8eo)
+### g8e Operator
 
-The Governed Operator serves as the Policy Execution Point (PEP) running on target hosts. It provides:
+The g8e Operator serves as the Policy Execution Point (PEP) running on target hosts. It provides:
 
-- **Fail-Closed Execution**: Executes mutations only through the Actuator, the single dispatch path that enforces L1/L2/L3 verification gates.
+- **Fail-Closed Execution**: Executes mutations only through L5Actuator, the single dispatch path that enforces L1/L2/L3 verification gates.
 - **Outbound-Only Connectivity**: Dials out to the Gateway via mTLS reverse tunnel, exposing no inbound ports or remote attack surface.
 - **Local-First Audit**: Writes all audit entries to a host-local Git-backed vault before execution, preserving raw data and forensic context on the host.
 - **MCP Server**: Exposes tools to standard local clients as a Model Context Protocol server for AI agent integration.
@@ -49,13 +49,13 @@ The Operator distrusts all upstream inputs. It validates every envelope independ
 1. **Client Submission**: An AI client submits a mutation request via MCP or A2A protocol to the Gateway.
 2. **Envelope Construction**: The Gateway wraps the request in a canonical JSON GovernanceEnvelope with typed payload, transaction hash, nonce, expiry, and state root.
 3. **Verification Sequence**: The platform enforces the 5-layer verification sequence:
-   - L1 (Technical Bedrock): Forbidden patterns, blacklist, whitelist checks.
-   - L2 (Consensus): Multi-model Byzantine consensus signatures (in consensus/notary modes).
-   - L3 (Notary): Human-in-the-loop approval via WebAuthn (in notary mode).
-   - L4 (Warden): Pre-dispatch integrity and state-root verification.
-   - L5 (Actuator): Sovereign execution boundary and signed receipt issuance.
+   - L1Doctrine: Forbidden patterns, blacklist, whitelist checks.
+   - L2Consensus: Multi-model Byzantine consensus signatures (in consensus/notary modes).
+   - L3Notary: Human-in-the-loop approval via WebAuthn (in notary mode).
+   - L4Warden: Pre-dispatch integrity and state-root verification.
+   - L5Actuator: Sovereign execution boundary and signed receipt issuance.
 4. **Dispatch**: Verified envelopes are dispatched over the Pub/Sub broker to target Operators.
-5. **Execution**: The Operator receives the envelope, re-verifies all proofs, and executes the mutation through the Actuator.
+5. **Execution**: The Operator receives the envelope, re-verifies all proofs, and executes the mutation through L5Actuator.
 6. **Receipt**: The Operator emits a signed receipt and writes an audit entry to the local Git-backed vault.
 
 ---
@@ -75,7 +75,7 @@ This produces the `g8e` binary. It is self-contained and manages both Gateway (P
 
 ### 2. Initialize Gateway
 
-Start the Sovereign Governance Gateway in **Doctrine Mode** (L1 enforced):
+Start the Governance Gateway in **Doctrine Mode** (L1Doctrine enforced):
 
 ```bash
 ./g8e gw start
@@ -116,7 +116,7 @@ g8e enforces a hierarchical defense-in-depth model:
 ## Protocol Integration
 
 ### MCP (Model Context Protocol)
-Connect AI agents to the Operator's toolset. The Operator translates JSON-RPC requests into signed Governance Envelopes before execution.
+Connect AI agents to the Operator's toolset. The Operator translates JSON-RPC requests into signed GovernanceEnvelope before execution.
 
 ### A2A (Agent-to-Agent)
 Gateway-mediated communication between sovereign agents. Every interaction is state-bound and audit-logged to the local Git ledger.
@@ -175,9 +175,9 @@ Query the local audit vault to verify governance enforcement:
 
 The Gateway operates in three security postures:
 
-- **Doctrine Mode** (default): L1 enforced, L2/L3 audited
-- **Consensus Mode**: L1/L2 enforced, L3 audited
-- **Notary Mode**: L1/L2/L3 strictly enforced
+- **Doctrine Mode** (default): L1Doctrine enforced, L2/L3 audited
+- **Consensus Mode**: L1Doctrine/L2Consensus enforced, L3 audited
+- **Notary Mode**: L1Doctrine/L2Consensus/L3Notary strictly enforced
 
 Configure posture via `./g8e gw start --doctrine`, `--consensus`, or `--notary`.
 
