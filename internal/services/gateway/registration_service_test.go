@@ -64,7 +64,7 @@ func TestPKIPhase2_CalculateSerialFromPEM(t *testing.T) {
 
 	// Generate a CSR and sign it
 	csr := testutil.GenerateTestCSRP256(t, "test-operator")
-	certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+	certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789", "")
 	require.NoError(t, err)
 
 	// Extract serial using the helper function

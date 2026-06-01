@@ -130,7 +130,7 @@ func (c *PKIController) handlePKICSRSign(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	certPEM, chainPEM, err := c.pki.SignCSR(req.CSR, req.LeafType, req.OrganizationID, req.OperatorID, req.UserID, req.WorkloadSessionID)
+	certPEM, chainPEM, err := c.pki.SignCSR(req.CSR, req.LeafType, req.OrganizationID, req.OperatorID, req.UserID, req.WorkloadSessionID, "")
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return

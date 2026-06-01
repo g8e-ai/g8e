@@ -1067,7 +1067,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 		}
 
 		// Sign the CSR
-		certPEM, chainPEM, err := c.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, orgID, operatorID, user.ID, sessionID)
+		certPEM, chainPEM, err := c.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, orgID, operatorID, user.ID, sessionID, "")
 		if err != nil {
 			c.logger.Error("Failed to sign bootstrap CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to sign CSR")
@@ -1083,7 +1083,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 			return
 		}
 
-		cliCertPEM, cliCertChainPEM, err := c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID)
+		cliCertPEM, cliCertChainPEM, err := c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "")
 		if err != nil {
 			c.logger.Error("Failed to sign bootstrap CLI CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to sign CLI CSR")

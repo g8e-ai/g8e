@@ -112,7 +112,7 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 
 	// Sign the CSR with the operator intermediate CA
 	// Use appID as the operatorID parameter for AppSPIFFEID generation
-	certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, "app", req.OrganizationID, appID, "", "")
+	certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, "app", req.OrganizationID, appID, "", "", "")
 	if err != nil {
 		s.logger.Error("Failed to sign app CSR", "app_id", appID, "error", err)
 		return &AppEnrollResponse{Success: false, Error: "failed to sign certificate"}, nil

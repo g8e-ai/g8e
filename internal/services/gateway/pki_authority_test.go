@@ -269,7 +269,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		// Verify trust bundles exist and parse correctly
 		bundles := map[string]int{
 			"root.pem":            1, // root only
-			"g8eg-ca-bundle.pem":  3, // root + hub + operator
+			"g8eg-ca-bundle.pem":  4, // root + hub + operator + gateway peer
 			"operator-bundle.pem": 2, // root + operator
 		}
 		for bundleName, expectedCount := range bundles {
@@ -682,7 +682,7 @@ func TestPKIAuthority_ReuseExisting(t *testing.T) {
 //	defer cleanup()
 //
 //	csr := testutil.GenerateTestCSR(t, "test-operator")
-//	certPEM, chainPEM, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+//	certPEM, chainPEM, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789", "")
 //	require.NoError(t, err)
 func NewTestPKIBootstrap(t *testing.T) (*PKIAuthority, string, func()) {
 	t.Helper()
@@ -768,7 +768,7 @@ func TestPKIAuthority_Phase0Regression_C2_OperatorSerialBlank(t *testing.T) {
 
 	// Generate a P-256 CSR and sign it
 	csr := testutil.GenerateTestCSRP256(t, "test-operator")
-	certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+	certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789", "")
 	require.NoError(t, err)
 
 	// Extract serial from the issued cert
@@ -819,7 +819,7 @@ func TestPKIAuthority_Phase0Regression_H2_CurveInconsistency(t *testing.T) {
 
 	// Check leaf cert curve (from CSR)
 	csr := testutil.GenerateTestCSRP256(t, "test-operator")
-	certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+	certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789", "")
 	require.NoError(t, err)
 
 	certBlock, _ := pem.Decode([]byte(certPEM))
@@ -847,7 +847,7 @@ func TestPKIAuthority_Phase0Regression_C3_LeafCertTTL(t *testing.T) {
 
 	// Sign a leaf cert with P-256 CSR
 	csr := testutil.GenerateTestCSRP256(t, "test-operator")
-	certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+	certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789", "")
 	require.NoError(t, err)
 
 	block, _ := pem.Decode([]byte(certPEM))
@@ -877,7 +877,7 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 
 		// Verify we can sign a CSR using the production flow
 		csr := testutil.GenerateTestCSRP256(t, "test-operator")
-		certPEM, chainPEM, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+		certPEM, chainPEM, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789", "")
 		require.NoError(t, err, "SignCSR should succeed with auto-bootstrapped PKI")
 		assert.NotEmpty(t, certPEM, "certificate PEM should not be empty")
 		assert.NotEmpty(t, chainPEM, "certificate chain PEM should not be empty")
@@ -934,7 +934,7 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 
 		// Document current behavior for all critical issues
 		csr := testutil.GenerateTestCSRP256(t, "test-operator")
-		certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+		certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789", "")
 		require.NoError(t, err)
 
 		block, _ := pem.Decode([]byte(certPEM))
@@ -961,7 +961,7 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 
 		// Revoke a certificate
 		csr := testutil.GenerateTestCSRP256(t, "test-operator")
-		certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+		certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789", "")
 		require.NoError(t, err)
 
 		block, _ := pem.Decode([]byte(certPEM))
@@ -1037,7 +1037,7 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		require.NoError(t, err)
 		csrPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER}))
 
-		_, _, err = pki.SignCSR(csrPEM, "operator", "org-123", "op-456", "", "session-789")
+		_, _, err = pki.SignCSR(csrPEM, "operator", "org-123", "op-456", "", "session-789", "")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "must use P-256 curve")
 	})
@@ -1056,7 +1056,7 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 
 		// Generate a P-256 CSR (should be accepted)
 		csr := testutil.GenerateTestCSRP256(t, "test-operator")
-		certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789")
+		certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789", "")
 		assert.NoError(t, err)
 		assert.NotEmpty(t, certPEM)
 	})
