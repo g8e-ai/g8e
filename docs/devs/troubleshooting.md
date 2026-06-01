@@ -76,12 +76,12 @@ imports for package-relative use.
 
 ## `./g8e gw start` does not become healthy
 
-The gateway start path builds and launches the Governance Gateway (g8eg), then waits for the
+The gateway start path builds and launches the Governance Gateway, then waits for the
 health endpoint. Start with the status command and the log:
 
 ```bash
 ./g8e gw status
-tail -n 80 .g8e/logs/operator.log
+./g8e gw logs
 ```
 
 Common causes:
@@ -108,7 +108,7 @@ them.
 
 ```bash
 ./g8e gw start
-./g8e test g8eo
+make test
 ```
 
 If a test failure mentions missing trust bundles or client certificates, confirm

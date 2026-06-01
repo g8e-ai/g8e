@@ -6,7 +6,7 @@ title: g8e Protocol
 
 Last Updated: 2026-05-31
 
-The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence.
+The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
 ---
 
@@ -17,6 +17,7 @@ The g8e Protocol is the foundational wire contract for all mutations in the g8e 
 ### Core Design Principles
 
 - **Canonical JSON Wire Format**: All client-facing surfaces (HTTP, WSS pub/sub, receipts, audit exports) carry the `GovernanceEnvelope` as canonical JSON (protojson). Binary protobuf is strictly reserved for internal storage.
+- **g8e.local Canonical Alias**: The platform uses `g8e.local` as the stable internal hostname. The gateway translates this alias to installation-specific peer identity and endpoint data.
 - **Hash-Based Signing**: A deterministic `transaction_hash` is computed from normalized envelope fields. The verifier enforces `id == transaction_hash == SHA256(canonical_fields)`.
 - **Fail-Closed Verification**: Any malformed envelope, expired transaction, reused nonce, stale state root, or missing proof is rejected immediately before execution.
 - **Body-Embedded Context**: Business and execution context (`web_session_id`, `cli_session_id`, `operator_session_id`, `user_id`) lives inside the envelope via typed fields.
@@ -37,7 +38,7 @@ The g8e Protocol does not compete with tool-calling standards. Instead, it wraps
 
 ## GovernanceEnvelope Schema
 
-The `GovernanceEnvelope` is the single canonical container for all g8e mutations. The schema source of truth is protocol/proto/g8e/common/v1/common.proto.
+The `GovernanceEnvelope` is the single canonical container for all g8e mutations. The schema source of truth is defined in `../../protocol/proto/g8e/common/v1/common.proto`.
 
 ### Envelope Fields
 
@@ -83,7 +84,7 @@ The `governance` field encapsulates all three governance layers:
 
 All envelopes use canonical JSON (protojson) encoding for client-facing surfaces:
 
-- **Schema source of truth**: `.proto` files in protocol/proto/
+- **Schema source of truth**: `.proto` files in `../../protocol/proto/`
 - **Wire format**: canonical JSON (protojson)
 - **Signing basis**: deterministic `transaction_hash` computed from normalized envelope fields
 - **Internal storage**: protobuf bytes (implementation detail)
@@ -99,10 +100,11 @@ The transaction lifecycle follows a strict sequence from intent to audited execu
 ### Request Phase (Client -> Gateway -> Operator)
 
 1. A client ecosystem generates a typed protobuf payload (e.g., `CommandRequested`).
-2. The payload is embedded into a `GovernanceEnvelope` alongside `nonce`, `expires_at`, and `state_merkle_root`.
-3. An L2 Consensus producer computes the `transaction_hash` and attaches a signature.
-4. For mutations, an L3 Notary (human) signs the same hash via WebAuthn, unless auto-approval policy applies.
-5. The client submits the canonical-JSON envelope over mTLS to the Governance Gateway (`g8eg`), which validates and dispatches it to the target Operator (`g8eo`) over WSS.
+2. The gateway detects the machine's network identity (IPs, hostnames, and aliases) using the detector in `../../internal/services/network/identity.go`.
+3. The payload is embedded into a `GovernanceEnvelope` alongside `nonce`, `expires_at`, and `state_merkle_root`.
+4. An L2 Consensus producer computes the `transaction_hash` and attaches a signature.
+5. For mutations, an L3 Notary (human) signs the same hash via WebAuthn, unless auto-approval policy applies.
+6. The client submits the canonical-JSON envelope over mTLS to the Governance Gateway (`g8eg`), which validates and dispatches it to the target Operator (`g8eo`) over WSS. Remote peers are resolved via `g8e.local` translation.
 
 ### Verification Phase (L4Warden)
 
@@ -129,32 +131,32 @@ The `L4Warden` operates as the primary pre-dispatch validation gate, executing t
 Every mutation must pass through five independent layers in order. A failure at any layer is an immediate rejection.
 
 ### L1 Doctrine: Technical Bedrock
-Static, deterministic checks enforced before any code executes. Validated using doctrines sourced from protocol/constants/doctrine/doctrine_registry.json. Code pattern matching and threat analysis are defined in internal/services/governance/l1_doctrine.go.
+Static, deterministic checks enforced before any code executes. Validated using doctrines sourced from `../../protocol/constants/doctrine/doctrine_registry.json`. Code pattern matching and threat analysis are defined in `../../internal/services/governance/l1_doctrine.go`.
 - **Forbidden Patterns**: The custom protobuf field option `(g8e.common.v1.forbidden_patterns)` is reflected at runtime to scan typed payloads.
 - **Threat Detection**: L1 Doctrine analyzes command inputs for MITRE ATT&CK patterns, reverse shells, and injection vectors.
 - **Allow/Deny Lists**: Enforces per-host policy and user settings.
 
 ### L2 Consensus: Distributed Agreement
-A cryptographic proof that an independent ensemble agreed on the instruction. Signature verification using Ed25519 cryptography is defined in internal/services/governance/l2_consensus.go.
+A cryptographic proof that an independent ensemble agreed on the instruction. Signature verification using Ed25519 cryptography is defined in `../../internal/services/governance/l2_consensus.go`.
 - An Ed25519 signature is generated over `transaction_hash | decision`.
 - Verified against the Operator-owned `SignerStore`.
 - Gateway mode may sign locally (`gateway_signed=true`) for single-agent MCP clients.
 
 ### L3 Notary: Human Authorization
-Hardware-bound proof of human presence. Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) is defined in internal/services/governance/l3_notary.go.
+Hardware-bound proof of human presence. Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) is defined in `../../internal/services/governance/l3_notary.go`.
 - **Web Sessions**: Real WebAuthn/FIDO2 proof with the transaction hash as the assertion challenge.
-- **CLI Sessions**: Authenticates via mTLS certificates with SPIFFE URI SANs. The L3 proof is the SHA-256 fingerprint of the mTLS certificate.
+- **CLI Sessions**: Authenticates via mTLS certificates with SPIFFE URI SANs. The L3 proof includes the SHA-256 fingerprint of the mTLS certificate and an optional `cli_signature` over the `transaction_hash`.
 - **Auto-Approval**: Explicit policy permits auto-approval for benign diagnostic verbs. Auto-approval never bypasses L1 or L2 gates.
 
 ### L4 Warden: Pre-dispatch Verification
-The central Policy Execution Point (PEP) that validates the entire transaction proof before dispatch. Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) is defined in internal/services/governance/l4_warden.go.
+The central Policy Execution Point (PEP) that validates the entire transaction proof before dispatch. Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) is defined in `../../internal/services/governance/l4_warden.go`.
 - **Stateless Validation**: Verifies structural integrity, payload decoding, and L1Doctrine compliance.
 - **Cryptographic Integrity**: Validates `transaction_hash` and signatures.
 - **Freshness & Replay**: Verifies `expires_at` and the `nonce` replay store.
 - **State Binding**: Compares `state_merkle_root` against the host ledger.
 
 ### L5 Actuator: Execution Boundary
-The single fail-closed execution target that dispatches the verified payload and issues signed receipts. Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production are defined in internal/services/governance/l5_actuator.go.
+The single fail-closed execution target that dispatches the verified payload and issues signed receipts. Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production are defined in `../../internal/services/governance/l5_actuator.go`.
 - **Rehydration**: Sensitive tokens scrubbed by the Sovereignty Boundary Plane are re-injected.
 - **Native Dispatch**: Executes the typed payload (bash, file edit, tool call).
 - **Signed Action Receipts**: Issues an immutable `ActionReceipt` proof of execution and result.
@@ -207,7 +209,7 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 
 ## Error Handling
 
-Protocol errors follow standardized JSON-RPC codes for MCP/A2A client compatibility:
+Protocol errors follow standardized JSON-RPC codes for MCP/A2A client compatibility. Codes are defined in `../../internal/cli/errors/errors.go`.
 
 | Code | Label | Meaning |
 |---|---|---|
@@ -239,12 +241,13 @@ The Governance Gateway runs with three posture options:
 
 ### Port Configuration
 
-Default ports (configurable via flags or internal/cli/config/paths.json):
+Default ports (configurable via flags or `../../internal/cli/config/paths.json`):
 
 | Port | Purpose | Auth |
 |---|---|---|
 | `8440` | mTLS API + Pub/Sub | mTLS (RequireAndVerifyClientCert) |
 | `8441` | Bootstrap enrollment | Plain HTTP (no TLS) |
+| `8442` | MCP HTTP Port | Rate-limited HTTP (no TLS) |
 | `8443` | Public web session | TLS (no client cert) |
 
 ### Configuration
@@ -280,31 +283,33 @@ Output scrubbing is performed directly at the `L5Actuator` boundary to redact to
 
 | Concern | File |
 |---|---|
-| Protobuf schemas | protocol/proto/g8e/common/v1/common.proto |
-| Event registry | protocol/constants/events.json |
-| Channel prefixes | protocol/constants/channels.json |
-| Envelope types | pkg/governance/types.go |
-| Warden logic | internal/services/governance/l4_warden.go |
-| Actuator logic | internal/services/governance/l5_actuator.go |
-| Audit storage | internal/services/storage/audit_vault.go |
-| Ledger storage | internal/services/storage/ledger.go |
-| Workload identity | protocol/workload_identity.go |
-| Gateway envelope construction | internal/services/gateway/governance_envelope.go |
-| Gateway HTTP routing | internal/services/gateway/gateway_http.go |
-| Pub/Sub command service | internal/services/pubsub/pubsub_commands.go |
-| Pub/Sub results service | internal/services/pubsub/pubsub_results.go |
-| MCP/A2A translation | internal/services/mcp/gateway.go |
-| Session management | internal/services/gateway/session_service.go |
-| CLI L3 verification | internal/services/gateway/cli_l3_notary.go |
-| Composite L3 verifier | internal/services/gateway/composite_l3_verifier.go |
-| Doctrine registry | protocol/constants/doctrine/doctrine_registry.json |
-| MCP vectors doctrine | protocol/constants/doctrine/mcp_vectors_doctrine.json |
+| Protobuf schemas | `../../protocol/proto/g8e/common/v1/common.proto` |
+| Event registry | `../../protocol/constants/events.json` |
+| Channel prefixes | `../../protocol/constants/channels.json` |
+| Envelope types | `../../pkg/governance/types.go` |
+| Warden logic | `../../internal/services/governance/l4_warden.go` |
+| Actuator logic | `../../internal/services/governance/l5_actuator.go` |
+| Audit storage | `../../internal/services/storage/audit_vault.go` |
+| Ledger storage | `../../internal/services/storage/ledger.go` |
+| Workload identity | `../../protocol/workload_identity.go` |
+| Network identity | `../../internal/services/network/identity.go` |
+| Gateway envelope construction | `../../internal/services/gateway/governance_envelope.go` |
+| Gateway HTTP routing | `../../internal/services/gateway/gateway_http.go` |
+| Pub/Sub command service | `../../internal/services/pubsub/pubsub_commands.go` |
+| Pub/Sub results service | `../../internal/services/pubsub/pubsub_results.go` |
+| MCP/A2A translation | `../../internal/services/mcp/gateway.go` |
+| Session management | `../../internal/services/gateway/session_service.go` |
+| CLI L3 verification | `../../internal/services/gateway/cli_l3_notary.go` |
+| Composite L3 verifier | `../../internal/services/gateway/composite_l3_verifier.go` |
+| Doctrine registry | `../../protocol/constants/doctrine/doctrine_registry.json` |
+| MCP vectors doctrine | `../../protocol/constants/doctrine/mcp_vectors_doctrine.json` |
+| Internal translation | `../../docs/architecture/g8e_local_translation.md` |
 
 ---
 
 ## Related Documentation
 
-- [**Operator (g8eo)**](docs/architecture/operator.md) - Operator architecture and execution boundary
-- [**Gateway (g8eg)**](docs/architecture/gateway.md) - Governance Gateway architecture
-- [**MCP Protocol**](docs/protocols/mcp/mcp.md) - MCP protocol specification and integration
-- [**A2A Protocol**](docs/protocols/a2a/a2a.md) - A2A protocol specification and integration
+- [**Operator (g8eo)**](./operator.md) - Operator architecture and execution boundary
+- [**Gateway (g8eg)**](./gateway.md) - Governance Gateway architecture
+- [**MCP Protocol**](../protocols/mcp/mcp.md) - MCP protocol specification and integration
+- [**A2A Protocol**](../protocols/a2a/a2a.md) - A2A protocol specification and integration

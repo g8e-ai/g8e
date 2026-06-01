@@ -513,10 +513,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	cmd.Stdin = nil
 
 	// Set process group so we can kill entire command tree on timeout/cancel
-	if cmd.SysProcAttr == nil {
-		cmd.SysProcAttr = &syscall.SysProcAttr{}
-	}
-	cmd.SysProcAttr.Setpgid = true
+	setProcessGroup(cmd)
 
 	// Start command
 	startTime := time.Now().UTC()
@@ -550,12 +547,8 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	case <-ctx.Done():
 		// Context cancelled or timed out - kill entire process group
 		if cmd.Process != nil {
-			pgid, pgidErr := syscall.Getpgid(cmd.Process.Pid)
-			if pgidErr == nil {
-				_ = syscall.Kill(-pgid, syscall.SIGKILL)
-			} else {
-				_ = cmd.Process.Kill()
-			}
+			_ = killProcessGroup(cmd.Process.Pid)
+			_ = cmd.Process.Kill()
 		}
 		err = <-done // Wait for process to actually exit
 	case err = <-done:
@@ -805,12 +798,8 @@ func (es *ExecutionService) Stop() {
 			execCtx.Cancel()
 		}
 		if execCtx.Process != nil {
-			pgid, err := syscall.Getpgid(execCtx.Process.Pid)
-			if err == nil {
-				_ = syscall.Kill(-pgid, syscall.SIGKILL)
-			} else {
-				_ = execCtx.Process.Kill()
-			}
+			_ = killProcessGroup(execCtx.Process.Pid)
+			_ = execCtx.Process.Kill()
 		}
 		execCtx.mu.Unlock()
 	}
@@ -850,12 +839,8 @@ func (es *ExecutionService) CancelExecution(requestID string) error {
 		execCtx.Cancel()
 	}
 	if execCtx.Process != nil {
-		pgid, err := syscall.Getpgid(execCtx.Process.Pid)
-		if err == nil {
-			_ = syscall.Kill(-pgid, syscall.SIGKILL)
-		} else {
-			_ = execCtx.Process.Kill()
-		}
+		_ = killProcessGroup(execCtx.Process.Pid)
+		_ = execCtx.Process.Kill()
 	}
 	execCtx.mu.Unlock()
 

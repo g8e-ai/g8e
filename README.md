@@ -4,17 +4,19 @@
 
 **Verify, then execute.**
 
-g8e is a ~20MB compressed, statically-compiled binary that provides agentic governance and state-mutation control. It functions as both the **control plane** (host-local policy decision) and the **data plane** (exclusive mutation executor). 
+g8e is a statically-compiled binary that provides agentic governance and state-mutation control. Binary sizes vary by platform and build option:
+- **Standard build** (`make build`): 35-38MB per platform
+- **Compressed build** (`make build-compressed`): 15-17MB per platform (Linux/Windows AMD64/ARM64); 35-38MB for macOS and Windows ARM64
 
-It dials out via mTLS and listens on nothing. Every AI-proposed action clears a fail-closed verification pipeline on the host and is committed to a git-backed ledger before execution. Only scrubbed projections leave the host; raw data never crosses the wire.
+The platform functions as the control plane (host-local policy decision) and the data plane (exclusive mutation executor). It utilizes mTLS for outbound communication and does not listen on inbound ports. Every action clears a fail-closed verification pipeline on the host and is committed to a git-backed ledger before execution. Raw data remains on the host; only scrubbed projections are transmitted.
 
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev)
-[![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v102--core-platform)
+[![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v103---core-platform)
 [![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/core/position_paper.md)
 
-[Getting Started](docs/guides/getting_started.md) · [The two roles](#the-two-roles) · [Mental Model](#the-mental-model) · [Protocol](#the-protocol-invariants) · [Docs](#documentation)
+[Getting Started](docs/guides/getting_started.md) · [Platform Roles](#platform-roles) · [Mental Model](#the-mental-model) · [Protocol](#the-protocol-invariants) · [Docs](#documentation)
 
 </div>
 
@@ -22,8 +24,9 @@ It dials out via mTLS and listens on nothing. Every AI-proposed action clears a 
 
 ## QuickStart
 
-Get g8e online in under 60 seconds.
+Installation and bootstrap instructions.
 
+**Linux/macOS:**
 ```bash
 # 1. Clone the repository
 git clone https://github.com/g8e-ai/g8e.git
@@ -31,6 +34,9 @@ cd g8e
 
 # 2. Build the binary
 make build
+
+# Or build with compression (smaller binaries)
+make build-compressed
 
 # 3. Start the Governance Gateway (g8eg)
 ./g8e gw start
@@ -42,18 +48,37 @@ make build
 ./g8e gw status
 ```
 
+**Windows:**
+```powershell
+# 1. Clone the repository
+git clone https://github.com/g8e-ai/g8e.git
+cd g8e
+
+# 2. Build the binary
+.\build.ps1
+
+# 3. Start the Governance Gateway (g8eg)
+.\g8e.exe gw start
+
+# 4. Authenticate (first login automatically bootstraps the platform)
+.\g8e.exe auth login
+
+# 5. Verify the status
+.\g8e.exe gw status
+```
+
 See the [Full QuickStart Guide](docs/guides/getting_started.md) for mTLS, enrollment, and CLI configuration.
 
 ---
 
-## The two roles
+## Platform Roles
 
-g8e is one binary. Run it in Gateway mode or Operator mode — same artifact, copied wherever it's needed. Everything else is detail.
+The g8e platform utilizes a single binary that operates in either Gateway mode or Operator mode.
 
-- **As the Gateway (g8eg)**, it's the meeting point. Your agents and clients submit signed work here. It issues the identity everything else authenticates against, enforces freshness and replay defense, scopes sessions, and keeps the network-side record. And it's deliberately powerless where it counts: it can't reach into a host, can't open a connection to an Operator, and can't decide what's safe to run on a machine it isn't sitting on. It admits work and hands it out. It does not execute, and its say-so is not final.
-- **As the Operator (g8eo)**, it's the authority. Run on the host, it dials out to the Gateway, pulls down signed work, and makes up its own mind — re-verifying every proof against its own local state and trusting nothing upstream, the Gateway included. It's the only thing on that box allowed to change state, the only place raw data ever lives, and the local, git-backed record of everything that happened. Decision and execution, both on the host, in one binary.
+- **g8e Gateway (g8eg)**: The central coordinator and Policy Decision Point (PDP). It manages the platform PKI, issues workload identities, enforces freshness, and provides replay defense. The gateway admits signed envelopes and manages the network-side record. It does not possess execution authority on managed hosts and cannot initiate connections to operators.
+- **g8e Operator (g8eo)**: The host-resident authority and Policy Execution Point (PEP). It initiates outbound mTLS connections to the gateway to fetch pending envelopes. The operator performs local verification of all proofs against host state and serves as the exclusive executor of state mutations. It maintains a git-backed local audit ledger of all host activity.
 
-**The split is the entire point**: the Gateway proposes, the Operator disposes. A compromised Gateway can lie about what to run; it can't make a host run it. The binding go/no-go always happens on the machine that owns the consequences — locally, against local state, recorded before the side effect. There is no trusted middle to compromise, because nothing in the middle has the final word.
+The architectural separation ensures that the gateway proposes mutations while the operator executes them. Verification occurs on the host that maintains the consequences of the execution. This model removes the requirement for a trusted central authority to possess final execution power.
 
 *Learn more: [Gateway Architecture](docs/architecture/gateway.md) · [Operator Architecture](docs/architecture/operator.md) · [Auth Architecture](docs/architecture/auth.md)*
 
@@ -114,7 +139,7 @@ sequenceDiagram
 
 ## Governance Layers
 
-Every mutation passes through sequential verification layers at the Operator boundary. Failed transactions are rejected and audited immediately.
+Every mutation passes through sequential verification layers at the operator boundary. Transactions that fail verification are rejected and audited.
 
 ```mermaid
 graph TD
@@ -156,21 +181,21 @@ graph TD
     Start --> L1
 ```
 
-| Layer | Name | Mechanism | What it proves |
+| Layer | Name | Mechanism | Verification Target |
 | :---: | --- | --- | --- |
-| **L1** | **L1Doctrine** | Forbidden patterns + MITRE heuristics | No hard gate violations (privesc, destruction). |
-| **L2** | **L2Consensus** | Ed25519 k-of-n over transaction hash | Independent model ensemble co-signed intent. |
-| **L3** | **L3Notary** | WebAuthn / mTLS cert fingerprint | Human authorized *this exact* transaction hash. |
-| **L4** | **L4Warden** | Fail-closed pre-dispatch gate | Hash, freshness, state root, and signer trust. |
-| **L5** | **L5Actuator** | Atomic dispatch + signed receipt | The only code path allowed to mutate the host. |
+| **L1** | **L1Doctrine** | Forbidden patterns and MITRE heuristics | Technical policy compliance and threat detection. |
+| **L2** | **L2Consensus** | Ed25519 k-of-n signatures | Multi-agent consensus over transaction intent. |
+| **L3** | **L3Notary** | WebAuthn or mTLS certificate | Explicit human authorization for the transaction hash. |
+| **L4** | **L4Warden** | Pre-dispatch verification gate | Structural integrity, hash validity, and state freshness. |
+| **L5** | **L5Actuator** | Atomic dispatch and signed receipt | Execution of the mutation and production of an immutable receipt. |
 
 *Learn more: [Governance Protocol](docs/architecture/g8e.md) · [Constants Reference](docs/reference/constants.md) · [Glossary](docs/reference/glossary.md)*
 
 ---
 
-## Optional AI Engine (g8ee)
+## AI Engine (g8ee)
 
-The reference AI Engine (`g8ee`) is an optional application-layer adapter that produces signed GovernanceEnvelope transactions. It implements a multi-layered agentic hierarchy for high-fidelity intent translation.
+The AI Engine (g8ee) is an application-layer adapter that generates signed `GovernanceEnvelope` transactions. This component was removed from the core g8e platform and is currently in development as a separate repository. It implements an agentic hierarchy for intent translation.
 
 ```mermaid
 graph TD
@@ -207,12 +232,12 @@ graph TD
     Auditor -- "Produces L2 Signed Intent" --> Protocol["g8e Protocol Envelope"]:::protocol
 ```
 
-**Agentic Hierarchy Components:**
-- **Triage & Dash:** Specialized agents for routing, posture assessment, and high-speed trivial responses.
-- **Sage (Reasoning Engine):** Primary interpreter of user intent. Sage stakes reputation on proposals but **cannot execute**; it must submit intent to the Tribunal.
-- **Tribunal (Consensus):** Isolated agents generating command proposals from unique perspectives. Requires consensus (2/5 or 5/5) to proceed. If consensus fails, it loops back to Sage for refinement.
-- **Warden (Circuit Breaker):** Heuristic blocker that rejects "off-the-wall" proposals. Rejections trigger a loop back to Sage to improve intent translation.
-- **Auditor (History & Grounding):** Final verification layer. Reviews the full investigation history to ensure progressive accuracy before signing the protocol envelope.
+**Hierarchy Components:**
+- **Triage and Dash**: Agents for routing, posture assessment, and high-speed responses.
+- **Sage (Reasoning Engine)**: Primary interpreter of user intent. Sage proposes actions but cannot execute them; it must submit intent to the Tribunal.
+- **Tribunal (Consensus)**: Independent agents that generate command proposals. Execution requires a quorum (2/5 or 5/5).
+- **Warden (Circuit Breaker)**: Heuristic filter that rejects proposals violating security constraints.
+- **Auditor (History and Grounding)**: Verification layer that reviews the investigation history before signing the protocol envelope.
 
 *Learn more: [Build Applications](docs/guides/build_apps.md) · [Connect Apps to Gateway](docs/guides/connect_apps_to_gateway.md) · [Developer Docs](docs/devs/)*
 
@@ -231,7 +256,7 @@ graph TD
 
 ---
 
-## Status: v1.0.3 — Core Platform
+## Status: v1.0.3 - Core Platform
 
 g8e is the mandatory governance platform. Agent ensembles and Dashboard (g8ed) are optional application-layer adapters.
 

@@ -5,7 +5,7 @@ parent: Architecture
 
 # Air-Gap Architecture
 
-Last Updated: 2026-05-31
+Last Updated: 2026-06-01
 Version: v1.0.3
 
 The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the Governance Gateway (`g8eg`), the g8e Operator (`g8eo`), and local Go dependencies.
@@ -18,7 +18,7 @@ In an air-gapped configuration, the platform restricts all outbound communicatio
 
 - **No Telemetry**: The platform disables all outbound telemetry, usage statistics, and error reporting.
 - **Local Assets**: All user interface assets, fonts, icons, and libraries are served locally by platform services.
-- **Local Persistence**: All platform state, including session records, configuration settings, and cryptographic keys, resides in local SQLite databases managed by the Governance Gateway (`g8eg`). Database paths are defined in `internal/constants/paths.go`, including the main database at `.g8e/data/g8e.db`, local state at `.g8e/local_state.db`, and audit vault at `.g8e/data/audit_vault.db`.
+- **Local Persistence**: All platform state, including session records, configuration settings, and cryptographic keys, resides in local SQLite databases managed by the Governance Gateway (`g8eg`). Database paths are defined in `internal/constants/paths.go`, including the main database at `.g8e/data/g8e.db`, local state at `.g8e/local_state.db`, and audit vault at `.g8e/audit_vault.db`.
 
 ---
 
@@ -40,7 +40,7 @@ Surfaces with conflicting TLS client-authentication requirements do not share a 
 
 ### Core Functional Capabilities
 
-- **State Persistence**: All system state is stored locally within SQLite databases as defined in `internal/constants/paths.go`, including the main database (`.g8e/data/g8e.db`), local state (`.g8e/local_state.db`), and audit vault (`.g8e/data/audit_vault.db`).
+- **State Persistence**: All system state is stored locally within SQLite databases as defined in `internal/constants/paths.go`, including the main database (`.g8e/data/g8e.db`), local state (`.g8e/local_state.db`), and audit vault (`.g8e/audit_vault.db`).
 - **Local Public Key Infrastructure (PKI)**: The gateway generates a local Certificate Authority (CA) using ECDSA P-384 keys to issue and rotate TLS certificates for local services.
 - **Secret Storage**: An internal encrypted vault stores local credentials and access tokens, removing any requirement for external key managers.
 - **Event Brokerage**: A local websocket pub/sub server manages communication between the gateway and connected clients.

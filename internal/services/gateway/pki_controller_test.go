@@ -469,6 +469,101 @@ func TestPKIController_HandlePKICABundle(t *testing.T) {
 	assert.NotEmpty(t, rr.Body.Bytes())
 }
 
+func TestPKIController_HandleTrustScriptWindows(t *testing.T) {
+	t.Parallel()
+	c, _, _ := setupTestPKIController(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/trust-windows", nil)
+	rr := httptest.NewRecorder()
+
+	c.handleTrustScriptWindows(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "application/x-powershell", rr.Header().Get("Content-Type"))
+	assert.NotEmpty(t, rr.Body.Bytes())
+	script := rr.Body.String()
+	assert.Contains(t, script, "CA bundle installed")
+	assert.Contains(t, script, "Download g8e binary")
+	assert.Contains(t, script, "security pki enroll")
+	assert.Contains(t, script, "Enrollment complete")
+}
+
+func TestPKIController_HandleTrustScriptLinux(t *testing.T) {
+	t.Parallel()
+	c, _, _ := setupTestPKIController(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/trust-linux", nil)
+	rr := httptest.NewRecorder()
+
+	c.handleTrustScriptLinux(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "application/x-sh", rr.Header().Get("Content-Type"))
+	assert.NotEmpty(t, rr.Body.Bytes())
+	script := rr.Body.String()
+	assert.Contains(t, script, "CA bundle installed")
+	assert.Contains(t, script, "g8e auth login")
+}
+
+func TestPKIController_HandleBinaryDownload(t *testing.T) {
+	t.Parallel()
+	c, _, _ := setupTestPKIController(t)
+
+	// Create binaries directory and a test binary
+	binaryDir := filepath.Join(c.pki.PKIDir(), "binaries")
+	require.NoError(t, os.MkdirAll(binaryDir, 0755))
+	testBinaryPath := filepath.Join(binaryDir, "g8e-windows-amd64.exe")
+	testBinaryContent := []byte("test binary content")
+	require.NoError(t, os.WriteFile(testBinaryPath, testBinaryContent, 0644))
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/binary/g8e-windows-amd64.exe", nil)
+	rr := httptest.NewRecorder()
+
+	c.handleBinaryDownload(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "application/octet-stream", rr.Header().Get("Content-Type"))
+	assert.Equal(t, "attachment; filename=g8e-windows-amd64.exe", rr.Header().Get("Content-Disposition"))
+	assert.Equal(t, testBinaryContent, rr.Body.Bytes())
+}
+
+func TestPKIController_HandleBinaryDownload_NotFound(t *testing.T) {
+	t.Parallel()
+	c, _, _ := setupTestPKIController(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/binary/g8e-linux-amd64", nil)
+	rr := httptest.NewRecorder()
+
+	c.handleBinaryDownload(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+}
+
+func TestPKIController_HandleBinaryDownload_InvalidName(t *testing.T) {
+	t.Parallel()
+	c, _, _ := setupTestPKIController(t)
+
+	testCases := []string{
+		"../../../etc/passwd",
+		"malicious.exe",
+		"g8e-unknown-os-amd64",
+		"g8e-linux-unknown-arch",
+		"random-file.txt",
+		".hidden",
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/binary/"+tc, nil)
+			rr := httptest.NewRecorder()
+
+			c.handleBinaryDownload(rr, req)
+
+			assert.Equal(t, http.StatusBadRequest, rr.Code)
+		})
+	}
+}
+
 func mustMarshalJSON(t *testing.T, v interface{}) []byte {
 	t.Helper()
 	b, err := json.Marshal(v)

@@ -28,12 +28,12 @@ func TestResolveGitBinary_SystemGit(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	resolved := ResolveGitBinary(logger)
-	assert.Equal(t, "embedded", resolved)
+	assert.Equal(t, GitEmbedded, resolved)
 }
 
 func TestValidateGitBinary_Valid(t *testing.T) {
 	t.Parallel()
-	version, err := ValidateGitBinary("embedded")
+	version, err := ValidateGitBinary(GitEmbedded)
 	require.NoError(t, err)
 	assert.Contains(t, version, "go-git v5")
 }

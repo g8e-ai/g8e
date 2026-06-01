@@ -16,10 +16,12 @@ package gateway
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -29,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/responder"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
+	"github.com/g8e-ai/g8e/internal/services/network"
 )
 
 // GatewayService is the top-level orchestrator for gateway mode (operator).
@@ -52,6 +55,7 @@ type GatewayService struct {
 	server          *http.Server
 	publicServer    *http.Server
 	bootstrapServer *http.Server
+	mcpHttpServer   *http.Server
 
 	handler *HTTPHandler
 
@@ -91,27 +95,19 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, jwksProvider, cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
 	sessionSvc := NewSessionService(db, logger)
 
-	var extraIPs []net.IP
-	if ifaces, err := net.Interfaces(); err == nil {
-		for _, iface := range ifaces {
-			addrs, _ := iface.Addrs()
-			for _, addr := range addrs {
-				var ip net.IP
-				switch v := addr.(type) {
-				case *net.IPNet:
-					ip = v.IP
-				case *net.IPAddr:
-					ip = v.IP
-				}
-				if ip != nil && !ip.IsLoopback() && ip.To4() != nil {
-					extraIPs = append(extraIPs, ip)
-				}
-			}
-		}
+	// Detect network identity for certificate generation based on mode
+	extraIPs, extraDNSNames, err := resolveGatewayCertificateIdentity(cfg.Gateway.CertMode, cfg.Gateway.NetworkIdentityFile, network.NewDetector(logger), logger)
+	if err != nil {
+		return nil, err
 	}
-
-	if err := pki.EnsurePKI(extraIPs); err != nil {
-		return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
+	if len(extraDNSNames) > 0 {
+		if err := pki.EnsurePKIWithNames(extraIPs, extraDNSNames); err != nil {
+			return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
+		}
+	} else {
+		if err := pki.EnsurePKI(extraIPs); err != nil {
+			return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
+		}
 	}
 
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
@@ -152,6 +148,90 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 	}
 
 	return ls, nil
+}
+
+type networkIdentityDetector interface {
+	DetectAll(context.Context) (*network.NetworkIdentity, error)
+}
+
+func resolveGatewayCertificateIdentity(certMode, identityFile string, detector networkIdentityDetector, logger *slog.Logger) ([]net.IP, []string, error) {
+	switch certMode {
+	case "localhost":
+		return resolveLocalhostCertificateIdentity(detector, logger)
+	default:
+		return resolveFullCertificateIdentity(identityFile, detector, logger)
+	}
+}
+
+func resolveLocalhostCertificateIdentity(detector networkIdentityDetector, logger *slog.Logger) ([]net.IP, []string, error) {
+	logger.Info("Using localhost-only mode for certificate")
+	netIdentity, err := detector.DetectAll(context.Background())
+	if err != nil {
+		logger.Warn("Failed to detect localhost identities, using defaults", "error", err)
+		return []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}, []string{"localhost"}, nil
+	}
+
+	var extraIPs []net.IP
+	for _, ip := range netIdentity.GetAllIPs() {
+		if ip.IsLoopback() {
+			extraIPs = append(extraIPs, ip)
+		}
+	}
+	return extraIPs, []string{"localhost"}, nil
+}
+
+func resolveFullCertificateIdentity(identityFile string, detector networkIdentityDetector, logger *slog.Logger) ([]net.IP, []string, error) {
+	if identityFile != "" {
+		logger.Info("Using pre-detected network identity from file", "file", identityFile)
+		identityData, err := os.ReadFile(identityFile)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read network identity file: %w", err)
+		}
+
+		var netIdentity network.NetworkIdentity
+		if err := json.Unmarshal(identityData, &netIdentity); err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal network identity: %w", err)
+		}
+
+		extraIPs := netIdentity.GetAllIPs()
+		extraDNSNames := netIdentity.GetAllDNSNames()
+		logger.Info("Network identity loaded from file for certificate", "dns_names", len(extraDNSNames), "ips", len(extraIPs))
+		return extraIPs, extraDNSNames, nil
+	}
+
+	netIdentity, err := detector.DetectAll(context.Background())
+	if err != nil {
+		logger.Warn("Failed to detect full network identity, falling back to basic IP detection", "error", err)
+		extraIPs := detectBasicNonLoopbackIPv4Addresses()
+		return extraIPs, nil, nil
+	}
+
+	extraIPs := netIdentity.GetAllIPs()
+	extraDNSNames := netIdentity.GetAllDNSNames()
+	logger.Info("Network identity detected for certificate", "dns_names", len(extraDNSNames), "ips", len(extraIPs))
+	return extraIPs, extraDNSNames, nil
+}
+
+func detectBasicNonLoopbackIPv4Addresses() []net.IP {
+	var extraIPs []net.IP
+	if ifaces, err := net.Interfaces(); err == nil {
+		for _, iface := range ifaces {
+			addrs, _ := iface.Addrs()
+			for _, addr := range addrs {
+				var ip net.IP
+				switch v := addr.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+				}
+				if ip != nil && !ip.IsLoopback() && ip.To4() != nil {
+					extraIPs = append(extraIPs, ip)
+				}
+			}
+		}
+	}
+	return extraIPs
 }
 
 // newGatewayServiceFromComponents assembles a GatewayService from pre-built components.
@@ -240,11 +320,13 @@ func (ls *GatewayService) initHandlersAndServers() error {
 
 	// Build a map of ports to identify port assignments.
 	// Bootstrap port uses plain HTTP for initial CA discovery and bootstrap.
+	// MCP HTTP port uses plain HTTP for MCP-only calls.
 	// All other surfaces use mTLS (RequireAndVerifyClientCert).
 	portUsage := make(map[int][]string)
 	portUsage[cfg.Gateway.HTTPPort] = append(portUsage[cfg.Gateway.HTTPPort], "HTTP")
 	portUsage[cfg.Gateway.BootstrapPort] = append(portUsage[cfg.Gateway.BootstrapPort], "Bootstrap")
 	portUsage[cfg.Gateway.PublicPort] = append(portUsage[cfg.Gateway.PublicPort], "Public")
+	portUsage[cfg.Gateway.MCPHttpPort] = append(portUsage[cfg.Gateway.MCPHttpPort], "MCPHTTP")
 
 	// Validate up front so collisions fail during init.
 	// Port 0 is reserved for tests (net.Listen picks a random free port per server).
@@ -306,6 +388,18 @@ func (ls *GatewayService) initHandlersAndServers() error {
 		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
 	}
 
+	// MCP HTTP server: plain HTTP for MCP-only calls
+	// Serves MCP endpoints without TLS/mTLS for HTTP MCP clients
+	ls.mcpHttpServer = &http.Server{
+		Addr:              fmt.Sprintf(":%d", cfg.Gateway.MCPHttpPort),
+		Handler:           ls.handler.buildMCPHttpRouter(),
+		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
+		ReadTimeout:       cfg.Gateway.ReadTimeout,
+		WriteTimeout:      cfg.Gateway.WriteTimeout,
+		IdleTimeout:       cfg.Gateway.IdleTimeout,
+		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
+	}
+
 	return nil
 }
 
@@ -355,6 +449,16 @@ func (ls *GatewayService) GetBootstrapPort() int {
 		return 0
 	}
 	_, portStr, _ := net.SplitHostPort(ls.bootstrapServer.Addr)
+	p, _ := strconv.Atoi(portStr)
+	return p
+}
+
+// GetMCPHttpPort returns the assigned port for the MCP HTTP server.
+func (ls *GatewayService) GetMCPHttpPort() int {
+	if ls.mcpHttpServer == nil || ls.mcpHttpServer.Addr == "" {
+		return 0
+	}
+	_, portStr, _ := net.SplitHostPort(ls.mcpHttpServer.Addr)
 	p, _ := strconv.Atoi(portStr)
 	return p
 }
@@ -425,9 +529,10 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 		"posture", ls.cfg.Gateway.Posture,
 		"http_port", ls.cfg.Gateway.HTTPPort,
 		"bootstrap_port", ls.cfg.Gateway.BootstrapPort,
+		"mcp_http_port", ls.cfg.Gateway.MCPHttpPort,
 		"data_dir", ls.cfg.Gateway.DataDir)
 
-	ls.logger.Info("Gateway TLS servers starting", "http_port", ls.cfg.Gateway.HTTPPort, "bootstrap_port", ls.cfg.Gateway.BootstrapPort)
+	ls.logger.Info("Gateway servers starting", "http_port", ls.cfg.Gateway.HTTPPort, "bootstrap_port", ls.cfg.Gateway.BootstrapPort, "mcp_http_port", ls.cfg.Gateway.MCPHttpPort)
 
 	// Start background maintenance for MCP gateway
 	go ls.mcpGateway.RunMaintenance(ctx)
@@ -435,8 +540,8 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	// Start background service certificate renewal loop
 	go ls.runServiceCertRenewalLoop(ctx)
 
-	errChan := make(chan error, 4)
-	readyChan := make(chan struct{}, 4)
+	errChan := make(chan error, 5)
+	readyChan := make(chan struct{}, 5)
 
 	// Identify unique servers to start
 	uniqueServers := make(map[*http.Server]string)
@@ -451,6 +556,11 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	if ls.publicServer != nil {
 		if _, ok := uniqueServers[ls.publicServer]; !ok {
 			uniqueServers[ls.publicServer] = "Public"
+		}
+	}
+	if ls.mcpHttpServer != nil {
+		if _, ok := uniqueServers[ls.mcpHttpServer]; !ok {
+			uniqueServers[ls.mcpHttpServer] = "MCPHTTP"
 		}
 	}
 
@@ -574,7 +684,7 @@ func (ls *GatewayService) runServiceCertRenewalLoop(ctx context.Context) {
 	defer ticker.Stop()
 
 	// Check immediately on startup
-	if err := ls.pki.RenewServiceCert(ls.extraIPs); err != nil {
+	if err := ls.renewServiceCertWithIdentity(ctx); err != nil {
 		ls.logger.Error("Failed to renew service certificate on startup", string(constants.ConnectionStateError), err)
 	}
 
@@ -583,9 +693,25 @@ func (ls *GatewayService) runServiceCertRenewalLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := ls.pki.RenewServiceCert(ls.extraIPs); err != nil {
+			if err := ls.renewServiceCertWithIdentity(ctx); err != nil {
 				ls.logger.Error("Failed to renew service certificate", string(constants.ConnectionStateError), err)
 			}
 		}
 	}
+}
+
+// renewServiceCertWithIdentity renews the service certificate with current network identity.
+func (ls *GatewayService) renewServiceCertWithIdentity(ctx context.Context) error {
+	// Detect current network identity
+	netDetector := network.NewDetector(ls.logger)
+	netIdentity, err := netDetector.DetectAll(ctx)
+	if err != nil {
+		ls.logger.Warn("Failed to detect network identity for renewal, using cached IPs", "error", err)
+		return ls.pki.RenewServiceCert(ls.extraIPs)
+	}
+
+	// Use detected identity for renewal
+	extraIPs := netIdentity.GetAllIPs()
+	extraDNSNames := netIdentity.GetAllDNSNames()
+	return ls.pki.RenewServiceCertWithNames(extraIPs, extraDNSNames)
 }

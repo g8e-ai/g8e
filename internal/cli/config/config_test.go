@@ -286,6 +286,7 @@ func TestConfig_OperatorHTTPSPort(t *testing.T) {
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
+					OperatorMcpHttp        int `json:"operator_mcp_http"`
 					OperatorPublicHTTPS    int `json:"operator_public_https"`
 				}{
 					OperatorHTTPS: 8440,
@@ -306,6 +307,7 @@ func TestConfig_OperatorBootstrapHTTPSPort(t *testing.T) {
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
+					OperatorMcpHttp        int `json:"operator_mcp_http"`
 					OperatorPublicHTTPS    int `json:"operator_public_https"`
 				}{
 					OperatorBootstrapHTTPS: 8441,
@@ -326,6 +328,7 @@ func TestConfig_OperatorHTTPURL(t *testing.T) {
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
+					OperatorMcpHttp        int `json:"operator_mcp_http"`
 					OperatorPublicHTTPS    int `json:"operator_public_https"`
 				}{
 					OperatorPublicHTTPS: 8443,
@@ -346,6 +349,7 @@ func TestConfig_OperatorBootstrapURL(t *testing.T) {
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
+					OperatorMcpHttp        int `json:"operator_mcp_http"`
 					OperatorPublicHTTPS    int `json:"operator_public_https"`
 				}{
 					OperatorBootstrapHTTPS: 8441,
@@ -367,6 +371,7 @@ func TestConfig_OperatorPublicURL(t *testing.T) {
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
+					OperatorMcpHttp        int `json:"operator_mcp_http"`
 					OperatorPublicHTTPS    int `json:"operator_public_https"`
 				}{
 					OperatorBootstrapHTTPS: 8441,
@@ -388,6 +393,7 @@ func TestConfig_OperatorDiscoveryURL(t *testing.T) {
 					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
+					OperatorMcpHttp        int `json:"operator_mcp_http"`
 					OperatorPublicHTTPS    int `json:"operator_public_https"`
 				}{
 					OperatorBootstrapHTTPS: 8441,

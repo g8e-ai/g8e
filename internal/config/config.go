@@ -86,6 +86,7 @@ type GatewayConfig struct {
 	HTTPPort         int            // TLS/HTTPS port for internal agent/client traffic (default: from paths.json)
 	BootstrapPort    int            // Plain-TLS port for bootstrap routes (/.well-known/, /api/pki/device-enroll for CSR enrollment) (default: from paths.json)
 	PublicPort       int            // Plain-TLS port for browser-based auth and setup (default: from paths.json)
+	MCPHttpPort      int            // Plain-HTTP port for MCP HTTP calls (default: from paths.json)
 	DataDir          string         // Root directory for SQLite database (default: .g8e/data in working directory)
 	PKIDir           string         // Directory for TLS certificates (default: .g8e/pki)
 	SecretsDir       string         // Directory for platform secrets (default: .g8e/secrets)
@@ -98,6 +99,9 @@ type GatewayConfig struct {
 	JWTIssuer        string         // Expected issuer claim in JWT (optional, for multi-audience IdP deployments)
 	JWTAudience      string         // Expected audience claim in JWT (optional, for multi-audience IdP deployments)
 
+	// Federation
+	FederationSeedURL string // Optional seed gateway URL for federation (empty = standalone mode)
+
 	// HTTP server limits
 	MaxPayloadBytes   int64         // Maximum request payload size in bytes (default: 10MB)
 	ReadHeaderTimeout time.Duration // Timeout for reading request headers (default: 10s)
@@ -109,6 +113,10 @@ type GatewayConfig struct {
 	// Rate limiting
 	RateLimitRPS   float64 // Requests per second limit (default: 5)
 	RateLimitBurst int     // Burst size for rate limiter (default: 10)
+
+	// Certificate mode
+	CertMode            string // "full" for all hostnames/IPs, "localhost" for minimal
+	NetworkIdentityFile string // Path to JSON file containing pre-detected network identity
 
 	// Distributed lock retry configuration
 	LockMaxRetries int           // Maximum retry attempts for distributed lock acquisition (default: 30)
@@ -252,6 +260,7 @@ type GatewayOptions struct {
 	HTTPPort         int
 	BootstrapPort    int
 	PublicPort       int
+	MCPHttpPort      int
 	DataDir          string
 	PKIDir           string
 	SecretsDir       string
@@ -267,14 +276,17 @@ type GatewayOptions struct {
 	RateLimitRPS   float64
 	RateLimitBurst int
 
+	CertMode            string
+	NetworkIdentityFile string
+
 	// AllowTestPortZero should be true only when called from Go tests; when false,
 	// port 0 is rejected to prevent dynamic port assignment in production.
 	AllowTestPortZero bool
 }
 
-// ResolveGatewayPorts finds three available ports incrementally, starting from the
+// ResolveGatewayPorts finds four available ports incrementally, starting from the
 // requested ports. This allows multiple operators to run on the same host.
-func ResolveGatewayPorts(httpPort, bootstrapPort, publicPort int) (int, int, int) {
+func ResolveGatewayPorts(httpPort, bootstrapPort, publicPort, mcpHttpPort int) (int, int, int, int) {
 	if httpPort <= 0 {
 		httpPort = constants.Ports.OperatorHttps
 	}
@@ -284,20 +296,24 @@ func ResolveGatewayPorts(httpPort, bootstrapPort, publicPort int) (int, int, int
 	if publicPort <= 0 {
 		publicPort = constants.Ports.OperatorPublicHttps
 	}
+	if mcpHttpPort <= 0 {
+		mcpHttpPort = constants.Ports.OperatorMcpHttp
+	}
 
 	// Try up to 100 offsets
 	for offset := 0; offset < 100; offset++ {
 		h := httpPort + offset
 		b := bootstrapPort + offset
 		p := publicPort + offset
+		m := mcpHttpPort + offset
 
-		if isPortAvailable(h) && isPortAvailable(b) && isPortAvailable(p) {
-			return h, b, p
+		if isPortAvailable(h) && isPortAvailable(b) && isPortAvailable(p) && isPortAvailable(m) {
+			return h, b, p, m
 		}
 	}
 
 	// Fallback to original if we can't find a free block (let it fail during bind)
-	return httpPort, bootstrapPort, publicPort
+	return httpPort, bootstrapPort, publicPort, mcpHttpPort
 }
 
 func isPortAvailable(port int) bool {
@@ -307,6 +323,53 @@ func isPortAvailable(port int) bool {
 	}
 	_ = ln.Close()
 	return true
+}
+
+// validateAndResolveGatewayPorts validates and resolves gateway port configuration.
+// It handles:
+// - Port zero validation (rejects explicit zero in production unless all ports are zero)
+// - Port resolution to available ports (with offset fallback)
+// - Port uniqueness checks (ignoring zero-valued ports)
+//
+// Returns validated and resolved ports, or an error if validation fails.
+func validateAndResolveGatewayPorts(httpPort, bootstrapPort, publicPort, mcpHttpPort int, allowTestPortZero bool) (int, int, int, int, error) {
+	// Reject port 0 in production
+	// This check must happen before default assignment to validate actual input
+	if !allowTestPortZero {
+		if httpPort == 0 && bootstrapPort == 0 && publicPort == 0 && mcpHttpPort == 0 {
+			// All zero means "use defaults and resolve"
+		} else {
+			if httpPort == 0 {
+				return 0, 0, 0, 0, fmt.Errorf("httpPort cannot be 0 in production")
+			}
+			if bootstrapPort == 0 {
+				return 0, 0, 0, 0, fmt.Errorf("bootstrapPort cannot be 0 in production")
+			}
+			if publicPort == 0 {
+				return 0, 0, 0, 0, fmt.Errorf("publicPort cannot be 0 in production")
+			}
+		}
+	}
+
+	// Resolve available ports if they are not 0 (dynamic test ports)
+	if !allowTestPortZero {
+		httpPort, bootstrapPort, publicPort, mcpHttpPort = ResolveGatewayPorts(httpPort, bootstrapPort, publicPort, mcpHttpPort)
+	}
+
+	// Validate that all ports are unique to prevent conflicts.
+	// Zero-valued ports are ignored so test/default configurations can leave
+	// optional ports unset without tripping false conflicts.
+	if httpPort > 0 && mcpHttpPort > 0 && httpPort == mcpHttpPort {
+		return 0, 0, 0, 0, fmt.Errorf("httpPort (%d) and mcpHttpPort (%d) must be different", httpPort, mcpHttpPort)
+	}
+	if bootstrapPort > 0 && mcpHttpPort > 0 && bootstrapPort == mcpHttpPort {
+		return 0, 0, 0, 0, fmt.Errorf("bootstrapPort (%d) and mcpHttpPort (%d) must be different", bootstrapPort, mcpHttpPort)
+	}
+	if publicPort > 0 && mcpHttpPort > 0 && publicPort == mcpHttpPort {
+		return 0, 0, 0, 0, fmt.Errorf("publicPort (%d) and mcpHttpPort (%d) must be different", publicPort, mcpHttpPort)
+	}
+
+	return httpPort, bootstrapPort, publicPort, mcpHttpPort, nil
 }
 
 // LoadGateway creates configuration for gateway mode.
@@ -334,31 +397,16 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 		secretsDir = constants.Paths.Infra.SecretsDir
 	}
 
-	// Reject port 0 in production
-	// This check must happen before default assignment to validate actual input
-	if !opts.AllowTestPortZero {
-		if opts.HTTPPort == 0 && opts.BootstrapPort == 0 && opts.PublicPort == 0 {
-			// All zero means "use defaults and resolve"
-		} else {
-			if opts.HTTPPort == 0 {
-				return nil, fmt.Errorf("httpPort cannot be 0 in production")
-			}
-			if opts.BootstrapPort == 0 {
-				return nil, fmt.Errorf("bootstrapPort cannot be 0 in production")
-			}
-			if opts.PublicPort == 0 {
-				return nil, fmt.Errorf("publicPort cannot be 0 in production")
-			}
-		}
-	}
-
-	httpPort := opts.HTTPPort
-	bootstrapPort := opts.BootstrapPort
-	publicPort := opts.PublicPort
-
-	// Resolve available ports if they are not 0 (dynamic test ports)
-	if !opts.AllowTestPortZero {
-		httpPort, bootstrapPort, publicPort = ResolveGatewayPorts(httpPort, bootstrapPort, publicPort)
+	// Validate and resolve gateway ports
+	httpPort, bootstrapPort, publicPort, mcpHttpPort, err := validateAndResolveGatewayPorts(
+		opts.HTTPPort,
+		opts.BootstrapPort,
+		opts.PublicPort,
+		opts.MCPHttpPort,
+		opts.AllowTestPortZero,
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	passkeyRpID := opts.PasskeyRpID
@@ -392,6 +440,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			HTTPPort:         httpPort,
 			BootstrapPort:    bootstrapPort,
 			PublicPort:       publicPort,
+			MCPHttpPort:      mcpHttpPort,
 			DataDir:          dataDir,
 			PKIDir:           pkiDir,
 			SecretsDir:       secretsDir,
@@ -415,6 +464,10 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			// Rate limiting defaults
 			RateLimitRPS:   opts.RateLimitRPS,
 			RateLimitBurst: opts.RateLimitBurst,
+
+			// Certificate mode
+			CertMode:            opts.CertMode,
+			NetworkIdentityFile: opts.NetworkIdentityFile,
 
 			// Distributed lock retry defaults
 			LockMaxRetries: 30,                    // 30 retry attempts

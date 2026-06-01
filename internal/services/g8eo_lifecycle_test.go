@@ -33,7 +33,7 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	t.Parallel()
 	// 1. Setup mock client server for bootstrap
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/auth/operator" {
+		if r.URL.Path == "/api/v1/operators/reauth" {
 			resp := auth.AuthServicesResponse{
 				Success:           true,
 				OperatorID:        "test-op-1",
