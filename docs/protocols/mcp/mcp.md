@@ -370,8 +370,10 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 | HTTP routing | `internal/services/gateway/gateway_http.go` |
 | MCP/A2A translation | `internal/services/mcp/gateway.go` |
 | MCP models | `internal/services/mcp/models.go` |
+| Native tool registry | `internal/services/mcp/registry.go` |
+| Native tool registration | `internal/services/mcp/native_tool_registry.go` |
 | Native tool handlers | `internal/services/mcp/native_handlers.go` |
-| Native tool definitions | `internal/services/mcp/native_tools.go` |
+| Native tool definitions | `internal/services/mcp/*.go` (individual tool files) |
 | Field path registry | `internal/services/mcp/field_parser.go` |
 | Envelope construction | `internal/services/mcp/gateway.go` (processGatewayTransaction) |
 | Transaction verification | `internal/services/governance/l4_warden.go` |
@@ -387,6 +389,19 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 | Port constants | `internal/constants/ports.go` |
 | Action type constants | `internal/constants/action_types.go` |
 | Protobuf schemas | `protocol/proto/g8e/operator/v1/operator.proto` |
+
+---
+
+## Adding a New Native Tool
+
+To add a new native tool to the Operator:
+
+1. **Create tool file**: Copy `docs/protocols/mcp/tool_template.go` to `internal/services/mcp/your_tool_name.go`
+2. **Implement interface**: Replace the template with your tool's logic (Name, Description, InputSchema, Execute)
+3. **Register tool**: Add your tool to the tools list in `RegisterNativeTools()` in `internal/services/mcp/native_tool_registry.go`
+4. **Test**: Add unit tests in `internal/services/mcp/native_handlers_test.go`
+
+The tool will automatically be available via the MCP tools/list endpoint when no downstream MCP server is configured.
 
 ---
 

@@ -190,10 +190,11 @@ See [docs/reference/constants.md](../reference/constants.md) for details.
 Native tools are MCP tools compiled into the Operator binary that execute within the Operator's execution boundary locally, without proxying to downstream MCP servers.
 
 **Adding a new native tool:**
-1. Create a new file in `internal/services/mcp/` (e.g., `your_tool_name.go`)
+1. Copy `docs/protocols/mcp/tool_template.go` to `internal/services/mcp/your_tool_name.go`
 2. Implement the `NativeTool` interface with `Name()`, `Description()`, `InputSchema()`, and `Execute()` methods
-3. Add your tool to the tools list in `RegisterNativeTools()` in `native_tool_registry.go`
-4. No `init()` function needed - registration is explicit
+3. Add your tool to the tools list in `RegisterNativeTools()` in `internal/services/mcp/native_tool_registry.go`
+4. Add unit tests in `internal/services/mcp/native_handlers_test.go`
+5. No `init()` function needed - registration is explicit via `RegisterNativeTools()`
 
 **Template:** See `docs/protocols/mcp/tool_template.go` for a complete example.
 

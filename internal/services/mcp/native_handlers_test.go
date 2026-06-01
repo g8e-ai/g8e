@@ -34,6 +34,40 @@ func TestNativeToolHandler_HandleTool(t *testing.T) {
 			t.Error("expected error for unknown tool")
 		}
 	})
+
+	t.Run("all 13 tools registered", func(t *testing.T) {
+		tools := handler.ListTools()
+		if len(tools) != 13 {
+			t.Errorf("expected 13 registered tools, got %d", len(tools))
+		}
+
+		expectedTools := []string{
+			"db_discover_topology",
+			"db_query_validate",
+			"db_isolated_read",
+			"db_index_triage",
+			"log_stream_filter",
+			"sys_oom_detect",
+			"config_diff_mask",
+			"proc_metric_top",
+			"fs_disk_profile",
+			"proc_signal_safe",
+			"net_socket_audit",
+			"net_endpoint_ping",
+			"net_http_probe",
+		}
+
+		toolNames := make(map[string]bool)
+		for _, tool := range tools {
+			toolNames[tool.Name()] = true
+		}
+
+		for _, expected := range expectedTools {
+			if !toolNames[expected] {
+				t.Errorf("expected tool '%s' to be registered", expected)
+			}
+		}
+	})
 }
 
 func TestHandleDBDiscoverTopology(t *testing.T) {
