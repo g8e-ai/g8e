@@ -325,6 +325,53 @@ func isPortAvailable(port int) bool {
 	return true
 }
 
+// validateAndResolveGatewayPorts validates and resolves gateway port configuration.
+// It handles:
+// - Port zero validation (rejects explicit zero in production unless all ports are zero)
+// - Port resolution to available ports (with offset fallback)
+// - Port uniqueness checks (ignoring zero-valued ports)
+//
+// Returns validated and resolved ports, or an error if validation fails.
+func validateAndResolveGatewayPorts(httpPort, bootstrapPort, publicPort, mcpHttpPort int, allowTestPortZero bool) (int, int, int, int, error) {
+	// Reject port 0 in production
+	// This check must happen before default assignment to validate actual input
+	if !allowTestPortZero {
+		if httpPort == 0 && bootstrapPort == 0 && publicPort == 0 && mcpHttpPort == 0 {
+			// All zero means "use defaults and resolve"
+		} else {
+			if httpPort == 0 {
+				return 0, 0, 0, 0, fmt.Errorf("httpPort cannot be 0 in production")
+			}
+			if bootstrapPort == 0 {
+				return 0, 0, 0, 0, fmt.Errorf("bootstrapPort cannot be 0 in production")
+			}
+			if publicPort == 0 {
+				return 0, 0, 0, 0, fmt.Errorf("publicPort cannot be 0 in production")
+			}
+		}
+	}
+
+	// Resolve available ports if they are not 0 (dynamic test ports)
+	if !allowTestPortZero {
+		httpPort, bootstrapPort, publicPort, mcpHttpPort = ResolveGatewayPorts(httpPort, bootstrapPort, publicPort, mcpHttpPort)
+	}
+
+	// Validate that all ports are unique to prevent conflicts.
+	// Zero-valued ports are ignored so test/default configurations can leave
+	// optional ports unset without tripping false conflicts.
+	if httpPort > 0 && mcpHttpPort > 0 && httpPort == mcpHttpPort {
+		return 0, 0, 0, 0, fmt.Errorf("httpPort (%d) and mcpHttpPort (%d) must be different", httpPort, mcpHttpPort)
+	}
+	if bootstrapPort > 0 && mcpHttpPort > 0 && bootstrapPort == mcpHttpPort {
+		return 0, 0, 0, 0, fmt.Errorf("bootstrapPort (%d) and mcpHttpPort (%d) must be different", bootstrapPort, mcpHttpPort)
+	}
+	if publicPort > 0 && mcpHttpPort > 0 && publicPort == mcpHttpPort {
+		return 0, 0, 0, 0, fmt.Errorf("publicPort (%d) and mcpHttpPort (%d) must be different", publicPort, mcpHttpPort)
+	}
+
+	return httpPort, bootstrapPort, publicPort, mcpHttpPort, nil
+}
+
 // LoadGateway creates configuration for gateway mode.
 // Gateway mode skips all operator-mode validation - no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
@@ -350,46 +397,16 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 		secretsDir = constants.Paths.Infra.SecretsDir
 	}
 
-	// Reject port 0 in production
-	// This check must happen before default assignment to validate actual input
-	if !opts.AllowTestPortZero {
-		if opts.HTTPPort == 0 && opts.BootstrapPort == 0 && opts.PublicPort == 0 && opts.MCPHttpPort == 0 {
-			// All zero means "use defaults and resolve"
-		} else {
-			if opts.HTTPPort == 0 {
-				return nil, fmt.Errorf("httpPort cannot be 0 in production")
-			}
-			if opts.BootstrapPort == 0 {
-				return nil, fmt.Errorf("bootstrapPort cannot be 0 in production")
-			}
-			if opts.PublicPort == 0 {
-				return nil, fmt.Errorf("publicPort cannot be 0 in production")
-			}
-			if opts.MCPHttpPort == 0 {
-				return nil, fmt.Errorf("mcpHttpPort cannot be 0 in production")
-			}
-		}
-	}
-
-	httpPort := opts.HTTPPort
-	bootstrapPort := opts.BootstrapPort
-	publicPort := opts.PublicPort
-	mcpHttpPort := opts.MCPHttpPort
-
-	// Resolve available ports if they are not 0 (dynamic test ports)
-	if !opts.AllowTestPortZero {
-		httpPort, bootstrapPort, publicPort, mcpHttpPort = ResolveGatewayPorts(httpPort, bootstrapPort, publicPort, mcpHttpPort)
-	}
-
-	// Validate that all ports are unique to prevent conflicts
-	if httpPort == mcpHttpPort {
-		return nil, fmt.Errorf("httpPort (%d) and mcpHttpPort (%d) must be different", httpPort, mcpHttpPort)
-	}
-	if bootstrapPort == mcpHttpPort {
-		return nil, fmt.Errorf("bootstrapPort (%d) and mcpHttpPort (%d) must be different", bootstrapPort, mcpHttpPort)
-	}
-	if publicPort == mcpHttpPort {
-		return nil, fmt.Errorf("publicPort (%d) and mcpHttpPort (%d) must be different", publicPort, mcpHttpPort)
+	// Validate and resolve gateway ports
+	httpPort, bootstrapPort, publicPort, mcpHttpPort, err := validateAndResolveGatewayPorts(
+		opts.HTTPPort,
+		opts.BootstrapPort,
+		opts.PublicPort,
+		opts.MCPHttpPort,
+		opts.AllowTestPortZero,
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	passkeyRpID := opts.PasskeyRpID

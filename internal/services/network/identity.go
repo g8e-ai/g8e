@@ -310,7 +310,7 @@ func (d *Detector) detectEtcHosts() ([]HostAlias, error) {
 
 // detectMDNS detects mDNS/Bonjour *.local names.
 func (d *Detector) detectMDNS() ([]string, error) {
-	var mdnsNames []string
+	mdnsNames := make([]string, 0)
 
 	// Get hostname and append .local
 	hostnames, err := d.detectHostnames()
@@ -405,7 +405,7 @@ func (d *Detector) detectDNSPTRs(ctx context.Context, ips []string) ([]DNSPTRRec
 
 // detectSSHKnownHosts checks SSH known_hosts for hostnames pointing to this machine.
 func (d *Detector) detectSSHKnownHosts() ([]string, error) {
-	var hostnames []string
+	hostnames := make([]string, 0)
 
 	// Get local IPs
 	localIPs, err := d.detectIPs()

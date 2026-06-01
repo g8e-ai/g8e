@@ -1231,9 +1231,9 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		ok := pool.AppendCertsFromPEM(gatewayPEM)
 		assert.True(t, ok, "g8eg-ca-bundle.pem should parse as valid PEM bundle")
 
-		// Verify it contains exactly 3 certificates (root + hub intermediate + operator intermediate)
+		// Verify it contains exactly 4 certificates (root + hub intermediate + operator intermediate + gateway peer intermediate)
 		certCount := countCertificatesInPEM(gatewayPEM)
-		assert.Equal(t, 3, certCount, "g8eg-ca-bundle.pem should contain exactly 3 certificates (root + hub + operator intermediates)")
+		assert.Equal(t, 4, certCount, "g8eg-ca-bundle.pem should contain exactly 4 certificates (root + hub + operator + gateway peer intermediates)")
 	})
 
 	t.Run("Phase8_1: serving certificate verifies against g8eg-ca-bundle.pem", func(t *testing.T) {

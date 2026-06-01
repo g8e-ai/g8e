@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/network"
 	"github.com/spf13/cobra"
 )
@@ -551,18 +552,13 @@ func gatewayMCPConfigCmd() *cobra.Command {
 			externalIP := config.GetExternalInterfaceIP()
 			gatewayURL := fmt.Sprintf("https://%s:%d/api/v1/mcp", externalIP, cfg.OperatorPublicHTTPSPort())
 
-			cmd.Printf(`{
-  "mcpServers": {
-    "g8e-gateway": {
-      "serverUrl": "%s",
-      "headers": {
-        "Content-Type": "application/json"
-      }
-    }
-  }
-}
-`, gatewayURL)
+			mcpConfig := mcp.NewGatewayConfig(gatewayURL)
+			configJSON, err := json.MarshalIndent(mcpConfig, "", "  ")
+			if err != nil {
+				return fmt.Errorf("failed to marshal MCP config: %w", err)
+			}
 
+			cmd.Println(string(configJSON))
 			return nil
 		},
 	}
