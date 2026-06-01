@@ -28,7 +28,7 @@ the missing command and retry from the repository root.
 
 ```bash
 command -v curl
-./g8e platform status
+./g8e gw status
 ```
 
 If the command exists in one terminal but not another, fix the shell `PATH`
@@ -74,13 +74,13 @@ make proto
 The full target also creates `__init__.py` files and rewrites generated Python
 imports for package-relative use.
 
-## `./g8e platform start` does not become healthy
+## `./g8e gw start` does not become healthy
 
-The platform start path builds and launches the Governance Gateway (g8eg), then waits for the
+The gateway start path builds and launches the Governance Gateway (g8eg), then waits for the
 health endpoint. Start with the status command and the log:
 
 ```bash
-./g8e platform status
+./g8e gw status
 tail -n 80 .g8e/logs/operator.log
 ```
 
@@ -93,37 +93,53 @@ Common causes:
 Stop the managed process before retrying:
 
 ```bash
-./g8e platform stop
-./g8e platform start
+./g8e gw stop
+./g8e gw start
 ```
 
-Use `./g8e platform reset` or `./g8e platform clean` only for disposable local
+Use `./g8e gw reset` or `./g8e gw clean` only for disposable local
 state. They intentionally remove runtime data under `.g8e/`.
 
-## Tests fail because the platform is not running
+## Tests fail because the gateway is not running
 
-The test runner uses real infrastructure. Start the platform before tests that
+The test runner uses real infrastructure. Start the gateway before tests that
 need the Governance Gateway, and start optional apps only when the test target requires
 them.
 
 ```bash
-./g8e platform start
+./g8e gw start
 ./g8e test g8eo
 ```
 
 If a test failure mentions missing trust bundles or client certificates, confirm
-that `.g8e/pki/` exists and that `./g8e platform status` reports the Governance Gateway as
+that `.g8e/pki/` exists and that `./g8e gw status` reports the Governance Gateway as
 running.
 
 ## Path resolution problems
 
-Scripts resolve `G8E_PROJECT_ROOT` from their own location. Avoid invoking
-subscripts directly until the root launcher works:
+Scripts resolve the project root by walking up from the current working directory to find the `.git` directory or `protocol/` directory. Avoid invoking subscripts directly until the root launcher works:
 
 ```bash
-./g8e platform status
+./g8e gw status
 ```
 
-If you have exported `G8E_PROJECT_ROOT` manually, make sure it points at the
-same checkout you are editing. A stale value can make scripts read constants,
-logs, or generated files from another clone.
+Run commands from the project root directory to ensure correct path resolution.
+
+## `./g8e` command not found
+
+The root `./g8e` launcher is a Bash script at the repository root. If you receive
+"command not found", ensure you are running from the repository root and the script
+has execute permissions:
+
+```bash
+ls -l g8e
+chmod +x g8e
+./g8e gw status
+```
+
+The launcher delegates to the compiled binary in `./bin/g8e`. If the binary is missing,
+run:
+
+```bash
+make build
+```

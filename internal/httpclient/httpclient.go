@@ -58,8 +58,35 @@ func New() (*http.Client, error) {
 	}, nil
 }
 
+// NewWithTLSConfig creates an HTTP client using the provided TLSConfig (DI pattern).
+// This is the preferred constructor for new code using dependency injection.
+func NewWithTLSConfig(tlsConfig *certs.TLSConfig) (*http.Client, error) {
+	tlsCfg, err := tlsConfig.GetTLSConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	return &http.Client{
+		Timeout:   DefaultTimeout,
+		Transport: newBaseTransport(tlsCfg),
+	}, nil
+}
+
 func NewWithTimeout(timeout time.Duration) (*http.Client, error) {
 	tlsCfg, err := certs.GetTLSConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: newBaseTransport(tlsCfg),
+	}, nil
+}
+
+// NewWithTLSConfigAndTimeout creates an HTTP client using the provided TLSConfig and timeout (DI pattern).
+func NewWithTLSConfigAndTimeout(tlsConfig *certs.TLSConfig, timeout time.Duration) (*http.Client, error) {
+	tlsCfg, err := tlsConfig.GetTLSConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +116,19 @@ func WebSocketDialer() (*websocket.Dialer, error) {
 	}, nil
 }
 
+// WebSocketDialerWithTLSConfig creates a WebSocket dialer using the provided TLSConfig (DI pattern).
+func WebSocketDialerWithTLSConfig(tlsConfig *certs.TLSConfig) (*websocket.Dialer, error) {
+	tlsCfg, err := tlsConfig.GetTLSConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	return &websocket.Dialer{
+		TLSClientConfig:  tlsCfg,
+		HandshakeTimeout: DefaultTLSTimeout,
+	}, nil
+}
+
 func WebSocketDialerWithTLS(tlsCfg *tls.Config) *websocket.Dialer {
 	return &websocket.Dialer{
 		TLSClientConfig:  tlsCfg,
@@ -108,8 +148,34 @@ func NewWithServerName(serverName string) (*http.Client, error) {
 	}, nil
 }
 
+// NewWithTLSConfigAndServerName creates an HTTP client using the provided TLSConfig and server name (DI pattern).
+func NewWithTLSConfigAndServerName(tlsConfig *certs.TLSConfig, serverName string) (*http.Client, error) {
+	tlsCfg, err := tlsConfig.GetTLSConfig()
+	if err != nil {
+		return nil, err
+	}
+	tlsCfg.ServerName = serverName
+	return &http.Client{
+		Timeout:   DefaultTimeout,
+		Transport: newBaseTransport(tlsCfg),
+	}, nil
+}
+
 func WebSocketDialerWithServerName(serverName string) (*websocket.Dialer, error) {
 	tlsCfg, err := certs.GetTLSConfig()
+	if err != nil {
+		return nil, err
+	}
+	tlsCfg.ServerName = serverName
+	return &websocket.Dialer{
+		TLSClientConfig:  tlsCfg,
+		HandshakeTimeout: DefaultTLSTimeout,
+	}, nil
+}
+
+// WebSocketDialerWithTLSConfigAndServerName creates a WebSocket dialer using the provided TLSConfig and server name (DI pattern).
+func WebSocketDialerWithTLSConfigAndServerName(tlsConfig *certs.TLSConfig, serverName string) (*websocket.Dialer, error) {
+	tlsCfg, err := tlsConfig.GetTLSConfig()
 	if err != nil {
 		return nil, err
 	}

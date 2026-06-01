@@ -89,8 +89,8 @@ func TestHandleBootstrap(t *testing.T) {
 	t.Run("Success - Bootstrap with CSR over loopback", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
-		csr := testutil.GenerateTestCSR(t, "test-operator")
-		cliCsr := testutil.GenerateTestCSR(t, "test-cli")
+		csr := testutil.GenerateTestCSRP256(t, "test-operator")
+		cliCsr := testutil.GenerateTestCSRP256(t, "test-cli")
 		body := map[string]string{
 			"name":               "Owner",
 			"csr_pem":            csr,
@@ -121,8 +121,8 @@ func TestHandleBootstrap(t *testing.T) {
 	t.Run("Failure - Non-loopback CSR request rejected", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
-		csr := testutil.GenerateTestCSR(t, "test-operator")
-		cliCsr := testutil.GenerateTestCSR(t, "test-cli")
+		csr := testutil.GenerateTestCSRP256(t, "test-operator")
+		cliCsr := testutil.GenerateTestCSRP256(t, "test-cli")
 		body := map[string]string{
 			"name":               "Owner",
 			"csr_pem":            csr,
@@ -147,8 +147,8 @@ func TestHandleBootstrap(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, user)
 
-		csr := testutil.GenerateTestCSR(t, "test-operator")
-		cliCsr := testutil.GenerateTestCSR(t, "test-cli")
+		csr := testutil.GenerateTestCSRP256(t, "test-operator")
+		cliCsr := testutil.GenerateTestCSRP256(t, "test-cli")
 		body := map[string]string{
 			"name":               "Owner",
 			"csr_pem":            csr,
@@ -176,8 +176,8 @@ func TestHandleBootstrap(t *testing.T) {
 		user, _ := c.userSvc.CreateBootstrapUser()
 		c.userSvc.Disable(user.ID, "retired", "actor", "op")
 
-		csr := testutil.GenerateTestCSR(t, "test-operator")
-		cliCsr := testutil.GenerateTestCSR(t, "test-cli")
+		csr := testutil.GenerateTestCSRP256(t, "test-operator")
+		cliCsr := testutil.GenerateTestCSRP256(t, "test-cli")
 		body := map[string]string{
 			"name":               "Owner",
 			"csr_pem":            csr,

@@ -54,7 +54,7 @@ The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
 		}
 
 		rootCmd.AddCommand(
-			platformCmd(),
+			gatewayCmd(),
 			authCmd(),
 			approveCmd(),
 			dataCmd(),
@@ -79,7 +79,7 @@ The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
 		}
 
 		rootCmd.AddCommand(
-			platformCmd(),
+			gatewayCmd(),
 			authCmd(),
 			approveCmd(),
 			dataCmd(),
@@ -87,7 +87,7 @@ The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
 			securityCmd(),
 		)
 
-		expectedCommands := []string{"platform", "auth", "approve", "data", "test", "security"}
+		expectedCommands := []string{"gw", "auth", "approve", "data", "test", "security"}
 		for _, expected := range expectedCommands {
 			found := false
 			for _, cmd := range rootCmd.Commands() {
@@ -126,7 +126,7 @@ The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
 		}
 
 		rootCmd.AddCommand(
-			platformCmd(),
+			gatewayCmd(),
 			authCmd(),
 			approveCmd(),
 			dataCmd(),
@@ -143,7 +143,7 @@ The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
 		output := buf.String()
 
 		assert.Contains(t, output, "g8e")
-		assert.Contains(t, output, "platform")
+		assert.Contains(t, output, "gw")
 		assert.Contains(t, output, "auth")
 		assert.Contains(t, output, "approve")
 		assert.Contains(t, output, "data")

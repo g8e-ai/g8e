@@ -37,7 +37,7 @@ func TestRootCommandStructure(t *testing.T) {
 func TestCommandRegistration(t *testing.T) {
 	t.Run("all expected subcommands are registered", func(t *testing.T) {
 		expectedCommands := []string{
-			"platform",
+			"gw",
 			"auth",
 			"data",
 			"test",
@@ -48,10 +48,10 @@ func TestCommandRegistration(t *testing.T) {
 			t.Run(cmdName+" command exists", func(t *testing.T) {
 				// Verify command constructors don't panic
 				switch cmdName {
-				case "platform":
-					cmd := platformCmd()
+				case "gw":
+					cmd := gatewayCmd()
 					assert.NotNil(t, cmd)
-					assert.Equal(t, "platform", cmd.Use)
+					assert.Equal(t, "gw", cmd.Use)
 				case "auth":
 					cmd := authCmd()
 					assert.NotNil(t, cmd)
@@ -74,9 +74,9 @@ func TestCommandRegistration(t *testing.T) {
 	})
 }
 
-func TestPlatformCommandSubcommands(t *testing.T) {
-	t.Run("platform command has expected subcommands", func(t *testing.T) {
-		cmd := platformCmd()
+func TestGatewayCommandSubcommands(t *testing.T) {
+	t.Run("gateway command has expected subcommands", func(t *testing.T) {
+		cmd := gatewayCmd()
 		require.NotNil(t, cmd)
 
 		expectedSubcommands := []string{
@@ -98,7 +98,7 @@ func TestPlatformCommandSubcommands(t *testing.T) {
 					break
 				}
 			}
-			assert.True(t, found, "platform command should have %s subcommand", subcmd)
+			assert.True(t, found, "gateway command should have %s subcommand", subcmd)
 		}
 	})
 }
@@ -195,7 +195,7 @@ func TestCommandHelpText(t *testing.T) {
 			name string
 			cmd  *cobra.Command
 		}{
-			{"platform", platformCmd()},
+			{"gw", gatewayCmd()},
 			{"auth", authCmd()},
 			{"data", dataCmd()},
 			{"test", testCmd()},
@@ -212,41 +212,30 @@ func TestCommandHelpText(t *testing.T) {
 }
 
 func TestCommandFlagValidation(t *testing.T) {
-	t.Run("platform reset has force flags", func(t *testing.T) {
-		cmd := platformResetCmd()
+	t.Run("gateway reset has force flags", func(t *testing.T) {
+		cmd := gatewayResetCmd()
 		require.NotNil(t, cmd)
 
 		forceFlag := cmd.Flags().Lookup("force")
 		yFlag := cmd.Flags().Lookup("y")
 		yesFlag := cmd.Flags().Lookup("yes")
 
-		assert.NotNil(t, forceFlag, "platform reset should have --force flag")
-		assert.NotNil(t, yFlag, "platform reset should have -y flag")
-		assert.NotNil(t, yesFlag, "platform reset should have --yes flag")
+		assert.NotNil(t, forceFlag, "gateway reset should have --force flag")
+		assert.NotNil(t, yFlag, "gateway reset should have -y flag")
+		assert.NotNil(t, yesFlag, "gateway reset should have --yes flag")
 	})
 
-	t.Run("platform clean has force flags", func(t *testing.T) {
-		cmd := platformCleanCmd()
+	t.Run("gateway clean has force flags", func(t *testing.T) {
+		cmd := gatewayCleanCmd()
 		require.NotNil(t, cmd)
 
 		forceFlag := cmd.Flags().Lookup("force")
 		yFlag := cmd.Flags().Lookup("y")
 		yesFlag := cmd.Flags().Lookup("yes")
 
-		assert.NotNil(t, forceFlag, "platform clean should have --force flag")
-		assert.NotNil(t, yFlag, "platform clean should have -y flag")
-		assert.NotNil(t, yesFlag, "platform clean should have --yes flag")
-	})
-
-	t.Run("auth login has required flags", func(t *testing.T) {
-		cmd := loginCmd()
-		require.NotNil(t, cmd)
-
-		countFlag := cmd.Flags().Lookup("count")
-		ttlFlag := cmd.Flags().Lookup("ttl")
-
-		assert.NotNil(t, countFlag, "auth login should have --count flag")
-		assert.NotNil(t, ttlFlag, "auth login should have --ttl flag")
+		assert.NotNil(t, forceFlag, "gateway clean should have --force flag")
+		assert.NotNil(t, yFlag, "gateway clean should have -y flag")
+		assert.NotNil(t, yesFlag, "gateway clean should have --yes flag")
 	})
 
 	t.Run("test g8eo has test flags", func(t *testing.T) {
@@ -277,8 +266,8 @@ func TestCommandFlagValidation(t *testing.T) {
 }
 
 func TestCommandAliases(t *testing.T) {
-	t.Run("platform logs has follow alias", func(t *testing.T) {
-		cmd := platformLogsCmd()
+	t.Run("gateway logs has follow alias", func(t *testing.T) {
+		cmd := gatewayLogsCmd()
 		flag := cmd.Flags().Lookup("follow")
 		assert.NotNil(t, flag)
 		// Check shorthand

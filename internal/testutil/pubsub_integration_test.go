@@ -29,7 +29,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestPubSubAvailable_ConnectsToLiveOperator(t *testing.T) {
-	TestPubSubAvailable(t)
+	TestPubSubAvailable(t, "")
 }
 
 // ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ func TestPubSubAvailable_ConnectsToLiveOperator(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSubscribeToChannel_ReceivesPublishedMessage(t *testing.T) {
-	TestPubSubAvailable(t)
+	TestPubSubAvailable(t, "")
 
 	channel := CreateTestChannel(t, "integration")
 	baseURL := GetTestOperatorDirectURL()
@@ -63,7 +63,7 @@ func TestSubscribeToChannel_ReceivesPublishedMessage(t *testing.T) {
 }
 
 func TestSubscribeToChannel_MultipleMessages(t *testing.T) {
-	TestPubSubAvailable(t)
+	TestPubSubAvailable(t, "")
 
 	channel := CreateTestChannel(t, "integration")
 	baseURL := GetTestOperatorDirectURL()
@@ -90,7 +90,7 @@ func TestSubscribeToChannel_MultipleMessages(t *testing.T) {
 }
 
 func TestPublishTestMessage_NonJSONPayload_WrappedAsString(t *testing.T) {
-	TestPubSubAvailable(t)
+	TestPubSubAvailable(t, "")
 
 	channel := CreateTestChannel(t, "integration")
 	baseURL := GetTestOperatorDirectURL()
@@ -111,7 +111,7 @@ func TestPublishTestMessage_NonJSONPayload_WrappedAsString(t *testing.T) {
 }
 
 func TestAssertMessageReceived_Integration(t *testing.T) {
-	TestPubSubAvailable(t)
+	TestPubSubAvailable(t, "")
 
 	channel := CreateTestChannel(t, "integration")
 	baseURL := GetTestOperatorDirectURL()
@@ -132,7 +132,7 @@ func TestAssertMessageReceived_Integration(t *testing.T) {
 }
 
 func TestSubscribeToChannel_IsolatedChannels_NoBleed(t *testing.T) {
-	TestPubSubAvailable(t)
+	TestPubSubAvailable(t, "")
 
 	baseURL := GetTestOperatorDirectURL()
 	ch1 := CreateTestChannel(t, "ch1")

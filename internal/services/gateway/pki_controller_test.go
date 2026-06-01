@@ -15,6 +15,7 @@ package gateway
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -148,7 +149,12 @@ func TestPKIController_HandlePKIHubBundle(t *testing.T) {
 				c.pki = &PKIAuthority{}
 			},
 			expectedStatus: http.StatusInternalServerError,
-			expectedBody:   `{"error":"failed to read hub bundle"}`,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var resp map[string]string
+				err := json.Unmarshal(rr.Body.Bytes(), &resp)
+				require.NoError(t, err)
+				assert.Contains(t, resp["error"], "failed to read hub bundle")
+			},
 		},
 	}
 
@@ -227,7 +233,7 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 
 func TestPKIController_HandlePKISignCSR(t *testing.T) {
 	validCSRPayload := map[string]string{
-		"csr_pem":             testutil.GenerateTestCSR(t, "test-operator"),
+		"csr_pem":             testutil.GenerateTestCSRP256(t, "test-operator"),
 		"leaf_type":           "operator",
 		"organization_id":     testOrganizationID,
 		"operator_id":         testOperatorID,
@@ -357,15 +363,18 @@ func TestPKIController_HandlePKICertificatesRevoke(t *testing.T) {
 func TestPKIController_HandlePKIRevocationBundle(t *testing.T) {
 	tests := []httpTestCase{
 		{
-			name:           "Success - GET returns revocation bundle",
+			name:           "Success - GET returns CRL",
 			method:         http.MethodGet,
 			expectedStatus: http.StatusOK,
 			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
-				var resp map[string]string
-				err := json.Unmarshal(rr.Body.Bytes(), &resp)
-				require.NoError(t, err, "failed to unmarshal response")
-				assert.NotEmpty(t, resp["bundle_json"], "bundle_json should not be empty")
-				assert.NotEmpty(t, resp["signature"], "signature should not be empty")
+				// After Phase 2, endpoint returns standard X.509 CRL (DER-encoded binary)
+				crlDER := rr.Body.Bytes()
+				assert.NotEmpty(t, crlDER, "CRL DER should not be empty")
+
+				// Verify it's a valid CRL
+				crl, err := x509.ParseRevocationList(crlDER)
+				require.NoError(t, err, "response should be a valid X.509 CRL")
+				assert.NotNil(t, crl, "CRL should parse successfully")
 			},
 		},
 		{

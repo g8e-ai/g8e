@@ -4,13 +4,13 @@
 
 **Verify, then execute.**
 
-g8e is a ~20MB, zero-dependency binary that provides agentic governance and state-mutation control. It functions as both the **control plane** (host-local policy decision) and the **data plane** (exclusive mutation executor). 
+g8e is a ~20MB compressed, statically-compiled binary that provides agentic governance and state-mutation control. It functions as both the **control plane** (host-local policy decision) and the **data plane** (exclusive mutation executor). 
 
 It dials out via mTLS and listens on nothing. Every AI-proposed action clears a fail-closed verification pipeline on the host and is committed to a git-backed ledger before execution. Only scrubbed projections leave the host; raw data never crosses the wire.
 
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev)
+[![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev)
 [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v102--core-platform)
 [![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/core/position_paper.md)
 
@@ -25,14 +25,21 @@ It dials out via mTLS and listens on nothing. Every AI-proposed action clears a 
 Get g8e online in under 60 seconds.
 
 ```bash
-# 1. Start the Governance Gateway (g8eg)
-./g8e platform start
+# 1. Clone the repository
+git clone https://github.com/g8e-ai/g8e.git
+cd g8e
 
-# 2. Authenticate (first login automatically bootstraps the platform)
+# 2. Build the binary
+make build
+
+# 3. Start the Governance Gateway (g8eg)
+./g8e gw start
+
+# 4. Authenticate (first login automatically bootstraps the platform)
 ./g8e auth login
 
-# 3. Verify the status
-./g8e platform status
+# 5. Verify the status
+./g8e gw status
 ```
 
 See the [Full QuickStart Guide](docs/guides/getting_started.md) for mTLS, enrollment, and CLI configuration.
@@ -48,6 +55,8 @@ g8e is one binary. Run it in Gateway mode or Operator mode — same artifact, co
 
 **The split is the entire point**: the Gateway proposes, the Operator disposes. A compromised Gateway can lie about what to run; it can't make a host run it. The binding go/no-go always happens on the machine that owns the consequences — locally, against local state, recorded before the side effect. There is no trusted middle to compromise, because nothing in the middle has the final word.
 
+*Learn more: [Gateway Architecture](docs/architecture/gateway.md) · [Operator Architecture](docs/architecture/operator.md) · [Auth Architecture](docs/architecture/auth.md)*
+
 ---
 
 ## The mental model
@@ -57,7 +66,7 @@ g8e follows standard MCP topology with integrated BFT governance.
 ```mermaid
 graph TD
     subgraph Clients ["Any AI client — agent-agnostic"]
-        C1["MCP client<br/>(Claude / Cursor / BYO)"]
+        C1["MCP client<br/>(Claude / Cursor / Windsurf)"]
         C2["Agentic ensemble<br/>(A2A / tool calls)"]
     end
 
@@ -69,7 +78,7 @@ graph TD
         O1 --- D1
     end
 
-    C1 --> GW
+    C1 -. "HTTP/mTLS<br/>universal endpoint" .-> GW
     C2 --> GW
     O1 -. "outbound-only mTLS" .-> GW
 ```
@@ -98,6 +107,8 @@ sequenceDiagram
     Operator->>Gateway: Push Sovereignty-scrubbed signed receipt
     Gateway->>Principal: Return final safe output
 ```
+
+*Learn more: [Protocol Specification](docs/architecture/g8e.md) · [MCP Protocol](docs/protocols/mcp/mcp.md) · [A2A Protocol](docs/protocols/a2a/a2a.md)*
 
 ---
 
@@ -153,6 +164,8 @@ graph TD
 | **L4** | **L4Warden** | Fail-closed pre-dispatch gate | Hash, freshness, state root, and signer trust. |
 | **L5** | **L5Actuator** | Atomic dispatch + signed receipt | The only code path allowed to mutate the host. |
 
+*Learn more: [Governance Protocol](docs/architecture/g8e.md) · [Constants Reference](docs/reference/constants.md) · [Glossary](docs/reference/glossary.md)*
+
 ---
 
 ## Optional AI Engine (g8ee)
@@ -201,6 +214,8 @@ graph TD
 - **Warden (Circuit Breaker):** Heuristic blocker that rejects "off-the-wall" proposals. Rejections trigger a loop back to Sage to improve intent translation.
 - **Auditor (History & Grounding):** Final verification layer. Reviews the full investigation history to ensure progressive accuracy before signing the protocol envelope.
 
+*Learn more: [Build Applications](docs/guides/build_apps.md) · [Connect Apps to Gateway](docs/guides/connect_apps_to_gateway.md) · [Developer Docs](docs/devs/)*
+
 ---
 
 ## The Protocol Invariants
@@ -211,6 +226,8 @@ graph TD
 - **Outbound-Only mTLS**: Operators dial out; zero inbound ports required on the host.
 - **Sovereignty Boundary**: Automated scrubbing/rehydration ensures raw data never leaves the host.
 - **No Backward Compatibility**: Rip and replace. Stale formats or unsigned inputs are rejected.
+
+*Learn more: [Protocol Specification](docs/architecture/g8e.md) · [API Reference](docs/reference/api/) · [Constants](docs/reference/constants.md)*
 
 ---
 
@@ -236,8 +253,13 @@ g8e is the mandatory governance platform. Agent ensembles and Dashboard (g8ed) a
 ## Documentation
 
 - **[Getting Started](docs/guides/getting_started.md)** · **[Position Paper](docs/core/position_paper.md)**
-- **[Protocol](docs/architecture/g8e.md)** · **[Operator (g8eo)](docs/architecture/operator.md)** · **[Gateway (g8eg)](docs/architecture/gateway.md)**
-- **[Guides](docs/guides/)** · **[Reference](docs/reference/)** · **[Contributing](CONTRIBUTING.md)**
+- **[Protocol](docs/architecture/g8e.md)** · **[Operator (g8eo)](docs/architecture/operator.md)** · **[Gateway (g8eg)](docs/architecture/gateway.md)** · **[Auth](docs/architecture/auth.md)**
+- **[MCP Protocol](docs/protocols/mcp/mcp.md)** · **[A2A Protocol](docs/protocols/a2a/a2a.md)**
+- **[CLI Guide](docs/guides/cli.md)** · **[Air Gap Deployment](docs/guides/air_gap.md)**
+- **[Build Gateway](docs/guides/build_gateway.md)** · **[Build Operator](docs/guides/build_operator.md)**
+- **[Connect Apps to Gateway](docs/guides/connect_apps_to_gateway.md)** · **[Connect Operator to Gateway](docs/guides/connect_operator_to_gateway.md)**
+- **[Glossary](docs/reference/glossary.md)** · **[Constants](docs/reference/constants.md)** · **[API Reference](docs/reference/api/)**
+- **[Developer Docs](docs/devs/)** · **[Contributing](CONTRIBUTING.md)**
 
 ---
 

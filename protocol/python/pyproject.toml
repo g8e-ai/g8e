@@ -1,0 +1,54 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "g8e-protocol"
+version = "0.3.0"
+description = "g8e Protocol Constants and Models"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Lateralus Labs, LLC"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+
+dependencies = [
+    "pydantic>=2.0.0",
+    "protobuf>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/g8e-ai/g8e"
+Repository = "https://github.com/g8e-ai/g8e"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["g8e_protocol*"]
+
+[tool.setuptools.package-data]
+g8e_protocol = ["*.json"]

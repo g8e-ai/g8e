@@ -19,26 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestEnvVarConstants_OperatorKeys(t *testing.T) {
-	assert.Equal(t, "G8E_OPERATOR_SESSION_ID", string(EnvVar.OperatorSessionID))
-	assert.Equal(t, "G8E_OPERATOR_ENDPOINT", string(EnvVar.OperatorEndpoint))
-	assert.Equal(t, "G8E_LOG_LEVEL", string(EnvVar.LogLevel))
-	assert.Equal(t, "G8E_LOCAL_STORE_ENABLED", string(EnvVar.LocalStoreEnabled))
-	assert.Equal(t, "G8E_LOCAL_DB_PATH", string(EnvVar.LocalDBPath))
-	assert.Equal(t, "G8E_LOCAL_STORE_MAX_SIZE_MB", string(EnvVar.LocalStoreMaxSizeMB))
-	assert.Equal(t, "G8E_LOCAL_STORE_RETENTION_DAYS", string(EnvVar.LocalStoreRetentionDays))
-	assert.Equal(t, "G8E_DATA_DIR", string(EnvVar.DataDir))
-	assert.Equal(t, "G8E_IP_SERVICE", string(EnvVar.IPService))
-	assert.Equal(t, "G8E_IP_RESOLVER", string(EnvVar.IPResolver))
-}
-
-func TestEnvVarConstants_SystemEnvVars(t *testing.T) {
-	assert.Equal(t, "SHELL", string(EnvVar.Shell))
-	assert.Equal(t, "LANG", string(EnvVar.Lang))
-	assert.Equal(t, "TERM", string(EnvVar.Term))
-	assert.Equal(t, "PATH", string(EnvVar.Path))
-	assert.Equal(t, "SSH_AUTH_SOCK", string(EnvVar.SSHAuthSock))
-	assert.Equal(t, "USER", string(EnvVar.User))
-	assert.Equal(t, "USERNAME", string(EnvVar.Username))
-	assert.Equal(t, "LOGNAME", string(EnvVar.LogName))
+func TestEnvVarConstants_ZeroEnvVars(t *testing.T) {
+	// g8e uses ZERO environment variables
+	assert.Empty(t, EnvVar)
 }

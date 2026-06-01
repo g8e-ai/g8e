@@ -26,7 +26,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/system"
 )
@@ -139,8 +138,6 @@ func RunStream(args []string) {
 
 	dialTimeout := time.Duration(timeoutSec) * time.Second
 
-	settings := config.LoadSettings()
-
 	// Set up context with signal cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -164,7 +161,7 @@ func RunStream(args []string) {
 
 	// Run concurrent streaming
 	wallStart := time.Now()
-	results := runConcurrentStream(ctx, hosts, binaryData, operatorArgs, sshConfigArg, concurrency, dialTimeout, settings.SSHAuthSock, settings.User, sshIdentityFile, sshUser)
+	results := runConcurrentStream(ctx, hosts, binaryData, operatorArgs, sshConfigArg, concurrency, dialTimeout, os.Getenv("SSH_AUTH_SOCK"), os.Getenv("USER"), sshIdentityFile, sshUser)
 
 	// Tally results
 	var succeeded, failed int
@@ -402,7 +399,7 @@ FLAGS
   --endpoint <host>             Platform endpoint: starts operator if set
   --no-git                      Disable ledger on remote operator
   --ssh-config <path>           SSH config path (default: ~/.ssh/config)
-  --binary-dir <path>           Operator build dir (default: /home/g8e)
+  --binary-dir <path>           Operator build dir (default: <project-root>/bin)
 
 OUTPUT
   Per-host status events are written as JSON lines to stdout.

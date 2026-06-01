@@ -523,7 +523,7 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 
 // ProcessEnvelope is the public, synchronous entry point for fail-closed
 // Gateway transaction processing. It is used by the listen-mode HTTP surface
-// (POST /api/governance/envelope) to verify a GovernanceEnvelope and execute it
+// (POST /api/v1/governance/envelopes) to verify a GovernanceEnvelope and execute it
 // through the Actuator, returning the signed ActionReceipt or a verification
 // error.
 //

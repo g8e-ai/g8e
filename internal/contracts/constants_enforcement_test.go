@@ -41,8 +41,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -474,9 +472,8 @@ func TestEnforcedValuesAfterAllowlist(t *testing.T) {
 }
 
 func TestNoRawStringLiteralsWhereConstantsExist(t *testing.T) {
-	if os.Getenv(marshaler.EnvVar(constants.EnvVar.StrictConstantsLint)) == "" {
-		t.Skip("set G8E_STRICT_CONSTANTS_LINT=1 to run")
-	}
+	// g8e uses ZERO environment variables - strict constants lint is deprecated
+	t.Skip("g8e uses ZERO environment variables - strict constants lint is deprecated")
 
 	enforced, _, err := buildEnforcedValues()
 	require.NoError(t, err)

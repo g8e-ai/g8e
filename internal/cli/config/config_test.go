@@ -319,7 +319,7 @@ func TestConfig_OperatorBootstrapHTTPSPort(t *testing.T) {
 }
 
 func TestConfig_OperatorHTTPURL(t *testing.T) {
-	t.Run("returns operator HTTPS URL", func(t *testing.T) {
+	t.Run("returns operator public HTTPS URL", func(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
@@ -328,13 +328,13 @@ func TestConfig_OperatorHTTPURL(t *testing.T) {
 					OperatorHTTPS          int `json:"operator_https"`
 					OperatorPublicHTTPS    int `json:"operator_public_https"`
 				}{
-					OperatorHTTPS: 8440,
+					OperatorPublicHTTPS: 8443,
 				},
 			},
 		}
 
 		result := config.OperatorHTTPURL()
-		assert.Equal(t, "https://localhost:8440", result)
+		assert.Equal(t, "https://localhost:8443", result)
 	})
 }
 

@@ -36,9 +36,10 @@ type LocalStoreConfig struct {
 }
 
 // DefaultLocalStoreConfig returns the default configuration.
+// Note: DBPath should be set by the caller based on the actual work directory.
 func DefaultLocalStoreConfig() *LocalStoreConfig {
 	return &LocalStoreConfig{
-		DBPath:               "./.g8e/local_state.db",
+		DBPath:               ".g8e/local_state.db",
 		MaxDBSizeMB:          1024,
 		RetentionDays:        30,
 		PruneIntervalMinutes: 60,

@@ -269,7 +269,7 @@ func (c *Config) OperatorPublicHTTPSPort() int {
 }
 
 func (c *Config) OperatorHTTPURL() string {
-	return fmt.Sprintf("https://localhost:%d", c.OperatorHTTPSPort())
+	return fmt.Sprintf("https://localhost:%d", c.OperatorPublicHTTPSPort())
 }
 
 // OperatorPublicURL returns the Public TLS port (8443) for CSR-based enrollment

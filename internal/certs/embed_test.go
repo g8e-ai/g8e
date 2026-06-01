@@ -59,6 +59,149 @@ func saveAndRestoreCA(t *testing.T) {
 	t.Cleanup(func() { SetCA(original) })
 }
 
+// Tests for new DI types
+
+func TestTrustStore_GetRawCA_ReturnsStoredValue(t *testing.T) {
+	ts := NewTrustStore(nil)
+	assert.Nil(t, ts.GetRawCA())
+}
+
+func TestTrustStore_SetCA_StoresBytes(t *testing.T) {
+	ts := NewTrustStore(nil)
+	pem := []byte("fake-pem-data")
+	ts.SetCA(pem)
+	assert.Equal(t, pem, ts.GetRawCA())
+}
+
+func TestTrustStore_SetCA_OverwritesPreviousValue(t *testing.T) {
+	ts := NewTrustStore(nil)
+	ts.SetCA([]byte("first"))
+	ts.SetCA([]byte("second"))
+	assert.Equal(t, []byte("second"), ts.GetRawCA())
+}
+
+func TestTrustStore_SetCA_NilClearsValue(t *testing.T) {
+	ts := NewTrustStore(nil)
+	ts.SetCA([]byte("some-ca"))
+	ts.SetCA(nil)
+	assert.Nil(t, ts.GetRawCA())
+}
+
+func TestTrustStore_GetRootCAs_WhenCANotSet(t *testing.T) {
+	ts := NewTrustStore(nil)
+	pool, err := ts.GetRootCAs()
+	assert.Nil(t, pool)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CA not set")
+}
+
+func TestTrustStore_GetRootCAs_InvalidPEM(t *testing.T) {
+	ts := NewTrustStore(nil)
+	ts.SetCA([]byte("not-a-valid-pem-block"))
+	pool, err := ts.GetRootCAs()
+	assert.Nil(t, pool)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse")
+}
+
+func TestTrustStore_GetRootCAs_ValidPEM(t *testing.T) {
+	ts := NewTrustStore(nil)
+	caBytes := generateTestCAPEM(t)
+	ts.SetCA(caBytes)
+
+	pool, err := ts.GetRootCAs()
+	require.NoError(t, err)
+	assert.NotNil(t, pool)
+}
+
+func TestClientIdentity_GetCertificate_WhenNotSet(t *testing.T) {
+	ci := NewClientIdentity(tls.Certificate{})
+	cert, ok := ci.GetCertificate()
+	assert.False(t, ok)
+	assert.Equal(t, tls.Certificate{}, cert)
+}
+
+func TestClientIdentity_SetCertificate_StoresCert(t *testing.T) {
+	ci := NewClientIdentity(tls.Certificate{})
+	cert := tls.Certificate{Certificate: [][]byte{[]byte("test")}}
+	ci.SetCertificate(cert)
+
+	retrieved, ok := ci.GetCertificate()
+	assert.True(t, ok)
+	assert.Equal(t, cert, retrieved)
+}
+
+func TestClientIdentity_SetCertificate_Overwrites(t *testing.T) {
+	ci := NewClientIdentity(tls.Certificate{})
+	ci.SetCertificate(tls.Certificate{Certificate: [][]byte{[]byte("first")}})
+	ci.SetCertificate(tls.Certificate{Certificate: [][]byte{[]byte("second")}})
+
+	retrieved, _ := ci.GetCertificate()
+	assert.Equal(t, [][]byte{[]byte("second")}, retrieved.Certificate)
+}
+
+func TestTLSConfig_GetTLSConfig_WhenCANotSet(t *testing.T) {
+	ts := NewTrustStore(nil)
+	ci := NewClientIdentity(tls.Certificate{})
+	tc := NewTLSConfig(ts, ci)
+
+	cfg, err := tc.GetTLSConfig()
+	assert.Nil(t, cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CA not set")
+}
+
+func TestTLSConfig_GetTLSConfig_WithValidCA(t *testing.T) {
+	ts := NewTrustStore(nil)
+	ci := NewClientIdentity(tls.Certificate{})
+	tc := NewTLSConfig(ts, ci)
+
+	caBytes := generateTestCAPEM(t)
+	ts.SetCA(caBytes)
+
+	cfg, err := tc.GetTLSConfig()
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	assert.Equal(t, uint16(tls.VersionTLS13), cfg.MinVersion)
+	assert.NotNil(t, cfg.RootCAs)
+	assert.Contains(t, cfg.CurvePreferences, tls.X25519)
+	assert.Contains(t, cfg.CurvePreferences, tls.CurveP384)
+	assert.Contains(t, cfg.CurvePreferences, tls.CurveP256)
+}
+
+func TestTLSConfig_GetTLSConfig_WithClientCert(t *testing.T) {
+	ts := NewTrustStore(nil)
+	ci := NewClientIdentity(tls.Certificate{})
+	tc := NewTLSConfig(ts, ci)
+
+	caBytes := generateTestCAPEM(t)
+	ts.SetCA(caBytes)
+
+	cert := tls.Certificate{Certificate: [][]byte{[]byte("test-cert")}}
+	ci.SetCertificate(cert)
+
+	cfg, err := tc.GetTLSConfig()
+	require.NoError(t, err)
+	require.Len(t, cfg.Certificates, 1)
+	assert.Equal(t, cert, cfg.Certificates[0])
+}
+
+func TestTLSConfig_GetTLSConfig_WithoutClientCert(t *testing.T) {
+	ts := NewTrustStore(nil)
+	ci := NewClientIdentity(tls.Certificate{})
+	tc := NewTLSConfig(ts, ci)
+
+	caBytes := generateTestCAPEM(t)
+	ts.SetCA(caBytes)
+
+	cfg, err := tc.GetTLSConfig()
+	require.NoError(t, err)
+	assert.Empty(t, cfg.Certificates)
+}
+
+// Tests for legacy global functions (deprecated, kept for migration compatibility)
+
 func TestGetRawCA_ReturnsStoredValue(t *testing.T) {
 	saveAndRestoreCA(t)
 	SetCA(nil)

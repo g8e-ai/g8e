@@ -1,0 +1,228 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package tests
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+// MCPConfig represents the MCP client configuration structure
+type MCPConfig struct {
+	MCPServers map[string]MCPServerConfig `json:"mcpServers"`
+}
+
+// MCPServerConfig represents a single MCP server configuration
+type MCPServerConfig struct {
+	Transport    TransportConfig `json:"transport"`
+	TLS          *TLSConfig      `json:"tls,omitempty"`
+	Capabilities struct {
+		Tools     bool `json:"tools"`
+		Resources bool `json:"resources"`
+		Prompts   bool `json:"prompts"`
+	} `json:"capabilities"`
+	Description string   `json:"description"`
+	Notes       []string `json:"notes"`
+}
+
+// TransportConfig represents the transport configuration
+type TransportConfig struct {
+	Type    string            `json:"type"`
+	URL     string            `json:"url,omitempty"`
+	Command string            `json:"command,omitempty"`
+	Args    []string          `json:"args,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
+// TLSConfig represents TLS configuration for HTTP transport
+type TLSConfig struct {
+	ClientCertificateEnv string `json:"clientCertificateEnv"`
+	ClientKeyEnv         string `json:"clientKeyEnv"`
+	CACertificateEnv     string `json:"caCertificateEnv"`
+	VerifyServer         bool   `json:"verifyServer"`
+	VerifyHostname       string `json:"verifyHostname"`
+}
+
+/*
+TestMCPGateway_ConfigOutput validates that the gw mcp-config command
+produces valid HTTP transport configuration for universal gateway access.
+
+This test verifies:
+1. Default output uses HTTP transport (universal endpoint)
+2. HTTP transport includes correct Gateway URL placeholder
+3. TLS configuration is present for mTLS
+*/
+func TestMCPGateway_ConfigOutput(t *testing.T) {
+	t.Run("http mode default", func(t *testing.T) {
+		output, err := runCLICommand("gw", "mcp-config")
+		if err != nil {
+			t.Skipf("CLI config not available (run './g8e auth login' first): %v", err)
+		}
+
+		var config MCPConfig
+		err = json.Unmarshal([]byte(output), &config)
+		assert.NoError(t, err, "output should be valid JSON")
+
+		gatewayConfig, ok := config.MCPServers["g8e-gateway"]
+		assert.True(t, ok, "should have g8e-gateway config")
+
+		assert.Equal(t, "http", gatewayConfig.Transport.Type, "default transport should be http")
+		assert.Contains(t, gatewayConfig.Transport.URL, "https://localhost:", "url should include Gateway URL")
+		assert.NotNil(t, gatewayConfig.TLS, "should have tls config for http mode")
+		assert.Equal(t, "G8E_CLIENT_CERT_PATH", gatewayConfig.TLS.ClientCertificateEnv)
+		assert.Equal(t, "G8E_CLIENT_KEY_PATH", gatewayConfig.TLS.ClientKeyEnv)
+		assert.Equal(t, "G8E_CA_CERT_PATH", gatewayConfig.TLS.CACertificateEnv)
+	})
+}
+
+/*
+TestMCPGateway_CommandExists validates that the g8e gw mcp-config command
+is available and produces valid output.
+*/
+func TestMCPGateway_CommandExists(t *testing.T) {
+	t.Run("gw mcp-config command exists", func(t *testing.T) {
+		output, err := runCLICommand("gw", "mcp-config")
+		if err != nil {
+			t.Skipf("CLI config not available (run './g8e auth login' first): %v", err)
+		}
+		assert.Contains(t, output, "http")
+		assert.Contains(t, output, "G8E_CLIENT_CERT_PATH")
+		assert.Contains(t, output, "G8E_CLIENT_KEY_PATH")
+		assert.Contains(t, output, "G8E_CA_CERT_PATH")
+	})
+}
+
+/*
+TestMCPGateway_JSONRPCParsing validates that the gateway can parse
+JSON-RPC requests from HTTP format.
+*/
+func TestMCPGateway_JSONRPCParsing(t *testing.T) {
+	t.Run("valid tools/list request", func(t *testing.T) {
+		req := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`
+		var parsed struct {
+			JSONRPC string          `json:"jsonrpc"`
+			ID      int             `json:"id"`
+			Method  string          `json:"method"`
+			Params  json.RawMessage `json:"params"`
+		}
+		err := json.Unmarshal([]byte(req), &parsed)
+		assert.NoError(t, err)
+		assert.Equal(t, "tools/list", parsed.Method)
+	})
+
+	t.Run("valid tools/call request", func(t *testing.T) {
+		req := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_tool","arguments":{}}}`
+		var parsed struct {
+			JSONRPC string          `json:"jsonrpc"`
+			ID      int             `json:"id"`
+			Method  string          `json:"method"`
+			Params  json.RawMessage `json:"params"`
+		}
+		err := json.Unmarshal([]byte(req), &parsed)
+		assert.NoError(t, err)
+		assert.Equal(t, "tools/call", parsed.Method)
+	})
+
+	t.Run("invalid JSON", func(t *testing.T) {
+		req := `invalid json`
+		var parsed struct {
+			JSONRPC string `json:"jsonrpc"`
+		}
+		err := json.Unmarshal([]byte(req), &parsed)
+		assert.Error(t, err, "invalid JSON should fail to parse")
+	})
+}
+
+/*
+TestMCPGateway_ConfigTemplate validates that the config template file
+exists and contains the expected HTTP transport structure.
+*/
+func TestMCPGateway_ConfigTemplate(t *testing.T) {
+	t.Run("http template exists", func(t *testing.T) {
+		content, err := readFile("protocol/examples/mcp_server/g8e_gateway_mcp_config.json")
+		assert.NoError(t, err, "http template should exist")
+		assert.Contains(t, content, `"type": "http"`)
+		assert.Contains(t, content, `"url"`)
+		assert.Contains(t, content, `"tls"`)
+		assert.Contains(t, content, `"clientCertificateEnv"`)
+		assert.Contains(t, content, `"clientKeyEnv"`)
+		assert.Contains(t, content, `"caCertificateEnv"`)
+	})
+}
+
+// Helper function to run CLI commands for testing
+func runCLICommand(args ...string) (string, error) {
+	// Find repo root by looking for go.mod
+	repoRoot, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err == nil {
+			break
+		}
+		parent := filepath.Dir(repoRoot)
+		if parent == repoRoot {
+			return "", fmt.Errorf("could not find repo root (go.mod)")
+		}
+		repoRoot = parent
+	}
+
+	g8ePath := filepath.Join(repoRoot, "bin", "g8e")
+	cmdArgs := append([]string{}, args...)
+	cmd := exec.Command(g8ePath, cmdArgs...)
+	cmd.Dir = repoRoot
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("command failed: %w, output: %s", err, string(output))
+	}
+
+	return string(output), nil
+}
+
+// Helper function to read file contents
+func readFile(path string) (string, error) {
+	// Find repo root by looking for go.mod
+	repoRoot, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err == nil {
+			break
+		}
+		parent := filepath.Dir(repoRoot)
+		if parent == repoRoot {
+			return "", fmt.Errorf("could not find repo root (go.mod)")
+		}
+		repoRoot = parent
+	}
+
+	fullPath := filepath.Join(repoRoot, path)
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file %s: %w", fullPath, err)
+	}
+
+	return string(content), nil
+}

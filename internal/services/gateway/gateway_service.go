@@ -39,20 +39,23 @@ type GatewayService struct {
 	cfg    *config.Config
 	logger *slog.Logger
 
-	db           *GatewayDBService
-	pubsub       *PubSubBroker
-	auth         *AuthService
-	pki          *PKIAuthority
-	reg          *RegistrationService
-	passkey      *PasskeyService
-	userSvc      *UserService
-	sessionSvc   *SessionService
-	mcpGateway   *mcp.GatewayService
-	responder    *responder.Responder
-	server       *http.Server
-	publicServer *http.Server
+	db              *GatewayDBService
+	pubsub          *PubSubBroker
+	auth            *AuthService
+	pki             *PKIAuthority
+	reg             *RegistrationService
+	passkey         *PasskeyService
+	userSvc         *UserService
+	sessionSvc      *SessionService
+	mcpGateway      *mcp.GatewayService
+	responder       *responder.Responder
+	server          *http.Server
+	publicServer    *http.Server
+	bootstrapServer *http.Server
 
 	handler *HTTPHandler
+
+	extraIPs []net.IP
 
 	mu      sync.Mutex
 	running bool
@@ -134,6 +137,7 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 		passkey:    passkey,
 		userSvc:    userSvc,
 		sessionSvc: sessionSvc,
+		extraIPs:   extraIPs,
 		mcpGateway: mcp.NewGatewayService(mcp.Dependencies{
 			Logger:          logger,
 			Responder:       res,
@@ -181,6 +185,7 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 		passkey:    passkey,
 		userSvc:    userSvc,
 		sessionSvc: sessionSvc,
+		extraIPs:   nil, // Test configuration does not use extra IPs
 		mcpGateway: mcp.NewGatewayService(mcp.Dependencies{
 			Logger:          logger,
 			Responder:       res,
@@ -234,9 +239,11 @@ func (ls *GatewayService) initHandlersAndServers() error {
 	})
 
 	// Build a map of ports to identify port assignments.
-	// All surfaces now use mTLS (RequireAndVerifyClientCert).
+	// Bootstrap port uses plain HTTP for initial CA discovery and bootstrap.
+	// All other surfaces use mTLS (RequireAndVerifyClientCert).
 	portUsage := make(map[int][]string)
 	portUsage[cfg.Gateway.HTTPPort] = append(portUsage[cfg.Gateway.HTTPPort], "HTTP")
+	portUsage[cfg.Gateway.BootstrapPort] = append(portUsage[cfg.Gateway.BootstrapPort], "Bootstrap")
 	portUsage[cfg.Gateway.PublicPort] = append(portUsage[cfg.Gateway.PublicPort], "Public")
 
 	// Validate up front so collisions fail during init.
@@ -287,6 +294,18 @@ func (ls *GatewayService) initHandlersAndServers() error {
 		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
 	}
 
+	// Bootstrap server: plain HTTP for CA discovery and initial bootstrap
+	// Serves /api/v1/auth/bootstrap and /api/v1/auth/bootstrap/status
+	ls.bootstrapServer = &http.Server{
+		Addr:              fmt.Sprintf(":%d", cfg.Gateway.BootstrapPort),
+		Handler:           ls.handler.buildBootstrapRouter(),
+		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
+		ReadTimeout:       cfg.Gateway.ReadTimeout,
+		WriteTimeout:      cfg.Gateway.WriteTimeout,
+		IdleTimeout:       cfg.Gateway.IdleTimeout,
+		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
+	}
+
 	return nil
 }
 
@@ -326,6 +345,16 @@ func (ls *GatewayService) GetPublicPort() int {
 		return 0
 	}
 	_, portStr, _ := net.SplitHostPort(ls.publicServer.Addr)
+	p, _ := strconv.Atoi(portStr)
+	return p
+}
+
+// GetBootstrapPort returns the assigned port for the bootstrap server.
+func (ls *GatewayService) GetBootstrapPort() int {
+	if ls.bootstrapServer == nil || ls.bootstrapServer.Addr == "" {
+		return 0
+	}
+	_, portStr, _ := net.SplitHostPort(ls.bootstrapServer.Addr)
 	p, _ := strconv.Atoi(portStr)
 	return p
 }
@@ -403,6 +432,9 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	// Start background maintenance for MCP gateway
 	go ls.mcpGateway.RunMaintenance(ctx)
 
+	// Start background service certificate renewal loop
+	go ls.runServiceCertRenewalLoop(ctx)
+
 	errChan := make(chan error, 4)
 	readyChan := make(chan struct{}, 4)
 
@@ -410,6 +442,11 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	uniqueServers := make(map[*http.Server]string)
 	if ls.server != nil {
 		uniqueServers[ls.server] = "HTTP"
+	}
+	if ls.bootstrapServer != nil {
+		if _, ok := uniqueServers[ls.bootstrapServer]; !ok {
+			uniqueServers[ls.bootstrapServer] = "Bootstrap"
+		}
 	}
 	if ls.publicServer != nil {
 		if _, ok := uniqueServers[ls.publicServer]; !ok {
@@ -502,6 +539,13 @@ func (ls *GatewayService) Stop(ctx context.Context) error {
 		}
 		ls.logger.Error("HTTP server shutdown error", string(constants.ConnectionStateError), err)
 	}
+	if err := ls.bootstrapServer.Shutdown(shutdownCtx); err != nil {
+		if shutdownCtx.Err() == context.DeadlineExceeded {
+			ls.logger.Error("Bootstrap server shutdown timeout - forcing exit to prevent zombie process")
+			return fmt.Errorf("shutdown timeout exceeded")
+		}
+		ls.logger.Error("Bootstrap server shutdown error", string(constants.ConnectionStateError), err)
+	}
 	if err := ls.publicServer.Shutdown(shutdownCtx); err != nil {
 		if shutdownCtx.Err() == context.DeadlineExceeded {
 			ls.logger.Error("Public server shutdown timeout - forcing exit to prevent zombie process")
@@ -521,4 +565,27 @@ func (ls *GatewayService) Stop(ctx context.Context) error {
 	ls.running = false
 	ls.logger.Info("Gateway service stopped")
 	return nil
+}
+
+// runServiceCertRenewalLoop runs a background goroutine that periodically checks
+// and renews the service certificate if it is expiring soon.
+func (ls *GatewayService) runServiceCertRenewalLoop(ctx context.Context) {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	// Check immediately on startup
+	if err := ls.pki.RenewServiceCert(ls.extraIPs); err != nil {
+		ls.logger.Error("Failed to renew service certificate on startup", string(constants.ConnectionStateError), err)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := ls.pki.RenewServiceCert(ls.extraIPs); err != nil {
+				ls.logger.Error("Failed to renew service certificate", string(constants.ConnectionStateError), err)
+			}
+		}
+	}
 }

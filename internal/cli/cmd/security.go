@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
@@ -34,6 +35,7 @@ func securityCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		securityValidateCmd(),
+		securityPKICmd(),
 	)
 
 	return cmd
@@ -47,16 +49,11 @@ func securityValidateCmd() *cobra.Command {
 		Use:   "validate",
 		Short: "Run security validation checks",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
 			if pkiDir == "" {
-				pkiDir = filepath.Join(cfg.ProjectRoot, ".g8e", "pki")
+				pkiDir = constants.Paths.Infra.PkiDir
 			}
 			if secretsDir == "" {
-				secretsDir = filepath.Join(cfg.ProjectRoot, ".g8e", "secrets")
+				secretsDir = constants.Paths.Infra.SecretsDir
 			}
 
 			cmd.Println("Running platform security validation...")
@@ -67,7 +64,7 @@ func securityValidateCmd() *cobra.Command {
 			pkiFiles := []string{
 				filepath.Join(pkiDir, "root", "root_ca.crt"),
 				filepath.Join(pkiDir, "root", "root_ca.key"),
-				filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem"),
+				filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem"),
 				filepath.Join(pkiDir, "warden_pub.pem"),
 			}
 			for _, file := range pkiFiles {
@@ -130,7 +127,7 @@ func securityValidateCmd() *cobra.Command {
 
 			// Check TLS configuration
 			cmd.Println("\n=== TLS Configuration ===")
-			trustBundlePath := filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
+			trustBundlePath := filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem")
 			if trustData, err := os.ReadFile(trustBundlePath); err == nil {
 				certPool := x509.NewCertPool()
 				if certPool.AppendCertsFromPEM(trustData) {
@@ -151,8 +148,126 @@ func securityValidateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "PKI directory (default: .g8e/pki)")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Secrets directory (default: .g8e/secrets)")
+	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "PKI directory (default: "+constants.Paths.Infra.PkiDir+")")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Secrets directory (default: "+constants.Paths.Infra.SecretsDir+")")
+
+	return cmd
+}
+
+func securityPKICmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pki",
+		Short: "PKI management",
+		Long:  `Manage PKI certificates and enrollment.`,
+	}
+
+	cmd.AddCommand(
+		securityPKIEnrollCmd(),
+	)
+
+	return cmd
+}
+
+func securityPKIEnrollCmd() *cobra.Command {
+	var endpoint string
+	var outputDir string
+
+	cmd := &cobra.Command{
+		Use:   "enroll",
+		Short: "Enroll a device with the Gateway via CSR",
+		Long:  `Generate a CSR and enroll with the Gateway to obtain mTLS certificates.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if endpoint == "" {
+				return fmt.Errorf("--endpoint is required")
+			}
+
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			// Use outputDir if specified, otherwise use project root
+			var pkiDir string
+			if outputDir != "" {
+				pkiDir = filepath.Join(outputDir, ".g8e/pki")
+			} else {
+				pkiDir = constants.Paths.Infra.PkiDir
+			}
+
+			cmd.Println("Generating CSR for enrollment...")
+			hostname, _ := os.Hostname()
+			opCSR, opKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
+			if err != nil {
+				return fmt.Errorf("failed to generate operator CSR: %w", err)
+			}
+
+			cliCSR, cliKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
+			if err != nil {
+				return fmt.Errorf("failed to generate CLI CSR: %w", err)
+			}
+
+			cmd.Printf("Enrolling with Gateway at %s...\n", endpoint)
+			regResp, err := auth.EnrollWithGateway(cfg, endpoint, opCSR, cliCSR, "")
+			if err != nil {
+				return fmt.Errorf("failed to enroll: %w", err)
+			}
+
+			if regResp.OperatorCert == "" {
+				return fmt.Errorf("unexpected response: missing certificate")
+			}
+
+			if err := os.MkdirAll(pkiDir, 0700); err != nil {
+				return fmt.Errorf("failed to create PKI directory: %w", err)
+			}
+
+			certPath := filepath.Join(pkiDir, "operator.crt")
+			keyPath := filepath.Join(pkiDir, "operator.key")
+			chainPath := filepath.Join(pkiDir, "operator.chain.pem")
+
+			if err := auth.SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey, certPath, keyPath); err != nil {
+				return fmt.Errorf("failed to save operator certificate: %w", err)
+			}
+
+			// Save CLI cert separately
+			cliCertPath := filepath.Join(pkiDir, "cli.crt")
+			cliKeyPath := filepath.Join(pkiDir, "cli.key")
+			if err := auth.SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cliCertPath, cliKeyPath); err != nil {
+				return fmt.Errorf("failed to save CLI certificate: %w", err)
+			}
+
+			if err := os.WriteFile(chainPath, []byte(regResp.OperatorCertChain), 0600); err != nil {
+				return fmt.Errorf("failed to save certificate chain: %w", err)
+			}
+
+			if regResp.HubTrustBundle != "" {
+				trustDir := filepath.Join(pkiDir, "trust")
+				if err := os.MkdirAll(trustDir, 0700); err != nil {
+					return fmt.Errorf("failed to create trust directory: %w", err)
+				}
+				bundlePath := filepath.Join(trustDir, "g8eg-ca-bundle.pem")
+				if err := os.WriteFile(bundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
+					return fmt.Errorf("failed to save trust bundle: %w", err)
+				}
+			}
+
+			cmd.Printf("\nEnrollment complete\n")
+			cmd.Printf("Operator ID: %s\n", regResp.OperatorID)
+			cmd.Printf("Operator Session ID: %s\n", regResp.OperatorSessionID)
+			cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
+			cmd.Printf("Certificate saved to: %s\n", certPath)
+			cmd.Printf("Key saved to: %s\n", keyPath)
+			cmd.Printf("CLI Certificate saved to: %s\n", cliCertPath)
+			cmd.Printf("CLI Key saved to: %s\n", cliKeyPath)
+			if regResp.HubTrustBundle != "" {
+				cmd.Printf("Trust bundle saved to: %s\n", filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem"))
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&endpoint, "endpoint", "", "Gateway endpoint (e.g., 192.168.1.62:8441)")
+	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Output directory for certificates (default: project root)")
 
 	return cmd
 }

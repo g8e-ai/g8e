@@ -276,11 +276,7 @@ func dataAuditListCmd() *cobra.Command {
 			}
 
 			if operatorSessionID == "" {
-				operatorSessionID = os.Getenv("G8E_OPERATOR_SESSION_ID")
-			}
-
-			if operatorSessionID == "" {
-				return fmt.Errorf("--operator-session-id or G8E_OPERATOR_SESSION_ID is required")
+				return fmt.Errorf("--operator-session-id is required")
 			}
 
 			query := QueryRequestWithLimit{
@@ -315,12 +311,7 @@ func dataAuditSummaryCmd() *cobra.Command {
 		Use:   string(constants.StreamStatusSummary),
 		Short: "Show audit event summary by type",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			dbPath := filepath.Join(cfg.ProjectRoot, ".g8e", "data", "g8e.db")
+			dbPath := filepath.Join(constants.Paths.Infra.DataDir, "g8e.db")
 			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 				return fmt.Errorf("audit vault database not found at %s", dbPath)
 			}
@@ -332,6 +323,7 @@ func dataAuditSummaryCmd() *cobra.Command {
 			query += " GROUP BY type"
 
 			var rows *sql.Rows
+			var err error
 			if operatorSessionID != "" {
 				rows, err = sqlDBQuery(dbPath, query, operatorSessionID)
 			} else {

@@ -136,7 +136,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	// Hub bundle (Root + Hub CA) is available on public port via HTTPS for initial discovery
 	// Instead of insecurely trusting the endpoint, we bootstrap trust from the known PKI dir
 	// which simulates a user pre-installing the Operator's root CA.
-	hubBundlePath := filepath.Join(pkiDir, "trust", "g8e-gw-ca-bundle.pem")
+	hubBundlePath := filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem")
 	require.Eventually(t, func() bool {
 		_, err := os.Stat(hubBundlePath)
 		return err == nil
@@ -223,7 +223,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
+	mtlsURL = fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		SystemFingerprint: "byo-fingerprint",
@@ -273,7 +273,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 
 	// 3. Fetch current state root
-	resp, err = mtlsClient.Get(mtlsURL + "/health")
+	resp, err = mtlsClient.Get(mtlsURL + constants.APIPaths.Health)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -384,7 +384,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	// Submit the envelope via the canonical governed mutation entry.
 	dataJSON, err := protojson.Marshal(envelope)
 	require.NoError(t, err)
-	httpReq, err := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/governance/envelopes", bytes.NewReader(dataJSON))
+	httpReq, err := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.GovernanceEnvelopes, bytes.NewReader(dataJSON))
 	require.NoError(t, err)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set(constants.HeaderAuthorization, "Bearer "+regResp.OperatorSessionID)

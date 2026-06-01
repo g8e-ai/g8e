@@ -15,10 +15,12 @@ package cmd
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -358,6 +360,7 @@ func testScenarioCmd() *cobra.Command {
 			goCmd.Stdout = os.Stdout
 			goCmd.Stderr = os.Stderr
 			goCmd.Dir = cfg.ProjectRoot
+
 			return goCmd.Run()
 		},
 	}
@@ -374,18 +377,20 @@ func testReviewCmd() *cobra.Command {
 	var vaultPath string
 	var clean bool
 	var cleanOld int
+	var showLedger bool
+	var showReceipts bool
+	var aggregate bool
+	var scenario string
+	var mode string
 
 	cmd := &cobra.Command{
 		Use:   "review",
 		Short: "Review integration test vault results",
 		Long:  `Inspect and manage persistent test vaults from integration test runs.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			vaultDir := filepath.Join(cfg.ProjectRoot, ".g8e", "test-vault")
+			projectRoot := constants.ResolveProjectRoot()
+			constants.ResolvePaths(projectRoot)
+			vaultDir := constants.Paths.Infra.TestVaultDir
 
 			if clean {
 				if cleanOld > 0 {
@@ -398,6 +403,13 @@ func testReviewCmd() *cobra.Command {
 				return listVaults(vaultDir, cmd)
 			}
 
+			if aggregate {
+				if vaultPath == "" {
+					return fmt.Errorf("--vault-path required when using --aggregate")
+				}
+				return aggregateVaultResults(vaultPath, scenario, mode, cmd)
+			}
+
 			if query != "" {
 				if vaultPath == "" {
 					return fmt.Errorf("--vault-path required when using --query")
@@ -406,6 +418,12 @@ func testReviewCmd() *cobra.Command {
 			}
 
 			if vaultPath != "" {
+				if showLedger {
+					return showVaultLedger(vaultPath, cmd)
+				}
+				if showReceipts {
+					return showVaultReceipts(vaultPath, cmd)
+				}
 				return inspectVault(vaultPath, cmd)
 			}
 
@@ -418,6 +436,11 @@ func testReviewCmd() *cobra.Command {
 	cmd.Flags().StringVar(&vaultPath, "vault-path", "", "Path to specific vault directory")
 	cmd.Flags().BoolVar(&clean, "clean", false, "Clean vaults")
 	cmd.Flags().IntVar(&cleanOld, "clean-old", 0, "Clean vaults older than N days")
+	cmd.Flags().BoolVar(&showLedger, "ledger", false, "Show git ledger for vault")
+	cmd.Flags().BoolVar(&showReceipts, "receipts", false, "Show action receipts from vault")
+	cmd.Flags().BoolVar(&aggregate, "aggregate", false, "Aggregate results across all scenarios")
+	cmd.Flags().StringVar(&scenario, "scenario", "", "Filter by scenario name (e.g., all_valid)")
+	cmd.Flags().StringVar(&mode, "mode", "", "Filter by mode (doctrine, consensus, notary)")
 
 	return cmd
 }
@@ -437,7 +460,7 @@ func listVaults(vaultDir string, cmd *cobra.Command) error {
 		return nil
 	}
 
-	cmd.Printf("Found %d test vault(s):\n\n", len(entries))
+	cmd.Printf("Found %d test vault run(s):\n\n", len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() && entry.Name() != "README.md" {
 			vaultPath := filepath.Join(vaultDir, entry.Name())
@@ -448,6 +471,17 @@ func listVaults(vaultDir string, cmd *cobra.Command) error {
 			}
 			cmd.Printf("  %s (modified: %s)\n", entry.Name(), info.ModTime().Format("2006-01-02 15:04:05"))
 			cmd.Printf("    Path: %s\n", vaultPath)
+
+			// Count scenario vaults
+			scenarioCount := 0
+			scenarioEntries, _ := os.ReadDir(vaultPath)
+			for _, se := range scenarioEntries {
+				if se.IsDir() {
+					scenarioCount++
+				}
+			}
+			cmd.Printf("    Scenarios: %d\n", scenarioCount)
+			cmd.Println()
 		}
 	}
 
@@ -571,14 +605,11 @@ func testSummaryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   string(constants.StreamStatusSummary),
 		Short: "Show summary of all integration test results",
-		Long:  `Aggregate and display test results from all test vaults in .g8e/test-vault/`,
+		Long:  `Aggregate and display test results from all test vaults in ` + constants.Paths.Infra.TestVaultDir + `/`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			vaultDir := filepath.Join(cfg.ProjectRoot, ".g8e", "test-vault")
+			projectRoot := constants.ResolveProjectRoot()
+			constants.ResolvePaths(projectRoot)
+			vaultDir := constants.Paths.Infra.TestVaultDir
 			entries, err := os.ReadDir(vaultDir)
 			if err != nil {
 				if os.IsNotExist(err) {
@@ -660,4 +691,374 @@ func countTableRows(dbPath, table string) (int, error) {
 		return 0, err
 	}
 	return count, nil
+}
+
+func showVaultLedger(vaultPath string, cmd *cobra.Command) error {
+	// Check if this is a scenario test vault (has scenario subdirectories)
+	entries, err := os.ReadDir(vaultPath)
+	if err != nil {
+		return fmt.Errorf("failed to read vault directory: %w", err)
+	}
+
+	// Detect scenario vault structure by looking for scenario subdirectories
+	hasScenarios := false
+	for _, entry := range entries {
+		if entry.IsDir() && entry.Name() != "ledger" && entry.Name() != "README.md" {
+			// Check if this subdirectory has mode subdirectories (doctrine/consensus/notary)
+			subPath := filepath.Join(vaultPath, entry.Name())
+			subEntries, subErr := os.ReadDir(subPath)
+			if subErr == nil {
+				for _, subEntry := range subEntries {
+					if subEntry.IsDir() && (subEntry.Name() == "doctrine" || subEntry.Name() == "consensus" || subEntry.Name() == "notary") {
+						hasScenarios = true
+						break
+					}
+				}
+			}
+			if hasScenarios {
+				break
+			}
+		}
+	}
+
+	if hasScenarios {
+		// Scenario test vault: show all available scenario/mode ledgers
+		cmd.Printf("Scenario test vault: %s\n\n", vaultPath)
+		cmd.Println("Available ledgers (scenario/mode):")
+
+		for _, entry := range entries {
+			if !entry.IsDir() || entry.Name() == "ledger" || entry.Name() == "README.md" {
+				continue
+			}
+			scenarioPath := filepath.Join(vaultPath, entry.Name())
+			modes := []string{"doctrine", "consensus", "notary"}
+
+			for _, mode := range modes {
+				ledgerDir := filepath.Join(scenarioPath, mode, "ledger")
+				if _, err := os.Stat(filepath.Join(ledgerDir, ".git")); err == nil {
+					cmd.Printf("  %s/%s/ledger\n", entry.Name(), mode)
+				}
+			}
+		}
+
+		cmd.Println("\nTo view a specific ledger, use the full path:")
+		cmd.Printf("  git -C %s/all_valid/doctrine/ledger log --oneline --all\n", vaultPath)
+		return nil
+	}
+
+	// Standard vault: look for top-level ledger directory
+	ledgerDir := filepath.Join(vaultPath, "ledger")
+	if _, err := os.Stat(ledgerDir); os.IsNotExist(err) {
+		return fmt.Errorf("ledger directory not found at %s", ledgerDir)
+	}
+
+	cmd.Printf("Git ledger for vault: %s\n\n", vaultPath)
+
+	gitCmd := exec.Command("git", "-C", ledgerDir, "log", "--oneline", "--all")
+	gitCmd.Stdout = os.Stdout
+	gitCmd.Stderr = os.Stderr
+	if err := gitCmd.Run(); err != nil {
+		return fmt.Errorf("failed to show git log: %w", err)
+	}
+
+	return nil
+}
+
+func showVaultReceipts(vaultPath string, cmd *cobra.Command) error {
+	// Check if this is a scenario test vault (has scenario subdirectories)
+	entries, err := os.ReadDir(vaultPath)
+	if err != nil {
+		return fmt.Errorf("failed to read vault directory: %w", err)
+	}
+
+	// Detect scenario vault structure by looking for scenario subdirectories
+	hasScenarios := false
+	for _, entry := range entries {
+		if entry.IsDir() && entry.Name() != "ledger" && entry.Name() != "README.md" {
+			// Check if this subdirectory has mode subdirectories (doctrine/consensus/notary)
+			subPath := filepath.Join(vaultPath, entry.Name())
+			subEntries, subErr := os.ReadDir(subPath)
+			if subErr == nil {
+				for _, subEntry := range subEntries {
+					if subEntry.IsDir() && (subEntry.Name() == "doctrine" || subEntry.Name() == "consensus" || subEntry.Name() == "notary") {
+						hasScenarios = true
+						break
+					}
+				}
+			}
+			if hasScenarios {
+				break
+			}
+		}
+	}
+
+	if hasScenarios {
+		// Scenario test vault: aggregate receipts from all scenario/mode databases
+		cmd.Printf("Scenario test vault: %s\n\n", vaultPath)
+		cmd.Println("Aggregating receipts from all scenarios/modes:")
+
+		// Load test results if available
+		type testResult struct {
+			Status string `json:"status"`
+			Label  string `json:"label"`
+		}
+		testResults := make(map[string]map[string]*testResult)
+		testResultsPath := filepath.Join(vaultPath, "test_results.json")
+		if data, err := os.ReadFile(testResultsPath); err == nil {
+			if err := json.Unmarshal(data, &testResults); err == nil {
+				cmd.Printf("Test verdicts loaded from %s\n\n", testResultsPath)
+			}
+		}
+
+		query := `SELECT transaction_id, transaction_hash, status, result_summary, 
+		          state_root_before, state_root_after, action_type, signer_key_id, 
+		          executed_at_ms 
+		          FROM receipts ORDER BY executed_at_ms DESC`
+
+		cmd.Printf("%-20s %-20s %-12s %-12s %-30s %-20s\n", "Transaction ID", "Scenario/Mode", "Test Status", "Receipt Status", "Summary", "Action Type")
+		cmd.Println(strings.Repeat("-", 130))
+
+		totalCount := 0
+		for _, entry := range entries {
+			if !entry.IsDir() || entry.Name() == "ledger" || entry.Name() == "README.md" {
+				continue
+			}
+			scenarioPath := filepath.Join(vaultPath, entry.Name())
+			modes := []string{"doctrine", "consensus", "notary"}
+
+			for _, mode := range modes {
+				dbPath := filepath.Join(scenarioPath, mode, "audit_vault.db")
+				if _, err := os.Stat(dbPath); err != nil {
+					continue
+				}
+
+				db, err := sql.Open("sqlite", dbPath)
+				if err != nil {
+					cmd.Printf("Warning: failed to open %s/%s: %v\n", entry.Name(), mode, err)
+					continue
+				}
+
+				rows, err := db.Query(query)
+				if err != nil {
+					db.Close()
+					cmd.Printf("Warning: failed to query %s/%s: %v\n", entry.Name(), mode, err)
+					continue
+				}
+
+				for rows.Next() {
+					var txID, txHash, summary, stateRootBefore, stateRootAfter, actionType, signerKeyID string
+					var status int
+					var executedAt int64
+
+					if err := rows.Scan(&txID, &txHash, &status, &summary, &stateRootBefore, &stateRootAfter, &actionType, &signerKeyID, &executedAt); err != nil {
+						rows.Close()
+						db.Close()
+						cmd.Printf("Warning: failed to scan row in %s/%s: %v\n", entry.Name(), mode, err)
+						continue
+					}
+
+					// Convert status int to string (matches protobuf ExecutionStatus enum)
+					statusStr := "UNKNOWN"
+					switch status {
+					case 0:
+						statusStr = "UNSPECIFIED"
+					case 1:
+						statusStr = "EXECUTING"
+					case 2:
+						statusStr = "COMPLETED"
+					case 3:
+						statusStr = "FAILED"
+					case 4:
+						statusStr = "CANCELLED"
+					case 5:
+						statusStr = "TIMEOUT"
+					}
+
+					// Get test verdict from test_results.json
+					testStatus := "N/A"
+					if modeResults, ok := testResults[entry.Name()]; ok {
+						if modeResult, ok := modeResults[mode]; ok {
+							testStatus = modeResult.Status
+						}
+					}
+
+					// Truncate fields for display
+					if len(txID) > 20 {
+						txID = txID[:17] + "..."
+					}
+					scenarioMode := fmt.Sprintf("%s/%s", entry.Name(), mode)
+					if len(scenarioMode) > 20 {
+						scenarioMode = scenarioMode[:17] + "..."
+					}
+					if len(summary) > 30 {
+						summary = summary[:27] + "..."
+					}
+					if len(actionType) > 20 {
+						actionType = actionType[:17] + "..."
+					}
+					if len(signerKeyID) > 20 {
+						signerKeyID = signerKeyID[:17] + "..."
+					}
+
+					// Display test status (no transformation needed)
+
+					cmd.Printf("%-20s %-20s %-12s %-12s %-30s %-20s\n", txID, scenarioMode, testStatus, statusStr, summary, actionType)
+					totalCount++
+				}
+				rows.Close()
+				db.Close()
+			}
+		}
+
+		if totalCount == 0 {
+			cmd.Println("No action receipts found")
+		} else {
+			cmd.Printf("\nTotal receipts: %d\n", totalCount)
+		}
+
+		return nil
+	}
+
+	// Standard vault: look for top-level audit_vault.db
+	dbPath := filepath.Join(vaultPath, "audit_vault.db")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return fmt.Errorf("vault database not found at %s", dbPath)
+	}
+
+	cmd.Printf("Action receipts for vault: %s\n\n", vaultPath)
+
+	query := `SELECT transaction_id, transaction_hash, status, result_summary, 
+	          state_root_before, state_root_after, action_type, signer_key_id, 
+	          executed_at_ms 
+	          FROM receipts ORDER BY executed_at_ms DESC`
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer db.Close()
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return fmt.Errorf("failed to query receipts: %w", err)
+	}
+	defer rows.Close()
+
+	cmd.Printf("%-20s %-12s %-30s %-20s %-20s\n", "Transaction ID", "Status", "Summary", "Action Type", "Signer Key ID")
+	cmd.Println(strings.Repeat("-", 110))
+
+	count := 0
+	for rows.Next() {
+		var txID, txHash, summary, stateRootBefore, stateRootAfter, actionType, signerKeyID string
+		var status int
+		var executedAt int64
+
+		if err := rows.Scan(&txID, &txHash, &status, &summary, &stateRootBefore, &stateRootAfter, &actionType, &signerKeyID, &executedAt); err != nil {
+			return fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		// Convert status int to string (matches protobuf ExecutionStatus enum)
+		statusStr := "UNKNOWN"
+		switch status {
+		case 0:
+			statusStr = "UNSPECIFIED"
+		case 1:
+			statusStr = "EXECUTING"
+		case 2:
+			statusStr = "COMPLETED"
+		case 3:
+			statusStr = "FAILED"
+		case 4:
+			statusStr = "CANCELLED"
+		case 5:
+			statusStr = "TIMEOUT"
+		}
+
+		// Truncate fields for display
+		if len(txID) > 20 {
+			txID = txID[:17] + "..."
+		}
+		if len(summary) > 30 {
+			summary = summary[:27] + "..."
+		}
+		if len(actionType) > 20 {
+			actionType = actionType[:17] + "..."
+		}
+		if len(signerKeyID) > 20 {
+			signerKeyID = signerKeyID[:17] + "..."
+		}
+
+		cmd.Printf("%-20s %-12s %-30s %-20s %-20s\n", txID, statusStr, summary, actionType, signerKeyID)
+		count++
+	}
+
+	if count == 0 {
+		cmd.Println("No action receipts found")
+	} else {
+		cmd.Printf("\nTotal receipts: %d\n", count)
+	}
+
+	return nil
+}
+
+func aggregateVaultResults(vaultPath, scenarioFilter, modeFilter string, cmd *cobra.Command) error {
+	entries, err := os.ReadDir(vaultPath)
+	if err != nil {
+		return fmt.Errorf("failed to read vault directory: %w", err)
+	}
+
+	cmd.Printf("Aggregating results from: %s\n\n", vaultPath)
+
+	totalReceipts := 0
+	totalEvents := 0
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		scenarioName := entry.Name()
+		if scenarioFilter != "" && scenarioName != scenarioFilter {
+			continue
+		}
+
+		scenarioPath := filepath.Join(vaultPath, scenarioName)
+		modes := []string{"doctrine", "consensus", "notary"}
+
+		for _, modeName := range modes {
+			if modeFilter != "" && modeName != modeFilter {
+				continue
+			}
+
+			modePath := filepath.Join(scenarioPath, modeName)
+			dbPath := filepath.Join(modePath, "audit_vault.db")
+
+			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+				continue
+			}
+
+			// Count receipts
+			receiptCount, err := countTableRows(dbPath, "receipts")
+			if err == nil && receiptCount > 0 {
+				cmd.Printf("%s/%s: %d receipts\n", scenarioName, modeName, receiptCount)
+				totalReceipts += receiptCount
+			}
+
+			// Count events
+			eventCount, err := countTableRows(dbPath, "events")
+			if err == nil && eventCount > 0 {
+				totalEvents += eventCount
+			}
+		}
+	}
+
+	cmd.Printf("\nSummary:\n")
+	cmd.Printf("  Total receipts: %d\n", totalReceipts)
+	cmd.Printf("  Total events: %d\n", totalEvents)
+
+	if totalReceipts == 0 && totalEvents == 0 {
+		cmd.Println("\nNo data found. Use --list to see available scenarios.")
+	}
+
+	return nil
 }

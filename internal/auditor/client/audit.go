@@ -6,14 +6,19 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
+
+	"github.com/g8e-ai/g8e/internal/cli/auth"
+	"github.com/g8e-ai/g8e/internal/cli/config"
 )
 
 // Receipt is a lenient view of an Operator-signed ActionReceipt as exposed by
 // /api/audit/receipts. The Operator is the source of truth; these are the real,
 // signed records of what actually executed on the host.
 type Receipt struct {
+	TransactionID   string          `json:"transaction_id"`
 	TransactionHash string          `json:"transaction_hash"`
 	ActionType      string          `json:"action_type"`
 	TargetResource  string          `json:"target_resource"`
@@ -22,6 +27,31 @@ type Receipt struct {
 	StateRootAfter  string          `json:"state_root_after"`
 	Signature       string          `json:"signature"`
 	Raw             json.RawMessage `json:"-"`
+}
+
+// GetReceipt retrieves a single receipt by transaction ID.
+func (c *Client) GetReceipt(ctx context.Context, transactionID string, persona ...Persona) (*Receipt, []byte, error) {
+	p := Persona{ID: "phantom-auditor"}
+	if len(persona) > 0 {
+		p = persona[0]
+	}
+	u := c.cfg.MTLSBaseURL + "/api/audit/receipts?tx_id=" + url.QueryEscape(transactionID)
+	status, body, err := c.do(ctx, p, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, body, err
+	}
+	if status == http.StatusNotFound {
+		return nil, body, nil
+	}
+	if status >= 400 {
+		return nil, body, fmt.Errorf("gateway returned status %d for transaction %s: %s", status, transactionID, string(body))
+	}
+	var rec Receipt
+	if err := json.Unmarshal(body, &rec); err != nil {
+		return nil, body, fmt.Errorf("failed to unmarshal receipt: %w", err)
+	}
+	rec.Raw = body
+	return &rec, body, nil
 }
 
 // AuditReceipts pulls signed receipts from the Operator's local audit vault via
@@ -52,7 +82,36 @@ func (c *Client) ExportReceipts(ctx context.Context, operatorSessionID string) (
 // DiscoverOperatorSession best-effort reads /api/operators to find a live
 // operator session id when the user didn't pin one.
 func (c *Client) DiscoverOperatorSession(ctx context.Context) string {
-	_, body, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodGet, c.cfg.MTLSBaseURL+"/api/operators", nil)
+	// If operator session ID is already pinned in config, use it
+	if c.cfg.OperatorSessionID != "" {
+		return c.cfg.OperatorSessionID
+	}
+
+	// Try to load user_id and operator_session_id from CLI credentials
+	userID := ""
+	operatorSessionID := ""
+	if c.cfg.UseCLIConfig {
+		cliCfg, err := config.Load("")
+		if err == nil && cliCfg != nil {
+			creds, err := auth.LoadCredentials(cliCfg)
+			if err == nil && creds != nil {
+				userID = creds.UserID
+				operatorSessionID = creds.OperatorSessionID
+			}
+		}
+	}
+
+	// If we already have the operator session ID from credentials, return it directly
+	if operatorSessionID != "" {
+		return operatorSessionID
+	}
+
+	url := c.cfg.MTLSBaseURL + "/api/operators"
+	if userID != "" {
+		url += "?user_id=" + userID
+	}
+
+	_, body, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodGet, url, nil)
 	if err != nil || !json.Valid(body) {
 		return ""
 	}

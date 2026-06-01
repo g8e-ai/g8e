@@ -22,7 +22,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/httpclient"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
+	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
 	"github.com/gorilla/websocket"
 	"google.golang.org/protobuf/proto"
 )
@@ -30,9 +30,13 @@ import (
 // TestPubSubAvailable checks if the client pub/sub gateway is reachable.
 // Fatally fails the test when client is unavailable - all callers are integration
 // tests that require a live stack.
-func TestPubSubAvailable(t *testing.T) {
+// baseURL is optional; if empty, uses GetTestOperatorDirectURL().
+func TestPubSubAvailable(t *testing.T, baseURL string) {
 	t.Helper()
-	wsURL := GetTestOperatorDirectURL() + "/ws/pubsub"
+	if baseURL == "" {
+		baseURL = GetTestOperatorDirectURL()
+	}
+	wsURL := baseURL + "/ws/pubsub"
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {
 		t.Fatalf("client pub/sub TLS setup failed: %v", err)
@@ -42,7 +46,7 @@ func TestPubSubAvailable(t *testing.T) {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		t.Fatalf("client pub/sub not available at %s: %v", GetTestOperatorDirectURL(), err)
+		t.Fatalf("client pub/sub not available at %s: %v", baseURL, err)
 	}
 	ws.Close()
 }

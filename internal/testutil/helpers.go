@@ -19,32 +19,23 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/marshaler"
 )
 
-// configCounter generates monotonically increasing IDs within a single test binary
-// run so that parallel tests never share the same operator/session identity.
-var configCounter atomic.Int64
-
-// NewTestConfig returns a minimal Config for unit tests.
-//
-// Each call produces a unique OperatorID and OperatorSessionId derived from the
-// test name and a process-local counter.  This guarantees that every test gets
-// its own operator pub/sub channels and no cross-test message bleed can occur.
+// NewTestConfig returns a test configuration with isolated workDir.
+// Does NOT modify global constants.Paths to avoid data races in parallel tests.
 func NewTestConfig(t *testing.T) *config.Config {
 	t.Helper()
+	n := time.Now().UnixNano()
 
-	n := configCounter.Add(1)
-	// Sanitize t.Name() so the ID is safe as a channel component.
 	safeName := strings.NewReplacer("/", "-", " ", "_", ":", "-").Replace(t.Name())
 	if len(safeName) > 40 {
 		safeName = safeName[:40]
@@ -53,8 +44,9 @@ func NewTestConfig(t *testing.T) *config.Config {
 	operatorID := fmt.Sprintf("test-op-%s-%d", safeName, n)
 	operatorSessionID := fmt.Sprintf("test-sess-%s-%d", safeName, n)
 	workDir := t.TempDir()
-	pkiDir := filepath.Join(workDir, ".g8e", "pki")
-	secretsDir := filepath.Join(workDir, ".g8e", "secrets")
+
+	pkiDir := filepath.Join(workDir, ".g8e/pki")
+	secretsDir := filepath.Join(workDir, ".g8e/secrets")
 	trustedSignersDir := filepath.Join(pkiDir, "trusted_signers")
 	if err := os.MkdirAll(trustedSignersDir, 0700); err != nil {
 		t.Fatalf("failed to create trusted signer directory: %v", err)
@@ -84,7 +76,7 @@ func NewTestConfig(t *testing.T) *config.Config {
 		PKIDir:                  pkiDir,
 		SecretsDir:              secretsDir,
 		LocalStoreEnabled:       true,
-		LocalStoreDBPath:        filepath.Join(workDir, ".g8e", "local_state.db"),
+		LocalStoreDBPath:        filepath.Join(workDir, ".g8e/local_state.db"),
 		LocalStoreMaxSizeMB:     1024,
 		LocalStoreRetentionDays: 30,
 	}
@@ -115,9 +107,7 @@ func (w testLogWriter) Write(p []byte) (int, error) {
 // proxies /ws/pubsub to operator internally. operator is not directly accessible from outside
 // the docker network. Must not include a path - callers append /ws/pubsub as needed.
 func GetTestOperatorDirectURL() string {
-	if u := os.Getenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL)); u != "" {
-		return u
-	}
+	// g8e uses ZERO environment variables - use default URL
 	return "wss://" + constants.DefaultEndpoint + ":443"
 }
 
@@ -131,4 +121,21 @@ func TempFile(t *testing.T, path string) {
 			t.Logf("TempFile cleanup: failed to remove %s: %v", path, err)
 		}
 	})
+}
+
+// GetFreePort returns a free TCP port.
+func GetFreePort(t *testing.T) int {
+	t.Helper()
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to resolve tcp addr: %v", err)
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		t.Fatalf("failed to listen on tcp addr: %v", err)
+	}
+	defer l.Close()
+
+	return l.Addr().(*net.TCPAddr).Port
 }

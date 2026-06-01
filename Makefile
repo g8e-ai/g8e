@@ -16,6 +16,7 @@
 
 SHELL := /bin/bash
 export PATH := $(shell go env GOPATH)/bin:$(HOME)/go/bin:$(PATH)
+TMPDIR ?= /tmp
 .DEFAULT_GOAL := help
 
 # =============================================================================
@@ -41,9 +42,19 @@ UPX := $(shell command -v upx 2>/dev/null || echo "/usr/local/bin/upx")
 help:
 	@echo "g8e Platform Root Makefile"
 	@echo ""
+	@echo "Platform Commands (via ./g8e):"
+	@echo "  ./g8e gw                    Gateway lifecycle (start, stop, status, logs)"
+	@echo "  ./g8e apps                  Application lifecycle (start, stop, status, logs)"
+	@echo "  ./g8e auth                  Authentication (login, logout)"
+	@echo "  ./g8e data                  Data operations (export, import, query)"
+	@echo "  ./g8e evals                 Run evaluation suites"
+	@echo "  ./g8e security              Security operations (pki, certificates)"
+	@echo "  ./g8e setup                 Initial setup and configuration"
+	@echo "  ./g8e vars                  Environment variable management"
+	@echo ""
 	@echo "CI/CD (Local):"
 	@echo "  ci            Run full CI pipeline locally (mirrors GitHub Actions)"
-	@echo "  ci-platform   Run platform-only CI (g8eo, protocol, proto, docs)"
+	@echo "  ci-platform   Run platform-only CI (operator, protocol, proto, docs)"
 	@echo ""
 	@echo "Protocol Generation:"
 	@echo "  generate      Generate all protocol artifacts (proto)"
@@ -57,11 +68,18 @@ help:
 	@echo "  build-compressed Build g8e with UPX compression"
 	@echo ""
 	@echo "Test:"
-	@echo "  test          Run all tests with race detection"
-	@echo "  test-short    Run short tests with race detection"
-	@echo "  test-coverage Run tests with coverage (enforces 60% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
-	@echo "  test-shuffle  Run all tests with randomized order"
-	@echo "  update-golden Update scenario test golden files"
+	@echo "  test                  Run all tests with race detection"
+	@echo "  test-short            Run short tests with race detection"
+	@echo "  test-coverage         Run tests with coverage (enforces 60% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
+	@echo "  test-shuffle          Run all tests with randomized order"
+	@echo "  test-integration      Run integration tests (requires platform running and auth login)"
+	@echo "  test-scenario         Run scenario integration tests (requires platform running)"
+	@echo "  test-gateway          Run gateway tests"
+	@echo "  test-mcp              Run MCP tests"
+	@echo "  test-a2a              Run A2A tests"
+	@echo "  test-universal-gateway Run universal gateway integration tests (requires platform running and auth login)"
+	@echo "  test-byo              Run BYO client tests (requires platform running and auth login)"
+	@echo "  test-native           Run native real operator tests (requires platform running and auth login)"
 	@echo ""
 	@echo "Lint & Quality:"
 	@echo "  lint          Run all linting and quality checks"
@@ -98,6 +116,22 @@ proto: buf-install protoc-install
 	fi
 	@echo "Protobuf generation complete."
 
+.PHONY: proto-python
+proto-python:
+	@echo "Generating Python Protobuf code..."
+	@if command -v python3 &> /dev/null; then \
+		python3 -m grpc_tools.protoc \
+			--python_out=protocol/python/g8e_protocol \
+			--proto_path=protocol/proto \
+			protocol/proto/g8e/common/v1/common.proto \
+			protocol/proto/g8e/operator/v1/operator.proto \
+			protocol/proto/g8e/pubsub/v1/pubsub.proto; \
+	else \
+		echo "Error: python3 not found. Install grpc_tools.protoc." >&2; \
+		exit 1; \
+	fi
+	@echo "Python Protobuf generation complete."
+
 .PHONY: proto-force
 proto-force: buf-install
 	@echo "Force generating Protobuf code..."
@@ -124,11 +158,11 @@ buf-install:
 protoc-install:
 	@if ! command -v protoc &> /dev/null; then \
 		echo "Installing protoc $(PROTOC_VERSION)..."; \
-		cd /tmp && curl -fSL https://github.com/protocolbuffers/protobuf/releases/download/$(PROTOC_VERSION)/protoc-35.0-linux-x86_64.zip -o protoc.zip && \
+		cd $(TMPDIR) && curl -fSL https://github.com/protocolbuffers/protobuf/releases/download/$(PROTOC_VERSION)/protoc-35.0-linux-x86_64.zip -o protoc.zip && \
 		unzip -o protoc.zip -d protoc && \
 		sudo cp protoc/bin/protoc /usr/local/bin/protoc && \
 		sudo chmod +x /usr/local/bin/protoc && \
-		rm -rf /tmp/protoc /tmp/protoc.zip; \
+		rm -rf $(TMPDIR)/protoc $(TMPDIR)/protoc.zip; \
 	fi
 	@echo "Verifying protoc version compatibility..."
 	@PROTOC_VERSION=$$($(PROTOC) --version | grep -oE '[0-9]+\.[0-9]+'); \
@@ -144,11 +178,11 @@ protoc-install:
 upx-install:
 	@if ! command -v upx &> /dev/null; then \
 		echo "Installing UPX $(UPX_VERSION)..."; \
-		cd /tmp && curl -fSL https://github.com/upx/upx/releases/download/$(UPX_VERSION)/upx-$(UPX_VERSION:v%=%)-linux_amd64.tar.xz -o upx.tar.xz && \
+		cd $(TMPDIR) && curl -fSL https://github.com/upx/upx/releases/download/$(UPX_VERSION)/upx-$(UPX_VERSION:v%=%)-linux_amd64.tar.xz -o upx.tar.xz && \
 		tar -xf upx.tar.xz && \
 		sudo cp upx-$(UPX_VERSION:v%=%)-linux_amd64/upx /usr/local/bin/upx && \
 		sudo chmod +x /usr/local/bin/upx && \
-		rm -rf /tmp/upx-$(UPX_VERSION:v%=%)-linux_amd64 /tmp/upx.tar.xz; \
+		rm -rf $(TMPDIR)/upx-$(UPX_VERSION:v%=%)-linux_amd64 $(TMPDIR)/upx.tar.xz; \
 	fi
 	@echo "UPX installed."
 
@@ -159,47 +193,49 @@ PLATFORMS := linux/amd64 linux/arm64 linux/386
 
 .PHONY: build
 build:
-	@echo "Building g8e..."
-	@mkdir -p bin
-	@echo "Building from: cmd/g8eo"
+	@echo "Building g8e operator..."
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
 	PLATFORM=$$(uname -s)_$$(uname -m); \
-	echo "Building output: bin/g8e"; \
-	if go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o bin/g8e ./cmd/g8eo; then \
-		ln -sf bin/g8e g8e; \
-		sha256sum bin/g8e > bin/g8e.sha256; \
-		echo "Build complete. Output: bin/g8e"; \
-		echo "Checksum: bin/g8e.sha256"; \
+	echo "Building output: g8e"; \
+	if go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o g8e ./cmd/operator; then \
+		sha256sum g8e > g8e.sha256; \
+		echo "Build complete. Output: g8e"; \
+		echo "Checksum: g8e.sha256"; \
 	else \
 		exit 1; \
 	fi
 
+.PHONY: docker-build
+docker-build:
+	@echo "Building g8e operator Docker image..."
+	@docker build -f Dockerfile -t g8e:$$(cat VERSION) -t g8e:latest .
+	@echo "Operator image built: g8e:$$(cat VERSION)"
+
 .PHONY: build-compressed
 build-compressed: upx-install
-	@echo "Building g8e with compression for $(PLATFORMS)..."
-	@mkdir -p bin
+	@echo "Building g8e operator with compression for $(PLATFORMS)..."
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
 	for platform in $(PLATFORMS); do \
 		GOOS=$${platform%/*}; \
 		GOARCH=$${platform#*/}; \
-		BINARY=bin/g8e-$$GOOS-$$GOARCH; \
+		BINARY=g8e-$$GOOS-$$GOARCH; \
 		echo "Building $$platform -> $$BINARY..."; \
-		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$platform" -o $$BINARY ./cmd/g8eo || exit 1; \
+		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$platform" -o $$BINARY ./cmd/operator || exit 1; \
 		echo "Compressing $$BINARY with UPX..."; \
 		$(UPX) --best --lzma $$BINARY; \
 		sha256sum $$BINARY > $$BINARY.sha256; \
 	done
 	@HOST_OS=$$(go env GOOS); \
 	HOST_ARCH=$$(go env GOARCH); \
-	if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH ]; then \
-		ln -sf bin/g8e-$$HOST_OS-$$HOST_ARCH g8e; \
-		echo "Created symlink: g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
+	if [ -f g8e-$$HOST_OS-$$HOST_ARCH ]; then \
+		ln -sf g8e-$$HOST_OS-$$HOST_ARCH g8e; \
+		echo "Created symlink: g8e -> g8e-$$HOST_OS-$$HOST_ARCH"; \
 	fi
-	@echo "Compressed multi-platform build complete. Checksums: bin/g8e-*.sha256"
+	@echo "Compressed multi-platform build complete. Checksums: g8e-*.sha256"
 
 # =============================================================================
 # TEST
@@ -245,11 +281,46 @@ test-coverage:
 test-shuffle:
 	@go test -race -count=1 -shuffle=on -timeout 180s ./...
 
-.PHONY: update-golden
-update-golden:
-	@echo "Updating scenario test golden files..."
-	@G8E_UPDATE_GOLDEN=1 go test -tags=integration -count=1 ./test/scenario -run TestScenarios
-	@echo "Golden files updated."
+.PHONY: test-integration
+test-integration:
+	@echo "Running integration tests (requires platform running and auth login)..."
+	@go test -tags=integration -race -count=1 -timeout 180s ./test/...
+
+.PHONY: test-scenario
+test-scenario:
+	@echo "Running scenario integration tests (requires platform running)..."
+	@go test -tags=integration -race -count=1 -timeout 180s ./test/scenario/...
+
+.PHONY: test-gateway
+test-gateway:
+	@echo "Running gateway tests..."
+	@go test -race -count=1 -timeout 180s ./test/a2a_gateway_test.go ./test/mcp_gateway_test.go ./test/mcp_stdio_test.go
+
+.PHONY: test-mcp
+test-mcp:
+	@echo "Running MCP tests..."
+	@go test -race -count=1 -timeout 180s ./test/mcp_gateway_test.go ./test/mcp_real_operator_test.go ./test/mcp_stdio_test.go
+
+.PHONY: test-a2a
+test-a2a:
+	@echo "Running A2A tests..."
+	@go test -race -count=1 -timeout 180s ./test/a2a_gateway_test.go ./test/a2a_real_operator_test.go
+
+.PHONY: test-universal-gateway
+test-universal-gateway:
+	@echo "Running universal gateway integration tests (requires platform running and auth login)..."
+	@go test -tags=integration -race -count=1 -timeout 180s ./test/universal_gateway_integration_test.go
+
+.PHONY: test-byo
+test-byo:
+	@echo "Running BYO client tests (requires platform running and auth login)..."
+	@go test -tags=integration -race -count=1 -timeout 180s ./test/byo_client_test.go
+
+.PHONY: test-native
+test-native:
+	@echo "Running native real operator tests (requires platform running and auth login)..."
+	@go test -tags=integration -race -count=1 -timeout 180s ./test/integration_helper.go ./test/native_real_operator_test.go
+
 
 # =============================================================================
 # LINT & QUALITY
@@ -291,12 +362,12 @@ ingest-doctrines:
 .PHONY: update-doctrines
 update-doctrines:
 	@echo "Updating doctrine sources..."
-	@if [ -d "/tmp/coreruleset" ]; then \
-		cd /tmp/coreruleset && git pull; \
+	@if [ -d "$(TMPDIR)/coreruleset" ]; then \
+		cd $(TMPDIR)/coreruleset && git pull; \
 	else \
-		git clone --depth 1 https://github.com/coreruleset/coreruleset.git /tmp/coreruleset; \
+		git clone --depth 1 https://github.com/coreruleset/coreruleset.git $(TMPDIR)/coreruleset; \
 	fi
-	@curl -sSL https://raw.githubusercontent.com/gitleaks/gitleaks/master/config/gitleaks.toml -o /tmp/gitleaks.toml
+	@curl -sSL https://raw.githubusercontent.com/gitleaks/gitleaks/master/config/gitleaks.toml -o $(TMPDIR)/gitleaks.toml
 	@$(MAKE) ingest-doctrines
 	@echo "Doctrine update complete."
 
@@ -307,10 +378,19 @@ update-doctrines:
 clean:
 	@echo "Cleaning up build artifacts and runtime state..."
 	@rm -rf .g8e/
-	@rm -rf bin/
 	@rm -f g8e
-	@rm -rf build/
+	@rm -f g8e-*
 	@rm -f *.sha256
+	@rm -f *.test
+	@rm -f coverage.out
+	@rm -f buf
+	@rm -rf .g8e-harness-*/
+	@echo "Clean complete."
+
+.PHONY: clean-harness
+clean-harness:
+	@echo "Cleaning up stale harness directories..."
+	@rm -rf .g8e-harness-*/
 	@echo "Clean complete."
 
 
@@ -352,7 +432,7 @@ _ci-vulncheck:
 .PHONY: _ci-test
 _ci-test:
 	@echo "=== test ==="
-	@./bin/g8e platform start
+	@./g8e gw start
 	@G8E_STRICT_CONSTANTS_LINT=1 go test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/")
 	@COVERAGE=$$(go tool cover -func=coverage.out | grep -v "internal/protocol/proto" | grep -v "mocks" | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
 	if [ $$(echo "$$COVERAGE < 60" | bc -l) -eq 1 ]; then \
@@ -360,4 +440,4 @@ _ci-test:
 		exit 1; \
 	fi; \
 	echo "Coverage $$COVERAGE% meets 60% threshold"
-	@./bin/g8e platform stop
+	@./g8e gw stop

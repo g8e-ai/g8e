@@ -18,74 +18,75 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestPlatformCmd(t *testing.T) {
-	t.Run("platform command has correct use and description", func(t *testing.T) {
-		cmd := platformCmd()
-		assert.Equal(t, "platform", cmd.Use)
+func TestGatewayCmd(t *testing.T) {
+	t.Run("gw command has correct use and description", func(t *testing.T) {
+		cmd := gatewayCmd()
+		assert.Equal(t, "gw", cmd.Use)
 		assert.Contains(t, cmd.Short, "Governance Gateway")
 		assert.Contains(t, cmd.Long, "lifecycle")
 	})
 }
 
-func TestPlatformStartCmd(t *testing.T) {
+func TestGatewayStartCmd(t *testing.T) {
 	t.Run("start command has correct use", func(t *testing.T) {
-		cmd := platformStartCmd()
+		cmd := gatewayStartCmd()
 		assert.Equal(t, "start", cmd.Use)
 		assert.Contains(t, cmd.Short, "Start")
 		assert.Contains(t, cmd.Short, "Governance Gateway")
 	})
 }
 
-func TestPlatformStopCmd(t *testing.T) {
+func TestGatewayStopCmd(t *testing.T) {
 	t.Run("stop command has correct use", func(t *testing.T) {
-		cmd := platformStopCmd()
+		cmd := gatewayStopCmd()
 		assert.Equal(t, "stop", cmd.Use)
 		assert.Contains(t, cmd.Short, "Stop")
 		assert.Contains(t, cmd.Short, "Governance Gateway")
 	})
 }
 
-func TestPlatformStatusCmd(t *testing.T) {
+func TestGatewayStatusCmd(t *testing.T) {
 	t.Run("status command has correct use", func(t *testing.T) {
-		cmd := platformStatusCmd()
+		cmd := gatewayStatusCmd()
 		assert.Equal(t, "status", cmd.Use)
 		assert.Contains(t, cmd.Short, "health")
 		assert.Contains(t, cmd.Short, "status")
 	})
 }
 
-func TestPlatformRestartCmd(t *testing.T) {
+func TestGatewayRestartCmd(t *testing.T) {
 	t.Run("restart command has correct use", func(t *testing.T) {
-		cmd := platformRestartCmd()
+		cmd := gatewayRestartCmd()
 		assert.Equal(t, "restart", cmd.Use)
 		assert.Contains(t, cmd.Short, "Restart")
 		assert.Contains(t, cmd.Short, "Governance Gateway")
 	})
 }
 
-func TestPlatformLogsCmd(t *testing.T) {
+func TestGatewayLogsCmd(t *testing.T) {
 	t.Run("logs command has correct use", func(t *testing.T) {
-		cmd := platformLogsCmd()
+		cmd := gatewayLogsCmd()
 		assert.Equal(t, "logs", cmd.Use)
 		assert.Contains(t, cmd.Short, "logs")
 	})
 }
 
-func TestPlatformSettingsCmd(t *testing.T) {
+func TestGatewaySettingsCmd(t *testing.T) {
 	t.Run("settings command has correct use", func(t *testing.T) {
-		cmd := platformSettingsCmd()
+		cmd := gatewaySettingsCmd()
 		assert.Equal(t, "settings", cmd.Use)
 		assert.Contains(t, cmd.Short, "settings")
 	})
 }
 
-func TestPlatformResetCmd(t *testing.T) {
+func TestGatewayResetCmd(t *testing.T) {
 	t.Run("reset command has correct use", func(t *testing.T) {
-		cmd := platformResetCmd()
+		cmd := gatewayResetCmd()
 		assert.Equal(t, "reset", cmd.Use)
 		assert.Contains(t, cmd.Short, "Reset")
 		assert.Contains(t, cmd.Short, "data")
@@ -93,59 +94,59 @@ func TestPlatformResetCmd(t *testing.T) {
 	})
 
 	t.Run("reset has force flag", func(t *testing.T) {
-		cmd := platformResetCmd()
+		cmd := gatewayResetCmd()
 		flag := cmd.Flags().Lookup("force")
 		assert.NotNil(t, flag)
 	})
 
 	t.Run("reset has y shorthand flag", func(t *testing.T) {
-		cmd := platformResetCmd()
+		cmd := gatewayResetCmd()
 		// The y flag is an alias for force, check force flag exists
 		forceFlag := cmd.Flags().Lookup("force")
 		assert.NotNil(t, forceFlag)
 	})
 
 	t.Run("reset has yes flag", func(t *testing.T) {
-		cmd := platformResetCmd()
+		cmd := gatewayResetCmd()
 		flag := cmd.Flags().Lookup("yes")
 		assert.NotNil(t, flag)
 	})
 
 }
 
-func TestPlatformCleanCmd(t *testing.T) {
+func TestGatewayCleanCmd(t *testing.T) {
 	t.Run("clean command has correct use", func(t *testing.T) {
-		cmd := platformCleanCmd()
+		cmd := gatewayCleanCmd()
 		assert.Equal(t, "clean", cmd.Use)
 		assert.Contains(t, cmd.Short, "Destructively")
 		assert.Contains(t, cmd.Short, "remove")
 	})
 
 	t.Run("clean has force flag", func(t *testing.T) {
-		cmd := platformCleanCmd()
+		cmd := gatewayCleanCmd()
 		flag := cmd.Flags().Lookup("force")
 		assert.NotNil(t, flag)
 	})
 
 	t.Run("clean has y shorthand flag", func(t *testing.T) {
-		cmd := platformCleanCmd()
+		cmd := gatewayCleanCmd()
 		// The y flag is an alias for force, check force flag exists
 		forceFlag := cmd.Flags().Lookup("force")
 		assert.NotNil(t, forceFlag)
 	})
 
 	t.Run("clean has yes flag", func(t *testing.T) {
-		cmd := platformCleanCmd()
+		cmd := gatewayCleanCmd()
 		flag := cmd.Flags().Lookup("yes")
 		assert.NotNil(t, flag)
 	})
 
 }
 
-func TestPlatformCommandFlags(t *testing.T) {
+func TestGatewayCommandFlags(t *testing.T) {
 	t.Run("reset and clean share force flags", func(t *testing.T) {
-		resetCmd := platformResetCmd()
-		cleanCmd := platformCleanCmd()
+		resetCmd := gatewayResetCmd()
+		cleanCmd := gatewayCleanCmd()
 
 		resetForce := resetCmd.Flags().Lookup("force")
 		cleanForce := cleanCmd.Flags().Lookup("force")
@@ -155,58 +156,58 @@ func TestPlatformCommandFlags(t *testing.T) {
 	})
 }
 
-func TestPlatformStartWithAlreadyRunningOperator(t *testing.T) {
+func TestGatewayStartWithAlreadyRunningOperator(t *testing.T) {
 	t.Run("start command structure is correct", func(t *testing.T) {
-		cmd := platformStartCmd()
+		cmd := gatewayStartCmd()
 		assert.Equal(t, "start", cmd.Use)
 		assert.Contains(t, cmd.Short, "Start")
 	})
 }
 
-func TestPlatformStopWithNotRunningOperator(t *testing.T) {
+func TestGatewayStopWithNotRunningOperator(t *testing.T) {
 	t.Run("stop command structure is correct", func(t *testing.T) {
-		cmd := platformStopCmd()
+		cmd := gatewayStopCmd()
 		assert.Equal(t, "stop", cmd.Use)
 		assert.Contains(t, cmd.Short, "Stop")
 	})
 }
 
-func TestPlatformStatusWithNotRunningOperator(t *testing.T) {
+func TestGatewayStatusWithNotRunningOperator(t *testing.T) {
 	t.Run("status command structure is correct", func(t *testing.T) {
-		cmd := platformStatusCmd()
+		cmd := gatewayStatusCmd()
 		assert.Equal(t, "status", cmd.Use)
 		assert.Contains(t, cmd.Short, "health")
 	})
 }
 
-func TestPlatformResetConfirmation(t *testing.T) {
+func TestGatewayResetConfirmation(t *testing.T) {
 	t.Run("reset command structure is correct", func(t *testing.T) {
-		cmd := platformResetCmd()
+		cmd := gatewayResetCmd()
 		assert.Equal(t, "reset", cmd.Use)
 		assert.Contains(t, cmd.Short, "Reset")
 	})
 }
 
-func TestPlatformCleanConfirmation(t *testing.T) {
+func TestGatewayCleanConfirmation(t *testing.T) {
 	t.Run("clean command structure is correct", func(t *testing.T) {
-		cmd := platformCleanCmd()
+		cmd := gatewayCleanCmd()
 		assert.Equal(t, "clean", cmd.Use)
 		assert.Contains(t, cmd.Short, "Destructively")
 	})
 }
 
-func TestPlatformLogsCommand(t *testing.T) {
+func TestGatewayLogsCommand(t *testing.T) {
 	t.Run("logs command structure is correct", func(t *testing.T) {
-		cmd := platformLogsCmd()
+		cmd := gatewayLogsCmd()
 		assert.Equal(t, "logs", cmd.Use)
 		assert.Contains(t, cmd.Short, "logs")
 	})
 }
 
-func setupPlatformTestConfig(t *testing.T, tmpDir string) {
-	runtimeDir := filepath.Join(tmpDir, ".g8e")
-	pkiDir := filepath.Join(runtimeDir, "pki")
-	secretsDir := filepath.Join(runtimeDir, "secrets")
+func setupGatewayTestConfig(t *testing.T, tmpDir string) {
+	runtimeDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
+	pkiDir := filepath.Join(runtimeDir, constants.Paths.Infra.PkiDir)
+	secretsDir := filepath.Join(runtimeDir, constants.Paths.Infra.SecretsDir)
 
 	require.NoError(t, os.MkdirAll(pkiDir, 0755))
 	require.NoError(t, os.MkdirAll(secretsDir, 0700))
@@ -219,16 +220,16 @@ func setupPlatformTestConfig(t *testing.T, tmpDir string) {
 	pathsJSON := `{
 		"host": "localhost",
 		"infra": {
-			"app_cert_dir": ".g8e/pki/app",
-			"ca_cert_path": ".g8e/pki/root/root_ca.crt",
-			"db_path": ".g8e/data/operator.db",
-			"docs_dir": "docs",
-			"pki_dir": ".g8e/pki",
-			"protocol_constants_dir": "protocol/constants",
-			"protocol_dir": "protocol",
-			"protocol_models_dir": "protocol/models",
-			"secrets_dir": ".g8e/secrets",
-			"ssh_config_path": ".g8e/ssh/config"
+			"app_cert_dir": "` + constants.Paths.Infra.AppCertDir + `",
+			"ca_cert_path": "` + constants.Paths.Infra.CaCertPath + `",
+			"db_path": "` + constants.Paths.Infra.DbPath + `",
+			"docs_dir": "` + constants.Paths.Infra.DocsDir + `",
+			"pki_dir": "` + constants.Paths.Infra.PkiDir + `",
+			"protocol_constants_dir": "` + constants.Paths.Infra.ProtocolConstantsDir + `",
+			"protocol_dir": "` + constants.Paths.Infra.ProtocolDir + `",
+			"protocol_models_dir": "` + constants.Paths.Infra.ProtocolModelsDir + `",
+			"secrets_dir": "` + constants.Paths.Infra.SecretsDir + `",
+			"ssh_config_path": "` + constants.Paths.Infra.SshConfigPath + `"
 		},
 		"ports": {
 			"insecure_mcp_gateway": 18789,

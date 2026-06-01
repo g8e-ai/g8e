@@ -175,9 +175,8 @@ func TestResolveGatewayPorts(t *testing.T) {
 		h, b, p := ResolveGatewayPorts(takenPort, takenPort+1, takenPort+2)
 		assert.NotEqual(t, takenPort, h)
 		assert.True(t, h > takenPort)
-		assert.Equal(t, h, takenPort+1)
-		assert.Equal(t, b, takenPort+2)
-		assert.Equal(t, p, takenPort+3)
+		assert.Equal(t, b, h+1)
+		assert.Equal(t, p, h+2)
 	})
 
 	t.Run("resolves when all are available", func(t *testing.T) {

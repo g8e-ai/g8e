@@ -48,6 +48,7 @@ type OperatorRegistrationRequest struct {
 // event stream - the Gateway refuses to do so.
 type OperatorRegistrationResponse struct {
 	Success                bool            `json:"success"`
+	UserID                 string          `json:"user_id,omitempty"`
 	OperatorSessionID      string          `json:"operator_session_id,omitempty"`
 	CLISessionID           string          `json:"cli_session_id,omitempty"`
 	OperatorID             string          `json:"operator_id,omitempty"`
@@ -252,12 +253,19 @@ func (u *User) WebAuthnCredentials() []webauthn.Credential {
 	return res
 }
 
-// WebSession represents an authenticated web session after passkey verification.
+// WebSession represents an authenticated web session.
+// Can be created via passkey verification or mTLS certificate (e.g., Windows Certificate Store).
 type WebSession struct {
 	ID              string `json:"id"`
 	UserID          string `json:"user_id"`
 	CreatedAtUnixMs int64  `json:"created_at_unix_ms"`
 	ExpiresAtUnixMs int64  `json:"expires_at_unix_ms"`
+	// mTLS certificate fields for Windows Certificate Store enrollment
+	OperatorSessionID string `json:"operator_session_id,omitempty"` // Bind to operator session for mTLS cert auth
+	CertFingerprint   string `json:"cert_fingerprint,omitempty"`    // SHA-256 fingerprint of mTLS certificate
+	CertSerial        string `json:"cert_serial,omitempty"`         // Serial number for revocation checking
+	UserAgent         string `json:"user_agent,omitempty"`          // Browser user agent for tracking
+	LoginMethod       string `json:"login_method,omitempty"`        // "passkey", "windows_cert_store", "p12_import", etc.
 }
 
 // CLISession represents an authenticated CLI/BYO session.
@@ -286,7 +294,7 @@ type CLISession struct {
 // cryptographic credentials.
 //
 // IsBootstrap identifies the ephemeral local-owner identity created by
-// `./g8e platform start -a` over loopback. It is *not* a privilege tier - it
+// `./g8e gw start -a` over loopback. It is *not* a privilege tier - it
 // marks an identity that exists purely to make a fresh local install usable
 // without ceremony, and that is retired automatically the first time a real
 // mTLS login completes.

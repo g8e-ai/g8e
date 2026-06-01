@@ -116,7 +116,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize SecretManager for loading signing keys (Actuator and Consensus)
 	// This must be initialized before LocalStore to provide keystore for encrypted token storage
-	secretsDir := filepath.Join(vs.config.WorkDir, ".g8e", "secrets")
+	secretsDir := vs.config.SecretsDir
 
 	// Initialize GatewayDBService for canonical state root calculation
 	// This ensures outbound mode uses the same state root schema as gateway mode
@@ -171,7 +171,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.config.GitAvailable = gitPath != ""
 
 	auditVaultConfig := storage.DefaultAuditVaultConfig()
-	auditVaultConfig.DataDir = filepath.Join(vs.config.WorkDir, ".g8e", "data")
+	auditVaultConfig.DataDir = filepath.Join(vs.config.WorkDir, ".g8e/data")
 	auditVaultConfig.GitPath = gitPath
 	vs.auditVault, err = storage.NewAuditVaultService(auditVaultConfig, vs.logger)
 	if err != nil {

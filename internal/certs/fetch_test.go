@@ -35,7 +35,7 @@ func TestFetchAndSetCA_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := FetchAndSetCA(context.Background(), srv.URL+"/.well-known/g8e/pki/ca-bundle")
+	err := FetchAndSetCA(context.Background(), srv.URL+"/.well-known/g8e/pki/ca-bundle", "")
 	require.NoError(t, err)
 	assert.Equal(t, caBytes, GetRawCA())
 }
@@ -49,7 +49,7 @@ func TestFetchAndSetCA_Non200Status(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := FetchAndSetCA(context.Background(), srv.URL+"/.well-known/g8e/pki/ca-bundle")
+	err := FetchAndSetCA(context.Background(), srv.URL+"/.well-known/g8e/pki/ca-bundle", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "404")
 	assert.Nil(t, GetRawCA())
@@ -64,7 +64,7 @@ func TestFetchAndSetCA_EmptyBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := FetchAndSetCA(context.Background(), srv.URL+"/.well-known/g8e/pki/ca-bundle")
+	err := FetchAndSetCA(context.Background(), srv.URL+"/.well-known/g8e/pki/ca-bundle", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "is empty")
 	assert.Nil(t, GetRawCA())
@@ -80,7 +80,7 @@ func TestFetchAndSetCA_InvalidPEM(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := FetchAndSetCA(context.Background(), srv.URL+"/.well-known/g8e/pki/ca-bundle")
+	err := FetchAndSetCA(context.Background(), srv.URL+"/.well-known/g8e/pki/ca-bundle", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not a valid PEM-encoded certificate")
 	assert.Nil(t, GetRawCA())
@@ -90,7 +90,7 @@ func TestFetchAndSetCA_UnreachableURL(t *testing.T) {
 	saveAndRestoreCA(t)
 	SetCA(nil)
 
-	err := FetchAndSetCA(context.Background(), "https://127.0.0.1:19999/.well-known/g8e/pki/ca-bundle")
+	err := FetchAndSetCA(context.Background(), "https://127.0.0.1:19999/.well-known/g8e/pki/ca-bundle", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to fetch CA certificate")
 	assert.Nil(t, GetRawCA())
@@ -109,7 +109,7 @@ func TestFetchAndSetCA_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := FetchAndSetCA(ctx, srv.URL+"/.well-known/g8e/pki/g8e-gw-ca-bundle.pem")
+	err := FetchAndSetCA(ctx, srv.URL+"/.well-known/g8e/pki/g8eg-ca-bundle.pem", "")
 	require.Error(t, err)
 }
 
@@ -117,6 +117,6 @@ func TestFetchAndSetCA_InvalidURL(t *testing.T) {
 	saveAndRestoreCA(t)
 	SetCA(nil)
 
-	err := FetchAndSetCA(context.Background(), "://invalid-url")
+	err := FetchAndSetCA(context.Background(), "://invalid-url", "")
 	require.Error(t, err)
 }

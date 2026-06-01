@@ -20,15 +20,133 @@ import (
 	"sync"
 )
 
+// TrustStore holds the CA trust bundle for TLS verification.
+// It replaces the package-level serverCAPEM global with an injectable type.
+type TrustStore struct {
+	mu    sync.RWMutex
+	caPEM []byte
+}
+
+// NewTrustStore creates a new TrustStore with optional initial CA PEM.
+func NewTrustStore(caPEM []byte) *TrustStore {
+	return &TrustStore{caPEM: caPEM}
+}
+
+// SetCA stores the PEM-encoded CA certificate.
+func (ts *TrustStore) SetCA(pem []byte) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.caPEM = pem
+}
+
+// GetRawCA returns the current PEM bytes.
+func (ts *TrustStore) GetRawCA() []byte {
+	ts.mu.RLock()
+	defer ts.mu.RUnlock()
+	return ts.caPEM
+}
+
+// GetRootCAs returns a certificate pool containing the CA.
+func (ts *TrustStore) GetRootCAs() (*x509.CertPool, error) {
+	ts.mu.RLock()
+	pem := ts.caPEM
+	ts.mu.RUnlock()
+
+	if len(pem) == 0 {
+		return nil, fmt.Errorf("CA not set - call SetCA before making TLS connections")
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pem) {
+		return nil, fmt.Errorf("failed to parse CA certificate")
+	}
+	return pool, nil
+}
+
+// ClientIdentity holds the mTLS client certificate for outbound connections.
+// It replaces the package-level clientCert global with an injectable type.
+type ClientIdentity struct {
+	mu   sync.RWMutex
+	cert tls.Certificate
+}
+
+// NewClientIdentity creates a new ClientIdentity with optional initial certificate.
+func NewClientIdentity(cert tls.Certificate) *ClientIdentity {
+	return &ClientIdentity{cert: cert}
+}
+
+// SetCertificate stores the mTLS client certificate.
+func (ci *ClientIdentity) SetCertificate(cert tls.Certificate) {
+	ci.mu.Lock()
+	defer ci.mu.Unlock()
+	ci.cert = cert
+}
+
+// GetCertificate returns the mTLS client certificate and a boolean indicating if it's set.
+func (ci *ClientIdentity) GetCertificate() (tls.Certificate, bool) {
+	ci.mu.RLock()
+	defer ci.mu.RUnlock()
+	return ci.cert, len(ci.cert.Certificate) > 0
+}
+
+// TLSConfig combines TrustStore and ClientIdentity to produce a complete TLS configuration.
+type TLSConfig struct {
+	trustStore     *TrustStore
+	clientIdentity *ClientIdentity
+}
+
+// NewTLSConfig creates a new TLSConfig with the given trust store and client identity.
+func NewTLSConfig(trustStore *TrustStore, clientIdentity *ClientIdentity) *TLSConfig {
+	return &TLSConfig{
+		trustStore:     trustStore,
+		clientIdentity: clientIdentity,
+	}
+}
+
+// GetTLSConfig returns a TLS configuration that trusts the CA and includes the client certificate if set.
+func (tc *TLSConfig) GetTLSConfig() (*tls.Config, error) {
+	rootCAs, err := tc.trustStore.GetRootCAs()
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := &tls.Config{
+		RootCAs:    rootCAs,
+		MinVersion: tls.VersionTLS13,
+		CurvePreferences: []tls.CurveID{
+			tls.X25519,
+			tls.CurveP384,
+			tls.CurveP256,
+		},
+	}
+
+	if cert, ok := tc.clientIdentity.GetCertificate(); ok {
+		cfg.Certificates = []tls.Certificate{cert}
+	}
+
+	return cfg, nil
+}
+
+// Legacy global functions - deprecated, will be removed after migration.
+// These maintain the old API for gradual migration.
+
 // serverCAMu guards serverCAPEM.
 var serverCAMu sync.RWMutex
 
 // serverCAPEM holds the PEM-encoded CA certificate fetched from the hub at
 // startup via FetchAndSetCA. It is never embedded at build time.
+// DEPRECATED: Use TrustStore instead.
 var serverCAPEM []byte
+
+// clientCertMu guards clientCert.
+var clientCertMu sync.RWMutex
+
+// clientCert holds the mTLS client certificate for Operator outbound connections.
+// DEPRECATED: Use ClientIdentity instead.
+var clientCert tls.Certificate
 
 // GetRawCA returns the current PEM bytes stored in the CA store. Intended for
 // use in tests to save and restore state around SetCA calls.
+// DEPRECATED: Use TrustStore.GetRawCA instead.
 func GetRawCA() []byte {
 	serverCAMu.RLock()
 	defer serverCAMu.RUnlock()
@@ -37,6 +155,7 @@ func GetRawCA() []byte {
 
 // SetCA stores the PEM-encoded CA certificate for use by GetTLSConfig and
 // GetServerCARootCAs. Must be called before any TLS connections are made.
+// DEPRECATED: Use TrustStore.SetCA instead.
 func SetCA(pem []byte) {
 	serverCAMu.Lock()
 	defer serverCAMu.Unlock()
@@ -44,6 +163,7 @@ func SetCA(pem []byte) {
 }
 
 // GetServerCARootCAs returns a certificate pool containing the hub CA.
+// DEPRECATED: Use TrustStore.GetRootCAs instead.
 func GetServerCARootCAs() (*x509.CertPool, error) {
 	serverCAMu.RLock()
 	pem := serverCAPEM
@@ -59,16 +179,32 @@ func GetServerCARootCAs() (*x509.CertPool, error) {
 	return pool, nil
 }
 
+// SetClientCertificate stores the mTLS client certificate for Operator outbound connections.
+// DEPRECATED: Use ClientIdentity.SetCertificate instead.
+func SetClientCertificate(cert tls.Certificate) {
+	clientCertMu.Lock()
+	defer clientCertMu.Unlock()
+	clientCert = cert
+}
+
+// GetClientCertificate returns the mTLS client certificate.
+// DEPRECATED: Use ClientIdentity.GetCertificate instead.
+func GetClientCertificate() (tls.Certificate, bool) {
+	clientCertMu.RLock()
+	defer clientCertMu.RUnlock()
+	return clientCert, clientCert.PrivateKey != nil
+}
+
 // GetTLSConfig returns a TLS configuration that trusts the hub CA.
-// No client certificate is included - the per-operator mTLS cert is applied
-// after bootstrap via rebuildTransportWithOperatorCert.
+// If a client certificate has been set via SetClientCertificate, it will be included.
+// DEPRECATED: Use TLSConfig.GetTLSConfig instead.
 func GetTLSConfig() (*tls.Config, error) {
 	rootCAs, err := GetServerCARootCAs()
 	if err != nil {
 		return nil, err
 	}
 
-	return &tls.Config{
+	cfg := &tls.Config{
 		RootCAs:    rootCAs,
 		MinVersion: tls.VersionTLS13,
 		CurvePreferences: []tls.CurveID{
@@ -76,5 +212,11 @@ func GetTLSConfig() (*tls.Config, error) {
 			tls.CurveP384,
 			tls.CurveP256,
 		},
-	}, nil
+	}
+
+	if cert, ok := GetClientCertificate(); ok {
+		cfg.Certificates = []tls.Certificate{cert}
+	}
+
+	return cfg, nil
 }

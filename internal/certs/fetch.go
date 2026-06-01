@@ -15,10 +15,14 @@ package certs
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/hex"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -29,7 +33,10 @@ import (
 // This is the bootstrap step that establishes trust. The trust bundle endpoint is
 // unauthenticated by design - it is equivalent to a certificate pinning
 // fetch. All subsequent connections are verified against this trust bundle.
-func FetchAndSetCA(ctx context.Context, caURL string) error {
+//
+// The optional caFingerprint parameter enables OOB pinning verification. If provided,
+// the fetched CA bundle's SHA-256 fingerprint must match the expected value.
+func FetchAndSetCA(ctx context.Context, caURL string, caFingerprint string) error {
 	client := &http.Client{Timeout: 15 * time.Second}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, caURL, nil)
@@ -61,6 +68,44 @@ func FetchAndSetCA(ctx context.Context, caURL string) error {
 		return fmt.Errorf("CA certificate from %s is not a valid PEM-encoded certificate", caURL)
 	}
 
+	// Verify CA fingerprint if pin is provided
+	if caFingerprint != "" {
+		if err := verifyCAFingerprint(pem, caFingerprint); err != nil {
+			return fmt.Errorf("CA fingerprint verification failed: %w", err)
+		}
+	}
+
 	SetCA(pem)
+	return nil
+}
+
+// verifyCAFingerprint verifies that a PEM-encoded CA bundle matches the expected fingerprint.
+// This is a copy of the auth package function to avoid circular dependencies.
+func verifyCAFingerprint(caPEM []byte, expectedFingerprint string) error {
+	if expectedFingerprint == "" {
+		return nil
+	}
+
+	// Normalize fingerprint: strip "sha256:" prefix if present
+	expectedFP := strings.TrimPrefix(expectedFingerprint, "sha256:")
+
+	// Parse the PEM to extract the DER-encoded certificate
+	block, _ := pem.Decode(caPEM)
+	if block == nil {
+		return fmt.Errorf("failed to decode CA PEM")
+	}
+
+	if block.Type != "CERTIFICATE" {
+		return fmt.Errorf("PEM block is not a certificate (type: %s)", block.Type)
+	}
+
+	// Compute SHA-256 hash of the DER-encoded certificate
+	hash := sha256.Sum256(block.Bytes)
+	actualFP := hex.EncodeToString(hash[:])
+
+	if actualFP != expectedFP {
+		return fmt.Errorf("CA fingerprint mismatch: expected %s, got %s", expectedFP, actualFP)
+	}
+
 	return nil
 }

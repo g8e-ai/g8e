@@ -28,7 +28,7 @@ import (
 // SetEnvelopeProcessor wires the synchronous envelope-processing pipeline
 // into the gateway HTTP surface. It must be called after the gateway service
 // has been constructed and before BYO clients submit transactions to
-// /api/governance/envelope. Calling with nil disables the endpoint.
+// /api/v1/governance/envelopes. Calling with nil disables the endpoint.
 func (ls *GatewayService) SetEnvelopeProcessor(p governance.EnvelopeProcessor) {
 	ls.handler.envProc = p
 	// Dependencies are now set via SetDependencies in runGatewayMode or similar
