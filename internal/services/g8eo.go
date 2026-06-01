@@ -32,6 +32,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/sovereignty"
 	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/services/system"
 )
 
 type G8eoService struct {
@@ -165,7 +166,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		vs.logger.Info("Git disabled via --no-git flag - ledger will not be available")
 	} else {
 		vs.logger.Info("Go-git (native Go implementation) initialized and ready")
-		gitPath = "embedded"
+		gitPath = system.GitEmbedded
 	}
 	vs.config.GitPath = gitPath
 	vs.config.GitAvailable = gitPath != ""
