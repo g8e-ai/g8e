@@ -602,7 +602,7 @@ func main() {
 	logger.Info("Trust bundle loaded")
 
 	// Resolve default client certificate paths if not explicitly provided
-	// Priority: 1. Explicit flags, 2. Project-local .g8e/pki/operator.*, 3. Project-local .g8e/pki/client.*, 4. User home ~/.g8e/operator.*
+	// Priority: 1. Explicit flags, 2. Project-local .g8e/pki/operator.*, 3. Project-local .g8e/pki/client.*
 	if privateKey == "" {
 		// Try project-local operator key (created by enrollment)
 		projectOperatorKey := filepath.Join(launchDir, ".g8e/pki/operator.key")
@@ -615,16 +615,6 @@ func main() {
 			if _, err := os.Stat(projectKey); err == nil {
 				privateKey = projectKey
 				logger.Info("Using default client key from project directory", "path", privateKey)
-			} else {
-				// Try user home operator key
-				homeDir, err := os.UserHomeDir()
-				if err == nil {
-					homeKey := filepath.Join(homeDir, ".g8e/operator.key")
-					if _, err := os.Stat(homeKey); err == nil {
-						privateKey = homeKey
-						logger.Info("Using default operator key from home directory", "path", privateKey)
-					}
-				}
 			}
 		}
 	}
@@ -641,16 +631,6 @@ func main() {
 			if _, err := os.Stat(projectCert); err == nil {
 				clientCert = projectCert
 				logger.Info("Using default client certificate from project directory", "path", clientCert)
-			} else {
-				// Try user home operator cert
-				homeDir, err := os.UserHomeDir()
-				if err == nil {
-					homeCert := filepath.Join(homeDir, ".g8e/operator.crt")
-					if _, err := os.Stat(homeCert); err == nil {
-						clientCert = homeCert
-						logger.Info("Using default operator certificate from home directory", "path", clientCert)
-					}
-				}
 			}
 		}
 	}
@@ -659,7 +639,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Private key is required (-k or --key). Expected locations:\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/operator.key (project directory)\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/client.key (project directory)\n")
-		fmt.Fprintf(os.Stderr, "  - ~/.g8e/operator.key (home directory)\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -667,7 +646,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Client certificate is required (--cert or --client-cert). Expected locations:\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/operator.crt (project directory)\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/client.crt (project directory)\n")
-		fmt.Fprintf(os.Stderr, "  - ~/.g8e/operator.crt (home directory)\n")
 		os.Exit(constants.ExitConfigError)
 	}
 

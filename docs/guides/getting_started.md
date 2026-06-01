@@ -93,7 +93,7 @@ The first login bootstraps the PKI hierarchy and issues your initial mTLS certif
 ./g8e auth login
 ```
 
-Credentials and trust material are stored in `~/.g8e/pki` and `~/.g8e/secrets`.
+Credentials and trust material are stored in `.g8e/pki` and `.g8e/secrets` in the project directory.
 
 ### 4. Deploy an Operator
 

@@ -7,9 +7,9 @@
         "url": "https://g8e.local:8443/mcp"
       },
       "tls": {
-        "clientCertificateEnv": "G8E_CLIENT_CERT_PATH",
-        "clientKeyEnv": "G8E_CLIENT_KEY_PATH",
-        "caCertificateEnv": "G8E_CA_CERT_PATH",
+        "clientCertificate": "/path/to/cli.crt",
+        "clientKey": "/path/to/cli.key",
+        "caCertificate": "/path/to/g8eg-ca-bundle.pem",
         "verifyServer": true,
         "verifyHostname": "g8e.local"
       },

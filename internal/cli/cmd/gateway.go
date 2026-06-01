@@ -530,20 +530,36 @@ func gatewayMCPConfigCmd() *cobra.Command {
 			// Use the canonical g8e.local internal hostname with unified /mcp endpoint
 			gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", cfg.OperatorPublicHTTPSPort())
 
-			mcpConfig := mcp.NewGatewayConfig(gatewayURL)
+			// Get current working directory
+			cwd, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("failed to get current working directory: %w", err)
+			}
 
-			// Add actual resolved cert paths as notes
+			// Get actual resolved cert paths
 			actualCertPath := cfg.CLICertFile()
 			actualKeyPath := cfg.CLIKeyFile()
 			actualCAPath := cfg.TrustBundlePath()
 
-			serverConfig := mcpConfig.MCPServers["g8e-gateway"]
-			serverConfig.Notes = append(serverConfig.Notes,
-				fmt.Sprintf("Actual client certificate path: %s", actualCertPath),
-				fmt.Sprintf("Actual client key path: %s", actualKeyPath),
-				fmt.Sprintf("Actual CA certificate path: %s", actualCAPath),
-			)
-			mcpConfig.MCPServers["g8e-gateway"] = serverConfig
+			// Make paths relative to CWD if possible, otherwise keep absolute
+			makeRelative := func(path string) string {
+				relPath, err := filepath.Rel(cwd, path)
+				if err != nil {
+					return path
+				}
+				return relPath
+			}
+
+			actualCertPath = makeRelative(actualCertPath)
+			actualKeyPath = makeRelative(actualKeyPath)
+			actualCAPath = makeRelative(actualCAPath)
+
+			// Normalize to forward slashes for JSON
+			actualCertPath = filepath.ToSlash(actualCertPath)
+			actualKeyPath = filepath.ToSlash(actualKeyPath)
+			actualCAPath = filepath.ToSlash(actualCAPath)
+
+			mcpConfig := mcp.NewGatewayConfig(gatewayURL, actualCertPath, actualKeyPath, actualCAPath)
 
 			configJSON, err := json.MarshalIndent(mcpConfig, "", "  ")
 			if err != nil {
