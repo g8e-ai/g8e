@@ -4,7 +4,11 @@
 
 **Verify, then execute.**
 
-g8e is a ~20MB compressed, statically-compiled binary that provides agentic governance and state-mutation control. It functions as both the **control plane** (host-local policy decision) and the **data plane** (exclusive mutation executor). 
+g8e is a statically-compiled binary that provides agentic governance and state-mutation control. Binary sizes vary by platform and build option:
+- **Standard build** (`make build`): ~35-38MB per platform
+- **Compressed build** (`make build-compressed`): ~15-17MB per platform (Linux/Windows AMD64/ARM64), ~35-38MB for macOS and Windows ARM64
+
+It functions as both the **control plane** (host-local policy decision) and the **data plane** (exclusive mutation executor). 
 
 It dials out via mTLS and listens on nothing. Every AI-proposed action clears a fail-closed verification pipeline on the host and is committed to a git-backed ledger before execution. Only scrubbed projections leave the host; raw data never crosses the wire.
 
@@ -32,6 +36,9 @@ cd g8e
 
 # 2. Build the binary
 make build
+
+# Or build with compression (smaller binaries)
+make build-compressed
 
 # 3. Start the Governance Gateway (g8eg)
 ./g8e gw start

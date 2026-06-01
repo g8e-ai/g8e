@@ -73,6 +73,10 @@ make build
 
 This produces the `g8e` binary. It is self-contained and manages both Gateway (PDP) and Operator (PEP) roles.
 
+**Build Options:**
+- `make build`: Standard build (~35-38MB per platform)
+- `make build-compressed`: Compressed build (~15-17MB for Linux/Windows AMD64/ARM64, ~35-38MB for macOS and Windows ARM64)
+
 ### 2. Initialize Gateway
 
 Start the Governance Gateway in **Doctrine Mode** (L1Doctrine enforced):
