@@ -530,31 +530,12 @@ func gatewayMCPConfigCmd() *cobra.Command {
 			// Use the canonical g8e.local internal hostname with unified /mcp endpoint
 			gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", cfg.OperatorPublicHTTPSPort())
 
-			// Get current working directory
-			cwd, err := os.Getwd()
-			if err != nil {
-				return fmt.Errorf("failed to get current working directory: %w", err)
-			}
-
-			// Get actual resolved cert paths
+			// Get actual resolved cert paths (absolute paths)
 			actualCertPath := cfg.CLICertFile()
 			actualKeyPath := cfg.CLIKeyFile()
 			actualCAPath := cfg.TrustBundlePath()
 
-			// Make paths relative to CWD if possible, otherwise keep absolute
-			makeRelative := func(path string) string {
-				relPath, err := filepath.Rel(cwd, path)
-				if err != nil {
-					return path
-				}
-				return relPath
-			}
-
-			actualCertPath = makeRelative(actualCertPath)
-			actualKeyPath = makeRelative(actualKeyPath)
-			actualCAPath = makeRelative(actualCAPath)
-
-			// Normalize to forward slashes for JSON
+			// Normalize to forward slashes for JSON (cross-platform compatibility)
 			actualCertPath = filepath.ToSlash(actualCertPath)
 			actualKeyPath = filepath.ToSlash(actualKeyPath)
 			actualCAPath = filepath.ToSlash(actualCAPath)
@@ -579,42 +560,16 @@ func gatewayMCPHttpConfigCmd() *cobra.Command {
 		Use:   "mcp-config-http",
 		Short: "Print MCP client configuration for the Gateway plain HTTP endpoint",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			externalIP := config.GetExternalInterfaceIP()
-			gatewayHTTPURL := fmt.Sprintf("http://%s:%d/mcp", externalIP, cfg.OperatorMcpHttpPort())
-
-			// Use the standard MCP config schema without TLS for plain HTTP
-			mcpConfig := &mcp.Config{
-				MCPServers: map[string]mcp.ServerConfig{
-					"g8e-gateway": {
-						Transport: mcp.TransportConfig{
-							Type: "http",
-							URL:  gatewayHTTPURL,
-						},
-						Capabilities: mcp.Capabilities{
-							Tools:     true,
-							Resources: true,
-							Prompts:   true,
-						},
-						Description: "g8e Gateway MCP endpoint (plain HTTP, development only)",
-						Notes: []string{
-							"Plain HTTP endpoint is for development and testing only.",
-							"Use mTLS endpoint (./g8e gw mcp-config) for production access.",
-						},
-					},
-				},
-			}
-
-			configJSON, err := json.MarshalIndent(mcpConfig, "", "  ")
-			if err != nil {
-				return fmt.Errorf("failed to marshal MCP config: %w", err)
-			}
-
-			cmd.Println(string(configJSON))
+			staticConfig := `{
+  "mcpServers": {
+    "g8e-gateway": {
+      "disabled": true,
+      "serverUrl": "http://127.0.0.1:8442/mcp",
+      "note": "Must use explicit 127.0.0.1 for HTTP (localhost may resolve to IPv6 ::1)"
+    }
+  }
+}`
+			cmd.Println(staticConfig)
 			return nil
 		},
 	}
