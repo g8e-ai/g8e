@@ -56,7 +56,8 @@ help:
 	@echo "  upx-install   Install UPX compressor"
 	@echo ""
 	@echo "Build:"
-	@echo "  build			Build g8e for all platforms (linux, windows, darwin)"
+	@echo "  build			Build g8e for current OS and architecture"
+	@echo "  build-all			Build g8e for all platforms (linux, windows, darwin)"
 	@echo "  build-linux		Build g8e for Linux (amd64, arm64, 386)"
 	@echo "  build-windows		Build g8e for Windows (amd64, arm64)"
 	@echo "  build-darwin		Build g8e for Darwin (amd64, arm64)"
@@ -182,6 +183,41 @@ PLATFORMS := linux/amd64 linux/arm64 linux/386 windows/amd64 windows/arm64 darwi
 
 .PHONY: build
 build:
+	@echo "Building g8e operator for current platform..."
+	@mkdir -p bin
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	HOST_OS=$$(go env GOOS); \
+	HOST_ARCH=$$(go env GOARCH); \
+	BINARY=bin/g8e-$$HOST_OS-$$HOST_ARCH; \
+	if [ "$$HOST_OS" = "windows" ]; then \
+		BINARY=$$BINARY.exe; \
+	fi; \
+	echo "Building $$HOST_OS/$$HOST_ARCH -> $$BINARY..."; \
+	GOOS=$$HOST_OS GOARCH=$$HOST_ARCH go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$HOST_OS_$$HOST_ARCH" -o $$BINARY ./cmd/operator || exit 1; \
+	sha256sum $$BINARY > $$BINARY.sha256; \
+	if [ "$$HOST_OS" = "windows" ]; then \
+		ln -sf g8e-$$HOST_OS-$$HOST_ARCH.exe bin/g8e; \
+		echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH.exe"; \
+		cp bin/g8e-$$HOST_OS-$$HOST_ARCH.exe g8e.exe; \
+		echo "Copied to root: g8e.exe"; \
+	else \
+		ln -sf g8e-$$HOST_OS-$$HOST_ARCH bin/g8e; \
+		echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
+		cp bin/g8e-$$HOST_OS-$$HOST_ARCH g8e; \
+		echo "Copied to root: g8e"; \
+	fi
+	@echo "Build complete. Binary: $$BINARY"
+
+.PHONY: docker-build
+docker-build:
+	@echo "Building g8e operator Docker image..."
+	@docker build -f Dockerfile -t g8e:$$(cat VERSION) -t g8e:latest .
+	@echo "Operator image built: g8e:$$(cat VERSION)"
+
+.PHONY: build-all
+build-all:
 	@echo "Building g8e operator for all platforms..."
 	@mkdir -p bin
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
@@ -216,12 +252,6 @@ build:
 		fi; \
 	fi
 	@echo "Multi-platform build complete. Checksums: bin/g8e-*.sha256"
-
-.PHONY: docker-build
-docker-build:
-	@echo "Building g8e operator Docker image..."
-	@docker build -f Dockerfile -t g8e:$$(cat VERSION) -t g8e:latest .
-	@echo "Operator image built: g8e:$$(cat VERSION)"
 
 .PHONY: build-compressed
 build-compressed: upx-install

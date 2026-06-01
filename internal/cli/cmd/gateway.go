@@ -14,14 +14,12 @@
 package cmd
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -108,29 +106,9 @@ func gatewayStartCmd() *cobra.Command {
 				cmd.Println()
 			}
 
-			// Prompt for network identity mode if not specified
+			// Default to full identity mode if not specified via flag
 			if certIdentityMode == "" {
-				cmd.Println("  The gateway certificate can include:")
-				cmd.Println("    - All detected hostnames and IPs (recommended)")
-				cmd.Println("    - Only localhost (minimal)")
-				cmd.Println()
-				cmd.Print("Include all detected hostnames and IPs in certificate? [Y/n]: ")
-
-				reader := bufio.NewReader(os.Stdin)
-				response, err := reader.ReadString('\n')
-				if err != nil {
-					cmd.Println("Error reading input, using full identity")
-					certIdentityMode = "full"
-				} else {
-					response = strings.TrimSpace(strings.ToLower(response))
-					if response == "n" {
-						certIdentityMode = "localhost"
-						cmd.Println("Using localhost only for certificate")
-					} else {
-						certIdentityMode = "full"
-						cmd.Println("Using all detected hostnames and IPs")
-					}
-				}
+				certIdentityMode = "full"
 			}
 
 			// Serialize network identity to pass to subprocess
