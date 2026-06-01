@@ -66,9 +66,14 @@ help:
 	@echo "  upx-install   Install UPX compressor"
 	@echo ""
 	@echo "Build:"
-	@echo "  build         Build g8e binary"
-	@echo "  build-compressed Build g8e with UPX compression"
-	@echo "  build-windows Build Windows binaries (amd64, arm64)"
+	@echo "  build			Build g8e for all platforms (linux, windows, darwin)"
+	@echo "  build-linux		Build g8e for Linux (amd64, arm64, 386)"
+	@echo "  build-windows		Build g8e for Windows (amd64, arm64)"
+	@echo "  build-darwin		Build g8e for Darwin (amd64, arm64)"
+	@echo "  build-compressed		Build g8e for all platforms with UPX compression"
+	@echo "  build-linux-compressed	Build g8e for Linux with UPX compression"
+	@echo "  build-windows-compressed	Build g8e for Windows with UPX compression"
+	@echo "  build-darwin-compressed	Build g8e for Darwin with UPX compression"
 	@echo ""
 	@echo "Test:"
 	@echo "  test                  Run all tests with race detection"
@@ -196,19 +201,36 @@ PLATFORMS := linux/amd64 linux/arm64 linux/386 windows/amd64 windows/arm64 darwi
 
 .PHONY: build
 build:
-	@echo "Building g8e operator..."
+	@echo "Building g8e operator for all platforms..."
+	@mkdir -p bin
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
-	PLATFORM=$$(uname -s)_$$(uname -m); \
-	echo "Building output: g8e"; \
-	if go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$PLATFORM" -o g8e ./cmd/operator; then \
-		sha256sum g8e > g8e.sha256; \
-		echo "Build complete. Output: g8e"; \
-		echo "Checksum: g8e.sha256"; \
+	for platform in $(PLATFORMS); do \
+		GOOS=$${platform%/*}; \
+		GOARCH=$${platform#*/}; \
+		BINARY=bin/g8e-$$GOOS-$$GOARCH; \
+		if [ "$$GOOS" = "windows" ]; then \
+			BINARY=$$BINARY.exe; \
+		fi; \
+		echo "Building $$platform -> $$BINARY..."; \
+		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$platform" -o $$BINARY ./cmd/operator || exit 1; \
+		sha256sum $$BINARY > $$BINARY.sha256; \
+	done
+	@HOST_OS=$$(go env GOOS); \
+	HOST_ARCH=$$(go env GOARCH); \
+	if [ "$$HOST_OS" = "windows" ]; then \
+		if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH.exe ]; then \
+			ln -sf g8e-$$HOST_OS-$$HOST_ARCH.exe bin/g8e; \
+			echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH.exe"; \
+		fi; \
 	else \
-		exit 1; \
+		if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH ]; then \
+			ln -sf g8e-$$HOST_OS-$$HOST_ARCH bin/g8e; \
+			echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
+		fi; \
 	fi
+	@echo "Multi-platform build complete. Checksums: bin/g8e-*.sha256"
 
 .PHONY: docker-build
 docker-build:
@@ -227,6 +249,9 @@ build-compressed: upx-install
 		GOOS=$${platform%/*}; \
 		GOARCH=$${platform#*/}; \
 		BINARY=bin/g8e-$$GOOS-$$GOARCH; \
+		if [ "$$GOOS" = "windows" ]; then \
+			BINARY=$$BINARY.exe; \
+		fi; \
 		echo "Building $$platform -> $$BINARY..."; \
 		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$platform" -o $$BINARY ./cmd/operator || exit 1; \
 		echo "Compressing $$BINARY with UPX..."; \
@@ -235,11 +260,103 @@ build-compressed: upx-install
 	done
 	@HOST_OS=$$(go env GOOS); \
 	HOST_ARCH=$$(go env GOARCH); \
-	if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH ]; then \
-		ln -sf g8e-$$HOST_OS-$$HOST_ARCH bin/g8e; \
-		echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
+	if [ "$$HOST_OS" = "windows" ]; then \
+		if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH.exe ]; then \
+			ln -sf g8e-$$HOST_OS-$$HOST_ARCH.exe bin/g8e; \
+			echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH.exe"; \
+		fi; \
+	else \
+		if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH ]; then \
+			ln -sf g8e-$$HOST_OS-$$HOST_ARCH bin/g8e; \
+			echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
+		fi; \
 	fi
 	@echo "Compressed multi-platform build complete. Checksums: bin/g8e-*.sha256"
+
+.PHONY: build-linux-compressed
+build-linux-compressed: upx-install
+	@echo "Building g8e for Linux with UPX compression..."
+	@mkdir -p bin
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	for arch in amd64 arm64 386; do \
+		BINARY=bin/g8e-linux-$$arch; \
+		echo "Building linux/$$arch -> $$BINARY..."; \
+		GOOS=linux GOARCH=$$arch go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=linux_$$arch" -o $$BINARY ./cmd/operator || exit 1; \
+		echo "Compressing $$BINARY with UPX..."; \
+		$(UPX) --best --lzma $$BINARY; \
+		sha256sum $$BINARY > $$BINARY.sha256; \
+	done
+	@echo "Linux compressed build complete. Binaries: bin/g8e-linux-*"
+
+.PHONY: build-darwin-compressed
+build-darwin-compressed: upx-install
+	@echo "Building g8e for Darwin with UPX compression..."
+	@mkdir -p bin
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	for arch in amd64 arm64; do \
+		BINARY=bin/g8e-darwin-$$arch; \
+		echo "Building darwin/$$arch -> $$BINARY..."; \
+		GOOS=darwin GOARCH=$$arch go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=darwin_$$arch" -o $$BINARY ./cmd/operator || exit 1; \
+		echo "Compressing $$BINARY with UPX..."; \
+		$(UPX) --best --lzma $$BINARY; \
+		sha256sum $$BINARY > $$BINARY.sha256; \
+	done
+	@echo "Darwin compressed build complete. Binaries: bin/g8e-darwin-*"
+
+.PHONY: build-windows-compressed
+build-windows-compressed: upx-install
+	@echo "Building g8e for Windows with UPX compression..."
+	@mkdir -p bin
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	for arch in amd64 arm64; do \
+		BINARY=bin/g8e-windows-$$arch.exe; \
+		echo "Building windows/$$arch -> $$BINARY..."; \
+		GOOS=windows GOARCH=$$arch go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=windows_$$arch -s -w" -o $$BINARY ./cmd/operator || exit 1; \
+		echo "Compressing $$BINARY with UPX..."; \
+		$(UPX) --best --lzma $$BINARY; \
+		sha256sum $$BINARY > $$BINARY.sha256; \
+	done
+	@echo "Windows compressed build complete. To avoid Defender false positives:"
+	@echo "  1. Code sign with a trusted certificate (EV Code Signing recommended)"
+	@echo "  2. Submit to Microsoft SmartScreen for whitelisting"
+	@echo "  3. Distribute via signed installer (MSIX or WiX)"
+	@echo "Binaries: bin/g8e-windows-*.exe"
+
+.PHONY: build-darwin
+build-darwin:
+	@echo "Building g8e for Darwin..."
+	@mkdir -p bin
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	for arch in amd64 arm64; do \
+		BINARY=bin/g8e-darwin-$$arch; \
+		echo "Building darwin/$$arch -> $$BINARY..."; \
+		GOOS=darwin GOARCH=$$arch go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=darwin_$$arch" -o $$BINARY ./cmd/operator || exit 1; \
+		sha256sum $$BINARY > $$BINARY.sha256; \
+	done
+	@echo "Darwin build complete. Binaries: bin/g8e-darwin-*"
+
+.PHONY: build-linux
+build-linux:
+	@echo "Building g8e for Linux..."
+	@mkdir -p bin
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	for arch in amd64 arm64 386; do \
+		BINARY=bin/g8e-linux-$$arch; \
+		echo "Building linux/$$arch -> $$BINARY..."; \
+		GOOS=linux GOARCH=$$arch go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=linux_$$arch" -o $$BINARY ./cmd/operator || exit 1; \
+		sha256sum $$BINARY > $$BINARY.sha256; \
+	done
+	@echo "Linux build complete. Binaries: bin/g8e-linux-*"
 
 .PHONY: build-windows
 build-windows:

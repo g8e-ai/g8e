@@ -15,6 +15,7 @@ package cmd
 
 import (
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -261,6 +262,36 @@ func securityPKIEnrollCmd() *cobra.Command {
 			if regResp.HubTrustBundle != "" {
 				cmd.Printf("Trust bundle saved to: %s\n", filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem"))
 			}
+
+			cmd.Printf("\n=== MCP Server Configuration ===\n")
+			mcpConfig := map[string]interface{}{
+				"mcpServers": map[string]interface{}{
+					"g8e-gateway": map[string]interface{}{
+						"serverUrl": fmt.Sprintf("https://%s", endpoint),
+						"headers": map[string]string{
+							"Content-Type": "application/json",
+						},
+						"clientCertPath": certPath,
+						"clientKeyPath":  keyPath,
+						"caCertPath":     filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem"),
+						"operatorId":     regResp.OperatorID,
+						"description":    "g8e Gateway - BFT-governed MCP/A2A protocol translator with L1/L2/L3 verification",
+						"notes": []string{
+							"Universal HTTP endpoint - no stdio bridge required",
+							"Requires mTLS client certificate issued by the g8e Gateway CA",
+							"Obtain client certificate via: ./g8e security pki enroll --endpoint <gateway-address>",
+							"All tool calls are wrapped in GovernanceEnvelope and verified through the 3-layer governance sequence",
+							"Local 'read_field' tool is available for JIT field resolution from governed collections",
+						},
+					},
+				},
+			}
+
+			configJSON, err := json.MarshalIndent(mcpConfig, "", "  ")
+			if err != nil {
+				return fmt.Errorf("failed to marshal MCP config: %w", err)
+			}
+			cmd.Println(string(configJSON))
 
 			return nil
 		},
