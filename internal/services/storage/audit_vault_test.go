@@ -1600,7 +1600,6 @@ func TestAuditVaultService_EncryptionWithRekey(t *testing.T) {
 }
 
 func TestAuditVaultService_MixedEncryptedUnencrypted(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 
 	config1 := &AuditVaultConfig{

@@ -70,7 +70,7 @@ func NewGatewayConfig(gatewayURL string) *Config {
 					ClientKeyEnv:         "G8E_CLIENT_KEY_PATH",
 					CACertificateEnv:     "G8E_CA_CERT_PATH",
 					VerifyServer:         true,
-					VerifyHostname:       "localhost",
+					VerifyHostname:       "g8e.local",
 				},
 				Capabilities: Capabilities{
 					Tools:     true,

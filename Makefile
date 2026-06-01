@@ -66,15 +66,15 @@ help:
 	@echo "  build-darwin-compressed	Build g8e for Darwin with UPX compression"
 	@echo ""
 	@echo "Test:"
-	@echo "  test                  Run all tests with race detection"
+	@echo "  test                  Run all tests with race detection (unit + gateway)"
 	@echo "  test-short            Run short tests with race detection"
 	@echo "  test-coverage         Run tests with coverage (enforces 60% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
 	@echo "  test-shuffle          Run all tests with randomized order"
 	@echo "  test-integration      Run integration tests (requires platform running and auth login)"
 	@echo "  test-scenario         Run scenario integration tests (requires platform running)"
 	@echo "  test-gateway          Run gateway tests"
-	@echo "  test-mcp              Run MCP tests"
-	@echo "  test-a2a              Run A2A tests"
+	@echo "  test-mcp              Run MCP tests (requires platform running and auth login)"
+	@echo "  test-a2a              Run A2A tests (requires platform running and auth login)"
 	@echo "  test-universal-gateway Run universal gateway integration tests (requires platform running and auth login)"
 	@echo "  test-byo              Run BYO client tests (requires platform running and auth login)"
 	@echo "  test-native           Run native real operator tests (requires platform running and auth login)"
@@ -307,11 +307,7 @@ build-windows-compressed: upx-install
 		$(UPX) --best --lzma $$BINARY; \
 		sha256sum $$BINARY > $$BINARY.sha256; \
 	done
-	@echo "Windows compressed build complete. To avoid Defender false positives:"
-	@echo "  1. Code sign with a trusted certificate (EV Code Signing recommended)"
-	@echo "  2. Submit to Microsoft SmartScreen for whitelisting"
-	@echo "  3. Distribute via signed installer (MSIX or WiX)"
-	@echo "Binaries: bin/g8e-windows-*.exe"
+	@echo "Windows compressed build complete. Binaries: bin/g8e-windows-*.exe"
 
 .PHONY: build-darwin
 build-darwin:
@@ -356,22 +352,23 @@ build-windows:
 		GOOS=windows GOARCH=$$arch go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=windows_$$arch -s -w" -o $$BINARY ./cmd/operator || exit 1; \
 		sha256sum $$BINARY > $$BINARY.sha256; \
 	done
-	@echo "Windows build complete. To avoid Defender false positives:"
-	@echo "  1. Code sign with a trusted certificate (EV Code Signing recommended)"
-	@echo "  2. Submit to Microsoft SmartScreen for whitelisting"
-	@echo "  3. Distribute via signed installer (MSIX or WiX)"
-	@echo "Binaries: bin/g8e-windows-*.exe"
+	@echo "Windows build complete. Binaries: bin/g8e-windows-*.exe"
 
 # =============================================================================
 # TEST
 # =============================================================================
 .PHONY: test
-test:
-	@go test -race -count=1 -timeout 180s ./...
+test: test-unit test-gateway
+	@echo "All tests completed successfully."
+
+.PHONY: test-unit
+test-unit:
+	@echo "Running unit tests..."
+	@go test -race -count=1 -timeout 180s $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/")
 
 .PHONY: test-short
 test-short:
-	@go test -race -short -count=1 -timeout 60s ./...
+	@go test -race -short -count=1 -timeout 60s $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/")
 
 .PHONY: test-coverage
 test-coverage:
@@ -404,7 +401,7 @@ test-coverage:
 
 .PHONY: test-shuffle
 test-shuffle:
-	@go test -race -count=1 -shuffle=on -timeout 180s ./...
+	@go test -race -count=1 -shuffle=on -timeout 180s $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/")
 
 .PHONY: test-integration
 test-integration:
@@ -423,13 +420,13 @@ test-gateway:
 
 .PHONY: test-mcp
 test-mcp:
-	@echo "Running MCP tests..."
-	@go test -race -count=1 -timeout 180s ./test/mcp_gateway_test.go ./test/mcp_real_operator_test.go ./test/mcp_stdio_test.go
+	@echo "Running MCP tests (requires platform running and auth login)..."
+	@go test -tags=integration -race -count=1 -timeout 180s ./test/integration_helper.go ./test/mcp_gateway_test.go ./test/mcp_real_operator_test.go ./test/mcp_stdio_test.go
 
 .PHONY: test-a2a
 test-a2a:
-	@echo "Running A2A tests..."
-	@go test -race -count=1 -timeout 180s ./test/a2a_gateway_test.go ./test/a2a_real_operator_test.go
+	@echo "Running A2A tests (requires platform running and auth login)..."
+	@go test -tags=integration -race -count=1 -timeout 180s ./test/integration_helper.go ./test/a2a_gateway_test.go ./test/a2a_real_operator_test.go
 
 .PHONY: test-universal-gateway
 test-universal-gateway:
