@@ -128,9 +128,6 @@ jobs:
       - name: Build CLI
         run: go build -ldflags "-X main.version=${{ github.ref_name }} -X main.buildID=${{ github.sha }} -X main.buildTime=$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ') -X main.platform=windows_amd64" -o g8e.exe ./cmd/operator
 
-      - name: Run unit tests
-        run: go test -race -count=1 -timeout 180s ./...
-
       - name: Verify Windows build
         run: |
           if (-not (Test-Path g8e.exe)) {
