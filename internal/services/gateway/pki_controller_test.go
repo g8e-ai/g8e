@@ -531,12 +531,37 @@ func TestPKIController_HandleBinaryDownload_NotFound(t *testing.T) {
 	t.Parallel()
 	c, _, _ := setupTestPKIController(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/binary/nonexistent.exe", nil)
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/binary/g8e-linux-amd64", nil)
 	rr := httptest.NewRecorder()
 
 	c.handleBinaryDownload(rr, req)
 
 	assert.Equal(t, http.StatusNotFound, rr.Code)
+}
+
+func TestPKIController_HandleBinaryDownload_InvalidName(t *testing.T) {
+	t.Parallel()
+	c, _, _ := setupTestPKIController(t)
+
+	testCases := []string{
+		"../../../etc/passwd",
+		"malicious.exe",
+		"g8e-unknown-os-amd64",
+		"g8e-linux-unknown-arch",
+		"random-file.txt",
+		".hidden",
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/binary/"+tc, nil)
+			rr := httptest.NewRecorder()
+
+			c.handleBinaryDownload(rr, req)
+
+			assert.Equal(t, http.StatusBadRequest, rr.Code)
+		})
+	}
 }
 
 func mustMarshalJSON(t *testing.T, v interface{}) []byte {

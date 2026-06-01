@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -381,6 +382,15 @@ func (c *PKIController) handleBinaryDownload(w http.ResponseWriter, r *http.Requ
 	filename := filepath.Base(r.URL.Path)
 	if filename == "" || filename == "." {
 		c.responder.Error(w, http.StatusBadRequest, "invalid filename")
+		return
+	}
+
+	// Validate filename matches expected g8e binary pattern: g8e-{os}-{arch}[.exe]
+	// Allowed OS: linux, darwin, windows
+	// Allowed arch: amd64, arm64, 386
+	binaryPattern := regexp.MustCompile(`^g8e-(linux|darwin|windows)-(amd64|arm64|386)(\.exe)?$`)
+	if !binaryPattern.MatchString(filename) {
+		c.responder.Error(w, http.StatusBadRequest, "invalid binary name")
 		return
 	}
 
