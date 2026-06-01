@@ -351,10 +351,14 @@ func (pki *PKIAuthority) GatewayTrustBundle() ([]byte, error) {
 	pki.mu.RLock()
 	defer pki.mu.RUnlock()
 	bundlePath := filepath.Join(pki.pkiDir, "trust", "g8eg-ca-bundle.pem")
-	pki.logger.Debug("GatewayTrustBundle reading", "path", bundlePath, "pki_dir", pki.pkiDir)
+	if pki.logger != nil {
+		pki.logger.Debug("GatewayTrustBundle reading", "path", bundlePath, "pki_dir", pki.pkiDir)
+	}
 	data, err := os.ReadFile(bundlePath)
 	if err != nil {
-		pki.logger.Error("GatewayTrustBundle failed to read", "error", err, "path", bundlePath, "pki_dir", pki.pkiDir)
+		if pki.logger != nil {
+			pki.logger.Error("GatewayTrustBundle failed to read", "error", err, "path", bundlePath, "pki_dir", pki.pkiDir)
+		}
 		return nil, err
 	}
 	return data, nil
@@ -858,12 +862,6 @@ func writePublicPEMBundleFile(path string, pemBytes []byte) error {
 	defer f.Close()
 	_, err = f.Write(pemBytes)
 	return err
-}
-
-// writePublicPEMFile writes a public certificate or bundle with 0644 permissions.
-// Deprecated: Use writePublicDERCertificateFile for DER input or writePublicPEMBundleFile for PEM input.
-func writePublicPEMFile(path, pemType string, der []byte) error {
-	return writePEMFile(path, pemType, der, 0644)
 }
 
 // writeSensitivePEMFile writes sensitive data (e.g., certificate chains) with 0600 permissions.

@@ -425,10 +425,14 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 
 // Load creates configuration from explicit options passed by main
 func Load(opts LoadOptions) (*Config, error) {
+	// Resolve paths based on project root before using them
+	projectRoot := FindProjectRoot()
+	constants.ResolvePaths(projectRoot)
+
 	// Resolve working directory - default to project root when not specified
 	workDir := opts.WorkDir
 	if workDir == "" {
-		workDir = FindProjectRoot()
+		workDir = projectRoot
 		if workDir == "" {
 			var err error
 			workDir, err = os.Getwd()
@@ -474,7 +478,7 @@ func Load(opts LoadOptions) (*Config, error) {
 		HeartbeatInterval:  heartbeatIntervalOrDefault(opts.HeartbeatInterval),
 
 		// Local storage - all paths anchored to WorkDir
-		LocalStoreDBPath:        constants.Paths.Infra.LocalStateDBPath,
+		LocalStoreDBPath:        filepath.Join(workDir, ".g8e", "local_state.db"),
 		LocalStoreMaxSizeMB:     1024,
 		LocalStoreRetentionDays: 30,
 

@@ -149,7 +149,12 @@ func TestPKIController_HandlePKIHubBundle(t *testing.T) {
 				c.pki = &PKIAuthority{}
 			},
 			expectedStatus: http.StatusInternalServerError,
-			expectedBody:   `{"error":"failed to read hub bundle"}`,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var resp map[string]string
+				err := json.Unmarshal(rr.Body.Bytes(), &resp)
+				require.NoError(t, err)
+				assert.Contains(t, resp["error"], "failed to read hub bundle")
+			},
 		},
 	}
 

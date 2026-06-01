@@ -32,6 +32,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// countCertificatesInPEM counts the number of PEM-encoded certificates in the given data.
+// This replaces the deprecated certPool.Subjects() method.
+func countCertificatesInPEM(pemData []byte) int {
+	count := 0
+	var block *pem.Block
+	rest := pemData
+	for {
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		if block.Type == "CERTIFICATE" {
+			count++
+		}
+	}
+	return count
+}
+
 func TestPKIAuthority_VerifyCertificate(t *testing.T) {
 	t.Parallel()
 	t.Run("Nil certificate is rejected", func(t *testing.T) {
@@ -263,7 +281,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 			ok := certPool.AppendCertsFromPEM(bundlePEM)
 			require.True(t, ok, "trust bundle %s should parse as valid PEM", bundleName)
 
-			actualCount := len(certPool.Subjects())
+			actualCount := countCertificatesInPEM(bundlePEM)
 			assert.Equal(t, expectedCount, actualCount, "trust bundle %s should contain %d certificates", bundleName, expectedCount)
 		}
 
@@ -1160,8 +1178,8 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		assert.True(t, ok, "root.pem should parse as valid PEM bundle")
 
 		// Verify it contains exactly 1 certificate (root CA)
-		subjects := pool.Subjects()
-		assert.Len(t, subjects, 1, "root.pem should contain exactly 1 certificate")
+		certCount := countCertificatesInPEM(rootPEM)
+		assert.Equal(t, 1, certCount, "root.pem should contain exactly 1 certificate")
 	})
 
 	t.Run("Phase8_1: operator-bundle.pem parses with 2 certificates", func(t *testing.T) {
@@ -1187,8 +1205,8 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		assert.True(t, ok, "operator-bundle.pem should parse as valid PEM bundle")
 
 		// Verify it contains exactly 2 certificates (root + operator intermediate)
-		subjects := pool.Subjects()
-		assert.Len(t, subjects, 2, "operator-bundle.pem should contain exactly 2 certificates (root + operator intermediate)")
+		certCount := countCertificatesInPEM(operatorPEM)
+		assert.Equal(t, 2, certCount, "operator-bundle.pem should contain exactly 2 certificates (root + operator intermediate)")
 	})
 
 	t.Run("Phase8_1: g8eg-ca-bundle.pem parses with 3 certificates", func(t *testing.T) {
@@ -1214,8 +1232,8 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		assert.True(t, ok, "g8eg-ca-bundle.pem should parse as valid PEM bundle")
 
 		// Verify it contains exactly 3 certificates (root + hub intermediate + operator intermediate)
-		subjects := pool.Subjects()
-		assert.Len(t, subjects, 3, "g8eg-ca-bundle.pem should contain exactly 3 certificates (root + hub + operator intermediates)")
+		certCount := countCertificatesInPEM(gatewayPEM)
+		assert.Equal(t, 3, certCount, "g8eg-ca-bundle.pem should contain exactly 3 certificates (root + hub + operator intermediates)")
 	})
 
 	t.Run("Phase8_1: serving certificate verifies against g8eg-ca-bundle.pem", func(t *testing.T) {
