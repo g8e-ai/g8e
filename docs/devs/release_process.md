@@ -13,7 +13,9 @@ Before starting a release, ensure:
 - Protocol generation is up to date: `make proto` (no uncommitted changes to generated .pb.go files)
 - Documentation is updated for any breaking changes or new features
 
-## Release Checklist
+## Pre-Release Preparation
+
+Complete all of the following steps before creating the git tag. These steps prepare the repository for release but do not yet publish anything.
 
 ### 1. Determine Version Number
 
@@ -189,7 +191,34 @@ git commit -m "Release v1.0.5"
 - Include a brief summary in the commit body if needed
 - Reference relevant issue numbers if applicable
 
-### 8. Create Git Tag
+### 8. Final Pre-Release Verification
+
+Before proceeding to the actual release, verify everything is in order:
+
+```bash
+# Verify VERSION file is correct
+cat VERSION
+
+# Verify CHANGELOG is updated
+head -n 50 CHANGELOG.md
+
+# Verify release notes file exists
+ls docs/release_notes/v1.0.5.md
+
+# Verify no uncommitted changes
+git status
+
+# Verify the commit is on main branch
+git branch --show-current
+```
+
+Ensure all pre-release changes are committed and the working directory is clean before proceeding to the release execution phase.
+
+## Release Execution
+
+Once all pre-release preparation is complete and committed, execute the following steps to publish the release.
+
+### 1. Create Git Tag
 
 Create and push an annotated tag for the release:
 
@@ -207,7 +236,7 @@ git push origin v1.0.5
 - Tag format: `vX.Y.Z` (matches VERSION file without 'v' prefix)
 - Include release notes in the tag message or reference the release notes file
 
-### 9. Create GitHub Release
+### 2. Create GitHub Release
 
 Create a GitHub release via the web interface or GitHub CLI:
 
@@ -233,7 +262,7 @@ gh release create v1.0.5 \
 - Highlight breaking changes prominently
 - Link to full CHANGELOG for detailed changes
 
-### 10. Release Protocol Packages (if applicable)
+### 3. Release Protocol Packages (if applicable)
 
 If protocol changes are included, release the Go and Python protocol packages:
 
@@ -262,7 +291,7 @@ The GitHub workflow `.github/workflows/release-python-protocol.yml` will automat
 
 **Note:** Protocol releases use the `protocol/vX.Y.Z` tag format to distinguish from platform releases.
 
-### 11. Update Documentation
+### 4. Update Documentation
 
 Update any documentation that references version numbers:
 
@@ -271,7 +300,7 @@ Update any documentation that references version numbers:
 - **API Reference**: Update if API changes are included
 - **Architecture Docs**: Update if architectural changes are included
 
-### 12. Post-Release Verification
+### 5. Post-Release Verification
 
 After the release is published:
 
@@ -289,7 +318,7 @@ After the release is published:
   ```
 4. **Monitor Issues**: Watch for any post-release issues or regressions
 
-### 13. Announce the Release
+### 6. Announce the Release
 
 Announce the release through appropriate channels:
 
