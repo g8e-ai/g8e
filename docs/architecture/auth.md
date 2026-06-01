@@ -20,10 +20,11 @@ Each system component receives a SPIFFE ID, embedded as a Uniform Resource Ident
 
 | Workload Type | SPIFFE ID Format | Reference |
 | :--- | :--- | :--- |
-| **g8e Operator (g8eo)** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` | `protocol/workload_identity.go:35-39` |
-| **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` | `protocol/workload_identity.go:46-50` |
-| **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` | `protocol/workload_identity.go:57-61` |
-| **Governance Gateway (g8eg)** | `spiffe://g8e.local/hub/operator-listen` | `protocol/workload_identity.go:68-72` |
+| **g8e Operator (g8eo)** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` | `protocol/workload_identity.go:37-39` |
+| **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` | `protocol/workload_identity.go:48-50` |
+| **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` | `protocol/workload_identity.go:59-61` |
+| **Governance Gateway (g8eg)** | `spiffe://g8e.local/hub/operator-listen` | `protocol/workload_identity.go:70-72` |
+| **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` | `protocol/workload_identity.go:139-141` |
 
 ### mTLS Enforcement
 
@@ -34,14 +35,17 @@ The Governance Gateway (g8eg) enforces TLS 1.3 for all L7 communication.
 
 ### PKI Hierarchy & Trust Domain
 
-The platform uses a three-tier PKI hierarchy issued by the Governance Gateway (g8eg):
+The platform uses a four-tier PKI hierarchy issued by the Governance Gateway (g8eg):
 
 | Tier | Certificate | Purpose | Validity |
 | :--- | :--- | :--- | :--- |
 | **Root CA** | `g8e Root CA` | Trust anchor for the entire platform | 3650 days |
 | **Hub Intermediate CA** | `g8e Hub Intermediate CA` | Signs the gateway serving certificate | 3650 days |
 | **Operator Intermediate CA** | `g8e Operator Intermediate CA` | Signs all leaf certificates (operator, CLI, app) | 3650 days |
-| **Leaf Certificates** | operator-gateway, operator, CLI, app | End-entity identities for services and clients | 7 days |
+| **Peer Intermediate CA** | `g8e Gateway Peer Intermediate CA` | Signs certificates for gateway-to-gateway peering | 3650 days |
+| **Serving Certificate** | operator-gateway | Gateway TLS identity for inbound connections | 90 days |
+| **Leaf Certificates** | operator, CLI, app | End-entity identities for services and clients | 7 days |
+| **Peer Certificates** | gateway-peer | Identity for federated gateway communication | 90 days |
 
 **Intermediate Split Rationale**: The hub and operator intermediate CAs are kept separate to enforce a clean blast-radius boundary. The hub intermediate signs only the gateway's serving identity, while the operator intermediate signs delegated workload leaves. This separation allows the operator-issuing key to be rotated or revoked without touching the gateway's serving trust, and vice versa.
 
@@ -59,14 +63,14 @@ Clients enroll in the platform using a Certificate Signing Request (CSR) bootstr
 
 ### Windows Certificate Store Enrollment
 
-Windows users can enroll via the Windows Certificate Store for seamless browser authentication:
-1. **CLI Enrollment**: Run `./g8e auth enroll-windows [--tpm]` to generate an ECDSA P-256 keypair in the Windows Personal store.
+Windows users can enroll via the Windows Certificate Store for managed browser authentication:
+1. **CLI Enrollment**: Run `./g8e auth enroll-windows [--tpm]` to generate an ECDSA P-256 keypair.
 2. **CSR Signing**: The CLI submits a CSR to the Gateway and receives a signed certificate with SPIFFE URI SAN.
-3. **Certificate Import**: The signed certificate is imported to `Cert:\CurrentUser\My` in the Windows Certificate Store.
+3. **Certificate Import**: The signed certificate is imported to `Cert:\CurrentUser\My` in the Windows Certificate Store (experimental).
 4. **Browser Authentication**: Chrome and Edge automatically present certificates from the Windows Personal store when the Gateway issues a TLS CertificateRequest.
 5. **Session Binding**: The Gateway extracts the SPIFFE URI SAN from the client certificate and creates a `web_session_id` bound to the user identity.
 
-**TPM-Backed Keys**: The `--tpm` flag uses the Microsoft Platform Crypto Provider KSP to generate keys backed by Windows Hello for Business, providing hardware-bound L3 presence proofs.
+**TPM-Backed Keys**: The `--tpm` flag utilizes the Microsoft Platform Crypto Provider KSP to generate keys in hardware. Currently, the implementation uses a software-backed key with TPM annotation as the full CNG API integration is pending.
 
 ---
 
@@ -91,29 +95,29 @@ L2 provides multi-agent cryptographic verification of intent.
 - **Posture-Aware Enforcement**: Enforces signature requirements based on the configured `GovernancePosture`.
 
 ### Layer 3: Notary (L3Notary)
-*Implementation: `internal/services/governance/l3_notary.go:29-50`*
+*Implementation: `internal/services/governance/l3_notary.go:31-35`*
 
 L3 ensures explicit human authorization for mutations.
 - **Suspension**: The Governance Gateway (g8eg) suspends transactions requiring L3 approval, storing them in the `suspended_transactions` pool.
-- **Out-of-Band (OOB) Approval**: The user approves via CLI command (`g8e approve <tx_hash>`) with cryptographic signature over the transaction hash, or via mTLS certificate fingerprint.
-- **L3Proof**: A successful approval generates an `L3Proof` containing the CLI signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
+- **Out-of-Band (OOB) Approval**: The user approves via CLI command (`g8e approve <tx_hash>`) with a cryptographic Ed25519 signature over the transaction hash, or via WebAuthn for web sessions.
+- **L3Proof**: A successful approval generates an `L3Proof` containing the cryptographic signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
 
 ### Layer 4: Warden (L4Warden)
-*Implementation: `internal/services/governance/l4_warden.go:306-320`*
+*Implementation: `internal/services/governance/l4_warden.go:307-320`*
 
 The Warden is the final fail-closed gate before execution. It verifies:
 1. **Structural Integrity**: Structural integrity, payload decoding, and L1Doctrine compliance.
-2. **Hash Verification**: Matches the `id` and `transaction_hash` fields against the recomputed hash.
+2. **Hash Verification**: Matches the `id` and `transaction_hash` fields against the recomputed SHA-256 hash.
 3. **State Root Consistency**: Ensures the `state_merkle_root` matches the current platform state.
 4. **Replay Protection**: Verifies the `nonce` using the `ReplayStore` with early reservation.
-5. **Posture Enforcement**: Enforces L2 and L3 requirements based on the configured `GovernancePosture`.
+5. **Posture Enforcement**: Enforces L2 and L3 requirements based on the configured `GovernancePosture` (Doctrine, Consensus, or Notary).
 
 ### Layer 5: Actuator (L5Actuator)
-*Implementation: `internal/services/governance/l5_actuator.go:51-70`*
+*Implementation: `internal/services/governance/l5_actuator.go:52-70`*
 
 The Actuator represents the execution boundary and final audit commitment.
 - **Egress Dispatch**: Dispatches the verified payload to downstream executors (Shell, MCP, A2A).
-- **Sovereignty Rehydration**: Rehydrates scrubbed payloads with original sensitive data just before execution.
+- **Sovereignty Rehydration**: Rehydrates scrubbed placeholders (such as `{{UEI_1}}`) with original sensitive data just before execution.
 - **Action Receipts**: Issues a signed `ActionReceipt` providing immutable proof of the outcome.
 - **Commitment**: Records the transaction in the `AuditVaultService` and chains it to the ledger.
 
@@ -133,7 +137,7 @@ Postures define which layers of the bedrock are enforced as fail-closed gates.
 
 ## 4. Sovereignty Boundary Plane
 
-Handling sensitive data without leaking it to upstream models is handled by the Sovereignty Boundary Plane:
-- **Scrubbing**: Private data is replaced with opaque tokens before sending to external LLMs.
-- **Deterministic Rehydration**: The L5 Actuator performs local rehydration of tokens just before execution via `RehydratePayload`.
+Handling sensitive data without leaking it to upstream models is managed by the Sovereignty Boundary Plane:
+- **Scrubbing**: Private data is replaced with opaque tokens (Uniform Element Identifiers, such as `{{UEI_1}}`) before sending to external LLMs.
+- **Deterministic Rehydration**: The L5 Actuator performs local rehydration of tokens just before execution via `RehydrateText`.
 - **Data Sovereignty**: Raw secrets never leave the sovereign host environment.

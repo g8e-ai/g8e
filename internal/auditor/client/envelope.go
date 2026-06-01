@@ -129,7 +129,7 @@ func (c *Client) SubmitEnvelope(ctx context.Context, p Persona, envelope *common
 	return status, body, err
 }
 
-// SubmitMaximal builds a real UAPEnvelope wrapping an MCP_CALL, computes the
+// SubmitMaximal builds a real GovernanceEnvelope wrapping an MCP_CALL, computes the
 // canonical transaction hash with g8e's own hasher, attaches L2 (and optionally
 // mock L3), marshals it as protojson, and POSTs it to the admission API.
 // Returns the computed hash so callers can drive the OOB approve flow.

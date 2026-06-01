@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a Governed Operator
 
-Last Updated: 2026-05-31
-Version: v1.0.3
+Last Updated: 2026-06-01
+Version: v1.0.5
 
 ---
 
@@ -41,8 +41,14 @@ This produces the `g8e` binary in the repository root. The binary is statically 
 
 The Makefile provides several build targets:
 
-- `make build` — Builds the `g8e` binary.
-- `make build-compressed` — Builds the `g8e` binary with compression optimizations.
+- `make build` — Builds the `g8e` binary for all platforms (linux, windows, darwin).
+- `make build-linux` — Builds the `g8e` binary for Linux (amd64, arm64, 386).
+- `make build-windows` — Builds the `g8e` binary for Windows (amd64, arm64).
+- `make build-darwin` — Builds the `g8e` binary for Darwin (amd64, arm64).
+- `make build-compressed` — Builds the `g8e` binary for all platforms with UPX compression.
+- `make build-linux-compressed` — Builds the `g8e` binary for Linux with UPX compression.
+- `make build-windows-compressed` — Builds the `g8e` binary for Windows with UPX compression.
+- `make build-darwin-compressed` — Builds the `g8e` binary for Darwin with UPX compression.
 - `make clean` — Removes compiled binaries and test artifacts.
 
 ### Cross-Compilation
@@ -200,10 +206,10 @@ Refer to `protocol/proto/g8e/` for the canonical schema definitions.
 A custom operator implementation must pass the platform test suite to claim g8e compatibility:
 
 ```bash
-./g8e test g8eo
+./g8e test unit
 ```
 
-This runs Gateway tests covering:
+This runs unit tests covering:
 - Pub/Sub command dispatch
 - AuditVaultService writes
 - LedgerService commits
@@ -214,6 +220,18 @@ This runs Gateway tests covering:
 - PKI operations
 - MCP/A2A translation
 - Sovereignty scrubbing
+
+For integration tests:
+
+```bash
+./g8e test integration
+```
+
+For the full CI pipeline:
+
+```bash
+./g8e test ci
+```
 
 ---
 

@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-05-31
-Version: v1.0.4
+Last Updated: 2026-06-01
+Version: v1.0.5
 
 ---
 
@@ -68,24 +68,28 @@ The envelope `id` must match the deterministic transaction_hash computed from it
 A valid GovernanceEnvelope must include:
 
 - **id**: Deterministic transaction hash (SHA256 of canonical fields).
-- **payload_type**: Typed payload identifier (e.g., `ShellExecuteRequested`).
-- **payload**: Typed payload content according to the protocol schema.
+- **event_type**: Typed event identifier (e.g., `g8e.v1.operator.command.requested`).
+- **payload**: Raw protobuf payload bytes.
+- **intent_data**: Structured JSON view of the intent.
+- **action_type**: UAP-compatible action type (e.g., `EXECUTE_BASH`).
+- **target_resource**: UAP-compatible target resource.
 - **nonce**: Unique value for replay defense.
 - **expires_at**: Timestamp for expiry enforcement.
 - **state_merkle_root**: Current state root from the Gateway.
-- **signatures**: L2Consensus signatures (for maximal applications).
-- **l3_notary_proof**: L3 authorization proof (mTLS certificate fingerprint or WebAuthn proof).
+- **transaction_hash**: Deterministic hash computed from envelope fields.
+- **governance**: Governance metadata containing L1, L2, and L3 proofs.
 
 ### Typed Payloads
 
-The protocol defines canonical request payload mappings for all first-class event types. Applications must use these typed payloads:
+The protocol defines canonical event types for all first-class operations. Applications must use these event types:
 
-- **Shell Operations**: `ShellExecuteRequested`, `ShellOutputReceived`
-- **File Operations**: `FileReadRequested`, `FileWriteRequested`, `FileHistoryRequested`, `FileDiffRequested`, `FileRestoreRequested`
-- **Audit Operations**: `AuditRequestEvent`
-- **Shutdown**: `ShutdownRequested`
+- **Shell Operations**: `g8e.v1.operator.command.requested`
+- **File Operations**: `g8e.v1.operator.filesystem.read.requested`, `g8e.v1.operator.file.edit.requested`, `g8e.v1.operator.file.history.fetch.requested`, `g8e.v1.operator.file.diff.fetch.requested`, `g8e.v1.operator.file.restore.requested`
+- **Filesystem Operations**: `g8e.v1.operator.filesystem.list.requested`, `g8e.v1.operator.filesystem.grep.requested`
+- **Audit Operations**: `g8e.v1.operator.audit.command.recorded`, `g8e.v1.operator.audit.ai.recorded`
+- **Shutdown**: `g8e.v1.operator.shutdown.requested`
 
-Refer to `protocol/proto/g8e/` for the canonical schema definitions.
+Refer to `protocol/proto/g8e/operator/v1/operator.proto` for the canonical schema definitions and `protocol/constants/events.json` for event type constants.
 
 ---
 
@@ -115,35 +119,33 @@ The response includes the `state_merkle_root` field.
 
 ### Step 3: Construct Typed Payload
 
-Format the mutation intent according to the protocol schema. For example, a shell execute request:
+Format the mutation intent according to the protocol schema. For example, a shell execute request uses the `CommandRequested` protobuf message:
 
 ```json
 {
   "command": "ls -la",
   "working_directory": "/tmp",
-  "environment": {}
+  "environment": {},
+  "execution_id": "unique-execution-id",
+  "justification": "List directory contents"
 }
 ```
 
+The payload must be serialized as protobuf bytes and base64-encoded in the final envelope.
+
 ### Step 4: Generate Transaction Hash
 
-Compute the deterministic transaction hash from the envelope fields:
+Compute the deterministic transaction hash from the envelope fields using the canonicalization rules defined in `pkg/governance/types.go`. The hash is computed over:
 
-```python
-import hashlib
-import json
+- action_type
+- target_resource
+- payload (base64-encoded)
+- state_merkle_root
+- nonce
+- expires_at (UTC RFC3339Nano format)
+- intent_data (canonicalized map)
 
-def compute_transaction_hash(payload_type, payload, nonce, expires_at, state_merkle_root):
-    fields = {
-        "payload_type": payload_type,
-        "payload": payload,
-        "nonce": nonce,
-        "expires_at": expires_at,
-        "state_merkle_root": state_merkle_root
-    }
-    canonical = json.dumps(fields, sort_keys=True, separators=(',', ':'))
-    return hashlib.sha256(canonical.encode()).hexdigest()
-```
+Refer to the `GenerateMessageID` function in `pkg/governance/types.go` for the exact canonicalization algorithm.
 
 ### Step 5: Build Envelope
 
@@ -152,15 +154,21 @@ Construct the GovernanceEnvelope:
 ```json
 {
   "id": "<transaction_hash>",
-  "payload_type": "ShellExecuteRequested",
-  "payload": {
+  "event_type": "g8e.v1.operator.command.requested",
+  "payload": "<base64_encoded_protobuf_bytes>",
+  "intent_data": {
     "command": "ls -la",
     "working_directory": "/tmp",
     "environment": {}
   },
+  "action_type": "EXECUTE_BASH",
+  "target_resource": "/tmp",
   "nonce": "<unique_nonce>",
   "expires_at": "<expiry_timestamp>",
-  "state_merkle_root": "<state_root>"
+  "state_merkle_root": "<state_root>",
+  "transaction_hash": "<transaction_hash>",
+  "timestamp": "<current_timestamp>",
+  "source_component": "COMPONENT_CLIENT"
 }
 ```
 
@@ -175,6 +183,8 @@ curl -X POST https://localhost:8443/api/v1/governance/envelopes \
   -H "Content-Type: application/json" \
   -d @envelope.json
 ```
+
+The Gateway validates the envelope through the five-layer governance pipeline (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator) before execution.
 
 ### Step 7: Consume Receipt
 
@@ -235,27 +245,31 @@ Applications can leverage the Governance Gateway's MCP/A2A translation layer ins
 
 ### MCP Integration
 
-For MCP-based applications, the Gateway automatically translates JSON-RPC tool calls into GovernanceEnvelope format:
+For MCP-based applications, the Gateway accepts JSON-RPC tool calls and translates them into GovernanceEnvelope format:
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/mcp/tools/call \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
-  -d '{"tool": "shell.execute", "arguments": {"command": "ls -la"}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shell_execute","arguments":{"command":"ls -la"}}}'
 ```
+
+The Gateway performs L1 Doctrine validation on the tool name before envelope construction.
 
 ### A2A Integration
 
-For A2A-based applications, the Gateway automatically translates HTTP/JSON task invocations into GovernanceEnvelope format:
+For A2A-based applications, the Gateway accepts HTTP/JSON task invocations and translates them into GovernanceEnvelope format:
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/a2a/call \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
-  -d '{"task": {"id": "task-1", "type": "file.read", "input": {"path": "/etc/hosts"}}}'
+  -d '{"skill_name":"file_read","payload_json":"{\"path\":\"/etc/hosts\"}","execution_id":"task-1"}'
 ```
+
+The Gateway performs L1 Doctrine validation on the skill name before envelope construction.
 
 ---
 
@@ -270,9 +284,10 @@ Applications should test against the reference Governance Gateway to ensure comp
 
 Verify that:
 - Envelopes are accepted by the Gateway
-- Receipts are returned with valid signatures
+- Receipts are returned with valid Ed25519 signatures
 - Mutations are executed on connected Operators
 - Audit entries are written to the audit vault
+- The transaction hash matches the envelope ID
 
 ---
 
@@ -301,11 +316,11 @@ Applications must validate the state root returned by the Governance Gateway (vi
 A reference g8e-compatible agentic ensemble demonstrates a maximal application implementation. It includes:
 
 - Internal consensus mechanism for L2 signature generation
-- Envelope construction and submission
+- Envelope construction and submission using the canonical hash algorithm
 - Receipt verification and consumption
 - MCP/A2A integration
 
-Refer to the reference ensemble source code for a complete example of a g8e-compatible application.
+Refer to `protocol/examples/governance_envelope/` for example envelope construction code and `pkg/governance/types.go` for the canonical hash implementation.
 
 ---
 

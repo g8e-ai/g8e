@@ -2,7 +2,7 @@
 
 ## Overview
 
-`g8e.local` is the canonical internal hostname for operator-to-operator communication in the g8e mesh. The gateway translates this alias to installation-specific peer identity and endpoint data behind the scenes, so users do not need to manage hostnames, IPs, or DNS records manually.
+`g8e.local` is the canonical internal hostname for operator-to-operator communication in the g8e mesh. The gateway translates this alias to installation-specific peer identity and endpoint data, ensuring that users do not manage hostnames, IPs, or DNS records manually. As of v1.0.6, this layer provides the foundational PKI and identity binding for gateway-to-gateway federation.
 
 ## Design Goals
 
@@ -24,32 +24,31 @@
 The gateway maintains a mapping from the canonical alias to installation-specific identity:
 
 ```
-g8e.local → spiffe://g8e.local/gateway/<gateway_id>
+g8e.local -> spiffe://g8e.local/gateway/<gateway_id>
 ```
 
-Where `<gateway_id>` is a persistent identifier generated at gateway installation time.
+Where `<gateway_id>` is a persistent identifier generated at gateway installation time and stored in the data directory. The identity is defined in `../../protocol/workload_identity.go`.
 
 ### 3. Peer Endpoint Resolution
 
-When a gateway needs to communicate with a peer, it performs internal resolution:
+When a gateway needs to communicate with a peer, it utilizes the `PeerConnectionManager` defined in `../../internal/services/gateway/peer_connection.go` to perform resolution:
 
 ```
-g8e.local → {
-  gateway_id: "abc123",
-  endpoints: ["10.0.1.5:8443", "192.168.1.100:8443"],
+g8e.local -> {
+  gateway_id: "gw-abc123-...",
+  endpoints: ["10.0.1.5:8440", "192.168.1.100:8440"],
   certificate: <gateway peer leaf cert>,
   last_seen: <timestamp>
 }
 ```
 
 The endpoint set is discovered via:
-- Initial seed gateway configuration (if provided)
-- Peer exchange during mesh membership synchronization
-- Local network identity detection (for single-gateway deployments)
+- Initial federation seed configuration (via `FederationSeedURL`)
+- Local network identity detection for standalone deployments as implemented in `../../internal/services/gateway/gateway_service.go`
 
 ### 4. Certificate SAN Binding
 
-Gateway peer certificates include the canonical alias in their SPIFFE URI SAN:
+Gateway peer certificates include the canonical alias in their SPIFFE URI SAN, managed by `PKIAuthority` in `../../internal/services/gateway/gateway_certs.go`:
 
 ```
 URI SAN: spiffe://g8e.local/gateway/<gateway_id>
@@ -57,89 +56,49 @@ URI SAN: spiffe://g8e.local/gateway/<gateway_id>
 
 This ensures:
 - Identity is consistent across the mesh
-- mTLS validation can verify the canonical namespace
-- Certificate revocation operates on the canonical identity, not host-specific names
+- mTLS validation verifies the canonical namespace
+- Certificate revocation operates on the canonical identity rather than host-specific names
 
 ## Routing Flow
 
 ### Local Operator Resolution
 
-1. Envelope arrives at local gateway
-2. Gateway checks locality registry for target operator
-3. If operator is local, deliver via in-process pub/sub
-4. No alias translation needed for local delivery
+1. Envelope arrives at the local gateway
+2. Gateway identifies the target operator via the internal pub/sub router in `../../internal/services/gateway/gateway_pubsub.go`
+3. If the operator is local, the gateway delivers the envelope via in-process dispatch
+4. No alias translation is required for local delivery
 
-### Remote Operator Resolution
+### Federation Foundations
 
-1. Envelope arrives at local gateway
-2. Gateway checks locality registry for target operator
-3. If operator is remote, resolve owning gateway via `g8e.local` translation
-4. Forward envelope to peer gateway using resolved endpoint and peer certificate
-5. Receiving gateway re-verifies envelope on arrival before execution
+The v1.0.6 release provides the PKI and identity foundations for remote resolution:
+1. Gateway peer identity is established via `gateway-peer` intermediate CA
+2. `PeerConnectionManager` maintains outbound-only connections to a federation seed
+3. Envelopes are re-verified by the receiving gateway using the logic in `../../internal/services/gateway/governance_envelope.go`
 
 ## Implementation Notes
 
 ### Gateway ID Generation
 
-- Generated once at gateway installation
-- Persisted in gateway data directory
-- Never regenerated unless gateway is reinstalled
-- Format: UUID or cryptographically random string
-
-### Translation Cache
-
-- Gateway caches resolved peer endpoints
-- Cache entries have TTL based on peer heartbeat
-- Stale entries trigger re-resolution via peer exchange
+- Generated once at gateway installation by `../../internal/services/gateway/peer_connection.go`
+- Persisted in the `gateway-id` file within the gateway data directory
+- Format: `gw-<hex>-<hex>-<hex>-<hex>` (16 bytes of entropy)
 
 ### Fallback Behavior
 
-- If no seed gateway is configured, `g8e.local` resolves to localhost
-- This preserves standalone gateway behavior
-- Federation is opt-in via seed configuration
+- If no federation seed is configured, `g8e.local` utilizes localhost for service discovery
+- Standalone gateway behavior is preserved through this fallback
+- Federation remains opt-in via seed configuration
 
 ### Security Invariants
 
-1. **Identity binding**: All peer connections use mTLS with SPIFFE URI SAN validation
-2. **Canonical namespace**: Certificates always use `spiffe://g8e.local/...` regardless of host
-3. **No DNS dependency**: Translation is internal; no external DNS required
-4. **Re-verification**: Every gateway re-verifies envelopes on receipt, regardless of forwarding path
-
-## Future Extensions
-
-### Multi-Mesh Support
-
-If multi-mesh separation is needed, the canonical alias could be extended:
-
-```
-g8e.local → spiffe://g8e.local/mesh/<mesh_id>/gateway/<gateway_id>
-```
-
-This would require:
-- Mesh ID configuration at install time
-- Per-mesh trust domains
-- Cross-mesh routing policies
-
-### Service Discovery
-
-The translation layer could be extended to support service discovery:
-
-```
-g8e.local → {
-  gateway_id: "abc123",
-  services: {
-    "operator-xyz": {
-      endpoints: [...],
-      certificate: <operator leaf cert>
-    }
-  }
-}
-```
-
-This would enable direct operator-to-operator communication without gateway forwarding.
+1. **Identity binding**: All peer connections enforce mTLS with SPIFFE URI SAN validation
+2. **Canonical namespace**: Certificates utilize `spiffe://g8e.local/...` regardless of the host environment
+3. **No DNS dependency**: Translation is internal to the gateway service; no external DNS is required
+4. **Re-verification**: Every gateway re-verifies envelopes on receipt as mandated by the governance pipeline in `../../internal/services/governance/processor.go`
 
 ## References
 
-- Federation plan: `.local.dev/docs/plans/gateway-federation-option-a-plan.md`
-- Gateway PKI: `internal/services/gateway/gateway_certs.go`
-- Workload identity: `protocol/workload_identity.go`
+- Federation plan: `../../.local.dev/docs/plans/gateway-federation-option-a-plan.md`
+- Gateway PKI: `../../internal/services/gateway/gateway_certs.go`
+- Workload identity: `../../protocol/workload_identity.go`
+- Port constants: `../../internal/constants/ports.go`

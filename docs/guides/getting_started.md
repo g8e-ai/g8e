@@ -183,7 +183,7 @@ The Gateway operates in three security postures:
 - **Consensus Mode**: L1Doctrine/L2Consensus enforced, L3 audited
 - **Notary Mode**: L1Doctrine/L2Consensus/L3Notary strictly enforced
 
-Configure posture via `./g8e gw start --doctrine`, `--consensus`, or `--notary`.
+Configure posture via `./g8e gw start --posture doctrine`, `--posture consensus`, or `--posture notary`.
 
 ---
 
