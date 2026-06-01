@@ -16,6 +16,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -68,7 +69,7 @@ func gatewayStartCmd() *cobra.Command {
 	var rateLimitRPS float64
 	var rateLimitBurst int
 	var logLevel string
-	var skipIdentityCheck bool
+	var certIdentityMode string
 
 	cmd := &cobra.Command{
 		Use:   string(constants.ThinkingActionTypeStart),
@@ -93,34 +94,50 @@ func gatewayStartCmd() *cobra.Command {
 				return nil
 			}
 
-			// Detect network identity for certificate generation
-			if !skipIdentityCheck {
-				logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-				netDetector := network.NewDetector(logger)
-				netIdentity, err := netDetector.DetectAll(context.Background())
-				if err == nil {
-					cmd.Println("Detecting network identity...")
-					cmd.Println()
-					cmd.Println(netIdentity.FormatForDisplay())
-					cmd.Println()
-					cmd.Print("Include all in gateway certificate? [Y/n/edit]: ")
+			// Detect and display network identity before prompting
+			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			netDetector := network.NewDetector(logger)
+			netIdentity, err := netDetector.DetectAll(context.Background())
+			if err != nil {
+				cmd.Printf("Warning: Failed to detect network identity: %v\n", err)
+				cmd.Println("Falling back to localhost-only mode")
+				certIdentityMode = "localhost"
+			} else {
+				cmd.Println(netIdentity.FormatForDisplay())
+				cmd.Println()
+			}
 
-					reader := bufio.NewReader(os.Stdin)
-					response, err := reader.ReadString('\n')
-					if err != nil {
-						cmd.Println("Error reading input, proceeding with all detected identities")
-					} else {
-						response = strings.TrimSpace(strings.ToLower(response))
-						if response == "n" {
-							cmd.Println("Using localhost only for certificate")
-							// Proceed with minimal identity
-						} else if response == "edit" {
-							cmd.Println("Edit mode not yet implemented, proceeding with all detected identities")
-						}
-					}
+			// Prompt for network identity mode if not specified
+			if certIdentityMode == "" {
+				cmd.Println("  The gateway certificate can include:")
+				cmd.Println("    - All detected hostnames and IPs (recommended)")
+				cmd.Println("    - Only localhost (minimal)")
+				cmd.Println()
+				cmd.Print("Include all detected hostnames and IPs in certificate? [Y/n]: ")
+
+				reader := bufio.NewReader(os.Stdin)
+				response, err := reader.ReadString('\n')
+				if err != nil {
+					cmd.Println("Error reading input, using full identity")
+					certIdentityMode = "full"
 				} else {
-					cmd.Printf("Warning: Failed to detect network identity: %v\n", err)
-					cmd.Println("Proceeding with basic IP detection...")
+					response = strings.TrimSpace(strings.ToLower(response))
+					if response == "n" {
+						certIdentityMode = "localhost"
+						cmd.Println("Using localhost only for certificate")
+					} else {
+						certIdentityMode = "full"
+						cmd.Println("Using all detected hostnames and IPs")
+					}
+				}
+			}
+
+			// Serialize network identity to pass to subprocess
+			var identityData []byte
+			if certIdentityMode == "full" && netIdentity != nil {
+				identityData, err = json.Marshal(netIdentity)
+				if err != nil {
+					return fmt.Errorf("failed to marshal network identity: %w", err)
 				}
 			}
 
@@ -139,6 +156,8 @@ func gatewayStartCmd() *cobra.Command {
 				rateLimitRPS,
 				rateLimitBurst,
 				logLevel,
+				certIdentityMode,
+				identityData,
 			); err != nil {
 				return err
 			}
@@ -212,7 +231,7 @@ func gatewayStartCmd() *cobra.Command {
 	cmd.Flags().Float64Var(&rateLimitRPS, "rate-limit-rps", 0, "Gateway requests per second limit (set to 0 to disable)")
 	cmd.Flags().IntVar(&rateLimitBurst, "rate-limit-burst", 0, "Gateway rate limit burst size")
 	cmd.Flags().StringVar(&logLevel, "log", "info", "Log level: info, error, debug")
-	cmd.Flags().BoolVar(&skipIdentityCheck, "skip-identity-check", false, "Skip network identity detection prompt")
+	cmd.Flags().StringVar(&certIdentityMode, "cert-mode", "", "Certificate mode: full (all hostnames/IPs), localhost (only localhost)")
 
 	return cmd
 }
@@ -333,6 +352,8 @@ func gatewayRestartCmd() *cobra.Command {
 				0,
 				0,
 				"info",
+				"",
+				nil,
 			); err != nil {
 				return err
 			}

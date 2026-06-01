@@ -77,6 +77,27 @@ func (pm *ProcessManager) ensureDirectories() error {
 	return nil
 }
 
+func (pm *ProcessManager) networkIdentityArgs(identityData []byte) ([]string, error) {
+	if len(identityData) == 0 {
+		return nil, nil
+	}
+
+	identityFile, err := pm.writeNetworkIdentityFile(identityData)
+	if err != nil {
+		return nil, err
+	}
+
+	return []string{"--network-identity-file", identityFile}, nil
+}
+
+func (pm *ProcessManager) writeNetworkIdentityFile(identityData []byte) (string, error) {
+	identityFile := filepath.Join(pm.runtimeDir, "network-identity.json")
+	if err := os.WriteFile(identityFile, identityData, 0600); err != nil {
+		return "", fmt.Errorf("failed to write network identity file: %w", err)
+	}
+	return identityFile, nil
+}
+
 func (pm *ProcessManager) checkPortAvailable(port int, name string) error {
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
@@ -222,7 +243,7 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 	return "./g8e", nil
 }
 
-func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort, publicPort, mcpHttpPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel string) error {
+func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort, publicPort, mcpHttpPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode string, identityData []byte) error {
 	if err := pm.ensureDirectories(); err != nil {
 		return err
 	}
@@ -307,6 +328,10 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 		"--log", effectiveLogLevel,
 	}
 
+	if certIdentityMode != "" {
+		args = append(args, "--cert-mode", certIdentityMode)
+	}
+
 	if effectivePasskeyRpID != "" {
 		args = append(args, "--passkey-rp-id", effectivePasskeyRpID)
 	}
@@ -319,6 +344,12 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 	if effectiveRateLimitBurst > 0 {
 		args = append(args, "--rate-limit-burst", strconv.Itoa(effectiveRateLimitBurst))
 	}
+
+	identityArgs, err := pm.networkIdentityArgs(identityData)
+	if err != nil {
+		return err
+	}
+	args = append(args, identityArgs...)
 
 	cmd := exec.Command(binPath, args...)
 	cmd.Stdout = logHandle

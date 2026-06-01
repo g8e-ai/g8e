@@ -16,10 +16,12 @@ package gateway
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -93,41 +95,19 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, jwksProvider, cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
 	sessionSvc := NewSessionService(db, logger)
 
-	// Detect network identity for certificate generation
-	netDetector := network.NewDetector(logger)
-	netIdentity, err := netDetector.DetectAll(context.Background())
-	var extraIPs []net.IP
+	// Detect network identity for certificate generation based on mode
+	extraIPs, extraDNSNames, err := resolveGatewayCertificateIdentity(cfg.Gateway.CertMode, cfg.Gateway.NetworkIdentityFile, network.NewDetector(logger), logger)
 	if err != nil {
-		logger.Warn("Failed to detect full network identity, falling back to basic IP detection", "error", err)
-		// Fallback to basic IP detection
-		if ifaces, err := net.Interfaces(); err == nil {
-			for _, iface := range ifaces {
-				addrs, _ := iface.Addrs()
-				for _, addr := range addrs {
-					var ip net.IP
-					switch v := addr.(type) {
-					case *net.IPNet:
-						ip = v.IP
-					case *net.IPAddr:
-						ip = v.IP
-					}
-					if ip != nil && !ip.IsLoopback() && ip.To4() != nil {
-						extraIPs = append(extraIPs, ip)
-					}
-				}
-			}
-		}
-		if err := pki.EnsurePKI(extraIPs); err != nil {
-			return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
-		}
-	} else {
-		// Use detected network identity for PKI
-		extraIPs = netIdentity.GetAllIPs()
-		extraDNSNames := netIdentity.GetAllDNSNames()
+		return nil, err
+	}
+	if len(extraDNSNames) > 0 {
 		if err := pki.EnsurePKIWithNames(extraIPs, extraDNSNames); err != nil {
 			return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
 		}
-		logger.Info("Network identity detected for certificate", "dns_names", len(extraDNSNames), "ips", len(extraIPs))
+	} else {
+		if err := pki.EnsurePKI(extraIPs); err != nil {
+			return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
+		}
 	}
 
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
@@ -168,6 +148,90 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 	}
 
 	return ls, nil
+}
+
+type networkIdentityDetector interface {
+	DetectAll(context.Context) (*network.NetworkIdentity, error)
+}
+
+func resolveGatewayCertificateIdentity(certMode, identityFile string, detector networkIdentityDetector, logger *slog.Logger) ([]net.IP, []string, error) {
+	switch certMode {
+	case "localhost":
+		return resolveLocalhostCertificateIdentity(detector, logger)
+	default:
+		return resolveFullCertificateIdentity(identityFile, detector, logger)
+	}
+}
+
+func resolveLocalhostCertificateIdentity(detector networkIdentityDetector, logger *slog.Logger) ([]net.IP, []string, error) {
+	logger.Info("Using localhost-only mode for certificate")
+	netIdentity, err := detector.DetectAll(context.Background())
+	if err != nil {
+		logger.Warn("Failed to detect localhost identities, using defaults", "error", err)
+		return []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}, []string{"localhost"}, nil
+	}
+
+	var extraIPs []net.IP
+	for _, ip := range netIdentity.GetAllIPs() {
+		if ip.IsLoopback() {
+			extraIPs = append(extraIPs, ip)
+		}
+	}
+	return extraIPs, []string{"localhost"}, nil
+}
+
+func resolveFullCertificateIdentity(identityFile string, detector networkIdentityDetector, logger *slog.Logger) ([]net.IP, []string, error) {
+	if identityFile != "" {
+		logger.Info("Using pre-detected network identity from file", "file", identityFile)
+		identityData, err := os.ReadFile(identityFile)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read network identity file: %w", err)
+		}
+
+		var netIdentity network.NetworkIdentity
+		if err := json.Unmarshal(identityData, &netIdentity); err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal network identity: %w", err)
+		}
+
+		extraIPs := netIdentity.GetAllIPs()
+		extraDNSNames := netIdentity.GetAllDNSNames()
+		logger.Info("Network identity loaded from file for certificate", "dns_names", len(extraDNSNames), "ips", len(extraIPs))
+		return extraIPs, extraDNSNames, nil
+	}
+
+	netIdentity, err := detector.DetectAll(context.Background())
+	if err != nil {
+		logger.Warn("Failed to detect full network identity, falling back to basic IP detection", "error", err)
+		extraIPs := detectBasicNonLoopbackIPv4Addresses()
+		return extraIPs, nil, nil
+	}
+
+	extraIPs := netIdentity.GetAllIPs()
+	extraDNSNames := netIdentity.GetAllDNSNames()
+	logger.Info("Network identity detected for certificate", "dns_names", len(extraDNSNames), "ips", len(extraIPs))
+	return extraIPs, extraDNSNames, nil
+}
+
+func detectBasicNonLoopbackIPv4Addresses() []net.IP {
+	var extraIPs []net.IP
+	if ifaces, err := net.Interfaces(); err == nil {
+		for _, iface := range ifaces {
+			addrs, _ := iface.Addrs()
+			for _, addr := range addrs {
+				var ip net.IP
+				switch v := addr.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+				}
+				if ip != nil && !ip.IsLoopback() && ip.To4() != nil {
+					extraIPs = append(extraIPs, ip)
+				}
+			}
+		}
+	}
+	return extraIPs
 }
 
 // newGatewayServiceFromComponents assembles a GatewayService from pre-built components.

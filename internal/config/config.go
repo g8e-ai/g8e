@@ -111,6 +111,10 @@ type GatewayConfig struct {
 	RateLimitRPS   float64 // Requests per second limit (default: 5)
 	RateLimitBurst int     // Burst size for rate limiter (default: 10)
 
+	// Certificate mode
+	CertMode            string // "full" for all hostnames/IPs, "localhost" for minimal
+	NetworkIdentityFile string // Path to JSON file containing pre-detected network identity
+
 	// Distributed lock retry configuration
 	LockMaxRetries int           // Maximum retry attempts for distributed lock acquisition (default: 30)
 	LockRetryDelay time.Duration // Base delay for lock retry backoff (default: 50ms)
@@ -268,6 +272,9 @@ type GatewayOptions struct {
 
 	RateLimitRPS   float64
 	RateLimitBurst int
+
+	CertMode            string
+	NetworkIdentityFile string
 
 	// AllowTestPortZero should be true only when called from Go tests; when false,
 	// port 0 is rejected to prevent dynamic port assignment in production.
@@ -437,6 +444,10 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			// Rate limiting defaults
 			RateLimitRPS:   opts.RateLimitRPS,
 			RateLimitBurst: opts.RateLimitBurst,
+
+			// Certificate mode
+			CertMode:            opts.CertMode,
+			NetworkIdentityFile: opts.NetworkIdentityFile,
 
 			// Distributed lock retry defaults
 			LockMaxRetries: 30,                    // 30 retry attempts

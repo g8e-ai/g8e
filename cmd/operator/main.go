@@ -389,6 +389,8 @@ func main() {
 	var gatewayPasskeyRpName string
 	var gatewayRateLimitRPS float64
 	var gatewayRateLimitBurst int
+	var gatewayCertIdentityMode string
+	var gatewayNetworkIdentityFile string
 	var insecureMode bool
 	var insecureURL string
 	var insecureToken string
@@ -437,6 +439,8 @@ func main() {
 	flag.StringVar(&gatewayPasskeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
 	flag.Float64Var(&gatewayRateLimitRPS, "rate-limit-rps", 5.0, "Gateway requests per second limit (set to 0 to disable)")
 	flag.IntVar(&gatewayRateLimitBurst, "rate-limit-burst", 10, "Gateway rate limit burst size")
+	flag.StringVar(&gatewayCertIdentityMode, "cert-mode", "", "Certificate mode: full (all hostnames/IPs), localhost (only localhost)")
+	flag.StringVar(&gatewayNetworkIdentityFile, "network-identity-file", "", "Path to JSON file containing pre-detected network identity")
 	flag.BoolVar(&rekeyVault, "rekey-vault", false, "Re-encrypt vault with new private key (requires --old-key)")
 	flag.StringVar(&oldPrivateKeyStr, "old-key", "", "Old private key for vault re-keying")
 	flag.BoolVar(&verifyVault, "verify-vault", false, "Verify vault integrity")
@@ -545,7 +549,7 @@ func main() {
 	}
 
 	if postureCount > 0 {
-		runGatewayMode(posture, gatewayHTTPPort, gatewayBootstrapPort, gatewayPublicPort, gatewayMCPHttpPort, gatewayDataDir, gatewayPKIDir, gatewaySecretsDir, gatewayPasskeyRpID, gatewayPasskeyRpName, gatewayRateLimitRPS, gatewayRateLimitBurst, logLevel)
+		runGatewayMode(posture, gatewayHTTPPort, gatewayBootstrapPort, gatewayPublicPort, gatewayMCPHttpPort, gatewayDataDir, gatewayPKIDir, gatewaySecretsDir, gatewayPasskeyRpID, gatewayPasskeyRpName, gatewayRateLimitRPS, gatewayRateLimitBurst, logLevel, gatewayCertIdentityMode, gatewayNetworkIdentityFile)
 		return
 	}
 
@@ -909,7 +913,7 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 // runGatewayMode starts the Operator in gateway mode - the platform's central
 // persistence (operator) and pub/sub broker. In this mode, the Operator also
 // runs an in-process command service to act as the sovereign execution Gateway.
-func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publicPort, mcpHttpPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel string) {
+func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publicPort, mcpHttpPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode, networkIdentityFile string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
@@ -937,21 +941,23 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		"build", buildID)
 
 	cfg, err := config.LoadGateway(config.GatewayOptions{
-		Posture:           posture,
-		HTTPPort:          httpPort,
-		BootstrapPort:     bootstrapPort,
-		PublicPort:        publicPort,
-		MCPHttpPort:       mcpHttpPort,
-		DataDir:           dataDir,
-		PKIDir:            pkiDir,
-		SecretsDir:        secretsDir,
-		PasskeyRpID:       passkeyRpID,
-		PasskeyRpName:     passkeyRpName,
-		RateLimitRPS:      rateLimitRPS,
-		RateLimitBurst:    rateLimitBurst,
-		MCPDownstreamURL:  "",
-		A2ADownstreamURL:  "",
-		AllowTestPortZero: false,
+		Posture:             posture,
+		HTTPPort:            httpPort,
+		BootstrapPort:       bootstrapPort,
+		PublicPort:          publicPort,
+		MCPHttpPort:         mcpHttpPort,
+		DataDir:             dataDir,
+		PKIDir:              pkiDir,
+		SecretsDir:          secretsDir,
+		PasskeyRpID:         passkeyRpID,
+		PasskeyRpName:       passkeyRpName,
+		RateLimitRPS:        rateLimitRPS,
+		RateLimitBurst:      rateLimitBurst,
+		CertMode:            certIdentityMode,
+		NetworkIdentityFile: networkIdentityFile,
+		MCPDownstreamURL:    "",
+		A2ADownstreamURL:    "",
+		AllowTestPortZero:   false,
 	})
 	if err != nil {
 		logger.Error("Failed to load gateway configuration", string(constants.ConnectionStateError), err)
