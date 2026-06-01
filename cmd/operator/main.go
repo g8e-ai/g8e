@@ -498,6 +498,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  --passkey-rp-name <name>    RP Name for passkey operations (default: g8e)\n")
 		fmt.Fprintf(os.Stderr, "  --rate-limit-rps <rps>      Requests per second limit (default: 5.0, set to 0 to disable)\n")
 		fmt.Fprintf(os.Stderr, "  --rate-limit-burst <burst>  Rate limit burst size (default: 10)\n")
+		fmt.Fprintf(os.Stderr, "  --cert-mode <mode>         Certificate mode: full (all hostnames/IPs), localhost (only localhost)\n")
+		fmt.Fprintf(os.Stderr, "  --network-identity-file <path> Path to JSON file containing pre-detected network identity\n")
 		fmt.Fprintf(os.Stderr, "\nVault Management:\n")
 		fmt.Fprintf(os.Stderr, "  --rekey-vault           Re-encrypt vault with new API key\n")
 		fmt.Fprintf(os.Stderr, "  --old-key <key>         Old API key (required for --rekey-vault)\n")
