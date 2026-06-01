@@ -218,6 +218,8 @@ func (s *FsListService) buildEntry(fi os.FileInfo, fullPath string) models.FsLis
 	if sys := fi.Sys(); sys != nil {
 		if stat, ok := sys.(*syscall.Stat_t); ok {
 			entry.Inode = stat.Ino
+			// Nlink type varies by architecture (uint16 on amd64, uint32 on arm64/386)
+			// Per-architecture getNlink helper handles conversion to uint64
 			entry.Nlink = getNlink(stat)
 
 			// Get owner/group names
