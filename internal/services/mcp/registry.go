@@ -122,12 +122,12 @@ func isValidToolName(name string) bool {
 	for i, r := range name {
 		if i == 0 {
 			// First character must be a letter
-			if !(r >= 'a' && r <= 'z') {
+			if r < 'a' || r > 'z' {
 				return false
 			}
 		} else {
 			// Subsequent characters can be letters, digits, or underscores
-			if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_') {
+			if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' {
 				return false
 			}
 		}

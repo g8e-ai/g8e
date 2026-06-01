@@ -11,6 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build ignore
+// +build ignore
+
 // TEMPLATE: Copy this file to create a new native tool
 //
 // USAGE:
