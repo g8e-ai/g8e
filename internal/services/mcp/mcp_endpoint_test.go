@@ -27,16 +27,38 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHandleMCP_InitializeHandshake(t *testing.T) {
-	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
+// endpointTestOption is a functional option for configuring a test GatewayService for endpoint tests.
+type endpointTestOption func(*GatewayService)
 
+// withEndpointSigningKey sets custom signing key and keyID for the test GatewayService.
+func withEndpointSigningKey(privKey ed25519.PrivateKey, keyID string) endpointTestOption {
+	return func(g *GatewayService) {
+		g.signingKey = privKey
+		g.keyID = keyID
+	}
+}
+
+// newEndpointTestGatewayService creates a GatewayService with sensible defaults for endpoint testing.
+// Options can be provided to override specific fields.
+func newEndpointTestGatewayService(opts ...endpointTestOption) *GatewayService {
+	logger := slog.Default()
 	g := &GatewayService{
 		logger:          logger,
-		responder:       resp,
+		responder:       responder.New(logger),
 		maxPayloadBytes: 10 * 1024 * 1024,
 	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(g)
+	}
+
+	return g
+}
+
+func TestHandleMCP_InitializeHandshake(t *testing.T) {
+	t.Parallel()
+	g := newEndpointTestGatewayService()
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
@@ -66,14 +88,7 @@ func TestHandleMCP_InitializeHandshake(t *testing.T) {
 
 func TestHandleMCP_InitializeEchoesProtocolVersion(t *testing.T) {
 	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
-
-	g := &GatewayService{
-		logger:          logger,
-		responder:       resp,
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newEndpointTestGatewayService()
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}`
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
@@ -93,14 +108,7 @@ func TestHandleMCP_InitializeEchoesProtocolVersion(t *testing.T) {
 
 func TestHandleMCP_InitializeDefaultsProtocolVersion(t *testing.T) {
 	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
-
-	g := &GatewayService{
-		logger:          logger,
-		responder:       resp,
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newEndpointTestGatewayService()
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"initialize"}`
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
@@ -121,14 +129,7 @@ func TestHandleMCP_InitializeDefaultsProtocolVersion(t *testing.T) {
 
 func TestHandleMCP_NotificationInitialized(t *testing.T) {
 	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
-
-	g := &GatewayService{
-		logger:          logger,
-		responder:       resp,
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newEndpointTestGatewayService()
 
 	reqBody := `{"jsonrpc":"2.0","method":"notifications/initialized"}`
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
@@ -142,14 +143,7 @@ func TestHandleMCP_NotificationInitialized(t *testing.T) {
 
 func TestHandleMCP_Ping(t *testing.T) {
 	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
-
-	g := &GatewayService{
-		logger:          logger,
-		responder:       resp,
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newEndpointTestGatewayService()
 
 	reqBody := `{"jsonrpc":"2.0","id":42,"method":"ping"}`
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
@@ -170,14 +164,7 @@ func TestHandleMCP_Ping(t *testing.T) {
 
 func TestHandleMCP_IDEchoing(t *testing.T) {
 	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
-
-	g := &GatewayService{
-		logger:          logger,
-		responder:       resp,
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newEndpointTestGatewayService()
 
 	testCases := []struct {
 		id       string
@@ -207,14 +194,7 @@ func TestHandleMCP_IDEchoing(t *testing.T) {
 
 func TestHandleMCP_InvalidJSONRPCVersion(t *testing.T) {
 	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
-
-	g := &GatewayService{
-		logger:          logger,
-		responder:       resp,
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newEndpointTestGatewayService()
 
 	reqBody := `{"jsonrpc":"1.0","id":1,"method":"initialize"}`
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
@@ -236,14 +216,7 @@ func TestHandleMCP_InvalidJSONRPCVersion(t *testing.T) {
 
 func TestHandleMCP_MissingMethod(t *testing.T) {
 	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
-
-	g := &GatewayService{
-		logger:          logger,
-		responder:       resp,
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newEndpointTestGatewayService()
 
 	reqBody := `{"jsonrpc":"2.0","id":1}`
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
@@ -265,14 +238,7 @@ func TestHandleMCP_MissingMethod(t *testing.T) {
 
 func TestHandleMCP_UnknownMethod(t *testing.T) {
 	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
-
-	g := &GatewayService{
-		logger:          logger,
-		responder:       resp,
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newEndpointTestGatewayService()
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"unknown_method"}`
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
@@ -294,14 +260,7 @@ func TestHandleMCP_UnknownMethod(t *testing.T) {
 
 func TestHandleMCP_BatchRequestRejected(t *testing.T) {
 	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
-
-	g := &GatewayService{
-		logger:          logger,
-		responder:       resp,
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newEndpointTestGatewayService()
 
 	reqBody := `[{"jsonrpc":"2.0","id":1,"method":"ping"}]`
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
@@ -323,14 +282,7 @@ func TestHandleMCP_BatchRequestRejected(t *testing.T) {
 
 func TestHandleMCP_GETMethodNotAllowed(t *testing.T) {
 	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
-
-	g := &GatewayService{
-		logger:          logger,
-		responder:       resp,
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newEndpointTestGatewayService()
 
 	r := httptest.NewRequest(http.MethodGet, "/mcp", nil)
 	w := httptest.NewRecorder()
@@ -343,14 +295,7 @@ func TestHandleMCP_GETMethodNotAllowed(t *testing.T) {
 
 func TestHandleMCP_InvalidJSON(t *testing.T) {
 	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
-
-	g := &GatewayService{
-		logger:          logger,
-		responder:       resp,
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newEndpointTestGatewayService()
 
 	reqBody := `{invalid json`
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
@@ -372,20 +317,11 @@ func TestHandleMCP_InvalidJSON(t *testing.T) {
 
 func TestHandleMCP_ToolsList(t *testing.T) {
 	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
-
 	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	_ = pubKey
 
-	g := &GatewayService{
-		logger:          logger,
-		responder:       resp,
-		signingKey:      privKey,
-		keyID:           "test-key",
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newEndpointTestGatewayService(withEndpointSigningKey(privKey, "test-key"))
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
@@ -406,14 +342,7 @@ func TestHandleMCP_ToolsList(t *testing.T) {
 
 func TestHandleMCP_ResourcesList(t *testing.T) {
 	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
-
-	g := &GatewayService{
-		logger:          logger,
-		responder:       resp,
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newEndpointTestGatewayService()
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"resources/list"}`
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
@@ -434,14 +363,7 @@ func TestHandleMCP_ResourcesList(t *testing.T) {
 
 func TestHandleMCP_PromptsList(t *testing.T) {
 	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
-
-	g := &GatewayService{
-		logger:          logger,
-		responder:       resp,
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newEndpointTestGatewayService()
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"prompts/list"}`
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
@@ -462,14 +384,7 @@ func TestHandleMCP_PromptsList(t *testing.T) {
 
 func TestHandleMCP_ResourcesTemplatesList(t *testing.T) {
 	t.Parallel()
-	logger := slog.Default()
-	resp := responder.New(logger)
-
-	g := &GatewayService{
-		logger:          logger,
-		responder:       resp,
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newEndpointTestGatewayService()
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"resources/templates/list"}`
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
