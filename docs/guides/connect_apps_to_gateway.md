@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to a Governance Gateway
 
-Last Updated: 2026-05-31
-Version: v1.0.4
+Last Updated: 2026-06-01
+Version: v1.0.5
 
 ---
 
@@ -219,14 +219,14 @@ The Gateway provides real-time pub/sub via WebSocket for streaming events and co
 #### WebSocket Connection
 
 ```bash
-wscat -c wss://localhost:8440/ws/pubsub \
+wscat -c wss://localhost:8440/api/v1/pubsub/stream \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key
 ```
 
 #### Pub/Sub Channels
 
-- **Mutation channels**: `cmd:*`, `auditor:*` (governed, require envelope submission)
+- **Mutation channels**: `cmd:*` (governed, require envelope submission)
 - **Non-mutation channels**: `heartbeat:*`, `results:*`, `sse:*`, `ws_session:*`, `internal:*`
 
 #### Subscribe Protocol
@@ -281,6 +281,8 @@ curl -X POST https://localhost:8440/api/v1/data/cases/_query \
     "limit": 10
   }'
 ```
+
+The document store uses the `/api/v1/data/{collection}/{id}` pattern for CRUD operations and `/api/v1/data/{collection}/_query` for queries.
 
 #### Governed Collections
 

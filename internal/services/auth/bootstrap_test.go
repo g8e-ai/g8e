@@ -98,7 +98,7 @@ func TestRequestHTTPAuth_Success(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "POST", r.Method)
-		require.Equal(t, "/api/auth/operator", r.URL.Path)
+		require.Equal(t, "/api/v1/operators/reauth", r.URL.Path)
 		require.Equal(t, "application/json", r.Header.Get(constants.HeaderContentType))
 		// mTLS authentication - no Authorization header expected
 		require.Empty(t, r.Header.Get(constants.HeaderAuthorization))

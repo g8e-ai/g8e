@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.6] - 2026-06-01
+
+### Overview
+
+v1.0.6 introduces full Windows support with native filesystem and service parity, significant improvements to gateway network identity detection, and the foundational PKI architecture for gateway-to-gateway federation. This release also standardizes `g8e.local` as the canonical internal mesh hostname and adds native support for MCP-over-HTTP.
+
+### Added
+
+*   **Native Windows Support** - Complete Windows implementation including native filesystem listing (`fs_list_windows.go`), process management, and service control. Added a one-line enrollment flow for Windows operators and specialized handling for Windows network identity (NetBIOS/AD FQDN).
+*   **Gateway Peer Identity** - Introduced a new `gateway-peer` intermediate CA and SPIFFE URI SAN binding (`spiffe://g8e.local/gateway/<id>`) to support secure gateway-to-gateway federation.
+*   **Canonical Mesh Addressing** - Standardized `g8e.local` as the internal hostname for operator-to-operator communication, supported by a new local translation layer and documentation.
+*   **MCP-over-HTTP** - Added support for Model Context Protocol over HTTP on port 8442, including a new `mcp.Config` schema for environment-based TLS configuration.
+*   **Network Identity Handoff** - Implemented a structured network identity detection system with cross-process handoff via `--network-identity-file`, allowing parent processes to pre-detect and pass network context to operators.
+
+### Changed
+
+*   **Build Pipeline** - Updated `Makefile` to support compressed builds (~15-17MB) for Linux/Windows and standard builds (~35-38MB). Refined build output for improved developer experience.
+*   **Field Path Security** - Optimized `field_parser` to use a constant-backed schema registry, moving away from filesystem-dependent validation for tool call field paths.
+*   **Architecture Documentation** - Updated the README and Getting Started guides to reflect current binary sizes, Windows QuickStart commands, and the 5-layer verification sequence.
+
+### Fixed
+
+*   **JSON Robustness** - Gateway controllers now strictly validate and reject malformed JSON bodies during operator binding and configuration updates.
+*   **Cross-Platform Nlink** - Fixed `nlink` handling in filesystem listings by implementing architecture-specific casting (uint16/uint32 to uint64) to ensure consistency across Linux, Unix, and Windows.
+*   **Gateway Startup** - Resolved race conditions in gateway service initialization specifically affecting Windows environments.
+
+---
+
 ## [1.0.5] - 2026-05-31
 
 ### Fixed

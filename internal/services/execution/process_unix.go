@@ -1,5 +1,3 @@
-//go:build 386
-
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,11 +11,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build !windows
+// +build !windows
+
 package execution
 
-import "syscall"
+import (
+	"os/exec"
+	"syscall"
+)
 
-// getNlink returns the Nlink field from Stat_t for 386 (uint32)
-func getNlink(stat *syscall.Stat_t) uint64 {
-	return uint64(stat.Nlink)
+// setProcessGroup sets the process group for Unix systems
+func setProcessGroup(cmd *exec.Cmd) {
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.Setpgid = true
+}
+
+// killProcessGroup kills a process group on Unix
+func killProcessGroup(pid int) error {
+	pgid, err := syscall.Getpgid(pid)
+	if err == nil {
+		return syscall.Kill(-pgid, syscall.SIGKILL)
+	}
+	return nil
 }

@@ -133,3 +133,34 @@ func (w *WorkloadIdentity) ExtractUserID(spiffeID string) (string, bool) {
 	}
 	return parts[4], true
 }
+
+// GatewayPeerSPIFFEID generates the SPIFFE ID for a gateway peer workload.
+// Format: spiffe://g8e.local/gateway/<gateway_id>
+func (w *WorkloadIdentity) GatewayPeerSPIFFEID(gatewayID string) string {
+	return fmt.Sprintf("spiffe://%s/gateway/%s", TrustDomain, gatewayID)
+}
+
+// GatewayPeerSPIFFEURL generates the SPIFFE URL for a gateway peer workload.
+func (w *WorkloadIdentity) GatewayPeerSPIFFEURL(gatewayID string) (*url.URL, error) {
+	return url.Parse(w.GatewayPeerSPIFFEID(gatewayID))
+}
+
+// MatchesGatewayPeer checks if a SPIFFE ID matches a gateway peer identity.
+func (w *WorkloadIdentity) MatchesGatewayPeer(spiffeID, gatewayID string) bool {
+	return spiffeID == w.GatewayPeerSPIFFEID(gatewayID)
+}
+
+// ExtractGatewayID extracts the gateway ID from a SPIFFE ID.
+// Returns the gateway ID and true if the SPIFFE ID is a valid gateway peer identity.
+func (w *WorkloadIdentity) ExtractGatewayID(spiffeID string) (string, bool) {
+	prefix := fmt.Sprintf("spiffe://%s/gateway/", TrustDomain)
+	if !strings.HasPrefix(spiffeID, prefix) {
+		return "", false
+	}
+	// Format: spiffe://g8e.local/gateway/<gateway_id>
+	parts := strings.Split(spiffeID, "/")
+	if len(parts) < 5 {
+		return "", false
+	}
+	return parts[4], true
+}

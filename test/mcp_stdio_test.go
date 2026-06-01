@@ -21,44 +21,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/stretchr/testify/assert"
 )
-
-// MCPConfig represents the MCP client configuration structure
-type MCPConfig struct {
-	MCPServers map[string]MCPServerConfig `json:"mcpServers"`
-}
-
-// MCPServerConfig represents a single MCP server configuration
-type MCPServerConfig struct {
-	Transport    TransportConfig `json:"transport"`
-	TLS          *TLSConfig      `json:"tls,omitempty"`
-	Capabilities struct {
-		Tools     bool `json:"tools"`
-		Resources bool `json:"resources"`
-		Prompts   bool `json:"prompts"`
-	} `json:"capabilities"`
-	Description string   `json:"description"`
-	Notes       []string `json:"notes"`
-}
-
-// TransportConfig represents the transport configuration
-type TransportConfig struct {
-	Type    string            `json:"type"`
-	URL     string            `json:"url,omitempty"`
-	Command string            `json:"command,omitempty"`
-	Args    []string          `json:"args,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"`
-}
-
-// TLSConfig represents TLS configuration for HTTP transport
-type TLSConfig struct {
-	ClientCertificateEnv string `json:"clientCertificateEnv"`
-	ClientKeyEnv         string `json:"clientKeyEnv"`
-	CACertificateEnv     string `json:"caCertificateEnv"`
-	VerifyServer         bool   `json:"verifyServer"`
-	VerifyHostname       string `json:"verifyHostname"`
-}
 
 /*
 TestMCPGateway_ConfigOutput validates that the gw mcp-config command
@@ -76,7 +41,7 @@ func TestMCPGateway_ConfigOutput(t *testing.T) {
 			t.Skipf("CLI config not available (run './g8e auth login' first): %v", err)
 		}
 
-		var config MCPConfig
+		var config mcp.Config
 		err = json.Unmarshal([]byte(output), &config)
 		assert.NoError(t, err, "output should be valid JSON")
 
@@ -84,7 +49,8 @@ func TestMCPGateway_ConfigOutput(t *testing.T) {
 		assert.True(t, ok, "should have g8e-gateway config")
 
 		assert.Equal(t, "http", gatewayConfig.Transport.Type, "default transport should be http")
-		assert.Contains(t, gatewayConfig.Transport.URL, "https://localhost:", "url should include Gateway URL")
+		assert.Contains(t, gatewayConfig.Transport.URL, "https://", "url should use an https gateway URL")
+		assert.Contains(t, gatewayConfig.Transport.URL, "/api/v1/mcp", "url should point to the MCP API path")
 		assert.NotNil(t, gatewayConfig.TLS, "should have tls config for http mode")
 		assert.Equal(t, "G8E_CLIENT_CERT_PATH", gatewayConfig.TLS.ClientCertificateEnv)
 		assert.Equal(t, "G8E_CLIENT_KEY_PATH", gatewayConfig.TLS.ClientKeyEnv)
@@ -167,6 +133,66 @@ func TestMCPGateway_ConfigTemplate(t *testing.T) {
 	})
 }
 
+// getTestBinaryPath returns the path to the cached test binary, building it if necessary.
+// The binary is cached in .g8e/test-bin/g8e to avoid rebuilding on every test run.
+func getTestBinaryPath() (string, error) {
+	// Find repo root by looking for go.mod
+	repoRoot, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err == nil {
+			break
+		}
+		parent := filepath.Dir(repoRoot)
+		if parent == repoRoot {
+			return "", fmt.Errorf("could not find repo root (go.mod)")
+		}
+		repoRoot = parent
+	}
+
+	// Use a dedicated test binary directory
+	testBinDir := filepath.Join(repoRoot, ".g8e", "test-bin")
+	if err := os.MkdirAll(testBinDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create test binary directory: %w", err)
+	}
+
+	g8ePath := filepath.Join(testBinDir, "g8e")
+
+	// Check if binary exists and is newer than go.mod (simple staleness check)
+	goModPath := filepath.Join(repoRoot, "go.mod")
+	binaryInfo, err := os.Stat(g8ePath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("failed to stat binary: %w", err)
+		}
+		// Binary doesn't exist, need to build
+	} else {
+		goModInfo, err := os.Stat(goModPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to stat go.mod: %w", err)
+		}
+		// If binary is older than go.mod, rebuild
+		if binaryInfo.ModTime().Before(goModInfo.ModTime()) {
+			_ = os.Remove(g8ePath) // Remove stale binary
+		} else {
+			// Binary exists and is up-to-date
+			return g8ePath, nil
+		}
+	}
+
+	// Build the binary
+	buildCmd := exec.Command("go", "build", "-o", g8ePath, "./cmd/operator")
+	buildCmd.Dir = repoRoot
+	if output, err := buildCmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("failed to build g8e binary: %w, output: %s", err, string(output))
+	}
+
+	return g8ePath, nil
+}
+
 // Helper function to run CLI commands for testing
 func runCLICommand(args ...string) (string, error) {
 	// Find repo root by looking for go.mod
@@ -186,7 +212,11 @@ func runCLICommand(args ...string) (string, error) {
 		repoRoot = parent
 	}
 
-	g8ePath := filepath.Join(repoRoot, "bin", "g8e")
+	g8ePath, err := getTestBinaryPath()
+	if err != nil {
+		return "", err
+	}
+
 	cmdArgs := append([]string{}, args...)
 	cmd := exec.Command(g8ePath, cmdArgs...)
 	cmd.Dir = repoRoot

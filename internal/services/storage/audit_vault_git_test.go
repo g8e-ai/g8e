@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -39,7 +40,7 @@ func TestAuditVaultService_GitGetCurrentHash_ReturnsHash(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
-		GitPath:                   "embedded",
+		GitPath:                   system.GitEmbedded,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -64,7 +65,7 @@ func TestAuditVaultService_GitGetCurrentHash_HashChangesAfterCommit(t *testing.T
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
-		GitPath:                   "embedded",
+		GitPath:                   system.GitEmbedded,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())

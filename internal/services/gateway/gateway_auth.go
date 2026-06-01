@@ -64,10 +64,12 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 
 	// PKI bootstrap routes (public material only)
 	r.addPrefix("/.well-known/g8e/pki/")
+	r.addPrefix("/.well-known/g8e/binary/")
 
 	// Trust script endpoints (public for initial bootstrap)
 	r.addExact(constants.APIPaths.BootstrapCALinux)
 	r.addExact(constants.APIPaths.BootstrapCAWindows)
+	r.addExact("/.well-known/g8e/pki/trust-windows")
 
 	// Protocol entry points (CSR enrollment, bootstrap)
 	r.addExact(constants.APIPaths.PKICSRSign)

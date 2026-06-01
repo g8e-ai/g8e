@@ -939,6 +939,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 		CSRPEM            string `json:"csr_pem"`
 		CLICSRPEM         string `json:"cli_csr_pem,omitempty"`
 		SystemFingerprint string `json:"system_fingerprint"`
+		Hostname          string `json:"hostname"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
@@ -948,8 +949,12 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 	// Check if CSR signing is requested
 	csrRequested := req.CSRPEM != ""
 
-	// If CSR is requested, enforce loopback gate (plan §4.2)
-	if csrRequested {
+	// If CSR is requested for device enrollment (not local bootstrap), allow remote requests
+	// Device enrollment requests include hostname and system_fingerprint fields
+	isDeviceEnrollment := req.Hostname != "" && req.SystemFingerprint != ""
+
+	// Only enforce loopback gate for local bootstrap, not device enrollment
+	if csrRequested && !isDeviceEnrollment {
 		host, _, err := net.SplitHostPort(r.RemoteAddr)
 		if err != nil {
 			host = r.RemoteAddr
@@ -1062,7 +1067,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 		}
 
 		// Sign the CSR
-		certPEM, chainPEM, err := c.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, orgID, operatorID, user.ID, sessionID)
+		certPEM, chainPEM, err := c.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, orgID, operatorID, user.ID, sessionID, "")
 		if err != nil {
 			c.logger.Error("Failed to sign bootstrap CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to sign CSR")
@@ -1078,7 +1083,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 			return
 		}
 
-		cliCertPEM, cliCertChainPEM, err := c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID)
+		cliCertPEM, cliCertChainPEM, err := c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "")
 		if err != nil {
 			c.logger.Error("Failed to sign bootstrap CLI CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to sign CLI CSR")

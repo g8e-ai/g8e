@@ -18,8 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -46,73 +44,24 @@ type CollectionFieldPaths struct {
 	ForbiddenPaths []string `json:"forbidden_paths"`
 }
 
-// NewFieldPathRegistry loads the field path schema from the embedded JSON
+// NewFieldPathRegistry loads the field path schema from the constants package
 func NewFieldPathRegistry(logger *slog.Logger) (*FieldPathRegistry, error) {
-	// Resolve paths without modifying global state to avoid data races
-	projectRoot := constants.ResolveProjectRoot()
-	protocolConstantsDir := filepath.Join(projectRoot, "protocol", "constants")
-
 	registry := &FieldPathRegistry{
 		logger:   logger,
 		registry: make(map[string]CollectionFieldPaths),
 	}
 
-	// Load from protocol constants
-	if err := registry.loadFromConstants(protocolConstantsDir); err != nil {
-		return nil, fmt.Errorf("failed to load field path registry: %w", err)
+	// Load from constants (canonical source, no filesystem dependency)
+	fieldPaths := constants.GetFieldPaths()
+	for collection, config := range fieldPaths {
+		registry.registry[collection] = CollectionFieldPaths{
+			AllowedPaths:   config.AllowedPaths,
+			ForbiddenPaths: config.ForbiddenPaths,
+		}
 	}
 
+	logger.Info("loaded field path registry from constants", "collections", len(registry.registry))
 	return registry, nil
-}
-
-// loadFromConstants loads field paths from the protocol constants JSON
-func (r *FieldPathRegistry) loadFromConstants(protocolConstantsDir string) error {
-	fieldPathsPath := filepath.Join(protocolConstantsDir, "field_paths.json")
-	data, err := os.ReadFile(fieldPathsPath)
-	if err != nil {
-		return fmt.Errorf("failed to read field_paths.json from %s: %w", fieldPathsPath, err)
-	}
-
-	var rawJSON map[string]interface{}
-	if err := json.Unmarshal(data, &rawJSON); err != nil {
-		return fmt.Errorf("failed to parse field_paths.json: %w", err)
-	}
-
-	fieldPaths, ok := rawJSON["field_paths"].(map[string]interface{})
-	if !ok {
-		return errors.New("field_paths.json missing 'field_paths' key or invalid type")
-	}
-
-	for collection, pathsData := range fieldPaths {
-		collectionMap, ok := pathsData.(map[string]interface{})
-		if !ok {
-			r.logger.Warn("invalid field path data for collection", "collection", collection)
-			continue
-		}
-
-		var fieldPaths CollectionFieldPaths
-
-		if allowedPaths, ok := collectionMap["allowed_paths"].([]interface{}); ok {
-			for _, path := range allowedPaths {
-				if pathStr, ok := path.(string); ok {
-					fieldPaths.AllowedPaths = append(fieldPaths.AllowedPaths, pathStr)
-				}
-			}
-		}
-
-		if forbiddenPaths, ok := collectionMap["forbidden_paths"].([]interface{}); ok {
-			for _, path := range forbiddenPaths {
-				if pathStr, ok := path.(string); ok {
-					fieldPaths.ForbiddenPaths = append(fieldPaths.ForbiddenPaths, pathStr)
-				}
-			}
-		}
-
-		r.registry[collection] = fieldPaths
-	}
-
-	r.logger.Info("loaded field path registry from protocol constants", "collections", len(r.registry))
-	return nil
 }
 
 // ValidateFieldPath checks if a field path is allowed for a given collection

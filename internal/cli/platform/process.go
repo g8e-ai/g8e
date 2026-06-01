@@ -77,6 +77,27 @@ func (pm *ProcessManager) ensureDirectories() error {
 	return nil
 }
 
+func (pm *ProcessManager) networkIdentityArgs(identityData []byte) ([]string, error) {
+	if len(identityData) == 0 {
+		return nil, nil
+	}
+
+	identityFile, err := pm.writeNetworkIdentityFile(identityData)
+	if err != nil {
+		return nil, err
+	}
+
+	return []string{"--network-identity-file", identityFile}, nil
+}
+
+func (pm *ProcessManager) writeNetworkIdentityFile(identityData []byte) (string, error) {
+	identityFile := filepath.Join(pm.runtimeDir, "network-identity.json")
+	if err := os.WriteFile(identityFile, identityData, 0600); err != nil {
+		return "", fmt.Errorf("failed to write network identity file: %w", err)
+	}
+	return identityFile, nil
+}
+
 func (pm *ProcessManager) checkPortAvailable(port int, name string) error {
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
@@ -222,7 +243,7 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 	return "./g8e", nil
 }
 
-func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel string) error {
+func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort, publicPort, mcpHttpPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode string, identityData []byte) error {
 	if err := pm.ensureDirectories(); err != nil {
 		return err
 	}
@@ -230,6 +251,7 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 	// Use provided values or defaults
 	effectiveHTTPPort := httpPort
 	effectivePublicPort := publicPort
+	effectiveMCPHttpPort := mcpHttpPort
 	effectiveDataDir := dataDir
 	effectivePKIDir := pkiDir
 	effectiveSecretsDir := secretsDir
@@ -241,10 +263,13 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 
 	// Use defaults if not provided
 	if effectiveHTTPPort == 0 {
-		effectiveHTTPPort = 9000
+		effectiveHTTPPort = constants.Ports.OperatorHttps
 	}
 	if effectivePublicPort == 0 {
 		effectivePublicPort = 8443
+	}
+	if effectiveMCPHttpPort == 0 {
+		effectiveMCPHttpPort = 8442
 	}
 	if effectiveDataDir == "" {
 		effectiveDataDir = pm.dataDir
@@ -268,10 +293,16 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 	// Calculate offset from original httpPort to maintain port spacing
 	offset := availableHTTPPort - effectiveHTTPPort
 	availablePublicPort := effectivePublicPort + offset
+	availableMCPHttpPort := effectiveMCPHttpPort + offset
 
 	// Verify the calculated Public port is available (Bootstrap now shares this port)
 	if err := pm.checkPortAvailable(availablePublicPort, "Operator Public API"); err != nil {
 		return fmt.Errorf("failed to verify Public API port %d: %w", availablePublicPort, err)
+	}
+
+	// Verify the calculated MCP HTTP port is available
+	if err := pm.checkPortAvailable(availableMCPHttpPort, "Operator MCP HTTP"); err != nil {
+		return fmt.Errorf("failed to verify MCP HTTP port %d: %w", availableMCPHttpPort, err)
 	}
 
 	binPath, err := pm.getOperatorBinary()
@@ -293,7 +324,12 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 		"--secrets-dir", effectiveSecretsDir,
 		"--http-listen-port", strconv.Itoa(availableHTTPPort),
 		"--public-listen-port", strconv.Itoa(availablePublicPort),
+		"--mcp-http-port", strconv.Itoa(availableMCPHttpPort),
 		"--log", effectiveLogLevel,
+	}
+
+	if certIdentityMode != "" {
+		args = append(args, "--cert-mode", certIdentityMode)
 	}
 
 	if effectivePasskeyRpID != "" {
@@ -309,12 +345,16 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 		args = append(args, "--rate-limit-burst", strconv.Itoa(effectiveRateLimitBurst))
 	}
 
+	identityArgs, err := pm.networkIdentityArgs(identityData)
+	if err != nil {
+		return err
+	}
+	args = append(args, identityArgs...)
+
 	cmd := exec.Command(binPath, args...)
 	cmd.Stdout = logHandle
 	cmd.Stderr = logHandle
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
-	}
+	setProcessGroup(cmd)
 
 	if err := cmd.Start(); err != nil {
 		if closeErr := logHandle.Close(); closeErr != nil {

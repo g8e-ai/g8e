@@ -176,6 +176,8 @@ services/
 │   └── mocks/                      #   Test mocks
 │
 ├── gateway/                        # Gateway mode orchestrator (PDP)
+│   ├── db/                         #   Database schema
+│   │   └── schema.sql
 │   ├── gateway_service.go          #   Top-level init, GovernanceDeps assembly
 │   ├── gateway_db.go               #   SQLite canonical state
 │   ├── gateway_auth.go             #   Authentication / authorization
@@ -188,6 +190,7 @@ services/
 │   ├── passkey_service.go          #   WebAuthn/FIDO2 passkey ops
 │   ├── registration_service.go     #   CSR-based enrollment
 │   ├── secret_manager.go           #   Signing key storage
+│   ├── peer_connection.go          #   Gateway peer connection handling
 │   ├── user_service.go
 │   ├── session_service.go
 │   ├── app_enrollment_service.go
@@ -256,6 +259,10 @@ services/
 │   ├── backend_linux.go            #   Linux keyring
 │   ├── backend_file_linux.go       #   Linux file fallback
 │   └── backend_inmemory.go         #   In-memory (tests)
+│
+├── network/
+│   ├── identity.go                 #   Network identity resolution
+│   └── identity_test.go
 │
 ├── sqliteutil/
 │   ├── db.go                       #   Connection management
@@ -329,36 +336,42 @@ test/
 ## Build Targets
 
 ```makefile
-make build              # Build g8e operator binary
-make build-compressed   # Build with UPX compression for multiple platforms
-make docker-build       # Build g8e operator Docker image
-make generate           # Generate all protocol artifacts (proto)
-make proto              # Generate all Protobuf code (Go)
-make proto-python       # Generate Python Protobuf code
-make proto-force        # Force generate Protobuf code
-make buf-install        # Install Buf CLI locally
-make protoc-install     # Install protoc compiler
-make upx-install        # Install UPX compressor
-make test               # Run all tests with race detection
-make test-short         # Run short tests with race detection
-make test-coverage      # Run tests with coverage (enforces 60% threshold)
-make test-shuffle       # Run all tests with randomized order
-make test-integration   # Run integration tests (requires platform running and auth login)
-make test-scenario      # Run scenario integration tests (requires platform running)
-make test-gateway       # Run gateway tests
-make test-mcp           # Run MCP tests
-make test-a2a           # Run A2A tests
-make test-universal-gateway # Run universal gateway integration tests
-make test-byo           # Run BYO client tests (requires platform running and auth login)
-make test-native        # Run native real operator tests
-make lint               # Run all linting and quality checks
-make lint-no-embedded-newlines # Check for compilation errors
-make vulncheck          # Run vulnerability check
-make validate-doctrines # Validate doctrine JSON schema
-make ingest-doctrines   # Doctrine ingestion (deprecated)
-make update-doctrines   # Update doctrine sources
-make clean              # Remove all build artifacts and runtime state
-make clean-harness      # Clean up stale harness directories
-make ci                 # Run full CI pipeline locally
-make ci-platform        # Run platform-only CI (operator, protocol, proto, docs)
+make build                        # Build g8e for all platforms (linux, windows, darwin)
+make build-linux                  # Build g8e for Linux (amd64, arm64, 386)
+make build-windows                # Build g8e for Windows (amd64, arm64)
+make build-darwin                 # Build g8e for Darwin (amd64, arm64)
+make build-compressed             # Build g8e for all platforms with UPX compression
+make build-linux-compressed       # Build g8e for Linux with UPX compression
+make build-windows-compressed     # Build g8e for Windows with UPX compression
+make build-darwin-compressed      # Build g8e for Darwin with UPX compression
+make docker-build                 # Build g8e operator Docker image
+make generate                     # Generate all protocol artifacts (proto)
+make proto                        # Generate all Protobuf code (Go)
+make proto-python                 # Generate Python Protobuf code
+make proto-force                   # Force generate Protobuf code
+make buf-install                  # Install Buf CLI locally
+make protoc-install               # Install protoc compiler
+make upx-install                  # Install UPX compressor
+make test                         # Run all tests with race detection
+make test-short                   # Run short tests with race detection
+make test-coverage                # Run tests with coverage (enforces 60% threshold)
+make test-shuffle                 # Run all tests with randomized order
+make test-integration             # Run integration tests (requires platform running and auth login)
+make test-scenario                # Run scenario integration tests (requires platform running)
+make test-gateway                 # Run gateway tests
+make test-mcp                     # Run MCP tests
+make test-a2a                     # Run A2A tests
+make test-universal-gateway       # Run universal gateway integration tests
+make test-byo                     # Run BYO client tests (requires platform running and auth login)
+make test-native                  # Run native real operator tests
+make lint                         # Run all linting and quality checks
+make lint-no-embedded-newlines    # Check for compilation errors
+make vulncheck                    # Run vulnerability check
+make validate-doctrines           # Validate doctrine JSON schema
+make ingest-doctrines             # Doctrine ingestion (deprecated)
+make update-doctrines             # Update doctrine sources
+make clean                        # Remove all build artifacts and runtime state
+make clean-harness                # Clean up stale harness directories
+make ci                           # Run full CI pipeline locally
+make ci-platform                  # Run platform-only CI (operator, protocol, proto, docs)
 ```

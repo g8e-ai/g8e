@@ -125,12 +125,12 @@ func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*Bootst
 	return bootstrapConfig, nil
 }
 
-// operatorAuthRequest is the request body for POST /api/auth/operator.
+// operatorAuthRequest is the request body for POST /api/v1/operators/reauth.
 type operatorAuthRequest struct {
 	RuntimeConfig *models.RuntimeConfig `json:"runtime_config"`
 }
 
-// requestHTTPAuth authenticates via POST /api/auth/operator with exponential backoff.
+// requestHTTPAuth authenticates via POST /api/v1/operators/reauth with exponential backoff.
 func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConfig, error) {
 	const (
 		maxAttempts = 5
@@ -157,7 +157,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		return nil, fmt.Errorf("failed to marshal auth request: %w", err)
 	}
 
-	authURL := fmt.Sprintf("https://%s:%d/api/auth/operator", bs.config.Endpoint, bs.config.HTTPPort)
+	authURL := fmt.Sprintf("https://%s:%d/api/v1/operators/reauth", bs.config.Endpoint, bs.config.HTTPPort)
 
 	var lastErr error
 	delay := baseDelay

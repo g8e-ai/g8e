@@ -1,4 +1,4 @@
-//go:build unix || linux || darwin
+//go:build unix || linux || (darwin && !windows)
 
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -218,6 +218,8 @@ func (s *FsListService) buildEntry(fi os.FileInfo, fullPath string) models.FsLis
 	if sys := fi.Sys(); sys != nil {
 		if stat, ok := sys.(*syscall.Stat_t); ok {
 			entry.Inode = stat.Ino
+			// getNlink handles architecture differences (uint16 on amd64, uint32 on arm64/386)
+			// by casting to uint64 uniformly in fs_list_unix.go
 			entry.Nlink = getNlink(stat)
 
 			// Get owner/group names

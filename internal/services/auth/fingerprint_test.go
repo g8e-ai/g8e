@@ -78,7 +78,7 @@ func TestGetMachineID(t *testing.T) {
 		machineID, err := getMachineID(logger)
 
 		switch runtime.GOOS {
-		case string(constants.PlatformLinux), string(constants.PlatformDarwin):
+		case string(constants.PlatformLinux), string(constants.PlatformDarwin), string(constants.PlatformWindows):
 			require.NoError(t, err)
 			assert.NotEmpty(t, machineID)
 		default:
@@ -97,6 +97,9 @@ func TestGetMachineID(t *testing.T) {
 			assert.NotEmpty(t, machineID)
 			assert.NotContains(t, machineID, string(constants.PlatformDarwin))
 		case string(constants.PlatformDarwin):
+			require.NoError(t, err)
+			assert.NotEmpty(t, machineID)
+		case string(constants.PlatformWindows):
 			require.NoError(t, err)
 			assert.NotEmpty(t, machineID)
 		}

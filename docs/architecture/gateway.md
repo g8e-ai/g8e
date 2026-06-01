@@ -14,12 +14,12 @@ The g8e Protocol platform is composed of two logically distinct roles, both impl
 ## Core Principles
 
 - **5-Layer Governance Bedrock**: Every transaction must pass through five mandatory, fail-closed layers sequentially:
-    - **L1 Doctrine**: Technical Bedrock (Hard Gates) code pattern matching and threat analysis defined in `internal/services/governance/l1_doctrine.go`.
-    - **L2 Consensus**: Multi-agent consensus signature verification using Ed25519 cryptography defined in `internal/services/governance/l2_consensus.go`.
-    - **L3 Notary**: Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) defined in `internal/services/governance/l3_notary.go`.
-    - **L4 Warden**: Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) defined in `internal/services/governance/l4_warden.go`.
-    - **L5 Actuator**: Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production defined in `internal/services/governance/l5_actuator.go`.
-- **mTLS-Everywhere**: All communication is strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts.
+    - **L1 Doctrine**: Technical Bedrock (Hard Gates) code pattern matching and threat analysis defined in `@/home/bob/g8e/internal/services/governance/l1_doctrine.go`.
+    - **L2 Consensus**: Multi-agent consensus signature verification using Ed25519 cryptography defined in `@/home/bob/g8e/internal/services/governance/l2_consensus.go`.
+    - **L3 Notary**: Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) defined in `@/home/bob/g8e/internal/services/governance/l3_notary.go`.
+    - **L4 Warden**: Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) defined in `@/home/bob/g8e/internal/services/governance/l4_warden.go`.
+    - **L5 Actuator**: Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production defined in `@/home/bob/g8e/internal/services/governance/l5_actuator.go`.
+- **mTLS-Everywhere**: All communication is strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts. The platform uses `g8e.local` as its canonical SPIFFE trust domain for workload identities defined in `@/home/bob/g8e/protocol/workload_identity.go:24`.
 - **Local-First Audit (LFAA)**: The target host remains the source of truth for command history and file mutations, stored in a tamper-evident local ledger.
 - **Canonical JSON (GovernanceEnvelope)**: Every mutation action is governed by a canonical JSON `GovernanceEnvelope` (protojson). This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
 - **Transaction Invariants**: Every transaction is identified by a deterministic `transaction_hash` computed from its content. The envelope `id` must match this hash for the transaction to be valid.
@@ -93,20 +93,22 @@ By passing `--doctrine`, `--consensus`, or `--notary`, the binary transforms int
 
 ### Port Topology
 
-The Governance Gateway (g8eg) exposes three logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port.
+The Governance Gateway (g8eg) exposes four logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port.
 
-Default ports are sourced from `internal/constants/ports.go`:
+Default ports are sourced from `@/home/bob/g8e/internal/constants/ports.go:17`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
 | **mTLS API + Pub/Sub** | `8440` (mTLS) | mTLS + URI SAN | `/api/v1/governance/envelopes`, `/api/v1/db/*`, `/api/v1/kv/*`, `/api/v1/blob/*`, `/api/v1/pubsub/publish`, and `/ws/v1/pubsub` real-time fan-out. |
 | **Bootstrap Port** | `8441` (plain HTTP) | CSR Enrollment | Certificate Signing Requests, CA bundle discovery, and initial provisioning. |
+| **MCP HTTP Port** | `8442` (plain HTTP) | Rate-limited HTTP | Plain HTTP endpoint for MCP calls without mTLS requirements. Useful for development and testing. |
 | **Public Port** | `8443` (mTLS) | mTLS + URI SAN | Public mTLS surface for external app enrollment and BYO bootstrap. |
 
 #### Port Constraints
 
 - **mTLS Surface** (`8440`): Requires `tls.RequireAndVerifyClientCert`. This is the primary execution boundary.
 - **Bootstrap Surface** (`8441`): Serves plain HTTP for initial CA discovery and bootstrap (no TLS).
+- **MCP HTTP Surface** (`8442`): Serves plain HTTP for MCP calls with rate limiting. Does not require mTLS but may have different security policies.
 - **Public Surface** (`8443`): Requires `tls.RequireAndVerifyClientCert` for mTLS-based external app enrollment.
 - **Collision Prevention**: The gateway fails startup if incompatible surfaces (e.g., mTLS and Bootstrap) are assigned to the same port, as this forces a downgrade to `VerifyClientCertIfGiven`.
 
@@ -117,26 +119,26 @@ Default ports are sourced from `internal/constants/ports.go`:
 Every transaction submitted to `POST /api/v1/governance/envelopes` must pass through the following layers sequentially:
 
 ### L1 Doctrine (Technical Bedrock)
-Defined in `internal/services/governance/l1_doctrine.go`. Enforces forbidden patterns (such as `sudo` or `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.
+Defined in `@/home/bob/g8e/internal/services/governance/l1_doctrine.go`. Enforces forbidden patterns (such as `sudo` or `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.
 
 ### L2 Consensus (Consensus Verification)
-Defined in `internal/services/governance/l2_consensus.go`. Verifies multi-agent consensus signature using Ed25519 cryptography. In Gateway mode, this requires Ed25519 signatures from trusted consensus agents.
+Defined in `@/home/bob/g8e/internal/services/governance/l2_consensus.go`. Verifies multi-agent consensus signature using Ed25519 cryptography. In Gateway mode, this requires Ed25519 signatures from trusted consensus agents.
 
 ### L3 Notary (Human Authorization)
-Defined in `internal/services/governance/l3_notary.go`. Enforces human-in-the-loop authorization using a cryptographic proof of human intent:
+Defined in `@/home/bob/g8e/internal/services/governance/l3_notary.go`. Enforces human-in-the-loop authorization using a cryptographic proof of human intent:
 - **BYO Clients**: Use WebAuthn or Passkey proofs (FIDO2).
 - **CLI Sessions**: Use mTLS certificate fingerprints or Ed25519 signatures bound to the session.
 
 ### L4 Warden (Pre-Dispatch Gating)
-Defined in `internal/services/governance/l4_warden.go`. Enforces final pre-execution verification gates:
-- **Transaction Hash**: The `envelope.id` must match the deterministic transaction hash computed from its content.
+Defined in `@/home/bob/g8e/internal/services/governance/l4_warden.go`. Enforces final pre-execution verification gates:
+- **Transaction Hash**: The `envelope.id` must match the deterministic transaction hash computed from its content using `governance.GenerateMessageID`.
 - **Expiry**: The `expires_at` timestamp must be in the future.
-- **Nonce/Replay**: The `nonce` must not have been used previously (sliding-window protection).
+- **Nonce/Replay**: The `nonce` must not have been used previously (sliding-window protection) via the `ReplayStore`.
 - **State Root**: The `state_merkle_root` (if provided) must match the current state root of the gateway.
-- **Signer Trust**: Verifies L2 Consensus / L3 Notary signatures against trusted keys.
+- **Signer Trust**: Verifies L2 Consensus / L3 Notary signatures against trusted keys in the `SignerStore`.
 
 ### L5 Actuator (Execution and Receipt)
-Defined in `internal/services/governance/l5_actuator.go`. Performs isolated boundary tool dispatch (via MCP/A2A) and signed receipt production:
+Defined in `@/home/bob/g8e/internal/services/governance/l5_actuator.go`. Performs isolated boundary tool dispatch (via MCP/A2A) and signed receipt production:
 - **Execution**: Dispatches the verified payload to the downstream execution handler (such as an MCP server).
 - **Audit**: Persists a `console_audit` record and a signed `ActionReceipt`.
 - **Receipt**: Generates a deterministic, signed receipt containing the result and state transitions.
@@ -159,14 +161,15 @@ When a standard AI client (such as Claude or Cursor) requests a mutation, it typ
 The Governance Gateway (g8eg) provides JWT authentication and Just-In-Time (JIT) user provisioning flows that fully isolate the downstream g8e Operator (g8eo) from Identity Providers (IdP). The Governance Gateway (g8eg) acts as the authentication brain, while the g8e Operator (g8eo) receives a pre-validated, enriched payload via the pub/sub pipe.
 
 ### 4-Step JWT Flow
+The JWT authentication logic is implemented in `@/home/bob/g8e/internal/services/gateway/gateway_auth.go:663`.
 
 **Step 1: Inbound HTTP Handshake & JWT Verification**
 The Governance Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS or static public keys, validates `exp` and `iss` claims, and extracts identity claims (`sub`, `tenant_id`, `roles`).
 
 **Step 2: Edge Validation & JIT Account Management**
 Following successful token validation, the Governance Gateway (g8eg) ensures the user exists locally and maps their roles:
-- **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID). If the user does not exist, dynamically creates their user account record with default active status.
-- **Persona Mapping**: Loads declarative Persona manifests (e.g., YAML definitions representing `security-analyst`, `admin`). Evaluates the JWT `roles` against these manifests to determine the active `binding_persona`.
+- **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID) via `userSvc.GetOrCreateBySub`. If the user does not exist, dynamically creates their user account record with default active status.
+- **Persona Mapping**: Loads declarative Persona manifests (e.g., YAML definitions representing `security-analyst`, `admin`). Evaluates the JWT `roles` against these manifests via `personaSvc.MapRolesToPersona` to determine the active `binding_persona`.
 - **Context Injection**: Stores the resolved `binding_persona` and `tenant_id` into the request context.
 
 **Step 3: Enriched Pub/Sub Handoff (GovernanceEnvelope)**
@@ -202,19 +205,19 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 
 | Concern | File |
 |---|---|
-| Gateway mode entry | `cmd/operator/main.go` (runGatewayMode) |
-| Gateway service | `internal/services/gateway/gateway_service.go` |
-| Coordination Store | `internal/services/gateway/gateway_db.go` |
-| Pub/Sub broker | `internal/services/gateway/gateway_pubsub.go` |
-| L1 Doctrine | `internal/services/governance/l1_doctrine.go` |
-| L2 Consensus | `internal/services/governance/l2_consensus.go` |
-| L3 Notary | `internal/services/governance/l3_notary.go` |
-| L4 Warden | `internal/services/governance/l4_warden.go` |
-| L5 Actuator | `internal/services/governance/l5_actuator.go` |
-| PKI / CertStore | `internal/services/gateway/gateway_certs.go` |
-| Secret Manager | `internal/services/gateway/secret_manager.go` |
-| Workload identity | `protocol/workload_identity.go` |
-| Collections registry | `internal/constants/collections.go` |
+| Gateway mode entry | `@/home/bob/g8e/cmd/operator/main.go:916` (`runGatewayMode`) |
+| Gateway service | `@/home/bob/g8e/internal/services/gateway/gateway_service.go` |
+| Coordination Store | `@/home/bob/g8e/internal/services/gateway/gateway_db.go` |
+| Pub/Sub broker | `@/home/bob/g8e/internal/services/gateway/gateway_pubsub.go` |
+| L1 Doctrine | `@/home/bob/g8e/internal/services/governance/l1_doctrine.go` |
+| L2 Consensus | `@/home/bob/g8e/internal/services/governance/l2_consensus.go` |
+| L3 Notary | `@/home/bob/g8e/internal/services/governance/l3_notary.go` |
+| L4 Warden | `@/home/bob/g8e/internal/services/governance/l4_warden.go` |
+| L5 Actuator | `@/home/bob/g8e/internal/services/governance/l5_actuator.go` |
+| PKI / CertStore | `@/home/bob/g8e/internal/services/gateway/gateway_certs.go` |
+| Secret Manager | `@/home/bob/g8e/internal/services/gateway/secret_manager.go` |
+| Workload identity | `@/home/bob/g8e/protocol/workload_identity.go` |
+| Collections registry | `@/home/bob/g8e/internal/constants/collections.go` |
 
 ---
 

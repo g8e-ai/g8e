@@ -46,6 +46,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/services/system"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -834,7 +835,7 @@ func pct(n, total int64) float64 {
 }
 
 func findGit() (string, error) {
-	return "embedded", nil
+	return system.GitEmbedded, nil
 }
 
 func printSummaryRow(category string, count int, expectedOutcome string, actual int) {

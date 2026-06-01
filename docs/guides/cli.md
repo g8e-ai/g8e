@@ -66,6 +66,8 @@ Flags:
   -h, --help   help for start
 ```
 
+When `--cert-mode full` is selected, the CLI detects network identity once, writes it to a temporary JSON file in the runtime directory, and passes that file to the Gateway subprocess via `--network-identity-file`. `--cert-mode localhost` continues to use loopback-only identities, including IPv6 localhost when available.
+
 ### gw stop
 ```
 Stop the Governance Gateway

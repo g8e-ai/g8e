@@ -172,22 +172,25 @@ func TestResolveGatewayPorts(t *testing.T) {
 	takenPort, _ := strconv.Atoi(portStr)
 
 	t.Run("resolves when port is taken", func(t *testing.T) {
-		h, b, p := ResolveGatewayPorts(takenPort, takenPort+1, takenPort+2)
+		h, b, p, m := ResolveGatewayPorts(takenPort, takenPort+1, takenPort+2, takenPort+3)
 		assert.NotEqual(t, takenPort, h)
 		assert.True(t, h > takenPort)
 		assert.Equal(t, b, h+1)
 		assert.Equal(t, p, h+2)
+		assert.Equal(t, m, h+3)
 	})
 
 	t.Run("resolves when all are available", func(t *testing.T) {
 		// Use very high ports that are likely free
-		h, b, p := ResolveGatewayPorts(55000, 55001, 55002)
+		h, b, p, m := ResolveGatewayPorts(55000, 55001, 55002, 55003)
 		// Verify ports are sequential and >= requested values
 		assert.True(t, h >= 55000)
 		assert.True(t, b >= 55001)
 		assert.True(t, p >= 55002)
+		assert.True(t, m >= 55003)
 		assert.Equal(t, b, h+1)
 		assert.Equal(t, p, h+2)
+		assert.Equal(t, m, h+3)
 	})
 }
 

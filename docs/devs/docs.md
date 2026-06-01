@@ -54,4 +54,4 @@ When modifying, extending, or creating documentation within this repository, fol
 1. **Analyze Current Implementation**: Trace the execution path through the codebase starting from the protocol boundaries to verify the accuracy of the proposed documentation updates.
 2. **Remove Outdated Information**: Fully delete any mentions of deprecated components, obsolete architectural layouts, or legacy terminology.
 3. **Align with active codebase**: Do not document feature ideas, speculative roadmaps, or unmerged code. Public documentation must reflect the live repository state.
-4. **Compile and Format**: Verify that all modified markdown files adhere to markdown syntax, contain zero emojis, utilize present tense, use only commas/semicolons/single-hyphens rather than em-dashes, and use absolute path citations.
+4. **Compile and Format**: Verify that all modified markdown files adhere to markdown syntax, contain zero emojis, utilize present tense, use only commas/semicolons/single-hyphens rather than em-dashes, and use *relative path* citations.

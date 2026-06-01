@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/services/system"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 )
 
@@ -616,8 +617,8 @@ func TestFindGit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("findGit() error = %v", err)
 	}
-	if gitPath != "embedded" {
-		t.Errorf("findGit() = %s, want embedded", gitPath)
+	if gitPath != system.GitEmbedded {
+		t.Errorf("findGit() = %s, want %s", gitPath, system.GitEmbedded)
 	}
 }
 

@@ -19,9 +19,11 @@ import (
 	"os"
 )
 
+const GitEmbedded = "embedded"
+
 // ResolveGitBinary is a stub for native go-git migration.
 func ResolveGitBinary(logger *slog.Logger) string {
-	return "embedded"
+	return GitEmbedded
 }
 
 // ValidateGitBinary is a stub for native go-git migration.

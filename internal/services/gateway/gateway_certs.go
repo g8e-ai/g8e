@@ -42,10 +42,12 @@ const (
 	intermediateValidityDays = 3650
 	servingCertValidityDays  = 90 // 90-day TTL for gateway serving certificate
 	leafCertValidityDays     = 7  // 7-day TTL for operator/cli leaf certificates
+	peerCertValidityDays     = 90 // 90-day TTL for gateway peer certificates
 
-	rootCommonName     = "g8e Root CA"
-	hubCommonName      = "g8e Hub Intermediate CA"
-	operatorCommonName = "g8e Operator Intermediate CA"
+	rootCommonName        = "g8e Root CA"
+	hubCommonName         = "g8e Hub Intermediate CA"
+	operatorCommonName    = "g8e Operator Intermediate CA"
+	gatewayPeerCommonName = "g8e Gateway Peer Intermediate CA"
 )
 
 // PKIAuthority manages the full PKI hierarchy for the Operator.
@@ -68,10 +70,12 @@ type PKIAuthority struct {
 	rootKey  *ecdsa.PrivateKey
 
 	// Intermediate CAs
-	hubCert      *x509.Certificate
-	hubKey       *ecdsa.PrivateKey
-	operatorCert *x509.Certificate
-	operatorKey  *ecdsa.PrivateKey
+	hubCert         *x509.Certificate
+	hubKey          *ecdsa.PrivateKey
+	operatorCert    *x509.Certificate
+	operatorKey     *ecdsa.PrivateKey
+	gatewayPeerCert *x509.Certificate
+	gatewayPeerKey  *ecdsa.PrivateKey
 
 	// Service certificate for operator-gateway
 	serviceCert tls.Certificate
@@ -91,6 +95,12 @@ func newPKIAuthority(dataDir, pkiDir string, db *GatewayDBService, secretManager
 
 // EnsurePKI initializes the full PKI hierarchy. Must be called before TLSConfig().
 func (pki *PKIAuthority) EnsurePKI(extraIPs []net.IP) error {
+	return pki.EnsurePKIWithNames(extraIPs, nil)
+}
+
+// EnsurePKIWithNames initializes the full PKI hierarchy with custom DNS names.
+// Must be called before TLSConfig().
+func (pki *PKIAuthority) EnsurePKIWithNames(extraIPs []net.IP, extraDNSNames []string) error {
 	pki.mu.Lock()
 	defer pki.mu.Unlock()
 
@@ -99,6 +109,7 @@ func (pki *PKIAuthority) EnsurePKI(extraIPs []net.IP) error {
 		filepath.Join(pki.pkiDir, "root"),
 		filepath.Join(pki.pkiDir, "authorities"),
 		filepath.Join(pki.pkiDir, "issued", "hub"),
+		filepath.Join(pki.pkiDir, "issued", "gateway-peer"),
 		filepath.Join(pki.pkiDir, "trust"),
 		filepath.Join(pki.pkiDir, "revocation"),
 	}
@@ -119,7 +130,7 @@ func (pki *PKIAuthority) EnsurePKI(extraIPs []net.IP) error {
 	}
 
 	// Generate or load operator-gateway service certificate
-	if err := pki.ensureServiceCert(extraIPs); err != nil {
+	if err := pki.ensureServiceCertWithNames(extraIPs, extraDNSNames); err != nil {
 		return fmt.Errorf("service certificate setup failed: %w", err)
 	}
 
@@ -220,10 +231,25 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 		}
 	}
 
+	// Gateway Peer Intermediate CA
+	gatewayPeerCertPath := filepath.Join(pki.pkiDir, "authorities", "gateway_peer_ca.crt")
+	if fileExists(gatewayPeerCertPath) {
+		if err := pki.loadCACertificate(gatewayPeerCertPath, &pki.gatewayPeerCert); err != nil {
+			return fmt.Errorf("gateway peer CA exists but is corrupt: %w", err)
+		}
+	} else {
+		pki.logger.Info("[PKI] Generating gateway peer intermediate CA")
+		if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
+			return fmt.Errorf("load root CA private key for intermediate generation: %w", err)
+		}
+		if err := pki.generateIntermediateCA(gatewayPeerCertPath, pki.rootCert, pki.rootKey, gatewayPeerCommonName); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
-
-func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
+func (pki *PKIAuthority) ensureServiceCertWithNames(extraIPs []net.IP, extraDNSNames []string) error {
 	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.crt")
 	chainPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.chain.pem")
 
@@ -274,7 +300,7 @@ func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
 				return fmt.Errorf("load hub CA private key for service cert generation: %w", err)
 			}
 		}
-		if err := pki.generateServiceCert(extraIPs); err != nil {
+		if err := pki.generateServiceCertWithNames(extraIPs, extraDNSNames); err != nil {
 			return err
 		}
 		// Load the newly generated certificate and key
@@ -307,7 +333,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 		return fmt.Errorf("failed to write root bundle: %w", err)
 	}
 
-	// Gateway bundle (root + hub intermediate + operator intermediate)
+	// Gateway bundle (root + hub intermediate + operator intermediate + gateway peer intermediate)
 	gatewayBundlePath := filepath.Join(pki.pkiDir, "trust", "g8eg-ca-bundle.pem")
 	hubPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "hub_ca.crt"))
 	if err != nil {
@@ -317,10 +343,15 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	if err != nil {
 		return fmt.Errorf("failed to read operator CA: %w", err)
 	}
-	hubBundle := make([]byte, 0, len(rootPEM)+len(hubPEM)+len(operatorPEM))
+	gatewayPeerPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "gateway_peer_ca.crt"))
+	if err != nil {
+		return fmt.Errorf("failed to read gateway peer CA: %w", err)
+	}
+	hubBundle := make([]byte, 0, len(rootPEM)+len(hubPEM)+len(operatorPEM)+len(gatewayPeerPEM))
 	hubBundle = append(hubBundle, rootPEM...)
 	hubBundle = append(hubBundle, hubPEM...)
 	hubBundle = append(hubBundle, operatorPEM...)
+	hubBundle = append(hubBundle, gatewayPeerPEM...)
 	if err := writePublicPEMBundleFile(gatewayBundlePath, hubBundle); err != nil {
 		return fmt.Errorf("failed to write gateway bundle: %w", err)
 	}
@@ -483,24 +514,45 @@ func (pki *PKIAuthority) VerifyCertificate(cert *x509.Certificate) error {
 	return nil
 }
 
-// SignCSR signs a certificate signing request using the operator intermediate CA.
-// leafType should be "operator", "app", or "cli".
+// SignCSR signs a certificate signing request using the appropriate intermediate CA.
+// leafType should be "operator", "app", "cli", or "gateway-peer".
 // Parameters:
 //   - For "operator": organizationID, operatorID, sessionID (operator_session_id)
 //   - For "cli": userID, sessionID (cli_session_id)
 //   - For "app": operatorID (app identity)
-func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID, operatorID, userID, sessionID string) (certPEM, chainPEM string, err error) {
+//   - For "gateway-peer": gatewayID (gateway peer identity)
+func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID, operatorID, userID, sessionID, gatewayID string) (certPEM, chainPEM string, err error) {
 	pki.mu.Lock()
 	defer pki.mu.Unlock()
 
-	if pki.operatorCert == nil {
-		return "", "", fmt.Errorf("operator CA not loaded - call EnsurePKI first")
+	// Determine which CA to use based on leaf type
+	var caCert *x509.Certificate
+	var caKey *ecdsa.PrivateKey
+	var caType string
+	var certValidityDays int
+
+	switch leafType {
+	case "gateway-peer":
+		if pki.gatewayPeerCert == nil {
+			return "", "", fmt.Errorf("gateway peer CA not loaded - call EnsurePKI first")
+		}
+		caCert = pki.gatewayPeerCert
+		caType = "gateway-peer"
+		certValidityDays = peerCertValidityDays
+	default:
+		// operator, cli, app use operator CA
+		if pki.operatorCert == nil {
+			return "", "", fmt.Errorf("operator CA not loaded - call EnsurePKI first")
+		}
+		caCert = pki.operatorCert
+		caType = string(constants.UserRoleOperator)
+		certValidityDays = leafCertValidityDays
 	}
 
-	// Load operator CA private key on-demand for signing
-	if pki.operatorKey == nil {
-		if err := pki.loadCAPrivateKey(string(constants.UserRoleOperator), &pki.operatorKey); err != nil {
-			return "", "", fmt.Errorf("load operator CA private key for signing: %w", err)
+	// Load CA private key on-demand for signing
+	if caKey == nil {
+		if err := pki.loadCAPrivateKey(caType, &caKey); err != nil {
+			return "", "", fmt.Errorf("load %s CA private key for signing: %w", caType, err)
 		}
 	}
 
@@ -533,7 +585,7 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 		SerialNumber: serial,
 		Subject:      csr.Subject,
 		NotBefore:    now.Add(-1 * time.Minute),
-		NotAfter:     now.Add(time.Duration(leafCertValidityDays) * 24 * time.Hour),
+		NotAfter:     now.Add(time.Duration(certValidityDays) * 24 * time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		DNSNames:     csr.DNSNames,
@@ -550,23 +602,32 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 		uriURL, _ = wid.CLISPIFFEURL(userID, sessionID)
 	case "app":
 		uriURL, _ = wid.AppSPIFFEURL(operatorID)
+	case "gateway-peer":
+		uriURL, _ = wid.GatewayPeerSPIFFEURL(gatewayID)
 	}
 
 	if uriURL != nil {
 		template.URIs = []*url.URL{uriURL}
 	}
 
-	certDER, err := x509.CreateCertificate(rand.Reader, template, pki.operatorCert, csr.PublicKey, pki.operatorKey)
+	certDER, err := x509.CreateCertificate(rand.Reader, template, caCert, csr.PublicKey, caKey)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to sign certificate: %w", err)
 	}
 
 	certPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}))
 
-	// Build chain (leaf + operator intermediate + root)
-	opPEM, _ := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "operator_ca.crt"))
+	// Build chain based on CA type
 	rootPEM, _ := os.ReadFile(filepath.Join(pki.pkiDir, "root", "root_ca.crt"))
-	chainPEM = certPEM + string(opPEM) + string(rootPEM)
+	if leafType == "gateway-peer" {
+		// Gateway peer chain: leaf + gateway peer intermediate + root
+		caPEM, _ := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "gateway_peer_ca.crt"))
+		chainPEM = certPEM + string(caPEM) + string(rootPEM)
+	} else {
+		// Operator/cli/app chain: leaf + operator intermediate + root
+		caPEM, _ := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "operator_ca.crt"))
+		chainPEM = certPEM + string(caPEM) + string(rootPEM)
+	}
 
 	return certPEM, chainPEM, nil
 }
@@ -721,6 +782,8 @@ func (pki *PKIAuthority) generateIntermediateCA(certPath string, parentCert *x50
 		caType = "hub"
 	case operatorCommonName:
 		caType = string(constants.UserRoleOperator)
+	case gatewayPeerCommonName:
+		caType = "gateway-peer"
 	}
 
 	if pki.secretManager == nil {
@@ -741,12 +804,14 @@ func (pki *PKIAuthority) generateIntermediateCA(certPath string, parentCert *x50
 	case operatorCommonName:
 		pki.operatorCert = intermediateCert
 		pki.operatorKey = intermediateKey
+	case gatewayPeerCommonName:
+		pki.gatewayPeerCert = intermediateCert
+		pki.gatewayPeerKey = intermediateKey
 	}
 
 	return nil
 }
-
-func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
+func (pki *PKIAuthority) generateServiceCertWithNames(extraIPs []net.IP, extraDNSNames []string) error {
 	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.crt")
 
 	if pki.hubCert == nil || pki.hubKey == nil {
@@ -764,6 +829,10 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 	}
 
 	dnsNames := []string{"localhost", "g8e.local", string(constants.SessionTypeOperator)}
+	// Add extra DNS names from network identity detection
+	if extraDNSNames != nil {
+		dnsNames = append(dnsNames, extraDNSNames...)
+	}
 	ipAddresses := append([]net.IP{net.ParseIP("127.0.0.1")}, extraIPs...)
 
 	// Add URI SAN for workload identity
@@ -896,6 +965,12 @@ func isCurveP256(pubKey interface{}) bool {
 // RenewServiceCert renews the operator-gateway service certificate if it is expiring soon.
 // This is called by the background renewal loop in the gateway service.
 func (pki *PKIAuthority) RenewServiceCert(extraIPs []net.IP) error {
+	return pki.RenewServiceCertWithNames(extraIPs, nil)
+}
+
+// RenewServiceCertWithNames renews the operator-gateway service certificate with custom DNS names.
+// This is called by the background renewal loop in the gateway service.
+func (pki *PKIAuthority) RenewServiceCertWithNames(extraIPs []net.IP, extraDNSNames []string) error {
 	pki.mu.Lock()
 	defer pki.mu.Unlock()
 
@@ -914,7 +989,7 @@ func (pki *PKIAuthority) RenewServiceCert(extraIPs []net.IP) error {
 	}
 
 	// Generate new service certificate
-	if err := pki.generateServiceCert(extraIPs); err != nil {
+	if err := pki.generateServiceCertWithNames(extraIPs, extraDNSNames); err != nil {
 		return fmt.Errorf("failed to generate new service certificate: %w", err)
 	}
 

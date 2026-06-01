@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a Governance Gateway
 
-Last Updated: 2026-05-31
-Version: v1.0.3
+Last Updated: 2026-06-01
+Version: v1.0.5
 
 ---
 
@@ -35,13 +35,17 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces the `g8e` binary in the repository root. The binary is statically linked and requires no runtime dependencies.
+This produces the `g8e` binary in the repository root and platform-specific binaries in the `bin/` directory. The binary is statically linked and requires no runtime dependencies.
 
 ### Build Targets
 
 The Makefile provides several build targets:
 
-- `make build` — Builds the `g8e` binary.
+- `make build` — Builds the g8e binary for all platforms (linux, windows, darwin).
+- `make build-linux` — Builds g8e for Linux (amd64, arm64, 386).
+- `make build-windows` — Builds g8e for Windows (amd64, arm64).
+- `make build-darwin` — Builds g8e for Darwin (amd64, arm64).
+- `make build-compressed` — Builds g8e for all platforms with UPX compression.
 - `make clean` — Removes compiled binaries and test artifacts.
 
 ### Cross-Compilation
@@ -51,31 +55,58 @@ To build for different target platforms:
 ```bash
 GOOS=linux GOARCH=amd64 make build
 GOOS=darwin GOARCH=arm64 make build
+GOOS=windows GOARCH=amd64 make build
 ```
+
+### Windows Build
+
+On Windows, use the provided PowerShell build script:
+
+```powershell
+.\build.ps1
+```
+
+For cross-compilation from Linux/macOS to Windows:
+
+```bash
+GOOS=windows GOARCH=amd64 make build
+# Output: g8e (rename to g8e.exe on Windows)
+```
+
+The Makefile also includes a dedicated Windows build target:
+
+```bash
+make build-windows
+```
+
+This builds for both amd64 and arm64 architectures without compression to avoid Windows Defender false positives.
 
 ### Running in Gateway Mode
 
-To start the gateway, run the g8e binary with a gateway mode flag:
+To start the gateway, use the CLI gateway command:
 
 ```bash
-./g8e --doctrine          # L1 enforced, L2/L3 audited
-./g8e --consensus         # L1/L2 enforced, L3 audited
-./g8e --notary            # L1/L2/L3 strictly enforced
+./g8e gw start --posture doctrine    # L1 enforced, L2/L3 audited (default)
+./g8e gw start --posture consensus   # L1/L2 enforced, L3 audited
+./g8e gw start --posture notary      # L1/L2/L3 strictly enforced
 ```
 
 ### Gateway Mode Flags
 
-- `--doctrine` — Gateway mode: L1 enforced, L2/L3 audited (default)
-- `--consensus` — Gateway mode: L1/L2 enforced, L3 audited
-- `--notary` — Gateway mode: L1/L2/L3 strictly enforced
-- `--http-listen-port <port>` — HTTPS port for mTLS API (default: from paths.json)
-- `--bootstrap-listen-port <port>` — Bootstrap TLS port for CSR-based enrollment (default: from paths.json)
-- `--public-listen-port <port>` — Public browser/BYO bootstrap port (default: from paths.json)
+- `--posture <mode>` — Gateway posture: doctrine (L1 enforced, L2/L3 audited, default), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)
+- `--http-listen-port <port>` — HTTPS port for mTLS API (default: 8440)
+- `--bootstrap-listen-port <port>` — Bootstrap TLS port for CSR-based enrollment (default: 8441)
+- `--public-listen-port <port>` — Public browser/BYO bootstrap port (default: 8443)
+- `--mcp-http-port <port>` — Plain HTTP port for MCP calls (default: 8442)
 - `--data-dir <dir>` — Data directory for SQLite database (default: .g8e/data in working directory)
 - `--pki-dir <dir>` — Directory for TLS certificates (default: .g8e/pki)
 - `--secrets-dir <dir>` — Directory for platform secrets (default: .g8e/secrets)
 - `--passkey-rp-id <id>` — RP ID for passkey operations (default: localhost)
 - `--passkey-rp-name <name>` — RP Name for passkey operations (default: g8e)
+- `--rate-limit-rps <rps>` — Gateway requests per second limit (default: 0, disabled)
+- `--rate-limit-burst <burst>` — Gateway rate limit burst size (default: 10)
+- `--cert-mode <mode>` — Certificate mode: full (all hostnames/IPs), localhost (only localhost)
+- `--network-identity-file <path>` — Path to JSON file containing pre-detected network identity
 
 ---
 
@@ -123,6 +154,8 @@ The gateway must expose HTTP endpoints:
 - **Device Enrollment**: `POST /api/v1/pki/devices/enroll` for CSR-based device enrollment (Operator and CLI certificates).
 - **Certificate Revocation**: `POST /api/v1/pki/certificates/revoke` for certificate revocation.
 - **Revocation Bundle**: `GET /api/v1/pki/revocation-bundle` for the signed revocation list.
+- **MCP Endpoint**: `POST /api/v1/mcp` for JSON-RPC MCP tool calls.
+- **Trust Bundle**: `GET /.well-known/g8e/pki/ca-bundle` for the CA trust bundle.
 
 #### 5. Protocol Translation
 
@@ -154,7 +187,7 @@ Your implementation must enforce these core invariants:
 
 The gateway must support three operating modes:
 
-- **Doctrine Mode**: Enforce L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures not required.
+- **Doctrine Mode**: Enforce L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures not required. This is the default mode.
 - **Consensus Mode**: Enforce L1 and L2 (multi-model Byzantine consensus). L3 signature not required.
 - **Notary Mode**: Enforce L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2).
 
@@ -215,7 +248,13 @@ This verifies:
 For comprehensive testing including integration tests, use:
 
 ```bash
-./g8e test ci
+make test
+```
+
+For CI-quality testing with coverage enforcement:
+
+```bash
+make ci
 ```
 
 ---

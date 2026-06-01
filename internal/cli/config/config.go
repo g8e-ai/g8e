@@ -81,6 +81,7 @@ type PathsConfig struct {
 		InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 		OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 		OperatorHTTPS          int `json:"operator_https"`
+		OperatorMcpHttp        int `json:"operator_mcp_http"`
 		OperatorPublicHTTPS    int `json:"operator_public_https"`
 	} `json:"ports"`
 }
@@ -266,6 +267,10 @@ func (c *Config) OperatorBootstrapHTTPSPort() int {
 
 func (c *Config) OperatorPublicHTTPSPort() int {
 	return c.Paths.Ports.OperatorPublicHTTPS
+}
+
+func (c *Config) OperatorMcpHttpPort() int {
+	return c.Paths.Ports.OperatorMcpHttp
 }
 
 func (c *Config) OperatorHTTPURL() string {

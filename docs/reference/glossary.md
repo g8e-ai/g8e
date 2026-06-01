@@ -4,8 +4,8 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-05-31
-Version: v1.0.3
+Last Updated: 2026-06-01
+Version: v1.0.5
 
 Core terminology for the g8e protocol, Governance Gateway, Governed Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
 
@@ -31,14 +31,14 @@ An embedded SQLite database on the Governed Operator that stores all operator se
 
 ## Coordination Store
 
-The embedded SQLite database used by the Governance Gateway for durable storage of users, operators, and platform data. The Gateway running in Gateway mode is the single source of truth - a single SQLite database in WAL mode shared by all components via the Gateway's document store, KV, and pub/sub APIs. BYO agentic clients and other components are stateless with respect to persistence and access all data through the Gateway's HTTP API.
+The embedded SQLite database used by the Governance Gateway for durable storage of users, operators, and platform data. The Gateway running in Gateway mode is the single source of truth - a single SQLite database in WAL mode shared by all components via the Gateway's document store, KV, and pub/sub APIs. BYO agentic clients and other components are stateless with respect to persistence and access all data through the Gateway's HTTP API. Collections include users, operators, operator_sessions, cli_sessions, web_sessions, cases, investigations, tasks, app_policies, trusted_signers, revoked_certificates, reputation_state, reputation_commitments, and others.
 
 ---
 
 ## Governance Envelope
 
 The canonical Protobuf container (`g8e.common.v1.GovernanceEnvelope`) for all g8e protocol mutations. It binds identity, intent, state, and governance proofs into one transaction. Fields include:
-- Identity: `id`, `timestamp`, `expires_at`, `source_component`, `operator_id`, `operator_session_id`, `web_session_id`, `cli_session_id`
+- Identity: `id`, `timestamp`, `expires_at`, `source_component`, `operator_id`, `operator_session_id`, `web_session_id`, `cli_session_id`, `tenant_id`, `binding_persona`
 - Intent: `event_type`, `payload` (typed protobuf bytes), `intent_data` (structured JSON), `action_type`, `target_resource`
 - State: `state_merkle_root`, `nonce`, `transaction_hash`, `protocol_version`
 - Governance: `governance` (L1/L2/L3 metadata)
@@ -48,9 +48,25 @@ The wire format is canonical JSON (protojson) for client-facing surfaces; signin
 
 ---
 
+## Gateway Peer
+
+A gateway instance in a federated deployment that can communicate with other gateways. Gateway peers have their own SPIFFE identity (`spiffe://g8e.local/gateway/<gateway_id>`) and PKI support for peer-to-peer mTLS connections. Gateway peer functionality is part of the federation architecture for multi-gateway deployments.
+
+---
+
 ## g8e Gateway
 
 A reference implementation of a g8e-compliant Policy Decision Point (PDP).
+
+---
+
+## Governance Posture
+
+A configuration that determines which governance layers are required for transaction verification. The three postures are:
+- **Doctrine**: Requires only L1 (Technical Bedrock) validation
+- **Consensus**: Requires L1 and L2 (Consensus) validation
+- **Notary**: Requires L1, L2, and L3 (Notary/Human) validation
+The posture is set at startup and affects whether L2 signatures and L3 proofs are required. Posture requirements are enforced by the L4 Warden via the GovernancePosture interface.
 
 ---
 
@@ -83,7 +99,7 @@ L1 is foundationally active for every command and cannot be bypassed.
 
 ## L2 Consensus (L2Consensus)
 
-The second layer of g8e governance (Consensus). A multi-agent consensus system where independent agents vote on command candidates. L2 ensures every command executed is backed by a cryptographic quorum. In the g8e protocol, this is represented by an Ed25519 signature over the `transaction_hash|decision` in the `GovernanceEnvelope`. This signature is verified by the L4 Warden.
+The second layer of g8e governance (Consensus). A multi-agent consensus system where independent agents vote on command candidates. L2 ensures every command executed is backed by a cryptographic quorum. In the g8e protocol, this is represented by an Ed25519 signature over the `transaction_hash|decision` in the `GovernanceEnvelope`. This signature is verified by the L4 Warden. L2 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
 
 ---
 
@@ -92,7 +108,8 @@ The second layer of g8e governance (Consensus). A multi-agent consensus system w
 The third layer of g8e governance (Authorization), focusing on human oversight. Every state-changing mutation requires explicit human authorization. This is implemented via:
 - **WebAuthn (Passkey)**: FIDO2-compliant cryptographic proof for web-based clients.
 - **mTLS Signature**: A cryptographic signature over the transaction hash using the CLI/operator private key (mTLS certificate fingerprint binding).
-The L4 Warden verifies these proofs before allowing execution to proceed.
+- **CLI Approval**: In outbound mode, mutations requiring L3 are suspended and must be approved via CLI command with cryptographic signature verification.
+The L4 Warden verifies these proofs before allowing execution to proceed. L3 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
 
 ---
 
@@ -107,6 +124,7 @@ The fail-closed transaction verification gate in the Governed Operator that enfo
 - State root matching
 - L2 signature verification (when required by posture)
 - L3 Notary proof verification (when required by posture)
+- App policy auto-approval checks for external apps
 The Warden rejects transactions that fail any check; only verified transactions proceed to the L5 Actuator for execution.
 
 ---
@@ -155,7 +173,7 @@ A unique execution context for a running Governed Operator instance. Identified 
 
 ## PKI (Public Key Infrastructure)
 
-The cryptographic infrastructure managed by the Governance Gateway for issuing and revoking operator certificates. The Gateway acts as a Certificate Authority (CA), issuing certificates with workload identity (URI SAN) for operators. Certificates are revoked via the Gateway's revocation service, and operators fetch the revocation bundle to enforce revocation. TLS 1.3-only is enforced.
+The cryptographic infrastructure managed by the Governance Gateway for issuing and revoking operator certificates. The Gateway acts as a Certificate Authority (CA), issuing certificates with workload identity (URI SAN) for operators. Certificates are revoked via the Gateway's revocation service, and operators fetch the revocation bundle to enforce revocation. TLS 1.3-only is enforced. The PKI also supports gateway peer certificates for federated deployments.
 
 ---
 
@@ -224,4 +242,9 @@ A deterministic SHA-256 hash computed from normalized GovernanceEnvelope fields.
 
 ## Workload Identity
 
-The identity of a Governed Operator as encoded in its TLS certificate via URI SAN (Subject Alternative Name). The workload identity is used for authentication and authorization in the mTLS connection between the Operator and the Gateway.
+The identity of a Governed Operator as encoded in its TLS certificate via URI SAN (Subject Alternative Name). The workload identity is used for authentication and authorization in the mTLS connection between the Operator and the Gateway. The SPIFFE trust domain is `g8e.local`. Supported identity formats include:
+- Operator: `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>`
+- CLI: `spiffe://g8e.local/cli/<user_id>/<cli_session_id>`
+- App: `spiffe://g8e.local/app/<operator_id>`
+- Hub: `spiffe://g8e.local/hub/operator-listen`
+- Gateway Peer: `spiffe://g8e.local/gateway/<gateway_id>`

@@ -275,7 +275,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		if orgID == "" {
 			orgID = organizationID
 		}
-		certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, orgID, operator.ID, "", operatorSessionID)
+		certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, orgID, operator.ID, "", operatorSessionID, "")
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign operator CSR: %w", err)
 		}
@@ -294,7 +294,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	}
 
 	var err error
-	cliCertPEM, cliCertChainPEM, err = s.pki.SignCSR(req.CLICSR, constants.LeafTypeCLI, "", "", userID, cliSessionID)
+	cliCertPEM, cliCertChainPEM, err = s.pki.SignCSR(req.CLICSR, constants.LeafTypeCLI, "", "", userID, cliSessionID, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign CLI CSR: %w", err)
 	}

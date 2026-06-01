@@ -18,6 +18,7 @@
     - [CheckPortRequested](#g8e-operator-v1-CheckPortRequested)
     - [CommandCancelRequested](#g8e-operator-v1-CommandCancelRequested)
     - [CommandRequested](#g8e-operator-v1-CommandRequested)
+    - [CommandRequested.EnvironmentEntry](#g8e-operator-v1-CommandRequested-EnvironmentEntry)
     - [CommandResult](#g8e-operator-v1-CommandResult)
     - [CommitmentAttestation](#g8e-operator-v1-CommitmentAttestation)
     - [CreateDeviceLinkRequested](#g8e-operator-v1-CreateDeviceLinkRequested)
@@ -395,9 +396,24 @@ Payload for g8e.v1.operator.command.requested
 | sentinel_mode | [string](#string) |  | Vault scrubbing mode for output storage |
 | timeout_seconds | [int32](#int32) |  | Execution timeout override in seconds |
 | intent | [string](#string) |  | Intent: The high-level goal (The &#34;Why&#34;) |
-| environment | map&lt;string, string&gt; |  | Environment variables |
+| environment | [CommandRequested.EnvironmentEntry](#g8e-operator-v1-CommandRequested-EnvironmentEntry) | repeated | Environment variables |
 | working_directory | [string](#string) |  | Working directory override |
 
+
+
+
+
+
+<a name="g8e-operator-v1-CommandRequested-EnvironmentEntry"></a>
+
+### CommandRequested.EnvironmentEntry
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| key | [string](#string) |  |  |
+| value | [string](#string) |  |  |
 
 
 

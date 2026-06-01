@@ -381,6 +381,7 @@ func main() {
 	var gatewayHTTPPort int
 	var gatewayBootstrapPort int
 	var gatewayPublicPort int
+	var gatewayMCPHttpPort int
 	var gatewayDataDir string
 	var gatewayPKIDir string
 	var gatewaySecretsDir string
@@ -388,6 +389,8 @@ func main() {
 	var gatewayPasskeyRpName string
 	var gatewayRateLimitRPS float64
 	var gatewayRateLimitBurst int
+	var gatewayCertIdentityMode string
+	var gatewayNetworkIdentityFile string
 	var insecureMode bool
 	var insecureURL string
 	var insecureToken string
@@ -428,6 +431,7 @@ func main() {
 	flag.IntVar(&gatewayHTTPPort, "http-listen-port", constants.Ports.OperatorHttps, "HTTPS port for mTLS API (default: from paths.json)")
 	flag.IntVar(&gatewayBootstrapPort, "bootstrap-listen-port", constants.Ports.OperatorBootstrapHttps, "Bootstrap TLS port for CSR enrollment (default: from paths.json)")
 	flag.IntVar(&gatewayPublicPort, "public-listen-port", constants.Ports.OperatorPublicHttps, "Public browser/BYO bootstrap port (default: from paths.json)")
+	flag.IntVar(&gatewayMCPHttpPort, "mcp-http-port", constants.Ports.OperatorMcpHttp, "Plain HTTP port for MCP calls (default: from paths.json)")
 	flag.StringVar(&gatewayDataDir, "data-dir", "", "Data directory for SQLite database (default: "+constants.Paths.Infra.DataDir+" in working directory)")
 	flag.StringVar(&gatewayPKIDir, "pki-dir", "", "Directory for TLS certificates (default: "+constants.Paths.Infra.PkiDir+")")
 	flag.StringVar(&gatewaySecretsDir, "secrets-dir", "", "Directory for platform secrets (default: "+constants.Paths.Infra.SecretsDir+")")
@@ -435,6 +439,8 @@ func main() {
 	flag.StringVar(&gatewayPasskeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
 	flag.Float64Var(&gatewayRateLimitRPS, "rate-limit-rps", 5.0, "Gateway requests per second limit (set to 0 to disable)")
 	flag.IntVar(&gatewayRateLimitBurst, "rate-limit-burst", 10, "Gateway rate limit burst size")
+	flag.StringVar(&gatewayCertIdentityMode, "cert-mode", "", "Certificate mode: full (all hostnames/IPs), localhost (only localhost)")
+	flag.StringVar(&gatewayNetworkIdentityFile, "network-identity-file", "", "Path to JSON file containing pre-detected network identity")
 	flag.BoolVar(&rekeyVault, "rekey-vault", false, "Re-encrypt vault with new private key (requires --old-key)")
 	flag.StringVar(&oldPrivateKeyStr, "old-key", "", "Old private key for vault re-keying")
 	flag.BoolVar(&verifyVault, "verify-vault", false, "Verify vault integrity")
@@ -484,6 +490,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for mTLS API (default: %d)\n", constants.Ports.OperatorHttps)
 		fmt.Fprintf(os.Stderr, "  --bootstrap-listen-port <port> Bootstrap TLS port for CSR-based enrollment (default: %d)\n", constants.Ports.OperatorBootstrapHttps)
 		fmt.Fprintf(os.Stderr, "  --public-listen-port <port> Public browser/BYO bootstrap port (default: %d)\n", constants.Ports.OperatorPublicHttps)
+		fmt.Fprintf(os.Stderr, "  --mcp-http-port <port>      Plain HTTP port for MCP calls (default: %d)\n", constants.Ports.OperatorMcpHttp)
 		fmt.Fprintf(os.Stderr, "  --data-dir <dir>            Data directory for SQLite (default: %s in working directory)\n", constants.Paths.Infra.DataDir)
 		fmt.Fprintf(os.Stderr, "  --pki-dir <dir>             Directory for TLS certificates (default: %s)\n", constants.Paths.Infra.PkiDir)
 		fmt.Fprintf(os.Stderr, "  --secrets-dir <dir>         Directory for platform secrets (default: %s)\n", constants.Paths.Infra.SecretsDir)
@@ -542,7 +549,7 @@ func main() {
 	}
 
 	if postureCount > 0 {
-		runGatewayMode(posture, gatewayHTTPPort, gatewayBootstrapPort, gatewayPublicPort, gatewayDataDir, gatewayPKIDir, gatewaySecretsDir, gatewayPasskeyRpID, gatewayPasskeyRpName, gatewayRateLimitRPS, gatewayRateLimitBurst, logLevel)
+		runGatewayMode(posture, gatewayHTTPPort, gatewayBootstrapPort, gatewayPublicPort, gatewayMCPHttpPort, gatewayDataDir, gatewayPKIDir, gatewaySecretsDir, gatewayPasskeyRpID, gatewayPasskeyRpName, gatewayRateLimitRPS, gatewayRateLimitBurst, logLevel, gatewayCertIdentityMode, gatewayNetworkIdentityFile)
 		return
 	}
 
@@ -594,25 +601,73 @@ func main() {
 	}
 	logger.Info("Trust bundle loaded")
 
-	// Load initial client certificate if provided
-	if clientCert != "" && privateKey != "" {
-		cert, err := tls.LoadX509KeyPair(clientCert, privateKey)
-		if err != nil {
-			logger.Error("Failed to load client certificate", string(constants.ConnectionStateError), err)
+	// Resolve default client certificate paths if not explicitly provided
+	// Priority: 1. Explicit flags, 2. Project-local .g8e/pki/operator.*, 3. Project-local .g8e/pki/client.*, 4. User home ~/.g8e/operator.*
+	if privateKey == "" {
+		// Try project-local operator key (created by enrollment)
+		projectOperatorKey := filepath.Join(launchDir, ".g8e/pki/operator.key")
+		if _, err := os.Stat(projectOperatorKey); err == nil {
+			privateKey = projectOperatorKey
+			logger.Info("Using default operator key from project directory", "path", privateKey)
 		} else {
-			clientIdentity.SetCertificate(cert)
-			// Also set the global for compatibility during migration
-			certs.SetClientCertificate(cert)
+			// Try project-local client key
+			projectKey := filepath.Join(launchDir, ".g8e/pki/client.key")
+			if _, err := os.Stat(projectKey); err == nil {
+				privateKey = projectKey
+				logger.Info("Using default client key from project directory", "path", privateKey)
+			} else {
+				// Try user home operator key
+				homeDir, err := os.UserHomeDir()
+				if err == nil {
+					homeKey := filepath.Join(homeDir, ".g8e/operator.key")
+					if _, err := os.Stat(homeKey); err == nil {
+						privateKey = homeKey
+						logger.Info("Using default operator key from home directory", "path", privateKey)
+					}
+				}
+			}
+		}
+	}
+
+	if clientCert == "" {
+		// Try project-local operator cert (created by enrollment)
+		projectOperatorCert := filepath.Join(launchDir, ".g8e/pki/operator.crt")
+		if _, err := os.Stat(projectOperatorCert); err == nil {
+			clientCert = projectOperatorCert
+			logger.Info("Using default operator certificate from project directory", "path", clientCert)
+		} else {
+			// Try project-local client cert
+			projectCert := filepath.Join(launchDir, ".g8e/pki/client.crt")
+			if _, err := os.Stat(projectCert); err == nil {
+				clientCert = projectCert
+				logger.Info("Using default client certificate from project directory", "path", clientCert)
+			} else {
+				// Try user home operator cert
+				homeDir, err := os.UserHomeDir()
+				if err == nil {
+					homeCert := filepath.Join(homeDir, ".g8e/operator.crt")
+					if _, err := os.Stat(homeCert); err == nil {
+						clientCert = homeCert
+						logger.Info("Using default operator certificate from home directory", "path", clientCert)
+					}
+				}
+			}
 		}
 	}
 
 	if privateKey == "" {
-		fmt.Fprintf(os.Stderr, "Private key is required (-k or --key)\n")
+		fmt.Fprintf(os.Stderr, "Private key is required (-k or --key). Expected locations:\n")
+		fmt.Fprintf(os.Stderr, "  - .g8e/pki/operator.key (project directory)\n")
+		fmt.Fprintf(os.Stderr, "  - .g8e/pki/client.key (project directory)\n")
+		fmt.Fprintf(os.Stderr, "  - ~/.g8e/operator.key (home directory)\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
 	if clientCert == "" {
-		fmt.Fprintf(os.Stderr, "Client certificate is required (--cert or --client-cert)\n")
+		fmt.Fprintf(os.Stderr, "Client certificate is required (--cert or --client-cert). Expected locations:\n")
+		fmt.Fprintf(os.Stderr, "  - .g8e/pki/operator.crt (project directory)\n")
+		fmt.Fprintf(os.Stderr, "  - .g8e/pki/client.crt (project directory)\n")
+		fmt.Fprintf(os.Stderr, "  - ~/.g8e/operator.crt (home directory)\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -635,7 +690,8 @@ func main() {
 		os.Exit(constants.ExitConfigError)
 	}
 
-	// Store cert in global certs package for use by httpclient
+	clientIdentity.SetCertificate(cert)
+	// Also set the global for compatibility during migration
 	certs.SetClientCertificate(cert)
 
 	// Resolve the effective working directory: flag overrides launch dir.
@@ -857,7 +913,7 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 // runGatewayMode starts the Operator in gateway mode - the platform's central
 // persistence (operator) and pub/sub broker. In this mode, the Operator also
 // runs an in-process command service to act as the sovereign execution Gateway.
-func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel string) {
+func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publicPort, mcpHttpPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode, networkIdentityFile string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
@@ -885,20 +941,23 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		"build", buildID)
 
 	cfg, err := config.LoadGateway(config.GatewayOptions{
-		Posture:           posture,
-		HTTPPort:          httpPort,
-		BootstrapPort:     bootstrapPort,
-		PublicPort:        publicPort,
-		DataDir:           dataDir,
-		PKIDir:            pkiDir,
-		SecretsDir:        secretsDir,
-		PasskeyRpID:       passkeyRpID,
-		PasskeyRpName:     passkeyRpName,
-		RateLimitRPS:      rateLimitRPS,
-		RateLimitBurst:    rateLimitBurst,
-		MCPDownstreamURL:  "",
-		A2ADownstreamURL:  "",
-		AllowTestPortZero: false,
+		Posture:             posture,
+		HTTPPort:            httpPort,
+		BootstrapPort:       bootstrapPort,
+		PublicPort:          publicPort,
+		MCPHttpPort:         mcpHttpPort,
+		DataDir:             dataDir,
+		PKIDir:              pkiDir,
+		SecretsDir:          secretsDir,
+		PasskeyRpID:         passkeyRpID,
+		PasskeyRpName:       passkeyRpName,
+		RateLimitRPS:        rateLimitRPS,
+		RateLimitBurst:      rateLimitBurst,
+		CertMode:            certIdentityMode,
+		NetworkIdentityFile: networkIdentityFile,
+		MCPDownstreamURL:    "",
+		A2ADownstreamURL:    "",
+		AllowTestPortZero:   false,
 	})
 	if err != nil {
 		logger.Error("Failed to load gateway configuration", string(constants.ConnectionStateError), err)

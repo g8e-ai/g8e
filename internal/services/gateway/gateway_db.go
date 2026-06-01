@@ -36,6 +36,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/services/system"
 )
 
 // gatewaySchema is the canonical operator SQLite schema, embedded at compile time
@@ -83,6 +84,7 @@ func OpenGatewayDBService(dataDir string, secretsDir string, logger *slog.Logger
 	// Initialize Audit Vault for transaction-native audit recording
 	auditVaultConfig := storage.DefaultAuditVaultConfig()
 	auditVaultConfig.DataDir = dataDir
+	auditVaultConfig.GitPath = system.GitEmbedded
 	auditVault, err := storage.NewAuditVaultService(auditVaultConfig, logger)
 	if err != nil {
 		db.Close()

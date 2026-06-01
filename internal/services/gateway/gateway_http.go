@@ -339,8 +339,27 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
 	mux.HandleFunc(constants.APIPaths.BootstrapCALinux, h.pkiController.handleTrustScriptLinux)
 	mux.HandleFunc(constants.APIPaths.BootstrapCAWindows, h.pkiController.handleTrustScriptWindows)
+	mux.HandleFunc("/.well-known/g8e/pki/trust-windows", h.pkiController.handleTrustScriptWindowsAlias)
+	mux.HandleFunc("/.well-known/g8e/binary/", h.pkiController.handleBinaryDownload)
 
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
+}
+
+func (h *HTTPHandler) buildMCPHttpRouter() http.Handler {
+	mux := http.NewServeMux()
+
+	// MCP-only routes on plain HTTP for HTTP MCP calls
+	mux.HandleFunc(constants.APIPaths.MCPToolsList, h.mcp.HandleToolsList)
+	mux.HandleFunc(constants.APIPaths.MCPToolsCall, h.mcp.HandleToolsCall)
+	mux.HandleFunc(constants.APIPaths.MCPToolsCallSSE, h.mcp.HandleToolsCallSSE)
+	mux.HandleFunc(constants.APIPaths.MCPResourcesList, h.mcp.HandleResourcesList)
+	mux.HandleFunc(constants.APIPaths.MCPResourcesRead, h.mcp.HandleResourcesRead)
+	mux.HandleFunc(constants.APIPaths.MCPPromptsList, h.mcp.HandlePromptsList)
+	mux.HandleFunc(constants.APIPaths.MCPPromptsGet, h.mcp.HandlePromptsGet)
+	mux.HandleFunc(constants.APIPaths.A2ACall, h.mcp.HandleA2aCall)
+
+	// Wrap with rate limiting
+	return h.pathTraversalGuard(h.rateLimitMiddleware(mux))
 }
 
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
