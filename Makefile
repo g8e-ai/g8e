@@ -200,23 +200,11 @@ build:
 	if [ "$$HOST_OS" = "windows" ]; then \
 		ln -sf g8e-$$HOST_OS-$$HOST_ARCH.exe bin/g8e; \
 		echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH.exe"; \
-		if pgrep -f "g8e" > /dev/null 2>&1; then \
-			echo "WARNING: g8e Gateway is running. Skipping copy to project root."; \
-			echo "Run './g8e gw stop' first to update the root binary."; \
-		else \
-			cp bin/g8e-$$HOST_OS-$$HOST_ARCH.exe g8e.exe; \
-			echo "Copied to root: g8e.exe"; \
-		fi; \
+		cp bin/g8e-$$HOST_OS-$$HOST_ARCH.exe g8e.exe 2>/dev/null || true; \
 	else \
 		ln -sf g8e-$$HOST_OS-$$HOST_ARCH bin/g8e; \
 		echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
-		if pgrep -f "g8e" > /dev/null 2>&1; then \
-			echo "WARNING: g8e Gateway is running. Skipping copy to project root."; \
-			echo "Run './g8e gw stop' first to update the root binary."; \
-		else \
-			cp bin/g8e-$$HOST_OS-$$HOST_ARCH g8e; \
-			echo "Copied to root: g8e"; \
-		fi; \
+		cp bin/g8e-$$HOST_OS-$$HOST_ARCH g8e 2>/dev/null || true; \
 	fi
 	@echo "Build complete. Binary: $$BINARY"
 
@@ -250,25 +238,13 @@ build-all:
 		if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH.exe ]; then \
 			ln -sf g8e-$$HOST_OS-$$HOST_ARCH.exe bin/g8e; \
 			echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH.exe"; \
-			if pgrep -f "g8e" > /dev/null 2>&1; then \
-				echo "WARNING: g8e operator is running. Skipping copy to root."; \
-				echo "Run './g8e gw stop' first to update the root binary."; \
-			else \
-				cp bin/g8e-$$HOST_OS-$$HOST_ARCH.exe g8e.exe; \
-				echo "Copied to root: g8e.exe"; \
-			fi; \
+			cp bin/g8e-$$HOST_OS-$$HOST_ARCH.exe g8e.exe 2>/dev/null || true; \
 		fi; \
 	else \
 		if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH ]; then \
 			ln -sf g8e-$$HOST_OS-$$HOST_ARCH bin/g8e; \
 			echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
-			if pgrep -f "g8e" > /dev/null 2>&1; then \
-				echo "WARNING: g8e operator is running. Skipping copy to root."; \
-				echo "Run './g8e gw stop' first to update the root binary."; \
-			else \
-				cp bin/g8e-$$HOST_OS-$$HOST_ARCH g8e; \
-				echo "Copied to root: g8e"; \
-			fi; \
+			cp bin/g8e-$$HOST_OS-$$HOST_ARCH g8e 2>/dev/null || true; \
 		fi; \
 	fi
 	@echo "Multi-platform build complete. Checksums: bin/g8e-*.sha256"
@@ -299,25 +275,13 @@ build-compressed: upx-install
 		if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH.exe ]; then \
 			ln -sf g8e-$$HOST_OS-$$HOST_ARCH.exe bin/g8e; \
 			echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH.exe"; \
-			if pgrep -f "g8e" > /dev/null 2>&1; then \
-				echo "WARNING: g8e operator is running. Skipping copy to root."; \
-				echo "Run './g8e gw stop' first to update the root binary."; \
-			else \
-				cp bin/g8e-$$HOST_OS-$$HOST_ARCH.exe g8e.exe; \
-				echo "Copied to root: g8e.exe"; \
-			fi; \
+			cp bin/g8e-$$HOST_OS-$$HOST_ARCH.exe g8e.exe 2>/dev/null || true; \
 		fi; \
 	else \
 		if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH ]; then \
 			ln -sf g8e-$$HOST_OS-$$HOST_ARCH bin/g8e; \
 			echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
-			if pgrep -f "g8e" > /dev/null 2>&1; then \
-				echo "WARNING: g8e operator is running. Skipping copy to root."; \
-				echo "Run './g8e gw stop' first to update the root binary."; \
-			else \
-				cp bin/g8e-$$HOST_OS-$$HOST_ARCH g8e; \
-				echo "Copied to root: g8e"; \
-			fi; \
+			cp bin/g8e-$$HOST_OS-$$HOST_ARCH g8e 2>/dev/null || true; \
 		fi; \
 	fi
 	@echo "Compressed multi-platform build complete. Checksums: bin/g8e-*.sha256"
