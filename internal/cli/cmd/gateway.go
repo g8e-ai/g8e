@@ -54,6 +54,7 @@ func gatewayStartCmd() *cobra.Command {
 	var httpPort int
 	var bootstrapPort int
 	var publicPort int
+	var mcpHttpPort int
 	var dataDir string
 	var pkiDir string
 	var secretsDir string
@@ -92,6 +93,7 @@ func gatewayStartCmd() *cobra.Command {
 				httpPort,
 				bootstrapPort,
 				publicPort,
+				mcpHttpPort,
 				dataDir,
 				pkiDir,
 				secretsDir,
@@ -156,6 +158,11 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println("[g8e] Gateway service started. Run './g8e auth login' to authenticate your CLI.")
 
+			// Generate dynamic mcp_http_config.json with actual IP address
+			if err := generateMCPHttpConfig(cfg, externalIP); err != nil {
+				cmd.Printf("Warning: Failed to generate mcp_http_config.json: %v\n", err)
+			}
+
 			return nil
 		},
 	}
@@ -164,6 +171,7 @@ func gatewayStartCmd() *cobra.Command {
 	cmd.Flags().IntVar(&httpPort, "http-port", 0, "HTTPS port for mTLS API (default: from paths.json)")
 	cmd.Flags().IntVar(&bootstrapPort, "bootstrap-port", 0, "Bootstrap TLS port for CSR enrollment (default: from paths.json)")
 	cmd.Flags().IntVar(&publicPort, "public-port", 0, "Public browser/BYO bootstrap port (default: from paths.json)")
+	cmd.Flags().IntVar(&mcpHttpPort, "mcp-http-port", 0, "Plain HTTP port for MCP calls (default: from paths.json)")
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
 	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "Directory for TLS certificates (default: .g8e/pki)")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
@@ -239,6 +247,7 @@ func gatewayStatusCmd() *cobra.Command {
 				cmd.Printf("\nEndpoints:\n")
 				cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), cfg.OperatorBootstrapHTTPSPort())
 				cmd.Printf("  Public API:         https://localhost:%d (Public browser/BYO bootstrap)\n", cfg.Paths.Ports.OperatorPublicHTTPS)
+				cmd.Printf("  MCP HTTP:           http://localhost:%d (Plain HTTP for MCP calls)\n", cfg.OperatorMcpHttpPort())
 			} else {
 				cmd.Println("State: STOPPED")
 			}
@@ -282,6 +291,7 @@ func gatewayRestartCmd() *cobra.Command {
 				cfg.OperatorHTTPSPort(),
 				0,
 				cfg.Paths.Ports.OperatorPublicHTTPS,
+				0,
 				"",
 				"",
 				"",
@@ -407,6 +417,7 @@ func gatewayResetCmd() *cobra.Command {
 				cfg.OperatorHTTPSPort(),
 				0,
 				cfg.Paths.Ports.OperatorPublicHTTPS,
+				0,
 				"",
 				"",
 				"",
@@ -504,6 +515,7 @@ func gatewayMCPConfigCmd() *cobra.Command {
 			}
 
 			gatewayURL := fmt.Sprintf("https://localhost:%d/api/mcp/v1", cfg.OperatorHTTPSPort())
+			gatewayHTTPURL := fmt.Sprintf("http://localhost:%d/api/mcp/v1", cfg.OperatorMcpHttpPort())
 			projectRoot := cfg.ProjectRoot
 			hostname := "localhost"
 
@@ -517,7 +529,9 @@ func gatewayMCPConfigCmd() *cobra.Command {
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println("Universal Gateway Configuration")
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			cmd.Println("The Gateway uses a single HTTP endpoint that auto-detects all payload types.")
+			cmd.Println("The Gateway provides two MCP endpoints:")
+			cmd.Printf("  1. mTLS Endpoint (recommended): %s\n", gatewayURL)
+			cmd.Printf("  2. Plain HTTP Endpoint: %s\n", gatewayHTTPURL)
 			cmd.Println()
 			cmd.Println("Setup Instructions:")
 			cmd.Println("1. Ensure the Gateway is running: ./g8e gw start")
@@ -529,10 +543,32 @@ func gatewayMCPConfigCmd() *cobra.Command {
 			cmd.Println()
 			cmd.Println("4. Copy the JSON configuration above to your MCP client's config file")
 			cmd.Println()
+			cmd.Println("Note: The plain HTTP endpoint does not require mTLS credentials but may have")
+			cmd.Println("      different security policies. Use the mTLS endpoint for production workloads.")
 
 			return nil
 		},
 	}
 
 	return cmd
+}
+
+// generateMCPHttpConfig generates the mcp_http_config.json file with the actual gateway IP address
+func generateMCPHttpConfig(cfg *config.Config, gatewayIP string) error {
+	templatePath := filepath.Join(cfg.ProjectRoot, "docs", "protocols", "mcp", "mcp_http_config.json.template")
+	outputPath := filepath.Join(cfg.ProjectRoot, "docs", "protocols", "mcp", "mcp_http_config.json")
+
+	templateContent, err := os.ReadFile(templatePath)
+	if err != nil {
+		return fmt.Errorf("failed to read MCP HTTP config template: %w", err)
+	}
+
+	configStr := string(templateContent)
+	configStr = strings.ReplaceAll(configStr, "{{GATEWAY_IP}}", gatewayIP)
+
+	if err := os.WriteFile(outputPath, []byte(configStr), 0644); err != nil {
+		return fmt.Errorf("failed to write MCP HTTP config: %w", err)
+	}
+
+	return nil
 }

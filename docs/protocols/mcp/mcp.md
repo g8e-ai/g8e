@@ -116,7 +116,11 @@ This ensures compatibility with JSON-based ecosystems while maintaining typed sc
 
 ### MCP Client Configuration
 
-To configure an MCP client to connect to the g8e Gateway, use the provided CLI command to generate a ready-to-use configuration:
+The g8e Gateway provides two MCP endpoints for client connections:
+
+#### mTLS Endpoint (Recommended for Production)
+
+To configure an MCP client to connect to the g8e Gateway with mTLS authentication, use the provided CLI command:
 
 ```bash
 ./g8e gw mcp-config
@@ -129,6 +133,31 @@ export G8E_CLIENT_CERT_PATH=/path/to/g8e/.g8e/pki/client.crt
 export G8E_CLIENT_KEY_PATH=/path/to/g8e/.g8e/pki/client.key
 export G8E_CA_CERT_PATH=/path/to/g8e/.g8e/pki/ca.crt
 ```
+
+#### Plain HTTP Endpoint (Development/Testing)
+
+For development and testing scenarios, the gateway also provides a plain HTTP endpoint (port 8442) that does not require mTLS credentials. This endpoint has rate limiting and may have different security policies.
+
+A configuration template is available at `docs/protocols/mcp/mcp_http_config.json`. This template provides the schema for configuring MCP clients to use the HTTP endpoint:
+
+```json
+{
+  "mcpServers": {
+    "g8e-gateway-http": {
+      "transport": {
+        "type": "http",
+        "url": "http://localhost:8442/api/mcp/v1"
+      },
+      "security": {
+        "mode": "rate-limited",
+        "warning": "Plain HTTP endpoint does not provide mTLS authentication. Use the mTLS endpoint (port 8440) for production workloads."
+      }
+    }
+  }
+}
+```
+
+**Security Note**: The plain HTTP endpoint is intended for development and testing only. Use the mTLS endpoint (port 8440) for production workloads to ensure proper authentication and security.
 
 ### MCP Client Connection
 

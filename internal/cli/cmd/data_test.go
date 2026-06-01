@@ -221,11 +221,13 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 				InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
 				OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 				OperatorHTTPS          int `json:"operator_https"`
+				OperatorMcpHttp        int `json:"operator_mcp_http"`
 				OperatorPublicHTTPS    int `json:"operator_public_https"`
 			}{
 				InsecureMcpGateway:     18789,
 				OperatorBootstrapHTTPS: 8441,
 				OperatorHTTPS:          8440,
+				OperatorMcpHttp:        8442,
 				OperatorPublicHTTPS:    8443,
 			},
 		},

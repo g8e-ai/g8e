@@ -189,7 +189,7 @@ upx-install:
 # =============================================================================
 # BUILD
 # =============================================================================
-PLATFORMS := linux/amd64 linux/arm64 linux/386
+PLATFORMS := linux/amd64 linux/arm64 linux/386 windows/amd64 windows/arm64 darwin/amd64 darwin/arm64
 
 .PHONY: build
 build:
@@ -216,13 +216,14 @@ docker-build:
 .PHONY: build-compressed
 build-compressed: upx-install
 	@echo "Building g8e operator with compression for $(PLATFORMS)..."
+	@mkdir -p bin
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
 	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
 	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
 	for platform in $(PLATFORMS); do \
 		GOOS=$${platform%/*}; \
 		GOARCH=$${platform#*/}; \
-		BINARY=g8e-$$GOOS-$$GOARCH; \
+		BINARY=bin/g8e-$$GOOS-$$GOARCH; \
 		echo "Building $$platform -> $$BINARY..."; \
 		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$platform" -o $$BINARY ./cmd/operator || exit 1; \
 		echo "Compressing $$BINARY with UPX..."; \
@@ -231,11 +232,30 @@ build-compressed: upx-install
 	done
 	@HOST_OS=$$(go env GOOS); \
 	HOST_ARCH=$$(go env GOARCH); \
-	if [ -f g8e-$$HOST_OS-$$HOST_ARCH ]; then \
-		ln -sf g8e-$$HOST_OS-$$HOST_ARCH g8e; \
-		echo "Created symlink: g8e -> g8e-$$HOST_OS-$$HOST_ARCH"; \
+	if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH ]; then \
+		ln -sf g8e-$$HOST_OS-$$HOST_ARCH bin/g8e; \
+		echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
 	fi
-	@echo "Compressed multi-platform build complete. Checksums: g8e-*.sha256"
+	@echo "Compressed multi-platform build complete. Checksums: bin/g8e-*.sha256"
+
+.PHONY: build-windows
+build-windows:
+	@echo "Building g8e for Windows (no compression to avoid Defender false positives)..."
+	@mkdir -p bin
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	for arch in amd64 arm64; do \
+		BINARY=bin/g8e-windows-$$arch.exe; \
+		echo "Building windows/$$arch -> $$BINARY..."; \
+		GOOS=windows GOARCH=$$arch go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=windows_$$arch -s -w -H=windowsgui" -o $$BINARY ./cmd/operator || exit 1; \
+		sha256sum $$BINARY > $$BINARY.sha256; \
+	done
+	@echo "Windows build complete. To avoid Defender false positives:"
+	@echo "  1. Code sign with a trusted certificate (EV Code Signing recommended)"
+	@echo "  2. Submit to Microsoft SmartScreen for whitelisting"
+	@echo "  3. Distribute via signed installer (MSIX or WiX)"
+	@echo "Binaries: bin/g8e-windows-*.exe"
 
 # =============================================================================
 # TEST

@@ -381,6 +381,7 @@ func main() {
 	var gatewayHTTPPort int
 	var gatewayBootstrapPort int
 	var gatewayPublicPort int
+	var gatewayMCPHttpPort int
 	var gatewayDataDir string
 	var gatewayPKIDir string
 	var gatewaySecretsDir string
@@ -428,6 +429,7 @@ func main() {
 	flag.IntVar(&gatewayHTTPPort, "http-listen-port", constants.Ports.OperatorHttps, "HTTPS port for mTLS API (default: from paths.json)")
 	flag.IntVar(&gatewayBootstrapPort, "bootstrap-listen-port", constants.Ports.OperatorBootstrapHttps, "Bootstrap TLS port for CSR enrollment (default: from paths.json)")
 	flag.IntVar(&gatewayPublicPort, "public-listen-port", constants.Ports.OperatorPublicHttps, "Public browser/BYO bootstrap port (default: from paths.json)")
+	flag.IntVar(&gatewayMCPHttpPort, "mcp-http-port", constants.Ports.OperatorMcpHttp, "Plain HTTP port for MCP calls (default: from paths.json)")
 	flag.StringVar(&gatewayDataDir, "data-dir", "", "Data directory for SQLite database (default: "+constants.Paths.Infra.DataDir+" in working directory)")
 	flag.StringVar(&gatewayPKIDir, "pki-dir", "", "Directory for TLS certificates (default: "+constants.Paths.Infra.PkiDir+")")
 	flag.StringVar(&gatewaySecretsDir, "secrets-dir", "", "Directory for platform secrets (default: "+constants.Paths.Infra.SecretsDir+")")
@@ -484,6 +486,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for mTLS API (default: %d)\n", constants.Ports.OperatorHttps)
 		fmt.Fprintf(os.Stderr, "  --bootstrap-listen-port <port> Bootstrap TLS port for CSR-based enrollment (default: %d)\n", constants.Ports.OperatorBootstrapHttps)
 		fmt.Fprintf(os.Stderr, "  --public-listen-port <port> Public browser/BYO bootstrap port (default: %d)\n", constants.Ports.OperatorPublicHttps)
+		fmt.Fprintf(os.Stderr, "  --mcp-http-port <port>      Plain HTTP port for MCP calls (default: %d)\n", constants.Ports.OperatorMcpHttp)
 		fmt.Fprintf(os.Stderr, "  --data-dir <dir>            Data directory for SQLite (default: %s in working directory)\n", constants.Paths.Infra.DataDir)
 		fmt.Fprintf(os.Stderr, "  --pki-dir <dir>             Directory for TLS certificates (default: %s)\n", constants.Paths.Infra.PkiDir)
 		fmt.Fprintf(os.Stderr, "  --secrets-dir <dir>         Directory for platform secrets (default: %s)\n", constants.Paths.Infra.SecretsDir)
@@ -542,7 +545,7 @@ func main() {
 	}
 
 	if postureCount > 0 {
-		runGatewayMode(posture, gatewayHTTPPort, gatewayBootstrapPort, gatewayPublicPort, gatewayDataDir, gatewayPKIDir, gatewaySecretsDir, gatewayPasskeyRpID, gatewayPasskeyRpName, gatewayRateLimitRPS, gatewayRateLimitBurst, logLevel)
+		runGatewayMode(posture, gatewayHTTPPort, gatewayBootstrapPort, gatewayPublicPort, gatewayMCPHttpPort, gatewayDataDir, gatewayPKIDir, gatewaySecretsDir, gatewayPasskeyRpID, gatewayPasskeyRpName, gatewayRateLimitRPS, gatewayRateLimitBurst, logLevel)
 		return
 	}
 
@@ -857,7 +860,7 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 // runGatewayMode starts the Operator in gateway mode - the platform's central
 // persistence (operator) and pub/sub broker. In this mode, the Operator also
 // runs an in-process command service to act as the sovereign execution Gateway.
-func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel string) {
+func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publicPort, mcpHttpPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
@@ -889,6 +892,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		HTTPPort:          httpPort,
 		BootstrapPort:     bootstrapPort,
 		PublicPort:        publicPort,
+		MCPHttpPort:       mcpHttpPort,
 		DataDir:           dataDir,
 		PKIDir:            pkiDir,
 		SecretsDir:        secretsDir,

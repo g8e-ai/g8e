@@ -52,6 +52,7 @@ type GatewayService struct {
 	server          *http.Server
 	publicServer    *http.Server
 	bootstrapServer *http.Server
+	mcpHttpServer   *http.Server
 
 	handler *HTTPHandler
 
@@ -240,11 +241,13 @@ func (ls *GatewayService) initHandlersAndServers() error {
 
 	// Build a map of ports to identify port assignments.
 	// Bootstrap port uses plain HTTP for initial CA discovery and bootstrap.
+	// MCP HTTP port uses plain HTTP for MCP-only calls.
 	// All other surfaces use mTLS (RequireAndVerifyClientCert).
 	portUsage := make(map[int][]string)
 	portUsage[cfg.Gateway.HTTPPort] = append(portUsage[cfg.Gateway.HTTPPort], "HTTP")
 	portUsage[cfg.Gateway.BootstrapPort] = append(portUsage[cfg.Gateway.BootstrapPort], "Bootstrap")
 	portUsage[cfg.Gateway.PublicPort] = append(portUsage[cfg.Gateway.PublicPort], "Public")
+	portUsage[cfg.Gateway.MCPHttpPort] = append(portUsage[cfg.Gateway.MCPHttpPort], "MCPHTTP")
 
 	// Validate up front so collisions fail during init.
 	// Port 0 is reserved for tests (net.Listen picks a random free port per server).
@@ -306,6 +309,18 @@ func (ls *GatewayService) initHandlersAndServers() error {
 		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
 	}
 
+	// MCP HTTP server: plain HTTP for MCP-only calls
+	// Serves MCP endpoints without TLS/mTLS for HTTP MCP clients
+	ls.mcpHttpServer = &http.Server{
+		Addr:              fmt.Sprintf(":%d", cfg.Gateway.MCPHttpPort),
+		Handler:           ls.handler.buildMCPHttpRouter(),
+		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
+		ReadTimeout:       cfg.Gateway.ReadTimeout,
+		WriteTimeout:      cfg.Gateway.WriteTimeout,
+		IdleTimeout:       cfg.Gateway.IdleTimeout,
+		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
+	}
+
 	return nil
 }
 
@@ -355,6 +370,16 @@ func (ls *GatewayService) GetBootstrapPort() int {
 		return 0
 	}
 	_, portStr, _ := net.SplitHostPort(ls.bootstrapServer.Addr)
+	p, _ := strconv.Atoi(portStr)
+	return p
+}
+
+// GetMCPHttpPort returns the assigned port for the MCP HTTP server.
+func (ls *GatewayService) GetMCPHttpPort() int {
+	if ls.mcpHttpServer == nil || ls.mcpHttpServer.Addr == "" {
+		return 0
+	}
+	_, portStr, _ := net.SplitHostPort(ls.mcpHttpServer.Addr)
 	p, _ := strconv.Atoi(portStr)
 	return p
 }
@@ -425,9 +450,10 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 		"posture", ls.cfg.Gateway.Posture,
 		"http_port", ls.cfg.Gateway.HTTPPort,
 		"bootstrap_port", ls.cfg.Gateway.BootstrapPort,
+		"mcp_http_port", ls.cfg.Gateway.MCPHttpPort,
 		"data_dir", ls.cfg.Gateway.DataDir)
 
-	ls.logger.Info("Gateway TLS servers starting", "http_port", ls.cfg.Gateway.HTTPPort, "bootstrap_port", ls.cfg.Gateway.BootstrapPort)
+	ls.logger.Info("Gateway servers starting", "http_port", ls.cfg.Gateway.HTTPPort, "bootstrap_port", ls.cfg.Gateway.BootstrapPort, "mcp_http_port", ls.cfg.Gateway.MCPHttpPort)
 
 	// Start background maintenance for MCP gateway
 	go ls.mcpGateway.RunMaintenance(ctx)
@@ -435,8 +461,8 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	// Start background service certificate renewal loop
 	go ls.runServiceCertRenewalLoop(ctx)
 
-	errChan := make(chan error, 4)
-	readyChan := make(chan struct{}, 4)
+	errChan := make(chan error, 5)
+	readyChan := make(chan struct{}, 5)
 
 	// Identify unique servers to start
 	uniqueServers := make(map[*http.Server]string)
@@ -451,6 +477,11 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	if ls.publicServer != nil {
 		if _, ok := uniqueServers[ls.publicServer]; !ok {
 			uniqueServers[ls.publicServer] = "Public"
+		}
+	}
+	if ls.mcpHttpServer != nil {
+		if _, ok := uniqueServers[ls.mcpHttpServer]; !ok {
+			uniqueServers[ls.mcpHttpServer] = "MCPHTTP"
 		}
 	}
 
@@ -552,6 +583,13 @@ func (ls *GatewayService) Stop(ctx context.Context) error {
 			return fmt.Errorf("shutdown timeout exceeded")
 		}
 		ls.logger.Error("Public server shutdown error", string(constants.ConnectionStateError), err)
+	}
+	if err := ls.mcpHttpServer.Shutdown(shutdownCtx); err != nil {
+		if shutdownCtx.Err() == context.DeadlineExceeded {
+			ls.logger.Error("MCP HTTP server shutdown timeout - forcing exit to prevent zombie process")
+			return fmt.Errorf("shutdown timeout exceeded")
+		}
+		ls.logger.Error("MCP HTTP server shutdown error", string(constants.ConnectionStateError), err)
 	}
 
 	// Close pub/sub broker (disconnects all WebSocket clients)

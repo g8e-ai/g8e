@@ -222,7 +222,7 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 	return "./g8e", nil
 }
 
-func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel string) error {
+func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort, publicPort, mcpHttpPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel string) error {
 	if err := pm.ensureDirectories(); err != nil {
 		return err
 	}
@@ -230,6 +230,7 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 	// Use provided values or defaults
 	effectiveHTTPPort := httpPort
 	effectivePublicPort := publicPort
+	effectiveMCPHttpPort := mcpHttpPort
 	effectiveDataDir := dataDir
 	effectivePKIDir := pkiDir
 	effectiveSecretsDir := secretsDir
@@ -245,6 +246,9 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 	}
 	if effectivePublicPort == 0 {
 		effectivePublicPort = 8443
+	}
+	if effectiveMCPHttpPort == 0 {
+		effectiveMCPHttpPort = 8442
 	}
 	if effectiveDataDir == "" {
 		effectiveDataDir = pm.dataDir
@@ -268,10 +272,16 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 	// Calculate offset from original httpPort to maintain port spacing
 	offset := availableHTTPPort - effectiveHTTPPort
 	availablePublicPort := effectivePublicPort + offset
+	availableMCPHttpPort := effectiveMCPHttpPort + offset
 
 	// Verify the calculated Public port is available (Bootstrap now shares this port)
 	if err := pm.checkPortAvailable(availablePublicPort, "Operator Public API"); err != nil {
 		return fmt.Errorf("failed to verify Public API port %d: %w", availablePublicPort, err)
+	}
+
+	// Verify the calculated MCP HTTP port is available
+	if err := pm.checkPortAvailable(availableMCPHttpPort, "Operator MCP HTTP"); err != nil {
+		return fmt.Errorf("failed to verify MCP HTTP port %d: %w", availableMCPHttpPort, err)
 	}
 
 	binPath, err := pm.getOperatorBinary()
@@ -293,6 +303,7 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 		"--secrets-dir", effectiveSecretsDir,
 		"--http-listen-port", strconv.Itoa(availableHTTPPort),
 		"--public-listen-port", strconv.Itoa(availablePublicPort),
+		"--mcp-http-port", strconv.Itoa(availableMCPHttpPort),
 		"--log", effectiveLogLevel,
 	}
 

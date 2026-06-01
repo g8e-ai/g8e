@@ -86,6 +86,7 @@ type GatewayConfig struct {
 	HTTPPort         int            // TLS/HTTPS port for internal agent/client traffic (default: from paths.json)
 	BootstrapPort    int            // Plain-TLS port for bootstrap routes (/.well-known/, /api/pki/device-enroll for CSR enrollment) (default: from paths.json)
 	PublicPort       int            // Plain-TLS port for browser-based auth and setup (default: from paths.json)
+	MCPHttpPort      int            // Plain-HTTP port for MCP HTTP calls (default: from paths.json)
 	DataDir          string         // Root directory for SQLite database (default: .g8e/data in working directory)
 	PKIDir           string         // Directory for TLS certificates (default: .g8e/pki)
 	SecretsDir       string         // Directory for platform secrets (default: .g8e/secrets)
@@ -252,6 +253,7 @@ type GatewayOptions struct {
 	HTTPPort         int
 	BootstrapPort    int
 	PublicPort       int
+	MCPHttpPort      int
 	DataDir          string
 	PKIDir           string
 	SecretsDir       string
@@ -272,9 +274,9 @@ type GatewayOptions struct {
 	AllowTestPortZero bool
 }
 
-// ResolveGatewayPorts finds three available ports incrementally, starting from the
+// ResolveGatewayPorts finds four available ports incrementally, starting from the
 // requested ports. This allows multiple operators to run on the same host.
-func ResolveGatewayPorts(httpPort, bootstrapPort, publicPort int) (int, int, int) {
+func ResolveGatewayPorts(httpPort, bootstrapPort, publicPort, mcpHttpPort int) (int, int, int, int) {
 	if httpPort <= 0 {
 		httpPort = constants.Ports.OperatorHttps
 	}
@@ -284,20 +286,24 @@ func ResolveGatewayPorts(httpPort, bootstrapPort, publicPort int) (int, int, int
 	if publicPort <= 0 {
 		publicPort = constants.Ports.OperatorPublicHttps
 	}
+	if mcpHttpPort <= 0 {
+		mcpHttpPort = constants.Ports.OperatorMcpHttp
+	}
 
 	// Try up to 100 offsets
 	for offset := 0; offset < 100; offset++ {
 		h := httpPort + offset
 		b := bootstrapPort + offset
 		p := publicPort + offset
+		m := mcpHttpPort + offset
 
-		if isPortAvailable(h) && isPortAvailable(b) && isPortAvailable(p) {
-			return h, b, p
+		if isPortAvailable(h) && isPortAvailable(b) && isPortAvailable(p) && isPortAvailable(m) {
+			return h, b, p, m
 		}
 	}
 
 	// Fallback to original if we can't find a free block (let it fail during bind)
-	return httpPort, bootstrapPort, publicPort
+	return httpPort, bootstrapPort, publicPort, mcpHttpPort
 }
 
 func isPortAvailable(port int) bool {
@@ -337,7 +343,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	// Reject port 0 in production
 	// This check must happen before default assignment to validate actual input
 	if !opts.AllowTestPortZero {
-		if opts.HTTPPort == 0 && opts.BootstrapPort == 0 && opts.PublicPort == 0 {
+		if opts.HTTPPort == 0 && opts.BootstrapPort == 0 && opts.PublicPort == 0 && opts.MCPHttpPort == 0 {
 			// All zero means "use defaults and resolve"
 		} else {
 			if opts.HTTPPort == 0 {
@@ -349,16 +355,31 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			if opts.PublicPort == 0 {
 				return nil, fmt.Errorf("publicPort cannot be 0 in production")
 			}
+			if opts.MCPHttpPort == 0 {
+				return nil, fmt.Errorf("mcpHttpPort cannot be 0 in production")
+			}
 		}
 	}
 
 	httpPort := opts.HTTPPort
 	bootstrapPort := opts.BootstrapPort
 	publicPort := opts.PublicPort
+	mcpHttpPort := opts.MCPHttpPort
 
 	// Resolve available ports if they are not 0 (dynamic test ports)
 	if !opts.AllowTestPortZero {
-		httpPort, bootstrapPort, publicPort = ResolveGatewayPorts(httpPort, bootstrapPort, publicPort)
+		httpPort, bootstrapPort, publicPort, mcpHttpPort = ResolveGatewayPorts(httpPort, bootstrapPort, publicPort, mcpHttpPort)
+	}
+
+	// Validate that all ports are unique to prevent conflicts
+	if httpPort == mcpHttpPort {
+		return nil, fmt.Errorf("httpPort (%d) and mcpHttpPort (%d) must be different", httpPort, mcpHttpPort)
+	}
+	if bootstrapPort == mcpHttpPort {
+		return nil, fmt.Errorf("bootstrapPort (%d) and mcpHttpPort (%d) must be different", bootstrapPort, mcpHttpPort)
+	}
+	if publicPort == mcpHttpPort {
+		return nil, fmt.Errorf("publicPort (%d) and mcpHttpPort (%d) must be different", publicPort, mcpHttpPort)
 	}
 
 	passkeyRpID := opts.PasskeyRpID
@@ -392,6 +413,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			HTTPPort:         httpPort,
 			BootstrapPort:    bootstrapPort,
 			PublicPort:       publicPort,
+			MCPHttpPort:      mcpHttpPort,
 			DataDir:          dataDir,
 			PKIDir:           pkiDir,
 			SecretsDir:       secretsDir,
