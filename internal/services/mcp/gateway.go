@@ -177,13 +177,11 @@ func (g *GatewayService) SetAuditLogger(logger AuditLogger) {
 
 // isNativeTool checks if a tool name is a native tool compiled into the Operator.
 func (g *GatewayService) isNativeTool(name string) bool {
-	nativeTools := NativeTools()
-	for _, tool := range nativeTools {
-		if tool.Name == name {
-			return true
-		}
+	if g.nativeToolHandler == nil {
+		return false
 	}
-	return false
+	_, ok := g.nativeToolHandler.registry.Get(name)
+	return ok
 }
 
 func (g *GatewayService) isCircuitOpen() bool {
@@ -239,7 +237,19 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 
 	if g.downstreamURL == "" {
 		// Return native tools if no downstream configured
-		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: NativeTools()})
+		var nativeTools []NativeTool
+		if g.nativeToolHandler != nil {
+			nativeTools = g.nativeToolHandler.registry.List()
+		}
+		tools := make([]Tool, 0, len(nativeTools))
+		for _, nt := range nativeTools {
+			tools = append(tools, Tool{
+				Name:        nt.Name(),
+				Description: nt.Description(),
+				InputSchema: nt.InputSchema(),
+			})
+		}
+		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
 		return
 	}
 
@@ -458,7 +468,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 	}
 
 	// Handle native tools within Operator's execution boundary
-	if g.isNativeTool(callParams.Name) {
+	if g.isNativeTool(callParams.Name) && g.nativeToolHandler != nil {
 		return g.nativeToolHandler.HandleTool(ctx, callParams.Name, callParams.Arguments)
 	}
 

@@ -240,7 +240,19 @@ func (g *GatewayService) mcpInitialize(params json.RawMessage) initializeResult 
 // it proxies tools/list to the downstream server.
 func (g *GatewayService) listToolsResult(ctx context.Context) (interface{}, error) {
 	if g.downstreamURL == "" {
-		return ToolsListResult{Tools: NativeTools()}, nil
+		var nativeTools []NativeTool
+		if g.nativeToolHandler != nil {
+			nativeTools = g.nativeToolHandler.registry.List()
+		}
+		tools := make([]Tool, 0, len(nativeTools))
+		for _, nt := range nativeTools {
+			tools = append(tools, Tool{
+				Name:        nt.Name(),
+				Description: nt.Description(),
+				InputSchema: nt.InputSchema(),
+			})
+		}
+		return ToolsListResult{Tools: tools}, nil
 	}
 	raw, err := g.proxyListMethod(ctx, "tools/list")
 	if err != nil {

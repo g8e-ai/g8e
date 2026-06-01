@@ -561,8 +561,9 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 	t.Run("native tools when no downstream", func(t *testing.T) {
 		t.Parallel()
 		g := &GatewayService{
-			responder:       responder.New(slog.Default()),
-			maxPayloadBytes: 10 * 1024 * 1024,
+			responder:         responder.New(slog.Default()),
+			nativeToolHandler: NewNativeToolHandler(),
+			maxPayloadBytes:   10 * 1024 * 1024,
 		}
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader("{}"))
@@ -1105,7 +1106,8 @@ func TestGatewayService_HandlePromptsList(t *testing.T) {
 func TestGatewayService_IsNativeTool(t *testing.T) {
 	t.Parallel()
 	g := &GatewayService{
-		maxPayloadBytes: 10 * 1024 * 1024,
+		nativeToolHandler: NewNativeToolHandler(),
+		maxPayloadBytes:   10 * 1024 * 1024,
 	}
 
 	t.Run("native tool recognized", func(t *testing.T) {

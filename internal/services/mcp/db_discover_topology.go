@@ -1,0 +1,133 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package mcp
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+
+	_ "modernc.org/sqlite"
+)
+
+// DBDiscoverTopologyTool scans database schemas, tables, and column data types.
+type DBDiscoverTopologyTool struct{}
+
+// Name returns the tool identifier.
+func (t *DBDiscoverTopologyTool) Name() string {
+	return "db_discover_topology"
+}
+
+// Description returns a human-readable description.
+func (t *DBDiscoverTopologyTool) Description() string {
+	return "Automatically scans database schemas, tables, and column data types, returning a highly compressed JSON map."
+}
+
+// InputSchema returns the JSON Schema for tool validation.
+func (t *DBDiscoverTopologyTool) InputSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"database_path": map[string]interface{}{
+				"type":        "string",
+				"description": "Path to the SQLite database file",
+			},
+		},
+		"required": []string{"database_path"},
+	}
+}
+
+// Execute implements the tool logic.
+func (t *DBDiscoverTopologyTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
+	var req struct {
+		DatabasePath string `json:"database_path"`
+	}
+	if err := json.Unmarshal(args, &req); err != nil {
+		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+	}
+
+	if req.DatabasePath == "" {
+		return CallToolResult{}, fmt.Errorf("database_path required")
+	}
+
+	dsn := fmt.Sprintf("file:%s?mode=ro", req.DatabasePath)
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return CallToolResult{}, fmt.Errorf("failed to open database: %w", err)
+	}
+	defer db.Close()
+
+	schema := make(map[string]map[string]string)
+
+	tables, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+	if err != nil {
+		return CallToolResult{}, fmt.Errorf("failed to query tables: %w", err)
+	}
+	defer tables.Close()
+
+	for tables.Next() {
+		if ctx.Err() != nil {
+			return CallToolResult{}, ctx.Err()
+		}
+
+		var tableName string
+		if err := tables.Scan(&tableName); err != nil {
+			continue
+		}
+
+		schema[tableName] = make(map[string]string)
+
+		if !isValidIdentifier(tableName) {
+			continue
+		}
+
+		columns, err := db.Query("PRAGMA table_info(" + tableName + ")")
+		if err != nil {
+			continue
+		}
+
+		for columns.Next() {
+			var cid int
+			var name, datatype string
+			var notnull int
+			var dfltValue interface{}
+			var pk int
+
+			if err := columns.Scan(&cid, &name, &datatype, &notnull, &dfltValue, &pk); err != nil {
+				continue
+			}
+
+			schema[tableName][name] = datatype
+		}
+		columns.Close()
+	}
+
+	result := map[string]interface{}{
+		"schema": schema,
+	}
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+	}
+
+	return CallToolResult{
+		Content: []TextContent{
+			{
+				Type: "text",
+				Text: string(resultJSON),
+			},
+		},
+	}, nil
+}

@@ -185,6 +185,20 @@ Cross-component constants are stored in JSON at `protocol/constants/` (SSOT). Go
 
 See [docs/reference/constants.md](../reference/constants.md) for details.
 
+## Native Tools
+
+Native tools are MCP tools compiled into the Operator binary that execute within the Operator's execution boundary locally, without proxying to downstream MCP servers.
+
+**Adding a new native tool:**
+1. Create a new file in `internal/services/mcp/` (e.g., `your_tool_name.go`)
+2. Implement the `NativeTool` interface with `Name()`, `Description()`, `InputSchema()`, and `Execute()` methods
+3. Add your tool to the tools list in `RegisterNativeTools()` in `native_tool_registry.go`
+4. No `init()` function needed - registration is explicit
+
+**Template:** See `docs/protocols/mcp/tool_template.go` for a complete example.
+
+**Existing tools:** Database tools (discover, validate, read, index triage), log filtering, OOM detection, config diff masking, process metrics, disk profiling, signal safety, network socket audit, endpoint ping, HTTP probe.
+
 ## Quick Reference
 
 | Concern | Location |
