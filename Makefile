@@ -319,7 +319,7 @@ test-byo:
 .PHONY: test-native
 test-native:
 	@echo "Running native real operator tests (requires platform running and auth login)..."
-	@go test -tags=integration -race -count=1 -timeout 180s ./test/native_real_operator_test.go
+	@go test -tags=integration -race -count=1 -timeout 180s ./test/integration_helper.go ./test/native_real_operator_test.go
 
 
 # =============================================================================
