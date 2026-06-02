@@ -383,6 +383,39 @@ func TestHandleHealth_StateRootFailure(t *testing.T) {
 	assert.JSONEq(t, `{"error":"state root calculation failed"}`, rr.Body.String())
 }
 
+func TestHandleBootstrapHealth(t *testing.T) {
+	h, _ := setupTestHTTPHandler(t)
+
+	t.Run("Returns 503 when not ready", func(t *testing.T) {
+		t.Parallel()
+		h.isReady = func() bool { return false }
+		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
+		rr := httptest.NewRecorder()
+
+		h.handleBootstrapHealth(rr, req)
+		assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
+		assert.JSONEq(t, `{"error":"service initializing"}`, rr.Body.String())
+	})
+
+	t.Run("Returns 200 when ready", func(t *testing.T) {
+		t.Parallel()
+		h.isReady = func() bool { return true }
+		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
+		rr := httptest.NewRecorder()
+
+		h.handleBootstrapHealth(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var resp models.HealthResponse
+		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, constants.GatewayModeStatusOK, resp.Status)
+		assert.Equal(t, constants.GatewayModeMode, resp.Mode)
+		// Bootstrap health does not include governance_ready or state_merkle_root
+		assert.Empty(t, resp.StateMerkleRoot)
+	})
+}
+
 // Regression: g8e-compatible agentic ensembles push typed events via /api/internal/sse/push and
 // CLI/dashboard consumers poll /api/internal/sse/events with exactly one of
 // web_session_id, cli_session_id, or user_id set. The Gateway persists each

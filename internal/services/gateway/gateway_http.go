@@ -269,7 +269,6 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	// Bootstrap routes (CA discovery, trust scripts) - now on public HTTPS
-	mux.HandleFunc(constants.APIPaths.Health, h.handleHealth)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
 	mux.HandleFunc(constants.APIPaths.PKICRL, h.pkiController.handlePKIRevocationBundle)
@@ -344,7 +343,7 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	// Health check - available on bootstrap port for initialization monitoring
-	mux.HandleFunc(constants.APIPaths.Health, h.handleHealth)
+	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
 
 	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
 	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handlePublicAuthBootstrap)
@@ -592,6 +591,19 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		Version:         h.cfg.Version,
 		GovernanceReady: h.isGovernanceReady != nil && h.isGovernanceReady(),
 		StateMerkleRoot: root,
+	})
+}
+
+func (h *HTTPHandler) handleBootstrapHealth(w http.ResponseWriter, r *http.Request) {
+	if h.isReady != nil && !h.isReady() {
+		h.responder.Error(w, http.StatusServiceUnavailable, "service initializing")
+		return
+	}
+
+	h.responder.JSON(w, http.StatusOK, models.HealthResponse{
+		Status:  constants.GatewayModeStatusOK,
+		Mode:    constants.GatewayModeMode,
+		Version: h.cfg.Version,
 	})
 }
 
