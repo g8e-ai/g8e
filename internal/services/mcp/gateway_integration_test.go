@@ -72,6 +72,7 @@ func TestGatewaySignedEndToEndIntegration(t *testing.T) {
 	_ = pubKey
 
 	g := &GatewayService{
+		logger:            slog.Default(),
 		envProc:           wrappedProcessor,
 		signingKey:        privKey,
 		keyID:             "test-key",
@@ -148,6 +149,7 @@ func TestGatewaySignedReceiptIntegration(t *testing.T) {
 	_ = pubKey
 
 	g := &GatewayService{
+		logger:            slog.Default(),
 		envProc:           processor,
 		signingKey:        privKey,
 		keyID:             "test-key",
@@ -273,6 +275,7 @@ func TestSSEStreamingIntegration(t *testing.T) {
 	_ = pubKey
 
 	g := &GatewayService{
+		logger:            slog.Default(),
 		envProc:           processor,
 		signingKey:        privKey,
 		keyID:             "sse-test-key",
@@ -406,6 +409,7 @@ func TestGatewayErrorCodesIntegration(t *testing.T) {
 			_ = pubKey
 
 			g := &GatewayService{
+				logger:            slog.Default(),
 				envProc:           processor,
 				signingKey:        privKey,
 				keyID:             "error-test-key",

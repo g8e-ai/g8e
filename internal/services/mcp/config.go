@@ -42,9 +42,12 @@ type TransportConfig struct {
 
 // TLSConfig represents TLS configuration for HTTP transport.
 type TLSConfig struct {
-	ClientCertificateEnv string `json:"clientCertificateEnv"`
-	ClientKeyEnv         string `json:"clientKeyEnv"`
-	CACertificateEnv     string `json:"caCertificateEnv"`
+	ClientCertificateEnv string `json:"clientCertificateEnv,omitempty"`
+	ClientKeyEnv         string `json:"clientKeyEnv,omitempty"`
+	CACertificateEnv     string `json:"caCertificateEnv,omitempty"`
+	ClientCertificate    string `json:"clientCertificate,omitempty"`
+	ClientKey            string `json:"clientKey,omitempty"`
+	CACertificate        string `json:"caCertificate,omitempty"`
 	VerifyServer         bool   `json:"verifyServer"`
 	VerifyHostname       string `json:"verifyHostname"`
 }
@@ -56,8 +59,8 @@ type Capabilities struct {
 	Prompts   bool `json:"prompts"`
 }
 
-// NewGatewayConfig creates a standard gateway MCP configuration with the given gateway URL.
-func NewGatewayConfig(gatewayURL string) *Config {
+// NewGatewayConfig creates a standard gateway MCP configuration with the given gateway URL and cert paths.
+func NewGatewayConfig(gatewayURL, clientCertPath, clientKeyPath, caCertPath string) *Config {
 	return &Config{
 		MCPServers: map[string]ServerConfig{
 			"g8e-gateway": {
@@ -66,11 +69,11 @@ func NewGatewayConfig(gatewayURL string) *Config {
 					URL:  gatewayURL,
 				},
 				TLS: &TLSConfig{
-					ClientCertificateEnv: "G8E_CLIENT_CERT_PATH",
-					ClientKeyEnv:         "G8E_CLIENT_KEY_PATH",
-					CACertificateEnv:     "G8E_CA_CERT_PATH",
-					VerifyServer:         true,
-					VerifyHostname:       "localhost",
+					ClientCertificate: clientCertPath,
+					ClientKey:         clientKeyPath,
+					CACertificate:     caCertPath,
+					VerifyServer:      true,
+					VerifyHostname:    "g8e.local",
 				},
 				Capabilities: Capabilities{
 					Tools:     true,

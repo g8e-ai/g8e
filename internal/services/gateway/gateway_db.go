@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"hash"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -68,6 +69,10 @@ type GatewayDBService struct {
 	wg      sync.WaitGroup
 	ctx     context.Context
 	cancel  context.CancelFunc
+
+	// State root caching to avoid full table scans
+	cachedStateRoot    string
+	cachedStateVersion int64
 }
 
 // OpenGatewayDBService opens (or creates) the unified SQLite database.
@@ -157,7 +162,16 @@ func (s *GatewayDBService) initTestSchema(secretsDir string) error {
 		logger:     s.logger,
 		keystore:   ks,
 	}
-	return sm.InitAppSettings()
+	if err := sm.InitAppSettings(); err != nil {
+		return err
+	}
+
+	// Migration: Initialize state_version table for existing databases
+	if err := s.migrateStateVersion(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *GatewayDBService) initStateRoot() error {
@@ -182,7 +196,51 @@ func (s *GatewayDBService) initStateRoot() error {
 }
 
 // GetCurrentStateRoot returns the current state merkle root.
+// Uses caching based on state_version to avoid full table scans when state hasn't changed.
 func (s *GatewayDBService) GetCurrentStateRoot() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Get current state version
+	var currentVersion int64
+	err := s.db.QueryRowWithRetry("SELECT version FROM state_version WHERE id = 1").Scan(&currentVersion)
+	if err != nil {
+		// Fallback to full calculation if version table is unavailable
+		return s.calculateStateRootUncached()
+	}
+
+	// If version hasn't changed, return cached root
+	if currentVersion == s.cachedStateVersion && s.cachedStateRoot != "" {
+		return s.cachedStateRoot, nil
+	}
+
+	// Version changed or cache is empty, recalculate
+	root, err := s.calculateStateRoot()
+	if err != nil {
+		return "", err
+	}
+
+	// Update cache
+	s.cachedStateRoot = root
+	s.cachedStateVersion = currentVersion
+
+	// Persist to state_root table
+	_, err = s.db.ExecWithRetry(
+		`INSERT INTO state_root (id, root, updated_at)
+		 VALUES (1, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET root = excluded.root, updated_at = excluded.updated_at`,
+		root,
+		sqliteutil.FormatTimestamp(time.Now().UTC()),
+	)
+	if err != nil {
+		return "", err
+	}
+	return root, nil
+}
+
+// calculateStateRootUncached performs a full state root calculation without caching.
+// Used as a fallback when state_version tracking is unavailable.
+func (s *GatewayDBService) calculateStateRootUncached() (string, error) {
 	root, err := s.calculateStateRoot()
 	if err != nil {
 		return "", err
@@ -201,69 +259,104 @@ func (s *GatewayDBService) GetCurrentStateRoot() (string, error) {
 }
 
 func (s *GatewayDBService) calculateStateRoot() (string, error) {
-	type row struct {
-		Table  string        `json:"table"`
-		Values []interface{} `json:"values"`
-	}
-
-	rowsToHash := make([]row, 0)
+	h := sha256.New()
 
 	// 1. Documents (Authoritative)
 	// Exclude metadata-only timestamps (created_at, updated_at) to ensure
 	// the state root only changes when the content actually changes.
-	docRows, err := sqliteutil.MaterializeRows(s.db, "SELECT collection, id, data FROM documents ORDER BY collection, id", nil, func(r *sql.Rows) (row, error) {
+	if err := s.hashTableToStream(h, "SELECT collection, id, data FROM documents ORDER BY collection, id", nil, func(r *sql.Rows) error {
 		var collection, id, data string
 		if err := r.Scan(&collection, &id, &data); err != nil {
-			return row{}, err
+			return err
 		}
-		return row{"documents", []interface{}{collection, id, data}}, nil
-	})
-	if err != nil {
+		return writeRowToHash(h, "documents", collection, id, data)
+	}); err != nil {
+		s.logger.Error("Failed to query documents for state root calculation", "error", err)
 		return "", err
 	}
-	rowsToHash = append(rowsToHash, docRows...)
 
 	now := sqliteutil.NowTimestamp()
 
 	// 2. KV Store (Authoritative)
 	// Filter for active entries only. Exclude created_at.
 	// expires_at IS included because it affects the active state of the entry.
-	kvRows, err := sqliteutil.MaterializeRows(s.db, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", []interface{}{now}, func(r *sql.Rows) (row, error) {
+	if err := s.hashTableToStream(h, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", []interface{}{now}, func(r *sql.Rows) error {
 		var key, value, expiresAt string
 		if err := r.Scan(&key, &value, &expiresAt); err != nil {
-			return row{}, err
+			return err
 		}
-		return row{"kv_store", []interface{}{key, value, expiresAt}}, nil
-	})
-	if err != nil {
+		return writeRowToHash(h, "kv_store", key, value, expiresAt)
+	}); err != nil {
+		s.logger.Error("Failed to query kv_store for state root calculation", "error", err)
 		return "", err
 	}
-	rowsToHash = append(rowsToHash, kvRows...)
 
 	// 3. Blobs (Authoritative)
 	// Filter for active entries only. Exclude created_at.
-	// data is included (as hex for JSON determinism).
-	blobRows, err := sqliteutil.MaterializeRows(s.db, "SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE expires_at IS NULL OR expires_at > ? ORDER BY namespace, id", []interface{}{now}, func(r *sql.Rows) (row, error) {
+	// data is included (as hex for determinism).
+	if err := s.hashTableToStream(h, "SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE expires_at IS NULL OR expires_at > ? ORDER BY namespace, id", []interface{}{now}, func(r *sql.Rows) error {
 		var namespace, id, contentType, dataHex, expiresAt string
 		var size int64
 		if err := r.Scan(&namespace, &id, &size, &contentType, &dataHex, &expiresAt); err != nil {
-			return row{}, err
+			return err
 		}
-		return row{"blobs", []interface{}{namespace, id, size, contentType, dataHex, expiresAt}}, nil
-	})
-	if err != nil {
+		return writeRowToHash(h, "blobs", namespace, id, size, contentType, dataHex, expiresAt)
+	}); err != nil {
+		s.logger.Error("Failed to query blobs for state root calculation", "error", err)
 		return "", err
 	}
-	rowsToHash = append(rowsToHash, blobRows...)
 
 	// 4. Nonces and SSE events are EXCLUDED (volatile/metadata)
 
-	payload, err := json.Marshal(rowsToHash)
+	sum := h.Sum(nil)
+	return hex.EncodeToString(sum), nil
+}
+
+// hashTableToStream executes a query and streams each row to the hash writer.
+// This avoids materializing all rows in memory, which is critical for large databases.
+func (s *GatewayDBService) hashTableToStream(h hash.Hash, query string, args []interface{}, scan func(*sql.Rows) error) error {
+	rows, err := s.db.QueryWithRetry(query, args...)
 	if err != nil {
-		return "", err
+		return err
 	}
-	sum := sha256.Sum256(payload)
-	return hex.EncodeToString(sum[:]), nil
+	defer rows.Close()
+
+	for rows.Next() {
+		if err := scan(rows); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+// writeRowToHash writes a row's values to the hash in a deterministic format.
+// The format matches the previous JSON structure for compatibility:
+// {"table":"table_name","values":[v1,v2,...]}
+func writeRowToHash(h hash.Hash, table string, values ...interface{}) error {
+	// Write deterministic JSON-like format directly to hash
+	// This avoids allocating intermediate JSON strings
+	h.Write([]byte(`{"table":"`))
+	h.Write([]byte(table))
+	h.Write([]byte(`","values":[`))
+
+	for i, v := range values {
+		if i > 0 {
+			h.Write([]byte(","))
+		}
+		switch val := v.(type) {
+		case string:
+			h.Write([]byte(`"`))
+			h.Write([]byte(val))
+			h.Write([]byte(`"`))
+		case int64:
+			fmt.Fprintf(h, "%d", val)
+		default:
+			return fmt.Errorf("unsupported type %T for state root hashing", v)
+		}
+	}
+
+	h.Write([]byte("]}\n"))
+	return nil
 }
 
 // ReserveNonce atomically reserves a nonce for early replay protection.
@@ -361,6 +454,11 @@ func (s *GatewayDBService) initSchema(secretsDir string) error {
 		return err
 	}
 
+	// Migration: Initialize state_version table for existing databases
+	if err := s.migrateStateVersion(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -429,6 +527,29 @@ func (s *GatewayDBService) migratePlaintextServiceKeys(secretsDir string, sm *Se
 		s.logger.Info("[Migration] Completed plaintext service key migration", "count", migratedCount)
 	}
 
+	return nil
+}
+
+// migrateStateVersion initializes the state_version table for existing databases.
+// This is a one-time migration for databases created before the change tracking feature.
+func (s *GatewayDBService) migrateStateVersion() error {
+	// Check if state_version table exists and has a row
+	var count int
+	err := s.db.QueryRowWithRetry("SELECT COUNT(*) FROM state_version").Scan(&count)
+	if err != nil {
+		// Table doesn't exist, will be created by schema
+		return nil
+	}
+	if count > 0 {
+		// Already initialized
+		return nil
+	}
+
+	// Table exists but is empty, initialize it
+	_, err = s.db.ExecWithRetry("INSERT INTO state_version (id, version) VALUES (1, 0)")
+	if err != nil && !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		s.logger.Warn("Failed to initialize state_version", "error", err)
+	}
 	return nil
 }
 

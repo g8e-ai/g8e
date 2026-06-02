@@ -150,10 +150,12 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 	runtimeDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
 	pkiDir := filepath.Join(runtimeDir, constants.Paths.Infra.PkiDir)
 	secretsDir := filepath.Join(runtimeDir, constants.Paths.Infra.SecretsDir)
-	credentialsDir := filepath.Join(runtimeDir, "credentials")
+	credentialsDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
 
 	require.NoError(t, os.MkdirAll(pkiDir, 0755))
 	require.NoError(t, os.MkdirAll(secretsDir, 0700))
+	// Create credentials directory but NOT the credentials file itself
+	// This ensures auth.LoadCredentials returns (nil, nil) which triggers ErrNotAuthenticated
 	require.NoError(t, os.MkdirAll(credentialsDir, 0700))
 	require.NoError(t, os.MkdirAll(filepath.Join(pkiDir, "root"), 0755))
 

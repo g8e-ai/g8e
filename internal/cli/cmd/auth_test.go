@@ -216,6 +216,10 @@ func TestLogoutCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := setupTestConfig(t, tmpDir)
 
+		// Create credentials directory (but not the credentials file itself)
+		certDir := cfg.CredentialsDir
+		require.NoError(t, os.MkdirAll(certDir, 0700))
+
 		// Create credentials
 		creds := &auth.Credentials{
 			OperatorSessionID: "op-sess-123",
@@ -224,10 +228,6 @@ func TestLogoutCmd(t *testing.T) {
 			CLISessionID:      "cli-sess-abc",
 		}
 		require.NoError(t, auth.SaveCredentials(cfg, creds))
-
-		// Create cert files
-		certDir := cfg.CredentialsDir
-		require.NoError(t, os.MkdirAll(certDir, 0700))
 		require.NoError(t, os.WriteFile(cfg.CLICertFile(), []byte("cli-cert"), 0600))
 		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), []byte("cli-key"), 0600))
 		require.NoError(t, os.WriteFile(cfg.OperatorCertFile(), []byte("op-cert"), 0600))
@@ -290,11 +290,11 @@ func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
 	runtimeDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
 	pkiDir := filepath.Join(runtimeDir, constants.Paths.Infra.PkiDir)
 	secretsDir := filepath.Join(runtimeDir, constants.Paths.Infra.SecretsDir)
-	credentialsDir := filepath.Join(runtimeDir, "credentials")
 
 	require.NoError(t, os.MkdirAll(pkiDir, 0755))
 	require.NoError(t, os.MkdirAll(secretsDir, 0700))
-	require.NoError(t, os.MkdirAll(credentialsDir, 0700))
+	// Note: credentialsDir is .g8e by default, do NOT create a "credentials" subdirectory
+	// The credentials file is written to .g8e/credentials, not .g8e/credentials/credentials
 
 	// Create trust bundle
 	trustBundlePath := filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem")

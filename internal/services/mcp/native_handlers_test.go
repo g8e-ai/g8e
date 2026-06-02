@@ -34,6 +34,40 @@ func TestNativeToolHandler_HandleTool(t *testing.T) {
 			t.Error("expected error for unknown tool")
 		}
 	})
+
+	t.Run("all 13 tools registered", func(t *testing.T) {
+		tools := handler.ListTools()
+		if len(tools) != 13 {
+			t.Errorf("expected 13 registered tools, got %d", len(tools))
+		}
+
+		expectedTools := []string{
+			"db_discover_topology",
+			"db_query_validate",
+			"db_isolated_read",
+			"db_index_triage",
+			"log_stream_filter",
+			"sys_oom_detect",
+			"config_diff_mask",
+			"proc_metric_top",
+			"fs_disk_profile",
+			"proc_signal_safe",
+			"net_socket_audit",
+			"net_endpoint_ping",
+			"net_http_probe",
+		}
+
+		toolNames := make(map[string]bool)
+		for _, tool := range tools {
+			toolNames[tool.Name()] = true
+		}
+
+		for _, expected := range expectedTools {
+			if !toolNames[expected] {
+				t.Errorf("expected tool '%s' to be registered", expected)
+			}
+		}
+	})
 }
 
 func TestHandleDBDiscoverTopology(t *testing.T) {
@@ -649,6 +683,26 @@ func TestHandleNetSocketAudit(t *testing.T) {
 			t.Error("expected sockets in result")
 		}
 	})
+
+	t.Run("invalid protocol - path traversal attempt", func(t *testing.T) {
+		req := NetSocketAuditRequest{Protocol: "../../etc/passwd"}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "net_socket_audit", reqJSON)
+		if err == nil {
+			t.Error("expected error for invalid protocol, got nil")
+		}
+	})
+
+	t.Run("invalid protocol - arbitrary string", func(t *testing.T) {
+		req := NetSocketAuditRequest{Protocol: "sctp"}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "net_socket_audit", reqJSON)
+		if err == nil {
+			t.Error("expected error for invalid protocol, got nil")
+		}
+	})
 }
 
 func TestHandleNetEndpointPing(t *testing.T) {
@@ -885,13 +939,77 @@ func TestHandleNetHTTPProbe(t *testing.T) {
 			t.Error("expected error for invalid URL format")
 		}
 	})
+
+	t.Run("blocks localhost", func(t *testing.T) {
+		req := NetHTTPProbeRequest{
+			URL: "http://localhost:8080",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "net_http_probe", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var probeResult NetHTTPProbeResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &probeResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if probeResult.Error == "" {
+			t.Error("expected error for localhost URL")
+		}
+	})
+
+	t.Run("blocks loopback IP", func(t *testing.T) {
+		req := NetHTTPProbeRequest{
+			URL: "http://127.0.0.1:8080",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "net_http_probe", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var probeResult NetHTTPProbeResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &probeResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if probeResult.Error == "" {
+			t.Error("expected error for loopback IP URL")
+		}
+	})
+
+	t.Run("blocks private IP", func(t *testing.T) {
+		req := NetHTTPProbeRequest{
+			URL: "http://192.168.1.1",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "net_http_probe", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var probeResult NetHTTPProbeResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &probeResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if probeResult.Error == "" {
+			t.Error("expected error for private IP URL")
+		}
+	})
 }
 
 func TestNativeTools(t *testing.T) {
-	tools := NativeTools()
+	handler := NewNativeToolHandler()
+	nativeTools := handler.ListTools()
 
-	if len(tools) != 13 {
-		t.Errorf("expected 13 native tools, got %d", len(tools))
+	if len(nativeTools) != 13 {
+		t.Errorf("expected 13 native tools, got %d", len(nativeTools))
 	}
 
 	expectedTools := []string{
@@ -911,8 +1029,8 @@ func TestNativeTools(t *testing.T) {
 	}
 
 	toolNames := make(map[string]bool)
-	for _, tool := range tools {
-		toolNames[tool.Name] = true
+	for _, tool := range nativeTools {
+		toolNames[tool.Name()] = true
 	}
 
 	for _, expected := range expectedTools {
@@ -924,12 +1042,11 @@ func TestNativeTools(t *testing.T) {
 
 func TestNativeToolHandler_ScrubLine(t *testing.T) {
 	t.Parallel()
-	h := &NativeToolHandler{}
 
 	t.Run("redacts password", func(t *testing.T) {
 		t.Parallel()
 		line := "user login password=secret123"
-		scrubbed := h.scrubLine(line)
+		scrubbed := scrubLine(line)
 		require.Equal(t, "user login password=REDACTED", scrubbed)
 		require.NotContains(t, scrubbed, "secret123")
 	})
@@ -937,7 +1054,7 @@ func TestNativeToolHandler_ScrubLine(t *testing.T) {
 	t.Run("redacts api_key", func(t *testing.T) {
 		t.Parallel()
 		line := "api_key=sk-12345 processed"
-		scrubbed := h.scrubLine(line)
+		scrubbed := scrubLine(line)
 		require.Equal(t, "api_key=REDACTED processed", scrubbed)
 		require.NotContains(t, scrubbed, "sk-12345")
 	})
@@ -945,7 +1062,7 @@ func TestNativeToolHandler_ScrubLine(t *testing.T) {
 	t.Run("redacts secret", func(t *testing.T) {
 		t.Parallel()
 		line := "secret=mysecret value"
-		scrubbed := h.scrubLine(line)
+		scrubbed := scrubLine(line)
 		require.Equal(t, "secret=REDACTED value", scrubbed)
 		require.NotContains(t, scrubbed, "mysecret")
 	})
@@ -953,7 +1070,7 @@ func TestNativeToolHandler_ScrubLine(t *testing.T) {
 	t.Run("redacts token", func(t *testing.T) {
 		t.Parallel()
 		line := "token=abc123def456 session"
-		scrubbed := h.scrubLine(line)
+		scrubbed := scrubLine(line)
 		require.Equal(t, "token=REDACTED session", scrubbed)
 		require.NotContains(t, scrubbed, "abc123def456")
 	})
@@ -961,7 +1078,7 @@ func TestNativeToolHandler_ScrubLine(t *testing.T) {
 	t.Run("redacts bearer", func(t *testing.T) {
 		t.Parallel()
 		line := "Authorization: bearer xyz789"
-		scrubbed := h.scrubLine(line)
+		scrubbed := scrubLine(line)
 		require.Equal(t, "Authorization: bearer REDACTED", scrubbed)
 		require.NotContains(t, scrubbed, "xyz789")
 	})
@@ -969,61 +1086,60 @@ func TestNativeToolHandler_ScrubLine(t *testing.T) {
 	t.Run("case insensitive", func(t *testing.T) {
 		t.Parallel()
 		line := "PASSWORD=secret123 API_KEY=sk-12345"
-		scrubbed := h.scrubLine(line)
+		scrubbed := scrubLine(line)
 		require.Equal(t, "password=REDACTED api_key=REDACTED", scrubbed)
 	})
 
 	t.Run("safe line unchanged", func(t *testing.T) {
 		t.Parallel()
 		line := "INFO: request processed successfully"
-		scrubbed := h.scrubLine(line)
+		scrubbed := scrubLine(line)
 		require.Equal(t, line, scrubbed)
 	})
 }
 
 func TestNativeToolHandler_MaskSecret(t *testing.T) {
 	t.Parallel()
-	h := &NativeToolHandler{}
 
 	t.Run("masks password line", func(t *testing.T) {
 		t.Parallel()
 		line := "db_password=secret123"
-		masked := h.maskSecret(line)
+		masked := maskSecret(line)
 		require.Equal(t, "REDACTED", masked)
 	})
 
 	t.Run("masks secret line", func(t *testing.T) {
 		t.Parallel()
 		line := "shared_secret=mysecret"
-		masked := h.maskSecret(line)
+		masked := maskSecret(line)
 		require.Equal(t, "REDACTED", masked)
 	})
 
 	t.Run("masks token line", func(t *testing.T) {
 		t.Parallel()
 		line := "access_token=abc123"
-		masked := h.maskSecret(line)
+		masked := maskSecret(line)
 		require.Equal(t, "REDACTED", masked)
 	})
 
 	t.Run("masks key line", func(t *testing.T) {
 		t.Parallel()
 		line := "encryption_key=xyz789"
-		masked := h.maskSecret(line)
+		masked := maskSecret(line)
 		require.Equal(t, "REDACTED", masked)
 	})
 
 	t.Run("case insensitive", func(t *testing.T) {
 		t.Parallel()
 		line := "PASSWORD=secret123"
-		masked := h.maskSecret(line)
+		masked := maskSecret(line)
 		require.Equal(t, "REDACTED", masked)
 	})
 
 	t.Run("safe line unchanged", func(t *testing.T) {
 		t.Parallel()
 		line := "timeout=30"
-		masked := h.maskSecret(line)
+		masked := maskSecret(line)
 		require.Equal(t, line, masked)
 	})
 }

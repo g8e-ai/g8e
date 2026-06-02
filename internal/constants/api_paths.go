@@ -19,6 +19,7 @@ var APIPaths = struct {
 	OperatorPrefix string            `json:"operator_prefix"`
 	Client         map[string]string `json:"client"`
 	// MCP routes
+	MCPEndpoint      string `json:"mcp_endpoint"`
 	MCPToolsList     string `json:"mcp_tools_list"`
 	MCPToolsCall     string `json:"mcp_tools_call"`
 	MCPToolsCallSSE  string `json:"mcp_tools_call_sse"`
@@ -117,6 +118,7 @@ var APIPaths = struct {
 		"sse_stream": "/api/v1/internal/sse/stream",
 	},
 	// MCP routes
+	MCPEndpoint:      "/mcp",
 	MCPToolsList:     "/api/v1/mcp/tools/list",
 	MCPToolsCall:     "/api/v1/mcp/tools/call",
 	MCPToolsCallSSE:  "/api/v1/mcp/tools/call/sse",

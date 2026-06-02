@@ -510,10 +510,7 @@ func TestDocSet_UpsertReplacesDataAndUpdatesTimestamp(t *testing.T) {
 	updatedAt1 := doc1.UpdatedAt
 
 	// Small delay to ensure timestamp changes
-	require.Eventually(t, func() bool {
-		time.Sleep(2 * time.Millisecond)
-		return true
-	}, 10*time.Millisecond, 1*time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	require.NoError(t, db.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "admin"})))
 
@@ -540,10 +537,7 @@ func TestDocUpdate_PreservesCreatedAt(t *testing.T) {
 	createdAt := doc1.CreatedAt
 
 	// Small delay to ensure timestamp changes
-	require.Eventually(t, func() bool {
-		time.Sleep(2 * time.Millisecond)
-		return true
-	}, 10*time.Millisecond, 1*time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	doc2, err := db.DocUpdate("things", "t1", mustDocJSON(t, map[string]string{"x": "updated"}))
 	require.NoError(t, err)

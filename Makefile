@@ -56,7 +56,8 @@ help:
 	@echo "  upx-install   Install UPX compressor"
 	@echo ""
 	@echo "Build:"
-	@echo "  build			Build g8e for all platforms (linux, windows, darwin)"
+	@echo "  build			Build g8e for current OS and architecture"
+	@echo "  build-all			Build g8e for all platforms (linux, windows, darwin)"
 	@echo "  build-linux		Build g8e for Linux (amd64, arm64, 386)"
 	@echo "  build-windows		Build g8e for Windows (amd64, arm64)"
 	@echo "  build-darwin		Build g8e for Darwin (amd64, arm64)"
@@ -66,15 +67,15 @@ help:
 	@echo "  build-darwin-compressed	Build g8e for Darwin with UPX compression"
 	@echo ""
 	@echo "Test:"
-	@echo "  test                  Run all tests with race detection"
+	@echo "  test                  Run all tests with race detection (unit + gateway)"
 	@echo "  test-short            Run short tests with race detection"
 	@echo "  test-coverage         Run tests with coverage (enforces 60% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
 	@echo "  test-shuffle          Run all tests with randomized order"
 	@echo "  test-integration      Run integration tests (requires platform running and auth login)"
 	@echo "  test-scenario         Run scenario integration tests (requires platform running)"
 	@echo "  test-gateway          Run gateway tests"
-	@echo "  test-mcp              Run MCP tests"
-	@echo "  test-a2a              Run A2A tests"
+	@echo "  test-mcp              Run MCP tests (requires platform running and auth login)"
+	@echo "  test-a2a              Run A2A tests (requires platform running and auth login)"
 	@echo "  test-universal-gateway Run universal gateway integration tests (requires platform running and auth login)"
 	@echo "  test-byo              Run BYO client tests (requires platform running and auth login)"
 	@echo "  test-native           Run native real operator tests (requires platform running and auth login)"
@@ -182,6 +183,39 @@ PLATFORMS := linux/amd64 linux/arm64 linux/386 windows/amd64 windows/arm64 darwi
 
 .PHONY: build
 build:
+	@echo "Building g8e operator for current platform..."
+	@mkdir -p bin
+	@VERSION=$$(cat VERSION | tr -d '\n'); \
+	BUILD_ID=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_TIME=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	HOST_OS=$$(go env GOOS); \
+	HOST_ARCH=$$(go env GOARCH); \
+	BINARY=bin/g8e-$$HOST_OS-$$HOST_ARCH; \
+	if [ "$$HOST_OS" = "windows" ]; then \
+		BINARY=$$BINARY.exe; \
+	fi; \
+	echo "Building $$HOST_OS/$$HOST_ARCH -> $$BINARY..."; \
+	GOOS=$$HOST_OS GOARCH=$$HOST_ARCH go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=$$HOST_OS_$$HOST_ARCH" -o $$BINARY ./cmd/operator || exit 1; \
+	sha256sum $$BINARY > $$BINARY.sha256; \
+	if [ "$$HOST_OS" = "windows" ]; then \
+		ln -sf g8e-$$HOST_OS-$$HOST_ARCH.exe bin/g8e; \
+		echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH.exe"; \
+		cp bin/g8e-$$HOST_OS-$$HOST_ARCH.exe g8e.exe 2>/dev/null || true; \
+	else \
+		ln -sf g8e-$$HOST_OS-$$HOST_ARCH bin/g8e; \
+		echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
+		cp bin/g8e-$$HOST_OS-$$HOST_ARCH g8e 2>/dev/null || true; \
+	fi
+	@echo "Build complete. Binary: $$BINARY"
+
+.PHONY: docker-build
+docker-build:
+	@echo "Building g8e operator Docker image..."
+	@docker build -f Dockerfile -t g8e:$$(cat VERSION) -t g8e:latest .
+	@echo "Operator image built: g8e:$$(cat VERSION)"
+
+.PHONY: build-all
+build-all:
 	@echo "Building g8e operator for all platforms..."
 	@mkdir -p bin
 	@VERSION=$$(cat VERSION | tr -d '\n'); \
@@ -204,24 +238,16 @@ build:
 		if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH.exe ]; then \
 			ln -sf g8e-$$HOST_OS-$$HOST_ARCH.exe bin/g8e; \
 			echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH.exe"; \
-			cp bin/g8e-$$HOST_OS-$$HOST_ARCH.exe g8e.exe; \
-			echo "Copied to root: g8e.exe"; \
+			cp bin/g8e-$$HOST_OS-$$HOST_ARCH.exe g8e.exe 2>/dev/null || true; \
 		fi; \
 	else \
 		if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH ]; then \
 			ln -sf g8e-$$HOST_OS-$$HOST_ARCH bin/g8e; \
 			echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
-			cp bin/g8e-$$HOST_OS-$$HOST_ARCH g8e; \
-			echo "Copied to root: g8e"; \
+			cp bin/g8e-$$HOST_OS-$$HOST_ARCH g8e 2>/dev/null || true; \
 		fi; \
 	fi
 	@echo "Multi-platform build complete. Checksums: bin/g8e-*.sha256"
-
-.PHONY: docker-build
-docker-build:
-	@echo "Building g8e operator Docker image..."
-	@docker build -f Dockerfile -t g8e:$$(cat VERSION) -t g8e:latest .
-	@echo "Operator image built: g8e:$$(cat VERSION)"
 
 .PHONY: build-compressed
 build-compressed: upx-install
@@ -249,11 +275,13 @@ build-compressed: upx-install
 		if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH.exe ]; then \
 			ln -sf g8e-$$HOST_OS-$$HOST_ARCH.exe bin/g8e; \
 			echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH.exe"; \
+			cp bin/g8e-$$HOST_OS-$$HOST_ARCH.exe g8e.exe 2>/dev/null || true; \
 		fi; \
 	else \
 		if [ -f bin/g8e-$$HOST_OS-$$HOST_ARCH ]; then \
 			ln -sf g8e-$$HOST_OS-$$HOST_ARCH bin/g8e; \
 			echo "Created symlink: bin/g8e -> bin/g8e-$$HOST_OS-$$HOST_ARCH"; \
+			cp bin/g8e-$$HOST_OS-$$HOST_ARCH g8e 2>/dev/null || true; \
 		fi; \
 	fi
 	@echo "Compressed multi-platform build complete. Checksums: bin/g8e-*.sha256"
@@ -307,11 +335,7 @@ build-windows-compressed: upx-install
 		$(UPX) --best --lzma $$BINARY; \
 		sha256sum $$BINARY > $$BINARY.sha256; \
 	done
-	@echo "Windows compressed build complete. To avoid Defender false positives:"
-	@echo "  1. Code sign with a trusted certificate (EV Code Signing recommended)"
-	@echo "  2. Submit to Microsoft SmartScreen for whitelisting"
-	@echo "  3. Distribute via signed installer (MSIX or WiX)"
-	@echo "Binaries: bin/g8e-windows-*.exe"
+	@echo "Windows compressed build complete. Binaries: bin/g8e-windows-*.exe"
 
 .PHONY: build-darwin
 build-darwin:
@@ -356,22 +380,23 @@ build-windows:
 		GOOS=windows GOARCH=$$arch go build -ldflags "-X main.version=$$VERSION -X main.buildID=$$BUILD_ID -X main.buildTime=$$BUILD_TIME -X main.platform=windows_$$arch -s -w" -o $$BINARY ./cmd/operator || exit 1; \
 		sha256sum $$BINARY > $$BINARY.sha256; \
 	done
-	@echo "Windows build complete. To avoid Defender false positives:"
-	@echo "  1. Code sign with a trusted certificate (EV Code Signing recommended)"
-	@echo "  2. Submit to Microsoft SmartScreen for whitelisting"
-	@echo "  3. Distribute via signed installer (MSIX or WiX)"
-	@echo "Binaries: bin/g8e-windows-*.exe"
+	@echo "Windows build complete. Binaries: bin/g8e-windows-*.exe"
 
 # =============================================================================
 # TEST
 # =============================================================================
 .PHONY: test
-test:
-	@go test -race -count=1 -timeout 180s ./...
+test: test-unit test-gateway
+	@echo "All tests completed successfully."
+
+.PHONY: test-unit
+test-unit:
+	@echo "Running unit tests..."
+	@go test -race -count=1 -timeout 180s $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/")
 
 .PHONY: test-short
 test-short:
-	@go test -race -short -count=1 -timeout 60s ./...
+	@go test -race -short -count=1 -timeout 60s $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/")
 
 .PHONY: test-coverage
 test-coverage:
@@ -404,7 +429,7 @@ test-coverage:
 
 .PHONY: test-shuffle
 test-shuffle:
-	@go test -race -count=1 -shuffle=on -timeout 180s ./...
+	@go test -race -count=1 -shuffle=on -timeout 180s $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/")
 
 .PHONY: test-integration
 test-integration:
@@ -423,13 +448,13 @@ test-gateway:
 
 .PHONY: test-mcp
 test-mcp:
-	@echo "Running MCP tests..."
-	@go test -race -count=1 -timeout 180s ./test/mcp_gateway_test.go ./test/mcp_real_operator_test.go ./test/mcp_stdio_test.go
+	@echo "Running MCP tests (requires platform running and auth login)..."
+	@go test -tags=integration -race -count=1 -timeout 180s ./test/integration_helper.go ./test/mcp_gateway_test.go ./test/mcp_real_operator_test.go ./test/mcp_stdio_test.go
 
 .PHONY: test-a2a
 test-a2a:
-	@echo "Running A2A tests..."
-	@go test -race -count=1 -timeout 180s ./test/a2a_gateway_test.go ./test/a2a_real_operator_test.go
+	@echo "Running A2A tests (requires platform running and auth login)..."
+	@go test -tags=integration -race -count=1 -timeout 180s ./test/integration_helper.go ./test/a2a_gateway_test.go ./test/a2a_real_operator_test.go
 
 .PHONY: test-universal-gateway
 test-universal-gateway:

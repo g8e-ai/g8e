@@ -479,6 +479,7 @@ func TailLog(logPath string, follow bool) error {
 	reader := bufio.NewReader(file)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
 
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -486,6 +487,7 @@ func TailLog(logPath string, follow bool) error {
 	for {
 		select {
 		case <-sigChan:
+			// Exit gracefully on interrupt signal
 			return nil
 		case <-ticker.C:
 			line, err := reader.ReadString('\n')

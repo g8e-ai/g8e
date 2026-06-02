@@ -82,7 +82,7 @@ The Makefile also includes a dedicated Windows build target:
 make build-windows
 ```
 
-This builds for both amd64 and arm64 architectures without compression to avoid Windows Defender false positives.
+This builds for both amd64 and arm64 architectures.
 
 ---
 

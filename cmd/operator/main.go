@@ -498,6 +498,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  --passkey-rp-name <name>    RP Name for passkey operations (default: g8e)\n")
 		fmt.Fprintf(os.Stderr, "  --rate-limit-rps <rps>      Requests per second limit (default: 5.0, set to 0 to disable)\n")
 		fmt.Fprintf(os.Stderr, "  --rate-limit-burst <burst>  Rate limit burst size (default: 10)\n")
+		fmt.Fprintf(os.Stderr, "  --cert-mode <mode>         Certificate mode: full (all hostnames/IPs), localhost (only localhost)\n")
+		fmt.Fprintf(os.Stderr, "  --network-identity-file <path> Path to JSON file containing pre-detected network identity\n")
 		fmt.Fprintf(os.Stderr, "\nVault Management:\n")
 		fmt.Fprintf(os.Stderr, "  --rekey-vault           Re-encrypt vault with new API key\n")
 		fmt.Fprintf(os.Stderr, "  --old-key <key>         Old API key (required for --rekey-vault)\n")
@@ -509,9 +511,28 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  --insecure-token <tok>  Auth token\n")
 		fmt.Fprintf(os.Stderr, "  --insecure-node-id <id> Node ID advertised to the Gateway (default: hostname)\n")
 		fmt.Fprintf(os.Stderr, "  --insecure-name <name>  Display name shown in MCP gateway UI (default: node ID)\n")
+		fmt.Fprintf(os.Stderr, "\nExample Scenarios:\n")
+		fmt.Fprintf(os.Stderr, "  # Initialize Gateway in Doctrine Mode\n")
+		fmt.Fprintf(os.Stderr, "  ./g8e gw start\n\n")
+		fmt.Fprintf(os.Stderr, "  # Authenticate and bootstrap PKI\n")
+		fmt.Fprintf(os.Stderr, "  ./g8e auth login\n\n")
+		fmt.Fprintf(os.Stderr, "  # Deploy an Operator on a remote host\n")
+		fmt.Fprintf(os.Stderr, "  ./g8e security pki enroll --endpoint <gateway-ip>\n\n")
+		fmt.Fprintf(os.Stderr, "  # Verify platform status\n")
+		fmt.Fprintf(os.Stderr, "  ./g8e gw status\n\n")
+		fmt.Fprintf(os.Stderr, "  # Query audit trail\n")
+		fmt.Fprintf(os.Stderr, "  ./g8e data query --collection audit_vault\n\n")
+		fmt.Fprintf(os.Stderr, "  # Start Gateway in Notary Mode (L1/L2/L3 enforced)\n")
+		fmt.Fprintf(os.Stderr, "  ./g8e gw start --posture notary\n")
 	}
 
 	flag.Parse()
+
+	// Show help if no arguments provided
+	if len(os.Args) == 1 {
+		flag.Usage()
+		os.Exit(0)
+	}
 
 	if showVersion {
 		printVersion()
@@ -602,7 +623,7 @@ func main() {
 	logger.Info("Trust bundle loaded")
 
 	// Resolve default client certificate paths if not explicitly provided
-	// Priority: 1. Explicit flags, 2. Project-local .g8e/pki/operator.*, 3. Project-local .g8e/pki/client.*, 4. User home ~/.g8e/operator.*
+	// Priority: 1. Explicit flags, 2. Project-local .g8e/pki/operator.*, 3. Project-local .g8e/pki/client.*
 	if privateKey == "" {
 		// Try project-local operator key (created by enrollment)
 		projectOperatorKey := filepath.Join(launchDir, ".g8e/pki/operator.key")
@@ -615,16 +636,6 @@ func main() {
 			if _, err := os.Stat(projectKey); err == nil {
 				privateKey = projectKey
 				logger.Info("Using default client key from project directory", "path", privateKey)
-			} else {
-				// Try user home operator key
-				homeDir, err := os.UserHomeDir()
-				if err == nil {
-					homeKey := filepath.Join(homeDir, ".g8e/operator.key")
-					if _, err := os.Stat(homeKey); err == nil {
-						privateKey = homeKey
-						logger.Info("Using default operator key from home directory", "path", privateKey)
-					}
-				}
 			}
 		}
 	}
@@ -641,16 +652,6 @@ func main() {
 			if _, err := os.Stat(projectCert); err == nil {
 				clientCert = projectCert
 				logger.Info("Using default client certificate from project directory", "path", clientCert)
-			} else {
-				// Try user home operator cert
-				homeDir, err := os.UserHomeDir()
-				if err == nil {
-					homeCert := filepath.Join(homeDir, ".g8e/operator.crt")
-					if _, err := os.Stat(homeCert); err == nil {
-						clientCert = homeCert
-						logger.Info("Using default operator certificate from home directory", "path", clientCert)
-					}
-				}
 			}
 		}
 	}
@@ -659,7 +660,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Private key is required (-k or --key). Expected locations:\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/operator.key (project directory)\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/client.key (project directory)\n")
-		fmt.Fprintf(os.Stderr, "  - ~/.g8e/operator.key (home directory)\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -667,7 +667,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Client certificate is required (--cert or --client-cert). Expected locations:\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/operator.crt (project directory)\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/client.crt (project directory)\n")
-		fmt.Fprintf(os.Stderr, "  - ~/.g8e/operator.crt (home directory)\n")
 		os.Exit(constants.ExitConfigError)
 	}
 

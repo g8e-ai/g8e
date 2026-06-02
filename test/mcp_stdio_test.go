@@ -50,11 +50,11 @@ func TestMCPGateway_ConfigOutput(t *testing.T) {
 
 		assert.Equal(t, "http", gatewayConfig.Transport.Type, "default transport should be http")
 		assert.Contains(t, gatewayConfig.Transport.URL, "https://", "url should use an https gateway URL")
-		assert.Contains(t, gatewayConfig.Transport.URL, "/api/v1/mcp", "url should point to the MCP API path")
+		assert.Contains(t, gatewayConfig.Transport.URL, "/mcp", "url should point to the MCP API path")
 		assert.NotNil(t, gatewayConfig.TLS, "should have tls config for http mode")
-		assert.Equal(t, "G8E_CLIENT_CERT_PATH", gatewayConfig.TLS.ClientCertificateEnv)
-		assert.Equal(t, "G8E_CLIENT_KEY_PATH", gatewayConfig.TLS.ClientKeyEnv)
-		assert.Equal(t, "G8E_CA_CERT_PATH", gatewayConfig.TLS.CACertificateEnv)
+		assert.NotEmpty(t, gatewayConfig.TLS.ClientCertificate, "should have client certificate path")
+		assert.NotEmpty(t, gatewayConfig.TLS.ClientKey, "should have client key path")
+		assert.NotEmpty(t, gatewayConfig.TLS.CACertificate, "should have CA certificate path")
 	})
 }
 
@@ -69,9 +69,9 @@ func TestMCPGateway_CommandExists(t *testing.T) {
 			t.Skipf("CLI config not available (run './g8e auth login' first): %v", err)
 		}
 		assert.Contains(t, output, "http")
-		assert.Contains(t, output, "G8E_CLIENT_CERT_PATH")
-		assert.Contains(t, output, "G8E_CLIENT_KEY_PATH")
-		assert.Contains(t, output, "G8E_CA_CERT_PATH")
+		assert.Contains(t, output, "clientCertificate")
+		assert.Contains(t, output, "clientKey")
+		assert.Contains(t, output, "caCertificate")
 	})
 }
 
@@ -127,9 +127,9 @@ func TestMCPGateway_ConfigTemplate(t *testing.T) {
 		assert.Contains(t, content, `"type": "http"`)
 		assert.Contains(t, content, `"url"`)
 		assert.Contains(t, content, `"tls"`)
-		assert.Contains(t, content, `"clientCertificateEnv"`)
-		assert.Contains(t, content, `"clientKeyEnv"`)
-		assert.Contains(t, content, `"caCertificateEnv"`)
+		assert.Contains(t, content, `"clientCertificate"`)
+		assert.Contains(t, content, `"clientKey"`)
+		assert.Contains(t, content, `"caCertificate"`)
 	})
 }
 

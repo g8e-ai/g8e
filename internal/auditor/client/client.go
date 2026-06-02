@@ -33,6 +33,8 @@ type Persona struct {
 	UserAgent string
 	// OperatorSessionID is the operator session ID for Bearer token authentication.
 	OperatorSessionID string
+	// CLISessionID is the CLI session ID for CLI mTLS certificate binding.
+	CLISessionID string
 }
 
 // Exchange is a single recorded HTTP round-trip. Slices of these are the spine
@@ -122,6 +124,9 @@ func (c *Client) do(ctx context.Context, p Persona, method, url string, body []b
 	} else if p.OperatorSessionID != "" {
 		req.Header.Set("Authorization", "Bearer "+p.OperatorSessionID)
 	}
+	if p.CLISessionID != "" {
+		req.Header.Set(constants.HeaderCLISessionID, p.CLISessionID)
+	}
 
 	resp, err := c.http.Do(req)
 	ex := Exchange{Persona: p.ID, Method: method, URL: url, At: start}
@@ -172,7 +177,17 @@ func attachBody(j *json.RawMessage, raw *string, b []byte) {
 // StateRoot fetches the current state_merkle_root from /health on the public surface.
 // Maximal envelopes must bind to this exact root or the Operator drops them (TOCTOU gap).
 func (c *Client) StateRoot(ctx context.Context) (string, error) {
-	_, body, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodGet, c.cfg.PublicBaseURL+constants.APIPaths.Health, nil)
+	return c.stateRoot(ctx, c.cfg.PublicBaseURL)
+}
+
+// StateRootFromMTLS fetches the current state_merkle_root from /health on the mTLS surface.
+// Use this when the gateway is running in full cert mode where all ports require mTLS.
+func (c *Client) StateRootFromMTLS(ctx context.Context) (string, error) {
+	return c.stateRoot(ctx, c.cfg.MTLSBaseURL)
+}
+
+func (c *Client) stateRoot(ctx context.Context, baseURL string) (string, error) {
+	_, body, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodGet, baseURL+constants.APIPaths.Health, nil)
 	if err != nil {
 		return "", err
 	}

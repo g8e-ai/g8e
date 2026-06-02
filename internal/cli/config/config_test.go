@@ -420,7 +420,7 @@ func TestDefaultConstants(t *testing.T) {
 	})
 
 	t.Run("default credentials dir constant", func(t *testing.T) {
-		assert.Equal(t, "~/.g8e", DefaultCredentialsDir)
+		assert.Equal(t, ".g8e", DefaultCredentialsDir)
 	})
 }
 

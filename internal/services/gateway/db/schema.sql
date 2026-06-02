@@ -104,6 +104,79 @@ CREATE TABLE IF NOT EXISTS state_root (
     updated_at TEXT NOT NULL
 );
 
+-- State Version: monotonically increasing counter for change tracking
+-- Used to avoid full table scans when state hasn't changed
+CREATE TABLE IF NOT EXISTS state_version (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    version INTEGER NOT NULL DEFAULT 0
+);
+
+-- Initialize state_version row if table was just created
+INSERT OR IGNORE INTO state_version (id, version) VALUES (1, 0);
+
+-- Trigger to increment state_version on document insert
+CREATE TRIGGER IF NOT EXISTS trg_documents_insert_version
+AFTER INSERT ON documents
+BEGIN
+    UPDATE state_version SET version = version + 1 WHERE id = 1;
+END;
+
+-- Trigger to increment state_version on document update
+CREATE TRIGGER IF NOT EXISTS trg_documents_update_version
+AFTER UPDATE ON documents
+BEGIN
+    UPDATE state_version SET version = version + 1 WHERE id = 1;
+END;
+
+-- Trigger to increment state_version on document delete
+CREATE TRIGGER IF NOT EXISTS trg_documents_delete_version
+AFTER DELETE ON documents
+BEGIN
+    UPDATE state_version SET version = version + 1 WHERE id = 1;
+END;
+
+-- Trigger to increment state_version on kv_store insert
+CREATE TRIGGER IF NOT EXISTS trg_kv_store_insert_version
+AFTER INSERT ON kv_store
+BEGIN
+    UPDATE state_version SET version = version + 1 WHERE id = 1;
+END;
+
+-- Trigger to increment state_version on kv_store update
+CREATE TRIGGER IF NOT EXISTS trg_kv_store_update_version
+AFTER UPDATE ON kv_store
+BEGIN
+    UPDATE state_version SET version = version + 1 WHERE id = 1;
+END;
+
+-- Trigger to increment state_version on kv_store delete
+CREATE TRIGGER IF NOT EXISTS trg_kv_store_delete_version
+AFTER DELETE ON kv_store
+BEGIN
+    UPDATE state_version SET version = version + 1 WHERE id = 1;
+END;
+
+-- Trigger to increment state_version on blobs insert
+CREATE TRIGGER IF NOT EXISTS trg_blobs_insert_version
+AFTER INSERT ON blobs
+BEGIN
+    UPDATE state_version SET version = version + 1 WHERE id = 1;
+END;
+
+-- Trigger to increment state_version on blobs update
+CREATE TRIGGER IF NOT EXISTS trg_blobs_update_version
+AFTER UPDATE ON blobs
+BEGIN
+    UPDATE state_version SET version = version + 1 WHERE id = 1;
+END;
+
+-- Trigger to increment state_version on blobs delete
+CREATE TRIGGER IF NOT EXISTS trg_blobs_delete_version
+AFTER DELETE ON blobs
+BEGIN
+    UPDATE state_version SET version = version + 1 WHERE id = 1;
+END;
+
 -- Nonces: used for transaction replay protection
 CREATE TABLE IF NOT EXISTS nonces (
     nonce TEXT PRIMARY KEY,

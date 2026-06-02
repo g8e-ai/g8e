@@ -18,6 +18,7 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 
@@ -71,10 +72,10 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 	suspendedStore := &fakeSuspendedStore{txs: make(map[string]*models.SuspendedTransaction)}
 
 	// Setup: Gateway service with signing key
-	pubKey, privKey, _ := ed25519.GenerateKey(nil)
-	_ = pubKey
+	_, privKey, _ := ed25519.GenerateKey(nil)
 
 	g := &GatewayService{
+		logger:            slog.Default(),
 		envProc:           processor,
 		suspendedStore:    suspendedStore,
 		signingKey:        privKey,
@@ -263,10 +264,10 @@ func TestBYOClientA2AEndToEndProof(t *testing.T) {
 
 	suspendedStore := &fakeSuspendedStore{txs: make(map[string]*models.SuspendedTransaction)}
 
-	pubKey, privKey, _ := ed25519.GenerateKey(nil)
-	_ = pubKey
+	_, privKey, _ := ed25519.GenerateKey(nil)
 
 	g := &GatewayService{
+		logger:            slog.Default(),
 		envProc:           processor,
 		suspendedStore:    suspendedStore,
 		signingKey:        privKey,

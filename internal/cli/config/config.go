@@ -36,7 +36,7 @@ const (
 	DefaultRuntimeDir     = ".g8e"
 	DefaultPKIDir         = ".g8e/pki"
 	DefaultSecretsDir     = ".g8e/secrets"
-	DefaultCredentialsDir = "~/.g8e"
+	DefaultCredentialsDir = ".g8e"
 )
 
 // expandPath expands tilde (~) to the user's home directory and expands environment variables
@@ -108,10 +108,7 @@ func Load(projectRoot string) (*Config, error) {
 	pkiDir := filepath.Join(projectRoot, DefaultPKIDir)
 	secretsDir := filepath.Join(projectRoot, DefaultSecretsDir)
 
-	credentialsDir, err := expandPath(DefaultCredentialsDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to expand credentials directory: %w", err)
-	}
+	credentialsDir := filepath.Join(projectRoot, DefaultCredentialsDir)
 
 	// Always use embedded default paths configuration
 	pathsData := defaultPathsJSON
@@ -178,10 +175,7 @@ func LoadWithPaths(projectRoot string, pathsData []byte) (*Config, error) {
 	pkiDir := filepath.Join(projectRoot, DefaultPKIDir)
 	secretsDir := filepath.Join(projectRoot, DefaultSecretsDir)
 
-	credentialsDir, err := expandPath(DefaultCredentialsDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to expand credentials directory: %w", err)
-	}
+	credentialsDir := filepath.Join(projectRoot, DefaultCredentialsDir)
 
 	var paths PathsConfig
 	if err := json.Unmarshal(pathsData, &paths); err != nil {

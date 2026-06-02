@@ -211,7 +211,7 @@ These are absolute. There are no exceptions and no context in which these are ac
 | Add a workload identity type | `protocol/workload_identity.go` |
 | Add a new mutation type | Define proto payload → add event constant → implement in `internal/services/governance/l5_actuator.go` |
 | Add a config value | Config struct and loaders at `internal/config/config.go` → `internal/cli/config/paths.json` if it's a path |
-| Add a native tool | `internal/services/mcp/native_tools.go` schema + `internal/services/mcp/native_handlers.go` implementation |
+| Add a native tool | Create tool file in `internal/services/mcp/` implementing `NativeTool` interface → add to `RegisterNativeTools()` in `native_tool_registry.go` |
 
 ---
 

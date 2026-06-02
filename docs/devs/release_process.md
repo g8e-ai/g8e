@@ -264,32 +264,53 @@ gh release create v1.0.5 \
 
 ### 3. Release Protocol Packages (if applicable)
 
-If protocol changes are included, release the Go and Python protocol packages:
+If protocol changes are included, release the Go and Python protocol packages.
 
-**Go Protocol:**
+#### Version Synchronization
+
+The Go and Python packages must use the same version number. Update the Python version in `protocol/python/pyproject.toml` before tagging. The Go module version derives from the git tag.
+
+- Go: `protocol/go.mod` - version determined by git tag
+- Python: `protocol/python/pyproject.toml` - version field in `[project]` section
+
+#### Tag and Push
+
 ```bash
+# Update Python version first
+# protocol/python/pyproject.toml: version = "X.Y.Z"
+
 # Tag the protocol release
 git tag -a protocol/v1.0.5 -m "Protocol v1.0.5"
 git push origin protocol/v1.0.5
 ```
 
-The GitHub workflow `.github/workflows/release-go-protocol.yml` will automatically:
-- Run tests (Go 1.26)
-- Create a GitHub release
-- Publish the Go module
+The tag format `protocol/vX.Y.Z` triggers both release workflows.
 
-**Python Protocol:**
+#### Automated Workflows
+
+**Go Protocol** (`.github/workflows/release-go-protocol.yml`):
+- Runs tests with Go 1.26
+- Creates GitHub release with installation instructions
+- Publishes Go module
+
+**Python Protocol** (`.github/workflows/release-python-protocol.yml`):
+- Runs tests with Python 3.14
+- Builds package using standard `build` module
+- Validates package with `twine check`
+- Publishes to PyPI using `PYPI_API_TOKEN`
+- Creates GitHub release with installation instructions
+
+#### Verification
+
+After workflows complete, verify both packages:
+
 ```bash
-# The same tag triggers both Go and Python releases
-# Ensure PYPI_API_TOKEN is configured in GitHub secrets
+# Go verification
+go get github.com/g8e-ai/g8e/protocol@v1.0.5
+
+# Python verification
+pip install g8e-protocol==1.0.5
 ```
-
-The GitHub workflow `.github/workflows/release-python-protocol.yml` will automatically:
-- Build the Python package (Python 3.14)
-- Publish to PyPI
-- Create a GitHub release
-
-**Note:** Protocol releases use the `protocol/vX.Y.Z` tag format to distinguish from platform releases.
 
 ### 4. Update Documentation
 
