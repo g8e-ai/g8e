@@ -155,6 +155,69 @@ Read the full argument in our [Position Paper](https://www.google.com/search?q=d
 
 ---
 
+## Example: GovernanceEnvelope with MCP Payload
+
+Below is a complete example of a `GovernanceEnvelope` wrapping an MCP tool call (`fs_read`), demonstrating all fields including L1/L2/L3 governance proofs:
+
+```json
+{
+  "id": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+  "timestamp": "2026-06-02T18:27:00Z",
+  "expiresAt": "2026-06-02T18:32:00Z",
+  "sourceComponent": "COMPONENT_CLIENT",
+  "operatorId": "op-prod-12345",
+  "operatorSessionId": "sess-abc-789",
+  "webSessionId": "web-xyz-456",
+  "cliSessionId": "",
+  "eventType": "g8e.v1.operator.mcp.call.requested",
+  "payload": "CgZmc19yZWFkEglleGVjLTIwMzUSCgoZmlsZTovLy9ob21lL3VzZXIvcmVhZG1lLm1kGgZzY3J1Yg==",
+  "intentData": {
+    "tool": "fs_read",
+    "path": "/home/user/readme.md",
+    "reason": "Read deployment documentation"
+  },
+  "actionType": "MCP_CALL",
+  "targetResource": "file:///home/user/readme.md",
+  "stateMerkleRoot": "abc123def456abc123def456abc123def456abc123def456abc123def456abc1",
+  "nonce": "nonce-1717358820000-abc123",
+  "transactionHash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+  "protocolVersion": "1.0",
+  "governance": {
+    "l1": {
+      "validated": true,
+      "violations": []
+    },
+    "l2": {
+      "consensusSignature": "4a5b6c7d8e9f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "agentIds": ["agent-ensemble-1", "agent-ensemble-2", "agent-ensemble-3"],
+      "keyId": "key-ensemble-prod-abc123"
+    },
+    "l3": {
+      "proof": {
+        "clientDataJson": "{\"challenge\":\"a1b2c3d4e5f6\",\"origin\":\"https://g8e.ai\",\"type\":\"webauthn.get\"}",
+        "authenticatorData": "SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2NFAAAAAQ",
+        "signature": "MEUCIQDWn3x4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2IgE5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        "credentialId": "abc123def456abc123def456abc123def456abc123def456abc123def456abc1",
+        "mtlsCertFingerprint": "",
+        "cliSignature": ""
+      },
+      "autoApproved": false
+    },
+    "gatewaySigned": false
+  },
+  "caseId": "case-deploy-456",
+  "investigationId": "",
+  "taskId": "task-readme-789",
+  "systemFingerprint": "fp-linux-amd64-abc123",
+  "tenantId": "tenant-prod-xyz",
+  "bindingPersona": "default"
+}
+```
+
+The `payload` field contains base64-encoded protobuf bytes of the `McpCallRequested` message, which includes the tool name (`fs_read`) and JSON arguments specifying the file path.
+
+---
+
 ## Documentation
 
 * [Getting Started](https://www.google.com/search?q=docs/guides/getting_started.md)
