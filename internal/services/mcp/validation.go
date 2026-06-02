@@ -49,33 +49,33 @@ func validateSQLQuery(query string) error {
 	return nil
 }
 
-func validateHTTPRequestURL(rawURL string) error {
+func validateHTTPRequestURL(rawURL string) (*url.URL, error) {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
-		return fmt.Errorf("invalid URL format: %w", err)
+		return nil, fmt.Errorf("invalid URL format: %w", err)
 	}
 
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return fmt.Errorf("only http and https schemes are allowed")
+		return nil, fmt.Errorf("only http and https schemes are allowed")
 	}
 
 	if parsedURL.Host == "" {
-		return fmt.Errorf("URL must have a host")
+		return nil, fmt.Errorf("URL must have a host")
 	}
 
 	host := strings.ToLower(parsedURL.Hostname())
 	if strings.Contains(host, "localhost") || host == "127.0.0.1" || host == "::1" {
-		return fmt.Errorf("localhost and loopback addresses are not allowed")
+		return nil, fmt.Errorf("localhost and loopback addresses are not allowed")
 	}
 
 	ip := net.ParseIP(host)
 	if ip != nil {
 		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
-			return fmt.Errorf("private and loopback IP addresses are not allowed")
+			return nil, fmt.Errorf("private and loopback IP addresses are not allowed")
 		}
 	}
 
-	return nil
+	return parsedURL, nil
 }
 
 func validateProcNetPath(protocol string) error {

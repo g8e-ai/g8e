@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 )
@@ -66,7 +67,8 @@ func (t *NetHTTPProbeTool) Execute(ctx context.Context, args json.RawMessage) (C
 		return CallToolResult{}, fmt.Errorf("url required")
 	}
 
-	if err := validateHTTPRequestURL(req.URL); err != nil {
+	parsedURL, err := validateHTTPRequestURL(req.URL)
+	if err != nil {
 		result := map[string]interface{}{
 			"error": fmt.Sprintf("URL validation failed: %v", err),
 		}
@@ -91,7 +93,7 @@ func (t *NetHTTPProbeTool) Execute(ctx context.Context, args json.RawMessage) (C
 	}
 
 	start := time.Now()
-	httpReq, err := http.NewRequestWithContext(ctx, method, req.URL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, method, parsedURL.String(), nil)
 	if err != nil {
 		return CallToolResult{}, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -104,7 +106,21 @@ func (t *NetHTTPProbeTool) Execute(ctx context.Context, args json.RawMessage) (C
 		}
 	}
 
-	client := &http.Client{Timeout: timeout}
+	transport := &http.Transport{
+		DialContext: func(dialCtx context.Context, network, addr string) (net.Conn, error) {
+			host, _, err := net.SplitHostPort(addr)
+			if err != nil {
+				host = addr
+			}
+			ip := net.ParseIP(host)
+			if ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()) {
+				return nil, fmt.Errorf("blocked address: %s", host)
+			}
+			d := net.Dialer{}
+			return d.DialContext(dialCtx, network, addr)
+		},
+	}
+	client := &http.Client{Timeout: timeout, Transport: transport}
 	resp, err := client.Do(httpReq)
 	latency := time.Since(start).Seconds() * 1000
 

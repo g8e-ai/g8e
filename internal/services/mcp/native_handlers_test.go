@@ -939,6 +939,69 @@ func TestHandleNetHTTPProbe(t *testing.T) {
 			t.Error("expected error for invalid URL format")
 		}
 	})
+
+	t.Run("blocks localhost", func(t *testing.T) {
+		req := NetHTTPProbeRequest{
+			URL: "http://localhost:8080",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "net_http_probe", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var probeResult NetHTTPProbeResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &probeResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if probeResult.Error == "" {
+			t.Error("expected error for localhost URL")
+		}
+	})
+
+	t.Run("blocks loopback IP", func(t *testing.T) {
+		req := NetHTTPProbeRequest{
+			URL: "http://127.0.0.1:8080",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "net_http_probe", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var probeResult NetHTTPProbeResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &probeResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if probeResult.Error == "" {
+			t.Error("expected error for loopback IP URL")
+		}
+	})
+
+	t.Run("blocks private IP", func(t *testing.T) {
+		req := NetHTTPProbeRequest{
+			URL: "http://192.168.1.1",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "net_http_probe", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var probeResult NetHTTPProbeResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &probeResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if probeResult.Error == "" {
+			t.Error("expected error for private IP URL")
+		}
+	})
 }
 
 func TestNativeTools(t *testing.T) {
