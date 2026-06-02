@@ -19,7 +19,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -90,7 +92,7 @@ func (t *ShellExecuteTool) Execute(ctx context.Context, args json.RawMessage) (C
 	}
 
 	// Validate against denylist
-	if err := validateCommandSafety(req.Command, req.Args); err != nil {
+	if err := validateCommandSafety(req.Command, req.Args, req.WorkingDir); err != nil {
 		result := map[string]interface{}{
 			"exit_code": -1,
 			"stdout":    "",
@@ -169,7 +171,7 @@ func (t *ShellExecuteTool) Execute(ctx context.Context, args json.RawMessage) (C
 }
 
 // validateCommandSafety checks if a command is safe to execute based on denylist.
-func validateCommandSafety(command string, args []string) error {
+func validateCommandSafety(command string, args []string, workingDir string) error {
 	dangerousCommands := []string{
 		"rm",
 		"dd",
@@ -279,6 +281,33 @@ func validateCommandSafety(command string, args []string) error {
 		return fmt.Errorf("command contains shell injection pattern")
 	}
 
+	// Validate working directory if specified
+	if workingDir != "" {
+		// Check for path traversal attempts BEFORE cleaning
+		if strings.Contains(workingDir, "..") {
+			return fmt.Errorf("working directory contains path traversal: %s", workingDir)
+		}
+
+		// Ensure the path is absolute
+		if !filepath.IsAbs(workingDir) {
+			return fmt.Errorf("working directory must be an absolute path: %s", workingDir)
+		}
+
+		// Clean the path to resolve any redundant components
+		cleanDir := filepath.Clean(workingDir)
+
+		// Verify the directory exists and is accessible
+		info, err := os.Stat(cleanDir)
+		if err != nil {
+			return fmt.Errorf("working directory does not exist or is not accessible: %s", workingDir)
+		}
+
+		// Ensure it's actually a directory
+		if !info.IsDir() {
+			return fmt.Errorf("working directory is not a directory: %s", workingDir)
+		}
+	}
+
 	return nil
 }
 
@@ -299,6 +328,63 @@ func shellQuoteCommand(command string, args []string) string {
 		quotedArgs[i] = shellQuoteArg(arg)
 	}
 	return fmt.Sprintf("%s %s", quotedCmd, strings.Join(quotedArgs, " "))
+}
+
+// validateForSSHExecution performs stricter validation for SSH execution
+// since SSH session.Run() executes through a remote shell.
+func validateForSSHExecution(command string, args []string, workingDir string) error {
+	// Additional SSH-specific validation: ensure no shell metacharacters
+	// can slip through even with quoting - check this FIRST before other validation
+	shellMetacharacters := []string{"$", "`", "\\", ";", "&", "|", ">", "<", "\n", "\r"}
+
+	// Check command for shell metacharacters
+	for _, meta := range shellMetacharacters {
+		if strings.Contains(command, meta) {
+			return fmt.Errorf("command contains shell metacharacter '%s' which is not allowed for SSH execution", meta)
+		}
+	}
+
+	// Check args for shell metacharacters
+	for _, arg := range args {
+		for _, meta := range shellMetacharacters {
+			if strings.Contains(arg, meta) {
+				return fmt.Errorf("argument contains shell metacharacter '%s' which is not allowed for SSH execution", meta)
+			}
+		}
+	}
+
+	// Check working directory for shell metacharacters
+	if workingDir != "" {
+		for _, meta := range shellMetacharacters {
+			if strings.Contains(workingDir, meta) {
+				return fmt.Errorf("working directory contains shell metacharacter '%s' which is not allowed for SSH execution", meta)
+			}
+		}
+	}
+
+	// Run the standard safety validation but without workingDir
+	// since SSH executes on remote hosts where we can't verify local directory existence
+	if err := validateCommandSafety(command, args, ""); err != nil {
+		return err
+	}
+
+	// For SSH, only validate working directory path structure (not existence)
+	if workingDir != "" {
+		// Clean the path to resolve any relative components
+		cleanDir := filepath.Clean(workingDir)
+
+		// Check for path traversal attempts
+		if strings.Contains(cleanDir, "..") {
+			return fmt.Errorf("working directory contains path traversal: %s", workingDir)
+		}
+
+		// Ensure the path is absolute
+		if !filepath.IsAbs(cleanDir) {
+			return fmt.Errorf("working directory must be an absolute path: %s", workingDir)
+		}
+	}
+
+	return nil
 }
 
 // executeOnHost executes a command on a specific host (localhost or remote via SSH).
@@ -364,6 +450,12 @@ func executeLocally(ctx context.Context, command string, args []string, workingD
 
 // executeViaSSH executes a command on a remote host via SSH.
 func executeViaSSH(ctx context.Context, hostname, command string, args []string, workingDir string, timeout time.Duration) (map[string]interface{}, error) {
+	// Validate command and args for SSH execution to prevent shell injection
+	// SSH session.Run() executes through a remote shell, so we must be stricter
+	if err := validateForSSHExecution(command, args, workingDir); err != nil {
+		return nil, err
+	}
+
 	// Resolve SSH connection parameters
 	r := ssh.ResolveHost(hostname, "", "", "", "")
 	if r.Hostname == "" {

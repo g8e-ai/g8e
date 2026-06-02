@@ -207,7 +207,7 @@ func TestShellExecuteTool_Denylist_DangerousCommands(t *testing.T) {
 
 	for _, cmd := range dangerousCommands {
 		t.Run(cmd, func(t *testing.T) {
-			err := validateCommandSafety(cmd, nil)
+			err := validateCommandSafety(cmd, nil, "")
 			require.Error(t, err)
 			require.Contains(t, strings.ToLower(err.Error()), "blocked by safety policy")
 		})
@@ -226,7 +226,7 @@ func TestShellExecuteTool_Denylist_DangerousPatterns(t *testing.T) {
 
 	for _, pattern := range dangerousPatterns {
 		t.Run(pattern, func(t *testing.T) {
-			err := validateCommandSafety(pattern, nil)
+			err := validateCommandSafety(pattern, nil, "")
 			require.Error(t, err)
 			require.Contains(t, strings.ToLower(err.Error()), "dangerous pattern")
 		})
@@ -243,7 +243,7 @@ func TestShellExecuteTool_Denylist_ShellInjection(t *testing.T) {
 
 	for _, pattern := range injectionPatterns {
 		t.Run(pattern, func(t *testing.T) {
-			err := validateCommandSafety(pattern, nil)
+			err := validateCommandSafety(pattern, nil, "")
 			require.Error(t, err)
 			require.Contains(t, strings.ToLower(err.Error()), "shell injection")
 		})
@@ -268,7 +268,7 @@ func TestShellExecuteTool_Denylist_AllowsSafeCommands(t *testing.T) {
 
 	for _, tc := range safeCommands {
 		t.Run(tc.command, func(t *testing.T) {
-			err := validateCommandSafety(tc.command, tc.args)
+			err := validateCommandSafety(tc.command, tc.args, "")
 			require.NoError(t, err)
 		})
 	}
@@ -372,4 +372,122 @@ func TestShellExecuteTool_Execute_DefaultHostname(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, shellResult.ExitCode)
 	require.Equal(t, "localhost", shellResult.Hostname)
+}
+
+func TestValidateForSSHExecution_BlocksShellMetacharacters(t *testing.T) {
+	metacharacterTests := []struct {
+		command     string
+		args        []string
+		workingDir  string
+		expectError bool
+	}{
+		{"echo", []string{"test$(whoami)"}, "", true},     // $ in args
+		{"echo", []string{"test`whoami`"}, "", true},      // backtick in args
+		{"echo", []string{"test; rm -rf /"}, "", true},    // semicolon in args
+		{"echo", []string{"test& rm -rf /"}, "", true},    // ampersand in args
+		{"echo", []string{"test| rm -rf /"}, "", true},    // pipe in args
+		{"echo", []string{"test> /dev/null"}, "", true},   // redirect in args
+		{"echo", []string{"test< /etc/passwd"}, "", true}, // redirect in args
+		{"echo", []string{"test\nrm -rf /"}, "", true},    // newline in args
+		{"echo", []string{"test\r"}, "", true},            // carriage return in args
+		{"echo", []string{"test\\n"}, "", true},           // backslash in args
+		{"echo$(whoami)", []string{}, "", true},           // $ in command
+		{"echo`whoami`", []string{}, "", true},            // backtick in command
+		{"echo; rm", []string{}, "", true},                // semicolon in command
+		{"echo", []string{"test"}, "/tmp/test\n", true},   // newline in working dir
+		{"echo", []string{"test"}, "/tmp/test;", true},    // semicolon in working dir
+		{"echo", []string{"test"}, "/tmp/test$", true},    // $ in working dir
+		{"echo", []string{"test"}, "/tmp/test`", true},    // backtick in working dir
+		{"echo", []string{"test"}, "/tmp/test\\", true},   // backslash in working dir
+		{"echo", []string{"test"}, "/tmp/test|", true},    // pipe in working dir
+		{"echo", []string{"test"}, "/tmp/test>", true},    // redirect in working dir
+		{"echo", []string{"test"}, "/tmp/test<", true},    // redirect in working dir
+		{"echo", []string{"test"}, "/tmp/test&", true},    // ampersand in working dir
+		{"echo", []string{"test"}, "/tmp/test\r", true},   // carriage return in working dir
+		{"echo", []string{"test"}, "", false},             // safe: no metacharacters
+		{"ls", []string{"-la"}, "/tmp", false},            // safe: normal command
+		{"cat", []string{"/etc/hostname"}, "", false},     // safe: normal command
+	}
+
+	for _, tc := range metacharacterTests {
+		t.Run(tc.command+"_"+tc.workingDir, func(t *testing.T) {
+			err := validateForSSHExecution(tc.command, tc.args, tc.workingDir)
+			if tc.expectError {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "shell metacharacter")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateForSSHExecution_StillBlocksDenylist(t *testing.T) {
+	// Ensure SSH validation still enforces the standard denylist
+	dangerousCommands := []string{"rm", "sudo", "su", "dd"}
+
+	for _, cmd := range dangerousCommands {
+		t.Run(cmd, func(t *testing.T) {
+			err := validateForSSHExecution(cmd, nil, "")
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestValidateForSSHExecution_AllowsSafeCommands(t *testing.T) {
+	safeCommands := []struct {
+		command    string
+		args       []string
+		workingDir string
+	}{
+		{"ls", []string{"-la"}, ""},
+		{"echo", []string{"hello world"}, ""},
+		{"cat", []string{"/etc/hostname"}, ""},
+		{"grep", []string{"pattern", "file.txt"}, ""},
+		{"find", []string{".", "-name", "*.go"}, ""},
+		{"date", nil, ""},
+		{"pwd", nil, "/tmp"},
+		{"ls", []string{}, "/var/log"},
+	}
+
+	for _, tc := range safeCommands {
+		t.Run(tc.command, func(t *testing.T) {
+			err := validateForSSHExecution(tc.command, tc.args, tc.workingDir)
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestValidateCommandSafety_WorkingDirValidation(t *testing.T) {
+	workingDirTests := []struct {
+		name        string
+		command     string
+		args        []string
+		workingDir  string
+		expectError bool
+		errorMsg    string
+	}{
+		{"valid absolute dir", "ls", []string{}, "/tmp", false, ""},
+		{"valid absolute dir with args", "pwd", nil, "/var/log", false, ""},
+		{"path traversal", "ls", []string{}, "/tmp/../etc", true, "path traversal"},
+		{"relative path", "ls", []string{}, "tmp", true, "absolute path"},
+		{"nonexistent dir", "ls", []string{}, "/nonexistent_dir_12345", true, "does not exist"},
+		{"file instead of dir", "ls", []string{}, "/etc/passwd", true, "not a directory"},
+		{"empty working dir", "ls", []string{}, "", false, ""},
+		{"complex valid path", "ls", []string{}, "/var/log/apt", false, ""},
+	}
+
+	for _, tc := range workingDirTests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateCommandSafety(tc.command, tc.args, tc.workingDir)
+			if tc.expectError {
+				require.Error(t, err)
+				if tc.errorMsg != "" {
+					require.Contains(t, err.Error(), tc.errorMsg)
+				}
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }

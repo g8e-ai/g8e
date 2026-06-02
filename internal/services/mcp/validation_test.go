@@ -300,6 +300,155 @@ func TestValidateGitRepoPath(t *testing.T) {
 	}
 }
 
+func TestValidateGitRef(t *testing.T) {
+	tests := []struct {
+		name    string
+		ref     string
+		wantErr bool
+	}{
+		{
+			name:    "valid HEAD",
+			ref:     "HEAD",
+			wantErr: false,
+		},
+		{
+			name:    "valid branch name",
+			ref:     "main",
+			wantErr: false,
+		},
+		{
+			name:    "valid feature branch",
+			ref:     "feature/new-feature",
+			wantErr: false,
+		},
+		{
+			name:    "valid remote branch",
+			ref:     "origin/main",
+			wantErr: false,
+		},
+		{
+			name:    "valid tag",
+			ref:     "v1.0.0",
+			wantErr: false,
+		},
+		{
+			name:    "valid commit hash",
+			ref:     "abc123def456",
+			wantErr: false,
+		},
+		{
+			name:    "valid HEAD~1",
+			ref:     "HEAD~1",
+			wantErr: false,
+		},
+		{
+			name:    "valid HEAD~10",
+			ref:     "HEAD~10",
+			wantErr: false,
+		},
+		{
+			name:    "empty ref",
+			ref:     "",
+			wantErr: true,
+		},
+		{
+			name:    "ref with leading whitespace",
+			ref:     "  main",
+			wantErr: true,
+		},
+		{
+			name:    "ref with trailing whitespace",
+			ref:     "main  ",
+			wantErr: true,
+		},
+		{
+			name:    "ref with null byte",
+			ref:     "main\x00",
+			wantErr: true,
+		},
+		{
+			name:    "ref with semicolon",
+			ref:     "main;rm -rf",
+			wantErr: true,
+		},
+		{
+			name:    "ref with ampersand",
+			ref:     "main&evil",
+			wantErr: true,
+		},
+		{
+			name:    "ref with pipe",
+			ref:     "main|cat",
+			wantErr: true,
+		},
+		{
+			name:    "ref with dollar sign",
+			ref:     "main$(evil)",
+			wantErr: true,
+		},
+		{
+			name:    "ref with backtick",
+			ref:     "main`evil`",
+			wantErr: true,
+		},
+		{
+			name:    "ref with parentheses",
+			ref:     "main(evil)",
+			wantErr: true,
+		},
+		{
+			name:    "ref with redirect",
+			ref:     "main>/etc/passwd",
+			wantErr: true,
+		},
+		{
+			name:    "ref with newline",
+			ref:     "main\nevil",
+			wantErr: true,
+		},
+		{
+			name:    "ref with carriage return",
+			ref:     "main\revil",
+			wantErr: true,
+		},
+		{
+			name:    "absolute path",
+			ref:     "/etc/passwd",
+			wantErr: true,
+		},
+		{
+			name:    "Windows absolute path",
+			ref:     "\\windows\\system32",
+			wantErr: true,
+		},
+		{
+			name:    "ref with space",
+			ref:     "main branch",
+			wantErr: true,
+		},
+		{
+			name:    "ref with special chars",
+			ref:     "main@#$%",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateGitRef(tt.ref)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateGitRef(%q) expected error, got nil", tt.ref)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateGitRef(%q) unexpected error: %v", tt.ref, err)
+				}
+			}
+		})
+	}
+}
+
 func TestValidateK8sResourceName(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -630,6 +779,75 @@ func TestValidateProcNetPath(t *testing.T) {
 			} else {
 				if err != nil {
 					t.Errorf("validateProcNetPath(%q) unexpected error: %v", tt.protocol, err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateContainerRuntime(t *testing.T) {
+	tests := []struct {
+		name    string
+		runtime string
+		wantErr bool
+	}{
+		{
+			name:    "empty runtime (auto-detect)",
+			runtime: "",
+			wantErr: false,
+		},
+		{
+			name:    "valid docker",
+			runtime: "docker",
+			wantErr: false,
+		},
+		{
+			name:    "valid podman",
+			runtime: "podman",
+			wantErr: false,
+		},
+		{
+			name:    "invalid runtime",
+			runtime: "runc",
+			wantErr: true,
+		},
+		{
+			name:    "invalid runtime with path",
+			runtime: "/usr/bin/docker",
+			wantErr: true,
+		},
+		{
+			name:    "runtime with injection attempt",
+			runtime: "docker; rm -rf /",
+			wantErr: true,
+		},
+		{
+			name:    "runtime with command substitution",
+			runtime: "$(whoami)",
+			wantErr: true,
+		},
+		{
+			name:    "runtime with pipe",
+			runtime: "docker | cat",
+			wantErr: true,
+		},
+		{
+			name:    "runtime with backticks",
+			runtime: "`rm -rf /`",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateContainerRuntime(tt.runtime)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateContainerRuntime(%q) expected error, got nil", tt.runtime)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateContainerRuntime(%q) unexpected error: %v", tt.runtime, err)
 				}
 			}
 		})

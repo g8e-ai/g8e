@@ -263,6 +263,14 @@ func gitStatus(repoPath string) (map[string]interface{}, error) {
 }
 
 func gitLog(repoPath string, limit int) (map[string]interface{}, error) {
+	// Bound the limit to prevent resource exhaustion
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
 	output, err := runGitCommand(repoPath, "log", fmt.Sprintf("--max-count=%d", limit), "--pretty=format:%H|%an|%ae|%ad|%s", "--date=iso")
 	if err != nil {
 		return nil, fmt.Errorf("git log failed: %w", err)
@@ -397,6 +405,10 @@ func gitCurrentBranch(repoPath string) (map[string]interface{}, error) {
 }
 
 func gitDiff(repoPath string, ref string) (map[string]interface{}, error) {
+	if err := validateGitRef(ref); err != nil {
+		return nil, fmt.Errorf("invalid git reference: %w", err)
+	}
+
 	output, err := runGitCommand(repoPath, "diff", ref)
 	if err != nil {
 		return nil, fmt.Errorf("git diff failed: %w", err)

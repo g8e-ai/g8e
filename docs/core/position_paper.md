@@ -7,203 +7,156 @@ parent: Architecture
 
 ### Co-validation, heterogeneous consensus, and the case for free and open AI runtime governance
 
-**A position paper.** Last updated: 2026-05-29.
+**A position paper.** Last updated: 2026-06-02.
 
 ---
 
 ## Abstract
 
-We argue that the architecture wrapped around autonomous agents must shift from trust-then-verify to verify-then-execute. Capability protocols, including MCP, A2A, and OpenAI-style tool calls, establish that an agent can act. They do not establish authority over whether the agent should act. The platform supplies the missing admission boundary. This is a typed, signed, state-bound transaction that must clear a fail-closed verification pipeline at the host before any side effect occurs.
+We argue that the architecture wrapped around autonomous agents must decisively shift from *trust-then-verify* to *verify-then-execute*.
 
-The central claim of this paper is that **safe autonomous execution is a Byzantine agreement problem layered on top of a human-intent problem, and the two cannot be collapsed into one validator.** Machine-checkable *consistency* and human-checkable *intent* are orthogonal competencies. Authority safe to execute is the conjunction of both proofs, bound cryptographically to a single transaction, verified locally against sovereign state. Neither signature alone is sufficient.
+Capability protocols—including MCP, A2A, and OpenAI-style tool calls—establish that an agent *can* act. They do not establish authority over whether the agent *should* act. g8e supplies the missing admission boundary: a typed, signed, state-bound transaction that must clear a fail-closed, host-local verification pipeline before any side effect occurs in reality.
 
-We develop this with the mathematics of heterogeneous consensus, a mechanism-design account of why human time is the only validator resource that cannot be farmed, and a model of the four-role trustless dependency chain that makes entire classes of legacy attack require simultaneous, orthogonal compromise rather than a single point of failure. We close with the argument we hold most strongly: that runtime governance and audit are public goods, and that gating them behind a paywall is incompatible with a safe AI-powered, human-driven world. They must be free, open, and self-hostable.
+The central claim of this paper is that **safe autonomous execution is a Byzantine agreement problem layered on top of a human-intent problem, and the two cannot be collapsed into one validator.** Machine-checkable *consistency* and human-checkable *intent* are orthogonal competencies. Safe execution authority is the cryptographic conjunction of both proofs, bound to a single transaction, and verified locally against sovereign state. Neither signature alone is sufficient.
 
----
-
-## 1. The substitutability error
-
-Every current approach to agent safety makes the same error. It treats human and machine validators as substitutable. Pick one, and you inherit its failure mode.
-
-**Full autonomy** assumes the machine is a sufficient validator. It is not. A model verifying its own intent has no independent basis for catching a misaligned but coherent plan. The same weights that produced the action produce its justification. Worse, a single model is a single attack surface. A prompt injection, a poisoned tool description, or a jailbreak does not need to defeat a verifier. It becomes the verifier. Autonomy fails by executing confident nonsense.
-
-**Human-in-the-loop** assumes the human is a sufficient validator and is available at machine throughput. Neither holds. Route every action through a person and you manufacture alert fatigue. The marginal cost of attention collapses, approvals degrade to reflex, and the signature that was supposed to mean responsible authorization comes to mean nothing. Human-in-the-loop fails by rubber-stamping at scale.
-
-Both failures share a root cause. They ask one validator to certify two different things at once. The validator must certify that the action is internally consistent and technically safe, and that it matches what a responsible human actually wants. These are not the same property. They fail independently, and no single validator is competent at both. A model is good at the first and structurally blind to the second. A human is authoritative on the second and cannot keep pace on the first.
-
-The resolution is not a better single validator. It is to recognize that the two competencies are distinct.
+We develop this thesis through the mathematics of heterogeneous consensus, a mechanism-design account of why human time is the only non-forgeable validator bond, and a model of a trustless dependency chain that forces legacy attacks to require simultaneous, orthogonal compromise. We close with the stance we hold most strongly: runtime governance and audit are public goods. Gating them behind a paywall is incompatible with a safe AI-powered world. They must be free, open, and self-hostable.
 
 ---
 
-## 2. Co-validation
+## 1. The Substitutability Error
 
-We define authority over a state-changing action as the conjunction of two independent proofs:
+Every current approach to agent safety makes the same fatal error: treating human and machine validators as substitutable. Pick one, and you inherit its failure mode.
 
-- A **consistency proof**: evidence that the action is technically sound, policy-compliant, and that an independent ensemble agrees it faithfully realizes the stated request. This is machine-checkable and produced by the L2 consensus layer.
-- An **intent proof**: evidence that a responsible human has authorized *this specific action*. This is human-checkable and produced by the L3 notary layer.
+**Full autonomy** assumes the machine is a sufficient validator. It is not. A model verifying its own intent has no independent basis for catching a misaligned but coherent plan. The same weights that produced the action produce its justification. Worse, a single model represents a single attack surface. A prompt injection or poisoned tool description doesn’t defeat a verifier; it *becomes* the verifier. Autonomy fails by executing confident nonsense.
 
-$$
-\text{Authority}(\text{action}) \;\equiv\; \text{ConsistencyProof}(\text{action}) \;\wedge\; \text{IntentProof}(\text{action})
-$$
+**Human-in-the-loop** assumes the human is a sufficient validator available at machine throughput. Neither holds. Route every action through a person and you manufacture alert fatigue. The marginal cost of attention collapses, approvals degrade to reflex, and the signature that meant "responsible authorization" comes to mean nothing. Human-in-the-loop fails by rubber-stamping at scale.
 
-The conjunction matters more than either conjunct. Defense in depth is usually described as a sum. More layers means more chances to catch something. Co-validation is a **product**: an unsafe action executes only if it passes a consistency check it should fail *and* an intent check it should fail, where the two checks draw their errors from different distributions because they are testing different properties. We make this precise in §4.
-
-This is also why the platform is agnostic by construction. It is agent-agnostic, model-agnostic, and domain-agnostic. The verifier never asks who produced an action or what it is for. It asks only whether the two proofs are present and valid, bound to this transaction, against this host's current state. Agnosticism is not a feature added for market reach. It is the consequence of a trust model that checks mathematics rather than provenance. A platform that trusted certain vendors more than others would have introduced a privileged channel, and the architecture prohibits privileged channels.
+Both paradigms fail because they ask one validator to certify two orthogonal properties: that an action is technically consistent, and that it matches what a human actually wants. A model is structurally blind to the latter; a human cannot keep pace with the former. The resolution is not a better single validator. It is acknowledging that these competencies must remain distinct.
 
 ---
 
-## 3. The trustless dependency chain
+## 2. Co-validation: A Woven Defense
 
-The system was designed as a whole, not as a gateway with accessories. Four roles cooperate, and each *layers intent* by adding a proof that the next layer can check without trusting the layer that produced it.
+We define authority over a state-changing action as the exact conjunction of two independent proofs:
 
-1. **The frontend** captures human intent. It is where a responsible party reads the proposed action and, for high-risk mutations, signs. Its output is an intent proof. This is a WebAuthn assertion, or for CLI sessions an mTLS certificate fingerprint, computed over the transaction hash, not over a session. The approval is bound to one action, forever.
+* **A Consistency Proof (L2):** Evidence that the action is technically sound, policy-compliant, and that an independent model ensemble agrees it faithfully realizes the stated request.
+* **An Intent Proof (L3):** Evidence that a responsible human has authorized *this specific action*.
 
-2. **The platform-compatible agentic ensemble** forms machine intent. It translates a request into a concrete typed payload and reaches consensus that the payload is a faithful, safe realization of the request. Its output is a consistency proof. This is a set of Ed25519 signatures over the transaction hash from independent reasoners.
+$$\text{Authority}(\text{action}) \;\equiv\; \text{ConsistencyProof}(\text{action}) \;\wedge\; \text{IntentProof}(\text{action})$$
 
-3. **The g8e Gateway (`g8eg`)** admits. It assigns cryptographic identity (SPIFFE URI SANs over mTLS), enforces replay defense, distributes state roots, and relays envelopes to the right host. Critically, it holds **no privileged bypass**. It is a stateless coordinator, not a trusted authority.
+Defense in depth is usually an additive sum: more layers yield more chances to catch a flaw. Co-validation is a **product**: an unsafe action executes only if it passes a consistency check it should fail *and* an intent check it should fail. Because they test fundamentally different properties, these checks draw their errors from entirely different distributions.
 
-4. **The g8e Operator (`g8eo`)** verifies and executes. It re-derives every proof from scratch against its own local state, trusts nothing upstream, and is the only component permitted to mutate the host. It writes the audit record *before* the side effect, scrubs the output at the boundary, and emits a signed receipt anchored to a host-local, git-backed ledger.
-
-The chain is trustless in the precise sense that each role depends on the previous for inputs but not for trust. The Operator does not trust the Gateway assertion that a transaction is consensus-approved. It checks the signatures itself. It does not trust the ensemble assertion that the state is current. It compares the envelope's expected Merkle root against its own ledger root. Every claim arrives as a proof the next layer can independently falsify.
-
-The consequence is that compromising any single layer is insufficient to cause an unauthorized mutation. This is what we mean when we say the design makes old security and privacy concerns structurally harder. The design requires that an attacker simultaneously defeat orthogonal, independently audited proofs rather than patching concerns one by one.
-
-| Legacy attack class | The proof that neutralizes it |
-|---|---|
-| Prompt injection / a jailbroken single model | L2 heterogeneous consensus. Peers reject. The only residual is a *shared* blind spot (see §4) |
-| Stolen session token | L3 binds approval to the transaction hash plus live human presence; a session alone authorizes nothing |
-| Replay of a previously approved action | Nonce in a sliding replay window plus `expires_at` freshness |
-| Time-of-check/time-of-use, approval against a stale world | `state_merkle_root` binding. The Operator rejects if its local root has moved |
-| Compromised relay or man-in-the-middle gateway | The Operator re-verifies all proofs locally; the Gateway has no bypass; mTLS + SPIFFE identity |
-| Data exfiltration through model context | The Sovereignty Boundary scrubs before egress; raw data and tokens are rehydrated only at execution, on-host |
-| Credential theft | Zero standing privileges. There is no persistent credential to steal (§6) |
-| Any single rogue actor, human or machine | Co-validation. No unilateral path exists. Consensus *and* a human signature are both required |
-
-Impossible is a strong word and we use it carefully. The honest claim is this: each of these attacks, which against a conventional agent integration is a single-point compromise, becomes a requirement to break two or more orthogonal proofs at once. Every attempt, successful or not, is recorded in a tamper-evident local vault before anything executes. The bar moves to coordinating a multi-domain compromise that also evades a fail-closed audit.
+This is why the g8e platform is strictly agent-agnostic, model-agnostic, and domain-agnostic. The local verifier never asks who produced an action. It asks only if both proofs are valid, mathematically bound to this transaction, against the host's current state.
 
 ---
 
-## 4. The mathematics of heterogeneous consensus
+## 3. The Trustless Dependency Chain
 
-The consistency proof is a Byzantine agreement among reasoners. Its strength is almost entirely a function of one quantity that the marketing of ensemble AI tends to hide. This is the correlation between validator errors.
+g8e is not a gateway with accessories; it is a woven, trustless dependency chain. Four roles cooperate, each layering intent by adding a proof the next layer can independently verify—without trusting the layer that produced it.
 
-### 4.1 The independent case, and why it is seductive
+1. **The Frontend (Intent):** Captures human intent. For high-risk mutations, it outputs an intent proof (a WebAuthn assertion or mTLS cert fingerprint) computed over the exact transaction hash, never a session.
+2. **The Ensemble (Consistency):** Translates requests into typed payloads, reaching consensus that the payload is safe. It outputs a consistency proof (Ed25519 signatures from independent reasoners).
+3. **The g8e Gateway (Coordinator):** Admits envelopes, assigns cryptographic identity (SPIFFE over mTLS), enforces replay defense, and relays. *It holds no privileged bypass.*
+4. **The g8e Operator (Execution):** The sole component permitted to mutate the host. It re-derives every proof from scratch, trusts nothing upstream, anchors the audit record locally *before* execution, and emits a signed receipt.
 
-Let an action be either safe or unsafe. We want unsafe actions blocked. Consider $n$ validators, each independently approving an unsafe action, a false-approve, with probability $p$. We require $k$ approvals to pass. If errors are independent,
+Because the Operator checks the signatures and ledger root itself, compromising any single layer is mathematically insufficient to cause an unauthorized mutation.
 
-$$
-\Pr[\text{unsafe passes}] \;=\; \sum_{i=k}^{n} \binom{n}{i} p^{\,i} (1-p)^{\,n-i}.
-$$
+| Legacy Attack Class | The g8e Proof That Neutralizes It |
+| --- | --- |
+| **Prompt Injection / Jailbreak** | L2 Heterogeneous Consensus. Peers reject. |
+| **Stolen Session Token** | L3 binds approval to the transaction hash + live human presence. Sessions authorize nothing. |
+| **Replay Attacks** | Enforced sliding replay window (Nonce) + `expires_at` freshness. |
+| **Time-of-Check / Time-of-Use** | `state_merkle_root` binding. Operators reject if the local root has moved. |
+| **Compromised Gateway / MITM** | The Operator re-verifies all proofs locally; the Gateway has no bypass. |
+| **Credential Theft** | Zero standing privileges. Credentials are JIT-minted, scoped to one action, and dissolved. |
 
-For small $p$ and $k \ge 2$ this is dominated by its first term, $\binom{n}{k} p^{k}$. It falls polynomially in $p$ raised to the $k$. With $p = 0.05$ and a 3-of-5 rule, the chance an unsafe action slips through is on the order of $10^{-3}$. Push to 4-of-7 and it is smaller still. This is the Condorcet Jury Theorem applied to cryptography. If each juror is better than a coin flip and votes independently, the probability the majority is correct tends to 1 as the jury grows.
-
-This is the result that ensemble AI marketing implicitly invokes. It is also where the theorem hides its load-bearing assumption in a single word: *independently*.
-
-### 4.2 The common-mode floor
-
-Models trained on overlapping corpora, with similar architectures and similar alignment procedures, share failure modes. The same injection, the same adversarial suffix, the same plausible-but-wrong reasoning pattern fools all of them together. Independence is exactly the assumption that does not hold for a homogeneous ensemble.
-
-Model this directly. Let there be a common-mode event with probability $c$. This is a shared blind spot that makes every validator false-approve simultaneously. Conditional on no common-mode event, let each validator fail independently with probability $p$. Then
-
-$$
-\Pr[\text{unsafe passes}] \;=\; c \;+\; (1-c)\sum_{i=k}^{n}\binom{n}{i} p^{\,i}(1-p)^{\,n-i}.
-$$
-
-Now take the limit that the redundancy pitch relies on. As $n \to \infty$ with a majority rule and $p < \tfrac12$, the independent term vanishes. Condorcet still works against idiosyncratic error, but the common-mode term does not move:
-
-$$
-\lim_{n\to\infty}\Pr[\text{unsafe passes}] \;=\; c.
-$$
-
-**The safety of the consensus layer is bounded below by the common-mode failure rate, and no amount of redundancy reduces that floor.** Ten homogeneous models that share a blind spot are, against the attack that exploits the blind spot, barely better than one. Adding correlated validators is theater.
-
-The only lever on $c$ is heterogeneity. Different providers, different architectures, different training data, and different alignment lineages vote independently. This is why the platform consensus layer is provider-agnostic as a safety requirement, not a convenience. Provider agnosticism is the mechanism by which $c$ is driven down. Redundancy ($n$) fights idiosyncratic error. Heterogeneity (lower $c$) fights correlated error. Since the correlated term is the one that survives the limit, heterogeneity dominates redundancy. An honest ensemble is measured by the diversity of its members' failure modes, not their count.
-
-### 4.3 Why the human layer multiplies rather than adds
-
-Let $q$ be the probability a human false-approves an unsafe action that reaches them. Because the human is checking a different property, intent alignment rather than technical consistency, their error is, to first order, independent of the ensemble consistency error. The two competencies are orthogonal. Then
-
-$$
-\Pr[\text{unsafe executes}] \;\approx\; \underbrace{\big(c + (1-c)\,\Sigma_{k,n,p}\big)}_{\text{consistency fails}} \;\times\; \underbrace{q}_{\text{intent fails}}.
-$$
-
-An unsafe action executes only if it survives a consistency check it should fail *and* an intent check it should fail. This product is the entire reason co-validation is not redundant with deeper machine consensus. You cannot buy the human layer's contribution by adding models, because the human covers a failure mode no model covers.
-
-There is one way to invalidate this, and it is the trap described in §1. If the human is shown so many actions that they stop reading, then $q \to 1$ and, worse, the human error becomes correlated with the ensemble error. They are now echoing whatever the machines surfaced. The product collapses back to a sum, and then to a single term. The independence of the human layer is not free. It must be protected by keeping human signatures rare and expensive. That requirement is not a UX preference. It is a precondition for the math to hold, and it leads directly to the economics of the next section.
+To achieve a breach, an attacker must simultaneously defeat orthogonal, independently audited proofs, all while evading a fail-closed, host-local audit vault.
 
 ---
 
-## 5. Time as a self-priced bond
+## 4. The Mathematics of Heterogeneous Consensus
 
-A signature is only evidence if it was costly to produce. A free signature is cheap talk: it carries no information because anyone, or any compromised process, can emit it at no cost. The design question for the L3 layer is therefore: *what makes a human's approval an informative, hard-to-forge signal of genuine belief?*
+The strength of the L2 consistency proof relies heavily on the correlation of validator errors—a metric ensemble marketing frequently ignores.
 
-Consider the two resources a validator can stake.
+### 4.1 The Seductive Independent Case
 
-**Machine reputation is recoverable.** When a consensus signer stakes reputation $r$ on a decision and is slashed for a bad one, the expected cost of a dishonest approval is roughly $r \cdot \Pr[\text{caught}]$. Reputation can be re-earned over repeated rounds; slashing is a fine, and fines are a cost of doing business. A patient or well-funded adversary can absorb them. Reputation staking is a real and useful deterrent, but it is *bounded*, and it is bounded in a currency the adversary can replenish.
+If $n$ validators each independently false-approve an unsafe action with probability $p$, the chance an unsafe action passes a $k$-of-$n$ threshold is dominated by $\binom{n}{k} p^{k}$. This is the Condorcet Jury Theorem applied to cryptography: if jurors vote independently, the probability of a correct majority approaches 1 as the jury grows.
 
-**Human time is not recoverable.** It is non-fungible, non-transferable, and strictly scarce. It is the one validator resource that cannot be farmed, delegated, or regenerated. When the protocol requires a human signature for a high-risk mutation, it uses that resource as a bond. The person who signs spends attention they cannot get back, on an action whose failure costs *their own* infrastructure and *their own* time to remediate. This couples the mechanism to actual welfare through revealed preference: the approver only signs what they truly believe is correct, because the cost of being wrong is paid by them, in the one currency they cannot mint.
+This is where redundancy pitches hide their load-bearing assumption: *independently*.
 
-In the language of signaling, a costly signal separates types only when the cost is higher for the dishonest type than the honest one. Here the cost structure is even cleaner. The cost is borne by the party with the most context and the most to lose, in a resource adversaries cannot acquire in bulk. That is why a *sparing* human signature, bound to a specific transaction hash, is worth more than any volume of cheap machine attestation.
+### 4.2 The Common-Mode Floor
 
-This closes the loop with §4.3. The bond only stays valuable while it stays rare. Spend it on every action and you debase the currency. Attention-per-signature falls, the signal degrades to cheap talk, and independence collapses. The consensus layer exists, in part, to protect the value of the human bond by filtering volume so that the few actions which reach a person are exactly the ones worth a non-recoverable cost. Machine consensus is what keeps the human signature expensive enough to mean something.
+Models trained on overlapping corpora with similar alignment share failure modes. A shared blind spot makes validators false-approve simultaneously. Let $c$ be the probability of a common-mode event. The probability an unsafe action passes becomes:
 
----
+$$\Pr[\text{unsafe passes}] \;=\; c \;+\; (1-c)\sum_{i=k}^{n}\binom{n}{i} p^{\,i}(1-p)^{\,n-i}$$
 
-## 6. Cryptographic binding and sovereign state
+As $n \to \infty$, the independent term vanishes, but the common-mode term remains:
 
-Co-validation and consensus are arguments about who decides. They are worthless if the proofs can be detached from the action, reused, or evaluated against the wrong world. The binding layer is what makes the proofs rigid.
+$$\lim_{n\to\infty}\Pr[\text{unsafe passes}] \;=\; c$$
 
-Every mutation is a single `GovernanceEnvelope`. A deterministic transaction hash is computed from its normalized fields, and the verifier enforces
+**The safety of a consensus layer is bounded below by its common-mode failure rate. Adding correlated validators is theater.** The only lever on $c$ is heterogeneity. Different providers, architectures, and training data are required to drive $c$ down. Provider-agnosticism is a strict safety requirement, not a convenience.
 
-$$
-\mathtt{id} \;=\; \mathtt{transaction\_hash} \;=\; \mathrm{SHA\text{-}256}(\text{canonical fields}).
-$$
+### 4.3 Why the Human Layer Multiplies
 
-Every proof, including every L2 signature and every L3 assertion, is computed over that hash. This is the property that makes approval action-specific rather than session-specific: a human's WebAuthn assertion authorizes the exact bytes of one transaction and authorizes nothing else, so it cannot be transplanted to a different action, replayed against a later request, or harvested from a live session. Consensus signatures inherit the same rigidity.
+Let $q$ be the probability a human false-approves. Because humans check intent alignment rather than technical consistency, their error is orthogonal to the ensemble's error:
 
-Freshness is enforced by a `nonce` checked against a sliding replay window and an `expires_at` timestamp; a stale or reused transaction is rejected before any layer runs. Causal integrity is enforced by **state binding**: the envelope carries the `state_merkle_root` the producer expected, and the Operator compares it to its own current ledger root. If the world moved between approval and execution, the classic time-of-check/time-of-use gap, the roots disagree and the transaction is dropped. Approval is therefore bound not just to an action but to the state of reality in which that action made sense.
+$$\Pr[\text{unsafe executes}] \;\approx\; \big(\text{Consistency Fails}\big) \;\times\; \big(q\big)$$
 
-Identity is SPIFFE-style and carried over mutual TLS, with revocation checked on every handshake. Execution emits an `ActionReceipt` signed by a host-unique Ed25519 key, with `state_root_before` and `state_root_after` captured around a two-phase, git-backed commit, so every mutation is a tamper-evident ledger entry that can be rolled back. The wire format is canonical JSON for ecosystem compatibility; the signing basis is the deterministic hash, so JSON cosmetics can never change what was signed.
-
-The point of the whole binding layer is singular. A proof is meaningless unless it is rigidly attached to one action, in one moment, on one host. The platform attaches it.
+You cannot buy the human layer's contribution by adding more models. However, if humans are bombarded with approval requests, $q \to 1$, and human error correlates with machine error. The consensus layer exists explicitly to filter volume, keeping human signatures rare and statistically independent.
 
 ---
 
-## 7. Sovereignty as an architectural invariant
+## 5. Time as a Self-Priced Bond
 
-Authoritative state belongs on the host, not in a vendor's cloud. This is not a deployment preference. It is what the threat model requires, and it forces three design commitments.
+A signature is only evidence if it was costly to produce. A free signature is cheap talk.
 
-**The single g8e Node is a precondition, not a convenience.** The reference g8e Operator is a statically compiled g8e Node, roughly 20MB, with zero standing dependencies. A governance layer that requires a complex service mesh implicitly requires centralized operations to run it, which reintroduces the trusted third party the architecture exists to eliminate. A single, auditable, air-gap-capable artifact is what allows the entity that owns the infrastructure to own the system of record. There is no runtime to patch and no interpreter to audit. The attack surface is the binary you can read.
+**Machine reputation is recoverable.** Slashed reputation is a fine, and fines are a cost of doing business that a patient adversary can absorb.
+**Human time is not recoverable.** It is non-fungible, non-transferable, and strictly scarce.
 
-**Zero standing privileges.** The Operator holds no permanent administrative credentials. Permissions are minted just-in-time, derived from the verified intent inside the envelope, scoped to a single action, and dissolved on completion. The Gateway enforces this through JIT user provisioning and JWT validation. User accounts are created dynamically on first successful JWT validation rather than pre-provisioned. JWT tokens are short-lived and signed by an external Identity Provider carrying only the claims needed for the current session. The Gateway validates the token, extracts minimal identity and role information, and injects it into the envelope as `tenant_id` and `binding_persona`. The Operator receives only this pre-validated metadata and never stores persistent user credentials or long-lived sessions. A compromise of any layer, such as a hijacked session, a poisoned reasoning state, or even the Gateway user database, cannot exfiltrate reusable credentials because none exist. Every authentication requires a fresh, cryptographically signed token from the IdP. Every permission is scoped to a single transaction. No credential exists to steal.
-
-Data never leaves. Only scrubbed projections do. The Sovereignty Boundary scrubs secrets and PII at the execution boundary, replacing them with tokens that are rehydrated only at the instant of execution, on-host. The model upstream receives a safe projection of reality, never reality itself. Raw forensic data and full execution history remain local, split into a scrubbed vault safe for AI consumption and a raw vault for human security audit. The platform vendor is reduced to a stateless relay.
-
-Sovereignty and the SaaS economics of a paywalled governance product are incompatible. A vendor that holds your state, your audit log, and your execution authority is itself an unaudited single point of trust. This is a direct contradiction of zero-trust. This brings us to the argument that motivates the license.
+When the protocol requires a human signature for a high-risk mutation, it uses human time as an unforgeable bond. The approver spends attention they cannot get back, on an action whose failure costs *their own* infrastructure to remediate. This couples the mechanism to actual welfare through revealed preference. A sparing human signature, bound to a specific transaction hash, is worth infinitely more than a high volume of cheap machine attestation.
 
 ---
 
-## 8. The free-and-open imperative
+## 6. Cryptographic Binding and Sovereign State
 
-We hold this position without hedging: **runtime governance and audit for AI agents are public goods, and gating them behind a paywall is incompatible with a safe AI-powered, human-driven world.**
+Co-validation is worthless if proofs can be detached, reused, or evaluated against the wrong world. The g8e binding layer makes proofs rigid.
 
-The reasoning is straightforward. The benefit of an agent not mutating reality recklessly is largely non-excludable. It accrues to everyone downstream of that infrastructure, not only to whoever paid for the governance layer. Goods with non-excludable benefits are under-provided by markets that try to sell them. If safety is a premium SKU, the cheapest path to shipping an agent will always be the ungoverned one. Economics will select for it. The safe default loses to the free default when the safe default costs money. For governance to be the default, governance must be free.
+Every mutation is a `GovernanceEnvelope`. A deterministic hash is computed from its normalized fields:
 
-There is a second, sharper reason. You cannot trust a governance layer you cannot inspect or self-host. A closed, proprietary governance vendor is an unaudited authority sitting in the most sensitive position in the stack. This is precisely the trusted third party that zero-trust architecture is built to abolish. An auditing system that is itself unauditable is a contradiction. The only credible guarantee is source you can read, a binary you can compile, and a deployment you can run inside your own perimeter with no outbound dependency. Open source is the only configuration in which the security claims are checkable, and therefore the only configuration in which they are true.
 
-Accountability for autonomous action, the ability to determine who authorized an action, on what basis, against what state, and prove it later, is becoming civic infrastructure. Civic infrastructure behind a paywall is a two-tier safety regime, where well-funded actors are governed and everyone else is not. That is not a safe world. It is an unevenly dangerous one. This is why the platform is Apache-2.0, single-binary, and air-gap-capable. It will stay that way. Everyone must have access to free and open AI agent runtime governance and auditing. Otherwise, the governed world is only ever a subset of the world.
+$$\mathtt{id} \;=\; \mathtt{transaction\_hash} \;=\; \mathrm{SHA\text{-}256}(\text{canonical fields})$$
+
+Every L2 signature and L3 assertion is computed over that hash. A human’s WebAuthn assertion authorizes the exact bytes of *one* transaction. It cannot be transplanted or harvested from a live session. Causal integrity is enforced via `state_merkle_root` binding. If reality moves between approval and execution, the Operator drops the transaction.
+
+### Sovereignty as an Architectural Invariant
+
+Authoritative state belongs on the host, not in a vendor's cloud. This forces three commitments:
+
+1. **The Single Node:** A statically compiled, air-gap-capable 15MB binary with no runtime to patch. The attack surface is the binary you can read.
+2. **Zero Standing Privileges:** The Operator holds no permanent administrative credentials. JIT permissions are minted from verified intent, scoped to one action, and immediately dissolved. No credential exists to steal.
+3. **Data Sovereignty:** Data never leaves the host. Secrets and PII are scrubbed at the boundary, replaced with tokens rehydrated only at the instant of execution.
+
+Sovereignty and the SaaS economics of a paywalled governance product are fundamentally incompatible.
 
 ---
 
-## 9. The forward invariant
+## 7. The Free-and-Open Imperative
 
-The trajectory we are building toward is explicit. As agents grow more capable, **single agents will not be permitted to make state changes.** The baseline for any mutation that touches real infrastructure becomes consensus among heterogeneous reasoners plus a human signoff at some upstream stage. This is not a configurable nicety. It is the floor.
+**Runtime governance and audit for AI agents are public goods. Gating them behind a paywall is incompatible with a safe AI-powered world.**
 
-The future work extends co-validation outward without changing its shape. Operator-to-operator coordination allows a transaction to require independent verification across hosts and environments. Multi-user consensus requires high-consequence actions to have more than one human bond. In every extension the invariant holds unchanged.
+If safety is a premium SKU, the cheapest path to shipping an agent will always be the ungoverned one, and economics will select for it. Furthermore, you cannot trust a governance layer you cannot inspect or self-host. A closed, proprietary vendor holding your state and execution authority is an unaudited single point of trust—a direct contradiction of zero-trust principles.
 
-> A typed, signed, state-bound transaction reaches a sovereign host agent that refuses to mutate reality unless every independent proof, including machine consistency, human intent, freshness, and state, checks out locally and is recorded before the fact.
+Accountability for autonomous action is civic infrastructure. Gating it creates a two-tier safety regime where well-funded actors are governed and everyone else is dangerously exposed. This is why g8e is Apache-2.0, single-binary, and air-gap capable. It will stay that way.
 
-The platform is not an agent. It is the platform on which agents must run to be viable in production infrastructure, and it must be free for that infrastructure to be safe. The architecture holds that the future of autonomous systems is not trust-then-verify. It is verify-then-execute, and the right to verify belongs to everyone.
+---
+
+## 8. The Forward Invariant
+
+As agents grow more capable, **single agents will not be permitted to make state changes.** The baseline for real-world mutations is becoming heterogeneous machine consensus plus human cryptographic signoff upstream. This is not a configurable nicety. It is the floor.
+
+> A typed, signed, state-bound transaction reaches a sovereign host agent that refuses to mutate reality unless every independent proof—machine consistency, human intent, freshness, and state—checks out locally and is recorded before the fact.
+
+g8e is not an agent. It is the mandatory, open-source substrate agents must run on to be viable in production infrastructure. The future of autonomous systems is not *trust-then-verify*. It is *verify-then-execute*, and the right to verify belongs to everyone.
 
 ---
 

@@ -104,6 +104,45 @@ func validateGitRepoPath(path string) error {
 	return nil
 }
 
+func validateGitRef(ref string) error {
+	if ref == "" {
+		return fmt.Errorf("git reference cannot be empty")
+	}
+
+	cleanRef := strings.TrimSpace(ref)
+	if cleanRef != ref {
+		return fmt.Errorf("git reference must not contain leading/trailing whitespace")
+	}
+
+	if strings.ContainsAny(ref, "\x00") {
+		return fmt.Errorf("git reference must not contain null bytes")
+	}
+
+	// Reject shell metacharacters and command injection patterns
+	dangerousChars := []string{";", "&", "|", "$", "`", "(", ")", "<", ">", "\n", "\r"}
+	for _, char := range dangerousChars {
+		if strings.Contains(ref, char) {
+			return fmt.Errorf("git reference contains dangerous character: %q", char)
+		}
+	}
+
+	// Git references should be valid: branch names, tags, commit hashes, or special refs
+	// Allow: alphanumeric, hyphens, underscores, dots, slashes, and tilde (for HEAD~n patterns)
+	// Reject absolute paths and command-like patterns
+	if strings.HasPrefix(ref, "/") || strings.HasPrefix(ref, "\\") {
+		return fmt.Errorf("git reference must not be an absolute path")
+	}
+
+	// Validate ref format - should look like a valid git reference
+	// Valid patterns: HEAD, main, feature/branch, origin/main, v1.0.0, HEAD~1, HEAD~n, abc123def
+	validRefPattern := regexp.MustCompile(`^[a-zA-Z0-9_\-./~]+$`)
+	if !validRefPattern.MatchString(ref) {
+		return fmt.Errorf("git reference contains invalid characters")
+	}
+
+	return nil
+}
+
 func validateK8sResourceName(name string) error {
 	if name == "" {
 		return fmt.Errorf("resource name cannot be empty")
@@ -216,10 +255,27 @@ func validateContainerName(name string) error {
 	// Docker container names allow: [a-zA-Z0-9][a-zA-Z0-9_.-]*
 	// We'll be slightly more restrictive to prevent injection
 	for _, r := range name {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
-			r == '_' || r == '-' || r == '.' || r == '/') {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') &&
+			r != '_' && r != '-' && r != '.' && r != '/' {
 			return fmt.Errorf("container name contains invalid character: %c", r)
 		}
+	}
+
+	return nil
+}
+
+func validateContainerRuntime(runtime string) error {
+	if runtime == "" {
+		return nil // Empty means auto-detect, which is safe
+	}
+
+	allowedRuntimes := map[string]bool{
+		"docker": true,
+		"podman": true,
+	}
+
+	if !allowedRuntimes[runtime] {
+		return fmt.Errorf("invalid container runtime: %s (must be 'docker' or 'podman')", runtime)
 	}
 
 	return nil
