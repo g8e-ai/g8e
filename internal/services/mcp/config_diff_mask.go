@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/g8e-ai/g8e/internal/security"
 )
 
 // ConfigDiffMaskTool compares configuration files with secret masking.
@@ -66,7 +68,18 @@ func (t *ConfigDiffMaskTool) Execute(ctx context.Context, args json.RawMessage) 
 		return CallToolResult{}, fmt.Errorf("config_path and baseline required")
 	}
 
-	currentBytes, err := os.ReadFile(req.ConfigPath)
+	// Validate path to prevent directory traversal attacks
+	// Use current working directory as root for relative paths
+	cwd, err := os.Getwd()
+	if err != nil {
+		return CallToolResult{}, fmt.Errorf("failed to get current working directory: %w", err)
+	}
+	safePath, err := security.ValidatePath(req.ConfigPath, cwd)
+	if err != nil {
+		return CallToolResult{}, fmt.Errorf("invalid config path: %w", err)
+	}
+
+	currentBytes, err := os.ReadFile(safePath)
 	if err != nil {
 		return CallToolResult{}, fmt.Errorf("failed to read config file: %w", err)
 	}

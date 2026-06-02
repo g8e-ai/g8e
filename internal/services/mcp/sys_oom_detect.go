@@ -22,6 +22,8 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/security"
 )
 
 // SysOOMDetectTool scans system logs for OOM killer events.
@@ -64,7 +66,18 @@ func (t *SysOOMDetectTool) Execute(ctx context.Context, args json.RawMessage) (C
 		logPath = "/var/log/dmesg"
 	}
 
-	file, err := os.Open(logPath)
+	// Validate path to prevent directory traversal attacks
+	// Use current working directory as root for relative paths
+	cwd, err := os.Getwd()
+	if err != nil {
+		return CallToolResult{}, fmt.Errorf("failed to get current working directory: %w", err)
+	}
+	safePath, err := security.ValidatePath(logPath, cwd)
+	if err != nil {
+		return CallToolResult{}, fmt.Errorf("invalid log path: %w", err)
+	}
+
+	file, err := os.Open(safePath)
 	if err != nil {
 		return CallToolResult{}, fmt.Errorf("failed to open log file: %w", err)
 	}
