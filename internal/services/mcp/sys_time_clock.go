@@ -50,12 +50,12 @@ func (t *SysTimeClockTool) Execute(ctx context.Context, args json.RawMessage) (C
 
 	result := map[string]interface{}{
 		"system_time": map[string]interface{}{
-			"utc":         now.UTC().Format(time.RFC3339),
-			"local":       now.Format(time.RFC3339),
-			"unix":        now.Unix(),
-			"unix_nano":   now.UnixNano(),
-			"timezone":    now.Location().String(),
-			"offset":      now.Format("-07:00"),
+			"utc":       now.UTC().Format(time.RFC3339),
+			"local":     now.Format(time.RFC3339),
+			"unix":      now.Unix(),
+			"unix_nano": now.UnixNano(),
+			"timezone":  now.Location().String(),
+			"offset":    now.Format("-07:00"),
 		},
 		"ntp": ntpStatus,
 	}

@@ -333,6 +333,7 @@ func TestCircuitBreakerIntegration(t *testing.T) {
 		maxFailures:       3, // Lower threshold for faster test
 		cooldownDuration:  100 * time.Millisecond,
 		downstreamURL:     "http://localhost:9999", // Invalid URL that will fail
+		nativeToolHandler: NewNativeToolHandler(),
 	}
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
@@ -347,7 +348,7 @@ func TestCircuitBreakerIntegration(t *testing.T) {
 	// Circuit should now be open
 	require.True(t, g.isCircuitOpen(), "Circuit should be open after 3 failures")
 
-	// Next request should be rejected with circuit open error
+	// Next request should return native tools when circuit is open
 	req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/list", strings.NewReader(reqBody))
 	w := httptest.NewRecorder()
 	g.HandleToolsList(w, req)
@@ -355,8 +356,13 @@ func TestCircuitBreakerIntegration(t *testing.T) {
 	var resp JSONRPCResponse
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	require.NotNil(t, resp.Error)
-	require.Contains(t, resp.Error.Message, "circuit open")
+	require.Nil(t, resp.Error)
+
+	// Verify native tools are returned
+	var result ToolsListResult
+	err = json.Unmarshal(resp.Result, &result)
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Tools, "Native tools should be returned when circuit is open")
 
 	// Wait for cooldown and verify circuit closes
 	time.Sleep(150 * time.Millisecond)

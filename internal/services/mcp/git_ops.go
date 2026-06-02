@@ -285,9 +285,7 @@ func gitBranches(repoPath string) (map[string]interface{}, error) {
 			continue
 		}
 
-		if strings.HasPrefix(line, "* ") {
-			line = strings.TrimPrefix(line, "* ")
-		}
+		line = strings.TrimPrefix(line, "* ")
 
 		if strings.HasPrefix(line, "remotes/") {
 			remote = append(remote, line)

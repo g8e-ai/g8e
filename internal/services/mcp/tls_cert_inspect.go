@@ -129,7 +129,7 @@ func loadCertFromFile(path string) (*x509.Certificate, error) {
 func fetchCertFromHost(ctx context.Context, host string, port int) (*x509.Certificate, error) {
 	address := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
-	
+
 	conn, err := tls.DialWithDialer(dialer, "tcp", address, &tls.Config{
 		InsecureSkipVerify: true,
 	})
@@ -153,21 +153,21 @@ func inspectCertificate(cert *x509.Certificate) map[string]interface{} {
 	isNearExpiry := daysUntilExpiry > 0 && daysUntilExpiry <= 30
 
 	result := map[string]interface{}{
-		"subject":         cert.Subject.CommonName,
-		"issuer":          cert.Issuer.CommonName,
-		"serial_number":   cert.SerialNumber.String(),
-		"not_before":      cert.NotBefore.Format(time.RFC3339),
-		"not_after":       cert.NotAfter.Format(time.RFC3339),
-		"is_expired":      isExpired,
-		"days_until_expiry": daysUntilExpiry,
-		"is_near_expiry":  isNearExpiry,
-		"signature_algorithm": cert.SignatureAlgorithm.String(),
+		"subject":              cert.Subject.CommonName,
+		"issuer":               cert.Issuer.CommonName,
+		"serial_number":        cert.SerialNumber.String(),
+		"not_before":           cert.NotBefore.Format(time.RFC3339),
+		"not_after":            cert.NotAfter.Format(time.RFC3339),
+		"is_expired":           isExpired,
+		"days_until_expiry":    daysUntilExpiry,
+		"is_near_expiry":       isNearExpiry,
+		"signature_algorithm":  cert.SignatureAlgorithm.String(),
 		"public_key_algorithm": cert.PublicKeyAlgorithm.String(),
-		"key_usage":       cert.KeyUsage,
-		"ext_key_usage":   cert.ExtKeyUsage,
-		"dns_names":       cert.DNSNames,
-		"email_addresses": cert.EmailAddresses,
-		"ip_addresses":    cert.IPAddresses,
+		"key_usage":            cert.KeyUsage,
+		"ext_key_usage":        cert.ExtKeyUsage,
+		"dns_names":            cert.DNSNames,
+		"email_addresses":      cert.EmailAddresses,
+		"ip_addresses":         cert.IPAddresses,
 	}
 
 	if len(cert.Subject.Organization) > 0 {

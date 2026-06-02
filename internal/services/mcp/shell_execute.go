@@ -140,7 +140,7 @@ func (t *ShellExecuteTool) Execute(ctx context.Context, args json.RawMessage) (C
 		"exit_code": exitCode,
 		"stdout":    string(output),
 		"stderr":    "",
-		"timed_out":  timedOut,
+		"timed_out": timedOut,
 	}
 
 	if timedOut {

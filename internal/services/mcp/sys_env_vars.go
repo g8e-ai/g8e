@@ -61,7 +61,7 @@ func (t *SysEnvVarsTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
 	}
 
-	if req.RedactSecrets == false {
+	if !req.RedactSecrets {
 		req.RedactSecrets = true
 	}
 

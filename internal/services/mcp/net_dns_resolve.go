@@ -77,8 +77,8 @@ func (t *NetDNSResolveTool) Execute(ctx context.Context, args json.RawMessage) (
 	}
 	if deadline, ok := ctx.Deadline(); ok {
 		resolver = &net.Resolver{
-			PreferGo:     true,
-			Dial:         func(ctx context.Context, network, address string) (net.Conn, error) {
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
 				d := net.Dialer{Timeout: time.Until(deadline)}
 				return d.DialContext(ctx, network, address)
 			},

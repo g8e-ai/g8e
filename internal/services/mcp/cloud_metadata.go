@@ -159,15 +159,21 @@ func detectCloudProvider() string {
 
 	client := &http.Client{Timeout: 2 * time.Second}
 
-	if _, err := client.Get("http://169.254.169.254/latest/meta-data/"); err == nil {
+	resp, err := client.Get("http://169.254.169.254/latest/meta-data/")
+	if err == nil {
+		resp.Body.Close()
 		return "aws"
 	}
 
-	if _, err := client.Get("http://169.254.169.254/metadata/instance?api-version=2021-02-01"); err == nil {
+	resp, err = client.Get("http://169.254.169.254/metadata/instance?api-version=2021-02-01")
+	if err == nil {
+		resp.Body.Close()
 		return "azure"
 	}
 
-	if _, err := client.Get("http://metadata.google.internal/computeMetadata/v1/"); err == nil {
+	resp, err = client.Get("http://metadata.google.internal/computeMetadata/v1/")
+	if err == nil {
+		resp.Body.Close()
 		return "gcp"
 	}
 

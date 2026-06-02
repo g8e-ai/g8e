@@ -108,10 +108,10 @@ func getServiceStatus(serviceName string) (map[string]interface{}, error) {
 		"load_state":   getProp(properties, "LoadState"),
 		"active_state": getProp(properties, "ActiveState"),
 		"sub_state":    getProp(properties, "SubState"),
-		"enabled":       getProp(properties, "UnitFileState") == "enabled",
-		"description":   getProp(properties, "Description"),
-		"main_pid":      getProp(properties, "MainPID"),
-		"exec_start":    getProp(properties, "ExecMainStartTimestamp"),
+		"enabled":      getProp(properties, "UnitFileState") == "enabled",
+		"description":  getProp(properties, "Description"),
+		"main_pid":     getProp(properties, "MainPID"),
+		"exec_start":   getProp(properties, "ExecMainStartTimestamp"),
 	}
 
 	return result, nil
