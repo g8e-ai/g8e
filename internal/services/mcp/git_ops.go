@@ -179,6 +179,34 @@ func isGitRepo(path string) bool {
 }
 
 func runGitCommand(repoPath string, args ...string) (string, error) {
+	// Validate git subcommand is safe
+	if len(args) == 0 {
+		return "", fmt.Errorf("no git subcommand provided")
+	}
+
+	// Whitelist of safe git subcommands
+	safeSubcommands := map[string]bool{
+		"status":    true,
+		"log":       true,
+		"branch":    true,
+		"branches":  true,
+		"remote":    true,
+		"remotes":   true,
+		"config":    true,
+		"rev-parse": true,
+		"diff":      true,
+	}
+
+	subcommand := args[0]
+	if !safeSubcommands[subcommand] {
+		return "", fmt.Errorf("git subcommand '%s' is not allowed", subcommand)
+	}
+
+	// Validate repo path to prevent path traversal
+	if err := validateGitRepoPath(repoPath); err != nil {
+		return "", err
+	}
+
 	cmd := exec.Command("git", args...)
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()

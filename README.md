@@ -2,7 +2,7 @@
 
 # g8e
 
-**Military-Grade MCP**
+**Multi-Host Military-Grade MCP**
 
 The "move fast and break things" era is costing organizations a fortune in wasted tokens, broken infrastructure, and unaccountable AI actions. SaaS vendors are positioning themselves as the solution — offering "governance" and "control planes" that are little more than token spend dashboards, then open-sourcing the client tools to lock you into their expensive services. Cloud provider lock-in, MCP and A2A protocol gaps, and single-model self-reflection have created a structural vulnerability in agentic systems.
 
@@ -152,11 +152,11 @@ The g8e Operator is the center of gravity — a protocol-aware MCP server that e
 ```bash
 # Host-side MCP server (Policy Execution Point).
 # Point any MCP client at it; every tool call is governed before it executes.
-g8e
+g8e -e <gateway-ip>
 
 # The exact same g8e Node as the g8e Gateway (Policy Decision Point).
 # Admits envelopes, owns the PKI, fans transactions out to remote Operators.
-g8e --notary        # or --consensus / --doctrine to set the posture
+g8e gw start        # or --posture notary / --posture consensus / --posture doctrine
 ```
 
 **One g8e Node, two roles.** No second package to deploy, no runtime to patch, no interpreter to audit. The attack surface is the g8e Node you can read.

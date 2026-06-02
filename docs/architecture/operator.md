@@ -148,7 +148,7 @@ Confirm the g8e Gateway is running and accessible:
 For distributed enforcement across multiple hosts, enroll each remote operator:
 
 ```bash
-./g8e security pki enroll --endpoint <gateway-ip>
+./g8e security pki enroll -e <gateway-ip>
 ```
 
 Each Operator receives a unique SPIFFE workload identity bound to its mTLS certificate.

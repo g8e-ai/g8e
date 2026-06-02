@@ -212,5 +212,15 @@ func validateContainerName(name string) error {
 		return fmt.Errorf("container name must not contain whitespace")
 	}
 
+	// Validate that container name only contains safe characters
+	// Docker container names allow: [a-zA-Z0-9][a-zA-Z0-9_.-]*
+	// We'll be slightly more restrictive to prevent injection
+	for _, r := range name {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
+			r == '_' || r == '-' || r == '.' || r == '/') {
+			return fmt.Errorf("container name contains invalid character: %c", r)
+		}
+	}
+
 	return nil
 }

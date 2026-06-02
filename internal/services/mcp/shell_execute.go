@@ -282,6 +282,25 @@ func validateCommandSafety(command string, args []string) error {
 	return nil
 }
 
+// shellQuoteArg quotes a single argument for safe shell execution.
+// Uses POSIX shell quoting: replace ' with '"'"' and wrap in single quotes.
+func shellQuoteArg(arg string) string {
+	return fmt.Sprintf("'%s'", strings.ReplaceAll(arg, "'", "'\"'\"'"))
+}
+
+// shellQuoteCommand builds a safely quoted shell command from command and args.
+func shellQuoteCommand(command string, args []string) string {
+	quotedCmd := shellQuoteArg(command)
+	if len(args) == 0 {
+		return quotedCmd
+	}
+	quotedArgs := make([]string, len(args))
+	for i, arg := range args {
+		quotedArgs[i] = shellQuoteArg(arg)
+	}
+	return fmt.Sprintf("%s %s", quotedCmd, strings.Join(quotedArgs, " "))
+}
+
 // executeOnHost executes a command on a specific host (localhost or remote via SSH).
 func executeOnHost(ctx context.Context, hostname, command string, args []string, workingDir string, timeout time.Duration) (map[string]interface{}, error) {
 	// Local execution
@@ -299,11 +318,12 @@ func executeLocally(ctx context.Context, command string, args []string, workingD
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// Build command
-	cmd := exec.CommandContext(cmdCtx, command)
-	if len(args) > 0 {
-		cmd.Args = append([]string{command}, args...)
-	}
+	// Build command with safe argument passing
+	// Use command as the executable name and args as separate arguments
+	// This prevents shell injection by avoiding shell interpretation
+	cmdArgs := []string{command}
+	cmdArgs = append(cmdArgs, args...)
+	cmd := exec.CommandContext(cmdCtx, cmdArgs[0], cmdArgs[1:]...)
 	if workingDir != "" {
 		cmd.Dir = workingDir
 	}
@@ -385,17 +405,13 @@ func executeViaSSH(ctx context.Context, hostname, command string, args []string,
 	}
 	defer session.Close()
 
-	// Build full command with args
-	fullCmd := command
-	if len(args) > 0 {
-		fullCmd = fmt.Sprintf("%s %s", command, strings.Join(args, " "))
-	}
+	// Build full command with args using proper shell quoting
+	// This prevents shell injection by properly escaping each argument
+	fullCmd := shellQuoteCommand(command, args)
 
 	// Add working directory if specified (properly quoted to prevent injection)
 	if workingDir != "" {
-		// Use shell quoting to safely escape the working directory path
-		// Pattern: replace ' with '"'"' (end quote, literal quote, start quote)
-		quotedDir := fmt.Sprintf("'%s'", strings.ReplaceAll(workingDir, "'", "'\"'\"'"))
+		quotedDir := shellQuoteArg(workingDir)
 		fullCmd = fmt.Sprintf("cd %s && %s", quotedDir, fullCmd)
 	}
 

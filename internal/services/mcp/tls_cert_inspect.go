@@ -55,6 +55,10 @@ func (t *TLSCertInspectTool) InputSchema() map[string]interface{} {
 				"type":        "integer",
 				"description": "Port number for remote host (default 443)",
 			},
+			"insecure_skip_verify": map[string]interface{}{
+				"type":        "boolean",
+				"description": "Skip TLS certificate verification (default: false, use with caution)",
+			},
 		},
 	}
 }
@@ -62,9 +66,10 @@ func (t *TLSCertInspectTool) InputSchema() map[string]interface{} {
 // Execute implements the tool logic.
 func (t *TLSCertInspectTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 	var req struct {
-		CertPath string `json:"cert_path,omitempty"`
-		Host     string `json:"host,omitempty"`
-		Port     int    `json:"port,omitempty"`
+		CertPath           string `json:"cert_path,omitempty"`
+		Host               string `json:"host,omitempty"`
+		Port               int    `json:"port,omitempty"`
+		InsecureSkipVerify bool   `json:"insecure_skip_verify,omitempty"`
 	}
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
@@ -86,7 +91,7 @@ func (t *TLSCertInspectTool) Execute(ctx context.Context, args json.RawMessage) 
 		if port <= 0 {
 			port = 443
 		}
-		cert, err = fetchCertFromHost(ctx, req.Host, port)
+		cert, err = fetchCertFromHost(ctx, req.Host, port, req.InsecureSkipVerify)
 		if err != nil {
 			return CallToolResult{}, fmt.Errorf("failed to fetch certificate from host: %w", err)
 		}
@@ -129,12 +134,12 @@ func loadCertFromFile(path string) (*x509.Certificate, error) {
 	return cert, nil
 }
 
-func fetchCertFromHost(ctx context.Context, host string, port int) (*x509.Certificate, error) {
+func fetchCertFromHost(ctx context.Context, host string, port int, insecureSkipVerify bool) (*x509.Certificate, error) {
 	address := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 
 	conn, err := tls.DialWithDialer(dialer, "tcp", address, &tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: insecureSkipVerify,
 	})
 	if err != nil {
 		return nil, err

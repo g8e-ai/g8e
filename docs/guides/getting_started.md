@@ -100,7 +100,7 @@ Credentials and trust material are stored in `.g8e/pki` and `.g8e/secrets` in th
 For remote host enforcement, use CSR-based enrollment:
 
 ```bash
-./g8e security pki enroll --endpoint <gateway-ip>
+./g8e security pki enroll -e <gateway-ip>
 ```
 
 ---
@@ -151,7 +151,7 @@ After successful bootstrap, verify the platform and begin integration:
 For distributed enforcement across multiple hosts:
 
 ```bash
-./g8e security pki enroll --endpoint <gateway-ip>
+./g8e security pki enroll -e <gateway-ip>
 ```
 
 See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for detailed enrollment steps.
