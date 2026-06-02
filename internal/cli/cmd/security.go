@@ -206,8 +206,10 @@ func securityPKIEnrollCmd() *cobra.Command {
 				return fmt.Errorf("failed to generate CLI CSR: %w", err)
 			}
 
-			cmd.Printf("Enrolling with Gateway at %s...\n", endpoint)
-			regResp, err := auth.EnrollWithGateway(cfg, endpoint, opCSR, cliCSR, "")
+			// Append default bootstrap port
+			gatewayEndpoint := fmt.Sprintf("%s:%d", endpoint, constants.Ports.OperatorBootstrapHttps)
+			cmd.Printf("Enrolling with Gateway at %s...\n", gatewayEndpoint)
+			regResp, err := auth.EnrollWithGateway(cfg, gatewayEndpoint, opCSR, cliCSR, "")
 			if err != nil {
 				return fmt.Errorf("failed to enroll: %w", err)
 			}
@@ -266,7 +268,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&endpoint, "endpoint", "", "Gateway endpoint (e.g., 192.168.1.62:8441)")
+	cmd.Flags().StringVarP(&endpoint, "endpoint", "e", "", "Gateway IP address (e.g., 192.168.1.62)")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Output directory for certificates (default: project root)")
 
 	return cmd

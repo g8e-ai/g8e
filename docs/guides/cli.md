@@ -488,7 +488,7 @@ Usage:
   g8e security pki enroll [flags]
 
 Flags:
-      --endpoint string    Gateway endpoint (e.g., 192.168.1.62:8441)
+  -e, --endpoint string     Gateway IP address (e.g., 192.168.1.62)
   -h, --help                help for enroll
       --output-dir string   Output directory for certificates (default: project root)
 ```

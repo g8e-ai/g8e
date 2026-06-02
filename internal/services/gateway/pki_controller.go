@@ -348,8 +348,8 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 		"}\n\n" +
 		"Write-Host \"[g8e] Binary downloaded to ${BinaryName}\"\n\n" +
 		"# Run enrollment\n" +
-		"Write-Host \"[g8e] Running PKI enrollment with endpoint ${GatewayHost}:${GatewayPort}...\"\n" +
-		"& .\\$BinaryName security pki enroll --endpoint \"${GatewayHost}:${GatewayPort}\"\n" +
+		"Write-Host \"[g8e] Running PKI enrollment with endpoint ${GatewayHost}...\"\n" +
+		"& .\\$BinaryName security pki enroll --endpoint \"${GatewayHost}\"\n" +
 		"\n" +
 		"if ($LASTEXITCODE -ne 0) {\n" +
 		"    Write-Host \"[g8e] ERROR: Enrollment failed with exit code ${LASTEXITCODE}\"\n" +

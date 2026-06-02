@@ -37,10 +37,10 @@ For distributed infrastructure, deploy the operator on remote hosts:
 On the remote host, generate a CSR and enroll with the Gateway:
 
 ```bash
-./g8e security pki enroll --endpoint <gateway-ip>:8441
+./g8e security pki enroll --endpoint <gateway-ip>
 ```
 
-The endpoint is the Gateway bootstrap port (default 8441). This command generates operator and CLI CSRs, submits them to the Gateway, and saves the signed certificates to the PKI directory.
+The endpoint is the Gateway IP address. The bootstrap port (8441) is appended automatically. This command generates operator and CLI CSRs, submits them to the Gateway, and saves the signed certificates to the PKI directory.
 
 #### 2. Copy Binary and Certificates
 
@@ -172,7 +172,7 @@ When the mTLS certificate expires, re-authenticate using:
 This command automatically checks certificate expiry and performs auto-renewal if needed. For remote device enrollment, use CSR-based enrollment:
 
 ```bash
-./g8e security pki enroll --endpoint <gateway-ip>:8441
+./g8e security pki enroll --endpoint <gateway-ip>
 ```
 
 ---
