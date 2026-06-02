@@ -82,3 +82,201 @@ func validateProcNetPath(protocol string) error {
 
 	return nil
 }
+
+func validateGitRepoPath(path string) error {
+	if path == "" {
+		return fmt.Errorf("repository path cannot be empty")
+	}
+
+	cleanPath := strings.TrimSpace(path)
+	if cleanPath != path {
+		return fmt.Errorf("repository path must not contain leading/trailing whitespace")
+	}
+
+	if strings.Contains(path, "..") {
+		return fmt.Errorf("repository path must not contain parent directory references (..)")
+	}
+
+	if strings.ContainsAny(path, "\x00") {
+		return fmt.Errorf("repository path must not contain null bytes")
+	}
+
+	return nil
+}
+
+func validateGitRef(ref string) error {
+	if ref == "" {
+		return fmt.Errorf("git reference cannot be empty")
+	}
+
+	cleanRef := strings.TrimSpace(ref)
+	if cleanRef != ref {
+		return fmt.Errorf("git reference must not contain leading/trailing whitespace")
+	}
+
+	if strings.ContainsAny(ref, "\x00") {
+		return fmt.Errorf("git reference must not contain null bytes")
+	}
+
+	// Reject shell metacharacters and command injection patterns
+	dangerousChars := []string{";", "&", "|", "$", "`", "(", ")", "<", ">", "\n", "\r"}
+	for _, char := range dangerousChars {
+		if strings.Contains(ref, char) {
+			return fmt.Errorf("git reference contains dangerous character: %q", char)
+		}
+	}
+
+	// Git references should be valid: branch names, tags, commit hashes, or special refs
+	// Allow: alphanumeric, hyphens, underscores, dots, slashes, and tilde (for HEAD~n patterns)
+	// Reject absolute paths and command-like patterns
+	if strings.HasPrefix(ref, "/") || strings.HasPrefix(ref, "\\") {
+		return fmt.Errorf("git reference must not be an absolute path")
+	}
+
+	// Validate ref format - should look like a valid git reference
+	// Valid patterns: HEAD, main, feature/branch, origin/main, v1.0.0, HEAD~1, HEAD~n, abc123def
+	validRefPattern := regexp.MustCompile(`^[a-zA-Z0-9_\-./~]+$`)
+	if !validRefPattern.MatchString(ref) {
+		return fmt.Errorf("git reference contains invalid characters")
+	}
+
+	return nil
+}
+
+func validateK8sResourceName(name string) error {
+	if name == "" {
+		return fmt.Errorf("resource name cannot be empty")
+	}
+
+	cleanName := strings.TrimSpace(name)
+	if cleanName != name {
+		return fmt.Errorf("resource name must not contain leading/trailing whitespace")
+	}
+
+	if len(name) > 253 {
+		return fmt.Errorf("resource name must not exceed 253 characters")
+	}
+
+	allowedPattern := regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+	if !allowedPattern.MatchString(name) {
+		return fmt.Errorf("resource name must consist of lowercase alphanumeric characters, hyphens, or dots, and must start and end with an alphanumeric character")
+	}
+
+	if strings.ContainsAny(name, "\x00") {
+		return fmt.Errorf("resource name must not contain null bytes")
+	}
+
+	return nil
+}
+
+func validateK8sNamespace(namespace string) error {
+	if namespace == "" {
+		return fmt.Errorf("namespace cannot be empty")
+	}
+
+	cleanNamespace := strings.TrimSpace(namespace)
+	if cleanNamespace != namespace {
+		return fmt.Errorf("namespace must not contain leading/trailing whitespace")
+	}
+
+	if len(namespace) > 63 {
+		return fmt.Errorf("namespace must not exceed 63 characters")
+	}
+
+	allowedPattern := regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+	if !allowedPattern.MatchString(namespace) {
+		return fmt.Errorf("namespace must consist of lowercase alphanumeric characters or hyphens, and must start and end with an alphanumeric character")
+	}
+
+	if strings.ContainsAny(namespace, "\x00") {
+		return fmt.Errorf("namespace must not contain null bytes")
+	}
+
+	return nil
+}
+
+func validateCloudMetadataOperation(operation string) error {
+	allowedOperations := map[string]bool{
+		"detect":            true,
+		"instance":          true,
+		"region":            true,
+		"availability_zone": true,
+		"instance_type":     true,
+		"all":               true,
+	}
+
+	if !allowedOperations[operation] {
+		return fmt.Errorf("invalid operation: %s", operation)
+	}
+
+	return nil
+}
+
+func validateFilePath(path string) error {
+	if path == "" {
+		return fmt.Errorf("file path cannot be empty")
+	}
+
+	cleanPath := strings.TrimSpace(path)
+	if cleanPath != path {
+		return fmt.Errorf("file path must not contain leading/trailing whitespace")
+	}
+
+	if strings.Contains(path, "..") {
+		return fmt.Errorf("file path must not contain parent directory references (..)")
+	}
+
+	if strings.ContainsAny(path, "\x00") {
+		return fmt.Errorf("file path must not contain null bytes")
+	}
+
+	return nil
+}
+
+func validateContainerName(name string) error {
+	if name == "" {
+		return fmt.Errorf("container name cannot be empty")
+	}
+
+	cleanName := strings.TrimSpace(name)
+	if cleanName != name {
+		return fmt.Errorf("container name must not contain leading/trailing whitespace")
+	}
+
+	if strings.ContainsAny(name, "\x00") {
+		return fmt.Errorf("container name must not contain null bytes")
+	}
+
+	if strings.Contains(name, " ") || strings.Contains(name, "\t") || strings.Contains(name, "\n") {
+		return fmt.Errorf("container name must not contain whitespace")
+	}
+
+	// Validate that container name only contains safe characters
+	// Docker container names allow: [a-zA-Z0-9][a-zA-Z0-9_.-]*
+	// We'll be slightly more restrictive to prevent injection
+	for _, r := range name {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') &&
+			r != '_' && r != '-' && r != '.' && r != '/' {
+			return fmt.Errorf("container name contains invalid character: %c", r)
+		}
+	}
+
+	return nil
+}
+
+func validateContainerRuntime(runtime string) error {
+	if runtime == "" {
+		return nil // Empty means auto-detect, which is safe
+	}
+
+	allowedRuntimes := map[string]bool{
+		"docker": true,
+		"podman": true,
+	}
+
+	if !allowedRuntimes[runtime] {
+		return fmt.Errorf("invalid container runtime: %s (must be 'docker' or 'podman')", runtime)
+	}
+
+	return nil
+}

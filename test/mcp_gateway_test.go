@@ -268,8 +268,8 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRDER})
 
-	// Create a temporary client cert for initial enrollment (using operator CA)
-	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + operator only
+	// Create a temporary client cert for initial enrollment (using Operator CA)
+	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + Operator only
 	operatorCAPEM := testutil.ReadOperatorCA(t, pkiDir)
 	operatorBlock, _ := pem.Decode(operatorCAPEM)
 	operatorCert, err := x509.ParseCertificate(operatorBlock.Bytes)
@@ -368,8 +368,17 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		}
 		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
 		require.NoError(t, err)
-		require.Len(t, mcpResp.Result.Tools, 1)
-		require.Equal(t, "echo", mcpResp.Result.Tools[0].Name)
+		// Gateway merges native tools (27) with downstream tools (1 echo)
+		require.Len(t, mcpResp.Result.Tools, 28)
+		// Verify downstream tool is present
+		hasEcho := false
+		for _, tool := range mcpResp.Result.Tools {
+			if tool.Name == "echo" {
+				hasEcho = true
+				break
+			}
+		}
+		require.True(t, hasEcho, "Downstream 'echo' tool should be present in merged list")
 	})
 
 	// 4.5 Test MCP resources/list
@@ -617,8 +626,8 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	require.NoError(t, err)
 	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRDER})
 
-	// Create a temporary client cert for initial enrollment (using operator CA)
-	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + operator only
+	// Create a temporary client cert for initial enrollment (using Operator CA)
+	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + Operator only
 	operatorCAPEM := testutil.ReadOperatorCA(t, pkiDir)
 	operatorBlock, _ := pem.Decode(operatorCAPEM)
 	operatorCert, err := x509.ParseCertificate(operatorBlock.Bytes)
@@ -1020,8 +1029,8 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	require.NoError(t, err)
 	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRDER})
 
-	// Create a temporary client cert for initial enrollment (using operator CA)
-	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + operator only
+	// Create a temporary client cert for initial enrollment (using Operator CA)
+	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + Operator only
 	operatorCAPEM := testutil.ReadOperatorCA(t, pkiDir)
 	operatorBlock, _ := pem.Decode(operatorCAPEM)
 	operatorCert, err := x509.ParseCertificate(operatorBlock.Bytes)

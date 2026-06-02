@@ -16,10 +16,10 @@ from .base import G8eBaseModel, Field, model_validator
 from ..constants import ComponentName
 
 class BoundOperator(G8eBaseModel):
-    """Represents a bound operator in the protocol context."""
-    operator_id: str = Field(..., description="Unique operator identifier")
+    """Represents a bound Operator in the protocol context."""
+    operator_id: str = Field(..., description="Unique Operator identifier")
     operator_session_id: str | None = Field(default=None, description="Operator session identifier")
-    bound_web_session_id: str | None = Field(default=None, description="Web session ID this operator is bound to")
+    bound_web_session_id: str | None = Field(default=None, description="Web session ID this Operator is bound to")
     status: str | None = Field(default=None, description="Operator status")
 
 class RequestContext(G8eBaseModel):

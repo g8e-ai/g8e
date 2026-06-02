@@ -55,7 +55,7 @@ func (c *Client) GetReceipt(ctx context.Context, transactionID string, persona .
 }
 
 // AuditReceipts pulls signed receipts from the Operator's local audit vault via
-// the Gateway, optionally scoped to an operator session.
+// the Gateway, optionally scoped to an Operator session.
 func (c *Client) AuditReceipts(ctx context.Context, operatorSessionID string) ([]Receipt, []byte, error) {
 	u := c.cfg.MTLSBaseURL + "/api/audit/receipts"
 	if operatorSessionID != "" {
@@ -80,9 +80,9 @@ func (c *Client) ExportReceipts(ctx context.Context, operatorSessionID string) (
 }
 
 // DiscoverOperatorSession best-effort reads /api/operators to find a live
-// operator session id when the user didn't pin one.
+// Operator session id when the user didn't pin one.
 func (c *Client) DiscoverOperatorSession(ctx context.Context) string {
-	// If operator session ID is already pinned in config, use it
+	// If Operator session ID is already pinned in config, use it
 	if c.cfg.OperatorSessionID != "" {
 		return c.cfg.OperatorSessionID
 	}
@@ -101,7 +101,7 @@ func (c *Client) DiscoverOperatorSession(ctx context.Context) string {
 		}
 	}
 
-	// If we already have the operator session ID from credentials, return it directly
+	// If we already have the Operator session ID from credentials, return it directly
 	if operatorSessionID != "" {
 		return operatorSessionID
 	}

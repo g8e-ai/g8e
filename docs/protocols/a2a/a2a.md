@@ -6,7 +6,7 @@ title: A2A Protocol
 
 Last Updated: 2026-05-31
 
-The g8e Operator in gateway mode supports Agent-to-Agent (A2A) protocol integration. A2A agents send HTTP/JSON skill invocation requests to the Governance Gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer verification sequence (L1Doctrine, L2Consensus, L3Notary, L4Warden, L5Actuator), and dispatches verified payloads to downstream A2A servers or to the in-process execution service for local execution.
+The g8e Operator in gateway mode supports Agent-to-Agent (A2A) protocol integration. A2A agents send HTTP/JSON skill invocation requests to the g8e Gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer verification sequence (L1Doctrine, L2Consensus, L3Notary, L4Warden, L5Actuator), and dispatches verified payloads to downstream A2A servers or to the in-process execution service for local execution.
 
 ---
 
@@ -24,7 +24,7 @@ A2A requests follow an HTTP/JSON pattern:
 
 ### Gateway Integration
 
-The Governance Gateway translates A2A skill invocations into governance envelopes:
+The g8e Gateway translates A2A skill invocations into governance envelopes:
 
 1. **Inbound**: A2A agent sends HTTP/JSON skill invocation to gateway
 2. **Envelope Construction**: Gateway wraps payload in `GovernanceEnvelope` with action type `A2A_CALL`
@@ -95,7 +95,7 @@ Skill discovery is not currently implemented. The A2A downstream URL is configur
 
 Bring-your-own clients can integrate by:
 
-1. Submitting standard A2A requests to the Governance Gateway HTTP endpoints
+1. Submitting standard A2A requests to the g8e Gateway HTTP endpoints
 2. Receiving `A2ASuccessResponse` or `A2ASuspensionResponse` with verification proofs
 3. Trusting the Gateway's cryptographic guarantees without implementing full protocol
 
@@ -164,7 +164,7 @@ Gateway verification errors are mapped to g8e custom JSON-RPC error codes via `m
 
 ### Gateway Postures
 
-The Governance Gateway supports three governance postures (configured via CLI flags):
+The g8e Gateway supports three governance postures (configured via CLI flags):
 
 | Posture | Configuration | Purpose |
 |---|---|---|

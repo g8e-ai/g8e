@@ -478,7 +478,7 @@ func TestCheckOperatorRunning_InvalidURL(t *testing.T) {
 
 	err := CheckOperatorRunningAtURL("invalid-url")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid operator URL")
+	assert.Contains(t, err.Error(), "invalid Operator URL")
 }
 
 func TestCheckOperatorRunning_URLWithoutProtocol(t *testing.T) {
@@ -486,7 +486,7 @@ func TestCheckOperatorRunning_URLWithoutProtocol(t *testing.T) {
 
 	err := CheckOperatorRunningAtURL("localhost:8440")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid operator URL")
+	assert.Contains(t, err.Error(), "invalid Operator URL")
 }
 
 // ---------------------------------------------------------------------------

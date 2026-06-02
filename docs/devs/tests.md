@@ -12,13 +12,13 @@ g8e tests run directly on the host using real infrastructure. The test environme
 
 ## Test Philosophy
 
-- **Hermetic execution** - Tests run on the host via `./g8e test` or in Docker for end-to-end testing. The g8e Operator is a unified binary that operates as Governance Gateway (Policy Decision Point) in gateway mode or as g8e Operator (Policy Execution Point) in cloud mode.
+- **Hermetic execution** - Tests run on the host via `./g8e test` or in Docker for end-to-end testing. The g8e Node is a unified g8e Node that operates as g8e Gateway (Policy Decision Point) in gateway mode or as g8e Operator (Policy Execution Point) in Operator mode.
 - **Real infrastructure** - Tests use the actual SQLite database, PKI certificates, and pub/sub channels. Platform starts via `./g8e gw start`.
 - **No mocks** - Mocking internal services, database clients, or cross-component communication is prohibited. Integration tests use real wire paths.
 - **mTLS required** - Operator communication requires mTLS. Authentication via `./g8e auth login` issues certificates from `.g8e/pki`.
 - **Reproduce first** - Reproduce bugs with failing tests before fixes.
 - **Contract tests** - Enforce alignment between the Operator and `protocol/` constants/models with typed protobuf assertions.
-- **Docker for E2E** - Docker is encouraged for end-to-end testing of the operator binary against the local gateway to validate real deployment scenarios.
+- **Docker for E2E** - Docker is encouraged for end-to-end testing of the g8e Node in Operator mode against the local g8e Gateway to validate real deployment scenarios.
 
 ---
 
@@ -39,7 +39,7 @@ g8e tests run directly on the host using real infrastructure. The test environme
 
 The `./g8e test` command runs the full test suite including unit tests across `cmd/`, `internal/`, `pkg/`, and `test/` packages, followed by integration tests from `test/scenario/`. The `ci` subcommand mirrors the GitHub Actions CI pipeline exactly, running proto generation, linting, vulncheck, and platform tests with coverage enforcement.
 
-Validates the Operator and protocol enforcement (`GovernanceEnvelope`, 5-layer governance, Audit Vault). Tests cover pub/sub command dispatch, L1/L2/L3/L4/L5 verification, transaction replay protection, state root validation, and audit vault integrity.
+Validates the g8e Node and protocol enforcement (`GovernanceEnvelope`, 5-layer governance, Audit Vault). Tests cover pub/sub command dispatch, L1/L2/L3/L4/L5 verification, transaction replay protection, state root validation, and audit vault integrity.
 
 ### Scenario Tests
 
@@ -48,7 +48,7 @@ Validates the Operator and protocol enforcement (`GovernanceEnvelope`, 5-layer g
 ./g8e test scenario --run forge_signature
 ```
 
-Integration tests exercising end-to-end governance workflows across doctrine, consensus, and notary modes. Tests cover the 5-layer verification sequence (L1-L5), transaction replay protection, state root validation, and receipt verification. Requires the Gateway to be running.
+Integration tests exercising end-to-end governance workflows across doctrine, consensus, and notary modes. Tests cover the 5-layer verification sequence (L1-L5), transaction replay protection, state root validation, and receipt verification. Requires the g8e Gateway to be running.
 
 **Test Types**:
 - **Table-driven scenarios** - JSON fixtures in `test/scenario/fixtures/` covering security gates (bad integrity, hash mismatch, replay, stale state root, L2/L3 validation) and finance workflows
@@ -93,11 +93,11 @@ If no users exist, the first login automatically bootstraps the platform:
 ./g8e auth login
 ```
 
-This creates the first user and issues mTLS certificates for the Gateway and CLI.
+This creates the first user and issues mTLS certificates for the g8e Gateway and CLI.
 
 ### Trust Bundle Requirements
 
-Live operator integration tests (MCP, A2A, Native) require the canonical trust bundle at `.g8e/pki/trust/g8eg-ca-bundle.pem`. This bundle contains the root CA, hub intermediate CA, operator intermediate CA, and gateway peer CA certificates.
+Live Operator integration tests (MCP, A2A, Native) require the canonical trust bundle at `.g8e/pki/trust/g8eg-ca-bundle.pem`. This bundle contains the root CA, hub intermediate CA, Operator intermediate CA, and gateway peer CA certificates.
 
 **Canonical trust bundle path**: `.g8e/pki/trust/g8eg-ca-bundle.pem`
 
@@ -161,7 +161,7 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 - **`make test-a2a`** - Runs A2A tests (A2A gateway, A2A real operator).
 - **`make test-universal-gateway`** - Runs universal gateway integration tests (requires platform running and auth login).
 - **`make test-byo`** - Runs BYO client tests (requires platform running and auth login).
-- **`make test-native`** - Runs native real operator tests (requires platform running and auth login).
+- **`make test-native`** - Runs native real Operator tests (requires platform running and auth login).
 
 ### Lints
 
@@ -181,7 +181,7 @@ Defaults from `protocol/constants/ports.json` (canonical source of truth):
 - `8443` - Gateway Public TLS (browser/BYO bootstrap)
 - `18789` - Insecure MCP Gateway
 
-All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NET_BIND_SERVICE` to the g8e binary or front with an external port redirect.
+All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NET_BIND_SERVICE` to the g8e Node or front with an external port redirect.
 
 ---
 
@@ -190,7 +190,7 @@ All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NE
 GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 
 - **`verify-proto`** - Generated Go and Python code sync with `.proto` definitions.
-- **`lint-g8eo`** - Runs `golangci-lint` on the g8e binary and protocol code.
+- **`lint-g8eo`** - Runs `golangci-lint` on the g8e Node and protocol code.
 - **`vulncheck-g8eo`** - Scans Go dependencies for known vulnerabilities.
 - **`test-g8eo`** (blocking) - Installs Go, starts the gateway, runs `./g8e test ci` with 60% coverage threshold.
 - **`test-scenarios`** - Runs scenario integration tests with `-tags=integration`.

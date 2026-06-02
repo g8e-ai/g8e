@@ -568,8 +568,13 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 		var resp JSONRPCResponse
 		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		require.NotNil(t, resp.Error)
-		require.Contains(t, resp.Error.Message, "circuit open")
+		require.Nil(t, resp.Error)
+
+		// Should return native tools as fallback
+		var result ToolsListResult
+		err = json.Unmarshal(resp.Result, &result)
+		require.NoError(t, err)
+		require.NotEmpty(t, result.Tools)
 	})
 
 	t.Run("downstream HTTP error", func(t *testing.T) {
@@ -586,7 +591,18 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 
 		g.HandleToolsList(w, req)
 
-		require.Equal(t, http.StatusInternalServerError, w.Code)
+		// Should return native tools as fallback when downstream returns 500
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.Nil(t, resp.Error)
+
+		var result ToolsListResult
+		err = json.Unmarshal(resp.Result, &result)
+		require.NoError(t, err)
+		require.NotEmpty(t, result.Tools)
 	})
 
 	t.Run("downstream connection error", func(t *testing.T) {
@@ -598,13 +614,18 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 
 		g.HandleToolsList(w, req)
 
+		// Should return native tools as fallback when downstream is unreachable
 		require.Equal(t, http.StatusOK, w.Code)
 
 		var resp JSONRPCResponse
 		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		require.NotNil(t, resp.Error)
-		require.Contains(t, resp.Error.Message, "failed to query downstream")
+		require.Nil(t, resp.Error)
+
+		var result ToolsListResult
+		err = json.Unmarshal(resp.Result, &result)
+		require.NoError(t, err)
+		require.NotEmpty(t, result.Tools)
 	})
 
 	t.Run("empty POST body uses default", func(t *testing.T) {
@@ -626,6 +647,44 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 		g.HandleToolsList(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("merges native tools with downstream tools", func(t *testing.T) {
+		t.Parallel()
+		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			// Return a downstream tool that doesn't conflict with native tools
+			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"downstream_tool","description":"A downstream tool","inputSchema":{"type":"object"}}]}}`))
+		}))
+		defer downstream.Close()
+
+		g := newTestGatewayService(withDownstreamURL(downstream.URL))
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+		w := httptest.NewRecorder()
+
+		g.HandleToolsList(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.Nil(t, resp.Error)
+
+		var result ToolsListResult
+		err = json.Unmarshal(resp.Result, &result)
+		require.NoError(t, err)
+
+		// Should have both downstream tool and native tools
+		toolNames := make(map[string]bool)
+		for _, tool := range result.Tools {
+			toolNames[tool.Name] = true
+		}
+
+		require.Contains(t, toolNames, "downstream_tool", "should include downstream tool")
+		require.Contains(t, toolNames, "db_discover_topology", "should include native tools")
 	})
 
 	t.Run("method not allowed", func(t *testing.T) {

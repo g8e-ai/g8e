@@ -39,7 +39,7 @@
       "type": "boolean",
       "required": true,
       "default": true,
-      "description": "Propagated to all operator commands issued during this conversation. When true, output is Sentinel-scrubbed before storage."
+      "description": "Propagated to all Operator commands issued during this conversation. When true, output is Sentinel-scrubbed before storage."
     },
     "created_at": {
       "type": "string",

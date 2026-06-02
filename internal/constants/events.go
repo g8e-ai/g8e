@@ -283,7 +283,7 @@ const EventSourceAiAssistant EventType = "g8e.v1.source.ai.assistant"
 const EventSourceAiTriage EventType = "g8e.v1.source.ai.triage"
 const EventSourceSystem EventType = "g8e.v1.source.system"
 
-// Event.Operator provides hierarchical access to operator event constants
+// Event.Operator provides hierarchical access to Operator event constants
 type _EventOperatorA2a struct {
 	CallRequested EventType
 }

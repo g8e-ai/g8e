@@ -8,12 +8,12 @@ Last Updated: 2026-06-01
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
-The reference implementation of a g8e-compliant Policy Execution Point (PEP) is the **`g8eo`** service (built within the `g8e` binary). It functions as both a **Governed Operator** and a **Model Context Protocol (MCP) Server**. The same Go codebase provides the logic for both the Governance Gateway (PDP) and the g8e Operator (PEP), differentiated by runtime configuration as seen in `../../cmd/operator/main.go`:
+The reference implementation of a g8e-compliant Policy Execution Point (PEP) is the g8e Node. It functions as both a **g8e Operator** and a **Model Context Protocol (MCP) Server**. The same Go codebase provides the logic for both the g8e Gateway (PDP) and the g8e Operator (PEP), differentiated by runtime configuration as seen in `../../cmd/operator/main.go`:
 
-- **Governance Gateway (PDP)**: When run in Gateway mode (utilizing `L1Doctrine`, `L2Consensus`, and `L3Notary` as a central authority), it acts as the central Policy Decision Point (PDP) with platform persistence and pub/sub brokering.
+- **g8e Gateway (PDP)**: When run in Gateway mode (utilizing `L1Doctrine`, `L2Consensus`, and `L3Notary` as a central authority), it acts as the central Policy Decision Point (PDP) with platform persistence and pub/sub brokering.
 - **g8e Operator (PEP)**: When run as a host agent, it acts as the Policy Execution Point (PEP) and MCP server, enforcing local verification before host mutation.
 
-This document focuses on the **Governed Operator** (PEP) role.
+This document focuses on the **g8e Operator** (PEP) role.
 
 ---
 
@@ -60,23 +60,23 @@ The **L5Actuator** is the singular execution boundary permitted to mutate host s
 By exposing standard MCP and A2A interfaces, the Operator acts as the admission gate for BYO (Bring-Your-Own) AI clients. It isolates the complex requirements of the `GovernanceEnvelope` (such as transaction hashing and L2/L3 signature collection) behind a standardized tool-calling facade, mapping native JSON-RPC/HTTP requests directly to governed mutations.
 
 ### Native Tool Execution
-The Operator compiles native tool playbooks directly into the binary to provide memory-safe, boundary-enforced execution for common operational tasks. These tools execute within the Operator's execution boundary locally, without proxying to downstream MCP servers. AI agents interact with clean JSON schemas while the internal memory-safe execution layer enforces hard boundaries.
+The g8e Operator compiles native tool playbooks directly into the g8e Node to provide memory-safe, boundary-enforced execution for common operational tasks. These tools execute within the g8e Operator's execution boundary locally, without proxying to downstream MCP servers. AI agents interact with clean JSON schemas while the internal memory-safe execution layer enforces hard boundaries.
 
 #### Database Triage & Performance Playbook
 - **db_discover_topology**: Automatically scans database schemas, tables, and column data types, returning a highly compressed JSON map. AI agents need this first to prevent hallucinated queries.
-- **db_query_validate**: Intercepts any AI-generated SQL and runs it through EXPLAIN QUERY PLAN natively. If the engine flags an unindexed, full-table scan on a production dataset, the binary rejects the task before execution.
+- **db_query_validate**: Intercepts any AI-generated SQL and runs it through EXPLAIN QUERY PLAN natively. If the engine flags an unindexed, full-table scan on a production dataset, the g8e Node rejects the task before execution.
 - **db_isolated_read**: Executes SELECT statements using a database handle opened strictly with SQLITE_OPEN_READONLY. This prevents the AI from executing destructive injections (e.g., ; DROP TABLE...).
 - **db_index_triage**: Queries internal fragmentation statistics and indexes to diagnose slow queries without letting the AI guess the performance bottleneck.
 
 #### Telemetry & Log Digestion Playbook
 - **log_stream_filter**: Reads native log paths or standard buffers, applies a regex match requested by the AI, runs the matched chunks through the scrubbing engine to redact secrets/PII, and pushes only the sanitized fragments.
 - **sys_oom_detect**: Directly parses /var/log/dmesg or system logs to scan for Out-Of-Memory (OOM) killer events, process kills, or core panic dumps, isolating the exact failing PID.
-- **config_diff_mask**: Compares application configuration states against environmental baselines. It strips out actual passwords, tokens, and salts inside the binary before outputting the structural differences to the AI.
+- **config_diff_mask**: Compares application configuration states against environmental baselines. It strips out actual passwords, tokens, and salts inside the g8e Node before outputting the structural differences to the AI.
 
 #### Resource & Process Governance Playbook
 - **proc_metric_top**: Directly parses the Linux /proc filesystem in memory to extract process IDs, memory maps, and CPU tracking. It returns a tightly structured JSON array of the top resource-hogging processes.
 - **fs_disk_profile**: Recursively calculates directory sizes natively (equivalent to an optimized du --max-depth=2) starting from an approved path root. It instantly isolates unrotated log files or bloated tmp directories.
-- **proc_signal_safe**: Allows the AI to send explicit termination signals (SIGTERM, SIGKILL) to a process, but enforces a strict binary-level denylist (e.g., rejecting attempts to kill PID 1, system init, or the operator binary itself).
+- **proc_signal_safe**: Allows the AI to send explicit termination signals (SIGTERM, SIGKILL) to a process, but enforces a strict g8e Node-level denylist (e.g., rejecting attempts to kill PID 1, system init, or the g8e Node itself).
 
 #### Network & Connectivity Validation Playbook
 - **net_socket_audit**: Directly inspects active network sockets (/proc/net/tcp and /proc/net/udp) to map established connections and confirm if expected internal microservices are actually listening.
@@ -84,20 +84,20 @@ The Operator compiles native tool playbooks directly into the binary to provide 
 - **net_http_probe**: Performs a lightweight native HTTP request (similar to curl -I) to internal API endpoints, returning only the status codes, headers, and latency metrics while discarding heavy response payloads.
 
 ### Identity, PKI, and mTLS
-The Operator establishes workload identity bound to SPIFFE-style URI SANs, strictly enforced over mutual TLS (mTLS):
-- **Operator Identity**: `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>`
+The g8e Operator establishes workload identity bound to SPIFFE-style URI SANs, strictly enforced over mutual TLS (mTLS):
+- **g8e Operator Identity**: `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>`
 - **CLI/BYO Client**: `spiffe://g8e.local/cli/<user_id>/<cli_session_id>`
 - **App Workload**: `spiffe://g8e.local/app/<operator_id>`
 
 Revocation is checked on every handshake. Every `ActionReceipt` is signed by a host-unique Ed25519 key, providing a cryptographic proof of host execution as defined in `../../protocol/workload_identity.go`.
 
 ### JWT Authentication Isolation
-The Operator is fully isolated from Identity Providers (IdP). The Gateway handles all JWT validation, user provisioning, and role mapping. JIT provisioning is **owner-controlled** and requires an active invitation:
+The g8e Operator is fully isolated from Identity Providers (IdP). The g8e Gateway handles all JWT validation, user provisioning, and role mapping. JIT provisioning is **owner-controlled** and requires an active invitation:
 - **Owner-Centric Model**: All authentication requires owner approval via invitations. The platform owner creates invitations for specific identities (IdP `sub` or email) before JIT provisioning can occur.
-- **Invitation-Based JIT**: When a JWT is presented, the Gateway validates the signature and checks for an active invitation. If no invitation exists, authentication is rejected (403 Forbidden). If a valid invitation exists, the user is provisioned and bound to the owner's organization, then the invitation is consumed.
+- **Invitation-Based JIT**: When a JWT is presented, the g8e Gateway validates the signature and checks for an active invitation. If no invitation exists, authentication is rejected (403 Forbidden). If a valid invitation exists, the user is provisioned and bound to the owner's organization, then the invitation is consumed.
 - **Strict TTL**: Sessions have a 1-hour TTL by default. Long-lived access requires programmatic renewal or re-authentication.
-- **Gateway Responsibility**: The Gateway validates inbound `Authorization: Bearer <JWT>` tokens, performs invitation-gated JIT user provisioning, maps JWT roles to Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
-- **Operator Responsibility**: The Operator receives only the pre-validated, enriched security metadata in the envelope. It decodes `tenant_id` and `binding_persona` from the envelope, propagates them into the execution context, and applies Persona-based data scrubbing (column masks, redaction) before returning results.
+- **g8e Gateway Responsibility**: The g8e Gateway validates inbound `Authorization: Bearer <JWT>` tokens, performs invitation-gated JIT user provisioning, maps JWT roles to Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
+- **g8e Operator Responsibility**: The g8e Operator receives only the pre-validated, enriched security metadata in the envelope. It decodes `tenant_id` and `binding_persona` from the envelope, propagates them into the execution context, and applies Persona-based data scrubbing (column masks, redaction) before returning results.
 - **No IdP Dependency**: The Operator never requires outbound internet access to verify tokens or manage user state. This enables air-gapped and high-security deployments where the Operator has no external network connectivity.
 
 ### Local-First Audit Architecture (LFAA)
@@ -127,7 +127,7 @@ The reference implementation (`g8eo`) currently supports:
 - **Deterministic Hash Binding**: SHA-256 transaction hash integrity enforced across all wire formats.
 - **Sovereignty Boundary**: Automated scrubbing and rehydration of sensitive data during the execution lifecycle.
 - **Host-Unique Signing**: Cryptographic Action Receipts signed by host-specific keys.
-- **Zero-Dependency Binary**: Statically compiled Go binary for air-gapped and high-security deployments.
+- **Zero-DependencyNode Node Binary**: Statically compiled Go binary for air-gapped and high-security deployments.
 
 ---
 
@@ -137,7 +137,7 @@ After completing platform bootstrap via `./g8e auth login`, follow this workflow
 
 ### 1. Verify Gateway Health
 
-Confirm the Governance Gateway is running and accessible:
+Confirm the g8e Gateway is running and accessible:
 
 ```bash
 ./g8e gw status
@@ -148,10 +148,10 @@ Confirm the Governance Gateway is running and accessible:
 For distributed enforcement across multiple hosts, enroll each remote operator:
 
 ```bash
-./g8e security pki enroll --endpoint <gateway-ip>
+./g8e security pki enroll -e <gateway-ip>
 ```
 
-Each operator receives a unique SPIFFE workload identity bound to its mTLS certificate.
+Each Operator receives a unique SPIFFE workload identity bound to its mTLS certificate.
 
 ### 3. Configure AI Client Integration
 
@@ -239,4 +239,4 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 | Event Constants | `../../protocol/constants/events.json` |
 | Port Constants | `../../protocol/constants/ports.json` |
 
-See also: [g8e Protocol](./g8e.md), [Governance Gateway](./gateway.md).
+See also: [g8e Protocol](./g8e.md), [g8e Gateway](./gateway.md).

@@ -133,9 +133,9 @@ func TestMCPGateway_ConfigTemplate(t *testing.T) {
 	})
 }
 
-// getTestBinaryPath returns the path to the cached test binary, building it if necessary.
+// getTestNodeBinaryPath returns the path to the cached test binary, building it if necessary.
 // The binary is cached in .g8e/test-bin/g8e to avoid rebuilding on every test run.
-func getTestBinaryPath() (string, error) {
+func getTestNodeBinaryPath() (string, error) {
 	// Find repo root by looking for go.mod
 	repoRoot, err := os.Getwd()
 	if err != nil {
@@ -168,7 +168,7 @@ func getTestBinaryPath() (string, error) {
 		if !os.IsNotExist(err) {
 			return "", fmt.Errorf("failed to stat binary: %w", err)
 		}
-		// Binary doesn't exist, need to build
+		//Node Node Binary doesn't exist, need to build
 	} else {
 		goModInfo, err := os.Stat(goModPath)
 		if err != nil {
@@ -178,7 +178,7 @@ func getTestBinaryPath() (string, error) {
 		if binaryInfo.ModTime().Before(goModInfo.ModTime()) {
 			_ = os.Remove(g8ePath) // Remove stale binary
 		} else {
-			// Binary exists and is up-to-date
+			//Node Node Binary exists and is up-to-date
 			return g8ePath, nil
 		}
 	}
@@ -187,7 +187,7 @@ func getTestBinaryPath() (string, error) {
 	buildCmd := exec.Command("go", "build", "-o", g8ePath, "./cmd/operator")
 	buildCmd.Dir = repoRoot
 	if output, err := buildCmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("failed to build g8e binary: %w, output: %s", err, string(output))
+		return "", fmt.Errorf("failed to build g8e Node: %w, output: %s", err, string(output))
 	}
 
 	return g8ePath, nil
@@ -212,7 +212,7 @@ func runCLICommand(args ...string) (string, error) {
 		repoRoot = parent
 	}
 
-	g8ePath, err := getTestBinaryPath()
+	g8ePath, err := getTestNodeBinaryPath()
 	if err != nil {
 		return "", err
 	}

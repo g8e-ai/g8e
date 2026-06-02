@@ -1,11 +1,11 @@
 # CLI Reference
 
-This reference documents the g8e CLI commands for managing the Governance Gateway (g8eg) and Governed Operator (g8eo).
+This reference documents the g8e CLI commands for managing the g8e Gateway and g8e Operator.
 
 ## g8e Root Help
 ```
 g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).
+The CLI manages the g8e Gateway and g8e Operator.
 
 Usage:
   g8e [command]
@@ -16,7 +16,7 @@ Available Commands:
   auditor     Universal agent emulator for a real g8e Gateway/Operator
   chaos       Generate realistic governance events against the local g8e audit stack
   data        Administer the local platform over mTLS
-  gw          Manage the Governance Gateway (g8eg) lifecycle
+  gw          Manage the g8e Gateway lifecycle
   help        Help about any command
   security    Security validation checks
   test        Run test suites
@@ -30,7 +30,7 @@ Use "g8e [command] --help" for more information about a command.
 
 ## gw
 ```
-Gateway lifecycle commands for starting, stopping, and checking the status of the Governance Gateway.
+Gateway lifecycle commands for starting, stopping, and checking the status of the g8e Gateway.
 
 Usage:
   g8e gw [command]
@@ -44,11 +44,11 @@ Available Commands:
   mcp-config      Print MCP client configuration for the Gateway
   mcp-config-http Print MCP client configuration for the Gateway plain HTTP endpoint
   reset           Reset Gateway data and secrets (preserves CA)
-  restart         Restart the Governance Gateway
+  restart         Restart the g8e Gateway
   settings        Manage Gateway settings
-  start           Start the Governance Gateway
+  start           Start the g8e Gateway
   status          Check Gateway health and status
-  stop            Stop the Governance Gateway
+  stop            Stop the g8e Gateway
 
 Flags:
   -h, --help   help for gw
@@ -58,7 +58,7 @@ Use "g8e gw [command] --help" for more information about a command.
 
 ### gw start
 ```
-Start the Governance Gateway
+Start the sovereign g8e Gateway (PDP). Bootstraps the stateless gateway with PKI, persistence, and pub/sub. The gateway must be running before any client can authenticate.
 
 Usage:
   g8e gw start [flags]
@@ -85,7 +85,7 @@ When `--cert-mode full` is selected, the CLI detects network identity once, writ
 
 ### gw stop
 ```
-Stop the Governance Gateway
+Stop the g8e Gateway
 
 Usage:
   g8e gw stop [flags]
@@ -107,7 +107,7 @@ Flags:
 
 ### gw restart
 ```
-Restart the Governance Gateway
+Restart the g8e Gateway
 
 Usage:
   g8e gw restart [flags]
@@ -191,14 +191,14 @@ Flags:
 
 ## auth
 ```
-Manage mTLS enrollment and operator sessions.
+Manage mTLS enrollment and g8e Operator sessions.
 
 Usage:
   g8e auth [command]
 
 Available Commands:
-  login           Authenticate and save operator session
-  logout          Clear local operator session and credentials
+  login           Authenticate and save g8e Operator session
+  logout          Clear local g8e Operator session and credentials
   enroll-windows  Enroll via Windows Certificate Store (Windows only)
 
 Flags:
@@ -209,7 +209,7 @@ Use "g8e auth [command] --help" for more information about a command.
 
 ### auth login
 ```
-Authenticate CLI with the running Gateway via CSR-based enrollment. Generates client keypairs, submits CSRs to the Gateway's CA, and saves signed mTLS credentials. The Gateway must already be running (use './g8e gw start' first).
+Authenticate the CLI to the running g8e Gateway via CSR-based enrollment. Bootstraps the PKI hierarchy, generates client keypairs, submits CSRs to the g8e Gateway's CA, and saves signed mTLS credentials. Required before any CLI or Operator can connect to the g8e Gateway.
 
 Usage:
   g8e auth login [flags]
@@ -220,7 +220,7 @@ Flags:
 
 ### auth logout
 ```
-Clear local operator session and credentials
+Clear local Operator session and credentials
 
 Usage:
   g8e auth logout [flags]
@@ -231,7 +231,7 @@ Flags:
 
 ### auth enroll-windows
 ```
-Enroll via Windows Certificate Store (Windows only). Generate an ECDSA P-384 keypair in the Windows Certificate Store, submit a CSR to the Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert.
+Enroll via Windows Certificate Store (Windows only). Generate an ECDSA P-384 keypair in the Windows Certificate Store, submit a CSR to the g8e Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert.
 
 Usage:
   g8e auth enroll-windows [flags]
@@ -243,14 +243,14 @@ Flags:
 
 ## data
 ```
-Data management commands for users, operators, and settings.
+Data management commands for users, g8e Operators, and settings.
 
 Usage:
   g8e data [command]
 
 Available Commands:
   audit        Query audit vault
-  operators    Manage operator instances
+  operators    Manage g8e Operator instances
   settings     Manage Gateway settings
   store        Manage document storage
   users        Manage user accounts
@@ -274,7 +274,7 @@ Flags:
 
 ### data operators
 ```
-Manage operator instances
+Manage g8e Operator instances
 
 Usage:
   g8e data operators [flags]
@@ -285,7 +285,7 @@ Flags:
 
 ### data settings
 ```
-Manage Gateway settings
+Manage g8e Gateway settings
 
 Usage:
   g8e data settings [flags]
@@ -309,7 +309,7 @@ Flags:
 
 ### data audit
 ```
-Query audit vault
+Query g8e audit vault
 
 Usage:
   g8e data audit [command]
@@ -334,12 +334,12 @@ Usage:
 Flags:
   -h, --help                         help for list
       --limit int                    Limit number of events (default 100)
-      --operator-session-id string   Operator session ID
+      --operator-session-id string   g8e Operator session ID
 ```
 
 #### data audit summary
 ```
-Show chaos test summary from audit vault
+Show chaos test summary from g8e audit vault
 
 Usage:
   g8e data audit summary [flags]
@@ -488,14 +488,14 @@ Usage:
   g8e security pki enroll [flags]
 
 Flags:
-      --endpoint string    Gateway endpoint (e.g., 192.168.1.62:8441)
+  -e, --endpoint string     Gateway IP address (e.g., 192.168.1.62)
   -h, --help                help for enroll
       --output-dir string   Output directory for certificates (default: project root)
 ```
 
 ## approve
 ```
-Approve a suspended L3 transaction with CLI signature. Approve a suspended transaction by signing the transaction hash with the CLI private key and submitting the cryptographic proof to the Gateway.
+Approve a suspended L3 transaction with CLI signature. Approve a suspended transaction by signing the transaction hash with the CLI private key and submitting the cryptographic proof to the g8e Gateway.
 
 Usage:
   g8e approve <transaction_hash> [flags]
@@ -506,15 +506,15 @@ Flags:
 
 ## auditor
 ```
-Universal agent emulator for a real g8e Gateway/Operator. auditor impersonates arbitrary AI tools and agents against a REAL g8e Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the Operator's signed receipts.
+Universal agent emulator for a real g8e Gateway/g8e Operator. auditor impersonates arbitrary AI tools and agents against a REAL g8e Gateway + g8e Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the g8e Operator's signed receipts.
 
 Usage:
   g8e auditor [command]
 
 Available Commands:
-  audit       Audit signed receipts from the Operator
+  audit       Audit signed receipts from the g8e Operator
   list        List available scenarios
-  run         Run scenarios against a real Gateway/Operator
+  run         Run scenarios against a real g8e Gateway/g8e Operator
 
 Flags:
   -h, --help   help for auditor
@@ -541,7 +541,7 @@ Usage:
   g8e auditor run [flags] [scenario ...]
 
 Flags:
-      --api-key string           operator API key for MCP/A2A surface
+      --api-key string           Operator API key for MCP/A2A surface
       --ca string                gateway CA bundle PEM
       --cert string              client cert PEM
       --config string            JSON config overlay
@@ -551,7 +551,7 @@ Flags:
       --l3-mode string           mock|suspend
       --mtls-url string          Gateway mTLS surface
       --out string               report output dir
-      --operator-session string   scope audit to a specific operator session
+      --operator-session string   scope audit to a specific Operator session
       --phase string             doctrine|notary|all (default "all")
       --public-url string        Gateway public surface for OOB approve
   -h, --help                     help for run
@@ -566,7 +566,7 @@ Usage:
   g8e auditor audit [flags]
 
 Flags:
-      --api-key string           operator API key
+      --api-key string           Operator API key
       --ca string                gateway CA bundle PEM
       --cert string              client cert PEM
       --config string            JSON config overlay
@@ -574,14 +574,14 @@ Flags:
       --key string               client key PEM
       --mtls-url string          Gateway mTLS surface
       --out string               report output dir
-      --operator-session string   operator session id
+      --operator-session string   Operator session id
       --public-url string        Gateway public surface
   -h, --help                     help for audit
 ```
 
 ## chaos
 ```
-Generate realistic governance events against the local g8e audit stack. chaos generates a realistic distribution of governance events against the local g8e audit stack. It bypasses network/TLS by driving the TransactionVerifier + Actuator stack directly in-process, which is the same path exercised by the live operator when payloads arrive over pub/sub.
+Generate realistic governance events against the local g8e audit stack. chaos generates a realistic distribution of governance events against the local g8e audit stack. It bypasses network/TLS by driving the TransactionVerifier + Actuator stack directly in-process, which is the same path exercised by the live g8e Operator when payloads arrive over pub/sub.
 
 Distribution:
   70%  Good Actor  – valid sig, safe intent (FS_LIST)       → EXECUTED

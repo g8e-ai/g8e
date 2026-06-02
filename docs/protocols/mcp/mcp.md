@@ -36,20 +36,34 @@ The gateway translates MCP tool invocations into governance envelopes:
 The gateway handles certain tools locally without downstream proxy:
 
 - **read_field**: JIT field resolution from governed collections with L1 field path validation, L3 session validation, and audit vault logging. Requires `collection`, `document_id`, `field_path`, and `operator_session_id` parameters.
-- **Native tools**: The Operator includes 13 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
-  - `db_discover_topology`: Scans database schemas, tables, and column data types
-  - `db_query_validate`: Validates SQL queries using EXPLAIN QUERY PLAN
-  - `db_isolated_read`: Executes SELECT statements in read-only mode
-  - `db_index_triage`: Queries fragmentation statistics and indexes
-  - `log_stream_filter`: Reads log files with regex filtering and secret scrubbing
-  - `sys_oom_detect`: Scans system logs for OOM killer events
-  - `config_diff_mask`: Compares configuration files with secret masking
-  - `proc_metric_top`: Parses /proc to extract top resource-consuming processes
-  - `fs_disk_profile`: Recursively calculates directory sizes
-  - `proc_signal_safe`: Sends signals to processes with denylist enforcement
-  - `net_socket_audit`: Inspects active network sockets
-  - `net_endpoint_ping`: Performs TCP handshake or ICMP ping
-  - `net_http_probe`: Performs lightweight HTTP requests
+- **Native tools**: The Operator includes 27 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
+  - `db_discover_topology`: Automatically scans database schemas, tables, and column data types, returning a highly compressed JSON map
+  - `db_query_validate`: Validates SQL queries using EXPLAIN QUERY PLAN to detect full table scans and performance issues
+  - `db_isolated_read`: Executes SELECT statements in read-only mode against a SQLite database
+  - `db_index_triage`: Queries database fragmentation statistics and index information
+  - `log_stream_filter`: Reads log files and applies regex filtering with sensitive data scrubbing
+  - `sys_oom_detect`: Scans system logs for OOM (Out of Memory) killer events
+  - `config_diff_mask`: Compares configuration files with automatic secret masking for sensitive values
+  - `proc_metric_top`: Parses /proc to extract top resource-consuming processes by CPU and memory
+  - `fs_disk_profile`: Recursively calculates directory sizes and disk usage
+  - `proc_signal_safe`: Sends signals to processes with denylist enforcement for protected PIDs
+  - `net_socket_audit`: Inspects active network sockets (TCP/UDP) from /proc/net
+  - `net_endpoint_ping`: Performs TCP handshake to verify network endpoint connectivity and measure latency
+  - `net_http_probe`: Performs lightweight HTTP requests to probe web endpoints
+  - `sys_info`: Provides system information including hostname, OS version, kernel, uptime, and load average
+  - `net_dns_resolve`: Performs DNS resolution (dig/nslookup equivalent) for network debugging
+  - `tls_cert_inspect`: Parses TLS certificates, verifies chains, and checks expiration (critical for PKI debugging)
+  - `sys_env_vars`: Reads environment variables for configuration debugging
+  - `fs_file_checksum`: Computes SHA256/MD5 checksums for file integrity verification
+  - `sys_service_status`: Checks systemd service status (operator, gateway, etc.)
+  - `sys_container_status`: Checks Docker/podman container health status
+  - `fs_disk_usage`: Provides df-style free space reporting for mounted filesystems
+  - `sys_time_clock`: Provides NTP sync status and system time verification
+  - `proc_tree`: Provides parent-child process relationships and process tree
+  - `git_ops`: Provides git repository operations including status, log, branch info, and remote management for GitHub/GitLab workflows
+  - `cloud_metadata`: Detects cloud provider (AWS, Azure, GCP) and retrieves instance metadata including region, instance type, and availability zone
+  - `k8s_inspect`: Provides Kubernetes cluster inspection including pods, nodes, services, and deployment status
+  - `shell_execute`: Executes shell commands with denylist enforcement for dangerous operations and timeout limits. Supports multi-host execution via SSH with optional `hostnames` parameter (defaults to localhost)
 
 ---
 
@@ -201,13 +215,21 @@ Invoke MCP tools via JSON-RPC POST to `/api/v1/mcp/tools/call` or `/api/v1/mcp/t
 
 ### Tool Discovery
 
-The gateway proxies tool discovery to the configured downstream MCP server. If no downstream server is configured, the gateway returns native tools via the unified MCP endpoint architecture (`internal/services/mcp/mcp_endpoint.go`):
+The gateway provides merged tool discovery that combines native tools with downstream MCP server tools:
 
-- `tools/list`: Returns available tools with schemas (native tools if no downstream)
+- `tools/list`: Returns available tools with schemas (native tools merged with downstream tools when downstream is configured, native tools only when no downstream)
 - `prompts/list`: Returns available prompt templates
 - `resources/list`: Returns available resources
 
-The unified endpoint uses a functional options pattern for configuration and improved test coverage. Discovery endpoints are proxied verbatim from the downstream server when configured. Tool calls are wrapped in GovernanceEnvelope before verification.
+When a downstream MCP server is configured, the gateway:
+1. Proxies the `tools/list` request to the downstream server
+2. Parses the downstream response
+3. Merges native tools with downstream tools (deduplicating by tool name)
+4. Returns the combined tool list to the client
+
+If the downstream server is unavailable (circuit open, connection error, or invalid response), the gateway falls back to returning only native tools. This ensures clients always have access to native tools even when downstream services are degraded.
+
+The unified endpoint uses a functional options pattern for configuration and improved test coverage. Discovery endpoints are proxied from the downstream server when configured. Tool calls are wrapped in GovernanceEnvelope before verification.
 
 ### Tool Schema
 
@@ -412,20 +434,48 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 
 ## Adding a New Native Tool
 
-To add a new native tool to the Operator:
+To add a new native tool to the Operator, follow this sequence:
 
 1. **Create tool file**: Copy `docs/protocols/mcp/tool_template.go` to `internal/services/mcp/your_tool_name.go`
-2. **Implement interface**: Replace the template with your tool's logic (Name, Description, InputSchema, Execute)
-3. **Add input validation**: If the tool accepts user input, add validation logic in `internal/services/mcp/validation.go` following the fail-closed security principles
-4. **Register tool**: Add your tool to the tools list in `RegisterNativeTools()` in `internal/services/mcp/native_tool_registry.go`
-5. **Test**: Add unit tests in `internal/services/mcp/native_handlers_test.go` and validation tests in `internal/services/mcp/validation_test.go`
+2. **Implement interface**: Replace the template with your tool's logic by implementing the `NativeTool` interface methods:
+   - `Name() string`: Returns the unique tool identifier (snake_case, lowercase letters, digits, underscores only)
+   - `Description() string`: Returns a human-readable description of the tool's purpose
+   - `InputSchema() map[string]interface{}`: Returns the JSON Schema for input validation
+   - `Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error)`: Implements the tool logic
+3. **Add input validation**: If the tool accepts user input, add validation logic in `internal/services/mcp/validation.go` following the fail-closed security principles. The validation framework enforces SQL query validation, URL validation, protocol validation, and request forgery protection.
+4. **Register tool**: Add your tool to the tools list in `RegisterNativeTools()` in `internal/services/mcp/native_tool_registry.go`. The registry validates tool name format and input schema at registration time.
+5. **Test**: Add unit tests in `internal/services/mcp/native_handlers_test.go` and validation tests in `internal/services/mcp/validation_test.go`. Use table-driven tests for deterministic behavior enumeration.
 
-The tool will automatically be available via the MCP tools/list endpoint when no downstream MCP server is configured.
+The tool automatically becomes available via the MCP tools/list endpoint when no downstream MCP server is configured. The registry performs runtime validation of tool names (must be valid identifiers) and input schemas (must have type "object" with valid properties structure).
+
+### Tool Implementation Requirements
+
+All native tools must comply with the following requirements:
+
+- **Tool naming**: Use snake_case format with lowercase letters, digits, and underscores only. The first character must be a letter.
+- **Input validation**: Tools that accept user input must include validation logic in `internal/services/mcp/validation.go` to prevent injection attacks, path traversal, and request forgery.
+- **Error handling**: Return typed, structured errors with context using `fmt.Errorf("component: action: %w", err)` wrapping.
+- **Context cancellation**: Respect context cancellation in long-running operations by checking `ctx.Err()` in loops and blocking operations.
+- **Path validation**: Use `security.ValidatePath()` for file path operations to prevent directory traversal attacks.
+- **Secret scrubbing**: Apply secret scrubbing to log output and configuration data using the scrubbing functions in `native_handlers.go`.
+- **Fail-closed behavior**: Reject invalid inputs before execution rather than attempting to sanitize or proceed with unsafe data.
+
+### Template Reference
+
+The template file at `docs/protocols/mcp/tool_template.go` provides a complete starting point with:
+
+- Proper copyright header and Apache 2.0 license
+- Build tags to exclude the template from compilation (`//go:build ignore`)
+- Usage instructions in comments
+- Complete `NativeTool` interface implementation
+- JSON Schema input validation example
+- Error handling pattern
+- Result marshaling pattern
 
 ---
 
 ## Related Documentation
 
 - [**g8e Protocol**](../../architecture/g8e.md) - The wire contract and governance hierarchy
-- [**Operator (g8eo)**](../../architecture/operator.md) - Operator architecture and gateway mode
+- [**g8e Operator (g8eo)**](../../architecture/operator.md) - Operator architecture and gateway mode
 - [**A2A Protocol**](../a2a/a2a.md) - A2A protocol specification and integration

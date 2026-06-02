@@ -33,6 +33,20 @@ func RegisterNativeTools(registry *ToolRegistry) error {
 		&NetSocketAuditTool{},
 		&NetEndpointPingTool{},
 		&NetHTTPProbeTool{},
+		&SysInfoTool{},
+		&NetDNSResolveTool{},
+		&TLSCertInspectTool{},
+		&SysEnvVarsTool{},
+		&FSFileChecksumTool{},
+		&SysServiceStatusTool{},
+		&SysContainerStatusTool{},
+		&FSDiskUsageTool{},
+		&SysTimeClockTool{},
+		&ProcTreeTool{},
+		&GitOpsTool{},
+		&CloudMetadataTool{},
+		&K8sInspectTool{},
+		&ShellExecuteTool{},
 	}
 
 	for _, tool := range tools {

@@ -37,7 +37,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// PubSubCommandMessage is the inbound wire message received from operator pub/sub.
+// PubSubCommandMessage is the inbound wire message received from Operator pub/sub.
 type PubSubCommandMessage struct {
 	ID                string              `json:"id"`
 	EventType         constants.EventType `json:"event_type"`
@@ -53,8 +53,8 @@ type PubSubCommandMessage struct {
 	Timestamp         time.Time           `json:"timestamp"`
 }
 
-// PubSubCommandService manages the operator pub/sub connection and dispatches inbound
-// operator commands to the appropriate first-class service handler.
+// PubSubCommandService manages the Operator pub/sub connection and dispatches inbound
+// Operator commands to the appropriate first-class service handler.
 type PubSubCommandService struct {
 	client  PubSubClient
 	config  *config.Config
@@ -128,7 +128,7 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 		var err error
 		client, err = NewOperatorPubSubClient(c.Config.PubSubURL, c.Config.TLSServerName, c.Logger)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create operator pub/sub client: %w", err)
+			return nil, fmt.Errorf("failed to create Operator pub/sub client: %w", err)
 		}
 	}
 
@@ -333,10 +333,10 @@ func (rs *PubSubCommandService) Start(ctx context.Context) error {
 
 	channelName := constants.CmdChannel(rs.config.OperatorID, rs.config.OperatorSessionId)
 
-	// Only subscribe to pub/sub channel when running as a traditional operator (with identity)
+	// Only subscribe to pub/sub channel when running as a traditional Operator (with identity)
 	// In gateway mode, commands arrive via HTTP/WebSocket endpoints directly
 	if rs.config.OperatorID != "" && rs.config.OperatorSessionId != "" {
-		rs.logger.Info("Command service subscribing to operator channel",
+		rs.logger.Info("Command service subscribing to Operator channel",
 			"operator_id", rs.config.OperatorID,
 			"operator_session_id", rs.config.OperatorSessionId,
 			"cmd_channel", channelName)
@@ -409,11 +409,11 @@ func (rs *PubSubCommandService) listenForCommands(channelName string) {
 		}
 
 		if rs.client == nil {
-			rs.logger.Error("[RECONNECT] No operator pub/sub client configured")
+			rs.logger.Error("[RECONNECT] No Operator pub/sub client configured")
 			return
 		}
 
-		rs.logger.Info("Subscribing to operator command channel",
+		rs.logger.Info("Subscribing to Operator command channel",
 			"operator_session_id", rs.config.OperatorSessionId,
 			"channel_name", channelName)
 
@@ -424,9 +424,9 @@ func (rs *PubSubCommandService) listenForCommands(channelName string) {
 				return
 			}
 			if IsTLSCertError(err) {
-				rs.logger.Error("Server certificate verification failed during reconnect - this operator binary has outdated certificates",
+				rs.logger.Error("Server certificate verification failed during reconnect - this Node binary has outdated certificates",
 					"action", "SSL Failure. Requesting shutdown.",
-					"resolution", "download a new operator binary from https://"+constants.DefaultEndpoint)
+					"resolution", "download a new Node binary from https://"+constants.DefaultEndpoint)
 				rs.ShutdownChan <- "SSL_CERT_FAILURE"
 				return
 			}
@@ -506,7 +506,7 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 	}
 
 	// Decode as GovernanceEnvelope - this is the only canonical mutation transport.
-	// Binary protobuf bytes and other formats are explicitly rejected.
+	//Node Node Binary protobuf bytes and other formats are explicitly rejected.
 	envelope := &govpkg.GovernanceEnvelope{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, envelope); err != nil {
 		rs.logger.Error("envelope: non-JSON payload rejected",
@@ -822,7 +822,7 @@ func (rs *PubSubCommandService) handleShutdownRequest(msg *PubSubCommandMessage)
 	if reason == "" {
 		reason = "No reason provided"
 	}
-	rs.logger.Info("Shutting down operator (UAP)", "reason", reason)
+	rs.logger.Info("Shutting down Operator (UAP)", "reason", reason)
 	rs.ShutdownChan <- reason
 }
 

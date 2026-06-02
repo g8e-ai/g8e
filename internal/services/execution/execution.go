@@ -451,7 +451,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	execCtx.mu.Unlock()
 
 	// Set working directory: explicit request overrides, otherwise use operator's WorkDir.
-	// WorkDir is the directory the operator was launched from (or --working-dir flag value).
+	// WorkDir is the directory the Operator was launched from (or --working-dir flag value).
 	if request.WorkingDirectory != nil {
 		cmd.Dir = *request.WorkingDirectory
 	} else {

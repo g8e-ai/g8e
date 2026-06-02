@@ -315,8 +315,8 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 		"$GatewayPort = if ($env:GATEWAY_PORT) { $env:GATEWAY_PORT } else { \"" + port + "\" }\n" +
 		"$CABundleUrl = \"http://${GatewayHost}:${GatewayPort}/.well-known/g8e/pki/ca-bundle\"\n" +
 		"$LocalCAPath = \"" + constants.CACertBundlePath + "\"\n" +
-		"$BinaryName = \"g8e-windows-amd64.exe\"\n" +
-		"$BinaryUrl = \"http://${GatewayHost}:${GatewayPort}/.well-known/g8e/binary/g8e-windows-amd64.exe\"\n\n" +
+		"$Node BinaryName = \"g8e-windows-amd64.exe\"\n" +
+		"$Node BinaryUrl = \"http://${GatewayHost}:${GatewayPort}/.well-known/g8e/binary/g8e-windows-amd64.exe\"\n\n" +
 		"Write-Host \"[g8e] Fetching platform CA bundle from ${CABundleUrl}...\"\n" +
 		"$LocalDir = Split-Path -Parent $LocalCAPath\n" +
 		"if (-not (Test-Path $LocalDir)) {\n" +
@@ -333,23 +333,23 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 		"    return\n" +
 		"}\n\n" +
 		"Write-Host \"[g8e] CA bundle installed to ${LocalCAPath}\"\n\n" +
-		"# Download g8e binary\n" +
-		"Write-Host \"[g8e] Downloading g8e binary from ${BinaryUrl}...\"\n" +
+		"# Download g8e Node\n" +
+		"Write-Host \"[g8e] Downloading g8e Node from ${Node BinaryUrl}...\"\n" +
 		"try {\n" +
-		"    Invoke-RestMethod -Uri $BinaryUrl -OutFile $BinaryName\n" +
+		"    Invoke-RestMethod -Uri $Node BinaryUrl -OutFile $Node BinaryName\n" +
 		"} catch {\n" +
-		"    Write-Host \"[g8e] ERROR: Failed to download g8e binary: $_\"\n" +
+		"    Write-Host \"[g8e] ERROR: Failed to download g8e Node: $_\"\n" +
 		"    return\n" +
 		"}\n" +
 		"\n" +
-		"if (-not (Test-Path $BinaryName)) {\n" +
-		"    Write-Host \"[g8e] ERROR: Failed to download g8e binary\"\n" +
+		"if (-not (Test-Path $Node BinaryName)) {\n" +
+		"    Write-Host \"[g8e] ERROR: Failed to download g8e Node\"\n" +
 		"    return\n" +
 		"}\n\n" +
-		"Write-Host \"[g8e] Binary downloaded to ${BinaryName}\"\n\n" +
+		"Write-Host \"[g8e]Node Node Binary downloaded to ${Node BinaryName}\"\n\n" +
 		"# Run enrollment\n" +
-		"Write-Host \"[g8e] Running PKI enrollment with endpoint ${GatewayHost}:${GatewayPort}...\"\n" +
-		"& .\\$BinaryName security pki enroll --endpoint \"${GatewayHost}:${GatewayPort}\"\n" +
+		"Write-Host \"[g8e] Running PKI enrollment with endpoint ${GatewayHost}...\"\n" +
+		"& .\\$Node BinaryName security pki enroll --endpoint \"${GatewayHost}\"\n" +
 		"\n" +
 		"if ($LASTEXITCODE -ne 0) {\n" +
 		"    Write-Host \"[g8e] ERROR: Enrollment failed with exit code ${LASTEXITCODE}\"\n" +
@@ -357,9 +357,9 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 		"}\n\n" +
 		"Write-Host \"[g8e] Enrollment complete\"\n\n" +
 		"# Start the operator\n" +
-		"Write-Host \"[g8e] Starting operator with endpoint ${GatewayHost}...\"\n" +
-		"Write-Host \"[g8e] The operator will run in this terminal. Press Ctrl+C to stop.\"\n" +
-		"& .\\$BinaryName -e $GatewayHost\n"
+		"Write-Host \"[g8e] Starting Operator with endpoint ${GatewayHost}...\"\n" +
+		"Write-Host \"[g8e] The Operator will run in this terminal. Press Ctrl+C to stop.\"\n" +
+		"& .\\$Node BinaryName -e $GatewayHost\n"
 
 	w.Header().Set("Content-Type", "application/x-powershell")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -372,7 +372,7 @@ func (c *PKIController) handleTrustScriptWindowsAlias(w http.ResponseWriter, r *
 	c.handleTrustScriptWindows(w, r)
 }
 
-func (c *PKIController) handleBinaryDownload(w http.ResponseWriter, r *http.Request) {
+func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -385,7 +385,7 @@ func (c *PKIController) handleBinaryDownload(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Validate filename matches expected g8e binary pattern: g8e-{os}-{arch}[.exe]
+	// Validate filename matches expected g8e Node pattern: g8e-{os}-{arch}[.exe]
 	// Allowed OS: linux, darwin, windows
 	// Allowed arch: amd64, arm64, 386
 	binaryPattern := regexp.MustCompile(`^g8e-(linux|darwin|windows)-(amd64|arm64|386)(\.exe)?$`)

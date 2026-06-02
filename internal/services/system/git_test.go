@@ -24,21 +24,21 @@ import (
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
-func TestResolveGitBinary_SystemGit(t *testing.T) {
+func TestResolveGitNodeBinary_SystemGit(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	resolved := ResolveGitBinary(logger)
 	assert.Equal(t, GitEmbedded, resolved)
 }
 
-func TestValidateGitBinary_Valid(t *testing.T) {
+func TestValidateGitNodeBinary_Valid(t *testing.T) {
 	t.Parallel()
 	version, err := ValidateGitBinary(GitEmbedded)
 	require.NoError(t, err)
 	assert.Contains(t, version, "go-git v5")
 }
 
-func TestValidateGitBinary_Empty(t *testing.T) {
+func TestValidateGitNodeBinary_Empty(t *testing.T) {
 	t.Parallel()
 	_, err := ValidateGitBinary("")
 	require.Error(t, err)

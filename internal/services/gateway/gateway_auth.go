@@ -175,7 +175,7 @@ func NewAuthService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger
 	}
 }
 
-// ValidateOperatorSession checks if a session ID is valid and returns the operator document.
+// ValidateOperatorSession checks if a session ID is valid and returns the Operator document.
 // Auth depends on session validity (existence + certificate revocation), not on operator
 // status liveness signals from other processes. The primary session invalidation mechanism
 // is certificate revocation via PKI authority.
@@ -194,7 +194,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	}
 
 	if len(docs) == 0 {
-		return nil, &AuthError{Message: "invalid or expired operator session", Status: http.StatusUnauthorized}
+		return nil, &AuthError{Message: "invalid or expired Operator session", Status: http.StatusUnauthorized}
 	}
 
 	// Convert Document to OperatorDocumentGo
@@ -244,7 +244,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	return &op, nil
 }
 
-// ExtractOperatorSessionID returns the operator session ID from the request headers.
+// ExtractOperatorSessionID returns the Operator session ID from the request headers.
 // It prefers Authorization: Bearer <token>.
 func (s *AuthService) ExtractOperatorSessionID(r *http.Request) string {
 	authHeader := r.Header.Get(constants.HeaderAuthorization)
@@ -336,7 +336,7 @@ func (s *AuthService) authMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// handleOperatorAuth handles authentication for operator sessions.
+// handleOperatorAuth handles authentication for Operator sessions.
 // Returns true if the request was handled (either succeeded or failed with error).
 func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request, operatorSessionID, cliSessionID string, next http.Handler) bool {
 	op, err := s.ValidateOperatorSession(operatorSessionID)
@@ -355,7 +355,7 @@ func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request,
 				match = s.cliCertBoundToOperator(cert.URIs, cliSessionID, op.UserID, operatorSessionID)
 			}
 			if !match {
-				s.logger.Warn("mTLS URI SAN mismatch for operator session", "path", r.URL.Path, "operator_id", op.ID, "operator_session_id", operatorSessionID)
+				s.logger.Warn("mTLS URI SAN mismatch for Operator session", "path", r.URL.Path, "operator_id", op.ID, "operator_session_id", operatorSessionID)
 				s.responder.Error(w, http.StatusForbidden, "mTLS identity mismatch")
 				return true
 			}
@@ -365,7 +365,7 @@ func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request,
 		return true
 	}
 
-	s.logger.Warn("Invalid operator session attempt", "operator_session_id", operatorSessionID[:8]+"...", string(constants.ConnectionStateError), err)
+	s.logger.Warn("Invalid Operator session attempt", "operator_session_id", operatorSessionID[:8]+"...", string(constants.ConnectionStateError), err)
 
 	if ae, ok := err.(*AuthError); ok {
 		s.responder.Error(w, ae.Status, ae.Message)

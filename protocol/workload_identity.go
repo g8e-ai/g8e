@@ -32,13 +32,13 @@ func NewWorkloadIdentity() *WorkloadIdentity {
 	return &WorkloadIdentity{}
 }
 
-// OperatorSPIFFEID generates the SPIFFE ID for an operator workload.
+// OperatorSPIFFEID generates the SPIFFE ID for an Operator workload.
 // Format: spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
 func (w *WorkloadIdentity) OperatorSPIFFEID(organizationID, operatorID, sessionID string) string {
 	return fmt.Sprintf("spiffe://%s/operator/%s/%s/%s", TrustDomain, organizationID, operatorID, sessionID)
 }
 
-// OperatorSPIFFEURL generates the SPIFFE URL for an operator workload.
+// OperatorSPIFFEURL generates the SPIFFE URL for an Operator workload.
 func (w *WorkloadIdentity) OperatorSPIFFEURL(organizationID, operatorID, sessionID string) (*url.URL, error) {
 	return url.Parse(w.OperatorSPIFFEID(organizationID, operatorID, sessionID))
 }
@@ -76,7 +76,7 @@ func (w *WorkloadIdentity) HubSPIFFEURL() (*url.URL, error) {
 	return url.Parse(w.HubSPIFFEID())
 }
 
-// MatchesOperator checks if a SPIFFE ID matches an operator identity.
+// MatchesOperator checks if a SPIFFE ID matches an Operator identity.
 func (w *WorkloadIdentity) MatchesOperator(spiffeID, organizationID, operatorID, sessionID string) bool {
 	return spiffeID == w.OperatorSPIFFEID(organizationID, operatorID, sessionID)
 }
