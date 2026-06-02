@@ -70,13 +70,13 @@ func (b *Builder) WithCommand(cmd string) *Builder {
 	return b
 }
 
-// WithOperatorID sets the operator ID.
+// WithOperatorID sets the Operator ID.
 func (b *Builder) WithOperatorID(id string) *Builder {
 	b.envelope.OperatorId = id
 	return b
 }
 
-// WithOperatorSessionID sets the operator session ID.
+// WithOperatorSessionID sets the Operator session ID.
 func (b *Builder) WithOperatorSessionID(id string) *Builder {
 	b.envelope.OperatorSessionId = id
 	return b

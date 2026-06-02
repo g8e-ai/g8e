@@ -553,7 +553,7 @@ func (m *SecretManager) GetOperatorPrivateKey() (ed25519.PrivateKey, error) {
 	}
 	seed, err := hex.DecodeString(seedHex)
 	if err != nil {
-		return nil, fmt.Errorf("decode operator private key seed: %w", err)
+		return nil, fmt.Errorf("decode Operator private key seed: %w", err)
 	}
 	if len(seed) != ed25519.SeedSize {
 		return nil, fmt.Errorf("operator private key seed has invalid length %d; expected %d", len(seed), ed25519.SeedSize)

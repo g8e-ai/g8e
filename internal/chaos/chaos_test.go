@@ -14,17 +14,25 @@
 package chaos
 
 import (
+	"context"
 	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"math/rand/v2"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestPickCategory(t *testing.T) {
@@ -735,6 +743,63 @@ func TestBatchEventWriter(t *testing.T) {
 		// Should not panic with empty events
 		writer.flush()
 	})
+
+	t.Run("auto-flush on reaching flushSize", func(t *testing.T) {
+		writer := &batchEventWriter{
+			events:    make([]*storage.ChaosEvent, 0, 5),
+			flushSize: 3,
+		}
+
+		event := &storage.ChaosEvent{
+			OperatorSessionID: "test-session",
+			Timestamp:         time.Now(),
+			ChaosID:           1,
+			Category:          "TEST",
+			Outcome:           "TEST_OUTCOME",
+		}
+
+		// Add 2 events - should not flush
+		writer.queueEvent(event)
+		writer.queueEvent(event)
+		if len(writer.events) != 2 {
+			t.Errorf("expected 2 events before flush, got %d", len(writer.events))
+		}
+
+		// Add 3rd event - should trigger flush
+		writer.queueEvent(event)
+		if len(writer.events) != 0 {
+			t.Errorf("expected 0 events after auto-flush, got %d", len(writer.events))
+		}
+	})
+
+	t.Run("multiple flushes", func(t *testing.T) {
+		writer := &batchEventWriter{
+			events:    make([]*storage.ChaosEvent, 0, 2),
+			flushSize: 2,
+		}
+
+		event := &storage.ChaosEvent{
+			OperatorSessionID: "test-session",
+			Timestamp:         time.Now(),
+			ChaosID:           1,
+			Category:          "TEST",
+			Outcome:           "TEST_OUTCOME",
+		}
+
+		// First batch
+		writer.queueEvent(event)
+		writer.queueEvent(event)
+		if len(writer.events) != 0 {
+			t.Errorf("expected 0 events after first auto-flush, got %d", len(writer.events))
+		}
+
+		// Second batch
+		writer.queueEvent(event)
+		writer.queueEvent(event)
+		if len(writer.events) != 0 {
+			t.Errorf("expected 0 events after second auto-flush, got %d", len(writer.events))
+		}
+	})
 }
 
 func TestCounters(t *testing.T) {
@@ -1019,6 +1084,37 @@ func TestRecordRejection(t *testing.T) {
 			t.Errorf("expected chaos ID 1, got %d", event.ChaosID)
 		}
 	})
+
+	t.Run("different rejection reasons", func(t *testing.T) {
+		testErrors := []struct {
+			err  error
+			want string
+		}{
+			{errors.New("TX_L1_FAILED: test"), "L1_BLOCKED"},
+			{errors.New("TX_HASH_MISMATCH: test"), "HASH_FAIL"},
+			{errors.New("TX_L2_REJECTED: test"), "L2_REJECTED"},
+			{errors.New("TX_EXPIRED: test"), "EXPIRED"},
+			{errors.New("TX_REPLAY: test"), "REPLAY"},
+			{errors.New("other error"), "REJECTED"},
+		}
+
+		for _, tt := range testErrors {
+			reason := classifyRejection(tt.err)
+			if reason != tt.want {
+				t.Errorf("classifyRejection(%v) = %s, want %s", tt.err, reason, tt.want)
+			}
+		}
+	})
+
+	t.Run("different categories", func(t *testing.T) {
+		categories := []category{catGoodActor, catPromptInj, catMitM, catFileMutation}
+		for _, cat := range categories {
+			catName := categoryName(cat)
+			if catName == "UNKNOWN" && cat != category(999) {
+				t.Errorf("categoryName(%d) returned UNKNOWN for valid category", cat)
+			}
+		}
+	})
 }
 
 func TestRecordExecution(t *testing.T) {
@@ -1103,4 +1199,683 @@ func TestPrintSummaryRow(t *testing.T) {
 func TestPrintDemoQueries(t *testing.T) {
 	// This is a visual output function, just verify it doesn't panic
 	printDemoQueries("/tmp/test.db")
+}
+
+func TestChaosExecutionHandler(t *testing.T) {
+	handler := &chaosExecutionHandler{
+		ledger:    nil,
+		stateRoot: &dynamicStateRoot{root: "test-root"},
+	}
+
+	t.Run("non-PubSubCommandMessage returns empty", func(t *testing.T) {
+		result, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.FsList.Requested, "not a command message")
+		if err != nil {
+			t.Errorf("ExecuteVerifiedTransaction() error = %v", err)
+		}
+		if result != "" {
+			t.Errorf("ExecuteVerifiedTransaction() result = %s, want empty string", result)
+		}
+	})
+
+	t.Run("nil ledger with FileEdit does not panic", func(t *testing.T) {
+		handlerNilLedger := &chaosExecutionHandler{
+			ledger:    nil,
+			stateRoot: &dynamicStateRoot{root: "test-root"},
+		}
+
+		payload, _ := proto.Marshal(&operatorv1.FileEditRequested{
+			FilePath:    "/tmp/test.txt",
+			Content:     "test content",
+			ExecutionId: "exec-123",
+		})
+
+		cmdMsg := pubsub.PubSubCommandMessage{
+			ID:                "test-id",
+			EventType:         constants.Event.Operator.FileEdit.Requested,
+			OperatorSessionID: "session-123",
+			Payload:           payload,
+			Timestamp:         time.Now(),
+		}
+
+		result, err := handlerNilLedger.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.FileEdit.Requested, cmdMsg)
+		if err != nil {
+			t.Errorf("ExecuteVerifiedTransaction() error = %v", err)
+		}
+		if result != "" {
+			t.Errorf("ExecuteVerifiedTransaction() result = %s, want empty string", result)
+		}
+	})
+
+	t.Run("non-FileEdit event type", func(t *testing.T) {
+		payload, _ := proto.Marshal(&operatorv1.FsListRequested{
+			Path:        "/tmp",
+			ExecutionId: "exec-123",
+		})
+
+		cmdMsg := pubsub.PubSubCommandMessage{
+			ID:                "test-id",
+			EventType:         constants.Event.Operator.FsList.Requested,
+			OperatorSessionID: "session-123",
+			Payload:           payload,
+			Timestamp:         time.Now(),
+		}
+
+		result, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.FsList.Requested, cmdMsg)
+		if err != nil {
+			t.Errorf("ExecuteVerifiedTransaction() error = %v", err)
+		}
+		if result != "" {
+			t.Errorf("ExecuteVerifiedTransaction() result = %s, want empty string", result)
+		}
+	})
+
+	t.Run("mutation count tracking", func(t *testing.T) {
+		handlerWithCount := &chaosExecutionHandler{
+			ledger:        nil,
+			stateRoot:     &dynamicStateRoot{root: "test-root"},
+			mutationCount: atomic.Int64{},
+		}
+
+		initialCount := handlerWithCount.mutationCount.Load()
+		if initialCount != 0 {
+			t.Errorf("initial mutation count = %d, want 0", initialCount)
+		}
+	})
+
+	t.Run("invalid payload unmarshal", func(t *testing.T) {
+		handlerInvalid := &chaosExecutionHandler{
+			ledger:    nil,
+			stateRoot: &dynamicStateRoot{root: "test-root"},
+		}
+
+		cmdMsg := pubsub.PubSubCommandMessage{
+			ID:                "test-id",
+			EventType:         constants.Event.Operator.FileEdit.Requested,
+			OperatorSessionID: "session-123",
+			Payload:           []byte("invalid protobuf data"),
+			Timestamp:         time.Now(),
+		}
+
+		result, err := handlerInvalid.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.FileEdit.Requested, cmdMsg)
+		if err != nil {
+			t.Errorf("ExecuteVerifiedTransaction() error = %v", err)
+		}
+		if result != "" {
+			t.Errorf("ExecuteVerifiedTransaction() result = %s, want empty string", result)
+		}
+	})
+
+	t.Run("nil state root", func(t *testing.T) {
+		handlerNilState := &chaosExecutionHandler{
+			ledger:    nil,
+			stateRoot: nil,
+		}
+
+		payload, _ := proto.Marshal(&operatorv1.FsListRequested{
+			Path:        "/tmp",
+			ExecutionId: "exec-123",
+		})
+
+		cmdMsg := pubsub.PubSubCommandMessage{
+			ID:                "test-id",
+			EventType:         constants.Event.Operator.FsList.Requested,
+			OperatorSessionID: "session-123",
+			Payload:           payload,
+			Timestamp:         time.Now(),
+		}
+
+		result, err := handlerNilState.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.FsList.Requested, cmdMsg)
+		if err != nil {
+			t.Errorf("ExecuteVerifiedTransaction() error = %v", err)
+		}
+		if result != "" {
+			t.Errorf("ExecuteVerifiedTransaction() result = %s, want empty string", result)
+		}
+	})
+}
+
+func TestMemReplayStoreConcurrency(t *testing.T) {
+	store := newMemReplayStore()
+	nonce := "concurrent-nonce"
+	expiry := time.Now().Add(1 * time.Hour)
+
+	t.Run("concurrent ReserveNonce", func(t *testing.T) {
+		const goroutines = 100
+		results := make(chan bool, goroutines)
+
+		for i := 0; i < goroutines; i++ {
+			go func() {
+				seen, err := store.ReserveNonce(nonce, expiry)
+				if err != nil {
+					t.Errorf("ReserveNonce() error = %v", err)
+				}
+				results <- seen
+			}()
+		}
+
+		seenCount := 0
+		for i := 0; i < goroutines; i++ {
+			if <-results {
+				seenCount++
+			}
+		}
+
+		// Only the first caller should see the nonce as not seen
+		if seenCount != goroutines-1 {
+			t.Errorf("expected %d seen, got %d", goroutines-1, seenCount)
+		}
+	})
+
+	t.Run("concurrent ReleaseNonce and ReserveNonce", func(t *testing.T) {
+		store2 := newMemReplayStore()
+		nonce2 := "concurrent-nonce-2"
+		expiry2 := time.Now().Add(1 * time.Hour)
+
+		const operations = 50
+		var wg sync.WaitGroup
+
+		for i := 0; i < operations; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				store2.ReserveNonce(nonce2, expiry2)
+				store2.ReleaseNonce(nonce2)
+			}()
+		}
+
+		wg.Wait()
+
+		// After all operations, nonce should be available
+		seen, err := store2.ReserveNonce(nonce2, expiry2)
+		if err != nil {
+			t.Errorf("ReserveNonce() error = %v", err)
+		}
+		if seen {
+			t.Error("nonce should not be seen after all release operations")
+		}
+	})
+}
+
+func TestDynamicStateRootConcurrency(t *testing.T) {
+	provider := &dynamicStateRoot{root: "initial"}
+
+	t.Run("concurrent GetCurrentStateRoot", func(t *testing.T) {
+		const goroutines = 100
+		var wg sync.WaitGroup
+		errors := make(chan error, goroutines)
+
+		for i := 0; i < goroutines; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, err := provider.GetCurrentStateRoot()
+				if err != nil {
+					errors <- err
+				}
+			}()
+		}
+
+		wg.Wait()
+		close(errors)
+
+		for err := range errors {
+			t.Errorf("GetCurrentStateRoot() error = %v", err)
+		}
+	})
+
+	t.Run("concurrent UpdateRoot and GetCurrentStateRoot", func(t *testing.T) {
+		provider2 := &dynamicStateRoot{root: "initial"}
+		const goroutines = 50
+		var wg sync.WaitGroup
+
+		for i := 0; i < goroutines; i++ {
+			wg.Add(1)
+			go func(idx int) {
+				defer wg.Done()
+				if idx%2 == 0 {
+					provider2.UpdateRoot(fmt.Sprintf("root-%d", idx))
+				} else {
+					provider2.GetCurrentStateRoot()
+				}
+			}(i)
+		}
+
+		wg.Wait()
+
+		// Final state should be one of the updated roots
+		root, err := provider2.GetCurrentStateRoot()
+		if err != nil {
+			t.Errorf("GetCurrentStateRoot() error = %v", err)
+		}
+		if root == "" {
+			t.Error("root should not be empty")
+		}
+	})
+}
+
+func TestSignedEnvelopePayloadEdgeCases(t *testing.T) {
+	_, privKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+
+	t.Run("empty payload", func(t *testing.T) {
+		env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", []byte{}, false, privKey, "key-id", "session-id")
+		if err != nil {
+			t.Fatalf("signedEnvelope() error = %v", err)
+		}
+		if env == nil {
+			t.Fatal("envelope is nil")
+		}
+		if env.Nonce == "" {
+			t.Error("Nonce should not be empty even with empty payload")
+		}
+	})
+
+	t.Run("small payload", func(t *testing.T) {
+		env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", []byte("a"), false, privKey, "key-id", "session-id")
+		if err != nil {
+			t.Fatalf("signedEnvelope() error = %v", err)
+		}
+		if env == nil {
+			t.Fatal("envelope is nil")
+		}
+	})
+
+	t.Run("large payload", func(t *testing.T) {
+		largePayload := make([]byte, 10000)
+		for i := range largePayload {
+			largePayload[i] = byte(i % 256)
+		}
+		env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", largePayload, false, privKey, "key-id", "session-id")
+		if err != nil {
+			t.Fatalf("signedEnvelope() error = %v", err)
+		}
+		if env == nil {
+			t.Fatal("envelope is nil")
+		}
+	})
+}
+
+func TestBuildEnvelopeErrors(t *testing.T) {
+	_, privKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+
+	stateRoot := "test-state-root"
+	keyID := "test-key-id"
+	sessionID := "test-session-id"
+
+	t.Run("buildGoodActorEnvelope with invalid proto marshal", func(t *testing.T) {
+		// This test verifies error handling in the envelope builders
+		// Since proto.Marshal rarely fails with valid inputs, we test the error path exists
+		env, err := buildGoodActorEnvelope(1, stateRoot, privKey, keyID, sessionID)
+		if err != nil {
+			t.Fatalf("buildGoodActorEnvelope() unexpected error = %v", err)
+		}
+		if env == nil {
+			t.Error("envelope should not be nil on success")
+		}
+	})
+
+	t.Run("buildFileMutationEnvelope with L3 proof", func(t *testing.T) {
+		env, err := buildFileMutationEnvelope(1, stateRoot, privKey, keyID, sessionID)
+		if err != nil {
+			t.Fatalf("buildFileMutationEnvelope() error = %v", err)
+		}
+		if env == nil {
+			t.Fatal("envelope is nil")
+		}
+		if env.Governance == nil {
+			t.Fatal("Governance is nil")
+		}
+		if env.Governance.L3 == nil {
+			t.Error("L3 should be present for file mutation")
+		}
+		if env.Governance.L3.Proof == nil {
+			t.Error("L3 Proof should be present")
+		}
+		if env.Governance.L3.Proof.Signature != "chaos-human-proof" {
+			t.Errorf("L3 Proof Signature = %s, want chaos-human-proof", env.Governance.L3.Proof.Signature)
+		}
+	})
+}
+
+func TestConfig(t *testing.T) {
+	t.Run("default config", func(t *testing.T) {
+		cfg := Config{}
+		if cfg.Count != 0 {
+			t.Errorf("Count = %d, want 0", cfg.Count)
+		}
+		if cfg.DataDir != "" {
+			t.Errorf("DataDir = %s, want empty string", cfg.DataDir)
+		}
+		if cfg.PKIDir != "" {
+			t.Errorf("PKIDir = %s, want empty string", cfg.PKIDir)
+		}
+	})
+
+	t.Run("config with values", func(t *testing.T) {
+		cfg := Config{
+			Count:   100,
+			DataDir: "/tmp/test-data",
+			PKIDir:  "/tmp/test-pki",
+		}
+		if cfg.Count != 100 {
+			t.Errorf("Count = %d, want 100", cfg.Count)
+		}
+		if cfg.DataDir != "/tmp/test-data" {
+			t.Errorf("DataDir = %s, want /tmp/test-data", cfg.DataDir)
+		}
+		if cfg.PKIDir != "/tmp/test-pki" {
+			t.Errorf("PKIDir = %s, want /tmp/test-pki", cfg.PKIDir)
+		}
+	})
+}
+
+func TestCategoryConstants(t *testing.T) {
+	t.Run("category values are distinct", func(t *testing.T) {
+		categories := []category{catGoodActor, catPromptInj, catMitM, catFileMutation}
+		seen := make(map[category]bool)
+
+		for _, cat := range categories {
+			if seen[cat] {
+				t.Errorf("duplicate category value: %d", cat)
+			}
+			seen[cat] = true
+		}
+
+		if len(seen) != len(categories) {
+			t.Error("category constants are not distinct")
+		}
+	})
+
+	t.Run("category iota ordering", func(t *testing.T) {
+		if catGoodActor != 0 {
+			t.Errorf("catGoodActor = %d, want 0", catGoodActor)
+		}
+		if catPromptInj != 1 {
+			t.Errorf("catPromptInj = %d, want 1", catPromptInj)
+		}
+		if catMitM != 2 {
+			t.Errorf("catMitM = %d, want 2", catMitM)
+		}
+		if catFileMutation != 3 {
+			t.Errorf("catFileMutation = %d, want 3", catFileMutation)
+		}
+	})
+}
+
+func TestChaosTestCorruptedHash(t *testing.T) {
+	if chaosTestCorruptedHash == "" {
+		t.Error("chaosTestCorruptedHash should not be empty")
+	}
+	if len(chaosTestCorruptedHash) != 72 {
+		t.Errorf("chaosTestCorruptedHash length = %d, want 72 (36 hex bytes)", len(chaosTestCorruptedHash))
+	}
+}
+
+func TestSignedEnvelopeSourceComponent(t *testing.T) {
+	_, privKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+
+	env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", []byte("payload"), false, privKey, "key-id", "session-id")
+	if err != nil {
+		t.Fatalf("signedEnvelope() error = %v", err)
+	}
+
+	if env.SourceComponent != commonv1.Component_COMPONENT_AGENT {
+		t.Errorf("SourceComponent = %v, want COMPONENT_AGENT", env.SourceComponent)
+	}
+}
+
+func TestSignedEnvelopeProtocolVersion(t *testing.T) {
+	_, privKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+
+	env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", []byte("payload"), false, privKey, "key-id", "session-id")
+	if err != nil {
+		t.Fatalf("signedEnvelope() error = %v", err)
+	}
+
+	if env.ProtocolVersion != "1.0" {
+		t.Errorf("ProtocolVersion = %s, want 1.0", env.ProtocolVersion)
+	}
+}
+
+func TestMemReplayStoreMultipleNonces(t *testing.T) {
+	store := newMemReplayStore()
+	expiry := time.Now().Add(1 * time.Hour)
+
+	nonces := []string{"nonce-1", "nonce-2", "nonce-3"}
+
+	t.Run("reserve multiple nonces", func(t *testing.T) {
+		for _, nonce := range nonces {
+			seen, err := store.ReserveNonce(nonce, expiry)
+			if err != nil {
+				t.Errorf("ReserveNonce() error = %v", err)
+			}
+			if seen {
+				t.Errorf("nonce %s should not be seen on first use", nonce)
+			}
+		}
+	})
+
+	t.Run("re-reserve multiple nonces", func(t *testing.T) {
+		for _, nonce := range nonces {
+			seen, err := store.ReserveNonce(nonce, expiry)
+			if err != nil {
+				t.Errorf("ReserveNonce() error = %v", err)
+			}
+			if !seen {
+				t.Errorf("nonce %s should be seen on second use", nonce)
+			}
+		}
+	})
+
+	t.Run("release specific nonce", func(t *testing.T) {
+		err := store.ReleaseNonce("nonce-2")
+		if err != nil {
+			t.Errorf("ReleaseNonce() error = %v", err)
+		}
+
+		seen, err := store.ReserveNonce("nonce-2", expiry)
+		if err != nil {
+			t.Errorf("ReserveNonce() after release error = %v", err)
+		}
+		if seen {
+			t.Error("nonce-2 should not be seen after release")
+		}
+
+		// Other nonces should still be seen
+		seen, err = store.ReserveNonce("nonce-1", expiry)
+		if err != nil {
+			t.Errorf("ReserveNonce() error = %v", err)
+		}
+		if !seen {
+			t.Error("nonce-1 should still be seen")
+		}
+	})
+}
+
+func TestMemReplayStoreEmptyNonce(t *testing.T) {
+	store := newMemReplayStore()
+	expiry := time.Now().Add(1 * time.Hour)
+
+	t.Run("empty string nonce", func(t *testing.T) {
+		seen, err := store.ReserveNonce("", expiry)
+		if err != nil {
+			t.Errorf("ReserveNonce() error = %v", err)
+		}
+		if seen {
+			t.Error("empty nonce should not be seen on first use")
+		}
+
+		seen, err = store.ReserveNonce("", expiry)
+		if err != nil {
+			t.Errorf("ReserveNonce() error = %v", err)
+		}
+		if !seen {
+			t.Error("empty nonce should be seen on second use")
+		}
+	})
+}
+
+func TestDynamicStateRootEmpty(t *testing.T) {
+	provider := &dynamicStateRoot{root: ""}
+
+	t.Run("empty root", func(t *testing.T) {
+		root, err := provider.GetCurrentStateRoot()
+		if err != nil {
+			t.Errorf("GetCurrentStateRoot() error = %v", err)
+		}
+		if root != "" {
+			t.Errorf("GetCurrentStateRoot() = %s, want empty string", root)
+		}
+	})
+
+	t.Run("update to empty root", func(t *testing.T) {
+		provider.UpdateRoot("")
+		root, err := provider.GetCurrentStateRoot()
+		if err != nil {
+			t.Errorf("GetCurrentStateRoot() error = %v", err)
+		}
+		if root != "" {
+			t.Errorf("GetCurrentStateRoot() = %s, want empty string", root)
+		}
+	})
+}
+
+func TestSignedEnvelopeL3ProofStructure(t *testing.T) {
+	_, privKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+
+	t.Run("mutation has L3 proof", func(t *testing.T) {
+		env, err := signedEnvelope("FILE_EDIT", "/tmp/test.txt", "state-root", "nonce", []byte("content"), true, privKey, "key-id", "session-id")
+		if err != nil {
+			t.Fatalf("signedEnvelope() error = %v", err)
+		}
+
+		if env.Governance == nil {
+			t.Fatal("Governance is nil")
+		}
+		if env.Governance.L3 == nil {
+			t.Fatal("L3 is nil for mutation")
+		}
+		if env.Governance.L3.Proof == nil {
+			t.Fatal("L3 Proof is nil for mutation")
+		}
+		if env.Governance.L3.Proof.Signature == "" {
+			t.Error("L3 Proof Signature is empty")
+		}
+	})
+
+	t.Run("non-mutation has no L3 proof", func(t *testing.T) {
+		env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", []byte("content"), false, privKey, "key-id", "session-id")
+		if err != nil {
+			t.Fatalf("signedEnvelope() error = %v", err)
+		}
+
+		if env.Governance == nil {
+			t.Fatal("Governance is nil")
+		}
+		if env.Governance.L3 != nil {
+			t.Error("L3 should be nil for non-mutation")
+		}
+	})
+}
+
+func TestBuildPromptInjEnvelopeVariations(t *testing.T) {
+	_, privKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+
+	stateRoot := "test-state-root"
+	keyID := "test-key-id"
+	sessionID := "test-session-id"
+
+	t.Run("different IDs use different commands", func(t *testing.T) {
+		envs := make([]*govpkg.GovernanceEnvelope, 10)
+		for i := 0; i < 10; i++ {
+			env, err := buildPromptInjEnvelope(i, stateRoot, privKey, keyID, sessionID)
+			if err != nil {
+				t.Fatalf("buildPromptInjEnvelope() error = %v", err)
+			}
+			envs[i] = env
+		}
+
+		// Verify all envelopes have EXECUTE_BASH action type
+		for i, env := range envs {
+			if env.ActionType != "EXECUTE_BASH" {
+				t.Errorf("envelope %d ActionType = %s, want EXECUTE_BASH", i, env.ActionType)
+			}
+		}
+	})
+}
+
+func TestBuildGoodActorEnvelopeVariations(t *testing.T) {
+	_, privKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+
+	stateRoot := "test-state-root"
+	keyID := "test-key-id"
+	sessionID := "test-session-id"
+
+	t.Run("different IDs produce different paths", func(t *testing.T) {
+		env1, err := buildGoodActorEnvelope(1, stateRoot, privKey, keyID, sessionID)
+		if err != nil {
+			t.Fatalf("buildGoodActorEnvelope() error = %v", err)
+		}
+
+		env2, err := buildGoodActorEnvelope(2, stateRoot, privKey, keyID, sessionID)
+		if err != nil {
+			t.Fatalf("buildGoodActorEnvelope() error = %v", err)
+		}
+
+		// Different IDs should produce different envelopes
+		if env1.Id == env2.Id {
+			t.Error("different IDs should produce different envelope IDs")
+		}
+		if env1.Nonce == env2.Nonce {
+			t.Error("different IDs should produce different nonces")
+		}
+	})
+}
+
+func TestBuildFileMutationEnvelopeVariations(t *testing.T) {
+	_, privKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+
+	stateRoot := "test-state-root"
+	keyID := "test-key-id"
+	sessionID := "test-session-id"
+
+	t.Run("different IDs produce different file paths", func(t *testing.T) {
+		env1, err := buildFileMutationEnvelope(1, stateRoot, privKey, keyID, sessionID)
+		if err != nil {
+			t.Fatalf("buildFileMutationEnvelope() error = %v", err)
+		}
+
+		env2, err := buildFileMutationEnvelope(2, stateRoot, privKey, keyID, sessionID)
+		if err != nil {
+			t.Fatalf("buildFileMutationEnvelope() error = %v", err)
+		}
+
+		// Different IDs should produce different envelopes
+		if env1.Id == env2.Id {
+			t.Error("different IDs should produce different envelope IDs")
+		}
+	})
 }

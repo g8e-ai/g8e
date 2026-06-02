@@ -90,7 +90,7 @@ func auditorRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&auditorKey, "key", "", "client key PEM")
 	cmd.Flags().StringVar(&auditorCA, "ca", "", "gateway CA bundle PEM")
 	cmd.Flags().StringVar(&auditorAPIKey, "api-key", "", "operator API key for MCP/A2A surface")
-	cmd.Flags().StringVar(&auditorSessionID, "operator-session", "", "scope audit to a specific operator session")
+	cmd.Flags().StringVar(&auditorSessionID, "operator-session", "", "scope audit to a specific Operator session")
 	cmd.Flags().BoolVar(&auditorInsecure, "insecure", false, "skip TLS verify (local dev only)")
 	cmd.Flags().StringVar(&auditorOutDir, "out", "", "report output dir")
 	cmd.Flags().StringVar(&auditorL3Mode, "l3-mode", "", "mock|suspend")

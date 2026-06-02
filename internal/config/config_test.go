@@ -142,7 +142,7 @@ func TestLoad_ValidationErrors(t *testing.T) {
 		errContains string
 	}{
 		{
-			name:        "missing operator endpoint",
+			name:        "missing Operator endpoint",
 			opts:        LoadOptions{},
 			errContains: "OperatorEndpoint is required",
 		},
@@ -275,7 +275,7 @@ func TestLoadGateway_PartialDefaults(t *testing.T) {
 		assert.Equal(t, "/custom/data", cfg.Gateway.DataDir)
 	})
 
-	t.Run("no operator fields set", func(t *testing.T) {
+	t.Run("no Operator fields set", func(t *testing.T) {
 		cfg, err := LoadGateway(GatewayOptions{AllowTestPortZero: true})
 		require.NoError(t, err)
 		assert.Empty(t, cfg.Endpoint)

@@ -5,14 +5,14 @@ This directory contains Docker configurations for running the g8e platform in co
 ## Components
 
 - **Dockerfile.gateway**: Builds the g8e gateway (Policy Decision Point) in gateway mode with L1 enforcement, L2/L3 auditing
-- **Dockerfile.operator**: Builds the g8e operator (Policy Execution Point) in listen mode
-- **docker-compose.yml**: Orchestrates gateway and operator services with proper networking and dependencies
+- **Dockerfile.operator**: Builds the g8e Operator (Policy Execution Point) in listen mode
+- **docker-compose.yml**: Orchestrates gateway and Operator services with proper networking and dependencies
 
 ## Quick Start
 
-### Build the g8e Binary First
+### Build the g8e Node First
 
-The Dockerfiles copy the pre-built binary from the host. Build it first:
+The Dockerfiles copy the pre-built g8e Node from the host. Build it first:
 
 ```bash
 make build
@@ -26,9 +26,9 @@ docker-compose up -d
 ```
 
 This will:
-1. Build both gateway and operator images (copying the pre-built binary)
+1. Build both gateway and Operator images (copying the pre-built g8e Node)
 2. Start the gateway service on ports 9000-9002
-3. Start the operator service on ports 9010-9012 (offset to avoid conflicts)
+3. Start the Operator service on ports 9010-9012 (offset to avoid conflicts)
 4. Create persistent volumes for data, PKI, and secrets
 
 ### Service Endpoints
@@ -117,7 +117,7 @@ Then build the Docker images:
 # Build gateway image
 docker build -f docker/Dockerfile.gateway -t g8e-gateway:latest ..
 
-# Build operator image
+# Build Operator image
 docker build -f docker/Dockerfile.operator -t g8e-operator:latest ..
 ```
 

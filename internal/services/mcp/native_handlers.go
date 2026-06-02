@@ -55,7 +55,7 @@ const (
 	defaultHTTPTimeout      = 10 * time.Second
 )
 
-// NativeToolHandler executes native tools compiled into the Operator binary.
+// NativeToolHandler executes native tools compiled into the Node binary.
 type NativeToolHandler struct {
 	registry *ToolRegistry
 }

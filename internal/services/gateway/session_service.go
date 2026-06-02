@@ -24,7 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
-// SessionService centralizes the logic for creating and binding operator and CLI sessions.
+// SessionService centralizes the logic for creating and binding Operator and CLI sessions.
 type SessionService struct {
 	db     *GatewayDBService
 	logger *slog.Logger
@@ -38,7 +38,7 @@ func NewSessionService(db *GatewayDBService, logger *slog.Logger) *SessionServic
 	}
 }
 
-// PersistSessions binds an operator session and a CLI session and persists both documents.
+// PersistSessions binds an Operator session and a CLI session and persists both documents.
 func (s *SessionService) PersistSessions(cliSessionID, operatorSessionID, userID, orgID, operatorID, systemFingerprint, certFingerprint, certSerial, loginMethod string) error {
 	// CLI session id is a first-class session type, strictly disjoint from
 	// operator_session_id. The operator_session_id authenticates the host
@@ -49,7 +49,7 @@ func (s *SessionService) PersistSessions(cliSessionID, operatorSessionID, userID
 
 	// Store the binding between operator_session_id and cli_session_id in a first-class
 	// collection to support metadata, expiry, and revocation. Without this binding,
-	// any authenticated operator could drain any cli_session_id's event buffer.
+	// any authenticated Operator could drain any cli_session_id's event buffer.
 	cliExpiry := time.Now().UTC().Add(1 * time.Hour)
 	cliSession := models.CLISession{
 		ID:                cliSessionID,
@@ -78,7 +78,7 @@ func (s *SessionService) PersistSessions(cliSessionID, operatorSessionID, userID
 
 	// Write an operator_sessions document so g8e-compatible agentic ensembles can look up the
 	// session by ID via GET /db/operator_sessions/{operator_session_id}.
-	// Field names match the canonical operator session document schema.
+	// Field names match the canonical Operator session document schema.
 	sessionExpiry := time.Now().UTC().Add(1 * time.Hour)
 	operatorSessionDoc := map[string]interface{}{
 		"id":                  operatorSessionID,
@@ -95,12 +95,12 @@ func (s *SessionService) PersistSessions(cliSessionID, operatorSessionID, userID
 	}
 	operatorSessionBytes, err := json.Marshal(operatorSessionDoc)
 	if err != nil {
-		return fmt.Errorf("failed to marshal operator session document: %w", err)
+		return fmt.Errorf("failed to marshal Operator session document: %w", err)
 	}
 
 	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID, operatorSessionBytes); err != nil {
-		s.logger.Error("Failed to persist operator session document", string(constants.ConnectionStateError), err)
-		return fmt.Errorf("failed to persist operator session document: %w", err)
+		s.logger.Error("Failed to persist Operator session document", string(constants.ConnectionStateError), err)
+		return fmt.Errorf("failed to persist Operator session document: %w", err)
 	}
 
 	return nil

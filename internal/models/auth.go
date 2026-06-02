@@ -44,7 +44,7 @@ type OperatorRegistrationRequest struct {
 //     The CLI has its own distinct mTLS certificate with SPIFFE ID
 //     spiffe://g8e.local/cli/<user_id>/<cli_session_id> (see protocol.WorkloadIdentity.CLISPIFFEID).
 //
-// Conflating the two would let an operator session drain another client's
+// Conflating the two would let an Operator session drain another client's
 // event stream - the Gateway refuses to do so.
 type OperatorRegistrationResponse struct {
 	Success                bool            `json:"success"`
@@ -62,7 +62,7 @@ type OperatorRegistrationResponse struct {
 	Error                  string          `json:"error,omitempty"`
 }
 
-// SessionSummary provides a brief overview of the created operator session.
+// SessionSummary provides a brief overview of the created Operator session.
 type SessionSummary struct {
 	OperatorSessionID string    `json:"operator_session_id"`
 	ExpiresAt         time.Time `json:"expires_at"`
@@ -182,7 +182,7 @@ type SetTargetContextResponse struct {
 }
 
 // BoundSessionsDocumentGo represents the persisted record of the bidirectional binding
-// between a web session and one or more operator sessions.
+// between a web session and one or more Operator sessions.
 type BoundSessionsDocumentGo struct {
 	ID                 string                   `json:"id"`
 	WebSessionID       string                   `json:"web_session_id"`
@@ -261,7 +261,7 @@ type WebSession struct {
 	CreatedAtUnixMs int64  `json:"created_at_unix_ms"`
 	ExpiresAtUnixMs int64  `json:"expires_at_unix_ms"`
 	// mTLS certificate fields for Windows Certificate Store enrollment
-	OperatorSessionID string `json:"operator_session_id,omitempty"` // Bind to operator session for mTLS cert auth
+	OperatorSessionID string `json:"operator_session_id,omitempty"` // Bind to Operator session for mTLS cert auth
 	CertFingerprint   string `json:"cert_fingerprint,omitempty"`    // SHA-256 fingerprint of mTLS certificate
 	CertSerial        string `json:"cert_serial,omitempty"`         // Serial number for revocation checking
 	UserAgent         string `json:"user_agent,omitempty"`          // Browser user agent for tracking
@@ -273,7 +273,7 @@ type WebSession struct {
 type CLISession struct {
 	ID                string    `json:"id"`
 	UserID            string    `json:"user_id"`
-	OperatorSessionID string    `json:"operator_session_id"` // Bind to the specific operator session that created it
+	OperatorSessionID string    `json:"operator_session_id"` // Bind to the specific Operator session that created it
 	SystemFingerprint string    `json:"system_fingerprint,omitempty"`
 	CertFingerprint   string    `json:"cert_fingerprint,omitempty"` // SHA-256 fingerprint of the mTLS certificate
 	CertSerial        string    `json:"cert_serial,omitempty"`      // Serial number for revocation checking

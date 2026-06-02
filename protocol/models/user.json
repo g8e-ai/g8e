@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical User document shape. client is the authority - it creates and owns this document in SQLite. agent ensembles read it via operator KV cache (cache-aside) for auth context. A field mismatch breaks authentication, web session validation, and API key checks.",
+  "_comment": "Canonical User document shape. client is the authority - it creates and owns this document in SQLite. agent ensembles read it via Operator KV cache (cache-aside) for auth context. A field mismatch breaks authentication, web session validation, and API key checks.",
 
   "_authority": "client (SQLite)",
   "_consumers": ["agent", "client internal services (auth, web session, API key validation)"],
@@ -51,7 +51,7 @@
       "operator_id": {
         "type": "string",
         "required": false,
-        "description": "Primary operator ID currently associated with this user. Updated by client on operator activation."
+        "description": "Primary Operator ID currently associated with this user. Updated by client on Operator activation."
       },
       "operator_status": {
         "type": "string",

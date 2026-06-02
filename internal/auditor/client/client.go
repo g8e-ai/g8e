@@ -31,7 +31,7 @@ type Persona struct {
 	ID string
 	// UserAgent is sent on the wire so the Gateway/audit log attributes the call.
 	UserAgent string
-	// OperatorSessionID is the operator session ID for Bearer token authentication.
+	// OperatorSessionID is the Operator session ID for Bearer token authentication.
 	OperatorSessionID string
 	// CLISessionID is the CLI session ID for CLI mTLS certificate binding.
 	CLISessionID string

@@ -24,7 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/responder"
 )
 
-// OperatorController handles operator lifecycle endpoints.
+// OperatorController handles Operator lifecycle endpoints.
 type OperatorController struct {
 	cfg       *config.Config
 	logger    *slog.Logger
@@ -234,7 +234,7 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 		"user_id":                    op.UserID,
 	}
 
-	// Return response in format expected by operator (AuthServicesResponse)
+	// Return response in format expected by Operator (AuthServicesResponse)
 	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
 		"success":             true,
 		"operator_session_id": op.OperatorSessionID,

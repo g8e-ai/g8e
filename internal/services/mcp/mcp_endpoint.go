@@ -231,7 +231,7 @@ func (g *GatewayService) mcpInitialize(params json.RawMessage) initializeResult 
 			Name:    mcpServerName,
 			Version: mcpServerVersion,
 		},
-		Instructions: "g8e governance gateway. Tool calls are executed through the platform's fail-closed governance pipeline; some calls may pause for out-of-band (WebAuthn) authorization.",
+		Instructions: "g8e g8e Gateway. Tool calls are executed through the platform's fail-closed governance pipeline; some calls may pause for out-of-band (WebAuthn) authorization.",
 	}
 }
 

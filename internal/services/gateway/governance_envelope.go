@@ -72,17 +72,17 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 	for _, uri := range cert.URIs {
 		spiffeID := uri.String()
 
-		// For operator sessions, verify the SPIFFE ID contains the operator_id and operator_session_id
+		// For Operator sessions, verify the SPIFFE ID contains the operator_id and operator_session_id
 		if envelope.OperatorSessionID != "" && envelope.OperatorID != "" {
 			// Format: spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
 			// We check if the SPIFFE ID ends with the operator_id and operator_session_id
 			if strings.HasSuffix(spiffeID, "/"+envelope.OperatorID+"/"+envelope.OperatorSessionID) {
-				// Verify it's an operator SPIFFE ID (starts with spiffe://g8e.local/operator/)
+				// Verify it's an Operator SPIFFE ID (starts with spiffe://g8e.local/operator/)
 				if strings.HasPrefix(spiffeID, "spiffe://"+protocol.TrustDomain+"/operator/") {
 					return nil
 				}
 			}
-			// Also check if it matches the operator session ID alone (for CLI certs bound to operator)
+			// Also check if it matches the Operator session ID alone (for CLI certs bound to operator)
 			if wid.MatchesCLISessionOnly(spiffeID, envelope.OperatorSessionID) {
 				return nil
 			}

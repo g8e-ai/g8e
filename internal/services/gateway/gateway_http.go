@@ -269,7 +269,6 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	// Bootstrap routes (CA discovery, trust scripts) - now on public HTTPS
-	mux.HandleFunc(constants.APIPaths.Health, h.handleHealth)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
 	mux.HandleFunc(constants.APIPaths.PKICRL, h.pkiController.handlePKIRevocationBundle)
@@ -344,7 +343,7 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	// Health check - available on bootstrap port for initialization monitoring
-	mux.HandleFunc(constants.APIPaths.Health, h.handleHealth)
+	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
 
 	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
 	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handlePublicAuthBootstrap)
@@ -354,7 +353,7 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.BootstrapCALinux, h.pkiController.handleTrustScriptLinux)
 	mux.HandleFunc(constants.APIPaths.BootstrapCAWindows, h.pkiController.handleTrustScriptWindows)
 	mux.HandleFunc("/.well-known/g8e/pki/trust-windows", h.pkiController.handleTrustScriptWindowsAlias)
-	mux.HandleFunc("/.well-known/g8e/binary/", h.pkiController.handleBinaryDownload)
+	mux.HandleFunc("/.well-known/g8e/binary/", h.pkiController.handleNodeBinaryDownload)
 
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }
@@ -536,7 +535,7 @@ func (h *HTTPHandler) handleLandingPage(w http.ResponseWriter, r *http.Request) 
 
         <div class="section">
             <div class="label">Trust & Security</div>
-            <p>To use this operator from your browser or as a BYO client, you must first install the platform's root certificate. If you see a "Not Secure" warning, please provide your own valid client certificate for mTLS operations.</p>
+            <p>To use this Operator from your browser or as a BYO client, you must first install the platform's root certificate. If you see a "Not Secure" warning, please provide your own valid client certificate for mTLS operations.</p>
         </div>
 
         <div class="section">
@@ -548,7 +547,7 @@ func (h *HTTPHandler) handleLandingPage(w http.ResponseWriter, r *http.Request) 
         </div>
 
         <div class="footer">
-            Sovereign Governance Gateway &copy; 2026 Lateralus Labs, LLC.
+            Sovereign g8e Gateway &copy; 2026 Lateralus Labs, LLC.
         </div>
     </div>
 </body>
@@ -592,6 +591,19 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		Version:         h.cfg.Version,
 		GovernanceReady: h.isGovernanceReady != nil && h.isGovernanceReady(),
 		StateMerkleRoot: root,
+	})
+}
+
+func (h *HTTPHandler) handleBootstrapHealth(w http.ResponseWriter, r *http.Request) {
+	if h.isReady != nil && !h.isReady() {
+		h.responder.Error(w, http.StatusServiceUnavailable, "service initializing")
+		return
+	}
+
+	h.responder.JSON(w, http.StatusOK, models.HealthResponse{
+		Status:  constants.GatewayModeStatusOK,
+		Mode:    constants.GatewayModeMode,
+		Version: h.cfg.Version,
 	})
 }
 
@@ -641,7 +653,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	for _, uri := range cert.URIs {
 		// Only g8e-compatible agentic ensembles are authorized to push SSE events, as they act as the centralized event broker
 		// between LLM generations and the end user. Accept any app workload identity (SPIFFE ID with /app/ prefix)
-		// except operator identities (g8eo, g8eg).
+		// except Operator identities (g8eo, g8eg).
 		if strings.HasPrefix(uri.Path, "/app/") && uri.Path != "/app/g8eo" && uri.Path != "/app/g8eg" {
 			isAppWorkload = true
 			appID = uri.String()
@@ -709,7 +721,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		// Check if any bound operator session is associated with this appID
+		// Check if any bound Operator session is associated with this appID
 		authorized := false
 		for _, opSessID := range operatorSessionIDs {
 			opDoc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), opSessID)
@@ -751,10 +763,10 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		// Verify app owns the operator session bound to this CLI session
+		// Verify app owns the Operator session bound to this CLI session
 		opDoc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), cliSess.OperatorSessionID)
 		if err != nil || opDoc == nil {
-			h.logger.Warn("SSE push: operator session for CLI session not found", "operator_session_id", cliSess.OperatorSessionID, "cli_session_id", route.CLISessionID)
+			h.logger.Warn("SSE push: Operator session for CLI session not found", "operator_session_id", cliSess.OperatorSessionID, "cli_session_id", route.CLISessionID)
 			h.responder.Error(w, http.StatusForbidden, "operator session not found")
 			return
 		}
@@ -767,7 +779,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		}
 	} else if route.UserID != "" {
 		// User-scoped pushes: app must be authorized for AT LEAST ONE session belonging to the user.
-		// We check if the app identity corresponds to an operator owned by this user.
+		// We check if the app identity corresponds to an Operator owned by this user.
 		filters := []models.DocFilter{
 			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", route.UserID))},
 		}
@@ -833,13 +845,13 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	sinceID, _ := strconv.ParseInt(q.Get("since_id"), 10, 64)
 	limit, _ := strconv.Atoi(q.Get("limit"))
 
-	// Authorization: ensure the authenticated operator session has the right
+	// Authorization: ensure the authenticated Operator session has the right
 	// to access the requested routing buffer. Without this check, any operator
 	// could drain any other client's event buffer, creating a multi-tenant
 	// data leak.
 	operatorSessionID := h.auth.ExtractOperatorSessionID(r)
 	if operatorSessionID == "" {
-		h.responder.Error(w, http.StatusUnauthorized, "missing operator session id")
+		h.responder.Error(w, http.StatusUnauthorized, "missing Operator session id")
 		return
 	}
 
@@ -879,10 +891,10 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 			return
 		}
 	case route.UserID != "" && route.WebSessionID == "" && route.CLISessionID == "":
-		// User-scoped events are accessible to any operator owned by that user.
+		// User-scoped events are accessible to any Operator owned by that user.
 		op, err := h.auth.ValidateOperatorSession(operatorSessionID)
 		if err != nil {
-			h.responder.Error(w, http.StatusUnauthorized, "invalid operator session")
+			h.responder.Error(w, http.StatusUnauthorized, "invalid Operator session")
 			return
 		}
 		if op.UserID != route.UserID {
@@ -926,7 +938,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	// 1. Authorization (re-use logic from handleInternalSSEEvents)
 	operatorSessionID := h.auth.ExtractOperatorSessionID(r)
 	if operatorSessionID == "" {
-		h.responder.Error(w, http.StatusUnauthorized, "missing operator session id")
+		h.responder.Error(w, http.StatusUnauthorized, "missing Operator session id")
 		return
 	}
 

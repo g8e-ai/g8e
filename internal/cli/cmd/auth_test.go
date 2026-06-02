@@ -42,7 +42,7 @@ func TestLoginCmd(t *testing.T) {
 		assert.Contains(t, cmd.Short, "Authenticate")
 	})
 
-	t.Run("login fails when operator not running", func(t *testing.T) {
+	t.Run("login fails when Operator not running", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := setupTestConfig(t, tmpDir)
 
@@ -67,7 +67,7 @@ func TestLoginCmd(t *testing.T) {
 	})
 
 	t.Run("login fails with no active session", func(t *testing.T) {
-		// This test verifies that login fails when operator is not running
+		// This test verifies that login fails when Operator is not running
 		tmpDir := t.TempDir()
 		cfg := setupTestConfig(t, tmpDir)
 

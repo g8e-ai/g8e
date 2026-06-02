@@ -12,9 +12,9 @@ Version: v1.0.5
 
 ## Overview
 
-A g8e-compatible application functions strictly as a GovernanceEnvelope producer and receipt consumer. It maintains no privileged communication channels, never interacts directly with the host system, and communicates with the Governance Gateway exclusively through public ingress paths.
+A g8e-compatible application functions strictly as a GovernanceEnvelope producer and receipt consumer. It maintains no privileged communication channels, never interacts directly with the host system, and communicates with the g8e Gateway exclusively through public ingress paths.
 
-Security operations including Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) verification gates, replay defense, state binding, cryptographic audit, and human-in-the-loop authorization are fully delegated to the Governance Gateway. The application provides only the components the protocol cannot intrinsically supply: the mutation intent and optionally, consensus evidence.
+Security operations including Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) verification gates, replay defense, state binding, cryptographic audit, and human-in-the-loop authorization are fully delegated to the g8e Gateway. The application provides only the components the protocol cannot intrinsically supply: the mutation intent and optionally, consensus evidence.
 
 ---
 
@@ -47,7 +47,7 @@ Two invariants apply to all g8e applications:
 
 ### Identity and Authentication
 
-Application identity is established via an mTLS/SPIFFE certificate. The application authenticates cryptographically and receives no ambient trust. The Governance Gateway evaluates its envelope with identical rigor to any external client.
+Application identity is established via an mTLS/SPIFFE certificate. The application authenticates cryptographically and receives no ambient trust. The g8e Gateway evaluates its envelope with identical rigor to any external client.
 
 ### State Management
 
@@ -59,7 +59,7 @@ Application-internal state remains the exclusive responsibility of the applicati
 
 ### Canonical JSON Wire Format
 
-All client-facing interactions must use canonical JSON (protojson) as the wire format. Binary protobuf is reserved for internal storage.
+All client-facing interactions must use canonical JSON (protojson) as the wire format.Node Node Binary protobuf is reserved for internal storage.
 
 The envelope `id` must match the deterministic transaction_hash computed from its content. The signature basis is always the deterministic transaction hash, regardless of wire encoding.
 
@@ -174,7 +174,7 @@ Construct the GovernanceEnvelope:
 
 ### Step 6: Submit to Gateway
 
-Submit the envelope to the Governance Gateway:
+Submit the envelope to the g8e Gateway:
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/governance/envelopes \
@@ -235,13 +235,13 @@ Add the L2Consensus signatures to the envelope:
 
 ### Step 3: Submit to Gateway
 
-Submit the envelope with L2 signatures to the Governance Gateway. The Gateway will verify the signatures as part of the L2Consensus check.
+Submit the envelope with L2 signatures to the g8e Gateway. The g8e Gateway will verify the signatures as part of the L2Consensus check.
 
 ---
 
 ## Protocol Translation Integration
 
-Applications can leverage the Governance Gateway's MCP/A2A translation layer instead of constructing envelopes directly.
+Applications can leverage the g8e Gateway's MCP/A2A translation layer instead of constructing envelopes directly.
 
 ### MCP Integration
 
@@ -275,7 +275,7 @@ The Gateway performs L1 Doctrine validation on the skill name before envelope co
 
 ## Testing
 
-Applications should test against the reference Governance Gateway to ensure compatibility:
+Applications should test against the reference g8e Gateway to ensure compatibility:
 
 ```bash
 ./g8e gw start
@@ -295,11 +295,11 @@ Verify that:
 
 ### No Privileged Channels
 
-Applications must not attempt to establish privileged communication channels with the Governance Gateway or g8e Operators. All communication must go through public ingress paths.
+Applications must not attempt to establish privileged communication channels with the g8e Gateway or g8e Operators. All communication must go through public ingress paths.
 
 ### Fail-Closed Behavior
 
-Applications must handle verification failures gracefully. If the Governance Gateway rejects an envelope, the application must not retry with modified parameters or attempt fallback paths.
+Applications must handle verification failures gracefully. If the g8e Gateway rejects an envelope, the application must not retry with modified parameters or attempt fallback paths.
 
 ### Certificate Management
 
@@ -307,7 +307,7 @@ Applications must manage their mTLS certificates securely. Certificates should b
 
 ### State Root Validation
 
-Applications must validate the state root returned by the Governance Gateway (via health endpoint) before using it in envelope construction. This prevents man-in-the-middle attacks.
+Applications must validate the state root returned by the g8e Gateway (via health endpoint) before using it in envelope construction. This prevents man-in-the-middle attacks.
 
 ---
 
@@ -327,4 +327,4 @@ Refer to `protocol/examples/governance_envelope/` for example envelope construct
 ## Next Steps
 
 - **[Connect Apps to Gateway](connect_apps_to_gateway.md)** — Connect to, authenticate, use, maintain, and pull reports from a Gateway.
-- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Deploy and use a Governed Operator.
+- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Deploy and use a g8e Operator.

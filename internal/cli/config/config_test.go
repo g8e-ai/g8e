@@ -257,7 +257,7 @@ func TestConfig_CLIKeyFile(t *testing.T) {
 }
 
 func TestConfig_OperatorCertFile(t *testing.T) {
-	t.Run("returns operator cert file path", func(t *testing.T) {
+	t.Run("returns Operator cert file path", func(t *testing.T) {
 		config := &Config{
 			CredentialsDir: "/credentials/dir",
 		}
@@ -268,7 +268,7 @@ func TestConfig_OperatorCertFile(t *testing.T) {
 }
 
 func TestConfig_OperatorKeyFile(t *testing.T) {
-	t.Run("returns operator key file path", func(t *testing.T) {
+	t.Run("returns Operator key file path", func(t *testing.T) {
 		config := &Config{
 			CredentialsDir: "/credentials/dir",
 		}
@@ -279,7 +279,7 @@ func TestConfig_OperatorKeyFile(t *testing.T) {
 }
 
 func TestConfig_OperatorHTTPSPort(t *testing.T) {
-	t.Run("returns operator HTTPS port", func(t *testing.T) {
+	t.Run("returns Operator HTTPS port", func(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
@@ -300,7 +300,7 @@ func TestConfig_OperatorHTTPSPort(t *testing.T) {
 }
 
 func TestConfig_OperatorBootstrapHTTPSPort(t *testing.T) {
-	t.Run("returns operator bootstrap HTTPS port", func(t *testing.T) {
+	t.Run("returns Operator bootstrap HTTPS port", func(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
@@ -321,7 +321,7 @@ func TestConfig_OperatorBootstrapHTTPSPort(t *testing.T) {
 }
 
 func TestConfig_OperatorHTTPURL(t *testing.T) {
-	t.Run("returns operator public HTTPS URL", func(t *testing.T) {
+	t.Run("returns Operator public HTTPS URL", func(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
@@ -342,7 +342,7 @@ func TestConfig_OperatorHTTPURL(t *testing.T) {
 }
 
 func TestConfig_OperatorBootstrapURL(t *testing.T) {
-	t.Run("returns operator bootstrap HTTPS URL (deprecated, delegates to OperatorPublicURL)", func(t *testing.T) {
+	t.Run("returns Operator bootstrap HTTPS URL (deprecated, delegates to OperatorPublicURL)", func(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
@@ -364,7 +364,7 @@ func TestConfig_OperatorBootstrapURL(t *testing.T) {
 }
 
 func TestConfig_OperatorPublicURL(t *testing.T) {
-	t.Run("returns operator public TLS URL for CSR-based enrollment", func(t *testing.T) {
+	t.Run("returns Operator public TLS URL for CSR-based enrollment", func(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
@@ -386,7 +386,7 @@ func TestConfig_OperatorPublicURL(t *testing.T) {
 }
 
 func TestConfig_OperatorDiscoveryURL(t *testing.T) {
-	t.Run("returns operator discovery URL for CA download over plain HTTP", func(t *testing.T) {
+	t.Run("returns Operator discovery URL for CA download over plain HTTP", func(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {

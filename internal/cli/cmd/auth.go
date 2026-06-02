@@ -29,7 +29,7 @@ func authCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth",
 		Short: "Authentication and session management",
-		Long:  `Manage mTLS enrollment and operator sessions via CSR-based authentication.`,
+		Long:  `Manage mTLS enrollment and Operator sessions via CSR-based authentication.`,
 	}
 
 	cmd.AddCommand(
@@ -75,7 +75,7 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 				hostname, _ := os.Hostname()
 				opCSR, opKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
 				if err != nil {
-					return fmt.Errorf("failed to generate operator CSR: %w", err)
+					return fmt.Errorf("failed to generate Operator CSR: %w", err)
 				}
 
 				cliCSR, cliKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
@@ -98,7 +98,7 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 				}
 
 				if err := auth.SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey, cfg.OperatorCertFile(), cfg.OperatorKeyFile()); err != nil {
-					return fmt.Errorf("failed to save operator credentials: %w", err)
+					return fmt.Errorf("failed to save Operator credentials: %w", err)
 				}
 
 				if regResp.HubTrustBundle != "" {
@@ -145,7 +145,7 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 			hostname, _ := os.Hostname()
 			opCSR, opKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
 			if err != nil {
-				return fmt.Errorf("failed to generate operator CSR: %w", err)
+				return fmt.Errorf("failed to generate Operator CSR: %w", err)
 			}
 
 			cliCSR, cliKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
@@ -173,7 +173,7 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 			}
 
 			if err := auth.SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey, cfg.OperatorCertFile(), cfg.OperatorKeyFile()); err != nil {
-				return fmt.Errorf("failed to save operator credentials: %w", err)
+				return fmt.Errorf("failed to save Operator credentials: %w", err)
 			}
 
 			if regResp.HubTrustBundle != "" {
@@ -211,7 +211,7 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 func logoutCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logout",
-		Short: "Clear local operator session and credentials",
+		Short: "Clear local Operator session and credentials",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {

@@ -198,7 +198,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 			hostname, _ := os.Hostname()
 			opCSR, opKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
 			if err != nil {
-				return fmt.Errorf("failed to generate operator CSR: %w", err)
+				return fmt.Errorf("failed to generate Operator CSR: %w", err)
 			}
 
 			cliCSR, cliKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
@@ -206,8 +206,10 @@ func securityPKIEnrollCmd() *cobra.Command {
 				return fmt.Errorf("failed to generate CLI CSR: %w", err)
 			}
 
-			cmd.Printf("Enrolling with Gateway at %s...\n", endpoint)
-			regResp, err := auth.EnrollWithGateway(cfg, endpoint, opCSR, cliCSR, "")
+			// Append default bootstrap port
+			gatewayEndpoint := fmt.Sprintf("%s:%d", endpoint, constants.Ports.OperatorBootstrapHttps)
+			cmd.Printf("Enrolling with Gateway at %s...\n", gatewayEndpoint)
+			regResp, err := auth.EnrollWithGateway(cfg, gatewayEndpoint, opCSR, cliCSR, "")
 			if err != nil {
 				return fmt.Errorf("failed to enroll: %w", err)
 			}
@@ -225,7 +227,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 			chainPath := filepath.Join(pkiDir, "operator.chain.pem")
 
 			if err := auth.SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey, certPath, keyPath); err != nil {
-				return fmt.Errorf("failed to save operator certificate: %w", err)
+				return fmt.Errorf("failed to save Operator certificate: %w", err)
 			}
 
 			// Save CLI cert separately
@@ -266,7 +268,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&endpoint, "endpoint", "", "Gateway endpoint (e.g., 192.168.1.62:8441)")
+	cmd.Flags().StringVarP(&endpoint, "endpoint", "e", "", "Gateway IP address (e.g., 192.168.1.62)")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Output directory for certificates (default: project root)")
 
 	return cmd

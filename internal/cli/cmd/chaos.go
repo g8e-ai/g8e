@@ -33,7 +33,7 @@ func chaosCmd() *cobra.Command {
 		Long: `chaos generates a realistic distribution of governance events against
 the local g8e audit stack. It bypasses network/TLS by driving the
 TransactionVerifier + Actuator stack directly in-process, which is the same
-path exercised by the live operator when payloads arrive over pub/sub.
+path exercised by the live Operator when payloads arrive over pub/sub.
 
 Distribution:
   70%  Good Actor  – valid sig, safe intent (FS_LIST)       → EXECUTED

@@ -204,7 +204,7 @@ func ReadHubCA(t *testing.T, pkiDir string) []byte {
 	return ReadCACert(t, paths.HubCA, "hub")
 }
 
-// ReadOperatorCA reads the operator CA certificate from the PKI directory.
+// ReadOperatorCA reads the Operator CA certificate from the PKI directory.
 func ReadOperatorCA(t *testing.T, pkiDir string) []byte {
 	t.Helper()
 	paths := GetPKICertPaths(pkiDir)

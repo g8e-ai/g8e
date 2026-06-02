@@ -27,7 +27,7 @@ func TestGatewayCmd(t *testing.T) {
 	t.Run("gw command has correct use and description", func(t *testing.T) {
 		cmd := gatewayCmd()
 		assert.Equal(t, "gw", cmd.Use)
-		assert.Contains(t, cmd.Short, "Governance Gateway")
+		assert.Contains(t, cmd.Short, "g8e Gateway")
 		assert.Contains(t, cmd.Long, "lifecycle")
 	})
 }
@@ -37,7 +37,7 @@ func TestGatewayStartCmd(t *testing.T) {
 		cmd := gatewayStartCmd()
 		assert.Equal(t, "start", cmd.Use)
 		assert.Contains(t, cmd.Short, "Start")
-		assert.Contains(t, cmd.Short, "Governance Gateway")
+		assert.Contains(t, cmd.Short, "g8e Gateway")
 	})
 }
 
@@ -46,7 +46,7 @@ func TestGatewayStopCmd(t *testing.T) {
 		cmd := gatewayStopCmd()
 		assert.Equal(t, "stop", cmd.Use)
 		assert.Contains(t, cmd.Short, "Stop")
-		assert.Contains(t, cmd.Short, "Governance Gateway")
+		assert.Contains(t, cmd.Short, "g8e Gateway")
 	})
 }
 
@@ -64,7 +64,7 @@ func TestGatewayRestartCmd(t *testing.T) {
 		cmd := gatewayRestartCmd()
 		assert.Equal(t, "restart", cmd.Use)
 		assert.Contains(t, cmd.Short, "Restart")
-		assert.Contains(t, cmd.Short, "Governance Gateway")
+		assert.Contains(t, cmd.Short, "g8e Gateway")
 	})
 }
 

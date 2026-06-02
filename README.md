@@ -2,292 +2,230 @@
 
 # g8e
 
-**Verify, then execute.**
+**Enterprise-Grade MCP/A2A for Fleets**
 
-g8e is a statically-compiled binary that provides agentic governance and state-mutation control. Binary sizes vary by platform and build option:
-- **Standard build** (`make build`): 35-38MB per platform
-- **Compressed build** (`make build-compressed`): 15-17MB per platform (Linux/Windows AMD64/ARM64); 35-38MB for macOS and Windows ARM64
+The "move fast and break things" era is costing organizations a fortune in wasted tokens, broken infrastructure, and unaccountable AI actions. SaaS vendors offer "governance" control planes that are little more than token spend dashboards, open-sourcing client tools simply to lock you into their proprietary backends. Cloud provider lock-in, protocol gaps in MCP/A2A, and the structural vulnerability of single-model self-reflection have left agentic systems dangerously exposed.
 
-The platform functions as the control plane (host-local policy decision) and the data plane (exclusive mutation executor). It utilizes mTLS for outbound communication and does not listen on inbound ports. Every action clears a fail-closed verification pipeline on the host and is committed to a git-backed ledger before execution. Raw data remains on the host; only scrubbed projections are transmitted.
+**g8e is the missing admission boundary.** It enforces a typed, signed, state-bound transaction that must clear a fail-closed verification pipeline **directly on the host** before any side effect occurs.
 
+Start the g8e Gateway on your local machine, point your AI tools at it, and every action is governed—hardware-bound, just-in-time provisioned, secured via mutual TLS, and anchored to a local ledger.
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev)
-[![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v103---core-platform)
-[![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/core/position_paper.md)
-
-[Getting Started](docs/guides/getting_started.md) · [Platform Roles](#platform-roles) · [Mental Model](#the-mental-model) · [Protocol](#the-protocol-invariants) · [Docs](#documentation)
+[Getting Started](https://www.google.com/search?q=docs/guides/getting_started.md) · [Architecture](https://www.google.com/search?q=%23the-architecture) · [Protocol](https://www.google.com/search?q=%23protocol-invariants) · [Position Paper](https://www.google.com/search?q=docs/core/position_paper.md) · [Docs](https://www.google.com/search?q=%23documentation)
 
 </div>
+
+## The Problem: Capability does not equal Authority
+
+Agents now hold write access to terminals, cloud APIs, CI/CD, source control, and databases. Standard protocols like MCP and A2A establish **capability** (proof an agent *can* act). They say nothing about **authority** (whether *this* action, *right now*, on *this* host, against *this* state, is safe to run).
+
+The industry has responded with flawed, single-point solutions:
+
+* **Token spend dashboards:** Counting what you spent, not blocking what you shouldn't have executed.
+* **Single-model self-reflection:** The same weights that produce an action produce its justification. A prompt injection doesn’t defeat the verifier; it *becomes* the verifier.
+* **Human-in-the-loop at scale:** Routing every action through a human decays into approval fatigue.
+* **Vendor "open source" clients:** Free tools requiring proprietary backends, acting as trojan horses for vendor lock-in.
+
+The fundamental error is assuming a single validator can certify two orthogonal properties: technical consistency and human intent.
+
+---
+
+## The g8e Differentiators
+
+g8e fixes this by enforcing a strict invariant: **A state-changing action reaches the host only as a typed, signed, state-bound transaction, and the host verifies that transaction before it executes.**
+
+* **Structural Consensus over Single-Model Reflection:** Authority to mutate requires the *conjunction* of two independent proofs. Machine **consistency** (a heterogeneous model quorum agreeing the payload is safe) **+** Human **intent** (a person authorizing the exact transaction hash). Neither signature alone is sufficient.
+* **Hardware-Bound & Zero Standing Privileges:** Permissions are minted just-in-time, scoped to a single action, and dissolved on completion. The g8e Operator is outbound-only—it requires no new inbound ports, no dependencies, and no root access.
+* **Local-First Data Sovereignty:** Every mutation is written to a host-local, git-backed ledger *before* execution. Raw data and forensic context never leave the host; only scrubbed projections cross the wire. The platform vendor is reduced to a stateless relay.
+* **One Binary, Two Roles, Total Fleet Control:** A single 15MB statically compiled artifact runs as either the **g8e Gateway** (Policy Decision Point) or **g8e Operator** (Policy Execution Point) across Windows, macOS, and Linux. Deploy via SSH and execute fan-out operations across your entire fleet simultaneously.
+* **Free and Open, by Design:** Runtime governance and audit for agents are public goods. A governance layer you cannot inspect or self-host is a contradiction to zero-trust. g8e is Apache-2.0, single-binary, and air-gap-capable—and it stays that way.
 
 ---
 
 ## QuickStart
 
-Installation and bootstrap instructions.
+The platform is a single g8e Node. No runtime, no interpreter, no sidecar.
 
-**Linux/macOS:**
+**Quick launch (Linux)**
+
 ```bash
-# 1. Clone the repository
-git clone https://github.com/g8e-ai/g8e.git
-cd g8e
+curl -fsSL https://g8e.ai/g8e-linux-amd64 -o g8e && chmod +x g8e && ./g8e gw start
 
-# 2. Build the binary
-make build
-
-# Or build with compression (smaller binaries)
-make build-compressed
-
-# 3. Start the Governance Gateway (g8eg)
-./g8e gw start
-
-# 4. Authenticate (first login automatically bootstraps the platform)
-./g8e auth login
-
-# 5. Verify the status
-./g8e gw status
 ```
 
-**Windows:**
+**Quick launch (macOS)**
+
+```bash
+curl -fsSL https://g8e.ai/g8e-darwin-amd64 -o g8e && chmod +x g8e && ./g8e gw start
+
+```
+
+**Quick launch (Windows)**
+
 ```powershell
-# 1. Clone the repository
-git clone https://github.com/g8e-ai/g8e.git
-cd g8e
+iwr https://g8e.ai/g8e-windows-amd64.exe -outf g8e.exe && .\g8e.exe gw start
 
-# 2. Build the binary
-.\build.ps1
-
-# 3. Start the Governance Gateway (g8eg)
-.\g8e.exe gw start
-
-# 4. Authenticate (first login automatically bootstraps the platform)
-.\g8e.exe auth login
-
-# 5. Verify the status
-.\g8e.exe gw status
 ```
 
-See the [Full QuickStart Guide](docs/guides/getting_started.md) for mTLS, enrollment, and CLI configuration.
+**Deploy operators to remote hosts via SSH**
+
+```bash
+# Using your existing SSH config, deploy Operators across your fleet
+./g8e Operator deploy --hosts host1,host2,host3
+
+# Tool calls now accept a list of hosts for simultaneous fan-out execution
+
+```
+
+*See the [full QuickStart](https://www.google.com/search?q=docs/guides/getting_started.md) for mTLS, Operator enrollment, and client configuration.*
 
 ---
 
-## Platform Roles
+## Architecture & Governance Layers
 
-The g8e platform utilizes a single binary that operates in either Gateway mode or Operator mode.
+g8e follows standard MCP topology, but folds in strict governance and data sovereignty. Any conforming implementation that enforces our `GovernanceEnvelope` invariant is a valid g8e Operator or Gateway.
 
-- **g8e Gateway (g8eg)**: The central coordinator and Policy Decision Point (PDP). It manages the platform PKI, issues workload identities, enforces freshness, and provides replay defense. The gateway admits signed envelopes and manages the network-side record. It does not possess execution authority on managed hosts and cannot initiate connections to operators.
-- **g8e Operator (g8eo)**: The host-resident authority and Policy Execution Point (PEP). It initiates outbound mTLS connections to the gateway to fetch pending envelopes. The operator performs local verification of all proofs against host state and serves as the exclusive executor of state mutations. It maintains a git-backed local audit ledger of all host activity.
+* **g8e Gateway (MCP Gateway):** Admits signed, state-bound envelopes, manages the PKI, and provides central audit authority without exposing raw data.
+* **g8e Operator (MCP Server):** A tool-calling facade that listens on *no inbound ports*, dialing out to pull pending work. It executes the governance gauntlet locally.
 
-The architectural separation ensures that the gateway proposes mutations while the operator executes them. Verification occurs on the host that maintains the consequences of the execution. This model removes the requirement for a trusted central authority to possess final execution power.
+### The Host-Local Gauntlet (L1-L5)
 
-*Learn more: [Gateway Architecture](docs/architecture/gateway.md) · [Operator Architecture](docs/architecture/operator.md) · [Auth Architecture](docs/architecture/auth.md)*
+Every mutation passes through sequential verification layers at the Operator boundary. Compromising any single layer is not enough to cause an unauthorized mutation.
 
----
-
-## The mental model
-
-g8e follows standard MCP topology with integrated BFT governance.
-
-```mermaid
-graph TD
-    subgraph Clients ["Any AI client — agent-agnostic"]
-        C1["MCP client<br/>(Claude / Cursor / Windsurf)"]
-        C2["Agentic ensemble<br/>(A2A / tool calls)"]
-    end
-
-    GW["Governance Gateway · g8eg<br/>(Policy Decision Point)<br/>admits signed envelopes · owns PKI"]
-
-    subgraph Fleet ["Sovereign hosts — platform-agnostic"]
-        O1["Governed Operator · g8eo<br/>(Policy Execution Point)<br/>governs + executes locally"]
-        D1[("Raw data + audit<br/>stay on host")]
-        O1 --- D1
-    end
-
-    C1 -. "HTTP/mTLS<br/>universal endpoint" .-> GW
-    C2 --> GW
-    O1 -. "outbound-only mTLS" .-> GW
-```
-
-### Execution Flow
-
-The sequence of a governed transaction execution:
+| Layer | Name | Mechanism | Proof Objective |
+| --- | --- | --- | --- |
+| **L1** | **Doctrine** | Reflected `forbidden_patterns` + MITRE ATT&CK heuristics | The action trips no hard gate (e.g., reverse shells, destructive disk ops). |
+| **L2** | **Consensus** | Ed25519 k-of-n over the transaction hash | An independent, heterogeneous model ensemble co-signed the intent. |
+| **L3** | **Notary** | WebAuthn / mTLS cert fingerprint | A human authorized *this exact transaction hash*, not just a session. |
+| **L4** | **Warden** | Pre-dispatch verification gate | Hash integrity, temporal freshness, state binding, and signer trust hold true. |
+| **L5** | **Actuator** | Single fail-closed dispatch path | Mutates the host and emits a signed, Sovereignty-scrubbed `ActionReceipt`. |
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Principal as Principal<br/>(Human / AI Agent)
-    participant Ensemble as Producer<br/>(g8e-compatible agentic ensemble / BYO / MCP client)
-    participant Gateway as Governance Gateway<br/>(g8eg)
-    participant Operator as Governed Operator<br/>(g8eo)
+    participant Ensemble as Producer<br/>(g8e-compatible ensemble)
+    participant Gateway as g8e Gateway
+    participant Operator as g8e Operator
 
-    Principal->>Ensemble: Submit intent (MCP / A2A / tool call)
+    Principal->>Ensemble: Submit intent (MCP/A2A/tool call)
     Note over Ensemble: Reach Consensus (L2)<br/>Wrap in signed GovernanceEnvelope
     Ensemble->>Gateway: Submit envelope for admission
 
     Operator->>Gateway: Open outbound-only mTLS tunnel
     Operator->>Gateway: Fetch pending GovernanceEnvelope
 
-    Note over Operator: Run verification layers — Doctrine, Consensus, Notary, Warden<br/>(fail-closed)<br/>Execute via Actuator<br/>Anchor to local audit vault
+    Note over Operator: Sequential verification (L1-L4)<br/>Execute via Actuator (L5)<br/>Anchor to local audit vault
 
     Operator->>Gateway: Push Sovereignty-scrubbed signed receipt
     Gateway->>Principal: Return final safe output
+
 ```
 
-*Learn more: [Protocol Specification](docs/architecture/g8e.md) · [MCP Protocol](docs/protocols/mcp/mcp.md) · [A2A Protocol](docs/protocols/a2a/a2a.md)*
+---
+
+## The Stance
+
+We hold this without hedging: **runtime governance and audit for AI agents are public goods, and gating them behind a paywall is incompatible with a safe AI-powered world.**
+
+If safety is a premium SKU, the cheapest path to shipping an agent is always the ungoverned one. For governance to be the default, it must be free. As agents grow more capable, the baseline for real-world infrastructure mutations must be heterogeneous consensus plus a cryptographic human signoff upstream.
+
+g8e is not an agent. It is the mandatory, open-source substrate agents must run on to be viable in production infrastructure.
+
+Read the full argument in our [Position Paper](https://www.google.com/search?q=docs/core/position_paper.md).
 
 ---
 
-## Governance Layers
+## Status: v1.0.7 — Core Platform
 
-Every mutation passes through sequential verification layers at the operator boundary. Transactions that fail verification are rejected and audited.
+**Operational today:**
 
-```mermaid
-graph TD
-    Start["Signed GovernanceEnvelope<br/>(Incoming Transaction)"]
+* Universal protocol translation (MCP/A2A intercepted into signed envelopes).
+* Fail-closed verification (L1, L2, L4).
+* L3 Notary (WebAuthn / mTLS human authorization).
+* Sovereign execution (git-backed ledger & local vault) with data sovereignty (PII/secret scrubbing).
+* Outbound-only mTLS for firewalled/air-gapped hosts.
+* SSH deployment & Fan-out execution across remote fleets.
+* Native Windows support parity.
 
-    subgraph Verification ["Operator Verification - protocol-mandated"]
-        direction TB
-        L1{"L1: Technical Bedrock<br/>Forbidden Patterns?"}
-        L2{"L2: Consensus<br/>Tribunal Signature?"}
-        L3{"L3: Authorization<br/>Human Presence?"}
-        State{"State Check<br/>Merkle Root Fresh?"}
-        L4{"L4: Warden<br/>Pre-dispatch Gate"}
-        
-        FailClosed["Fail Closed<br/>Typed Rejection + Audit Entry"]
-        Actuator["L5: Actuator<br/>Execute + Signed Receipt"]
-        LocalVault([Local Audit Vault])
+**In development:**
 
-        L1 -- "Passed" --> L2
-        L1 -- "Violated" ----> FailClosed
-        
-        L2 -- "Passed" --> L3
-        L2 -- "Invalid/Missing" ---> FailClosed
-        
-        L3 -- "Authorized" --> State
-        L3 -- "Denied" --> FailClosed
-        
-        State -- "Fresh" --> L4
-        State -- "Stale" --> FailClosed
+* RBAC & Multi-tenancy.
+* Complex policy (dynamic intent allowlisting).
+* Gateway federation & agentic mesh gossiping.
 
-        L4 -- "Verified" --> Actuator
-        L4 -- "Failed" --> FailClosed
+---
 
-        Actuator --> LocalVault
-        FailClosed --> LocalVault
-    end
+## Example: GovernanceEnvelope with MCP Payload
 
-    LocalVault --> Done["Recorded · Signed · Audited"]
+Below is a complete example of a `GovernanceEnvelope` wrapping an MCP tool call (`fs_read`), demonstrating all fields including L1/L2/L3 governance proofs:
 
-    Start --> L1
+```json
+{
+  "id": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+  "timestamp": "2026-06-02T18:27:00Z",
+  "expiresAt": "2026-06-02T18:32:00Z",
+  "sourceComponent": "COMPONENT_CLIENT",
+  "operatorId": "op-prod-12345",
+  "operatorSessionId": "sess-abc-789",
+  "webSessionId": "web-xyz-456",
+  "cliSessionId": "",
+  "eventType": "g8e.v1.operator.mcp.call.requested",
+  "payload": "CgZmc19yZWFkEglleGVjLTIwMzUSCgoZmlsZTovLy9ob21lL3VzZXIvcmVhZG1lLm1kGgZzY3J1Yg==",
+  "intentData": {
+    "tool": "fs_read",
+    "path": "/home/user/readme.md",
+    "reason": "Read deployment documentation"
+  },
+  "actionType": "MCP_CALL",
+  "targetResource": "file:///home/user/readme.md",
+  "stateMerkleRoot": "abc123def456abc123def456abc123def456abc123def456abc123def456abc1",
+  "nonce": "nonce-1717358820000-abc123",
+  "transactionHash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+  "protocolVersion": "1.0",
+  "governance": {
+    "l1": {
+      "validated": true,
+      "violations": []
+    },
+    "l2": {
+      "consensusSignature": "4a5b6c7d8e9f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "agentIds": ["agent-ensemble-1", "agent-ensemble-2", "agent-ensemble-3"],
+      "keyId": "key-ensemble-prod-abc123"
+    },
+    "l3": {
+      "proof": {
+        "clientDataJson": "{\"challenge\":\"a1b2c3d4e5f6\",\"origin\":\"https://g8e.ai\",\"type\":\"webauthn.get\"}",
+        "authenticatorData": "SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2NFAAAAAQ",
+        "signature": "MEUCIQDWn3x4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2IgE5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        "credentialId": "abc123def456abc123def456abc123def456abc123def456abc123def456abc1",
+        "mtlsCertFingerprint": "",
+        "cliSignature": ""
+      },
+      "autoApproved": false
+    },
+    "gatewaySigned": false
+  },
+  "caseId": "case-deploy-456",
+  "investigationId": "",
+  "taskId": "task-readme-789",
+  "systemFingerprint": "fp-linux-amd64-abc123",
+  "tenantId": "tenant-prod-xyz",
+  "bindingPersona": "default"
+}
 ```
 
-| Layer | Name | Mechanism | Verification Target |
-| :---: | --- | --- | --- |
-| **L1** | **L1Doctrine** | Forbidden patterns and MITRE heuristics | Technical policy compliance and threat detection. |
-| **L2** | **L2Consensus** | Ed25519 k-of-n signatures | Multi-agent consensus over transaction intent. |
-| **L3** | **L3Notary** | WebAuthn or mTLS certificate | Explicit human authorization for the transaction hash. |
-| **L4** | **L4Warden** | Pre-dispatch verification gate | Structural integrity, hash validity, and state freshness. |
-| **L5** | **L5Actuator** | Atomic dispatch and signed receipt | Execution of the mutation and production of an immutable receipt. |
-
-*Learn more: [Governance Protocol](docs/architecture/g8e.md) · [Constants Reference](docs/reference/constants.md) · [Glossary](docs/reference/glossary.md)*
-
----
-
-## AI Engine (g8ee)
-
-The AI Engine (g8ee) is an application-layer adapter that generates signed `GovernanceEnvelope` transactions. This component was removed from the core g8e platform and is currently in development as a separate repository. It implements an agentic hierarchy for intent translation.
-
-```mermaid
-graph TD
-    classDef principal fill:#f9d0c4,stroke:#333,stroke-width:2px,color:#000;
-    classDef engine fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#000;
-    classDef protocol fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000;
-
-    Principal(("Principal (Human / Agent)")):::principal
-
-    subgraph Engine ["g8ee AI Engine (Application Layer)"]
-        direction TB
-        Triage["Triage Agent (Intent & Posture)"]:::engine
-        Reasoner["Sage / Dash (Reasoning Path)"]:::engine
-        
-        subgraph Tribunal ["Tribunal (L2 Producer)"]
-            direction TB
-            Panel["5-Member Agent Panel"]:::engine
-            Warden["Warden (Two-Strike Circuit Breaker)"]:::engine
-            Auditor["Auditor (L2 Verifier)"]:::engine
-            
-            Panel --> Warden
-            Warden --> Auditor
-        end
-        
-        Triage --> Reasoner
-        Reasoner --> Panel
-        
-        %% Short Circuits (Feedback Loops)
-        Warden -. "Risk Feedback (Short Circuit)" .-> Reasoner
-        Auditor -. "Rejection / Revision (Short Circuit)" .-> Reasoner
-    end
-
-    Principal -- "Initiates Intent" --> Triage
-    Auditor -- "Produces L2 Signed Intent" --> Protocol["g8e Protocol Envelope"]:::protocol
-```
-
-**Hierarchy Components:**
-- **Triage and Dash**: Agents for routing, posture assessment, and high-speed responses.
-- **Sage (Reasoning Engine)**: Primary interpreter of user intent. Sage proposes actions but cannot execute them; it must submit intent to the Tribunal.
-- **Tribunal (Consensus)**: Independent agents that generate command proposals. Execution requires a quorum (2/5 or 5/5).
-- **Warden (Circuit Breaker)**: Heuristic filter that rejects proposals violating security constraints.
-- **Auditor (History and Grounding)**: Verification layer that reviews the investigation history before signing the protocol envelope.
-
-*Learn more: [Build Applications](docs/guides/build_apps.md) · [Connect Apps to Gateway](docs/guides/connect_apps_to_gateway.md) · [Developer Docs](docs/devs/)*
-
----
-
-## The Protocol Invariants
-
-- **GovernanceEnvelope**: The single canonical container for every mutation.
-- **Hash-based Integrity**: `id == SHA-256(canonical_fields)`. Wire format is canonical JSON (protojson).
-- **Zero Ambient Context**: Session IDs and identity are body-embedded; no implicit authority.
-- **Outbound-Only mTLS**: Operators dial out; zero inbound ports required on the host.
-- **Sovereignty Boundary**: Automated scrubbing/rehydration ensures raw data never leaves the host.
-- **No Backward Compatibility**: Rip and replace. Stale formats or unsigned inputs are rejected.
-
-*Learn more: [Protocol Specification](docs/architecture/g8e.md) · [API Reference](docs/reference/api/) · [Constants](docs/reference/constants.md)*
-
----
-
-## Status: v1.0.3 - Core Platform
-
-g8e is the mandatory governance platform. Agent ensembles and Dashboard (g8ed) are optional application-layer adapters.
-
-**Operational Today**
-- **Universal Protocol Translation**: Intercept MCP/A2A tool calls into signed envelopes.
-- **BFT Governance**: Fail-closed L1/L2/L3/L4 verification paths.
-- **Sovereign Execution**: Git-backed ledger and host-local audit vault.
-- **mTLS Reverse Tunnels**: Secure connectivity for firewalled/air-gapped hosts.
-- **L3 Notary**: Out-of-band human-in-the-loop authorization (CLI/WebAuthn).
-- **Data Sovereignty**: Automated PII scrubbing and local forensic persistence.
-
-**In Development**
-- **RBAC**: Granular role-based access control.
-- **Complex Policy**: Dynamic intent allowlisting and advanced L1 heuristics.
-- **Multi-tenancy**: Organization partitioning and tenant isolation.
+The `payload` field contains base64-encoded protobuf bytes of the `McpCallRequested` message, which includes the tool name (`fs_read`) and JSON arguments specifying the file path.
 
 ---
 
 ## Documentation
 
-- **[Getting Started](docs/guides/getting_started.md)** · **[Position Paper](docs/core/position_paper.md)**
-- **[Protocol](docs/architecture/g8e.md)** · **[Operator (g8eo)](docs/architecture/operator.md)** · **[Gateway (g8eg)](docs/architecture/gateway.md)** · **[Auth](docs/architecture/auth.md)**
-- **[MCP Protocol](docs/protocols/mcp/mcp.md)** · **[A2A Protocol](docs/protocols/a2a/a2a.md)**
-- **[CLI Guide](docs/guides/cli.md)** · **[Air Gap Deployment](docs/guides/air_gap.md)**
-- **[Build Gateway](docs/guides/build_gateway.md)** · **[Build Operator](docs/guides/build_operator.md)**
-- **[Connect Apps to Gateway](docs/guides/connect_apps_to_gateway.md)** · **[Connect Operator to Gateway](docs/guides/connect_operator_to_gateway.md)**
-- **[Glossary](docs/reference/glossary.md)** · **[Constants](docs/reference/constants.md)** · **[API Reference](docs/reference/api/)**
-- **[Developer Docs](docs/devs/)** · **[Contributing](CONTRIBUTING.md)**
+* [Getting Started](https://www.google.com/search?q=docs/guides/getting_started.md)
+* [Position Paper](https://www.google.com/search?q=docs/core/position_paper.md)
+* [Architecture: Operator](https://www.google.com/search?q=docs/architecture/operator.md) · [Gateway](https://www.google.com/search?q=docs/architecture/gateway.md)
+* [Protocol Specification](https://www.google.com/search?q=docs/architecture/g8e.md) · [API Reference](https://www.google.com/search?q=docs/reference/api/)
+* [Build a g8e Operator](https://www.google.com/search?q=docs/guides/build_operator.md)
 
 ---
 
-## License
-
-Apache 2.0. See [LICENSE](LICENSE). Built by [Lateralus Labs](https://lateraluslabs.com).
+*Built by Lateralus Labs. Licensed Apache 2.0.*

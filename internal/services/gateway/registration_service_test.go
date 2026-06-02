@@ -146,7 +146,7 @@ func TestPKIPhase3_CLI_CSR_Mandatory(t *testing.T) {
 		cfg := &config.GatewayConfig{}
 		regSvc := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, cfg)
 
-		// Generate only operator CSR, no CLI CSR
+		// Generate only Operator CSR, no CLI CSR
 		opCSR := testutil.GenerateTestCSRP256(t, "test-operator")
 
 		req := models.OperatorRegistrationRequest{

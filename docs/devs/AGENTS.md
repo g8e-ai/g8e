@@ -42,7 +42,7 @@ These are the rules. Follow them unconditionally. If a task cannot be completed 
 
 **Always** write the audit record before the side effect. The `AuditVaultService` write comes first. If the vault write fails, abort execution.
 
-**Always** keep Gateway (PDP) and Operator (PEP) logic in their correct respective packages. Gateway logic belongs in `internal/services/gateway/`. Operator logic belongs in `internal/services/mcp/` and its governance pipeline. Cross-contamination is a protocol violation.
+**Always** keep g8e Gateway (PDP) and g8e Operator (PEP) logic in their correct respective packages. g8e Gateway logic belongs in `internal/services/gateway/`. g8e Operator logic belongs in `internal/services/mcp/` and its governance pipeline. Cross-contamination is a protocol violation.
 
 **Always** route new mutation types through the `GovernanceEnvelope`. No mutation reaches host state without a `transaction_hash`-verified envelope passing the full gauntlet.
 
@@ -56,7 +56,7 @@ These are the rules. Follow them unconditionally. If a task cannot be completed 
 
 **Always** include `nonce`, `expires_at`, and `state_merkle_root` when constructing envelopes. Omitting any of these produces an envelope that L4 will reject.
 
-**Always** use canonical JSON (`protojson`) for all wire formats. Binary protobuf is internal storage only.
+**Always** use canonical JSON (`protojson`) for all wire formats.Node Node Binary protobuf is internal storage only.
 
 **Always** sign receipts with the host-unique Ed25519 key. An `ActionReceipt` without a valid signature is not an `ActionReceipt`.
 
@@ -98,13 +98,13 @@ These are the rules. Follow them unconditionally. If a task cannot be completed 
 
 ---
 
-### 7. Binary & Dependency Hygiene
+### 7.Node Node Binary & Dependency Hygiene
 
 **Always** check that a new import is already present in `go.mod` before using it. The zero-dependency constraint is a hard architectural requirement.
 
 **Always** prefer standard library over third-party for any new capability. If a third-party package is genuinely required, state the reason explicitly in the PR description before adding it.
 
-**Always** ensure the binary compiles to a single statically linked artifact (`CGO_ENABLED=0`). Nothing that breaks static compilation is acceptable.
+**Always** ensure the g8e Node compiles to a single statically linked artifact (`CGO_ENABLED=0`). Nothing that breaks static compilation is acceptable.
 
 ---
 
@@ -152,11 +152,11 @@ These are absolute. There are no exceptions and no context in which these are ac
 ### Architecture
 
 - **Never** create a new code path that bypasses any governance layer. There is no "fast path", "trusted caller", or "internal shortcut" through the gauntlet.
-- **Never** allow the Gateway to execute host mutations directly. Execution is the Operator's exclusive domain.
-- **Never** allow the Operator to communicate with an Identity Provider directly. JWT validation and JIT provisioning are Gateway responsibilities only.
-- **Never** duplicate governance logic between Gateway and Operator. The shared governance layer in `internal/services/governance/` is the single implementation.
+- **Never** allow the g8e Gateway to execute host mutations directly. Execution is the g8e Operator's exclusive domain.
+- **Never** allow the g8e Operator to communicate with an Identity Provider directly. JWT validation and JIT provisioning are g8e Gateway responsibilities only.
+- **Never** duplicate governance logic between g8e Gateway and g8e Operator. The shared governance layer in `internal/services/governance/` is the single implementation.
 - **Never** introduce a new protocol format alongside the `GovernanceEnvelope`. There is one canonical wire format.
-- **Never** store user credentials or long-lived session tokens in the Operator. Zero standing privileges is an invariant.
+- **Never** store user credentials or long-lived session tokens in the g8e Operator. Zero standing privileges is an invariant.
 
 ---
 
@@ -176,7 +176,7 @@ These are absolute. There are no exceptions and no context in which these are ac
 - **Never** add a new third-party dependency without explicit approval. Go modules that do not already exist in `go.mod` are off-limits without a justified exception.
 - **Never** introduce `init()` functions in service packages. Initialization order is explicit and intentional.
 - **Never** use `reflect` in hot paths (governance layer execution). Reflection in L1 field-option scanning is pre-existing and intentional; new uses are not.
-- **Never** write code that requires `CGO_ENABLED=1`. The binary is statically compiled.
+- **Never** write code that requires `CGO_ENABLED=1`. The g8e Node is statically compiled.
 
 ---
 
@@ -195,7 +195,7 @@ These are absolute. There are no exceptions and no context in which these are ac
 - **Never** make changes to Mermaid diagrams in documentation files unless explicitly asked. Diagrams are architecture artifacts, not prose.
 - **Never** rename an exported symbol, protobuf field, or JSON key without verifying all callers. These are wire-format contracts.
 - **Never** change a default port without updating `ports.go`, `ports.json`, and all documentation that references it.
-- **Never** introduce a behavior difference between Gateway mode and Operator mode for a shared governance layer. The five layers behave identically regardless of which binary mode is running them.
+- **Never** introduce a behavior difference between gateway mode and Operator mode for a shared governance layer. The five layers behave identically regardless of which g8e Node mode is running them.
 
 ---
 

@@ -41,7 +41,7 @@ type PubSubClient interface {
 	Close()
 }
 
-// OperatorPubSubClient connects to a operator instance's WebSocket pub/sub endpoint.
+// OperatorPubSubClient connects to a Operator instance's WebSocket pub/sub endpoint.
 // It provides Subscribe (receive) and Publish (send) over the channel
 // naming convention:
 //
@@ -65,7 +65,7 @@ type OperatorPubSubClient struct {
 	pubWs  *websocket.Conn // persistent WebSocket for publishing
 }
 
-// NewOperatorPubSubClient creates a client that connects to a operator pub/sub endpoint.
+// NewOperatorPubSubClient creates a client that connects to a Operator pub/sub endpoint.
 // baseURL must use ws:// or wss:// scheme.
 // serverName overrides the TLS SNI hostname; pass an empty string when the
 // endpoint is a hostname (no override needed).
@@ -76,7 +76,7 @@ func NewOperatorPubSubClient(baseURL, serverName string, logger *slog.Logger) (*
 
 	isSecure := len(baseURL) >= 6 && baseURL[:6] == "wss://"
 
-	// For secure connections, load the embedded CA so the operator trusts
+	// For secure connections, load the embedded CA so the Operator trusts
 	// the server's self-signed certificate. Plain ws:// (local dev) skips this.
 	var tlsCfg *tls.Config
 	if isSecure {
@@ -98,7 +98,7 @@ func NewOperatorPubSubClient(baseURL, serverName string, logger *slog.Logger) (*
 	}, nil
 }
 
-// Subscribe subscribes to a operator pub/sub channel and returns a channel that
+// Subscribe subscribes to a Operator pub/sub channel and returns a channel that
 // delivers raw JSON payloads. The returned channel is closed when the
 // subscription ends (context cancelled or connection lost).
 //
@@ -110,7 +110,7 @@ func NewOperatorPubSubClient(baseURL, serverName string, logger *slog.Logger) (*
 func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<-chan []byte, error) {
 	wsURL := c.pubSubWSURL()
 
-	c.logger.Info("Dialing operator pub/sub WebSocket",
+	c.logger.Info("Dialing Operator pub/sub WebSocket",
 		"url", wsURL,
 		"channel", channel,
 		"tls", c.tlsConfig != nil)
@@ -121,6 +121,9 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 	}
 	ws, resp, err := dialer.DialContext(ctx, wsURL, nil)
 	if err != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
 		statusCode := 0
 		if resp != nil {
 			statusCode = resp.StatusCode
@@ -130,7 +133,7 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 			string(constants.ConnectionStateError), err,
 			"http_status", statusCode,
 			"tls_enabled", c.tlsConfig != nil)
-		return nil, fmt.Errorf("failed to connect to operator pub/sub (http_status=%d): %w", statusCode, err)
+		return nil, fmt.Errorf("failed to connect to Operator pub/sub (http_status=%d): %w", statusCode, err)
 	}
 
 	subMsg := pubsubv1.PubSubMessage{
@@ -277,7 +280,7 @@ func (c *OperatorPubSubClient) connectPubWs() error {
 	return nil
 }
 
-// Publish sends a message to a operator pub/sub channel via the persistent WebSocket.
+// Publish sends a message to a Operator pub/sub channel via the persistent WebSocket.
 // This is fire-and-forget: the server fans out to all subscribers.
 func (c *OperatorPubSubClient) Publish(ctx context.Context, channel string, data []byte) error {
 	c.mu.Lock()
@@ -314,7 +317,7 @@ func (c *OperatorPubSubClient) Publish(ctx context.Context, channel string, data
 		if err := c.pubWs.WriteMessage(websocket.BinaryMessage, msgBytes); err != nil {
 			c.pubWs.Close()
 			c.pubWs = nil
-			return fmt.Errorf("failed to publish to operator after reconnect: %w", err)
+			return fmt.Errorf("failed to publish to Operator after reconnect: %w", err)
 		}
 	}
 

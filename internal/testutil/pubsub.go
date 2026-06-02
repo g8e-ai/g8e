@@ -51,7 +51,7 @@ func TestPubSubAvailable(t *testing.T, baseURL string) {
 	ws.Close()
 }
 
-// SubscribeToChannel subscribes to a operator pub/sub channel and returns a channel for receiving raw bytes from the Data field.
+// SubscribeToChannel subscribes to a Operator pub/sub channel and returns a channel for receiving raw bytes from the Data field.
 // baseURL is the WebSocket URL to connect to (e.g., wss://localhost:port).
 // The subscription runs until the test ends (via t.Cleanup).
 func SubscribeToChannel(t *testing.T, baseURL string, channel string) <-chan []byte {
@@ -61,14 +61,14 @@ func SubscribeToChannel(t *testing.T, baseURL string, channel string) <-chan []b
 
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {
-		t.Fatalf("Failed to build TLS dialer for operator pub/sub: %v", err)
+		t.Fatalf("Failed to build TLS dialer for Operator pub/sub: %v", err)
 	}
 	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		t.Fatalf("Failed to connect to operator pub/sub at %s: %v", wsURL, err)
+		t.Fatalf("Failed to connect to Operator pub/sub at %s: %v", wsURL, err)
 	}
 
 	subMsg := &pubsubv1.PubSubMessage{Action: constants.PubSubActionSubscribe, Channel: channel}

@@ -77,7 +77,7 @@ func main() {
 	// Parse SPIFFE URLs
 	operatorURL, err := wid.OperatorSPIFFEURL(orgID, operatorID, sessionID)
 	if err != nil {
-		log.Fatalf("Failed to parse operator SPIFFE URL: %v", err)
+		log.Fatalf("Failed to parse Operator SPIFFE URL: %v", err)
 	}
 	fmt.Printf("Operator SPIFFE URL: %s\n", operatorURL.String())
 }

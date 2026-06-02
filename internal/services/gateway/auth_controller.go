@@ -1043,7 +1043,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 
 	// If CSR is requested and loopback, sign and return cert (plan §4.2)
 	if csrRequested {
-		// Create operator slot for the bootstrap user
+		// Create Operator slot for the bootstrap user
 		operatorID := uuid.NewString()
 		sessionID := uuid.NewString()
 		cliSessionID := uuid.NewString()
@@ -1094,15 +1094,15 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 		cliCertFingerprint := calculateFingerprintFromPEM(cliCertPEM)
 		cliCertSerial := calculateSerialFromPEM(cliCertPEM)
 
-		// Persist operator document
+		// Persist Operator document
 		opBytes, err := json.Marshal(operator)
 		if err != nil {
-			c.logger.Error("Failed to marshal operator document", string(constants.ConnectionStateError), err)
+			c.logger.Error("Failed to marshal Operator document", string(constants.ConnectionStateError), err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 			return
 		}
 		if err := c.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
-			c.logger.Error("Failed to persist operator document", string(constants.ConnectionStateError), err)
+			c.logger.Error("Failed to persist Operator document", string(constants.ConnectionStateError), err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 			return
 		}

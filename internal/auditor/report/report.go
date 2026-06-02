@@ -88,7 +88,7 @@ func markdown(rep Report) string {
 
 	fmt.Fprintf(&b, "## Real Operator receipts\n\n")
 	if len(rep.Receipts) == 0 {
-		b.WriteString("_No receipts returned. Confirm the operator session id and that mutations actually executed._\n")
+		b.WriteString("_No receipts returned. Confirm the Operator session id and that mutations actually executed._\n")
 		return b.String()
 	}
 	fmt.Fprintf(&b, "| tx_hash | action | status | state before → after |\n|---|---|---|---|\n")

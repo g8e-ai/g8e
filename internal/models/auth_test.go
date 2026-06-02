@@ -93,7 +93,7 @@ func TestSessionSummary(t *testing.T) {
 }
 
 func TestOperatorDocumentGo(t *testing.T) {
-	t.Run("creates valid operator document", func(t *testing.T) {
+	t.Run("creates valid Operator document", func(t *testing.T) {
 		now := time.Now().UTC()
 		startedAt := now.Add(-1 * time.Hour)
 		certPEM, _ := testutil.GenerateTestCertificate(t, "test-operator")
@@ -123,7 +123,7 @@ func TestOperatorDocumentGo(t *testing.T) {
 		assert.True(t, doc.Claimed)
 	})
 
-	t.Run("marshals JSON with default operator type", func(t *testing.T) {
+	t.Run("marshals JSON with default Operator type", func(t *testing.T) {
 		doc := &OperatorDocumentGo{
 			ID:        "operator-123",
 			UserID:    "user-123",
@@ -140,7 +140,7 @@ func TestOperatorDocumentGo(t *testing.T) {
 		assert.Contains(t, string(data), constants.OperatorTypeSystem)
 	})
 
-	t.Run("marshals JSON with explicit operator type", func(t *testing.T) {
+	t.Run("marshals JSON with explicit Operator type", func(t *testing.T) {
 		doc := &OperatorDocumentGo{
 			ID:           "operator-123",
 			UserID:       "user-123",

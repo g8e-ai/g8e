@@ -25,7 +25,7 @@ func TestCmdChannel(t *testing.T) {
 		assert.Equal(t, "cmd:op-123:sess-456", result)
 	})
 
-	t.Run("empty operator ID", func(t *testing.T) {
+	t.Run("empty Operator ID", func(t *testing.T) {
 		result := CmdChannel("", "sess-456")
 		assert.Equal(t, "cmd::sess-456", result)
 	})
@@ -47,7 +47,7 @@ func TestResultsChannel(t *testing.T) {
 		assert.Equal(t, "results:op-123:sess-456", result)
 	})
 
-	t.Run("empty operator ID", func(t *testing.T) {
+	t.Run("empty Operator ID", func(t *testing.T) {
 		result := ResultsChannel("", "sess-456")
 		assert.Equal(t, "results::sess-456", result)
 	})
@@ -64,7 +64,7 @@ func TestHeartbeatChannel(t *testing.T) {
 		assert.Equal(t, "heartbeat:op-123:sess-456", result)
 	})
 
-	t.Run("empty operator ID", func(t *testing.T) {
+	t.Run("empty Operator ID", func(t *testing.T) {
 		result := HeartbeatChannel("", "sess-456")
 		assert.Equal(t, "heartbeat::sess-456", result)
 	})

@@ -27,7 +27,7 @@ type Auth struct {
 	ClientKey  string `json:"client_key"`
 	// CABundle is the Gateway root/hub bundle (.well-known/g8e/pki/hub-bundle.pem).
 	CABundle string `json:"ca_bundle"`
-	// APIKey is the optional operator API key for the MCP/A2A surface.
+	// APIKey is the optional Operator API key for the MCP/A2A surface.
 	APIKey string `json:"api_key"`
 	// Insecure skips TLS verification. Local dev only. Never in a real audit.
 	Insecure bool `json:"insecure"`

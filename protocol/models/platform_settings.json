@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical PlatformSettings document shape. operator (g8eo) is the initial authority for security secrets, while client is the authority for user-managed configuration via the dashboard. Document ID is 'platform_settings' in the 'settings' collection.",
+  "_comment": "Canonical PlatformSettings document shape. Operator (g8eo) is the initial authority for security secrets, while client is the authority for user-managed configuration via the dashboard. Document ID is 'platform_settings' in the 'settings' collection.",
 
   "_authority": "operator (Secrets) / client (Config)",
   "_consumers": [
@@ -16,7 +16,7 @@
       "operator_session_id": {
         "type": "string",
         "required": false,
-        "description": "Active operator session identifier for the operator component."
+        "description": "Active Operator session identifier for the Operator component."
       },
       "llm_command_gen_enabled": {
         "type": "boolean",

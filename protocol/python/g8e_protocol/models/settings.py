@@ -40,7 +40,7 @@ class CommandValidationSettings(G8eBaseModel):
     auto_approved_commands: str = Field("")
 
 class BatchExecutionSettings(G8eBaseModel):
-    """Batch execution configuration for operator tools."""
+    """Batch execution configuration for Operator tools."""
     max_concurrency: int = Field(10, ge=1, le=64)
     fail_fast: bool = Field(False)
 

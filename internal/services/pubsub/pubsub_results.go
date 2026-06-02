@@ -33,7 +33,7 @@ func (rr *PubSubResultsService) resultsChannel(operatorSessionID string) string 
 	return constants.ResultsChannel(rr.config.OperatorID, operatorSessionID)
 }
 
-// PubSubResultsService handles publishing results back to g8e-Compliant Agentic Ensemble via operator pub/sub
+// PubSubResultsService handles publishing results back to g8e-Compliant Agentic Ensemble via Operator pub/sub
 type PubSubResultsService struct {
 	client     PubSubClient
 	config     *config.Config
@@ -41,7 +41,7 @@ type PubSubResultsService struct {
 	localStore *storage.LocalStoreService
 }
 
-// NewPubSubResultsService creates a new operator pub/sub results service
+// NewPubSubResultsService creates a new Operator pub/sub results service
 func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client PubSubClient, localStore *storage.LocalStoreService) (*PubSubResultsService, error) {
 	return &PubSubResultsService{
 		client:     client,
@@ -51,7 +51,7 @@ func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client Pub
 	}, nil
 }
 
-// PublishExecutionResult publishes command execution result via operator pub/sub
+// PublishExecutionResult publishes command execution result via Operator pub/sub
 // Stdout/stderr have already been sentinel.Sentinel-scrubbed by pubsub_commands.go before this is called.
 func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
 	// Determine event type based on status field via reflection
@@ -81,7 +81,7 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 	return nil
 }
 
-// PublishCancellationResult publishes command cancellation result via operator pub/sub
+// PublishCancellationResult publishes command cancellation result via Operator pub/sub
 func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.Command.Cancelled
 
@@ -94,7 +94,7 @@ func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, r
 	return nil
 }
 
-// PublishFileEditResult publishes file edit result via operator pub/sub.
+// PublishFileEditResult publishes file edit result via Operator pub/sub.
 func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.FileEdit.Completed
 
@@ -115,7 +115,7 @@ func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, resul
 	return nil
 }
 
-// PublishFsListResult publishes file system list result via operator pub/sub.
+// PublishFsListResult publishes file system list result via Operator pub/sub.
 func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.FsList.Completed
 
@@ -136,7 +136,7 @@ func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result 
 	return nil
 }
 
-// PublishFsGrepResult publishes file system grep result via operator pub/sub.
+// PublishFsGrepResult publishes file system grep result via Operator pub/sub.
 func (rr *PubSubResultsService) PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.FsGrep.Completed
 
@@ -198,10 +198,10 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 	return nil
 }
 
-// PublishHeartbeat publishes heartbeat to dedicated operator pub/sub heartbeat channel.
+// PublishHeartbeat publishes heartbeat to dedicated Operator pub/sub heartbeat channel.
 // It wraps the heartbeat in a GovernanceEnvelope for consistency with other results.
 func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error {
-	rr.logger.Info("[HEARTBEAT] Publishing heartbeat to operator pub/sub (UAP)")
+	rr.logger.Info("[HEARTBEAT] Publishing heartbeat to Operator pub/sub (UAP)")
 
 	// Build the UAP envelope
 	operatorSessionID := rr.config.OperatorSessionId

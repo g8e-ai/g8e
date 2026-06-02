@@ -269,7 +269,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		// Verify trust bundles exist and parse correctly
 		bundles := map[string]int{
 			"root.pem":            1, // root only
-			"g8eg-ca-bundle.pem":  4, // root + hub + operator + gateway peer
+			"g8eg-ca-bundle.pem":  4, // root + hub + Operator + gateway peer
 			"operator-bundle.pem": 2, // root + operator
 		}
 		for bundleName, expectedCount := range bundles {
@@ -780,7 +780,7 @@ func TestPKIAuthority_Phase0Regression_C2_OperatorSerialBlank(t *testing.T) {
 	issuedSerial := cert.SerialNumber.String()
 	assert.NotEmpty(t, issuedSerial, "issued cert should have a serial")
 
-	// BEFORE FIX: The registration service blanks the serial in the operator document
+	// BEFORE FIX: The registration service blanks the serial in the Operator document
 	// This is verified in registration_service_test.go but we document it here
 	// See registration_service.go:281 where operator_cert_serial is set to ""
 	assert.Equal(t, "", "", "BEFORE FIX: operator_cert_serial is blanked in completeRegistration")
@@ -890,7 +890,7 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		assert.False(t, cert.IsCA, "leaf certificate should not be a CA")
 		assert.Contains(t, cert.ExtKeyUsage, x509.ExtKeyUsageClientAuth, "leaf should have client auth EKU")
 
-		// Verify the chain contains the operator CA and root CA
+		// Verify the chain contains the Operator CA and root CA
 		chainBlocks := 0
 		chainBytes := []byte(chainPEM)
 		for len(chainBytes) > 0 {
@@ -903,7 +903,7 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 				chainBlocks++
 			}
 		}
-		assert.GreaterOrEqual(t, chainBlocks, 2, "chain should contain at least operator CA and root CA")
+		assert.GreaterOrEqual(t, chainBlocks, 2, "chain should contain at least Operator CA and root CA")
 	})
 
 	t.Run("Auto-bootstrap creates distinct test CA per test", func(t *testing.T) {
@@ -984,9 +984,9 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		assert.Len(t, crl.RevokedCertificateEntries, 1)
 		assert.Equal(t, cert.SerialNumber, crl.RevokedCertificateEntries[0].SerialNumber)
 
-		// Verify CRL signature can be verified with operator CA
+		// Verify CRL signature can be verified with Operator CA
 		err = crl.CheckSignatureFrom(pki.operatorCert)
-		assert.NoError(t, err, "CRL signature should verify with operator CA")
+		assert.NoError(t, err, "CRL signature should verify with Operator CA")
 	})
 
 	t.Run("GenerateCRL handles empty revocation list", func(t *testing.T) {
@@ -1079,7 +1079,7 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		// Check hub intermediate CA curve
 		assert.True(t, isCurveP256(pki.hubCert.PublicKey), "hub CA must use P-256")
 
-		// Check operator intermediate CA curve
+		// Check Operator intermediate CA curve
 		assert.True(t, isCurveP256(pki.operatorCert.PublicKey), "operator CA must use P-256")
 
 		// Check service cert curve
@@ -1204,9 +1204,9 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		ok := pool.AppendCertsFromPEM(operatorPEM)
 		assert.True(t, ok, "operator-bundle.pem should parse as valid PEM bundle")
 
-		// Verify it contains exactly 2 certificates (root + operator intermediate)
+		// Verify it contains exactly 2 certificates (root + Operator intermediate)
 		certCount := countCertificatesInPEM(operatorPEM)
-		assert.Equal(t, 2, certCount, "operator-bundle.pem should contain exactly 2 certificates (root + operator intermediate)")
+		assert.Equal(t, 2, certCount, "operator-bundle.pem should contain exactly 2 certificates (root + Operator intermediate)")
 	})
 
 	t.Run("Phase8_1: g8eg-ca-bundle.pem parses with 3 certificates", func(t *testing.T) {
@@ -1231,9 +1231,9 @@ func TestNewTestPKIBootstrap(t *testing.T) {
 		ok := pool.AppendCertsFromPEM(gatewayPEM)
 		assert.True(t, ok, "g8eg-ca-bundle.pem should parse as valid PEM bundle")
 
-		// Verify it contains exactly 4 certificates (root + hub intermediate + operator intermediate + gateway peer intermediate)
+		// Verify it contains exactly 4 certificates (root + hub intermediate + Operator intermediate + gateway peer intermediate)
 		certCount := countCertificatesInPEM(gatewayPEM)
-		assert.Equal(t, 4, certCount, "g8eg-ca-bundle.pem should contain exactly 4 certificates (root + hub + operator + gateway peer intermediates)")
+		assert.Equal(t, 4, certCount, "g8eg-ca-bundle.pem should contain exactly 4 certificates (root + hub + Operator + gateway peer intermediates)")
 	})
 
 	t.Run("Phase8_1: serving certificate verifies against g8eg-ca-bundle.pem", func(t *testing.T) {

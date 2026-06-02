@@ -116,7 +116,7 @@ func dataUsersCmd() *cobra.Command {
 func dataOperatorsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operators",
-		Short: "Manage operator instances",
+		Short: "Manage Operator instances",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
@@ -362,7 +362,7 @@ func dataAuditSummaryCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&operatorSessionID, "operator-session-id", "", "Filter by operator session ID")
+	cmd.Flags().StringVar(&operatorSessionID, "operator-session-id", "", "Filter by Operator session ID")
 
 	return cmd
 }

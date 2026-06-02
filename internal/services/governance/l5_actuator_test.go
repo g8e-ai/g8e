@@ -435,7 +435,7 @@ func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
 
 	actuator.AuditVault = auditVault
 
-	// Create the operator session first (required for fail-closed audit)
+	// Create the Operator session first (required for fail-closed audit)
 	err = auditVault.CreateSession("test-operator-session", "operator", "Test Session", "test-user")
 	require.NoError(t, err)
 

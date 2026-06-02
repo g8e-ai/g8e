@@ -223,7 +223,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if vs.pubSubClient == nil {
 		vs.pubSubClient, err = pubsub.NewOperatorPubSubClient(vs.config.PubSubURL, vs.config.TLSServerName, vs.logger)
 		if err != nil {
-			return fmt.Errorf("failed to create operator pub/sub client: %w", err)
+			return fmt.Errorf("failed to create Operator pub/sub client: %w", err)
 		}
 	}
 
@@ -408,7 +408,7 @@ func (a *auditVaultTransactionStore) DocSet(collection, id string, data json.Raw
 	return a.vault.RecordActionReceipt(&receipt)
 }
 
-// printOperatorStartupBanner prints the operator startup banner to stdout
+// printOperatorStartupBanner prints the Operator startup banner to stdout
 func printOperatorStartupBanner(cfg *config.Config) {
 	fmt.Println("[g8eo] Initializing Edge Execution Operator...")
 	fmt.Println()

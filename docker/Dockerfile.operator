@@ -28,7 +28,7 @@ USER g8e
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD g8e --version || exit 1
 
-# Expose operator ports
+# Expose Operator ports
 # 9000: HTTPS mTLS API
 # 9001: Bootstrap TLS (CSR enrollment)
 # 9002: Public browser/BYO bootstrap

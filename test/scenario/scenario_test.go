@@ -94,7 +94,7 @@ func setupTestContext(t *testing.T) *TestContext {
 	auditorCfg.Auth.CABundle = caBundlePath
 	auditorCfg.Auth.Insecure = false
 
-	// Load operator session ID from CLI credentials
+	// Load Operator session ID from CLI credentials
 	creds, err := auth.LoadCredentials(cliCfg)
 	if err != nil {
 		t.Fatalf("failed to load CLI credentials: %v", err)
@@ -109,11 +109,11 @@ func setupTestContext(t *testing.T) *TestContext {
 		t.Fatalf("failed to create auditor client: %v", err)
 	}
 
-	// Discover live operator session (should use the one we loaded)
+	// Discover live Operator session (should use the one we loaded)
 	ctx := context.Background()
 	operatorSessionID := testClient.DiscoverOperatorSession(ctx)
 	if operatorSessionID == "" {
-		t.Fatal("failed to discover live operator session - is the platform running? (./g8e gw start)")
+		t.Fatal("failed to discover live Operator session - is the platform running? (./g8e gw start)")
 	}
 
 	// Generate test client keys for signing (these are for L2 consensus simulation in tests)

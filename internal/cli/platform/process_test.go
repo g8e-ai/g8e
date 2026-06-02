@@ -360,7 +360,7 @@ func TestGetLogPath(t *testing.T) {
 	}
 }
 
-func TestGetOperatorBinary(t *testing.T) {
+func TestGetOperatorNodeBinary(t *testing.T) {
 	tmpDir := t.TempDir()
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
@@ -717,7 +717,7 @@ func TestIsProcessRunningNegativePID(t *testing.T) {
 	}
 }
 
-func TestGetOperatorBinaryPath(t *testing.T) {
+func TestGetOperatorNodeBinaryPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {

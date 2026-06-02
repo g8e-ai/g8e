@@ -247,7 +247,7 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 		return nil, fmt.Errorf("failed to get hostname: %w", err)
 	}
 
-	// Fetch current trust bundle from operator bootstrap endpoint to handle CA rotation
+	// Fetch current trust bundle from Operator bootstrap endpoint to handle CA rotation
 	trustBundleURL := fmt.Sprintf("%s/.well-known/g8e/pki/ca-bundle", cfg.OperatorDiscoveryURL())
 	trustBundleResp, err := http.Get(trustBundleURL)
 	if err != nil {
@@ -456,7 +456,7 @@ func CheckOperatorRunningAtURL(operatorURL string) error {
 	// Parse the URL to extract host:port
 	parts := strings.Split(operatorURL, "://")
 	if len(parts) != 2 {
-		return fmt.Errorf("invalid operator URL: %s", operatorURL)
+		return fmt.Errorf("invalid Operator URL: %s", operatorURL)
 	}
 
 	hostPort := parts[1]
@@ -486,7 +486,7 @@ func CheckBootstrapStatus(cfg *config.Config) (bool, error) {
 	url := fmt.Sprintf("%s/api/v1/auth/bootstrap/status", cfg.OperatorDiscoveryURL())
 	resp, err := http.Get(url)
 	if err != nil {
-		// If operator is not reachable, we cannot confirm bootstrap status
+		// If Operator is not reachable, we cannot confirm bootstrap status
 		return false, fmt.Errorf("failed to check remote bootstrap status: %w", err)
 	}
 	defer resp.Body.Close()
@@ -538,7 +538,7 @@ func isCertExpiringSoon(cert *x509.Certificate) bool {
 	return timeUntilExpiry <= renewalThreshold
 }
 
-// CheckCertExpiry checks if the local CLI or operator certificate is expiring soon.
+// CheckCertExpiry checks if the local CLI or Operator certificate is expiring soon.
 // Returns true if the certificate is expiring within the renewal threshold.
 func CheckCertExpiry(certFile string) (bool, error) {
 	cert, err := parseCertPEM(certFile)
@@ -578,7 +578,7 @@ func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint str
 
 	opCSR, opKey, err := GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
 	if err != nil {
-		return fmt.Errorf("failed to generate operator CSR: %w", err)
+		return fmt.Errorf("failed to generate Operator CSR: %w", err)
 	}
 
 	cliCSR, cliKey, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
@@ -600,7 +600,7 @@ func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint str
 	}
 
 	if err := SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey, cfg.OperatorCertFile(), cfg.OperatorKeyFile()); err != nil {
-		return fmt.Errorf("failed to save renewed operator credentials: %w", err)
+		return fmt.Errorf("failed to save renewed Operator credentials: %w", err)
 	}
 
 	if regResp.HubTrustBundle != "" {

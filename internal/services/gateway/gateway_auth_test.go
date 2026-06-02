@@ -58,7 +58,7 @@ func TestAuthService_ValidateOperatorSession_SessionNotFound(t *testing.T) {
 
 	_, err := auth.ValidateOperatorSession("nonexistent-session")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid or expired operator session")
+	assert.Contains(t, err.Error(), "invalid or expired Operator session")
 }
 
 func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
@@ -70,7 +70,7 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 	res := responder.New(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
-	// Create an operator session with terminated status
+	// Create an Operator session with terminated status
 	sessionID := "terminated-session"
 	opDoc := map[string]interface{}{
 		"id":                  "op-123",
@@ -107,7 +107,7 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("users", userID, userBytes))
 
-	// Create an operator session with old timestamp using the test hook
+	// Create an Operator session with old timestamp using the test hook
 	sessionID := "expired-session"
 	oldTime := time.Now().UTC().Add(-25 * time.Hour)
 	opDoc := map[string]interface{}{
@@ -145,7 +145,7 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("users", userID, userBytes))
 
-	// Create an operator session linked to the inactive user
+	// Create an Operator session linked to the inactive user
 	sessionID := "session-with-inactive-user"
 	opDoc := map[string]interface{}{
 		"id":                  "op-789",
@@ -610,7 +610,7 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("users", userID, userBytes))
 
-	// Create an operator session
+	// Create an Operator session
 	sessionID := "op-session-123"
 	opDoc := map[string]interface{}{
 		"id":                  "op-123",
@@ -643,7 +643,7 @@ func TestAuthService_HandleOperatorAuth_InvalidSession(t *testing.T) {
 	// Test with invalid session
 	_, err := auth.ValidateOperatorSession("invalid-session")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid or expired operator session")
+	assert.Contains(t, err.Error(), "invalid or expired Operator session")
 }
 
 func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
@@ -655,7 +655,7 @@ func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
 	res := responder.New(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
-	// Create a terminated operator session
+	// Create a terminated Operator session
 	sessionID := "terminated-session"
 	opDoc := map[string]interface{}{
 		"id":                  "op-terminated",
@@ -863,7 +863,7 @@ func TestAuthService_CliCertBoundToOperator_Success(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	// Create a CLI session linked to operator session
+	// Create a CLI session linked to Operator session
 	cliSessionID := "cli-session-bound"
 	operatorSessionID := "op-session-bound"
 	userID := "user-bound"
@@ -899,14 +899,14 @@ func TestAuthService_CliCertBoundToOperator_SessionMismatch(t *testing.T) {
 	res := responder.New(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
-	// Create a CLI session with different operator session
+	// Create a CLI session with different Operator session
 	cliSessionID := "cli-session-mismatch"
 	operatorSessionID := "op-session-1"
 	userID := "user-mismatch"
 
 	cliDoc := map[string]interface{}{
 		"user_id":             userID,
-		"operator_session_id": "op-session-2", // Different operator session
+		"operator_session_id": "op-session-2", // Different Operator session
 		"expires_at":          time.Now().Add(1 * time.Hour).Format(time.RFC3339),
 	}
 	cliBytes, err := json.Marshal(cliDoc)
@@ -966,7 +966,7 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("users", userID, userBytes))
 
-	// Create an operator session
+	// Create an Operator session
 	sessionID := "op-session-auth-test"
 	organizationID := "org-auth-test"
 	opDoc := map[string]interface{}{

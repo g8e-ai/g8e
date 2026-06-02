@@ -16,13 +16,13 @@ The g8e Protocol is the foundational wire contract for all mutations in the g8e 
 
 ### Core Design Principles
 
-- **Canonical JSON Wire Format**: All client-facing surfaces (HTTP, WSS pub/sub, receipts, audit exports) carry the `GovernanceEnvelope` as canonical JSON (protojson). Binary protobuf is strictly reserved for internal storage.
+- **Canonical JSON Wire Format**: All client-facing surfaces (HTTP, WSS pub/sub, receipts, audit exports) carry the `GovernanceEnvelope` as canonical JSON (protojson).Node Node Binary protobuf is strictly reserved for internal storage.
 - **g8e.local Canonical Alias**: The platform uses `g8e.local` as the stable internal hostname. The gateway translates this alias to installation-specific peer identity and endpoint data.
 - **Hash-Based Signing**: A deterministic `transaction_hash` is computed from normalized envelope fields. The verifier enforces `id == transaction_hash == SHA256(canonical_fields)`.
 - **Fail-Closed Verification**: Any malformed envelope, expired transaction, reused nonce, stale state root, or missing proof is rejected immediately before execution.
 - **Body-Embedded Context**: Business and execution context (`web_session_id`, `cli_session_id`, `operator_session_id`, `user_id`) lives inside the envelope via typed fields.
 - **BFT State Binding**: Mutations carry a `state_merkle_root` that the Operator compares against its current host state.
-- **Operator Sovereignty**: No bundled component has privileged channels. The Operator (`g8eo`) is the only execution boundary, enforcing rules uniformly.
+- **Operator Sovereignty**: No bundled component has privileged channels. The g8e Operator is the only execution boundary, enforcing rules uniformly.
 
 ### Protocol Translation
 
@@ -104,7 +104,7 @@ The transaction lifecycle follows a strict sequence from intent to audited execu
 3. The payload is embedded into a `GovernanceEnvelope` alongside `nonce`, `expires_at`, and `state_merkle_root`.
 4. An L2 Consensus producer computes the `transaction_hash` and attaches a signature.
 5. For mutations, an L3 Notary (human) signs the same hash via WebAuthn, unless auto-approval policy applies.
-6. The client submits the canonical-JSON envelope over mTLS to the Governance Gateway (`g8eg`), which validates and dispatches it to the target Operator (`g8eo`) over WSS. Remote peers are resolved via `g8e.local` translation.
+6. The client submits the canonical-JSON envelope over mTLS to the g8e Gateway, which validates and dispatches it to the target g8e Operator over WSS. Remote peers are resolved via `g8e.local` translation.
 
 ### Verification Phase (L4Warden)
 
@@ -231,7 +231,7 @@ Protocol errors follow standardized JSON-RPC codes for MCP/A2A client compatibil
 
 ### Gateway Postures
 
-The Governance Gateway runs with three posture options:
+The g8e Gateway runs with three posture options:
 
 | Mode | Flag | Purpose |
 |---|---|---|
@@ -267,7 +267,7 @@ The g8e platform uses **ZERO environment variables** for production configuratio
 
 ### Multi-Ledger Architecture
 
-Each operator session owns an isolated, encrypted git repository tracking all mutations with `LedgerHashBefore` and `LedgerHashAfter`. Every file mutation triggers a native Go `go-git` commit.
+Each Operator session owns an isolated, encrypted git repository tracking all mutations with `LedgerHashBefore` and `LedgerHashAfter`. Every file mutation triggers a native Go `go-git` commit.
 
 ### Fail-Closed Audit Vault
 
@@ -307,9 +307,171 @@ Output scrubbing is performed directly at the `L5Actuator` boundary to redact to
 
 ---
 
+## Example GovernanceEnvelope with MCP Payloads
+
+### Example 1: MCP File Read Tool Call
+
+```json
+{
+  "id": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+  "timestamp": "2026-06-02T18:27:00Z",
+  "expiresAt": "2026-06-02T18:32:00Z",
+  "sourceComponent": "COMPONENT_CLIENT",
+  "operatorId": "op-prod-12345",
+  "operatorSessionId": "sess-abc-789",
+  "webSessionId": "web-xyz-456",
+  "eventType": "g8e.v1.operator.mcp.call.requested",
+  "payload": "CgZmc19yZWFkEglleGVjLTIwMzUSCgoZmlsZTovLy9ob21lL3VzZXIvcmVhZG1lLm1kGgZzY3J1Yg==",
+  "intentData": {
+    "tool": "fs_read",
+    "path": "/home/user/readme.md",
+    "reason": "Read deployment documentation"
+  },
+  "actionType": "MCP_CALL",
+  "targetResource": "file:///home/user/readme.md",
+  "stateMerkleRoot": "abc123def456abc123def456abc123def456abc123def456abc123def456abc1",
+  "nonce": "nonce-1717358820000-abc123",
+  "transactionHash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+  "protocolVersion": "1.0",
+  "governance": {
+    "l1": {
+      "validated": true,
+      "violations": []
+    },
+    "l2": {
+      "consensusSignature": "4a5b6c7d8e9f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "agentIds": ["agent-ensemble-1", "agent-ensemble-2", "agent-ensemble-3"],
+      "keyId": "key-ensemble-prod-abc123"
+    },
+    "l3": {
+      "proof": {
+        "clientDataJson": "{\"challenge\":\"a1b2c3d4e5f6\",\"origin\":\"https://g8e.ai\",\"type\":\"webauthn.get\"}",
+        "authenticatorData": "SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2NFAAAAAQ",
+        "signature": "MEUCIQDWn3x4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2IgE5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        "credentialId": "abc123def456abc123def456abc123def456abc123def456abc123def456abc1"
+      },
+      "autoApproved": false
+    },
+    "gatewaySigned": false
+  },
+  "caseId": "case-deploy-456",
+  "taskId": "task-readme-789",
+  "systemFingerprint": "fp-linux-amd64-abc123",
+  "tenantId": "tenant-prod-xyz"
+}
+```
+
+The `payload` field contains base64-encoded protobuf bytes of `McpCallRequested` with:
+- `tool_name`: "fs_read"
+- `arguments_json`: "{\"path\":\"/home/user/readme.md\"}"
+- `execution_id`: "exec-2035"
+
+### Example 2: MCP Database Query Tool Call (Auto-Approved)
+
+```json
+{
+  "id": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+  "timestamp": "2026-06-02T18:28:00Z",
+  "expiresAt": "2026-06-02T18:33:00Z",
+  "sourceComponent": "COMPONENT_AGENT",
+  "operatorId": "op-prod-67890",
+  "operatorSessionId": "sess-def-012",
+  "eventType": "g8e.v1.operator.mcp.call.requested",
+  "payload": "CgZxdWVyeRIXZXhlYy1idWlsZC0zNDU2EgoJCXNFTEVDVCBjb3VudCgqKSBGUk9NIHVzZXJzGgZzY3J1Yg==",
+  "intentData": {
+    "tool": "postgres_query",
+    "query": "SELECT count(*) FROM users",
+    "reason": "Check user count for health check"
+  },
+  "actionType": "MCP_CALL",
+  "targetResource": "postgres://prod-db.internal/users",
+  "stateMerkleRoot": "def456abc123def456abc123def456abc123def456abc123def456abc123def4",
+  "nonce": "nonce-1717358880000-def456",
+  "transactionHash": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+  "protocolVersion": "1.0",
+  "governance": {
+    "l1": {
+      "validated": true,
+      "violations": []
+    },
+    "l2": {
+      "consensusSignature": "5c6d7e8f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+      "agentIds": ["agent-ensemble-1"],
+      "keyId": "key-ensemble-prod-def456"
+    },
+    "l3": {
+      "proof": null,
+      "autoApproved": true
+    },
+    "gatewaySigned": true
+  },
+  "caseId": "",
+  "taskId": "task-health-345",
+  "systemFingerprint": "fp-linux-amd64-def456",
+  "tenantId": "tenant-prod-xyz"
+}
+```
+
+This example shows a benign diagnostic query with `autoApproved: true` and `gatewaySigned: true`, bypassing the L3 human authorization while still passing L1 and L2 checks.
+
+### Example 3: MCP Resource List Call
+
+```json
+{
+  "id": "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+  "timestamp": "2026-06-02T18:29:00Z",
+  "expiresAt": "2026-06-02T18:34:00Z",
+  "sourceComponent": "COMPONENT_CLIENT",
+  "operatorId": "op-prod-11111",
+  "operatorSessionId": "sess-ghi-345",
+  "webSessionId": "web-jkl-678",
+  "eventType": "g8e.v1.operator.mcp.resources.list.requested",
+  "payload": "CgZleGVjLTQ1NjcG",
+  "intentData": {
+    "operation": "list_resources",
+    "reason": "Discover available MCP resources"
+  },
+  "actionType": "MCP_RESOURCE_LIST",
+  "targetResource": "*",
+  "stateMerkleRoot": "efg789abc123efg789abc123efg789abc123efg789abc123efg789abc123efg7",
+  "nonce": "nonce-1717358940000-efg789",
+  "transactionHash": "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+  "protocolVersion": "1.0",
+  "governance": {
+    "l1": {
+      "validated": true,
+      "violations": []
+    },
+    "l2": {
+      "consensusSignature": "6d7e8f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+      "agentIds": ["agent-ensemble-1", "agent-ensemble-2"],
+      "keyId": "key-ensemble-prod-efg789"
+    },
+    "l3": {
+      "proof": {
+        "clientDataJson": "{\"challenge\":\"c3d4e5f6\",\"origin\":\"https://g8e.ai\",\"type\":\"webauthn.get\"}",
+        "authenticatorData": "SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2NFAAAAAQ",
+        "signature": "MEYCIQCd4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2IhAOf6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        "credentialId": "def456abc123def456abc123def456abc123def456abc123def456abc123def4"
+      },
+      "autoApproved": false
+    },
+    "gatewaySigned": false
+  },
+  "caseId": "case-discovery-789",
+  "taskId": "task-resources-456",
+  "systemFingerprint": "fp-linux-amd64-efg789",
+  "tenantId": "tenant-prod-xyz"
+}
+```
+
+This example demonstrates a resource discovery operation using the `McpResourceListRequested` payload type.
+
+---
+
 ## Related Documentation
 
-- [**Operator (g8eo)**](./operator.md) - Operator architecture and execution boundary
-- [**Gateway (g8eg)**](./gateway.md) - Governance Gateway architecture
+- [**g8e Operator**](./operator.md) - Operator architecture and execution boundary
+- [**g8e Gateway**](./gateway.md) - Gateway architecture
 - [**MCP Protocol**](../protocols/mcp/mcp.md) - MCP protocol specification and integration
 - [**A2A Protocol**](../protocols/a2a/a2a.md) - A2A protocol specification and integration

@@ -3,7 +3,7 @@ title: Connect Operator to Gateway
 parent: Guides
 ---
 
-# Connect Operator to a Governance Gateway
+# Connect g8e Operator to g8e Gateway
 
 Last Updated: 2026-06-01
 Version: v1.0.5
@@ -12,7 +12,7 @@ Version: v1.0.5
 
 ## Overview
 
-This guide covers connecting the g8e platform to the Governance Gateway. The Gateway (g8eg) serves as the central policy decision point, while the Operator (g8eo) executes governed mutations through the five-layer verification pipeline.
+This guide covers connecting the g8e platform to the g8e Gateway. The g8e Gateway serves as the central policy decision point, while the g8e Operator executes governed mutations through the five-layer verification pipeline.
 
 ---
 
@@ -20,41 +20,41 @@ This guide covers connecting the g8e platform to the Governance Gateway. The Gat
 
 ### Local Deployment
 
-For development or single-host deployments, start the Gateway locally:
+For development or single-host deployments, start the g8e Gateway locally:
 
 ```bash
 ./g8e gw start
 ```
 
-This starts the Gateway in doctrine mode (L1 enforced, L2/L3 audited). The Gateway performs network identity detection at startup and prompts for certificate identity mode (full hostnames/IPs or localhost only).
+This starts the g8e Gateway in doctrine mode (L1 enforced, L2/L3 audited). The g8e Gateway performs network identity detection at startup and prompts for certificate identity mode (full hostnames/IPs or localhost only).
 
 ### Remote Deployment
 
-For distributed infrastructure, deploy the operator on remote hosts:
+For distributed infrastructure, deploy the g8e Operator on remote hosts:
 
 #### 1. CSR-Based Enrollment
 
-On the remote host, generate a CSR and enroll with the Gateway:
+On the remote host, generate a CSR and enroll with the g8e Gateway:
 
 ```bash
-./g8e security pki enroll --endpoint <gateway-ip>:8441
+./g8e security pki enroll -e <gateway-ip>
 ```
 
-The endpoint is the Gateway bootstrap port (default 8441). This command generates operator and CLI CSRs, submits them to the Gateway, and saves the signed certificates to the PKI directory.
+The endpoint is the g8e Gateway IP address. The bootstrap port (8441) is appended automatically. This command generates g8e Operator and CLI CSRs, submits them to the g8e Gateway, and saves the signed certificates to the PKI directory.
 
-#### 2. Copy Binary and Certificates
+#### 2. Copy g8e Node and Certificates
 
-Copy the `g8e` binary and the issued certificates to the remote host.
+Copy the `g8e` g8e Node and the issued certificates to the remote host.
 
-#### 3. Start the Gateway
+#### 3. Start the g8e Gateway
 
-On the remote host, start the Gateway with the enrolled certificates:
+On the remote host, start the g8e Gateway with the enrolled certificates:
 
 ```bash
 ./g8e gw start
 ```
 
-The Gateway will:
+The g8e Gateway will:
 - Load the mTLS certificates from the PKI directory
 - Establish the control plane on port 8440 (mTLS) and bootstrap port 8441
 - Initialize the local in-process Pub/Sub broker
@@ -63,21 +63,21 @@ The Gateway will:
 
 ---
 
-## Operator Configuration
+## g8e Operator Configuration
 
-### Gateway Endpoint
+### g8e Gateway Endpoint
 
-The Gateway endpoint is configured via the `--endpoint` flag during CSR enrollment. The Gateway itself does not require an endpoint flag at startup, as it binds to the configured ports.
+The g8e Gateway endpoint is configured via the `--endpoint` flag during CSR enrollment. The g8e Gateway itself does not require an endpoint flag at startup, as it binds to the configured ports.
 
 ### PKI Directory
 
-Specify the PKI directory via the `--pki-dir` flag when starting the Gateway:
+Specify the PKI directory via the `--pki-dir` flag when starting the g8e Gateway:
 
 ```bash
 ./g8e gw start --pki-dir /etc/g8e/pki
 ```
 
-This defaults to `.g8e/pki` in the current working directory. The PKI directory contains the root CA, intermediate CA, gateway service certificates, and trust bundles.
+This defaults to `.g8e/pki` in the current working directory. The PKI directory contains the root CA, intermediate CA, g8e Gateway service certificates, and trust bundles.
 
 ---
 
@@ -172,7 +172,7 @@ When the mTLS certificate expires, re-authenticate using:
 This command automatically checks certificate expiry and performs auto-renewal if needed. For remote device enrollment, use CSR-based enrollment:
 
 ```bash
-./g8e security pki enroll --endpoint <gateway-ip>:8441
+./g8e security pki enroll -e <gateway-ip>
 ```
 
 ---
@@ -197,7 +197,7 @@ Custom operators should support configuration via:
 ### High Availability
 
 For production deployments, consider:
-- Multiple operator instances per host for redundancy
+- Multiple Operator instances per host for redundancy
 - Automatic restart on failure
 - Health check integration with orchestration systems
 - Log aggregation and monitoring

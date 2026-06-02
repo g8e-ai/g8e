@@ -42,7 +42,7 @@ func toLower(s string) string {
 
 // IsTLSCertError returns true if the error indicates a TLS certificate trust failure.
 // These are non-retryable conditions caused by stale embedded CA certificates or
-// expired/revoked server certificates. The operator must self-terminate when this
+// expired/revoked server certificates. The Operator must self-terminate when this
 // occurs to prevent noisy retry loops against the server.
 func IsTLSCertError(err error) bool {
 	if err == nil {

@@ -76,7 +76,7 @@ imports for package-relative use.
 
 ## `./g8e gw start` does not become healthy
 
-The gateway start path builds and launches the Governance Gateway, then waits for the
+The gateway start path builds and launches the g8e Gateway, then waits for the
 health endpoint. Start with the status command and the log:
 
 ```bash
@@ -103,7 +103,7 @@ state. They intentionally remove runtime data under `.g8e/`.
 ## Tests fail because the gateway is not running
 
 The test runner uses real infrastructure. Start the gateway before tests that
-need the Governance Gateway, and start optional apps only when the test target requires
+need the g8e Gateway, and start optional apps only when the test target requires
 them.
 
 ```bash
@@ -112,7 +112,7 @@ make test
 ```
 
 If a test failure mentions missing trust bundles or client certificates, confirm
-that `.g8e/pki/` exists and that `./g8e gw status` reports the Governance Gateway as
+that `.g8e/pki/` exists and that `./g8e gw status` reports the g8e Gateway as
 running.
 
 ## Path resolution problems

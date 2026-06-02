@@ -149,7 +149,7 @@ func (pki *PKIAuthority) TLSConfig() *tls.Config {
 	pki.mu.RLock()
 	defer pki.mu.RUnlock()
 
-	// Create client CA pool from root and operator intermediate for client verification
+	// Create client CA pool from root and Operator intermediate for client verification
 	// Hub intermediate is excluded as it only signs the gateway serving certificate
 	pool := x509.NewCertPool()
 	if pki.rootCert != nil {
@@ -222,7 +222,7 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 			return fmt.Errorf("operator CA exists but is corrupt: %w", err)
 		}
 	} else {
-		pki.logger.Info("[PKI] Generating operator intermediate CA")
+		pki.logger.Info("[PKI] Generating Operator intermediate CA")
 		if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
 			return fmt.Errorf("load root CA private key for intermediate generation: %w", err)
 		}
@@ -333,7 +333,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 		return fmt.Errorf("failed to write root bundle: %w", err)
 	}
 
-	// Gateway bundle (root + hub intermediate + operator intermediate + gateway peer intermediate)
+	// Gateway bundle (root + hub intermediate + Operator intermediate + gateway peer intermediate)
 	gatewayBundlePath := filepath.Join(pki.pkiDir, "trust", "g8eg-ca-bundle.pem")
 	hubPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "hub_ca.crt"))
 	if err != nil {
@@ -341,7 +341,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	}
 	operatorPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "operator_ca.crt"))
 	if err != nil {
-		return fmt.Errorf("failed to read operator CA: %w", err)
+		return fmt.Errorf("failed to read Operator CA: %w", err)
 	}
 	gatewayPeerPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "gateway_peer_ca.crt"))
 	if err != nil {
@@ -356,13 +356,13 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 		return fmt.Errorf("failed to write gateway bundle: %w", err)
 	}
 
-	// Operator bundle (root + operator intermediate)
+	// Operator bundle (root + Operator intermediate)
 	operatorBundlePath := filepath.Join(pki.pkiDir, "trust", "operator-bundle.pem")
 	operatorBundle := make([]byte, 0, len(rootPEM)+len(operatorPEM))
 	operatorBundle = append(operatorBundle, rootPEM...)
 	operatorBundle = append(operatorBundle, operatorPEM...)
 	if err := writePublicPEMBundleFile(operatorBundlePath, operatorBundle); err != nil {
-		return fmt.Errorf("failed to write operator bundle: %w", err)
+		return fmt.Errorf("failed to write Operator bundle: %w", err)
 	}
 
 	// Trust domain metadata
@@ -377,7 +377,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	return nil
 }
 
-// GatewayTrustBundle returns the full PEM-encoded gateway trust bundle (root + hub intermediate + operator intermediate).
+// GatewayTrustBundle returns the full PEM-encoded gateway trust bundle (root + hub intermediate + Operator intermediate).
 func (pki *PKIAuthority) GatewayTrustBundle() ([]byte, error) {
 	pki.mu.RLock()
 	defer pki.mu.RUnlock()
@@ -414,7 +414,7 @@ func (pki *PKIAuthority) RevokeCertificate(serial string, reason string) error {
 	return pki.db.DocSet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial, body)
 }
 
-// GenerateCRL creates a standard X.509 Certificate Revocation List (CRL) signed by the operator intermediate CA.
+// GenerateCRL creates a standard X.509 Certificate Revocation List (CRL) signed by the Operator intermediate CA.
 // The CRL contains all revoked certificate serials from the database.
 func (pki *PKIAuthority) GenerateCRL() (crlDER []byte, err error) {
 	pki.mu.RLock()
@@ -472,7 +472,7 @@ func (pki *PKIAuthority) GenerateCRL() (crlDER []byte, err error) {
 		NextUpdate:          now.Add(24 * time.Hour), // CRL valid for 24 hours
 	}
 
-	// Generate CRL signed by operator intermediate CA
+	// Generate CRL signed by Operator intermediate CA
 	crlDER, err = x509.CreateRevocationList(rand.Reader, crlTemplate, pki.operatorCert, pki.operatorKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CRL: %w", err)
@@ -540,7 +540,7 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 		caType = "gateway-peer"
 		certValidityDays = peerCertValidityDays
 	default:
-		// operator, cli, app use operator CA
+		// operator, cli, app use Operator CA
 		if pki.operatorCert == nil {
 			return "", "", fmt.Errorf("operator CA not loaded - call EnsurePKI first")
 		}
@@ -624,7 +624,7 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 		caPEM, _ := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "gateway_peer_ca.crt"))
 		chainPEM = certPEM + string(caPEM) + string(rootPEM)
 	} else {
-		// Operator/cli/app chain: leaf + operator intermediate + root
+		// Operator/cli/app chain: leaf + Operator intermediate + root
 		caPEM, _ := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "operator_ca.crt"))
 		chainPEM = certPEM + string(caPEM) + string(rootPEM)
 	}

@@ -45,9 +45,9 @@ func TestExecute(t *testing.T) {
 		// Instead, we test the root command construction
 		rootCmd := &cobra.Command{
 			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the Governance Gateway and Governed Operator",
+			Short: "g8e Platform Manager - CLI for the g8e Gateway and g8e Operator",
 			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
+The CLI manages the g8e Gateway (g8eg) and g8e Operator (g8eo).`,
 			CompletionOptions: cobra.CompletionOptions{
 				DisableDefaultCmd: true,
 			},
@@ -70,9 +70,9 @@ The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
 	t.Run("root command has all expected subcommands", func(t *testing.T) {
 		rootCmd := &cobra.Command{
 			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the Governance Gateway and Governed Operator",
+			Short: "g8e Platform Manager - CLI for the g8e Gateway and g8e Operator",
 			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
+The CLI manages the g8e Gateway (g8eg) and g8e Operator (g8eo).`,
 			CompletionOptions: cobra.CompletionOptions{
 				DisableDefaultCmd: true,
 			},
@@ -103,9 +103,9 @@ The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
 	t.Run("root command has correct completion options", func(t *testing.T) {
 		rootCmd := &cobra.Command{
 			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the Governance Gateway and Governed Operator",
+			Short: "g8e Platform Manager - CLI for the g8e Gateway and g8e Operator",
 			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
+The CLI manages the g8e Gateway (g8eg) and g8e Operator (g8eo).`,
 			CompletionOptions: cobra.CompletionOptions{
 				DisableDefaultCmd: true,
 			},
@@ -117,9 +117,9 @@ The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
 	t.Run("root command help displays correctly", func(t *testing.T) {
 		rootCmd := &cobra.Command{
 			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the Governance Gateway and Governed Operator",
+			Short: "g8e Platform Manager - CLI for the g8e Gateway and g8e Operator",
 			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the Governance Gateway (g8eg) and Governed Operator (g8eo).`,
+The CLI manages the g8e Gateway (g8eg) and g8e Operator (g8eo).`,
 			CompletionOptions: cobra.CompletionOptions{
 				DisableDefaultCmd: true,
 			},

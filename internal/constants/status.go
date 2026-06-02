@@ -65,7 +65,7 @@ const (
 	ConnectionStateReconnecting ConnectionState = "reconnecting"
 )
 
-// OperatorStatus is a typed string for operator status.
+// OperatorStatus is a typed string for Operator status.
 type OperatorStatus string
 
 const (
@@ -79,7 +79,7 @@ const (
 	OperatorStatusUnavailable OperatorStatus = "unavailable"
 )
 
-// OperatorType is a typed string for operator type.
+// OperatorType is a typed string for Operator type.
 type OperatorType string
 
 const (

@@ -153,7 +153,7 @@
           },
           "command": {
             "type": "string",
-            "description": "Command string for operator command events"
+            "description": "Command string for Operator command events"
           },
           "output": {
             "type": "string",

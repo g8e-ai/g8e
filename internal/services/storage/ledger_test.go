@@ -460,7 +460,7 @@ func TestLedgerService_GetFileHistory(t *testing.T) {
 }
 
 // Regression: callers (e.g. HistoryHandler) may hold a nil *LedgerService when
-// the operator was started without local storage. Public methods must degrade
+// the Operator was started without local storage. Public methods must degrade
 // to an error instead of panicking on the auditVault deref inside gitReady().
 func TestLedgerService_GetFileHistory_NilReceiver(t *testing.T) {
 	t.Parallel()
@@ -762,7 +762,7 @@ func TestLedgerService_DeepNestedPath(t *testing.T) {
 	assert.Equal(t, "deep content", string(mirrorContent))
 }
 
-func TestLedgerService_BinaryFile(t *testing.T) {
+func TestLedgerService_NodeBinaryFile(t *testing.T) {
 	t.Parallel()
 	lms, avs, tempDir := setupTestLedger(t)
 	defer avs.Close()

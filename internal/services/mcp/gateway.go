@@ -83,7 +83,7 @@ type GatewayService struct {
 	maxPayloadBytes int64
 }
 
-// SessionValidator validates operator sessions for L3 authorization
+// SessionValidator validates Operator sessions for L3 authorization
 type SessionValidator interface {
 	ValidateSession(operatorSessionID string) (bool, error)
 }
@@ -254,8 +254,21 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 	}
 
 	if g.isCircuitOpen() {
-		g.logger.Warn("MCP downstream circuit is open, rejecting tools/list", "url", g.downstreamURL)
-		g.responder.RPCError(w, 1, -32603, "downstream MCP server is temporarily unavailable (circuit open)")
+		g.logger.Warn("MCP downstream circuit is open, returning native tools only", "url", g.downstreamURL)
+		// Return native tools when downstream is unavailable
+		var nativeTools []NativeTool
+		if g.nativeToolHandler != nil {
+			nativeTools = g.nativeToolHandler.registry.List()
+		}
+		tools := make([]Tool, 0, len(nativeTools))
+		for _, nt := range nativeTools {
+			tools = append(tools, Tool{
+				Name:        nt.Name(),
+				Description: nt.Description(),
+				InputSchema: nt.InputSchema(),
+			})
+		}
+		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
 		return
 	}
 
@@ -287,8 +300,21 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 
 	if err != nil {
 		g.recordFailure()
-		g.logger.Error("Failed to query downstream MCP server", "url", g.downstreamURL, "error", err)
-		g.responder.RPCError(w, 1, -32603, fmt.Sprintf("failed to query downstream MCP server: %v", err))
+		g.logger.Error("Failed to query downstream MCP server, returning native tools only", "url", g.downstreamURL, "error", err)
+		// Return native tools when downstream is unavailable
+		var nativeTools []NativeTool
+		if g.nativeToolHandler != nil {
+			nativeTools = g.nativeToolHandler.registry.List()
+		}
+		tools := make([]Tool, 0, len(nativeTools))
+		for _, nt := range nativeTools {
+			tools = append(tools, Tool{
+				Name:        nt.Name(),
+				Description: nt.Description(),
+				InputSchema: nt.InputSchema(),
+			})
+		}
+		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
 		return
 	}
 	defer func() {
@@ -299,15 +325,110 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 
 	if resp.StatusCode >= 500 {
 		g.recordFailure()
+		// Return native tools as fallback when downstream returns error
+		var nativeTools []NativeTool
+		if g.nativeToolHandler != nil {
+			nativeTools = g.nativeToolHandler.registry.List()
+		}
+		tools := make([]Tool, 0, len(nativeTools))
+		for _, nt := range nativeTools {
+			tools = append(tools, Tool{
+				Name:        nt.Name(),
+				Description: nt.Description(),
+				InputSchema: nt.InputSchema(),
+			})
+		}
+		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
+		return
 	} else {
 		g.recordSuccess()
 	}
 
-	w.Header().Set(constants.HeaderContentType, "application/json")
-	w.WriteHeader(resp.StatusCode)
-	if _, err := io.Copy(w, resp.Body); err != nil {
-		g.logger.Error("Failed to copy response body", "error", err)
+	// Parse downstream response
+	var downstreamJSONRPC JSONRPCResponse
+	if err := json.NewDecoder(resp.Body).Decode(&downstreamJSONRPC); err != nil {
+		g.logger.Error("Failed to decode downstream tools/list response, returning native tools only", "error", err)
+		// Return native tools as fallback when response is invalid
+		var nativeTools []NativeTool
+		if g.nativeToolHandler != nil {
+			nativeTools = g.nativeToolHandler.registry.List()
+		}
+		tools := make([]Tool, 0, len(nativeTools))
+		for _, nt := range nativeTools {
+			tools = append(tools, Tool{
+				Name:        nt.Name(),
+				Description: nt.Description(),
+				InputSchema: nt.InputSchema(),
+			})
+		}
+		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
+		return
 	}
+
+	// Extract result from JSON-RPC response
+	var downstreamResult ToolsListResult
+	if downstreamJSONRPC.Result != nil {
+		resultBytes, err := json.Marshal(downstreamJSONRPC.Result)
+		if err != nil {
+			g.logger.Error("Failed to marshal downstream result, returning native tools only", "error", err)
+			var nativeTools []NativeTool
+			if g.nativeToolHandler != nil {
+				nativeTools = g.nativeToolHandler.registry.List()
+			}
+			tools := make([]Tool, 0, len(nativeTools))
+			for _, nt := range nativeTools {
+				tools = append(tools, Tool{
+					Name:        nt.Name(),
+					Description: nt.Description(),
+					InputSchema: nt.InputSchema(),
+				})
+			}
+			g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
+			return
+		}
+		if err := json.Unmarshal(resultBytes, &downstreamResult); err != nil {
+			g.logger.Error("Failed to unmarshal downstream result, returning native tools only", "error", err)
+			var nativeTools []NativeTool
+			if g.nativeToolHandler != nil {
+				nativeTools = g.nativeToolHandler.registry.List()
+			}
+			tools := make([]Tool, 0, len(nativeTools))
+			for _, nt := range nativeTools {
+				tools = append(tools, Tool{
+					Name:        nt.Name(),
+					Description: nt.Description(),
+					InputSchema: nt.InputSchema(),
+				})
+			}
+			g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
+			return
+		}
+	}
+
+	// Merge native tools with downstream tools
+	var nativeTools []NativeTool
+	if g.nativeToolHandler != nil {
+		nativeTools = g.nativeToolHandler.registry.List()
+	}
+
+	// Create a map of downstream tool names for deduplication
+	downstreamToolNames := make(map[string]bool)
+	for _, tool := range downstreamResult.Tools {
+		downstreamToolNames[tool.Name] = true
+	}
+
+	// Add native tools that aren't in downstream
+	for _, nt := range nativeTools {
+		if !downstreamToolNames[nt.Name()] {
+			downstreamResult.Tools = append(downstreamResult.Tools, Tool{
+				Name:        nt.Name(),
+				Description: nt.Description(),
+				InputSchema: nt.InputSchema(),
+			})
+		}
+	}
+
+	g.responder.RPCResponse(w, 1, downstreamResult)
 }
 
 func (g *GatewayService) HandleResourcesList(w http.ResponseWriter, r *http.Request) {
@@ -570,7 +691,7 @@ func (g *GatewayService) handleReadField(ctx context.Context, arguments json.Raw
 		return nil, fmt.Errorf("field path validation failed: %w", err)
 	}
 
-	// L3: Validate operator session
+	// L3: Validate Operator session
 	if g.sessionValidator != nil {
 		valid, err := g.sessionValidator.ValidateSession(req.OperatorSessionID)
 		if err != nil {
@@ -1218,7 +1339,7 @@ func (g *GatewayService) DeleteSuspendedTransaction(txHash string) {
 }
 
 // ResumeWithL3Proof re-submits a suspended transaction with an attached L3
-// WebAuthn proof through the governance Gateway. The proof is verified
+// WebAuthn proof through the g8e Gateway. The proof is verified
 // inside the Gateway's TransactionVerifier - this method does not perform
 // independent passkey validation, it only re-wires the envelope and calls
 // the same fail-closed entry point used for primary submission.
@@ -1227,7 +1348,7 @@ func (g *GatewayService) DeleteSuspendedTransaction(txHash string) {
 // the OOB approval UI can surface the downstream tool result to the user.
 func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID string, proof *commonv1.L3Proof) (*operatorv1.ActionReceipt, error) {
 	if g.envProc == nil {
-		return nil, fmt.Errorf("governance Gateway not ready")
+		return nil, fmt.Errorf("g8e Gateway not ready")
 	}
 	if proof == nil {
 		return nil, fmt.Errorf("L3 proof required")

@@ -34,4 +34,4 @@ body:
     id: logs
     attributes:
       label: Logs
-      description: Relevant logs from the operator or platform services.
+      description: Relevant logs from the Operator or platform services.

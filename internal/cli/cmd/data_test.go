@@ -49,7 +49,7 @@ func TestDataOperatorsCmd(t *testing.T) {
 	t.Run("operators command has correct use", func(t *testing.T) {
 		cmd := dataOperatorsCmd()
 		assert.Equal(t, "operators", cmd.Use)
-		assert.Contains(t, cmd.Short, "Manage operator instances")
+		assert.Contains(t, cmd.Short, "Manage Operator instances")
 	})
 }
 

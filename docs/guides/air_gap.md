@@ -8,7 +8,7 @@ parent: Architecture
 Last Updated: 2026-06-01
 Version: v1.0.3
 
-The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the Governance Gateway (`g8eg`), the g8e Operator (`g8eo`), and local Go dependencies.
+The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and local Go dependencies.
 
 ---
 
@@ -18,13 +18,13 @@ In an air-gapped configuration, the platform restricts all outbound communicatio
 
 - **No Telemetry**: The platform disables all outbound telemetry, usage statistics, and error reporting.
 - **Local Assets**: All user interface assets, fonts, icons, and libraries are served locally by platform services.
-- **Local Persistence**: All platform state, including session records, configuration settings, and cryptographic keys, resides in local SQLite databases managed by the Governance Gateway (`g8eg`). Database paths are defined in `internal/constants/paths.go`, including the main database at `.g8e/data/g8e.db`, local state at `.g8e/local_state.db`, and audit vault at `.g8e/audit_vault.db`.
+- **Local Persistence**: All platform state, including session records, configuration settings, and cryptographic keys, resides in local SQLite databases managed by the g8e Gateway. Database paths are defined in `internal/constants/paths.go`, including the main database at `.g8e/data/g8e.db`, local state at `.g8e/local_state.db`, and audit vault at `.g8e/audit_vault.db`.
 
 ---
 
-## Governance Gateway (g8eg) Role
+## g8e Gateway Role
 
-In an air-gapped deployment, the Governance Gateway (`g8eg`) operates as the central Policy Decision Point (PDP). Running the `g8e` binary in gateway mode activates persistence and messaging services on the local host.
+In an air-gapped deployment, the g8e Gateway operates as the central Policy Decision Point (PDP). Running the g8e Node in gateway mode activates persistence and messaging services on the local host.
 
 ### Port Configuration and Communication Surfaces
 
@@ -47,9 +47,9 @@ Surfaces with conflicting TLS client-authentication requirements do not share a 
 
 ---
 
-## Policy Execution Point: g8e Operator (g8eo)
+## Policy Execution Point: g8e Operator
 
-The g8e Operator (`g8eo`) operates as the host-side Policy Execution Point (PEP). In an air-gapped deployment, the operator runs as a daemon on the target host and initiates a local mTLS connection to the Governance Gateway (`g8eg`).
+The g8e Operator operates as the host-side Policy Execution Point (PEP). In an air-gapped deployment, the g8e Operator runs as a daemon on the target host and initiates a local mTLS connection to the g8e Gateway.
 
 Every transaction or mutation payload wrapped in a `GovernanceEnvelope` undergoes sequential verification across the five-layer interlock sequence before execution on the host:
 
@@ -59,7 +59,7 @@ Every transaction or mutation payload wrapped in a `GovernanceEnvelope` undergoe
 4. **L4 Warden**: Pre-dispatch verification gates validate replay prevention, expiration, transaction nonces, and the state Merkle root, defined in `internal/services/governance/l4_warden.go`.
 5. **L5 Actuator**: Isolated boundary tool dispatch executes the validated operation via Model Context Protocol (MCP) or Agent2Agent (A2A), producing a cryptographically signed transaction receipt, defined in `internal/services/governance/l5_actuator.go`.
 
-Verified operations are logged to a host-local ledger, and the operator exposes local tools as a standalone Model Context Protocol (MCP) server.
+Verified operations are logged to a host-local ledger, and the Operator exposes local tools as a standalone Model Context Protocol (MCP) server.
 
 ---
 
@@ -74,7 +74,7 @@ Verified operations are logged to a host-local ledger, and the operator exposes 
 
 To ensure a self-contained installation, the build process packages all required components offline:
 
-- **Go Dependencies**: The core platform compiles into a single binary, resolving dependencies defined in `go.mod`.
+- **Go Dependencies**: The core platform compiles into a single g8e Node, resolving dependencies defined in `go.mod`.
 - **Protocol Generation**: Protobuf compilation is performed offline using local tools without relying on the remote Buf Schema Registry (BSR). Configuration details are defined in `buf.gen.yaml` and `Makefile`.
 - **Build-Time Tooling**: Protobuf stub generation requires `buf`, `protoc-gen-go`, and `protoc-gen-go-grpc` during the build phase. These binaries are not required on the target runtime host.
 
@@ -95,12 +95,12 @@ Implementing an air-gapped deployment requires a connected staging host to resol
    make build-compressed
    ```
 2. **Package Runtime Configurations**: Archive the build artifacts and the protocol schemas:
-   - The compiled `bin/g8e` binary.
+   - The compiled `bin/g8e` g8e Node.
    - The protocol configuration files under the `protocol/` directory.
 
 ### 2. Implementation on the Air-Gapped Target Host
 
-1. **Stage Binaries and Schemas**: Copy the compiled `g8e` binary and the schema directories to the target directory. Ensure the `g8e` binary is executable.
+1. **Stage Binaries and Schemas**: Copy the compiled `g8e` g8e Node and the schema directories to the target directory. Ensure the `g8e` g8e Node is executable.
 2. **Initialize the Gateway**:
    ```bash
    ./g8e gw start
@@ -114,8 +114,8 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 
 ## Security Invariants
 
-1. **Isolated Boundaries**: In gateway mode, the Governance Gateway (`g8eg`) does not initiate outbound connections to any external network addresses.
-2. **Mutual Cryptographic Trust**: All traffic between the Governance Gateway (`g8eg`), connected clients, and the g8e Operator (`g8eo`) is encrypted and authenticated using mutual TLS (mTLS) issued by the local Certificate Authority.
+1. **Isolated Boundaries**: In gateway mode, the g8e Gateway does not initiate outbound connections to any external network addresses.
+2. **Mutual Cryptographic Trust**: All traffic between the g8e Gateway, connected clients, and the g8e Operator is encrypted and authenticated using mutual TLS (mTLS) issued by the local Certificate Authority.
 3. **Local Sovereignty**: All audit logs, transactions, and state records remain strictly on the host filesystem inside the local `.g8e` directory, as defined in `internal/constants/paths.go`.
 4. **Fail-Closed Design**: If any component requires a missing or unavailable external resource, it terminates immediately with a clear error instead of attempting unencrypted or insecure fallbacks.
 
