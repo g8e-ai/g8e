@@ -66,6 +66,25 @@ func (t *NetHTTPProbeTool) Execute(ctx context.Context, args json.RawMessage) (C
 		return CallToolResult{}, fmt.Errorf("url required")
 	}
 
+	if err := validateHTTPRequestURL(req.URL); err != nil {
+		result := map[string]interface{}{
+			"error": fmt.Sprintf("URL validation failed: %v", err),
+		}
+		resultJSON, err := json.Marshal(result)
+		if err != nil {
+			return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		}
+		return CallToolResult{
+			Content: []TextContent{
+				{
+					Type: "text",
+					Text: string(resultJSON),
+				},
+			},
+			IsError: true,
+		}, nil
+	}
+
 	method := req.Method
 	if method == "" {
 		method = "HEAD"

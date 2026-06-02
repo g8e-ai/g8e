@@ -88,6 +88,25 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 		}, nil
 	}
 
+	if err := validateSQLQuery(req.Query); err != nil {
+		result := map[string]interface{}{
+			"error": fmt.Sprintf("Query validation failed: %v", err),
+		}
+		resultJSON, err := json.Marshal(result)
+		if err != nil {
+			return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		}
+		return CallToolResult{
+			Content: []TextContent{
+				{
+					Type: "text",
+					Text: string(resultJSON),
+				},
+			},
+			IsError: true,
+		}, nil
+	}
+
 	dsn := fmt.Sprintf("file:%s?mode=ro", req.DatabasePath)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {

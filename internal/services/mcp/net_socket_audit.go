@@ -64,9 +64,8 @@ func (t *NetSocketAuditTool) Execute(ctx context.Context, args json.RawMessage) 
 
 	if req.Protocol != "" {
 		proto := strings.ToLower(req.Protocol)
-		// Validate protocol to prevent path traversal
-		if proto != string(constants.NetworkProtocolTCP) && proto != string(constants.NetworkProtocolUDP) {
-			return CallToolResult{}, fmt.Errorf("invalid protocol: %s (must be tcp or udp)", req.Protocol)
+		if err := validateProcNetPath(proto); err != nil {
+			return CallToolResult{}, fmt.Errorf("invalid protocol: %w", err)
 		}
 		protocols = []string{proto}
 	}
