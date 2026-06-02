@@ -566,3 +566,72 @@ func TestValidateCloudMetadataOperation(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateProcNetPath(t *testing.T) {
+	tests := []struct {
+		name     string
+		protocol string
+		wantErr  bool
+	}{
+		{
+			name:     "valid tcp",
+			protocol: "tcp",
+			wantErr:  false,
+		},
+		{
+			name:     "valid udp",
+			protocol: "udp",
+			wantErr:  false,
+		},
+		{
+			name:     "valid tcp6",
+			protocol: "tcp6",
+			wantErr:  false,
+		},
+		{
+			name:     "valid udp6",
+			protocol: "udp6",
+			wantErr:  false,
+		},
+		{
+			name:     "valid raw",
+			protocol: "raw",
+			wantErr:  false,
+		},
+		{
+			name:     "invalid protocol",
+			protocol: "icmp",
+			wantErr:  true,
+		},
+		{
+			name:     "empty protocol",
+			protocol: "",
+			wantErr:  true,
+		},
+		{
+			name:     "invalid uppercase",
+			protocol: "TCP",
+			wantErr:  true,
+		},
+		{
+			name:     "protocol with injection",
+			protocol: "tcp; rm -rf /",
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateProcNetPath(tt.protocol)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateProcNetPath(%q) expected error, got nil", tt.protocol)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateProcNetPath(%q) unexpected error: %v", tt.protocol, err)
+				}
+			}
+		})
+	}
+}

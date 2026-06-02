@@ -36,6 +36,17 @@ func TestNativeToolHandler_HandleTool(t *testing.T) {
 		}
 	})
 
+	t.Run("custom registry", func(t *testing.T) {
+		customRegistry := NewToolRegistry()
+		customHandler := NewNativeToolHandlerWithRegistry(customRegistry)
+		if customHandler == nil {
+			t.Error("expected non-nil handler with custom registry")
+		}
+		if customHandler.registry != customRegistry {
+			t.Error("expected handler to use provided registry")
+		}
+	})
+
 	t.Run("all 27 tools registered", func(t *testing.T) {
 		tools := handler.ListTools()
 		if len(tools) != 27 {
@@ -1173,6 +1184,51 @@ func TestNativeToolHandler_MaskSecret(t *testing.T) {
 	})
 }
 
+func TestIsValidIdentifier(t *testing.T) {
+	t.Parallel()
+
+	validIdentifiers := []string{
+		"valid_table",
+		"_table",
+		"a",
+		"table_name_123",
+		"Table1",
+		"TABLE",
+		"_123",
+	}
+
+	for _, id := range validIdentifiers {
+		t.Run("valid_"+id, func(t *testing.T) {
+			t.Parallel()
+			if !isValidIdentifier(id) {
+				t.Errorf("Expected '%s' to be valid identifier", id)
+			}
+		})
+	}
+
+	invalidIdentifiers := []string{
+		"",
+		"123table",
+		"table-name",
+		"table name",
+		"table.name",
+		"table;drop",
+		"table'or'1'='1",
+		"table`",
+		"table@",
+		"table!",
+	}
+
+	for _, id := range invalidIdentifiers {
+		t.Run("invalid_"+id, func(t *testing.T) {
+			t.Parallel()
+			if isValidIdentifier(id) {
+				t.Errorf("Expected '%s' to be invalid identifier", id)
+			}
+		})
+	}
+}
+
 func TestParseSocketAddr(t *testing.T) {
 	t.Parallel()
 
@@ -1488,6 +1544,287 @@ func TestHandleK8sInspect(t *testing.T) {
 		_, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
 		if err == nil {
 			t.Error("expected error for missing pod name")
+		}
+	})
+}
+
+func TestHandleSysInfo(t *testing.T) {
+	handler := NewNativeToolHandler()
+
+	t.Run("valid request", func(t *testing.T) {
+		req := map[string]interface{}{}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "sys_info", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var info map[string]interface{}
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &info); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if _, ok := info["hostname"]; !ok {
+			t.Error("expected hostname in result")
+		}
+	})
+}
+
+func TestHandleNetDNSResolve(t *testing.T) {
+	handler := NewNativeToolHandler()
+
+	t.Run("valid hostname", func(t *testing.T) {
+		req := map[string]interface{}{
+			"hostname": "localhost",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "net_dns_resolve", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var resolve map[string]interface{}
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &resolve); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if _, ok := resolve["records"]; !ok {
+			t.Error("expected records in result")
+		}
+	})
+
+	t.Run("missing hostname", func(t *testing.T) {
+		req := map[string]interface{}{}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "net_dns_resolve", reqJSON)
+		if err == nil {
+			t.Error("expected error for missing hostname")
+		}
+	})
+}
+
+func TestHandleTLSCertInspect(t *testing.T) {
+	handler := NewNativeToolHandler()
+
+	t.Run("missing cert path", func(t *testing.T) {
+		req := map[string]interface{}{}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "tls_cert_inspect", reqJSON)
+		if err == nil {
+			t.Error("expected error for missing cert path")
+		}
+	})
+}
+
+func TestHandleSysEnvVars(t *testing.T) {
+	handler := NewNativeToolHandler()
+
+	t.Run("valid request", func(t *testing.T) {
+		req := map[string]interface{}{
+			"pattern":        "PATH",
+			"redact_secrets": true,
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "sys_env_vars", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var env map[string]interface{}
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &env); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if _, ok := env["variables"]; !ok {
+			t.Error("expected variables in result")
+		}
+	})
+}
+
+func TestHandleFSFileChecksum(t *testing.T) {
+	handler := NewNativeToolHandler()
+
+	t.Run("valid file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
+			t.Fatalf("failed to create test file: %v", err)
+		}
+
+		req := map[string]interface{}{
+			"file_path": testFile,
+			"algorithm": "sha256",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "fs_file_checksum", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var checksum map[string]interface{}
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &checksum); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if _, ok := checksum["checksum"]; !ok {
+			t.Error("expected checksum in result")
+		}
+	})
+
+	t.Run("missing file path", func(t *testing.T) {
+		req := map[string]interface{}{}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "fs_file_checksum", reqJSON)
+		if err == nil {
+			t.Error("expected error for missing file path")
+		}
+	})
+}
+
+func TestHandleSysServiceStatus(t *testing.T) {
+	handler := NewNativeToolHandler()
+
+	t.Run("missing service name", func(t *testing.T) {
+		req := map[string]interface{}{}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "sys_service_status", reqJSON)
+		if err == nil {
+			t.Error("expected error for missing service name")
+		}
+	})
+}
+
+func TestHandleSysContainerStatus(t *testing.T) {
+	handler := NewNativeToolHandler()
+
+	t.Run("missing container name", func(t *testing.T) {
+		req := map[string]interface{}{}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "sys_container_status", reqJSON)
+		if err == nil {
+			t.Error("expected error for missing container name")
+		}
+	})
+}
+
+func TestHandleFSDiskUsage(t *testing.T) {
+	handler := NewNativeToolHandler()
+
+	t.Run("valid path", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		req := map[string]interface{}{
+			"path": tmpDir,
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "fs_disk_usage", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var usage map[string]interface{}
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &usage); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if _, ok := usage["path"]; !ok {
+			t.Error("expected path in result")
+		}
+	})
+
+	t.Run("missing path (defaults to all filesystems)", func(t *testing.T) {
+		req := map[string]interface{}{}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "fs_disk_usage", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var usage map[string]interface{}
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &usage); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if _, ok := usage["filesystems"]; !ok {
+			t.Error("expected filesystems in result")
+		}
+	})
+}
+
+func TestHandleSysTimeClock(t *testing.T) {
+	handler := NewNativeToolHandler()
+
+	t.Run("valid request", func(t *testing.T) {
+		req := map[string]interface{}{}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "sys_time_clock", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var time map[string]interface{}
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &time); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if _, ok := time["system_time"]; !ok {
+			t.Error("expected system_time in result")
+		}
+	})
+}
+
+func TestHandleProcTree(t *testing.T) {
+	handler := NewNativeToolHandler()
+
+	t.Run("valid request", func(t *testing.T) {
+		req := map[string]interface{}{
+			"pid": 1,
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "proc_tree", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var tree map[string]interface{}
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &tree); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if _, ok := tree["root_pid"]; !ok {
+			t.Error("expected root_pid in result")
+		}
+	})
+
+	t.Run("missing pid (defaults to 1)", func(t *testing.T) {
+		req := map[string]interface{}{}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "proc_tree", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var tree map[string]interface{}
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &tree); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if _, ok := tree["root_pid"]; !ok {
+			t.Error("expected root_pid in result")
 		}
 	})
 }
