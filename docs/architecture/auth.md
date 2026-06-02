@@ -84,6 +84,7 @@ The platform implements a deterministic 5-layer governance sequence. Every mutat
 L1 is the foundational layer that executes deterministic security rules.
 - **Forbidden Patterns**: Uses Protobuf field options (`forbidden_patterns`) to reject strings matching dangerous patterns.
 - **MITRE Threat Detection**: Analyzes payloads against MITRE ATT&CK patterns for reverse shells, privilege escalation, credential access, and other threats.
+- **Input Validation Framework**: Comprehensive validation system (`internal/services/mcp/validation.go`) with fail-closed security principles for MCP tool inputs, including SQL query validation, URL validation to prevent SSRF attacks, and protocol validation to prevent path traversal.
 - **Hard Gates**: Rejects transactions immediately upon violation; cannot be bypassed by L2 or L3.
 
 ### Layer 2: Consensus (L2Consensus)

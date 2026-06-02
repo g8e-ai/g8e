@@ -6,7 +6,7 @@ parent: Guides
 # Connect Apps to a Governance Gateway
 
 Last Updated: 2026-06-01
-Version: v1.0.5
+Version: v1.0.7
 
 ---
 
@@ -99,6 +99,8 @@ This reports:
 - PKI hierarchy status
 - Connected Operators
 
+The Gateway provides a unified health endpoint across all services for consistent health checking.
+
 ---
 
 ## Connectivity Methods
@@ -106,6 +108,36 @@ This reports:
 ### 1. MCP (Model Context Protocol)
 
 MCP is a JSON-RPC 2.0 protocol for AI tool invocation. The Gateway translates MCP tool calls into governance envelopes, runs them through L1/L2/L3 verification, and dispatches to downstream MCP servers or local execution.
+
+The Gateway provides a unified MCP endpoint architecture with a comprehensive input validation framework that enforces fail-closed security principles for all tool inputs.
+
+#### Native Tools
+
+The Gateway includes a registry of native tools that execute locally with full governance enforcement. These tools are categorized by domain:
+
+**Database Tools**
+- `db_discover_topology` - Scans database schemas, tables, and column data types
+- `db_index_triage` - Queries fragmentation statistics and indexes
+- `db_isolated_read` - Executes SELECT statements in read-only mode with SQL validation
+- `db_query_validate` - Validates SQL queries using EXPLAIN QUERY PLAN
+
+**Filesystem Tools**
+- `fs_disk_profile` - Recursively calculates directory sizes and disk usage
+- `log_stream_filter` - Reads log files and applies regex filtering with automatic secret scrubbing
+
+**Network Tools**
+- `net_endpoint_ping` - Performs TCP handshake or ICMP ping to verify connectivity
+- `net_http_probe` - Performs lightweight HTTP requests to probe web endpoints with SSRF protection
+- `net_socket_audit` - Inspects active network sockets with protocol validation
+
+**Process Tools**
+- `proc_metric_top` - Parses /proc to extract top resource-consuming processes
+- `proc_signal_safe` - Sends signals to processes with denylist enforcement for protected PIDs
+
+**System Tools**
+- `sys_oom_detect` - Scans system logs for OOM killer events
+
+All native tools include input validation to prevent SQL injection, SSRF attacks, path traversal, and other security vulnerabilities.
 
 #### MCP Endpoints
 

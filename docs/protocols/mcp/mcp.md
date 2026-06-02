@@ -201,13 +201,13 @@ Invoke MCP tools via JSON-RPC POST to `/api/v1/mcp/tools/call` or `/api/v1/mcp/t
 
 ### Tool Discovery
 
-The gateway proxies tool discovery to the configured downstream MCP server. If no downstream server is configured, the gateway returns native tools:
+The gateway proxies tool discovery to the configured downstream MCP server. If no downstream server is configured, the gateway returns native tools via the unified MCP endpoint architecture (`internal/services/mcp/mcp_endpoint.go`):
 
 - `tools/list`: Returns available tools with schemas (native tools if no downstream)
 - `prompts/list`: Returns available prompt templates
 - `resources/list`: Returns available resources
 
-Discovery endpoints are proxied verbatim from the downstream server when configured. Tool calls are wrapped in GovernanceEnvelope before verification.
+The unified endpoint uses a functional options pattern for configuration and improved test coverage. Discovery endpoints are proxied verbatim from the downstream server when configured. Tool calls are wrapped in GovernanceEnvelope before verification.
 
 ### Tool Schema
 
@@ -222,6 +222,17 @@ The Gateway applies L1 forbidden pattern checks to tool names before forwarding 
 ---
 
 ## Security and Verification
+
+### Input Validation Framework
+
+The gateway implements a comprehensive input validation system (`internal/services/mcp/validation.go`) with fail-closed security principles for MCP tool inputs. This framework validates:
+
+- **SQL query validation**: Enforces read-only operations and prevents injection in `db_isolated_read` and `db_query_validate` tools
+- **URL validation**: Prevents SSRF attacks in `net_http_probe` by validating URL schemes and destinations
+- **Protocol validation**: Prevents path traversal in `net_socket_audit` by validating protocol strings
+- **Request forgery protection**: Validates all tool inputs to prevent request forgery attacks
+
+Validation failures are rejected before envelope construction, ensuring malicious inputs never reach the governance pipeline.
 
 ### L1 Doctrine (Hard Gates)
 
@@ -345,6 +356,10 @@ The Gateway implements a circuit breaker for downstream MCP servers:
 - **Cooldown**: 1 minute before attempting recovery
 - **Behavior**: Rejects requests with error when circuit is open
 
+### Incremental State Tracking
+
+The gateway implements incremental state tracking via database schema (`internal/services/gateway/db/schema.sql`) to support efficient state root calculation. This avoids full recomputation of the state Merkle root on each transaction, improving gateway performance for high-throughput scenarios.
+
 ---
 
 ## Session Management
@@ -370,6 +385,8 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 | HTTP routing | `internal/services/gateway/gateway_http.go` |
 | MCP/A2A translation | `internal/services/mcp/gateway.go` |
 | MCP models | `internal/services/mcp/models.go` |
+| Unified MCP endpoint | `internal/services/mcp/mcp_endpoint.go` |
+| Input validation | `internal/services/mcp/validation.go` |
 | Native tool registry | `internal/services/mcp/registry.go` |
 | Native tool registration | `internal/services/mcp/native_tool_registry.go` |
 | Native tool handlers | `internal/services/mcp/native_handlers.go` |
@@ -385,6 +402,7 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 | Passkey L3 brokerage | `internal/services/gateway/passkey_service.go` |
 | Error mapping | `internal/services/mcp/gateway.go` (mapGatewayError) |
 | Suspended transaction store | `internal/services/gateway/gateway_db_service.go` |
+| Gateway database schema | `internal/services/gateway/db/schema.sql` |
 | API path constants | `internal/constants/api_paths.go` |
 | Port constants | `internal/constants/ports.go` |
 | Action type constants | `internal/constants/action_types.go` |
@@ -398,8 +416,9 @@ To add a new native tool to the Operator:
 
 1. **Create tool file**: Copy `docs/protocols/mcp/tool_template.go` to `internal/services/mcp/your_tool_name.go`
 2. **Implement interface**: Replace the template with your tool's logic (Name, Description, InputSchema, Execute)
-3. **Register tool**: Add your tool to the tools list in `RegisterNativeTools()` in `internal/services/mcp/native_tool_registry.go`
-4. **Test**: Add unit tests in `internal/services/mcp/native_handlers_test.go`
+3. **Add input validation**: If the tool accepts user input, add validation logic in `internal/services/mcp/validation.go` following the fail-closed security principles
+4. **Register tool**: Add your tool to the tools list in `RegisterNativeTools()` in `internal/services/mcp/native_tool_registry.go`
+5. **Test**: Add unit tests in `internal/services/mcp/native_handlers_test.go` and validation tests in `internal/services/mcp/validation_test.go`
 
 The tool will automatically be available via the MCP tools/list endpoint when no downstream MCP server is configured.
 
