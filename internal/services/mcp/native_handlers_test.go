@@ -41,6 +41,7 @@ func TestNativeToolHandler_HandleTool(t *testing.T) {
 		customHandler := NewNativeToolHandlerWithRegistry(customRegistry)
 		if customHandler == nil {
 			t.Error("expected non-nil handler with custom registry")
+			return
 		}
 		if customHandler.registry != customRegistry {
 			t.Error("expected handler to use provided registry")

@@ -121,6 +121,9 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 	}
 	ws, resp, err := dialer.DialContext(ctx, wsURL, nil)
 	if err != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
 		statusCode := 0
 		if resp != nil {
 			statusCode = resp.StatusCode

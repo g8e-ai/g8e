@@ -405,8 +405,11 @@ func TestWaitForSubscribedACK(t *testing.T) {
 
 		wsURL := strings.Replace(server.URL, "http", "ws", 1)
 		dialer := websocket.Dialer{}
-		ws, _, err := dialer.Dial(wsURL, nil)
+		ws, resp, err := dialer.Dial(wsURL, nil)
 		require.NoError(t, err)
+		if resp != nil {
+			resp.Body.Close()
+		}
 
 		client, err := NewOperatorPubSubClient(wsURL, "", logger)
 		require.NoError(t, err)
@@ -432,8 +435,11 @@ func TestWaitForSubscribedACK(t *testing.T) {
 
 		wsURL := strings.Replace(server.URL, "http", "ws", 1)
 		dialer := websocket.Dialer{}
-		ws, _, err := dialer.Dial(wsURL, nil)
+		ws, resp, err := dialer.Dial(wsURL, nil)
 		require.NoError(t, err)
+		if resp != nil {
+			resp.Body.Close()
+		}
 
 		client, err := NewOperatorPubSubClient(wsURL, "", logger)
 		require.NoError(t, err)

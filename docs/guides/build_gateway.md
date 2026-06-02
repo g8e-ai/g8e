@@ -231,7 +231,7 @@ Refer to `protocol/proto/g8e/` for the canonical schema definitions.
 A custom gateway implementation must pass the platform test suite to claim g8e compatibility:
 
 ```bash
-./g8e test g8eo
+./g8e test
 ```
 
 This verifies:

@@ -44,8 +44,8 @@ export PATH=$GOPATH/bin:$PATH
 | Command | Purpose |
 |---|---|
 | `./g8e` | Interactive Platform Manager |
-| `./g8e platform start` | Start the Governance Gateway |
-| `./g8e platform status` | Get Gateway health and status |
+| `./g8e gw start` | Start the Governance Gateway |
+| `./g8e gw status` | Get Gateway health and status |
 | `./g8e auth login` | Authenticate the local CLI |
 | `./g8e test` | Run Go host-native tests |
 
@@ -67,7 +67,7 @@ For details, see [docs/architecture/](../architecture/).
 
 The platform is built via the Makefile. Run `make help` for available targets.
 
-**Startup sequence** (`./g8e platform start`):
+**Startup sequence** (`./g8e gw start`):
 1. Gateway binary check/build
 2. Root of trust generation (first boot only) - CA hierarchy in `.g8e/pki/`, secrets in `.g8e/secrets/`
 3. Service convergence via health checks
@@ -89,8 +89,8 @@ The platform is built via the Makefile. Run `make help` for available targets.
 - `.g8e/pids/` - Process IDs
 
 **Cleanup commands:**
-- `./g8e platform reset` - Delete database and secrets, preserve CA
-- `./g8e platform clean` - Destructive removal of all runtime state
+- `./g8e gw reset` - Delete database and secrets, preserve CA
+- `./g8e gw clean` - Destructive removal of all runtime state
 
 ## Code Quality Principles
 
@@ -141,8 +141,7 @@ The platform is built via the Makefile. Run `make help` for available targets.
 - mTLS by default; test runner handles certificate injection
 
 **Run tests via CLI:**
-- `./g8e test` - Default Gateway test run
-- `./g8e test g8eo` - Operator listen mode, pub/sub
+- `./g8e test` - Full test suite (unit + integration)
 
 Never call `go test` directly for platform tests.
 

@@ -609,7 +609,7 @@ func main() {
 			if err := certs.FetchAndSetCA(context.Background(), trustURL, ""); err != nil {
 				logger.Error("Failed to fetch trust bundle from Operator", "url", trustURL, string(constants.ConnectionStateError), err)
 				fmt.Fprintf(os.Stderr, "Failed to fetch trust bundle from Operator: %v\n", err)
-				fmt.Fprintf(os.Stderr, "  Ensure the platform is running: ./g8e platform start\n")
+				fmt.Fprintf(os.Stderr, "  Ensure the platform is running: ./g8e gw start\n")
 				os.Exit(constants.ExitConfigError)
 			}
 			// Also set in trustStore for DI

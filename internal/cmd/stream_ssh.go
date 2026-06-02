@@ -139,8 +139,8 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 				return
 			}
 			if tcpConn, ok := conn.(*net.TCPConn); ok {
-				tcpConn.SetKeepAlive(true)
-				tcpConn.SetKeepAlivePeriod(15 * time.Second)
+				_ = tcpConn.SetKeepAlive(true)
+				_ = tcpConn.SetKeepAlivePeriod(15 * time.Second)
 			}
 		}
 
@@ -330,8 +330,8 @@ func streamToHost(
 				}
 				// Enable TCP keepalive on the connection
 				if tcpConn, ok := conn.(*net.TCPConn); ok {
-					tcpConn.SetKeepAlive(true)
-					tcpConn.SetKeepAlivePeriod(15 * time.Second)
+					_ = tcpConn.SetKeepAlive(true)
+					_ = tcpConn.SetKeepAlivePeriod(15 * time.Second)
 				}
 			}
 
