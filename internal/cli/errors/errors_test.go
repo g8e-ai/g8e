@@ -20,9 +20,9 @@ import (
 
 func TestErrorsDefined(t *testing.T) {
 	tests := []struct {
-		name  string
-		err   error
-		want  string
+		name string
+		err  error
+		want string
 	}{
 		{
 			name: "ErrNotAuthenticated",
@@ -70,64 +70,64 @@ func TestErrorsDefined(t *testing.T) {
 
 func TestErrorsIs(t *testing.T) {
 	tests := []struct {
-		name  string
-		err   error
+		name   string
+		err    error
 		target error
-		want  bool
+		want   bool
 	}{
 		{
-			name:  "ErrNotAuthenticated matches itself",
-			err:   ErrNotAuthenticated,
+			name:   "ErrNotAuthenticated matches itself",
+			err:    ErrNotAuthenticated,
 			target: ErrNotAuthenticated,
-			want:  true,
+			want:   true,
 		},
 		{
-			name:  "ErrFailedToLoadCredentials matches itself",
-			err:   ErrFailedToLoadCredentials,
+			name:   "ErrFailedToLoadCredentials matches itself",
+			err:    ErrFailedToLoadCredentials,
 			target: ErrFailedToLoadCredentials,
-			want:  true,
+			want:   true,
 		},
 		{
-			name:  "ErrFailedToLoadClientCertificate matches itself",
-			err:   ErrFailedToLoadClientCertificate,
+			name:   "ErrFailedToLoadClientCertificate matches itself",
+			err:    ErrFailedToLoadClientCertificate,
 			target: ErrFailedToLoadClientCertificate,
-			want:  true,
+			want:   true,
 		},
 		{
-			name:  "ErrFailedToReadTrustBundle matches itself",
-			err:   ErrFailedToReadTrustBundle,
+			name:   "ErrFailedToReadTrustBundle matches itself",
+			err:    ErrFailedToReadTrustBundle,
 			target: ErrFailedToReadTrustBundle,
-			want:  true,
+			want:   true,
 		},
 		{
-			name:  "ErrFailedToParseTrustBundle matches itself",
-			err:   ErrFailedToParseTrustBundle,
+			name:   "ErrFailedToParseTrustBundle matches itself",
+			err:    ErrFailedToParseTrustBundle,
 			target: ErrFailedToParseTrustBundle,
-			want:  true,
+			want:   true,
 		},
 		{
-			name:  "ErrFailedToParsePaths matches itself",
-			err:   ErrFailedToParsePaths,
+			name:   "ErrFailedToParsePaths matches itself",
+			err:    ErrFailedToParsePaths,
 			target: ErrFailedToParsePaths,
-			want:  true,
+			want:   true,
 		},
 		{
-			name:  "ErrNotAuthenticated does not match other error",
-			err:   ErrNotAuthenticated,
+			name:   "ErrNotAuthenticated does not match other error",
+			err:    ErrNotAuthenticated,
 			target: ErrFailedToLoadCredentials,
-			want:  false,
+			want:   false,
 		},
 		{
-			name:  "wrapped error matches target",
-			err:   errors.New("wrapped: not authenticated"),
+			name:   "wrapped error matches target",
+			err:    errors.New("wrapped: not authenticated"),
 			target: ErrNotAuthenticated,
-			want:  false,
+			want:   false,
 		},
 		{
-			name:  "wrapped error with ErrNotAuthenticated matches",
-			err:   errors.New("context: not authenticated"),
+			name:   "wrapped error with ErrNotAuthenticated matches",
+			err:    errors.New("context: not authenticated"),
 			target: ErrNotAuthenticated,
-			want:  false,
+			want:   false,
 		},
 	}
 
@@ -143,34 +143,34 @@ func TestErrorsIs(t *testing.T) {
 
 func TestErrorUniqueness(t *testing.T) {
 	tests := []struct {
-		name  string
-		err1  error
-		err2  error
-		want  bool
+		name string
+		err1 error
+		err2 error
+		want bool
 	}{
 		{
-			name:  "ErrNotAuthenticated and ErrFailedToLoadCredentials are different",
-			err1:  ErrNotAuthenticated,
-			err2:  ErrFailedToLoadCredentials,
-			want:  false,
+			name: "ErrNotAuthenticated and ErrFailedToLoadCredentials are different",
+			err1: ErrNotAuthenticated,
+			err2: ErrFailedToLoadCredentials,
+			want: false,
 		},
 		{
-			name:  "ErrFailedToLoadCredentials and ErrFailedToLoadClientCertificate are different",
-			err1:  ErrFailedToLoadCredentials,
-			err2:  ErrFailedToLoadClientCertificate,
-			want:  false,
+			name: "ErrFailedToLoadCredentials and ErrFailedToLoadClientCertificate are different",
+			err1: ErrFailedToLoadCredentials,
+			err2: ErrFailedToLoadClientCertificate,
+			want: false,
 		},
 		{
-			name:  "ErrFailedToReadTrustBundle and ErrFailedToParseTrustBundle are different",
-			err1:  ErrFailedToReadTrustBundle,
-			err2:  ErrFailedToParseTrustBundle,
-			want:  false,
+			name: "ErrFailedToReadTrustBundle and ErrFailedToParseTrustBundle are different",
+			err1: ErrFailedToReadTrustBundle,
+			err2: ErrFailedToParseTrustBundle,
+			want: false,
 		},
 		{
-			name:  "ErrNotAuthenticated matches itself",
-			err1:  ErrNotAuthenticated,
-			err2:  ErrNotAuthenticated,
-			want:  true,
+			name: "ErrNotAuthenticated matches itself",
+			err1: ErrNotAuthenticated,
+			err2: ErrNotAuthenticated,
+			want: true,
 		},
 	}
 
