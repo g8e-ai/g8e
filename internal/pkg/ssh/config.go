@@ -32,20 +32,22 @@ type ConfigBlock struct {
 	User          string
 	Port          string
 	IdentityFiles []string
+	ProxyCommand  string
 }
 
 // HostConfig holds resolved SSH connection parameters for a target.
 type HostConfig struct {
-	Original string
-	Hostname string
-	User     string
-	Port     string
-	KeyFiles []string
+	Original     string
+	Hostname     string
+	User         string
+	Port         string
+	KeyFiles     []string
+	ProxyCommand string
 }
 
 // ParseConfig reads an OpenSSH-format config file and returns a map of
 // pattern → block for the fields relevant to SSH connections:
-// HostName, User, Port, IdentityFile.
+// HostName, User, Port, IdentityFile, ProxyCommand.
 //
 // This is a minimal parser that handles the subset of directives we need.
 // It does not handle Match blocks, Include, or multi-value canonicalisation.
@@ -101,6 +103,10 @@ func ParseConfig(path string) map[string]*ConfigBlock {
 		case "identityfile":
 			if current != nil {
 				current.IdentityFiles = append(current.IdentityFiles, ExpandTilde(val))
+			}
+		case "proxycommand":
+			if current != nil {
+				current.ProxyCommand = val
 			}
 		}
 	}
@@ -217,6 +223,9 @@ func ResolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser strin
 			r.Hostname = block.Hostname
 		}
 		r.KeyFiles = append(r.KeyFiles, block.IdentityFiles...)
+		if block.ProxyCommand != "" {
+			r.ProxyCommand = block.ProxyCommand
+		}
 	}
 
 	// Explicit SSH user flag overrides config and parsed user@host
@@ -263,7 +272,8 @@ func ResolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser strin
 
 // BuildAuthMethods returns the SSH auth methods for a resolved host.
 // Priority: explicit identity files → SSH agent → default key paths.
-func BuildAuthMethods(r HostConfig, sshAuthSock string) []ssh.AuthMethod {
+// If passphrase is provided, it will be used to decrypt encrypted keys.
+func BuildAuthMethods(r HostConfig, sshAuthSock, passphrase string) []ssh.AuthMethod {
 	var methods []ssh.AuthMethod
 
 	// SSH agent
@@ -280,9 +290,24 @@ func BuildAuthMethods(r HostConfig, sshAuthSock string) []ssh.AuthMethod {
 		if err != nil {
 			continue
 		}
-		signer, err := ssh.ParsePrivateKey(data)
-		if err != nil {
-			continue
+		var signer ssh.Signer
+		if passphrase != "" {
+			// Try with passphrase first
+			signer, err = ssh.ParsePrivateKeyWithPassphrase(data, []byte(passphrase))
+			if err != nil {
+				// Fall back to no passphrase if passphrase provided but wrong
+				signer, err = ssh.ParsePrivateKey(data)
+				if err != nil {
+					continue
+				}
+			}
+		} else {
+			// No passphrase provided, try without
+			signer, err = ssh.ParsePrivateKey(data)
+			if err != nil {
+				// Key is encrypted but no passphrase provided - skip
+				continue
+			}
 		}
 		methods = append(methods, ssh.PublicKeys(signer))
 	}

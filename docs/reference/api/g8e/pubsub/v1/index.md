@@ -1,84 +1,98 @@
-# Protocol Documentation
-<a name="top"></a>
+# PubSub Service Documentation
 
-## Table of Contents
+The pubsub service implements the operator-side command dispatch and response handling for the g8e platform. The service receives inbound commands from the gateway via the pub/sub channel and dispatches them to specialized service handlers.
 
-- [g8e/pubsub/v1/pubsub.proto](#g8e_pubsub_v1_pubsub-proto)
-    - [PubSubEvent](#g8e-pubsub-v1-PubSubEvent)
-    - [PubSubMessage](#g8e-pubsub-v1-PubSubMessage)
-  
-- [Scalar Value Types](#scalar-value-types)
+## Service Architecture
 
+The `PubSubCommandService` in `internal/services/pubsub/pubsub_commands.go` acts as the central dispatcher. It maintains a registry of event type handlers and routes inbound `PubSubCommandMessage` instances to the appropriate first-class service.
 
+### Core Services
 
-<a name="g8e_pubsub_v1_pubsub-proto"></a>
-<p align="right"><a href="#top">Top</a></p>
+The pubsub service coordinates the following specialized handlers:
 
-## g8e/pubsub/v1/pubsub.proto
+- **AuditService** (`internal/services/pubsub/audit_service.go`) - Records LFAA audit events for user messages, AI messages, and direct terminal commands to the audit vault
+- **CommandService** (`internal/services/pubsub/command_service.go`) - Handles command execution requests, cancellation requests, and periodic status updates during long-running commands
+- **HeartbeatService** (`internal/services/pubsub/heartbeat_service.go`) - Builds heartbeat payloads, handles heartbeat requests, and manages the automatic heartbeat scheduler
+- **FileOpsService** (`internal/services/pubsub/file_ops_service.go`) - Processes file edit, filesystem list, filesystem grep, and filesystem read requests
+- **HistoryService** (`internal/services/pubsub/history_service.go`) - Handles log retrieval, execution history, file history, file restore, and file diff requests
+- **PortService** (`internal/services/pubsub/port_service.go`) - Processes port connectivity check requests
 
+### Message Flow
 
+Inbound messages follow this sequence:
 
-<a name="g8e-pubsub-v1-PubSubEvent"></a>
+1. The `PubSubCommandService` receives a `PubSubCommandMessage` from the pub/sub client
+2. The message contains an `EventType` field that identifies the operation
+3. The dispatcher routes the message to the registered handler for that event type
+4. The handler unmarshals the protobuf payload from `msg.Payload`
+5. The handler executes the operation and publishes a result via the `ResultsPublisher`
 
-### PubSubEvent
+### Governance Integration
 
+The pubsub service integrates with the five-layer governance pipeline:
 
+- **L1 Doctrine** - Technical bedrock validation via `governance.L1Doctrine`
+- **L2 Consensus** - Multi-agent signature verification via `governance.L2Consensus`
+- **L3 Notary** - Human-in-the-loop authorization via `governance.L3Notary`
+- **L4 Warden** - Pre-dispatch verification gating via `governance.L4Warden`
+- **L5 Actuator** - Isolated boundary tool dispatch via `governance.L5Actuator`
 
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| type | [string](#string) |  |  |
-| channel | [string](#string) |  |  |
-| pattern | [string](#string) |  |  |
-| data | [bytes](#bytes) |  |  |
+The governance services are initialized in `initializeGovernance` and require a `SignerStore`, `ReplayStore`, and `StateRootProvider` to operate correctly.
 
+## Protocol Schema
 
-
-
-
-
-<a name="g8e-pubsub-v1-PubSubMessage"></a>
+The pubsub protocol uses protobuf messages defined in `protocol/proto/g8e/pubsub/v1/pubsub.proto`.
 
 ### PubSubMessage
 
+The `PubSubMessage` message carries outbound commands from the gateway to the operator.
 
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| action | string | The action type identifier |
+| channel | string | The pub/sub channel name |
+| data | bytes | The protobuf-encoded payload |
 
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| action | [string](#string) |  |  |
-| channel | [string](#string) |  |  |
-| data | [bytes](#bytes) |  |  |
+### PubSubEvent
 
+The `PubSubEvent` message carries event notifications from the operator to the gateway.
 
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| type | string | The event type identifier |
+| channel | string | The pub/sub channel name |
+| pattern | string | The subscription pattern |
+| data | bytes | The protobuf-encoded payload |
 
+## Event Types
 
+The pubsub service handles the following event types defined in the constants system:
 
- 
+- `Event.Operator.HeartbeatRequested` - Handled by `HeartbeatService.HandleRequest`
+- `Event.Operator.Command.Requested` - Handled by `CommandService.HandleExecutionRequest`
+- `Event.Operator.Command.CancelRequested` - Handled by `CommandService.HandleCancelRequest`
+- `Event.Operator.FileEdit.Requested` - Handled by `FileOpsService.HandleFileEditRequest`
+- `Event.Operator.FsList.Requested` - Handled by `FileOpsService.HandleFsListRequest`
+- `Event.Operator.FsRead.Requested` - Handled by `FileOpsService.HandleFsReadRequest`
+- `Event.Operator.FsGrep.Requested` - Handled by `FileOpsService.HandleFsGrepRequest`
+- `Event.Operator.PortCheck.Requested` - Handled by `PortService.HandlePortCheckRequest`
+- `Event.Operator.FetchLogs.Requested` - Handled by `HistoryService.HandleFetchLogsRequest`
+- `Event.Operator.FetchHistory.Requested` - Handled by `HistoryService.HandleFetchHistoryRequest`
+- `Event.Operator.FetchFileHistory.Requested` - Handled by `HistoryService.HandleFetchFileHistoryRequest`
+- `Event.Operator.RestoreFile.Requested` - Handled by `HistoryService.HandleRestoreFileRequest`
+- `Event.Operator.ShutdownRequested` - Handled by `PubSubCommandService.handleShutdownRequest`
+- `Event.Operator.Audit.UserMsg` - Handled by `AuditService.HandleUserMsgRequest`
+- `Event.Operator.Audit.AIMsg` - Handled by `AuditService.HandleAIMsgRequest`
+- `Event.Operator.Audit.Command` - Handled by `AuditService.HandleDirectCmdRequest`
 
- 
+## Constants
 
- 
+Field constants for pubsub messages are defined in `internal/constants/pubsub.go` and `protocol/constants/pubsub.json`:
 
- 
-
-
-
-## Scalar Value Types
-
-| .proto Type | Notes | C++ | Java | Python | Go | C# | PHP | Ruby |
-| ----------- | ----- | --- | ---- | ------ | -- | -- | --- | ---- |
-| <a name="double" /> double |  | double | double | float | float64 | double | float | Float |
-| <a name="float" /> float |  | float | float | float | float32 | float | float | Float |
-| <a name="int32" /> int32 | Uses variable-length encoding. Inefficient for encoding negative numbers – if your field is likely to have negative values, use sint32 instead. | int32 | int | int | int32 | int | integer | Bignum or Fixnum (as required) |
-| <a name="int64" /> int64 | Uses variable-length encoding. Inefficient for encoding negative numbers – if your field is likely to have negative values, use sint64 instead. | int64 | long | int/long | int64 | long | integer/string | Bignum |
-| <a name="uint32" /> uint32 | Uses variable-length encoding. | uint32 | int | int/long | uint32 | uint | integer | Bignum or Fixnum (as required) |
-| <a name="uint64" /> uint64 | Uses variable-length encoding. | uint64 | long | int/long | uint64 | ulong | integer/string | Bignum or Fixnum (as required) |
-| <a name="sint32" /> sint32 | Uses variable-length encoding. Signed int value. These more efficiently encode negative numbers than regular int32s. | int32 | int | int | int32 | int | integer | Bignum or Fixnum (as required) |
-| <a name="sint64" /> sint64 | Uses variable-length encoding. Signed int value. These more efficiently encode negative numbers than regular int64s. | int64 | long | int/long | int64 | long | integer/string | Bignum |
-| <a name="fixed32" /> fixed32 | Always four bytes. More efficient than uint32 if values are often greater than 2^28. | uint32 | int | int | uint32 | uint | integer | Bignum or Fixnum (as required) |
-| <a name="fixed64" /> fixed64 | Always eight bytes. More efficient than uint64 if values are often greater than 2^56. | uint64 | long | int/long | uint64 | ulong | integer/string | Bignum |
-| <a name="sfixed32" /> sfixed32 | Always four bytes. | int32 | int | int | int32 | int | integer | Bignum or Fixnum (as required) |
-| <a name="sfixed64" /> sfixed64 | Always eight bytes. | int64 | long | int/long | int64 | long | integer/string | Bignum |
-| <a name="bool" /> bool |  | bool | boolean | boolean | bool | bool | boolean | TrueClass/FalseClass |
-| <a name="string" /> string | A string must always contain UTF-8 encoded or 7-bit ASCII text. | string | String | str/unicode | string | string | string | String (UTF-8) |
-| <a name="bytes" /> bytes | May contain any arbitrary sequence of bytes. | string | ByteString | str | []byte | ByteString | string | String (ASCII-8BIT) |
-
+- `PubSubFieldAction` - "action"
+- `PubSubFieldChannel` - "channel"
+- `PubSubFieldData` - "data"
+- `PubSubFieldMessage` - "message"
+- `PubSubFieldPattern` - "pattern"
+- `PubSubFieldType` - "type"
+- `PubSubFieldSender` - "sender"

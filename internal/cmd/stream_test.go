@@ -698,7 +698,7 @@ func TestEmitJSON_TsIsRFC3339(t *testing.T) {
 
 func TestRunConcurrentStream_NoHosts(t *testing.T) {
 	ctx := context.Background()
-	results := runConcurrentStream(ctx, nil, []byte("bin"), "", "", 10, 5*time.Second, "", "", "", "")
+	results := runConcurrentStream(ctx, nil, []byte("bin"), "", "", 10, 5*time.Second, "", "", "", "", "", false)
 	assert.Empty(t, results)
 }
 
@@ -707,7 +707,7 @@ func TestRunConcurrentStream_ContextCancelled(t *testing.T) {
 	cancel()
 
 	hosts := []string{"host1", "host2", "host3"}
-	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 10, 100*time.Millisecond, "", "", "", "")
+	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 10, 100*time.Millisecond, "", "", "", "", "", false)
 
 	assert.Len(t, results, len(hosts))
 	for _, res := range results {
@@ -721,7 +721,7 @@ func TestRunConcurrentStream_AllResultsCollected(t *testing.T) {
 	cancel()
 
 	hosts := []string{"a", "b", "c", "d", "e"}
-	results := runConcurrentStream(ctx, hosts, []byte("x"), "", "", 5, 50*time.Millisecond, "", "", "", "")
+	results := runConcurrentStream(ctx, hosts, []byte("x"), "", "", 5, 50*time.Millisecond, "", "", "", "", "", false)
 
 	assert.Len(t, results, len(hosts), "must collect exactly one result per host")
 
@@ -743,7 +743,7 @@ func TestRunConcurrentStream_ConcurrencyLimitRespected(t *testing.T) {
 		hosts[i] = "host"
 	}
 
-	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 3, 50*time.Millisecond, "", "", "", "")
+	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 3, 50*time.Millisecond, "", "", "", "", "", false)
 	assert.Len(t, results, len(hosts))
 }
 
@@ -758,7 +758,7 @@ func TestRunConcurrentStream_EmitsPerHostEventsToStdout(t *testing.T) {
 	cancel()
 
 	hosts := []string{"host-a", "host-b"}
-	runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 10, 50*time.Millisecond, "", "", "", "")
+	runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 10, 50*time.Millisecond, "", "", "", "", "", false)
 	w.Close()
 
 	var buf bytes.Buffer
@@ -860,7 +860,7 @@ func TestRunStream_ValidBinaryWithCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	results := runConcurrentStream(ctx, []string{"host1"}, binaryData, "", "", 1, 50*time.Millisecond, "", "", "", "")
+	results := runConcurrentStream(ctx, []string{"host1"}, binaryData, "", "", 1, 50*time.Millisecond, "", "", "", "", "", false)
 	require.Len(t, results, 1)
 	assert.NotEmpty(t, results[0].Error)
 }
@@ -891,7 +891,7 @@ func TestBuildAuthMethods_NoKeysNoAgent_ReturnsEmpty(t *testing.T) {
 		Port:     "22",
 		KeyFiles: []string{},
 	}
-	methods := ssh.BuildAuthMethods(r, "")
+	methods := ssh.BuildAuthMethods(r, "", "")
 	assert.Empty(t, methods)
 }
 
@@ -899,7 +899,7 @@ func TestBuildAuthMethods_NonExistentKeyFile_Skipped(t *testing.T) {
 	r := ssh.HostConfig{
 		KeyFiles: []string{"/nonexistent/path/id_ed25519"},
 	}
-	methods := ssh.BuildAuthMethods(r, "")
+	methods := ssh.BuildAuthMethods(r, "", "")
 	assert.Empty(t, methods)
 }
 
@@ -911,7 +911,7 @@ func TestBuildAuthMethods_InvalidKeyFile_Skipped(t *testing.T) {
 	r := ssh.HostConfig{
 		KeyFiles: []string{badKey},
 	}
-	methods := ssh.BuildAuthMethods(r, "")
+	methods := ssh.BuildAuthMethods(r, "", "")
 	assert.Empty(t, methods)
 }
 
@@ -926,7 +926,7 @@ func TestBuildAuthMethods_ValidED25519Key_ReturnsMethod(t *testing.T) {
 	r := ssh.HostConfig{
 		KeyFiles: []string{keyPath},
 	}
-	methods := ssh.BuildAuthMethods(r, "")
+	methods := ssh.BuildAuthMethods(r, "", "")
 	assert.Len(t, methods, 1, "one auth method for one valid key file")
 }
 
@@ -940,7 +940,7 @@ func TestBuildAuthMethods_MultipleValidKeys_AllLoaded(t *testing.T) {
 	r := ssh.HostConfig{
 		KeyFiles: []string{key1, key2},
 	}
-	methods := ssh.BuildAuthMethods(r, "")
+	methods := ssh.BuildAuthMethods(r, "", "")
 	assert.Len(t, methods, 2, "two auth methods for two valid key files")
 }
 
@@ -955,7 +955,7 @@ func TestBuildAuthMethods_MixedValidAndInvalid(t *testing.T) {
 	r := ssh.HostConfig{
 		KeyFiles: []string{validKey, badKey, "/nonexistent"},
 	}
-	methods := ssh.BuildAuthMethods(r, "")
+	methods := ssh.BuildAuthMethods(r, "", "")
 	assert.Len(t, methods, 1, "only the valid key produces an auth method")
 }
 
@@ -968,7 +968,7 @@ func TestBuildAuthMethods_InvalidAgentSocket_StillLoadsKeys(t *testing.T) {
 		KeyFiles: []string{keyPath},
 	}
 	// Non-existent agent socket - Dial fails silently; key-file method still loaded
-	methods := ssh.BuildAuthMethods(r, "/tmp/nonexistent_agent_sock_xyz")
+	methods := ssh.BuildAuthMethods(r, "/tmp/nonexistent_agent_sock_xyz", "")
 	assert.Len(t, methods, 1)
 }
 

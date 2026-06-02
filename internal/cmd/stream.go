@@ -74,6 +74,8 @@ func RunStream(args []string) {
 		binaryDir       string
 		sshIdentityFile string
 		sshUser         string
+		sshPassphrase   string
+		preFlightCheck  bool
 	)
 
 	fs.StringVar(&arch, "arch", defaultArch, "Target architecture: amd64, arm64, 386")
@@ -86,6 +88,8 @@ func RunStream(args []string) {
 	fs.StringVar(&binaryDir, "binary-dir", getDefaultBinaryDir(), "Directory containing arch-specific operator builds")
 	fs.StringVar(&sshIdentityFile, "ssh-identity-file", "", "SSH identity file path")
 	fs.StringVar(&sshUser, "ssh-user", "", "SSH username")
+	fs.StringVar(&sshPassphrase, "ssh-passphrase", "", "Passphrase for encrypted SSH private keys")
+	fs.BoolVar(&preFlightCheck, "preflight", false, "Enable pre-flight SSH connectivity check before binary transfer")
 
 	positionalHosts, err := parseInterleavedArgs(fs, args)
 	if err != nil {
@@ -161,7 +165,7 @@ func RunStream(args []string) {
 
 	// Run concurrent streaming
 	wallStart := time.Now()
-	results := runConcurrentStream(ctx, hosts, binaryData, operatorArgs, sshConfigArg, concurrency, dialTimeout, os.Getenv("SSH_AUTH_SOCK"), os.Getenv("USER"), sshIdentityFile, sshUser)
+	results := runConcurrentStream(ctx, hosts, binaryData, operatorArgs, sshConfigArg, concurrency, dialTimeout, os.Getenv("SSH_AUTH_SOCK"), os.Getenv("USER"), sshIdentityFile, sshUser, sshPassphrase, preFlightCheck)
 
 	// Tally results
 	var succeeded, failed int
@@ -208,6 +212,8 @@ func runConcurrentStream(
 	username string,
 	sshIdentityFile string,
 	sshUser string,
+	sshPassphrase string,
+	preFlightCheck bool,
 ) []streamResult {
 	resultCh := make(chan streamResult, len(hosts))
 	sem := make(chan struct{}, concurrency)
@@ -219,7 +225,7 @@ func runConcurrentStream(
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			streamToHost(ctx, h, binaryData, operatorArgs, sshConfigPath, dialTimeout, sshAuthSock, username, sshIdentityFile, sshUser, resultCh)
+			streamToHost(ctx, h, binaryData, operatorArgs, sshConfigPath, dialTimeout, sshAuthSock, username, sshIdentityFile, sshUser, sshPassphrase, preFlightCheck, resultCh)
 		}(host)
 	}
 

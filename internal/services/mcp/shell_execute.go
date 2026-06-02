@@ -351,7 +351,7 @@ func executeViaSSH(ctx context.Context, hostname, command string, args []string,
 	}
 
 	// Build auth methods
-	authMethods := ssh.BuildAuthMethods(r, "")
+	authMethods := ssh.BuildAuthMethods(r, "", "")
 	if len(authMethods) == 0 {
 		return nil, fmt.Errorf("no SSH auth methods available for %s", hostname)
 	}
