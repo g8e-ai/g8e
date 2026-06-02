@@ -4,10 +4,10 @@
 
 ## Enterprise-Grade MCP/A2A for Fleets
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/g8e-ai/g8e)](https://goreportcard.com/report/github.com/g8e-ai/g8e) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v107--core-platform) [![Position Paper](https://img.shields.io/badge/read-position%20paper-2E8B57.svg)](docs/core/position_paper.md)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/g8e-ai/g8e)](https://goreportcard.com/report/github.com/g8e-ai/g8e) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v107--core-platform) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](docs/protocols/mcp/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](docs/architecture/g8e.md)
 
 <style>
-img[alt="License"], img[alt="Go"], img[alt="CI"], img[alt="Go Report Card"], img[alt="Latest Release"], img[alt="Status"], img[alt="Position Paper"] {
+img[alt="License"], img[alt="Go"], img[alt="CI"], img[alt="Go Report Card"], img[alt="Latest Release"], img[alt="Status"], img[alt="Compliance"], img[alt="Secure MCP"], img[alt="Protocol g8e"] {
   height: 28px;
 }
 </style>
@@ -18,7 +18,7 @@ The "move fast and break things" era is costing organizations a fortune in waste
 
 Start the g8e Gateway on your local machine, point your AI tools at it, and every action is governed—hardware-bound, just-in-time provisioned, secured via mutual TLS, and anchored to a local ledger.
 
-[Getting Started](https://www.google.com/search?q=docs/guides/getting_started.md) · [Architecture](https://www.google.com/search?q=%23the-architecture) · [Protocol](https://www.google.com/search?q=%23protocol-invariants) · [Position Paper](https://www.google.com/search?q=docs/core/position_paper.md) · [Docs](https://www.google.com/search?q=%23documentation)
+[Getting Started](docs/guides/getting_started.md) · [Architecture](docs/architecture/gateway.md) · [Protocol](docs/architecture/g8e.md) · [Docs](docs/)
 
 </div>
 
@@ -84,7 +84,7 @@ iwr https://g8e.ai/g8e-windows-amd64.exe -outf g8e.exe && .\g8e.exe gw start
 
 ```
 
-*See the [full QuickStart](https://www.google.com/search?q=docs/guides/getting_started.md) for mTLS, Operator enrollment, and client configuration.*
+*See the [full QuickStart](docs/guides/getting_started.md) for mTLS, Operator enrollment, and client configuration.*
 
 ---
 
@@ -138,8 +138,6 @@ We hold this without hedging: **runtime governance and audit for AI agents are p
 If safety is a premium SKU, the cheapest path to shipping an agent is always the ungoverned one. For governance to be the default, it must be free. As agents grow more capable, the baseline for real-world infrastructure mutations must be heterogeneous consensus plus a cryptographic human signoff upstream.
 
 g8e is not an agent. It is the mandatory, open-source substrate agents must run on to be viable in production infrastructure.
-
-Read the full argument in our [Position Paper](https://www.google.com/search?q=docs/core/position_paper.md).
 
 ---
 
@@ -228,11 +226,10 @@ The `payload` field contains base64-encoded protobuf bytes of the `McpCallReques
 
 ## Documentation
 
-* [Getting Started](https://www.google.com/search?q=docs/guides/getting_started.md)
-* [Position Paper](https://www.google.com/search?q=docs/core/position_paper.md)
-* [Architecture: Operator](https://www.google.com/search?q=docs/architecture/operator.md) · [Gateway](https://www.google.com/search?q=docs/architecture/gateway.md)
-* [Protocol Specification](https://www.google.com/search?q=docs/architecture/g8e.md) · [API Reference](https://www.google.com/search?q=docs/reference/api/)
-* [Build a g8e Operator](https://www.google.com/search?q=docs/guides/build_operator.md)
+* [Getting Started](docs/guides/getting_started.md)
+* [Architecture: Operator](docs/architecture/operator.md) · [Gateway](docs/architecture/gateway.md) · [Auth](docs/architecture/auth.md) · [Local Translation](docs/architecture/g8e_local_translation.md)
+* [Protocol Specification](docs/architecture/g8e.md) · [API Reference](docs/reference/)
+* [Build a g8e Operator](docs/guides/build_operator.md)
 
 ---
 
