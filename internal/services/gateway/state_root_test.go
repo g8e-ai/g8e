@@ -58,11 +58,8 @@ func TestStateRootSemantics(t *testing.T) {
 	assert.Greater(t, version2, version1, "State version must increment on document change")
 
 	// 3. Document metadata change (updated_at) does NOT alter root
-	require.Eventually(t, func() bool {
-		// Small delay to ensure updated_at timestamp changes
-		time.Sleep(2 * time.Millisecond)
-		return true
-	}, 10*time.Millisecond, 1*time.Millisecond)
+	// Small delay to ensure updated_at timestamp changes
+	time.Sleep(10 * time.Millisecond)
 	err = db.DocSet("test", "d1", json.RawMessage(`{"val":1}`))
 	require.NoError(t, err)
 	root3, err := db.GetCurrentStateRoot()

@@ -705,10 +705,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		req = req.WithContext(ctx)
 
 		go func() {
-			require.Eventually(t, func() bool {
-				time.Sleep(100 * time.Millisecond)
-				return true
-			}, 200*time.Millisecond, 10*time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			cancel()
 		}()
 
