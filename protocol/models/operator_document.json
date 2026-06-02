@@ -208,7 +208,7 @@
       "type": "object",
       "required": true,
       "default": {},
-      "description": "CLI flags and env var overrides active when the Operator binary was started. Sent by g8eo at bootstrap and updated on reconnect. Shape mirrors models.RuntimeConfig in g8eo wire.go.",
+      "description": "CLI flags and env var overrides active when the Node binary was started. Sent by g8eo at bootstrap and updated on reconnect. Shape mirrors models.RuntimeConfig in g8eo wire.go.",
       "fields": {
         "cloud_mode":           { "type": "boolean", "description": "True when Operator started with --cloud flag" },
         "cloud_provider":       { "type": "string",  "description": "Cloud provider (aws, gcp, azure). Empty unless cloud_mode is true." },

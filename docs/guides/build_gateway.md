@@ -132,7 +132,7 @@ The gateway must maintain canonical platform state:
 
 - **Document Store**: JSON document CRUD on a Collection/ID pattern with query support.
 - **KV Store**: TTL-aware ephemeral state with pattern scanning and cursor-based iteration.
-- **Blob Store**: Binary persistence for attachments and large objects.
+- **Blob Store**:Node Node Binary persistence for attachments and large objects.
 - **State Root Provider**: Compute and serve a deterministic Merkle state root across all authoritative data.
 - **Nonce Manager**: Implement sliding-window replay protection for governance transactions.
 

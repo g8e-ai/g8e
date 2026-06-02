@@ -36,7 +36,7 @@ const (
 	defaultArch        = "amd64"
 )
 
-func getDefaultBinaryDir() string {
+func getDefaultNodeBinaryDir() string {
 	return system.ResolveProjectRoot() + "/bin"
 }
 
@@ -58,7 +58,7 @@ type StreamStatusEvent struct {
 }
 
 // RunStream is the entry point for `g8e.operator stream`.
-// It runs inside the g8ep container and streams the Operator binary to
+// It runs inside the g8ep container and streams the Node binary to
 // one or more remote hosts concurrently via native Go crypto/ssh.
 func RunStream(args []string) {
 	fs := flag.NewFlagSet("stream", flag.ContinueOnError)
@@ -85,7 +85,7 @@ func RunStream(args []string) {
 	fs.StringVar(&endpoint, "endpoint", "", "Platform endpoint - if set, starts Operator on each remote host")
 	fs.BoolVar(&noGit, "no-git", false, "Disable ledger")
 	fs.StringVar(&sshConfigArg, "ssh-config", "", "Path to SSH config file (default: ~/.ssh/config)")
-	fs.StringVar(&binaryDir, "binary-dir", getDefaultBinaryDir(), "Directory containing arch-specific Operator builds")
+	fs.StringVar(&binaryDir, "binary-dir", getDefaultNodeBinaryDir(), "Directory containing arch-specific Operator builds")
 	fs.StringVar(&sshIdentityFile, "ssh-identity-file", "", "SSH identity file path")
 	fs.StringVar(&sshUser, "ssh-user", "", "SSH username")
 	fs.StringVar(&sshPassphrase, "ssh-passphrase", "", "Passphrase for encrypted SSH private keys")
@@ -382,7 +382,7 @@ func printStreamUsage() {
 	fmt.Print(`
 g8e.operator stream -- concurrent ephemeral SSH Operator injection
 
-Streams the Operator binary from the g8ep container directly to one or
+Streams the Node binary from the g8ep container directly to one or
 more remote hosts over SSH. The binary is written to a tmpfile, optionally
 started, and automatically deleted when the SSH session closes.
 

@@ -127,7 +127,7 @@ The reference implementation (`g8eo`) currently supports:
 - **Deterministic Hash Binding**: SHA-256 transaction hash integrity enforced across all wire formats.
 - **Sovereignty Boundary**: Automated scrubbing and rehydration of sensitive data during the execution lifecycle.
 - **Host-Unique Signing**: Cryptographic Action Receipts signed by host-specific keys.
-- **Zero-Dependency Binary**: Statically compiled Go binary for air-gapped and high-security deployments.
+- **Zero-DependencyNode Node Binary**: Statically compiled Go binary for air-gapped and high-security deployments.
 
 ---
 

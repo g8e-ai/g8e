@@ -831,7 +831,7 @@ func TestRunStream_HelpFlag(t *testing.T) {
 	assert.NotEmpty(t, buf.String(), "usage output must not be empty")
 }
 
-func TestRunStream_BinaryNotFound_ResultsInFailure(t *testing.T) {
+func TestRunStream_NodeBinaryNotFound_ResultsInFailure(t *testing.T) {
 	// Exercise the binary-load step in isolation: build a minimal binaryDir
 	// that does NOT contain the expected arch sub-path and verify the error
 	// message that RunStream would emit to stderr.
@@ -843,7 +843,7 @@ func TestRunStream_BinaryNotFound_ResultsInFailure(t *testing.T) {
 	require.Error(t, err, "binary must not exist in fresh temp dir")
 }
 
-func TestRunStream_ValidBinaryWithCancelledContext(t *testing.T) {
+func TestRunStream_ValidNodeBinaryWithCancelledContext(t *testing.T) {
 	// Write a minimal fake binary so the binary-load step succeeds.
 	binaryDir := t.TempDir()
 	arch := "amd64"

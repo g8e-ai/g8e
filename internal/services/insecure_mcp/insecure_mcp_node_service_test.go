@@ -299,7 +299,7 @@ func TestHandshake_WithToken(t *testing.T) {
 // system.which
 // ────────────────────────────────────────────────────────────────
 
-func TestSystemWhich_FindsExistingBinary(t *testing.T) {
+func TestSystemWhich_FindsExistingNodeBinary(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("wh-1", "test-node", "system.which", `{"bins":["sh","nonexistent_xyz_abc"]}`)
@@ -625,7 +625,7 @@ func TestRunCommand_EnvOverride(t *testing.T) {
 	}
 }
 
-func TestRunCommand_BadBinary(t *testing.T) {
+func TestRunCommand_BadNodeBinary(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	result, timedOut := runCommand(ctx, systemRunParams{

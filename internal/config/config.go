@@ -77,7 +77,7 @@ type LoadOptions struct {
 }
 
 // GatewayConfig holds configuration for gateway mode.
-// In gateway mode, the Operator binary becomes the persistence and messaging
+// In gateway mode, the Node binary becomes the persistence and messaging
 // backbone for the entire g8e platform, replacing external databases.
 // No outbound authentication is required - the Operator simply starts and listens.
 type GatewayConfig struct {

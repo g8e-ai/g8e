@@ -16,7 +16,7 @@ The g8e Protocol is the foundational wire contract for all mutations in the g8e 
 
 ### Core Design Principles
 
-- **Canonical JSON Wire Format**: All client-facing surfaces (HTTP, WSS pub/sub, receipts, audit exports) carry the `GovernanceEnvelope` as canonical JSON (protojson). Binary protobuf is strictly reserved for internal storage.
+- **Canonical JSON Wire Format**: All client-facing surfaces (HTTP, WSS pub/sub, receipts, audit exports) carry the `GovernanceEnvelope` as canonical JSON (protojson).Node Node Binary protobuf is strictly reserved for internal storage.
 - **g8e.local Canonical Alias**: The platform uses `g8e.local` as the stable internal hostname. The gateway translates this alias to installation-specific peer identity and endpoint data.
 - **Hash-Based Signing**: A deterministic `transaction_hash` is computed from normalized envelope fields. The verifier enforces `id == transaction_hash == SHA256(canonical_fields)`.
 - **Fail-Closed Verification**: Any malformed envelope, expired transaction, reused nonce, stale state root, or missing proof is rejected immediately before execution.

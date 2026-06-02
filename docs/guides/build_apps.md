@@ -59,7 +59,7 @@ Application-internal state remains the exclusive responsibility of the applicati
 
 ### Canonical JSON Wire Format
 
-All client-facing interactions must use canonical JSON (protojson) as the wire format. Binary protobuf is reserved for internal storage.
+All client-facing interactions must use canonical JSON (protojson) as the wire format.Node Node Binary protobuf is reserved for internal storage.
 
 The envelope `id` must match the deterministic transaction_hash computed from its content. The signature basis is always the deterministic transaction hash, regardless of wire encoding.
 

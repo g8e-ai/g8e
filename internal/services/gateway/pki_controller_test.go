@@ -505,41 +505,41 @@ func TestPKIController_HandleTrustScriptLinux(t *testing.T) {
 	assert.Contains(t, script, "g8e auth login")
 }
 
-func TestPKIController_HandleBinaryDownload(t *testing.T) {
+func TestPKIController_HandleNodeBinaryDownload(t *testing.T) {
 	t.Parallel()
 	c, _, _ := setupTestPKIController(t)
 
 	// Create binaries directory and a test binary
 	binaryDir := filepath.Join(c.pki.PKIDir(), "binaries")
 	require.NoError(t, os.MkdirAll(binaryDir, 0755))
-	testBinaryPath := filepath.Join(binaryDir, "g8e-windows-amd64.exe")
-	testBinaryContent := []byte("test binary content")
-	require.NoError(t, os.WriteFile(testBinaryPath, testBinaryContent, 0644))
+	testNodeBinaryPath := filepath.Join(binaryDir, "g8e-windows-amd64.exe")
+	testNodeBinaryContent := []byte("test binary content")
+	require.NoError(t, os.WriteFile(testNodeBinaryPath, testNodeBinaryContent, 0644))
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/binary/g8e-windows-amd64.exe", nil)
 	rr := httptest.NewRecorder()
 
-	c.handleBinaryDownload(rr, req)
+	c.handleNodeBinaryDownload(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Equal(t, "application/octet-stream", rr.Header().Get("Content-Type"))
 	assert.Equal(t, "attachment; filename=g8e-windows-amd64.exe", rr.Header().Get("Content-Disposition"))
-	assert.Equal(t, testBinaryContent, rr.Body.Bytes())
+	assert.Equal(t, testNodeBinaryContent, rr.Body.Bytes())
 }
 
-func TestPKIController_HandleBinaryDownload_NotFound(t *testing.T) {
+func TestPKIController_HandleNodeBinaryDownload_NotFound(t *testing.T) {
 	t.Parallel()
 	c, _, _ := setupTestPKIController(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/binary/g8e-linux-amd64", nil)
 	rr := httptest.NewRecorder()
 
-	c.handleBinaryDownload(rr, req)
+	c.handleNodeBinaryDownload(rr, req)
 
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
-func TestPKIController_HandleBinaryDownload_InvalidName(t *testing.T) {
+func TestPKIController_HandleNodeBinaryDownload_InvalidName(t *testing.T) {
 	t.Parallel()
 	c, _, _ := setupTestPKIController(t)
 
@@ -557,7 +557,7 @@ func TestPKIController_HandleBinaryDownload_InvalidName(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/binary/"+tc, nil)
 			rr := httptest.NewRecorder()
 
-			c.handleBinaryDownload(rr, req)
+			c.handleNodeBinaryDownload(rr, req)
 
 			assert.Equal(t, http.StatusBadRequest, rr.Code)
 		})

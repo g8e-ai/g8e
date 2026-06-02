@@ -186,7 +186,7 @@ See [docs/reference/constants.md](../reference/constants.md) for details.
 
 ## Native Tools
 
-Native tools are MCP tools compiled into the Operator binary that execute within the Operator's execution boundary locally, without proxying to downstream MCP servers.
+Native tools are MCP tools compiled into the Node binary that execute within the Operator's execution boundary locally, without proxying to downstream MCP servers.
 
 **Adding a new native tool:**
 1. Copy `docs/protocols/mcp/tool_template.go` to `internal/services/mcp/your_tool_name.go`

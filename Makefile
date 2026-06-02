@@ -197,15 +197,15 @@ PLATFORMS := linux/amd64 linux/arm64 linux/386 windows/amd64 windows/arm64 darwi
 build:
 	@echo "Building g8e Operator for current platform..."
 	@mkdir -p $(BIN_DIR)
-	@BINARY=$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH); \
+	@NODE_BINARY=$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH); \
 	if [ "$(HOST_OS)" = "windows" ]; then \
-		BINARY=$$BINARY.exe; \
+		NODE_BINARY=$$NODE_BINARY.exe; \
 	fi; \
-	echo "Building $(HOST_OS)/$(HOST_ARCH) -> $$BINARY..."; \
-	GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build -ldflags "$(LDFLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$BINARY $(MAIN_PKG); \
-	sha256sum $$BINARY > $$BINARY.sha256; \
-	$(call create_symlink,$$BINARY)
-	@echo "Build complete. Binary: $$BINARY"
+	echo "Building $(HOST_OS)/$(HOST_ARCH) -> $$NODE_BINARY..."; \
+	GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build -ldflags "$(LDFLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$NODE_BINARY $(MAIN_PKG); \
+	sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
+	$(call create_symlink,$$NODE_BINARY)
+	@echo "Build complete.Node Node Binary: $$NODE_BINARY"
 
 .PHONY: docker-build
 docker-build:
@@ -220,13 +220,13 @@ build-all:
 	@for platform in $(PLATFORMS); do \
 		GOOS=$${platform%/*}; \
 		GOARCH=$${platform#*/}; \
-		BINARY=$(BIN_DIR)/g8e-$$GOOS-$$GOARCH; \
+		NODE_BINARY=$(BIN_DIR)/g8e-$$GOOS-$$GOARCH; \
 		if [ "$$GOOS" = "windows" ]; then \
-			BINARY=$$BINARY.exe; \
+			NODE_BINARY=$$NODE_BINARY.exe; \
 		fi; \
-		echo "Building $$platform -> $$BINARY..."; \
-		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) -X main.platform=$$platform" -o $$BINARY $(MAIN_PKG); \
-		sha256sum $$BINARY > $$BINARY.sha256; \
+		echo "Building $$platform -> $$NODE_BINARY..."; \
+		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
+		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@$(call create_symlink,$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH))
 	@echo "Multi-platform build complete. Checksums: $(BIN_DIR)/g8e-*.sha256"
@@ -238,15 +238,15 @@ build-compressed: upx-install
 	@for platform in $(PLATFORMS); do \
 		GOOS=$${platform%/*}; \
 		GOARCH=$${platform#*/}; \
-		BINARY=$(BIN_DIR)/g8e-$$GOOS-$$GOARCH; \
+		NODE_BINARY=$(BIN_DIR)/g8e-$$GOOS-$$GOARCH; \
 		if [ "$$GOOS" = "windows" ]; then \
-			BINARY=$$BINARY.exe; \
+			NODE_BINARY=$$NODE_BINARY.exe; \
 		fi; \
-		echo "Building $$platform -> $$BINARY..."; \
-		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) -X main.platform=$$platform" -o $$BINARY $(MAIN_PKG); \
-		echo "Compressing $$BINARY with UPX..."; \
-		$(UPX) --best --lzma $$BINARY; \
-		sha256sum $$BINARY > $$BINARY.sha256; \
+		echo "Building $$platform -> $$NODE_BINARY..."; \
+		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
+		echo "Compressing $$NODE_BINARY with UPX..."; \
+		$(UPX) --best --lzma $$NODE_BINARY; \
+		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@$(call create_symlink,$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH))
 	@echo "Compressed multi-platform build complete. Checksums: $(BIN_DIR)/g8e-*.sha256"
@@ -256,12 +256,12 @@ build-linux-compressed: upx-install
 	@echo "Building g8e for Linux with UPX compression..."
 	@mkdir -p $(BIN_DIR)
 	@for arch in amd64 arm64 386; do \
-		BINARY=$(BIN_DIR)/g8e-linux-$$arch; \
-		echo "Building linux/$$arch -> $$BINARY..."; \
-		GOOS=linux GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=linux_$$arch" -o $$BINARY $(MAIN_PKG); \
-		echo "Compressing $$BINARY with UPX..."; \
-		$(UPX) --best --lzma $$BINARY; \
-		sha256sum $$BINARY > $$BINARY.sha256; \
+		NODE_BINARY=$(BIN_DIR)/g8e-linux-$$arch; \
+		echo "Building linux/$$arch -> $$NODE_BINARY..."; \
+		GOOS=linux GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=linux_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
+		echo "Compressing $$NODE_BINARY with UPX..."; \
+		$(UPX) --best --lzma $$NODE_BINARY; \
+		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Linux compressed build complete. Binaries: $(BIN_DIR)/g8e-linux-*"
 
@@ -270,12 +270,12 @@ build-darwin-compressed: upx-install
 	@echo "Building g8e for Darwin with UPX compression..."
 	@mkdir -p $(BIN_DIR)
 	@for arch in amd64 arm64; do \
-		BINARY=$(BIN_DIR)/g8e-darwin-$$arch; \
-		echo "Building darwin/$$arch -> $$BINARY..."; \
-		GOOS=darwin GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=darwin_$$arch" -o $$BINARY $(MAIN_PKG); \
-		echo "Compressing $$BINARY with UPX..."; \
-		$(UPX) --best --lzma $$BINARY; \
-		sha256sum $$BINARY > $$BINARY.sha256; \
+		NODE_BINARY=$(BIN_DIR)/g8e-darwin-$$arch; \
+		echo "Building darwin/$$arch -> $$NODE_BINARY..."; \
+		GOOS=darwin GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=darwin_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
+		echo "Compressing $$NODE_BINARY with UPX..."; \
+		$(UPX) --best --lzma $$NODE_BINARY; \
+		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Darwin compressed build complete. Binaries: $(BIN_DIR)/g8e-darwin-*"
 
@@ -284,12 +284,12 @@ build-windows-compressed: upx-install
 	@echo "Building g8e for Windows with UPX compression..."
 	@mkdir -p $(BIN_DIR)
 	@for arch in amd64 arm64; do \
-		BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
-		echo "Building windows/$$arch -> $$BINARY..."; \
-		GOOS=windows GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=windows_$$arch -s -w" -o $$BINARY $(MAIN_PKG); \
-		echo "Compressing $$BINARY with UPX..."; \
-		$(UPX) --best --lzma $$BINARY; \
-		sha256sum $$BINARY > $$BINARY.sha256; \
+		NODE_BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
+		echo "Building windows/$$arch -> $$NODE_BINARY..."; \
+		GOOS=windows GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=windows_$$arch -s -w" -o $$NODE_BINARY $(MAIN_PKG); \
+		echo "Compressing $$NODE_BINARY with UPX..."; \
+		$(UPX) --best --lzma $$NODE_BINARY; \
+		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Windows compressed build complete. Binaries: $(BIN_DIR)/g8e-windows-*.exe"
 
@@ -298,10 +298,10 @@ build-darwin:
 	@echo "Building g8e for Darwin..."
 	@mkdir -p $(BIN_DIR)
 	@for arch in amd64 arm64; do \
-		BINARY=$(BIN_DIR)/g8e-darwin-$$arch; \
-		echo "Building darwin/$$arch -> $$BINARY..."; \
-		GOOS=darwin GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=darwin_$$arch" -o $$BINARY $(MAIN_PKG); \
-		sha256sum $$BINARY > $$BINARY.sha256; \
+		NODE_BINARY=$(BIN_DIR)/g8e-darwin-$$arch; \
+		echo "Building darwin/$$arch -> $$NODE_BINARY..."; \
+		GOOS=darwin GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=darwin_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
+		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Darwin build complete. Binaries: $(BIN_DIR)/g8e-darwin-*"
 
@@ -310,10 +310,10 @@ build-linux:
 	@echo "Building g8e for Linux..."
 	@mkdir -p $(BIN_DIR)
 	@for arch in amd64 arm64 386; do \
-		BINARY=$(BIN_DIR)/g8e-linux-$$arch; \
-		echo "Building linux/$$arch -> $$BINARY..."; \
-		GOOS=linux GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=linux_$$arch" -o $$BINARY $(MAIN_PKG); \
-		sha256sum $$BINARY > $$BINARY.sha256; \
+		NODE_BINARY=$(BIN_DIR)/g8e-linux-$$arch; \
+		echo "Building linux/$$arch -> $$NODE_BINARY..."; \
+		GOOS=linux GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=linux_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
+		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Linux build complete. Binaries: $(BIN_DIR)/g8e-linux-*"
 
@@ -322,10 +322,10 @@ build-windows:
 	@echo "Building g8e for Windows (no compression to avoid Defender false positives)..."
 	@mkdir -p $(BIN_DIR)
 	@for arch in amd64 arm64; do \
-		BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
-		echo "Building windows/$$arch -> $$BINARY..."; \
-		GOOS=windows GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=windows_$$arch -s -w" -o $$BINARY $(MAIN_PKG); \
-		sha256sum $$BINARY > $$BINARY.sha256; \
+		NODE_BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
+		echo "Building windows/$$arch -> $$NODE_BINARY..."; \
+		GOOS=windows GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=windows_$$arch -s -w" -o $$NODE_BINARY $(MAIN_PKG); \
+		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Windows build complete. Binaries: $(BIN_DIR)/g8e-windows-*.exe"
 

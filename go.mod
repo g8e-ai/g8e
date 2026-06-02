@@ -56,9 +56,9 @@ require (
 )
 
 require (
-	// test-only (not compiled into the Operator binary)
+	// test-only (not compiled into the Node binary)
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	// compiled into the Operator binary (runtime deps of direct dependencies)
+	// compiled into the Node binary (runtime deps of direct dependencies)
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-isatty v0.0.22 // indirect

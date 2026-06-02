@@ -47,7 +47,7 @@ const (
 	// ExitCertTrustFailure indicates the Operator cannot verify the server's TLS certificate.
 	// This is a non-retryable condition caused by a stale embedded CA certificate.
 	// The Operator must self-terminate to prevent noisy retry loops against the server.
-	// Resolution: download a new Operator binary with updated certificates.
+	// Resolution: download a new Node binary with updated certificates.
 	ExitCertTrustFailure = 7
 )
 

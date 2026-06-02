@@ -61,7 +61,7 @@ func TestCompress_LargeInput(t *testing.T) {
 	assert.Equal(t, original, decompressed)
 }
 
-func TestCompress_BinaryData(t *testing.T) {
+func TestCompress_NodeBinaryData(t *testing.T) {
 	t.Parallel()
 	original := make([]byte, 256)
 	for i := range original {

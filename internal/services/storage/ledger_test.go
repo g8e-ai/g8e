@@ -762,7 +762,7 @@ func TestLedgerService_DeepNestedPath(t *testing.T) {
 	assert.Equal(t, "deep content", string(mirrorContent))
 }
 
-func TestLedgerService_BinaryFile(t *testing.T) {
+func TestLedgerService_NodeBinaryFile(t *testing.T) {
 	t.Parallel()
 	lms, avs, tempDir := setupTestLedger(t)
 	defer avs.Close()

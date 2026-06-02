@@ -56,7 +56,7 @@ These are the rules. Follow them unconditionally. If a task cannot be completed 
 
 **Always** include `nonce`, `expires_at`, and `state_merkle_root` when constructing envelopes. Omitting any of these produces an envelope that L4 will reject.
 
-**Always** use canonical JSON (`protojson`) for all wire formats. Binary protobuf is internal storage only.
+**Always** use canonical JSON (`protojson`) for all wire formats.Node Node Binary protobuf is internal storage only.
 
 **Always** sign receipts with the host-unique Ed25519 key. An `ActionReceipt` without a valid signature is not an `ActionReceipt`.
 
@@ -98,7 +98,7 @@ These are the rules. Follow them unconditionally. If a task cannot be completed 
 
 ---
 
-### 7. Binary & Dependency Hygiene
+### 7.Node Node Binary & Dependency Hygiene
 
 **Always** check that a new import is already present in `go.mod` before using it. The zero-dependency constraint is a hard architectural requirement.
 

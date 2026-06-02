@@ -86,7 +86,7 @@ By passing `--doctrine`, `--consensus`, or `--notary`, the g8e Node transforms i
     - **Gateway API**: `POST /api/v1/governance/envelopes` is the only customer-facing mutation entry point.
     - **Document Store**: JSON document CRUD on a Collection/ID pattern via `/api/v1/db/*`.
     - **KV Store**: TTL-aware ephemeral state with `GLOB` pattern scanning via `/api/v1/kv/*`.
-    - **Blob Store**: Binary persistence for attachments and certificate material via `/api/v1/blob/*`.
+    - **Blob Store**:Node Node Binary persistence for attachments and certificate material via `/api/v1/blob/*`.
     - **Pub/Sub Broker**: High-performance WebSocket fan-out via `/ws/v1/pubsub`. Mutation channels (`cmd:*`) are governed.
     - **Root CA / PKI**: Issues mTLS certificates via CSR-based enrollment with SPIFFE URI SAN identity.
     - **Audit Authority**: Append-only encrypted log of every event and signed `ActionReceipt`.

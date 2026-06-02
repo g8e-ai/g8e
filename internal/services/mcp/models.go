@@ -200,7 +200,7 @@ type FieldReadResult struct {
 	Value interface{} `json:"value"`
 }
 
-// Native tool definitions compiled into the Operator binary
+// Native tool definitions compiled into the Node binary
 
 // DBDiscoverTopologyRequest is the params for the "db_discover_topology" tool.
 type DBDiscoverTopologyRequest struct {

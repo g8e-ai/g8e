@@ -463,7 +463,7 @@ wait "$PID"`,
 				operatorArgs,
 			)
 		} else {
-			remoteCmd = `set -e; B=$(mktemp); cat > "$B"; chmod +x "$B"; trap 'rm -f "$B"' EXIT; echo "[g8e] Binary injected into $B -- run it manually: $B -e <endpoint> [options]"`
+			remoteCmd = `set -e; B=$(mktemp); cat > "$B"; chmod +x "$B"; trap 'rm -f "$B"' EXIT; echo "[g8e]Node Node Binary injected into $B -- run it manually: $B -e <endpoint> [options]"`
 		}
 
 		// Check for context cancellation before running

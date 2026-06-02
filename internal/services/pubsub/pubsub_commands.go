@@ -424,9 +424,9 @@ func (rs *PubSubCommandService) listenForCommands(channelName string) {
 				return
 			}
 			if IsTLSCertError(err) {
-				rs.logger.Error("Server certificate verification failed during reconnect - this Operator binary has outdated certificates",
+				rs.logger.Error("Server certificate verification failed during reconnect - this Node binary has outdated certificates",
 					"action", "SSL Failure. Requesting shutdown.",
-					"resolution", "download a new Operator binary from https://"+constants.DefaultEndpoint)
+					"resolution", "download a new Node binary from https://"+constants.DefaultEndpoint)
 				rs.ShutdownChan <- "SSL_CERT_FAILURE"
 				return
 			}
@@ -506,7 +506,7 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 	}
 
 	// Decode as GovernanceEnvelope - this is the only canonical mutation transport.
-	// Binary protobuf bytes and other formats are explicitly rejected.
+	//Node Node Binary protobuf bytes and other formats are explicitly rejected.
 	envelope := &govpkg.GovernanceEnvelope{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, envelope); err != nil {
 		rs.logger.Error("envelope: non-JSON payload rejected",

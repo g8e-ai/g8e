@@ -160,7 +160,7 @@ v1.0.3 removes all remaining g8ee application-layer coupling from the Gateway an
 * **Gateway routing refactor:** Gateway HTTP routing uses dedicated controllers. Admin, auth, and Operator concerns are separated into distinct controller packages with clear responsibilities.
 * **L3 notary outbound fix:** L3 notary verification for outbound transactions is fixed. Suspended transaction handling and receipt generation correctly handle outbound mutation flows.
 * **Test coverage expansion:** Extensive test coverage improvements across gateway services include comprehensive integration tests for JWT authentication, CLI approval, public route registry, and controller endpoints.
-* **Build process simplification:** The `cp` command is removed from the build process in Makefile. Binary compilation is streamlined to eliminate unnecessary file operations.
+* **Build process simplification:** The `cp` command is removed from the build process in Makefile.Node Node Binary compilation is streamlined to eliminate unnecessary file operations.
 * **Documentation updates:** CLI documentation, architecture docs, and guides reflect the platform-only architecture. g8ee-specific references and device-link command documentation are removed.
 * **Protocol constants regeneration:** Protocol constants are regenerated after g8ee path removal. Generated Go constants are updated to match protocol JSON definitions.
 
@@ -295,7 +295,7 @@ gates with no optional application-layer coupling in the critical path.
 * **DB transaction safety** - Unprotected transactions fixed; cursor-based query patterns replaced.
 * **mTLS bootstrap** - First-time mTLS setup sequence fixed; PKI test initialization refactored for
   isolation.
-* **Binary build process** - "build once, then copy" pattern enforces a single compilation artifact
+* **Node Binary build process** - "build once, then copy" pattern enforces a single compilation artifact
   per binary, eliminating race conditions during `platform start`.
 * **Constants casing** - Acronym and general casing standardized across all generated Go constants.
 * **Docs restructured** - Documentation reorganized to match the new root layout: `docs/architecture/`,
@@ -430,7 +430,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 - **Host-Native Testing:** Platform now runs component tests host-native without Docker, improving test reliability and CI performance.
 
 ### Changed
-- **Removed Docker:** Eliminated Docker containerization across the platform. Components now run directly on the host with the Operator binary in listen mode.
+- **Removed Docker:** Eliminated Docker containerization across the platform. Components now run directly on the host with the Node binary in listen mode.
 - **Platform Architecture:** Migrated to host-native execution model with platform runtime state in repo-local `.g8e` directory.
 - **Build System:** Comprehensive updates to `build.sh` for host-native bootstrapping, improved auth token handling, and better signal handling.
 - **Documentation:** Updated all documentation to reflect the removal of Docker and the new host-native architecture.
