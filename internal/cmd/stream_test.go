@@ -31,6 +31,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
+	"github.com/g8e-ai/g8e/internal/pkg/ssh"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -187,13 +188,13 @@ Host myserver
 `
 	require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-	blocks := parseSSHConfig(cfg)
+	blocks := ssh.ParseConfig(cfg)
 	require.Contains(t, blocks, "myserver")
 	b := blocks["myserver"]
-	assert.Equal(t, "192.168.1.10", b.hostname)
-	assert.Equal(t, "deploy", b.user)
-	assert.Equal(t, "2222", b.port)
-	assert.Len(t, b.identityFiles, 1)
+	assert.Equal(t, "192.168.1.10", b.Hostname)
+	assert.Equal(t, "deploy", b.User)
+	assert.Equal(t, "2222", b.Port)
+	assert.Len(t, b.IdentityFiles, 1)
 }
 
 func TestParseSSHConfig_MultipleBlocks(t *testing.T) {
@@ -211,7 +212,7 @@ Host staging
 `
 	require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-	blocks := parseSSHConfig(cfg)
+	blocks := ssh.ParseConfig(cfg)
 	assert.Len(t, blocks, 2)
 	assert.Contains(t, blocks, "prod-*")
 	assert.Contains(t, blocks, "staging")
@@ -228,15 +229,15 @@ Host equalhost
 `
 	require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-	blocks := parseSSHConfig(cfg)
+	blocks := ssh.ParseConfig(cfg)
 	require.Contains(t, blocks, "equalhost")
 	b := blocks["equalhost"]
-	assert.Equal(t, "10.0.0.1", b.hostname)
-	assert.Equal(t, "admin", b.user)
+	assert.Equal(t, "10.0.0.1", b.Hostname)
+	assert.Equal(t, "admin", b.User)
 }
 
 func TestParseSSHConfig_MissingFile(t *testing.T) {
-	blocks := parseSSHConfig("/nonexistent/.ssh/config")
+	blocks := ssh.ParseConfig("/nonexistent/.ssh/config")
 	assert.Empty(t, blocks)
 }
 
@@ -252,9 +253,9 @@ Host commented
 `
 	require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-	blocks := parseSSHConfig(cfg)
+	blocks := ssh.ParseConfig(cfg)
 	require.Contains(t, blocks, "commented")
-	assert.Equal(t, "10.0.0.2", blocks["commented"].hostname)
+	assert.Equal(t, "10.0.0.2", blocks["commented"].Hostname)
 }
 
 func TestParseSSHConfig_MultipleIdentityFiles(t *testing.T) {
@@ -267,9 +268,9 @@ Host multi
 `
 	require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-	blocks := parseSSHConfig(cfg)
+	blocks := ssh.ParseConfig(cfg)
 	require.Contains(t, blocks, "multi")
-	assert.Len(t, blocks["multi"].identityFiles, 2)
+	assert.Len(t, blocks["multi"].IdentityFiles, 2)
 }
 
 // ---------------------------------------------------------------------------
@@ -277,28 +278,28 @@ Host multi
 // ---------------------------------------------------------------------------
 
 func TestMatchSSHBlock_ExactMatch(t *testing.T) {
-	blocks := map[string]*sshConfigBlock{
-		"myhost": {hostname: "1.2.3.4"},
+	blocks := map[string]*ssh.ConfigBlock{
+		"myhost": {Hostname: "1.2.3.4"},
 	}
-	b := matchSSHBlock(blocks, "myhost")
+	b := ssh.MatchBlock(blocks, "myhost")
 	require.NotNil(t, b)
-	assert.Equal(t, "1.2.3.4", b.hostname)
+	assert.Equal(t, "1.2.3.4", b.Hostname)
 }
 
 func TestMatchSSHBlock_WildcardMatch(t *testing.T) {
-	blocks := map[string]*sshConfigBlock{
-		"prod-*": {user: "ubuntu"},
+	blocks := map[string]*ssh.ConfigBlock{
+		"prod-*": {User: "ubuntu"},
 	}
-	b := matchSSHBlock(blocks, "prod-web-01")
+	b := ssh.MatchBlock(blocks, "prod-web-01")
 	require.NotNil(t, b)
-	assert.Equal(t, "ubuntu", b.user)
+	assert.Equal(t, "ubuntu", b.User)
 }
 
 func TestMatchSSHBlock_NoMatch(t *testing.T) {
-	blocks := map[string]*sshConfigBlock{
-		"staging": {hostname: "10.0.0.1"},
+	blocks := map[string]*ssh.ConfigBlock{
+		"staging": {Hostname: "10.0.0.1"},
 	}
-	b := matchSSHBlock(blocks, "production")
+	b := ssh.MatchBlock(blocks, "production")
 	assert.Nil(t, b)
 }
 
@@ -323,15 +324,15 @@ func TestMatchGlob(t *testing.T) {
 		{"exact", "not-exact", false},
 	}
 	for _, tc := range cases {
-		got := matchGlob(tc.pattern, tc.input)
-		assert.Equal(t, tc.want, got, "matchGlob(%q, %q)", tc.pattern, tc.input)
+		got := ssh.MatchGlob(tc.pattern, tc.input)
+		assert.Equal(t, tc.want, got, "MatchGlob(%q, %q)", tc.pattern, tc.input)
 	}
 }
 
 func TestSSHPatternMatch_MultiplePatterns(t *testing.T) {
-	assert.True(t, sshPatternMatch("web-* db-*", "web-01"))
-	assert.True(t, sshPatternMatch("web-* db-*", "db-02"))
-	assert.False(t, sshPatternMatch("web-* db-*", "cache-01"))
+	assert.True(t, ssh.PatternMatch("web-* db-*", "web-01"))
+	assert.True(t, ssh.PatternMatch("web-* db-*", "db-02"))
+	assert.False(t, ssh.PatternMatch("web-* db-*", "cache-01"))
 }
 
 // ---------------------------------------------------------------------------
@@ -339,17 +340,17 @@ func TestSSHPatternMatch_MultiplePatterns(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveHost_UserAtHost(t *testing.T) {
-	r := resolveHost("deploy@10.0.0.5", "", "", "", "")
-	assert.Equal(t, "deploy", r.user)
-	assert.Equal(t, "10.0.0.5", r.hostname)
-	assert.Equal(t, "22", r.port)
+	r := ssh.ResolveHost("deploy@10.0.0.5", "", "", "", "")
+	assert.Equal(t, "deploy", r.User)
+	assert.Equal(t, "10.0.0.5", r.Hostname)
+	assert.Equal(t, "22", r.Port)
 }
 
 func TestResolveHost_UserAtHostPort(t *testing.T) {
-	r := resolveHost("admin@myhost:2222", "", "", "", "")
-	assert.Equal(t, "admin", r.user)
-	assert.Equal(t, "myhost", r.hostname)
-	assert.Equal(t, "2222", r.port)
+	r := ssh.ResolveHost("admin@myhost:2222", "", "", "", "")
+	assert.Equal(t, "admin", r.User)
+	assert.Equal(t, "myhost", r.Hostname)
+	assert.Equal(t, "2222", r.Port)
 }
 
 func TestResolveHost_AliasFromSSHConfig(t *testing.T) {
@@ -363,10 +364,10 @@ Host myalias
 `
 	require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-	r := resolveHost("myalias", cfg, "", "", "")
-	assert.Equal(t, "ubuntu", r.user)
-	assert.Equal(t, "192.168.1.50", r.hostname)
-	assert.Equal(t, "2222", r.port)
+	r := ssh.ResolveHost("myalias", cfg, "", "", "")
+	assert.Equal(t, "ubuntu", r.User)
+	assert.Equal(t, "192.168.1.50", r.Hostname)
+	assert.Equal(t, "2222", r.Port)
 }
 
 func TestResolveHost_UserOverridesConfig(t *testing.T) {
@@ -379,13 +380,13 @@ Host myhost
 	require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
 	// Explicit user@host overrides config User
-	r := resolveHost("explicit@myhost", cfg, "", "", "")
-	assert.Equal(t, "explicit", r.user)
+	r := ssh.ResolveHost("explicit@myhost", cfg, "", "", "")
+	assert.Equal(t, "explicit", r.User)
 }
 
 func TestResolveHost_DefaultPort(t *testing.T) {
-	r := resolveHost("somehost", "/nonexistent", "", "", "")
-	assert.Equal(t, "22", r.port)
+	r := ssh.ResolveHost("somehost", "/nonexistent", "", "", "")
+	assert.Equal(t, "22", r.Port)
 }
 
 // ---------------------------------------------------------------------------
@@ -394,12 +395,12 @@ func TestResolveHost_DefaultPort(t *testing.T) {
 
 func TestExpandTilde_WithTilde(t *testing.T) {
 	home, _ := os.UserHomeDir()
-	got := expandTilde("~/.ssh/id_ed25519")
+	got := ssh.ExpandTilde("~/.ssh/id_ed25519")
 	assert.Equal(t, filepath.Join(home, ".ssh/id_ed25519"), got)
 }
 
 func TestExpandTilde_WithoutTilde(t *testing.T) {
-	assert.Equal(t, "/absolute/path", expandTilde("/absolute/path"))
+	assert.Equal(t, "/absolute/path", ssh.ExpandTilde("/absolute/path"))
 }
 
 // ---------------------------------------------------------------------------
@@ -469,10 +470,10 @@ Host prod-*
 `
 	require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-	r := resolveHost("prod-web-01", cfg, "", "", "")
-	assert.Equal(t, "ubuntu", r.user)
-	assert.Equal(t, "prod-web-01", r.hostname)
-	assert.Equal(t, "22", r.port)
+	r := ssh.ResolveHost("prod-web-01", cfg, "", "", "")
+	assert.Equal(t, "ubuntu", r.User)
+	assert.Equal(t, "prod-web-01", r.Hostname)
+	assert.Equal(t, "22", r.Port)
 }
 
 func TestResolveHost_SSHConfigPort22NotOverridden(t *testing.T) {
@@ -486,16 +487,16 @@ Host myhost
 `
 	require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-	r := resolveHost("myhost", cfg, "", "", "")
-	assert.Equal(t, "22", r.port)
-	assert.Equal(t, "10.0.0.1", r.hostname)
+	r := ssh.ResolveHost("myhost", cfg, "", "", "")
+	assert.Equal(t, "22", r.Port)
+	assert.Equal(t, "10.0.0.1", r.Hostname)
 }
 
 func TestResolveHost_NoSSHConfig_DefaultsApplied(t *testing.T) {
-	r := resolveHost("bare-host", "/nonexistent/ssh/config", "fallback-user", "", "")
-	assert.Equal(t, "bare-host", r.hostname)
-	assert.Equal(t, "22", r.port)
-	assert.NotEmpty(t, r.user)
+	r := ssh.ResolveHost("bare-host", "/nonexistent/ssh/config", "fallback-user", "", "")
+	assert.Equal(t, "bare-host", r.Hostname)
+	assert.Equal(t, "22", r.Port)
+	assert.NotEmpty(t, r.User)
 }
 
 func TestResolveHost_HostnameOverriddenFromConfig(t *testing.T) {
@@ -508,9 +509,9 @@ Host alias
 `
 	require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-	r := resolveHost("alias", cfg, "", "", "")
-	assert.Equal(t, "192.168.99.1", r.hostname)
-	assert.Equal(t, "alias", r.original)
+	r := ssh.ResolveHost("alias", cfg, "", "", "")
+	assert.Equal(t, "192.168.99.1", r.Hostname)
+	assert.Equal(t, "alias", r.Original)
 }
 
 // ---------------------------------------------------------------------------
@@ -883,22 +884,22 @@ func TestRunStream_ArchValidation(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBuildAuthMethods_NoKeysNoAgent_ReturnsEmpty(t *testing.T) {
-	r := resolvedHost{
-		original: "host",
-		hostname: "host",
-		user:     "user",
-		port:     "22",
-		keyFiles: []string{},
+	r := ssh.HostConfig{
+		Original: "host",
+		Hostname: "host",
+		User:     "user",
+		Port:     "22",
+		KeyFiles: []string{},
 	}
-	methods := buildAuthMethods(r, "")
+	methods := ssh.BuildAuthMethods(r, "")
 	assert.Empty(t, methods)
 }
 
 func TestBuildAuthMethods_NonExistentKeyFile_Skipped(t *testing.T) {
-	r := resolvedHost{
-		keyFiles: []string{"/nonexistent/path/id_ed25519"},
+	r := ssh.HostConfig{
+		KeyFiles: []string{"/nonexistent/path/id_ed25519"},
 	}
-	methods := buildAuthMethods(r, "")
+	methods := ssh.BuildAuthMethods(r, "")
 	assert.Empty(t, methods)
 }
 
@@ -907,10 +908,10 @@ func TestBuildAuthMethods_InvalidKeyFile_Skipped(t *testing.T) {
 	badKey := filepath.Join(dir, "bad_key")
 	require.NoError(t, os.WriteFile(badKey, []byte("not a valid private key\n"), 0600))
 
-	r := resolvedHost{
-		keyFiles: []string{badKey},
+	r := ssh.HostConfig{
+		KeyFiles: []string{badKey},
 	}
-	methods := buildAuthMethods(r, "")
+	methods := ssh.BuildAuthMethods(r, "")
 	assert.Empty(t, methods)
 }
 
@@ -922,10 +923,10 @@ func TestBuildAuthMethods_ValidED25519Key_ReturnsMethod(t *testing.T) {
 	keyPath := filepath.Join(dir, "id_ed25519")
 	generateTestSSHKey(t, keyPath)
 
-	r := resolvedHost{
-		keyFiles: []string{keyPath},
+	r := ssh.HostConfig{
+		KeyFiles: []string{keyPath},
 	}
-	methods := buildAuthMethods(r, "")
+	methods := ssh.BuildAuthMethods(r, "")
 	assert.Len(t, methods, 1, "one auth method for one valid key file")
 }
 
@@ -936,10 +937,10 @@ func TestBuildAuthMethods_MultipleValidKeys_AllLoaded(t *testing.T) {
 	generateTestSSHKey(t, key1)
 	generateTestSSHKey(t, key2)
 
-	r := resolvedHost{
-		keyFiles: []string{key1, key2},
+	r := ssh.HostConfig{
+		KeyFiles: []string{key1, key2},
 	}
-	methods := buildAuthMethods(r, "")
+	methods := ssh.BuildAuthMethods(r, "")
 	assert.Len(t, methods, 2, "two auth methods for two valid key files")
 }
 
@@ -951,10 +952,10 @@ func TestBuildAuthMethods_MixedValidAndInvalid(t *testing.T) {
 	badKey := filepath.Join(dir, "bad")
 	require.NoError(t, os.WriteFile(badKey, []byte("garbage"), 0600))
 
-	r := resolvedHost{
-		keyFiles: []string{validKey, badKey, "/nonexistent"},
+	r := ssh.HostConfig{
+		KeyFiles: []string{validKey, badKey, "/nonexistent"},
 	}
-	methods := buildAuthMethods(r, "")
+	methods := ssh.BuildAuthMethods(r, "")
 	assert.Len(t, methods, 1, "only the valid key produces an auth method")
 }
 
@@ -963,11 +964,11 @@ func TestBuildAuthMethods_InvalidAgentSocket_StillLoadsKeys(t *testing.T) {
 	keyPath := filepath.Join(dir, "id_ed25519")
 	generateTestSSHKey(t, keyPath)
 
-	r := resolvedHost{
-		keyFiles: []string{keyPath},
+	r := ssh.HostConfig{
+		KeyFiles: []string{keyPath},
 	}
 	// Non-existent agent socket - Dial fails silently; key-file method still loaded
-	methods := buildAuthMethods(r, "/tmp/nonexistent_agent_sock_xyz")
+	methods := ssh.BuildAuthMethods(r, "/tmp/nonexistent_agent_sock_xyz")
 	assert.Len(t, methods, 1)
 }
 

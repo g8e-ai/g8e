@@ -418,6 +418,7 @@ type ShellExecuteRequest struct {
 	Args       []string `json:"args,omitempty"`
 	Timeout    int      `json:"timeout,omitempty"`
 	WorkingDir string   `json:"working_dir,omitempty"`
+	Hostnames  []string `json:"hostnames,omitempty"`
 }
 
 // ShellExecuteResult is the result for the "shell_execute" tool.
@@ -427,4 +428,5 @@ type ShellExecuteResult struct {
 	Stderr   string `json:"stderr"`
 	TimedOut bool   `json:"timed_out"`
 	Error    string `json:"error,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
 }

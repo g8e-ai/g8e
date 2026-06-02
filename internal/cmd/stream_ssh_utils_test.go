@@ -22,9 +22,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/pkg/ssh"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/ssh"
+	sshlib "golang.org/x/crypto/ssh"
 )
 
 func TestBuildHostKeyCallback(t *testing.T) {
@@ -43,7 +44,7 @@ func TestBuildHostKeyCallback(t *testing.T) {
 		// which is exactly the strict semantic we want.
 		require.NoError(t, os.WriteFile(khPath, []byte(""), 0600))
 
-		cb, err := buildHostKeyCallback()
+		cb, err := ssh.BuildHostKeyCallback()
 		require.NoError(t, err)
 		assert.NotNil(t, cb)
 	})
@@ -53,7 +54,7 @@ func TestBuildHostKeyCallback(t *testing.T) {
 		t.Setenv("HOME", tempDir)
 		// No env var to unset - ~/.ssh/known_hosts is the only path
 
-		cb, err := buildHostKeyCallback()
+		cb, err := ssh.BuildHostKeyCallback()
 		assert.Nil(t, cb)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "known_hosts not found")
@@ -75,14 +76,14 @@ func TestBuildHostKeyCallback(t *testing.T) {
 		khPath := filepath.Join(sshDir, "known_hosts")
 		require.NoError(t, os.WriteFile(khPath, []byte(""), 0600))
 
-		cb, err := buildHostKeyCallback()
+		cb, err := ssh.BuildHostKeyCallback()
 		require.NoError(t, err)
 
 		// Build a real RSA public key so the callback actually invokes its
 		// host-key matching logic instead of bailing on a nil key.
 		priv, err := rsa.GenerateKey(rand.Reader, 2048)
 		require.NoError(t, err)
-		pub, err := ssh.NewPublicKey(&priv.PublicKey)
+		pub, err := sshlib.NewPublicKey(&priv.PublicKey)
 		require.NoError(t, err)
 
 		err = cb("localhost:22", &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 22}, pub)
@@ -92,8 +93,8 @@ func TestBuildHostKeyCallback(t *testing.T) {
 
 func TestIsSSHExitError(t *testing.T) {
 	t.Run("is an exit error", func(t *testing.T) {
-		mockErr := &ssh.ExitError{}
-		var target *ssh.ExitError
+		mockErr := &sshlib.ExitError{}
+		var target *sshlib.ExitError
 		result := isSSHExitError(mockErr, &target)
 		assert.True(t, result)
 		assert.Equal(t, mockErr, target)
@@ -101,7 +102,7 @@ func TestIsSSHExitError(t *testing.T) {
 
 	t.Run("is not an exit error", func(t *testing.T) {
 		mockErr := fmt.Errorf("generic error")
-		var target *ssh.ExitError
+		var target *sshlib.ExitError
 		result := isSSHExitError(mockErr, &target)
 		assert.False(t, result)
 		assert.Nil(t, target)

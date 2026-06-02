@@ -17,9 +17,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/pkg/ssh"
+	sshlib "golang.org/x/crypto/ssh"
 )
 
 // ShellExecuteTool runs shell commands with denylist enforcement and timeout limits.
@@ -57,6 +61,11 @@ func (t *ShellExecuteTool) InputSchema() map[string]interface{} {
 				"type":        "string",
 				"description": "Working directory (optional, defaults to current directory)",
 			},
+			"hostnames": map[string]interface{}{
+				"type":        "array",
+				"items":       map[string]interface{}{"type": "string"},
+				"description": "List of hostnames to execute on (optional, defaults to localhost). Uses SSH config for remote hosts.",
+			},
 		},
 		"required": []string{"command"},
 	}
@@ -69,6 +78,7 @@ func (t *ShellExecuteTool) Execute(ctx context.Context, args json.RawMessage) (C
 		Args       []string `json:"args,omitempty"`
 		Timeout    int      `json:"timeout,omitempty"`
 		WorkingDir string   `json:"working_dir,omitempty"`
+		Hostnames  []string `json:"hostnames,omitempty"`
 	}
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
@@ -101,6 +111,12 @@ func (t *ShellExecuteTool) Execute(ctx context.Context, args json.RawMessage) (C
 		}, nil
 	}
 
+	// Determine target hostnames (default to localhost if not provided)
+	hostnames := req.Hostnames
+	if len(hostnames) == 0 {
+		hostnames = []string{"localhost"}
+	}
+
 	// Set timeout limits
 	timeout := 30 * time.Second
 	if req.Timeout > 0 {
@@ -110,46 +126,33 @@ func (t *ShellExecuteTool) Execute(ctx context.Context, args json.RawMessage) (C
 		timeout = time.Duration(req.Timeout) * time.Second
 	}
 
-	// Create command context with timeout
-	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	// Build command
-	cmd := exec.CommandContext(cmdCtx, req.Command)
-	if len(req.Args) > 0 {
-		cmd.Args = append([]string{req.Command}, req.Args...)
-	}
-	if req.WorkingDir != "" {
-		cmd.Dir = req.WorkingDir
-	}
-
-	// Execute command
-	output, err := cmd.CombinedOutput()
-	timedOut := ctx.Err() == context.DeadlineExceeded
-
-	exitCode := 0
-	if err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok {
-			exitCode = exitError.ExitCode()
+	// Execute on each host and collect results
+	var results []map[string]interface{}
+	for _, hostname := range hostnames {
+		result, err := executeOnHost(ctx, hostname, req.Command, req.Args, req.WorkingDir, timeout)
+		if err != nil {
+			result = map[string]interface{}{
+				"exit_code": -1,
+				"stdout":    "",
+				"stderr":    err.Error(),
+				"timed_out": false,
+				"error":     err.Error(),
+				"hostname":  hostname,
+			}
 		} else {
-			exitCode = -1
+			result["hostname"] = hostname
 		}
+		results = append(results, result)
 	}
 
-	result := map[string]interface{}{
-		"exit_code": exitCode,
-		"stdout":    string(output),
-		"stderr":    "",
-		"timed_out": timedOut,
+	// If only one host, return single result; otherwise return array
+	var resultJSON []byte
+	var err error
+	if len(results) == 1 {
+		resultJSON, err = json.Marshal(results[0])
+	} else {
+		resultJSON, err = json.Marshal(results)
 	}
-
-	if timedOut {
-		result["error"] = "command timed out"
-	} else if err != nil {
-		result["error"] = err.Error()
-	}
-
-	resultJSON, err := json.Marshal(result)
 	if err != nil {
 		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
 	}
@@ -276,4 +279,143 @@ func validateCommandSafety(command string, args []string) error {
 	}
 
 	return nil
+}
+
+// executeOnHost executes a command on a specific host (localhost or remote via SSH).
+func executeOnHost(ctx context.Context, hostname, command string, args []string, workingDir string, timeout time.Duration) (map[string]interface{}, error) {
+	// Local execution
+	if hostname == "localhost" || hostname == "127.0.0.1" {
+		return executeLocally(ctx, command, args, workingDir, timeout)
+	}
+
+	// Remote execution via SSH
+	return executeViaSSH(ctx, hostname, command, args, workingDir, timeout)
+}
+
+// executeLocally executes a command on the local machine.
+func executeLocally(ctx context.Context, command string, args []string, workingDir string, timeout time.Duration) (map[string]interface{}, error) {
+	// Create command context with timeout
+	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// Build command
+	cmd := exec.CommandContext(cmdCtx, command)
+	if len(args) > 0 {
+		cmd.Args = append([]string{command}, args...)
+	}
+	if workingDir != "" {
+		cmd.Dir = workingDir
+	}
+
+	// Execute command
+	output, err := cmd.CombinedOutput()
+	timedOut := ctx.Err() == context.DeadlineExceeded
+
+	exitCode := 0
+	if err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			exitCode = exitError.ExitCode()
+		} else {
+			exitCode = -1
+		}
+	}
+
+	result := map[string]interface{}{
+		"exit_code": exitCode,
+		"stdout":    string(output),
+		"stderr":    "",
+		"timed_out": timedOut,
+	}
+
+	if timedOut {
+		result["error"] = "command timed out"
+	} else if err != nil {
+		result["error"] = err.Error()
+	}
+
+	return result, nil
+}
+
+// executeViaSSH executes a command on a remote host via SSH.
+func executeViaSSH(ctx context.Context, hostname, command string, args []string, workingDir string, timeout time.Duration) (map[string]interface{}, error) {
+	// Resolve SSH connection parameters
+	r := ssh.ResolveHost(hostname, "", "", "", "")
+	if r.Hostname == "" {
+		return nil, fmt.Errorf("failed to resolve hostname: %s", hostname)
+	}
+
+	// Build auth methods
+	authMethods := ssh.BuildAuthMethods(r, "")
+	if len(authMethods) == 0 {
+		return nil, fmt.Errorf("no SSH auth methods available for %s", hostname)
+	}
+
+	// Build host key callback
+	hostKeyCallback, err := ssh.BuildHostKeyCallback()
+	if err != nil {
+		return nil, fmt.Errorf("host key verification failed: %w", err)
+	}
+
+	// Create SSH client config
+	clientConfig := &sshlib.ClientConfig{
+		User:            r.User,
+		Auth:            authMethods,
+		HostKeyCallback: hostKeyCallback,
+		Timeout:         timeout,
+	}
+
+	// Connect to SSH server
+	addr := net.JoinHostPort(r.Hostname, r.Port)
+	client, err := sshlib.Dial("tcp", addr, clientConfig)
+	if err != nil {
+		return nil, fmt.Errorf("SSH dial failed: %w", err)
+	}
+	defer client.Close()
+
+	// Create session
+	session, err := client.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("SSH session creation failed: %w", err)
+	}
+	defer session.Close()
+
+	// Build full command with args
+	fullCmd := command
+	if len(args) > 0 {
+		fullCmd = fmt.Sprintf("%s %s", command, strings.Join(args, " "))
+	}
+
+	// Add working directory if specified
+	if workingDir != "" {
+		fullCmd = fmt.Sprintf("cd %s && %s", workingDir, fullCmd)
+	}
+
+	// Execute command with timeout
+	output, err := session.CombinedOutput(fullCmd)
+	timedOut := ctx.Err() == context.DeadlineExceeded
+
+	exitCode := 0
+	if err != nil {
+		if exitError, ok := err.(*sshlib.ExitError); ok {
+			exitCode = exitError.ExitStatus()
+		} else {
+			exitCode = -1
+		}
+	}
+
+	result := map[string]interface{}{
+		"exit_code": exitCode,
+		"stdout":    string(output),
+		"stderr":    "",
+		"timed_out": timedOut,
+		"hostname":  hostname,
+	}
+
+	if timedOut {
+		result["error"] = "command timed out"
+	} else if err != nil {
+		result["error"] = err.Error()
+	}
+
+	return result, nil
 }
