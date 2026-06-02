@@ -205,3 +205,235 @@ func TestExpandTilde(t *testing.T) {
 		assert.Equal(t, "/absolute/path", got)
 	})
 }
+
+func TestResolveHost(t *testing.T) {
+	t.Run("simple hostname", func(t *testing.T) {
+		r := ResolveHost("myserver", "", "defaultuser", "", "")
+		assert.Equal(t, "myserver", r.Original)
+		assert.Equal(t, "myserver", r.Hostname)
+		assert.Equal(t, "defaultuser", r.User)
+		assert.Equal(t, "22", r.Port)
+	})
+
+	t.Run("user@host format", func(t *testing.T) {
+		r := ResolveHost("alice@myserver", "", "", "", "")
+		assert.Equal(t, "alice@myserver", r.Original)
+		assert.Equal(t, "myserver", r.Hostname)
+		assert.Equal(t, "alice", r.User)
+		assert.Equal(t, "22", r.Port)
+	})
+
+	t.Run("host:port format", func(t *testing.T) {
+		r := ResolveHost("myserver:2222", "", "defaultuser", "", "")
+		assert.Equal(t, "myserver:2222", r.Original)
+		assert.Equal(t, "myserver", r.Hostname)
+		assert.Equal(t, "2222", r.Port)
+		assert.Equal(t, "defaultuser", r.User)
+	})
+
+	t.Run("user@host:port format", func(t *testing.T) {
+		r := ResolveHost("alice@myserver:2222", "", "", "", "")
+		assert.Equal(t, "alice@myserver:2222", r.Original)
+		assert.Equal(t, "myserver", r.Hostname)
+		assert.Equal(t, "alice", r.User)
+		assert.Equal(t, "2222", r.Port)
+	})
+
+	t.Run("with SSH config file", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := filepath.Join(dir, "config")
+		content := `
+Host testhost
+    HostName 192.168.1.100
+    User deploy
+    Port 2200
+    IdentityFile ~/.ssh/test_key
+`
+		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
+
+		r := ResolveHost("testhost", cfg, "", "", "")
+		assert.Equal(t, "testhost", r.Original)
+		assert.Equal(t, "192.168.1.100", r.Hostname)
+		assert.Equal(t, "deploy", r.User)
+		assert.Equal(t, "2200", r.Port)
+		assert.Len(t, r.KeyFiles, 1)
+	})
+
+	t.Run("SSH config with wildcard match", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := filepath.Join(dir, "config")
+		content := `
+Host prod-*
+    User ubuntu
+    Port 2222
+`
+		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
+
+		r := ResolveHost("prod-web-01", cfg, "", "", "")
+		assert.Equal(t, "prod-web-01", r.Original)
+		assert.Equal(t, "prod-web-01", r.Hostname)
+		assert.Equal(t, "ubuntu", r.User)
+		assert.Equal(t, "2222", r.Port)
+	})
+
+	t.Run("SSH user flag overrides config", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := filepath.Join(dir, "config")
+		content := `
+Host testhost
+    User configuser
+`
+		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
+
+		r := ResolveHost("testhost", cfg, "", "", "flaguser")
+		assert.Equal(t, "flaguser", r.User)
+	})
+
+	t.Run("SSH identity file flag overrides config", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := filepath.Join(dir, "config")
+		content := `
+Host testhost
+    IdentityFile ~/.ssh/config_key
+`
+		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
+
+		r := ResolveHost("testhost", cfg, "", "/path/to/flag_key", "")
+		assert.Len(t, r.KeyFiles, 1)
+		assert.Equal(t, "/path/to/flag_key", r.KeyFiles[0])
+	})
+
+	t.Run("default username when none provided", func(t *testing.T) {
+		r := ResolveHost("myserver", "", "defaultuser", "", "")
+		assert.Equal(t, "defaultuser", r.User)
+	})
+
+	t.Run("default port when none provided", func(t *testing.T) {
+		r := ResolveHost("myserver", "", "", "", "")
+		assert.Equal(t, "22", r.Port)
+	})
+
+	t.Run("proxy command from config", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := filepath.Join(dir, "config")
+		content := `
+Host jump
+    ProxyCommand ssh -W %h:%p jump.example.com
+`
+		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
+
+		r := ResolveHost("jump", cfg, "", "", "")
+		assert.Equal(t, "ssh -W %h:%p jump.example.com", r.ProxyCommand)
+	})
+
+	t.Run("missing SSH config file", func(t *testing.T) {
+		r := ResolveHost("myserver", "/nonexistent/config", "defaultuser", "", "")
+		assert.Equal(t, "myserver", r.Hostname)
+		assert.Equal(t, "defaultuser", r.User)
+		assert.Equal(t, "22", r.Port)
+	})
+
+	t.Run("port 22 from config is ignored", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := filepath.Join(dir, "config")
+		content := `
+Host testhost
+    Port 22
+`
+		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
+
+		r := ResolveHost("testhost", cfg, "", "", "")
+		assert.Equal(t, "22", r.Port)
+	})
+
+	t.Run("config hostname overrides parsed hostname", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := filepath.Join(dir, "config")
+		content := `
+Host alias
+    HostName 192.168.1.50
+`
+		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
+
+		r := ResolveHost("alias", cfg, "", "", "")
+		assert.Equal(t, "192.168.1.50", r.Hostname)
+	})
+
+	t.Run("user@host with config hostname override", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := filepath.Join(dir, "config")
+		content := `
+Host alias
+    HostName 192.168.1.50
+`
+		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
+
+		r := ResolveHost("alice@alias", cfg, "", "", "")
+		assert.Equal(t, "192.168.1.50", r.Hostname)
+		assert.Equal(t, "alice", r.User)
+	})
+}
+
+func TestBuildAuthMethods(t *testing.T) {
+	t.Run("empty host config", func(t *testing.T) {
+		r := HostConfig{}
+		methods := BuildAuthMethods(r, "", "")
+		assert.Empty(t, methods)
+	})
+
+	t.Run("non-existent key file", func(t *testing.T) {
+		r := HostConfig{KeyFiles: []string{"/nonexistent/key"}}
+		methods := BuildAuthMethods(r, "", "")
+		assert.Empty(t, methods)
+	})
+
+	t.Run("invalid key file content", func(t *testing.T) {
+		dir := t.TempDir()
+		keyPath := filepath.Join(dir, "invalid_key")
+		require.NoError(t, os.WriteFile(keyPath, []byte("not a valid key"), 0600))
+
+		r := HostConfig{KeyFiles: []string{keyPath}}
+		methods := BuildAuthMethods(r, "", "")
+		assert.Empty(t, methods)
+	})
+
+	t.Run("invalid SSH agent socket", func(t *testing.T) {
+		r := HostConfig{}
+		methods := BuildAuthMethods(r, "/nonexistent/agent.sock", "")
+		assert.Empty(t, methods)
+	})
+
+	t.Run("empty key file", func(t *testing.T) {
+		dir := t.TempDir()
+		keyPath := filepath.Join(dir, "empty_key")
+		require.NoError(t, os.WriteFile(keyPath, []byte(""), 0600))
+
+		r := HostConfig{KeyFiles: []string{keyPath}}
+		methods := BuildAuthMethods(r, "", "")
+		assert.Empty(t, methods)
+	})
+}
+
+func TestBuildHostKeyCallback(t *testing.T) {
+	t.Run("known_hosts file does not exist", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("HOME", dir)
+
+		_, err := BuildHostKeyCallback()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "known_hosts not found")
+	})
+
+	t.Run("malformed known_hosts file", func(t *testing.T) {
+		dir := t.TempDir()
+		sshDir := filepath.Join(dir, ".ssh")
+		require.NoError(t, os.Mkdir(sshDir, 0700))
+		khPath := filepath.Join(sshDir, "known_hosts")
+		require.NoError(t, os.WriteFile(khPath, []byte("invalid known_hosts content"), 0600))
+
+		t.Setenv("HOME", dir)
+
+		_, err := BuildHostKeyCallback()
+		assert.Error(t, err)
+	})
+}
