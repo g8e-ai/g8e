@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -94,6 +95,9 @@ type HTTPHandler struct {
 	adminController    *AdminController
 	operatorController *OperatorController
 
+	// Main router cached at construction to avoid rebuilding on every request
+	router http.Handler
+
 	// Rate limiting state
 	muLimiters sync.Mutex
 	limiters   map[string]*rate.Limiter
@@ -125,6 +129,9 @@ func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
 	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.SessionSvc, deps.MCPGateway, deps.Responder)
 	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.DB, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
+
+	// Build router once to avoid per-request overhead
+	h.router = h.buildRouter()
 
 	return h
 }
@@ -162,8 +169,12 @@ func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
 func (h *HTTPHandler) buildRouter() http.Handler {
 	mux := http.NewServeMux()
 
+	// Health endpoint (available on mTLS surface for state root queries)
+	mux.HandleFunc(constants.APIPaths.Health, h.handleHealth)
+
 	// MCP Ingress routes with rate limiting
 	mcpMux := http.NewServeMux()
+	mcpMux.HandleFunc(constants.APIPaths.MCPEndpoint, h.mcp.HandleMCP)
 	mcpMux.HandleFunc(constants.APIPaths.MCPToolsList, h.mcp.HandleToolsList)
 	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCall, h.mcp.HandleToolsCall)
 	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCallSSE, h.mcp.HandleToolsCallSSE)
@@ -207,6 +218,7 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 
 	// Register rate-limited MCP routes with full paths
 	mux.Handle(constants.APIPaths.GovernanceEnvelopes, govEnvHandler)
+	mux.Handle(constants.APIPaths.MCPEndpoint, mcpHandler)
 	mux.Handle(constants.APIPaths.MCPToolsList, mcpHandler)
 	mux.Handle(constants.APIPaths.MCPToolsCall, mcpHandler)
 	mux.Handle(constants.APIPaths.MCPToolsCallSSE, mcpHandler)
@@ -273,6 +285,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 
 	// MCP/A2A Ingress routes with JWT authentication for remote clients
 	mcpMux := http.NewServeMux()
+	mcpMux.HandleFunc(constants.APIPaths.MCPEndpoint, h.mcp.HandleMCP)
 	mcpMux.HandleFunc(constants.APIPaths.MCPToolsList, h.mcp.HandleToolsList)
 	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCall, h.mcp.HandleToolsCall)
 	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCallSSE, h.mcp.HandleToolsCallSSE)
@@ -290,6 +303,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	var mcpHandler http.Handler
 	if h.auth != nil && h.auth.HasJWKS() {
 		mcpHandler = h.auth.JWTAuthMiddleware(mcpRateLimited)
+		mux.Handle(constants.APIPaths.MCPEndpoint, mcpHandler)
 		mux.Handle(constants.APIPaths.MCPToolsList, mcpHandler)
 		mux.Handle(constants.APIPaths.MCPToolsCall, mcpHandler)
 		mux.Handle(constants.APIPaths.MCPToolsCallSSE, mcpHandler)
@@ -348,6 +362,11 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 func (h *HTTPHandler) buildMCPHttpRouter() http.Handler {
 	mux := http.NewServeMux()
 
+	// Unified MCP Streamable HTTP endpoint for standard MCP clients (e.g.
+	// Claude Code custom connectors). This is the canonical single-URL
+	// JSON-RPC surface; the per-method routes below remain for compatibility.
+	mux.HandleFunc(constants.APIPaths.MCPEndpoint, h.mcp.HandleMCP)
+
 	// MCP-only routes on plain HTTP for HTTP MCP calls
 	mux.HandleFunc(constants.APIPaths.MCPToolsList, h.mcp.HandleToolsList)
 	mux.HandleFunc(constants.APIPaths.MCPToolsCall, h.mcp.HandleToolsCall)
@@ -358,12 +377,47 @@ func (h *HTTPHandler) buildMCPHttpRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.MCPPromptsGet, h.mcp.HandlePromptsGet)
 	mux.HandleFunc(constants.APIPaths.A2ACall, h.mcp.HandleA2aCall)
 
-	// Wrap with rate limiting
-	return h.pathTraversalGuard(h.rateLimitMiddleware(mux))
+	// Wrap with Origin validation (DNS-rebinding protection per the MCP
+	// Streamable HTTP transport spec) and rate limiting.
+	return h.pathTraversalGuard(h.mcpOriginGuard(h.rateLimitMiddleware(mux)))
+}
+
+// mcpOriginGuard rejects browser-originated requests whose Origin header does
+// not resolve to a loopback host. Non-browser clients (such as the Claude Code
+// CLI) do not send an Origin header and are allowed through. This implements
+// the MCP Streamable HTTP requirement to validate Origin to prevent DNS
+// rebinding attacks against the local server.
+func (h *HTTPHandler) mcpOriginGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" && !isLoopbackOrigin(origin) {
+			h.logger.Warn("MCP request rejected: non-local Origin", "origin", origin, "path", r.URL.Path)
+			h.responder.Error(w, http.StatusForbidden, "origin not allowed")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// isLoopbackOrigin reports whether an Origin header value refers to a loopback
+// host (localhost, 127.0.0.0/8, or ::1).
+func isLoopbackOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	if host == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
 }
 
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.buildRouter().ServeHTTP(w, r)
+	h.router.ServeHTTP(w, r)
 }
 
 // pathTraversalGuard rejects any request whose raw URL path contains a ".."
@@ -523,6 +577,13 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	root, err := h.db.GetCurrentStateRoot()
 	if err != nil {
 		h.logger.Error("Health check failed to get state root", string(constants.ConnectionStateError), err)
+		h.responder.Error(w, http.StatusServiceUnavailable, "state root calculation failed")
+		return
+	}
+	if root == "" {
+		h.logger.Warn("Health check: state root is empty")
+		h.responder.Error(w, http.StatusServiceUnavailable, "state root calculation failed")
+		return
 	}
 
 	h.responder.JSON(w, http.StatusOK, models.HealthResponse{

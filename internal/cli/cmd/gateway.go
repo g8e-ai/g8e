@@ -14,14 +14,12 @@
 package cmd
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -108,29 +106,9 @@ func gatewayStartCmd() *cobra.Command {
 				cmd.Println()
 			}
 
-			// Prompt for network identity mode if not specified
+			// Default to full identity mode if not specified via flag
 			if certIdentityMode == "" {
-				cmd.Println("  The gateway certificate can include:")
-				cmd.Println("    - All detected hostnames and IPs (recommended)")
-				cmd.Println("    - Only localhost (minimal)")
-				cmd.Println()
-				cmd.Print("Include all detected hostnames and IPs in certificate? [Y/n]: ")
-
-				reader := bufio.NewReader(os.Stdin)
-				response, err := reader.ReadString('\n')
-				if err != nil {
-					cmd.Println("Error reading input, using full identity")
-					certIdentityMode = "full"
-				} else {
-					response = strings.TrimSpace(strings.ToLower(response))
-					if response == "n" {
-						certIdentityMode = "localhost"
-						cmd.Println("Using localhost only for certificate")
-					} else {
-						certIdentityMode = "full"
-						cmd.Println("Using all detected hostnames and IPs")
-					}
-				}
+				certIdentityMode = "full"
 			}
 
 			// Serialize network identity to pass to subprocess
@@ -549,10 +527,21 @@ func gatewayMCPConfigCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			externalIP := config.GetExternalInterfaceIP()
-			gatewayURL := fmt.Sprintf("https://%s:%d/api/v1/mcp", externalIP, cfg.OperatorPublicHTTPSPort())
+			// Use the canonical g8e.local internal hostname with unified /mcp endpoint
+			gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", cfg.OperatorPublicHTTPSPort())
 
-			mcpConfig := mcp.NewGatewayConfig(gatewayURL)
+			// Get actual resolved cert paths (absolute paths)
+			actualCertPath := cfg.CLICertFile()
+			actualKeyPath := cfg.CLIKeyFile()
+			actualCAPath := cfg.TrustBundlePath()
+
+			// Normalize to forward slashes for JSON (cross-platform compatibility)
+			actualCertPath = filepath.ToSlash(actualCertPath)
+			actualKeyPath = filepath.ToSlash(actualKeyPath)
+			actualCAPath = filepath.ToSlash(actualCAPath)
+
+			mcpConfig := mcp.NewGatewayConfig(gatewayURL, actualCertPath, actualKeyPath, actualCAPath)
+
 			configJSON, err := json.MarshalIndent(mcpConfig, "", "  ")
 			if err != nil {
 				return fmt.Errorf("failed to marshal MCP config: %w", err)
@@ -571,26 +560,16 @@ func gatewayMCPHttpConfigCmd() *cobra.Command {
 		Use:   "mcp-config-http",
 		Short: "Print MCP client configuration for the Gateway plain HTTP endpoint",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			externalIP := config.GetExternalInterfaceIP()
-			gatewayHTTPURL := fmt.Sprintf("http://%s:%d/api/v1/mcp", externalIP, cfg.OperatorMcpHttpPort())
-
-			cmd.Printf(`{
+			staticConfig := `{
   "mcpServers": {
     "g8e-gateway": {
-      "serverUrl": "%s",
-      "headers": {
-        "Content-Type": "application/json"
-      }
+      "disabled": true,
+      "serverUrl": "http://127.0.0.1:8442/mcp",
+      "note": "Must use explicit 127.0.0.1 for HTTP (localhost may resolve to IPv6 ::1)"
     }
   }
-}
-`, gatewayHTTPURL)
-
+}`
+			cmd.Println(staticConfig)
 			return nil
 		},
 	}

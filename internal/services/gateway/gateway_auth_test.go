@@ -412,6 +412,43 @@ func TestAuthService_Middleware_PublicBypass(t *testing.T) {
 	assert.Equal(t, "success", rr.Body.String())
 }
 
+func TestAuthService_Middleware_HealthBypassConsolidated(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	res := responder.New(logger)
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("success"))
+	})
+
+	middleware := auth.Middleware(handler)
+
+	// Test that health endpoint bypasses all middleware layers via PublicRouteRegistry
+	// This verifies the consolidation: health is in PublicRouteRegistry, and all middleware
+	// use IsPublic() as the single source of truth
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code, "Health endpoint should bypass all middleware")
+	assert.Equal(t, "success", rr.Body.String())
+
+	// Verify that health is registered as public in the registry
+	assert.True(t, auth.publicRoutes.IsPublic(constants.APIPaths.Health), "Health must be in PublicRouteRegistry")
+
+	// Verify that non-public routes still require auth
+	reqPrivate := httptest.NewRequest(http.MethodGet, "/api/v1/operators", nil)
+	rrPrivate := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rrPrivate, reqPrivate)
+	assert.NotEqual(t, http.StatusOK, rrPrivate.Code, "Non-public routes should not bypass auth")
+}
+
 func TestAuthService_Middleware_MTLSRequired(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)

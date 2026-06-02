@@ -145,10 +145,7 @@ func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			proc := &fakeEnvelopeProcessor{err: tc.GatewayErr}
-			g := &GatewayService{
-				envProc:         proc,
-				maxPayloadBytes: 10 * 1024 * 1024, // 10MB
-			}
+			g := newTestGatewayService(withEnvProc(proc))
 
 			// Valid MCP tools/call request
 			reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`
@@ -169,17 +166,11 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 	t.Parallel()
 	proc := &fakeEnvelopeProcessor{err: governance.ErrL3ProofMissing}
 	store := &fakeSuspendedStore{}
-	pubKey, privKey, _ := ed25519.GenerateKey(rand.Reader)
-	_ = pubKey
 
-	g := &GatewayService{
-		envProc:         proc,
-		suspendedStore:  store,
-		signingKey:      privKey,
-		keyID:           "test-key",
-		publicBaseURL:   fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
-		maxPayloadBytes: 10 * 1024 * 1024, // 10MB
-	}
+	g := newTestGatewayService(
+		withEnvProc(proc),
+		withSuspendedStore(store),
+	)
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{"foo":"bar"}}}`
 	req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call", strings.NewReader(reqBody))
@@ -213,11 +204,10 @@ func TestGatewayService_ResumeWithL3Proof(t *testing.T) {
 	txHash := "hash-1"
 	envelope := `{"id":"tx-1","transaction_hash":"hash-1","action_type":"MCP_CALL","payload":"e30="}`
 
-	g := &GatewayService{
-		envProc:         proc,
-		suspendedStore:  store,
-		maxPayloadBytes: 10 * 1024 * 1024, // 10MB
-	}
+	g := newTestGatewayService(
+		withEnvProc(proc),
+		withSuspendedStore(store),
+	)
 
 	g.StoreSuspendedTransaction(txHash, []byte(envelope), "test-tool", json.RawMessage(`{}`), "user-1", "op-1", "")
 
@@ -245,16 +235,8 @@ func TestGatewayService_HandleResourcesRead(t *testing.T) {
 		ResultSummary: "resource content",
 	}
 	proc := &fakeEnvelopeProcessor{receipt: receipt}
-	pubKey, privKey, _ := ed25519.GenerateKey(rand.Reader)
-	_ = pubKey
 
-	g := &GatewayService{
-		envProc:           proc,
-		signingKey:        privKey,
-		keyID:             "test-key",
-		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
-	}
+	g := newTestGatewayService(withEnvProc(proc))
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"file:///test.txt"}}`
 	req := httptest.NewRequest(http.MethodPost, "/mcp/resources/read", strings.NewReader(reqBody))
@@ -276,16 +258,8 @@ func TestGatewayService_HandlePromptsGet(t *testing.T) {
 		ResultSummary: "prompt template",
 	}
 	proc := &fakeEnvelopeProcessor{receipt: receipt}
-	pubKey, privKey, _ := ed25519.GenerateKey(rand.Reader)
-	_ = pubKey
 
-	g := &GatewayService{
-		envProc:           proc,
-		signingKey:        privKey,
-		keyID:             "test-key",
-		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
-	}
+	g := newTestGatewayService(withEnvProc(proc))
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"test-prompt"}}`
 	req := httptest.NewRequest(http.MethodPost, "/mcp/prompts/get", strings.NewReader(reqBody))
@@ -310,16 +284,8 @@ func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
 			ResultSummary: "streamed result",
 		}
 		proc := &fakeEnvelopeProcessor{receipt: receipt}
-		pubKey, privKey, _ := ed25519.GenerateKey(rand.Reader)
-		_ = pubKey
 
-		g := &GatewayService{
-			envProc:           proc,
-			signingKey:        privKey,
-			keyID:             "test-key",
-			stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-			maxPayloadBytes:   10 * 1024 * 1024, // 10MB
-		}
+		g := newTestGatewayService(withEnvProc(proc))
 
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`
 		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call/sse", strings.NewReader(reqBody))
@@ -338,14 +304,10 @@ func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
 
 	t.Run("circuit breaker open", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			downstreamURL:    "http://localhost:9999",
-			logger:           slog.Default(),
-			responder:        responder.New(slog.Default()),
-			maxFailures:      3,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(
+			withDownstreamURL("http://localhost:9999"),
+			withCircuitBreaker(3, 1*time.Minute),
+		)
 
 		// Open the circuit
 		for i := 0; i < 3; i++ {
@@ -366,10 +328,7 @@ func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
 
 	t.Run("invalid JSON-RPC", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			responder:       responder.New(slog.Default()),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService()
 
 		reqBody := `invalid json`
 		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call/sse", strings.NewReader(reqBody))
@@ -385,10 +344,7 @@ func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
 
 	t.Run("payload too large", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			responder:       responder.New(slog.Default()),
-			maxPayloadBytes: 100, // Very small limit
-		}
+		g := newTestGatewayService(withMaxPayloadBytes(100))
 
 		largePayload := strings.Repeat("a", 1000)
 		reqBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{"data":"%s"}}}`, largePayload)
@@ -405,10 +361,7 @@ func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
 
 	t.Run("missing tool name", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			responder:       responder.New(slog.Default()),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService()
 
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"arguments":{}}}`
 		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call/sse", strings.NewReader(reqBody))
@@ -425,16 +378,8 @@ func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
 	t.Run("governance error - L1 validation failed", func(t *testing.T) {
 		t.Parallel()
 		proc := &fakeEnvelopeProcessor{err: governance.ErrL1ValidationFailed}
-		pubKey, privKey, _ := ed25519.GenerateKey(rand.Reader)
-		_ = pubKey
 
-		g := &GatewayService{
-			envProc:           proc,
-			signingKey:        privKey,
-			keyID:             "test-key",
-			stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-			maxPayloadBytes:   10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withEnvProc(proc))
 
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`
 		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call/sse", strings.NewReader(reqBody))
@@ -453,15 +398,7 @@ func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
 func TestGatewayService_EnvelopeGatewaySigned(t *testing.T) {
 	t.Parallel()
 	// Test that MCP gateway sets GatewaySigned=true in envelope
-	pubKey, privKey, _ := ed25519.GenerateKey(rand.Reader)
-	_ = pubKey
-
-	g := &GatewayService{
-		signingKey:        privKey,
-		keyID:             "test-key",
-		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
-	}
+	g := newTestGatewayService()
 
 	opts := processGatewayOptions{
 		actionType:     constants.ActionTypeMcpCall,
@@ -489,23 +426,13 @@ func TestGatewayService_CircuitBreaker(t *testing.T) {
 
 	t.Run("initially closed", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withCircuitBreaker(5, 1*time.Minute))
 		require.False(t, g.isCircuitOpen())
 	})
 
 	t.Run("opens after max failures", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			logger:           slog.Default(),
-			maxFailures:      3,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withCircuitBreaker(3, 1*time.Minute))
 
 		for i := 0; i < 3; i++ {
 			g.recordFailure()
@@ -515,12 +442,7 @@ func TestGatewayService_CircuitBreaker(t *testing.T) {
 
 	t.Run("closes after success", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			logger:           slog.Default(),
-			maxFailures:      3,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withCircuitBreaker(3, 1*time.Minute))
 
 		// Open the circuit
 		for i := 0; i < 3; i++ {
@@ -536,12 +458,7 @@ func TestGatewayService_CircuitBreaker(t *testing.T) {
 
 	t.Run("half-open after cooldown", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			logger:           slog.Default(),
-			maxFailures:      3,
-			cooldownDuration: 100 * time.Millisecond,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withCircuitBreaker(3, 100*time.Millisecond))
 
 		// Open the circuit
 		for i := 0; i < 3; i++ {
@@ -560,10 +477,7 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 
 	t.Run("native tools when no downstream", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			responder:       responder.New(slog.Default()),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService()
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader("{}"))
 		w := httptest.NewRecorder()
@@ -592,14 +506,7 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			downstreamURL:    downstream.URL,
-			responder:        responder.New(slog.Default()),
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL(downstream.URL))
 
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
 		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(reqBody))
@@ -624,14 +531,7 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			downstreamURL:    downstream.URL,
-			responder:        responder.New(slog.Default()),
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL(downstream.URL))
 
 		req := httptest.NewRequest(http.MethodGet, "/mcp/tools/list", nil)
 		w := httptest.NewRecorder()
@@ -648,14 +548,10 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 
 	t.Run("circuit breaker open", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			downstreamURL:    "http://localhost:9999",
-			responder:        responder.New(slog.Default()),
-			logger:           slog.Default(),
-			maxFailures:      3,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(
+			withDownstreamURL("http://localhost:9999"),
+			withCircuitBreaker(3, 1*time.Minute),
+		)
 
 		// Open the circuit
 		for i := 0; i < 5; i++ {
@@ -683,14 +579,7 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			downstreamURL:    downstream.URL,
-			responder:        responder.New(slog.Default()),
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL(downstream.URL))
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
 		w := httptest.NewRecorder()
@@ -702,14 +591,7 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 
 	t.Run("downstream connection error", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			downstreamURL:    "http://localhost:9999",
-			responder:        responder.New(slog.Default()),
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL("http://localhost:9999"))
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
 		w := httptest.NewRecorder()
@@ -736,14 +618,7 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			downstreamURL:    downstream.URL,
-			responder:        responder.New(slog.Default()),
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL(downstream.URL))
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(""))
 		w := httptest.NewRecorder()
@@ -755,9 +630,7 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 
 	t.Run("method not allowed", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService()
 
 		req := httptest.NewRequest(http.MethodDelete, "/mcp/tools/list", nil)
 		w := httptest.NewRecorder()
@@ -773,10 +646,7 @@ func TestGatewayService_HandleResourcesList(t *testing.T) {
 
 	t.Run("empty list when no downstream", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			responder:       responder.New(slog.Default()),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService()
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/resources/list", strings.NewReader("{}"))
 		w := httptest.NewRecorder()
@@ -800,14 +670,7 @@ func TestGatewayService_HandleResourcesList(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			downstreamURL:    downstream.URL,
-			responder:        responder.New(slog.Default()),
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL(downstream.URL))
 
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"resources/list"}`
 		req := httptest.NewRequest(http.MethodPost, "/mcp/resources/list", strings.NewReader(reqBody))
@@ -832,14 +695,7 @@ func TestGatewayService_HandleResourcesList(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			downstreamURL:    downstream.URL,
-			responder:        responder.New(slog.Default()),
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL(downstream.URL))
 
 		req := httptest.NewRequest(http.MethodGet, "/mcp/resources/list", nil)
 		w := httptest.NewRecorder()
@@ -856,14 +712,10 @@ func TestGatewayService_HandleResourcesList(t *testing.T) {
 
 	t.Run("circuit breaker open", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			downstreamURL:    "http://localhost:9999",
-			responder:        responder.New(slog.Default()),
-			logger:           slog.Default(),
-			maxFailures:      3,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(
+			withDownstreamURL("http://localhost:9999"),
+			withCircuitBreaker(3, 1*time.Minute),
+		)
 
 		// Open the circuit
 		for i := 0; i < 5; i++ {
@@ -891,14 +743,7 @@ func TestGatewayService_HandleResourcesList(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			downstreamURL:    downstream.URL,
-			responder:        responder.New(slog.Default()),
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL(downstream.URL))
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/resources/list", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"resources/list"}`))
 		w := httptest.NewRecorder()
@@ -910,14 +755,7 @@ func TestGatewayService_HandleResourcesList(t *testing.T) {
 
 	t.Run("downstream connection error", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			downstreamURL:    "http://localhost:9999",
-			responder:        responder.New(slog.Default()),
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL("http://localhost:9999"))
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/resources/list", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"resources/list"}`))
 		w := httptest.NewRecorder()
@@ -935,12 +773,7 @@ func TestGatewayService_HandleResourcesList(t *testing.T) {
 
 	t.Run("method not allowed", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			downstreamURL:   "http://localhost:9999",
-			responder:       responder.New(slog.Default()),
-			logger:          slog.Default(),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL("http://localhost:9999"))
 
 		req := httptest.NewRequest(http.MethodPut, "/mcp/resources/list", strings.NewReader(`{}`))
 		w := httptest.NewRecorder()
@@ -961,14 +794,7 @@ func TestGatewayService_HandleResourcesList(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			downstreamURL:    downstream.URL,
-			responder:        responder.New(slog.Default()),
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL(downstream.URL))
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/resources/list", strings.NewReader(""))
 		w := httptest.NewRecorder()
@@ -984,10 +810,7 @@ func TestGatewayService_HandlePromptsList(t *testing.T) {
 
 	t.Run("empty list when no downstream", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			responder:       responder.New(slog.Default()),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService()
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/prompts/list", strings.NewReader("{}"))
 		w := httptest.NewRecorder()
@@ -1012,13 +835,7 @@ func TestGatewayService_HandlePromptsList(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			downstreamURL:    downstream.URL,
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL(downstream.URL))
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/prompts/list", strings.NewReader("{}"))
 		w := httptest.NewRecorder()
@@ -1035,14 +852,10 @@ func TestGatewayService_HandlePromptsList(t *testing.T) {
 
 	t.Run("circuit breaker open", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			downstreamURL:    "http://localhost:9999",
-			logger:           slog.Default(),
-			responder:        responder.New(slog.Default()),
-			maxFailures:      3,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(
+			withDownstreamURL("http://localhost:9999"),
+			withCircuitBreaker(3, 1*time.Minute),
+		)
 
 		// Open the circuit
 		for i := 0; i < 3; i++ {
@@ -1070,14 +883,7 @@ func TestGatewayService_HandlePromptsList(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			downstreamURL:    downstream.URL,
-			logger:           slog.Default(),
-			responder:        responder.New(slog.Default()),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL(downstream.URL))
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/prompts/list", strings.NewReader("{}"))
 		w := httptest.NewRecorder()
@@ -1089,9 +895,7 @@ func TestGatewayService_HandlePromptsList(t *testing.T) {
 
 	t.Run("method not allowed", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService()
 
 		req := httptest.NewRequest(http.MethodDelete, "/mcp/prompts/list", nil)
 		w := httptest.NewRecorder()
@@ -1104,9 +908,7 @@ func TestGatewayService_HandlePromptsList(t *testing.T) {
 
 func TestGatewayService_IsNativeTool(t *testing.T) {
 	t.Parallel()
-	g := &GatewayService{
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newTestGatewayService()
 
 	t.Run("native tool recognized", func(t *testing.T) {
 		t.Parallel()
@@ -1124,9 +926,7 @@ func TestGatewayService_IsNativeTool(t *testing.T) {
 
 func TestGatewayService_ScanForForbiddenPatterns(t *testing.T) {
 	t.Parallel()
-	g := &GatewayService{
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newTestGatewayService()
 
 	t.Run("detects sudo", func(t *testing.T) {
 		t.Parallel()
@@ -1164,9 +964,7 @@ func TestGatewayService_ScanForForbiddenPatterns(t *testing.T) {
 
 func TestGatewayService_MapGatewayError(t *testing.T) {
 	t.Parallel()
-	g := &GatewayService{
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newTestGatewayService()
 
 	t.Run("maps governance errors", func(t *testing.T) {
 		t.Parallel()
@@ -1206,11 +1004,7 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 	t.Run("stores transaction", func(t *testing.T) {
 		t.Parallel()
 		store := &fakeSuspendedStore{}
-		g := &GatewayService{
-			suspendedStore:  store,
-			publicBaseURL:   fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withSuspendedStore(store))
 
 		g.StoreSuspendedTransaction("hash-123", []byte(`{"id":"123"}`), "test-tool", json.RawMessage(`{"arg":"val"}`), "user-1", "op-1", "cert-fp-abc123")
 
@@ -1225,11 +1019,7 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 
 	t.Run("nil store does not panic", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			suspendedStore:  nil,
-			publicBaseURL:   fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withSuspendedStore(nil))
 
 		// Should not panic
 		g.StoreSuspendedTransaction("test-hash", []byte(`{}`), "test-tool", json.RawMessage(`{}`), "user-1", "op-1", "")
@@ -1242,11 +1032,7 @@ func TestGatewayService_GetSuspendedTransaction(t *testing.T) {
 	t.Run("successful retrieval", func(t *testing.T) {
 		t.Parallel()
 		store := &fakeSuspendedStore{}
-
-		g := &GatewayService{
-			suspendedStore:  store,
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withSuspendedStore(store))
 
 		g.StoreSuspendedTransaction("test-hash", []byte(`{"test":"envelope"}`), "test-tool", json.RawMessage(`{"arg":"val"}`), "user-1", "op-1", "")
 
@@ -1259,10 +1045,7 @@ func TestGatewayService_GetSuspendedTransaction(t *testing.T) {
 	t.Run("transaction not found", func(t *testing.T) {
 		t.Parallel()
 		store := &fakeSuspendedStore{}
-		g := &GatewayService{
-			suspendedStore:  store,
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withSuspendedStore(store))
 
 		retrieved, ok := g.GetSuspendedTransaction("nonexistent")
 		require.False(t, ok)
@@ -1271,10 +1054,7 @@ func TestGatewayService_GetSuspendedTransaction(t *testing.T) {
 
 	t.Run("nil store returns false", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			suspendedStore:  nil,
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withSuspendedStore(nil))
 
 		retrieved, ok := g.GetSuspendedTransaction("test-hash")
 		require.False(t, ok)
@@ -1288,12 +1068,7 @@ func TestGatewayService_DeleteSuspendedTransaction(t *testing.T) {
 	t.Run("successful deletion", func(t *testing.T) {
 		t.Parallel()
 		store := &fakeSuspendedStore{}
-
-		g := &GatewayService{
-			suspendedStore:  store,
-			logger:          slog.Default(),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withSuspendedStore(store))
 
 		g.StoreSuspendedTransaction("test-hash", []byte(`{}`), "test-tool", json.RawMessage(`{}`), "user-1", "op-1", "")
 
@@ -1306,11 +1081,7 @@ func TestGatewayService_DeleteSuspendedTransaction(t *testing.T) {
 	t.Run("delete nonexistent transaction", func(t *testing.T) {
 		t.Parallel()
 		store := &fakeSuspendedStore{}
-		g := &GatewayService{
-			suspendedStore:  store,
-			logger:          slog.Default(),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withSuspendedStore(store))
 
 		// Should not panic
 		g.DeleteSuspendedTransaction("nonexistent")
@@ -1318,11 +1089,7 @@ func TestGatewayService_DeleteSuspendedTransaction(t *testing.T) {
 
 	t.Run("nil store does not panic", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			suspendedStore:  nil,
-			logger:          slog.Default(),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withSuspendedStore(nil))
 
 		// Should not panic
 		g.DeleteSuspendedTransaction("test-hash")
@@ -1386,11 +1153,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 
 	t.Run("field path registry not initialized", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			fieldPathRegistry: nil,
-			logger:            slog.Default(),
-			maxPayloadBytes:   10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withFieldPathRegistry(nil))
 
 		_, err := g.handleReadField(context.Background(), json.RawMessage(`{}`))
 		require.Error(t, err)
@@ -1400,12 +1163,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 	t.Run("database service not configured", func(t *testing.T) {
 		t.Parallel()
 		registry, _ := NewFieldPathRegistry(slog.Default())
-		g := &GatewayService{
-			fieldPathRegistry: registry,
-			dbService:         nil,
-			logger:            slog.Default(),
-			maxPayloadBytes:   10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withFieldPathRegistry(registry), withDBService(nil))
 
 		_, err := g.handleReadField(context.Background(), json.RawMessage(`{}`))
 		require.Error(t, err)
@@ -1415,12 +1173,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 	t.Run("invalid JSON arguments", func(t *testing.T) {
 		t.Parallel()
 		registry, _ := NewFieldPathRegistry(slog.Default())
-		g := &GatewayService{
-			fieldPathRegistry: registry,
-			dbService:         &fakeDBService{},
-			logger:            slog.Default(),
-			maxPayloadBytes:   10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withFieldPathRegistry(registry), withDBService(&fakeDBService{}))
 
 		_, err := g.handleReadField(context.Background(), json.RawMessage(`invalid json`))
 		require.Error(t, err)
@@ -1430,12 +1183,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 	t.Run("missing required fields", func(t *testing.T) {
 		t.Parallel()
 		registry, _ := NewFieldPathRegistry(slog.Default())
-		g := &GatewayService{
-			fieldPathRegistry: registry,
-			dbService:         &fakeDBService{},
-			logger:            slog.Default(),
-			maxPayloadBytes:   10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withFieldPathRegistry(registry), withDBService(&fakeDBService{}))
 
 		testCases := []struct {
 			name  string
@@ -1461,12 +1209,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 	t.Run("field path validation failed", func(t *testing.T) {
 		t.Parallel()
 		registry, _ := NewFieldPathRegistry(slog.Default())
-		g := &GatewayService{
-			fieldPathRegistry: registry,
-			dbService:         &fakeDBService{},
-			logger:            slog.Default(),
-			maxPayloadBytes:   10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withFieldPathRegistry(registry), withDBService(&fakeDBService{}))
 
 		args := `{"collection":"investigations","document_id":"doc1","field_path":"credentials.api_key","operator_session_id":"sess1"}`
 		_, err := g.handleReadField(context.Background(), json.RawMessage(args))
@@ -1478,13 +1221,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 		t.Parallel()
 		registry, _ := NewFieldPathRegistry(slog.Default())
 		validator := &fakeSessionValidator{valid: false}
-		g := &GatewayService{
-			fieldPathRegistry: registry,
-			dbService:         &fakeDBService{},
-			sessionValidator:  validator,
-			logger:            slog.Default(),
-			maxPayloadBytes:   10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withFieldPathRegistry(registry), withDBService(&fakeDBService{}), withSessionValidator(validator))
 
 		args := `{"collection":"investigations","document_id":"doc1","field_path":"status","operator_session_id":"sess1"}`
 		_, err := g.handleReadField(context.Background(), json.RawMessage(args))
@@ -1498,14 +1235,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 		db := &fakeDBService{}
 		validator := &fakeSessionValidator{valid: true}
 		audit := &fakeAuditLogger{}
-		g := &GatewayService{
-			fieldPathRegistry: registry,
-			dbService:         db,
-			sessionValidator:  validator,
-			auditLogger:       audit,
-			logger:            slog.Default(),
-			maxPayloadBytes:   10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withFieldPathRegistry(registry), withDBService(db), withSessionValidator(validator), withAuditLogger(audit))
 
 		args := `{"collection":"investigations","document_id":"doc1","field_path":"status","operator_session_id":"sess1"}`
 		result, err := g.handleReadField(context.Background(), json.RawMessage(args))
@@ -1524,13 +1254,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 		registry, _ := NewFieldPathRegistry(slog.Default())
 		db := &fakeDBService{value: "password=secret123"}
 		validator := &fakeSessionValidator{valid: true}
-		g := &GatewayService{
-			fieldPathRegistry: registry,
-			dbService:         db,
-			sessionValidator:  validator,
-			logger:            slog.Default(),
-			maxPayloadBytes:   10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withFieldPathRegistry(registry), withDBService(db), withSessionValidator(validator))
 
 		args := `{"collection":"investigations","document_id":"doc1","field_path":"status","operator_session_id":"sess1"}`
 		_, err := g.handleReadField(context.Background(), json.RawMessage(args))
@@ -1544,10 +1268,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("method not allowed", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			responder:       responder.New(slog.Default()),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService()
 
 		req := httptest.NewRequest(http.MethodGet, "/mcp/test", nil)
 		w := httptest.NewRecorder()
@@ -1561,13 +1282,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("circuit breaker open", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			responder:        responder.New(slog.Default()),
-			logger:           slog.Default(),
-			maxFailures:      3,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withCircuitBreaker(3, 1*time.Minute))
 
 		// Open the circuit
 		for i := 0; i < 5; i++ {
@@ -1592,10 +1307,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("payload too large", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			responder:       responder.New(slog.Default()),
-			maxPayloadBytes: 1024,
-		}
+		g := newTestGatewayService(withMaxPayloadBytes(1024))
 
 		largeBody := strings.Repeat("a", 2048)
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"test/method","params":"%s"}`, largeBody)))
@@ -1616,10 +1328,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("invalid JSON", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			responder:       responder.New(slog.Default()),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService()
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`invalid json`))
 		w := httptest.NewRecorder()
@@ -1639,10 +1348,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("invalid JSON-RPC version", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			responder:       responder.New(slog.Default()),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService()
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"1.0","id":1,"method":"test/method"}`))
 		w := httptest.NewRecorder()
@@ -1662,10 +1368,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("missing method", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			responder:       responder.New(slog.Default()),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService()
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1}`))
 		w := httptest.NewRecorder()
@@ -1685,10 +1388,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("method mismatch", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			responder:       responder.New(slog.Default()),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService()
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"wrong/method"}`))
 		w := httptest.NewRecorder()
@@ -1708,10 +1408,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("handler error", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			responder:       responder.New(slog.Default()),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService()
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"test/method"}`))
 		w := httptest.NewRecorder()
@@ -1731,10 +1428,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("successful request", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			responder:       responder.New(slog.Default()),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService()
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"test/method"}`))
 		w := httptest.NewRecorder()
@@ -1755,14 +1449,11 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 func TestGatewayService_DependencySetters(t *testing.T) {
 	t.Parallel()
-	g := &GatewayService{
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newTestGatewayService()
 
 	t.Run("SetDependencies", func(t *testing.T) {
 		t.Parallel()
-		pubKey, privKey, _ := ed25519.GenerateKey(rand.Reader)
-		_ = pubKey
+		_, privKey, _ := ed25519.GenerateKey(rand.Reader)
 
 		g.SetDependencies(&fakeEnvelopeProcessor{}, &fakeStateRootProvider{root: "test"}, privKey, "key-1", "http://downstream")
 		require.NotNil(t, g.envProc)
@@ -1808,10 +1499,7 @@ func TestGatewayService_DependencySetters(t *testing.T) {
 
 func TestGatewayService_RunMaintenance(t *testing.T) {
 	t.Parallel()
-	g := &GatewayService{
-		logger:          slog.Default(),
-		maxPayloadBytes: 10 * 1024 * 1024,
-	}
+	g := newTestGatewayService()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -1847,6 +1535,154 @@ func (f *fakeAuditLogger) LogFieldRead(operatorSessionID, collection, documentID
 	return nil
 }
 
+// testGatewayOption is a functional option for configuring test GatewayService instances
+type testGatewayOption func(*GatewayService)
+
+// withLogger sets a custom logger for the test GatewayService
+func withLogger(logger *slog.Logger) testGatewayOption {
+	return func(g *GatewayService) {
+		g.logger = logger
+	}
+}
+
+// withResponder sets a custom responder for the test GatewayService
+func withResponder(r *responder.Responder) testGatewayOption {
+	return func(g *GatewayService) {
+		g.responder = r
+	}
+}
+
+// withEnvProc sets a custom envelope processor for the test GatewayService
+func withEnvProc(proc governance.EnvelopeProcessor) testGatewayOption {
+	return func(g *GatewayService) {
+		g.envProc = proc
+	}
+}
+
+// withSuspendedStore sets a custom suspended store for the test GatewayService
+func withSuspendedStore(store SuspendedTransactionStore) testGatewayOption {
+	return func(g *GatewayService) {
+		g.suspendedStore = store
+	}
+}
+
+// withSigningKey sets custom signing key and keyID for the test GatewayService
+func withSigningKey(privKey ed25519.PrivateKey, keyID string) testGatewayOption {
+	return func(g *GatewayService) {
+		g.signingKey = privKey
+		g.keyID = keyID
+	}
+}
+
+// withStateRootProvider sets a custom state root provider for the test GatewayService
+func withStateRootProvider(provider StateRootProvider) testGatewayOption {
+	return func(g *GatewayService) {
+		g.stateRootProvider = provider
+	}
+}
+
+// withPublicBaseURL sets a custom public base URL for the test GatewayService
+func withPublicBaseURL(url string) testGatewayOption {
+	return func(g *GatewayService) {
+		g.publicBaseURL = url
+	}
+}
+
+// withDownstreamURL sets a custom downstream URL for the test GatewayService
+func withDownstreamURL(url string) testGatewayOption {
+	return func(g *GatewayService) {
+		g.downstreamURL = url
+	}
+}
+
+// withA2ADownstreamURL sets a custom A2A downstream URL for the test GatewayService
+func withA2ADownstreamURL(url string) testGatewayOption {
+	return func(g *GatewayService) {
+		g.a2aDownstreamURL = url
+	}
+}
+
+// withCircuitBreaker sets custom circuit breaker settings for the test GatewayService
+func withCircuitBreaker(maxFailures int, cooldown time.Duration) testGatewayOption {
+	return func(g *GatewayService) {
+		g.maxFailures = maxFailures
+		g.cooldownDuration = cooldown
+	}
+}
+
+// withMaxPayloadBytes sets a custom max payload size for the test GatewayService
+func withMaxPayloadBytes(bytes int64) testGatewayOption {
+	return func(g *GatewayService) {
+		g.maxPayloadBytes = bytes
+	}
+}
+
+// withNativeToolHandler sets a custom native tool handler for the test GatewayService
+func withNativeToolHandler(handler *NativeToolHandler) testGatewayOption {
+	return func(g *GatewayService) {
+		g.nativeToolHandler = handler
+	}
+}
+
+// withFieldPathRegistry sets a custom field path registry for the test GatewayService
+func withFieldPathRegistry(registry *FieldPathRegistry) testGatewayOption {
+	return func(g *GatewayService) {
+		g.fieldPathRegistry = registry
+	}
+}
+
+// withDBService sets a custom database service for the test GatewayService
+func withDBService(db interface {
+	GetField(collection, id, fieldPath string) (interface{}, error)
+}) testGatewayOption {
+	return func(g *GatewayService) {
+		g.dbService = db
+	}
+}
+
+// withSessionValidator sets a custom session validator for the test GatewayService
+func withSessionValidator(v SessionValidator) testGatewayOption {
+	return func(g *GatewayService) {
+		g.sessionValidator = v
+	}
+}
+
+// withAuditLogger sets a custom audit logger for the test GatewayService
+func withAuditLogger(audit AuditLogger) testGatewayOption {
+	return func(g *GatewayService) {
+		g.auditLogger = audit
+	}
+}
+
+// newTestGatewayService creates a GatewayService with sensible defaults for testing.
+// Options can be provided to override specific fields.
+func newTestGatewayService(opts ...testGatewayOption) *GatewayService {
+	// Generate default signing key
+	_, privKey, _ := ed25519.GenerateKey(rand.Reader)
+
+	g := &GatewayService{
+		logger:            slog.Default(),
+		responder:         responder.New(slog.Default()),
+		envProc:           &fakeEnvelopeProcessor{},
+		suspendedStore:    &fakeSuspendedStore{},
+		signingKey:        privKey,
+		keyID:             "test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		publicBaseURL:     fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
+		maxFailures:       5,
+		cooldownDuration:  1 * time.Minute,
+		maxPayloadBytes:   10 * 1024 * 1024,
+		nativeToolHandler: NewNativeToolHandler(),
+	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(g)
+	}
+
+	return g
+}
+
 func TestGatewayService_HandleA2aCall(t *testing.T) {
 	t.Parallel()
 
@@ -1858,17 +1694,7 @@ func TestGatewayService_HandleA2aCall(t *testing.T) {
 			ResultSummary: "a2a result",
 		}
 		proc := &fakeEnvelopeProcessor{receipt: receipt}
-		pubKey, privKey, _ := ed25519.GenerateKey(rand.Reader)
-		_ = pubKey
-
-		g := &GatewayService{
-			envProc:           proc,
-			signingKey:        privKey,
-			keyID:             "test-key",
-			stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-			publicBaseURL:     fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
-			maxPayloadBytes:   10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withEnvProc(proc))
 
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"skill_name":"test-skill","payload":{"arg":"val"}}}`
 		req := httptest.NewRequest(http.MethodPost, "/mcp/a2a/call", strings.NewReader(reqBody))
@@ -1886,9 +1712,7 @@ func TestGatewayService_HandleA2aCall(t *testing.T) {
 
 	t.Run("missing skill_name", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService()
 
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"payload":{}}}`
 		req := httptest.NewRequest(http.MethodPost, "/mcp/a2a/call", strings.NewReader(reqBody))
@@ -1909,17 +1733,7 @@ func TestGatewayService_HandleA2aCall(t *testing.T) {
 		t.Parallel()
 		proc := &fakeEnvelopeProcessor{err: governance.ErrL3ProofMissing}
 		store := &fakeSuspendedStore{}
-		pubKey, privKey, _ := ed25519.GenerateKey(rand.Reader)
-		_ = pubKey
-
-		g := &GatewayService{
-			envProc:         proc,
-			suspendedStore:  store,
-			signingKey:      privKey,
-			keyID:           "test-key",
-			publicBaseURL:   fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withEnvProc(proc), withSuspendedStore(store))
 
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"skill_name":"test-skill","payload":{}}}`
 		req := httptest.NewRequest(http.MethodPost, "/mcp/a2a/call", strings.NewReader(reqBody))
@@ -1946,13 +1760,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			downstreamURL:    downstream.URL,
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL(downstream.URL))
 
 		result, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{"arg":"val"}`))
 		require.NoError(t, err)
@@ -1961,10 +1769,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 
 	t.Run("no downstream configured", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			downstreamURL:   "",
-			maxPayloadBytes: 10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL(""))
 
 		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`))
 		require.Error(t, err)
@@ -1973,13 +1778,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 
 	t.Run("circuit breaker open", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			downstreamURL:    "http://localhost:9999",
-			logger:           slog.Default(),
-			maxFailures:      3,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL("http://localhost:9999"), withCircuitBreaker(3, 1*time.Minute))
 
 		// Open the circuit
 		for i := 0; i < 3; i++ {
@@ -1993,13 +1792,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 
 	t.Run("HTTP connection failure", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			downstreamURL:    "http://localhost:9999", // Non-existent server
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL("http://localhost:9999"), withCircuitBreaker(5, 1*time.Minute))
 
 		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`))
 		require.Error(t, err)
@@ -2013,13 +1806,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			downstreamURL:    downstream.URL,
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL(downstream.URL))
 
 		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`))
 		require.Error(t, err)
@@ -2035,13 +1822,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			downstreamURL:    downstream.URL,
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withDownstreamURL(downstream.URL))
 
 		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`))
 		require.Error(t, err)
@@ -2063,13 +1844,7 @@ func TestGatewayService_DispatchToA2ADownstream(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			a2aDownstreamURL: downstream.URL,
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withA2ADownstreamURL(downstream.URL), withCircuitBreaker(5, 1*time.Minute))
 
 		result, err := g.DispatchToA2ADownstream(context.Background(), "test-skill", json.RawMessage(`{"arg":"val"}`))
 		require.NoError(t, err)
@@ -2085,13 +1860,7 @@ func TestGatewayService_DispatchToA2ADownstream(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			a2aDownstreamURL: downstream.URL,
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withA2ADownstreamURL(downstream.URL), withCircuitBreaker(5, 1*time.Minute))
 
 		result, err := g.DispatchToA2ADownstream(context.Background(), "test-skill", json.RawMessage(`{}`))
 		require.NoError(t, err)
@@ -2107,13 +1876,7 @@ func TestGatewayService_DispatchToA2ADownstream(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			a2aDownstreamURL: downstream.URL,
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withA2ADownstreamURL(downstream.URL), withCircuitBreaker(5, 1*time.Minute))
 
 		result, err := g.DispatchToA2ADownstream(context.Background(), "test-skill", json.RawMessage(`{}`))
 		require.NoError(t, err)
@@ -2122,10 +1885,7 @@ func TestGatewayService_DispatchToA2ADownstream(t *testing.T) {
 
 	t.Run("no downstream configured", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			a2aDownstreamURL: "",
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withA2ADownstreamURL(""))
 
 		_, err := g.DispatchToA2ADownstream(context.Background(), "test-skill", json.RawMessage(`{}`))
 		require.Error(t, err)
@@ -2134,13 +1894,7 @@ func TestGatewayService_DispatchToA2ADownstream(t *testing.T) {
 
 	t.Run("circuit breaker open", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			a2aDownstreamURL: "http://localhost:9999",
-			logger:           slog.Default(),
-			maxFailures:      3,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withA2ADownstreamURL("http://localhost:9999"), withCircuitBreaker(3, 1*time.Minute))
 
 		// Open the circuit
 		for i := 0; i < 3; i++ {
@@ -2154,13 +1908,7 @@ func TestGatewayService_DispatchToA2ADownstream(t *testing.T) {
 
 	t.Run("HTTP connection failure", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			a2aDownstreamURL: "http://localhost:9999", // Non-existent server
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withA2ADownstreamURL("http://localhost:9999"), withCircuitBreaker(5, 1*time.Minute))
 
 		_, err := g.DispatchToA2ADownstream(context.Background(), "test-skill", json.RawMessage(`{}`))
 		require.Error(t, err)
@@ -2174,13 +1922,7 @@ func TestGatewayService_DispatchToA2ADownstream(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			a2aDownstreamURL: downstream.URL,
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withA2ADownstreamURL(downstream.URL), withCircuitBreaker(5, 1*time.Minute))
 
 		_, err := g.DispatchToA2ADownstream(context.Background(), "test-skill", json.RawMessage(`{}`))
 		require.Error(t, err)
@@ -2196,13 +1938,7 @@ func TestGatewayService_DispatchToA2ADownstream(t *testing.T) {
 		}))
 		defer downstream.Close()
 
-		g := &GatewayService{
-			a2aDownstreamURL: downstream.URL,
-			logger:           slog.Default(),
-			maxFailures:      5,
-			cooldownDuration: 1 * time.Minute,
-			maxPayloadBytes:  10 * 1024 * 1024,
-		}
+		g := newTestGatewayService(withA2ADownstreamURL(downstream.URL), withCircuitBreaker(5, 1*time.Minute))
 
 		_, err := g.DispatchToA2ADownstream(context.Background(), "test-skill", json.RawMessage(`{}`))
 		require.Error(t, err)

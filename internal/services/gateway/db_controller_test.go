@@ -878,7 +878,6 @@ func TestDBControllerHandleDataSettings(t *testing.T) {
 	dbController, db := setupTestDBController(t)
 
 	t.Run("GET - success", func(t *testing.T) {
-		t.Parallel()
 		// First create settings
 		settings := map[string]string{"mode": "test"}
 		err := db.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
@@ -893,7 +892,6 @@ func TestDBControllerHandleDataSettings(t *testing.T) {
 	})
 
 	t.Run("PUT - success", func(t *testing.T) {
-		t.Parallel()
 		settings := map[string]string{"mode": "production"}
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/data/settings", bytes.NewReader(mustDocJSON(t, settings)))
 		rr := httptest.NewRecorder()
@@ -903,7 +901,6 @@ func TestDBControllerHandleDataSettings(t *testing.T) {
 	})
 
 	t.Run("PATCH - success", func(t *testing.T) {
-		t.Parallel()
 		// First create settings
 		settings := map[string]string{"mode": "test"}
 		err := db.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
@@ -918,7 +915,6 @@ func TestDBControllerHandleDataSettings(t *testing.T) {
 	})
 
 	t.Run("Method Not Allowed", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/data/settings", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleDataSettings(rr, req)

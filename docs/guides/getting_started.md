@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-05-31
-Version: v1.0.3
+Last Updated: 2026-06-01
+Version: v1.0.7
 
 ---
 
@@ -21,10 +21,10 @@ The platform consists of two mandatory components:
 The Governance Gateway serves as the central Policy Decision Point (PDP). It provides:
 
 - **PKI and Trust Management**: Acts as the platform Certificate Authority, issuing and revoking mTLS certificates bound to URI SANs for workload identity.
-- **Persistence Layer**: Maintains the canonical state store via SQLite, including user accounts, operator registrations, and governance state.
+- **Persistence Layer**: Maintains the canonical state store via SQLite, including user accounts, operator registrations, and governance state. Implements incremental state tracking for efficient state root calculation.
 - **Messaging Broker**: Serves as the Pub/Sub broker for real-time event fan-out between clients and operators.
 - **Admission APIs**: Exposes HTTP endpoints for envelope submission and trust bundle distribution.
-- **Protocol Translation**: Translates standard MCP (Model Context Protocol) and A2A (Agent-to-Agent) requests into canonical JSON GovernanceEnvelope format.
+- **Protocol Translation**: Translates standard MCP (Model Context Protocol) and A2A (Agent-to-Agent) requests into canonical JSON GovernanceEnvelope format via a unified endpoint architecture.
 
 The Gateway runs in one of three modes, each enforcing different layers of the 5-layer verification sequence:
 
@@ -39,7 +39,7 @@ The g8e Operator serves as the Policy Execution Point (PEP) running on target ho
 - **Fail-Closed Execution**: Executes mutations only through L5Actuator, the single dispatch path that enforces L1/L2/L3 verification gates.
 - **Outbound-Only Connectivity**: Dials out to the Gateway via mTLS reverse tunnel, exposing no inbound ports or remote attack surface.
 - **Local-First Audit**: Writes all audit entries to a host-local Git-backed vault before execution, preserving raw data and forensic context on the host.
-- **MCP Server**: Exposes tools to standard local clients as a Model Context Protocol server for AI agent integration.
+- **MCP Server**: Exposes tools to standard local clients as a Model Context Protocol server for AI agent integration. Includes 13 native tools for database operations, filesystem analysis, network diagnostics, process management, and system monitoring.
 - **State Binding**: Verifies transaction state roots and enforces replay defense before executing any mutation.
 
 The Operator distrusts all upstream inputs. It validates every envelope independently, checks cryptographic proofs, and refuses execution if any verification fails.
@@ -93,7 +93,7 @@ The first login bootstraps the PKI hierarchy and issues your initial mTLS certif
 ./g8e auth login
 ```
 
-Credentials and trust material are stored in `~/.g8e/pki` and `~/.g8e/secrets`.
+Credentials and trust material are stored in `.g8e/pki` and `.g8e/secrets` in the project directory.
 
 ### 4. Deploy an Operator
 
@@ -120,7 +120,7 @@ g8e enforces a hierarchical defense-in-depth model:
 ## Protocol Integration
 
 ### MCP (Model Context Protocol)
-Connect AI agents to the Operator's toolset. The Operator translates JSON-RPC requests into signed GovernanceEnvelope before execution.
+Connect AI agents to the Operator's toolset. The Gateway translates JSON-RPC requests into signed GovernanceEnvelope before execution. The unified MCP endpoint architecture provides a single entry point for all MCP operations with comprehensive input validation for security hardening.
 
 ### A2A (Agent-to-Agent)
 Gateway-mediated communication between sovereign agents. Every interaction is state-bound and audit-logged to the local Git ledger.
