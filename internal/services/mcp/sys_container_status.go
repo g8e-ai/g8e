@@ -110,12 +110,11 @@ func detectContainerRuntime() string {
 }
 
 func getContainerStatus(containerName, runtime string) (map[string]interface{}, error) {
-	var cmd *exec.Cmd
-	if runtime == "docker" {
-		cmd = exec.Command(runtime, "inspect", "--format", "{{json .}}", containerName)
-	} else {
-		cmd = exec.Command(runtime, "inspect", "--format", "json", containerName)
+	format := "{{json .}}"
+	if runtime != "docker" {
+		format = "json"
 	}
+	cmd := exec.Command(runtime, "inspect", "--format", format, containerName)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {

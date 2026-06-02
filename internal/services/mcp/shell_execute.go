@@ -407,9 +407,7 @@ func executeLocally(ctx context.Context, command string, args []string, workingD
 	// Build command with safe argument passing
 	// Use command as the executable name and args as separate arguments
 	// This prevents shell injection by avoiding shell interpretation
-	cmdArgs := []string{command}
-	cmdArgs = append(cmdArgs, args...)
-	cmd := exec.CommandContext(cmdCtx, cmdArgs[0], cmdArgs[1:]...)
+	cmd := exec.CommandContext(cmdCtx, command, args...)
 	if workingDir != "" {
 		cmd.Dir = workingDir
 	}
