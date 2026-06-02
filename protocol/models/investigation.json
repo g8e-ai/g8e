@@ -76,7 +76,7 @@
       "sentinel_mode": {
         "type": "boolean",
         "required": true,
-        "description": "When true, operator output is scrubbed by Sentinel before storage and AI context. Must be explicitly set - no default."
+        "description": "When true, Operator output is scrubbed by Sentinel before storage and AI context. Must be explicitly set - no default."
       }
     },
 

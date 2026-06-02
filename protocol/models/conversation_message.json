@@ -1,11 +1,11 @@
 {
-  "_comment": "Canonical ConversationHistoryMessage wire shape. The agent is the authority - it creates these messages and persists them in investigation conversation_history arrays. client consumes them to render chat history and flatten audit events. A field mismatch breaks conversation history loading and operator command restoration.",
+  "_comment": "Canonical ConversationHistoryMessage wire shape. The agent is the authority - it creates these messages and persists them in investigation conversation_history arrays. client consumes them to render chat history and flatten audit events. A field mismatch breaks conversation history loading and Operator command restoration.",
 
   "_authority": "agent",
   "_consumers": ["client"],
 
   "conversation_history_message": {
-    "_description": "Single message in an investigation's conversation_history array. Messages are appended by the agent during chat turns, operator command executions, approval flows, and system notifications. client parses these into UI components for rendering.",
+    "_description": "Single message in an investigation's conversation_history array. Messages are appended by the agent during chat turns, Operator command executions, approval flows, and system notifications. client parses these into UI components for rendering.",
 
     "id": {
       "type": "string",
@@ -23,7 +23,7 @@
       "type": "string",
       "required": false,
       "default": "",
-      "description": "Message content. For user messages: the user's text. For AI responses: the generated response. For operator commands: command output or approval text."
+      "description": "Message content. For user messages: the user's text. For AI responses: the generated response. For Operator commands: command output or approval text."
     },
     "timestamp": {
       "type": "string",

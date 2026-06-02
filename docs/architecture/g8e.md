@@ -22,7 +22,7 @@ The g8e Protocol is the foundational wire contract for all mutations in the g8e 
 - **Fail-Closed Verification**: Any malformed envelope, expired transaction, reused nonce, stale state root, or missing proof is rejected immediately before execution.
 - **Body-Embedded Context**: Business and execution context (`web_session_id`, `cli_session_id`, `operator_session_id`, `user_id`) lives inside the envelope via typed fields.
 - **BFT State Binding**: Mutations carry a `state_merkle_root` that the Operator compares against its current host state.
-- **Operator Sovereignty**: No bundled component has privileged channels. The Operator (`g8eo`) is the only execution boundary, enforcing rules uniformly.
+- **Operator Sovereignty**: No bundled component has privileged channels. The g8e Operator is the only execution boundary, enforcing rules uniformly.
 
 ### Protocol Translation
 
@@ -104,7 +104,7 @@ The transaction lifecycle follows a strict sequence from intent to audited execu
 3. The payload is embedded into a `GovernanceEnvelope` alongside `nonce`, `expires_at`, and `state_merkle_root`.
 4. An L2 Consensus producer computes the `transaction_hash` and attaches a signature.
 5. For mutations, an L3 Notary (human) signs the same hash via WebAuthn, unless auto-approval policy applies.
-6. The client submits the canonical-JSON envelope over mTLS to the Governance Gateway (`g8eg`), which validates and dispatches it to the target Operator (`g8eo`) over WSS. Remote peers are resolved via `g8e.local` translation.
+6. The client submits the canonical-JSON envelope over mTLS to the g8e Gateway, which validates and dispatches it to the target g8e Operator over WSS. Remote peers are resolved via `g8e.local` translation.
 
 ### Verification Phase (L4Warden)
 
@@ -231,7 +231,7 @@ Protocol errors follow standardized JSON-RPC codes for MCP/A2A client compatibil
 
 ### Gateway Postures
 
-The Governance Gateway runs with three posture options:
+The g8e Gateway runs with three posture options:
 
 | Mode | Flag | Purpose |
 |---|---|---|
@@ -267,7 +267,7 @@ The g8e platform uses **ZERO environment variables** for production configuratio
 
 ### Multi-Ledger Architecture
 
-Each operator session owns an isolated, encrypted git repository tracking all mutations with `LedgerHashBefore` and `LedgerHashAfter`. Every file mutation triggers a native Go `go-git` commit.
+Each Operator session owns an isolated, encrypted git repository tracking all mutations with `LedgerHashBefore` and `LedgerHashAfter`. Every file mutation triggers a native Go `go-git` commit.
 
 ### Fail-Closed Audit Vault
 
@@ -309,7 +309,7 @@ Output scrubbing is performed directly at the `L5Actuator` boundary to redact to
 
 ## Related Documentation
 
-- [**Operator (g8eo)**](./operator.md) - Operator architecture and execution boundary
-- [**Gateway (g8eg)**](./gateway.md) - Governance Gateway architecture
+- [**g8e Operator**](./operator.md) - Operator architecture and execution boundary
+- [**g8e Gateway**](./gateway.md) - Gateway architecture
 - [**MCP Protocol**](../protocols/mcp/mcp.md) - MCP protocol specification and integration
 - [**A2A Protocol**](../protocols/a2a/a2a.md) - A2A protocol specification and integration

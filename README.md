@@ -6,7 +6,7 @@
 
 The "move fast and break things" era is costing organizations a fortune in wasted tokens, broken infrastructure, and unaccountable AI actions. SaaS vendors are positioning themselves as the solution — offering "governance" and "control planes" that are little more than token spend dashboards, then open-sourcing the client tools to lock you into their expensive services. Cloud provider lock-in, MCP and A2A protocol gaps, and single-model self-reflection have created a structural vulnerability in agentic systems.
 
-g8e is the missing admission boundary: a typed, signed, state-bound transaction that must clear a fail-closed verification pipeline **on the host** before any side effect occurs. One tiny pre-compiled binary serves as either Gateway (Policy Decision Point) or Operator (Policy Execution Point). Start the Gateway on your local machine, point your AI tools at it, and every action is governed — hardware-bound, just-in-time provisioned, mutual TLS secured, and anchored to a local ledger.
+g8e is the missing admission boundary: a typed, signed, state-bound transaction that must clear a fail-closed verification pipeline **on the host** before any side effect occurs. One tiny pre-compiled g8e Node serves as either g8e Gateway (Policy Decision Point) or g8e Operator (Policy Execution Point). Start the g8e Gateway on your local machine, point your AI tools at it, and every action is governed — hardware-bound, just-in-time provisioned, mutual TLS secured, and anchored to a local ledger.
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev)
@@ -50,7 +50,7 @@ boundary and recorded. The default is closed.
 
 **Local-first audit and sovereignty.** Every mutation is written to a host-local, git-backed ledger *before* the side effect occurs. Raw data and forensic context never leave the host — only scrubbed projections cross the wire. The platform vendor is reduced to a stateless relay. You own your audit trail, your data, and your execution authority.
 
-**One binary, two roles, everywhere.** The same statically compiled artifact runs as Gateway (PDP) or Operator (PEP) on Windows, macOS, and Linux. Deploy operators via SSH using your existing SSH config. Every native tool accepts a list of hosts for fan-out execution across many MCP servers simultaneously. No runtime, no interpreter, no sidecar — the attack surface is the binary you can read.
+**One g8e Node, two roles, everywhere.** The same statically compiled artifact runs as g8e Gateway (PDP) or g8e Operator (PEP) on Windows, macOS, and Linux. Deploy operators via SSH using your existing SSH config. Every native tool accepts a list of hosts for fan-out execution across many MCP servers simultaneously. No runtime, no interpreter, no sidecar — the attack surface is the g8e Node you can read.
 
 **Free and open, by design.** Runtime governance and audit for agents are public goods. A governance layer you can't inspect or self-host is an unaudited authority in the most sensitive seat in the stack — exactly the trusted third party zero-trust exists to abolish. An auditing system that is itself unauditable is a contradiction. g8e is Apache-2.0, single-binary, and air-gap-capable, and it stays that way.
 
@@ -58,11 +58,21 @@ boundary and recorded. The default is closed.
 
 ## QuickStart
 
-The platform is a single binary. The same artifact runs as the Governance Gateway or as a Governed Operator, selected by flags. Standard builds are **35–38MB** per platform; compressed builds are **15–17MB** (Linux/Windows AMD64/ARM64). No runtime, no interpreter, no sidecar.
+The platform is a single g8e Node. The same artifact runs as the g8e Gateway or as a g8e Operator, selected by flags. Standard builds are **35–38MB** per platform; compressed builds are **15–17MB** (Linux/Windows AMD64/ARM64). No runtime, no interpreter, no sidecar.
 
 **Quick launch (Linux)**
 ```bash
 curl -fsSL https://g8e.ai/g8e-linux-amd64 -o g8e && chmod +x g8e && ./g8e gw start
+```
+
+**Quick launch (macOS)**
+```bash
+curl -fsSL https://g8e.ai/g8e-darwin-amd64 -o g8e && chmod +x g8e && ./g8e gw start
+```
+
+**Quick launch (Windows)**
+```powershell
+iwr https://g8e.ai/g8e-windows-amd64.exe -outf g8e.exe && .\g8e.exe gw start
 ```
 
 **Linux / macOS (build from source)**
@@ -70,7 +80,7 @@ curl -fsSL https://g8e.ai/g8e-linux-amd64 -o g8e && chmod +x g8e && ./g8e gw sta
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
 
 make build                 # or: make build-compressed
-./g8e gw start             # start the Governance Gateway (g8e)
+./g8e gw start             # start the g8e Gateway (g8e)
 ./g8e auth login           # first login bootstraps the platform
 ./g8e gw status            # verify
 ```
@@ -88,13 +98,13 @@ git clone https://github.com/g8e-ai/g8e.git; cd g8e
 **Deploy operators to remote hosts via SSH**
 ```bash
 # Using your existing SSH config
-./g8e operator deploy --hosts host1,host2,host3
+./g8e Operator deploy --hosts host1,host2,host3
 
 # Tool calls now accept a list of hosts for fan-out execution
 # Every native tool supports multi-host execution
 ```
 
-See the [full QuickStart](docs/guides/getting_started.md) for mTLS, operator enrollment, and CLI/MCP client configuration.
+See the [full QuickStart](docs/guides/getting_started.md) for mTLS, Operator enrollment, and CLI/MCP client configuration.
 
 ---
 
@@ -104,8 +114,8 @@ g8e follows standard MCP topology with governance and data sovereignty folded in
 
 | Reference | g8e role | What it is |
 | --- | --- | --- |
-| **MCP server** | **Governed Operator (`g8e`)** | A tool-calling facade where every execution clears the host-local governance gauntlet. Listens on no inbound ports; runs on remote, private, or air-gapped hosts. Deploy via SSH. |
-| **MCP gateway** | **Governance Gateway (`g8e`)** | Admits signed, state-bound envelopes and dispatches them to remote Operators. Owns the PKI; provides a central audit authority with no raw-data exposure. |
+| **MCP server** | **g8e Operator** | A tool-calling facade where every execution clears the host-local governance gauntlet. Listens on no inbound ports; runs on remote, private, or air-gapped hosts. Deploy via SSH. |
+| **MCP gateway** | **g8e Gateway** | Admits signed, state-bound envelopes and dispatches them to remote Operators. Owns the PKI; provides a central audit authority with no raw-data exposure. |
 
 The substrate is **agent-agnostic, model-agnostic, platform-agnostic, and domain-agnostic** — the verifier checks the envelope's proofs against current state, never the provenance of who proposed it. Agnosticism isn't a feature for reach; it's the consequence of a trust model that checks mathematics instead of vendors. There is no privileged channel because the whole point is that none exists.
 
@@ -116,12 +126,12 @@ graph TD
         C2["Agentic ensemble<br/>(A2A / tool calls)"]
     end
 
-    GW["Governance Gateway · g8e<br/>(Policy Decision Point)<br/>admits signed envelopes · owns PKI"]
+    GW["g8e Gateway<br/>(Policy Decision Point)<br/>admits signed envelopes · owns PKI"]
 
     subgraph Fleet ["Sovereign hosts — platform-agnostic · domain-agnostic"]
-        O1["Governed Operator · g8e<br/>(Policy Execution Point)<br/>governs + executes locally"]
+        O1["g8e Operator<br/>(Policy Execution Point)<br/>governs + executes locally"]
         D1[("Raw data + audit<br/>stay on host")]
-        O2["Governed Operator · g8e<br/>(firewalled / air-gapped host)"]
+        O2["g8e Operator<br/>(firewalled / air-gapped host)"]
         D2[("Raw data + audit<br/>stay on host")]
         O1 --- D1
         O2 --- D2
@@ -135,21 +145,21 @@ graph TD
 
 ---
 
-## The Governed Operator
+## The g8e Operator
 
-The Operator is the center of gravity — a protocol-aware MCP server that enforces local verification before it ever mutates the host. The reference implementation, **`g8e`**, is a single statically compiled Go binary with zero standing dependencies, and how you start it decides what it is:
+The g8e Operator is the center of gravity — a protocol-aware MCP server that enforces local verification before it ever mutates the host. The reference implementation, **`g8e`**, is a single statically compiled g8e Node with zero standing dependencies, and how you start it decides what it is:
 
 ```bash
 # Host-side MCP server (Policy Execution Point).
 # Point any MCP client at it; every tool call is governed before it executes.
 g8e
 
-# The exact same binary as the Governance Gateway (Policy Decision Point).
+# The exact same g8e Node as the g8e Gateway (Policy Decision Point).
 # Admits envelopes, owns the PKI, fans transactions out to remote Operators.
 g8e --notary        # or --consensus / --doctrine to set the posture
 ```
 
-**One binary, two roles.** No second package to deploy, no runtime to patch, no interpreter to audit. The attack surface is the binary you can read.
+**One g8e Node, two roles.** No second package to deploy, no runtime to patch, no interpreter to audit. The attack surface is the g8e Node you can read.
 
 **A drop-in MCP server.** It exposes standard MCP (and A2A) interfaces, so any BYO client connects with no changes. It hides the entire `GovernanceEnvelope` machinery — transaction hashing, L2/L3 signature collection, replay defense — behind a normal tool-calling facade and maps each JSON-RPC call to a governed `ActionType` mutation.
 
@@ -163,9 +173,9 @@ g8e --notary        # or --consensus / --doctrine to set the posture
 
 ## Protocol first, implementation second
 
-> The **g8e Protocol** — the `GovernanceEnvelope`, the hash binding, the L1/L2/L3 contract — is the normative standard. `g8e` (Operator) and `g8e` (Gateway) are the **reference implementation** of those roles, not the protocol itself.
+> The **g8e Protocol** — the `GovernanceEnvelope`, the hash binding, the L1/L2/L3 contract — is the normative standard. `g8e` (g8e Operator) and `g8e` (g8e Gateway) are the **reference implementation** of those roles, not the protocol itself.
 
-Any conforming implementation, in any language, that enforces the invariants is a valid g8e Operator or Gateway. The binary you run today is one implementation of a spec anyone can build against. **g8e-compatible agentic ensembles** are likewise optional producers that implement the protocol to emit signed envelopes carrying L2 consensus evidence — the protocol is the only mandatory part of the system.
+Any conforming implementation, in any language, that enforces the invariants is a valid g8e Operator or Gateway. The g8e Node you run today is one implementation of a spec anyone can build against. **g8e-compatible agentic ensembles** are likewise optional producers that implement the protocol to emit signed envelopes carrying L2 consensus evidence — the protocol is the only mandatory part of the system.
 
 ---
 
@@ -199,8 +209,8 @@ sequenceDiagram
     autonumber
     participant Principal as Principal<br/>(Human / AI Agent)
     participant Ensemble as Producer<br/>(g8e-compatible agentic ensemble / BYO / MCP client)
-    participant Gateway as Governance Gateway<br/>(g8e)
-    participant Operator as Governed Operator<br/>(g8e)
+    participant Gateway as g8e Gateway<br/>(g8e)
+    participant Operator as g8e Operator<br/>(g8e)
 
     Principal->>Ensemble: Submit intent (MCP / A2A / tool call)
     Note over Ensemble: Reach Consensus (L2)<br/>Wrap in signed GovernanceEnvelope
@@ -313,7 +323,7 @@ g8e is the mandatory governance platform. Agent ensembles and the Dashboard (g8e
 - [Position Paper](docs/core/position_paper.md)
 - [Operator Architecture](docs/architecture/operator.md) · [Gateway Architecture](docs/architecture/gateway.md)
 - [Protocol Specification](docs/architecture/g8e.md) · [API Reference](docs/reference/api/)
-- [Build a Governed Operator](docs/guides/build_operator.md)
+- [Build a g8e Operator](docs/guides/build_operator.md)
 
 ---
 

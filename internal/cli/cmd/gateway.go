@@ -34,8 +34,8 @@ func gatewayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "gw",
 		Aliases: []string{"gateway"},
-		Short:   "Manage the Governance Gateway (g8eg) lifecycle",
-		Long:    `Gateway lifecycle commands for starting, stopping, and checking the status of the Governance Gateway.`,
+		Short:   "Manage the g8e Gateway (g8eg) lifecycle",
+		Long:    `Gateway lifecycle commands for starting, stopping, and checking the status of the g8e Gateway.`,
 	}
 
 	cmd.AddCommand(
@@ -72,7 +72,7 @@ func gatewayStartCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   string(constants.ThinkingActionTypeStart),
-		Short: "Start the Governance Gateway",
+		Short: "Start the g8e Gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
@@ -86,10 +86,10 @@ func gatewayStartCmd() *cobra.Command {
 
 			running, pid, err := pm.OperatorStatus()
 			if err != nil {
-				return fmt.Errorf("failed to check operator status: %w", err)
+				return fmt.Errorf("failed to check Operator status: %w", err)
 			}
 			if running {
-				cmd.Printf("Governance Gateway is already running (PID: %d)\n", pid)
+				cmd.Printf("g8e Gateway is already running (PID: %d)\n", pid)
 				return nil
 			}
 
@@ -120,7 +120,7 @@ func gatewayStartCmd() *cobra.Command {
 				}
 			}
 
-			cmd.Println("[g8e] Starting Governance Gateway service...")
+			cmd.Println("[g8e] Starting g8e Gateway service...")
 			if err := pm.StartOperator(
 				posture,
 				httpPort,
@@ -143,7 +143,7 @@ func gatewayStartCmd() *cobra.Command {
 
 			_, pid, err = pm.OperatorStatus()
 			if err != nil {
-				return fmt.Errorf("failed to check operator status after start: %w", err)
+				return fmt.Errorf("failed to check Operator status after start: %w", err)
 			}
 
 			externalIP := config.GetExternalInterfaceIP()
@@ -218,7 +218,7 @@ func gatewayStartCmd() *cobra.Command {
 func gatewayStopCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop",
-		Short: "Stop the Governance Gateway",
+		Short: "Stop the g8e Gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
@@ -232,19 +232,19 @@ func gatewayStopCmd() *cobra.Command {
 
 			running, pid, err := pm.OperatorStatus()
 			if err != nil {
-				return fmt.Errorf("failed to check operator status: %w", err)
+				return fmt.Errorf("failed to check Operator status: %w", err)
 			}
 			if !running {
-				cmd.Println("Governance Gateway is not running")
+				cmd.Println("g8e Gateway is not running")
 				return nil
 			}
 
-			cmd.Printf("Stopping Governance Gateway (PID: %d)...\n", pid)
+			cmd.Printf("Stopping g8e Gateway (PID: %d)...\n", pid)
 			if err := pm.StopOperator(); err != nil {
 				return err
 			}
 
-			cmd.Println("Governance Gateway stopped successfully")
+			cmd.Println("g8e Gateway stopped successfully")
 			return nil
 		},
 	}
@@ -268,10 +268,10 @@ func gatewayStatusCmd() *cobra.Command {
 
 			running, pid, err := pm.OperatorStatus()
 			if err != nil {
-				return fmt.Errorf("failed to check operator status: %w", err)
+				return fmt.Errorf("failed to check Operator status: %w", err)
 			}
 
-			cmd.Println("Governance Gateway Status")
+			cmd.Println("g8e Gateway Status")
 			cmd.Println("========================")
 			if running {
 				cmd.Printf("State: RUNNING (PID: %d)\n", pid)
@@ -292,7 +292,7 @@ func gatewayStatusCmd() *cobra.Command {
 func gatewayRestartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "restart",
-		Short: "Restart the Governance Gateway",
+		Short: "Restart the g8e Gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
@@ -306,17 +306,17 @@ func gatewayRestartCmd() *cobra.Command {
 
 			running, _, err := pm.OperatorStatus()
 			if err != nil {
-				return fmt.Errorf("failed to check operator status: %w", err)
+				return fmt.Errorf("failed to check Operator status: %w", err)
 			}
 
 			if running {
-				cmd.Println("Stopping Governance Gateway...")
+				cmd.Println("Stopping g8e Gateway...")
 				if err := pm.StopOperator(); err != nil {
 					return err
 				}
 			}
 
-			cmd.Println("Starting Governance Gateway...")
+			cmd.Println("Starting g8e Gateway...")
 			if err := pm.StartOperator(
 				"doctrine",
 				cfg.OperatorHTTPSPort(),
@@ -337,7 +337,7 @@ func gatewayRestartCmd() *cobra.Command {
 				return err
 			}
 
-			cmd.Println("Governance Gateway restarted successfully")
+			cmd.Println("g8e Gateway restarted successfully")
 			cmd.Printf("Governance mode: doctrine (L1 enforced, L2/L3 audited)\n")
 			cmd.Printf("\nNext step: Run './g8e auth login' to authenticate\n")
 			return nil

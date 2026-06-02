@@ -60,7 +60,7 @@ func TestUniversalGateway_RealMCPFlow(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
 	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 
-	// Read credentials file to get operator session ID and operator ID
+	// Read credentials file to get Operator session ID and Operator ID
 	credsFile := cliCfg.CredentialsFile()
 	credsData, err := os.ReadFile(credsFile)
 	if err != nil {
@@ -209,7 +209,7 @@ func TestUniversalGateway_RealA2AFlow(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
 	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 
-	// Read credentials file to get operator session ID
+	// Read credentials file to get Operator session ID
 	credsFile := cliCfg.CredentialsFile()
 	credsData, err := os.ReadFile(credsFile)
 	if err != nil {
@@ -277,7 +277,7 @@ func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
 	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 
-	// Read credentials file to get operator session ID
+	// Read credentials file to get Operator session ID
 	credsFile := cliCfg.CredentialsFile()
 	credsData, err := os.ReadFile(credsFile)
 	if err != nil {
@@ -348,7 +348,7 @@ func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
 	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 
-	// Read credentials file to get operator session ID
+	// Read credentials file to get Operator session ID
 	credsFile := cliCfg.CredentialsFile()
 	credsData, err := os.ReadFile(credsFile)
 	if err != nil {
@@ -481,7 +481,7 @@ func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
 	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 
-	// Read credentials file to get operator session ID
+	// Read credentials file to get Operator session ID
 	credsFile := cliCfg.CredentialsFile()
 	credsData, err := os.ReadFile(credsFile)
 	if err != nil {
@@ -570,7 +570,7 @@ func TestUniversalGateway_RealDownstreamIntegration(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
 	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 
-	// Read credentials file to get operator session ID
+	// Read credentials file to get Operator session ID
 	credsFile := cliCfg.CredentialsFile()
 	credsData, err := os.ReadFile(credsFile)
 	if err != nil {
@@ -648,7 +648,7 @@ func TestUniversalGateway_CanonicalJSONWireFormat(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
 	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 
-	// Read credentials file to get operator session ID
+	// Read credentials file to get Operator session ID
 	credsFile := cliCfg.CredentialsFile()
 	credsData, err := os.ReadFile(credsFile)
 	if err != nil {

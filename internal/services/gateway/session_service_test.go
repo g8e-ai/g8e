@@ -59,7 +59,7 @@ func TestSessionService_PersistSessions_Success(t *testing.T) {
 	assert.Equal(t, certSerial, certSerialStr)
 	assert.Equal(t, loginMethod, cliLoginMethodStr)
 
-	// Verify operator session was persisted
+	// Verify Operator session was persisted
 	opDoc, err := db.DocGet("operator_sessions", operatorSessionID)
 	require.NoError(t, err)
 	require.NotNil(t, opDoc)

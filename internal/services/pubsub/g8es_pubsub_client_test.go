@@ -224,7 +224,7 @@ func TestSubscribe(t *testing.T) {
 
 		_, err = client.Subscribe(context.Background(), "test-channel")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to connect to operator pub/sub")
+		assert.Contains(t, err.Error(), "failed to connect to Operator pub/sub")
 	})
 
 	t.Run("receives subscribed ACK and messages", func(t *testing.T) {

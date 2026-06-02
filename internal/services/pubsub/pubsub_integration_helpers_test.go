@@ -21,8 +21,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
-// NewTestPubSubClient returns a real OperatorPubSubClient connected to the test operator instance.
-// Fatally fails the test if operator is not available.
+// NewTestPubSubClient returns a real OperatorPubSubClient connected to the test Operator instance.
+// Fatally fails the test if Operator is not available.
 func NewTestPubSubClient(t *testing.T) *OperatorPubSubClient {
 	t.Helper()
 	testutil.TestPubSubAvailable(t)

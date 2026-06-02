@@ -268,8 +268,8 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRDER})
 
-	// Create a temporary client cert for initial enrollment (using operator CA)
-	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + operator only
+	// Create a temporary client cert for initial enrollment (using Operator CA)
+	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + Operator only
 	operatorCAPEM := testutil.ReadOperatorCA(t, pkiDir)
 	operatorBlock, _ := pem.Decode(operatorCAPEM)
 	operatorCert, err := x509.ParseCertificate(operatorBlock.Bytes)
@@ -626,8 +626,8 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	require.NoError(t, err)
 	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRDER})
 
-	// Create a temporary client cert for initial enrollment (using operator CA)
-	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + operator only
+	// Create a temporary client cert for initial enrollment (using Operator CA)
+	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + Operator only
 	operatorCAPEM := testutil.ReadOperatorCA(t, pkiDir)
 	operatorBlock, _ := pem.Decode(operatorCAPEM)
 	operatorCert, err := x509.ParseCertificate(operatorBlock.Bytes)
@@ -1029,8 +1029,8 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	require.NoError(t, err)
 	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRDER})
 
-	// Create a temporary client cert for initial enrollment (using operator CA)
-	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + operator only
+	// Create a temporary client cert for initial enrollment (using Operator CA)
+	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + Operator only
 	operatorCAPEM := testutil.ReadOperatorCA(t, pkiDir)
 	operatorBlock, _ := pem.Decode(operatorCAPEM)
 	operatorCert, err := x509.ParseCertificate(operatorBlock.Bytes)

@@ -62,7 +62,7 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 	cfg := &config.Config{Gateway: config.GatewayConfig{MaxPayloadBytes: 1024}}
 	controller := newOperatorController(cfg, logger, reg, auth, res)
 
-	// Create a valid operator session
+	// Create a valid Operator session
 	sessionID := "test-session-123"
 	opDoc := map[string]interface{}{
 		"id":                  "op-123",

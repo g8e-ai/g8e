@@ -198,7 +198,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 			hostname, _ := os.Hostname()
 			opCSR, opKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
 			if err != nil {
-				return fmt.Errorf("failed to generate operator CSR: %w", err)
+				return fmt.Errorf("failed to generate Operator CSR: %w", err)
 			}
 
 			cliCSR, cliKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
@@ -227,7 +227,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 			chainPath := filepath.Join(pkiDir, "operator.chain.pem")
 
 			if err := auth.SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey, certPath, keyPath); err != nil {
-				return fmt.Errorf("failed to save operator certificate: %w", err)
+				return fmt.Errorf("failed to save Operator certificate: %w", err)
 			}
 
 			// Save CLI cert separately

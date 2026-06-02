@@ -458,7 +458,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		assert.JSONEq(t, `{"error":"mTLS client certificate required"}`, rr.Body.String())
 	})
 
-	t.Run("push rejects operator identity", func(t *testing.T) {
+	t.Run("push rejects Operator identity", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/internal/sse/push", strings.NewReader(`{"web_session_id":"ws-1","event":{"type":"ai.text","data":{}}}`))
 		req.TLS = &tls.ConnectionState{
 			PeerCertificates: []*x509.Certificate{
@@ -488,7 +488,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	}
 
 	t.Run("web session event is persisted and replayable", func(t *testing.T) {
-		// Create operator document for op-session-1
+		// Create Operator document for op-session-1
 		opDoc := map[string]interface{}{
 			"id":                  "op-session-1",
 			"user_id":             "u-1",
@@ -499,7 +499,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-session-1", opBytes)
 
 		// Set up the web->operator binding for authorization BEFORE push
-		// The handler checks sessionWebBindKey(webSessionID) for operator session IDs
+		// The handler checks sessionWebBindKey(webSessionID) for Operator session IDs
 		opSessionIDs := []string{"op-session-1"}
 		bindBytes, _ := json.Marshal(opSessionIDs)
 		h.db.KVSet(sessionWebBindKey("ws-1"), string(bindBytes), 0)
@@ -521,7 +521,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("cli session event is persisted and replayable as a first-class type", func(t *testing.T) {
-		// Create operator document for op-session-1
+		// Create Operator document for op-session-1
 		opDoc := map[string]interface{}{
 			"id":                  "op-session-1",
 			"user_id":             "u-1",
@@ -549,7 +549,7 @@ func TestInternalSSEBridge(t *testing.T) {
 
 	t.Run("cli and web with colliding ids do not cross namespaces", func(t *testing.T) {
 		_, _ = h.db.SSEEventsWipe()
-		// Create operator document for op-session-1
+		// Create Operator document for op-session-1
 		opDoc := map[string]interface{}{
 			"id":                  "op-session-1",
 			"user_id":             "u-1",
@@ -588,7 +588,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("background event routes by user_id", func(t *testing.T) {
-		// Create a mock operator session bound to user u-2 BEFORE push
+		// Create a mock Operator session bound to user u-2 BEFORE push
 		// The app identity must match the operator's SPIFFE ID for authorization
 		opDoc := map[string]interface{}{
 			"id":                  "op-u2",
@@ -646,7 +646,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		assert.Contains(t, rr.Body.String(), `"event_type":"a"`)
 	})
 
-	t.Run("authorization: operator cannot access unbound cli_session_id", func(t *testing.T) {
+	t.Run("authorization: Operator cannot access unbound cli_session_id", func(t *testing.T) {
 		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-unbound"}, "test", `{"event":{"type":"x"}}`, "")
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-unbound&since_id=0", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
@@ -656,7 +656,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		assert.JSONEq(t, `{"error":"cli session not found"}`, rr.Body.String())
 	})
 
-	t.Run("authorization: operator cannot access cli_session_id owned by different operator", func(t *testing.T) {
+	t.Run("authorization: Operator cannot access cli_session_id owned by different operator", func(t *testing.T) {
 		// Bind cli-owned to op-session-1
 		seedCLISession("cli-owned", "op-session-1")
 
@@ -669,7 +669,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		assert.JSONEq(t, `{"error":"operator session does not own this cli session"}`, rr.Body.String())
 	})
 
-	t.Run("authorization: operator can access own cli_session_id", func(t *testing.T) {
+	t.Run("authorization: Operator can access own cli_session_id", func(t *testing.T) {
 		// Bind cli-mine to op-session-1
 		seedCLISession("cli-mine", "op-session-1")
 		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-mine"}, "x", `{"event":{"type":"x"}}`, "")
@@ -682,7 +682,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		assert.Contains(t, rr.Body.String(), `"event_type":"x"`)
 	})
 
-	t.Run("authorization: operator cannot access web_session_id not bound to them", func(t *testing.T) {
+	t.Run("authorization: Operator cannot access web_session_id not bound to them", func(t *testing.T) {
 		_ = h.db.SSEEventsAppend(SSERoute{WebSessionID: "ws-other"}, "test", `{"event":{"type":"x"}}`, "")
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?web_session_id=ws-other&since_id=0", nil)
@@ -693,8 +693,8 @@ func TestInternalSSEBridge(t *testing.T) {
 		assert.JSONEq(t, `{"error":"operator session does not own this web session"}`, rr.Body.String())
 	})
 
-	t.Run("authorization: operator cannot access user_id they don't belong to", func(t *testing.T) {
-		// Create operator document for op-session-1 with user_id u-1
+	t.Run("authorization: Operator cannot access user_id they don't belong to", func(t *testing.T) {
+		// Create Operator document for op-session-1 with user_id u-1
 		opDoc := map[string]interface{}{
 			"id":                  "op-session-1",
 			"user_id":             "u-1",
@@ -714,12 +714,12 @@ func TestInternalSSEBridge(t *testing.T) {
 		assert.JSONEq(t, `{"error":"operator does not belong to this user"}`, rr.Body.String())
 	})
 
-	t.Run("authorization: missing operator session id is rejected", func(t *testing.T) {
+	t.Run("authorization: missing Operator session id is rejected", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-1&since_id=0", nil)
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"missing operator session id"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"missing Operator session id"}`, rr.Body.String())
 	})
 
 	t.Run("stream endpoint and Last-Event-ID", func(t *testing.T) {
@@ -850,7 +850,7 @@ func (e *errorReader) Read(p []byte) (n int, err error) {
 // `./g8e login` clients (CLI cert + Bearer <operator_session_id> +
 // X-G8E-CLI-Session-ID). The cert URI SAN is a CLI SPIFFE ID and must be
 // accepted on internal routes when the cli session is owned by the bound
-// operator session.
+// Operator session.
 func TestCLICertBoundToOperator(t *testing.T) {
 	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
@@ -877,14 +877,14 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	opURI, err := wid.OperatorSPIFFEURL("org", "op-id", operatorSessionID)
 	require.NoError(t, err)
 
-	t.Run("CLI cert bound to operator session is accepted", func(t *testing.T) {
+	t.Run("CLI cert bound to Operator session is accepted", func(t *testing.T) {
 		t.Parallel()
 		assert.True(t, h.auth.cliCertBoundToOperator(
 			[]*url.URL{cliURI}, cliSessionID, userID, operatorSessionID,
 		))
 	})
 
-	t.Run("CLI cert bound to a different operator session is rejected", func(t *testing.T) {
+	t.Run("CLI cert bound to a different Operator session is rejected", func(t *testing.T) {
 		t.Parallel()
 		assert.False(t, h.auth.cliCertBoundToOperator(
 			[]*url.URL{cliURI}, cliSessionID, userID, otherOpSessionID,
@@ -1040,7 +1040,7 @@ func TestSSEPushAuthorization(t *testing.T) {
 		t.Parallel()
 		bindData, found := h.db.KVGet(webBindKey)
 		assert.True(t, found, "Web session binding should exist")
-		assert.Contains(t, bindData, operatorSessionID, "Binding should contain operator session")
+		assert.Contains(t, bindData, operatorSessionID, "Binding should contain Operator session")
 	})
 
 	t.Run("producer_id is stored in SSE events", func(t *testing.T) {

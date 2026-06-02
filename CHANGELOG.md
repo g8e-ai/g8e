@@ -71,7 +71,7 @@ v1.0.6 introduces full Windows support with native filesystem and service parity
 
 ### Fixed
 
-*   **JSON Robustness** - Gateway controllers now strictly validate and reject malformed JSON bodies during operator binding and configuration updates.
+*   **JSON Robustness** - Gateway controllers now strictly validate and reject malformed JSON bodies during Operator binding and configuration updates.
 *   **Cross-Platform Nlink** - Fixed `nlink` handling in filesystem listings by implementing architecture-specific casting (uint16/uint32 to uint64) to ensure consistency across Linux, Unix, and Windows.
 *   **Gateway Startup** - Resolved race conditions in gateway service initialization specifically affecting Windows environments.
 
@@ -112,7 +112,7 @@ v1.0.4 introduces MCP stdio transport for local agent integration, adds a comple
 * **mTLS auth flow** - Fixed mTLS authentication flow to properly pull down trust bundle before enrollment. Previous implementation had race conditions where enrollment could attempt before trust bundle was available.
 * **Platform startup improvements** - Enhanced `./g8e gw start` with better error handling, clearer status messages, and improved process management. Startup sequence now validates prerequisites before launching services.
 * **Path refactoring** - Standardized path handling across `internal/constants/paths.go`, `internal/config/config.go`, and service packages. Eliminates duplicate path resolution logic and improves consistency.
-* **Test infrastructure consolidation** - Integration test helper functions consolidated into `test/integration_helper.go`. Reduces code duplication across A2A, MCP, and native operator tests.
+* **Test infrastructure consolidation** - Integration test helper functions consolidated into `test/integration_helper.go`. Reduces code duplication across A2A, MCP, and native Operator tests.
 * **Scenario test simplification** - Scenario test framework refactored to use programmatic fixture generation instead of hardcoded JSON fixtures. Improves maintainability and reduces fixture drift.
 * **Documentation cleanup** - Removed AI-focused language from documentation, improved developer guides, and clarified architectural descriptions. Protocol module now includes comprehensive LICENSE and README.
 
@@ -121,7 +121,7 @@ v1.0.4 introduces MCP stdio transport for local agent integration, adds a comple
 * **PKI regeneration bug** - Fixed certificate regeneration logic that could cause stale certificates to persist. PKI authority now properly invalidates and regenerates certificates on demand.
 * **Receipts table output** - Fixed formatting and data integrity issues in receipts table output. Ledger results now display correctly with proper field alignment.
 * **Authentication login flow** - Fixed CLI authentication login flow with improved error messages and better handling of edge cases in enrollment sequences.
-* **Native test stability** - Fixed stability issues in native operator tests by improving test isolation and cleanup procedures.
+* **Native test stability** - Fixed stability issues in native Operator tests by improving test isolation and cleanup procedures.
 * **Trust script execution** - Fixed trust management script execution issues. Script now properly handles certificate trust operations across different platforms.
 
 ### Security
@@ -136,7 +136,7 @@ v1.0.4 introduces MCP stdio transport for local agent integration, adds a comple
 
 ### Overview
 
-v1.0.3 removes all remaining g8ee application-layer coupling from the Gateway and protocol definitions. The Gateway routing layer uses dedicated controllers for admin and operator lifecycle, and a CLI approval command enables out-of-band L3 transaction authorization. Security hardening includes fixes for outbound L3 notary verification and JIT user lockout prevention.
+v1.0.3 removes all remaining g8ee application-layer coupling from the Gateway and protocol definitions. The Gateway routing layer uses dedicated controllers for admin and Operator lifecycle, and a CLI approval command enables out-of-band L3 transaction authorization. Security hardening includes fixes for outbound L3 notary verification and JIT user lockout prevention.
 
 ### Breaking Changes
 
@@ -150,14 +150,14 @@ v1.0.3 removes all remaining g8ee application-layer coupling from the Gateway an
 
 * **CLI approval command:** The `./g8e approve <transaction_hash>` command enables out-of-band L3 transaction approval. Users sign suspended transaction hashes with their CLI private key and submit cryptographic proofs to the Gateway for authorization.
 * **PublicRouteRegistry:** A centralized public route registry in `gateway_auth.go` eliminates fragile `HasPrefix` duplication across middleware. Exact paths and prefixes are registered in one location for maintainability.
-* **AdminController:** A dedicated controller for admin-only endpoints, including app policy management. Separates admin concerns from auth and operator controllers.
-* **OperatorController:** A dedicated controller for operator lifecycle endpoints (registration, binding, session management). Provides clear separation of operator management concerns.
+* **AdminController:** A dedicated controller for admin-only endpoints, including app policy management. Separates admin concerns from auth and Operator controllers.
+* **OperatorController:** A dedicated controller for Operator lifecycle endpoints (registration, binding, session management). Provides clear separation of Operator management concerns.
 * **JIT user lockout defense:** A one-time valid JWT mechanism prevents JIT user lockout during enrollment. Users receive a temporary valid JWT if enrollment fails, ensuring they can recover access.
 * **Enhanced gateway security:** Multiple security hardening improvements include stricter request validation, improved error handling, and enhanced authentication checks.
 
 ### Changed
 
-* **Gateway routing refactor:** Gateway HTTP routing uses dedicated controllers. Admin, auth, and operator concerns are separated into distinct controller packages with clear responsibilities.
+* **Gateway routing refactor:** Gateway HTTP routing uses dedicated controllers. Admin, auth, and Operator concerns are separated into distinct controller packages with clear responsibilities.
 * **L3 notary outbound fix:** L3 notary verification for outbound transactions is fixed. Suspended transaction handling and receipt generation correctly handle outbound mutation flows.
 * **Test coverage expansion:** Extensive test coverage improvements across gateway services include comprehensive integration tests for JWT authentication, CLI approval, public route registry, and controller endpoints.
 * **Build process simplification:** The `cp` command is removed from the build process in Makefile. Binary compilation is streamlined to eliminate unnecessary file operations.
@@ -220,7 +220,7 @@ v1.0.3 removes all remaining g8ee application-layer coupling from the Gateway an
 
 * **JWT-only authentication** - Gateway now enforces JWT-based authentication exclusively. All API key paths, constants, and middleware are removed.
 * **Schema organization** - Moved `schema.sql` from `internal/services/gateway/` to `internal/services/gateway/db/` for better directory structure.
-* **Documentation updates** - Updated gateway architecture, operator docs, and connection guides to reflect JWT-only auth and JIT user provisioning.
+* **Documentation updates** - Updated gateway architecture, Operator docs, and connection guides to reflect JWT-only auth and JIT user provisioning.
 
 ### Fixed
 
@@ -327,12 +327,12 @@ gates with no optional application-layer coupling in the critical path.
 # [0.2.7] - 2026-05-20
 
 ## Overview
-Release **v0.2.7** separates the **Governance Gateway (`g8eg`)** and the **Governed Operator (`g8eo`)** into distinct roles, introduces an **MCP & A2A protocol translator gateway**, removes external runtime dependencies (`git` and `jq`), and improves overall security and developer experience.
+Release **v0.2.7** separates the **g8e Gateway** and the **g8e Operator** into distinct roles, introduces an **MCP & A2A protocol translator gateway**, removes external runtime dependencies (`git` and `jq`), and improves overall security and developer experience.
 
 ## Key Changes
 
-* **Gateway Role Splitting**: The Go Gateway is now explicitly split into the **Governance Gateway (`g8eg`)** acting as the central Policy Decision Point (PDP), and the **Governed Operator (`g8eo`)** acting as the host-side Policy Execution Point (PEP).
-* **MCP & A2A Gateway**: `g8eo` can now act as a standalone admission gate for standard AI clients. It translates standard tool calls into governed transactions and supports out-of-band transaction suspension with WebAuthn approval before execution.
+* **Gateway Role Splitting**: The Go Gateway is now explicitly split into the **g8e Gateway** acting as the central Policy Decision Point (PDP), and the **g8e Operator** acting as the host-side Policy Execution Point (PEP).
+* **MCP & A2A Gateway**: g8e Operator can now act as a standalone admission gate for standard AI clients. It translates standard tool calls into governed transactions and supports out-of-band transaction suspension with WebAuthn approval before execution.
 * **Native Dependencies**: Replaced external CLI dependencies on `git` and `jq` with native Go (`go-git/v5`) and Python implementations to streamline the runtime footprint.
 * **Security Enhancements**: Implemented strict mTLS client-identity verification for Server-Sent Events (SSE) push endpoints.
 * **CLI Protections**: Added interactive confirmation prompts to prevent accidental data loss on destructive operations like `platform reset` and `platform clean`.
@@ -350,7 +350,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 
 ### Changed
 - **CLI & UX Improvements:** Improved login UX, operator-side UX, and bootstrap script stability. Enhanced build output for Mac and Linux.
-- **Protocol Refinement:** Ripped out legacy protobuf definitions, refined boundary structures, and decoupled operator auth from the app layer.
+- **Protocol Refinement:** Ripped out legacy protobuf definitions, refined boundary structures, and decoupled Operator auth from the app layer.
 - **Session Isolation:** Improved session typing and untangled CLI chat sessions to better separate the Gateway and app layer.
 - **Code Quality & Linting:** Comprehensive code quality passes including Go critic/lint fixes, Ruff, and Pyright typing improvements.
 - **Eval & Testing:** Refactored the eval harness and bench tests. Improved chaos testing with better audit summaries, L1 reporting, and correct DB location.
@@ -365,7 +365,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 ### Added
 - **CLI Chat Wiring:** Implemented full CLI chat functionality (`./g8e chat`) with backend wiring to `g8ee` and unified stream handling.
 - **Multi-Ledger Audit:** Implemented session-isolated Git audit ledgers for per-investigation transaction tracing.
-- **Actuator Execution Boundary:** Established `g8eo` Actuator as the authoritative execution boundary with signed action receipts.
+- **Actuator Execution Boundary:** Established g8e Operator Actuator as the authoritative execution boundary with signed action receipts.
 - **Governance APIs:** Added first-class governance APIs for audit export and trust management.
 - **Protobuf Module:** Introduced a unified `protocol/` directory with formal Protobuf module definitions.
 - **Commitment Ledger:** Added definitions for the commitment ledger to support reputation staking.
@@ -374,34 +374,34 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 ### Changed
 - **RequestContext Body Migration:** Migrated business context (`web_session_id`, `user_id`, `source_component`, etc.) from HTTP headers to body-embedded `RequestContext` objects for improved security and contract stability.
 - **Directory Reorganization:** Renamed `components/` to `services/` and `shared/` to `protocol/` to align with the mandatory Gateway-first architecture.
-- **g8ed Decommissioning:** Completed the removal of `g8ed` (Dashboard) remnants; migrated all core logic to the `g8eo` operator.
+- **g8ed Decommissioning:** Completed the removal of `g8ed` (Dashboard) remnants; migrated all core logic to the g8e Operator.
 - **Auth Cleanup:** Refactored `APIKeyService` and passkey authentication for better consistency and security across the Gateway.
 - **CodeQL Refactor:** Optimized CodeQL workflows and addressed findings in `event_service`.
-- **Exit Code Handling:** Standardized exit code handling and improved path validation in `g8eo` execution services.
-- **Event Service:** Consolidated `client_event_service` into a unified `event_service` within `g8eo`.
+- **Exit Code Handling:** Standardized exit code handling and improved path validation in g8e Operator execution services.
+- **Event Service:** Consolidated `client_event_service` into a unified `event_service` within g8e Operator.
 - **Improved Chaos Output:** Enhanced chaos test reporting for better failure visibility.
 
 ### Fixed
-- **Operator TLS Hardening:** Refined operator TLS configuration and improved gateway service stability.
+- **Operator TLS Hardening:** Refined Operator TLS configuration and improved gateway service stability.
 - **WebAuthn L3:** Fixed L3 verification issues following the `g8ed` decommissioning.
 - **Path Resolution:** Improved path resolution and environment variable handling across the platform, including fixes in `paths.json`.
-- **Test Stability:** Extensive fixes for unit and integration tests across `g8ee` and `g8eo`, particularly around the `RequestContext` migration and tribunal consensus.
+- **Test Stability:** Extensive fixes for unit and integration tests across `g8ee` and g8e Operator, particularly around the `RequestContext` migration and tribunal consensus.
 - **Case Update Logic:** Fixed `CaseDataService.update_case` to correctly handle empty updates by ignoring the `context` field.
 
 ## [0.2.4] - 2026-05-13
 
 ### Added
-- **Operator-Owned PKI/TLS:** Transitioned from legacy SSL to a robust CSR-based mTLS infrastructure owned by `g8eo`.
+- **Operator-Owned PKI/TLS:** Transitioned from legacy SSL to a robust CSR-based mTLS infrastructure owned by g8e Operator.
 - **mTLS Enrollment:** New CSR and mTLS enrollment flow for operators and clients.
 - **BYO Client Support:** Consolidated state root and added end-to-end support for "Bring Your Own" clients.
 - **CLI Login:** Added first-class CLI login support via the operator.
 
 ### Changed
-- **Gateway/App Layer Split:** Formalized `g8eo` as the mandatory Gateway and moved `client`/`g8ee` to optional application-layer adapters.
-- **client Elimination:** Removed `client` Dashboard as a mandatory component; migrated data management scripts to `g8eo` API.
+- **Gateway/App Layer Split:** Formalized g8e Operator as the mandatory Gateway and moved `client`/`g8ee` to optional application-layer adapters.
+- **client Elimination:** Removed `client` Dashboard as a mandatory component; migrated data management scripts to g8e Operator API.
 - **Governance Envelope Hardening:** Improved GovernanceEnvelope and proto definitions for better transaction integrity.
-- **Reorganized g8eo:** Directory restructuring for better modularity and maintainability.
-- **Passkey & Setup Refactor:** Migrated passkey and setup logic to the operator Gateway.
+- **Reorganized g8e Operator:** Directory restructuring for better modularity and maintainability.
+- **Passkey & Setup Refactor:** Migrated passkey and setup logic to the Operator Gateway.
 
 ### Fixed
 - **Settings Model Paths:** Fixed inconsistencies in settings model resolution.
@@ -441,7 +441,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 - **Port Conflicts:** Resolved port conflict issues during platform startup.
 - **Platform Commands:** Fixed g8e platform commands for proper host-native execution.
 - **Build.sh:** Fixed auth token handling and kill signal processing in build scripts.
-- **Test Suite:** Fixed test failures across g8ee, client, and g8eo after Docker removal.
+- **Test Suite:** Fixed test failures across g8ee, client, and g8e Operator after Docker removal.
 - **Chat:** Fixed chat functionality issues in the dashboard.
 - **Demo Profiles:** Fixed nginx demo and cleaned up SAN configurations in demo profiles.
 - **Certificate Service:** Fixed test certificate service for host-native testing.
@@ -474,30 +474,30 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 - **Protobuf-Driven Architecture:** Massively migrated the platform to a robust, typed Protobuf-driven architecture for payloads, while maintaining a GovernanceEnvelope JSON-first transport for mutation envelopes.
 - **Governance Envelope:** Introduced the JSON `GovernanceEnvelope` for all BFT transactions, binding event metadata, state roots, and hardware-bound fingerprints.
 - **L1/L2/L3 Governance:** Integrated a 3-layer command validation hierarchy (L1 Technical Bedrock, L2 Consensus/Tribunal, L3 Authorization/Human) directly into the message envelope.
-- **Recursive Grep Tool:** Introduced `recursive_grep_search` for high-efficiency filesystem exploration across operator fleets.
+- **Recursive Grep Tool:** Introduced `recursive_grep_search` for high-efficiency filesystem exploration across Operator fleets.
 - **Interrogation Gate:** Implemented a new gate in the agent loop that detects `<interrogation>` blocks and suppresses pending tool calls to prioritize user input.
 - **Actuator Risk Analysis:** Enhanced risk classification logic for Actuator sub-agents with improved reputation staking and file-read security.
 - **LFAA Audit Enhancements:** Refactored the Low-Fidelity Agentic Assistance audit recording to use typed Protobuf schemas.
 
 ### Changed
-- **G8EO Protocol Hardening:** Hardened `g8eo` to reject malformed or non-envelope command bytes and enforce L1 `forbidden_patterns` via Protobuf reflection.
+- **G8EO Protocol Hardening:** Hardened g8e Operator to reject malformed or non-envelope command bytes and enforce L1 `forbidden_patterns` via Protobuf reflection.
 - **Tribunal 2.0 Pipeline:** Refactored the Tribunal consensus pipeline into a modular, stage-based architecture utilizing strict Protobuf-typed payloads and signatures.
 - **G8eHttpContext Refactor:** Centralized and enforced strict security header validation (`web_session_id`, `user_id`, `source_component`) for all internal service communication.
 - **Internal API Security:** Enforced strict component-identity verification and session-binding for internal component-to-component routing.
-- **Operator Lifecycle:** Hardened operator slot management with atomic state transitions and reliable relaunch/activation logic.
-- **Removed g8ep:** Eliminated the sidecar-managed `g8ep` operator node and `SupervisorService` in favor of external operators and unified slot management.
-- **Standardized Cloud Subtype:** Standardized operator identification using `cloud_subtype` for consistency across cloud providers.
+- **Operator Lifecycle:** Hardened Operator slot management with atomic state transitions and reliable relaunch/activation logic.
+- **Removed g8ep:** Eliminated the sidecar-managed `g8ep` Operator node and `SupervisorService` in favor of external operators and unified slot management.
+- **Standardized Cloud Subtype:** Standardized Operator identification using `cloud_subtype` for consistency across cloud providers.
 
 ### Fixed
 - **Actuator Risk Regression:** Resolved a regression where Actuator risk levels were incorrectly calculated in certain agent turns.
 - **Interrogation Plumbing:** Fixed response handling and user interaction flow for the device interrogation pipeline.
 - **G8EO Execution ID:** Fixed a bug where `FsGrepResultPayload` was missing `ExecutionID` propagation, breaking correlation for recursive searches.
 - **Fingerprint Recording:** Resolved issues with system fingerprint recording and included missing events in the audit trail.
-- **Test Coverage & Stability:** Massive increase in unit and integration test coverage for `g8ee`, `g8eo`, and `operator`, with full migration to typed payload assertions.
+- **Test Coverage & Stability:** Massive increase in unit and integration test coverage for `g8ee`, g8e Operator, and `operator`, with full migration to typed payload assertions.
 
 ### Removed
 - **Legacy Audit UI:** Removed the outdated Audit page and associated backend services from `client` in favor of streamlined platform logging.
-- **"Available" Status:** Deprecated the "available" operator status as it was redundant for state management.
+- **"Available" Status:** Deprecated the "available" Operator status as it was redundant for state management.
 
 ## [0.1.9] - 2026-05-05
 
@@ -512,7 +512,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 - **Tribunal Logging:** Improved logging detail and clarity for the Tribunal consensus pipeline.
 - **Tribunal Voting:** Enforced a mandatory two-round minimum for Tribunal voting to ensure rigorous consensus.
 - **Model Selection:** Refined the model selection drawer UI.
-- **Operator Card:** Removed unnecessary animations from the operator card for better performance.
+- **Operator Card:** Removed unnecessary animations from the Operator card for better performance.
 - **PR Template:** Updated the pull request template for better contributor guidelines.
 - **Documentation:** General improvements to platform documentation, position paper, and `g8e-help`.
 
@@ -520,7 +520,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 - **Interrogation Plumbing:** Fixed response handling and plumbing for the device interrogation flow.
 - **Hamburger Menu:** Corrected the width and layout of the dashboard hamburger menu.
 - **Fleet Demo:** Fixed configuration and deployment issues in the fleet demo profile.
-- **Node Count & Bind All:** Fixed node counting logic for demos and moved the "Bind All" button to the top of the operator list.
+- **Node Count & Bind All:** Fixed node counting logic for demos and moved the "Bind All" button to the top of the Operator list.
 
 ## [0.1.8] - 2026-05-04
 
@@ -565,26 +565,26 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 
 ### Added
 - **Information Isolation Round 2:** Enhanced reputation staking system with improved governance and consensus mechanisms.
-- **Reputation Staking:** Implemented multi-phase reputation commitment and stake resolution for operator trust management.
+- **Reputation Staking:** Implemented multi-phase reputation commitment and stake resolution for Operator trust management.
 - **Bug Fixes:** Resolved various issues across platform components for improved stability.
 
 ## [0.1.5] - 2026-04-28
 
 ### Added
-- **Reputation System:** Introduced a multi-stage reputation and staking system, including `ReputationCommitment`, `ReputationState`, and `StakeResolution` models for trust-based operator management.
-- **SSH Inventory Streaming:** New capability to stream and import operator inventory directly from local SSH configuration files.
+- **Reputation System:** Introduced a multi-stage reputation and staking system, including `ReputationCommitment`, `ReputationState`, and `StakeResolution` models for trust-based Operator management.
+- **SSH Inventory Streaming:** New capability to stream and import Operator inventory directly from local SSH configuration files.
 - **Enhanced Test Fixtures:** Added `gold-set-schema.json` and `ledger-hash-fixtures.json` to improve consistency across platform evaluation suites.
 - **Reputation CLI:** New administrative scripts `manage-reputation.py` and `seed-reputation-state.py` for platform governance.
 
 ### Changed
 - **Tribunal 2.0 Governance:** Significant refactor of the Tribunal pipeline, implementing multi-phase consensus, detailed dissent recording, and improved safety guideline delivery.
-- **Operator Authority Model:** Consolidated operator document handling and configuration delivery, positioning `g8ee` as the authoritative source for operator state.
+- **Operator Authority Model:** Consolidated Operator document handling and configuration delivery, positioning `g8ee` as the authoritative source for Operator state.
 - **Settings UX Overhaul:** Redesigned the Dashboard Settings page to match the Setup page layout, including improved command validation and status rendering.
 - **Device Link Refactoring:** Streamlined device link management and added auto-approval logic for benign, non-mutating commands.
 - **System Info & Heartbeat Synchronization:** Overhauled `SystemInfo` and `Heartbeat` wire models for better cross-component consistency and reduced payload size.
 
 ### Fixed
-- **Authentication Loops:** Resolved edge cases in operator authentication and fixed internal routing issues during high-concurrency streams.
+- **Authentication Loops:** Resolved edge cases in Operator authentication and fixed internal routing issues during high-concurrency streams.
 - **Async Tooling:** Fixed `asyncio` race conditions in the `ToolService` and improved background task tracking.
 - **Test Suite Stability:** Fixed unit and integration test failures in `client`, `g8ee`, and the evals suite.
 - **API Key Security:** Improved masking and display security for API keys within the CLI environment.
@@ -624,14 +624,14 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 
 ### Added
 - **Tribunal Enhancements:** 5-member tribunal implementation with enhanced context and safety guidelines delivery to the tribunal pipeline
-- **Operator Panel Documentation:** Comprehensive documentation for operator panel paths and features
-- **Operator Panel Tests:** Added test coverage for operator panel path functionality
+- **Operator Panel Documentation:** Comprehensive documentation for Operator panel paths and features
+- **Operator Panel Tests:** Added test coverage for Operator panel path functionality
 
 ### Changed
 - **Bound Session Refactoring:** Renamed `web_session_id` to `bound_web_session_id` across all services for clarity and consistency
 - **SSE Validation:** Enhanced Server-Sent Events validation and wire/docs alignment
 - **Heartbeat System:** Improved heartbeat data handling in g8ee and cleaned up flatten_for cruft
-- **Metrics Delivery:** Enhanced metrics delivery to frontend for better operator monitoring
+- **Metrics Delivery:** Enhanced metrics delivery to frontend for better Operator monitoring
 - **Tribunal Error Handling:** Consolidated Tribunal error-to-event-to-tool-call-failure flow for better error tracking
 - **Temperature Configuration:** Cleaned up temperature settings to be persona-specific
 - **Sentinel Configuration:** Sentinel is now always-on with updated documentation
@@ -639,7 +639,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 ### Fixed
 - **CLI Authentication:** Improved CLI login flow and authentication handling
 - **CLI Security:** Enhanced CLI security for Ollama-only setups
-- **Operator Panel:** Fixed operator list display, bind/unbind all buttons, and public IP obfuscation
+- **Operator Panel:** Fixed Operator list display, bind/unbind all buttons, and public IP obfuscation
 - **Model Selection:** Fixed model selection drawer in the dashboard
 - **Platform Clean:** Fixed platform clean script for proper cleanup
 - **Frontend Bugs:** General UX improvements and frontend bug fixes
@@ -679,9 +679,9 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 ### Added
 - **Core Platform:** Open-source release of the `g8e` platform for AI-assisted infrastructure operations.
 - **g8ee (g8e-Compliant Agentic Ensemble):** ReAct-based Python orchestration layer with support for Anthropic, OpenAI, and local Ollama models.
-- **g8eo (Operator):** ~4MB dependency-free static Go binary for remote host execution. Features zero-inbound ports and outbound-only mTLS.
+- **g8e Operator:** ~4MB dependency-free static Go binary for remote host execution. Features zero-inbound ports and outbound-only mTLS.
 - **operator (Data Store):** SQLite-backed persistence layer, KV store, and pub/sub broker running within the Operator framework.
 - **client (Dashboard):** Node.js central management console featuring FIDO2 WebAuthn (passkey) authentication and real-time mTLS gateway proxying.
 - **Security:** "Tribunal Refinement Pipeline" utilizing stochastic swarm voting to validate AI-proposed terminal commands before human review.
 - **Security:** Local execution vaulting to ensure raw stdout/stderr logs are securely encrypted and retained strictly on the target host.
-- **DevOps:** Comprehensive `g8e` CLI wrapper for host-native platform lifecycle, testing, operator deployment, and CA certificate management.
+- **DevOps:** Comprehensive `g8e` CLI wrapper for host-native platform lifecycle, testing, Operator deployment, and CA certificate management.

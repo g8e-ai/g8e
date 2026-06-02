@@ -39,7 +39,7 @@ const (
 type LoadOptions struct {
 	// Required
 	OperatorEndpoint string
-	HTTPPort         int // HTTP port to dial on operator for auth proxy (default: from paths.json)
+	HTTPPort         int // HTTP port to dial on Operator for auth proxy (default: from paths.json)
 
 	// Cloud Operator mode
 	CloudMode     bool
@@ -57,7 +57,7 @@ type LoadOptions struct {
 	NoGit bool // --no-git flag: disables ledger (git-backed file versioning)
 
 	// Working directory
-	WorkDir string // Absolute path of the directory the operator was launched from (--working-dir or os.Getwd())
+	WorkDir string // Absolute path of the directory the Operator was launched from (--working-dir or os.Getwd())
 
 	// PKI and Secrets directories
 	PKIDir     string
@@ -173,7 +173,7 @@ type Config struct {
 
 	// Operator identification
 	OperatorID        string
-	OperatorSessionId string // Operator's unique operator session ID for authorization
+	OperatorSessionId string // Operator's unique Operator session ID for authorization
 	SystemFingerprint string // Unique system fingerprint for Operator tracking
 
 	// Cloud Operator mode
@@ -188,9 +188,9 @@ type Config struct {
 	// (which carries a hostname SAN, not an IP SAN) still validates correctly.
 	TLSServerName string
 
-	// operator connection ports (operator dials these on the remote host)
-	PubSubURL string // WebSocket base URL for operator pub/sub (e.g., wss://192.168.1.10:443) - no path; client appends /ws/pubsub
-	HTTPPort  int    // HTTPS port for auth/bootstrap requests via operator proxy (default: from paths.json)
+	// Operator connection ports (operator dials these on the remote host)
+	PubSubURL string // WebSocket base URL for Operator pub/sub (e.g., wss://192.168.1.10:443) - no path; client appends /ws/pubsub
+	HTTPPort  int    // HTTPS port for auth/bootstrap requests via Operator proxy (default: from paths.json)
 
 	// Logging
 	LogLevel string // Active log level (info, debug, error)
@@ -202,7 +202,7 @@ type Config struct {
 	// Monitoring configuration
 	HeartbeatInterval time.Duration
 
-	// WorkDir is the absolute path of the directory the operator was launched from.
+	// WorkDir is the absolute path of the directory the Operator was launched from.
 	// All data storage and command execution is anchored here unless explicitly overridden.
 	WorkDir string
 
@@ -210,7 +210,7 @@ type Config struct {
 	PKIDir     string
 	SecretsDir string
 
-	// Local storage configuration. All paths are relative to WorkDir - the directory the operator was launched from.
+	// Local storage configuration. All paths are relative to WorkDir - the directory the Operator was launched from.
 	LocalStoreEnabled       bool
 	LocalStoreDBPath        string
 	LocalStoreMaxSizeMB     int64

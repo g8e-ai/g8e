@@ -414,7 +414,7 @@ func streamToHost(
 
 		// Capture stdout+stderr (bounded) so the caller can surface the remote
 		// operator's output when it exits non-zero. Without this, the deployment
-		// tool silently drops every remote log line and a failing operator is
+		// tool silently drops every remote log line and a failing Operator is
 		// indistinguishable from a generic SSH exit - see g8eo review notes.
 		const maxCapturedBytes = 64 * 1024
 		stderrBuf := &boundedBuffer{limit: maxCapturedBytes}
@@ -425,17 +425,17 @@ func streamToHost(
 		// Build the remote ephemeral script inline.
 		//
 		// Critical: when the local stream is cancelled (Ctrl-C, ctx cancel) we
-		// must guarantee the remote operator dies with the session. Without a
+		// must guarantee the remote Operator dies with the session. Without a
 		// PTY, sshd does not automatically HUP the remote process group, and a
-		// plain `& wait $!` pattern leaves the backgrounded operator orphaned to
+		// plain `& wait $!` pattern leaves the backgrounded Operator orphaned to
 		// init. We therefore:
 		//   1. Install a trap on HUP/INT/TERM that forwards the signal to the
 		//      operator's PID and the whole process group, then waits briefly
 		//      for graceful exit before SIGKILL.
-		//   2. Run the operator in its own process group (setsid) so we can
+		//   2. Run the Operator in its own process group (setsid) so we can
 		//      signal the group, covering any children it spawned.
 		//   3. `wait "$PID"` is interruptible by trapped signals, so the trap
-		//      fires promptly rather than after the operator exits on its own.
+		//      fires promptly rather than after the Operator exits on its own.
 		var remoteCmd string
 		if operatorArgs != "" {
 			remoteCmd = fmt.Sprintf(
@@ -476,7 +476,7 @@ wait "$PID"`,
 
 		// Watcher: on ctx cancellation, send SIGHUP to the remote shell and
 		// close the session so sshd tears down the channel. Our remote trap
-		// will fire and kill the operator process group.
+		// will fire and kill the Operator process group.
 		runDone := make(chan struct{})
 		go func() {
 			select {

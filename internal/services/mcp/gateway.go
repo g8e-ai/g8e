@@ -83,7 +83,7 @@ type GatewayService struct {
 	maxPayloadBytes int64
 }
 
-// SessionValidator validates operator sessions for L3 authorization
+// SessionValidator validates Operator sessions for L3 authorization
 type SessionValidator interface {
 	ValidateSession(operatorSessionID string) (bool, error)
 }
@@ -691,7 +691,7 @@ func (g *GatewayService) handleReadField(ctx context.Context, arguments json.Raw
 		return nil, fmt.Errorf("field path validation failed: %w", err)
 	}
 
-	// L3: Validate operator session
+	// L3: Validate Operator session
 	if g.sessionValidator != nil {
 		valid, err := g.sessionValidator.ValidateSession(req.OperatorSessionID)
 		if err != nil {
@@ -1339,7 +1339,7 @@ func (g *GatewayService) DeleteSuspendedTransaction(txHash string) {
 }
 
 // ResumeWithL3Proof re-submits a suspended transaction with an attached L3
-// WebAuthn proof through the governance Gateway. The proof is verified
+// WebAuthn proof through the g8e Gateway. The proof is verified
 // inside the Gateway's TransactionVerifier - this method does not perform
 // independent passkey validation, it only re-wires the envelope and calls
 // the same fail-closed entry point used for primary submission.
@@ -1348,7 +1348,7 @@ func (g *GatewayService) DeleteSuspendedTransaction(txHash string) {
 // the OOB approval UI can surface the downstream tool result to the user.
 func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID string, proof *commonv1.L3Proof) (*operatorv1.ActionReceipt, error) {
 	if g.envProc == nil {
-		return nil, fmt.Errorf("governance Gateway not ready")
+		return nil, fmt.Errorf("g8e Gateway not ready")
 	}
 	if proof == nil {
 		return nil, fmt.Errorf("L3 proof required")

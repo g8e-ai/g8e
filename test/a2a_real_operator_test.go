@@ -37,7 +37,7 @@ func TestA2ARealOperator_Smoke(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
 	client, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 
-	// Test basic connectivity to operator via HTTPS
+	// Test basic connectivity to Operator via HTTPS
 	healthURL := fmt.Sprintf("https://localhost:%d/health", cliCfg.Paths.Ports.OperatorPublicHTTPS)
 
 	resp, err := client.Get(healthURL)

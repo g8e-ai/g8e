@@ -12,7 +12,7 @@ The platform security model is founded on two core pillars:
 
 ## 1. Authentication & Workload Identity
 
-The platform uses an internal Public Key Infrastructure (PKI) to issue and manage certificates. The **Governance Gateway (g8eg)** acts as the Certificate Authority (CA) and enforces identity validation.
+The platform uses an internal Public Key Infrastructure (PKI) to issue and manage certificates. The **g8e Gateway** acts as the Certificate Authority (CA) and enforces identity validation.
 
 ### Workload Identity (SPIFFE)
 
@@ -20,22 +20,22 @@ Each system component receives a SPIFFE ID, embedded as a Uniform Resource Ident
 
 | Workload Type | SPIFFE ID Format | Reference |
 | :--- | :--- | :--- |
-| **g8e Operator (g8eo)** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` | `protocol/workload_identity.go:37-39` |
+| **g8e Operator** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` | `protocol/workload_identity.go:37-39` |
 | **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` | `protocol/workload_identity.go:48-50` |
 | **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` | `protocol/workload_identity.go:59-61` |
-| **Governance Gateway (g8eg)** | `spiffe://g8e.local/hub/operator-listen` | `protocol/workload_identity.go:70-72` |
+| **g8e Gateway** | `spiffe://g8e.local/hub/operator-listen` | `protocol/workload_identity.go:70-72` |
 | **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` | `protocol/workload_identity.go:139-141` |
 
 ### mTLS Enforcement
 
-The Governance Gateway (g8eg) enforces TLS 1.3 for all L7 communication.
+The g8e Gateway enforces TLS 1.3 for all L7 communication.
 - **Strict mTLS**: The gateway requires and verifies client certificates using `tls.RequireAndVerifyClientCert`.
-- **Revocation**: Certificates are checked against a database-backed revoked certificates store. Revocation is enforced at the Gateway.
+- **Revocation**: Certificates are checked against a database-backed revoked certificates store. Revocation is enforced at the g8e Gateway.
 - **Identity Binding**: Middleware verifies that the SPIFFE ID in the client certificate matches the specific session identifier (such as `operator_session_id` or `cli_session_id`) inside the `GovernanceEnvelope`.
 
 ### PKI Hierarchy & Trust Domain
 
-The platform uses a four-tier PKI hierarchy issued by the Governance Gateway (g8eg):
+The platform uses a four-tier PKI hierarchy issued by the g8e Gateway:
 
 | Tier | Certificate | Purpose | Validity |
 | :--- | :--- | :--- | :--- |
@@ -47,28 +47,28 @@ The platform uses a four-tier PKI hierarchy issued by the Governance Gateway (g8
 | **Leaf Certificates** | operator, CLI, app | End-entity identities for services and clients | 7 days |
 | **Peer Certificates** | gateway-peer | Identity for federated gateway communication | 90 days |
 
-**Intermediate Split Rationale**: The hub and operator intermediate CAs are kept separate to enforce a clean blast-radius boundary. The hub intermediate signs only the gateway's serving identity, while the operator intermediate signs delegated workload leaves. This separation allows the operator-issuing key to be rotated or revoked without touching the gateway's serving trust, and vice versa.
+**Intermediate Split Rationale**: The hub and Operator intermediate CAs are kept separate to enforce a clean blast-radius boundary. The hub intermediate signs only the gateway's serving identity, while the Operator intermediate signs delegated workload leaves. This separation allows the operator-issuing key to be rotated or revoked without touching the gateway's serving trust, and vice versa.
 
 **Curve Policy**: All certificates (root, intermediates, serving, and leaves) use ECDSA P-256 for maximum interoperability with SPIFFE/SPIRE and TLS 1.3 stacks.
 
-**Revocation**: Certificate revocation is enforced via a database-backed denylist checked per-request in the mTLS middleware. A standard X.509 CRL signed by the operator intermediate CA is served at `/.well-known/g8e/pki/crl` for external consumption.
+**Revocation**: Certificate revocation is enforced via a database-backed denylist checked per-request in the mTLS middleware. A standard X.509 CRL signed by the Operator intermediate CA is served at `/.well-known/g8e/pki/crl` for external consumption.
 
 ### Enrollment & Bootstrap (CSR-based)
 
 Clients enroll in the platform using a Certificate Signing Request (CSR) bootstrap flow:
 1. **CA Discovery**: Clients fetch the platform root CA bundle from the endpoint `/.well-known/g8e/pki/ca-bundle`.
 2. **CSR Submission**: Clients generate a local ECDSA P-256 key pair and submit a CSR to `/api/v1/pki/csr/sign`.
-3. **Registration**: The Governance Gateway (g8eg) validates the CSR and binds the certificate to a user identity via invitation-based Just-In-Time (JIT) provisioning.
-4. **Session Issuance**: Upon successful enrollment, the Governance Gateway (g8eg) issues a specific `operator_session_id` or `cli_session_id`.
+3. **Registration**: The g8e Gateway validates the CSR and binds the certificate to a user identity via invitation-based Just-In-Time (JIT) provisioning.
+4. **Session Issuance**: Upon successful enrollment, the g8e Gateway issues a specific `operator_session_id` or `cli_session_id`.
 
 ### Windows Certificate Store Enrollment
 
 Windows users can enroll via the Windows Certificate Store for managed browser authentication:
 1. **CLI Enrollment**: Run `./g8e auth enroll-windows [--tpm]` to generate an ECDSA P-256 keypair.
-2. **CSR Signing**: The CLI submits a CSR to the Gateway and receives a signed certificate with SPIFFE URI SAN.
+2. **CSR Signing**: The CLI submits a CSR to the g8e Gateway and receives a signed certificate with SPIFFE URI SAN.
 3. **Certificate Import**: The signed certificate is imported to `Cert:\CurrentUser\My` in the Windows Certificate Store (experimental).
-4. **Browser Authentication**: Chrome and Edge automatically present certificates from the Windows Personal store when the Gateway issues a TLS CertificateRequest.
-5. **Session Binding**: The Gateway extracts the SPIFFE URI SAN from the client certificate and creates a `web_session_id` bound to the user identity.
+4. **Browser Authentication**: Chrome and Edge automatically present certificates from the Windows Personal store when the g8e Gateway issues a TLS CertificateRequest.
+5. **Session Binding**: The g8e Gateway extracts the SPIFFE URI SAN from the client certificate and creates a `web_session_id` bound to the user identity.
 
 **TPM-Backed Keys**: The `--tpm` flag utilizes the Microsoft Platform Crypto Provider KSP to generate keys in hardware. Currently, the implementation uses a software-backed key with TPM annotation as the full CNG API integration is pending.
 
@@ -99,7 +99,7 @@ L2 provides multi-agent cryptographic verification of intent.
 *Implementation: `internal/services/governance/l3_notary.go:31-35`*
 
 L3 ensures explicit human authorization for mutations.
-- **Suspension**: The Governance Gateway (g8eg) suspends transactions requiring L3 approval, storing them in the `suspended_transactions` pool.
+- **Suspension**: The g8e Gateway (g8eg) suspends transactions requiring L3 approval, storing them in the `suspended_transactions` pool.
 - **Out-of-Band (OOB) Approval**: The user approves via CLI command (`g8e approve <tx_hash>`) with a cryptographic Ed25519 signature over the transaction hash, or via WebAuthn for web sessions.
 - **L3Proof**: A successful approval generates an `L3Proof` containing the cryptographic signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
 

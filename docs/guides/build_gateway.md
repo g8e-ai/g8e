@@ -3,7 +3,7 @@ title: Build Gateway
 parent: Guides
 ---
 
-# Build a Governance Gateway
+# Build a g8e Gateway
 
 Last Updated: 2026-06-01
 Version: v1.0.5
@@ -12,9 +12,9 @@ Version: v1.0.5
 
 ## Overview
 
-A g8e-compatible Governance Gateway implements the central Policy Decision Point (PDP) of the platform. It provides PKI management, persistence, messaging, admission APIs, and protocol translation for MCP/A2A requests.
+A g8e-compatible g8e Gateway implements the central Policy Decision Point (PDP) of the platform. It provides PKI management, persistence, messaging, admission APIs, and protocol translation for MCP/A2A requests.
 
-The reference implementation is the g8e binary running in gateway mode. The same `g8e` binary operates in two modes: Operator mode (connects to a remote gateway) and Gateway mode (acts as the platform's central persistence and pub/sub broker). Custom gateway implementations must implement the same protocol contracts and invariants.
+The reference implementation is the g8e Node running in gateway mode. The same g8e Node operates in two modes: g8e Operator mode (connects to a remote gateway) and g8e Gateway mode (acts as the platform's central persistence and pub/sub broker). Custom gateway implementations must implement the same protocol contracts and invariants.
 
 ---
 
@@ -28,25 +28,25 @@ The reference implementation is the g8e binary running in gateway mode. The same
 
 ### Build from Source
 
-Clone the repository and build the g8e binary:
+Clone the repository and build the g8e Node:
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces the `g8e` binary in the repository root and platform-specific binaries in the `bin/` directory. The binary is statically linked and requires no runtime dependencies.
+This produces the `g8e` g8e Node in the repository root and platform-specific binaries in the `bin/` directory. The g8e Node is statically linked and requires no runtime dependencies.
 
 ### Build Targets
 
 The Makefile provides several build targets:
 
-- `make build` — Builds the g8e binary for all platforms (linux, windows, darwin).
-- `make build-linux` — Builds g8e for Linux (amd64, arm64, 386).
-- `make build-windows` — Builds g8e for Windows (amd64, arm64).
-- `make build-darwin` — Builds g8e for Darwin (amd64, arm64).
-- `make build-compressed` — Builds g8e for all platforms with UPX compression.
-- `make clean` — Removes compiled binaries and test artifacts.
+- `make build` — Builds the g8e Node for all platforms (linux, windows, darwin).
+- `make build-linux` — Builds g8e Node for Linux (amd64, arm64, 386).
+- `make build-windows` — Builds g8e Node for Windows (amd64, arm64).
+- `make build-darwin` — Builds g8e Node for Darwin (amd64, arm64).
+- `make build-compressed` — Builds g8e Node for all platforms with UPX compression.
+- `make clean` — Removes compiled g8e Nodes and test artifacts.
 
 ### Cross-Compilation
 
@@ -93,7 +93,7 @@ To start the gateway, use the CLI gateway command:
 
 ### Gateway Mode Flags
 
-- `--posture <mode>` — Gateway posture: doctrine (L1 enforced, L2/L3 audited, default), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)
+- `--posture <mode>` — g8e Gateway posture: doctrine (L1 enforced, L2/L3 audited, default), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)
 - `--http-listen-port <port>` — HTTPS port for mTLS API (default: 8440)
 - `--bootstrap-listen-port <port>` — Bootstrap TLS port for CSR-based enrollment (default: 8441)
 - `--public-listen-port <port>` — Public browser/BYO bootstrap port (default: 8443)
@@ -112,7 +112,7 @@ To start the gateway, use the CLI gateway command:
 
 ## Custom Gateway Implementation
 
-To build a custom g8e-compatible Governance Gateway, your implementation must satisfy the following protocol contracts.
+To build a custom g8e-compatible g8e Gateway, your implementation must satisfy the following protocol contracts.
 
 ### Required Capabilities
 
@@ -262,4 +262,4 @@ make ci
 ## Next Steps
 
 - **[Connect Apps to Gateway](connect_apps_to_gateway.md)** — Connect to, authenticate, use, maintain, and pull reports from a Gateway.
-- **[Build Operator](build_operator.md)** — Build a custom g8e-compatible Governed Operator.
+- **[Build Operator](build_operator.md)** — Build a custom g8e-compatible g8e Operator.

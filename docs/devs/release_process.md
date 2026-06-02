@@ -152,13 +152,13 @@ If protocol changes are included in this release, update the protocol version:
 
 ### 6. Build and Verify
 
-Build the binary and verify it works:
+Build the g8e Node and verify it works:
 
 ```bash
-# Build the binary
+# Build the g8e Node
 make build
 
-# Verify the binary
+# Verify the g8e Node
 ./g8e --help
 
 # Run tests
@@ -168,7 +168,7 @@ make test
 make test-integration
 ```
 
-**Note:** The build command outputs a single binary named `g8e` (not `g8e operator`). The build process embeds version information via ldflags from the VERSION file.
+**Note:** The build command outputs a single g8e Node named `g8e` (not `g8e operator`). The build process embeds version information via ldflags from the VERSION file.
 
 Check that the build includes the correct version:
 ```bash

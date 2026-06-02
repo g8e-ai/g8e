@@ -6,7 +6,7 @@ g8e is a zero-trust execution platform for agentic infrastructure. We welcome co
 
 Before contributing, ensure you understand the core platform architecture:
 
-- **Governance Gateway (g8eg)**: The central, BFT-governed Policy Decision Point (PDP).
+- **g8e Gateway (g8eg)**: The central, BFT-governed Policy Decision Point (PDP).
 - **g8e Operator (g8eo)**: The host-side Policy Execution Point (PEP) and MCP server.
 - **g8e Protocol**: The canonical protocol definitions (protobuf schemas and constant registries).
 - **3-Layer Governance Bedrock**:

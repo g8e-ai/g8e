@@ -3,7 +3,7 @@ title: Build Operator
 parent: Guides
 ---
 
-# Build a Governed Operator
+# Build a g8e Operator
 
 Last Updated: 2026-06-01
 Version: v1.0.5
@@ -12,9 +12,9 @@ Version: v1.0.5
 
 ## Overview
 
-A g8e-compatible Governed Operator implements the host-side Policy Execution Point (PEP) of the platform. It receives transactions, enforces the 5-layer verification sequence, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
+A g8e-compatible g8e Operator implements the host-side Policy Execution Point (PEP) of the platform. It receives transactions, enforces the 5-layer verification sequence, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
-The reference implementation is a single Go codebase that compiles into the `g8e` binary. The same binary serves both Governance Gateway (PDP) and g8e Operator (PEP) roles, selected via command-line flags. Custom operator implementations must implement the same protocol contracts and invariants.
+The reference implementation is a single Go codebase that compiles into the g8e Node. The same g8e Node serves both g8e Gateway (PDP) and g8e Operator (PEP) roles, selected via command-line flags. Custom Operator implementations must implement the same protocol contracts and invariants.
 
 ---
 
@@ -26,30 +26,30 @@ The reference implementation is a single Go codebase that compiles into the `g8e
 
 ### Build from Source
 
-Clone the repository and build the operator binary:
+Clone the repository and build the g8e Node:
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces the `g8e` binary in the repository root. The binary is statically linked and requires no runtime dependencies.
+This produces the `g8e` g8e Node in the repository root. The g8e Node is statically linked and requires no runtime dependencies.
 
-**Self-Contained Deployment**: The compiled binary is fully self-sovereign and requires no source tree, configuration files, or specific directory structure. It can be copied to any directory and run from there. All paths are resolved relative to the current working directory unless explicitly overridden by flags. Path configuration is embedded directly in the binary via go:embed and is the sole source of truth.
+**Self-Contained Deployment**: The compiled g8e Node is fully self-sovereign and requires no source tree, configuration files, or specific directory structure. It can be copied to any directory and run from there. All paths are resolved relative to the current working directory unless explicitly overridden by flags. Path configuration is embedded directly in the g8e Node via go:embed and is the sole source of truth.
 
 ### Build Targets
 
 The Makefile provides several build targets:
 
-- `make build` — Builds the `g8e` binary for all platforms (linux, windows, darwin).
-- `make build-linux` — Builds the `g8e` binary for Linux (amd64, arm64, 386).
-- `make build-windows` — Builds the `g8e` binary for Windows (amd64, arm64).
-- `make build-darwin` — Builds the `g8e` binary for Darwin (amd64, arm64).
-- `make build-compressed` — Builds the `g8e` binary for all platforms with UPX compression.
-- `make build-linux-compressed` — Builds the `g8e` binary for Linux with UPX compression.
-- `make build-windows-compressed` — Builds the `g8e` binary for Windows with UPX compression.
-- `make build-darwin-compressed` — Builds the `g8e` binary for Darwin with UPX compression.
-- `make clean` — Removes compiled binaries and test artifacts.
+- `make build` — Builds the g8e Node for all platforms (linux, windows, darwin).
+- `make build-linux` — Builds the g8e Node for Linux (amd64, arm64, 386).
+- `make build-windows` — Builds the g8e Node for Windows (amd64, arm64).
+- `make build-darwin` — Builds the g8e Node for Darwin (amd64, arm64).
+- `make build-compressed` — Builds the g8e Node for all platforms with UPX compression.
+- `make build-linux-compressed` — Builds the g8e Node for Linux with UPX compression.
+- `make build-windows-compressed` — Builds the g8e Node for Windows with UPX compression.
+- `make build-darwin-compressed` — Builds the g8e Node for Darwin with UPX compression.
+- `make clean` — Removes compiled g8e Nodes and test artifacts.
 
 ### Cross-Compilation
 
@@ -88,13 +88,13 @@ This builds for both amd64 and arm64 architectures.
 
 ## Custom Operator Implementation
 
-To build a custom g8e-compatible Governed Operator, your implementation must satisfy the following protocol contracts.
+To build a custom g8e-compatible g8e Operator, your implementation must satisfy the following protocol contracts.
 
 ### Required Capabilities
 
 #### 1. Protocol Translation
 
-The operator must act as a universal protocol translator:
+The Operator must act as a universal protocol translator:
 
 - **MCP Translation**: Accept JSON-RPC MCP tool calls and wrap them in GovernanceEnvelope format.
 - **A2A Translation**: Accept HTTP/JSON A2A skill invocations and wrap them in GovernanceEnvelope format.
@@ -103,7 +103,7 @@ The operator must act as a universal protocol translator:
 
 #### 2. Verification Sequence (L1-L4)
 
-The operator must implement a singular verification gate that enforces:
+The Operator must implement a singular verification gate that enforces:
 
 - **Integrity**: Verify `id == transaction_hash == SHA256(canonical_fields)` computed from the GovernanceEnvelope.
 - **Freshness**: Validate `expires_at` is not passed and `nonce` is not in the replay store.
@@ -117,7 +117,7 @@ Any verification failure must result in a typed rejection and audit entry. No fa
 
 #### 3. Execution Boundary (L5Actuator)
 
-The operator must implement a single execution boundary permitted to mutate host state:
+The Operator must implement a single execution boundary permitted to mutate host state:
 
 - **Pre-execution Receipt**: Sign an ActionReceipt with status `EXECUTING` and commit it to the AuditVaultService. Abort execution if this write fails.
 - **Execution**: Dispatch the verified payload to the appropriate handler (shell, file edit, etc.).
@@ -126,7 +126,7 @@ The operator must implement a single execution boundary permitted to mutate host
 
 #### 4. Identity and PKI
 
-The operator must establish workload identity via mTLS:
+The Operator must establish workload identity via mTLS:
 
 - **SPIFFE URI SANs**: Use SPIFFE-style URI SANs for identity binding.
 - **Satellite Identity**: `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>`.
@@ -136,7 +136,7 @@ The operator must establish workload identity via mTLS:
 
 #### 5. Local-First Audit Architecture (LFAA)
 
-The operator must maintain the host as the authoritative source of truth:
+The Operator must maintain the host as the authoritative source of truth:
 
 - **AuditVaultService**: Append-only, encrypted SQLite log of every event and signed ActionReceipt. Fail-closed: reject events missing a valid operator_session_id. Supports optional encryption vault for data-at-rest protection.
 - **LedgerService**: Git-backed version control for file mutations. Implements two-phase commit (LedgerHashBefore / LedgerHashAfter) and supports restoration to any prior state within the session.
@@ -145,7 +145,7 @@ The operator must maintain the host as the authoritative source of truth:
 
 #### 6. Outbound-Only Connectivity
 
-The operator must establish outbound-only connectivity to the Gateway:
+The Operator must establish outbound-only connectivity to the Gateway:
 
 - **mTLS Reverse Tunnel**: Dial out to the Gateway via mTLS WSS.
 - **No Inbound Ports**: Listen on nothing. No NAT traversal or remote attack surface on the execution boundary.
@@ -153,7 +153,7 @@ The operator must establish outbound-only connectivity to the Gateway:
 
 #### 7. MCP Server
 
-The operator must expose tools as a Model Context Protocol server:
+The Operator must expose tools as a Model Context Protocol server:
 
 - **HTTP-based MCP**: Support HTTP-based MCP for all client integrations (IDEs, direct API access).
 - **Tool Registration**: Register available tools with the MCP client.
@@ -172,7 +172,7 @@ Your implementation must enforce these core invariants:
 
 ### Sovereignty Boundary Plane
 
-The operator must implement data sovereignty:
+The Operator must implement data sovereignty:
 
 - **Threat Detection Before Execution**: Run L1Doctrine threat detection before execution.
 - **Data Scrubbing During Execution**: Rehydrate safe tokens for execution at the L5Actuator and aggressively scrub outputs before publishing.
@@ -184,7 +184,7 @@ While schemas are defined via Protobuf, the canonical wire format for the operat
 
 ### Strict Protocol Enforcement
 
-The operator must drop stale JSON formats, raw HMAC structures, and outdated relay fallbacks. A transaction either fully complies with the current strict 5-layer verification protocol, or it is rejected.
+The Operator must drop stale JSON formats, raw HMAC structures, and outdated relay fallbacks. A transaction either fully complies with the current strict 5-layer verification protocol, or it is rejected.
 
 ---
 
@@ -203,7 +203,7 @@ Refer to `protocol/proto/g8e/` for the canonical schema definitions.
 
 ## Testing
 
-A custom operator implementation must pass the platform test suite to claim g8e compatibility:
+A custom Operator implementation must pass the platform test suite to claim g8e compatibility:
 
 ```bash
 ./g8e test unit
@@ -237,5 +237,5 @@ For the full CI pipeline:
 
 ## Next Steps
 
-- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Deploy and use a Governed Operator.
+- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Deploy and use a g8e Operator.
 - **[Build Apps](build_apps.md)** — Build g8e-compatible applications using a Gateway.

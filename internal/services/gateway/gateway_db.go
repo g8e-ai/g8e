@@ -40,7 +40,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/system"
 )
 
-// gatewaySchema is the canonical operator SQLite schema, embedded at compile time
+// gatewaySchema is the canonical Operator SQLite schema, embedded at compile time
 // from `schema.sql`. That file is the single source of truth - do not inline
 // CREATE TABLE statements in Go code.
 //

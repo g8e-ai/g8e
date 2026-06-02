@@ -3,7 +3,7 @@ title: Connect Apps to Gateway
 parent: Guides
 ---
 
-# Connect Apps to a Governance Gateway
+# Connect Apps to g8e Gateway
 
 Last Updated: 2026-06-01
 Version: v1.0.7
@@ -12,15 +12,15 @@ Version: v1.0.7
 
 ## Overview
 
-This guide covers connecting applications to the g8e Governance Gateway. The Gateway serves as the central Policy Decision Point (PDP) that enforces 3-layer Byzantine Fault Tolerant governance over all AI agent mutations. Applications connect via multiple protocol surfaces: MCP (Model Context Protocol), A2A (Agent-to-Agent), direct governance envelopes, WebSocket pub/sub, and HTTP APIs.
+This guide covers connecting applications to the g8e Gateway. The g8e Gateway serves as the central Policy Decision Point (PDP) that enforces 3-layer Byzantine Fault Tolerant governance over all AI agent mutations. Applications connect via multiple protocol surfaces: MCP (Model Context Protocol), A2A (Agent-to-Agent), direct governance envelopes, WebSocket pub/sub, and HTTP APIs.
 
 ---
 
-## Reference Gateway Connection
+## Reference g8e Gateway Connection
 
 ### Initialization
 
-Start the Gateway to initialize the platform runtime:
+Start the g8e Gateway to initialize the platform runtime:
 
 ```bash
 ./g8e gw start
@@ -28,19 +28,19 @@ Start the Gateway to initialize the platform runtime:
 
 This creates the `.g8e` directory structure:
 - `.g8e/pki/` - PKI hierarchy (CA, certificates, keys)
-- `.g8e/data/` - SQLite database for Gateway persistence
-- `.g8e/logs/` - Gateway logs
+- `.g8e/data/` - SQLite database for g8e Gateway persistence
+- `.g8e/logs/` - g8e Gateway logs
 - `.g8e/secrets/` - Encrypted vault for platform secrets
 
-### Starting the Gateway
+### Starting the g8e Gateway
 
-Start the Gateway:
+Start the g8e Gateway:
 
 ```bash
 ./g8e gw start
 ```
 
-The Gateway runs in the default mode (doctrine: L1 enforced, L2/L3 audited). To run in different enforcement modes, use the `--posture` flag:
+The g8e Gateway runs in the default mode (doctrine: L1 enforced, L2/L3 audited). To run in different enforcement modes, use the `--posture` flag:
 
 #### Doctrine Mode (Default)
 
@@ -66,9 +66,9 @@ Enforces L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2). This is the most
 ./g8e gw start --posture notary
 ```
 
-### Gateway Ports
+### g8e Gateway Ports
 
-The Gateway exposes four logical protocol surfaces. Each surface serves a specific purpose with distinct authentication requirements.
+The g8e Gateway exposes four logical protocol surfaces. Each surface serves a specific purpose with distinct authentication requirements.
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
@@ -77,7 +77,7 @@ The Gateway exposes four logical protocol surfaces. Each surface serves a specif
 
 ### Port Multiplexing
 
-The Gateway enforces strict port separation for security:
+The g8e Gateway enforces strict port separation for security:
 - **mTLS only**: `tls.RequireAndVerifyClientCert` for strict mutual TLS on the execution boundary
 - **Public only**: TLS without client certificate requirement for browser-based access
 
@@ -567,8 +567,8 @@ If downstream MCP/A2A server is unavailable, the Gateway circuit breaker activat
 
 ## Next Steps
 
-- **[Build Operator](build_operator.md)** - Build a custom g8e-compatible Governed Operator
-- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** - Deploy and use a Governed Operator
+- **[Build Operator](build_operator.md)** - Build a custom g8e-compatible g8e Operator
+- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** - Deploy and use a g8e Operator
 - **[Build Apps](build_apps.md)** - Build g8e-compatible applications using a Gateway
 - **[MCP Protocol](../protocols/mcp/mcp.md)** - Detailed MCP protocol specification
 - **[A2A Protocol](../protocols/a2a/a2a.md)** - Detailed A2A protocol specification

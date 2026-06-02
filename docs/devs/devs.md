@@ -44,20 +44,20 @@ export PATH=$GOPATH/bin:$PATH
 | Command | Purpose |
 |---|---|
 | `./g8e` | Interactive Platform Manager |
-| `./g8e gw start` | Start the Governance Gateway |
-| `./g8e gw status` | Get Gateway health and status |
+| `./g8e gw start` | Start the g8e Gateway |
+| `./g8e gw status` | Get g8e Gateway health and status |
 | `./g8e auth login` | Authenticate the local CLI |
 | `./g8e test` | Run Go host-native tests |
 
-The `g8e` binary is the single entry point for all platform operations. See [docs/g8e-help.md](../g8e-help.md) for complete command reference.
+The g8e Node is the single entry point for all platform operations. See [docs/g8e-help.md](../g8e-help.md) for complete command reference.
 
 ## Architecture
 
 The platform consists of:
 
 - **g8e Protocol** - Protobuf schemas and canonical JSON wire contract in `protocol/`
-- **Governance Gateway (g8eg)** - Central Policy Decision Point (PDP)
-- **Governed Operator (g8eo)** - Host-side Policy Execution Point (PEP) and MCP server
+- **g8e Gateway** - Central Policy Decision Point (PDP)
+- **g8e Operator** - Host-side Policy Execution Point (PEP) and MCP server
 
 All components run as native Go processes. Runtime state lives in `.g8e/`.
 
@@ -68,7 +68,7 @@ For details, see [docs/architecture/](../architecture/).
 The platform is built via the Makefile. Run `make help` for available targets.
 
 **Startup sequence** (`./g8e gw start`):
-1. Gateway binary check/build
+1. g8e Node check/build
 2. Root of trust generation (first boot only) - CA hierarchy in `.g8e/pki/`, secrets in `.g8e/secrets/`
 3. Service convergence via health checks
 
@@ -163,7 +163,7 @@ Security doctrines are stored in `protocol/constants/doctrine/` as canonical JSO
 **Adding doctrines:**
 1. Update JSON file in `protocol/constants/doctrine/`
 2. Run `make validate-doctrines`
-3. Restart g8eo to load new doctrines
+3. Restart g8e Operator to load new doctrines
 
 See [docs/architecture/g8e.md](../architecture/g8e.md) for doctrine schema details.
 
@@ -215,7 +215,7 @@ Native tools are MCP tools compiled into the Operator binary that execute within
 **PR guidelines:**
 - Keep it focused (one change per PR)
 - Add tests for bug fixes and features
-- Use clear commit prefixes (e.g., `g8eo: fix the thing`)
+- Use clear commit prefixes (e.g., `g8e: fix the thing`)
 
 **Contact:** danny@g8e.ai
 

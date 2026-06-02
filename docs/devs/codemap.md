@@ -1,6 +1,6 @@
 # g8e Codemap
 
-Structural reference. For protocol semantics see [docs/architecture/g8e.md](../architecture/g8e.md), for gateway architecture see [docs/architecture/gateway.md](../architecture/gateway.md), for operator details see [docs/architecture/operator.md](../architecture/operator.md).
+Structural reference. For protocol semantics see [docs/architecture/g8e.md](../architecture/g8e.md), for gateway architecture see [docs/architecture/gateway.md](../architecture/gateway.md), for Operator details see [docs/architecture/operator.md](../architecture/operator.md).
 
 ## Dependency Graph
 
@@ -21,7 +21,7 @@ internal/                          <-- private implementation; imports protocol/
 
 ```text
 g8e/
-├── cmd/                            # Binary entry points
+├── cmd/                            # g8e Node entry points
 ├── internal/                       # Private implementation
 ├── pkg/                            # Public packages
 ├── protocol/                       # Protocol definitions (shared truth)
@@ -118,7 +118,7 @@ Each subdirectory produces one binary. All import `internal/` and `protocol/`.
 ```text
 cmd/
 └── operator/
-    └── main.go                     # g8e operator binary (multi-mode: gateway, insecure, outbound)
+    └── main.go                     # g8e Operator g8e Node (multi-mode: gateway, insecure, outbound)
 ```
 
 ## internal/
@@ -135,7 +135,7 @@ internal/
 ├── certs/                          # Embedded trust bundles, cert loading
 ├── chaos/                          # Chaos testing utilities
 ├── cli/                            # Platform CLI
-│   ├── api/                        #   HTTP client for operator communication
+│   ├── api/                        #   HTTP client for Operator communication
 │   ├── auth/                       #   Authentication client
 │   ├── cmd/                        #   Subcommands
 │   ├── config/                     #   CLI configuration
@@ -305,13 +305,13 @@ Integration and scenario-based tests.
 ```text
 test/
 ├── a2a_gateway_test.go             # A2A gateway integration
-├── a2a_real_operator_test.go       # Real operator A2A tests
+├── a2a_real_operator_test.go       # Real Operator A2A tests
 ├── byo_client_test.go              # BYO client integration
 ├── integration_helper.go           # Integration test helpers
 ├── mcp_gateway_test.go             # MCP gateway tests
-├── mcp_real_operator_test.go       # Real operator MCP tests
+├── mcp_real_operator_test.go       # Real Operator MCP tests
 ├── mcp_stdio_test.go               # MCP stdio tests
-├── native_real_operator_test.go    # Native real operator tests
+├── native_real_operator_test.go    # Native real Operator tests
 ├── universal_gateway_integration_test.go # Universal gateway integration tests
 └── scenario/
     ├── scenario.go                 # Scenario runner framework
@@ -344,7 +344,7 @@ make build-compressed             # Build g8e for all platforms with UPX compres
 make build-linux-compressed       # Build g8e for Linux with UPX compression
 make build-windows-compressed     # Build g8e for Windows with UPX compression
 make build-darwin-compressed      # Build g8e for Darwin with UPX compression
-make docker-build                 # Build g8e operator Docker image
+make docker-build                 # Build g8e Operator Docker image
 make generate                     # Generate all protocol artifacts (proto)
 make proto                        # Generate all Protobuf code (Go)
 make proto-python                 # Generate Python Protobuf code
@@ -363,7 +363,7 @@ make test-mcp                     # Run MCP tests
 make test-a2a                     # Run A2A tests
 make test-universal-gateway       # Run universal gateway integration tests
 make test-byo                     # Run BYO client tests (requires platform running and auth login)
-make test-native                  # Run native real operator tests
+make test-native                  # Run native real Operator tests
 make lint                         # Run all linting and quality checks
 make lint-no-embedded-newlines    # Check for compilation errors
 make vulncheck                    # Run vulnerability check

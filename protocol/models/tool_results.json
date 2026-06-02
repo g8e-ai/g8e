@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical AI tool result shapes returned by g8e-compatible agentic ensembles. These are the typed result models that flow through the operator → tool_executor → AI pipeline. All error type values cross-reference protocol/constants/status.json command.error.type. All status values cross-reference protocol/constants/status.json execution.status.",
+  "_comment": "Canonical AI tool result shapes returned by g8e-compatible agentic ensembles. These are the typed result models that flow through the Operator → tool_executor → AI pipeline. All error type values cross-reference protocol/constants/status.json command.error.type. All status values cross-reference protocol/constants/status.json execution.status.",
 
   "_comment.scope": "These models are agent-internal result shapes - they are NOT pub/sub wire payloads. The pub/sub wire payloads (the shapes g8eo publishes) are defined in wire/result_payloads.json. The models here are the enriched, post-processed results that an agent returns to the AI pipeline after translating the wire payload.",
 
@@ -14,7 +14,7 @@
         "description": "Machine-readable error classification. See protocol/constants/status.json command.error.type.",
         "values_ref": "protocol/constants/status.json#command.error.type"
       },
-      "execution_id": { "type": "string", "required": false, "description": "Execution identifier from the originating operator command" },
+      "execution_id": { "type": "string", "required": false, "description": "Execution identifier from the originating Operator command" },
       "available_operators": { "type": "integer", "required": false, "description": "Number of bound operators at time of failure. Present when error is operator-availability-related." },
       "timeout_seconds": { "type": "integer", "required": false, "description": "Timeout value that was in effect. Present when error_type is operation.timeout." },
       "status": {
@@ -126,7 +126,7 @@
   },
 
   "fetch_logs_tool_result": {
-    "_description": "Result returned by the fetch_execution_output tool call. Contains stored command output retrieved from the operator local vault. Extends operation_error_base.",
+    "_description": "Result returned by the fetch_execution_output tool call. Contains stored command output retrieved from the Operator local vault. Extends operation_error_base.",
     "_authority": "agent",
     "_consumers": ["agent"],
     "_tool_names": ["fetch_execution_output"],
@@ -238,7 +238,7 @@
   },
 
   "file_diff_entry": {
-    "_description": "Single file diff record from the operator ledger. Used as items in fetch_file_diff_tool_result and as the diff field in fetch_file_diff_tool_result. Canonical wire shape: wire/result_payloads.json file_diff_entry.",
+    "_description": "Single file diff record from the Operator ledger. Used as items in fetch_file_diff_tool_result and as the diff field in fetch_file_diff_tool_result. Canonical wire shape: wire/result_payloads.json file_diff_entry.",
     "_authority": "agent",
     "_consumers": ["agent"],
     "fields": {
@@ -269,7 +269,7 @@
   },
 
   "fetch_history_tool_result": {
-    "_description": "Result returned by the fetch_session_history tool call. Contains audit web session history from the operator local vault. Extends operation_error_base.",
+    "_description": "Result returned by the fetch_session_history tool call. Contains audit web session history from the Operator local vault. Extends operation_error_base.",
     "_authority": "agent",
     "_consumers": ["agent"],
     "_tool_names": ["fetch_session_history"],

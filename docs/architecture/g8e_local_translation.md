@@ -64,8 +64,8 @@ This ensures:
 ### Local Operator Resolution
 
 1. Envelope arrives at the local gateway
-2. Gateway identifies the target operator via the internal pub/sub router in `../../internal/services/gateway/gateway_pubsub.go`
-3. If the operator is local, the gateway delivers the envelope via in-process dispatch
+2. Gateway identifies the target Operator via the internal pub/sub router in `../../internal/services/gateway/gateway_pubsub.go`
+3. If the Operator is local, the gateway delivers the envelope via in-process dispatch
 4. No alias translation is required for local delivery
 
 ### Federation Foundations

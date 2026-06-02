@@ -58,7 +58,7 @@ type StreamStatusEvent struct {
 }
 
 // RunStream is the entry point for `g8e.operator stream`.
-// It runs inside the g8ep container and streams the operator binary to
+// It runs inside the g8ep container and streams the Operator binary to
 // one or more remote hosts concurrently via native Go crypto/ssh.
 func RunStream(args []string) {
 	fs := flag.NewFlagSet("stream", flag.ContinueOnError)
@@ -82,10 +82,10 @@ func RunStream(args []string) {
 	fs.StringVar(&hostsFile, "hosts", "", "File of hosts (one per line) or - for stdin")
 	fs.IntVar(&concurrency, "concurrency", defaultConcurrency, "Max parallel SSH sessions")
 	fs.IntVar(&timeoutSec, "timeout", int(defaultTimeout.Seconds()), "Per-host dial+inject timeout in seconds")
-	fs.StringVar(&endpoint, "endpoint", "", "Platform endpoint - if set, starts operator on each remote host")
+	fs.StringVar(&endpoint, "endpoint", "", "Platform endpoint - if set, starts Operator on each remote host")
 	fs.BoolVar(&noGit, "no-git", false, "Disable ledger")
 	fs.StringVar(&sshConfigArg, "ssh-config", "", "Path to SSH config file (default: ~/.ssh/config)")
-	fs.StringVar(&binaryDir, "binary-dir", getDefaultBinaryDir(), "Directory containing arch-specific operator builds")
+	fs.StringVar(&binaryDir, "binary-dir", getDefaultBinaryDir(), "Directory containing arch-specific Operator builds")
 	fs.StringVar(&sshIdentityFile, "ssh-identity-file", "", "SSH identity file path")
 	fs.StringVar(&sshUser, "ssh-user", "", "SSH username")
 	fs.StringVar(&sshPassphrase, "ssh-passphrase", "", "Passphrase for encrypted SSH private keys")
@@ -133,11 +133,11 @@ func RunStream(args []string) {
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[stream] binary not found at %s\n", binPath)
-		fmt.Fprintf(os.Stderr, "  Run: ./g8e operator build\n")
+		fmt.Fprintf(os.Stderr, "  Run: ./g8e Operator build\n")
 		os.Exit(constants.ExitGeneralError)
 	}
 
-	// Build operator invocation args for the remote shell
+	// Build Operator invocation args for the remote shell
 	operatorArgs := buildOperatorArgs(endpoint, noGit)
 
 	dialTimeout := time.Duration(timeoutSec) * time.Second
@@ -334,7 +334,7 @@ func collectHosts(positional []string, hostsFile string) ([]string, error) {
 }
 
 // buildOperatorArgs constructs the shell-safe argument string for the remote
-// operator invocation. Returns empty string when no endpoint is specified
+// Operator invocation. Returns empty string when no endpoint is specified
 // (inject-only mode).
 //
 // NOTE: Host-key policy is not passed here because strict mode is enforced on
@@ -380,9 +380,9 @@ func humanBytes(n int64) string {
 
 func printStreamUsage() {
 	fmt.Print(`
-g8e.operator stream -- concurrent ephemeral SSH operator injection
+g8e.operator stream -- concurrent ephemeral SSH Operator injection
 
-Streams the operator binary from the g8ep container directly to one or
+Streams the Operator binary from the g8ep container directly to one or
 more remote hosts over SSH. The binary is written to a tmpfile, optionally
 started, and automatically deleted when the SSH session closes.
 
@@ -402,7 +402,7 @@ FLAGS
   --hosts <file|->              File of hosts (one per line), - for stdin
   --concurrency <N>             Max parallel SSH sessions (default: 50)
   --timeout <secs>              Per-host dial+inject timeout (default: 60)
-  --endpoint <host>             Platform endpoint: starts operator if set
+  --endpoint <host>             Platform endpoint: starts Operator if set
   --no-git                      Disable ledger on remote operator
   --ssh-config <path>           SSH config path (default: ~/.ssh/config)
   --binary-dir <path>           Operator build dir (default: <project-root>/bin)
@@ -412,7 +412,7 @@ OUTPUT
   Human-readable progress is written to stderr.
 
 EXAMPLES
-  # Inject to 3 hosts, start operator on each
+  # Inject to 3 hosts, start Operator on each
   g8e.operator stream host1 host2 host3 \
     --endpoint 10.0.0.1
 

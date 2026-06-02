@@ -120,7 +120,7 @@ func generateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 	return string(csrPEM), privKey, nil
 }
 
-// renewOperatorCertificate performs automatic re-enrollment for the operator certificate.
+// renewOperatorCertificate performs automatic re-enrollment for the Operator certificate.
 // This is a fail-closed operation: if renewal fails, it returns an error.
 func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile string, clientIdentity *certs.ClientIdentity) error {
 	expiringSoon, err := func() (bool, error) {
@@ -145,7 +145,7 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 
 	opCSR, opKey, err := generateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
 	if err != nil {
-		return fmt.Errorf("failed to generate operator CSR: %w", err)
+		return fmt.Errorf("failed to generate Operator CSR: %w", err)
 	}
 
 	cliCSR, _, err := generateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
@@ -262,7 +262,7 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 	// Save renewed certificates
 	keyBytes, err := x509.MarshalECPrivateKey(opKey)
 	if err != nil {
-		return fmt.Errorf("failed to marshal operator private key: %w", err)
+		return fmt.Errorf("failed to marshal Operator private key: %w", err)
 	}
 
 	keyPEM := pem.EncodeToMemory(&pem.Block{
@@ -271,7 +271,7 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 	})
 
 	if err := os.WriteFile(clientKeyFile, keyPEM, 0600); err != nil {
-		return fmt.Errorf("failed to write operator key: %w", err)
+		return fmt.Errorf("failed to write Operator key: %w", err)
 	}
 
 	certContent := regResp.OperatorCert
@@ -280,7 +280,7 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 	}
 
 	if err := os.WriteFile(clientCertFile, []byte(certContent), 0600); err != nil {
-		return fmt.Errorf("failed to write operator cert: %w", err)
+		return fmt.Errorf("failed to write Operator cert: %w", err)
 	}
 
 	// Update the client certificate via DI
@@ -412,12 +412,12 @@ func main() {
 	flag.StringVar(&logLevel, "l", "info", "Log level")
 	flag.BoolVar(&noGit, "G", false, "Disable git (ledger)")
 	flag.BoolVar(&showVersion, "v", false, "Version")
-	flag.IntVar(&httpPort, "http-port", constants.Ports.OperatorHttps, "HTTPS port for auth/bootstrap via operator proxy (default: from paths.json)")
+	flag.IntVar(&httpPort, "http-port", constants.Ports.OperatorHttps, "HTTPS port for auth/bootstrap via Operator proxy (default: from paths.json)")
 	flag.StringVar(&privateKey, "key", "", "Private key")
 	flag.StringVar(&clientCert, "client-cert", "", "Client certificate (for mTLS)")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
 	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: "+constants.CACertLegacyBundlePath+" or fetch from /.well-known/g8e/pki/ca-bundle)")
-	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory operator was launched from)")
+	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory Operator was launched from)")
 	flag.BoolVar(&cloudMode, string(constants.OperatorTypeCloud), true, "Cloud mode")
 	flag.StringVar(&cloudProvider, "provider", "", "Cloud provider")
 	flag.BoolVar(&localStorage, "local-storage", true, "Enable local storage (stores data in current directory)")
@@ -472,7 +472,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  -k, --key <key>         Private key\n")
 		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running operator\n")
 		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: "+constants.CACertLegacyBundlePath+" or fetch from /.well-known/g8e/pki/ca-bundle)\n")
-		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory operator was launched from)\n")
+		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory Operator was launched from)\n")
 		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")
 		fmt.Fprintf(os.Stderr, "      --http-port <port>    HTTPS port to dial for auth/bootstrap (default: %d)\n", constants.Ports.OperatorHttps)
 		fmt.Fprintf(os.Stderr, "  -c, --cloud             Cloud Operator mode (for AWS/cloud CLI)\n")
@@ -625,11 +625,11 @@ func main() {
 	// Resolve default client certificate paths if not explicitly provided
 	// Priority: 1. Explicit flags, 2. Project-local .g8e/pki/operator.*, 3. Project-local .g8e/pki/client.*
 	if privateKey == "" {
-		// Try project-local operator key (created by enrollment)
+		// Try project-local Operator key (created by enrollment)
 		projectOperatorKey := filepath.Join(launchDir, ".g8e/pki/operator.key")
 		if _, err := os.Stat(projectOperatorKey); err == nil {
 			privateKey = projectOperatorKey
-			logger.Info("Using default operator key from project directory", "path", privateKey)
+			logger.Info("Using default Operator key from project directory", "path", privateKey)
 		} else {
 			// Try project-local client key
 			projectKey := filepath.Join(launchDir, ".g8e/pki/client.key")
@@ -641,11 +641,11 @@ func main() {
 	}
 
 	if clientCert == "" {
-		// Try project-local operator cert (created by enrollment)
+		// Try project-local Operator cert (created by enrollment)
 		projectOperatorCert := filepath.Join(launchDir, ".g8e/pki/operator.crt")
 		if _, err := os.Stat(projectOperatorCert); err == nil {
 			clientCert = projectOperatorCert
-			logger.Info("Using default operator certificate from project directory", "path", clientCert)
+			logger.Info("Using default Operator certificate from project directory", "path", clientCert)
 		} else {
 			// Try project-local client cert
 			projectCert := filepath.Join(launchDir, ".g8e/pki/client.crt")

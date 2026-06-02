@@ -27,7 +27,7 @@ func TestRootCommandStructure(t *testing.T) {
 	t.Run("root command has correct use", func(t *testing.T) {
 		rootCmd := &cobra.Command{
 			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the Governance Gateway and Governed Operator",
+			Short: "g8e Platform Manager - CLI for the g8e Gateway and g8e Operator",
 		}
 		assert.Equal(t, "g8e", rootCmd.Use)
 		assert.Contains(t, rootCmd.Short, "g8e Platform Manager")
@@ -304,7 +304,7 @@ func TestCommandErrorHandling(t *testing.T) {
 		// Just verify it fails
 	})
 
-	t.Run("data audit list requires operator session id", func(t *testing.T) {
+	t.Run("data audit list requires Operator session id", func(t *testing.T) {
 		cmd := dataAuditListCmd()
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)

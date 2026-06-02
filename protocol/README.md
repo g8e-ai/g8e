@@ -46,13 +46,13 @@ import (
 func main() {
     wid := protocol.NewWorkloadIdentity()
     
-    // Generate operator SPIFFE ID
+    // Generate Operator SPIFFE ID
     spiffeID := wid.OperatorSPIFFEID("org-123", "op-456", "session-789")
     fmt.Println(spiffeID) // spiffe://g8e.local/operator/org-123/op-456/session-789
     
     // Validate SPIFFE ID
     if wid.MatchesOperator(spiffeID, "org-123", "op-456", "session-789") {
-        fmt.Println("Valid operator identity")
+        fmt.Println("Valid Operator identity")
     }
 }
 ```

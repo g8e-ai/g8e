@@ -62,12 +62,12 @@ func NewRegistrationService(db *GatewayDBService, pki *PKIAuthority, logger *slo
 	}
 }
 
-// sessionWebBindKey returns the KV key for binding a web session to operator sessions.
+// sessionWebBindKey returns the KV key for binding a web session to Operator sessions.
 func sessionWebBindKey(webSessionID string) string {
 	return sessionWebBindPrefix + webSessionID + sessionBindSuffix
 }
 
-// sessionOperatorBindKey returns the KV key for binding an operator session to a web session.
+// sessionOperatorBindKey returns the KV key for binding an Operator session to a web session.
 func sessionOperatorBindKey(operatorSessionID string) string {
 	return sessionOperatorBindPrefix + operatorSessionID + sessionBindSuffix
 }
@@ -124,7 +124,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		return nil // Already terminated
 	}
 
-	// Update operator to terminated status
+	// Update Operator to terminated status
 	update := map[string]interface{}{
 		"status":     constants.OperatorStatusTerminated,
 		"updated_at": time.Now().UTC(),
@@ -134,7 +134,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 	}
 	updateBytes, _ := json.Marshal(update)
 	if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, updateBytes); err != nil {
-		return fmt.Errorf("failed to update operator status: %w", err)
+		return fmt.Errorf("failed to update Operator status: %w", err)
 	}
 
 	s.logger.Info("[REGISTRATION] Operator terminated",
@@ -147,7 +147,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 
 // RegisterDeviceCSR handles CSR-based enrollment.
 // Clients must present a valid client certificate (mTLS) and provide CSRs
-// for operator and CLI certificates. The user_id is extracted from the
+// for Operator and CLI certificates. The user_id is extracted from the
 // client certificate's SPIFFE URI SAN.
 func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, req models.OperatorRegistrationRequest) (*models.OperatorRegistrationResponse, error) {
 	s.logger.Info("[REGISTRATION] CSR-based enrollment", "hostname", req.Hostname, "user_id", userID)
@@ -171,7 +171,7 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 		return nil, fmt.Errorf("invalid system_fingerprint")
 	}
 
-	// Resolve or create operator slot
+	// Resolve or create Operator slot
 	var operator *models.OperatorDocumentGo
 	var err error
 
@@ -201,12 +201,12 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 	if operator == nil {
 		operator, err = s.createSlot(userID, organizationID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create operator slot: %w", err)
+			return nil, fmt.Errorf("failed to create Operator slot: %w", err)
 		}
 	}
 
 	if operator == nil {
-		return nil, fmt.Errorf("failed to resolve operator slot")
+		return nil, fmt.Errorf("failed to resolve Operator slot")
 	}
 
 	// Complete registration with CSR
@@ -238,9 +238,9 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 	return resp, nil
 }
 
-// completeRegistration performs the common registration logic after operator slot is resolved.
+// completeRegistration performs the common registration logic after Operator slot is resolved.
 func (s *RegistrationService) completeRegistration(operator *models.OperatorDocumentGo, userID, organizationID string, req models.OperatorRegistrationRequest, sanitizedFingerprint string) (*models.OperatorRegistrationResponse, error) {
-	// Create operator session
+	// Create Operator session
 	operatorSessionID := uuid.NewString()
 	operatorSessionSummary := &models.SessionSummary{
 		OperatorSessionID: operatorSessionID,
@@ -248,7 +248,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		ExpiresAt:         time.Now().UTC().Add(1 * time.Hour),
 	}
 
-	// Update operator document
+	// Update Operator document
 	update := map[string]interface{}{
 		"status":              constants.OperatorStatusActive,
 		"operator_session_id": operatorSessionID,
@@ -257,7 +257,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		"claimed_at": time.Now().UTC(),
 	}
 
-	// Mint a strictly-disjoint cli_session_id alongside the operator session.
+	// Mint a strictly-disjoint cli_session_id alongside the Operator session.
 	// See OperatorRegistrationResponse doc: the two session types must never
 	// share an identifier.
 	cliSessionID := uuid.NewString()
@@ -277,7 +277,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		}
 		certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, orgID, operator.ID, "", operatorSessionID, "")
 		if err != nil {
-			return nil, fmt.Errorf("failed to sign operator CSR: %w", err)
+			return nil, fmt.Errorf("failed to sign Operator CSR: %w", err)
 		}
 		update["operator_cert"] = certPEM
 		update["operator_cert_chain"] = chainPEM
@@ -305,13 +305,13 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	updateBytes, _ := json.Marshal(update)
 	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operator.ID, updateBytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update operator status: %w", err)
+		return nil, fmt.Errorf("failed to update Operator status: %w", err)
 	}
 
 	// Fetch trust bundle
 	hubBundle, _ := s.pki.GatewayTrustBundle()
 
-	// Resolve operator cert and chain from updated doc
+	// Resolve Operator cert and chain from updated doc
 	finalCertPEM := update["operator_cert"].(string)
 	finalChainPEM := update["operator_cert_chain"].(string)
 
@@ -507,7 +507,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 			}
 		}
 
-		// 3. Update operator document itself (for UI)
+		// 3. Update Operator document itself (for UI)
 		_, _ = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(fmt.Sprintf(`{"bound_web_session_id": %q}`, req.WebSessionID)))
 
 		bound = append(bound, opID)
@@ -613,7 +613,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 			_, _ = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
 		}
 
-		// 3. Update operator document itself
+		// 3. Update Operator document itself
 		_, _ = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(`{"bound_web_session_id": ""}`))
 
 		unbound = append(unbound, opID)
@@ -632,7 +632,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 	return res, nil
 }
 
-// SetTargetContext sets the active target operator for a web session.
+// SetTargetContext sets the active target Operator for a web session.
 func (s *RegistrationService) SetTargetContext(req models.SetTargetContextRequest) (*models.SetTargetContextResponse, error) {
 	if req.WebSessionID == "" {
 		return nil, fmt.Errorf("web_session_id is required")
@@ -641,8 +641,8 @@ func (s *RegistrationService) SetTargetContext(req models.SetTargetContextReques
 		return nil, fmt.Errorf("user_id is required")
 	}
 
-	// For now, "target context" is just making sure the operator is bound to the operator session.
-	// In the future, this might set a specific "active" flag in the operator session state.
+	// For now, "target context" is just making sure the Operator is bound to the Operator session.
+	// In the future, this might set a specific "active" flag in the Operator session state.
 
 	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), req.OperatorID)
 	if err != nil {
@@ -670,7 +670,7 @@ func (s *RegistrationService) SetTargetContext(req models.SetTargetContextReques
 			return nil, err
 		}
 		if !bindRes.Success {
-			return nil, fmt.Errorf("failed to bind operator for target context: %s", bindRes.Error)
+			return nil, fmt.Errorf("failed to bind Operator for target context: %s", bindRes.Error)
 		}
 	}
 
