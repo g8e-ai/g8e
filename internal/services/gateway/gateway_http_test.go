@@ -387,7 +387,6 @@ func TestHandleBootstrapHealth(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
 
 	t.Run("Returns 503 when not ready", func(t *testing.T) {
-		t.Parallel()
 		h.isReady = func() bool { return false }
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 		rr := httptest.NewRecorder()
@@ -398,7 +397,6 @@ func TestHandleBootstrapHealth(t *testing.T) {
 	})
 
 	t.Run("Returns 200 when ready", func(t *testing.T) {
-		t.Parallel()
 		h.isReady = func() bool { return true }
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 		rr := httptest.NewRecorder()
