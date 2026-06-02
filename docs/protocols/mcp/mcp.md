@@ -63,7 +63,7 @@ The gateway handles certain tools locally without downstream proxy:
   - `git_ops`: Provides git repository operations including status, log, branch info, and remote management for GitHub/GitLab workflows
   - `cloud_metadata`: Detects cloud provider (AWS, Azure, GCP) and retrieves instance metadata including region, instance type, and availability zone
   - `k8s_inspect`: Provides Kubernetes cluster inspection including pods, nodes, services, and deployment status
-  - `shell_execute`: Executes shell commands with denylist enforcement for dangerous operations and timeout limits
+  - `shell_execute`: Executes shell commands with denylist enforcement for dangerous operations and timeout limits. Supports multi-host execution via SSH with optional `hostnames` parameter (defaults to localhost)
 
 ---
 

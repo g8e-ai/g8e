@@ -58,6 +58,13 @@ func TestShellExecuteTool_InputSchema(t *testing.T) {
 	require.True(t, ok)
 	_, ok = props["working_dir"]
 	require.True(t, ok)
+	_, ok = props["hostnames"]
+	require.True(t, ok)
+
+	// Check hostnames property structure
+	hostnamesProp, ok := props["hostnames"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, "array", hostnamesProp["type"])
 }
 
 func TestShellExecuteTool_Execute_SimpleCommand(t *testing.T) {
@@ -288,4 +295,81 @@ func TestShellExecuteTool_Execute_CommandRejected(t *testing.T) {
 	require.Equal(t, -1, shellResult.ExitCode)
 	require.Contains(t, strings.ToLower(shellResult.Stderr), "blocked by safety policy")
 	require.Contains(t, strings.ToLower(shellResult.Error), "rejected by safety policy")
+}
+
+func TestShellExecuteTool_Execute_MultiHost(t *testing.T) {
+	tool := &ShellExecuteTool{}
+	ctx := context.Background()
+
+	req := ShellExecuteRequest{
+		Command:   "echo",
+		Args:      []string{"test"},
+		Hostnames: []string{"localhost", "127.0.0.1"},
+	}
+	reqJSON, err := json.Marshal(req)
+	require.NoError(t, err)
+
+	result, err := tool.Execute(ctx, reqJSON)
+	require.NoError(t, err)
+	require.Len(t, result.Content, 1)
+
+	// Multi-host execution returns an array
+	var results []map[string]interface{}
+	err = json.Unmarshal([]byte(result.Content[0].Text), &results)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+
+	// Check each result has hostname field
+	for _, r := range results {
+		hostname, ok := r["hostname"].(string)
+		require.True(t, ok)
+		require.NotEmpty(t, hostname)
+	}
+}
+
+func TestShellExecuteTool_Execute_SingleHost(t *testing.T) {
+	tool := &ShellExecuteTool{}
+	ctx := context.Background()
+
+	req := ShellExecuteRequest{
+		Command:   "echo",
+		Args:      []string{"test"},
+		Hostnames: []string{"localhost"},
+	}
+	reqJSON, err := json.Marshal(req)
+	require.NoError(t, err)
+
+	result, err := tool.Execute(ctx, reqJSON)
+	require.NoError(t, err)
+	require.Len(t, result.Content, 1)
+
+	// Single-host execution returns a single object
+	var shellResult ShellExecuteResult
+	err = json.Unmarshal([]byte(result.Content[0].Text), &shellResult)
+	require.NoError(t, err)
+	require.Equal(t, 0, shellResult.ExitCode)
+	require.Equal(t, "localhost", shellResult.Hostname)
+}
+
+func TestShellExecuteTool_Execute_DefaultHostname(t *testing.T) {
+	tool := &ShellExecuteTool{}
+	ctx := context.Background()
+
+	req := ShellExecuteRequest{
+		Command: "echo",
+		Args:    []string{"test"},
+		// No hostnames specified - should default to localhost
+	}
+	reqJSON, err := json.Marshal(req)
+	require.NoError(t, err)
+
+	result, err := tool.Execute(ctx, reqJSON)
+	require.NoError(t, err)
+	require.Len(t, result.Content, 1)
+
+	var shellResult ShellExecuteResult
+	err = json.Unmarshal([]byte(result.Content[0].Text), &shellResult)
+	require.NoError(t, err)
+	require.Equal(t, 0, shellResult.ExitCode)
+	require.Equal(t, "localhost", shellResult.Hostname)
 }

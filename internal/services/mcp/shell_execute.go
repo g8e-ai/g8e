@@ -14,6 +14,7 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -307,9 +308,14 @@ func executeLocally(ctx context.Context, command string, args []string, workingD
 		cmd.Dir = workingDir
 	}
 
-	// Execute command
-	output, err := cmd.CombinedOutput()
+	// Execute command with separate stdout and stderr
+	stdout, err := cmd.Output()
 	timedOut := ctx.Err() == context.DeadlineExceeded
+
+	var stderr []byte
+	if exitError, ok := err.(*exec.ExitError); ok {
+		stderr = exitError.Stderr
+	}
 
 	exitCode := 0
 	if err != nil {
@@ -322,8 +328,8 @@ func executeLocally(ctx context.Context, command string, args []string, workingD
 
 	result := map[string]interface{}{
 		"exit_code": exitCode,
-		"stdout":    string(output),
-		"stderr":    "",
+		"stdout":    string(stdout),
+		"stderr":    string(stderr),
 		"timed_out": timedOut,
 	}
 
@@ -385,13 +391,19 @@ func executeViaSSH(ctx context.Context, hostname, command string, args []string,
 		fullCmd = fmt.Sprintf("%s %s", command, strings.Join(args, " "))
 	}
 
-	// Add working directory if specified
+	// Add working directory if specified (properly quoted to prevent injection)
 	if workingDir != "" {
-		fullCmd = fmt.Sprintf("cd %s && %s", workingDir, fullCmd)
+		// Use shell quoting to safely escape the working directory path
+		// Pattern: replace ' with '"'"' (end quote, literal quote, start quote)
+		quotedDir := fmt.Sprintf("'%s'", strings.ReplaceAll(workingDir, "'", "'\"'\"'"))
+		fullCmd = fmt.Sprintf("cd %s && %s", quotedDir, fullCmd)
 	}
 
-	// Execute command with timeout
-	output, err := session.CombinedOutput(fullCmd)
+	// Execute command with timeout and separate stdout/stderr
+	var stdoutBuf, stderrBuf bytes.Buffer
+	session.Stdout = &stdoutBuf
+	session.Stderr = &stderrBuf
+	err = session.Run(fullCmd)
 	timedOut := ctx.Err() == context.DeadlineExceeded
 
 	exitCode := 0
@@ -405,10 +417,9 @@ func executeViaSSH(ctx context.Context, hostname, command string, args []string,
 
 	result := map[string]interface{}{
 		"exit_code": exitCode,
-		"stdout":    string(output),
-		"stderr":    "",
+		"stdout":    stdoutBuf.String(),
+		"stderr":    stderrBuf.String(),
 		"timed_out": timedOut,
-		"hostname":  hostname,
 	}
 
 	if timedOut {
