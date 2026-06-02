@@ -36,7 +36,7 @@ The gateway translates MCP tool invocations into governance envelopes:
 The gateway handles certain tools locally without downstream proxy:
 
 - **read_field**: JIT field resolution from governed collections with L1 field path validation, L3 session validation, and audit vault logging. Requires `collection`, `document_id`, `field_path`, and `operator_session_id` parameters.
-- **Native tools**: The Operator includes 13 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
+- **Native tools**: The Operator includes 26 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
   - `db_discover_topology`: Scans database schemas, tables, and column data types
   - `db_query_validate`: Validates SQL queries using EXPLAIN QUERY PLAN
   - `db_isolated_read`: Executes SELECT statements in read-only mode
@@ -50,6 +50,19 @@ The gateway handles certain tools locally without downstream proxy:
   - `net_socket_audit`: Inspects active network sockets
   - `net_endpoint_ping`: Performs TCP handshake or ICMP ping
   - `net_http_probe`: Performs lightweight HTTP requests
+  - `sys_info`: Provides system information including hostname, OS version, kernel, uptime, and load average
+  - `net_dns_resolve`: Performs DNS resolution (dig/nslookup equivalent) for network debugging
+  - `tls_cert_inspect`: Inspects TLS certificates for validity and metadata
+  - `sys_env_vars`: Lists environment variables with optional filtering
+  - `fs_file_checksum`: Computes file checksums for integrity verification
+  - `sys_service_status`: Checks system service status (systemd)
+  - `sys_container_status`: Inspects container status and metadata
+  - `fs_disk_usage`: Reports disk usage statistics
+  - `sys_time_clock`: Reports system time and clock synchronization status
+  - `proc_tree`: Displays process hierarchy and relationships
+  - `git_ops`: Provides git repository operations including status, log, branch info, and remote management for GitHub/GitLab workflows
+  - `cloud_metadata`: Detects cloud provider (AWS, Azure, GCP) and retrieves instance metadata including region, instance type, and availability zone
+  - `k8s_inspect`: Provides Kubernetes cluster inspection including pods, nodes, services, and deployment status
 
 ---
 

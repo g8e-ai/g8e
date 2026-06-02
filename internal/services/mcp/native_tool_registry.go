@@ -43,6 +43,9 @@ func RegisterNativeTools(registry *ToolRegistry) error {
 		&FSDiskUsageTool{},
 		&SysTimeClockTool{},
 		&ProcTreeTool{},
+		&GitOpsTool{},
+		&CloudMetadataTool{},
+		&K8sInspectTool{},
 	}
 
 	for _, tool := range tools {
