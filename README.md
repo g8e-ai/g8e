@@ -57,21 +57,18 @@ The platform is a single g8e Node. No runtime, no interpreter, no sidecar.
 
 ```bash
 curl -fsSL https://g8e.ai/g8e-linux-amd64 -o g8e && chmod +x g8e && ./g8e gw start
-
 ```
 
 **Quick launch (macOS)**
 
 ```bash
 curl -fsSL https://g8e.ai/g8e-darwin-amd64 -o g8e && chmod +x g8e && ./g8e gw start
-
 ```
 
 **Quick launch (Windows)**
 
 ```powershell
 iwr https://g8e.ai/g8e-windows-amd64.exe -outf g8e.exe && .\g8e.exe gw start
-
 ```
 
 **Deploy operators to remote hosts via SSH**
@@ -80,8 +77,7 @@ iwr https://g8e.ai/g8e-windows-amd64.exe -outf g8e.exe && .\g8e.exe gw start
 # Using your existing SSH config, deploy Operators across your fleet
 ./g8e Operator deploy --hosts host1,host2,host3
 
-# Tool calls now accept a list of hosts for simultaneous fan-out execution
-
+# Tool calls accept a list of hosts for simultaneous fan-out execution
 ```
 
 *See the [full QuickStart](docs/guides/getting_started.md) for mTLS, Operator enrollment, and client configuration.*
