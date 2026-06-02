@@ -230,3 +230,339 @@ func TestValidateSQLQuery(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateGitRepoPath(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+	}{
+		{
+			name:    "valid current directory",
+			path:    ".",
+			wantErr: false,
+		},
+		{
+			name:    "valid relative path",
+			path:    "myrepo",
+			wantErr: false,
+		},
+		{
+			name:    "valid absolute path",
+			path:    "/home/user/repo",
+			wantErr: false,
+		},
+		{
+			name:    "empty path",
+			path:    "",
+			wantErr: true,
+		},
+		{
+			name:    "path with parent directory reference",
+			path:    "../repo",
+			wantErr: true,
+		},
+		{
+			name:    "path with embedded parent reference",
+			path:    "repo/../other",
+			wantErr: true,
+		},
+		{
+			name:    "path with leading whitespace",
+			path:    "  repo",
+			wantErr: true,
+		},
+		{
+			name:    "path with trailing whitespace",
+			path:    "repo  ",
+			wantErr: true,
+		},
+		{
+			name:    "path with null byte",
+			path:    "repo\x00",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateGitRepoPath(tt.path)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateGitRepoPath(%q) expected error, got nil", tt.path)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateGitRepoPath(%q) unexpected error: %v", tt.path, err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateK8sResourceName(t *testing.T) {
+	tests := []struct {
+		name    string
+		nameStr string
+		wantErr bool
+	}{
+		{
+			name:    "valid simple name",
+			nameStr: "my-pod",
+			wantErr: false,
+		},
+		{
+			name:    "valid name with numbers",
+			nameStr: "pod-123",
+			wantErr: false,
+		},
+		{
+			name:    "valid name starting with number",
+			nameStr: "1pod",
+			wantErr: false,
+		},
+		{
+			name:    "valid name with multiple hyphens",
+			nameStr: "my-app-pod",
+			wantErr: false,
+		},
+		{
+			name:    "empty name",
+			nameStr: "",
+			wantErr: true,
+		},
+		{
+			name:    "name with uppercase",
+			nameStr: "MyPod",
+			wantErr: true,
+		},
+		{
+			name:    "name with underscore",
+			nameStr: "my_pod",
+			wantErr: true,
+		},
+		{
+			name:    "name with special characters",
+			nameStr: "my@pod",
+			wantErr: true,
+		},
+		{
+			name:    "name with leading whitespace",
+			nameStr: " mypod",
+			wantErr: true,
+		},
+		{
+			name:    "name with trailing whitespace",
+			nameStr: "mypod ",
+			wantErr: true,
+		},
+		{
+			name:    "name with null byte",
+			nameStr: "mypod\x00",
+			wantErr: true,
+		},
+		{
+			name:    "name too long (254 chars)",
+			nameStr: string(make([]byte, 254)),
+			wantErr: true,
+		},
+		{
+			name:    "name at max length (253 chars)",
+			nameStr: "a" + string(make([]byte, 252)),
+			wantErr: true,
+		},
+		{
+			name:    "name starting with hyphen",
+			nameStr: "-mypod",
+			wantErr: true,
+		},
+		{
+			name:    "name ending with hyphen",
+			nameStr: "mypod-",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateK8sResourceName(tt.nameStr)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateK8sResourceName(%q) expected error, got nil", tt.nameStr)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateK8sResourceName(%q) unexpected error: %v", tt.nameStr, err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateK8sNamespace(t *testing.T) {
+	tests := []struct {
+		name      string
+		namespace string
+		wantErr   bool
+	}{
+		{
+			name:      "valid simple namespace",
+			namespace: "default",
+			wantErr:   false,
+		},
+		{
+			name:      "valid namespace with numbers",
+			namespace: "ns-123",
+			wantErr:   false,
+		},
+		{
+			name:      "valid namespace starting with number",
+			namespace: "1ns",
+			wantErr:   false,
+		},
+		{
+			name:      "valid namespace with multiple hyphens",
+			namespace: "my-app-namespace",
+			wantErr:   false,
+		},
+		{
+			name:      "empty namespace",
+			namespace: "",
+			wantErr:   true,
+		},
+		{
+			name:      "namespace with uppercase",
+			namespace: "MyNamespace",
+			wantErr:   true,
+		},
+		{
+			name:      "namespace with underscore",
+			namespace: "my_namespace",
+			wantErr:   true,
+		},
+		{
+			name:      "namespace with special characters",
+			namespace: "my@ns",
+			wantErr:   true,
+		},
+		{
+			name:      "namespace with leading whitespace",
+			namespace: " myns",
+			wantErr:   true,
+		},
+		{
+			name:      "namespace with trailing whitespace",
+			namespace: "myns ",
+			wantErr:   true,
+		},
+		{
+			name:      "namespace with null byte",
+			namespace: "myns\x00",
+			wantErr:   true,
+		},
+		{
+			name:      "namespace too long (64 chars)",
+			namespace: string(make([]byte, 64)),
+			wantErr:   true,
+		},
+		{
+			name:      "namespace at max length (63 chars)",
+			namespace: "a" + string(make([]byte, 62)),
+			wantErr:   true,
+		},
+		{
+			name:      "namespace starting with hyphen",
+			namespace: "-myns",
+			wantErr:   true,
+		},
+		{
+			name:      "namespace ending with hyphen",
+			namespace: "myns-",
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateK8sNamespace(tt.namespace)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateK8sNamespace(%q) expected error, got nil", tt.namespace)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateK8sNamespace(%q) unexpected error: %v", tt.namespace, err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateCloudMetadataOperation(t *testing.T) {
+	tests := []struct {
+		name      string
+		operation string
+		wantErr   bool
+	}{
+		{
+			name:      "valid detect operation",
+			operation: "detect",
+			wantErr:   false,
+		},
+		{
+			name:      "valid instance operation",
+			operation: "instance",
+			wantErr:   false,
+		},
+		{
+			name:      "valid region operation",
+			operation: "region",
+			wantErr:   false,
+		},
+		{
+			name:      "valid availability_zone operation",
+			operation: "availability_zone",
+			wantErr:   false,
+		},
+		{
+			name:      "valid instance_type operation",
+			operation: "instance_type",
+			wantErr:   false,
+		},
+		{
+			name:      "valid all operation",
+			operation: "all",
+			wantErr:   false,
+		},
+		{
+			name:      "invalid operation",
+			operation: "invalid",
+			wantErr:   true,
+		},
+		{
+			name:      "empty operation",
+			operation: "",
+			wantErr:   true,
+		},
+		{
+			name:      "operation with injection attempt",
+			operation: "detect; rm -rf /",
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateCloudMetadataOperation(tt.operation)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateCloudMetadataOperation(%q) expected error, got nil", tt.operation)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateCloudMetadataOperation(%q) unexpected error: %v", tt.operation, err)
+				}
+			}
+		})
+	}
+}

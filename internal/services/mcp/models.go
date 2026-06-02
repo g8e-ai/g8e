@@ -411,3 +411,20 @@ type NetHTTPProbeResult struct {
 	LatencyMs  float64           `json:"latency_ms"`
 	Error      string            `json:"error,omitempty"`
 }
+
+// ShellExecuteRequest is the params for the "shell_execute" tool.
+type ShellExecuteRequest struct {
+	Command    string   `json:"command"`
+	Args       []string `json:"args,omitempty"`
+	Timeout    int      `json:"timeout,omitempty"`
+	WorkingDir string   `json:"working_dir,omitempty"`
+}
+
+// ShellExecuteResult is the result for the "shell_execute" tool.
+type ShellExecuteResult struct {
+	ExitCode int    `json:"exit_code"`
+	Stdout   string `json:"stdout"`
+	Stderr   string `json:"stderr"`
+	TimedOut bool   `json:"timed_out"`
+	Error    string `json:"error,omitempty"`
+}

@@ -80,6 +80,25 @@ func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 		return CallToolResult{}, fmt.Errorf("kubectl not found in PATH")
 	}
 
+	if req.Namespace != "" {
+		if err := validateK8sNamespace(req.Namespace); err != nil {
+			result := map[string]interface{}{
+				"operation": req.Operation,
+				"namespace": req.Namespace,
+				"error":     err.Error(),
+			}
+			resultJSON, _ := json.Marshal(result)
+			return CallToolResult{
+				Content: []TextContent{
+					{
+						Type: "text",
+						Text: string(resultJSON),
+					},
+				},
+			}, nil
+		}
+	}
+
 	namespace := req.Namespace
 	if namespace == "" {
 		namespace = getCurrentNamespace()
@@ -110,10 +129,44 @@ func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 		if req.Name == "" {
 			return CallToolResult{}, fmt.Errorf("name required for pod_logs operation")
 		}
+		if err := validateK8sResourceName(req.Name); err != nil {
+			result := map[string]interface{}{
+				"operation": req.Operation,
+				"namespace": namespace,
+				"name":      req.Name,
+				"error":     err.Error(),
+			}
+			resultJSON, _ := json.Marshal(result)
+			return CallToolResult{
+				Content: []TextContent{
+					{
+						Type: "text",
+						Text: string(resultJSON),
+					},
+				},
+			}, nil
+		}
 		result, err = k8sPodLogs(namespace, req.Name)
 	case "pod_describe":
 		if req.Name == "" {
 			return CallToolResult{}, fmt.Errorf("name required for pod_describe operation")
+		}
+		if err := validateK8sResourceName(req.Name); err != nil {
+			result := map[string]interface{}{
+				"operation": req.Operation,
+				"namespace": namespace,
+				"name":      req.Name,
+				"error":     err.Error(),
+			}
+			resultJSON, _ := json.Marshal(result)
+			return CallToolResult{
+				Content: []TextContent{
+					{
+						Type: "text",
+						Text: string(resultJSON),
+					},
+				},
+			}, nil
 		}
 		result, err = k8sPodDescribe(namespace, req.Name)
 	default:

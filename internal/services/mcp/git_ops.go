@@ -83,6 +83,23 @@ func (t *GitOpsTool) Execute(ctx context.Context, args json.RawMessage) (CallToo
 		repoPath = "."
 	}
 
+	if err := validateGitRepoPath(repoPath); err != nil {
+		result := map[string]interface{}{
+			"operation": req.Operation,
+			"repo_path": repoPath,
+			"error":     err.Error(),
+		}
+		resultJSON, _ := json.Marshal(result)
+		return CallToolResult{
+			Content: []TextContent{
+				{
+					Type: "text",
+					Text: string(resultJSON),
+				},
+			},
+		}, nil
+	}
+
 	if !isGitRepo(repoPath) {
 		result := map[string]interface{}{
 			"operation": req.Operation,
@@ -349,7 +366,7 @@ func gitCurrentBranch(repoPath string) (map[string]interface{}, error) {
 	}
 
 	return map[string]interface{}{
-		"branch": strings.TrimPrefix(output, "'"),
+		"branch": strings.Trim(output, "'"),
 	}, nil
 }
 

@@ -36,7 +36,7 @@ The gateway translates MCP tool invocations into governance envelopes:
 The gateway handles certain tools locally without downstream proxy:
 
 - **read_field**: JIT field resolution from governed collections with L1 field path validation, L3 session validation, and audit vault logging. Requires `collection`, `document_id`, `field_path`, and `operator_session_id` parameters.
-- **Native tools**: The Operator includes 26 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
+- **Native tools**: The Operator includes 27 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
   - `db_discover_topology`: Scans database schemas, tables, and column data types
   - `db_query_validate`: Validates SQL queries using EXPLAIN QUERY PLAN
   - `db_isolated_read`: Executes SELECT statements in read-only mode
@@ -63,6 +63,7 @@ The gateway handles certain tools locally without downstream proxy:
   - `git_ops`: Provides git repository operations including status, log, branch info, and remote management for GitHub/GitLab workflows
   - `cloud_metadata`: Detects cloud provider (AWS, Azure, GCP) and retrieves instance metadata including region, instance type, and availability zone
   - `k8s_inspect`: Provides Kubernetes cluster inspection including pods, nodes, services, and deployment status
+  - `shell_execute`: Executes shell commands with denylist enforcement for dangerous operations and timeout limits
 
 ---
 

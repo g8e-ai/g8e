@@ -64,6 +64,17 @@ func (t *CloudMetadataTool) Execute(ctx context.Context, args json.RawMessage) (
 		req.Operation = "detect"
 	}
 
+	if err := validateCloudMetadataOperation(req.Operation); err != nil {
+		result := map[string]interface{}{
+			"operation": req.Operation,
+			"error":     err.Error(),
+		}
+		resultJSON, _ := json.Marshal(result)
+		return CallToolResult{
+			Content: []TextContent{{Type: "text", Text: string(resultJSON)}},
+		}, nil
+	}
+
 	provider := detectCloudProvider()
 	if provider == "unknown" {
 		result := map[string]interface{}{
@@ -103,7 +114,7 @@ func (t *CloudMetadataTool) Execute(ctx context.Context, args json.RawMessage) (
 		result = map[string]interface{}{
 			"operation": req.Operation,
 			"provider":  provider,
-			"error":      err.Error(),
+			"error":     err.Error(),
 		}
 	}
 
@@ -147,15 +158,15 @@ func detectCloudProvider() string {
 	}
 
 	client := &http.Client{Timeout: 2 * time.Second}
-	
+
 	if _, err := client.Get("http://169.254.169.254/latest/meta-data/"); err == nil {
 		return "aws"
 	}
-	
+
 	if _, err := client.Get("http://169.254.169.254/metadata/instance?api-version=2021-02-01"); err == nil {
 		return "azure"
 	}
-	
+
 	if _, err := client.Get("http://metadata.google.internal/computeMetadata/v1/"); err == nil {
 		return "gcp"
 	}
@@ -315,7 +326,7 @@ func getAvailabilityZone(provider string) (map[string]interface{}, error) {
 			az = "unknown"
 		}
 		return map[string]interface{}{
-			"provider":         "aws",
+			"provider":          "aws",
 			"availability_zone": az,
 		}, nil
 	case "azure":
@@ -330,12 +341,12 @@ func getAvailabilityZone(provider string) (map[string]interface{}, error) {
 		}
 		if faultDomain, ok := metadata["compute"].(map[string]interface{})["platformFaultDomain"].(string); ok {
 			return map[string]interface{}{
-				"provider":         "azure",
+				"provider":          "azure",
 				"availability_zone": faultDomain,
 			}, nil
 		}
 		return map[string]interface{}{
-			"provider":         "azure",
+			"provider":          "azure",
 			"availability_zone": "unknown",
 		}, nil
 	case "gcp":
@@ -349,7 +360,7 @@ func getAvailabilityZone(provider string) (map[string]interface{}, error) {
 			zone = parts[len(parts)-1]
 		}
 		return map[string]interface{}{
-			"provider":         "gcp",
+			"provider":          "gcp",
 			"availability_zone": zone,
 		}, nil
 	default:
@@ -429,10 +440,10 @@ func getAllMetadata(provider string) (map[string]interface{}, error) {
 	}
 
 	return map[string]interface{}{
-		"provider":         provider,
-		"instance":         instance,
-		"region":           region,
+		"provider":          provider,
+		"instance":          instance,
+		"region":            region,
 		"availability_zone": az,
-		"instance_type":    instanceType,
+		"instance_type":     instanceType,
 	}, nil
 }

@@ -82,3 +82,93 @@ func validateProcNetPath(protocol string) error {
 
 	return nil
 }
+
+func validateGitRepoPath(path string) error {
+	if path == "" {
+		return fmt.Errorf("repository path cannot be empty")
+	}
+
+	cleanPath := strings.TrimSpace(path)
+	if cleanPath != path {
+		return fmt.Errorf("repository path must not contain leading/trailing whitespace")
+	}
+
+	if strings.Contains(path, "..") {
+		return fmt.Errorf("repository path must not contain parent directory references (..)")
+	}
+
+	if strings.ContainsAny(path, "\x00") {
+		return fmt.Errorf("repository path must not contain null bytes")
+	}
+
+	return nil
+}
+
+func validateK8sResourceName(name string) error {
+	if name == "" {
+		return fmt.Errorf("resource name cannot be empty")
+	}
+
+	cleanName := strings.TrimSpace(name)
+	if cleanName != name {
+		return fmt.Errorf("resource name must not contain leading/trailing whitespace")
+	}
+
+	if len(name) > 253 {
+		return fmt.Errorf("resource name must not exceed 253 characters")
+	}
+
+	allowedPattern := regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+	if !allowedPattern.MatchString(name) {
+		return fmt.Errorf("resource name must consist of lowercase alphanumeric characters, hyphens, or dots, and must start and end with an alphanumeric character")
+	}
+
+	if strings.ContainsAny(name, "\x00") {
+		return fmt.Errorf("resource name must not contain null bytes")
+	}
+
+	return nil
+}
+
+func validateK8sNamespace(namespace string) error {
+	if namespace == "" {
+		return fmt.Errorf("namespace cannot be empty")
+	}
+
+	cleanNamespace := strings.TrimSpace(namespace)
+	if cleanNamespace != namespace {
+		return fmt.Errorf("namespace must not contain leading/trailing whitespace")
+	}
+
+	if len(namespace) > 63 {
+		return fmt.Errorf("namespace must not exceed 63 characters")
+	}
+
+	allowedPattern := regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+	if !allowedPattern.MatchString(namespace) {
+		return fmt.Errorf("namespace must consist of lowercase alphanumeric characters or hyphens, and must start and end with an alphanumeric character")
+	}
+
+	if strings.ContainsAny(namespace, "\x00") {
+		return fmt.Errorf("namespace must not contain null bytes")
+	}
+
+	return nil
+}
+
+func validateCloudMetadataOperation(operation string) error {
+	allowedOperations := map[string]bool{
+		"detect":            true,
+		"instance":          true,
+		"region":            true,
+		"availability_zone": true,
+		"instance_type":     true,
+		"all":               true,
+	}
+
+	if !allowedOperations[operation] {
+		return fmt.Errorf("invalid operation: %s", operation)
+	}
+
+	return nil
+}
