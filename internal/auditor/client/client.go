@@ -177,25 +177,17 @@ func attachBody(j *json.RawMessage, raw *string, b []byte) {
 // StateRoot fetches the current state_merkle_root from /health on the public surface.
 // Maximal envelopes must bind to this exact root or the Operator drops them (TOCTOU gap).
 func (c *Client) StateRoot(ctx context.Context) (string, error) {
-	_, body, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodGet, c.cfg.PublicBaseURL+constants.APIPaths.Health, nil)
-	if err != nil {
-		return "", err
-	}
-	var h struct {
-		StateMerkleRoot string `json:"state_merkle_root"`
-		StateRoot       string `json:"state_root"`
-	}
-	_ = json.Unmarshal(body, &h)
-	if h.StateMerkleRoot != "" {
-		return h.StateMerkleRoot, nil
-	}
-	return h.StateRoot, nil // tolerate either field name
+	return c.stateRoot(ctx, c.cfg.PublicBaseURL)
 }
 
 // StateRootFromMTLS fetches the current state_merkle_root from /health on the mTLS surface.
 // Use this when the gateway is running in full cert mode where all ports require mTLS.
 func (c *Client) StateRootFromMTLS(ctx context.Context) (string, error) {
-	_, body, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodGet, c.cfg.MTLSBaseURL+constants.APIPaths.Health, nil)
+	return c.stateRoot(ctx, c.cfg.MTLSBaseURL)
+}
+
+func (c *Client) stateRoot(ctx context.Context, baseURL string) (string, error) {
+	_, body, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodGet, baseURL+constants.APIPaths.Health, nil)
 	if err != nil {
 		return "", err
 	}

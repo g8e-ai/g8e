@@ -69,6 +69,10 @@ type GatewayDBService struct {
 	wg      sync.WaitGroup
 	ctx     context.Context
 	cancel  context.CancelFunc
+
+	// State root caching to avoid full table scans
+	cachedStateRoot    string
+	cachedStateVersion int64
 }
 
 // OpenGatewayDBService opens (or creates) the unified SQLite database.
@@ -158,7 +162,16 @@ func (s *GatewayDBService) initTestSchema(secretsDir string) error {
 		logger:     s.logger,
 		keystore:   ks,
 	}
-	return sm.InitAppSettings()
+	if err := sm.InitAppSettings(); err != nil {
+		return err
+	}
+
+	// Migration: Initialize state_version table for existing databases
+	if err := s.migrateStateVersion(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *GatewayDBService) initStateRoot() error {
@@ -183,7 +196,51 @@ func (s *GatewayDBService) initStateRoot() error {
 }
 
 // GetCurrentStateRoot returns the current state merkle root.
+// Uses caching based on state_version to avoid full table scans when state hasn't changed.
 func (s *GatewayDBService) GetCurrentStateRoot() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Get current state version
+	var currentVersion int64
+	err := s.db.QueryRowWithRetry("SELECT version FROM state_version WHERE id = 1").Scan(&currentVersion)
+	if err != nil {
+		// Fallback to full calculation if version table is unavailable
+		return s.calculateStateRootUncached()
+	}
+
+	// If version hasn't changed, return cached root
+	if currentVersion == s.cachedStateVersion && s.cachedStateRoot != "" {
+		return s.cachedStateRoot, nil
+	}
+
+	// Version changed or cache is empty, recalculate
+	root, err := s.calculateStateRoot()
+	if err != nil {
+		return "", err
+	}
+
+	// Update cache
+	s.cachedStateRoot = root
+	s.cachedStateVersion = currentVersion
+
+	// Persist to state_root table
+	_, err = s.db.ExecWithRetry(
+		`INSERT INTO state_root (id, root, updated_at)
+		 VALUES (1, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET root = excluded.root, updated_at = excluded.updated_at`,
+		root,
+		sqliteutil.FormatTimestamp(time.Now().UTC()),
+	)
+	if err != nil {
+		return "", err
+	}
+	return root, nil
+}
+
+// calculateStateRootUncached performs a full state root calculation without caching.
+// Used as a fallback when state_version tracking is unavailable.
+func (s *GatewayDBService) calculateStateRootUncached() (string, error) {
 	root, err := s.calculateStateRoot()
 	if err != nil {
 		return "", err
@@ -397,6 +454,11 @@ func (s *GatewayDBService) initSchema(secretsDir string) error {
 		return err
 	}
 
+	// Migration: Initialize state_version table for existing databases
+	if err := s.migrateStateVersion(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -465,6 +527,29 @@ func (s *GatewayDBService) migratePlaintextServiceKeys(secretsDir string, sm *Se
 		s.logger.Info("[Migration] Completed plaintext service key migration", "count", migratedCount)
 	}
 
+	return nil
+}
+
+// migrateStateVersion initializes the state_version table for existing databases.
+// This is a one-time migration for databases created before the change tracking feature.
+func (s *GatewayDBService) migrateStateVersion() error {
+	// Check if state_version table exists and has a row
+	var count int
+	err := s.db.QueryRowWithRetry("SELECT COUNT(*) FROM state_version").Scan(&count)
+	if err != nil {
+		// Table doesn't exist, will be created by schema
+		return nil
+	}
+	if count > 0 {
+		// Already initialized
+		return nil
+	}
+
+	// Table exists but is empty, initialize it
+	_, err = s.db.ExecWithRetry("INSERT INTO state_version (id, version) VALUES (1, 0)")
+	if err != nil && !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		s.logger.Warn("Failed to initialize state_version", "error", err)
+	}
 	return nil
 }
 

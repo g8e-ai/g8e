@@ -95,6 +95,9 @@ type HTTPHandler struct {
 	adminController    *AdminController
 	operatorController *OperatorController
 
+	// Main router cached at construction to avoid rebuilding on every request
+	router http.Handler
+
 	// Rate limiting state
 	muLimiters sync.Mutex
 	limiters   map[string]*rate.Limiter
@@ -126,6 +129,9 @@ func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
 	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.SessionSvc, deps.MCPGateway, deps.Responder)
 	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.DB, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
+
+	// Build router once to avoid per-request overhead
+	h.router = h.buildRouter()
 
 	return h
 }
@@ -411,7 +417,7 @@ func isLoopbackOrigin(origin string) bool {
 }
 
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.buildRouter().ServeHTTP(w, r)
+	h.router.ServeHTTP(w, r)
 }
 
 // pathTraversalGuard rejects any request whose raw URL path contains a ".."
@@ -571,9 +577,13 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	root, err := h.db.GetCurrentStateRoot()
 	if err != nil {
 		h.logger.Error("Health check failed to get state root", string(constants.ConnectionStateError), err)
+		h.responder.Error(w, http.StatusServiceUnavailable, "state root calculation failed")
+		return
 	}
 	if root == "" {
 		h.logger.Warn("Health check: state root is empty")
+		h.responder.Error(w, http.StatusServiceUnavailable, "state root calculation failed")
+		return
 	}
 
 	h.responder.JSON(w, http.StatusOK, models.HealthResponse{

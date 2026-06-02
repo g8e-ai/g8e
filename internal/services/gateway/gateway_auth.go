@@ -256,7 +256,7 @@ func (s *AuthService) ExtractOperatorSessionID(r *http.Request) string {
 
 // Middleware returns an http.Handler that authenticates requests.
 // It chains multiple single-responsibility middlewares:
-// 1. publicBypassMiddleware (unauthenticated routes)
+// 1. publicBypassMiddleware (unauthenticated routes - bypasses entire chain)
 // 2. mtlsMiddleware (mTLS enforcement and revocation)
 // 3. authMiddleware (Operator, CLI, or App authentication)
 func (s *AuthService) Middleware(next http.Handler) http.Handler {
@@ -264,31 +264,27 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		s.mtlsMiddleware(
 			s.authMiddleware(next),
 		),
+		next,
 	)
 }
 
 // publicBypassMiddleware handles routes that are accessible without any authentication.
-func (s *AuthService) publicBypassMiddleware(next http.Handler) http.Handler {
+// For public routes, it bypasses the entire middleware chain and calls the final handler directly.
+func (s *AuthService) publicBypassMiddleware(middlewareChain, finalHandler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.publicRoutes.IsPublic(r.URL.Path) {
-			next.ServeHTTP(w, r)
+			finalHandler.ServeHTTP(w, r)
 			return
 		}
 
-		next.ServeHTTP(w, r)
+		middlewareChain.ServeHTTP(w, r)
 	})
 }
 
 // mtlsMiddleware enforces mTLS and verifies certificate revocation.
 func (s *AuthService) mtlsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Public routes bypass mTLS enforcement (including health endpoint)
-		if s.publicRoutes.IsPublic(r.URL.Path) {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// [PIVOT] Enforce mTLS for all other routes (Phase 6)
+		// [PIVOT] Enforce mTLS for all routes (Phase 6)
 		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 			s.logger.Warn("mTLS required but no client certificate provided", "path", r.URL.Path)
 			s.responder.Error(w, http.StatusUnauthorized, "mTLS client certificate required")
@@ -311,13 +307,6 @@ func (s *AuthService) mtlsMiddleware(next http.Handler) http.Handler {
 // authMiddleware handles authentication for Operator, CLI, and App identities.
 func (s *AuthService) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip auth check for bypass routes. These routes either need no auth
-		// or have their own auth middleware (like JWTAuthMiddleware for MCP/A2A).
-		if s.publicRoutes.IsPublic(r.URL.Path) {
-			next.ServeHTTP(w, r)
-			return
-		}
-
 		// We prioritize session auth for operators.
 		operatorSessionID := s.ExtractOperatorSessionID(r)
 		cliSessionID := r.Header.Get(constants.HeaderCLISessionID)

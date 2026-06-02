@@ -329,7 +329,6 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 }
 
 func TestHandleHealth(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	t.Run("Returns 503 when platform_settings not found", func(t *testing.T) {
@@ -361,6 +360,27 @@ func TestHandleHealth(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, constants.GatewayModeStatusOK, resp.Status)
 	})
+}
+
+func TestHandleHealth_StateRootFailure(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
+		"session_encryption_key": "test-key",
+	}))
+	require.NoError(t, err)
+
+	// Force state root calculation to fail by dropping a table it queries
+	_, err = h.db.db.Exec("DROP TABLE kv_store")
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
+	rr := httptest.NewRecorder()
+
+	h.handleHealth(rr, req)
+	assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
+	assert.JSONEq(t, `{"error":"state root calculation failed"}`, rr.Body.String())
 }
 
 // Regression: g8e-compatible agentic ensembles push typed events via /api/internal/sse/push and
