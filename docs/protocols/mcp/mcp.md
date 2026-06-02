@@ -215,13 +215,21 @@ Invoke MCP tools via JSON-RPC POST to `/api/v1/mcp/tools/call` or `/api/v1/mcp/t
 
 ### Tool Discovery
 
-The gateway proxies tool discovery to the configured downstream MCP server. If no downstream server is configured, the gateway returns native tools via the unified MCP endpoint architecture (`internal/services/mcp/mcp_endpoint.go`):
+The gateway provides merged tool discovery that combines native tools with downstream MCP server tools:
 
-- `tools/list`: Returns available tools with schemas (native tools if no downstream)
+- `tools/list`: Returns available tools with schemas (native tools merged with downstream tools when downstream is configured, native tools only when no downstream)
 - `prompts/list`: Returns available prompt templates
 - `resources/list`: Returns available resources
 
-The unified endpoint uses a functional options pattern for configuration and improved test coverage. Discovery endpoints are proxied verbatim from the downstream server when configured. Tool calls are wrapped in GovernanceEnvelope before verification.
+When a downstream MCP server is configured, the gateway:
+1. Proxies the `tools/list` request to the downstream server
+2. Parses the downstream response
+3. Merges native tools with downstream tools (deduplicating by tool name)
+4. Returns the combined tool list to the client
+
+If the downstream server is unavailable (circuit open, connection error, or invalid response), the gateway falls back to returning only native tools. This ensures clients always have access to native tools even when downstream services are degraded.
+
+The unified endpoint uses a functional options pattern for configuration and improved test coverage. Discovery endpoints are proxied from the downstream server when configured. Tool calls are wrapped in GovernanceEnvelope before verification.
 
 ### Tool Schema
 
