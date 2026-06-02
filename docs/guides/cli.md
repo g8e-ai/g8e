@@ -58,7 +58,7 @@ Use "g8e gw [command] --help" for more information about a command.
 
 ### gw start
 ```
-Start the Governance Gateway
+Start the sovereign Governance Gateway (PDP). Bootstraps the stateless gateway with PKI, persistence, and pub/sub. The gateway must be running before any client can authenticate.
 
 Usage:
   g8e gw start [flags]
@@ -209,7 +209,7 @@ Use "g8e auth [command] --help" for more information about a command.
 
 ### auth login
 ```
-Authenticate CLI with the running Gateway via CSR-based enrollment. Generates client keypairs, submits CSRs to the Gateway's CA, and saves signed mTLS credentials. The Gateway must already be running (use './g8e gw start' first).
+Authenticate the CLI to the running Gateway via CSR-based enrollment. Bootstraps the PKI hierarchy, generates client keypairs, submits CSRs to the Gateway's CA, and saves signed mTLS credentials. Required before any CLI or operator can connect to the Gateway.
 
 Usage:
   g8e auth login [flags]

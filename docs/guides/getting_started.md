@@ -77,17 +77,17 @@ This produces the `g8e` binary. It is self-contained and manages both Gateway (P
 - `make build`: Standard build (~35-38MB per platform)
 - `make build-compressed`: Compressed build (~15-17MB for Linux/Windows AMD64/ARM64, ~35-38MB for macOS and Windows ARM64)
 
-### 2. Initialize Gateway
+### 2. Start the Gateway
 
-Start the Governance Gateway in **Doctrine Mode** (L1Doctrine enforced):
+Start the sovereign Governance Gateway (PDP) in **Doctrine Mode** (L1Doctrine enforced). This bootstraps the stateless gateway with PKI, persistence, and pub/sub:
 
 ```bash
 ./g8e gw start
 ```
 
-### 3. Authenticate & Bootstrap
+### 3. Authenticate CLI to Gateway
 
-The first login bootstraps the PKI hierarchy and issues your initial mTLS certificates:
+Authenticate the CLI to the running Gateway. This bootstraps the PKI hierarchy and issues your initial mTLS credentials. Required before any CLI or operator can connect:
 
 ```bash
 ./g8e auth login
