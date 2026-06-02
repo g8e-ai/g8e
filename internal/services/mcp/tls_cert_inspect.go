@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -135,7 +136,7 @@ func loadCertFromFile(path string) (*x509.Certificate, error) {
 }
 
 func fetchCertFromHost(ctx context.Context, host string, port int, insecureSkipVerify bool) (*x509.Certificate, error) {
-	address := net.JoinHostPort(host, fmt.Sprintf("%d", port))
+	address := net.JoinHostPort(host, strconv.Itoa(port))
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 
 	conn, err := tls.DialWithDialer(dialer, "tcp", address, &tls.Config{

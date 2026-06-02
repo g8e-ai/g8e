@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -221,7 +222,7 @@ func getCurrentNamespace() string {
 }
 
 func k8sListPods(namespace string, limit int) (map[string]interface{}, error) {
-	args := []string{"get", "pods", "-n", namespace, "-o", "json", "--limit", fmt.Sprintf("%d", limit)}
+	args := []string{"get", "pods", "-n", namespace, "-o", "json", "--limit", strconv.Itoa(limit)}
 	output, err := runKubectlCommand(args...)
 	if err != nil {
 		return nil, fmt.Errorf("kubectl get pods failed: %w", err)
@@ -259,7 +260,7 @@ func k8sListPods(namespace string, limit int) (map[string]interface{}, error) {
 }
 
 func k8sListNodes(limit int) (map[string]interface{}, error) {
-	args := []string{"get", "nodes", "-o", "json", "--limit", fmt.Sprintf("%d", limit)}
+	args := []string{"get", "nodes", "-o", "json", "--limit", strconv.Itoa(limit)}
 	output, err := runKubectlCommand(args...)
 	if err != nil {
 		return nil, fmt.Errorf("kubectl get nodes failed: %w", err)
@@ -304,7 +305,7 @@ func k8sListNodes(limit int) (map[string]interface{}, error) {
 }
 
 func k8sListServices(namespace string, limit int) (map[string]interface{}, error) {
-	args := []string{"get", "services", "-n", namespace, "-o", "json", "--limit", fmt.Sprintf("%d", limit)}
+	args := []string{"get", "services", "-n", namespace, "-o", "json", "--limit", strconv.Itoa(limit)}
 	output, err := runKubectlCommand(args...)
 	if err != nil {
 		return nil, fmt.Errorf("kubectl get services failed: %w", err)
@@ -342,7 +343,7 @@ func k8sListServices(namespace string, limit int) (map[string]interface{}, error
 }
 
 func k8sListDeployments(namespace string, limit int) (map[string]interface{}, error) {
-	args := []string{"get", "deployments", "-n", namespace, "-o", "json", "--limit", fmt.Sprintf("%d", limit)}
+	args := []string{"get", "deployments", "-n", namespace, "-o", "json", "--limit", strconv.Itoa(limit)}
 	output, err := runKubectlCommand(args...)
 	if err != nil {
 		return nil, fmt.Errorf("kubectl get deployments failed: %w", err)

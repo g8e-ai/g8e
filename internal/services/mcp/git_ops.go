@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -271,7 +272,7 @@ func gitLog(repoPath string, limit int) (map[string]interface{}, error) {
 		limit = 1000
 	}
 
-	output, err := runGitCommand(repoPath, "log", fmt.Sprintf("--max-count=%d", limit), "--pretty=format:%H|%an|%ae|%ad|%s", "--date=iso")
+	output, err := runGitCommand(repoPath, "log", "--max-count", strconv.Itoa(limit), "--pretty=format:%H|%an|%ae|%ad|%s", "--date=iso")
 	if err != nil {
 		return nil, fmt.Errorf("git log failed: %w", err)
 	}
