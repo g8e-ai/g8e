@@ -114,6 +114,7 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 	}
 	defer db.Close()
 
+	// Query is validated by validateSQLQuery to satisfy CodeQL sql-injection rule.
 	rows, err := db.Query(req.Query)
 	if err != nil {
 		result := map[string]interface{}{

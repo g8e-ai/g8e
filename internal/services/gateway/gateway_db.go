@@ -349,7 +349,7 @@ func writeRowToHash(h hash.Hash, table string, values ...interface{}) error {
 			h.Write([]byte(val))
 			h.Write([]byte(`"`))
 		case int64:
-			h.Write([]byte(fmt.Sprintf("%d", val)))
+			fmt.Fprintf(h, "%d", val)
 		default:
 			return fmt.Errorf("unsupported type %T for state root hashing", v)
 		}

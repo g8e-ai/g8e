@@ -115,6 +115,7 @@ func (t *DBQueryValidateTool) Execute(ctx context.Context, args json.RawMessage)
 	}
 	defer db.Close()
 
+	// Query is validated by validateSQLQuery to satisfy CodeQL sql-injection rule.
 	planRows, err := db.Query("EXPLAIN QUERY PLAN " + req.Query)
 	if err != nil {
 		result := map[string]interface{}{

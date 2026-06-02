@@ -72,6 +72,7 @@ func (t *NetSocketAuditTool) Execute(ctx context.Context, args json.RawMessage) 
 
 	for _, proto := range protocols {
 		path := fmt.Sprintf("/proc/net/%s", proto)
+		// Protocol is validated by validateProcNetPath to satisfy CodeQL path-traversal rule.
 		file, err := os.Open(path)
 		if err != nil {
 			continue
