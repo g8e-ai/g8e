@@ -14,6 +14,7 @@ img[alt="License"], img[alt="Go"], img[alt="CI"], img[alt="Go Report Card"], img
 }
 </style>
 
+
 The "move fast and break things" era is costing organizations a fortune in wasted tokens, broken infrastructure, and unaccountable AI actions. SaaS vendors offer "governance" control planes that are little more than token spend dashboards, open-sourcing client tools simply to lock you into their proprietary backends. Cloud provider lock-in, protocol gaps in MCP/A2A, and the structural vulnerability of single-model self-reflection have left agentic systems dangerously exposed.
 
 **g8e is the missing admission boundary.** It enforces a typed, signed, state-bound transaction that must clear a fail-closed verification pipeline **directly on the host** before any side effect occurs.
