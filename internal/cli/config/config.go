@@ -26,7 +26,7 @@ import (
 )
 
 // defaultPathsJSON contains embedded default path configuration. This is the sole source of truth
-// for path configuration in the g8e binary. All paths are relative and resolved from the current
+// for path configuration in the g8e Node. All paths are relative and resolved from the current
 // working directory. The binary is fully self-sovereign and requires no external configuration files.
 //
 //go:embed paths_default.json

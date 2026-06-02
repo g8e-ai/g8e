@@ -483,7 +483,7 @@ func TestPKIController_HandleTrustScriptWindows(t *testing.T) {
 	assert.NotEmpty(t, rr.Body.Bytes())
 	script := rr.Body.String()
 	assert.Contains(t, script, "CA bundle installed")
-	assert.Contains(t, script, "Download g8e binary")
+	assert.Contains(t, script, "Download g8e Node")
 	assert.Contains(t, script, "security pki enroll")
 	assert.Contains(t, script, "Enrollment complete")
 }

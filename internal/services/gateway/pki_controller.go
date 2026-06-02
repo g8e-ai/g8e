@@ -333,17 +333,17 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 		"    return\n" +
 		"}\n\n" +
 		"Write-Host \"[g8e] CA bundle installed to ${LocalCAPath}\"\n\n" +
-		"# Download g8e binary\n" +
-		"Write-Host \"[g8e] Downloading g8e binary from ${BinaryUrl}...\"\n" +
+		"# Download g8e Node\n" +
+		"Write-Host \"[g8e] Downloading g8e Node from ${BinaryUrl}...\"\n" +
 		"try {\n" +
 		"    Invoke-RestMethod -Uri $BinaryUrl -OutFile $BinaryName\n" +
 		"} catch {\n" +
-		"    Write-Host \"[g8e] ERROR: Failed to download g8e binary: $_\"\n" +
+		"    Write-Host \"[g8e] ERROR: Failed to download g8e Node: $_\"\n" +
 		"    return\n" +
 		"}\n" +
 		"\n" +
 		"if (-not (Test-Path $BinaryName)) {\n" +
-		"    Write-Host \"[g8e] ERROR: Failed to download g8e binary\"\n" +
+		"    Write-Host \"[g8e] ERROR: Failed to download g8e Node\"\n" +
 		"    return\n" +
 		"}\n\n" +
 		"Write-Host \"[g8e] Binary downloaded to ${BinaryName}\"\n\n" +
@@ -385,7 +385,7 @@ func (c *PKIController) handleBinaryDownload(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Validate filename matches expected g8e binary pattern: g8e-{os}-{arch}[.exe]
+	// Validate filename matches expected g8e Node pattern: g8e-{os}-{arch}[.exe]
 	// Allowed OS: linux, darwin, windows
 	// Allowed arch: amd64, arm64, 386
 	binaryPattern := regexp.MustCompile(`^g8e-(linux|darwin|windows)-(amd64|arm64|386)(\.exe)?$`)

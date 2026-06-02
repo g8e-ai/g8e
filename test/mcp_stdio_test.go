@@ -187,7 +187,7 @@ func getTestBinaryPath() (string, error) {
 	buildCmd := exec.Command("go", "build", "-o", g8ePath, "./cmd/operator")
 	buildCmd.Dir = repoRoot
 	if output, err := buildCmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("failed to build g8e binary: %w, output: %s", err, string(output))
+		return "", fmt.Errorf("failed to build g8e Node: %w, output: %s", err, string(output))
 	}
 
 	return g8ePath, nil
