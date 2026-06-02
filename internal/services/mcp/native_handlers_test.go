@@ -35,10 +35,10 @@ func TestNativeToolHandler_HandleTool(t *testing.T) {
 		}
 	})
 
-	t.Run("all 13 tools registered", func(t *testing.T) {
+	t.Run("all 23 tools registered", func(t *testing.T) {
 		tools := handler.ListTools()
-		if len(tools) != 13 {
-			t.Errorf("expected 13 registered tools, got %d", len(tools))
+		if len(tools) != 23 {
+			t.Errorf("expected 23 registered tools, got %d", len(tools))
 		}
 
 		expectedTools := []string{
@@ -55,6 +55,16 @@ func TestNativeToolHandler_HandleTool(t *testing.T) {
 			"net_socket_audit",
 			"net_endpoint_ping",
 			"net_http_probe",
+			"sys_info",
+			"net_dns_resolve",
+			"tls_cert_inspect",
+			"sys_env_vars",
+			"fs_file_checksum",
+			"sys_service_status",
+			"sys_container_status",
+			"fs_disk_usage",
+			"sys_time_clock",
+			"proc_tree",
 		}
 
 		toolNames := make(map[string]bool)
@@ -1008,8 +1018,8 @@ func TestNativeTools(t *testing.T) {
 	handler := NewNativeToolHandler()
 	nativeTools := handler.ListTools()
 
-	if len(nativeTools) != 13 {
-		t.Errorf("expected 13 native tools, got %d", len(nativeTools))
+	if len(nativeTools) != 23 {
+		t.Errorf("expected 23 native tools, got %d", len(nativeTools))
 	}
 
 	expectedTools := []string{
@@ -1026,6 +1036,16 @@ func TestNativeTools(t *testing.T) {
 		"net_socket_audit",
 		"net_endpoint_ping",
 		"net_http_probe",
+		"sys_info",
+		"net_dns_resolve",
+		"tls_cert_inspect",
+		"sys_env_vars",
+		"fs_file_checksum",
+		"sys_service_status",
+		"sys_container_status",
+		"fs_disk_usage",
+		"sys_time_clock",
+		"proc_tree",
 	}
 
 	toolNames := make(map[string]bool)
