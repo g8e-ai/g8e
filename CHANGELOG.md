@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.8] - 2026-06-02
+
+### Overview
+
+v1.0.8 focuses on expanding the MCP (Model Context Protocol) native tool ecosystem with 14 new tools, improving SSH streaming capabilities, standardizing naming conventions across the codebase, and addressing security and test reliability issues. This release adds comprehensive system introspection tools, enhances shell execution with multi-host support, and improves overall test coverage and documentation.
+
+### Added
+
+*   **Shell Execute Tool** - Added `shell_execute` native tool for secure shell command execution with multi-host support, input validation, and comprehensive error handling (`internal/services/mcp/shell_execute.go`).
+*   **Cloud Metadata Tool** - Added `cloud_metadata` tool for retrieving cloud provider metadata from AWS, GCP, and Azure (`internal/services/mcp/cloud_metadata.go`).
+*   **Git Operations Tool** - Added `git_ops` tool for git repository operations including status, log, diff, and branch information (`internal/services/mcp/git_ops.go`).
+*   **Kubernetes Inspect Tool** - Added `k8s_inspect` tool for Kubernetes cluster inspection including pods, nodes, services, and deployments (`internal/services/mcp/k8s_inspect.go`).
+*   **Filesystem Tools** - Added filesystem analysis tools:
+    *   `fs_disk_usage` - Disk usage analysis and reporting
+    *   `fs_file_checksum` - File integrity verification with checksums
+*   **Network Tools** - Added `net_dns_resolve` tool for DNS resolution and lookup operations.
+*   **Process Tools** - Added `proc_tree` tool for process tree visualization and analysis.
+*   **System Tools** - Added comprehensive system monitoring tools:
+    *   `sys_container_status` - Container runtime status and information
+    *   `sys_env_vars` - Environment variable inspection
+    *   `sys_info` - System information including OS, kernel, and hardware details
+    *   `sys_service_status` - System service status checking
+    *   `sys_time_clock` - System time and clock synchronization information
+*   **TLS Certificate Inspection** - Added `tls_cert_inspect` tool for TLS certificate analysis and validation.
+*   **SSH Stream Improvements** - Enhanced SSH streaming with improved error handling, connection management, and streaming capabilities (`internal/cmd/stream_ssh.go`).
+*   **PubSub Test Coverage** - Added comprehensive test coverage for pubsub client operations and integration scenarios.
+
+### Changed
+
+*   **Naming Standardization** - Standardized naming conventions across 131 files in the codebase for consistency and maintainability, including documentation, internal services, and protocol models.
+*   **Gateway Tool Handling** - Improved downstream gateway tool handling with better error propagation and tool registration.
+*   **Native Tool Registry** - Extended native tool registry to support the expanded tool ecosystem.
+*   **Validation Framework** - Enhanced input validation framework with additional validators for shell commands, cloud metadata, and Kubernetes operations.
+*   **Documentation** - Updated CLI documentation to clarify auth login purpose and improved getting started guides.
+*   **PKI Enrollment** - Clarified PKI enrollment process in documentation and improved error messaging.
+
+### Fixed
+
+*   **PKI Enrollment** - Fixed PKI enrollment issues in gateway security commands and improved operator-to-gateway connection documentation.
+*   **Kubernetes Test Reliability** - Fixed `k8s_inspect` tests to skip when kubectl has no cluster access, preventing CI failures in environments without configured clusters.
+*   **MCP Test Errors** - Fixed MCP test errors and improved test coverage for native handlers.
+*   **String Replace Issues** - Fixed string replacement issues in various components.
+*   **CodeQL Security Alerts** - Addressed CodeQL security alerts in MCP tools with additional input validation and security hardening.
+*   **Test Parallelism** - Cleaned up test parallelism issues to prevent race conditions.
+*   **Linting Issues** - Fixed various linting issues across the codebase.
+*   **Healthcheck Improvements** - Improved healthcheck reliability and error reporting.
+
+### Security
+
+*   **Input Validation** - Enhanced input validation for shell_execute tool to prevent command injection attacks.
+*   **Cloud Metadata Security** - Added validation for cloud metadata requests to prevent unauthorized access.
+*   **Kubernetes Access Control** - Improved Kubernetes inspect tool with proper access validation and error handling.
+
+---
+
 ## [1.0.7] - 2026-06-01
 
 ### Overview

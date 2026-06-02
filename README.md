@@ -2,7 +2,7 @@
 
 # g8e
 
-**Military-Grade MCP/A2A for Fleets**
+**Enterprise-Grade MCP/A2A for Fleets**
 
 The "move fast and break things" era is costing organizations a fortune in wasted tokens, broken infrastructure, and unaccountable AI actions. SaaS vendors offer "governance" control planes that are little more than token spend dashboards, open-sourcing client tools simply to lock you into their proprietary backends. Cloud provider lock-in, protocol gaps in MCP/A2A, and the structural vulnerability of single-model self-reflection have left agentic systems dangerously exposed.
 
