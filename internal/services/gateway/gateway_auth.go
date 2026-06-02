@@ -282,6 +282,7 @@ func (s *AuthService) publicBypassMiddleware(next http.Handler) http.Handler {
 // mtlsMiddleware enforces mTLS and verifies certificate revocation.
 func (s *AuthService) mtlsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Public routes bypass mTLS enforcement (including health endpoint)
 		if s.publicRoutes.IsPublic(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return

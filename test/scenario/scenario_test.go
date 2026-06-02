@@ -131,7 +131,7 @@ func setupTestContext(t *testing.T) *TestContext {
 		PrivKey:           priv,
 		PubKey:            pub,
 		OperatorSessionID: operatorSessionID,
-		CLISessionID:      "test-cli-session", // Can be anything for these tests
+		CLISessionID:      creds.CLISessionID,
 	}
 }
 
@@ -139,11 +139,14 @@ func TestScenarios(t *testing.T) {
 	// Setup test infrastructure
 	ctx := setupTestContext(t)
 
-	// Fetch actual state root from gateway
-	stateRoot, err := ctx.Client.StateRoot(context.Background())
+	// Fetch actual state root from gateway via mTLS port
+	// Note: StateRoot uses PublicBaseURL by default, but in full cert mode
+	// all ports require mTLS, so we need to use the mTLS endpoint directly
+	stateRoot, err := ctx.Client.StateRootFromMTLS(context.Background())
 	if err != nil {
 		t.Fatalf("failed to fetch state root: %v", err)
 	}
+	t.Logf("State root from gateway: %q", stateRoot)
 
 	// Build a valid envelope using the builder
 	intentBytes, err := New().
@@ -157,7 +160,7 @@ func TestScenarios(t *testing.T) {
 	}
 
 	// Submit via real HTTP client
-	result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID)
+	result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID, ctx.CLISessionID)
 
 	// Assert acceptance (doctrine mode accepts valid L1 commands)
 	if result.Error != nil {
@@ -187,7 +190,7 @@ func TestNegativeControls(t *testing.T) {
 			t.Fatalf("failed to build envelope: %v", err)
 		}
 
-		result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID)
+		result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID, ctx.CLISessionID)
 		if result.Error == nil {
 			t.Error("expected rejection for bad ID, got acceptance")
 		}
@@ -205,7 +208,7 @@ func TestNegativeControls(t *testing.T) {
 			t.Fatalf("failed to build envelope: %v", err)
 		}
 
-		result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID)
+		result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID, ctx.CLISessionID)
 		if result.Error == nil {
 			t.Error("expected rejection for bad hash, got acceptance")
 		}
@@ -224,7 +227,7 @@ func TestNegativeControls(t *testing.T) {
 			t.Fatalf("failed to build envelope: %v", err)
 		}
 
-		result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID)
+		result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID, ctx.CLISessionID)
 		if result.Error == nil {
 			t.Error("expected rejection for bad signature, got acceptance")
 		}
@@ -244,11 +247,11 @@ type Result struct {
 }
 
 // submitViaHTTP submits an envelope via the auditor client and returns the result.
-func submitViaHTTP(t *testing.T, auditorClient *client.Client, intent []byte, operatorSessionID string) Result {
+func submitViaHTTP(t *testing.T, auditorClient *client.Client, intent []byte, operatorSessionID, cliSessionID string) Result {
 	t.Helper()
 
 	ctx := context.Background()
-	persona := client.Persona{ID: "scenario-test", UserAgent: "g8e-scenario-tests", OperatorSessionID: operatorSessionID}
+	persona := client.Persona{ID: "scenario-test", UserAgent: "g8e-scenario-tests", OperatorSessionID: operatorSessionID, CLISessionID: cliSessionID}
 
 	// Decode intent to get envelope for submission
 	var envelope commonv1.GovernanceEnvelope

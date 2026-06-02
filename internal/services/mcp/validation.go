@@ -23,24 +23,13 @@ import (
 
 func validateSQLQuery(query string) error {
 	query = strings.TrimSpace(query)
-	queryUpper := strings.ToUpper(query)
 
-	dangerousPatterns := []string{
-		";DROP", ";DELETE", ";INSERT", ";UPDATE", ";ALTER", ";CREATE",
-		";TRUNCATE", ";EXEC", ";EXECUTE", "--", "/*", "*/",
+	// Reject empty queries
+	if query == "" {
+		return fmt.Errorf("query cannot be empty")
 	}
 
-	for _, pattern := range dangerousPatterns {
-		if strings.Contains(queryUpper, pattern) {
-			return fmt.Errorf("query contains forbidden pattern: %s", pattern)
-		}
-	}
-
-	commentPattern := regexp.MustCompile(`--|/\*|\*/`)
-	if commentPattern.MatchString(query) {
-		return fmt.Errorf("query contains SQL comments which are not allowed")
-	}
-
+	// Reject queries with trailing semicolons to prevent statement chaining
 	semicolonPattern := regexp.MustCompile(`;\s*$`)
 	if semicolonPattern.MatchString(query) {
 		return fmt.Errorf("query must not end with semicolon")

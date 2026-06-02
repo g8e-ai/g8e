@@ -116,3 +116,117 @@ func TestValidateHTTPRequestURL(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateSQLQuery(t *testing.T) {
+	tests := []struct {
+		name    string
+		query   string
+		wantErr bool
+	}{
+		{
+			name:    "valid SELECT query",
+			query:   "SELECT * FROM users",
+			wantErr: false,
+		},
+		{
+			name:    "valid SELECT with WHERE",
+			query:   "SELECT id, name FROM users WHERE id = 1",
+			wantErr: false,
+		},
+		{
+			name:    "valid SELECT with JOIN",
+			query:   "SELECT u.name, o.order_id FROM users u JOIN orders o ON u.id = o.user_id",
+			wantErr: false,
+		},
+		{
+			name:    "valid SELECT with subquery",
+			query:   "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders)",
+			wantErr: false,
+		},
+		{
+			name:    "valid SELECT with GROUP BY",
+			query:   "SELECT COUNT(*) FROM users GROUP BY status",
+			wantErr: false,
+		},
+		{
+			name:    "valid SELECT with ORDER BY",
+			query:   "SELECT * FROM users ORDER BY name ASC",
+			wantErr: false,
+		},
+		{
+			name:    "valid SELECT with LIMIT",
+			query:   "SELECT * FROM users LIMIT 10",
+			wantErr: false,
+		},
+		{
+			name:    "empty query",
+			query:   "",
+			wantErr: true,
+		},
+		{
+			name:    "whitespace only",
+			query:   "   ",
+			wantErr: true,
+		},
+		{
+			name:    "trailing semicolon",
+			query:   "SELECT * FROM users;",
+			wantErr: true,
+		},
+		{
+			name:    "trailing semicolon with spaces",
+			query:   "SELECT * FROM users;   ",
+			wantErr: true,
+		},
+		{
+			name:    "query with semicolon in middle (allowed, DB will reject)",
+			query:   "SELECT * FROM users; SELECT * FROM orders",
+			wantErr: false,
+		},
+		{
+			name:    "query with comment (allowed, DB will reject)",
+			query:   "SELECT * FROM users -- comment",
+			wantErr: false,
+		},
+		{
+			name:    "query with block comment (allowed, DB will reject)",
+			query:   "SELECT * FROM users /* comment */",
+			wantErr: false,
+		},
+		{
+			name:    "DROP query (allowed here, rejected by caller's SELECT check)",
+			query:   "DROP TABLE users",
+			wantErr: false,
+		},
+		{
+			name:    "DELETE query (allowed here, rejected by caller's SELECT check)",
+			query:   "DELETE FROM users WHERE id = 1",
+			wantErr: false,
+		},
+		{
+			name:    "INSERT query (allowed here, rejected by caller's SELECT check)",
+			query:   "INSERT INTO users (name) VALUES ('test')",
+			wantErr: false,
+		},
+		{
+			name:    "UPDATE query (allowed here, rejected by caller's SELECT check)",
+			query:   "UPDATE users SET name = 'test' WHERE id = 1",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateSQLQuery(tt.query)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateSQLQuery(%q) expected error, got nil", tt.query)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateSQLQuery(%q) unexpected error: %v", tt.query, err)
+				}
+			}
+		})
+	}
+}

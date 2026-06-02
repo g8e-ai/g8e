@@ -163,6 +163,9 @@ func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
 func (h *HTTPHandler) buildRouter() http.Handler {
 	mux := http.NewServeMux()
 
+	// Health endpoint (available on mTLS surface for state root queries)
+	mux.HandleFunc(constants.APIPaths.Health, h.handleHealth)
+
 	// MCP Ingress routes with rate limiting
 	mcpMux := http.NewServeMux()
 	mcpMux.HandleFunc(constants.APIPaths.MCPEndpoint, h.mcp.HandleMCP)
@@ -568,6 +571,9 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	root, err := h.db.GetCurrentStateRoot()
 	if err != nil {
 		h.logger.Error("Health check failed to get state root", string(constants.ConnectionStateError), err)
+	}
+	if root == "" {
+		h.logger.Warn("Health check: state root is empty")
 	}
 
 	h.responder.JSON(w, http.StatusOK, models.HealthResponse{

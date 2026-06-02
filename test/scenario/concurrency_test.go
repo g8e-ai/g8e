@@ -58,7 +58,7 @@ func TestConcurrencyReplayDetection(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID)
+			result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID, ctx.CLISessionID)
 			results <- result
 		}()
 	}
