@@ -168,7 +168,7 @@ func parseNtpqOutput(output string) map[string]interface{} {
 	if len(lines) > 2 {
 		for _, line := range lines[2:] {
 			fields := strings.Fields(line)
-			if len(fields) > 3 {
+			if len(fields) >= 9 {
 				remote := fields[0]
 				refid := fields[1]
 				st := fields[2]

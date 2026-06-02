@@ -66,6 +66,10 @@ func (t *SysContainerStatusTool) Execute(ctx context.Context, args json.RawMessa
 		return CallToolResult{}, fmt.Errorf("container_name required")
 	}
 
+	if err := validateContainerName(req.ContainerName); err != nil {
+		return CallToolResult{}, fmt.Errorf("invalid container name: %w", err)
+	}
+
 	runtime := req.Runtime
 	if runtime == "" {
 		runtime = detectContainerRuntime()

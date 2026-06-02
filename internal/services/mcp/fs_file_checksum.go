@@ -69,6 +69,10 @@ func (t *FSFileChecksumTool) Execute(ctx context.Context, args json.RawMessage) 
 		return CallToolResult{}, fmt.Errorf("file_path required")
 	}
 
+	if err := validateFilePath(req.FilePath); err != nil {
+		return CallToolResult{}, fmt.Errorf("invalid file path: %w", err)
+	}
+
 	algorithm := req.Algorithm
 	if algorithm == "" {
 		algorithm = "sha256"

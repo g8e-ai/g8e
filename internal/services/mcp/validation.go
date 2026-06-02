@@ -172,3 +172,45 @@ func validateCloudMetadataOperation(operation string) error {
 
 	return nil
 }
+
+func validateFilePath(path string) error {
+	if path == "" {
+		return fmt.Errorf("file path cannot be empty")
+	}
+
+	cleanPath := strings.TrimSpace(path)
+	if cleanPath != path {
+		return fmt.Errorf("file path must not contain leading/trailing whitespace")
+	}
+
+	if strings.Contains(path, "..") {
+		return fmt.Errorf("file path must not contain parent directory references (..)")
+	}
+
+	if strings.ContainsAny(path, "\x00") {
+		return fmt.Errorf("file path must not contain null bytes")
+	}
+
+	return nil
+}
+
+func validateContainerName(name string) error {
+	if name == "" {
+		return fmt.Errorf("container name cannot be empty")
+	}
+
+	cleanName := strings.TrimSpace(name)
+	if cleanName != name {
+		return fmt.Errorf("container name must not contain leading/trailing whitespace")
+	}
+
+	if strings.ContainsAny(name, "\x00") {
+		return fmt.Errorf("container name must not contain null bytes")
+	}
+
+	if strings.Contains(name, " ") || strings.Contains(name, "\t") || strings.Contains(name, "\n") {
+		return fmt.Errorf("container name must not contain whitespace")
+	}
+
+	return nil
+}

@@ -2,16 +2,16 @@
 
 # g8e
 
-**Self-Hosted Military-Grade MCP - Exceeds NSA ZIG**
+**Military-Grade MCP**
 
 The "move fast and break things" era is costing organizations a fortune in wasted tokens, broken infrastructure, and unaccountable AI actions. SaaS vendors are positioning themselves as the solution — offering "governance" and "control planes" that are little more than token spend dashboards, then open-sourcing the client tools to lock you into their expensive services. Cloud provider lock-in, MCP and A2A protocol gaps, and single-model self-reflection have created a structural vulnerability in agentic systems.
 
 g8e is the missing admission boundary: a typed, signed, state-bound transaction that must clear a fail-closed verification pipeline **on the host** before any side effect occurs. One tiny pre-compiled g8e Node serves as either g8e Gateway (Policy Decision Point) or g8e Operator (Policy Execution Point). Start the g8e Gateway on your local machine, point your AI tools at it, and every action is governed — hardware-bound, just-in-time provisioned, mutual TLS secured, and anchored to a local ledger.
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev)
-[![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v106--core-platform)
-[![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/core/position_paper.md)
+[<img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" height="31">](LICENSE)
+[<img src="https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg" height="31">](https://go.dev)
+[<img src="https://img.shields.io/badge/status-active%20development-orange.svg" height="31">](#status-v106--core-platform)
+[<img src="https://img.shields.io/badge/read-position%20paper-brightgreen.svg" height="31">](docs/core/position_paper.md)
 
 [Getting Started](docs/guides/getting_started.md) · [Why g8e](#the-problem) · [Architecture](#the-architecture) · [The Operator](#the-governed-operator) · [Protocol](#protocol-invariants) · [Docs](#documentation)
 

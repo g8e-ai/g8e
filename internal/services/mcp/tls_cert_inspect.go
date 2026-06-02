@@ -74,6 +74,9 @@ func (t *TLSCertInspectTool) Execute(ctx context.Context, args json.RawMessage) 
 	var err error
 
 	if req.CertPath != "" {
+		if err := validateFilePath(req.CertPath); err != nil {
+			return CallToolResult{}, fmt.Errorf("invalid cert path: %w", err)
+		}
 		cert, err = loadCertFromFile(req.CertPath)
 		if err != nil {
 			return CallToolResult{}, fmt.Errorf("failed to load certificate from file: %w", err)
