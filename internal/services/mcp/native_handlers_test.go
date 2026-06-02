@@ -683,6 +683,26 @@ func TestHandleNetSocketAudit(t *testing.T) {
 			t.Error("expected sockets in result")
 		}
 	})
+
+	t.Run("invalid protocol - path traversal attempt", func(t *testing.T) {
+		req := NetSocketAuditRequest{Protocol: "../../etc/passwd"}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "net_socket_audit", reqJSON)
+		if err == nil {
+			t.Error("expected error for invalid protocol, got nil")
+		}
+	})
+
+	t.Run("invalid protocol - arbitrary string", func(t *testing.T) {
+		req := NetSocketAuditRequest{Protocol: "sctp"}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "net_socket_audit", reqJSON)
+		if err == nil {
+			t.Error("expected error for invalid protocol, got nil")
+		}
+	})
 }
 
 func TestHandleNetEndpointPing(t *testing.T) {

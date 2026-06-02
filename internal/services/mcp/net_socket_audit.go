@@ -63,7 +63,12 @@ func (t *NetSocketAuditTool) Execute(ctx context.Context, args json.RawMessage) 
 	protocols := []string{string(constants.NetworkProtocolTCP), string(constants.NetworkProtocolUDP)}
 
 	if req.Protocol != "" {
-		protocols = []string{strings.ToLower(req.Protocol)}
+		proto := strings.ToLower(req.Protocol)
+		// Validate protocol to prevent path traversal
+		if proto != string(constants.NetworkProtocolTCP) && proto != string(constants.NetworkProtocolUDP) {
+			return CallToolResult{}, fmt.Errorf("invalid protocol: %s (must be tcp or udp)", req.Protocol)
+		}
+		protocols = []string{proto}
 	}
 
 	for _, proto := range protocols {
