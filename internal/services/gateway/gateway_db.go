@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"hash"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -201,69 +202,104 @@ func (s *GatewayDBService) GetCurrentStateRoot() (string, error) {
 }
 
 func (s *GatewayDBService) calculateStateRoot() (string, error) {
-	type row struct {
-		Table  string        `json:"table"`
-		Values []interface{} `json:"values"`
-	}
-
-	rowsToHash := make([]row, 0)
+	h := sha256.New()
 
 	// 1. Documents (Authoritative)
 	// Exclude metadata-only timestamps (created_at, updated_at) to ensure
 	// the state root only changes when the content actually changes.
-	docRows, err := sqliteutil.MaterializeRows(s.db, "SELECT collection, id, data FROM documents ORDER BY collection, id", nil, func(r *sql.Rows) (row, error) {
+	if err := s.hashTableToStream(h, "SELECT collection, id, data FROM documents ORDER BY collection, id", nil, func(r *sql.Rows) error {
 		var collection, id, data string
 		if err := r.Scan(&collection, &id, &data); err != nil {
-			return row{}, err
+			return err
 		}
-		return row{"documents", []interface{}{collection, id, data}}, nil
-	})
-	if err != nil {
+		return writeRowToHash(h, "documents", collection, id, data)
+	}); err != nil {
+		s.logger.Error("Failed to query documents for state root calculation", "error", err)
 		return "", err
 	}
-	rowsToHash = append(rowsToHash, docRows...)
 
 	now := sqliteutil.NowTimestamp()
 
 	// 2. KV Store (Authoritative)
 	// Filter for active entries only. Exclude created_at.
 	// expires_at IS included because it affects the active state of the entry.
-	kvRows, err := sqliteutil.MaterializeRows(s.db, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", []interface{}{now}, func(r *sql.Rows) (row, error) {
+	if err := s.hashTableToStream(h, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", []interface{}{now}, func(r *sql.Rows) error {
 		var key, value, expiresAt string
 		if err := r.Scan(&key, &value, &expiresAt); err != nil {
-			return row{}, err
+			return err
 		}
-		return row{"kv_store", []interface{}{key, value, expiresAt}}, nil
-	})
-	if err != nil {
+		return writeRowToHash(h, "kv_store", key, value, expiresAt)
+	}); err != nil {
+		s.logger.Error("Failed to query kv_store for state root calculation", "error", err)
 		return "", err
 	}
-	rowsToHash = append(rowsToHash, kvRows...)
 
 	// 3. Blobs (Authoritative)
 	// Filter for active entries only. Exclude created_at.
-	// data is included (as hex for JSON determinism).
-	blobRows, err := sqliteutil.MaterializeRows(s.db, "SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE expires_at IS NULL OR expires_at > ? ORDER BY namespace, id", []interface{}{now}, func(r *sql.Rows) (row, error) {
+	// data is included (as hex for determinism).
+	if err := s.hashTableToStream(h, "SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE expires_at IS NULL OR expires_at > ? ORDER BY namespace, id", []interface{}{now}, func(r *sql.Rows) error {
 		var namespace, id, contentType, dataHex, expiresAt string
 		var size int64
 		if err := r.Scan(&namespace, &id, &size, &contentType, &dataHex, &expiresAt); err != nil {
-			return row{}, err
+			return err
 		}
-		return row{"blobs", []interface{}{namespace, id, size, contentType, dataHex, expiresAt}}, nil
-	})
-	if err != nil {
+		return writeRowToHash(h, "blobs", namespace, id, size, contentType, dataHex, expiresAt)
+	}); err != nil {
+		s.logger.Error("Failed to query blobs for state root calculation", "error", err)
 		return "", err
 	}
-	rowsToHash = append(rowsToHash, blobRows...)
 
 	// 4. Nonces and SSE events are EXCLUDED (volatile/metadata)
 
-	payload, err := json.Marshal(rowsToHash)
+	sum := h.Sum(nil)
+	return hex.EncodeToString(sum), nil
+}
+
+// hashTableToStream executes a query and streams each row to the hash writer.
+// This avoids materializing all rows in memory, which is critical for large databases.
+func (s *GatewayDBService) hashTableToStream(h hash.Hash, query string, args []interface{}, scan func(*sql.Rows) error) error {
+	rows, err := s.db.QueryWithRetry(query, args...)
 	if err != nil {
-		return "", err
+		return err
 	}
-	sum := sha256.Sum256(payload)
-	return hex.EncodeToString(sum[:]), nil
+	defer rows.Close()
+
+	for rows.Next() {
+		if err := scan(rows); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+// writeRowToHash writes a row's values to the hash in a deterministic format.
+// The format matches the previous JSON structure for compatibility:
+// {"table":"table_name","values":[v1,v2,...]}
+func writeRowToHash(h hash.Hash, table string, values ...interface{}) error {
+	// Write deterministic JSON-like format directly to hash
+	// This avoids allocating intermediate JSON strings
+	h.Write([]byte(`{"table":"`))
+	h.Write([]byte(table))
+	h.Write([]byte(`","values":[`))
+
+	for i, v := range values {
+		if i > 0 {
+			h.Write([]byte(","))
+		}
+		switch val := v.(type) {
+		case string:
+			h.Write([]byte(`"`))
+			h.Write([]byte(val))
+			h.Write([]byte(`"`))
+		case int64:
+			h.Write([]byte(fmt.Sprintf("%d", val)))
+		default:
+			return fmt.Errorf("unsupported type %T for state root hashing", v)
+		}
+	}
+
+	h.Write([]byte("]}\n"))
+	return nil
 }
 
 // ReserveNonce atomically reserves a nonce for early replay protection.

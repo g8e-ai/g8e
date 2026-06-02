@@ -15,9 +15,12 @@ package gateway
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -130,4 +133,52 @@ func TestStateRootDeterministicOrder(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, root1, root2, "State root must be deterministic regardless of insertion order")
+}
+
+func BenchmarkStateRootCalculation(b *testing.B) {
+	dir := b.TempDir()
+	secretsDir := b.TempDir()
+	db, err := OpenGatewayDBService(dir, secretsDir, testutil.NewTestLogger(), true)
+	require.NoError(b, err)
+	defer db.Close()
+
+	// Populate with realistic data
+	for i := 0; i < 100; i++ {
+		docData := fmt.Sprintf(`{"field1":"value%d","field2":%d}`, i, i*2)
+		_ = db.DocSet("benchmark", fmt.Sprintf("doc%d", i), json.RawMessage(docData))
+		_ = db.KVSet(fmt.Sprintf("key%d", i), fmt.Sprintf("val%d", i), 0)
+		_ = db.BlobPut("ns", fmt.Sprintf("blob%d", i), []byte(fmt.Sprintf("data%d", i)), "text/plain", 0)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := db.GetCurrentStateRoot()
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkStateRootLargeDataset(b *testing.B) {
+	dir := b.TempDir()
+	secretsDir := b.TempDir()
+	db, err := OpenGatewayDBService(dir, secretsDir, testutil.NewTestLogger(), true)
+	require.NoError(b, err)
+	defer db.Close()
+
+	// Populate with larger dataset to test scalability
+	for i := 0; i < 1000; i++ {
+		docData := fmt.Sprintf(`{"field1":"value%d","field2":%d,"field3":"%s"}`, i, i*2, strings.Repeat("x", 100))
+		_ = db.DocSet("benchmark", fmt.Sprintf("doc%d", i), json.RawMessage(docData))
+		_ = db.KVSet(fmt.Sprintf("key%d", i), fmt.Sprintf("val%d", i), 0)
+		_ = db.BlobPut("ns", fmt.Sprintf("blob%d", i), []byte(strings.Repeat("y", 500)), "text/plain", 0)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := db.GetCurrentStateRoot()
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
 }
