@@ -1,6 +1,6 @@
 module github.com/g8e-ai/g8e
 
-go 1.26
+go 1.26.4
 
 require (
 	github.com/g8e-ai/g8e/protocol v0.0.0

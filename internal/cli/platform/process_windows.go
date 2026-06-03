@@ -17,11 +17,99 @@
 package platform
 
 import (
+	"fmt"
 	"os/exec"
+	"strings"
+	"syscall"
+	"time"
 )
 
 // setProcessGroup is a no-op on Windows
 func setProcessGroup(cmd *exec.Cmd) {
 	// Windows doesn't have process groups in the Unix sense
 	// Process management is handled differently
+}
+
+// isProcessRunning checks if a process with the given PID is running on Windows.
+// It uses the Windows API to check if the process still exists and is active.
+func (pm *ProcessManager) isProcessRunning(pid int) bool {
+	if pid == 0 {
+		return false
+	}
+
+	// On Windows, we can check if the process is running by calling
+	// GetExitCodeProcess. If the process is still running, it returns STILL_ACTIVE (259).
+	handle, err := syscall.OpenProcess(syscall.PROCESS_QUERY_INFORMATION, false, uint32(pid))
+	if err != nil {
+		return false
+	}
+	defer syscall.CloseHandle(handle)
+
+	var exitCode uint32
+	err = syscall.GetExitCodeProcess(handle, &exitCode)
+	if err != nil {
+		return false
+	}
+
+	// STILL_ACTIVE (259) indicates the process is still running
+	return exitCode == 259
+}
+
+// findProcessOnPort finds the PID of the process listening on the given port on Windows.
+// It uses netstat to find the process ID.
+func (pm *ProcessManager) findProcessOnPort(port int) int {
+	cmd := exec.Command("netstat", "-ano")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) >= 5 {
+			// Check if this line contains the port we're looking for
+			// Format: proto  local_address  foreign_address  state  pid
+			localAddr := fields[1]
+			if strings.Contains(localAddr, fmt.Sprintf(":%d", port)) {
+				pidStr := fields[len(fields)-1]
+				var pid int
+				if _, err := fmt.Sscanf(pidStr, "%d", &pid); err == nil {
+					return pid
+				}
+			}
+		}
+	}
+
+	return 0
+}
+
+// stopProcess stops a process with the given PID on Windows.
+// It uses taskkill to terminate the process gracefully, then forcefully if needed.
+func (pm *ProcessManager) stopProcess(pid int, name string) error {
+	if pid == 0 {
+		return nil
+	}
+
+	if !pm.isProcessRunning(pid) {
+		return nil
+	}
+
+	// Try graceful shutdown first
+	cmd := exec.Command("taskkill", "/PID", fmt.Sprintf("%d", pid), "/T")
+	if err := cmd.Run(); err == nil {
+		// Wait a bit to see if it exits gracefully
+		time.Sleep(500 * time.Millisecond)
+		if !pm.isProcessRunning(pid) {
+			return nil
+		}
+	}
+
+	// Force kill if graceful shutdown failed
+	cmd = exec.Command("taskkill", "/F", "/PID", fmt.Sprintf("%d", pid), "/T")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to force kill process: %w", err)
+	}
+
+	return nil
 }
