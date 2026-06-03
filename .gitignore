@@ -26,8 +26,8 @@ Desktop.ini
 .pydevproject
 .settings/
 *.iml
-.windsurf/
-.windsurf/*
+.devin/
+.devin/*
 .local.dev/
 .loal.dev/*
 

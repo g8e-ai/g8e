@@ -62,8 +62,7 @@ curl -fsSL https://g8e.ai/g8e-darwin-amd64 -o g8e && chmod +x g8e && ./g8e gw st
 **Quick launch (Windows)**
 
 ```powershell
-iwr https://g8e.ai/g8e-windows-amd64.exe -outf g8e.exe && .\g8e.exe gw start
-
+iwr https://g8e.ai/g8e-windows-amd64.exe -outf g8e.exe; .\g8e.exe gw start
 ```
 
 **Deploy operators to remote hosts via SSH**
