@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.9] - 2026-06-04
+
+### Overview
+
+v1.0.9 is a focused bug fix release addressing critical Windows startup issues and gateway audit vault functionality. This release ensures Windows users can successfully start the g8e gateway and fixes a critical issue in the operator's audit vault handling.
+
+### Added
+
+*   **Platform-Specific Process Handling** - Added platform-specific process implementations with `internal/cli/platform/process_unix.go` and `internal/cli/platform/process_windows.go` for improved cross-platform compatibility.
+
+### Changed
+
+*   **Go Version** - Bumped Go to version 1.26.4 for latest security patches and improvements.
+*   **GitHub Workflows** - Updated GitHub Actions workflows for improved Windows compatibility and build reliability.
+*   **Documentation** - Updated getting started guide with Windows-specific quick start instructions.
+
+### Fixed
+
+*   **Windows Gateway Startup** - Fixed Windows gateway startup issue by correcting PowerShell command syntax from `&&` to `;` in the quick start documentation and implementation (#135). This resolves startup failures on Windows platforms.
+*   **Gateway Audit Vault** - Fixed critical audit vault functionality in `cmd/operator/main.go` to ensure proper audit trail recording and vault operations (12 insertions, 1 deletion).
+
+---
+
 ## [1.0.8] - 2026-06-02
 
 ### Overview

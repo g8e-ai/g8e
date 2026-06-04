@@ -49,6 +49,7 @@ import (
 	insecure_mcp "github.com/g8e-ai/g8e/internal/services/insecure_mcp"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	vault "github.com/g8e-ai/g8e/internal/services/vault"
 )
@@ -1019,6 +1020,16 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	// reach it for Actuator egress dispatch on verified MCP_CALL transactions.
 	mcpSvc := svc.GetHTTPHandler().GetMCPGateway()
 
+	// Get the GatewayDBService's AuditVault for full audit vault storage
+	// This ensures ActionReceipts are persisted in the receipts table
+	var auditVault *storage.AuditVaultService
+	if svc.GetDB() != nil && svc.GetDB().AuditVault != nil && svc.GetDB().AuditVault.IsEnabled() {
+		auditVault = svc.GetDB().AuditVault
+		logger.Info("Gateway AuditVault enabled for full audit vault storage")
+	} else {
+		logger.Warn("Gateway AuditVault not available or disabled - ActionReceipts will not be stored in audit vault")
+	}
+
 	psConfig := pubsub.CommandServiceConfig{
 		Config:              cfg,
 		Logger:              logger,
@@ -1027,7 +1038,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		PubSubClient:        loopbackClient,
 		ResultsService:      nil, // Results handled via direct loopback publish if needed
 		LocalStore:          nil, // Not used in gateway mode
-		AuditVault:          nil, // Handled by Actuator direct audit
+		AuditVault:          auditVault,
 		Ledger:              nil, // P1: Ledger in gateway mode
 		HistoryHandler:      nil, // P1: History in gateway mode
 		Sovereignty:         sovereignty.NewSovereigntyService(sovereignty.DefaultConfig(), logger, nil),
