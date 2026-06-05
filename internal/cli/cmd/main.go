@@ -43,6 +43,7 @@ The CLI manages the g8e Gateway (g8eg) and g8e Operator (g8eo).`,
 		operatorCmd(),
 		agentCmd(),
 		claudeCmd(),
+		setupCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {

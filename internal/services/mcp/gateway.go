@@ -738,22 +738,25 @@ func (g *GatewayService) scanForForbiddenPatterns(value interface{}) error {
 
 	valueStr := fmt.Sprintf("%v", value)
 
-	// Forbidden patterns from L1 hard gates
-	forbiddenPatterns := []string{
-		"sudo",
-		"su ",
-		"rm -rf /",
-		"://",
-		"password",
-		"api_key",
-		"secret",
-		"token",
-		"private_key",
+	// Forbidden patterns from L1 hard gates with context describing the threat category
+	forbiddenPatterns := []struct {
+		pattern string
+		context string
+	}{
+		{"sudo", "privilege escalation"},
+		{"su ", "privilege escalation"},
+		{"rm -rf /", "destructive file operation"},
+		{"://", "external URL (potential exfiltration)"},
+		{"password", "credential leak"},
+		{"api_key", "credential leak"},
+		{"secret", "credential leak"},
+		{"token", "credential leak"},
+		{"private_key", "credential leak"},
 	}
 
-	for _, pattern := range forbiddenPatterns {
-		if strings.Contains(strings.ToLower(valueStr), pattern) {
-			return fmt.Errorf("forbidden pattern detected: %s", pattern)
+	for _, fp := range forbiddenPatterns {
+		if strings.Contains(strings.ToLower(valueStr), fp.pattern) {
+			return fmt.Errorf("L1 hard gate: forbidden pattern detected (%s): %s", fp.context, fp.pattern)
 		}
 	}
 

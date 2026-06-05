@@ -329,7 +329,57 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 
 ---
 
+## Agent Integration
+
+The g8e Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, Cursor, VS Code, Cline) through the agent wrapper and stdio-proxy components.
+
+### Agent Wrapper
+
+The agent wrapper (`internal/cli/cmd/agent.go`) is a generic wrapper that:
+- Detects tool binaries on the system
+- Verifies gateway status before execution
+- Checks CLI authentication status
+- Injects G8E_* environment variables with MCP configuration
+- Executes tools with proper process group management
+
+The wrapper automatically configures MCP integration by setting:
+- `G8E_MCP_CONFIG`: JSON configuration for stdio transport to g8e
+- `G8E_GATEWAY_URL`: Gateway HTTPS endpoint for mTLS
+- `G8E_CLIENT_CERT`/`G8E_CLIENT_KEY`: mTLS certificate paths
+- `G8E_CA_BUNDLE`: Trust bundle path
+- `G8E_OPERATOR_SESSION_ID`: Session identity
+- `G8E_USER_ID`: User identity
+
+### Stdio Proxy
+
+The stdio proxy (`internal/cli/cmd/mcp.go`) bridges stdio MCP transport to the gateway HTTP endpoint:
+- Accepts JSON-RPC 2.0 requests over stdin/stdout
+- Proxies requests to the gateway HTTPS endpoint with mTLS
+- Detects L3 approval responses and polls for completion
+- Auto-opens browser for L3 approval URLs
+- Implements retry logic with configurable timeout (5 minutes default)
+
+### L3 Approval Polling
+
+When the gateway returns an L3 approval response, the stdio proxy:
+1. Extracts the approval URL from the response (structured field or text content)
+2. Opens the browser automatically using `internal/cli/platform/browser.go`
+3. Polls the gateway every 10 seconds for up to 30 iterations
+4. Returns the final result once approval is complete
+
+The polling logic is implemented in `proxyToGatewayWithRetry` with constants:
+- `l3ApprovalMaxIterations`: 30
+- `l3ApprovalPollInterval`: 10 seconds
+- `l3ApprovalTotalTimeout`: 5 minutes
+
+### Browser Utility
+
+The browser utility (`internal/cli/platform/browser.go`) provides cross-platform browser opening for L3 approval URLs, supporting macOS, Linux, and Windows.
+
+---
+
 ## Related Documentation
 
 - [**g8e Protocol**](./g8e.md) - The wire contract and governance hierarchy.
 - [**g8e Operator**](./operator.md) - Sovereign host-side execution agent and MCP server.
+- [**CLI Reference**](../guides/cli.md) - Complete CLI command documentation including agent integration.

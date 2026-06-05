@@ -987,25 +987,45 @@ func TestGatewayService_ScanForForbiddenPatterns(t *testing.T) {
 	t.Parallel()
 	g := newTestGatewayService()
 
-	t.Run("detects sudo", func(t *testing.T) {
+	t.Run("detects sudo with context", func(t *testing.T) {
 		t.Parallel()
 		err := g.scanForForbiddenPatterns("sudo rm -rf /")
 		require.Error(t, err)
+		require.Contains(t, err.Error(), "L1 hard gate")
 		require.Contains(t, err.Error(), "sudo")
+		require.Contains(t, err.Error(), "privilege escalation")
 	})
 
-	t.Run("detects password", func(t *testing.T) {
+	t.Run("detects password with context", func(t *testing.T) {
 		t.Parallel()
 		err := g.scanForForbiddenPatterns("password=secret123")
 		require.Error(t, err)
+		require.Contains(t, err.Error(), "L1 hard gate")
 		require.Contains(t, err.Error(), "password")
+		require.Contains(t, err.Error(), "credential leak")
 	})
 
-	t.Run("detects api_key", func(t *testing.T) {
+	t.Run("detects api_key with context", func(t *testing.T) {
 		t.Parallel()
 		err := g.scanForForbiddenPatterns("api_key=sk-12345")
 		require.Error(t, err)
+		require.Contains(t, err.Error(), "L1 hard gate")
 		require.Contains(t, err.Error(), "api_key")
+		require.Contains(t, err.Error(), "credential leak")
+	})
+
+	t.Run("detects destructive file operation", func(t *testing.T) {
+		t.Parallel()
+		err := g.scanForForbiddenPatterns("rm -rf /")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "destructive file operation")
+	})
+
+	t.Run("detects external URL pattern", func(t *testing.T) {
+		t.Parallel()
+		err := g.scanForForbiddenPatterns("visit https://example.com")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "external URL")
 	})
 
 	t.Run("allows safe values", func(t *testing.T) {
