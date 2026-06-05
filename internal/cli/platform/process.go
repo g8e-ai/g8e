@@ -319,7 +319,15 @@ func (pm *ProcessManager) StopOperator() error {
 	}
 
 	if pid == 0 {
-		return nil
+		// PID file missing, try to find process via pgrep (same fallback as OperatorStatus)
+		if pm.findOperatorProcessFn != nil {
+			pid = pm.findOperatorProcessFn()
+		} else {
+			pid = pm.findOperatorProcess()
+		}
+		if pid == 0 {
+			return nil
+		}
 	}
 
 	if err := pm.stopProcess(pid, "operator"); err != nil {

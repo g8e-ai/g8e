@@ -102,7 +102,7 @@ protocol/
 │   └── workload_identity/
 ├── python/                         # Python protocol bindings
 │   ├── examples/
-│   └── g8e_protocol/
+│   └── g8e/
 │       └── models/
 ├── test-fixtures/
 ├── workload_identity.go

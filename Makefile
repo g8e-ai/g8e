@@ -147,7 +147,7 @@ proto-python:
 	@echo "Generating Python Protobuf code..."
 	@if command -v python3 &> /dev/null; then \
 		python3 -m grpc_tools.protoc \
-			--python_out=protocol/python/g8e_protocol \
+			--python_out=protocol/python/g8e \
 			--proto_path=protocol/proto \
 			protocol/proto/g8e/common/v1/common.proto \
 			protocol/proto/g8e/operator/v1/operator.proto \
