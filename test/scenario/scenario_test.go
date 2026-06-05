@@ -20,9 +20,11 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/auditor/client"
 	"github.com/g8e-ai/g8e/internal/auditor/config"
@@ -31,6 +33,12 @@ import (
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/encoding/protojson"
+)
+
+const (
+	defaultHTTPRetryMaxAttempts = 60
+	defaultHTTPRetryInterval    = 1 * time.Second
+	defaultHTTPRetryTimeout     = 70 * time.Second
 )
 
 // TestContext holds the test infrastructure for a single test run.
@@ -247,11 +255,16 @@ type Result struct {
 }
 
 // submitViaHTTP submits an envelope via the auditor client and returns the result.
+// Retries on 503 (envelope processor not initialized) up to the configured timeout.
 func submitViaHTTP(t *testing.T, auditorClient *client.Client, intent []byte, operatorSessionID, cliSessionID string) Result {
 	t.Helper()
 
-	ctx := context.Background()
-	persona := client.Persona{ID: "scenario-test", UserAgent: "g8e-scenario-tests", OperatorSessionID: operatorSessionID, CLISessionID: cliSessionID}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultHTTPRetryTimeout)
+	defer cancel()
+
+	// Authenticate as CLI session since we're using a CLI certificate
+	// The envelope body contains operator_session_id for governance validation
+	persona := client.Persona{ID: "scenario-test", UserAgent: "g8e-scenario-tests", CLISessionID: cliSessionID}
 
 	// Decode intent to get envelope for submission
 	var envelope commonv1.GovernanceEnvelope
@@ -259,32 +272,49 @@ func submitViaHTTP(t *testing.T, auditorClient *client.Client, intent []byte, op
 		return Result{Error: fmt.Errorf("failed to unmarshal envelope: %w", err)}
 	}
 
-	status, body, err := auditorClient.SubmitEnvelope(ctx, persona, &envelope)
+	// Retry on 503 (envelope processor not initialized)
+	for i := 0; i < defaultHTTPRetryMaxAttempts; i++ {
+		select {
+		case <-ctx.Done():
+			return Result{Error: fmt.Errorf("envelope processor not ready after %v (operator may not be running or command service not started)", defaultHTTPRetryTimeout)}
+		default:
+		}
 
-	res := Result{
-		EnvelopeID:      envelope.Id,
-		TransactionHash: envelope.TransactionHash,
-	}
+		status, body, err := auditorClient.SubmitEnvelope(ctx, persona, &envelope)
 
-	if err != nil {
-		res.Error = fmt.Errorf("HTTP submission failed: %w", err)
+		res := Result{
+			EnvelopeID:      envelope.Id,
+			TransactionHash: envelope.TransactionHash,
+		}
+
+		if err != nil {
+			res.Error = fmt.Errorf("HTTP submission failed: %w", err)
+			return res
+		}
+
+		if status == http.StatusServiceUnavailable {
+			t.Logf("Envelope processor not ready, retrying (%d/%d)...", i+1, defaultHTTPRetryMaxAttempts)
+			time.Sleep(defaultHTTPRetryInterval)
+			continue
+		}
+
+		if status >= 400 {
+			res.Error = fmt.Errorf("gateway rejected with status %d: %s", status, string(body))
+			return res
+		}
+
+		// Parse response to extract receipt if successful
+		var response struct {
+			Receipt *operatorv1.ActionReceipt `json:"receipt"`
+		}
+		if err := json.Unmarshal(body, &response); err == nil && response.Receipt != nil {
+			res.Receipt = response.Receipt
+		}
+
 		return res
 	}
 
-	if status >= 400 {
-		res.Error = fmt.Errorf("gateway rejected with status %d: %s", status, string(body))
-		return res
-	}
-
-	// Parse response to extract receipt if successful
-	var response struct {
-		Receipt *operatorv1.ActionReceipt `json:"receipt"`
-	}
-	if err := json.Unmarshal(body, &response); err == nil && response.Receipt != nil {
-		res.Receipt = response.Receipt
-	}
-
-	return res
+	return Result{Error: fmt.Errorf("envelope processor not ready after %v (operator may not be running or command service not started)", defaultHTTPRetryTimeout)}
 }
 
 // assertReceiptPersisted verifies that a receipt is persisted via the API.

@@ -208,6 +208,10 @@ build:
 	GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build -ldflags "$(LDFLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$NODE_BINARY $(MAIN_PKG); \
 	sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	if [ -z "$(DOCKER_BUILD)" ]; then \
+		if [ -f "./$$ROOT_COPY" ] && pgrep -f "$$ROOT_COPY --doctrine" > /dev/null 2>&1; then \
+			echo "Error: Unable to copy binary - g8e gateway is currently running. Please stop it first with: ./$$ROOT_COPY gw stop"; \
+			exit 1; \
+		fi; \
 		cp $$NODE_BINARY $$ROOT_COPY; \
 	fi
 	@echo "Build complete.Node Node Binary: $$NODE_BINARY"
