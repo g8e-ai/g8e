@@ -196,9 +196,7 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println("  To generate MCP client configuration for your coding tools:")
 			cmd.Println()
-			cmd.Println("  [mTLS with IP address] : ./g8e gw mcp show --type ip")
-			cmd.Println("  [mTLS with g8e.local]   : ./g8e gw mcp show --type local")
-			cmd.Println("  [Plain HTTP]            : ./g8e gw mcp show --type http")
+			cmd.Println("      ./g8e gw mcp show")
 			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println("[g8e] Gateway service started. Run './g8e auth login' to authenticate your CLI.")
@@ -538,31 +536,50 @@ func gatewayMCPCmd() *cobra.Command {
 }
 
 func gatewayMCPShowCmd() *cobra.Command {
-	var configType string
-
 	cmd := &cobra.Command{
 		Use:   "show",
 		Short: "Print MCP client configuration for the Gateway",
-		Long:  `Print MCP client configuration for connecting to the g8e Gateway from local coding tools. Use --type to specify the configuration type.`,
+		Long:  `Print MCP client configuration for connecting to the g8e Gateway from local coding tools.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if configType == "" {
-				configType = "local"
+			cmd.Println("╔══════════════════════════════════════════════════════════════════════════════╗")
+			cmd.Println("║                        g8e Gateway MCP Configurations                        ║")
+			cmd.Println("║  Use these configs to connect your coding tools (Cursor, Windsurf, etc.)     ║")
+			cmd.Println("║  to the g8e Gateway for agent orchestration and tool execution.              ║")
+			cmd.Println("╚══════════════════════════════════════════════════════════════════════════════╝")
+			cmd.Println()
+
+			cmd.Println("┌─ g8e.local (mTLS) ─────────────────────────────────────────────────────────────")
+			cmd.Println("│ Use: Production environments with DNS configured")
+			cmd.Println("│ Apps: Cursor, Windsurf, VS Code MCP clients")
+			cmd.Println("│ Requires: DNS or /etc/hosts entry for g8e.local resolution")
+			cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
+			if err := printMCPConfigLocal(cmd); err != nil {
+				return err
+			}
+			cmd.Println()
+
+			cmd.Println("┌─ IP Address (mTLS) ───────────────────────────────────────────────────────────")
+			cmd.Println("│ Use: Environments without DNS or for direct IP access")
+			cmd.Println("│ Apps: Cursor, Windsurf, VS Code MCP clients")
+			cmd.Println("│ Requires: No DNS setup, uses external interface IP")
+			cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
+			if err := printMCPConfigIP(cmd); err != nil {
+				return err
+			}
+			cmd.Println()
+
+			cmd.Println("┌─ Plain HTTP ────────────────────────────────────────────────────────────────")
+			cmd.Println("│ Use: Local development only (localhost access)")
+			cmd.Println("│ Apps: Local MCP clients, testing")
+			cmd.Println("│ Requires: No mTLS, uses 127.0.0.1 explicitly")
+			cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
+			if err := printMCPConfigHTTP(cmd); err != nil {
+				return err
 			}
 
-			switch configType {
-			case "local":
-				return printMCPConfigLocal(cmd)
-			case "ip":
-				return printMCPConfigIP(cmd)
-			case "http":
-				return printMCPConfigHTTP(cmd)
-			default:
-				return fmt.Errorf("invalid config type: %s (must be 'local', 'ip', or 'http')", configType)
-			}
+			return nil
 		},
 	}
-
-	cmd.Flags().StringVar(&configType, "type", "local", "Configuration type: local (g8e.local), ip (IP address), http (plain HTTP)")
 
 	return cmd
 }
@@ -573,9 +590,8 @@ func printMCPConfigLocal(cmd *cobra.Command) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Print banner with /etc/hosts entry
 	externalIP := config.GetExternalInterfaceIP()
-	cmd.Println("# Add this entry to /etc/hosts to enable g8e.local resolution:")
+	cmd.Printf("# Add this entry to /etc/hosts to enable g8e.local resolution:\n")
 	cmd.Printf("%s g8e.local\n", externalIP)
 	cmd.Println()
 
