@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -252,22 +252,11 @@ func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	host := "localhost"
-	port := "8441"
-	if r.Host != "" {
-		host, port, _ = net.SplitHostPort(r.Host)
-		if host == "" {
-			host = "localhost"
-		}
-		if port == "" {
-			port = "8441"
-		}
-	}
-
+	port := strconv.Itoa(constants.Ports.OperatorHttp)
 	script := `#!/bin/sh
 set -e
 
-GATEWAY_HOST="${GATEWAY_HOST:-` + host + `}"
+GATEWAY_HOST="${GATEWAY_HOST:-localhost}"
 GATEWAY_PORT="${GATEWAY_PORT:-` + port + `}"
 CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}/.well-known/g8e/pki/ca-bundle"
 LOCAL_CA_PATH="` + constants.CACertBundlePath + `"
@@ -298,20 +287,9 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 		return
 	}
 
-	host := "localhost"
-	port := "8441"
-	if r.Host != "" {
-		host, port, _ = net.SplitHostPort(r.Host)
-		if host == "" {
-			host = "localhost"
-		}
-		if port == "" {
-			port = "8441"
-		}
-	}
-
+	port := strconv.Itoa(constants.Ports.OperatorHttp)
 	script := "$ErrorActionPreference = \"Continue\"\n\n" +
-		"$GatewayHost = if ($env:GATEWAY_HOST) { $env:GATEWAY_HOST } else { \"" + host + "\" }\n" +
+		"$GatewayHost = if ($env:GATEWAY_HOST) { $env:GATEWAY_HOST } else { \"localhost\" }\n" +
 		"$GatewayPort = if ($env:GATEWAY_PORT) { $env:GATEWAY_PORT } else { \"" + port + "\" }\n" +
 		"$CABundleUrl = \"http://${GatewayHost}:${GatewayPort}/.well-known/g8e/pki/ca-bundle\"\n" +
 		"$LocalCAPath = \"" + constants.CACertBundlePath + "\"\n" +

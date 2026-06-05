@@ -14,9 +14,11 @@
 package cmd
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/auditor/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -116,18 +118,18 @@ func TestAuditorAuditCmd(t *testing.T) {
 
 func TestApplyAuditorFlags(t *testing.T) {
 	t.Run("applyAuditorFlags sets MTLS URL", func(t *testing.T) {
-		auditorMTLSURL = "https://example.com:8440"
+		auditorMTLSURL = "https://example.com:" + strconv.Itoa(constants.Ports.OperatorHttp)
 		cfg := config.Default()
 		applyAuditorFlags(&cfg)
-		assert.Equal(t, "https://example.com:8440", cfg.MTLSBaseURL)
+		assert.Equal(t, "https://example.com:"+strconv.Itoa(constants.Ports.OperatorHttp), cfg.MTLSBaseURL)
 		auditorMTLSURL = ""
 	})
 
 	t.Run("applyAuditorFlags sets public URL", func(t *testing.T) {
-		auditorPublicURL = "https://example.com:8443"
+		auditorPublicURL = "https://example.com:" + strconv.Itoa(constants.Ports.OperatorHttps)
 		cfg := config.Default()
 		applyAuditorFlags(&cfg)
-		assert.Equal(t, "https://example.com:8443", cfg.PublicBaseURL)
+		assert.Equal(t, "https://example.com:"+strconv.Itoa(constants.Ports.OperatorHttps), cfg.PublicBaseURL)
 		auditorPublicURL = ""
 	})
 

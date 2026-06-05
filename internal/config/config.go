@@ -83,8 +83,8 @@ type LoadOptions struct {
 type GatewayConfig struct {
 	Enabled          bool
 	Posture          GatewayPosture // Governance enforcement posture (doctrine, consensus, notary)
-	HTTPPort         int            // Plain HTTP port for bootstrap and MCP (default: 8440)
-	HTTPSPort        int            // HTTPS port for mTLS API (default: 8443)
+	HTTPPort         int            // Plain HTTP port for bootstrap and MCP (default: constants.Ports.OperatorHttp)
+	HTTPSPort        int            // HTTPS port for mTLS API (default: constants.Ports.OperatorHttps)
 	DataDir          string         // Root directory for SQLite database (default: .g8e/data in working directory)
 	PKIDir           string         // Directory for TLS certificates (default: .g8e/pki)
 	SecretsDir       string         // Directory for platform secrets (default: .g8e/secrets)
@@ -287,7 +287,7 @@ func ResolveGatewayPorts(httpPort, httpsPort int) (int, int) {
 		httpPort = constants.Ports.OperatorHttps
 	}
 	if httpsPort <= 0 {
-		httpsPort = 8443
+		httpsPort = constants.Ports.OperatorHttps
 	}
 
 	// Try up to 100 offsets

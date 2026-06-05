@@ -78,22 +78,16 @@ type PathsConfig struct {
 		SecretsDir           string `json:"secrets_dir"`
 		SSHConfigPath        string `json:"ssh_config_path"`
 	} `json:"infra"`
-	Ports struct {
-		InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-		OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-		OperatorHTTPS          int `json:"operator_https"`
-		OperatorMcpHttp        int `json:"operator_mcp_http"`
-		OperatorPublicHTTPS    int `json:"operator_public_https"`
-	} `json:"ports"`
 }
 
 type Config struct {
-	ProjectRoot    string
-	RuntimeDir     string
-	PKIDir         string
-	SecretsDir     string
-	CredentialsDir string
-	Paths          *PathsConfig
+	ProjectRoot      string
+	RuntimeDir       string
+	PKIDir           string
+	SecretsDir       string
+	CredentialsDir   string
+	Paths            *PathsConfig
+	TestPortOverride int // Test-only field to override default port
 }
 
 func Load(projectRoot string) (*Config, error) {
@@ -257,15 +251,18 @@ func (c *Config) OperatorHTTPSPort() int {
 }
 
 func (c *Config) OperatorHTTPURL() string {
+	if c.TestPortOverride != 0 {
+		return fmt.Sprintf("https://localhost:%d", c.TestPortOverride)
+	}
 	return fmt.Sprintf("https://localhost:%d", c.OperatorHTTPSPort())
 }
 
-// OperatorPublicURL returns the HTTPS port (8443) for mTLS API and public surface
+// OperatorPublicURL returns the HTTPS port (constants.Ports.OperatorHttps) for mTLS API and public surface
 func (c *Config) OperatorPublicURL() string {
 	return fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 }
 
-// OperatorDiscoveryURL returns the HTTP port (8440) for CA download and bootstrap routes
+// OperatorDiscoveryURL returns the HTTP port (constants.Ports.OperatorHttp) for CA download and bootstrap routes
 func (c *Config) OperatorDiscoveryURL() string {
 	return fmt.Sprintf("http://localhost:%d", constants.Ports.OperatorHttp)
 }

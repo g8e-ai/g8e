@@ -16,6 +16,7 @@ package pubsub
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -28,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
 )
 
@@ -42,24 +44,24 @@ func TestNewOperatorPubSubClient(t *testing.T) {
 	})
 
 	t.Run("accepts ws:// URL", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient("ws://localhost:8440", "", logger)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger)
 		assert.NoError(t, err)
 		assert.NotNil(t, client)
-		assert.Equal(t, "ws://localhost:8440", client.baseURL)
+		assert.Equal(t, fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), client.baseURL)
 		assert.Nil(t, client.tlsConfig)
 		assert.Empty(t, client.serverName)
 	})
 
 	t.Run("accepts wss:// URL", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient("wss://localhost:8440", "", logger)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), "", logger)
 		assert.NoError(t, err)
 		assert.NotNil(t, client)
-		assert.Equal(t, "wss://localhost:8440", client.baseURL)
+		assert.Equal(t, fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), client.baseURL)
 		assert.NotNil(t, client.tlsConfig)
 	})
 
 	t.Run("sets serverName for TLS SNI override", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient("wss://192.168.1.1:8440", "gateway.local", logger)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://192.168.1.1:%d", constants.Ports.OperatorHttp), "gateway.local", logger)
 		assert.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.Equal(t, "gateway.local", client.serverName)
@@ -71,15 +73,15 @@ func TestPubSubWSURL(t *testing.T) {
 	logger := slog.Default()
 
 	t.Run("returns correct URL for ws://", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient("ws://localhost:8440", "", logger)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger)
 		require.NoError(t, err)
-		assert.Equal(t, "ws://localhost:8440/ws/pubsub", client.pubSubWSURL())
+		assert.Equal(t, fmt.Sprintf("ws://localhost:%d/ws/pubsub", constants.Ports.OperatorHttp), client.pubSubWSURL())
 	})
 
 	t.Run("returns correct URL for wss://", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient("wss://localhost:8440", "", logger)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), "", logger)
 		require.NoError(t, err)
-		assert.Equal(t, "wss://localhost:8440/ws/pubsub", client.pubSubWSURL())
+		assert.Equal(t, fmt.Sprintf("wss://localhost:%d/ws/pubsub", constants.Ports.OperatorHttp), client.pubSubWSURL())
 	})
 }
 
@@ -126,7 +128,7 @@ func TestPublish(t *testing.T) {
 	logger := slog.Default()
 
 	t.Run("fails when client is closed", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient("ws://localhost:8440", "", logger)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger)
 		require.NoError(t, err)
 		client.Close()
 
@@ -184,7 +186,7 @@ func TestClose(t *testing.T) {
 	logger := slog.Default()
 
 	t.Run("closes nil pubWs gracefully", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient("ws://localhost:8440", "", logger)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger)
 		require.NoError(t, err)
 		assert.NotPanics(t, func() {
 			client.Close()

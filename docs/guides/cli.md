@@ -64,18 +64,16 @@ Usage:
   g8e gw start [flags]
 
 Flags:
-      --bootstrap-port int       Bootstrap TLS port for CSR enrollment (default: from paths.json)
       --cert-mode string         Certificate mode: full (all hostnames/IPs), localhost (only localhost)
       --data-dir string          Data directory for SQLite database (default: .g8e/data in working directory)
   -h, --help                     help for start
-      --http-port int            HTTPS port for mTLS API (default: from paths.json)
+      --http-port int            Plain HTTP port for bootstrap and MCP routes (default: 8440)
+      --https-port int           HTTPS port for mTLS API and public surface (default: 8443)
       --log string               Log level: info, error, debug (default "info")
-      --mcp-http-port int        Plain HTTP port for MCP calls (default: from paths.json)
       --passkey-rp-id string     RP ID for passkey operations (default: localhost)
       --passkey-rp-name string   RP Name for passkey operations (default: g8e)
       --pki-dir string           Directory for TLS certificates (default: .g8e/pki)
       --posture string           Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced) (default "doctrine")
-      --public-port int          Public browser/BYO bootstrap port (default: from paths.json)
       --rate-limit-burst int     Gateway rate limit burst size
       --rate-limit-rps float     Gateway requests per second limit (set to 0 to disable)
       --secrets-dir string       Directory for platform secrets (default: .g8e/secrets)

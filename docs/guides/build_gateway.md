@@ -94,10 +94,8 @@ To start the gateway, use the CLI gateway command:
 ### Gateway Mode Flags
 
 - `--posture <mode>` — g8e Gateway posture: doctrine (L1 enforced, L2/L3 audited, default), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)
-- `--http-listen-port <port>` — HTTPS port for mTLS API (default: 8440)
-- `--bootstrap-listen-port <port>` — Bootstrap TLS port for CSR-based enrollment (default: 8441)
-- `--public-listen-port <port>` — Public browser/BYO bootstrap port (default: 8443)
-- `--mcp-http-port <port>` — Plain HTTP port for MCP calls (default: 8442)
+- `--http-port <port>` — Plain HTTP port for bootstrap and MCP routes (default: 8440)
+- `--https-port <port>` — HTTPS port for mTLS API and public surface (default: 8443)
 - `--data-dir <dir>` — Data directory for SQLite database (default: .g8e/data in working directory)
 - `--pki-dir <dir>` — Directory for TLS certificates (default: .g8e/pki)
 - `--secrets-dir <dir>` — Directory for platform secrets (default: .g8e/secrets)

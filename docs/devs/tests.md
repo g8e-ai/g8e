@@ -175,9 +175,8 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 
 Defaults from `protocol/constants/ports.json` (canonical source of truth):
 
-- `8440` - Gateway mTLS API and Pub/Sub
-- `8441` - Gateway Bootstrap (plain HTTP; CSR signing)
-- `8443` - Gateway Public TLS (browser/BYO bootstrap)
+- `8440` - Gateway HTTP (bootstrap + MCP)
+- `8443` - Gateway HTTPS (mTLS API + public)
 - `18789` - Insecure MCP Gateway
 
 All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NET_BIND_SERVICE` to the g8e Node or front with an external port redirect.

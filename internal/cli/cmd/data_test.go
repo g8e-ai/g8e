@@ -177,12 +177,6 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 			"protocol_models_dir": "` + constants.Paths.Infra.ProtocolModelsDir + `",
 			"secrets_dir": "` + constants.Paths.Infra.SecretsDir + `",
 			"ssh_config_path": "` + constants.Paths.Infra.SshConfigPath + `"
-		},
-		"ports": {
-			"insecure_mcp_gateway": 18789,
-			"operator_bootstrap_https": 8441,
-			"operator_https": 8440,
-			"operator_public_https": 8443
 		}
 	}`
 	pathsPath := filepath.Join(constantsDir, "paths.json")
@@ -218,19 +212,6 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 				ProtocolModelsDir:    filepath.Join(tmpDir, constants.Paths.Infra.ProtocolModelsDir),
 				SecretsDir:           filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 				SSHConfigPath:        filepath.Join(tmpDir, constants.Paths.Infra.SshConfigPath),
-			},
-			Ports: struct {
-				InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-				OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-				OperatorHTTPS          int `json:"operator_https"`
-				OperatorMcpHttp        int `json:"operator_mcp_http"`
-				OperatorPublicHTTPS    int `json:"operator_public_https"`
-			}{
-				InsecureMcpGateway:     18789,
-				OperatorBootstrapHTTPS: 8441,
-				OperatorHTTPS:          8440,
-				OperatorMcpHttp:        8442,
-				OperatorPublicHTTPS:    8443,
 			},
 		},
 	}

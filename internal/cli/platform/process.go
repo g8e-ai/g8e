@@ -198,10 +198,10 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int,
 
 	// Use defaults if not provided
 	if effectiveHTTPPort == 0 {
-		effectiveHTTPPort = constants.Ports.OperatorHttps
+		effectiveHTTPPort = constants.Ports.OperatorHttp
 	}
 	if effectiveHTTPSPort == 0 {
-		effectiveHTTPSPort = 8443
+		effectiveHTTPSPort = constants.Ports.OperatorHttps
 	}
 	if effectiveDataDir == "" {
 		effectiveDataDir = pm.dataDir
@@ -248,8 +248,8 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int,
 		"--data-dir", effectiveDataDir,
 		"--pki-dir", effectivePKIDir,
 		"--secrets-dir", effectiveSecretsDir,
-		"--http-listen-port", strconv.Itoa(availableHTTPPort),
-		"--https-listen-port", strconv.Itoa(availableHTTPSPort),
+		"--http-port", strconv.Itoa(availableHTTPPort),
+		"--https-port", strconv.Itoa(availableHTTPSPort),
 		"--log", effectiveLogLevel,
 	}
 

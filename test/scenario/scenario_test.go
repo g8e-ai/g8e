@@ -95,8 +95,8 @@ func setupTestContext(t *testing.T) *TestContext {
 	// Create auditor client for HTTP submission
 	auditorCfg := config.Default()
 	auditorCfg.UseCLIConfig = false // Don't auto-load from CLI config, we set paths explicitly
-	auditorCfg.MTLSBaseURL = fmt.Sprintf("https://localhost:%d", cliCfg.Paths.Ports.OperatorHTTPS)
-	auditorCfg.PublicBaseURL = fmt.Sprintf("https://localhost:%d", cliCfg.Paths.Ports.OperatorPublicHTTPS)
+	auditorCfg.MTLSBaseURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	auditorCfg.PublicBaseURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 	auditorCfg.Auth.ClientCert = clientCertPath
 	auditorCfg.Auth.ClientKey = clientKeyPath
 	auditorCfg.Auth.CABundle = caBundlePath

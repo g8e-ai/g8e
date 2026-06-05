@@ -14,10 +14,12 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -278,130 +280,67 @@ func TestConfig_OperatorKeyFile(t *testing.T) {
 }
 
 func TestConfig_OperatorHTTPSPort(t *testing.T) {
-	t.Run("returns Operator HTTPS port", func(t *testing.T) {
+	t.Run("returns Operator HTTPS port from constants", func(t *testing.T) {
 		config := &Config{
-			Paths: &PathsConfig{
-				Ports: struct {
-					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-					OperatorHTTPS          int `json:"operator_https"`
-					OperatorMcpHttp        int `json:"operator_mcp_http"`
-					OperatorPublicHTTPS    int `json:"operator_public_https"`
-				}{
-					OperatorHTTPS: 8440,
-				},
-			},
+			Paths: &PathsConfig{},
 		}
 
 		result := config.OperatorHTTPSPort()
-		assert.Equal(t, 8440, result)
-	})
-}
-
-func TestConfig_OperatorBootstrapHTTPSPort(t *testing.T) {
-	t.Run("returns Operator bootstrap HTTPS port", func(t *testing.T) {
-		config := &Config{
-			Paths: &PathsConfig{
-				Ports: struct {
-					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-					OperatorHTTPS          int `json:"operator_https"`
-					OperatorMcpHttp        int `json:"operator_mcp_http"`
-					OperatorPublicHTTPS    int `json:"operator_public_https"`
-				}{
-					OperatorBootstrapHTTPS: 8441,
-				},
-			},
-		}
-
-		result := config.OperatorBootstrapHTTPSPort()
-		assert.Equal(t, 8441, result)
+		assert.Equal(t, constants.Ports.OperatorHttps, result)
 	})
 }
 
 func TestConfig_OperatorHTTPURL(t *testing.T) {
-	t.Run("returns Operator public HTTPS URL", func(t *testing.T) {
+	t.Run("returns Operator HTTPS URL from constants", func(t *testing.T) {
 		config := &Config{
-			Paths: &PathsConfig{
-				Ports: struct {
-					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-					OperatorHTTPS          int `json:"operator_https"`
-					OperatorMcpHttp        int `json:"operator_mcp_http"`
-					OperatorPublicHTTPS    int `json:"operator_public_https"`
-				}{
-					OperatorPublicHTTPS: 8443,
-				},
-			},
+			Paths: &PathsConfig{},
 		}
 
 		result := config.OperatorHTTPURL()
-		assert.Equal(t, "https://localhost:8443", result)
+		assert.Equal(t, fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps), result)
+	})
+
+	t.Run("returns Operator HTTPS URL with test port override", func(t *testing.T) {
+		config := &Config{
+			Paths:            &PathsConfig{},
+			TestPortOverride: 9999,
+		}
+
+		result := config.OperatorHTTPURL()
+		assert.Equal(t, "https://localhost:9999", result)
 	})
 }
 
 func TestConfig_OperatorBootstrapURL(t *testing.T) {
 	t.Run("returns Operator bootstrap HTTPS URL (deprecated, delegates to OperatorPublicURL)", func(t *testing.T) {
 		config := &Config{
-			Paths: &PathsConfig{
-				Ports: struct {
-					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-					OperatorHTTPS          int `json:"operator_https"`
-					OperatorMcpHttp        int `json:"operator_mcp_http"`
-					OperatorPublicHTTPS    int `json:"operator_public_https"`
-				}{
-					OperatorBootstrapHTTPS: 8441,
-					OperatorPublicHTTPS:    8443,
-				},
-			},
+			Paths: &PathsConfig{},
 		}
 
 		result := config.OperatorBootstrapURL()
-		assert.Equal(t, "https://localhost:8443", result)
+		assert.Equal(t, fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps), result)
 	})
 }
 
 func TestConfig_OperatorPublicURL(t *testing.T) {
 	t.Run("returns Operator public TLS URL for CSR-based enrollment", func(t *testing.T) {
 		config := &Config{
-			Paths: &PathsConfig{
-				Ports: struct {
-					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-					OperatorHTTPS          int `json:"operator_https"`
-					OperatorMcpHttp        int `json:"operator_mcp_http"`
-					OperatorPublicHTTPS    int `json:"operator_public_https"`
-				}{
-					OperatorBootstrapHTTPS: 8441,
-					OperatorPublicHTTPS:    8443,
-				},
-			},
+			Paths: &PathsConfig{},
 		}
 
 		result := config.OperatorPublicURL()
-		assert.Equal(t, "https://localhost:8443", result)
+		assert.Equal(t, fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps), result)
 	})
 }
 
 func TestConfig_OperatorDiscoveryURL(t *testing.T) {
 	t.Run("returns Operator discovery URL for CA download over plain HTTP", func(t *testing.T) {
 		config := &Config{
-			Paths: &PathsConfig{
-				Ports: struct {
-					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-					OperatorHTTPS          int `json:"operator_https"`
-					OperatorMcpHttp        int `json:"operator_mcp_http"`
-					OperatorPublicHTTPS    int `json:"operator_public_https"`
-				}{
-					OperatorBootstrapHTTPS: 8441,
-				},
-			},
+			Paths: &PathsConfig{},
 		}
 
 		result := config.OperatorDiscoveryURL()
-		assert.Equal(t, "http://localhost:8441", result)
+		assert.Equal(t, fmt.Sprintf("http://localhost:%d", constants.Ports.OperatorHttp), result)
 	})
 }
 
@@ -459,9 +398,8 @@ func TestLoadIntegration(t *testing.T) {
 		assert.Equal(t, filepath.Join(tempDir, ".g8e/protocol/constants"), config.Paths.Infra.ProtocolConstantsDir)
 		assert.Equal(t, filepath.Join(tempDir, ".g8e/protocol/models"), config.Paths.Infra.ProtocolModelsDir)
 
-		// Verify port values from embedded defaults
-		assert.Equal(t, 8440, config.OperatorHTTPSPort())
-		assert.Equal(t, 8441, config.OperatorBootstrapHTTPSPort())
-		assert.Equal(t, 8443, config.OperatorPublicHTTPSPort())
+		// Verify port values from constants
+		assert.Equal(t, constants.Ports.OperatorHttps, config.OperatorHTTPSPort())
+		assert.Equal(t, constants.Ports.OperatorHttp, constants.Ports.OperatorHttp)
 	})
 }

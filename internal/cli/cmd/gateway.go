@@ -158,13 +158,13 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println(" 1. Secure Gateway Endpoints & Cryptographic Reality")
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			cmd.Printf("  https://localhost:%d\n", cfg.Paths.Ports.OperatorPublicHTTPS)
+			cmd.Printf("  https://localhost:%d\n", constants.Ports.OperatorHttps)
 			cmd.Println("    mTLS control plane for Operator API, agents, CLI auth")
 			cmd.Println()
-			cmd.Printf("  http://%s:%d/bootstrap-ca\n", externalIP, cfg.Paths.Ports.OperatorHTTPS)
+			cmd.Printf("  http://%s:%d/bootstrap-ca\n", externalIP, constants.Ports.OperatorHttp)
 			cmd.Println("    Root CA distribution, CSR enrollment")
 			cmd.Println()
-			cmd.Printf("  http://127.0.0.1:%d/mcp\n", cfg.Paths.Ports.OperatorHTTPS)
+			cmd.Printf("  http://127.0.0.1:%d/mcp\n", constants.Ports.OperatorHttp)
 			cmd.Println("    Plain HTTP for local MCP clients")
 			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
@@ -174,10 +174,10 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Println("  the Root CA to establish mutual TLS (mTLS):")
 			cmd.Println()
 			cmd.Println("  macOS / Linux (Terminal) :")
-			cmd.Printf("      curl -fsSL http://%s:%d/bootstrap-ca | sudo sh\n", externalIP, cfg.Paths.Ports.OperatorHTTPS)
+			cmd.Printf("      curl -fsSL http://%s:%d/bootstrap-ca | sudo sh\n", externalIP, constants.Ports.OperatorHttp)
 			cmd.Println()
 			cmd.Println("  Windows (PowerShell - Admin) :")
-			cmd.Printf("      iex (irm http://%s:%d/bootstrap-ca.ps1)\n", externalIP, cfg.Paths.Ports.OperatorHTTPS)
+			cmd.Printf("      iex (irm http://%s:%d/bootstrap-ca.ps1)\n", externalIP, constants.Ports.OperatorHttp)
 			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println(" 3. Client Authentication (Required for CLI Access)")
@@ -208,8 +208,8 @@ func gatewayStartCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&posture, "posture", "doctrine", "Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)")
-	cmd.Flags().IntVar(&httpPort, "http-port", 0, "HTTP port for bootstrap and MCP (default: 8440)")
-	cmd.Flags().IntVar(&httpsPort, "https-port", 0, "HTTPS port for mTLS API (default: 8443)")
+	cmd.Flags().IntVar(&httpPort, "http-port", 0, "HTTP port for bootstrap and MCP (default: from constants.Ports.OperatorHttp)")
+	cmd.Flags().IntVar(&httpsPort, "https-port", 0, "HTTPS port for mTLS API (default: from constants.Ports.OperatorHttps)")
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
 	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "Directory for TLS certificates (default: .g8e/pki)")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
@@ -284,9 +284,9 @@ func gatewayStatusCmd() *cobra.Command {
 			if running {
 				cmd.Printf("State: RUNNING (PID: %d)\n", pid)
 				cmd.Printf("\nEndpoints:\n")
-				cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), cfg.OperatorBootstrapHTTPSPort())
-				cmd.Printf("  Public API:         https://localhost:%d (Public browser/BYO bootstrap)\n", cfg.Paths.Ports.OperatorPublicHTTPS)
-				cmd.Printf("  MCP HTTP:           http://localhost:%d (Plain HTTP for MCP calls)\n", cfg.OperatorMcpHttpPort())
+				cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
+				cmd.Printf("  Public API:         https://localhost:%d (Public browser/BYO bootstrap)\n", constants.Ports.OperatorHttps)
+				cmd.Printf("  MCP HTTP:           http://localhost:%d (Plain HTTP for MCP calls)\n", constants.Ports.OperatorHttp)
 			} else {
 				cmd.Println("State: STOPPED")
 			}
@@ -328,7 +328,7 @@ func gatewayRestartCmd() *cobra.Command {
 			if err := pm.StartOperator(
 				"doctrine",
 				cfg.OperatorHTTPSPort(),
-				cfg.Paths.Ports.OperatorPublicHTTPS,
+				constants.Ports.OperatorHttps,
 				"",
 				"",
 				"",
@@ -534,7 +534,7 @@ func gatewayMCPConfigCmd() *cobra.Command {
 			}
 
 			// Use the canonical g8e.local internal hostname with unified /mcp endpoint
-			gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", cfg.OperatorPublicHTTPSPort())
+			gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps)
 
 			// Get actual resolved cert paths (absolute paths)
 			actualCertPath := cfg.CLICertFile()
@@ -570,7 +570,7 @@ func gatewayMCPHttpConfigCmd() *cobra.Command {
   "mcpServers": {
     "g8e-gateway": {
       "disabled": true,
-      "serverUrl": "http://127.0.0.1:8442/mcp",
+      "serverUrl": "http://127.0.0.1:" + strconv.Itoa(httpPort) + "/mcp",
       "note": "Must use explicit 127.0.0.1 for HTTP (localhost may resolve to IPv6 ::1)"
     }
   }

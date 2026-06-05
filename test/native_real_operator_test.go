@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/require"
 )
 
@@ -37,7 +38,7 @@ func TestNativeRealOperator_Smoke(t *testing.T) {
 	client, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 
 	// Test basic connectivity to Operator via HTTPS
-	healthURL := fmt.Sprintf("https://localhost:%d/api/v1/health", cliCfg.Paths.Ports.OperatorPublicHTTPS)
+	healthURL := fmt.Sprintf("https://localhost:%d/api/v1/health", constants.Ports.OperatorHttps)
 
 	resp, err := client.Get(healthURL)
 	require.NoError(t, err)

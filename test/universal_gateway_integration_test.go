@@ -49,6 +49,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 )
@@ -496,7 +497,7 @@ func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 
 	operatorSessionID := creds.OperatorSessionID
 	mtlsURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorHTTPSPort())
-	publicURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorPublicHTTPSPort())
+	publicURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 
 	authHeader := func(req *http.Request) {
 		req.Header.Set("Authorization", "Bearer "+operatorSessionID)

@@ -26,6 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 )
 
@@ -346,9 +347,8 @@ func operatorDeployCmd() *cobra.Command {
 
 			cmd.Printf("Deploying operator to %d hosts: %s\n", len(hostList), strings.Join(hostList, ", "))
 
-			bootstrapPort := cfg.OperatorBootstrapHTTPSPort()
-			publicPort := cfg.Paths.Ports.OperatorPublicHTTPS
-			mcpHttpPort := cfg.OperatorMcpHttpPort()
+			httpPort := constants.Ports.OperatorHttp
+			httpsPort := constants.Ports.OperatorHttps
 
 			for _, host := range hostList {
 				cmd.Printf("\nDeploying to %s...\n", host)
@@ -402,7 +402,7 @@ func operatorDeployCmd() *cobra.Command {
 					if identityFile != "" {
 						sshArgs = append(sshArgs, "-i", identityFile)
 					}
-					startCommand := fmt.Sprintf("nohup ~/g8e gw start --bootstrap-port %d --public-port %d --mcp-http-port %d > /dev/null 2>&1 &", bootstrapPort, publicPort, mcpHttpPort)
+					startCommand := fmt.Sprintf("nohup ~/g8e gw start --http-port %d --https-port %d > /dev/null 2>&1 &", httpPort, httpsPort)
 					sshArgs = append(sshArgs, host, startCommand)
 
 					startCmd := exec.Command("ssh", sshArgs...)

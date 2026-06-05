@@ -94,24 +94,20 @@ By passing `--doctrine`, `--consensus`, or `--notary`, the g8e Node transforms i
 
 ### Port Topology
 
-The g8e Gateway exposes four logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port.
+The g8e Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port.
 
 Default ports are sourced from `internal/constants/ports.go:17`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **mTLS API + Pub/Sub** | `8440` (mTLS) | mTLS + URI SAN | `/api/v1/governance/envelopes`, `/api/v1/db/*`, `/api/v1/kv/*`, `/api/v1/blob/*`, `/api/v1/pubsub/publish`, and `/ws/v1/pubsub` real-time fan-out. |
-| **Bootstrap Port** | `8441` (plain HTTP) | CSR Enrollment | Certificate Signing Requests, CA bundle discovery, and initial provisioning. |
-| **MCP HTTP Port** | `8442` (plain HTTP) | Rate-limited HTTP | Plain HTTP endpoint for MCP calls without mTLS requirements. Useful for development and testing. |
-| **Public Port** | `8443` (mTLS) | mTLS + URI SAN | Public mTLS surface for external app enrollment and BYO bootstrap. |
+| **HTTP (Bootstrap + MCP)** | `8440` (plain HTTP) | No TLS | Bootstrap enrollment, CA bundle discovery, and plain HTTP MCP for development/testing. |
+| **HTTPS (mTLS API + Public)** | `8443` (mTLS) | mTLS + URI SAN | `/api/v1/governance/envelopes`, `/api/v1/db/*`, `/api/v1/kv/*`, `/api/v1/blob/*`, `/api/v1/pubsub/publish`, `/ws/v1/pubsub`, and public mTLS surface for external app enrollment. |
 
 #### Port Constraints
 
-- **mTLS Surface** (`8440`): Requires `tls.RequireAndVerifyClientCert`. This is the primary execution boundary.
-- **Bootstrap Surface** (`8441`): Serves plain HTTP for initial CA discovery and bootstrap (no TLS).
-- **MCP HTTP Surface** (`8442`): Serves plain HTTP for MCP calls with rate limiting. Does not require mTLS but may have different security policies.
-- **Public Surface** (`8443`): Requires `tls.RequireAndVerifyClientCert` for mTLS-based external app enrollment.
-- **Collision Prevention**: The gateway fails startup if incompatible surfaces (e.g., mTLS and Bootstrap) are assigned to the same port, as this forces a downgrade to `VerifyClientCertIfGiven`.
+- **HTTP Surface** (`8440`): Serves plain HTTP for bootstrap enrollment and MCP calls. Does not require TLS. Intended for development and initial provisioning.
+- **HTTPS Surface** (`8443`): Requires `tls.RequireAndVerifyClientCert`. This is the primary execution boundary for mTLS API and public surface.
+- **Collision Prevention**: The gateway fails startup if incompatible surfaces are assigned to the same port.
 
 ---
 

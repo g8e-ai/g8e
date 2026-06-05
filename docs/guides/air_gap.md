@@ -28,13 +28,12 @@ In an air-gapped deployment, the g8e Gateway operates as the central Policy Deci
 
 ### Port Configuration and Communication Surfaces
 
-The gateway exposes three logical communication surfaces. Canonical ports are defined in `internal/constants/ports.go` and `protocol/constants/ports.json`.
+The gateway exposes two logical communication surfaces. Canonical ports are defined in `internal/constants/ports.go` and `protocol/constants/ports.json`.
 
 | Surface | Port (default) | Authentication | Purpose |
 | :--- | :--- | :--- | :--- |
-| **Bootstrap** | `8441` (TLS) | None | Serves local trust bundles and handles Certificate Signing Request (CSR) enrollment. |
-| **Public Surface** | `8443` (TLS) | `web_session_id` | Browser management interface, WebAuthn passkey registration, and PKI discovery. |
-| **mTLS API & Pub/Sub** | `8440` (TLS) | mTLS + URI SAN | Receives `GovernanceEnvelope` mutation payloads, handles `/db` persistence, and runs `/ws/pubsub` streaming. |
+| **HTTP (Bootstrap + MCP)** | `8440` (plain HTTP) | None | Serves local trust bundles, handles Certificate Signing Request (CSR) enrollment, and plain HTTP MCP for development/testing. |
+| **HTTPS (mTLS API + Public)** | `8443` (mTLS) | mTLS + URI SAN | Receives `GovernanceEnvelope` mutation payloads, handles `/db` persistence, runs `/ws/pubsub` streaming, and provides browser management interface. |
 
 Surfaces with conflicting TLS client-authentication requirements do not share a network port. Sharing ports forces the use of `tls.VerifyClientCertIfGiven`, which degrades the mTLS execution boundary. The initialization sequence validates port isolation and fails if configurations overlap.
 

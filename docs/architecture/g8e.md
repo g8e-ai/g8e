@@ -245,10 +245,8 @@ Default ports (configurable via flags or `../../internal/cli/config/paths.json`)
 
 | Port | Purpose | Auth |
 |---|---|---|
-| `8440` | mTLS API + Pub/Sub | mTLS (RequireAndVerifyClientCert) |
-| `8441` | Bootstrap enrollment | Plain HTTP (no TLS) |
-| `8442` | MCP HTTP Port | Rate-limited HTTP (no TLS) |
-| `8443` | Public web session | TLS (no client cert) |
+| `8440` | HTTP (bootstrap + MCP) | Plain HTTP (no TLS) |
+| `8443` | HTTPS (mTLS API + public) | mTLS (RequireAndVerifyClientCert) |
 
 ### Configuration
 
@@ -257,9 +255,8 @@ The g8e platform uses **ZERO environment variables** for production configuratio
 - `--data-dir <dir>`: Data directory for SQLite database (default: `.g8e/data` in working directory)
 - `--pki-dir <dir>`: Directory for TLS certificates (default: `.g8e/pki`)
 - `--secrets-dir <dir>`: Directory for platform secrets (default: `.g8e/secrets`)
-- `--http-port <port>`: mTLS API port (default: 8440)
-- `--bootstrap-port <port>`: Bootstrap enrollment port (default: 8441)
-- `--public-port <port>`: Public web session port (default: 8443)
+- `--http-port <port>`: HTTP port for bootstrap and MCP routes (default: 8440)
+- `--https-port <port>`: HTTPS port for mTLS API and public surface (default: 8443)
 
 ---
 

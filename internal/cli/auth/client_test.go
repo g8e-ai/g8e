@@ -27,6 +27,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -484,7 +485,7 @@ func TestCheckOperatorRunning_InvalidURL(t *testing.T) {
 func TestCheckOperatorRunning_URLWithoutProtocol(t *testing.T) {
 	t.Parallel()
 
-	err := CheckOperatorRunningAtURL("localhost:8440")
+	err := CheckOperatorRunningAtURL("localhost:" + strconv.Itoa(constants.Ports.OperatorHttp))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid Operator URL")
 }

@@ -154,7 +154,7 @@ This command outputs a JSON configuration with the correct gateway URL and certi
 
 #### Plain HTTP Endpoint (Development/Testing)
 
-For development and testing scenarios, the gateway also provides a plain HTTP endpoint (port 8442) that does not require mTLS credentials. This endpoint has rate limiting and may have different security policies.
+For development and testing scenarios, the gateway also provides a plain HTTP endpoint (port 8440) that does not require mTLS credentials. This endpoint has rate limiting and may have different security policies.
 
 Run the CLI command to generate the configuration:
 
@@ -175,10 +175,10 @@ The g8e Gateway provides a unified MCP Streamable HTTP endpoint at `/mcp` that i
 To register the g8e Gateway as a custom connector in Claude Code using HTTP transport:
 
 ```bash
-claude mcp add --transport http g8e http://localhost:8442/mcp
+claude mcp add --transport http g8e http://localhost:8440/mcp
 ```
 
-Replace `8442` with your configured `--mcp-http-port` if different from the default.
+Replace `8440` with your configured `--http-port` if different from the default.
 
 The unified `/mcp` endpoint supports:
 - **Initialize handshake**: Protocol version negotiation and capability exchange
@@ -188,7 +188,7 @@ The unified `/mcp` endpoint supports:
 - **SSE support**: GET requests for server-sent events streaming
 - **Origin validation**: DNS-rebinding protection via Origin header validation (rejects non-loopback origins)
 
-**Note**: The `/mcp` endpoint is available on all three gateway surfaces (mTLS port 8440, public TLS port 8443, and plain HTTP port 8442). For Claude Code, use the plain HTTP port (8442) for development or the public TLS port (8443) with JWT authentication for production.
+**Note**: The `/mcp` endpoint is available on both gateway surfaces (mTLS port 8443 and plain HTTP port 8440). For Claude Code, use the plain HTTP port (8440) for development or the public TLS port (8443) with JWT authentication for production.
 
 **Stdio Transport (Recommended for Local Development)**
 
@@ -366,10 +366,8 @@ Default ports (configurable via flags or paths.json):
 
 | Port | Purpose | Auth |
 |---|---|---|
-| `8440` | Operator mTLS API | mTLS (RequireAndVerifyClientCert) |
-| `8443` | Public HTTPS (browser/BYO bootstrap) | TLS (optional client cert) |
-| `8441` | Bootstrap enrollment | TLS (no client cert) |
-| `8442` | Plain HTTP MCP | No TLS (development only) |
+| `8440` | HTTP (bootstrap + MCP) | Plain HTTP (no TLS) |
+| `8443` | HTTPS (mTLS API + public) | mTLS (RequireAndVerifyClientCert) |
 
 ### Configuration
 
@@ -378,10 +376,8 @@ The g8e platform uses **ZERO environment variables** for production configuratio
 - `--data-dir <dir>`: Data directory for SQLite database (default: `.g8e/data` in working directory)
 - `--pki-dir <dir>`: Directory for TLS certificates (default: `.g8e/pki`)
 - `--secrets-dir <dir>`: Directory for platform secrets (default: `.g8e/secrets`)
-- `--http-listen-port <port>`: mTLS API port (default: 8440)
-- `--public-listen-port <port>`: Public HTTPS port (default: 8443)
-- `--bootstrap-port <port>`: Bootstrap enrollment port (default: 8441)
-- `--mcp-http-port <port>`: Plain HTTP MCP port (default: 8442)
+- `--http-port <port>`: HTTP port for bootstrap and MCP routes (default: 8440)
+- `--https-port <port>`: HTTPS port for mTLS API and public surface (default: 8443)
 
 ### Circuit Breaker
 

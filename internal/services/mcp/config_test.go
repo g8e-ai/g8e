@@ -15,11 +15,14 @@ package mcp
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestNewGatewayConfig(t *testing.T) {
-	gatewayURL := "https://g8e.local:8443/mcp"
+	gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps)
 	clientCertPath := "/path/to/client.crt"
 	clientKeyPath := "/path/to/client.key"
 	caCertPath := "/path/to/ca.crt"
@@ -91,7 +94,7 @@ func TestNewGatewayConfig(t *testing.T) {
 
 func TestConfigJSONSerialization(t *testing.T) {
 	config := NewGatewayConfig(
-		"https://g8e.local:8443/mcp",
+		fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps),
 		"/path/to/client.crt",
 		"/path/to/client.key",
 		"/path/to/ca.crt",

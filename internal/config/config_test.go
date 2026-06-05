@@ -172,25 +172,19 @@ func TestResolveGatewayPorts(t *testing.T) {
 	takenPort, _ := strconv.Atoi(portStr)
 
 	t.Run("resolves when port is taken", func(t *testing.T) {
-		h, b, p, m := ResolveGatewayPorts(takenPort, takenPort+1, takenPort+2, takenPort+3)
+		h, s := ResolveGatewayPorts(takenPort, takenPort+1)
 		assert.NotEqual(t, takenPort, h)
 		assert.True(t, h > takenPort)
-		assert.Equal(t, b, h+1)
-		assert.Equal(t, p, h+2)
-		assert.Equal(t, m, h+3)
+		assert.Equal(t, s, h+1)
 	})
 
 	t.Run("resolves when all are available", func(t *testing.T) {
 		// Use very high ports that are likely free
-		h, b, p, m := ResolveGatewayPorts(55000, 55001, 55002, 55003)
+		h, s := ResolveGatewayPorts(55000, 55001)
 		// Verify ports are sequential and >= requested values
 		assert.True(t, h >= 55000)
-		assert.True(t, b >= 55001)
-		assert.True(t, p >= 55002)
-		assert.True(t, m >= 55003)
-		assert.Equal(t, b, h+1)
-		assert.Equal(t, p, h+2)
-		assert.Equal(t, m, h+3)
+		assert.True(t, s >= 55001)
+		assert.Equal(t, s, h+1)
 	})
 }
 
@@ -215,8 +209,7 @@ func TestLoadGateway_IncrementalPorts(t *testing.T) {
 	// Now try to load gateway with that base port
 	cfg, err := LoadGateway(GatewayOptions{
 		HTTPPort:          basePort,
-		BootstrapPort:     basePort + 10, // Far enough away
-		PublicPort:        basePort + 20,
+		HTTPSPort:         basePort + 10,
 		AllowTestPortZero: false,
 	})
 	require.NoError(t, err)
@@ -247,8 +240,7 @@ func TestLoadGateway_Defaults(t *testing.T) {
 func TestLoadGateway_ExplicitValues(t *testing.T) {
 	cfg, err := LoadGateway(GatewayOptions{
 		HTTPPort:          443,
-		BootstrapPort:     80,
-		PublicPort:        8443,
+		HTTPSPort:         constants.Ports.OperatorHttps,
 		DataDir:           "/var/data",
 		PKIDir:            "/var/pki",
 		SecretsDir:        "/var/secrets",
@@ -259,8 +251,7 @@ func TestLoadGateway_ExplicitValues(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 443, cfg.Gateway.HTTPPort)
-	assert.Equal(t, 80, cfg.Gateway.BootstrapPort)
-	assert.Equal(t, 8443, cfg.Gateway.PublicPort)
+	assert.Equal(t, constants.Ports.OperatorHttps, cfg.Gateway.HTTPSPort)
 	assert.Equal(t, "/var/data", cfg.Gateway.DataDir)
 	assert.Equal(t, "/var/pki", cfg.Gateway.PKIDir)
 	assert.Equal(t, "/var/secrets", cfg.Gateway.SecretsDir)

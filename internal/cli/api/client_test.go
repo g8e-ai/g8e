@@ -133,12 +133,6 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 			"protocol_models_dir": "protocol/models",
 			"secrets_dir": ".g8e/secrets",
 			"ssh_config_path": "/tmp/ssh/config"
-		},
-		"ports": {
-			"insecure_mcp_gateway": 18789,
-			"operator_bootstrap_https": 8441,
-			"operator_https": 8440,
-			"operator_public_https": 8443
 		}
 	}`
 	pathsPath := filepath.Join(constantsDir, "paths.json")
@@ -183,7 +177,7 @@ func setupTLSClient(t *testing.T, cfg *config.Config, server *httptest.Server) *
 	var port int
 	_, err = fmt.Sscanf(portStr, "%d", &port)
 	require.NoError(t, err)
-	cfg.Paths.Ports.OperatorPublicHTTPS = port
+	cfg.TestPortOverride = port
 
 	client, err := NewClient(cfg)
 	require.NoError(t, err)

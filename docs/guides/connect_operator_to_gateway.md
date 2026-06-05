@@ -40,7 +40,7 @@ On the remote host, generate a CSR and enroll with the g8e Gateway:
 ./g8e security pki enroll -e <gateway-ip>
 ```
 
-The endpoint is the g8e Gateway IP address. The bootstrap port (8441) is appended automatically. This command generates g8e Operator and CLI CSRs, submits them to the g8e Gateway, and saves the signed certificates to the PKI directory.
+The endpoint is the g8e Gateway IP address. The HTTP port (8440) is appended automatically. This command generates g8e Operator and CLI CSRs, submits them to the g8e Gateway, and saves the signed certificates to the PKI directory.
 
 #### 2. Copy g8e Node and Certificates
 
@@ -56,7 +56,7 @@ On the remote host, start the g8e Gateway with the enrolled certificates:
 
 The g8e Gateway will:
 - Load the mTLS certificates from the PKI directory
-- Establish the control plane on port 8440 (mTLS) and bootstrap port 8441
+- Establish the control plane on port 8443 (HTTPS) and bootstrap on port 8440 (HTTP)
 - Initialize the local in-process Pub/Sub broker
 - Initialize the SQLite-backed audit vault with Git ledger
 - Execute mutations through the L1/L2/L3/L4/L5 verification pipeline

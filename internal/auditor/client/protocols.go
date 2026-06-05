@@ -121,7 +121,7 @@ func (c *Client) A2ACallProto(ctx context.Context, p Persona, skill string, payl
 
 // Suspended reports whether a JSON-RPC response is an L3 suspension and returns
 // the transaction hash to approve. The Gateway returns an approval URL of the
-// form https://host:8442/approve/{tx_hash} when a mutation needs a human notary.
+// form https://host:<https-port>/approve/{tx_hash} when a mutation needs a human notary.
 func Suspended(resp *JSONRPCResponse) (txHash string, yes bool) {
 	if resp == nil {
 		return "", false

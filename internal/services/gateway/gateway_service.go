@@ -42,20 +42,18 @@ type GatewayService struct {
 	cfg    *config.Config
 	logger *slog.Logger
 
-	db              *GatewayDBService
-	pubsub          *PubSubBroker
-	auth            *AuthService
-	pki             *PKIAuthority
-	reg             *RegistrationService
-	passkey         *PasskeyService
-	userSvc         *UserService
-	sessionSvc      *SessionService
-	mcpGateway      *mcp.GatewayService
-	responder       *responder.Responder
-	server          *http.Server
-	publicServer    *http.Server
-	bootstrapServer *http.Server
-	mcpHttpServer   *http.Server
+	db           *GatewayDBService
+	pubsub       *PubSubBroker
+	auth         *AuthService
+	pki          *PKIAuthority
+	reg          *RegistrationService
+	passkey      *PasskeyService
+	userSvc      *UserService
+	sessionSvc   *SessionService
+	mcpGateway   *mcp.GatewayService
+	responder    *responder.Responder
+	server       *http.Server
+	publicServer *http.Server
 
 	handler *HTTPHandler
 
@@ -411,26 +409,6 @@ func (ls *GatewayService) GetPublicPort() int {
 		return 0
 	}
 	_, portStr, _ := net.SplitHostPort(ls.publicServer.Addr)
-	p, _ := strconv.Atoi(portStr)
-	return p
-}
-
-// GetBootstrapPort returns the assigned port for the bootstrap server.
-func (ls *GatewayService) GetBootstrapPort() int {
-	if ls.bootstrapServer == nil || ls.bootstrapServer.Addr == "" {
-		return 0
-	}
-	_, portStr, _ := net.SplitHostPort(ls.bootstrapServer.Addr)
-	p, _ := strconv.Atoi(portStr)
-	return p
-}
-
-// GetMCPHttpPort returns the assigned port for the MCP HTTP server.
-func (ls *GatewayService) GetMCPHttpPort() int {
-	if ls.mcpHttpServer == nil || ls.mcpHttpServer.Addr == "" {
-		return 0
-	}
-	_, portStr, _ := net.SplitHostPort(ls.mcpHttpServer.Addr)
 	p, _ := strconv.Atoi(portStr)
 	return p
 }

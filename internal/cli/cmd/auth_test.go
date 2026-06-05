@@ -132,12 +132,6 @@ func TestLogoutCmd(t *testing.T) {
 				"protocol_models_dir": "` + constants.Paths.Infra.ProtocolModelsDir + `",
 				"secrets_dir": "` + constants.Paths.Infra.SecretsDir + `",
 				"ssh_config_path": "` + constants.Paths.Infra.SshConfigPath + `"
-			},
-			"ports": {
-				"insecure_mcp_gateway": 18789,
-				"operator_bootstrap_https": 8441,
-				"operator_https": 48440,
-				"operator_public_https": 8443
 			}
 		}`
 		pathsPath := filepath.Join(constantsDir, "paths.json")
@@ -301,7 +295,7 @@ func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
 	require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
 	require.NoError(t, os.WriteFile(trustBundlePath, []byte("dummy-trust-bundle"), 0644))
 
-	// Use LoadWithPaths with a unique port for hermetic test execution
+	// Use LoadWithPaths for hermetic test execution
 	// This ensures the test does not depend on any running operator
 	pathsJSON := `{
 		"host": "localhost",
@@ -316,12 +310,6 @@ func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
 			"protocol_models_dir": "` + constants.Paths.Infra.ProtocolModelsDir + `",
 			"secrets_dir": "` + constants.Paths.Infra.SecretsDir + `",
 			"ssh_config_path": "` + constants.Paths.Infra.SshConfigPath + `"
-		},
-		"ports": {
-			"insecure_mcp_gateway": 18789,
-			"operator_bootstrap_https": 18441,
-			"operator_https": 58440,
-			"operator_public_https": 18443
 		}
 	}`
 
