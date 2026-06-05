@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"text/template"
 
 	"github.com/spf13/cobra"
 )
@@ -74,20 +72,31 @@ func dockerUp(numGateways, numOperators int) error {
 		return fmt.Errorf("binary not found at bin/g8e-linux-amd64 - run 'make build' first")
 	}
 
-	fmt.Printf("[g8e] Generating docker-compose.yml for %d gateway(s) and %d operator(s)...\n", numGateways, numOperators)
-	dockerComposePath := filepath.Join("docker", "docker-compose.yml")
-	if err := generateDockerCompose(dockerComposePath, numGateways, numOperators); err != nil {
-		return fmt.Errorf("failed to generate docker-compose.yml: %w", err)
-	}
+	fmt.Printf("[g8e] Building Docker images for %d gateway(s) and %d operator(s)...\n", numGateways, numOperators)
 
-	fmt.Printf("[g8e] Building Docker images...\n")
+	// Create docker network if it doesn't exist
+	fmt.Println("[g8e] Ensuring docker network exists...")
+	networkCmd := exec.Command("docker", "network", "create", "g8e-network")
+	networkCmd.Stdout = os.Stdout
+	networkCmd.Stderr = os.Stderr
+	networkCmd.Run() // Ignore error if network already exists
+
 	if err := buildDockerImages(); err != nil {
 		return fmt.Errorf("failed to build Docker images: %w", err)
 	}
 
-	fmt.Printf("[g8e] Starting containers (gateways first, then operators)...\n")
-	if err := startContainers(); err != nil {
-		return fmt.Errorf("failed to start containers: %w", err)
+	fmt.Printf("[g8e] Starting gateway containers...\n")
+	for i := 0; i < numGateways; i++ {
+		if err := startGatewayContainer(i); err != nil {
+			return fmt.Errorf("failed to start gateway%d: %w", i, err)
+		}
+	}
+
+	fmt.Printf("[g8e] Starting operator containers...\n")
+	for i := 0; i < numOperators; i++ {
+		if err := startOperatorContainer(i); err != nil {
+			return fmt.Errorf("failed to start operator%d: %w", i, err)
+		}
 	}
 
 	printContainerInfo(numGateways, numOperators)
@@ -96,203 +105,204 @@ func dockerUp(numGateways, numOperators int) error {
 
 func dockerStart(numGateways, numOperators int) error {
 	fmt.Printf("[g8e] Starting %d gateway(s) and %d operator(s)...\n", numGateways, numOperators)
-	if err := startContainers(); err != nil {
-		return fmt.Errorf("failed to start containers: %w", err)
+	for i := 0; i < numGateways; i++ {
+		if err := startGatewayContainer(i); err != nil {
+			return fmt.Errorf("failed to start gateway%d: %w", i, err)
+		}
+	}
+	for i := 0; i < numOperators; i++ {
+		if err := startOperatorContainer(i); err != nil {
+			return fmt.Errorf("failed to start operator%d: %w", i, err)
+		}
 	}
 	printContainerInfo(numGateways, numOperators)
 	return nil
 }
 
 func dockerStop() error {
-	fmt.Println("[g8e] Stopping all containers...")
-	cmd := exec.Command("docker-compose", "-f", "docker/docker-compose.yml", "stop")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to stop containers: %w", err)
+	fmt.Println("[g8e] Stopping all g8e containers...")
+	cmd := exec.Command("docker", "ps", "-q", "--filter", "name=g8e-")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	containerIDs := bytes.TrimSpace(output)
+	if len(containerIDs) > 0 {
+		stopCmd := exec.Command("docker", "stop")
+		stopCmd.Stdin = bytes.NewReader(containerIDs)
+		stopCmd.Stdout = os.Stdout
+		stopCmd.Stderr = os.Stderr
+		if err := stopCmd.Run(); err != nil {
+			return fmt.Errorf("failed to stop containers: %w", err)
+		}
 	}
 	fmt.Println("[g8e] Containers stopped.")
 	return nil
 }
 
 func dockerDown() error {
-	fmt.Println("[g8e] Stopping and removing all containers and volumes...")
-	cmd := exec.Command("docker-compose", "-f", "docker/docker-compose.yml", "down", "-v")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to remove containers: %w", err)
+	fmt.Println("[g8e] Stopping and removing all g8e containers and volumes...")
+	cmd := exec.Command("docker", "ps", "-q", "--filter", "name=g8e-")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to list containers: %w", err)
 	}
+
+	containerIDs := bytes.TrimSpace(output)
+	if len(containerIDs) > 0 {
+		stopCmd := exec.Command("docker", "stop")
+		stopCmd.Stdin = bytes.NewReader(containerIDs)
+		stopCmd.Stdout = os.Stdout
+		stopCmd.Stderr = os.Stderr
+		if err := stopCmd.Run(); err != nil {
+			return fmt.Errorf("failed to stop containers: %w", err)
+		}
+
+		rmCmd := exec.Command("docker", "rm")
+		rmCmd.Stdin = bytes.NewReader(containerIDs)
+		rmCmd.Stdout = os.Stdout
+		rmCmd.Stderr = os.Stderr
+		if err := rmCmd.Run(); err != nil {
+			return fmt.Errorf("failed to remove containers: %w", err)
+		}
+	}
+
+	// Remove volumes
+	volCmd := exec.Command("docker", "volume", "ls", "-q", "--filter", "name=g8e-")
+	volOutput, err := volCmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to list volumes: %w", err)
+	}
+
+	volumeIDs := bytes.TrimSpace(volOutput)
+	if len(volumeIDs) > 0 {
+		rmVolCmd := exec.Command("docker", "volume", "rm")
+		rmVolCmd.Stdin = bytes.NewReader(volumeIDs)
+		rmVolCmd.Stdout = os.Stdout
+		rmVolCmd.Stderr = os.Stderr
+		if err := rmVolCmd.Run(); err != nil {
+			return fmt.Errorf("failed to remove volumes: %w", err)
+		}
+	}
+
 	fmt.Println("[g8e] Containers and volumes removed.")
 	return nil
 }
 
-func buildBinary() error {
-	// Copy the existing binary to docker/ directory for Dockerfile to pick up
-	src := "bin/g8e-linux-amd64"
-	dst := "docker/g8e-linux-amd64"
-
-	// Check if source exists
-	if _, err := os.Stat(src); os.IsNotExist(err) {
-		return fmt.Errorf("binary not found at %s - run 'make build' first", src)
+func buildDockerImages() error {
+	// Build gateway image
+	fmt.Println("[g8e] Building gateway image...")
+	gwCmd := exec.Command("docker", "build", "-f", "docker/Dockerfile.gateway", "-t", "g8e-gateway:latest", ".")
+	gwCmd.Stdout = os.Stdout
+	gwCmd.Stderr = os.Stderr
+	if err := gwCmd.Run(); err != nil {
+		return fmt.Errorf("failed to build gateway image: %w", err)
 	}
 
-	// Remove existing binary if it exists (ignore errors, file may be in use)
-	os.Remove(dst)
-
-	if err := copyFile(src, dst); err != nil {
-		return fmt.Errorf("failed to copy binary: %w", err)
+	// Build operator image
+	fmt.Println("[g8e] Building operator image...")
+	opCmd := exec.Command("docker", "build", "-f", "docker/Dockerfile.operator", "-t", "g8e-operator:latest", ".")
+	opCmd.Stdout = os.Stdout
+	opCmd.Stderr = os.Stderr
+	if err := opCmd.Run(); err != nil {
+		return fmt.Errorf("failed to build operator image: %w", err)
 	}
 
 	return nil
 }
 
-func copyFile(src, dst string) error {
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(dst, data, 0755)
-}
+func startGatewayContainer(index int) error {
+	containerName := fmt.Sprintf("g8e-gateway%d", index)
+	basePort := 9000 + (index * 10)
 
-func buildDockerImages() error {
-	cmd := exec.Command("docker-compose", "-f", "docker/docker-compose.yml", "build")
+	// Check if container already exists
+	checkCmd := exec.Command("docker", "ps", "-a", "-q", "--filter", fmt.Sprintf("name=%s", containerName))
+	if output, _ := checkCmd.Output(); len(bytes.TrimSpace(output)) > 0 {
+		// Container exists, remove it first
+		rmCmd := exec.Command("docker", "rm", "-f", containerName)
+		rmCmd.Stdout = os.Stdout
+		rmCmd.Stderr = os.Stderr
+		if err := rmCmd.Run(); err != nil {
+			return fmt.Errorf("failed to remove existing container: %w", err)
+		}
+	}
+
+	// Create volumes
+	dataVol := fmt.Sprintf("gateway%d-data", index)
+	pkiVol := fmt.Sprintf("gateway%d-pki", index)
+	secretsVol := fmt.Sprintf("gateway%d-secrets", index)
+
+	for _, vol := range []string{dataVol, pkiVol, secretsVol} {
+		exec.Command("docker", "volume", "create", vol).Run()
+	}
+
+	// Start container
+	cmd := exec.Command("docker", "run", "-d",
+		"--name", containerName,
+		"--hostname", fmt.Sprintf("gateway%d", index),
+		"--network", "g8e-network",
+		"-p", fmt.Sprintf("%d:9000", basePort),
+		"-p", fmt.Sprintf("%d:9001", basePort+1),
+		"-p", fmt.Sprintf("%d:9002", basePort+2),
+		"-v", fmt.Sprintf("%s:/home/g8eg/.g8e/data", dataVol),
+		"-v", fmt.Sprintf("%s:/home/g8eg/.g8e/pki", pkiVol),
+		"-v", fmt.Sprintf("%s:/home/g8eg/.g8e/secrets", secretsVol),
+		"g8e-gateway:latest")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to start container: %w", err)
+	}
+
+	fmt.Printf("[g8e] Started %s (ports: %d, %d, %d)\n", containerName, basePort, basePort+1, basePort+2)
+	return nil
 }
 
-func startContainers() error {
-	cmd := exec.Command("docker-compose", "-f", "docker/docker-compose.yml", "up", "-d")
+func startOperatorContainer(index int) error {
+	containerName := fmt.Sprintf("g8e-operator%d", index)
+	basePort := 9020 + (index * 10)
+
+	// Check if container already exists
+	checkCmd := exec.Command("docker", "ps", "-a", "-q", "--filter", fmt.Sprintf("name=%s", containerName))
+	if output, _ := checkCmd.Output(); len(bytes.TrimSpace(output)) > 0 {
+		// Container exists, remove it first
+		rmCmd := exec.Command("docker", "rm", "-f", containerName)
+		rmCmd.Stdout = os.Stdout
+		rmCmd.Stderr = os.Stderr
+		if err := rmCmd.Run(); err != nil {
+			return fmt.Errorf("failed to remove existing container: %w", err)
+		}
+	}
+
+	// Create volumes
+	dataVol := fmt.Sprintf("operator%d-data", index)
+	pkiVol := fmt.Sprintf("operator%d-pki", index)
+	secretsVol := fmt.Sprintf("operator%d-secrets", index)
+
+	for _, vol := range []string{dataVol, pkiVol, secretsVol} {
+		exec.Command("docker", "volume", "create", vol).Run()
+	}
+
+	// Start container
+	cmd := exec.Command("docker", "run", "-d",
+		"--name", containerName,
+		"--hostname", fmt.Sprintf("operator%d", index),
+		"--network", "g8e-network",
+		"-p", fmt.Sprintf("%d:9000", basePort),
+		"-p", fmt.Sprintf("%d:9001", basePort+1),
+		"-p", fmt.Sprintf("%d:9002", basePort+2),
+		"-v", fmt.Sprintf("%s:/home/g8eo/.g8e/data", dataVol),
+		"-v", fmt.Sprintf("%s:/home/g8eo/.g8e/pki", pkiVol),
+		"-v", fmt.Sprintf("%s:/home/g8eo/.g8e/secrets", secretsVol),
+		"g8e-operator:latest")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-func generateDockerCompose(path string, numGateways, numOperators int) error {
-	tmpl := `# Copyright (c) 2026 Lateralus Labs, LLC.
-# Licensed under the Apache License, Version 2.0
-# Auto-generated by ./g8e docker
-
-services:
-{{- range $i := .GatewayIndices }}
-  gateway{{ $i }}:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.gateway
-    image: g8e-gateway:latest
-    container_name: g8e-gateway{{ $i }}
-    hostname: gateway{{ $i }}
-    networks:
-      - g8e-network
-    ports:
-      - "{{ add 9000 (mul $i 10) }}:9000"  # HTTPS mTLS API
-      - "{{ add 9001 (mul $i 10) }}:9001"  # Bootstrap TLS (CSR enrollment)
-      - "{{ add 9002 (mul $i 10) }}:9002"  # Public browser/BYO bootstrap
-    volumes:
-      - gateway{{ $i }}-data:/home/g8eg/.g8e/data
-      - gateway{{ $i }}-pki:/home/g8eg/.g8e/pki
-      - gateway{{ $i }}-secrets:/home/g8eg/.g8e/secrets
-    healthcheck:
-      test: ["CMD", "/home/g8eg/g8e-linux-amd64", "gw", "status"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
-    restart: unless-stopped
-{{- end }}
-{{- range $i := .OperatorIndices }}
-  operator{{ $i }}:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.operator
-    image: g8e-operator:latest
-    container_name: g8e-operator{{ $i }}
-    hostname: operator{{ $i }}
-    networks:
-      - g8e-network
-    ports:
-      - "{{ add 9010 (mul $i 10) }}:9000"  # HTTPS mTLS API (offset to avoid conflict with gateway)
-      - "{{ add 9011 (mul $i 10) }}:9001"  # Bootstrap TLS (CSR enrollment)
-      - "{{ add 9012 (mul $i 10) }}:9002"  # Public browser/BYO bootstrap
-    volumes:
-      - operator{{ $i }}-data:/home/g8eo/.g8e/data
-      - operator{{ $i }}-pki:/home/g8eo/.g8e/pki
-      - operator{{ $i }}-secrets:/home/g8eo/.g8e/secrets
-    depends_on:
-{{- range $j := .GatewayIndices }}
-      gateway{{ $j }}:
-        condition: service_healthy
-{{- end }}
-    healthcheck:
-      test: ["CMD", "/home/g8eo/g8e-linux-amd64", "--version"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
-    restart: unless-stopped
-{{- end }}
-
-networks:
-  g8e-network:
-    driver: bridge
-
-volumes:
-{{- range $i := .GatewayIndices }}
-  gateway{{ $i }}-data:
-    driver: local
-  gateway{{ $i }}-pki:
-    driver: local
-  gateway{{ $i }}-secrets:
-    driver: local
-{{- end }}
-{{- range $i := .OperatorIndices }}
-  operator{{ $i }}-data:
-    driver: local
-  operator{{ $i }}-pki:
-    driver: local
-  operator{{ $i }}-secrets:
-    driver: local
-{{- end }}
-`
-
-	funcMap := map[string]interface{}{
-		"add": func(a, b int) int { return a + b },
-		"mul": func(a, b int) int { return a * b },
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to start container: %w", err)
 	}
 
-	gatewayIndices := make([]int, numGateways)
-	for i := 0; i < numGateways; i++ {
-		gatewayIndices[i] = i
-	}
-
-	operatorIndices := make([]int, numOperators)
-	for i := 0; i < numOperators; i++ {
-		operatorIndices[i] = i
-	}
-
-	data := struct {
-		GatewayIndices  []int
-		OperatorIndices []int
-	}{
-		GatewayIndices:  gatewayIndices,
-		OperatorIndices: operatorIndices,
-	}
-
-	t, err := template.New("docker-compose").Funcs(funcMap).Parse(tmpl)
-	if err != nil {
-		return fmt.Errorf("failed to parse template: %w", err)
-	}
-
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, data); err != nil {
-		return fmt.Errorf("failed to execute template: %w", err)
-	}
-
-	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
-		return fmt.Errorf("failed to write docker-compose.yml: %w", err)
-	}
-
+	fmt.Printf("[g8e] Started %s (ports: %d, %d, %d)\n", containerName, basePort, basePort+1, basePort+2)
 	return nil
 }
 
@@ -306,12 +316,12 @@ func printContainerInfo(numGateways, numOperators int) {
 	}
 	fmt.Printf(" │ ✔ Operators: %d\n", numOperators)
 	for i := 0; i < numOperators; i++ {
-		basePort := 9010 + (i * 10)
+		basePort := 9020 + (i * 10)
 		fmt.Printf(" │   - operator%d: https://localhost:%d (mTLS), %d (bootstrap), %d (public)\n", i, basePort, basePort+1, basePort+2)
 	}
 	fmt.Println(" └──────────────────────────────────────────────────────────────────────────┘")
 	fmt.Println()
-	fmt.Println("View logs: docker-compose -f docker/docker-compose.yml logs -f")
+	fmt.Println("View logs: docker logs -f <container-name>")
 	fmt.Println("Stop all:  ./g8e docker --stop")
 	fmt.Println("Clean up:  ./g8e docker --down")
 }
