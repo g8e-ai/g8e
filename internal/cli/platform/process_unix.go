@@ -111,7 +111,14 @@ func (pm *ProcessManager) stopProcess(pid int, name string) error {
 			if err := process.Signal(syscall.SIGKILL); err != nil {
 				return fmt.Errorf("failed to send SIGKILL: %w", err)
 			}
-			return nil
+			// Wait for process to actually exit after SIGKILL
+			for i := 0; i < 20; i++ {
+				time.Sleep(100 * time.Millisecond)
+				if !pm.isProcessRunning(pid) {
+					return nil
+				}
+			}
+			return fmt.Errorf("process %d did not exit after SIGKILL", pid)
 		case <-ticker.C:
 			if !pm.isProcessRunning(pid) {
 				return nil
