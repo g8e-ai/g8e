@@ -35,7 +35,7 @@ func TestDetectToolBinary(t *testing.T) {
 			name:        "unknown tool",
 			toolName:    "unknown-tool",
 			wantErr:     true,
-			errContains: "unknown tool",
+			errContains: "supported tools",
 		},
 	}
 

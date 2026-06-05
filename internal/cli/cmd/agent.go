@@ -92,7 +92,10 @@ func runAgentWrapper(toolName string, toolArgs []string) error {
 
 	creds, err := auth.LoadCredentials(cfg)
 	if err != nil {
-		return fmt.Errorf("CLI not authenticated. Run: ./g8e auth login")
+		return fmt.Errorf("failed to load credentials: %w (run './g8e auth login' to authenticate)", err)
+	}
+	if creds == nil {
+		return fmt.Errorf("CLI not authenticated (no credentials found at %s). Run: ./g8e auth login", cfg.CredentialsFile())
 	}
 
 	toolBinary, err := detectToolBinary(toolName, defaultToolPaths)
@@ -108,7 +111,11 @@ func runAgentWrapper(toolName string, toolArgs []string) error {
 func detectToolBinary(toolName string, toolPaths map[string][]string) (string, error) {
 	paths, ok := toolPaths[toolName]
 	if !ok {
-		return "", fmt.Errorf("unknown tool: %s", toolName)
+		supportedTools := make([]string, 0, len(toolPaths))
+		for tool := range toolPaths {
+			supportedTools = append(supportedTools, tool)
+		}
+		return "", fmt.Errorf("unknown tool: %s (supported tools: %v)", toolName, supportedTools)
 	}
 
 	for _, path := range paths {
