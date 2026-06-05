@@ -61,6 +61,11 @@ type Capabilities struct {
 
 // NewGatewayConfig creates a standard gateway MCP configuration with the given gateway URL and cert paths.
 func NewGatewayConfig(gatewayURL, clientCertPath, clientKeyPath, caCertPath string) *Config {
+	return NewGatewayConfigWithHostname(gatewayURL, clientCertPath, clientKeyPath, caCertPath, "g8e.local")
+}
+
+// NewGatewayConfigWithHostname creates a gateway MCP configuration with a custom hostname for verification.
+func NewGatewayConfigWithHostname(gatewayURL, clientCertPath, clientKeyPath, caCertPath, verifyHostname string) *Config {
 	return &Config{
 		MCPServers: map[string]ServerConfig{
 			"g8e-gateway": {
@@ -73,7 +78,7 @@ func NewGatewayConfig(gatewayURL, clientCertPath, clientKeyPath, caCertPath stri
 					ClientKey:         clientKeyPath,
 					CACertificate:     caCertPath,
 					VerifyServer:      true,
-					VerifyHostname:    "g8e.local",
+					VerifyHostname:    verifyHostname,
 				},
 				Capabilities: Capabilities{
 					Tools:     true,
@@ -82,7 +87,6 @@ func NewGatewayConfig(gatewayURL, clientCertPath, clientKeyPath, caCertPath stri
 				},
 				Description: "g8e Gateway MCP endpoint",
 				Notes: []string{
-					"Use the canonical g8e.local internal hostname through gateway-managed translation.",
 					"mTLS is required for production access.",
 				},
 			},

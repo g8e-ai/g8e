@@ -48,6 +48,7 @@ func gatewayCmd() *cobra.Command {
 		gatewayResetCmd(),
 		gatewayCleanCmd(),
 		gatewayMCPConfigCmd(),
+		gatewayMCPConfigIPCmd(),
 		gatewayMCPHttpConfigCmd(),
 	)
 
@@ -533,6 +534,12 @@ func gatewayMCPConfigCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
+			// Print banner with /etc/hosts entry
+			externalIP := config.GetExternalInterfaceIP()
+			cmd.Println("# Add this entry to /etc/hosts to enable g8e.local resolution:")
+			cmd.Printf("%s g8e.local\n", externalIP)
+			cmd.Println()
+
 			// Use the canonical g8e.local internal hostname with unified /mcp endpoint
 			gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps)
 
@@ -561,20 +568,60 @@ func gatewayMCPConfigCmd() *cobra.Command {
 	return cmd
 }
 
+func gatewayMCPConfigIPCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mcp-config-ip",
+		Short: "Print MCP client configuration for the Gateway using IP address (no DNS required)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			// Use the external IP address instead of g8e.local
+			externalIP := config.GetExternalInterfaceIP()
+			gatewayURL := fmt.Sprintf("https://%s:%d/mcp", externalIP, constants.Ports.OperatorHttps)
+
+			// Get actual resolved cert paths (absolute paths)
+			actualCertPath := cfg.CLICertFile()
+			actualKeyPath := cfg.CLIKeyFile()
+			actualCAPath := cfg.TrustBundlePath()
+
+			// Normalize to forward slashes for JSON (cross-platform compatibility)
+			actualCertPath = filepath.ToSlash(actualCertPath)
+			actualKeyPath = filepath.ToSlash(actualKeyPath)
+			actualCAPath = filepath.ToSlash(actualCAPath)
+
+			// Use IP address as hostname for verification
+			mcpConfig := mcp.NewGatewayConfigWithHostname(gatewayURL, actualCertPath, actualKeyPath, actualCAPath, externalIP)
+
+			configJSON, err := json.MarshalIndent(mcpConfig, "", "  ")
+			if err != nil {
+				return fmt.Errorf("failed to marshal MCP config: %w", err)
+			}
+
+			cmd.Println(string(configJSON))
+			return nil
+		},
+	}
+
+	return cmd
+}
+
 func gatewayMCPHttpConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mcp-config-http",
 		Short: "Print MCP client configuration for the Gateway plain HTTP endpoint",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			staticConfig := `{
+			staticConfig := fmt.Sprintf(`{
   "mcpServers": {
     "g8e-gateway": {
       "disabled": true,
-      "serverUrl": "http://127.0.0.1:" + strconv.Itoa(httpPort) + "/mcp",
+      "serverUrl": "http://127.0.0.1:%d/mcp",
       "note": "Must use explicit 127.0.0.1 for HTTP (localhost may resolve to IPv6 ::1)"
     }
   }
-}`
+}`, constants.Ports.OperatorHttp)
 			cmd.Println(staticConfig)
 			return nil
 		},
