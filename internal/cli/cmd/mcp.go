@@ -34,6 +34,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	l3ApprovalMaxIterations = 30
+	l3ApprovalPollInterval  = 10 * time.Second
+	l3ApprovalTotalTimeout  = 5 * time.Minute
+)
+
 // mcpCmd implements the MCP stdio transport mode
 func mcpCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -401,8 +407,8 @@ func proxyToGatewayWithRetry(client *http.Client, gatewayURL string, req JSONRPC
 			fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
 		}
 
-		for i := 0; i < 30; i++ {
-			time.Sleep(10 * time.Second)
+		for i := 0; i < l3ApprovalMaxIterations; i++ {
+			time.Sleep(l3ApprovalPollInterval)
 
 			retryResp, err := proxyToGateway(client, gatewayURL, req)
 			if err != nil {
