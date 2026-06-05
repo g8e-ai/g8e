@@ -19,7 +19,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
@@ -96,18 +95,13 @@ func operatorCpCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := args[0]
 
-			cfg, err := config.Load("")
+			sourceBinary, err := os.Executable()
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			sourceBinary := filepath.Join(cfg.ProjectRoot, "bin", fmt.Sprintf("g8e-%s-%s", runtime.GOOS, runtime.GOARCH))
-			if runtime.GOOS == "windows" {
-				sourceBinary += ".exe"
+				return fmt.Errorf("failed to get running binary path: %w", err)
 			}
 
 			if _, err := os.Stat(sourceBinary); os.IsNotExist(err) {
-				return fmt.Errorf("operator binary not found at %s. Run 'make build' first", sourceBinary)
+				return fmt.Errorf("operator binary not found at %s", sourceBinary)
 			}
 
 			targetInfo, err := os.Stat(target)
