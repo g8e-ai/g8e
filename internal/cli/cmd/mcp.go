@@ -23,6 +23,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -440,22 +441,56 @@ func extractApprovalURL(resp JSONRPCResponse) string {
 		return ""
 	}
 
+	// First try to extract approval_url from structured JSON response
+	resultMap, ok := resp.Result.(map[string]interface{})
+	if ok {
+		if approvalURL, exists := resultMap["approval_url"]; exists {
+			if urlStr, ok := approvalURL.(string); ok && urlStr != "" {
+				return urlStr
+			}
+		}
+
+		// Check if content array exists and extract URL from text content
+		if content, exists := resultMap["content"]; exists {
+			if contentArray, ok := content.([]interface{}); ok {
+				for _, item := range contentArray {
+					if itemMap, ok := item.(map[string]interface{}); ok {
+						if text, exists := itemMap["text"]; exists {
+							if textStr, ok := text.(string); ok {
+								if url := extractURLFromText(textStr); url != "" {
+									return url
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback: marshal and use regex extraction
 	resultBytes, err := json.Marshal(resp.Result)
 	if err != nil {
 		return ""
 	}
 
-	resultStr := string(resultBytes)
+	return extractURLFromText(string(resultBytes))
+}
 
-	start := strings.Index(resultStr, "https://")
-	if start == -1 {
-		return ""
+func extractURLFromText(text string) string {
+	// Use regex to extract HTTPS URLs that contain the approval path
+	urlPattern := regexp.MustCompile(`https://[^\s"']+` + regexp.QuoteMeta(constants.APIPaths.ApprovePagePrefix) + `[^\s"']*`)
+	matches := urlPattern.FindStringSubmatch(text)
+	if len(matches) > 0 {
+		return matches[0]
 	}
 
-	end := strings.Index(resultStr[start:], " ")
-	if end == -1 {
-		return resultStr[start:]
+	// Fallback to any HTTPS URL if approval path not found
+	genericURLPattern := regexp.MustCompile(`https://[^\s"']+`)
+	matches = genericURLPattern.FindStringSubmatch(text)
+	if len(matches) > 0 {
+		return matches[0]
 	}
 
-	return resultStr[start : start+end]
+	return ""
 }

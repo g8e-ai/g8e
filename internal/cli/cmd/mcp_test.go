@@ -326,19 +326,29 @@ func TestIsL3ApprovalResponse(t *testing.T) {
 }
 
 func TestExtractApprovalURL(t *testing.T) {
-	t.Run("extracts URL from approval response", func(t *testing.T) {
+	t.Run("extracts URL from structured approval_url field", func(t *testing.T) {
+		resp := JSONRPCResponse{
+			Result: map[string]interface{}{
+				"approval_url": "https://example.com/api/v1/approve/abc123",
+			},
+		}
+		url := extractApprovalURL(resp)
+		assert.Equal(t, "https://example.com/api/v1/approve/abc123", url)
+	})
+
+	t.Run("extracts URL from content text with approval path", func(t *testing.T) {
 		resp := JSONRPCResponse{
 			Result: map[string]interface{}{
 				"content": []interface{}{
 					map[string]interface{}{
 						"type": "text",
-						"text": "Execution paused. Please visit https://example.com/approve/123 to authorize",
+						"text": "Execution paused. Please visit https://example.com/api/v1/approve/123 to authorize",
 					},
 				},
 			},
 		}
 		url := extractApprovalURL(resp)
-		assert.Equal(t, "https://example.com/approve/123", url)
+		assert.Equal(t, "https://example.com/api/v1/approve/123", url)
 	})
 
 	t.Run("handles URL at end of string", func(t *testing.T) {
@@ -347,13 +357,13 @@ func TestExtractApprovalURL(t *testing.T) {
 				"content": []interface{}{
 					map[string]interface{}{
 						"type": "text",
-						"text": "Please visit https://example.com/approve/456",
+						"text": "Please visit https://example.com/api/v1/approve/456",
 					},
 				},
 			},
 		}
 		url := extractApprovalURL(resp)
-		assert.Equal(t, "https://example.com/approve/456", url)
+		assert.Equal(t, "https://example.com/api/v1/approve/456", url)
 	})
 
 	t.Run("handles nil result", func(t *testing.T) {
@@ -377,5 +387,31 @@ func TestExtractApprovalURL(t *testing.T) {
 		}
 		url := extractApprovalURL(resp)
 		assert.Empty(t, url)
+	})
+
+	t.Run("extracts URL from marshaled JSON as fallback", func(t *testing.T) {
+		resp := JSONRPCResponse{
+			Result: map[string]interface{}{
+				"message": "Visit https://example.com/api/v1/approve/789 for approval",
+			},
+		}
+		url := extractApprovalURL(resp)
+		assert.Equal(t, "https://example.com/api/v1/approve/789", url)
+	})
+
+	t.Run("prefers structured approval_url over text content", func(t *testing.T) {
+		resp := JSONRPCResponse{
+			Result: map[string]interface{}{
+				"approval_url": "https://example.com/api/v1/approve/structured",
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": "Visit https://example.com/api/v1/approve/text instead",
+					},
+				},
+			},
+		}
+		url := extractApprovalURL(resp)
+		assert.Equal(t, "https://example.com/api/v1/approve/structured", url)
 	})
 }
