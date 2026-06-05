@@ -193,7 +193,7 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Println()
 			cmd.Println("  Other actions:")
 			cmd.Println("  [Bind Satellite]    : ./g8e security pki enroll")
-			cmd.Println("  [View Live Ledger]  : ./g8e gateway logs --follow")
+			cmd.Println("  [View Live Ledger]  : ./g8e gw logs --follow")
 			cmd.Println("  [MCP Client Config] : ./g8e gw mcp-config")
 			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
