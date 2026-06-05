@@ -31,6 +31,30 @@ LDFLAGS := -X main.version=$(VERSION) -X main.buildID=$(BUILD_ID) -X main.buildT
 HOST_OS := $(shell go env GOOS)
 HOST_ARCH := $(shell go env GOARCH)
 
+# Platform and architecture lists
+PLATFORMS := linux/amd64 linux/arm64 linux/386 windows/amd64 windows/arm64 darwin/amd64 darwin/arm64
+LINUX_ARCHS := amd64 arm64 386
+DARWIN_ARCHS := amd64 arm64
+WINDOWS_ARCHS := amd64 arm64
+
+# Build flags
+CGO_ENABLED := 0
+WINDOWS_EXTRA_FLAGS := -s -w
+
+# Test configuration
+TEST_TIMEOUT := 180s
+TEST_SHORT_TIMEOUT := 60s
+TEST_RACE := -race
+TEST_COUNT := -count=1
+COVERAGE_THRESHOLD := 60
+
+# Package exclusion filter (reused across test targets)
+PKG_EXCLUDE := | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/"
+TEST_PKGS := $$(go list ./... $(PKG_EXCLUDE))
+
+# Coverage exclusion filter (for coverage calculations)
+COVERAGE_EXCLUDE := | grep -v "internal/protocol/proto" | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/"
+
 # =============================================================================
 # TOOLS
 # =============================================================================
@@ -191,7 +215,6 @@ upx-install:
 # =============================================================================
 # BUILD
 # =============================================================================
-PLATFORMS := linux/amd64 linux/arm64 linux/386 windows/amd64 windows/arm64 darwin/amd64 darwin/arm64
 
 .PHONY: build
 build:
@@ -201,18 +224,20 @@ build:
 	if [ "$(HOST_OS)" = "windows" ]; then \
 		NODE_BINARY=$$NODE_BINARY.exe; \
 		ROOT_COPY=g8e.exe; \
+		EXTRA_FLAGS="$(WINDOWS_EXTRA_FLAGS)"; \
 	else \
 		ROOT_COPY=g8e; \
+		EXTRA_FLAGS=""; \
 	fi; \
 	echo "Building $(HOST_OS)/$(HOST_ARCH) -> $$NODE_BINARY..."; \
-	CGO_ENABLED=0 GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build -ldflags "$(LDFLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$NODE_BINARY $(MAIN_PKG); \
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build -ldflags "$(LDFLAGS) $$EXTRA_FLAGS -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$NODE_BINARY $(MAIN_PKG); \
 	sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	if [ -f "./$$ROOT_COPY" ] && pgrep -f "$$ROOT_COPY --doctrine" > /dev/null 2>&1; then \
 		echo "Error: Unable to copy binary - g8e gateway is currently running. Please stop it first with: ./$$ROOT_COPY gw stop"; \
 		exit 1; \
 	fi; \
 	cp $$NODE_BINARY $$ROOT_COPY
-	@echo "Build complete.Node Node Binary: $$NODE_BINARY"
+	@echo "Build complete. Binary: $(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH)$(if $(filter windows,$(HOST_OS)),.exe,)"
 
 .PHONY: build-all
 build-all:
@@ -224,9 +249,12 @@ build-all:
 		NODE_BINARY=$(BIN_DIR)/g8e-$$GOOS-$$GOARCH; \
 		if [ "$$GOOS" = "windows" ]; then \
 			NODE_BINARY=$$NODE_BINARY.exe; \
+			EXTRA_FLAGS="$(WINDOWS_EXTRA_FLAGS)"; \
+		else \
+			EXTRA_FLAGS=""; \
 		fi; \
 		echo "Building $$platform -> $$NODE_BINARY..."; \
-		CGO_ENABLED=0 GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
+		CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) $${EXTRA_FLAGS} -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Multi-platform build complete. Checksums: $(BIN_DIR)/g8e-*.sha256"
@@ -241,9 +269,12 @@ build-compressed: upx-install
 		NODE_BINARY=$(BIN_DIR)/g8e-$$GOOS-$$GOARCH; \
 		if [ "$$GOOS" = "windows" ]; then \
 			NODE_BINARY=$$NODE_BINARY.exe; \
+			EXTRA_FLAGS="$(WINDOWS_EXTRA_FLAGS)"; \
+		else \
+			EXTRA_FLAGS=""; \
 		fi; \
 		echo "Building $$platform -> $$NODE_BINARY..."; \
-		CGO_ENABLED=0 GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
+		CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) $${EXTRA_FLAGS} -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
 		echo "Compressing $$NODE_BINARY with UPX..."; \
 		$(UPX) --best --lzma $$NODE_BINARY; \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
@@ -254,10 +285,10 @@ build-compressed: upx-install
 build-linux-compressed: upx-install
 	@echo "Building g8e for Linux with UPX compression..."
 	@mkdir -p $(BIN_DIR)
-	@for arch in amd64 arm64 386; do \
+	@for arch in $(LINUX_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-linux-$$arch; \
 		echo "Building linux/$$arch -> $$NODE_BINARY..."; \
-		GOOS=linux GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=linux_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
+		CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=linux_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
 		echo "Compressing $$NODE_BINARY with UPX..."; \
 		$(UPX) --best --lzma $$NODE_BINARY; \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
@@ -268,10 +299,10 @@ build-linux-compressed: upx-install
 build-darwin-compressed: upx-install
 	@echo "Building g8e for Darwin with UPX compression..."
 	@mkdir -p $(BIN_DIR)
-	@for arch in amd64 arm64; do \
+	@for arch in $(DARWIN_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-darwin-$$arch; \
 		echo "Building darwin/$$arch -> $$NODE_BINARY..."; \
-		GOOS=darwin GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=darwin_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
+		CGO_ENABLED=$(CGO_ENABLED) GOOS=darwin GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=darwin_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
 		echo "Compressing $$NODE_BINARY with UPX..."; \
 		$(UPX) --best --lzma $$NODE_BINARY; \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
@@ -282,10 +313,10 @@ build-darwin-compressed: upx-install
 build-windows-compressed: upx-install
 	@echo "Building g8e for Windows with UPX compression..."
 	@mkdir -p $(BIN_DIR)
-	@for arch in amd64 arm64; do \
+	@for arch in $(WINDOWS_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
 		echo "Building windows/$$arch -> $$NODE_BINARY..."; \
-		GOOS=windows GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=windows_$$arch -s -w" -o $$NODE_BINARY $(MAIN_PKG); \
+		CGO_ENABLED=$(CGO_ENABLED) GOOS=windows GOARCH=$$arch go build -ldflags "$(LDFLAGS) "$(WINDOWS_EXTRA_FLAGS)" -X main.platform=windows_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
 		echo "Compressing $$NODE_BINARY with UPX..."; \
 		$(UPX) --best --lzma $$NODE_BINARY; \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
@@ -296,10 +327,10 @@ build-windows-compressed: upx-install
 build-darwin:
 	@echo "Building g8e for Darwin..."
 	@mkdir -p $(BIN_DIR)
-	@for arch in amd64 arm64; do \
+	@for arch in $(DARWIN_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-darwin-$$arch; \
 		echo "Building darwin/$$arch -> $$NODE_BINARY..."; \
-		CGO_ENABLED=0 GOOS=darwin GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=darwin_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
+		CGO_ENABLED=$(CGO_ENABLED) GOOS=darwin GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=darwin_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Darwin build complete. Binaries: $(BIN_DIR)/g8e-darwin-*"
@@ -308,10 +339,10 @@ build-darwin:
 build-linux:
 	@echo "Building g8e for Linux..."
 	@mkdir -p $(BIN_DIR)
-	@for arch in amd64 arm64 386; do \
+	@for arch in $(LINUX_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-linux-$$arch; \
 		echo "Building linux/$$arch -> $$NODE_BINARY..."; \
-		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=linux_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
+		CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=linux_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Linux build complete. Binaries: $(BIN_DIR)/g8e-linux-*"
@@ -320,10 +351,10 @@ build-linux:
 build-windows:
 	@echo "Building g8e for Windows (no compression to avoid Defender false positives)..."
 	@mkdir -p $(BIN_DIR)
-	@for arch in amd64 arm64; do \
+	@for arch in $(WINDOWS_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
 		echo "Building windows/$$arch -> $$NODE_BINARY..."; \
-		CGO_ENABLED=0 GOOS=windows GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=windows_$$arch -s -w" -o $$NODE_BINARY $(MAIN_PKG); \
+		CGO_ENABLED=$(CGO_ENABLED) GOOS=windows GOARCH=$$arch go build -ldflags "$(LDFLAGS) "$(WINDOWS_EXTRA_FLAGS)" -X main.platform=windows_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Windows build complete. Binaries: $(BIN_DIR)/g8e-windows-*.exe"
@@ -331,91 +362,99 @@ build-windows:
 # =============================================================================
 # TEST
 # =============================================================================
+# Core test targets
 .PHONY: test
 test: test-unit test-gateway
 	@echo "All tests completed successfully."
 
+# Unit tests (no platform required)
 .PHONY: test-unit
 test-unit:
 	@echo "Running unit tests..."
-	@go test -race -count=1 -timeout 180s $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/")
+	@go test $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) $(TEST_PKGS)
 
 .PHONY: test-short
 test-short:
-	@go test -race -short -count=1 -timeout 60s $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/")
+	@echo "Running short unit tests (skips long-running tests)..."
+	@go test $(TEST_RACE) -short $(TEST_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 
 .PHONY: test-coverage
 test-coverage:
-	@echo "Running tests with coverage..."
+	@echo "Running tests with coverage analysis..."
 	@if [ -n "$(PKG)" ]; then \
 		echo "Testing package: $(PKG)"; \
 		if [ "$(VERBOSE)" = "true" ]; then \
-			go test -v -race -count=1 -timeout 180s -coverprofile=coverage.out -covermode=atomic $(PKG); \
+			go test -v $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(PKG); \
 		else \
-			go test -race -count=1 -timeout 180s -coverprofile=coverage.out -covermode=atomic $(PKG); \
+			go test $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(PKG); \
 		fi; \
 	else \
 		echo "Testing all packages (excluding mocks, cmd, testutil, test, proto)"; \
 		if [ "$(VERBOSE)" = "true" ]; then \
-			go test -v -race -count=1 -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/"); \
+			go test -v $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(TEST_PKGS); \
 		else \
-			go test -race -count=1 -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/"); \
+			go test $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(TEST_PKGS); \
 		fi; \
 	fi
 	@echo "Coverage report generated in coverage.out"
 	@go tool cover -func=coverage.out | tail -1
 	@if [ -z "$(PKG)" ]; then \
-		COVERAGE=$$(go tool cover -func=coverage.out | grep -v "internal/protocol/proto" | grep -v "mocks" | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
-		if [ $$(echo "$$COVERAGE < 60" | bc -l) -eq 1 ]; then \
-			echo "Coverage $$COVERAGE% is below 60% threshold"; \
+		COVERAGE=$$(go tool cover -func=coverage.out $(COVERAGE_EXCLUDE) | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+		if [ $$(echo "$$COVERAGE < $(COVERAGE_THRESHOLD)" | bc -l) -eq 1 ]; then \
+			echo "Coverage $$COVERAGE% is below $(COVERAGE_THRESHOLD)% threshold"; \
 			exit 1; \
 		fi; \
-		echo "Coverage $$COVERAGE% meets 60% threshold"; \
+		echo "Coverage $$COVERAGE% meets $(COVERAGE_THRESHOLD)% threshold"; \
 	fi
 
 .PHONY: test-shuffle
 test-shuffle:
-	@go test -race -count=1 -shuffle=on -timeout 180s $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/")
+	@echo "Running unit tests with randomized execution order..."
+	@go test $(TEST_RACE) $(TEST_COUNT) -shuffle=on -timeout $(TEST_TIMEOUT) $(TEST_PKGS)
 
+# Integration tests (requires platform running and auth login)
 .PHONY: test-integration
 test-integration:
-	@echo "Running integration tests (requires platform running and auth login)..."
-	@go test -tags=integration -race -count=1 -timeout 180s ./test/...
+	@echo "Running all integration tests (requires platform running and auth login)..."
+	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/...
 
 .PHONY: test-scenario
 test-scenario:
 	@echo "Running scenario integration tests (requires platform running)..."
-	@go test -tags=integration -race -count=1 -timeout 180s ./test/scenario/...
+	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/scenario/...
 
+# Gateway tests (subset of integration tests)
 .PHONY: test-gateway
 test-gateway:
-	@echo "Running gateway tests..."
-	@go test -race -count=1 -timeout 180s ./test/a2a_gateway_test.go ./test/mcp_gateway_test.go ./test/mcp_stdio_test.go
+	@echo "Running gateway-specific tests (no platform required)..."
+	@go test $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/a2a_gateway_test.go ./test/mcp_gateway_test.go ./test/mcp_stdio_test.go
 
+# Protocol-specific integration tests (requires platform running and auth login)
 .PHONY: test-mcp
 test-mcp:
-	@echo "Running MCP tests (requires platform running and auth login)..."
-	@go test -tags=integration -race -count=1 -timeout 180s ./test/integration_helper.go ./test/mcp_gateway_test.go ./test/mcp_real_operator_test.go ./test/mcp_stdio_test.go
+	@echo "Running MCP (Model Context Protocol) integration tests (requires platform running and auth login)..."
+	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/mcp_gateway_test.go ./test/mcp_real_operator_test.go ./test/mcp_stdio_test.go
 
 .PHONY: test-a2a
 test-a2a:
-	@echo "Running A2A tests (requires platform running and auth login)..."
-	@go test -tags=integration -race -count=1 -timeout 180s ./test/integration_helper.go ./test/a2a_gateway_test.go ./test/a2a_real_operator_test.go
+	@echo "Running A2A (Agent-to-Agent) integration tests (requires platform running and auth login)..."
+	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/a2a_gateway_test.go ./test/a2a_real_operator_test.go
 
 .PHONY: test-universal-gateway
 test-universal-gateway:
 	@echo "Running universal gateway integration tests (requires platform running and auth login)..."
-	@go test -tags=integration -race -count=1 -timeout 180s ./test/universal_gateway_integration_test.go
+	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/universal_gateway_integration_test.go
 
+# Client integration tests (requires platform running and auth login)
 .PHONY: test-byo
 test-byo:
-	@echo "Running BYO client tests (requires platform running and auth login)..."
-	@go test -tags=integration -race -count=1 -timeout 180s ./test/byo_client_test.go
+	@echo "Running BYO (Bring Your Own) client integration tests (requires platform running and auth login)..."
+	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/byo_client_test.go
 
 .PHONY: test-native
 test-native:
-	@echo "Running native real Operator tests (requires platform running and auth login)..."
-	@go test -tags=integration -race -count=1 -timeout 180s ./test/integration_helper.go ./test/native_real_operator_test.go
+	@echo "Running native real Operator integration tests (requires platform running and auth login)..."
+	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/native_real_operator_test.go
 
 
 # =============================================================================
@@ -530,11 +569,11 @@ _ci-vulncheck:
 _ci-test:
 	@echo "=== test ==="
 	@./g8e gw start --cert-mode localhost
-	@G8E_STRICT_CONSTANTS_LINT=1 go test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/")
-	@COVERAGE=$$(go tool cover -func=coverage.out | grep -v "internal/protocol/proto" | grep -v "mocks" | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
-	if [ $$(echo "$$COVERAGE < 60" | bc -l) -eq 1 ]; then \
-		echo "Coverage $$COVERAGE% is below 60% threshold"; \
+	@G8E_STRICT_CONSTANTS_LINT=1 go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(TEST_PKGS)
+	@COVERAGE=$$(go tool cover -func=coverage.out $(COVERAGE_EXCLUDE) | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+	if [ $$(echo "$$COVERAGE < $(COVERAGE_THRESHOLD)" | bc -l) -eq 1 ]; then \
+		echo "Coverage $$COVERAGE% is below $(COVERAGE_THRESHOLD)% threshold"; \
 		exit 1; \
 	fi; \
-	echo "Coverage $$COVERAGE% meets 60% threshold"
+	echo "Coverage $$COVERAGE% meets $(COVERAGE_THRESHOLD)% threshold"
 	@./g8e gw stop

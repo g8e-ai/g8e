@@ -24,7 +24,6 @@ import (
 	"os/user"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 	"unsafe"
 
@@ -293,8 +292,6 @@ func GetEnvironmentDetails(lang, term, tz string) models.HeartbeatEnvironment {
 		ContainerSignals: []string{},
 		InitSystem:       initSystem,
 	}
-}
-
 }
 
 func GetHostname() string {
