@@ -179,15 +179,14 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 	return "./g8e", nil
 }
 
-func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort, publicPort, mcpHttpPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode string, identityData []byte) error {
+func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode string, identityData []byte) error {
 	if err := pm.ensureDirectories(); err != nil {
 		return err
 	}
 
 	// Use provided values or defaults
 	effectiveHTTPPort := httpPort
-	effectivePublicPort := publicPort
-	effectiveMCPHttpPort := mcpHttpPort
+	effectiveHTTPSPort := httpsPort
 	effectiveDataDir := dataDir
 	effectivePKIDir := pkiDir
 	effectiveSecretsDir := secretsDir
@@ -201,11 +200,8 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 	if effectiveHTTPPort == 0 {
 		effectiveHTTPPort = constants.Ports.OperatorHttps
 	}
-	if effectivePublicPort == 0 {
-		effectivePublicPort = 8443
-	}
-	if effectiveMCPHttpPort == 0 {
-		effectiveMCPHttpPort = 8442
+	if effectiveHTTPSPort == 0 {
+		effectiveHTTPSPort = 8443
 	}
 	if effectiveDataDir == "" {
 		effectiveDataDir = pm.dataDir
@@ -221,24 +217,18 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 	}
 
 	// Find the first available port starting from httpPort
-	availableHTTPPort, err := pm.findAvailablePort(effectiveHTTPPort, "Operator HTTP API")
+	availableHTTPPort, err := pm.findAvailablePort(effectiveHTTPPort, "Operator HTTP")
 	if err != nil {
-		return fmt.Errorf("failed to find available HTTP API port: %w", err)
+		return fmt.Errorf("failed to find available HTTP port: %w", err)
 	}
 
 	// Calculate offset from original httpPort to maintain port spacing
 	offset := availableHTTPPort - effectiveHTTPPort
-	availablePublicPort := effectivePublicPort + offset
-	availableMCPHttpPort := effectiveMCPHttpPort + offset
+	availableHTTPSPort := effectiveHTTPSPort + offset
 
-	// Verify the calculated Public port is available (Bootstrap now shares this port)
-	if err := pm.checkPortAvailable(availablePublicPort, "Operator Public API"); err != nil {
-		return fmt.Errorf("failed to verify Public API port %d: %w", availablePublicPort, err)
-	}
-
-	// Verify the calculated MCP HTTP port is available
-	if err := pm.checkPortAvailable(availableMCPHttpPort, "Operator MCP HTTP"); err != nil {
-		return fmt.Errorf("failed to verify MCP HTTP port %d: %w", availableMCPHttpPort, err)
+	// Verify the calculated HTTPS port is available
+	if err := pm.checkPortAvailable(availableHTTPSPort, "Operator HTTPS"); err != nil {
+		return fmt.Errorf("failed to verify HTTPS port %d: %w", availableHTTPSPort, err)
 	}
 
 	binPath, err := pm.getOperatorBinary()
@@ -259,8 +249,7 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 		"--pki-dir", effectivePKIDir,
 		"--secrets-dir", effectiveSecretsDir,
 		"--http-listen-port", strconv.Itoa(availableHTTPPort),
-		"--public-listen-port", strconv.Itoa(availablePublicPort),
-		"--mcp-http-port", strconv.Itoa(availableMCPHttpPort),
+		"--https-listen-port", strconv.Itoa(availableHTTPSPort),
 		"--log", effectiveLogLevel,
 	}
 

@@ -83,10 +83,8 @@ type LoadOptions struct {
 type GatewayConfig struct {
 	Enabled          bool
 	Posture          GatewayPosture // Governance enforcement posture (doctrine, consensus, notary)
-	HTTPPort         int            // TLS/HTTPS port for internal agent/client traffic (default: from paths.json)
-	BootstrapPort    int            // Plain-TLS port for bootstrap routes (/.well-known/, /api/pki/device-enroll for CSR enrollment) (default: from paths.json)
-	PublicPort       int            // Plain-TLS port for browser-based auth and setup (default: from paths.json)
-	MCPHttpPort      int            // Plain-HTTP port for MCP HTTP calls (default: from paths.json)
+	HTTPPort         int            // Plain HTTP port for bootstrap and MCP (default: 8440)
+	HTTPSPort        int            // HTTPS port for mTLS API (default: 8443)
 	DataDir          string         // Root directory for SQLite database (default: .g8e/data in working directory)
 	PKIDir           string         // Directory for TLS certificates (default: .g8e/pki)
 	SecretsDir       string         // Directory for platform secrets (default: .g8e/secrets)
@@ -258,9 +256,7 @@ func FindProjectRoot() string {
 type GatewayOptions struct {
 	Posture          GatewayPosture
 	HTTPPort         int
-	BootstrapPort    int
-	PublicPort       int
-	MCPHttpPort      int
+	HTTPSPort        int
 	DataDir          string
 	PKIDir           string
 	SecretsDir       string
@@ -284,36 +280,28 @@ type GatewayOptions struct {
 	AllowTestPortZero bool
 }
 
-// ResolveGatewayPorts finds four available ports incrementally, starting from the
+// ResolveGatewayPorts finds two available ports incrementally, starting from the
 // requested ports. This allows multiple operators to run on the same host.
-func ResolveGatewayPorts(httpPort, bootstrapPort, publicPort, mcpHttpPort int) (int, int, int, int) {
+func ResolveGatewayPorts(httpPort, httpsPort int) (int, int) {
 	if httpPort <= 0 {
 		httpPort = constants.Ports.OperatorHttps
 	}
-	if bootstrapPort <= 0 {
-		bootstrapPort = constants.Ports.OperatorBootstrapHttps
-	}
-	if publicPort <= 0 {
-		publicPort = constants.Ports.OperatorPublicHttps
-	}
-	if mcpHttpPort <= 0 {
-		mcpHttpPort = constants.Ports.OperatorMcpHttp
+	if httpsPort <= 0 {
+		httpsPort = 8443
 	}
 
 	// Try up to 100 offsets
 	for offset := 0; offset < 100; offset++ {
 		h := httpPort + offset
-		b := bootstrapPort + offset
-		p := publicPort + offset
-		m := mcpHttpPort + offset
+		s := httpsPort + offset
 
-		if isPortAvailable(h) && isPortAvailable(b) && isPortAvailable(p) && isPortAvailable(m) {
-			return h, b, p, m
+		if isPortAvailable(h) && isPortAvailable(s) {
+			return h, s
 		}
 	}
 
 	// Fallback to original if we can't find a free block (let it fail during bind)
-	return httpPort, bootstrapPort, publicPort, mcpHttpPort
+	return httpPort, httpsPort
 }
 
 func isPortAvailable(port int) bool {
@@ -332,44 +320,35 @@ func isPortAvailable(port int) bool {
 // - Port uniqueness checks (ignoring zero-valued ports)
 //
 // Returns validated and resolved ports, or an error if validation fails.
-func validateAndResolveGatewayPorts(httpPort, bootstrapPort, publicPort, mcpHttpPort int, allowTestPortZero bool) (int, int, int, int, error) {
+func validateAndResolveGatewayPorts(httpPort, httpsPort int, allowTestPortZero bool) (int, int, error) {
 	// Reject port 0 in production
 	// This check must happen before default assignment to validate actual input
 	if !allowTestPortZero {
-		if httpPort == 0 && bootstrapPort == 0 && publicPort == 0 && mcpHttpPort == 0 {
+		if httpPort == 0 && httpsPort == 0 {
 			// All zero means "use defaults and resolve"
 		} else {
 			if httpPort == 0 {
-				return 0, 0, 0, 0, fmt.Errorf("httpPort cannot be 0 in production")
+				return 0, 0, fmt.Errorf("httpPort cannot be 0 in production")
 			}
-			if bootstrapPort == 0 {
-				return 0, 0, 0, 0, fmt.Errorf("bootstrapPort cannot be 0 in production")
-			}
-			if publicPort == 0 {
-				return 0, 0, 0, 0, fmt.Errorf("publicPort cannot be 0 in production")
+			if httpsPort == 0 {
+				return 0, 0, fmt.Errorf("httpsPort cannot be 0 in production")
 			}
 		}
 	}
 
 	// Resolve available ports if they are not 0 (dynamic test ports)
 	if !allowTestPortZero {
-		httpPort, bootstrapPort, publicPort, mcpHttpPort = ResolveGatewayPorts(httpPort, bootstrapPort, publicPort, mcpHttpPort)
+		httpPort, httpsPort = ResolveGatewayPorts(httpPort, httpsPort)
 	}
 
 	// Validate that all ports are unique to prevent conflicts.
 	// Zero-valued ports are ignored so test/default configurations can leave
 	// optional ports unset without tripping false conflicts.
-	if httpPort > 0 && mcpHttpPort > 0 && httpPort == mcpHttpPort {
-		return 0, 0, 0, 0, fmt.Errorf("httpPort (%d) and mcpHttpPort (%d) must be different", httpPort, mcpHttpPort)
-	}
-	if bootstrapPort > 0 && mcpHttpPort > 0 && bootstrapPort == mcpHttpPort {
-		return 0, 0, 0, 0, fmt.Errorf("bootstrapPort (%d) and mcpHttpPort (%d) must be different", bootstrapPort, mcpHttpPort)
-	}
-	if publicPort > 0 && mcpHttpPort > 0 && publicPort == mcpHttpPort {
-		return 0, 0, 0, 0, fmt.Errorf("publicPort (%d) and mcpHttpPort (%d) must be different", publicPort, mcpHttpPort)
+	if httpPort > 0 && httpsPort > 0 && httpPort == httpsPort {
+		return 0, 0, fmt.Errorf("httpPort (%d) and httpsPort (%d) must be different", httpPort, httpsPort)
 	}
 
-	return httpPort, bootstrapPort, publicPort, mcpHttpPort, nil
+	return httpPort, httpsPort, nil
 }
 
 // LoadGateway creates configuration for gateway mode.
@@ -398,11 +377,9 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	}
 
 	// Validate and resolve gateway ports
-	httpPort, bootstrapPort, publicPort, mcpHttpPort, err := validateAndResolveGatewayPorts(
+	httpPort, httpsPort, err := validateAndResolveGatewayPorts(
 		opts.HTTPPort,
-		opts.BootstrapPort,
-		opts.PublicPort,
-		opts.MCPHttpPort,
+		opts.HTTPSPort,
 		opts.AllowTestPortZero,
 	)
 	if err != nil {
@@ -438,9 +415,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			Posture: posture,
 
 			HTTPPort:         httpPort,
-			BootstrapPort:    bootstrapPort,
-			PublicPort:       publicPort,
-			MCPHttpPort:      mcpHttpPort,
+			HTTPSPort:        httpsPort,
 			DataDir:          dataDir,
 			PKIDir:           pkiDir,
 			SecretsDir:       secretsDir,

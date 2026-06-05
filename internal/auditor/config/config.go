@@ -78,8 +78,8 @@ type Config struct {
 // Default returns a config wired for a local two-container dev stack.
 func Default() Config {
 	cfg := Config{
-		MTLSBaseURL:    fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
-		PublicBaseURL:  fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
+		MTLSBaseURL:    fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps),
+		PublicBaseURL:  fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps),
 		EnsembleSize:   3,
 		ConsensusKeyID: "auditor-ensemble",
 		PrincipalKeyID: "auditor-principal",

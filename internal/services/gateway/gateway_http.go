@@ -339,6 +339,38 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }
 
+func (h *HTTPHandler) buildHTTPRouter() http.Handler {
+	mux := http.NewServeMux()
+
+	// Health check - available on HTTP port for initialization monitoring
+	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
+
+	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
+	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handlePublicAuthBootstrap)
+	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)
+	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
+	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
+	mux.HandleFunc(constants.APIPaths.BootstrapCALinux, h.pkiController.handleTrustScriptLinux)
+	mux.HandleFunc(constants.APIPaths.BootstrapCAWindows, h.pkiController.handleTrustScriptWindows)
+	mux.HandleFunc("/.well-known/g8e/pki/trust-windows", h.pkiController.handleTrustScriptWindowsAlias)
+	mux.HandleFunc("/.well-known/g8e/binary/", h.pkiController.handleNodeBinaryDownload)
+
+	// MCP-only routes on plain HTTP for HTTP MCP calls
+	mux.HandleFunc(constants.APIPaths.MCPEndpoint, h.mcp.HandleMCP)
+	mux.HandleFunc(constants.APIPaths.MCPToolsList, h.mcp.HandleToolsList)
+	mux.HandleFunc(constants.APIPaths.MCPToolsCall, h.mcp.HandleToolsCall)
+	mux.HandleFunc(constants.APIPaths.MCPToolsCallSSE, h.mcp.HandleToolsCallSSE)
+	mux.HandleFunc(constants.APIPaths.MCPResourcesList, h.mcp.HandleResourcesList)
+	mux.HandleFunc(constants.APIPaths.MCPResourcesRead, h.mcp.HandleResourcesRead)
+	mux.HandleFunc(constants.APIPaths.MCPPromptsList, h.mcp.HandlePromptsList)
+	mux.HandleFunc(constants.APIPaths.MCPPromptsGet, h.mcp.HandlePromptsGet)
+	mux.HandleFunc(constants.APIPaths.A2ACall, h.mcp.HandleA2aCall)
+
+	// Wrap with Origin validation (DNS-rebinding protection per the MCP
+	// Streamable HTTP transport spec) and rate limiting.
+	return h.pathTraversalGuard(h.auth.Middleware(h.mcpOriginGuard(h.rateLimitMiddleware(mux))))
+}
+
 func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux := http.NewServeMux()
 

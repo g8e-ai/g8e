@@ -142,7 +142,6 @@ func TestLoad(t *testing.T) {
 		assert.NotNil(t, config)
 		// Should use embedded defaults, not the file
 		assert.Equal(t, "localhost", config.Paths.Host)
-		assert.Equal(t, 8440, config.Paths.Ports.OperatorHTTPS)
 	})
 }
 

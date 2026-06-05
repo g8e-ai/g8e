@@ -293,41 +293,27 @@ func TestLoadGateway_RejectsPortZeroInProduction(t *testing.T) {
 	t.Run("reject httpPort 0", func(t *testing.T) {
 		_, err := LoadGateway(GatewayOptions{
 			HTTPPort:          0,
-			BootstrapPort:     constants.Ports.OperatorBootstrapHttps,
-			PublicPort:        constants.Ports.OperatorPublicHttps,
+			HTTPSPort:         constants.Ports.OperatorHttps,
 			AllowTestPortZero: false,
 		})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "httpPort cannot be 0 in production")
 	})
 
-	t.Run("reject bootstrapPort 0", func(t *testing.T) {
+	t.Run("reject httpsPort 0", func(t *testing.T) {
 		_, err := LoadGateway(GatewayOptions{
-			HTTPPort:          constants.Ports.OperatorHttps,
-			BootstrapPort:     0,
-			PublicPort:        constants.Ports.OperatorPublicHttps,
+			HTTPPort:          constants.Ports.OperatorHttp,
+			HTTPSPort:         0,
 			AllowTestPortZero: false,
 		})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "bootstrapPort cannot be 0 in production")
-	})
-
-	t.Run("reject publicPort 0", func(t *testing.T) {
-		_, err := LoadGateway(GatewayOptions{
-			HTTPPort:          constants.Ports.OperatorHttps,
-			BootstrapPort:     constants.Ports.OperatorBootstrapHttps,
-			PublicPort:        0,
-			AllowTestPortZero: false,
-		})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "publicPort cannot be 0 in production")
+		assert.Contains(t, err.Error(), "httpsPort cannot be 0 in production")
 	})
 
 	t.Run("accept all non-zero ports in production", func(t *testing.T) {
 		_, err := LoadGateway(GatewayOptions{
-			HTTPPort:          constants.Ports.OperatorHttps,
-			BootstrapPort:     constants.Ports.OperatorBootstrapHttps,
-			PublicPort:        constants.Ports.OperatorPublicHttps,
+			HTTPPort:          constants.Ports.OperatorHttp,
+			HTTPSPort:         constants.Ports.OperatorHttps,
 			AllowTestPortZero: false,
 		})
 		require.NoError(t, err)

@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	clierrors "github.com/g8e-ai/g8e/internal/cli/errors"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // defaultPathsJSON contains embedded default path configuration. This is the sole source of truth
@@ -252,33 +253,21 @@ func (c *Config) OperatorKeyFile() string {
 }
 
 func (c *Config) OperatorHTTPSPort() int {
-	return c.Paths.Ports.OperatorHTTPS
-}
-
-func (c *Config) OperatorBootstrapHTTPSPort() int {
-	return c.Paths.Ports.OperatorBootstrapHTTPS
-}
-
-func (c *Config) OperatorPublicHTTPSPort() int {
-	return c.Paths.Ports.OperatorPublicHTTPS
-}
-
-func (c *Config) OperatorMcpHttpPort() int {
-	return c.Paths.Ports.OperatorMcpHttp
+	return constants.Ports.OperatorHttps
 }
 
 func (c *Config) OperatorHTTPURL() string {
-	return fmt.Sprintf("https://localhost:%d", c.OperatorPublicHTTPSPort())
+	return fmt.Sprintf("https://localhost:%d", c.OperatorHTTPSPort())
 }
 
-// OperatorPublicURL returns the Public TLS port (8443) for CSR-based enrollment
+// OperatorPublicURL returns the HTTPS port (8443) for mTLS API and public surface
 func (c *Config) OperatorPublicURL() string {
-	return fmt.Sprintf("https://localhost:%d", c.Paths.Ports.OperatorPublicHTTPS)
+	return fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 }
 
-// OperatorDiscoveryURL returns the bootstrap port (8441) for CA download over plain HTTP
+// OperatorDiscoveryURL returns the HTTP port (8440) for CA download and bootstrap routes
 func (c *Config) OperatorDiscoveryURL() string {
-	return fmt.Sprintf("http://localhost:%d", c.Paths.Ports.OperatorBootstrapHTTPS)
+	return fmt.Sprintf("http://localhost:%d", constants.Ports.OperatorHttp)
 }
 
 // OperatorBootstrapURL is deprecated; use OperatorPublicURL for CSR-based enrollment

@@ -44,7 +44,7 @@ func TestNewGatewayService(t *testing.T) {
 
 		cfg.Gateway.PKIDir = t.TempDir()
 		cfg.Gateway.SecretsDir = t.TempDir()
-		cfg.Gateway.BootstrapPort = constants.Ports.OperatorBootstrapHttps
+		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
 		ls, err := newGatewayServiceFromComponents(cfg, logger, db, pubsub)
 		require.NoError(t, err)
@@ -71,7 +71,7 @@ func TestGatewayService_StateManagement(t *testing.T) {
 	pubsub := NewPubSubBroker(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	cfg.Gateway.BootstrapPort = constants.Ports.OperatorBootstrapHttps
+	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
 	ls, err := newGatewayServiceFromComponents(cfg, logger, db, pubsub)
 	require.NoError(t, err)
@@ -132,7 +132,7 @@ func TestNewGatewayServiceFromComponents(t *testing.T) {
 
 	cfg.Gateway.PKIDir = pkiDir
 	cfg.Gateway.SecretsDir = secretsDir
-	cfg.Gateway.BootstrapPort = constants.Ports.OperatorBootstrapHttps
+	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
 	ls, err := newGatewayServiceFromComponents(cfg, logger, db, pubsub)
 	require.NoError(t, err)

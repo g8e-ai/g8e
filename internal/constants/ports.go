@@ -15,15 +15,11 @@ package constants
 
 // Ports defines canonical G8E networking ports.
 var Ports = struct {
-	OperatorHttps          int
-	OperatorBootstrapHttps int
-	OperatorPublicHttps    int
-	OperatorMcpHttp        int
-	InsecureMcpGateway     int
+	OperatorHttp       int
+	OperatorHttps      int
+	InsecureMcpGateway int
 }{
-	OperatorHttps:          8440,
-	OperatorBootstrapHttps: 8441,
-	OperatorPublicHttps:    8443,
-	OperatorMcpHttp:        8442,
-	InsecureMcpGateway:     18789,
+	OperatorHttp:       8440,
+	OperatorHttps:      8443,
+	InsecureMcpGateway: 18789,
 }

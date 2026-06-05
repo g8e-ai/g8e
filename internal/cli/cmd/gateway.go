@@ -57,9 +57,7 @@ func gatewayCmd() *cobra.Command {
 func gatewayStartCmd() *cobra.Command {
 	var posture string
 	var httpPort int
-	var bootstrapPort int
-	var publicPort int
-	var mcpHttpPort int
+	var httpsPort int
 	var dataDir string
 	var pkiDir string
 	var secretsDir string
@@ -124,9 +122,7 @@ func gatewayStartCmd() *cobra.Command {
 			if err := pm.StartOperator(
 				posture,
 				httpPort,
-				bootstrapPort,
-				publicPort,
-				mcpHttpPort,
+				httpsPort,
 				dataDir,
 				pkiDir,
 				secretsDir,
@@ -165,10 +161,10 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Printf("  https://localhost:%d\n", cfg.Paths.Ports.OperatorPublicHTTPS)
 			cmd.Println("    mTLS control plane for Operator API, agents, CLI auth")
 			cmd.Println()
-			cmd.Printf("  http://%s:%d/bootstrap-ca\n", externalIP, cfg.Paths.Ports.OperatorBootstrapHTTPS)
+			cmd.Printf("  http://%s:%d/bootstrap-ca\n", externalIP, cfg.Paths.Ports.OperatorHTTPS)
 			cmd.Println("    Root CA distribution, CSR enrollment")
 			cmd.Println()
-			cmd.Printf("  http://127.0.0.1:%d/mcp\n", cfg.Paths.Ports.OperatorMcpHttp)
+			cmd.Printf("  http://127.0.0.1:%d/mcp\n", cfg.Paths.Ports.OperatorHTTPS)
 			cmd.Println("    Plain HTTP for local MCP clients")
 			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
@@ -178,10 +174,10 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Println("  the Root CA to establish mutual TLS (mTLS):")
 			cmd.Println()
 			cmd.Println("  macOS / Linux (Terminal) :")
-			cmd.Printf("      curl -fsSL http://%s:%d/bootstrap-ca | sudo sh\n", externalIP, cfg.Paths.Ports.OperatorBootstrapHTTPS)
+			cmd.Printf("      curl -fsSL http://%s:%d/bootstrap-ca | sudo sh\n", externalIP, cfg.Paths.Ports.OperatorHTTPS)
 			cmd.Println()
 			cmd.Println("  Windows (PowerShell - Admin) :")
-			cmd.Printf("      iex (irm http://%s:%d/bootstrap-ca.ps1)\n", externalIP, cfg.Paths.Ports.OperatorBootstrapHTTPS)
+			cmd.Printf("      iex (irm http://%s:%d/bootstrap-ca.ps1)\n", externalIP, cfg.Paths.Ports.OperatorHTTPS)
 			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println(" 3. Client Authentication (Required for CLI Access)")
@@ -212,10 +208,8 @@ func gatewayStartCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&posture, "posture", "doctrine", "Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)")
-	cmd.Flags().IntVar(&httpPort, "http-port", 0, "HTTPS port for mTLS API (default: from paths.json)")
-	cmd.Flags().IntVar(&bootstrapPort, "bootstrap-port", 0, "Bootstrap TLS port for CSR enrollment (default: from paths.json)")
-	cmd.Flags().IntVar(&publicPort, "public-port", 0, "Public browser/BYO bootstrap port (default: from paths.json)")
-	cmd.Flags().IntVar(&mcpHttpPort, "mcp-http-port", 0, "Plain HTTP port for MCP calls (default: from paths.json)")
+	cmd.Flags().IntVar(&httpPort, "http-port", 0, "HTTP port for bootstrap and MCP (default: 8440)")
+	cmd.Flags().IntVar(&httpsPort, "https-port", 0, "HTTPS port for mTLS API (default: 8443)")
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
 	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "Directory for TLS certificates (default: .g8e/pki)")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
@@ -334,9 +328,7 @@ func gatewayRestartCmd() *cobra.Command {
 			if err := pm.StartOperator(
 				"doctrine",
 				cfg.OperatorHTTPSPort(),
-				0,
 				cfg.Paths.Ports.OperatorPublicHTTPS,
-				0,
 				"",
 				"",
 				"",

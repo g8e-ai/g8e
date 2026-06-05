@@ -187,7 +187,7 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 		require.Equal(t, "test-tool", tx.ToolName)
 		require.Equal(t, `{"foo":"bar"}`, string(tx.ToolArguments))
 	}
-	expectedJSON := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Execution paused. Please visit https://localhost:%d/approve/%s to authorize via WebAuthn, then retry."}]}}`, constants.Ports.OperatorPublicHttps, txHash)
+	expectedJSON := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Execution paused. Please visit https://localhost:%d/approve/%s to authorize via WebAuthn, then retry."}]}}`, constants.Ports.OperatorHttps, txHash)
 	require.JSONEq(t, expectedJSON, w.Body.String())
 }
 
@@ -1727,7 +1727,7 @@ func newTestGatewayService(opts ...testGatewayOption) *GatewayService {
 		signingKey:        privKey,
 		keyID:             "test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		publicBaseURL:     fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
+		publicBaseURL:     fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps),
 		maxFailures:       5,
 		cooldownDuration:  1 * time.Minute,
 		maxPayloadBytes:   10 * 1024 * 1024,

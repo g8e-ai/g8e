@@ -192,7 +192,7 @@ func setupTestGatewayService(t *testing.T) (*GatewayService, *config.Config) {
 		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
 	})
 
-	infra.Cfg.Gateway.BootstrapPort = constants.Ports.OperatorBootstrapHttps
+	infra.Cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
 	ls := &GatewayService{
 		cfg:        infra.Cfg,

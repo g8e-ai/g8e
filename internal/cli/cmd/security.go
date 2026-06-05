@@ -110,9 +110,8 @@ func securityValidateCmd() *cobra.Command {
 			// Check port availability (standard ports)
 			cmd.Println("\n=== Port Availability ===")
 			ports := []int{
+				constants.Ports.OperatorHttp,
 				constants.Ports.OperatorHttps,
-				constants.Ports.OperatorBootstrapHttps,
-				constants.Ports.OperatorPublicHttps,
 			}
 			for _, port := range ports {
 				addr := fmt.Sprintf("127.0.0.1:%d", port)
@@ -206,8 +205,8 @@ func securityPKIEnrollCmd() *cobra.Command {
 				return fmt.Errorf("failed to generate CLI CSR: %w", err)
 			}
 
-			// Append default bootstrap port
-			gatewayEndpoint := fmt.Sprintf("%s:%d", endpoint, constants.Ports.OperatorBootstrapHttps)
+			// Append default HTTP port
+			gatewayEndpoint := fmt.Sprintf("%s:%d", endpoint, constants.Ports.OperatorHttp)
 			cmd.Printf("Enrolling with Gateway at %s...\n", gatewayEndpoint)
 			regResp, err := auth.EnrollWithGateway(cfg, gatewayEndpoint, opCSR, cliCSR, "")
 			if err != nil {

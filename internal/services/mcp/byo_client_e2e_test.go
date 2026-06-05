@@ -81,7 +81,7 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 		signingKey:        privKey,
 		keyID:             "byo-test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		publicBaseURL:     fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
+		publicBaseURL:     fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps),
 		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
 	}
 
@@ -158,7 +158,7 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 		CredentialId:      "webauthn-cred-byo-123",
 		Signature:         "simulated-webauthn-sig",
 		AuthenticatorData: "auth-data",
-		ClientDataJson:    fmt.Sprintf(`{"type":"webauthn.get","challenge":"challenge","origin":"https://localhost:%d"}`, constants.Ports.OperatorPublicHttps),
+		ClientDataJson:    fmt.Sprintf(`{"type":"webauthn.get","challenge":"challenge","origin":"https://localhost:%d"}`, constants.Ports.OperatorHttps),
 	}
 
 	// Step 4: Resume transaction with L3 proof
@@ -273,7 +273,7 @@ func TestBYOClientA2AEndToEndProof(t *testing.T) {
 		signingKey:        privKey,
 		keyID:             "a2a-test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		publicBaseURL:     fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorPublicHttps),
+		publicBaseURL:     fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps),
 		maxPayloadBytes:   10 * 1024 * 1024,
 	}
 
