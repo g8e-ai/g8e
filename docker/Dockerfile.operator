@@ -12,21 +12,21 @@ RUN addgroup -g 1000 g8e && \
     adduser -D -u 1000 -G g8e g8e
 
 # Set up directories
-WORKDIR /g8e
-RUN mkdir -p /g8e/.g8e/pki /g8e/.g8e/secrets /g8e/.g8e/data && \
-    chown -R g8e:g8e /g8e
+WORKDIR /home/g8eo
+RUN mkdir -p /home/g8eo/.g8e/pki /home/g8eo/.g8e/secrets /home/g8eo/.g8e/data && \
+    chown -R g8e:g8e /home/g8eo
 
 # Copy pre-built binary from host
-COPY g8e /g8e/g8e
-RUN chmod +x /g8e/g8e && \
-    chown g8e:g8e /g8e/g8e
+COPY bin/g8e-linux-amd64 /home/g8eo/g8e-linux-amd64
+RUN chmod +x /home/g8eo/g8e-linux-amd64 && \
+    chown g8e:g8e /home/g8eo/g8e-linux-amd64
 
 # Switch to non-root user
 USER g8e
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD g8e --version || exit 1
+    CMD /home/g8eo/g8e-linux-amd64 --version || exit 1
 
 # Expose Operator ports
 # 9000: HTTPS mTLS API
@@ -34,5 +34,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # 9002: Public browser/BYO bootstrap
 EXPOSE 9000 9001 9002
 
-# Operator listen mode
-ENTRYPOINT ["/g8e/g8e", "--listen", "--data-dir", "/g8e/.g8e/data", "--pki-dir", "/g8e/.g8e/pki", "--secrets-dir", "/g8e/.g8e/secrets", "--http-listen-port", "9000", "--bootstrap-listen-port", "9001", "--public-listen-port", "9002"]
+# Operator mode (connects to gateway via -e/--endpoint)
+# Operators connect to gateway0:9000 via docker network DNS
+ENTRYPOINT ["/home/g8eo/g8e-linux-amd64", "-e", "gateway0:9000", "--data-dir", "/home/g8eo/.g8e/data", "--pki-dir", "/home/g8eo/.g8e/pki", "--secrets-dir", "/home/g8eo/.g8e/secrets"]

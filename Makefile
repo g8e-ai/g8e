@@ -207,7 +207,9 @@ build:
 	echo "Building $(HOST_OS)/$(HOST_ARCH) -> $$NODE_BINARY..."; \
 	GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build -ldflags "$(LDFLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$NODE_BINARY $(MAIN_PKG); \
 	sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
-	cp $$NODE_BINARY $$ROOT_COPY
+	if [ -z "$(DOCKER_BUILD)" ]; then \
+		cp $$NODE_BINARY $$ROOT_COPY; \
+	fi
 	@echo "Build complete.Node Node Binary: $$NODE_BINARY"
 
 .PHONY: docker-build

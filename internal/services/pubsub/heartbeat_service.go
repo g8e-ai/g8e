@@ -297,7 +297,7 @@ func (hs *HeartbeatService) SendAutomatic() {
 		}
 	} else {
 		if hs.config.Gateway.Enabled {
-			hs.logger.Debug("[HEARTBEAT] Results publisher not set, skipping automatic heartbeat in listen mode")
+			hs.logger.Debug("[HEARTBEAT] Results publisher not set, skipping automatic heartbeat in gateway mode")
 		} else {
 			hs.logger.Warn("[HEARTBEAT] Results publisher not set, cannot send automatic heartbeat")
 		}
