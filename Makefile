@@ -200,11 +200,14 @@ build:
 	@NODE_BINARY=$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH); \
 	if [ "$(HOST_OS)" = "windows" ]; then \
 		NODE_BINARY=$$NODE_BINARY.exe; \
+		ROOT_COPY=g8e.exe; \
+	else \
+		ROOT_COPY=g8e; \
 	fi; \
 	echo "Building $(HOST_OS)/$(HOST_ARCH) -> $$NODE_BINARY..."; \
 	GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build -ldflags "$(LDFLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$NODE_BINARY $(MAIN_PKG); \
 	sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
-	$(call create_symlink,$$NODE_BINARY)
+	cp $$NODE_BINARY $$ROOT_COPY
 	@echo "Build complete.Node Node Binary: $$NODE_BINARY"
 
 .PHONY: docker-build
@@ -228,7 +231,6 @@ build-all:
 		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
-	@$(call create_symlink,$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH))
 	@echo "Multi-platform build complete. Checksums: $(BIN_DIR)/g8e-*.sha256"
 
 .PHONY: build-compressed
@@ -248,7 +250,6 @@ build-compressed: upx-install
 		$(UPX) --best --lzma $$NODE_BINARY; \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
-	@$(call create_symlink,$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH))
 	@echo "Compressed multi-platform build complete. Checksums: $(BIN_DIR)/g8e-*.sha256"
 
 .PHONY: build-linux-compressed
@@ -475,7 +476,8 @@ update-doctrines:
 clean:
 	@echo "Cleaning up build artifacts and runtime state..."
 	@rm -rf .g8e/
-	@rm -f g8e g8e-* *.sha256 *.test coverage.out buf
+	@rm -rf bin/
+	@rm -f *.sha256 *.test coverage.out buf
 	@rm -rf .g8e-harness-*/
 	@echo "Clean complete."
 
@@ -489,21 +491,7 @@ clean-harness:
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
-define create_symlink
-	if [ "$(HOST_OS)" = "windows" ]; then \
-		if [ -f "$(1)" ]; then \
-			ln -sf $$(basename $(1)) $(BIN_DIR)/g8e; \
-			echo "Created symlink: $(BIN_DIR)/g8e -> $(1)"; \
-			cp $(1) g8e.exe 2>/dev/null || true; \
-		fi; \
-	else \
-		if [ -f "$(1)" ]; then \
-			ln -sf $$(basename $(1)) $(BIN_DIR)/g8e; \
-			echo "Created symlink: $(BIN_DIR)/g8e -> $(1)"; \
-			cp $(1) g8e 2>/dev/null || true; \
-		fi; \
-	fi
-endef
+
 
 # =============================================================================
 # CI/CD (LOCAL)
