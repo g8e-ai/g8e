@@ -344,6 +344,7 @@ func main() {
 		"auditor":  true,
 		"chaos":    true,
 		"mcp":      true,
+		"operator": true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {

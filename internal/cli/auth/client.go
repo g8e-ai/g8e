@@ -463,7 +463,7 @@ func CheckOperatorRunningAtURL(operatorURL string) error {
 	// Try to connect to the port
 	conn, err := net.Dial(string(constants.NetworkProtocolTCP), hostPort)
 	if err != nil {
-		return fmt.Errorf("operator is not running or not responding at %s: %w", operatorURL, err)
+		return fmt.Errorf("g8e Gateway is not running or not responding at %s: %w", operatorURL, err)
 	}
 	conn.Close()
 

@@ -63,7 +63,7 @@ func TestLoginCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "operator is not running")
+		assert.Contains(t, err.Error(), "g8e Gateway is not running")
 	})
 
 	t.Run("login fails with no active session", func(t *testing.T) {
@@ -85,7 +85,7 @@ func TestLoginCmd(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "operator is not running")
+		assert.Contains(t, err.Error(), "g8e Gateway is not running")
 	})
 }
 

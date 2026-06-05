@@ -445,7 +445,7 @@ func TestCheckOperatorRunning_NotRunning(t *testing.T) {
 
 	err := CheckOperatorRunning(cfg)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "operator is not running or not responding")
+	assert.Contains(t, err.Error(), "g8e Gateway is not running or not responding")
 }
 
 func TestCheckOperatorRunning_HealthCheckFailed(t *testing.T) {

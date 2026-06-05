@@ -61,6 +61,7 @@ g8e.sha256
 *.sqlite3
 *.sqlite3-journal
 docker/g8e-*
+operator
 
 # --- Secrets & PKI (CRITICAL: DO NOT COMMIT) ---
 .env
