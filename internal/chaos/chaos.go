@@ -41,7 +41,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
@@ -344,21 +343,8 @@ type counters struct {
 func Run(cfg Config) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		logger.Error("cannot determine working directory", "error", err)
-		os.Exit(1)
-	}
-
-	// Find project root by looking for VERSION file
-	projectRoot := config.FindProjectRoot()
-	if projectRoot == "" {
-		logger.Warn("could not find project root (no VERSION file) - using cwd")
-		projectRoot = cwd
-	}
-
-	// Resolve paths to ensure constants are initialized
-	constants.ResolvePaths(projectRoot)
+	// Initialize paths relative to current working directory
+	constants.InitPaths()
 
 	// Use shared test vault directory for persistent inspection
 	dataDir := cfg.DataDir
@@ -394,7 +380,6 @@ func Run(cfg Config) {
 		"count", cfg.Count,
 		"data_dir", dataDir,
 		"pki_dir", pkiDir,
-		"project_root", projectRoot,
 	}
 	if testVaultDir != "" {
 		logArgs = append(logArgs, "test_vault", testVaultDir)

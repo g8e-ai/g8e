@@ -913,9 +913,8 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		os.Exit(constants.ExitConfigError)
 	}
 
-	// Resolve paths to ensure constants are initialized
-	projectRoot := constants.ResolveProjectRoot()
-	constants.ResolvePaths(projectRoot)
+	// Initialize paths relative to current working directory
+	constants.InitPaths()
 
 	// Apply defaults for empty directory flags (constants are now absolute)
 	if dataDir == "" {

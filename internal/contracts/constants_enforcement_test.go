@@ -41,7 +41,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/services/system"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -49,7 +49,30 @@ import (
 var g8eoRoot string
 
 func init() {
-	g8eoRoot = system.ResolveProjectRoot()
+	// Use project root for contract tests
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "."
+	}
+	// Walk up to find project root
+	current := cwd
+	for {
+		if _, err := os.Stat(filepath.Join(current, "protocol")); err == nil {
+			g8eoRoot = current
+			break
+		}
+		if _, err := os.Stat(filepath.Join(current, ".git")); err == nil {
+			g8eoRoot = current
+			break
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			g8eoRoot = cwd
+			break
+		}
+		current = parent
+	}
+	constants.InitPathsWithBase(g8eoRoot)
 }
 
 // discoverScanDirs returns all subdirectories under internal/ to scan for violations

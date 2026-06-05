@@ -32,7 +32,6 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,7 +39,30 @@ import (
 var protocolConstantsDir string
 
 func init() {
-	protocolConstantsDir = filepath.Join(system.ResolveProjectRoot(), "protocol/constants")
+	// Use project root for contract tests
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "."
+	}
+	// Walk up to find project root
+	current := cwd
+	for {
+		if _, err := os.Stat(filepath.Join(current, "protocol")); err == nil {
+			protocolConstantsDir = filepath.Join(current, "protocol/constants")
+			break
+		}
+		if _, err := os.Stat(filepath.Join(current, ".git")); err == nil {
+			protocolConstantsDir = filepath.Join(current, "protocol/constants")
+			break
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			protocolConstantsDir = filepath.Join(cwd, "protocol/constants")
+			break
+		}
+		current = parent
+	}
+	constants.InitPathsWithBase(filepath.Dir(protocolConstantsDir))
 }
 
 func loadProtocolFile(t *testing.T, filename string) []byte {

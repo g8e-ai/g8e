@@ -355,9 +355,12 @@ func validateAndResolveGatewayPorts(httpPort, httpsPort int, allowTestPortZero b
 // Gateway mode skips all operator-mode validation - no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
 func LoadGateway(opts GatewayOptions) (*Config, error) {
-	// Resolve paths based on project root before using them
+	// Initialize paths relative to current working directory
 	projectRoot := FindProjectRoot()
-	constants.ResolvePaths(projectRoot)
+	if projectRoot == "" {
+		projectRoot = "."
+	}
+	constants.InitPathsWithBase(projectRoot)
 
 	// Resolve paths using canonical constants
 	dataDir := opts.DataDir
@@ -453,21 +456,17 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 
 // Load creates configuration from explicit options passed by main
 func Load(opts LoadOptions) (*Config, error) {
-	// Resolve paths based on project root before using them
+	// Initialize paths relative to project root
 	projectRoot := FindProjectRoot()
-	constants.ResolvePaths(projectRoot)
+	if projectRoot == "" {
+		projectRoot = "."
+	}
+	constants.InitPathsWithBase(projectRoot)
 
 	// Resolve working directory - default to project root when not specified
 	workDir := opts.WorkDir
 	if workDir == "" {
 		workDir = projectRoot
-		if workDir == "" {
-			var err error
-			workDir, err = os.Getwd()
-			if err != nil {
-				return nil, fmt.Errorf("failed to determine working directory: %w", err)
-			}
-		}
 	} else {
 		var err error
 		workDir, err = filepath.Abs(workDir)

@@ -99,10 +99,13 @@ func Load(projectRoot string) (*Config, error) {
 		}
 	}
 
-	runtimeDir := filepath.Join(projectRoot, DefaultRuntimeDir)
-	pkiDir := filepath.Join(projectRoot, DefaultPKIDir)
-	secretsDir := filepath.Join(projectRoot, DefaultSecretsDir)
+	// Initialize paths relative to projectRoot
+	constants.InitPathsWithBase(projectRoot)
 
+	// Use centralized path constants
+	runtimeDir := constants.Paths.Infra.RuntimeDir
+	pkiDir := constants.Paths.Infra.PkiDir
+	secretsDir := constants.Paths.Infra.SecretsDir
 	credentialsDir := filepath.Join(projectRoot, DefaultCredentialsDir)
 
 	// Always use embedded default paths configuration

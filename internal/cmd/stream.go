@@ -21,13 +21,13 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/system"
 )
 
 const (
@@ -37,7 +37,10 @@ const (
 )
 
 func getDefaultNodeBinaryDir() string {
-	return system.ResolveProjectRoot() + "/bin"
+	// Initialize paths relative to current working directory
+	constants.InitPaths()
+	// Use project root (parent of .g8e) for bin directory
+	return filepath.Join(constants.Paths.Infra.RuntimeDir, "../bin")
 }
 
 // StreamStatusEvent is written as a JSON line to stdout for each host event.
