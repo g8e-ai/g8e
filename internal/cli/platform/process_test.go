@@ -268,6 +268,9 @@ func TestOperatorStatus(t *testing.T) {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
+	// Mock findOperatorProcess to return 0 (no process found)
+	pm.findOperatorProcessFn = func() int { return 0 }
+
 	// Test no PID file
 	running, pid, err := pm.OperatorStatus()
 	if err != nil {
