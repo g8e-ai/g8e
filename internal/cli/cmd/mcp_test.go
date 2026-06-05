@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -96,40 +97,16 @@ func TestMcpCmd(t *testing.T) {
 		assert.Contains(t, cmd.Long, "stdio transport")
 	})
 
-	t.Run("mcp command has required flags", func(t *testing.T) {
+	t.Run("mcp command has no required flags", func(t *testing.T) {
 		cmd := mcpCmd()
 		require.NotNil(t, cmd)
 
+		// Should not have endpoint or pki-dir flags anymore
 		endpointFlag := cmd.Flags().Lookup("endpoint")
 		pkiDirFlag := cmd.Flags().Lookup("pki-dir")
 
-		assert.NotNil(t, endpointFlag, "mcp command should have --endpoint flag")
-		assert.NotNil(t, pkiDirFlag, "mcp command should have --pki-dir flag")
-	})
-}
-
-func TestMcpCmdValidation(t *testing.T) {
-	t.Run("mcp command fails without endpoint flag", func(t *testing.T) {
-		cmd := mcpCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "endpoint")
-	})
-
-	t.Run("mcp command fails without pki-dir flag", func(t *testing.T) {
-		cmd := mcpCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		cmd.Flags().Set("endpoint", "https://example.com")
-		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "pki-dir")
+		assert.Nil(t, endpointFlag, "mcp command should not have --endpoint flag")
+		assert.Nil(t, pkiDirFlag, "mcp command should not have --pki-dir flag")
 	})
 }
 
@@ -254,10 +231,11 @@ func TestHandleInitialize(t *testing.T) {
 }
 
 func TestHandleToolsList(t *testing.T) {
-	t.Run("tools/list response contains execute_bash tool", func(t *testing.T) {
+	t.Run("tools/list response contains native tools", func(t *testing.T) {
 		var buf bytes.Buffer
 		encoder := json.NewEncoder(&buf)
-		handleToolsList(encoder, 1)
+		nativeToolHandler := mcp.NewNativeToolHandler()
+		handleToolsList(encoder, 1, nativeToolHandler)
 
 		var resp JSONRPCResponse
 		err := json.Unmarshal(buf.Bytes(), &resp)
@@ -267,10 +245,6 @@ func TestHandleToolsList(t *testing.T) {
 		result := resp.Result.(map[string]interface{})
 		tools := result["tools"].([]interface{})
 		assert.Greater(t, len(tools), 0)
-
-		tool := tools[0].(map[string]interface{})
-		assert.Equal(t, "execute_bash", tool["name"])
-		assert.Contains(t, tool["description"], "bash")
 	})
 }
 
@@ -292,15 +266,15 @@ func TestSendError(t *testing.T) {
 }
 
 func TestHandleToolsCall(t *testing.T) {
-	t.Run("tools/call returns error for gateway integration", func(t *testing.T) {
+	t.Run("tools/call executes native tool", func(t *testing.T) {
 		var buf bytes.Buffer
 		encoder := json.NewEncoder(&buf)
-		handleToolsCall(encoder, 1, json.RawMessage(`{"name":"execute_bash","arguments":{"command":"ls"}}`))
+		nativeToolHandler := mcp.NewNativeToolHandler()
+		handleToolsCall(encoder, 1, json.RawMessage(`{"name":"sys_info","arguments":{}}`), nativeToolHandler)
 
 		var resp JSONRPCResponse
 		err := json.Unmarshal(buf.Bytes(), &resp)
 		assert.NoError(t, err)
-		assert.NotNil(t, resp.Error)
-		assert.Contains(t, resp.Error.Message, "gateway mode")
+		assert.NotNil(t, resp.Result)
 	})
 }

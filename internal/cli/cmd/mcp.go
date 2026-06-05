@@ -15,30 +15,26 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 
+	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/spf13/cobra"
 )
 
 // mcpCmd implements the MCP stdio transport mode
 func mcpCmd() *cobra.Command {
-	var endpoint string
-	var pkiDir string
-
 	cmd := &cobra.Command{
 		Use:   "mcp",
 		Short: "MCP protocol operations (stdio transport)",
-		Long:  `Run g8e as an MCP server using stdio transport for local agent integration.`,
+		Long:  `Run g8e as an MCP server using stdio transport for local agent integration. Exposes all native tools without requiring gateway mode.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMCPStdio(cmd, args, endpoint, pkiDir)
+			return runMCPStdio(cmd, args)
 		},
 	}
-
-	cmd.Flags().StringVar(&endpoint, "endpoint", "", "Gateway endpoint (required)")
-	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "PKI directory (required)")
 
 	return cmd
 }
@@ -78,20 +74,20 @@ type Tool struct {
 	InputSchema map[string]interface{} `json:"inputSchema"`
 }
 
+// CallToolRequest is the params for the "tools/call" method
+type CallToolRequest struct {
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments,omitempty"`
+}
+
 // runMCPStdio implements the MCP stdio transport
-func runMCPStdio(cmd *cobra.Command, args []string, endpoint string, pkiDir string) error {
+func runMCPStdio(cmd *cobra.Command, args []string) error {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
-	if endpoint == "" {
-		logger.Error("--endpoint flag is required")
-		return fmt.Errorf("--endpoint flag is required")
-	}
-	if pkiDir == "" {
-		logger.Error("--pki-dir flag is required")
-		return fmt.Errorf("--pki-dir flag is required")
-	}
+	logger.Info("g8e MCP stdio server starting")
 
-	logger.Info("g8e MCP stdio server starting", "endpoint", endpoint, "pkiDir", pkiDir)
+	// Initialize native tool handler
+	nativeToolHandler := mcp.NewNativeToolHandler()
 
 	scanner := bufio.NewScanner(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)
@@ -113,11 +109,13 @@ func runMCPStdio(cmd *cobra.Command, args []string, endpoint string, pkiDir stri
 
 		switch req.Method {
 		case "tools/list":
-			handleToolsList(encoder, req.ID)
+			handleToolsList(encoder, req.ID, nativeToolHandler)
 		case "tools/call":
-			handleToolsCall(encoder, req.ID, req.Params)
+			handleToolsCall(encoder, req.ID, req.Params, nativeToolHandler)
 		case "initialize":
 			handleInitialize(encoder, req.ID)
+		case "ping":
+			sendSuccess(encoder, req.ID, struct{}{})
 		default:
 			logger.Warn("Unknown MCP method", "method", req.Method)
 			sendError(encoder, req.ID, -32601, fmt.Sprintf("method not found: %s", req.Method))
@@ -133,24 +131,19 @@ func runMCPStdio(cmd *cobra.Command, args []string, endpoint string, pkiDir stri
 	return nil
 }
 
-func handleToolsList(encoder *json.Encoder, id interface{}) {
+func handleToolsList(encoder *json.Encoder, id interface{}, nativeToolHandler *mcp.NativeToolHandler) {
+	nativeTools := nativeToolHandler.ListTools()
+	tools := make([]Tool, 0, len(nativeTools))
+	for _, nt := range nativeTools {
+		tools = append(tools, Tool{
+			Name:        nt.Name(),
+			Description: nt.Description(),
+			InputSchema: nt.InputSchema(),
+		})
+	}
+
 	result := ToolsListResult{
-		Tools: []Tool{
-			{
-				Name:        "execute_bash",
-				Description: "Execute a bash command on the host",
-				InputSchema: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"command": map[string]interface{}{
-							"type":        "string",
-							"description": "The bash command to execute",
-						},
-					},
-					"required": []string{"command"},
-				},
-			},
-		},
+		Tools: tools,
 	}
 
 	response := JSONRPCResponse{
@@ -164,9 +157,34 @@ func handleToolsList(encoder *json.Encoder, id interface{}) {
 	}
 }
 
-func handleToolsCall(encoder *json.Encoder, id interface{}, params json.RawMessage) {
-	// For now, return an error indicating this needs gateway integration
-	sendError(encoder, id, -32603, "tools/call requires gateway mode - use g8e gw start instead")
+func handleToolsCall(encoder *json.Encoder, id interface{}, params json.RawMessage, nativeToolHandler *mcp.NativeToolHandler) {
+	var callParams CallToolRequest
+	if err := json.Unmarshal(params, &callParams); err != nil {
+		sendError(encoder, id, -32600, fmt.Sprintf("invalid tools/call params: %v", err))
+		return
+	}
+
+	if callParams.Name == "" {
+		sendError(encoder, id, -32600, "tool name required")
+		return
+	}
+
+	// Execute native tool
+	result, err := nativeToolHandler.HandleTool(context.Background(), callParams.Name, callParams.Arguments)
+	if err != nil {
+		sendError(encoder, id, -32603, fmt.Sprintf("tool execution failed: %v", err))
+		return
+	}
+
+	response := JSONRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result:  result,
+	}
+
+	if err := encoder.Encode(response); err != nil {
+		slog.Error("Failed to encode tools/call response", "error", err)
+	}
 }
 
 func handleInitialize(encoder *json.Encoder, id interface{}) {
@@ -202,5 +220,17 @@ func sendError(encoder *json.Encoder, id interface{}, code int, message string) 
 
 	if err := encoder.Encode(response); err != nil {
 		slog.Error("Failed to encode error response", "error", err)
+	}
+}
+
+func sendSuccess(encoder *json.Encoder, id interface{}, result interface{}) {
+	response := JSONRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result:  result,
+	}
+
+	if err := encoder.Encode(response); err != nil {
+		slog.Error("Failed to encode success response", "error", err)
 	}
 }

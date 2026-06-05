@@ -199,19 +199,11 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println("  4. MCP Gateway Config for Local Coding Tools")
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			mcpHttpPort := cfg.OperatorMcpHttpPort()
-			if mcpHttpPort == 0 {
-				mcpHttpPort = cfg.Paths.Ports.OperatorMcpHttp
-			}
-			cmd.Printf(`{
-  "mcpServers": {
-    "g8e-gateway": {
-      "disabled": false,
-      "serverUrl": "http://127.0.0.1:%d/mcp"
-    }
-  }
-}
-`, mcpHttpPort)
+			cmd.Println("  To generate MCP client configuration for your coding tools:")
+			cmd.Println()
+			cmd.Println("  [mTLS with g8e.local] : ./g8e gw mcp-config")
+			cmd.Println("  [Plain HTTP]          : ./g8e gw mcp-config-http")
+			cmd.Println()
 			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
 			cmd.Println("[g8e] Gateway service started. Run './g8e auth login' to authenticate your CLI.")
 

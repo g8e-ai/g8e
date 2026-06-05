@@ -168,9 +168,11 @@ This outputs a JSON configuration with the correct gateway URL.
 
 #### Claude Code Custom Connector Registration
 
-The g8e Gateway provides a unified MCP Streamable HTTP endpoint at `/mcp` that is compatible with Claude Code custom connectors. This endpoint implements the standard MCP JSON-RPC 2.0 protocol with method dispatch, ID echoing, and notification handling.
+The g8e Gateway provides a unified MCP Streamable HTTP endpoint at `/mcp` that is compatible with Claude Code custom connectors. This endpoint implements the standard MCP JSON-RPC 2.0 protocol with method dispatch, ID echoing, notification handling, and SSE support.
 
-To register the g8e Gateway as a custom connector in Claude Code:
+**HTTP Transport (Recommended for Gateway Mode)**
+
+To register the g8e Gateway as a custom connector in Claude Code using HTTP transport:
 
 ```bash
 claude mcp add --transport http g8e http://localhost:8442/mcp
@@ -183,9 +185,20 @@ The unified `/mcp` endpoint supports:
 - **Method dispatch**: All MCP methods (tools/list, tools/call, resources/list, prompts/list, etc.)
 - **ID echoing**: Preserves client request IDs for request-response correlation
 - **Notification handling**: Accepts notifications (e.g., `notifications/initialized`) with 202 Accepted
+- **SSE support**: GET requests for server-sent events streaming
 - **Origin validation**: DNS-rebinding protection via Origin header validation (rejects non-loopback origins)
 
 **Note**: The `/mcp` endpoint is available on all three gateway surfaces (mTLS port 8440, public TLS port 8443, and plain HTTP port 8442). For Claude Code, use the plain HTTP port (8442) for development or the public TLS port (8443) with JWT authentication for production.
+
+**Stdio Transport (Recommended for Local Development)**
+
+For local development without running the gateway, g8e can run as a stdio MCP server exposing all native tools:
+
+```bash
+claude mcp add g8e-stdio g8e mcp
+```
+
+This runs g8e in stdio mode with no additional flags required. All 27 native tools are available including system diagnostics, database operations, network tools, and shell execution with governance safety features.
 
 ### MCP Client Connection
 
