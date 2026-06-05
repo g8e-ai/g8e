@@ -959,10 +959,10 @@ func TestSovereigntyService_StrictModeDataRows(t *testing.T) {
 
 	t.Run("non-sensitive key-value pairs preserved", func(t *testing.T) {
 		t.Parallel()
-		input := "Version: 24.0.7\nClient: Docker Engine"
+		input := "Version: 24.0.7\nClient: Container Engine"
 		result := service.ScrubText(input)
 		assert.Contains(t, result, "Version: 24.0.7")
-		assert.Contains(t, result, "Client: Docker Engine")
+		assert.Contains(t, result, "Client: Container Engine")
 	})
 
 	t.Run("JSON data preserves structure but scrubs sensitive values", func(t *testing.T) {

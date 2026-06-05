@@ -27,7 +27,6 @@ g8e/
 ├── protocol/                       # Protocol definitions (shared truth)
 ├── test/                           # Integration / E2E tests
 ├── docs/                           # Architecture and user docs
-├── docker/                         # Docker configurations
 ├── .github/                        # GitHub workflows and templates
 ├── Makefile                        # Build orchestration
 ├── go.mod / go.sum
@@ -344,7 +343,6 @@ make build-compressed             # Build g8e for all platforms with UPX compres
 make build-linux-compressed       # Build g8e for Linux with UPX compression
 make build-windows-compressed     # Build g8e for Windows with UPX compression
 make build-darwin-compressed      # Build g8e for Darwin with UPX compression
-make docker-build                 # Build g8e Operator Docker image
 make generate                     # Generate all protocol artifacts (proto)
 make proto                        # Generate all Protobuf code (Go)
 make proto-python                 # Generate Python Protobuf code

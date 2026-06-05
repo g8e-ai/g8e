@@ -344,7 +344,6 @@ func main() {
 		"auditor":  true,
 		"chaos":    true,
 		"mcp":      true,
-		"docker":   true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
@@ -469,11 +468,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  security    Security operations (pki, certificates)\n")
 		fmt.Fprintf(os.Stderr, "  auditor     Governance auditor (list, run, audit, self-test)\n")
 		fmt.Fprintf(os.Stderr, "  chaos       Chaos testing (generate governance events)\n")
-		fmt.Fprintf(os.Stderr, "  mcp         MCP protocol operations\n")
-		fmt.Fprintf(os.Stderr, "  docker      Docker container management for testing\n\n")
+		fmt.Fprintf(os.Stderr, "  mcp         MCP protocol operations\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -k, --key <key>         Private key\n")
-		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running operator\n")
+		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address or hostname of the operator\n")
 		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: "+constants.CACertLegacyBundlePath+" or fetch from /.well-known/g8e/pki/ca-bundle)\n")
 		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory Operator was launched from)\n")
 		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")

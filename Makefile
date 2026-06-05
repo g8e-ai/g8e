@@ -205,22 +205,14 @@ build:
 		ROOT_COPY=g8e; \
 	fi; \
 	echo "Building $(HOST_OS)/$(HOST_ARCH) -> $$NODE_BINARY..."; \
-	GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build -ldflags "$(LDFLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$NODE_BINARY $(MAIN_PKG); \
+	CGO_ENABLED=0 GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build -ldflags "$(LDFLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$NODE_BINARY $(MAIN_PKG); \
 	sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
-	if [ -z "$(DOCKER_BUILD)" ]; then \
-		if [ -f "./$$ROOT_COPY" ] && pgrep -f "$$ROOT_COPY --doctrine" > /dev/null 2>&1; then \
-			echo "Error: Unable to copy binary - g8e gateway is currently running. Please stop it first with: ./$$ROOT_COPY gw stop"; \
-			exit 1; \
-		fi; \
-		cp $$NODE_BINARY $$ROOT_COPY; \
-	fi
+	if [ -f "./$$ROOT_COPY" ] && pgrep -f "$$ROOT_COPY --doctrine" > /dev/null 2>&1; then \
+		echo "Error: Unable to copy binary - g8e gateway is currently running. Please stop it first with: ./$$ROOT_COPY gw stop"; \
+		exit 1; \
+	fi; \
+	cp $$NODE_BINARY $$ROOT_COPY
 	@echo "Build complete.Node Node Binary: $$NODE_BINARY"
-
-.PHONY: docker-build
-docker-build:
-	@echo "Building g8e Operator Docker image..."
-	@docker build -f Dockerfile -t g8e:$(VERSION) -t g8e:latest .
-	@echo "Operator image built: g8e:$(VERSION)"
 
 .PHONY: build-all
 build-all:
@@ -234,7 +226,7 @@ build-all:
 			NODE_BINARY=$$NODE_BINARY.exe; \
 		fi; \
 		echo "Building $$platform -> $$NODE_BINARY..."; \
-		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
+		CGO_ENABLED=0 GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Multi-platform build complete. Checksums: $(BIN_DIR)/g8e-*.sha256"
@@ -251,7 +243,7 @@ build-compressed: upx-install
 			NODE_BINARY=$$NODE_BINARY.exe; \
 		fi; \
 		echo "Building $$platform -> $$NODE_BINARY..."; \
-		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
+		CGO_ENABLED=0 GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
 		echo "Compressing $$NODE_BINARY with UPX..."; \
 		$(UPX) --best --lzma $$NODE_BINARY; \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
@@ -307,7 +299,7 @@ build-darwin:
 	@for arch in amd64 arm64; do \
 		NODE_BINARY=$(BIN_DIR)/g8e-darwin-$$arch; \
 		echo "Building darwin/$$arch -> $$NODE_BINARY..."; \
-		GOOS=darwin GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=darwin_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
+		CGO_ENABLED=0 GOOS=darwin GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=darwin_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Darwin build complete. Binaries: $(BIN_DIR)/g8e-darwin-*"
@@ -319,7 +311,7 @@ build-linux:
 	@for arch in amd64 arm64 386; do \
 		NODE_BINARY=$(BIN_DIR)/g8e-linux-$$arch; \
 		echo "Building linux/$$arch -> $$NODE_BINARY..."; \
-		GOOS=linux GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=linux_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
+		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=linux_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Linux build complete. Binaries: $(BIN_DIR)/g8e-linux-*"
@@ -331,7 +323,7 @@ build-windows:
 	@for arch in amd64 arm64; do \
 		NODE_BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
 		echo "Building windows/$$arch -> $$NODE_BINARY..."; \
-		GOOS=windows GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=windows_$$arch -s -w" -o $$NODE_BINARY $(MAIN_PKG); \
+		CGO_ENABLED=0 GOOS=windows GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=windows_$$arch -s -w" -o $$NODE_BINARY $(MAIN_PKG); \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Windows build complete. Binaries: $(BIN_DIR)/g8e-windows-*.exe"

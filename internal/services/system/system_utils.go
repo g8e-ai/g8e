@@ -423,7 +423,6 @@ func GetMemoryDetails() models.HeartbeatMemoryDetails {
 func GetEnvironmentDetails(lang, term, tz string) models.HeartbeatEnvironment {
 	pwd, _ := os.Getwd()
 
-	containerInfo := detectContainerEnvironment()
 	initSystem := detectInitSystem()
 
 	return models.HeartbeatEnvironment{
@@ -431,9 +430,9 @@ func GetEnvironmentDetails(lang, term, tz string) models.HeartbeatEnvironment {
 		Lang:             lang,
 		Timezone:         getTimezone(tz),
 		Term:             term,
-		IsContainer:      containerInfo.IsContainer,
-		ContainerRuntime: containerInfo.Runtime,
-		ContainerSignals: containerInfo.Signals,
+		IsContainer:      false,
+		ContainerRuntime: "none",
+		ContainerSignals: []string{},
 		InitSystem:       initSystem,
 	}
 }
@@ -444,77 +443,6 @@ type ContainerInfo struct {
 	Signals     []string `json:"container_signals"`
 }
 
-func detectContainerEnvironment() ContainerInfo {
-	info := ContainerInfo{
-		Runtime: "none",
-	}
-
-	if _, err := os.Stat("/.dockerenv"); err == nil {
-		info.IsContainer = true
-		info.Runtime = "docker"
-		info.Signals = append(info.Signals, "dockerenv_file")
-	}
-
-	if _, err := os.Stat("/run/.containerenv"); err == nil {
-		info.IsContainer = true
-		if info.Runtime == "none" {
-			info.Runtime = "podman"
-		}
-		info.Signals = append(info.Signals, "containerenv_file")
-	}
-
-	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
-		cgroupContent := strings.ToLower(string(data))
-		cgroupRuntimes := map[string]string{
-			"docker":     "docker",
-			"kubepods":   "kubernetes",
-			"containerd": "containerd",
-			"lxc":        "lxc",
-		}
-		for marker, runtime := range cgroupRuntimes {
-			if strings.Contains(cgroupContent, marker) {
-				info.IsContainer = true
-				info.Signals = append(info.Signals, "cgroup_"+marker)
-				if info.Runtime == "none" {
-					info.Runtime = runtime
-				}
-			}
-		}
-	}
-
-	if data, err := os.ReadFile("/proc/1/mountinfo"); err == nil {
-		mountContent := strings.ToLower(string(data))
-		if strings.Contains(mountContent, "overlay") || strings.Contains(mountContent, "aufs") {
-			info.Signals = append(info.Signals, "overlay_filesystem")
-			if !info.IsContainer {
-				info.IsContainer = true
-				if info.Runtime == "none" {
-					info.Runtime = string(constants.SystemHealthUnknown)
-				}
-			}
-		}
-	}
-
-	initName := getInitProcessName()
-	standardInits := map[string]bool{
-		"systemd": true, "init": true, "launchd": true, "upstart": true,
-	}
-	if initName != "" && !standardInits[initName] {
-		info.Signals = append(info.Signals, "non_standard_init_"+initName)
-		if !info.IsContainer {
-			info.IsContainer = true
-			if info.Runtime == "none" {
-				info.Runtime = string(constants.SystemHealthUnknown)
-			}
-		}
-	}
-
-	if info.Signals == nil {
-		info.Signals = []string{}
-	}
-
-	return info
-}
 
 func getInitProcessName() string {
 	data, err := os.ReadFile("/proc/1/cmdline")

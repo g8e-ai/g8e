@@ -19,42 +19,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSysContainerStatusTool_Name(t *testing.T) {
-	tool := &SysContainerStatusTool{}
-	require.Equal(t, "sys_container_status", tool.Name())
-}
-
-func TestSysContainerStatusTool_Description(t *testing.T) {
-	tool := &SysContainerStatusTool{}
-	require.NotEmpty(t, tool.Description())
-	require.Contains(t, tool.Description(), "container")
-}
-
-func TestSysContainerStatusTool_InputSchema(t *testing.T) {
-	tool := &SysContainerStatusTool{}
-	schema := tool.InputSchema()
-
-	require.Equal(t, "object", schema["type"])
-	props, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
-
-	required, ok := schema["required"].([]string)
-	require.True(t, ok)
-	require.Contains(t, required, "container_name")
-
-	containerNameProp, ok := props["container_name"].(map[string]interface{})
-	require.True(t, ok)
-	require.Equal(t, "string", containerNameProp["type"])
-
-	runtimeProp, ok := props["runtime"].(map[string]interface{})
-	require.True(t, ok)
-	require.Equal(t, "string", runtimeProp["type"])
-	enum, ok := runtimeProp["enum"].([]string)
-	require.True(t, ok)
-	require.Contains(t, enum, "docker")
-	require.Contains(t, enum, "podman")
-}
-
 func TestSysEnvVarsTool_Name(t *testing.T) {
 	tool := &SysEnvVarsTool{}
 	require.Equal(t, "sys_env_vars", tool.Name())
@@ -333,85 +297,6 @@ func TestRedactEnvValue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := redactEnvValue(tt.key, tt.value)
 			require.Equal(t, tt.want, got)
-		})
-	}
-}
-
-func TestGetNested(t *testing.T) {
-	tests := []struct {
-		name     string
-		m        map[string]interface{}
-		keys     []string
-		expected interface{}
-	}{
-		{
-			name:     "single level key exists",
-			m:        map[string]interface{}{"key1": "value1"},
-			keys:     []string{"key1"},
-			expected: "value1",
-		},
-		{
-			name:     "single level key missing",
-			m:        map[string]interface{}{"key1": "value1"},
-			keys:     []string{"key2"},
-			expected: nil,
-		},
-		{
-			name: "nested key exists",
-			m: map[string]interface{}{
-				"level1": map[string]interface{}{
-					"level2": "value2",
-				},
-			},
-			keys:     []string{"level1", "level2"},
-			expected: "value2",
-		},
-		{
-			name: "nested key missing at second level",
-			m: map[string]interface{}{
-				"level1": map[string]interface{}{
-					"level2": "value2",
-				},
-			},
-			keys:     []string{"level1", "level3"},
-			expected: nil,
-		},
-		{
-			name: "nested key missing at first level",
-			m: map[string]interface{}{
-				"level1": map[string]interface{}{
-					"level2": "value2",
-				},
-			},
-			keys:     []string{"level2", "level3"},
-			expected: nil,
-		},
-		{
-			name: "three levels deep",
-			m: map[string]interface{}{
-				"level1": map[string]interface{}{
-					"level2": map[string]interface{}{
-						"level3": "value3",
-					},
-				},
-			},
-			keys:     []string{"level1", "level2", "level3"},
-			expected: "value3",
-		},
-		{
-			name: "intermediate value is not a map",
-			m: map[string]interface{}{
-				"level1": "string_value",
-			},
-			keys:     []string{"level1", "level2"},
-			expected: "string_value",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := getNested(tt.m, tt.keys...)
-			require.Equal(t, tt.expected, got)
 		})
 	}
 }

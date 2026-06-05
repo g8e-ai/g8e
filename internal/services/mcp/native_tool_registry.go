@@ -39,7 +39,6 @@ func RegisterNativeTools(registry *ToolRegistry) error {
 		&SysEnvVarsTool{},
 		&FSFileChecksumTool{},
 		&SysServiceStatusTool{},
-		&SysContainerStatusTool{},
 		&FSDiskUsageTool{},
 		&SysTimeClockTool{},
 		&ProcTreeTool{},

@@ -100,17 +100,10 @@ func getMachineID(logger *slog.Logger) (string, error) {
 }
 
 // getLinuxMachineID reads a stable machine identifier from the kernel.
-// For containers, uses container-specific identifiers (cgroup container ID or hostname).
 // For bare metal/VMs, tries persistent identity files first (/etc/machine-id, /var/lib/dbus/machine-id),
 // then falls back to /proc/sys/kernel/random/boot_id.
 func getLinuxMachineID(logger *slog.Logger) (string, error) {
-	// Check if running in a container and use container-specific ID
-	if containerID, err := getContainerMachineID(logger); err == nil && containerID != "" {
-		logger.Info("Retrieved container machine ID", "source", "container")
-		return containerID, nil
-	}
-
-	// Fallback to bare metal/VM logic
+	// Try persistent identity files
 	paths := []string{
 		constants.PathEtcMachineID,
 		constants.PathVarLibDbusMachineID,
@@ -129,81 +122,6 @@ func getLinuxMachineID(logger *slog.Logger) (string, error) {
 	}
 
 	return "", fmt.Errorf("could not read machine ID from any known path")
-}
-
-// getContainerMachineID attempts to get a container-specific identifier.
-// Returns empty string if not running in a container or if detection fails.
-func getContainerMachineID(logger *slog.Logger) (string, error) {
-	// Method 1: Check for Docker container ID from /proc/self/cgroup (cgroup v1)
-	cgroupData, err := os.ReadFile(constants.PathProcSelfCgroup)
-	if err == nil {
-		cgroupLines := strings.Split(string(cgroupData), "\n")
-		for _, line := range cgroupLines {
-			if strings.Contains(line, "docker") || strings.Contains(line, "kubepods") {
-				// Extract container ID from cgroup path (format: .../docker/<container_id>/...)
-				parts := strings.Split(line, "/")
-				for i, part := range parts {
-					if part == "docker" && i+1 < len(parts) {
-						containerID := parts[i+1]
-						if len(containerID) >= 12 { // Docker container IDs are at least 12 chars
-							return containerID[:12], nil
-						}
-					}
-					// Also handle kubernetes pod format
-					if strings.HasPrefix(part, "cri-") || strings.HasPrefix(part, "docker-") {
-						containerID := strings.TrimPrefix(part, "docker-")
-						if len(containerID) >= 12 {
-							return containerID[:12], nil
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Method 2: Try /proc/self/mountinfo for cgroup v2 (works with Docker and containerd)
-	mountInfoData, err := os.ReadFile(constants.PathProcSelfMountinfo)
-	if err == nil {
-		mountInfoLines := strings.Split(string(mountInfoData), "\n")
-		for _, line := range mountInfoLines {
-			// Look for container ID in mountinfo (format includes container_id)
-			if strings.Contains(line, "container_id") {
-				parts := strings.Fields(line)
-				for _, part := range parts {
-					if strings.HasPrefix(part, "container_id=") {
-						containerID := strings.TrimPrefix(part, "container_id=")
-						if len(containerID) >= 12 {
-							logger.Info("Retrieved container ID from mountinfo", "container_id", containerID[:12])
-							return containerID[:12], nil
-						}
-					}
-				}
-			}
-			// Alternative: look for docker container ID pattern in mount source
-			if strings.Contains(line, "docker") {
-				parts := strings.Fields(line)
-				for _, part := range parts {
-					// Docker container IDs are 64-character hex strings
-					if len(part) == 64 && isHex(part) {
-						logger.Info("Retrieved container ID from mountinfo", "container_id", part[:12])
-						return part[:12], nil
-					}
-				}
-			}
-		}
-	}
-
-	// Method 3: Fallback to /etc/hostname which is unique per container
-	hostname, err := os.ReadFile(constants.PathEtcHostname)
-	if err == nil {
-		hn := strings.TrimSpace(string(hostname))
-		if hn != "" && hn != "localhost" {
-			logger.Info("Using container hostname as machine ID", "hostname", hn)
-			return hn, nil
-		}
-	}
-
-	return "", nil
 }
 
 // isHex checks if a string is a valid hexadecimal string

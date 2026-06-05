@@ -18,7 +18,6 @@ package system
 
 import (
 	"math"
-	"os"
 	"runtime"
 	"strings"
 	"testing"
@@ -131,23 +130,6 @@ func TestSystemUtilsIntegration(t *testing.T) {
 	})
 }
 
-func TestDetectContainerEnvironment(t *testing.T) {
-	t.Parallel()
-	info := detectContainerEnvironment()
-
-	assert.NotNil(t, info.Signals)
-	assert.NotEmpty(t, info.Runtime)
-
-	if _, err := os.Stat("/.dockerenv"); err == nil {
-		assert.True(t, info.IsContainer)
-		assert.Equal(t, "docker", info.Runtime)
-		assert.Contains(t, info.Signals, "dockerenv_file")
-	}
-
-	if !info.IsContainer {
-		assert.Equal(t, "none", info.Runtime)
-	}
-}
 
 func TestGetInitProcessName(t *testing.T) {
 	t.Parallel()
@@ -173,10 +155,6 @@ func TestGetEnvironmentDetails_ContainerFields(t *testing.T) {
 	assert.NotEmpty(t, details.PWD)
 }
 
-func TestContainerInfo_EmptySignals(t *testing.T) {
-	t.Parallel()
-	require.NotNil(t, detectContainerEnvironment().Signals)
-}
 
 func TestCPUStatConsistency(t *testing.T) {
 	t.Parallel()

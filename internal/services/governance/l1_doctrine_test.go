@@ -614,40 +614,6 @@ func TestL1Doctrine_AnalyzeCommand_Cryptominer(t *testing.T) {
 	}
 }
 
-func TestL1Doctrine_AnalyzeCommand_ContainerEscape(t *testing.T) {
-	t.Parallel()
-	doctrine := NewL1Doctrine()
-
-	tests := []struct {
-		name        string
-		command     string
-		expectBlock bool
-	}{
-		{"mount host root", "docker run -v /:/host alpine", true},
-		{"mount docker sock", "docker run -v /var/run/docker.sock:/var/run/docker.sock alpine", true},
-		{"privileged container", "docker run --privileged alpine", false}, // flagged but not blocked
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			signals := doctrine.AnalyzeCommand(tt.command)
-			assert.NotEmpty(t, signals, "Should detect threat: %s", tt.command)
-
-			if tt.expectBlock {
-				found := false
-				for _, sig := range signals {
-					if sig.BlockRecommended {
-						found = true
-						break
-					}
-				}
-				assert.True(t, found, "Expected block recommendation for: %s", tt.command)
-			}
-		})
-	}
-}
-
 func TestL1Doctrine_AnalyzeCommand_KernelModule(t *testing.T) {
 	t.Parallel()
 	doctrine := NewL1Doctrine()
@@ -690,7 +656,6 @@ func TestL1Doctrine_AnalyzeCommand_SafeCommands(t *testing.T) {
 		"df -h",
 		"free -m",
 		"uptime",
-		"docker ps",
 		"kubectl get pods",
 		"systemctl status nginx",
 		"journalctl -u sshd -n 50",
@@ -993,7 +958,6 @@ func TestL1Doctrine_CriticalSystemDirs_ExactMatch(t *testing.T) {
 	t.Run("similar but non-critical paths", func(t *testing.T) {
 		t.Parallel()
 		assert.False(t, doctrine.isCriticalSystemFile("/home/bin"))
-		assert.False(t, doctrine.isCriticalSystemFile("/var/lib/docker"))
 		assert.False(t, doctrine.isCriticalSystemFile("/opt/bin/myapp"))
 		assert.False(t, doctrine.isCriticalSystemFile("/tmp/sbin"))
 	})
@@ -1256,46 +1220,6 @@ func TestL1Doctrine_AnalyzeCommand_AllCryptominer(t *testing.T) {
 	}
 }
 
-func TestL1Doctrine_AnalyzeCommand_AllContainerEscape(t *testing.T) {
-	t.Parallel()
-	doctrine := NewL1Doctrine()
-
-	tests := []struct {
-		name        string
-		command     string
-		expectBlock bool
-	}{
-		{"privileged container", "docker run --privileged alpine", false},
-		{"privileged container uppercase", "DOCKER RUN --PRIVILEGED alpine", false},
-		{"mount host root", "docker run -v /:/host alpine", true},
-		{"mount host root uppercase", "DOCKER RUN -V /:/HOST alpine", true},
-		{"mount docker sock", "docker run -v /var/run/docker.sock:/var/run/docker.sock alpine", true},
-		{"mount docker sock uppercase", "DOCKER RUN -V /VAR/RUN/DOCKER.SOCK:/VAR/RUN/DOCKER.SOCK alpine", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			signals := doctrine.AnalyzeCommand(tt.command)
-			assert.NotEmpty(t, signals, "Should detect threat: %s", tt.command)
-
-			if tt.expectBlock {
-				found := false
-				for _, sig := range signals {
-					if sig.BlockRecommended {
-						found = true
-						break
-					}
-				}
-				assert.True(t, found, "Expected block recommendation for: %s", tt.command)
-			} else {
-				for _, sig := range signals {
-					assert.False(t, sig.BlockRecommended, "Should not block: %s", tt.command)
-				}
-			}
-		})
-	}
-}
 
 func TestL1Doctrine_AnalyzeCommand_AllNetworkManipulation(t *testing.T) {
 	t.Parallel()

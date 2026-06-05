@@ -104,8 +104,7 @@ func (w testLogWriter) Write(p []byte) (int, error) {
 
 // GetTestOperatorDirectURL returns the client WebSocket gateway base URL for g8eo pub/sub tests.
 // g8eo connects to pub/sub via client (the single external entry point) at port 443; client
-// proxies /ws/pubsub to Operator internally. Operator is not directly accessible from outside
-// the docker network. Must not include a path - callers append /ws/pubsub as needed.
+// proxies /ws/pubsub to Operator internally. Must not include a path - callers append /ws/pubsub as needed.
 func GetTestOperatorDirectURL() string {
 	// g8e uses ZERO environment variables - use default URL
 	return "wss://" + constants.DefaultEndpoint + ":443"

@@ -281,7 +281,6 @@ func GetMemoryDetails() models.HeartbeatMemoryDetails {
 func GetEnvironmentDetails(lang, term, tz string) models.HeartbeatEnvironment {
 	pwd, _ := os.Getwd()
 
-	containerInfo := detectContainerEnvironment()
 	initSystem := "Windows Service Manager"
 
 	return models.HeartbeatEnvironment{
@@ -289,43 +288,13 @@ func GetEnvironmentDetails(lang, term, tz string) models.HeartbeatEnvironment {
 		Lang:             lang,
 		Timezone:         getTimezone(tz),
 		Term:             term,
-		IsContainer:      containerInfo.IsContainer,
-		ContainerRuntime: containerInfo.Runtime,
-		ContainerSignals: containerInfo.Signals,
+		IsContainer:      false,
+		ContainerRuntime: "none",
+		ContainerSignals: []string{},
 		InitSystem:       initSystem,
 	}
 }
 
-func detectContainerEnvironment() ContainerInfo {
-	// Windows container detection via WSL or Docker Desktop
-	info := ContainerInfo{
-		Runtime: "none",
-	}
-
-	// Check for WSL
-	if _, err := os.Stat("/proc/version"); err == nil {
-		data, _ := os.ReadFile("/proc/version")
-		if strings.Contains(strings.ToLower(string(data)), "microsoft") {
-			info.IsContainer = true
-			info.Runtime = "wsl"
-			info.Signals = append(info.Signals, "wsl_proc_version")
-		}
-	}
-
-	// Check for Docker Desktop on Windows
-	if _, err := os.ReadFile("/.dockerenv"); err == nil {
-		info.IsContainer = true
-		if info.Runtime == "none" {
-			info.Runtime = "docker"
-		}
-		info.Signals = append(info.Signals, "dockerenv_file")
-	}
-
-	if info.Signals == nil {
-		info.Signals = []string{}
-	}
-
-	return info
 }
 
 func GetHostname() string {

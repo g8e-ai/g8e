@@ -165,7 +165,7 @@ func TestFingerprintIncludesHostname(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
-	t.Run("fingerprint incorporates hostname for Docker container differentiation", func(t *testing.T) {
+	t.Run("fingerprint incorporates hostname for container differentiation", func(t *testing.T) {
 		t.Parallel()
 		fp, err := GenerateSystemFingerprint(logger)
 		require.NoError(t, err)

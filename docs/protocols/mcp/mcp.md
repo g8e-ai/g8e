@@ -56,7 +56,7 @@ The gateway handles certain tools locally without downstream proxy:
   - `sys_env_vars`: Reads environment variables for configuration debugging
   - `fs_file_checksum`: Computes SHA256/MD5 checksums for file integrity verification
   - `sys_service_status`: Checks systemd service status (operator, gateway, etc.)
-  - `sys_container_status`: Checks Docker/podman container health status
+  - `sys_container_status`: Checks container health status (podman)
   - `fs_disk_usage`: Provides df-style free space reporting for mounted filesystems
   - `sys_time_clock`: Provides NTP sync status and system time verification
   - `proc_tree`: Provides parent-child process relationships and process tree

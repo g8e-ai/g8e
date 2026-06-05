@@ -192,14 +192,14 @@ func TestHeartbeatEnvironment(t *testing.T) {
 			Timezone:         "UTC",
 			Term:             "xterm-256color",
 			IsContainer:      true,
-			ContainerRuntime: "docker",
+			ContainerRuntime: "none",
 			ContainerSignals: []string{"SIGTERM", "SIGINT"},
 			InitSystem:       "systemd",
 		}
 
 		assert.Equal(t, "/home/user", env.PWD)
 		assert.True(t, env.IsContainer)
-		assert.Equal(t, "docker", env.ContainerRuntime)
+		assert.Equal(t, "none", env.ContainerRuntime)
 	})
 }
 

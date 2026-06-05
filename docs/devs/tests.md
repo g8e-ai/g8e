@@ -12,13 +12,12 @@ g8e tests run directly on the host using real infrastructure. The test environme
 
 ## Test Philosophy
 
-- **Hermetic execution** - Tests run on the host via `./g8e test` or in Docker for end-to-end testing. The g8e Node is a unified g8e Node that operates as g8e Gateway (Policy Decision Point) in gateway mode or as g8e Operator (Policy Execution Point) in Operator mode.
+- **Hermetic execution** - Tests run on the host via `./g8e test`. The g8e Node is a unified g8e Node that operates as g8e Gateway (Policy Decision Point) in gateway mode or as g8e Operator (Policy Execution Point) in Operator mode.
 - **Real infrastructure** - Tests use the actual SQLite database, PKI certificates, and pub/sub channels. Platform starts via `./g8e gw start`.
 - **No mocks** - Mocking internal services, database clients, or cross-component communication is prohibited. Integration tests use real wire paths.
 - **mTLS required** - Operator communication requires mTLS. Authentication via `./g8e auth login` issues certificates from `.g8e/pki`.
 - **Reproduce first** - Reproduce bugs with failing tests before fixes.
 - **Contract tests** - Enforce alignment between the Operator and `protocol/` constants/models with typed protobuf assertions.
-- **Docker for E2E** - Docker is encouraged for end-to-end testing of the g8e Node in Operator mode against the local g8e Gateway to validate real deployment scenarios.
 
 ---
 

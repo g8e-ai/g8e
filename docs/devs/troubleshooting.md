@@ -1,8 +1,7 @@
 # Developer Troubleshooting
 
 This page covers common setup failures for contributors working on g8e from a
-fresh checkout. The platform runs host-native; Docker is not required for
-platform development.
+fresh checkout. The platform runs host-native.
 
 ## First checks
 

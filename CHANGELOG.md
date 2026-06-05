@@ -23,6 +23,10 @@ v1.0.9 is a focused bug fix release addressing critical Windows startup issues a
 *   **GitHub Workflows** - Updated GitHub Actions workflows for improved Windows compatibility and build reliability.
 *   **Documentation** - Updated getting started guide with Windows-specific quick start instructions.
 
+### Removed
+
+*   **Docker Infrastructure** - Removed all Docker-related infrastructure including Docker CLI commands, Docker port constants, container status tools, and container runtime detection. The platform is now fully host-native with no container or virtualization dependencies.
+
 ### Fixed
 
 *   **Windows Gateway Startup** - Fixed Windows gateway startup issue by correcting PowerShell command syntax from `&&` to `;` in the quick start documentation and implementation (#135). This resolves startup failures on Windows platforms.
