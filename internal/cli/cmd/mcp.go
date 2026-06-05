@@ -16,11 +16,19 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
+	"strings"
+	"time"
 
+	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/cli/platform"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/spf13/cobra"
 )
@@ -30,6 +38,21 @@ func mcpCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mcp",
 		Short: "MCP protocol operations (stdio transport)",
+		Long:  `Run g8e as an MCP server using stdio transport for local agent integration. Exposes all native tools without requiring gateway mode.`,
+	}
+
+	cmd.AddCommand(
+		mcpStdioCmd(),
+		mcpStdioProxyCmd(),
+	)
+
+	return cmd
+}
+
+func mcpStdioCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "stdio",
+		Short: "Run MCP stdio server with native tools only",
 		Long:  `Run g8e as an MCP server using stdio transport for local agent integration. Exposes all native tools without requiring gateway mode.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runMCPStdio(cmd, args)
@@ -233,4 +256,206 @@ func sendSuccess(encoder *json.Encoder, id interface{}, result interface{}) {
 	if err := encoder.Encode(response); err != nil {
 		slog.Error("Failed to encode success response", "error", err)
 	}
+}
+
+func mcpStdioProxyCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "stdio-proxy",
+		Short: "Proxy stdio MCP requests to the gateway HTTP endpoint",
+		Long:  `Run as an MCP stdio server that proxies all requests to the running gateway's HTTP endpoint. This enables tools that only support stdio transport to use the full gateway governance layer.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runMCPStdioProxy(cmd, args)
+		},
+	}
+
+	return cmd
+}
+
+func runMCPStdioProxy(cmd *cobra.Command, args []string) error {
+	cfg, err := config.Load("")
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	running, _, err := checkGatewayStatus(cfg)
+	if err != nil {
+		return err
+	}
+	if !running {
+		return fmt.Errorf("gateway is not running. Start it with: ./g8e gw start")
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	logger.Info("g8e MCP stdio proxy starting")
+
+	client, err := createMCPClient(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to create MCP client: %w", err)
+	}
+
+	gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps)
+
+	scanner := bufio.NewScanner(os.Stdin)
+	encoder := json.NewEncoder(os.Stdout)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+
+		var req JSONRPCRequest
+		if err := json.Unmarshal([]byte(line), &req); err != nil {
+			logger.Error("Failed to parse JSON-RPC request", "error", err)
+			sendError(encoder, nil, -32700, "parse error")
+			continue
+		}
+
+		logger.Info("Received MCP request", "method", req.Method, "id", req.ID)
+
+		resp, err := proxyToGatewayWithRetry(client, gatewayURL, req, logger)
+		if err != nil {
+			logger.Error("Failed to proxy to gateway", "error", err)
+			sendError(encoder, req.ID, -32603, fmt.Sprintf("gateway proxy error: %v", err))
+			continue
+		}
+
+		if err := encoder.Encode(resp); err != nil {
+			logger.Error("Failed to encode response", "error", err)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		logger.Error("Error reading stdin", "error", err)
+		return err
+	}
+
+	logger.Info("g8e MCP stdio proxy shutting down")
+	return nil
+}
+
+func createMCPClient(cfg *config.Config) (*http.Client, error) {
+	cert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
+	if err != nil {
+		return nil, fmt.Errorf("failed to load client certificate: %w", err)
+	}
+
+	caCert, err := os.ReadFile(cfg.TrustBundlePath())
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CA bundle: %w", err)
+	}
+
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      caCertPool,
+		MinVersion:   tls.VersionTLS12,
+		ServerName:   "g8e.local",
+	}
+
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+
+	return &http.Client{
+		Transport: transport,
+		Timeout:   30 * time.Second,
+	}, nil
+}
+
+func proxyToGateway(client *http.Client, gatewayURL string, req JSONRPCRequest) (JSONRPCResponse, error) {
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return JSONRPCResponse{}, err
+	}
+
+	httpResp, err := client.Post(gatewayURL, "application/json", strings.NewReader(string(reqBody)))
+	if err != nil {
+		return JSONRPCResponse{}, err
+	}
+	defer httpResp.Body.Close()
+
+	var resp JSONRPCResponse
+	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
+		return JSONRPCResponse{}, err
+	}
+
+	return resp, nil
+}
+
+func proxyToGatewayWithRetry(client *http.Client, gatewayURL string, req JSONRPCRequest, logger *slog.Logger) (JSONRPCResponse, error) {
+	resp, err := proxyToGateway(client, gatewayURL, req)
+	if err != nil {
+		return resp, err
+	}
+
+	if isL3ApprovalResponse(resp) {
+		approvalURL := extractApprovalURL(resp)
+		logger.Info("L3 approval required, waiting for user to authorize...", "url", approvalURL)
+
+		if err := platform.OpenBrowser(approvalURL); err != nil {
+			logger.Warn("Failed to auto-open browser", "error", err)
+			fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
+		}
+
+		for i := 0; i < 30; i++ {
+			time.Sleep(10 * time.Second)
+
+			retryResp, err := proxyToGateway(client, gatewayURL, req)
+			if err != nil {
+				continue
+			}
+
+			if !isL3ApprovalResponse(retryResp) {
+				logger.Info("L3 approval completed, proceeding with execution")
+				return retryResp, nil
+			}
+		}
+
+		logger.Warn("L3 approval timeout, returning original response")
+	}
+
+	return resp, nil
+}
+
+func isL3ApprovalResponse(resp JSONRPCResponse) bool {
+	if resp.Result == nil {
+		return false
+	}
+
+	resultBytes, err := json.Marshal(resp.Result)
+	if err != nil {
+		return false
+	}
+
+	resultStr := string(resultBytes)
+	return strings.Contains(resultStr, "Execution paused") &&
+		strings.Contains(resultStr, "approve/")
+}
+
+func extractApprovalURL(resp JSONRPCResponse) string {
+	if resp.Result == nil {
+		return ""
+	}
+
+	resultBytes, err := json.Marshal(resp.Result)
+	if err != nil {
+		return ""
+	}
+
+	resultStr := string(resultBytes)
+
+	start := strings.Index(resultStr, "https://")
+	if start == -1 {
+		return ""
+	}
+
+	end := strings.Index(resultStr[start:], " ")
+	if end == -1 {
+		return resultStr[start:]
+	}
+
+	return resultStr[start : start+end]
 }

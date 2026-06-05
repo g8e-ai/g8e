@@ -11,13 +11,16 @@ Usage:
   g8e [command]
 
 Available Commands:
+  agent       Wrap agentic coding tools with g8e zero-trust gateway
   approve     Approve a suspended L3 transaction with CLI signature
   auth        Authentication and session management
   auditor     Universal agent emulator for a real g8e Gateway/Operator
   chaos       Generate realistic governance events against the local g8e audit stack
+  claude      Execute Claude Code proxied through g8e gateway
   data        Administer the local platform over mTLS
   gw          Manage the g8e Gateway lifecycle
   help        Help about any command
+  mcp         MCP protocol operations (stdio transport)
   security    Security validation checks
   test        Run test suites
 
@@ -594,3 +597,120 @@ Flags:
       --data-dir string audit vault data dir (default: <project-root>/.g8e/test-vault/<timestamp>)
   -h, --help            help for chaos
       --pki-dir string  PKI dir for trusted_signers (default: <cwd>/.g8e/pki)
+```
+
+## agent
+```
+Wrap agentic coding tools with g8e zero-trust gateway. Wrap agentic coding tools (Claude Code, Cursor, VS Code, Cline) with g8e governance.
+
+Usage:
+  g8e agent [tool-name] -- [tool-args]
+
+Available Commands:
+  claude      Execute Claude Code proxied through g8e gateway
+
+Flags:
+  -h, --help   help for agent
+```
+
+### agent claude
+```
+Execute Claude Code proxied through g8e gateway. Execute Claude Code with all tool calls proxied through the g8e zero-trust gateway. Automatically configures MCP integration and handles L3 approvals.
+
+Usage:
+  g8e agent claude -- [claude-args]
+
+Flags:
+  -h, --help   help for claude
+```
+
+## claude
+```
+Execute Claude Code proxied through g8e gateway. This is a convenience alias for `g8e agent claude`.
+
+Usage:
+  g8e claude -- [claude-args]
+
+Flags:
+  -h, --help   help for claude
+```
+
+## mcp
+```
+MCP protocol operations (stdio transport). Run g8e as an MCP server using stdio transport for local agent integration.
+
+Usage:
+  g8e mcp [command]
+
+Available Commands:
+  stdio       Run MCP stdio server with native tools only
+  stdio-proxy Proxy stdio MCP requests to the gateway HTTP endpoint
+
+Flags:
+  -h, --help   help for mcp
+```
+
+### mcp stdio
+```
+Run MCP stdio server with native tools only. Run g8e as an MCP server using stdio transport for local agent integration. Exposes all native tools without requiring gateway mode.
+
+Usage:
+  g8e mcp stdio [flags]
+
+Flags:
+  -h, --help   help for stdio
+```
+
+### mcp stdio-proxy
+```
+Proxy stdio MCP requests to the gateway HTTP endpoint. Run as an MCP stdio server that proxies all requests to the running gateway's HTTP endpoint. This enables tools that only support stdio transport to use the full gateway governance layer.
+
+Usage:
+  g8e mcp stdio-proxy [flags]
+
+Flags:
+  -h, --help   help for stdio-proxy
+```
+
+## Agent Integration
+
+### Quick Start
+
+1. Start the gateway:
+   ```bash
+   ./g8e gw start
+   ```
+
+2. Authenticate your CLI:
+   ```bash
+   ./g8e auth login
+   ```
+
+3. Run Claude Code with g8e governance:
+   ```bash
+   ./g8e claude -- --help
+   ```
+
+### Supported Tools
+
+- Claude Code: `./g8e agent claude` or `./g8e claude`
+- Cursor: `./g8e agent cursor`
+- VS Code: `./g8e agent code`
+- Cline: `./g8e agent cline`
+
+### L3 Approval Flow
+
+When a tool requires L3 approval, g8e will:
+1. Automatically open your browser to the approval URL
+2. Wait for you to authorize via WebAuthn
+3. Retry the tool call automatically
+4. Return the result to the tool
+
+### Manual MCP Configuration
+
+For tools that don't support the agent wrapper, use the MCP config commands:
+
+```bash
+./g8e gw mcp-config       # mTLS with g8e.local
+./g8e gw mcp-config-http  # Plain HTTP (localhost only)
+```

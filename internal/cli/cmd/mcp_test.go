@@ -278,3 +278,104 @@ func TestHandleToolsCall(t *testing.T) {
 		assert.NotNil(t, resp.Result)
 	})
 }
+
+func TestMcpStdioProxyCmd(t *testing.T) {
+	t.Run("stdio-proxy command exists", func(t *testing.T) {
+		cmd := mcpStdioProxyCmd()
+		assert.NotNil(t, cmd)
+		assert.Contains(t, cmd.Use, "stdio-proxy")
+		assert.Contains(t, cmd.Short, "Proxy stdio MCP requests")
+	})
+}
+
+func TestIsL3ApprovalResponse(t *testing.T) {
+	t.Run("detects L3 approval response", func(t *testing.T) {
+		resp := JSONRPCResponse{
+			Result: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": "Execution paused. Please visit https://example.com/approve/123 to authorize",
+					},
+				},
+			},
+		}
+		assert.True(t, isL3ApprovalResponse(resp))
+	})
+
+	t.Run("does not detect non-approval response", func(t *testing.T) {
+		resp := JSONRPCResponse{
+			Result: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": "Command executed successfully",
+					},
+				},
+			},
+		}
+		assert.False(t, isL3ApprovalResponse(resp))
+	})
+
+	t.Run("handles nil result", func(t *testing.T) {
+		resp := JSONRPCResponse{
+			Result: nil,
+		}
+		assert.False(t, isL3ApprovalResponse(resp))
+	})
+}
+
+func TestExtractApprovalURL(t *testing.T) {
+	t.Run("extracts URL from approval response", func(t *testing.T) {
+		resp := JSONRPCResponse{
+			Result: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": "Execution paused. Please visit https://example.com/approve/123 to authorize",
+					},
+				},
+			},
+		}
+		url := extractApprovalURL(resp)
+		assert.Equal(t, "https://example.com/approve/123", url)
+	})
+
+	t.Run("handles URL at end of string", func(t *testing.T) {
+		resp := JSONRPCResponse{
+			Result: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": "Please visit https://example.com/approve/456",
+					},
+				},
+			},
+		}
+		url := extractApprovalURL(resp)
+		assert.Equal(t, "https://example.com/approve/456", url)
+	})
+
+	t.Run("handles nil result", func(t *testing.T) {
+		resp := JSONRPCResponse{
+			Result: nil,
+		}
+		url := extractApprovalURL(resp)
+		assert.Empty(t, url)
+	})
+
+	t.Run("handles response without URL", func(t *testing.T) {
+		resp := JSONRPCResponse{
+			Result: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": "No URL here",
+					},
+				},
+			},
+		}
+		url := extractApprovalURL(resp)
+		assert.Empty(t, url)
+	})
+}
