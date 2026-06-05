@@ -342,10 +342,21 @@ func (pm *ProcessManager) OperatorStatus() (bool, int, error) {
 	}
 
 	if pid == 0 {
-		return false, 0, nil
+		// PID file missing, try to find process via pgrep
+		pid = pm.findOperatorProcess()
+		if pid == 0 {
+			return false, 0, nil
+		}
 	}
 
 	running := pm.isProcessRunning(pid)
+	if !running {
+		// PID file exists but process is dead, try pgrep fallback
+		pid = pm.findOperatorProcess()
+		if pid > 0 {
+			running = pm.isProcessRunning(pid)
+		}
+	}
 	return running, pid, nil
 }
 

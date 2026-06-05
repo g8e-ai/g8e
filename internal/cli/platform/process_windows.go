@@ -84,6 +84,33 @@ func (pm *ProcessManager) findProcessOnPort(port int) int {
 	return 0
 }
 
+// findOperatorProcess finds the PID of the running g8e operator process using tasklist.
+// This is used as a fallback when the PID file is missing or stale.
+func (pm *ProcessManager) findOperatorProcess() int {
+	cmd := exec.Command("tasklist", "/FI", "IMAGENAME eq g8e.exe", "/FO", "CSV")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+
+	lines := strings.Split(string(output), "\n")
+	if len(lines) < 2 {
+		return 0
+	}
+
+	// Skip header line, parse first data line
+	fields := strings.Split(lines[1], ",")
+	if len(fields) >= 2 {
+		pidStr := strings.Trim(fields[1], "\"")
+		var pid int
+		if _, err := fmt.Sscanf(pidStr, "%d", &pid); err == nil {
+			return pid
+		}
+	}
+
+	return 0
+}
+
 // stopProcess stops a process with the given PID on Windows.
 // It uses taskkill to terminate the process gracefully, then forcefully if needed.
 func (pm *ProcessManager) stopProcess(pid int, name string) error {

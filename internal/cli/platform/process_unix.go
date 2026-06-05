@@ -64,6 +64,23 @@ func (pm *ProcessManager) findProcessOnPort(port int) int {
 	return pid
 }
 
+// findOperatorProcess finds the PID of the running g8e operator process using pgrep.
+// This is used as a fallback when the PID file is missing or stale.
+func (pm *ProcessManager) findOperatorProcess() int {
+	cmd := exec.Command("pgrep", "-f", "g8e --doctrine")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+
+	var pid int
+	if _, err := fmt.Sscanf(string(output), "%d", &pid); err != nil {
+		return 0
+	}
+
+	return pid
+}
+
 // stopProcess stops a process with the given PID on Unix systems.
 // It sends SIGTERM first, then SIGKILL if the process doesn't exit within the timeout.
 func (pm *ProcessManager) stopProcess(pid int, name string) error {
