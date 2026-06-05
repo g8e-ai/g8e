@@ -224,13 +224,15 @@ build:
 	if [ "$(HOST_OS)" = "windows" ]; then \
 		NODE_BINARY=$$NODE_BINARY.exe; \
 		ROOT_COPY=g8e.exe; \
-		EXTRA_FLAGS="$(WINDOWS_EXTRA_FLAGS)"; \
 	else \
 		ROOT_COPY=g8e; \
-		EXTRA_FLAGS=""; \
 	fi; \
 	echo "Building $(HOST_OS)/$(HOST_ARCH) -> $$NODE_BINARY..."; \
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build -ldflags "$(LDFLAGS) $$EXTRA_FLAGS -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$NODE_BINARY $(MAIN_PKG); \
+	if [ "$(HOST_OS)" = "windows" ]; then \
+		CGO_ENABLED=$(CGO_ENABLED) GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build -ldflags "$(LDFLAGS) $(WINDOWS_EXTRA_FLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$NODE_BINARY $(MAIN_PKG); \
+	else \
+		CGO_ENABLED=$(CGO_ENABLED) GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build -ldflags "$(LDFLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$NODE_BINARY $(MAIN_PKG); \
+	fi; \
 	sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	if [ -f "./$$ROOT_COPY" ] && pgrep -f "$$ROOT_COPY --doctrine" > /dev/null 2>&1; then \
 		echo "Error: Unable to copy binary - g8e gateway is currently running. Please stop it first with: ./$$ROOT_COPY gw stop"; \
@@ -249,12 +251,13 @@ build-all:
 		NODE_BINARY=$(BIN_DIR)/g8e-$$GOOS-$$GOARCH; \
 		if [ "$$GOOS" = "windows" ]; then \
 			NODE_BINARY=$$NODE_BINARY.exe; \
-			EXTRA_FLAGS="$(WINDOWS_EXTRA_FLAGS)"; \
-		else \
-			EXTRA_FLAGS=""; \
 		fi; \
 		echo "Building $$platform -> $$NODE_BINARY..."; \
-		CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) $${EXTRA_FLAGS} -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
+		if [ "$$GOOS" = "windows" ]; then \
+			CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) $(WINDOWS_EXTRA_FLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
+		else \
+			CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
+		fi; \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Multi-platform build complete. Checksums: $(BIN_DIR)/g8e-*.sha256"
@@ -269,12 +272,13 @@ build-compressed: upx-install
 		NODE_BINARY=$(BIN_DIR)/g8e-$$GOOS-$$GOARCH; \
 		if [ "$$GOOS" = "windows" ]; then \
 			NODE_BINARY=$$NODE_BINARY.exe; \
-			EXTRA_FLAGS="$(WINDOWS_EXTRA_FLAGS)"; \
-		else \
-			EXTRA_FLAGS=""; \
 		fi; \
 		echo "Building $$platform -> $$NODE_BINARY..."; \
-		CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) $${EXTRA_FLAGS} -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
+		if [ "$$GOOS" = "windows" ]; then \
+			CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) $(WINDOWS_EXTRA_FLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
+		else \
+			CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
+		fi; \
 		echo "Compressing $$NODE_BINARY with UPX..."; \
 		$(UPX) --best --lzma $$NODE_BINARY; \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
@@ -316,7 +320,7 @@ build-windows-compressed: upx-install
 	@for arch in $(WINDOWS_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
 		echo "Building windows/$$arch -> $$NODE_BINARY..."; \
-		CGO_ENABLED=$(CGO_ENABLED) GOOS=windows GOARCH=$$arch go build -ldflags "$(LDFLAGS) "$(WINDOWS_EXTRA_FLAGS)" -X main.platform=windows_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
+		CGO_ENABLED=$(CGO_ENABLED) GOOS=windows GOARCH=$$arch go build -ldflags "$(LDFLAGS) $(WINDOWS_EXTRA_FLAGS) -X main.platform=windows_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
 		echo "Compressing $$NODE_BINARY with UPX..."; \
 		$(UPX) --best --lzma $$NODE_BINARY; \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
@@ -354,7 +358,7 @@ build-windows:
 	@for arch in $(WINDOWS_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
 		echo "Building windows/$$arch -> $$NODE_BINARY..."; \
-		CGO_ENABLED=$(CGO_ENABLED) GOOS=windows GOARCH=$$arch go build -ldflags "$(LDFLAGS) "$(WINDOWS_EXTRA_FLAGS)" -X main.platform=windows_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
+		CGO_ENABLED=$(CGO_ENABLED) GOOS=windows GOARCH=$$arch go build -ldflags "$(LDFLAGS) $(WINDOWS_EXTRA_FLAGS) -X main.platform=windows_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Windows build complete. Binaries: $(BIN_DIR)/g8e-windows-*.exe"
