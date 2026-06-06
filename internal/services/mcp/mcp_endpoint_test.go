@@ -14,6 +14,7 @@
 package mcp
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
@@ -22,6 +23,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/responder"
 	"github.com/stretchr/testify/require"
@@ -284,7 +286,10 @@ func TestHandleMCP_GETMethodNotAllowed(t *testing.T) {
 	t.Parallel()
 	g := newEndpointTestGatewayService()
 
-	r := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	r := httptest.NewRequest(http.MethodGet, "/mcp", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	g.HandleMCP(w, r)

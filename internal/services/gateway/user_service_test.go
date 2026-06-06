@@ -144,11 +144,12 @@ func TestUserService_Disable(t *testing.T) {
 	t.Run("Error - user not found", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		db, _ := OpenGatewayDBService(t.TempDir(), t.TempDir(), logger, true)
+		db, err := OpenGatewayDBService(t.TempDir(), t.TempDir(), logger, true)
+		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)
 
-		err := userSvc.Disable("non-existent-id", "test_reason", "actor_user_id", "operator_id")
+		err = userSvc.Disable("non-existent-id", "test_reason", "actor_user_id", "operator_id")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "user not found")
 	})
@@ -165,7 +166,8 @@ func TestUserService_FindBootstrapUser(t *testing.T) {
 	t.Run("Success - finds bootstrap user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		db, _ := OpenGatewayDBService(t.TempDir(), t.TempDir(), logger, true)
+		db, err := OpenGatewayDBService(t.TempDir(), t.TempDir(), logger, true)
+		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)
 
@@ -184,12 +186,13 @@ func TestUserService_FindBootstrapUser(t *testing.T) {
 	t.Run("Success - returns nil when no bootstrap user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		db, _ := OpenGatewayDBService(t.TempDir(), t.TempDir(), logger, true)
+		db, err := OpenGatewayDBService(t.TempDir(), t.TempDir(), logger, true)
+		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)
 
 		// Create a non-bootstrap user
-		_, err := userSvc.CreateUser()
+		_, err = userSvc.CreateUser()
 		require.NoError(t, err)
 
 		// Find bootstrap user should return nil

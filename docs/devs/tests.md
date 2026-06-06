@@ -379,6 +379,10 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 - **Concurrency** - Goroutines require explicit cancellation contexts and clear channel ownership.
 - **Integration tags** - Scenario tests require `-tags=integration` to access test fixtures and Gateway gate infrastructure.
 - **Path constants** - Tests must use `constants.Paths.Infra.*` constants for runtime state paths (e.g., `constants.Paths.Infra.PkiDir` for `.g8e/pki`). Hardcoded path strings like `.g8e/pki` are prohibited in test code.
+- **Regression test markers** - When documenting known issues in regression tests (e.g., Phase0Regression tests), use standardized marker constants instead of hardcoded strings. See `internal/services/gateway/pki_authority_test.go` for examples:
+  - `RegressionMarkerAfterFix` - indicates expected behavior after a fix is implemented
+  - `RegressionMarkerBeforeFix` - indicates current (broken) behavior before a fix
+  - `RegressionMarkerIssue` - identifies a specific issue being tracked (e.g., C1, C2, H2)
 
 ### Makefile Test Targets
 

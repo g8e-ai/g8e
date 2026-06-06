@@ -55,11 +55,13 @@ func TestPKIPhase2_CalculateSerialFromPEM(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
-	db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
-	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+	db, err := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+	require.NoError(t, err)
+	sm, err := NewSecretManager(db.db, t.TempDir(), logger)
+	require.NoError(t, err)
 
 	pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-	err := pki.EnsurePKI(nil)
+	err = pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
 	// Generate a CSR and sign it
@@ -134,11 +136,13 @@ func TestPKIPhase3_CLI_CSR_Mandatory(t *testing.T) {
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
-		db, _ := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
-		sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+		db, err := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		require.NoError(t, err)
+		sm, err := NewSecretManager(db.db, t.TempDir(), logger)
+		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-		err := pki.EnsurePKI(nil)
+		err = pki.EnsurePKI(nil)
 		require.NoError(t, err)
 
 		userSvc := &UserService{}
