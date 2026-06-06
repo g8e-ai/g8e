@@ -28,7 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"github.com/google/uuid"
@@ -38,7 +38,7 @@ import (
 type AuthController struct {
 	cfg        *config.Config
 	logger     *slog.Logger
-	db         *GatewayDBService
+	db         *CanonicalDBService
 	auth       *AuthService
 	passkey    *PasskeyService
 	userSvc    *UserService
@@ -46,10 +46,10 @@ type AuthController struct {
 	pki        *PKIAuthority
 	sessionSvc *SessionsService
 	mcp        *mcp.GatewayService
-	responder  *responder.Responder
+	responder  *response.Writer
 }
 
-func newAuthController(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, sessionSvc *SessionsService, mcp *mcp.GatewayService, responder *responder.Responder) *AuthController {
+func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, sessionSvc *SessionsService, mcp *mcp.GatewayService, responder *response.Writer) *AuthController {
 	return &AuthController{
 		cfg:        cfg,
 		logger:     logger,

@@ -101,7 +101,7 @@ type CommandServiceConfig struct {
 	ResultsService    ResultsPublisher
 	LocalStore        *storage.LocalStoreService
 	AuditVault        *storage.AuditVaultService
-	Ledger            *storage.LedgerService
+	Ledger            *storage.GitLedgerService
 	HistoryHandler    *storage.HistoryHandler
 	Scrubbing         *scrubbing.ScrubbingService
 	L3Notary          governance.L3Notary

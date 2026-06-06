@@ -41,7 +41,7 @@ const (
 // PasskeyService handles L3 proof brokerage for passkey/WebAuthn operations.
 // This moves the L3 authorization from client into g8eo as the sovereign authority.
 type PasskeyService struct {
-	db       *GatewayDBService
+	db       *CanonicalDBService
 	logger   *slog.Logger
 	rpID     string
 	rpName   string
@@ -55,7 +55,7 @@ type PasskeyConfig struct {
 }
 
 // NewPasskeyService creates a new PasskeyService with the given configuration.
-func NewPasskeyService(db *GatewayDBService, logger *slog.Logger, cfg *PasskeyConfig) (*PasskeyService, error) {
+func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *PasskeyConfig) (*PasskeyService, error) {
 	rpName := cfg.RpName
 	if rpName == "" {
 		rpName = "g8e"

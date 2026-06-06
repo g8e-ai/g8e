@@ -11,6 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package gateway provides services for gateway mode (operator platform mode).
+//
+// This package contains mode-specific services that are only used in gateway mode,
+// including GatewayModeService (the top-level orchestrator) and CanonicalDBService
+// (shared with outbound mode for state root calculation).
+//
+// For more information on service modes, see docs/architecture/service_modes.md.
 package gateway
 
 import (
@@ -53,12 +60,15 @@ func GatewaySchema() string {
 	return gatewaySchema
 }
 
-// GatewayDBService provides the unified SQLite persistence layer for gateway mode.
+// CanonicalDBService provides the unified SQLite persistence layer for gateway mode.
 // Three subsystems:
 //   - Document store: collection/id based CRUD (replaces client+agent separate SQLite DBs)
 //   - KV store with TTL: key/value with optional expiration
 //   - SSE event buffer: per-session event ring buffer
-type GatewayDBService struct {
+//
+// This service is used in both gateway mode (full database service) and outbound mode
+// (state root calculation only).
+type CanonicalDBService struct {
 	db         *sqliteutil.DB
 	logger     *slog.Logger
 	AuditVault *storage.AuditVaultService
@@ -75,9 +85,9 @@ type GatewayDBService struct {
 	cachedStateVersion int64
 }
 
-// OpenGatewayDBService opens (or creates) the unified SQLite database.
+// OpenCanonicalDBService opens (or creates) the unified SQLite database.
 // testMode enables the in-memory keystore backend for unit tests.
-func OpenGatewayDBService(dataDir string, secretsDir string, logger *slog.Logger, testMode bool) (*GatewayDBService, error) {
+func OpenCanonicalDBService(dataDir string, secretsDir string, logger *slog.Logger, testMode bool) (*CanonicalDBService, error) {
 	dbPath := filepath.Join(dataDir, "g8e.db")
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
@@ -97,7 +107,7 @@ func OpenGatewayDBService(dataDir string, secretsDir string, logger *slog.Logger
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	svc := &GatewayDBService{
+	svc := &CanonicalDBService{
 		db:         db,
 		logger:     logger,
 		AuditVault: auditVault,
@@ -132,7 +142,7 @@ func OpenGatewayDBService(dataDir string, secretsDir string, logger *slog.Logger
 	return svc, nil
 }
 
-func (s *GatewayDBService) initTestSchema(secretsDir string) error {
+func (s *CanonicalDBService) initTestSchema(secretsDir string) error {
 	_, err := s.db.ExecWithRetry(gatewaySchema)
 	if err != nil {
 		return err
@@ -174,7 +184,7 @@ func (s *GatewayDBService) initTestSchema(secretsDir string) error {
 	return nil
 }
 
-func (s *GatewayDBService) initStateRoot() error {
+func (s *CanonicalDBService) initStateRoot() error {
 	var count int
 	err := s.db.QueryRowWithRetry("SELECT COUNT(*) FROM state_root").Scan(&count)
 	if err != nil {
@@ -197,7 +207,7 @@ func (s *GatewayDBService) initStateRoot() error {
 
 // GetCurrentStateRoot returns the current state merkle root.
 // Uses caching based on state_version to avoid full table scans when state hasn't changed.
-func (s *GatewayDBService) GetCurrentStateRoot() (string, error) {
+func (s *CanonicalDBService) GetCurrentStateRoot() (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -240,7 +250,7 @@ func (s *GatewayDBService) GetCurrentStateRoot() (string, error) {
 
 // calculateStateRootUncached performs a full state root calculation without caching.
 // Used as a fallback when state_version tracking is unavailable.
-func (s *GatewayDBService) calculateStateRootUncached() (string, error) {
+func (s *CanonicalDBService) calculateStateRootUncached() (string, error) {
 	root, err := s.calculateStateRoot()
 	if err != nil {
 		return "", err
@@ -258,7 +268,7 @@ func (s *GatewayDBService) calculateStateRootUncached() (string, error) {
 	return root, nil
 }
 
-func (s *GatewayDBService) calculateStateRoot() (string, error) {
+func (s *CanonicalDBService) calculateStateRoot() (string, error) {
 	h := sha256.New()
 
 	// 1. Documents (Authoritative)
@@ -314,7 +324,7 @@ func (s *GatewayDBService) calculateStateRoot() (string, error) {
 
 // hashTableToStream executes a query and streams each row to the hash writer.
 // This avoids materializing all rows in memory, which is critical for large databases.
-func (s *GatewayDBService) hashTableToStream(h hash.Hash, query string, args []interface{}, scan func(*sql.Rows) error) error {
+func (s *CanonicalDBService) hashTableToStream(h hash.Hash, query string, args []interface{}, scan func(*sql.Rows) error) error {
 	rows, err := s.db.QueryWithRetry(query, args...)
 	if err != nil {
 		return err
@@ -362,7 +372,7 @@ func writeRowToHash(h hash.Hash, table string, values ...interface{}) error {
 // ReserveNonce atomically reserves a nonce for early replay protection.
 // Returns true if the nonce was already reserved/used (replay detected).
 // If not used, it reserves the nonce and returns false.
-func (s *GatewayDBService) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
+func (s *CanonicalDBService) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
 	// 1. Check if exists
 	var existing string
 	err := s.db.QueryRowWithRetry("SELECT nonce FROM nonces WHERE nonce = ?", nonce).Scan(&existing)
@@ -388,7 +398,7 @@ func (s *GatewayDBService) ReserveNonce(nonce string, expiresAt time.Time) (bool
 }
 
 // FinalizeNonce marks a reserved nonce as fully consumed.
-func (s *GatewayDBService) FinalizeNonce(nonce string) error {
+func (s *CanonicalDBService) FinalizeNonce(nonce string) error {
 	_, err := s.db.ExecWithRetry("UPDATE nonces SET status = 'used' WHERE nonce = ? AND status = 'reserved'", nonce)
 	if err != nil {
 		return fmt.Errorf("failed to finalize nonce: %w", err)
@@ -397,7 +407,7 @@ func (s *GatewayDBService) FinalizeNonce(nonce string) error {
 }
 
 // ReleaseNonce removes a reservation for a failed transaction.
-func (s *GatewayDBService) ReleaseNonce(nonce string) error {
+func (s *CanonicalDBService) ReleaseNonce(nonce string) error {
 	_, err := s.db.ExecWithRetry("DELETE FROM nonces WHERE nonce = ? AND status = 'reserved'", nonce)
 	if err != nil {
 		return fmt.Errorf("failed to release nonce: %w", err)
@@ -406,7 +416,7 @@ func (s *GatewayDBService) ReleaseNonce(nonce string) error {
 }
 
 // RunMaintenance periodically removes expired entries.
-func (s *GatewayDBService) RunMaintenance(ctx context.Context) {
+func (s *CanonicalDBService) RunMaintenance(ctx context.Context) {
 	defer s.wg.Done()
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -429,7 +439,7 @@ func (s *GatewayDBService) RunMaintenance(ctx context.Context) {
 	}
 }
 
-func (s *GatewayDBService) initSchema(secretsDir string) error {
+func (s *CanonicalDBService) initSchema(secretsDir string) error {
 	_, err := s.db.ExecWithRetry(gatewaySchema)
 	if err != nil {
 		return err
@@ -464,7 +474,7 @@ func (s *GatewayDBService) initSchema(secretsDir string) error {
 
 // migratePlaintextServiceKeys moves existing plaintext service certificate private keys
 // to the keystore and deletes the plaintext files. This is a one-time migration.
-func (s *GatewayDBService) migratePlaintextServiceKeys(secretsDir string, sm *SecretManager) error {
+func (s *CanonicalDBService) migratePlaintextServiceKeys(secretsDir string, sm *SecretManager) error {
 	// Check if migration marker exists in keystore
 	_, err := sm.keystore.DecryptSecret("migration_plaintext_keys_migrated")
 	if err == nil {
@@ -532,7 +542,7 @@ func (s *GatewayDBService) migratePlaintextServiceKeys(secretsDir string, sm *Se
 
 // migrateStateVersion initializes the state_version table for existing databases.
 // This is a one-time migration for databases created before the change tracking feature.
-func (s *GatewayDBService) migrateStateVersion() error {
+func (s *CanonicalDBService) migrateStateVersion() error {
 	// Check if state_version table exists and has a row
 	var count int
 	err := s.db.QueryRowWithRetry("SELECT COUNT(*) FROM state_version").Scan(&count)
@@ -554,12 +564,12 @@ func (s *GatewayDBService) migrateStateVersion() error {
 }
 
 // GetDB returns the underlying SQLite database connection.
-func (s *GatewayDBService) GetDB() *sqliteutil.DB {
+func (s *CanonicalDBService) GetDB() *sqliteutil.DB {
 	return s.db
 }
 
 // Close closes the database connection and waits for background workers.
-func (s *GatewayDBService) Close() error {
+func (s *CanonicalDBService) Close() error {
 	s.mu.Lock()
 	if !s.running {
 		s.mu.Unlock()
@@ -580,7 +590,7 @@ func (s *GatewayDBService) Close() error {
 	case <-done:
 		// All workers finished cleanly
 	case <-time.After(30 * time.Second):
-		s.logger.Warn("GatewayDBService shutdown timeout, forcing close")
+		s.logger.Warn("CanonicalDBService shutdown timeout, forcing close")
 	}
 
 	if err := s.db.Close(); err != nil {
@@ -591,7 +601,7 @@ func (s *GatewayDBService) Close() error {
 }
 
 // Wait blocks until all background workers have finished.
-func (s *GatewayDBService) Wait() {
+func (s *CanonicalDBService) Wait() {
 	s.wg.Wait()
 }
 
@@ -601,7 +611,7 @@ func (s *GatewayDBService) Wait() {
 
 // DocGet retrieves a document by collection and id.
 // Returns a typed Document with native time.Time timestamps, or nil if not found.
-func (s *GatewayDBService) DocGet(collection, id string) (*models.Document, error) {
+func (s *CanonicalDBService) DocGet(collection, id string) (*models.Document, error) {
 	var dataJSON string
 	var createdAtStr, updatedAtStr string
 	err := s.db.QueryRowWithRetry(
@@ -619,7 +629,7 @@ func (s *GatewayDBService) DocGet(collection, id string) (*models.Document, erro
 
 // DocCreate creates a document only if it does not already exist. data must be valid JSON.
 // Timestamps are managed by the service - created_at is set once on insert.
-func (s *GatewayDBService) DocCreate(collection, id string, data json.RawMessage) error {
+func (s *CanonicalDBService) DocCreate(collection, id string, data json.RawMessage) error {
 	var userDoc map[string]json.RawMessage
 	if err := json.Unmarshal(data, &userDoc); err != nil {
 		return fmt.Errorf("failed to unmarshal document: %w", err)
@@ -653,7 +663,7 @@ func (s *GatewayDBService) DocCreate(collection, id string, data json.RawMessage
 // DocSet creates or replaces a document. data must be valid JSON.
 // Timestamps are managed by the service - created_at is set once on insert and
 // never overwritten. updated_at is refreshed on every upsert.
-func (s *GatewayDBService) DocSet(collection, id string, data json.RawMessage) error {
+func (s *CanonicalDBService) DocSet(collection, id string, data json.RawMessage) error {
 	return s.DocSetWithTimestamps(collection, id, data, time.Time{}, time.Time{})
 }
 
@@ -661,7 +671,7 @@ func (s *GatewayDBService) DocSet(collection, id string, data json.RawMessage) e
 // This is a test-only hook for setting specific created_at/updated_at values.
 // For production use, call DocSet instead which auto-manages timestamps.
 // Zero-valued timestamps are replaced with time.Now().UTC().
-func (s *GatewayDBService) DocSetWithTimestamps(collection, id string, data json.RawMessage, createdAt, updatedAt time.Time) error {
+func (s *CanonicalDBService) DocSetWithTimestamps(collection, id string, data json.RawMessage, createdAt, updatedAt time.Time) error {
 	var userDoc map[string]json.RawMessage
 	if err := json.Unmarshal(data, &userDoc); err != nil {
 		return fmt.Errorf("failed to unmarshal document: %w", err)
@@ -702,7 +712,7 @@ func (s *GatewayDBService) DocSetWithTimestamps(collection, id string, data json
 
 // DocUpdate merges fields into an existing document. fields must be valid JSON.
 // Returns the updated Document with native time.Time timestamps.
-func (s *GatewayDBService) DocUpdate(collection, id string, fields json.RawMessage) (*models.Document, error) {
+func (s *CanonicalDBService) DocUpdate(collection, id string, fields json.RawMessage) (*models.Document, error) {
 	var existingJSON string
 	var createdAtStr, updatedAtStr string
 	err := s.db.QueryRowWithRetry(
@@ -757,7 +767,7 @@ func (s *GatewayDBService) DocUpdate(collection, id string, fields json.RawMessa
 }
 
 // DocDelete removes a document. Returns (true, nil) if deleted, (false, nil) if not found.
-func (s *GatewayDBService) DocDelete(collection, id string) (bool, error) {
+func (s *CanonicalDBService) DocDelete(collection, id string) (bool, error) {
 	result, err := s.db.ExecWithRetry(
 		"DELETE FROM documents WHERE collection = ? AND id = ?",
 		collection, id,
@@ -774,7 +784,7 @@ func (s *GatewayDBService) DocDelete(collection, id string) (bool, error) {
 
 // DocDeleteNamespace removes all documents in a collection.
 // Returns the count of deleted documents.
-func (s *GatewayDBService) DocDeleteNamespace(collection string) (int64, error) {
+func (s *CanonicalDBService) DocDeleteNamespace(collection string) (int64, error) {
 	result, err := s.db.ExecWithRetry("DELETE FROM documents WHERE collection = ?", collection)
 	if err != nil {
 		return 0, err
@@ -784,7 +794,7 @@ func (s *GatewayDBService) DocDeleteNamespace(collection string) (int64, error) 
 
 // GetField extracts a single field value from a document using dot notation.
 // This is used for JIT field resolution with governed access controls.
-func (s *GatewayDBService) GetField(collection, id, fieldPath string) (interface{}, error) {
+func (s *CanonicalDBService) GetField(collection, id, fieldPath string) (interface{}, error) {
 	var dataJSON string
 	err := s.db.QueryRowWithRetry(
 		"SELECT data FROM documents WHERE collection = ? AND id = ?",
@@ -822,7 +832,7 @@ func (s *GatewayDBService) GetField(collection, id, fieldPath string) (interface
 
 // DocQuery returns documents matching field conditions.
 // Supported ops: ==, !=, <, >, <=, >=. orderBy is "field" or "field DESC". limit 0 means no limit.
-func (s *GatewayDBService) DocQuery(collection string, filters []models.DocFilter, orderBy string, limit int) ([]*models.Document, error) {
+func (s *CanonicalDBService) DocQuery(collection string, filters []models.DocFilter, orderBy string, limit int) ([]*models.Document, error) {
 	var query strings.Builder
 	query.WriteString("SELECT id, data, created_at, updated_at FROM documents WHERE collection = ?")
 	args := []interface{}{collection}
@@ -932,7 +942,7 @@ func (s *GatewayDBService) DocQuery(collection string, filters []models.DocFilte
 // This is the single point where TEXT timestamps are converted to time.Time.
 // GetTrustedSigner retrieves an L2 signer public key from the database.
 // Implements governance.SignerStore.
-func (s *GatewayDBService) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
+func (s *CanonicalDBService) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
 	doc, err := s.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get trusted signer %s: %w", keyID, err)
@@ -968,7 +978,7 @@ func (s *GatewayDBService) GetTrustedSigner(keyID string) (ed25519.PublicKey, er
 }
 
 // AddTrustedSigner adds or updates a trusted L2 signer in the database.
-func (s *GatewayDBService) AddTrustedSigner(signer models.TrustedSigner) error {
+func (s *CanonicalDBService) AddTrustedSigner(signer models.TrustedSigner) error {
 	if signer.ID == "" {
 		return fmt.Errorf("signer ID is required")
 	}
@@ -989,7 +999,7 @@ func (s *GatewayDBService) AddTrustedSigner(signer models.TrustedSigner) error {
 }
 
 // ListTrustedSigners returns all trusted L2 signers in the database.
-func (s *GatewayDBService) ListTrustedSigners() ([]models.TrustedSigner, error) {
+func (s *CanonicalDBService) ListTrustedSigners() ([]models.TrustedSigner, error) {
 	docs, err := s.DocQuery(marshaler.CollectionName(constants.CollectionTrustedSigners), nil, "id", 0)
 	if err != nil {
 		return nil, err
@@ -1013,12 +1023,12 @@ func (s *GatewayDBService) ListTrustedSigners() ([]models.TrustedSigner, error) 
 }
 
 // DeleteTrustedSigner removes a trusted L2 signer from the database.
-func (s *GatewayDBService) DeleteTrustedSigner(keyID string) (bool, error) {
+func (s *CanonicalDBService) DeleteTrustedSigner(keyID string) (bool, error) {
 	return s.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
 }
 
 // HasTrustedSigners returns true if at least one trusted L2 signer is provisioned in the database.
-func (s *GatewayDBService) HasTrustedSigners() (bool, error) {
+func (s *CanonicalDBService) HasTrustedSigners() (bool, error) {
 	filters := []models.DocFilter{
 		{Field: "enabled", Op: "==", Value: json.RawMessage("true")},
 	}
@@ -1031,7 +1041,7 @@ func (s *GatewayDBService) HasTrustedSigners() (bool, error) {
 
 // GetAppPolicy retrieves an AppPolicy by app_id from the database.
 // Implements governance.AppPolicyStore.
-func (s *GatewayDBService) GetAppPolicy(appID string) (*models.AppPolicy, error) {
+func (s *CanonicalDBService) GetAppPolicy(appID string) (*models.AppPolicy, error) {
 	doc, err := s.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get app policy %s: %w", appID, err)
@@ -1085,7 +1095,7 @@ func scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr string) (
 // =============================================================================
 
 // KVGet retrieves a value by key. Returns ("", false) if not found or expired.
-func (s *GatewayDBService) KVGet(key string) (string, bool) {
+func (s *CanonicalDBService) KVGet(key string) (string, bool) {
 	// Use a single query that filters out expired keys, avoiding the need
 	// for a separate lazy-delete goroutine (which risked deadlocks).
 	// Expired entries are cleaned up by RunTTLCleanup instead.
@@ -1101,7 +1111,7 @@ func (s *GatewayDBService) KVGet(key string) (string, bool) {
 }
 
 // KVSet stores a key/value pair. ttlSeconds <= 0 means no expiration.
-func (s *GatewayDBService) KVSet(key, value string, ttlSeconds int) error {
+func (s *CanonicalDBService) KVSet(key, value string, ttlSeconds int) error {
 	now := sqliteutil.NowTimestamp()
 	var expiresAt *string
 	if ttlSeconds > 0 {
@@ -1119,13 +1129,13 @@ func (s *GatewayDBService) KVSet(key, value string, ttlSeconds int) error {
 }
 
 // KVDelete removes a key.
-func (s *GatewayDBService) KVDelete(key string) error {
+func (s *CanonicalDBService) KVDelete(key string) error {
 	_, err := s.db.ExecWithRetry("DELETE FROM kv_store WHERE key = ?", key)
 	return err
 }
 
 // KVDeletePattern removes all keys matching a glob pattern (uses SQL GLOB).
-func (s *GatewayDBService) KVDeletePattern(pattern string) (int64, error) {
+func (s *CanonicalDBService) KVDeletePattern(pattern string) (int64, error) {
 	result, err := s.db.ExecWithRetry("DELETE FROM kv_store WHERE key GLOB ?", pattern)
 	if err != nil {
 		return 0, err
@@ -1134,7 +1144,7 @@ func (s *GatewayDBService) KVDeletePattern(pattern string) (int64, error) {
 }
 
 // KVKeys returns all keys matching a glob pattern.
-func (s *GatewayDBService) KVKeys(pattern string) ([]string, error) {
+func (s *CanonicalDBService) KVKeys(pattern string) ([]string, error) {
 	keys, err := sqliteutil.MaterializeRows(s.db,
 		"SELECT key FROM kv_store WHERE key GLOB ? AND (expires_at IS NULL OR expires_at > ?)",
 		[]interface{}{pattern, sqliteutil.NowTimestamp()},
@@ -1154,7 +1164,7 @@ func (s *GatewayDBService) KVKeys(pattern string) ([]string, error) {
 // KVScan returns keys matching a glob pattern using cursor-based pagination.
 // cursor is a row offset (0 = start). count is the page size (default 100).
 // Returns (nextCursor, keys, error). nextCursor == 0 means scan is complete.
-func (s *GatewayDBService) KVScan(pattern string, cursor, count int) (int, []string, error) {
+func (s *CanonicalDBService) KVScan(pattern string, cursor, count int) (int, []string, error) {
 	if count <= 0 {
 		count = 100
 	}
@@ -1180,13 +1190,13 @@ func (s *GatewayDBService) KVScan(pattern string, cursor, count int) (int, []str
 }
 
 // KVExists checks if a key exists and is not expired.
-func (s *GatewayDBService) KVExists(key string) bool {
+func (s *CanonicalDBService) KVExists(key string) bool {
 	_, found := s.KVGet(key)
 	return found
 }
 
 // KVTTL returns the remaining TTL in seconds for a key. -1 if no expiry, -2 if not found.
-func (s *GatewayDBService) KVTTL(key string) int {
+func (s *CanonicalDBService) KVTTL(key string) int {
 	var expiresAt sql.NullString
 	err := s.db.QueryRowWithRetry(
 		"SELECT expires_at FROM kv_store WHERE key = ?", key,
@@ -1209,7 +1219,7 @@ func (s *GatewayDBService) KVTTL(key string) int {
 }
 
 // KVExpire sets a TTL on an existing key. Returns false if key not found.
-func (s *GatewayDBService) KVExpire(key string, ttlSeconds int) bool {
+func (s *CanonicalDBService) KVExpire(key string, ttlSeconds int) bool {
 	exp := sqliteutil.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
 	result, err := s.db.ExecWithRetry(
 		"UPDATE kv_store SET expires_at = ? WHERE key = ?", exp, key,
@@ -1258,7 +1268,7 @@ func (r SSERoute) validate() error {
 // SSEEventsAppend inserts a row into the sse_events table. The route MUST set
 // exactly one of WebSessionID, CLISessionID, UserID. The producer_id is the
 // app identity (SPIFFE ID) that produced the event for attribution.
-func (s *GatewayDBService) SSEEventsAppend(route SSERoute, eventType, payload, producerID string) error {
+func (s *CanonicalDBService) SSEEventsAppend(route SSERoute, eventType, payload, producerID string) error {
 	if err := route.validate(); err != nil {
 		return err
 	}
@@ -1280,7 +1290,7 @@ func nullIfEmpty(s string) interface{} {
 }
 
 // SSEEventsWipe deletes all rows from the sse_events table. Returns the number of rows deleted.
-func (s *GatewayDBService) SSEEventsWipe() (int64, error) {
+func (s *CanonicalDBService) SSEEventsWipe() (int64, error) {
 	result, err := s.db.ExecWithRetry("DELETE FROM sse_events")
 	if err != nil {
 		return 0, err
@@ -1289,7 +1299,7 @@ func (s *GatewayDBService) SSEEventsWipe() (int64, error) {
 }
 
 // SSEEventsCount returns the total number of rows in the sse_events table.
-func (s *GatewayDBService) SSEEventsCount() (int64, error) {
+func (s *CanonicalDBService) SSEEventsCount() (int64, error) {
 	var count int64
 	err := s.db.QueryRowWithRetry("SELECT COUNT(*) FROM sse_events").Scan(&count)
 	return count, err
@@ -1298,7 +1308,7 @@ func (s *GatewayDBService) SSEEventsCount() (int64, error) {
 // SSEEventsListSince returns up to `limit` events with id > sinceID, ordered by
 // id ascending. The route MUST set exactly one of WebSessionID, CLISessionID,
 // UserID. SSEEventsListAllSince is the admin-only "all routes" variant.
-func (s *GatewayDBService) SSEEventsListSince(route SSERoute, sinceID int64, limit int) ([]models.SSEEventRow, error) {
+func (s *CanonicalDBService) SSEEventsListSince(route SSERoute, sinceID int64, limit int) ([]models.SSEEventRow, error) {
 	if err := route.validate(); err != nil {
 		return nil, err
 	}
@@ -1335,7 +1345,7 @@ func (s *GatewayDBService) SSEEventsListSince(route SSERoute, sinceID int64, lim
 // SSEEventsListAllSince is an admin/debug helper that returns events across
 // every routing target with id > sinceID. Production paths MUST use
 // SSEEventsListSince with a typed route.
-func (s *GatewayDBService) SSEEventsListAllSince(sinceID int64, limit int) ([]models.SSEEventRow, error) {
+func (s *CanonicalDBService) SSEEventsListAllSince(sinceID int64, limit int) ([]models.SSEEventRow, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
@@ -1356,7 +1366,7 @@ func (s *GatewayDBService) SSEEventsListAllSince(sinceID int64, limit int) ([]mo
 }
 
 // RunTTLCleanup periodically removes expired KV entries and expired blobs.
-func (s *GatewayDBService) RunTTLCleanup(ctx context.Context) {
+func (s *CanonicalDBService) RunTTLCleanup(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -1388,7 +1398,7 @@ type BlobRecord struct {
 // BlobPut stores raw bytes under namespace/id. ttlSeconds == 0 means no expiration.
 // Negative ttlSeconds means the blob is immediately expired (will never be returned by BlobGet).
 // An existing blob at the same namespace/id is replaced.
-func (s *GatewayDBService) BlobPut(namespace, id string, data []byte, contentType string, ttlSeconds int) error {
+func (s *CanonicalDBService) BlobPut(namespace, id string, data []byte, contentType string, ttlSeconds int) error {
 	now := sqliteutil.NowTimestamp()
 	var expiresAt *string
 	if ttlSeconds > 0 {
@@ -1414,7 +1424,7 @@ func (s *GatewayDBService) BlobPut(namespace, id string, data []byte, contentTyp
 
 // BlobGet retrieves the raw bytes and content type for a blob.
 // Returns (nil, "", false) if not found or expired.
-func (s *GatewayDBService) BlobGet(namespace, id string) ([]byte, string, bool) {
+func (s *CanonicalDBService) BlobGet(namespace, id string) ([]byte, string, bool) {
 	var data []byte
 	var contentType string
 	err := s.db.QueryRowWithRetry(
@@ -1429,7 +1439,7 @@ func (s *GatewayDBService) BlobGet(namespace, id string) ([]byte, string, bool) 
 
 // BlobMeta retrieves metadata for a blob without loading the data.
 // Returns (nil, false) if not found or expired.
-func (s *GatewayDBService) BlobMeta(namespace, id string) (*BlobRecord, bool) {
+func (s *CanonicalDBService) BlobMeta(namespace, id string) (*BlobRecord, bool) {
 	var rec BlobRecord
 	var createdAtStr string
 	err := s.db.QueryRowWithRetry(
@@ -1448,7 +1458,7 @@ func (s *GatewayDBService) BlobMeta(namespace, id string) (*BlobRecord, bool) {
 }
 
 // BlobDelete removes a single blob. Returns (true, nil) if deleted, (false, nil) if not found.
-func (s *GatewayDBService) BlobDelete(namespace, id string) (bool, error) {
+func (s *CanonicalDBService) BlobDelete(namespace, id string) (bool, error) {
 	result, err := s.db.ExecWithRetry(
 		"DELETE FROM blobs WHERE namespace = ? AND id = ?",
 		namespace, id,
@@ -1465,7 +1475,7 @@ func (s *GatewayDBService) BlobDelete(namespace, id string) (bool, error) {
 
 // BlobDeleteNamespace removes all blobs under a namespace.
 // Returns the count of deleted blobs.
-func (s *GatewayDBService) BlobDeleteNamespace(namespace string) (int64, error) {
+func (s *CanonicalDBService) BlobDeleteNamespace(namespace string) (int64, error) {
 	result, err := s.db.ExecWithRetry("DELETE FROM blobs WHERE namespace = ?", namespace)
 	if err != nil {
 		return 0, err
@@ -1478,7 +1488,7 @@ func (s *GatewayDBService) BlobDeleteNamespace(namespace string) (int64, error) 
 // =============================================================================
 
 // StoreSuspendedTransaction stores a transaction awaiting L3 approval.
-func (s *GatewayDBService) StoreSuspendedTransaction(tx *models.SuspendedTransaction) error {
+func (s *CanonicalDBService) StoreSuspendedTransaction(tx *models.SuspendedTransaction) error {
 	now := sqliteutil.FormatTimestamp(tx.CreatedAt)
 	expires := sqliteutil.FormatTimestamp(tx.ExpiresAt)
 
@@ -1513,7 +1523,7 @@ func (s *GatewayDBService) StoreSuspendedTransaction(tx *models.SuspendedTransac
 
 // GetSuspendedTransaction retrieves a suspended transaction by hash.
 // Returns (nil, false) if not found or expired.
-func (s *GatewayDBService) GetSuspendedTransaction(txHash string) (*models.SuspendedTransaction, bool) {
+func (s *CanonicalDBService) GetSuspendedTransaction(txHash string) (*models.SuspendedTransaction, bool) {
 	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID, approvedBy, approvalSignature, expectedCertFingerprint string
 	var approved int
 	var approvedAtStr sql.NullString
@@ -1567,7 +1577,7 @@ func (s *GatewayDBService) GetSuspendedTransaction(txHash string) (*models.Suspe
 
 // ListSuspendedTransactions retrieves all non-expired suspended transactions.
 // Optionally filters by user_id if provided.
-func (s *GatewayDBService) ListSuspendedTransactions(userID string) ([]*models.SuspendedTransaction, error) {
+func (s *CanonicalDBService) ListSuspendedTransactions(userID string) ([]*models.SuspendedTransaction, error) {
 	var query string
 	var args []interface{}
 
@@ -1634,7 +1644,7 @@ func (s *GatewayDBService) ListSuspendedTransactions(userID string) ([]*models.S
 
 // ApproveSuspendedTransaction marks a suspended transaction as approved with cryptographic signature.
 // This is called by the CLI approval command when a human approves a transaction.
-func (s *GatewayDBService) ApproveSuspendedTransaction(txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error {
+func (s *CanonicalDBService) ApproveSuspendedTransaction(txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error {
 	now := time.Now().UTC()
 	nowStr := sqliteutil.FormatTimestamp(now)
 
@@ -1661,14 +1671,14 @@ func (s *GatewayDBService) ApproveSuspendedTransaction(txHash, approvedBy, appro
 }
 
 // DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.
-func (s *GatewayDBService) DeleteSuspendedTransaction(txHash string) error {
+func (s *CanonicalDBService) DeleteSuspendedTransaction(txHash string) error {
 	_, err := s.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE transaction_hash = ?", txHash)
 	return err
 }
 
 // CleanupExpiredSuspendedTransactions removes expired suspended transactions.
 // Returns the count of deleted transactions.
-func (s *GatewayDBService) CleanupExpiredSuspendedTransactions() (int64, error) {
+func (s *CanonicalDBService) CleanupExpiredSuspendedTransactions() (int64, error) {
 	result, err := s.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE expires_at < ?", sqliteutil.NowTimestamp())
 	if err != nil {
 		return 0, err

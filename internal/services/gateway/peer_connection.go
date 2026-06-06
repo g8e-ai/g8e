@@ -40,7 +40,7 @@ import (
 type PeerConnectionManager struct {
 	cfg    *config.Config
 	logger *slog.Logger
-	db     *GatewayDBService
+	db     *CanonicalDBService
 	pki    *PKIAuthority
 
 	seedURL      string
@@ -60,7 +60,7 @@ type PeerConnectionManager struct {
 
 // NewPeerConnectionManager creates a new peer connection manager.
 // If seedURL is empty, the manager operates in standalone mode (no federation).
-func NewPeerConnectionManager(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, pki *PKIAuthority) *PeerConnectionManager {
+func NewPeerConnectionManager(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, pki *PKIAuthority) *PeerConnectionManager {
 	return &PeerConnectionManager{
 		cfg:    cfg,
 		logger: logger,

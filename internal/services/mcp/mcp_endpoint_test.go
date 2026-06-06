@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,7 +46,7 @@ func newEndpointTestGatewayService(opts ...endpointTestOption) *GatewayService {
 	logger := slog.Default()
 	g := &GatewayService{
 		logger:          logger,
-		responder:       responder.New(logger),
+		responder:       response.NewWriter(logger),
 		maxPayloadBytes: 10 * 1024 * 1024,
 	}
 

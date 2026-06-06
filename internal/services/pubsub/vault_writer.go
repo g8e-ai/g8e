@@ -38,6 +38,7 @@ type VaultWriter struct {
 
 // NewVaultWriter creates a VaultWriter. All service dependencies are optional - a nil
 // service is treated as disabled, matching the IsEnabled() pattern used elsewhere.
+// Note: LocalStoreService now requires a vault for encryption at rest.
 func NewVaultWriter(
 	cfg *config.Config,
 	logger *slog.Logger,
@@ -144,7 +145,7 @@ func (vw *VaultWriter) WriteFileDiff(p fileDiffWriteParams) {
 
 // StoreFileDiffFromLedger fetches the two most recent ledger commits for filePath, computes
 // the diff, and writes it to both vaults. Called after a successful file mutation audit event.
-func (vw *VaultWriter) StoreFileDiffFromLedger(filePath, operation, eventID, operatorSessionID, caseID string, ledger *storage.LedgerService) {
+func (vw *VaultWriter) StoreFileDiffFromLedger(filePath, operation, eventID, operatorSessionID, caseID string, ledger *storage.GitLedgerService) {
 	if ledger == nil {
 		return
 	}

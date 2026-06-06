@@ -31,7 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 )
 
@@ -39,14 +39,14 @@ import (
 type PKIController struct {
 	cfg           *config.Config
 	logger        *slog.Logger
-	db            *GatewayDBService
+	db            *CanonicalDBService
 	pki           *PKIAuthority
 	appEnrollment *AppEnrollmentService
 	registration  *RegistrationService
-	responder     *responder.Responder
+	responder     *response.Writer
 }
 
-func newPKIController(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, pki *PKIAuthority, appEnrollment *AppEnrollmentService, registration *RegistrationService, responder *responder.Responder) *PKIController {
+func newPKIController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, pki *PKIAuthority, appEnrollment *AppEnrollmentService, registration *RegistrationService, responder *response.Writer) *PKIController {
 	return &PKIController{
 		cfg:           cfg,
 		logger:        logger,

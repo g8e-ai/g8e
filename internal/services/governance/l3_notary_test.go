@@ -35,7 +35,7 @@ func TestOutboundL3Notary_VerifyL3Proof_NoApproval(t *testing.T) {
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil, nil)
+	store, err := storage.NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -75,7 +75,7 @@ func TestOutboundL3Notary_VerifyL3Proof_ExpiredApproval(t *testing.T) {
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil, nil)
+	store, err := storage.NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -119,7 +119,7 @@ func TestOutboundL3Notary_VerifyL3Proof_MissingSignature(t *testing.T) {
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil, nil)
+	store, err := storage.NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -163,7 +163,7 @@ func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureEncoding(t *testing.T) {
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil, nil)
+	store, err := storage.NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -207,7 +207,7 @@ func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureLength(t *testing.T) {
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil, nil)
+	store, err := storage.NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -252,7 +252,7 @@ func TestOutboundL3Notary_VerifyL3Proof_SignatureMismatch(t *testing.T) {
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil, nil)
+	store, err := storage.NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -300,7 +300,7 @@ func TestOutboundL3Notary_VerifyL3Proof_FingerprintMismatch(t *testing.T) {
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil, nil)
+	store, err := storage.NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -350,7 +350,7 @@ func TestOutboundL3Notary_VerifyL3Proof_ValidProof(t *testing.T) {
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil, nil)
+	store, err := storage.NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -399,7 +399,7 @@ func TestOutboundL3Notary_VerifyL3Proof_TransactionNotFound(t *testing.T) {
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil, nil)
+	store, err := storage.NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -425,7 +425,7 @@ func TestOutboundL3Notary_VerifyL3Proof_UserIDMismatch(t *testing.T) {
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil, nil)
+	store, err := storage.NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -469,7 +469,7 @@ func TestOutboundL3Notary_VerifyL3Proof_NoFingerprintCheckWhenNotSet(t *testing.
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil, nil)
+	store, err := storage.NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)

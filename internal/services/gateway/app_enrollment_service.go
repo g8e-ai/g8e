@@ -28,13 +28,13 @@ import (
 // Enrollment is identity-only by default: apps receive mTLS certificates but no L2 consensus power.
 // L2 signers must be explicitly registered by an admin via POST /api/admin/app-policies/{app_id}/signer.
 type AppEnrollmentService struct {
-	db     *GatewayDBService
+	db     *CanonicalDBService
 	pki    *PKIAuthority
 	logger *slog.Logger
 }
 
 // NewAppEnrollmentService creates a new AppEnrollmentService.
-func NewAppEnrollmentService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger) *AppEnrollmentService {
+func NewAppEnrollmentService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logger) *AppEnrollmentService {
 	return &AppEnrollmentService{
 		db:     db,
 		pki:    pki,

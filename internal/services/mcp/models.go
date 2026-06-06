@@ -17,34 +17,34 @@ import (
 	"encoding/json"
 
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 )
 
-// JSONRPCRequest is an alias for responder.JSONRPCRequest
-type JSONRPCRequest = responder.JSONRPCRequest
+// JSONRPCRequest is an alias for response.JSONRPCRequest
+type JSONRPCRequest = response.JSONRPCRequest
 
-// JSONRPCResponse is an alias for responder.JSONRPCResponse
-type JSONRPCResponse = responder.JSONRPCResponse
+// JSONRPCResponse is an alias for response.JSONRPCResponse
+type JSONRPCResponse = response.JSONRPCResponse
 
-// JSONRPCError is an alias for responder.JSONRPCError
-type JSONRPCError = responder.JSONRPCError
+// JSONRPCError is an alias for response.JSONRPCError
+type JSONRPCError = response.JSONRPCError
 
 // Protocol-specific error codes for g8eo (reserved range -32000 to -32099)
 const (
 	// Verification Errors (-32000 range)
-	ErrCodeInvalidEnvelope     = responder.ErrCodeInvalidEnvelope
-	ErrCodeHashMismatch        = responder.ErrCodeHashMismatch
-	ErrCodeExpired             = responder.ErrCodeExpired
-	ErrCodeReplay              = responder.ErrCodeReplay
-	ErrCodeStateMismatch       = responder.ErrCodeStateMismatch
-	ErrCodeL1ValidationFailed  = responder.ErrCodeL1ValidationFailed
-	ErrCodeL2SignatureInvalid  = responder.ErrCodeL2SignatureInvalid
-	ErrCodeL3ProofInvalid      = responder.ErrCodeL3ProofInvalid
-	ErrCodePayloadDecodeFailed = responder.ErrCodePayloadDecodeFailed
+	ErrCodeInvalidEnvelope     = response.ErrCodeInvalidEnvelope
+	ErrCodeHashMismatch        = response.ErrCodeHashMismatch
+	ErrCodeExpired             = response.ErrCodeExpired
+	ErrCodeReplay              = response.ErrCodeReplay
+	ErrCodeStateMismatch       = response.ErrCodeStateMismatch
+	ErrCodeL1ValidationFailed  = response.ErrCodeL1ValidationFailed
+	ErrCodeL2SignatureInvalid  = response.ErrCodeL2SignatureInvalid
+	ErrCodeL3ProofInvalid      = response.ErrCodeL3ProofInvalid
+	ErrCodePayloadDecodeFailed = response.ErrCodePayloadDecodeFailed
 
 	// Resource/State Errors (-32100 range)
-	ErrCodeResourceNotFound = responder.ErrCodeResourceNotFound
-	ErrCodeGatewayNotReady  = responder.ErrCodeGatewayNotReady
+	ErrCodeResourceNotFound = response.ErrCodeResourceNotFound
+	ErrCodeGatewayNotReady  = response.ErrCodeGatewayNotReady
 )
 
 // CallToolRequest is the params for the "tools/call" method.

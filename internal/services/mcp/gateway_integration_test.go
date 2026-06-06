@@ -34,7 +34,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
@@ -460,7 +460,7 @@ func TestNativeToolExecutionIntegration(t *testing.T) {
 
 	g := &GatewayService{
 		logger:            logger,
-		responder:         responder.New(logger),
+		responder:         response.NewWriter(logger),
 		envProc:           processor,
 		signingKey:        privKey,
 		keyID:             "native-test-key",
@@ -536,7 +536,7 @@ func TestReadFieldIntegration(t *testing.T) {
 
 	g := &GatewayService{
 		logger:            logger,
-		responder:         responder.New(logger),
+		responder:         response.NewWriter(logger),
 		envProc:           nil, // read_field doesn't use envelope processor
 		signingKey:        privKey,
 		keyID:             "readfield-test-key",

@@ -21,7 +21,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 )
 
 // OperatorController handles Operator lifecycle endpoints.
@@ -30,10 +30,10 @@ type OperatorController struct {
 	logger    *slog.Logger
 	reg       *RegistrationService
 	auth      *AuthService
-	responder *responder.Responder
+	responder *response.Writer
 }
 
-func newOperatorController(cfg *config.Config, logger *slog.Logger, reg *RegistrationService, auth *AuthService, responder *responder.Responder) *OperatorController {
+func newOperatorController(cfg *config.Config, logger *slog.Logger, reg *RegistrationService, auth *AuthService, responder *response.Writer) *OperatorController {
 	return &OperatorController{
 		cfg:       cfg,
 		logger:    logger,

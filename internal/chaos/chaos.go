@@ -253,6 +253,10 @@ func (m *memReplayStore) ReleaseNonce(nonce string) error {
 	return nil
 }
 
+func (m *memReplayStore) Close() error {
+	return nil
+}
+
 // ── L3 notary (auto-approve non-mutations; mutations need no L3 here) ───────
 
 type chaosL3Notary struct{}
@@ -283,7 +287,7 @@ func (d *dynamicStateRoot) UpdateRoot(newRoot string) {
 // ── execution handler (no-op: chaos tester does not actually run commands) ────
 
 type chaosExecutionHandler struct {
-	ledger        *storage.LedgerService
+	ledger        *storage.GitLedgerService
 	stateRoot     *dynamicStateRoot
 	mutationCount atomic.Int64
 }
@@ -453,8 +457,8 @@ func Run(cfg Config) {
 		constants.ActionTypeEvalAnswer,
 	}
 
-	// Initialize Ledger
-	ledger := storage.NewLedgerService(av, nil, logger)
+	// Initialize Ledger (nil for chaos tester - no actual ledger needed)
+	ledger := storage.NewGitLedgerService(&storage.LedgerConfig{BaseDir: ".g8e/data/ledger", EncryptionVault: nil}, logger)
 
 	// Initialize L1 Doctrine for threat detection
 	doctrine := governance.NewL1Doctrine()

@@ -236,7 +236,7 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 			Enabled: true,
 			DBPath:  ":memory:",
 		}
-		localStore, err := storage.NewLocalStoreService(localStoreCfg, logger, nil, nil)
+		localStore, err := storage.NewLocalStoreService(localStoreCfg, logger, nil)
 		require.NoError(t, err)
 		svc.localStore = localStore
 
@@ -262,7 +262,7 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 			Enabled: true,
 			DBPath:  ":memory:",
 		}
-		localStore, err := storage.NewLocalStoreService(localStoreCfg, logger, nil, nil)
+		localStore, err := storage.NewLocalStoreService(localStoreCfg, logger, nil)
 		require.NoError(t, err)
 		svc.localStore = localStore
 

@@ -11,6 +11,8 @@
     "protocol_dir": ".g8e/protocol",
     "protocol_models_dir": ".g8e/protocol/models",
     "secrets_dir": ".g8e/secrets",
-    "ssh_config_path": ".g8e/ssh_config"
+    "ssh_config_path": ".g8e/ssh_config",
+    "vault_dir": ".g8e/vault",
+    "vault_key_path": ".g8e/vault/key"
   }
 }

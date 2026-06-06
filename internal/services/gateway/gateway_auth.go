@@ -27,7 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/protocol"
 	"golang.org/x/time/rate"
 )
@@ -139,12 +139,12 @@ func (e *AuthError) Is(target error) bool {
 
 // AuthService handles authentication for the Gateway service.
 type AuthService struct {
-	db         *GatewayDBService
+	db         *CanonicalDBService
 	pki        *PKIAuthority
 	logger     *slog.Logger
 	userSvc    *UserService
 	personaSvc *PersonaService
-	responder  *responder.Responder
+	responder  *response.Writer
 	secretsDir string
 
 	jwks        *JWKSProvider
@@ -160,7 +160,7 @@ type AuthService struct {
 }
 
 // NewAuthService creates a new AuthService.
-func NewAuthService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, personaSvc *PersonaService, responder *responder.Responder, secretsDir string, jwks *JWKSProvider, jwtRole, jwtIssuer, jwtAudience string) *AuthService {
+func NewAuthService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, personaSvc *PersonaService, responder *response.Writer, secretsDir string, jwks *JWKSProvider, jwtRole, jwtIssuer, jwtAudience string) *AuthService {
 	jwksEnabled := jwks != nil
 	return &AuthService{
 		db:           db,
@@ -597,7 +597,7 @@ func (s *AuthService) WebSocketAuth(next http.Handler) http.Handler {
 
 // WebSessionAuth validates web session cookies and stamps context with user_id.
 // This is for browser-based authentication on the public gateway.
-func (s *AuthService) WebSessionAuth(next http.Handler, db *GatewayDBService) http.Handler {
+func (s *AuthService) WebSessionAuth(next http.Handler, db *CanonicalDBService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("g8e_session")
 		if err != nil || cookie == nil {

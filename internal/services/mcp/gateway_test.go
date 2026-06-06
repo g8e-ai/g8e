@@ -30,12 +30,12 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/response"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -1182,7 +1182,7 @@ func TestGatewayService_NewGatewayService(t *testing.T) {
 		t.Parallel()
 		deps := Dependencies{
 			Logger:          slog.Default(),
-			Responder:       responder.New(slog.Default()),
+			Responder:       response.NewWriter(slog.Default()),
 			SuspendedStore:  &fakeSuspendedStore{},
 			MaxPayloadBytes: 10 * 1024 * 1024,
 		}
@@ -1203,7 +1203,7 @@ func TestGatewayService_NewGatewayService(t *testing.T) {
 		t.Parallel()
 		deps := Dependencies{
 			Logger:          slog.Default(),
-			Responder:       responder.New(slog.Default()),
+			Responder:       response.NewWriter(slog.Default()),
 			MaxPayloadBytes: 10 * 1024 * 1024,
 		}
 
@@ -1216,7 +1216,7 @@ func TestGatewayService_NewGatewayService(t *testing.T) {
 		t.Parallel()
 		deps := Dependencies{
 			Logger:          slog.Default(),
-			Responder:       responder.New(slog.Default()),
+			Responder:       response.NewWriter(slog.Default()),
 			MaxPayloadBytes: 10 * 1024 * 1024,
 		}
 
@@ -1625,7 +1625,7 @@ func withLogger(logger *slog.Logger) testGatewayOption {
 }
 
 // withResponder sets a custom responder for the test GatewayService
-func withResponder(r *responder.Responder) testGatewayOption {
+func withResponder(r *response.Writer) testGatewayOption {
 	return func(g *GatewayService) {
 		g.responder = r
 	}
@@ -1741,7 +1741,7 @@ func newTestGatewayService(opts ...testGatewayOption) *GatewayService {
 
 	g := &GatewayService{
 		logger:            slog.Default(),
-		responder:         responder.New(slog.Default()),
+		responder:         response.NewWriter(slog.Default()),
 		envProc:           &fakeEnvelopeProcessor{},
 		suspendedStore:    &fakeSuspendedStore{},
 		signingKey:        privKey,

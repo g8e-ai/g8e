@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -48,13 +48,13 @@ type httpTestCase struct {
 	method         string
 	body           []byte
 	headers        map[string]string
-	setup          func(*testing.T, *PKIController, *GatewayDBService)
+	setup          func(*testing.T, *PKIController, *CanonicalDBService)
 	expectedStatus int
 	expectedBody   string
 	validateResp   func(*testing.T, *httptest.ResponseRecorder)
 }
 
-func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *GatewayDBService) {
+func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *CanonicalDBService) {
 	t.Helper()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
@@ -63,7 +63,7 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Gate
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
 
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err, "failed to open gateway DB service")
 	t.Cleanup(func() { db.Close() })
 
@@ -89,7 +89,7 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Gate
 	require.NoError(t, pki.EnsurePKI(nil), "failed to ensure PKI")
 
 	appEnrollment := NewAppEnrollmentService(db, pki, logger)
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
 
 	// Initialize script templates
 	if err := scripts.Init(logger); err != nil {
@@ -151,7 +151,7 @@ func TestPKIController_HandlePKIHubBundle(t *testing.T) {
 		{
 			name:   "Failure - PKI error returns 500",
 			method: http.MethodGet,
-			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+			setup: func(t *testing.T, c *PKIController, _ *CanonicalDBService) {
 				c.pki = &PKIAuthority{}
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -202,7 +202,7 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 		{
 			name:   "Failure - Root CA file not found",
 			method: http.MethodGet,
-			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+			setup: func(t *testing.T, c *PKIController, _ *CanonicalDBService) {
 				c.pki = &PKIAuthority{}
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -211,7 +211,7 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 		{
 			name:   "Failure - Invalid PEM format",
 			method: http.MethodGet,
-			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+			setup: func(t *testing.T, c *PKIController, _ *CanonicalDBService) {
 				pkiDir := c.pki.PKIDir()
 				rootPath := filepath.Join(pkiDir, "root", "root_ca.crt")
 				err := os.WriteFile(rootPath, []byte("invalid pem data"), 0644)
@@ -344,7 +344,7 @@ func TestPKIController_HandlePKICertificatesRevoke(t *testing.T) {
 			name:   "Failure - PKI revocation error",
 			method: http.MethodPost,
 			body:   mustMarshalJSON(t, validRevokePayload),
-			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+			setup: func(t *testing.T, c *PKIController, _ *CanonicalDBService) {
 				c.pki = &PKIAuthority{}
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -392,7 +392,7 @@ func TestPKIController_HandlePKIRevocationBundle(t *testing.T) {
 		{
 			name:   "Failure - PKI bundle generation error",
 			method: http.MethodGet,
-			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+			setup: func(t *testing.T, c *PKIController, _ *CanonicalDBService) {
 				c.pki = &PKIAuthority{}
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -449,11 +449,11 @@ func TestNewPKIController(t *testing.T) {
 		t.Fatalf("Failed to initialize script templates: %v", err)
 	}
 
-	db := &GatewayDBService{}
+	db := &CanonicalDBService{}
 	pki := &PKIAuthority{}
 	appEnrollment := &AppEnrollmentService{}
 	registration := &RegistrationService{}
-	responder := &responder.Responder{}
+	responder := &response.Writer{}
 
 	controller := newPKIController(cfg, logger, db, pki, appEnrollment, registration, responder)
 

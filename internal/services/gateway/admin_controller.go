@@ -27,19 +27,19 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 )
 
 // AdminController handles admin-only endpoints for app policy management.
 type AdminController struct {
 	cfg       *config.Config
 	logger    *slog.Logger
-	db        *GatewayDBService
+	db        *CanonicalDBService
 	userSvc   *UserService
-	responder *responder.Responder
+	responder *response.Writer
 }
 
-func newAdminController(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, userSvc *UserService, responder *responder.Responder) *AdminController {
+func newAdminController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, userSvc *UserService, responder *response.Writer) *AdminController {
 	return &AdminController{
 		cfg:       cfg,
 		logger:    logger,

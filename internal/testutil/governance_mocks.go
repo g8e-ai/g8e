@@ -37,6 +37,10 @@ func (m *MockReplayStore) ReleaseNonce(nonce string) error {
 	return nil
 }
 
+func (m *MockReplayStore) Close() error {
+	return nil
+}
+
 // StatefulMockReplayStore implements ReplayStore with nonce tracking.
 type StatefulMockReplayStore struct {
 	mu     sync.RWMutex
@@ -66,6 +70,10 @@ func (m *StatefulMockReplayStore) ReleaseNonce(nonce string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.Nonces, nonce)
+	return nil
+}
+
+func (m *StatefulMockReplayStore) Close() error {
 	return nil
 }
 

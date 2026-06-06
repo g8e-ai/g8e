@@ -15,12 +15,12 @@ import (
 
 // InvitationService handles invitations in the Operator Gateway.
 type InvitationService struct {
-	db     *GatewayDBService
+	db     *CanonicalDBService
 	logger *slog.Logger
 }
 
 // NewInvitationService creates a new InvitationService.
-func NewInvitationService(db *GatewayDBService, logger *slog.Logger) *InvitationService {
+func NewInvitationService(db *CanonicalDBService, logger *slog.Logger) *InvitationService {
 	return &InvitationService{
 		db:     db,
 		logger: logger,

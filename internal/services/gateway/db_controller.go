@@ -27,7 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
 
@@ -35,14 +35,14 @@ import (
 type DBController struct {
 	cfg       *config.Config
 	logger    *slog.Logger
-	db        *GatewayDBService
+	db        *CanonicalDBService
 	auth      *AuthService
 	pubsub    *PubSubBroker
 	userSvc   *UserService
-	responder *responder.Responder
+	responder *response.Writer
 }
 
-func newDBController(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, auth *AuthService, pubsub *PubSubBroker, userSvc *UserService, responder *responder.Responder) *DBController {
+func newDBController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, pubsub *PubSubBroker, userSvc *UserService, responder *response.Writer) *DBController {
 	return &DBController{
 		cfg:       cfg,
 		logger:    logger,

@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 
 // newSecretManagerTestDB opens a raw sqliteutil.DB with just the documents +
 // kv_store schema that SecretManager needs, without pulling in the full
-// GatewayDBService wiring.
+// CanonicalDBService wiring.
 func newSecretManagerTestDB(t *testing.T) *sqliteutil.DB {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "secret_manager_test.db")

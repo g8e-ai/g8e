@@ -22,23 +22,56 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
 
+// ReplayStoreConfig holds configuration for the replay store service.
+type ReplayStoreConfig struct {
+	DBPath  string
+	Enabled bool
+}
+
+// DefaultReplayStoreConfig returns the default configuration.
+func DefaultReplayStoreConfig() *ReplayStoreConfig {
+	return &ReplayStoreConfig{
+		DBPath:  ".g8e/replay_store.db",
+		Enabled: true,
+	}
+}
+
 // SQLReplayStore provides nonce replay protection using SQLite.
 type SQLReplayStore struct {
 	db     *sqliteutil.DB
 	logger *slog.Logger
+	config *ReplayStoreConfig
 }
 
 // NewSQLReplayStore creates a new replay store backed by SQLite.
-func NewSQLReplayStore(db *sqliteutil.DB, logger *slog.Logger) (*SQLReplayStore, error) {
+func NewSQLReplayStore(config *ReplayStoreConfig, logger *slog.Logger) (*SQLReplayStore, error) {
+	if config == nil {
+		config = DefaultReplayStoreConfig()
+	}
+
+	if !config.Enabled {
+		logger.Info("Replay store is disabled")
+		return nil, nil
+	}
+
+	cfg := sqliteutil.DefaultDBConfig(config.DBPath)
+	db, err := sqliteutil.OpenDB(cfg, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize database: %w", err)
+	}
+
 	rs := &SQLReplayStore{
 		db:     db,
 		logger: logger,
+		config: config,
 	}
 
 	if err := rs.initSchema(); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("failed to initialize replay store schema: %w", err)
 	}
 
+	rs.logger.Info("Replay store initialized", "db_path", config.DBPath)
 	return rs, nil
 }
 
@@ -188,6 +221,19 @@ func (rs *SQLReplayStore) Prune(retentionDays int) error {
 	_, err := rs.db.ExecWithRetry("DELETE FROM nonce_usage WHERE used_at < ?", cutoffStr)
 	if err != nil {
 		return fmt.Errorf("failed to prune nonce_usage: %w", err)
+	}
+
+	return nil
+}
+
+// Close shuts down the replay store service.
+func (rs *SQLReplayStore) Close() error {
+	if rs == nil {
+		return nil
+	}
+
+	if rs.db != nil {
+		return rs.db.Close()
 	}
 
 	return nil

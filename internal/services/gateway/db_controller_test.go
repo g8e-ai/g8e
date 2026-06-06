@@ -25,13 +25,13 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestDBController(t *testing.T) (*DBController, *GatewayDBService) {
+func setupTestDBController(t *testing.T) (*DBController, *CanonicalDBService) {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
 
@@ -580,7 +580,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 	userSvc := NewUserService(db, testutil.NewTestLogger())
 	logger := testutil.NewTestLogger()
 	cfg := testutil.NewTestConfig(t)
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
 	adminController := newAdminController(cfg, logger, db, userSvc, resp)
 
 	bootstrapUser, err := userSvc.CreateBootstrapUser()

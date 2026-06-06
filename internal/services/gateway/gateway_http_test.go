@@ -181,7 +181,7 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	return h, infra.Cfg
 }
 
-func setupTestGatewayService(t *testing.T) (*GatewayService, *config.Config) {
+func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config) {
 	t.Helper()
 	infra := setupTestInfrastructure(t, true)
 
@@ -194,7 +194,7 @@ func setupTestGatewayService(t *testing.T) (*GatewayService, *config.Config) {
 
 	infra.Cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-	ls := &GatewayService{
+	ls := &GatewayModeService{
 		cfg:        infra.Cfg,
 		logger:     infra.Logger,
 		db:         infra.DB,

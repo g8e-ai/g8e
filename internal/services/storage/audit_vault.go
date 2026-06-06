@@ -15,7 +15,6 @@ package storage
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -43,8 +42,8 @@ type AuditVaultConfig struct {
 	Enabled                   bool
 	OutputTruncationThreshold int
 	HeadTailSize              int
-	// EncryptionVault is the optional vault.Vault for encrypting sensitive content fields.
-	// When set, content_text, command_stdout, and command_stderr are encrypted at rest.
+	// EncryptionVault is the required vault.Vault for encrypting sensitive content fields.
+	// content_text, command_stdout, and command_stderr are encrypted at rest.
 	EncryptionVault *vault.Vault
 	// GitPath is the resolved path to the git binary. Empty string means git is unavailable.
 	GitPath string
@@ -66,57 +65,6 @@ func DefaultAuditVaultConfig() *AuditVaultConfig {
 	}
 }
 
-var (
-	ErrAuditEventNil       = errors.New("AUDIT_EVENT_INVALID: event required")
-	ErrAuditSessionMissing = errors.New("AUDIT_SESSION_MISSING: operator_session_id required")
-	ErrAuditSessionUnknown = errors.New("AUDIT_SESSION_UNKNOWN: operator_session_id must reference a pre-created session")
-)
-
-// FileMutationOperation represents the type of file operation
-type FileMutationOperation string
-
-const (
-	FileMutationWrite  FileMutationOperation = "WRITE"
-	FileMutationDelete FileMutationOperation = "DELETE"
-	FileMutationCreate FileMutationOperation = "CREATE"
-)
-
-// OperatorSession represents a chat session in the audit log
-type OperatorSession struct {
-	ID           string
-	Title        string
-	CreatedAt    time.Time
-	UserIdentity string
-}
-
-// Event represents an event in the audit log (append-only)
-type Event struct {
-	ID                  int64
-	OperatorSessionID   string
-	Timestamp           time.Time
-	Type                constants.EventType
-	ContentText         string
-	CommandRaw          string
-	CommandExitCode     *int
-	CommandStdout       string
-	CommandStderr       string
-	ExecutionDurationMs int64
-	StoredLocally       bool
-	StdoutTruncated     bool
-	StderrTruncated     bool
-}
-
-// FileMutationLog represents a file mutation record linked to an event
-type FileMutationLog struct {
-	ID               int64
-	EventID          int64
-	Filepath         string
-	Operation        FileMutationOperation
-	LedgerHashBefore string
-	LedgerHashAfter  string
-	DiffStat         string
-}
-
 // AuditVaultService provides the Local-First Audit Architecture implementation
 type AuditVaultService struct {
 	db              *sqliteutil.DB
@@ -135,6 +83,7 @@ type AuditVaultService struct {
 }
 
 // NewAuditVaultService creates a new audit vault service
+// EncryptionVault in config is required for encryption at rest.
 func NewAuditVaultService(config *AuditVaultConfig, logger *slog.Logger) (*AuditVaultService, error) {
 	if config == nil {
 		config = DefaultAuditVaultConfig()
@@ -143,6 +92,10 @@ func NewAuditVaultService(config *AuditVaultConfig, logger *slog.Logger) (*Audit
 	if !config.Enabled {
 		logger.Info("Audit vault is disabled")
 		return nil, nil
+	}
+
+	if config.EncryptionVault == nil {
+		return nil, fmt.Errorf("EncryptionVault is required for audit vault service")
 	}
 
 	avs := &AuditVaultService{
@@ -163,7 +116,7 @@ func NewAuditVaultService(config *AuditVaultConfig, logger *slog.Logger) (*Audit
 	avs.pruner = sqliteutil.NewPruner(avs.db, logger, interval, auditVaultPrune(config))
 	avs.pruner.Start()
 
-	encryptionEnabled := avs.encryptionVault != nil && avs.encryptionVault.IsUnlocked()
+	encryptionEnabled := avs.encryptionVault.IsUnlocked()
 	avs.logger.Info("Audit vault initialized",
 		"data_dir", config.DataDir,
 		"db_path", filepath.Join(config.DataDir, config.DBPath),
@@ -576,19 +529,6 @@ func (avs *AuditVaultService) RecordEvents(events []*Event) error {
 		avs.logger.Info("Batch of events recorded", "count", len(events))
 		return nil
 	})
-}
-
-// ChaosEvent represents a chaos test event
-type ChaosEvent struct {
-	ID                int64
-	OperatorSessionID string
-	Timestamp         time.Time
-	ChaosID           int
-	Category          string
-	Outcome           string
-	ContentText       string
-	CommandRaw        string
-	TransactionHash   string
 }
 
 // RecordChaosEvent records a chaos test event in the chaos_events table
@@ -1321,19 +1261,20 @@ func (avs *AuditVaultService) GetLedgerPath() string {
 	return avs.ledgerPath
 }
 
-// IsEncryptionEnabled returns whether content encryption is enabled
+// IsEncryptionEnabled returns whether content encryption is enabled.
+// Vault is required, so only checks if unlocked.
 func (avs *AuditVaultService) IsEncryptionEnabled() bool {
-	return avs != nil && avs.encryptionVault != nil && avs.encryptionVault.IsUnlocked()
+	return avs.encryptionVault.IsUnlocked()
 }
 
-// encryptContent encrypts content if encryption is enabled, otherwise returns original
+// encryptContent encrypts content. Vault is required and must be unlocked.
 func (avs *AuditVaultService) encryptContent(content string) ([]byte, error) {
 	if content == "" {
 		return nil, nil
 	}
 
 	if !avs.IsEncryptionEnabled() {
-		return []byte(content), nil
+		return nil, fmt.Errorf("vault is locked, cannot encrypt content")
 	}
 
 	encrypted, err := avs.encryptionVault.Encrypt([]byte(content))
@@ -1344,14 +1285,14 @@ func (avs *AuditVaultService) encryptContent(content string) ([]byte, error) {
 	return encrypted, nil
 }
 
-// decryptContent decrypts content if encryption is enabled, otherwise returns original
+// decryptContent decrypts content. Vault is required and must be unlocked.
 func (avs *AuditVaultService) decryptContent(data []byte) (string, error) {
 	if len(data) == 0 {
 		return "", nil
 	}
 
 	if !avs.IsEncryptionEnabled() {
-		return string(data), nil
+		return "", fmt.Errorf("vault is locked, cannot decrypt content")
 	}
 
 	decrypted, err := avs.encryptionVault.Decrypt(data)

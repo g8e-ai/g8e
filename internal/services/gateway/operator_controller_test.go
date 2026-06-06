@@ -24,7 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,7 +37,7 @@ func TestNewOperatorController(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(nil, nil))
 	reg := &RegistrationService{}
 	auth := &AuthService{}
-	resp := &responder.Responder{}
+	resp := &response.Writer{}
 
 	controller := newOperatorController(cfg, logger, reg, auth, resp)
 
@@ -56,7 +56,7 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 	reg := &RegistrationService{}
 	cfg := &config.Config{Gateway: config.GatewayConfig{MaxPayloadBytes: 1024}}

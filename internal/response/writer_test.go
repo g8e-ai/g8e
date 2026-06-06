@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package responder
+package response
 
 import (
 	"encoding/json"
@@ -24,14 +24,14 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-func TestNew(t *testing.T) {
+func TestNewWriter(t *testing.T) {
 	var logger *slog.Logger
-	r := New(logger)
-	if r == nil {
-		t.Fatal("New() returned nil")
+	w := NewWriter(logger)
+	if w == nil {
+		t.Fatal("NewWriter() returned nil")
 	}
-	if r.logger != logger {
-		t.Error("New() did not set logger")
+	if w.logger != logger {
+		t.Error("NewWriter() did not set logger")
 	}
 }
 
@@ -70,34 +70,34 @@ func TestJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := New((*slog.Logger)(nil))
-			w := httptest.NewRecorder()
+			w := NewWriter((*slog.Logger)(nil))
+			rw := httptest.NewRecorder()
 
-			r.JSON(w, tt.status, tt.data)
+			w.JSON(rw, tt.status, tt.data)
 
-			if w.Code != tt.status {
-				t.Errorf("JSON() status = %v, want %v", w.Code, tt.status)
+			if rw.Code != tt.status {
+				t.Errorf("JSON() status = %v, want %v", rw.Code, tt.status)
 			}
 
-			ct := w.Header().Get(constants.HeaderContentType)
+			ct := rw.Header().Get(constants.HeaderContentType)
 			if ct != "application/json" {
 				t.Errorf("JSON() Content-Type = %v, want application/json", ct)
 			}
 
-			if w.Header().Get("X-Content-Type-Options") != "nosniff" {
+			if rw.Header().Get("X-Content-Type-Options") != "nosniff" {
 				t.Error("JSON() missing X-Content-Type-Options header")
 			}
 
-			if w.Header().Get("X-Frame-Options") != "DENY" {
+			if rw.Header().Get("X-Frame-Options") != "DENY" {
 				t.Error("JSON() missing X-Frame-Options header")
 			}
 
-			if w.Header().Get("Content-Security-Policy") != "default-src 'none'; frame-ancestors 'none'" {
+			if rw.Header().Get("Content-Security-Policy") != "default-src 'none'; frame-ancestors 'none'" {
 				t.Error("JSON() missing or incorrect Content-Security-Policy header")
 			}
 
 			var got map[string]interface{}
-			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			if err := json.Unmarshal(rw.Body.Bytes(), &got); err != nil {
 				t.Fatalf("JSON() failed to unmarshal response: %v", err)
 			}
 		})
@@ -133,16 +133,16 @@ func TestError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := New((*slog.Logger)(nil))
-			w := httptest.NewRecorder()
+			w := NewWriter((*slog.Logger)(nil))
+			rw := httptest.NewRecorder()
 
-			r.Error(w, tt.status, tt.msg)
+			w.Error(rw, tt.status, tt.msg)
 
-			if w.Code != tt.wantCode {
-				t.Errorf("Error() status = %v, want %v", w.Code, tt.wantCode)
+			if rw.Code != tt.wantCode {
+				t.Errorf("Error() status = %v, want %v", rw.Code, tt.wantCode)
 			}
 
-			ct := w.Header().Get(constants.HeaderContentType)
+			ct := rw.Header().Get(constants.HeaderContentType)
 			if ct != "application/json" {
 				t.Errorf("Error() Content-Type = %v, want application/json", ct)
 			}
@@ -150,7 +150,7 @@ func TestError(t *testing.T) {
 			var resp struct {
 				Error string `json:"error"`
 			}
-			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			if err := json.Unmarshal(rw.Body.Bytes(), &resp); err != nil {
 				t.Fatalf("Error() failed to unmarshal response: %v", err)
 			}
 
@@ -215,22 +215,22 @@ func TestRPCResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := New((*slog.Logger)(nil))
-			w := httptest.NewRecorder()
+			w := NewWriter((*slog.Logger)(nil))
+			rw := httptest.NewRecorder()
 
-			r.RPCResponse(w, tt.id, tt.result)
+			w.RPCResponse(rw, tt.id, tt.result)
 
-			if w.Code != http.StatusOK {
-				t.Errorf("RPCResponse() status = %v, want 200", w.Code)
+			if rw.Code != http.StatusOK {
+				t.Errorf("RPCResponse() status = %v, want 200", rw.Code)
 			}
 
-			ct := w.Header().Get(constants.HeaderContentType)
+			ct := rw.Header().Get(constants.HeaderContentType)
 			if ct != "application/json" {
 				t.Errorf("RPCResponse() Content-Type = %v, want application/json", ct)
 			}
 
 			var resp JSONRPCResponse
-			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			if err := json.Unmarshal(rw.Body.Bytes(), &resp); err != nil {
 				t.Fatalf("RPCResponse() failed to unmarshal response: %v", err)
 			}
 
@@ -254,8 +254,8 @@ func TestRPCResponse(t *testing.T) {
 }
 
 func TestRPCResponse_UnmarshalableResult(t *testing.T) {
-	r := New(slog.New(slog.NewTextHandler(os.Stdout, nil)))
-	w := httptest.NewRecorder()
+	w := NewWriter(slog.New(slog.NewTextHandler(os.Stdout, nil)))
+	rw := httptest.NewRecorder()
 
 	type unmarshalable struct {
 		Func func()
@@ -265,14 +265,14 @@ func TestRPCResponse_UnmarshalableResult(t *testing.T) {
 		Func: func() {},
 	}
 
-	r.RPCResponse(w, 1, result)
+	w.RPCResponse(rw, 1, result)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("RPCResponse() status = %v, want 200", w.Code)
+	if rw.Code != http.StatusOK {
+		t.Errorf("RPCResponse() status = %v, want 200", rw.Code)
 	}
 
 	var resp JSONRPCResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+	if err := json.Unmarshal(rw.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("RPCResponse() failed to unmarshal response: %v", err)
 	}
 
@@ -335,22 +335,22 @@ func TestRPCError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := New((*slog.Logger)(nil))
-			w := httptest.NewRecorder()
+			w := NewWriter((*slog.Logger)(nil))
+			rw := httptest.NewRecorder()
 
-			r.RPCError(w, tt.id, tt.code, tt.msg)
+			w.RPCError(rw, tt.id, tt.code, tt.msg)
 
-			if w.Code != http.StatusOK {
-				t.Errorf("RPCError() status = %v, want 200", w.Code)
+			if rw.Code != http.StatusOK {
+				t.Errorf("RPCError() status = %v, want 200", rw.Code)
 			}
 
-			ct := w.Header().Get(constants.HeaderContentType)
+			ct := rw.Header().Get(constants.HeaderContentType)
 			if ct != "application/json" {
 				t.Errorf("RPCError() Content-Type = %v, want application/json", ct)
 			}
 
 			var resp JSONRPCResponse
-			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			if err := json.Unmarshal(rw.Body.Bytes(), &resp); err != nil {
 				t.Fatalf("RPCError() failed to unmarshal response: %v", err)
 			}
 

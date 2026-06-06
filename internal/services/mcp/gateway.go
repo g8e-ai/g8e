@@ -11,6 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package mcp provides Model Context Protocol (MCP) and Agent-to-Agent (A2A) services.
+//
+// This package contains GatewayService, which is a shared service used in both gateway mode
+// and outbound mode for MCP/A2A protocol translation and downstream dispatch. The service is
+// truly polymorphic - the same implementation is used in both modes.
+//
+// For more information on service modes, see docs/architecture/service_modes.md.
 package mcp
 
 import (
@@ -30,7 +37,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -53,9 +60,15 @@ type SuspendedTransactionStore interface {
 	DeleteSuspendedTransaction(txHash string) error
 }
 
+// GatewayService handles MCP/A2A protocol translation and downstream dispatch.
+// This service is shared across both gateway mode and outbound mode - the same
+// implementation is used in both contexts (truly polymorphic).
+//
+// In gateway mode, it is created by GatewayModeService as field mcpGateway.
+// In outbound mode, it is used by PubSubCommandService as field mcpGateway.
 type GatewayService struct {
 	logger            *slog.Logger
-	responder         *responder.Responder
+	responder         *response.Writer
 	envProc           governance.EnvelopeProcessor
 	stateRootProvider StateRootProvider
 	signingKey        ed25519.PrivateKey
@@ -96,7 +109,7 @@ type AuditLogger interface {
 // Dependencies groups all dependencies for NewGatewayService to reduce constructor bloat.
 type Dependencies struct {
 	Logger          *slog.Logger
-	Responder       *responder.Responder
+	Responder       *response.Writer
 	SuspendedStore  SuspendedTransactionStore
 	MaxPayloadBytes int64
 }
@@ -122,7 +135,7 @@ func NewGatewayService(deps Dependencies) *GatewayService {
 }
 
 // RunMaintenance periodically prunes expired suspended transactions.
-// Although the underlying store may perform its own cleanup (e.g., GatewayDBService
+// Although the underlying store may perform its own cleanup (e.g., CanonicalDBService
 // does this via RunMaintenance), the GatewayService provides this routine to
 // ensure memory and state consistency regardless of the store implementation.
 func (g *GatewayService) RunMaintenance(ctx context.Context) {
@@ -134,7 +147,7 @@ func (g *GatewayService) RunMaintenance(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// If the store is the GatewayDBService, it already prunes.
+			// If the store is the CanonicalDBService, it already prunes.
 			// If it's another implementation, we might need an explicit cleanup call.
 			// For now, we rely on the store's internal expiration logic during GET,
 			// but we can add an explicit DELETE call here if the interface is expanded.
@@ -1254,37 +1267,37 @@ func (g *GatewayService) mapGatewayError(err error) (int, string) {
 		errors.Is(err, governance.ErrTransactionIDMissing),
 		errors.Is(err, governance.ErrPayloadMissing),
 		errors.Is(err, governance.ErrUnknownActionType):
-		return responder.ErrCodeInvalidEnvelope, msg
+		return response.ErrCodeInvalidEnvelope, msg
 
 	case errors.Is(err, governance.ErrPayloadDecodeFailed):
-		return responder.ErrCodePayloadDecodeFailed, msg
+		return response.ErrCodePayloadDecodeFailed, msg
 
 	case errors.Is(err, governance.ErrTransactionHashMissing),
 		errors.Is(err, governance.ErrTransactionHashMismatch):
-		return responder.ErrCodeHashMismatch, msg
+		return response.ErrCodeHashMismatch, msg
 
 	case errors.Is(err, governance.ErrTransactionExpired):
-		return responder.ErrCodeExpired, msg
+		return response.ErrCodeExpired, msg
 
 	case errors.Is(err, governance.ErrTransactionReplay):
-		return responder.ErrCodeReplay, msg
+		return response.ErrCodeReplay, msg
 
 	case errors.Is(err, governance.ErrStateRootMissing),
 		errors.Is(err, governance.ErrStateRootRequired),
 		errors.Is(err, governance.ErrStateRootMismatch):
-		return responder.ErrCodeStateMismatch, msg
+		return response.ErrCodeStateMismatch, msg
 
 	case errors.Is(err, governance.ErrL1ValidationFailed):
-		return responder.ErrCodeL1ValidationFailed, msg
+		return response.ErrCodeL1ValidationFailed, msg
 
 	case errors.Is(err, governance.ErrL2SignatureMissing),
 		errors.Is(err, governance.ErrL2SignatureInvalid),
 		errors.Is(err, governance.ErrL2KeyNotConfigured):
-		return responder.ErrCodeL2SignatureInvalid, msg
+		return response.ErrCodeL2SignatureInvalid, msg
 
 	case errors.Is(err, governance.ErrL3ProofInvalid),
 		errors.Is(err, governance.ErrL3NotaryNotConfigured):
-		return responder.ErrCodeL3ProofInvalid, msg
+		return response.ErrCodeL3ProofInvalid, msg
 	}
 
 	// Map other Gateway errors back to JSON-RPC error
@@ -1407,7 +1420,7 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	}
 
 	// Construct MCP tools/call request
-	mcpReq := &responder.JSONRPCRequest{
+	mcpReq := &response.JSONRPCRequest{
 		JSONRPC: "2.0",
 		Method:  "tools/call",
 		Params:  toolArgs,

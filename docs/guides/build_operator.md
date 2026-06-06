@@ -141,7 +141,7 @@ The Operator must maintain the host as the authoritative source of truth:
 - **AuditVaultService**: Append-only, encrypted SQLite log of every event and signed ActionReceipt. Fail-closed: reject events missing a valid operator_session_id. Supports optional encryption vault for data-at-rest protection.
 - **LedgerService**: Git-backed version control for file mutations. Implements two-phase commit (LedgerHashBefore / LedgerHashAfter) and supports restoration to any prior state within the session.
 - **LocalStoreService**: SQLite storage for command execution results, file diffs, and suspended transactions. Provides token persistence for sovereignty scrubbing.
-- **GatewayDBService**: (Gateway mode only) Unified SQLite persistence for state roots, nonces, trusted signers, app policies, and suspended transactions.
+- **CanonicalDBService**: (Gateway mode only) Unified SQLite persistence for state roots, nonces, trusted signers, app policies, and suspended transactions.
 
 #### 6. Outbound-Only Connectivity
 

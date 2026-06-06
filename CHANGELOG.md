@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.11] - 2026-06-06
+
+### Breaking Changes
+
+* **Dead scrubbing code removed** - Removed unused `TextScrubber` interface and `SetScrubber()` method from `ExecutionVaultService` and `interfaces.ExecutionVault`. The scrubber field was never used (no callers found), representing dead code from a previous circular dependency cleanup.
+
+### Removed
+
+* `TextScrubber` interface from `internal/interfaces/execution_vault.go`
+* `scrubber` field from `ExecutionVaultService` struct in `internal/services/storage/execution_vault.go`
+* `SetScrubber()` method from `ExecutionVaultService` and `interfaces.ExecutionVault`
+
+### Changed
+
+* `ExecutionVaultService` struct simplified to remove unused scrubber dependency
+* Interface definition for `ExecutionVault` updated to remove scrubber-related method
+
+---
+
 ## [1.0.10] - 2026-06-05
 
 ### Overview

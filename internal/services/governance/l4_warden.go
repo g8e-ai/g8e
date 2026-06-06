@@ -79,6 +79,9 @@ type ReplayStore interface {
 	// ReleaseNonce removes a reservation for a failed transaction.
 	// This allows the nonce to be reused for retry.
 	ReleaseNonce(nonce string) error
+
+	// Close shuts down the replay store and releases resources.
+	Close() error
 }
 
 //go:generate mockery --name StateRootProvider --output ./mocks --dir .

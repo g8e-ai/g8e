@@ -42,7 +42,7 @@ const (
 
 // RegistrationService handles Gateway-native device enrollment via CSR-based authentication.
 type RegistrationService struct {
-	db         *GatewayDBService
+	db         *CanonicalDBService
 	pki        *PKIAuthority
 	logger     *slog.Logger
 	userSvc    *UserService
@@ -51,7 +51,7 @@ type RegistrationService struct {
 }
 
 // NewRegistrationService creates a new RegistrationService.
-func NewRegistrationService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, sessionSvc *SessionsService, cfg *config.GatewayConfig) *RegistrationService {
+func NewRegistrationService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, sessionSvc *SessionsService, cfg *config.GatewayConfig) *RegistrationService {
 	return &RegistrationService{
 		db:         db,
 		pki:        pki,

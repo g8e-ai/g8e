@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewGatewayService(t *testing.T) {
+func TestNewGatewayModeService(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
@@ -35,7 +35,7 @@ func TestNewGatewayService(t *testing.T) {
 
 	t.Run("Default configuration with self-signed certs", func(t *testing.T) {
 		t.Parallel()
-		db, err := OpenGatewayDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, logger, true)
+		db, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, logger, true)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -46,7 +46,7 @@ func TestNewGatewayService(t *testing.T) {
 		cfg.Gateway.SecretsDir = t.TempDir()
 		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-		ls, err := newGatewayServiceFromComponents(cfg, logger, db, pubsub)
+		ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
 		require.NoError(t, err)
 		assert.NotNil(t, ls)
 		assert.NotNil(t, ls.server)
@@ -55,7 +55,7 @@ func TestNewGatewayService(t *testing.T) {
 	})
 }
 
-func TestGatewayService_StateManagement(t *testing.T) {
+func TestGatewayModeService_StateManagement(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
@@ -64,7 +64,7 @@ func TestGatewayService_StateManagement(t *testing.T) {
 	cfg.Gateway.PKIDir = t.TempDir()
 	cfg.Gateway.SecretsDir = t.TempDir()
 
-	db, err := OpenGatewayDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, logger, true)
+	db, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, logger, true)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -73,7 +73,7 @@ func TestGatewayService_StateManagement(t *testing.T) {
 
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-	ls, err := newGatewayServiceFromComponents(cfg, logger, db, pubsub)
+	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
 	require.NoError(t, err)
 
 	t.Run("Initial state", func(t *testing.T) {
@@ -115,7 +115,7 @@ func TestGatewayService_StateManagement(t *testing.T) {
 	})
 }
 
-func TestNewGatewayServiceFromComponents(t *testing.T) {
+func TestNewGatewayModeServiceFromComponents(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
@@ -123,7 +123,7 @@ func TestNewGatewayServiceFromComponents(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -134,7 +134,7 @@ func TestNewGatewayServiceFromComponents(t *testing.T) {
 	cfg.Gateway.SecretsDir = secretsDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-	ls, err := newGatewayServiceFromComponents(cfg, logger, db, pubsub)
+	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
 	require.NoError(t, err)
 	assert.NotNil(t, ls)
 	assert.Equal(t, db, ls.db)

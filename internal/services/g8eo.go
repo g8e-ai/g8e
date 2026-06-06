@@ -33,25 +33,30 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
+	"github.com/g8e-ai/g8e/internal/services/vault"
 )
 
 type G8eoService struct {
 	config *config.Config
 	logger *slog.Logger
 
-	bootstrap      *auth.BootstrapService
-	secretManager  *gateway.SecretManager
-	execution      *execution.ExecutionService
-	fileEdit       *execution.FileEditService
-	pubSubCommands *pubsub.PubSubCommandService
-	pubSubResults  *pubsub.PubSubResultsService
-	localStore     *storage.LocalStoreService
-	gatewayDB      *gateway.GatewayDBService
+	bootstrap        *auth.BootstrapService
+	secretManager    *gateway.SecretManager
+	execution        *execution.ExecutionService
+	fileEdit         *execution.FileEditService
+	pubSubCommands   *pubsub.PubSubCommandService
+	pubSubResults    *pubsub.PubSubResultsService
+	localStore       *storage.LocalStoreService
+	executionVault   *storage.ExecutionVaultService
+	tokenStore       *storage.TokenStoreService
+	suspendedTxStore *storage.SuspendedTransactionService
+	gatewayDB        *gateway.CanonicalDBService
 
 	pubSubClient pubsub.PubSubClient
 
 	auditVault     *storage.AuditVaultService
-	ledger         *storage.LedgerService
+	auditStore     *storage.SQLAuditStore
+	ledger         *storage.GitLedgerService
 	historyHandler *storage.HistoryHandler
 
 	// P0 Transaction Gate infrastructure
@@ -119,10 +124,10 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// This must be initialized before LocalStore to provide keystore for encrypted token storage
 	secretsDir := vs.config.SecretsDir
 
-	// Initialize GatewayDBService for canonical state root calculation
+	// Initialize CanonicalDBService for canonical state root calculation
 	// This ensures outbound mode uses the same state root schema as gateway mode
 	dataDir := filepath.Join(vs.config.WorkDir, ".g8e")
-	gatewayDB, err := gateway.OpenGatewayDBService(dataDir, secretsDir, vs.logger, false)
+	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, secretsDir, vs.logger, false)
 	if err != nil {
 		return fmt.Errorf("failed to initialize gateway database (required for state root calculation): %w", err)
 	}
@@ -143,21 +148,43 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("local storage must be enabled for replay protection - set LocalStorageEnabled=true")
 	}
 
-	localStoreConfig := &storage.LocalStoreConfig{
-		DBPath:               vs.config.LocalStoreDBPath,
-		MaxDBSizeMB:          vs.config.LocalStoreMaxSizeMB,
-		RetentionDays:        vs.config.LocalStoreRetentionDays,
-		PruneIntervalMinutes: 60,
-		Enabled:              true,
-	}
-	vs.localStore, err = storage.NewLocalStoreService(localStoreConfig, vs.logger, nil, nil)
+	// Initialize ExecutionVaultService for execution log and file diff storage
+	executionVaultConfig := storage.DefaultExecutionVaultConfig()
+	executionVaultConfig.DBPath = filepath.Join(dataDir, "execution_vault.db")
+	executionVaultConfig.MaxDBSizeMB = vs.config.LocalStoreMaxSizeMB
+	executionVaultConfig.RetentionDays = vs.config.LocalStoreRetentionDays
+	vs.executionVault, err = storage.NewExecutionVaultService(executionVaultConfig, vs.logger, nil)
 	if err != nil {
-		return fmt.Errorf("failed to initialize local store (required for replay protection): %w", err)
+		return fmt.Errorf("failed to initialize execution vault: %w", err)
 	}
-	if vs.localStore == nil {
-		return fmt.Errorf("local store is required but was not initialized")
+	if vs.executionVault == nil {
+		return fmt.Errorf("execution vault is required but was not initialized")
 	}
-	vs.logger.Info("Local store initialized (consolidated execution vault, encryption enabled)")
+	vs.logger.Info("Execution vault initialized")
+
+	// Initialize TokenStoreService for Sentinel token persistence
+	tokenStoreConfig := storage.DefaultTokenStoreConfig()
+	tokenStoreConfig.DBPath = filepath.Join(dataDir, "token_store.db")
+	vs.tokenStore, err = storage.NewTokenStoreService(tokenStoreConfig, vs.logger, nil)
+	if err != nil {
+		return fmt.Errorf("failed to initialize token store: %w", err)
+	}
+	if vs.tokenStore == nil {
+		return fmt.Errorf("token store is required but was not initialized")
+	}
+	vs.logger.Info("Token store initialized")
+
+	// Initialize SuspendedTransactionService for L3 approval workflow
+	suspendedTxConfig := storage.DefaultSuspendedTransactionConfig()
+	suspendedTxConfig.DBPath = filepath.Join(dataDir, "suspended_transactions.db")
+	vs.suspendedTxStore, err = storage.NewSuspendedTransactionService(suspendedTxConfig, vs.logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize suspended transaction store: %w", err)
+	}
+	if vs.suspendedTxStore == nil {
+		return fmt.Errorf("suspended transaction store is required but was not initialized")
+	}
+	vs.logger.Info("Suspended transaction store initialized")
 
 	vs.logger.Info("Initializing Local-First Audit Architecture (LFAA)...")
 
@@ -171,8 +198,48 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.config.GitPath = gitPath
 	vs.config.GitAvailable = gitPath != ""
 
+	// Initialize LocalStoreService for sentinel token persistence and suspended transactions
+	localStoreConfig := storage.DefaultLocalStoreConfig()
+	localStoreConfig.DBPath = filepath.Join(dataDir, "local_state.db")
+	localStoreConfig.MaxDBSizeMB = vs.config.LocalStoreMaxSizeMB
+	localStoreConfig.RetentionDays = vs.config.LocalStoreRetentionDays
+	vs.localStore, err = storage.NewLocalStoreService(localStoreConfig, vs.logger, nil)
+	if err != nil {
+		return fmt.Errorf("failed to initialize local store: %w", err)
+	}
+	if vs.localStore == nil {
+		return fmt.Errorf("local store is required but was not initialized")
+	}
+	vs.logger.Info("Local store initialized")
+
+	// Initialize vault for encryption
+	vaultConfig := &vault.VaultConfig{
+		DataDir: filepath.Join(vs.config.WorkDir, ".g8e/vault"),
+		Logger:  vs.logger,
+	}
+	encryptionVault, err := vault.NewVault(vaultConfig)
+	if err != nil {
+		return fmt.Errorf("failed to initialize vault: %w", err)
+	}
+	// Note: Vault should be unlocked by the operator via bootstrap process
+	// For now, we'll initialize without unlocking - services will handle locked vault gracefully
+
+	// Initialize SQLAuditStore for history handler
+	auditStoreConfig := storage.DefaultAuditStoreConfig()
+	auditStoreConfig.DataDir = filepath.Join(vs.config.WorkDir, ".g8e/data")
+	auditStoreConfig.EncryptionVault = encryptionVault
+	vs.auditStore, err = storage.NewSQLAuditStore(auditStoreConfig, vs.logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize audit store: %w", err)
+	}
+	if vs.auditStore == nil {
+		return fmt.Errorf("audit store is required but was not initialized")
+	}
+
+	// Initialize AuditVaultService for audit logging
 	auditVaultConfig := storage.DefaultAuditVaultConfig()
 	auditVaultConfig.DataDir = filepath.Join(vs.config.WorkDir, ".g8e/data")
+	auditVaultConfig.EncryptionVault = encryptionVault
 	auditVaultConfig.GitPath = gitPath
 	vs.auditVault, err = storage.NewAuditVaultService(auditVaultConfig, vs.logger)
 	if err != nil {
@@ -194,23 +261,27 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		}
 	}
 
-	if vs.auditVault != nil && vs.auditVault.IsEnabled() && vs.auditVault.IsGitAvailable() {
-		vs.ledger = storage.NewLedgerService(vs.auditVault, vs.auditVault.GetEncryptionVault(), vs.logger)
+	if vs.auditStore != nil && vs.auditStore.IsEnabled() && gitPath != "" {
+		ledgerConfig := &storage.LedgerConfig{
+			BaseDir:         filepath.Join(vs.config.WorkDir, ".g8e/data/ledger"),
+			GitPath:         gitPath,
+			EncryptionVault: vs.auditStore.GetEncryptionVault(),
+		}
+		vs.ledger = storage.NewGitLedgerService(ledgerConfig, vs.logger)
 		vs.logger.Info("Ledger initialized")
-		vs.historyHandler = storage.NewHistoryHandler(vs.auditVault, vs.ledger, vs.logger)
+		vs.historyHandler = storage.NewHistoryHandler(vs.auditStore, vs.ledger, vs.logger)
 		vs.logger.Info("History Handler initialized (FETCH_HISTORY ready)")
-	} else if vs.auditVault != nil && vs.auditVault.IsEnabled() {
-		vs.logger.Warn("Ledger disabled - audit vault active without git-backed file versioning")
-		vs.historyHandler = storage.NewHistoryHandler(vs.auditVault, nil, vs.logger)
+	} else if vs.auditStore != nil && vs.auditStore.IsEnabled() {
+		vs.logger.Warn("Ledger disabled - audit store active without git-backed file versioning")
+		vs.historyHandler = storage.NewHistoryHandler(vs.auditStore, nil, vs.logger)
 		vs.logger.Info("History Handler initialized (FETCH_HISTORY ready, file history unavailable)")
 	}
 
 	// Initialize P0 Transaction Gate infrastructure (replay protection and state root verification)
 	// ReplayStore is mandatory for fail-closed replay protection
-	if vs.localStore == nil {
-		return fmt.Errorf("local store is required for replay protection initialization")
-	}
-	replayStore, err := storage.NewSQLReplayStore(vs.localStore.GetDB(), vs.logger)
+	replayStoreConfig := storage.DefaultReplayStoreConfig()
+	replayStoreConfig.DBPath = filepath.Join(dataDir, "replay_store.db")
+	replayStore, err := storage.NewSQLReplayStore(replayStoreConfig, vs.logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize replay store (required for transaction verification): %w", err)
 	}
@@ -233,12 +304,12 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 
 	// Create governance dependencies for transaction verification
-	// Use GatewayDBService for canonical state root calculation (same schema as gateway mode)
+	// Use CanonicalDBService for canonical state root calculation (same schema as gateway mode)
 	stateRootProvider := vs.gatewayDB
 	transactionAudit := &auditVaultTransactionStore{vault: vs.auditVault}
 	// L3Notary for outbound mode: CLI-based approval via suspended transactions
 	// Mutations requiring L3 are suspended and must be approved via CLI command
-	cliL3Notary := governance.NewOutboundL3Notary(vs.localStore, vs.logger)
+	cliL3Notary := governance.NewOutboundL3Notary(vs.suspendedTxStore, vs.logger)
 
 	// Load signing keys for Actuator and Consensus (fail-closed if missing)
 	actuatorPriv, actuatorKeyID, err := vs.secretManager.GetActuatorKey()
@@ -261,7 +332,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize ScrubbingService for data scrubbing (scrubbing/rehydration)
 	scrubbingConfig := scrubbing.DefaultConfig()
-	scrubbingService := scrubbing.NewScrubbingService(scrubbingConfig, vs.logger, vs.localStore)
+	scrubbingService := scrubbing.NewScrubbingService(scrubbingConfig, vs.logger, vs.tokenStore)
 
 	// PubSubCommandService Construction
 	psConfig := pubsub.CommandServiceConfig{
@@ -291,11 +362,6 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize command service: %w", err)
 	}
-
-	// Wire ScrubbingService into LocalStoreService for AI data scrubbing
-	// This must happen after ScrubbingService is created to break circular dependency
-	vs.localStore.SetScrubber(scrubbingService)
-	vs.logger.Info("ScrubbingService wired to LocalStoreService for AI data scrubbing")
 
 	if err = vs.pubSubCommands.Start(vs.ctx); err != nil {
 		return fmt.Errorf("failed to start command service: %w", err)
@@ -374,9 +440,27 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 		}
 	}
 
-	if vs.localStore != nil {
-		if err := vs.localStore.Close(); err != nil {
-			vs.logger.Error("Failed to close local store", string(constants.ConnectionStateError), err)
+	if vs.executionVault != nil {
+		if err := vs.executionVault.Close(); err != nil {
+			vs.logger.Error("Failed to close execution vault", string(constants.ConnectionStateError), err)
+		}
+	}
+
+	if vs.tokenStore != nil {
+		if err := vs.tokenStore.Close(); err != nil {
+			vs.logger.Error("Failed to close token store", string(constants.ConnectionStateError), err)
+		}
+	}
+
+	if vs.suspendedTxStore != nil {
+		if err := vs.suspendedTxStore.Close(); err != nil {
+			vs.logger.Error("Failed to close suspended transaction store", string(constants.ConnectionStateError), err)
+		}
+	}
+
+	if vs.replayStore != nil {
+		if err := vs.replayStore.Close(); err != nil {
+			vs.logger.Error("Failed to close replay store", string(constants.ConnectionStateError), err)
 		}
 	}
 

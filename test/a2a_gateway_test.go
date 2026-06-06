@@ -78,7 +78,7 @@ func (a2aGatewayRejectingL3Notary) VerifyL3Proof(_ string, _ string, _ string, _
 type a2aTestContext struct {
 	cfg              *config.Config
 	dataDir          string
-	ls               *gateway.GatewayService
+	ls               *gateway.GatewayModeService
 	mcpGateway       *mcp.GatewayService
 	mtlsClient       *http.Client
 	mtlsURL          string
@@ -127,7 +127,7 @@ func setupA2AGatewayTest(t *testing.T, testName string, downstreamHandler http.H
 	require.NoError(t, err)
 	cfg.Gateway.A2ADownstreamURL = downstreamServer.URL
 
-	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
+	ls, err := gateway.NewGatewayModeService(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())

@@ -35,6 +35,7 @@ var Paths = struct {
 		SshConfigPath        string
 		RuntimeDir           string
 		DataDir              string
+		VaultDir             string
 		TestVaultDir         string
 		LocalStateDBPath     string
 		AuditVaultDBPath     string
@@ -53,6 +54,7 @@ var Paths = struct {
 		SshConfigPath        string
 		RuntimeDir           string
 		DataDir              string
+		VaultDir             string
 		TestVaultDir         string
 		LocalStateDBPath     string
 		AuditVaultDBPath     string
@@ -69,6 +71,7 @@ var Paths = struct {
 		SshConfigPath:        ".g8e/ssh_config",
 		RuntimeDir:           ".g8e",
 		DataDir:              ".g8e/data",
+		VaultDir:             ".g8e/vault",
 		TestVaultDir:         ".g8e/test-vault",
 		LocalStateDBPath:     ".g8e/local_state.db",
 		AuditVaultDBPath:     ".g8e/audit_vault.db",
@@ -95,6 +98,7 @@ func InitPathsWithBase(baseDir string) {
 	Paths.Infra.PkiDir = filepath.Join(baseDir, ".g8e/pki")
 	Paths.Infra.SecretsDir = filepath.Join(baseDir, ".g8e/secrets")
 	Paths.Infra.ProtocolDir = filepath.Join(baseDir, ".g8e/protocol")
+	Paths.Infra.VaultDir = filepath.Join(baseDir, ".g8e/vault")
 
 	// Update derived paths
 	Paths.Infra.ProtocolConstantsDir = filepath.Join(Paths.Infra.ProtocolDir, "constants")

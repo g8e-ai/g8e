@@ -55,26 +55,26 @@ func TestGatewaySchema(t *testing.T) {
 	assert.Contains(t, schema, "CREATE TABLE", "Schema should contain CREATE TABLE statements")
 }
 
-func TestGatewayDBService_GetDB(t *testing.T) {
+func TestCanonicalDBService_GetDB(t *testing.T) {
 	t.Parallel()
 	dataDir := t.TempDir()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
-	db, err := OpenGatewayDBService(dataDir, secretsDir, logger, true)
+	db, err := OpenCanonicalDBService(dataDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	defer db.Close()
 
 	assert.NotNil(t, db.GetDB(), "GetDB should return non-nil database")
 }
 
-func TestGatewayDBService_Wait(t *testing.T) {
+func TestCanonicalDBService_Wait(t *testing.T) {
 	t.Parallel()
 	dataDir := t.TempDir()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
-	db, err := OpenGatewayDBService(dataDir, secretsDir, logger, true)
+	db, err := OpenCanonicalDBService(dataDir, secretsDir, logger, true)
 	require.NoError(t, err)
 
 	// Close the database to stop background workers
@@ -84,13 +84,13 @@ func TestGatewayDBService_Wait(t *testing.T) {
 	db.Wait()
 }
 
-func TestGatewayDBService_SSEEventsListAllSince(t *testing.T) {
+func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 	t.Parallel()
 	dataDir := t.TempDir()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
-	db, err := OpenGatewayDBService(dataDir, secretsDir, logger, true)
+	db, err := OpenCanonicalDBService(dataDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -112,11 +112,11 @@ func TestGatewayDBService_SSEEventsListAllSince(t *testing.T) {
 	assert.Len(t, rows, 2, "Should return 2 events after ID 3")
 }
 
-func newTestDB(t *testing.T) *GatewayDBService {
+func newTestDB(t *testing.T) *CanonicalDBService {
 	t.Helper()
 	dir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dir, secretsDir, testutil.NewTestLogger(), true)
+	db, err := OpenCanonicalDBService(dir, secretsDir, testutil.NewTestLogger(), true)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return db
@@ -461,13 +461,13 @@ func TestSchemaIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	secretsDir := t.TempDir()
 
-	db1, err := OpenGatewayDBService(dir, secretsDir, testutil.NewTestLogger(), true)
+	db1, err := OpenCanonicalDBService(dir, secretsDir, testutil.NewTestLogger(), true)
 	require.NoError(t, err)
 	require.NoError(t, db1.DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
 	// Re-open same database - schema init should not fail or lose data
-	db2, err := OpenGatewayDBService(dir, secretsDir, testutil.NewTestLogger(), true)
+	db2, err := OpenCanonicalDBService(dir, secretsDir, testutil.NewTestLogger(), true)
 	require.NoError(t, err)
 	t.Cleanup(func() { db2.Close() })
 
@@ -486,7 +486,7 @@ func TestCreateDataDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "nested", "deep", "data")
 	secretsDir := t.TempDir()
 
-	db, err := OpenGatewayDBService(dir, secretsDir, testutil.NewTestLogger(), true)
+	db, err := OpenCanonicalDBService(dir, secretsDir, testutil.NewTestLogger(), true)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

@@ -43,7 +43,7 @@ type CommandService struct {
 	vaultWriter    *VaultWriter
 	auditVault     *storage.AuditVaultService
 	localStore     *storage.LocalStoreService
-	ledger         *storage.LedgerService
+	ledger         *storage.GitLedgerService
 	historyHandler *storage.HistoryHandler
 }
 
@@ -75,7 +75,7 @@ func (cs *CommandService) SetAuditVaultService(av *storage.AuditVaultService) {
 }
 
 // SetLedgerService sets the ledger service for the CommandService.
-func (cs *CommandService) SetLedgerService(l *storage.LedgerService) {
+func (cs *CommandService) SetLedgerService(l *storage.GitLedgerService) {
 	cs.ledger = l
 }
 

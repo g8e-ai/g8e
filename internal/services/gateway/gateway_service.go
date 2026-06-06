@@ -11,6 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package gateway provides services for gateway mode (operator platform mode).
+//
+// This package contains mode-specific services that are only used in gateway mode,
+// including GatewayModeService (the top-level orchestrator) and CanonicalDBService
+// (shared with outbound mode for state root calculation).
+//
+// For more information on service modes, see docs/architecture/service_modes.md.
 package gateway
 
 import (
@@ -27,21 +34,21 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/network"
 )
 
-// GatewayService is the top-level orchestrator for gateway mode (operator).
+// GatewayModeService is the top-level orchestrator for gateway mode (operator).
 // It acts as the platform's central persistence and messaging backbone.
 // In this mode, the Operator does NOT execute commands or initiate outbound
 // connections. It strictly serves inbound requests from platform components.
-type GatewayService struct {
+type GatewayModeService struct {
 	cfg    *config.Config
 	logger *slog.Logger
 
-	db           *GatewayDBService
+	db           *CanonicalDBService
 	pubsub       *PubSubBroker
 	auth         *AuthService
 	pki          *PKIAuthority
@@ -50,7 +57,7 @@ type GatewayService struct {
 	userSvc      *UserService
 	sessionSvc   *SessionsService
 	mcpGateway   *mcp.GatewayService
-	responder    *responder.Responder
+	responder    *response.Writer
 	server       *http.Server
 	publicServer *http.Server
 
@@ -63,9 +70,9 @@ type GatewayService struct {
 	ready   bool
 }
 
-// NewGatewayService creates a new gateway mode service.
-func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService, error) {
-	db, err := OpenGatewayDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, logger, false)
+// NewGatewayModeService creates a new gateway mode service.
+func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayModeService, error) {
+	db, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, logger, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
@@ -77,7 +84,7 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 	}
 	pki := newPKIAuthority(cfg.Gateway.DataDir, cfg.Gateway.PKIDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 
 	var jwksProvider *JWKSProvider
 	if cfg.Gateway.JWKSURL != "" {
@@ -119,7 +126,7 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 		return nil, fmt.Errorf("failed to initialize passkey service: %w", err)
 	}
 
-	ls := &GatewayService{
+	ls := &GatewayModeService{
 		cfg:        cfg,
 		logger:     logger,
 		db:         db,
@@ -231,14 +238,14 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 	return extraIPs
 }
 
-// newGatewayServiceFromComponents assembles a GatewayService from pre-built components.
+// newGatewayModeServiceFromComponents assembles a GatewayModeService from pre-built components.
 // Used in tests where the DB and pub/sub broker are constructed independently.
-func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, pubsub *PubSubBroker) (*GatewayService, error) {
+func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, pubsub *PubSubBroker) (*GatewayModeService, error) {
 	sm, _ := NewSecretManager(db.db, cfg.Gateway.SecretsDir, logger)
 	pki := newPKIAuthority(cfg.Gateway.DataDir, cfg.Gateway.PKIDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, nil, "", "", "")
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
@@ -251,7 +258,7 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 	// Passkey service initialization is optional; ignore errors for test configuration
 	passkey, _ := NewPasskeyService(db, logger, passkeyCfg) //nolint:errcheck
 
-	ls := &GatewayService{
+	ls := &GatewayModeService{
 		cfg:        cfg,
 		logger:     logger,
 		db:         db,
@@ -279,7 +286,7 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 	return ls, nil
 }
 
-func (ls *GatewayService) initHandlersAndServers() error {
+func (ls *GatewayModeService) initHandlersAndServers() error {
 	cfg := ls.cfg
 	logger := ls.logger
 	db := ls.db
@@ -373,38 +380,38 @@ func (ls *GatewayService) initHandlersAndServers() error {
 }
 
 // GetDB returns the underlying database service.
-func (ls *GatewayService) GetDB() *GatewayDBService {
+func (ls *GatewayModeService) GetDB() *CanonicalDBService {
 	return ls.db
 }
 
 // GetSecretManager returns the secret manager.
-func (ls *GatewayService) GetSecretManager() (*SecretManager, error) {
+func (ls *GatewayModeService) GetSecretManager() (*SecretManager, error) {
 	return NewSecretManager(ls.db.db, ls.cfg.Gateway.SecretsDir, ls.logger)
 }
 
 // GetPKIAuthority returns the underlying PKI authority.
-func (ls *GatewayService) GetPKIAuthority() *PKIAuthority {
+func (ls *GatewayModeService) GetPKIAuthority() *PKIAuthority {
 	return ls.pki
 }
 
 // GetHTTPHandler returns the HTTP handler.
-func (ls *GatewayService) GetHTTPHandler() *HTTPHandler {
+func (ls *GatewayModeService) GetHTTPHandler() *HTTPHandler {
 	return ls.handler
 }
 
-func (ls *GatewayService) IsRunning() bool {
+func (ls *GatewayModeService) IsRunning() bool {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 	return ls.running
 }
 
-func (ls *GatewayService) IsReady() bool {
+func (ls *GatewayModeService) IsReady() bool {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 	return ls.ready
 }
 
-func (ls *GatewayService) IsGovernanceReady() bool {
+func (ls *GatewayModeService) IsGovernanceReady() bool {
 	ready, err := ls.db.HasTrustedSigners()
 	if err != nil {
 		ls.logger.Error("Failed to check if governance is ready", string(constants.ConnectionStateError), err)
@@ -414,7 +421,7 @@ func (ls *GatewayService) IsGovernanceReady() bool {
 }
 
 // GovernanceDeps holds the governance dependencies required for transaction verification.
-// These interfaces are implemented by GatewayDBService (ReplayStore, StateRootProvider,
+// These interfaces are implemented by CanonicalDBService (ReplayStore, StateRootProvider,
 // TransactionAuditStore) and CompositeL3Verifier (L3Notary).
 type GovernanceDeps struct {
 	ReplayStore       governance.ReplayStore
@@ -428,7 +435,7 @@ type GovernanceDeps struct {
 // GetGovernanceDeps returns the governance dependencies for transaction verification.
 // This enables the in-process PubSubCommandService to perform fail-closed verification.
 // The L3 notary is a composite that handles both WebAuthn (web sessions) and mTLS (CLI sessions).
-func (ls *GatewayService) GetGovernanceDeps() *GovernanceDeps {
+func (ls *GatewayModeService) GetGovernanceDeps() *GovernanceDeps {
 	// Create composite L3 notary that handles both web and CLI sessions
 	cliL3 := NewCLIL3Notary(ls.db, ls.pki, ls.logger, ls.userSvc, ls.sessionSvc)
 	compositeL3 := NewCompositeL3Verifier(ls.passkey, cliL3, ls.logger)
@@ -445,7 +452,7 @@ func (ls *GatewayService) GetGovernanceDeps() *GovernanceDeps {
 
 // Start begins serving HTTP/WS requests. Blocks until the context is cancelled
 // or the server encounters a fatal error.
-func (ls *GatewayService) Start(ctx context.Context) error {
+func (ls *GatewayModeService) Start(ctx context.Context) error {
 	ls.mu.Lock()
 	if ls.running {
 		ls.mu.Unlock()
@@ -544,7 +551,7 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 // Stop gracefully shuts down the HTTP server and closes the database.
 // Enforces a strict 30-second timeout - if shutdown hangs, the process will
 // force-kill itself to prevent zombie processes.
-func (ls *GatewayService) Stop(ctx context.Context) error {
+func (ls *GatewayModeService) Stop(ctx context.Context) error {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
@@ -590,7 +597,7 @@ func (ls *GatewayService) Stop(ctx context.Context) error {
 
 // runServiceCertRenewalLoop runs a background goroutine that periodically checks
 // and renews the service certificate if it is expiring soon.
-func (ls *GatewayService) runServiceCertRenewalLoop(ctx context.Context) {
+func (ls *GatewayModeService) runServiceCertRenewalLoop(ctx context.Context) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
@@ -612,7 +619,7 @@ func (ls *GatewayService) runServiceCertRenewalLoop(ctx context.Context) {
 }
 
 // renewServiceCertWithIdentity renews the service certificate with current network identity.
-func (ls *GatewayService) renewServiceCertWithIdentity(ctx context.Context) error {
+func (ls *GatewayModeService) renewServiceCertWithIdentity(ctx context.Context) error {
 	// Detect current network identity
 	netDetector := network.NewDetector(ls.logger)
 	netIdentity, err := netDetector.DetectAll(ctx)

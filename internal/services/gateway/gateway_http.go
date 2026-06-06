@@ -32,7 +32,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
@@ -46,7 +46,7 @@ var governanceEnvelopeRedirectError = "submit via POST " + constants.APIPaths.Go
 type HTTPHandlerDependencies struct {
 	Cfg               *config.Config
 	Logger            *slog.Logger
-	DB                *GatewayDBService
+	DB                *CanonicalDBService
 	Pubsub            *PubSubBroker
 	Auth              *AuthService
 	PKI               *PKIAuthority
@@ -54,7 +54,7 @@ type HTTPHandlerDependencies struct {
 	Reg               *RegistrationService
 	Passkey           *PasskeyService
 	UserSvc           *UserService
-	Responder         *responder.Responder
+	Responder         *response.Writer
 	MCPGateway        *mcp.GatewayService
 	AppEnrollment     *AppEnrollmentService
 	IsReady           func() bool
@@ -70,7 +70,7 @@ func (h *HTTPHandler) readBody(r *http.Request) ([]byte, error) {
 type HTTPHandler struct {
 	cfg               *config.Config
 	logger            *slog.Logger
-	db                *GatewayDBService
+	db                *CanonicalDBService
 	pubsub            *PubSubBroker
 	auth              *AuthService
 	pki               *PKIAuthority
@@ -78,7 +78,7 @@ type HTTPHandler struct {
 	reg               *RegistrationService
 	passkey           *PasskeyService
 	userSvc           *UserService
-	responder         *responder.Responder
+	responder         *response.Writer
 	mcp               *mcp.GatewayService
 	appEnrollment     *AppEnrollmentService
 	isReady           func() bool

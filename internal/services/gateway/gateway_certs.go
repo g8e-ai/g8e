@@ -60,7 +60,7 @@ const (
 type PKIAuthority struct {
 	mu     sync.RWMutex
 	logger *slog.Logger
-	db     *GatewayDBService
+	db     *CanonicalDBService
 
 	pkiDir        string
 	secretManager *SecretManager
@@ -81,7 +81,7 @@ type PKIAuthority struct {
 	serviceCert tls.Certificate
 }
 
-func newPKIAuthority(dataDir, pkiDir string, db *GatewayDBService, secretManager *SecretManager, logger *slog.Logger) *PKIAuthority {
+func newPKIAuthority(dataDir, pkiDir string, db *CanonicalDBService, secretManager *SecretManager, logger *slog.Logger) *PKIAuthority {
 	if pkiDir == "" {
 		pkiDir = filepath.Join(dataDir, "pki")
 	}

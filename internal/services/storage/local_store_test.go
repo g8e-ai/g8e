@@ -35,7 +35,7 @@ func TestNewLocalStoreService(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = dbPath
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -53,7 +53,7 @@ func TestLocalStoreService_Disabled(t *testing.T) {
 		Enabled: false,
 	}
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	assert.NoError(t, err)
 	assert.Nil(t, ls)
 }
@@ -65,7 +65,7 @@ func TestLocalStoreService_StoreAndRetrieve(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_store.db")
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -91,7 +91,7 @@ func TestLocalStoreService_StoreAndRetrieve(t *testing.T) {
 	err = ls.StoreExecution(record)
 	require.NoError(t, err)
 
-	retrieved, err := ls.GetExecution("test-exec-123", false)
+	retrieved, err := ls.GetExecution("test-exec-123")
 	require.NoError(t, err)
 	require.NotNil(t, retrieved)
 
@@ -107,7 +107,7 @@ func TestLocalStoreService_KVScanPrefix(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_kv_scan.db")
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -145,7 +145,7 @@ func TestLocalStoreService_KVScanPrefix_TTL(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_kv_scan_ttl.db")
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -179,7 +179,7 @@ func TestLocalStoreService_HashConsistency(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_hash.db")
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -202,7 +202,7 @@ func TestLocalStoreService_UpsertBehavior(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_upsert.db")
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -230,7 +230,7 @@ func TestLocalStoreService_UpsertBehavior(t *testing.T) {
 	err = ls.StoreExecution(record)
 	require.NoError(t, err)
 
-	retrieved, err := ls.GetExecution("test-upsert-123", false)
+	retrieved, err := ls.GetExecution("test-upsert-123")
 	require.NoError(t, err)
 	require.NotNil(t, retrieved)
 
@@ -245,12 +245,12 @@ func TestLocalStoreService_NonExistentRecord(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_nonexistent.db")
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
 
-	record, err := ls.GetExecution("does-not-exist", false)
+	record, err := ls.GetExecution("does-not-exist")
 	assert.NoError(t, err)
 	assert.Nil(t, record)
 }
@@ -290,7 +290,7 @@ func TestLocalStoreService_StoreAndRetrieveFileDiff(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_file_diff.db")
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -316,7 +316,7 @@ func TestLocalStoreService_StoreAndRetrieveFileDiff(t *testing.T) {
 	err = ls.StoreFileDiff(record)
 	require.NoError(t, err)
 
-	retrieved, err := ls.GetFileDiff("diff-test-123", false)
+	retrieved, err := ls.GetFileDiff("diff-test-123")
 	require.NoError(t, err)
 	require.NotNil(t, retrieved)
 
@@ -341,7 +341,7 @@ func TestLocalStoreService_GetFileDiffsBySession(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_file_diff_session.db")
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -391,12 +391,12 @@ func TestLocalStoreService_GetFileDiff_NotFound(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_file_diff_notfound.db")
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
 
-	retrieved, err := ls.GetFileDiff("nonexistent-diff-id", false)
+	retrieved, err := ls.GetFileDiff("nonexistent-diff-id")
 	assert.NoError(t, err)
 	assert.Nil(t, retrieved)
 }
@@ -415,7 +415,7 @@ func TestLocalStorePrune(t *testing.T) {
 		PruneIntervalMinutes: 60,
 	}
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	defer ls.Close()
 
@@ -455,19 +455,19 @@ func TestLocalStorePrune(t *testing.T) {
 	pruneFunc(ls.db, logger)
 
 	// 4. Verify retention pruning
-	retrievedOldExec, err := ls.GetExecution("old-exec", false)
+	retrievedOldExec, err := ls.GetExecution("old-exec")
 	require.NoError(t, err)
 	assert.Nil(t, retrievedOldExec)
 
-	retrievedRecentExec, err := ls.GetExecution("recent-exec", false)
+	retrievedRecentExec, err := ls.GetExecution("recent-exec")
 	require.NoError(t, err)
 	assert.NotNil(t, retrievedRecentExec)
 
-	retrievedOldDiff, err := ls.GetFileDiff("old-diff", false)
+	retrievedOldDiff, err := ls.GetFileDiff("old-diff")
 	require.NoError(t, err)
 	assert.Nil(t, retrievedOldDiff)
 
-	retrievedRecentDiff, err := ls.GetFileDiff("recent-diff", false)
+	retrievedRecentDiff, err := ls.GetFileDiff("recent-diff")
 	require.NoError(t, err)
 	assert.NotNil(t, retrievedRecentDiff)
 
@@ -509,7 +509,7 @@ func TestLocalStoreService_FileDiffUpsert(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_file_diff_upsert.db")
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -531,7 +531,7 @@ func TestLocalStoreService_FileDiffUpsert(t *testing.T) {
 	err = ls.StoreFileDiff(record)
 	require.NoError(t, err)
 
-	retrieved, err := ls.GetFileDiff("diff-upsert-123", false)
+	retrieved, err := ls.GetFileDiff("diff-upsert-123")
 	require.NoError(t, err)
 	require.NotNil(t, retrieved)
 	assert.Equal(t, "updated diff content", string(retrieved.DiffCompressed))
@@ -544,7 +544,7 @@ func TestLocalStoreService_TokenStore_IsEnabled(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_is_enabled.db")
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -559,7 +559,7 @@ func TestLocalStoreService_TokenStore_KVSet_KVGet(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_kv_set_get.db")
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -630,7 +630,7 @@ func TestLocalStoreService_TokenStore_KVGet_TTLExpiry(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_kv_ttl_expiry.db")
 
-	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -667,4 +667,85 @@ func TestLocalStoreService_TokenStore_NilSafety(t *testing.T) {
 
 	_, err = ls.KVScanPrefix("prefix")
 	assert.Error(t, err, "KVScanPrefix on nil should return error")
+}
+
+func TestLocalStoreService_Regression_UnscrubbedData(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	config := DefaultLocalStoreConfig()
+	config.DBPath = filepath.Join(t.TempDir(), "test_unscrubbed.db")
+
+	ls, err := NewLocalStoreService(config, logger, nil)
+	require.NoError(t, err)
+	require.NotNil(t, ls)
+	defer ls.Close()
+
+	// Regression test: verify that sensitive data is returned unscrubbed
+	// This test ensures the removal of the scrubbing logic doesn't accidentally
+	// scrub data in the future.
+	sensitiveToken := "{{UEI_sensitive_token_12345}}"
+	sensitiveSecret := "api_key=sk-1234567890abcdef"
+
+	exitCode := 0
+	record := &ExecutionRecord{
+		ID:               "regression-test-1",
+		TimestampUTC:     time.Now().UTC(),
+		Command:          "echo " + sensitiveToken,
+		ExitCode:         &exitCode,
+		DurationMs:       100,
+		StdoutCompressed: []byte("Output: " + sensitiveSecret),
+		StderrCompressed: []byte("Error: " + sensitiveToken),
+		StdoutSize:       len("Output: " + sensitiveSecret),
+		StderrSize:       len("Error: " + sensitiveToken),
+	}
+
+	err = ls.StoreExecution(record)
+	require.NoError(t, err)
+
+	retrieved, err := ls.GetExecution("regression-test-1")
+	require.NoError(t, err)
+	require.NotNil(t, retrieved)
+
+	// Verify sensitive data is preserved (not scrubbed)
+	assert.Contains(t, string(retrieved.StdoutCompressed), sensitiveSecret, "Sensitive data in stdout should be preserved")
+	assert.Contains(t, string(retrieved.StderrCompressed), sensitiveToken, "Sensitive data in stderr should be preserved")
+	assert.Contains(t, retrieved.Command, sensitiveToken, "Sensitive data in command should be preserved")
+}
+
+func TestLocalStoreService_Regression_UnscrubbedFileDiff(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	config := DefaultLocalStoreConfig()
+	config.DBPath = filepath.Join(t.TempDir(), "test_unscrubbed_diff.db")
+
+	ls, err := NewLocalStoreService(config, logger, nil)
+	require.NoError(t, err)
+	require.NotNil(t, ls)
+	defer ls.Close()
+
+	// Regression test: verify that file diff content is returned unscrubbed
+	sensitiveContent := "password = secret123"
+	diffContent := "--- a/config\n+++ b/config\n@@ -1,1 +1,1 @@\n-old\n+" + sensitiveContent
+
+	record := &FileDiffRecord{
+		ID:                "regression-diff-1",
+		TimestampUTC:      time.Now().UTC(),
+		FilePath:          "/etc/config",
+		Operation:         "replace",
+		DiffCompressed:    []byte(diffContent),
+		DiffSize:          len(diffContent),
+		OperatorSessionID: "session-123",
+	}
+
+	err = ls.StoreFileDiff(record)
+	require.NoError(t, err)
+
+	retrieved, err := ls.GetFileDiff("regression-diff-1")
+	require.NoError(t, err)
+	require.NotNil(t, retrieved)
+
+	// Verify sensitive data in diff is preserved (not scrubbed)
+	assert.Contains(t, string(retrieved.DiffCompressed), sensitiveContent, "Sensitive data in diff should be preserved")
 }

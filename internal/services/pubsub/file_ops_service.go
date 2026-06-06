@@ -45,7 +45,7 @@ type FileOpsService struct {
 	scrubbing   *scrubbing.ScrubbingService
 	vaultWriter *VaultWriter
 	auditVault  *storage.AuditVaultService
-	ledger      *storage.LedgerService
+	ledger      *storage.GitLedgerService
 	client      PubSubClient
 }
 

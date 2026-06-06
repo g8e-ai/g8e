@@ -85,32 +85,24 @@ type FileDiffRecord struct {
 	OperatorID        string
 }
 
-// TextScrubber defines the interface for scrubbing sensitive data from text.
-// This breaks the import cycle between storage and sentinel packages.
-type TextScrubber interface {
-	ScrubText(input string) string
-}
-
 // Ensure LocalStoreService implements interfaces.TokenStore interface.
 var _ interfaces.TokenStore = (*LocalStoreService)(nil)
 
 // LocalStoreService provides local SQLite storage for command execution results.
 // This is the consolidated execution vault - all data encrypted at rest when configured.
-// Customer read path: decrypt → return full data
-// AI read path: decrypt → scrubber → return redacted data
 type LocalStoreService struct {
-	db       *sqliteutil.DB
-	config   *LocalStoreConfig
-	logger   *slog.Logger
-	pruner   *sqliteutil.Pruner
-	vault    *vault.Vault
-	scrubber TextScrubber
+	db     *sqliteutil.DB
+	config *LocalStoreConfig
+	logger *slog.Logger
+	pruner *sqliteutil.Pruner
+	vault  *vault.Vault
 
 	wg sync.WaitGroup
 }
 
 // NewLocalStoreService creates a new local storage service.
-func NewLocalStoreService(config *LocalStoreConfig, logger *slog.Logger, v *vault.Vault, scrubber TextScrubber) (*LocalStoreService, error) {
+// Vault is required for encryption at rest.
+func NewLocalStoreService(config *LocalStoreConfig, logger *slog.Logger, v *vault.Vault) (*LocalStoreService, error) {
 	if config == nil {
 		config = DefaultLocalStoreConfig()
 	}
@@ -118,6 +110,10 @@ func NewLocalStoreService(config *LocalStoreConfig, logger *slog.Logger, v *vaul
 	if !config.Enabled {
 		logger.Info("Local storage is disabled")
 		return nil, nil
+	}
+
+	if v == nil {
+		return nil, fmt.Errorf("vault is required for local storage service")
 	}
 
 	cfg := sqliteutil.DefaultDBConfig(config.DBPath)
@@ -132,18 +128,17 @@ func NewLocalStoreService(config *LocalStoreConfig, logger *slog.Logger, v *vaul
 	}
 
 	ls := &LocalStoreService{
-		config:   config,
-		logger:   logger,
-		db:       db,
-		vault:    v,
-		scrubber: scrubber,
+		config: config,
+		logger: logger,
+		db:     db,
+		vault:  v,
 	}
 
 	interval := time.Duration(config.PruneIntervalMinutes) * time.Minute
 	ls.pruner = sqliteutil.NewPruner(db, logger, interval, localStorePrune(config))
 	ls.pruner.Start()
 
-	encryptionEnabled := ls.vault != nil && ls.vault.IsUnlocked()
+	encryptionEnabled := ls.vault.IsUnlocked()
 	ls.logger.Info("Local storage initialized (consolidated execution vault)",
 		"db_path", config.DBPath,
 		"encryption_enabled", encryptionEnabled)
@@ -314,8 +309,7 @@ func (ls *LocalStoreService) StoreExecution(record *ExecutionRecord) error {
 }
 
 // GetExecution retrieves a stored execution by ID.
-// If forAI is true, stdout and stderr are scrubbed by Sentinel before return.
-func (ls *LocalStoreService) GetExecution(executionID string, forAI bool) (*ExecutionRecord, error) {
+func (ls *LocalStoreService) GetExecution(executionID string) (*ExecutionRecord, error) {
 	if ls == nil || ls.db == nil {
 		return nil, fmt.Errorf("local storage is disabled")
 	}
@@ -374,9 +368,6 @@ func (ls *LocalStoreService) GetExecution(executionID string, forAI bool) (*Exec
 			if err != nil {
 				ls.logger.Warn("Failed to decrypt stdout", string(constants.ConnectionStateError), err)
 			} else {
-				if forAI && ls.scrubber != nil {
-					decrypted = ls.scrubber.ScrubText(decrypted)
-				}
 				record.StdoutCompressed = []byte(decrypted)
 			}
 		}
@@ -391,9 +382,6 @@ func (ls *LocalStoreService) GetExecution(executionID string, forAI bool) (*Exec
 			if err != nil {
 				ls.logger.Warn("Failed to decrypt stderr", string(constants.ConnectionStateError), err)
 			} else {
-				if forAI && ls.scrubber != nil {
-					decrypted = ls.scrubber.ScrubText(decrypted)
-				}
 				record.StderrCompressed = []byte(decrypted)
 			}
 		}
@@ -514,44 +502,38 @@ func (ls *LocalStoreService) IsEncryptionEnabled() bool {
 	return ls != nil && ls.vault != nil && ls.vault.IsUnlocked()
 }
 
-// SetScrubber sets the text scrubber for AI data scrubbing.
-// This is called after Sentinel is created to break the circular dependency.
-func (ls *LocalStoreService) SetScrubber(scrubber TextScrubber) {
-	ls.scrubber = scrubber
-}
-
-// encryptContent encrypts content if encryption is enabled, otherwise returns original
+// encryptContent encrypts content. Vault is required and must be unlocked.
 func (ls *LocalStoreService) encryptContent(content string) ([]byte, error) {
 	if content == "" {
 		return nil, nil
 	}
 
-	if ls.vault != nil && ls.vault.IsUnlocked() {
-		encrypted, err := ls.vault.Encrypt([]byte(content))
-		if err != nil {
-			return nil, fmt.Errorf("failed to encrypt content: %w", err)
-		}
-		return encrypted, nil
+	if !ls.vault.IsUnlocked() {
+		return nil, fmt.Errorf("vault is locked, cannot encrypt content")
 	}
 
-	return []byte(content), nil
+	encrypted, err := ls.vault.Encrypt([]byte(content))
+	if err != nil {
+		return nil, fmt.Errorf("failed to encrypt content: %w", err)
+	}
+	return encrypted, nil
 }
 
-// decryptContent decrypts content if encryption is enabled, otherwise returns original
+// decryptContent decrypts content. Vault is required and must be unlocked.
 func (ls *LocalStoreService) decryptContent(data []byte) (string, error) {
 	if len(data) == 0 {
 		return "", nil
 	}
 
-	if ls.vault != nil && ls.vault.IsUnlocked() {
-		decrypted, err := ls.vault.Decrypt(data)
-		if err != nil {
-			return "", fmt.Errorf("failed to decrypt content: %w", err)
-		}
-		return string(decrypted), nil
+	if !ls.vault.IsUnlocked() {
+		return "", fmt.Errorf("vault is locked, cannot decrypt content")
 	}
 
-	return string(data), nil
+	decrypted, err := ls.vault.Decrypt(data)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt content: %w", err)
+	}
+	return string(decrypted), nil
 }
 
 // Wait blocks until all local store background workers and writes have finished.
@@ -739,8 +721,7 @@ func (ls *LocalStoreService) StoreFileDiff(record *FileDiffRecord) error {
 }
 
 // GetFileDiff retrieves a file diff by ID.
-// If forAI is true, the diff content is scrubbed by Sentinel before return.
-func (ls *LocalStoreService) GetFileDiff(diffID string, forAI bool) (*FileDiffRecord, error) {
+func (ls *LocalStoreService) GetFileDiff(diffID string) (*FileDiffRecord, error) {
 	if ls == nil || ls.db == nil {
 		return nil, fmt.Errorf("local storage is disabled")
 	}
@@ -799,9 +780,6 @@ func (ls *LocalStoreService) GetFileDiff(diffID string, forAI bool) (*FileDiffRe
 			if err != nil {
 				ls.logger.Warn("Failed to decrypt file diff", string(constants.ConnectionStateError), err)
 			} else {
-				if forAI && ls.scrubber != nil {
-					decrypted = ls.scrubber.ScrubText(decrypted)
-				}
 				record.DiffCompressed = []byte(decrypted)
 			}
 		}

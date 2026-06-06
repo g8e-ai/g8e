@@ -81,21 +81,24 @@ type LoadOptions struct {
 // backbone for the entire g8e platform, replacing external databases.
 // No outbound authentication is required - the Operator simply starts and listens.
 type GatewayConfig struct {
-	Enabled          bool
-	Posture          GatewayPosture // Governance enforcement posture (doctrine, consensus, notary)
-	HTTPPort         int            // Plain HTTP port for bootstrap and MCP (default: constants.Ports.OperatorHttp)
-	HTTPSPort        int            // HTTPS port for mTLS API (default: constants.Ports.OperatorHttps)
-	DataDir          string         // Root directory for SQLite database (default: .g8e/data in working directory)
-	PKIDir           string         // Directory for TLS certificates (default: .g8e/pki)
-	SecretsDir       string         // Directory for platform secrets (default: .g8e/secrets)
-	PasskeyRpID      string         // RP ID for passkey operations (default: localhost)
-	PasskeyRpName    string         // RP Name for passkey operations (default: g8e)
-	MCPDownstreamURL string         // URL of the downstream MCP server to proxy discovery and execution to
-	A2ADownstreamURL string         // URL of the downstream A2A server to proxy execution to
-	JWKSURL          string         // URL to fetch JWKS for JWT validation
-	JWTRoleClaim     string         // The claim in JWT that contains roles (default: "roles")
-	JWTIssuer        string         // Expected issuer claim in JWT (optional, for multi-audience IdP deployments)
-	JWTAudience      string         // Expected audience claim in JWT (optional, for multi-audience IdP deployments)
+	Enabled            bool
+	Posture            GatewayPosture // Governance enforcement posture (doctrine, consensus, notary)
+	HTTPPort           int            // Plain HTTP port for bootstrap and MCP (default: constants.Ports.OperatorHttp)
+	HTTPSPort          int            // HTTPS port for mTLS API (default: constants.Ports.OperatorHttps)
+	DataDir            string         // Root directory for SQLite database (default: .g8e/data in working directory)
+	PKIDir             string         // Directory for TLS certificates (default: .g8e/pki)
+	SecretsDir         string         // Directory for platform secrets (default: .g8e/secrets)
+	VaultDir           string         // Directory for encryption vault (default: .g8e/vault)
+	VaultKeyPath       string         // Path to vault key file (default: .g8e/vault/key)
+	VaultRequireUnlock bool           // Require vault to be unlocked before starting (default: true)
+	PasskeyRpID        string         // RP ID for passkey operations (default: localhost)
+	PasskeyRpName      string         // RP Name for passkey operations (default: g8e)
+	MCPDownstreamURL   string         // URL of the downstream MCP server to proxy discovery and execution to
+	A2ADownstreamURL   string         // URL of the downstream A2A server to proxy execution to
+	JWKSURL            string         // URL to fetch JWKS for JWT validation
+	JWTRoleClaim       string         // The claim in JWT that contains roles (default: "roles")
+	JWTIssuer          string         // Expected issuer claim in JWT (optional, for multi-audience IdP deployments)
+	JWTAudience        string         // Expected audience claim in JWT (optional, for multi-audience IdP deployments)
 
 	// Federation
 	FederationSeedURL string // Optional seed gateway URL for federation (empty = standalone mode)
@@ -207,6 +210,11 @@ type Config struct {
 	// PKI and Secrets directories
 	PKIDir     string
 	SecretsDir string
+
+	// Vault configuration for encryption at rest
+	VaultDir           string // Directory for encryption vault (default: .g8e/vault)
+	VaultKeyPath       string // Path to vault key file (default: .g8e/vault/key)
+	VaultRequireUnlock bool   // Require vault to be unlocked before starting (default: true)
 
 	// Local storage configuration. All paths are relative to WorkDir - the directory the Operator was launched from.
 	LocalStoreEnabled       bool
@@ -369,6 +377,9 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 		secretsDir = constants.Paths.Infra.SecretsDir
 	}
 
+	vaultDir := constants.Paths.Infra.VaultDir
+	vaultKeyPath := filepath.Join(vaultDir, "key")
+
 	// Validate and resolve gateway ports
 	httpPort, httpsPort, err := validateAndResolveGatewayPorts(
 		opts.HTTPPort,
@@ -409,19 +420,22 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			Enabled: true,
 			Posture: posture,
 
-			HTTPPort:         httpPort,
-			HTTPSPort:        httpsPort,
-			DataDir:          dataDir,
-			PKIDir:           pkiDir,
-			SecretsDir:       secretsDir,
-			PasskeyRpID:      passkeyRpID,
-			PasskeyRpName:    passkeyRpName,
-			MCPDownstreamURL: mcpDownstreamURL,
-			A2ADownstreamURL: a2aDownstreamURL,
-			JWKSURL:          jwksURL,
-			JWTRoleClaim:     jwtRoleClaim,
-			JWTIssuer:        jwtIssuer,
-			JWTAudience:      jwtAudience,
+			HTTPPort:           httpPort,
+			HTTPSPort:          httpsPort,
+			DataDir:            dataDir,
+			PKIDir:             pkiDir,
+			SecretsDir:         secretsDir,
+			VaultDir:           vaultDir,
+			VaultKeyPath:       vaultKeyPath,
+			VaultRequireUnlock: true,
+			PasskeyRpID:        passkeyRpID,
+			PasskeyRpName:      passkeyRpName,
+			MCPDownstreamURL:   mcpDownstreamURL,
+			A2ADownstreamURL:   a2aDownstreamURL,
+			JWKSURL:            jwksURL,
+			JWTRoleClaim:       jwtRoleClaim,
+			JWTIssuer:          jwtIssuer,
+			JWTAudience:        jwtAudience,
 
 			// HTTP server limits with fail-closed defaults
 			MaxPayloadBytes:   512 * 1024, // 512KB
@@ -526,6 +540,19 @@ func Load(opts LoadOptions) (*Config, error) {
 	if cfg.SecretsDir == "" {
 		cfg.SecretsDir = constants.Paths.Infra.SecretsDir
 	}
+
+	// Default VaultDir to .g8e/vault if not explicitly set
+	if cfg.VaultDir == "" {
+		cfg.VaultDir = constants.Paths.Infra.VaultDir
+	}
+
+	// Default VaultKeyPath to .g8e/vault/key if not explicitly set
+	if cfg.VaultKeyPath == "" {
+		cfg.VaultKeyPath = filepath.Join(cfg.VaultDir, "key")
+	}
+
+	// Default VaultRequireUnlock to true
+	cfg.VaultRequireUnlock = true
 
 	// Read operator session ID from environment variable (in-memory only, never persisted)
 	// This is set by the deploy script after enrollment to track the operator's session

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package responder
+package response
 
 import (
 	"encoding/json"
@@ -62,39 +62,39 @@ const (
 	ErrCodeGatewayNotReady  = -32101
 )
 
-// Responder provides a unified way to write JSON and JSON-RPC responses.
-type Responder struct {
+// Writer provides a unified way to write JSON and JSON-RPC responses.
+type Writer struct {
 	logger *slog.Logger
 }
 
-// New creates a new Responder.
-func New(logger *slog.Logger) *Responder {
-	return &Responder{
+// NewWriter creates a new Writer.
+func NewWriter(logger *slog.Logger) *Writer {
+	return &Writer{
 		logger: logger,
 	}
 }
 
 // JSON writes a standard JSON response.
-func (r *Responder) JSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set(constants.HeaderContentType, "application/json")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "DENY")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		r.logger.Error("Failed to encode JSON response", "error", err)
+func (w *Writer) JSON(rw http.ResponseWriter, status int, data interface{}) {
+	rw.Header().Set(constants.HeaderContentType, "application/json")
+	rw.Header().Set("X-Content-Type-Options", "nosniff")
+	rw.Header().Set("X-Frame-Options", "DENY")
+	rw.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+	rw.WriteHeader(status)
+	if err := json.NewEncoder(rw).Encode(data); err != nil {
+		w.logger.Error("Failed to encode JSON response", "error", err)
 	}
 }
 
 // Error writes a standard JSON error response.
-func (r *Responder) Error(w http.ResponseWriter, status int, msg string) {
-	r.JSON(w, status, struct {
+func (w *Writer) Error(rw http.ResponseWriter, status int, msg string) {
+	w.JSON(rw, status, struct {
 		Error string `json:"error"`
 	}{Error: msg})
 }
 
 // RPCResponse writes a JSON-RPC 2.0 success response.
-func (r *Responder) RPCResponse(w http.ResponseWriter, id interface{}, result interface{}) {
+func (w *Writer) RPCResponse(rw http.ResponseWriter, id interface{}, result interface{}) {
 	res := JSONRPCResponse{
 		JSONRPC: "2.0",
 		ID:      id,
@@ -106,24 +106,24 @@ func (r *Responder) RPCResponse(w http.ResponseWriter, id interface{}, result in
 	} else {
 		b, err := json.Marshal(result)
 		if err != nil {
-			r.logger.Error("Failed to marshal JSON-RPC result", "error", err)
-			r.RPCError(w, id, -32603, "failed to marshal result")
+			w.logger.Error("Failed to marshal JSON-RPC result", "error", err)
+			w.RPCError(rw, id, -32603, "failed to marshal result")
 			return
 		}
 		res.Result = json.RawMessage(b)
 	}
 
-	w.Header().Set(constants.HeaderContentType, "application/json")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "DENY")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(res); err != nil {
-		r.logger.Error("Failed to encode JSON-RPC response", "error", err)
+	rw.Header().Set(constants.HeaderContentType, "application/json")
+	rw.Header().Set("X-Content-Type-Options", "nosniff")
+	rw.Header().Set("X-Frame-Options", "DENY")
+	rw.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(rw).Encode(res); err != nil {
+		w.logger.Error("Failed to encode JSON-RPC response", "error", err)
 	}
 }
 
 // RPCError writes a JSON-RPC 2.0 error response.
-func (r *Responder) RPCError(w http.ResponseWriter, id interface{}, code int, msg string) {
+func (w *Writer) RPCError(rw http.ResponseWriter, id interface{}, code int, msg string) {
 	res := JSONRPCResponse{
 		JSONRPC: "2.0",
 		ID:      id,
@@ -132,11 +132,11 @@ func (r *Responder) RPCError(w http.ResponseWriter, id interface{}, code int, ms
 			Message: msg,
 		},
 	}
-	w.Header().Set(constants.HeaderContentType, "application/json")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "DENY")
-	w.WriteHeader(http.StatusOK) // JSON-RPC usually returns 200 even for errors
-	if err := json.NewEncoder(w).Encode(res); err != nil {
-		r.logger.Error("Failed to encode JSON-RPC error response", "error", err)
+	rw.Header().Set(constants.HeaderContentType, "application/json")
+	rw.Header().Set("X-Content-Type-Options", "nosniff")
+	rw.Header().Set("X-Frame-Options", "DENY")
+	rw.WriteHeader(http.StatusOK) // JSON-RPC usually returns 200 even for errors
+	if err := json.NewEncoder(rw).Encode(res); err != nil {
+		w.logger.Error("Failed to encode JSON-RPC error response", "error", err)
 	}
 }

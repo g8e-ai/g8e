@@ -26,12 +26,12 @@ import (
 
 // SessionsService centralizes the logic for creating and binding Operator and CLI sessions.
 type SessionsService struct {
-	db     *GatewayDBService
+	db     *CanonicalDBService
 	logger *slog.Logger
 }
 
 // NewSessionService creates a new SessionsService instance.
-func NewSessionService(db *GatewayDBService, logger *slog.Logger) *SessionsService {
+func NewSessionService(db *CanonicalDBService, logger *slog.Logger) *SessionsService {
 	return &SessionsService{
 		db:     db,
 		logger: logger,

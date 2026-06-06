@@ -30,7 +30,7 @@ import (
 func TestNewRegistrationService(t *testing.T) {
 	t.Parallel()
 
-	db := &GatewayDBService{}
+	db := &CanonicalDBService{}
 	pki := &PKIAuthority{}
 	logger := slog.New(slog.NewTextHandler(nil, nil))
 	userSvc := &UserService{}
@@ -55,7 +55,7 @@ func TestPKIPhase2_CalculateSerialFromPEM(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
-	db, err := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+	db, err := OpenCanonicalDBService(dataDir, t.TempDir(), logger, true)
 	require.NoError(t, err)
 	sm, err := NewSecretManager(db.db, t.TempDir(), logger)
 	require.NoError(t, err)
@@ -137,7 +137,7 @@ func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
-		db, err := OpenGatewayDBService(dataDir, t.TempDir(), logger, true)
+		db, err := OpenCanonicalDBService(dataDir, t.TempDir(), logger, true)
 		require.NoError(t, err)
 		sm, err := NewSecretManager(db.db, t.TempDir(), logger)
 		require.NoError(t, err)

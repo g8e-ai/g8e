@@ -74,7 +74,7 @@ func (hs *HistoryService) handleFetchFromConsolidatedVault(ctx context.Context, 
 		return
 	}
 
-	record, err := hs.localStore.GetExecution(executionID, false)
+	record, err := hs.localStore.GetExecution(executionID)
 	if err != nil {
 		hs.logger.Error("Failed to retrieve execution from consolidated vault", string(constants.ConnectionStateError), err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, fmt.Sprintf("failed to retrieve execution: %v", err))
@@ -213,7 +213,7 @@ func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg *P
 	}
 
 	if diffID != "" {
-		record, err := hs.localStore.GetFileDiff(diffID, false)
+		record, err := hs.localStore.GetFileDiff(diffID)
 		if err != nil {
 			hs.logger.Error("Failed to fetch file diff", "diff_id", diffID, string(constants.ConnectionStateError), err)
 			publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed,

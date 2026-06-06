@@ -3,11 +3,11 @@
 ## Top-Level Service Roots
 
 ```text
-G8eoService (Outbound/Operator Mode)
+G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 ├── auth.BootstrapService
 │   └── *external HTTP auth endpoint*
 ├── gateway.SecretManager
-│   └── gateway.GatewayDBService (for keystore DB access)
+│   └── gateway.CanonicalDBService (for keystore DB access) [SHARED]
 ├── execution.ExecutionService
 ├── execution.FileEditService
 ├── pubsub.PubSubCommandService
@@ -23,14 +23,14 @@ G8eoService (Outbound/Operator Mode)
 │   │   └── governance.L1Doctrine
 │   ├── governance.L4Warden
 │   │   ├── governance.ReplayStore (storage.SQLReplayStore)
-│   │   ├── governance.StateRootProvider (gateway.GatewayDBService)
+│   │   ├── governance.StateRootProvider (gateway.CanonicalDBService) [SHARED]
 │   │   ├── governance.SignerStore
-│   │   ├── governance.AppPolicyStore (gateway.GatewayDBService)
+│   │   ├── governance.AppPolicyStore (gateway.CanonicalDBService) [SHARED]
 │   │   └── governance.L3Notary
 │   │       └── gateway.CompositeL3Verifier
 │   │           ├── gateway.PasskeyService
 │   │           └── gateway.CLIL3Notary
-│   │               ├── gateway.GatewayDBService
+│   │               ├── gateway.CanonicalDBService [SHARED]
 │   │               ├── gateway.PKIAuthority
 │   │               ├── gateway.UserService
 │   │               └── gateway.SessionsService
@@ -41,15 +41,14 @@ G8eoService (Outbound/Operator Mode)
 │   │   ├── scrubbing.ScrubbingService
 │   │   ├── governance.StateRootProvider
 │   │   └── governance.SignerStore
-│   └── mcp.GatewayService
-│       ├── responder.Responder
-│       └── gateway.GatewayDBService (as SuspendedTransactionStore)
+│   └── mcp.GatewayService [SHARED]
+│       ├── response.Writer
+│       └── gateway.CanonicalDBService (as SuspendedTransactionStore) [SHARED]
 ├── pubsub.PubSubResultsService
 │   └── storage.LocalStoreService
 ├── storage.LocalStoreService
 │   ├── sqliteutil.DB
-│   ├── vault.Vault (optional encryption)
-│   └── scrubbing.ScrubbingService (wired post-init to break cycle)
+│   └── vault.Vault (optional encryption)
 ├── storage.AuditVaultService
 │   ├── sqliteutil.DB
 │   ├── vault.Vault (optional encryption)
@@ -65,51 +64,55 @@ G8eoService (Outbound/Operator Mode)
 └── scrubbing.ScrubbingService
     └── storage.LocalStoreService (as TokenStore)
 
-GatewayService (Gateway/Platform Mode)
-├── gateway.GatewayDBService
+GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
+├── gateway.CanonicalDBService [SHARED]
 │   ├── sqliteutil.DB
 │   ├── storage.AuditVaultService
 │   └── keystore (embedded in schema)
 ├── gateway.PubSubBroker
 ├── gateway.AuthService
-│   ├── gateway.GatewayDBService
+│   ├── gateway.CanonicalDBService [SHARED]
 │   ├── gateway.PKIAuthority
 │   ├── gateway.UserService
 │   ├── gateway.PersonaService
-│   └── responder.Responder
+│   └── response.Writer
 ├── gateway.PKIAuthority
-│   ├── gateway.GatewayDBService
+│   ├── gateway.CanonicalDBService [SHARED]
 │   └── gateway.SecretManager
 ├── gateway.RegistrationService
-│   ├── gateway.GatewayDBService
+│   ├── gateway.CanonicalDBService [SHARED]
 │   ├── gateway.PKIAuthority
 │   ├── gateway.UserService
 │   └── gateway.SessionsService
 ├── gateway.PasskeyService
-│   └── gateway.GatewayDBService
+│   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.UserService
-│   └── gateway.GatewayDBService
+│   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.SessionsService
-│   └── gateway.GatewayDBService
+│   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.AppEnrollmentService
-│   ├── gateway.GatewayDBService
+│   ├── gateway.CanonicalDBService [SHARED]
 │   └── gateway.PKIAuthority
-├── mcp.GatewayService
-│   ├── responder.Responder
-│   └── gateway.GatewayDBService (as SuspendedTransactionStore)
-└── responder.Responder
+├── mcp.GatewayService [SHARED]
+│   ├── response.Writer
+│   └── gateway.CanonicalDBService (as SuspendedTransactionStore) [SHARED]
+└── response.Writer
 ```
 
 ## Structural Observations
 
+### Mode Bifurcation
+- **Mode-specific services**: `G8eoService` (outbound mode only), `GatewayModeService` (gateway mode only)
+- **Shared services**: `mcp.GatewayService` (used in both modes for MCP/A2A protocol handling), `CanonicalDBService` (used in both modes for state root calculation - full service in gateway mode, state root calculation only in outbound mode)
+
 ### Data Handling Convergence
-- **`gateway.GatewayDBService`** is the canonical SQLite root for gateway mode; it also embeds `storage.AuditVaultService`.
+- **`gateway.CanonicalDBService`** is the canonical SQLite root for gateway mode; it also embeds `storage.AuditVaultService`. In outbound mode, it is used only for state root calculation.
 - **`storage.LocalStoreService`** is the consolidated execution vault for outbound mode.
 - **`storage.AuditVaultService`** is shared by both modes and provides the git-backed ledger foundation.
 
-### Circular Dependency Break
+### Dependency Flow
 - `scrubbing.ScrubbingService` depends on `storage.LocalStoreService` (as `TokenStore`).
-- `storage.LocalStoreService` receives its `TextScrubber` via `SetScrubber()` post-initialization to break the cycle (`@/home/bob/g8e/internal/services/g8eo.go:297`).
+- `storage.LocalStoreService` has no dependency on `scrubbing.ScrubbingService` (circular dependency removed).
 
 ### Governance Stack (L1-L5)
 - **L1**: `governance.L1Doctrine` (technical bedrock validation)
@@ -119,7 +122,7 @@ GatewayService (Gateway/Platform Mode)
 - **L5**: `governance.L5Actuator` (execution boundary, receipt signing)
 
 ### Shared Interface Implementations
-- `gateway.GatewayDBService` implements: `governance.ReplayStore`, `governance.StateRootProvider`, `governance.TransactionAuditStore`, `governance.SignerStore`, `governance.AppPolicyStore`, `governance.SuspendedTransactionStore`.
+- `gateway.CanonicalDBService` implements: `governance.ReplayStore`, `governance.StateRootProvider`, `governance.TransactionAuditStore`, `governance.SignerStore`, `governance.AppPolicyStore`, `governance.SuspendedTransactionStore`.
 - `storage.LocalStoreService` implements: `interfaces.TokenStore`, `governance.SuspendedTransactionStore`.
 
 ### Transport & Protocol Layer
@@ -134,5 +137,5 @@ GatewayService (Gateway/Platform Mode)
 | Command execution results | `ExecutionService` → `CommandService` → `PubSubResultsService` → Pub/Sub channel |
 | Audit events | `CommandService` / `FileOpsService` → `AuditVaultService` → SQLite + git ledger |
 | File mutations | `FileEditService` → `LedgerService` → `AuditVaultService` git commit |
-| Suspended transactions | `L4Warden` → `LocalStoreService` (outbound) or `GatewayDBService` (gateway) |
+| Suspended transactions | `L4Warden` → `LocalStoreService` (outbound) or `CanonicalDBService` (gateway) |
 | Action receipts | `L5Actuator` → `AuditVaultService` (receipts table) + signed return |

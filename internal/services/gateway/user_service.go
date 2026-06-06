@@ -29,12 +29,12 @@ import (
 // UserService handles user management in the Operator Gateway.
 // This replaces client's UserService as the authoritative user source.
 type UserService struct {
-	db     *GatewayDBService
+	db     *CanonicalDBService
 	logger *slog.Logger
 }
 
 // NewUserService creates a new UserService.
-func NewUserService(db *GatewayDBService, logger *slog.Logger) *UserService {
+func NewUserService(db *CanonicalDBService, logger *slog.Logger) *UserService {
 	return &UserService{
 		db:     db,
 		logger: logger,
@@ -321,12 +321,12 @@ func (s *UserService) docToUser(doc *models.Document) (*models.User, error) {
 
 // PersonaService handles persona management for role-based access control.
 type PersonaService struct {
-	db     *GatewayDBService
+	db     *CanonicalDBService
 	logger *slog.Logger
 }
 
 // NewPersonaService creates a new PersonaService.
-func NewPersonaService(db *GatewayDBService, logger *slog.Logger) *PersonaService {
+func NewPersonaService(db *CanonicalDBService, logger *slog.Logger) *PersonaService {
 	return &PersonaService{
 		db:     db,
 		logger: logger,

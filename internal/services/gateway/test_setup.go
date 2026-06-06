@@ -19,7 +19,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
@@ -29,13 +29,13 @@ import (
 type TestInfrastructure struct {
 	Cfg         *config.Config
 	Logger      *slog.Logger
-	DB          *GatewayDBService
+	DB          *CanonicalDBService
 	Pubsub      *PubSubBroker
 	SecretMgr   *SecretManager
 	PKI         *PKIAuthority
 	UserSvc     *UserService
 	PersonaSvc  *PersonaService
-	Responder   *responder.Responder
+	Responder   *response.Writer
 	Auth        *AuthService
 	SessionSvc  *SessionsService
 	Reg         *RegistrationService
@@ -56,7 +56,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -90,7 +90,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "", "", "")
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)

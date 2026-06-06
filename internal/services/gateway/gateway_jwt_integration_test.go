@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -101,7 +101,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -135,7 +135,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	// Create an invitation for JIT provisioning
 	_, err = userSvc.CreateInvitation("tenant-abc", "user-1234", "bootstrap", []string{"admin"}, 24*time.Hour)
 	require.NoError(t, err)
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 	// Apply JWT configuration to AuthService's provider
 
@@ -240,7 +240,7 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -274,7 +274,7 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 	// Create an invitation for JIT provisioning
 	_, err = userSvc.CreateInvitation("tenant-abc", "jit-user-001", "bootstrap", []string{"admin"}, 24*time.Hour)
 	require.NoError(t, err)
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
 	sessionSvc := NewSessionService(db, logger)
@@ -393,7 +393,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -427,7 +427,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	// Create an invitation for JIT provisioning
 	_, err = userSvc.CreateInvitation("tenant-abc", "stepup-user-001", "bootstrap", []string{"admin"}, 24*time.Hour)
 	require.NoError(t, err)
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
 	sessionSvc := NewSessionService(db, logger)
@@ -534,7 +534,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -559,7 +559,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	personaSvc := NewPersonaService(db, logger)
 	require.NoError(t, personaSvc.GetOrCreateDefaultPersonas())
 
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
 
 	t.Run("Token with wrong aud is rejected", func(t *testing.T) {

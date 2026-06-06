@@ -29,7 +29,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -43,7 +43,7 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -69,7 +69,7 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "", "", "")
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
