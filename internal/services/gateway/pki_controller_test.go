@@ -25,6 +25,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -89,6 +90,11 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Gate
 
 	appEnrollment := NewAppEnrollmentService(db, pki, logger)
 	resp := responder.New(logger)
+
+	// Initialize script templates
+	if err := scripts.Init(logger); err != nil {
+		t.Fatalf("Failed to initialize script templates: %v", err)
+	}
 
 	controller := newPKIController(cfg, logger, db, pki, appEnrollment, nil, resp)
 	return controller, cfg, db
@@ -437,6 +443,12 @@ func TestNewPKIController(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
+
+	// Initialize script templates
+	if err := scripts.Init(logger); err != nil {
+		t.Fatalf("Failed to initialize script templates: %v", err)
+	}
+
 	db := &GatewayDBService{}
 	pki := &PKIAuthority{}
 	appEnrollment := &AppEnrollmentService{}
@@ -516,7 +528,7 @@ func TestPKIController_HandleNodeBinaryDownload(t *testing.T) {
 	testNodeBinaryContent := []byte("test binary content")
 	require.NoError(t, os.WriteFile(testNodeBinaryPath, testNodeBinaryContent, 0644))
 
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/binary/g8e-windows-amd64.exe", nil)
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/g8e-windows-amd64.exe", nil)
 	rr := httptest.NewRecorder()
 
 	c.handleNodeBinaryDownload(rr, req)
@@ -531,7 +543,7 @@ func TestPKIController_HandleNodeBinaryDownload_NotFound(t *testing.T) {
 	t.Parallel()
 	c, _, _ := setupTestPKIController(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/binary/g8e-linux-amd64", nil)
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/g8e-linux-amd64", nil)
 	rr := httptest.NewRecorder()
 
 	c.handleNodeBinaryDownload(rr, req)
@@ -554,7 +566,7 @@ func TestPKIController_HandleNodeBinaryDownload_InvalidName(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/binary/"+tc, nil)
+			req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/"+tc, nil)
 			rr := httptest.NewRecorder()
 
 			c.handleNodeBinaryDownload(rr, req)

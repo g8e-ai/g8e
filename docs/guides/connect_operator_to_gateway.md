@@ -30,9 +30,25 @@ This starts the g8e Gateway in doctrine mode (L1 enforced, L2/L3 audited). The g
 
 ### Remote Deployment
 
-For distributed infrastructure, deploy the g8e Operator on remote hosts:
+For distributed infrastructure, deploy the g8e Operator on remote hosts.
 
-#### 1. CSR-Based Enrollment
+#### 1. Copy/Paste Deploy Scripts (Gateway-Served)
+
+The gateway embeds deploy scripts and serves them over HTTP on port 8080. After starting the gateway on the host machine, run these commands on remote hosts to download and deploy the g8e binary:
+
+**Linux/macOS:**
+
+```bash
+curl -fsSL http://<gateway-ip>:8080/deploy.sh | bash
+```
+
+**Windows:**
+
+```powershell
+iwr http://<gateway-ip>:8080/deploy.ps1 -UseBasicParsing | iex
+```
+
+#### 2. CSR-Based Enrollment
 
 On the remote host, generate a CSR and enroll with the g8e Gateway:
 
@@ -42,11 +58,11 @@ On the remote host, generate a CSR and enroll with the g8e Gateway:
 
 The endpoint is the g8e Gateway IP address. The HTTP port (8080) is appended automatically. This command generates g8e Operator and CLI CSRs, submits them to the g8e Gateway, and saves the signed certificates to the PKI directory.
 
-#### 2. Copy g8e Node and Certificates
+#### 3. Copy g8e Node and Certificates
 
 Copy the `g8e` g8e Node and the issued certificates to the remote host.
 
-#### 3. Start the g8e Gateway
+#### 4. Start the g8e Gateway
 
 On the remote host, start the g8e Gateway with the enrolled certificates:
 

@@ -50,22 +50,16 @@ g8e fixes this by enforcing a strict invariant: **A state-changing action reache
 
 The platform is a single g8e Node. No runtime, no interpreter, no sidecar.
 
-**Quick launch (Linux)**
+**Quick launch (Linux/macOS)**
 
 ```bash
-curl -fsSL https://g8e.ai/g8e-linux-amd64 -o g8e && chmod +x g8e && ./g8e gw start
-```
-
-**Quick launch (macOS)**
-
-```bash
-curl -fsSL https://g8e.ai/g8e-darwin-amd64 -o g8e && chmod +x g8e && ./g8e gw start
+curl -fsSL https://g8e.ai/deploy.sh -o deploy.sh && chmod +x deploy.sh && ./deploy.sh
 ```
 
 **Quick launch (Windows)**
 
 ```powershell
-iwr https://g8e.ai/g8e-windows-amd64.exe -outf g8e.exe; .\g8e.exe gw start
+iwr https://g8e.ai/deploy.ps1 -UseBasicParsing | iex
 ```
 
 **Deploy operators to remote hosts via SSH**

@@ -126,9 +126,9 @@ func NewLocalStoreService(config *LocalStoreConfig, logger *slog.Logger, v *vaul
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
-	if err := db.RunMigrations(localStoreMigrations); err != nil {
+	if _, err := db.Exec(localStoreSchema); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to run schema migrations: %w", err)
+		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
 	ls := &LocalStoreService{
@@ -156,97 +156,75 @@ func (ls *LocalStoreService) GetDB() *sqliteutil.DB {
 	return ls.db
 }
 
-var localStoreMigrations = []sqliteutil.Migration{
-	{
-		Version:     1,
-		Description: "Initial schema: execution_log and file_diff_log tables",
-		SQL: `
-		CREATE TABLE IF NOT EXISTS execution_log (
-			id TEXT PRIMARY KEY,
-			timestamp_utc TEXT NOT NULL,
-			command TEXT NOT NULL,
-			exit_code INTEGER,
-			duration_ms INTEGER,
-			stdout_compressed BLOB,
-			stderr_compressed BLOB,
-			stdout_hash TEXT,
-			stderr_hash TEXT,
-			stdout_size INTEGER DEFAULT 0,
-			stderr_size INTEGER DEFAULT 0,
-			user_id TEXT,
-			case_id TEXT,
-			task_id TEXT,
-			investigation_id TEXT,
-			operator_id TEXT
-		);
+// localStoreSchema defines the initial schema for the local store database.
+const localStoreSchema = `
+CREATE TABLE IF NOT EXISTS execution_log (
+	id TEXT PRIMARY KEY,
+	timestamp_utc TEXT NOT NULL,
+	command TEXT NOT NULL,
+	exit_code INTEGER,
+	duration_ms INTEGER,
+	stdout_compressed BLOB,
+	stderr_compressed BLOB,
+	stdout_hash TEXT,
+	stderr_hash TEXT,
+	stdout_size INTEGER DEFAULT 0,
+	stderr_size INTEGER DEFAULT 0,
+	user_id TEXT,
+	case_id TEXT,
+	task_id TEXT,
+	investigation_id TEXT,
+	operator_id TEXT
+);
 
-		CREATE INDEX IF NOT EXISTS idx_execution_timestamp ON execution_log(timestamp_utc);
-		CREATE INDEX IF NOT EXISTS idx_execution_case ON execution_log(case_id);
-		CREATE INDEX IF NOT EXISTS idx_execution_task ON execution_log(task_id);
+CREATE TABLE IF NOT EXISTS file_diff_log (
+	id TEXT PRIMARY KEY,
+	timestamp_utc TEXT NOT NULL,
+	file_path TEXT NOT NULL,
+	operation TEXT NOT NULL,
+	ledger_hash_before TEXT,
+	ledger_hash_after TEXT,
+	diff_stat TEXT,
+	diff_compressed BLOB,
+	diff_hash TEXT,
+	diff_size INTEGER DEFAULT 0,
+	operator_session_id TEXT,
+	user_id TEXT,
+	case_id TEXT,
+	operator_id TEXT
+);
 
-		CREATE TABLE IF NOT EXISTS file_diff_log (
-			id TEXT PRIMARY KEY,
-			timestamp_utc TEXT NOT NULL,
-			file_path TEXT NOT NULL,
-			operation TEXT NOT NULL,
-			ledger_hash_before TEXT,
-			ledger_hash_after TEXT,
-			diff_stat TEXT,
-			diff_compressed BLOB,
-			diff_hash TEXT,
-			diff_size INTEGER DEFAULT 0,
-			operator_session_id TEXT,
-			user_id TEXT,
-			case_id TEXT,
-			operator_id TEXT
-		);
+CREATE TABLE IF NOT EXISTS kv (
+	key TEXT PRIMARY KEY,
+	value TEXT NOT NULL,
+	expires_at TEXT
+);
 
-		CREATE INDEX IF NOT EXISTS idx_file_diff_timestamp ON file_diff_log(timestamp_utc);
-		CREATE INDEX IF NOT EXISTS idx_file_diff_path ON file_diff_log(file_path);
-		CREATE INDEX IF NOT EXISTS idx_file_diff_session ON file_diff_log(operator_session_id);
-		`,
-	},
-	{
-		Version:     2,
-		Description: "Add kv table for generic persistence and replay protection",
-		SQL: `
-		CREATE TABLE IF NOT EXISTS kv (
-			key TEXT PRIMARY KEY,
-			value TEXT NOT NULL,
-			expires_at TEXT
-		);
-		CREATE INDEX IF NOT EXISTS idx_kv_expiry ON kv(expires_at);
-		`,
-	},
-	{
-		Version:     3,
-		Description: "Add suspended_transactions table for L3 OOB approval in outbound mode",
-		SQL: `
-		CREATE TABLE IF NOT EXISTS suspended_transactions (
-			transaction_hash TEXT PRIMARY KEY,
-			envelope TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			expires_at TEXT NOT NULL,
-			tool_name TEXT,
-			tool_arguments TEXT,
-			user_id TEXT,
-			operator_id TEXT
-		);
-		CREATE INDEX IF NOT EXISTS idx_suspended_expires_at ON suspended_transactions(expires_at);
-		`,
-	},
-	{
-		Version:     4,
-		Description: "Add approval decision state to suspended_transactions",
-		SQL: `
-		ALTER TABLE suspended_transactions ADD COLUMN approved INTEGER DEFAULT 0;
-		ALTER TABLE suspended_transactions ADD COLUMN approved_at TEXT;
-		ALTER TABLE suspended_transactions ADD COLUMN approved_by TEXT;
-		ALTER TABLE suspended_transactions ADD COLUMN approval_signature TEXT;
-		ALTER TABLE suspended_transactions ADD COLUMN expected_cert_fingerprint TEXT;
-		`,
-	},
-}
+CREATE TABLE IF NOT EXISTS suspended_transactions (
+	transaction_hash TEXT PRIMARY KEY,
+	envelope TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	expires_at TEXT NOT NULL,
+	tool_name TEXT,
+	tool_arguments TEXT,
+	user_id TEXT,
+	operator_id TEXT,
+	approved INTEGER DEFAULT 0,
+	approved_at TEXT,
+	approved_by TEXT,
+	approval_signature TEXT,
+	expected_cert_fingerprint TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_execution_timestamp ON execution_log(timestamp_utc);
+CREATE INDEX IF NOT EXISTS idx_execution_case ON execution_log(case_id);
+CREATE INDEX IF NOT EXISTS idx_execution_task ON execution_log(task_id);
+CREATE INDEX IF NOT EXISTS idx_file_diff_timestamp ON file_diff_log(timestamp_utc);
+CREATE INDEX IF NOT EXISTS idx_file_diff_path ON file_diff_log(file_path);
+CREATE INDEX IF NOT EXISTS idx_file_diff_session ON file_diff_log(operator_session_id);
+CREATE INDEX IF NOT EXISTS idx_kv_expiry ON kv(expires_at);
+CREATE INDEX IF NOT EXISTS idx_suspended_expires_at ON suspended_transactions(expires_at);
+`
 
 // StoreExecution stores a command execution result locally.
 // Content is encrypted at rest if an encryption vault is configured.

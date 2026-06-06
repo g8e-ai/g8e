@@ -233,23 +233,13 @@ type Config struct {
 	Gateway GatewayConfig
 }
 
-// FindProjectRoot locates the g8e project root by searching for the VERSION file.
+// FindProjectRoot returns the current working directory.
 func FindProjectRoot() string {
-	curr, err := os.Getwd()
+	cwd, err := os.Getwd()
 	if err != nil {
-		return ""
+		return "."
 	}
-	for {
-		if _, err := os.Stat(filepath.Join(curr, "VERSION")); err == nil {
-			return curr
-		}
-		parent := filepath.Dir(curr)
-		if parent == curr {
-			break
-		}
-		curr = parent
-	}
-	return ""
+	return cwd
 }
 
 // GatewayOptions contains configuration values for LoadGateway.
@@ -536,6 +526,10 @@ func Load(opts LoadOptions) (*Config, error) {
 	if cfg.SecretsDir == "" {
 		cfg.SecretsDir = constants.Paths.Infra.SecretsDir
 	}
+
+	// Read operator session ID from environment variable (in-memory only, never persisted)
+	// This is set by the deploy script after enrollment to track the operator's session
+	cfg.OperatorSessionId = os.Getenv("G8E_OPERATOR_SESSION_ID")
 
 	return cfg, nil
 }

@@ -333,121 +333,99 @@ func (avs *AuditVaultService) initDatabase() error {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
 
-	if err := db.RunMigrations(auditVaultMigrations); err != nil {
+	if _, err := db.Exec(auditVaultSchema); err != nil {
 		db.Close()
-		return fmt.Errorf("failed to run migrations: %w", err)
+		return fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
 	avs.db = db
 
-	avs.logger.Info("Database schema migrations completed")
+	avs.logger.Info("Database schema initialized")
 	return nil
 }
 
-// auditVaultMigrations defines the schema evolution for the audit vault database.
-var auditVaultMigrations = []sqliteutil.Migration{
-	{
-		Version:     1,
-		Description: "Initial schema: sessions, events, file_mutation_log tables",
-		SQL: `
-		CREATE TABLE IF NOT EXISTS sessions (
-			id TEXT PRIMARY KEY,
-			title TEXT,
-			created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
-			user_identity TEXT
-		);
+// auditVaultSchema defines the initial schema for the audit vault database.
+const auditVaultSchema = `
+CREATE TABLE IF NOT EXISTS sessions (
+	id TEXT PRIMARY KEY,
+	title TEXT,
+	session_type TEXT NOT NULL DEFAULT 'operator',
+	created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
+	user_identity TEXT
+);
 
-		CREATE TABLE IF NOT EXISTS events (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			operator_session_id TEXT,
-			timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
-			type TEXT NOT NULL,
-			content_text BLOB,
-			command_raw TEXT,
-			command_exit_code INTEGER,
-			command_stdout BLOB,
-			command_stderr BLOB,
-			execution_duration_ms INTEGER,
-			stored_locally INTEGER DEFAULT 1,
-			stdout_truncated INTEGER DEFAULT 0,
-			stderr_truncated INTEGER DEFAULT 0,
-			encrypted INTEGER DEFAULT 0,
-			FOREIGN KEY(operator_session_id) REFERENCES sessions(id)
-		);
+CREATE TABLE IF NOT EXISTS events (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	operator_session_id TEXT,
+	timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
+	type TEXT NOT NULL,
+	content_text BLOB,
+	command_raw TEXT,
+	command_exit_code INTEGER,
+	command_stdout BLOB,
+	command_stderr BLOB,
+	execution_duration_ms INTEGER,
+	stored_locally INTEGER DEFAULT 1,
+	stdout_truncated INTEGER DEFAULT 0,
+	stderr_truncated INTEGER DEFAULT 0,
+	encrypted INTEGER DEFAULT 0,
+	FOREIGN KEY(operator_session_id) REFERENCES sessions(id)
+);
 
-		CREATE TABLE IF NOT EXISTS file_mutation_log (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			event_id INTEGER NOT NULL,
-			filepath TEXT NOT NULL,
-			operation TEXT NOT NULL,
-			ledger_hash_before TEXT,
-			ledger_hash_after TEXT,
-			diff_stat TEXT,
-			FOREIGN KEY(event_id) REFERENCES events(id)
-		);
+CREATE TABLE IF NOT EXISTS file_mutation_log (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	event_id INTEGER NOT NULL,
+	filepath TEXT NOT NULL,
+	operation TEXT NOT NULL,
+	ledger_hash_before TEXT,
+	ledger_hash_after TEXT,
+	diff_stat TEXT,
+	FOREIGN KEY(event_id) REFERENCES events(id)
+);
 
-		CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(operator_session_id);
-		CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
-		CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
-		CREATE INDEX IF NOT EXISTS idx_file_mutation_event_id ON file_mutation_log(event_id);
-		CREATE INDEX IF NOT EXISTS idx_file_mutation_filepath ON file_mutation_log(filepath);
-		`,
-	},
-	{
-		Version:     2,
-		Description: "Add receipts table for transaction-native audit",
-		SQL: `
-		CREATE TABLE IF NOT EXISTS receipts (
-			transaction_id TEXT PRIMARY KEY,
-			transaction_hash TEXT NOT NULL,
-			operator_id TEXT NOT NULL,
-			operator_session_id TEXT NOT NULL,
-			action_type TEXT NOT NULL,
-			target_resource TEXT,
-			status TEXT NOT NULL,
-			result_summary TEXT,
-			state_root_before TEXT,
-			state_root_after TEXT,
-			executed_at_ms INTEGER NOT NULL,
-			signer_key_id TEXT NOT NULL,
-			signature TEXT NOT NULL,
-			timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
-			FOREIGN KEY(operator_session_id) REFERENCES sessions(id)
-		);
-		CREATE INDEX IF NOT EXISTS idx_receipts_session_id ON receipts(operator_session_id);
-		CREATE INDEX IF NOT EXISTS idx_receipts_timestamp ON receipts(timestamp);
-		`,
-	},
-	{
-		Version:     3,
-		Description: "Add chaos_events table for chaos testing isolation",
-		SQL: `
-		CREATE TABLE IF NOT EXISTS chaos_events (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			operator_session_id TEXT,
-			timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
-			chaos_id INTEGER NOT NULL,
-			category TEXT NOT NULL,
-			outcome TEXT NOT NULL,
-			content_text TEXT,
-			command_raw TEXT,
-			transaction_hash TEXT,
-			FOREIGN KEY(operator_session_id) REFERENCES sessions(id)
-		);
-		CREATE INDEX IF NOT EXISTS idx_chaos_events_session_id ON chaos_events(operator_session_id);
-		CREATE INDEX IF NOT EXISTS idx_chaos_events_timestamp ON chaos_events(timestamp);
-		CREATE INDEX IF NOT EXISTS idx_chaos_events_category ON chaos_events(category);
-		`,
-	},
-	{
-		Version:     4,
-		Description: "Add session_type column to sessions table with composite unique constraint",
-		SQL: `
-		ALTER TABLE sessions ADD COLUMN session_type TEXT NOT NULL DEFAULT 'operator';
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_id_type ON sessions(id, session_type);
-		`,
-	},
-}
+CREATE TABLE IF NOT EXISTS receipts (
+	transaction_id TEXT PRIMARY KEY,
+	transaction_hash TEXT NOT NULL,
+	operator_id TEXT NOT NULL,
+	operator_session_id TEXT NOT NULL,
+	action_type TEXT NOT NULL,
+	target_resource TEXT,
+	status TEXT NOT NULL,
+	result_summary TEXT,
+	state_root_before TEXT,
+	state_root_after TEXT,
+	executed_at_ms INTEGER NOT NULL,
+	signer_key_id TEXT NOT NULL,
+	signature TEXT NOT NULL,
+	timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
+	FOREIGN KEY(operator_session_id) REFERENCES sessions(id)
+);
+
+CREATE TABLE IF NOT EXISTS chaos_events (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	operator_session_id TEXT,
+	timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
+	chaos_id INTEGER NOT NULL,
+	category TEXT NOT NULL,
+	outcome TEXT NOT NULL,
+	content_text TEXT,
+	command_raw TEXT,
+	transaction_hash TEXT,
+	FOREIGN KEY(operator_session_id) REFERENCES sessions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(operator_session_id);
+CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
+CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
+CREATE INDEX IF NOT EXISTS idx_file_mutation_event_id ON file_mutation_log(event_id);
+CREATE INDEX IF NOT EXISTS idx_file_mutation_filepath ON file_mutation_log(filepath);
+CREATE INDEX IF NOT EXISTS idx_receipts_session_id ON receipts(operator_session_id);
+CREATE INDEX IF NOT EXISTS idx_receipts_timestamp ON receipts(timestamp);
+CREATE INDEX IF NOT EXISTS idx_chaos_events_session_id ON chaos_events(operator_session_id);
+CREATE INDEX IF NOT EXISTS idx_chaos_events_timestamp ON chaos_events(timestamp);
+CREATE INDEX IF NOT EXISTS idx_chaos_events_category ON chaos_events(category);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_id_type ON sessions(id, session_type);
+`
 
 // CreateSession creates a new session in the audit log
 func (avs *AuditVaultService) CreateSession(id, sessionType, title, userIdentity string) error {

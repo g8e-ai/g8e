@@ -17,8 +17,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
-	"syscall"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -169,11 +167,7 @@ func executeTool(binary string, args []string, env []string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	if runtime.GOOS != "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			Setpgid: true,
-		}
-	}
+	setSysProcAttr(cmd)
 
 	return cmd.Run()
 }

@@ -70,6 +70,14 @@ type Credentials struct {
 }
 
 func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "PANIC in GenerateCSR: %v\n", r)
+			fmt.Fprintf(os.Stderr, "Windows CSP (Cryptographic Service Provider) error.\n")
+			fmt.Fprintf(os.Stderr, "Run PowerShell as Administrator and try again.\n")
+		}
+	}()
+
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to generate ECDSA key: %w", err)

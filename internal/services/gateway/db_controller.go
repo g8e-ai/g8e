@@ -640,7 +640,7 @@ func blobNamespaceAllowed(namespace string) bool {
 func (c *DBController) extractCallerIdentity(r *http.Request) (string, string, string, string) {
 	userID, _ := r.Context().Value(userIDKey).(string)
 	appID, _ := r.Context().Value(appIDKey).(string)
-	operatorSessionID := c.auth.ExtractOperatorSessionID(r)
+	operatorSessionID := c.auth.extractOperatorSessionIDFromMTLS(r)
 	cliSessionID := r.Header.Get(constants.HeaderCLISessionID)
 	return userID, appID, operatorSessionID, cliSessionID
 }

@@ -33,12 +33,8 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestLoad_Defaults(t *testing.T) {
-	wantWorkDir := FindProjectRoot()
-	if wantWorkDir == "" {
-		var err error
-		wantWorkDir, err = os.Getwd()
-		require.NoError(t, err)
-	}
+	wantWorkDir, err := os.Getwd()
+	require.NoError(t, err)
 
 	cfg, err := Load(LoadOptions{
 		OperatorEndpoint: constants.DefaultEndpoint,
@@ -218,12 +214,8 @@ func TestLoadGateway_IncrementalPorts(t *testing.T) {
 }
 
 func TestLoadGateway_Defaults(t *testing.T) {
-	wantWorkDir := FindProjectRoot()
-	if wantWorkDir == "" {
-		var err error
-		wantWorkDir, err = os.Getwd()
-		require.NoError(t, err)
-	}
+	wantWorkDir, err := os.Getwd()
+	require.NoError(t, err)
 
 	cfg, err := LoadGateway(GatewayOptions{AllowTestPortZero: true})
 	require.NoError(t, err)

@@ -104,6 +104,9 @@ var APIPaths = struct {
 	// Bootstrap scripts
 	BootstrapCALinux   string `json:"bootstrap_ca_linux"`
 	BootstrapCAWindows string `json:"bootstrap_ca_windows"`
+	// Deploy scripts
+	DeployScriptLinux   string `json:"deploy_script_linux"`
+	DeployScriptWindows string `json:"deploy_script_windows"`
 	// Health
 	Health string `json:"health"`
 	// Landing
@@ -203,6 +206,9 @@ var APIPaths = struct {
 	// Bootstrap scripts
 	BootstrapCALinux:   "/bootstrap-ca",
 	BootstrapCAWindows: "/bootstrap-ca.ps1",
+	// Deploy scripts
+	DeployScriptLinux:   "/deploy.sh",
+	DeployScriptWindows: "/deploy.ps1",
 	// Health
 	Health: "/api/v1/health",
 	// Landing

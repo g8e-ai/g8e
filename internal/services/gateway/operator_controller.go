@@ -197,12 +197,12 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	sessionID := c.auth.ExtractOperatorSessionID(r)
-	if sessionID == "" {
-		c.responder.Error(w, http.StatusUnauthorized, "missing session id")
+	operatorSessionID := c.auth.extractOperatorSessionIDFromMTLS(r)
+	if operatorSessionID == "" {
+		c.responder.Error(w, http.StatusUnauthorized, "missing operator session id")
 		return
 	}
-	op, err := c.auth.ValidateOperatorSession(sessionID)
+	op, err := c.auth.ValidateOperatorSession(operatorSessionID)
 	if err != nil {
 		c.responder.Error(w, http.StatusUnauthorized, err.Error())
 		return

@@ -33,6 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/protocol"
@@ -121,6 +122,11 @@ func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
 		isReady:           deps.IsReady,
 		isGovernanceReady: deps.IsGovernanceReady,
 		limiters:          make(map[string]*rate.Limiter),
+	}
+
+	// Initialize script templates (panic on failure - this is a fatal startup error)
+	if err := scripts.Init(deps.Logger); err != nil {
+		panic(fmt.Sprintf("failed to initialize script templates: %v", err))
 	}
 
 	// Initialize controllers
@@ -356,7 +362,9 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.BootstrapCALinux, h.pkiController.handleTrustScriptLinux)
 	mux.HandleFunc(constants.APIPaths.BootstrapCAWindows, h.pkiController.handleTrustScriptWindows)
 	mux.HandleFunc("/.well-known/g8e/pki/trust-windows", h.pkiController.handleTrustScriptWindowsAlias)
-	mux.HandleFunc("/.well-known/g8e/binary/", h.pkiController.handleNodeBinaryDownload)
+	mux.HandleFunc("/.well-known/g8e/bin/", h.pkiController.handleNodeBinaryDownload)
+	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)
+	mux.HandleFunc(constants.APIPaths.DeployScriptWindows, h.pkiController.handleDeployScriptWindows)
 
 	// MCP-only routes on plain HTTP for HTTP MCP calls
 	mux.HandleFunc(constants.APIPaths.MCPEndpoint, h.mcp.HandleMCP)
@@ -388,7 +396,9 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.BootstrapCALinux, h.pkiController.handleTrustScriptLinux)
 	mux.HandleFunc(constants.APIPaths.BootstrapCAWindows, h.pkiController.handleTrustScriptWindows)
 	mux.HandleFunc("/.well-known/g8e/pki/trust-windows", h.pkiController.handleTrustScriptWindowsAlias)
-	mux.HandleFunc("/.well-known/g8e/binary/", h.pkiController.handleNodeBinaryDownload)
+	mux.HandleFunc("/.well-known/g8e/bin/", h.pkiController.handleNodeBinaryDownload)
+	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)
+	mux.HandleFunc(constants.APIPaths.DeployScriptWindows, h.pkiController.handleDeployScriptWindows)
 
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }
@@ -887,7 +897,7 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	// to access the requested routing buffer. Without this check, any operator
 	// could drain any other client's event buffer, creating a multi-tenant
 	// data leak.
-	operatorSessionID := h.auth.ExtractOperatorSessionID(r)
+	operatorSessionID := h.auth.extractOperatorSessionIDFromMTLS(r)
 	if operatorSessionID == "" {
 		h.responder.Error(w, http.StatusUnauthorized, "missing Operator session id")
 		return
@@ -974,7 +984,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	sinceID, _ := strconv.ParseInt(sinceIDStr, 10, 64)
 
 	// 1. Authorization (re-use logic from handleInternalSSEEvents)
-	operatorSessionID := h.auth.ExtractOperatorSessionID(r)
+	operatorSessionID := h.auth.extractOperatorSessionIDFromMTLS(r)
 	if operatorSessionID == "" {
 		h.responder.Error(w, http.StatusUnauthorized, "missing Operator session id")
 		return

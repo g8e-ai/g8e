@@ -63,10 +63,10 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 	controller := newOperatorController(cfg, logger, reg, auth, res)
 
 	// Create a valid Operator session
-	sessionID := "test-session-123"
+	operatorSessionID := "test-session-123"
 	opDoc := map[string]interface{}{
 		"id":                  "op-123",
-		"operator_session_id": sessionID,
+		"operator_session_id": operatorSessionID,
 		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
 		"user_id":             "user-123",
 		"organization_id":     "org-123",
@@ -77,7 +77,7 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/reauth", strings.NewReader("{invalid json"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(constants.HeaderAuthorization, "Bearer "+sessionID)
+	req.Header.Set(constants.HeaderAuthorization, "Bearer "+operatorSessionID)
 	w := httptest.NewRecorder()
 
 	controller.handleReauth(w, req)

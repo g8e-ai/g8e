@@ -64,12 +64,16 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 
 	// PKI bootstrap routes (public material only)
 	r.addPrefix("/.well-known/g8e/pki/")
-	r.addPrefix("/.well-known/g8e/binary/")
+	r.addPrefix("/.well-known/g8e/bin/")
 
 	// Trust script endpoints (public for initial bootstrap)
 	r.addExact(constants.APIPaths.BootstrapCALinux)
 	r.addExact(constants.APIPaths.BootstrapCAWindows)
 	r.addExact("/.well-known/g8e/pki/trust-windows")
+
+	// Deploy script endpoints (public for initial deployment)
+	r.addExact(constants.APIPaths.DeployScriptLinux)
+	r.addExact(constants.APIPaths.DeployScriptWindows)
 
 	// Protocol entry points (CSR enrollment, bootstrap)
 	r.addExact(constants.APIPaths.PKICSRSign)
@@ -244,13 +248,23 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	return &op, nil
 }
 
-// ExtractOperatorSessionID returns the Operator session ID from the request headers.
-// It prefers Authorization: Bearer <token>.
-func (s *AuthService) ExtractOperatorSessionID(r *http.Request) string {
-	authHeader := r.Header.Get(constants.HeaderAuthorization)
-	if strings.HasPrefix(authHeader, "Bearer ") {
-		return strings.TrimPrefix(authHeader, "Bearer ")
+// extractOperatorSessionIDFromMTLS extracts the operator session ID from the mTLS certificate's SPIFFE URI SAN.
+// This enables mTLS-only authentication without requiring Bearer tokens.
+func (s *AuthService) extractOperatorSessionIDFromMTLS(r *http.Request) string {
+	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+		return ""
 	}
+
+	cert := r.TLS.PeerCertificates[0]
+	wid := protocol.NewWorkloadIdentity()
+
+	for _, uri := range cert.URIs {
+		spiffeID := uri.String()
+		if sessionID, ok := wid.ExtractOperatorSessionID(spiffeID); ok {
+			return sessionID
+		}
+	}
+
 	return ""
 }
 
@@ -307,8 +321,8 @@ func (s *AuthService) mtlsMiddleware(next http.Handler) http.Handler {
 // authMiddleware handles authentication for Operator, CLI, and App identities.
 func (s *AuthService) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// We prioritize session auth for operators.
-		operatorSessionID := s.ExtractOperatorSessionID(r)
+		// Extract operator session ID from mTLS certificate SPIFFE URI SAN (mTLS-only auth)
+		operatorSessionID := s.extractOperatorSessionIDFromMTLS(r)
 		cliSessionID := r.Header.Get(constants.HeaderCLISessionID)
 
 		switch {
@@ -591,14 +605,14 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *GatewayDBService) ht
 			return
 		}
 
-		sessionID := cookie.Value
-		if sessionID == "" {
+		webSessionID := cookie.Value
+		if webSessionID == "" {
 			s.responder.Error(w, http.StatusUnauthorized, "invalid web session cookie")
 			return
 		}
 
 		// Validate web session
-		doc, err := db.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), sessionID)
+		doc, err := db.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
 		if err != nil {
 			s.responder.Error(w, http.StatusUnauthorized, "web session validation failed")
 			return

@@ -71,10 +71,10 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	// Create an Operator session with terminated status
-	sessionID := "terminated-session"
+	operatorSessionID := "terminated-session"
 	opDoc := map[string]interface{}{
 		"id":                  "op-123",
-		"operator_session_id": sessionID,
+		"operator_session_id": operatorSessionID,
 		"status":              marshaler.OperatorStatus(constants.OperatorStatusTerminated),
 		"user_id":             "user-123",
 	}
@@ -82,7 +82,7 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("operators", "op-123", opBytes))
 
-	_, err = auth.ValidateOperatorSession(sessionID)
+	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "operator identity disabled")
 }
@@ -108,11 +108,11 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	require.NoError(t, db.DocSet("users", userID, userBytes))
 
 	// Create an Operator session with old timestamp using the test hook
-	sessionID := "expired-session"
+	operatorSessionID := "expired-session"
 	oldTime := time.Now().UTC().Add(-25 * time.Hour)
 	opDoc := map[string]interface{}{
 		"id":                  "op-456",
-		"operator_session_id": sessionID,
+		"operator_session_id": operatorSessionID,
 		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
 		"user_id":             userID,
 	}
@@ -120,7 +120,7 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.DocSetWithTimestamps("operators", "op-456", opBytes, oldTime, oldTime))
 
-	_, err = auth.ValidateOperatorSession(sessionID)
+	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "operator session expired")
 }
@@ -146,10 +146,10 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	require.NoError(t, db.DocSet("users", userID, userBytes))
 
 	// Create an Operator session linked to the inactive user
-	sessionID := "session-with-inactive-user"
+	operatorSessionID := "session-with-inactive-user"
 	opDoc := map[string]interface{}{
 		"id":                  "op-789",
-		"operator_session_id": sessionID,
+		"operator_session_id": operatorSessionID,
 		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
 		"user_id":             userID,
 		"created_at":          time.Now().Format(time.RFC3339),
@@ -158,56 +158,9 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("operators", "op-789", opBytes))
 
-	_, err = auth.ValidateOperatorSession(sessionID)
+	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "identity disabled")
-}
-
-func TestAuthService_ExtractOperatorSessionID_BearerToken(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(db, logger)
-	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Authorization", "Bearer test-token-123")
-
-	sessionID := auth.ExtractOperatorSessionID(req)
-	assert.Equal(t, "test-token-123", sessionID)
-}
-
-func TestAuthService_ExtractOperatorSessionID_NoBearer(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(db, logger)
-	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Authorization", "Basic dGVzdDp0ZXN0")
-
-	sessionID := auth.ExtractOperatorSessionID(req)
-	assert.Empty(t, sessionID)
-}
-
-func TestAuthService_ExtractOperatorSessionID_NoHeader(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(db, logger)
-	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
-
-	req := httptest.NewRequest("GET", "/", nil)
-
-	sessionID := auth.ExtractOperatorSessionID(req)
-	assert.Empty(t, sessionID)
 }
 
 func TestAuthError_Error(t *testing.T) {
@@ -611,10 +564,10 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 	require.NoError(t, db.DocSet("users", userID, userBytes))
 
 	// Create an Operator session
-	sessionID := "op-session-123"
+	operatorSessionID := "op-session-123"
 	opDoc := map[string]interface{}{
 		"id":                  "op-123",
-		"operator_session_id": sessionID,
+		"operator_session_id": operatorSessionID,
 		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
 		"user_id":             userID,
 		"organization_id":     "org-123",
@@ -624,10 +577,10 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 	require.NoError(t, db.DocSet("operators", "op-123", opBytes))
 
 	// Test ValidateOperatorSession directly (the core validation logic)
-	op, err := auth.ValidateOperatorSession(sessionID)
+	op, err := auth.ValidateOperatorSession(operatorSessionID)
 	assert.NoError(t, err)
 	assert.NotNil(t, op)
-	assert.Equal(t, sessionID, op.OperatorSessionID)
+	assert.Equal(t, operatorSessionID, op.OperatorSessionID)
 	assert.Equal(t, userID, op.UserID)
 }
 
@@ -656,10 +609,10 @@ func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	// Create a terminated Operator session
-	sessionID := "terminated-session"
+	operatorSessionID := "terminated-session"
 	opDoc := map[string]interface{}{
 		"id":                  "op-terminated",
-		"operator_session_id": sessionID,
+		"operator_session_id": operatorSessionID,
 		"status":              marshaler.OperatorStatus(constants.OperatorStatusTerminated),
 		"user_id":             "user-123",
 	}
@@ -667,7 +620,7 @@ func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("operators", "op-terminated", opBytes))
 
-	_, err = auth.ValidateOperatorSession(sessionID)
+	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "operator identity disabled")
 }
@@ -967,11 +920,11 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	require.NoError(t, db.DocSet("users", userID, userBytes))
 
 	// Create an Operator session
-	sessionID := "op-session-auth-test"
+	operatorSessionID := "op-session-auth-test"
 	organizationID := "org-auth-test"
 	opDoc := map[string]interface{}{
 		"id":                  "op-auth-test",
-		"operator_session_id": sessionID,
+		"operator_session_id": operatorSessionID,
 		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
 		"user_id":             userID,
 		"organization_id":     organizationID,
@@ -990,11 +943,11 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	t.Run("operator auth with valid mTLS URI SAN succeeds", func(t *testing.T) {
 		t.Parallel()
 		wid := protocol.NewWorkloadIdentity()
-		opURI, err := wid.OperatorSPIFFEURL(organizationID, "op-auth-test", sessionID)
+		opURI, err := wid.OperatorSPIFFEURL(organizationID, "op-auth-test", operatorSessionID)
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		req.Header.Set("Authorization", "Bearer "+sessionID)
+		req.Header.Set("Authorization", "Bearer "+operatorSessionID)
 		req.TLS = &tls.ConnectionState{
 			PeerCertificates: []*x509.Certificate{
 				{URIs: []*url.URL{opURI}},
@@ -1014,7 +967,7 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		req.Header.Set("Authorization", "Bearer "+sessionID)
+		req.Header.Set("Authorization", "Bearer "+operatorSessionID)
 		req.TLS = &tls.ConnectionState{
 			PeerCertificates: []*x509.Certificate{
 				{URIs: []*url.URL{wrongURI}},

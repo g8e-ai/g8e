@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -31,6 +32,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 )
 
 // PKIController handles PKI and certificate management endpoints.
@@ -189,7 +191,6 @@ func (c *PKIController) handlePKIRevocationBundle(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Return CRL as DER-encoded binary
 	w.Header().Set("Content-Type", "application/pkix-crl")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
@@ -294,7 +295,7 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 		"$CABundleUrl = \"http://${GatewayHost}:${GatewayPort}/.well-known/g8e/pki/ca-bundle\"\n" +
 		"$LocalCAPath = \"" + constants.CACertBundlePath + "\"\n" +
 		"$Node BinaryName = \"g8e-windows-amd64.exe\"\n" +
-		"$Node BinaryUrl = \"http://${GatewayHost}:${GatewayPort}/.well-known/g8e/binary/g8e-windows-amd64.exe\"\n\n" +
+		"$Node BinaryUrl = \"http://${GatewayHost}:${GatewayPort}/.well-known/g8e/bin/g8e-windows-amd64.exe\"\n\n" +
 		"Write-Host \"[g8e] Fetching platform CA bundle from ${CABundleUrl}...\"\n" +
 		"$LocalDir = Split-Path -Parent $LocalCAPath\n" +
 		"if (-not (Test-Path $LocalDir)) {\n" +
@@ -356,27 +357,25 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Extract filename from URL path
 	filename := filepath.Base(r.URL.Path)
 	if filename == "" || filename == "." {
 		c.responder.Error(w, http.StatusBadRequest, "invalid filename")
 		return
 	}
 
-	// Validate filename matches expected g8e Node pattern: g8e-{os}-{arch}[.exe]
-	// Allowed OS: linux, darwin, windows
-	// Allowed arch: amd64, arm64, 386
 	binaryPattern := regexp.MustCompile(`^g8e-(linux|darwin|windows)-(amd64|arm64|386)(\.exe)?$`)
 	if !binaryPattern.MatchString(filename) {
 		c.responder.Error(w, http.StatusBadRequest, "invalid binary name")
 		return
 	}
 
-	// Try multiple binary locations in order
-	possiblePaths := []string{
-		filepath.Join("bin", filename),                      // Project root bin directory
-		filepath.Join(c.pki.PKIDir(), "binaries", filename), // PKI binaries directory
+	possiblePaths := []string{}
+
+	if execPath, err := os.Executable(); err == nil {
+		possiblePaths = append(possiblePaths, filepath.Join(filepath.Dir(execPath), "bin", filename))
 	}
+
+	possiblePaths = append(possiblePaths, filepath.Join(c.pki.PKIDir(), "binaries", filename))
 
 	var binaryPath string
 	var fileInfo os.FileInfo
@@ -391,14 +390,75 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 	}
 
 	if binaryPath == "" {
-		c.responder.Error(w, http.StatusNotFound, fmt.Sprintf("binary not found: %s (checked bin/ and .g8e/pki/binaries/)", filename))
+		c.responder.Error(w, http.StatusNotFound, fmt.Sprintf("binary not found: %s (checked: %v)", filename, possiblePaths))
 		return
 	}
 
-	// Serve the file
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	http.ServeFile(w, r, binaryPath)
+}
+
+func (c *PKIController) handleDeployScriptLinux(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	gatewayHost := c.extractGatewayHost(r.Host)
+	data := scripts.TemplateData{
+		GatewayHost: gatewayHost,
+		GatewayPort: "8080",
+	}
+
+	script, err := scripts.RenderLinuxDeployScript(data)
+	if err != nil {
+		c.logger.Error("Failed to render Linux deploy script", "error", err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to render deploy script")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/x-sh")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(script))
+}
+
+func (c *PKIController) handleDeployScriptWindows(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	gatewayHost := c.extractGatewayHost(r.Host)
+	data := scripts.TemplateData{
+		GatewayHost: gatewayHost,
+		GatewayPort: "8080",
+	}
+
+	script, err := scripts.RenderWindowsDeployScript(data)
+	if err != nil {
+		c.logger.Error("Failed to render Windows deploy script", "error", err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to render deploy script")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/x-powershell")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(script))
+}
+
+func (c *PKIController) extractGatewayHost(host string) string {
+	if host == "" {
+		return "localhost"
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		return h
+	}
+	return host
 }

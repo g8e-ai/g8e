@@ -1045,7 +1045,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 	if csrRequested {
 		// Create Operator slot for the bootstrap user
 		operatorID := uuid.NewString()
-		sessionID := uuid.NewString()
+		operatorSessionID := uuid.NewString()
 		cliSessionID := uuid.NewString()
 		orgID := user.ID // Use user ID as org ID for bootstrap
 		now := time.Now().UTC()
@@ -1057,7 +1057,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 			Component:         constants.ComponentNameG8EO,
 			Name:              "bootstrap-operator",
 			Status:            constants.OperatorStatusActive,
-			OperatorSessionID: sessionID,
+			OperatorSessionID: operatorSessionID,
 			OperatorType:      constants.OperatorTypeSystem,
 			SystemFingerprint: req.SystemFingerprint,
 			Claimed:           true,
@@ -1067,7 +1067,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 		}
 
 		// Sign the CSR
-		certPEM, chainPEM, err := c.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, orgID, operatorID, user.ID, sessionID, "")
+		certPEM, chainPEM, err := c.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, orgID, operatorID, user.ID, operatorSessionID, "")
 		if err != nil {
 			c.logger.Error("Failed to sign bootstrap CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to sign CSR")
@@ -1116,7 +1116,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 
 		err = c.sessionSvc.PersistSessions(
 			cliSessionID,
-			sessionID,
+			operatorSessionID,
 			user.ID,
 			orgID,
 			operatorID,
@@ -1134,7 +1134,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 		response["operator_cert"] = certPEM
 		response["operator_cert_chain"] = chainPEM
 		response["hub_trust_bundle"] = string(hubBundle)
-		response["operator_session_id"] = sessionID
+		response["operator_session_id"] = operatorSessionID
 		response["operator_id"] = operatorID
 		response["cli_session_id"] = cliSessionID
 		response["cli_cert"] = cliCertPEM
