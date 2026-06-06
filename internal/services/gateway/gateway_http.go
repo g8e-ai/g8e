@@ -268,6 +268,9 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux := http.NewServeMux()
 
+	// Health endpoint
+	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
+
 	// Bootstrap routes (CA discovery, trust scripts) - now on public HTTPS
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
@@ -392,6 +395,9 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 
 func (h *HTTPHandler) buildMCPHttpRouter() http.Handler {
 	mux := http.NewServeMux()
+
+	// Health endpoint
+	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
 
 	// Unified MCP Streamable HTTP endpoint for standard MCP clients (e.g.
 	// Claude Code custom connectors). This is the canonical single-URL

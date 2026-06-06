@@ -178,7 +178,8 @@ func setupA2AGatewayTest(t *testing.T, testName string, downstreamHandler http.H
 	ctx, cancel := context.WithCancel(context.Background())
 	go ls.Start(ctx)
 
-	require.Eventually(t, func() bool { return ls.IsReady() }, 5*time.Second, 100*time.Millisecond)
+	// Wait for governance to be ready before returning
+	waitForGovernanceReady(t, "")
 
 	cleanup := func() {
 		cancel()
@@ -195,6 +196,28 @@ func setupA2AGatewayTest(t *testing.T, testName string, downstreamHandler http.H
 	}
 }
 
+// waitForGovernanceReady polls the health endpoint until governance_ready is true.
+// This fixes timing dependencies where tests proceed before governance is fully initialized.
+func waitForGovernanceReady(t *testing.T, baseURL string) {
+	t.Helper()
+	httpURL := fmt.Sprintf("http://localhost:%d", constants.Ports.OperatorHttp)
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(httpURL + constants.APIPaths.Health)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return false
+		}
+		var health models.HealthResponse
+		if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+			return false
+		}
+		return health.GovernanceReady
+	}, 10*time.Second, 100*time.Millisecond, "governance_ready did not become true")
+}
+
 func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	// Setup test infrastructure using helper
 	ctx := setupA2AGatewayTest(t, t.Name(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -207,6 +230,9 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 		w.Write([]byte(`{"result":"a2a says hello","summary":"verified skill execution"}`))
 	}), "")
 	defer ctx.cleanup()
+
+	// Wait for governance to be ready before proceeding with enrollment
+	waitForGovernanceReady(t, "")
 
 	// 3. Setup client identity via CSR enrollment
 	userID := "a2a-user"
