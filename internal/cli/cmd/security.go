@@ -173,8 +173,8 @@ func securityPKIEnrollCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "enroll",
-		Short: "Enroll a device with the Gateway via CSR",
-		Long:  `Generate a CSR and enroll with the Gateway to obtain mTLS certificates.`,
+		Short: "Enroll an operator with the Gateway via CSR",
+		Long:  `Generate a CSR and enroll with the Gateway to obtain Operator mTLS certificates.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if endpoint == "" {
 				return fmt.Errorf("--endpoint is required")
@@ -200,15 +200,10 @@ func securityPKIEnrollCmd() *cobra.Command {
 				return fmt.Errorf("failed to generate Operator CSR: %w", err)
 			}
 
-			cliCSR, cliKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
-			if err != nil {
-				return fmt.Errorf("failed to generate CLI CSR: %w", err)
-			}
-
 			// Append default HTTP port
 			gatewayEndpoint := fmt.Sprintf("%s:%d", endpoint, constants.Ports.OperatorHttp)
 			cmd.Printf("Enrolling with Gateway at %s...\n", gatewayEndpoint)
-			regResp, err := auth.EnrollWithGateway(cfg, gatewayEndpoint, opCSR, cliCSR, "")
+			regResp, err := auth.EnrollWithGateway(cfg, gatewayEndpoint, opCSR, "", "")
 			if err != nil {
 				return fmt.Errorf("failed to enroll: %w", err)
 			}
@@ -229,13 +224,6 @@ func securityPKIEnrollCmd() *cobra.Command {
 				return fmt.Errorf("failed to save Operator certificate: %w", err)
 			}
 
-			// Save CLI cert separately
-			cliCertPath := filepath.Join(pkiDir, "cli.crt")
-			cliKeyPath := filepath.Join(pkiDir, "cli.key")
-			if err := auth.SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cliCertPath, cliKeyPath); err != nil {
-				return fmt.Errorf("failed to save CLI certificate: %w", err)
-			}
-
 			if err := os.WriteFile(chainPath, []byte(regResp.OperatorCertChain), 0600); err != nil {
 				return fmt.Errorf("failed to save certificate chain: %w", err)
 			}
@@ -254,11 +242,8 @@ func securityPKIEnrollCmd() *cobra.Command {
 			cmd.Printf("\nEnrollment complete\n")
 			cmd.Printf("Operator ID: %s\n", regResp.OperatorID)
 			cmd.Printf("Operator Session ID: %s\n", regResp.OperatorSessionID)
-			cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
 			cmd.Printf("Certificate saved to: %s\n", certPath)
 			cmd.Printf("Key saved to: %s\n", keyPath)
-			cmd.Printf("CLI Certificate saved to: %s\n", cliCertPath)
-			cmd.Printf("CLI Key saved to: %s\n", cliKeyPath)
 			if regResp.HubTrustBundle != "" {
 				cmd.Printf("Trust bundle saved to: %s\n", filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem"))
 			}

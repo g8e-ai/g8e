@@ -50,7 +50,7 @@ type HTTPHandlerDependencies struct {
 	Pubsub            *PubSubBroker
 	Auth              *AuthService
 	PKI               *PKIAuthority
-	SessionSvc        *SessionService
+	SessionSvc        *SessionsService
 	Reg               *RegistrationService
 	Passkey           *PasskeyService
 	UserSvc           *UserService
@@ -74,7 +74,7 @@ type HTTPHandler struct {
 	pubsub            *PubSubBroker
 	auth              *AuthService
 	pki               *PKIAuthority
-	sessionSvc        *SessionService
+	sessionSvc        *SessionsService
 	reg               *RegistrationService
 	passkey           *PasskeyService
 	userSvc           *UserService
@@ -287,8 +287,9 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.Landing, h.handleLandingPage)
 	mux.HandleFunc(constants.APIPaths.AuthLoginVerify, h.authController.handlePublicAuthLoginVerify)
 	mux.HandleFunc(constants.APIPaths.AuthLogout, h.authController.handlePublicAuthLogout)
-	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handlePublicAuthBootstrap)
+	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handleLocalBootstrap)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)
+	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.authController.handleDeviceEnrollment)
 	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
 
 	// MCP/A2A Ingress routes with JWT authentication for remote clients
@@ -355,7 +356,7 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
 
 	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
-	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handlePublicAuthBootstrap)
+	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handleLocalBootstrap)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
@@ -389,7 +390,7 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
 
 	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
-	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handlePublicAuthBootstrap)
+	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handleLocalBootstrap)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)

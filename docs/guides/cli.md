@@ -13,7 +13,7 @@ Usage:
 Available Commands:
   agent       Wrap agentic coding tools with g8e zero-trust gateway
   approve     Approve a suspended L3 transaction with CLI signature
-  auth        Authentication and session management
+  auth        Authentication and cli/web/operator session management
   auditor     Universal agent emulator for a real g8e Gateway/Operator
   chaos       Generate realistic governance events against the local g8e audit stack
   claude      Execute Claude Code proxied through g8e gateway

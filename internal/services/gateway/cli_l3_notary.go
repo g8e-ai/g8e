@@ -39,11 +39,11 @@ type CLIL3Notary struct {
 	pki        *PKIAuthority
 	logger     *slog.Logger
 	userSvc    *UserService
-	sessionSvc *SessionService
+	sessionSvc *SessionsService
 }
 
 // NewCLIL3Notary creates a new CLI L3 notary.
-func NewCLIL3Notary(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, sessionSvc *SessionService) *CLIL3Notary {
+func NewCLIL3Notary(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, sessionSvc *SessionsService) *CLIL3Notary {
 	return &CLIL3Notary{
 		db:         db,
 		pki:        pki,

@@ -776,7 +776,7 @@ func TestIsMutationPubSubChannelAllowed(t *testing.T) {
 	}{
 		{"Heartbeat channel allowed", "heartbeat:operator-1", true},
 		{"Results channel allowed", "results:cli-session-1", true},
-		{"SSE channel allowed", "sse:session-1", true},
+		{"SSE channel allowed", "sse:sessions-1", true},
 		{"WebSocket session channel allowed", "ws_session:conn-1", true},
 		{"Internal channel allowed", "internal:system", true},
 		{"Command channel not allowed", "cmd:execute", false},

@@ -113,7 +113,7 @@ func TestAuditVaultService_Session(t *testing.T) {
 	require.NoError(t, err)
 
 	// Retrieve the session
-	session, err := avs.GetSession(operatorSessionID)
+	session, err := avs.GetOperatorSession(operatorSessionID)
 	require.NoError(t, err)
 	require.NotNil(t, session)
 
@@ -215,7 +215,7 @@ func TestAuditVaultService_RecordEvent_RejectsUnknownSession(t *testing.T) {
 	require.ErrorIs(t, err, ErrAuditSessionUnknown)
 	assert.Equal(t, int64(0), eventID)
 
-	session, err := avs.GetSession(operatorSessionID)
+	session, err := avs.GetOperatorSession(operatorSessionID)
 	require.NoError(t, err)
 	assert.Nil(t, session)
 }
@@ -514,7 +514,7 @@ func TestAuditVaultService_MultipleSessions(t *testing.T) {
 
 	// Verify each session exists with correct data
 	for _, s := range sessions {
-		session, err := avs.GetSession(s.id)
+		session, err := avs.GetOperatorSession(s.id)
 		require.NoError(t, err)
 		require.NotNil(t, session)
 		assert.Equal(t, s.id, session.ID)
@@ -874,7 +874,7 @@ func TestAuditVaultService_GetSessionNotFound(t *testing.T) {
 	require.NoError(t, err)
 	defer avs.Close()
 
-	session, err := avs.GetSession("non-existent-session")
+	session, err := avs.GetOperatorSession("non-existent-session")
 	require.NoError(t, err)
 	assert.Nil(t, session)
 }
@@ -1334,7 +1334,7 @@ func TestAuditVaultService_SessionWithNullFields(t *testing.T) {
 	err = avs.CreateSession("null-fields-session", "operator", "", "")
 	require.NoError(t, err)
 
-	session, err := avs.GetSession("null-fields-session")
+	session, err := avs.GetOperatorSession("null-fields-session")
 	require.NoError(t, err)
 	require.NotNil(t, session)
 

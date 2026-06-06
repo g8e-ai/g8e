@@ -44,12 +44,12 @@ type AuthController struct {
 	userSvc    *UserService
 	reg        *RegistrationService
 	pki        *PKIAuthority
-	sessionSvc *SessionService
+	sessionSvc *SessionsService
 	mcp        *mcp.GatewayService
 	responder  *responder.Responder
 }
 
-func newAuthController(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, sessionSvc *SessionService, mcp *mcp.GatewayService, responder *responder.Responder) *AuthController {
+func newAuthController(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, sessionSvc *SessionsService, mcp *mcp.GatewayService, responder *responder.Responder) *AuthController {
 	return &AuthController{
 		cfg:        cfg,
 		logger:     logger,
@@ -922,7 +922,7 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 	c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }
 
-func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -935,11 +935,9 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 	}
 
 	var req struct {
-		Name              string `json:"name"`
-		CSRPEM            string `json:"csr_pem"`
-		CLICSRPEM         string `json:"cli_csr_pem,omitempty"`
-		SystemFingerprint string `json:"system_fingerprint"`
-		Hostname          string `json:"hostname"`
+		Name      string `json:"name"`
+		CSRPEM    string `json:"csr_pem"`
+		CLICSRPEM string `json:"cli_csr_pem,omitempty"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
@@ -949,19 +947,15 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 	// Check if CSR signing is requested
 	csrRequested := req.CSRPEM != ""
 
-	// If CSR is requested for device enrollment (not local bootstrap), allow remote requests
-	// Device enrollment requests include hostname and system_fingerprint fields
-	isDeviceEnrollment := req.Hostname != "" && req.SystemFingerprint != ""
-
-	// Only enforce loopback gate for local bootstrap, not device enrollment
-	if csrRequested && !isDeviceEnrollment {
+	// Enforce loopback gate for local bootstrap
+	if csrRequested {
 		host, _, err := net.SplitHostPort(r.RemoteAddr)
 		if err != nil {
 			host = r.RemoteAddr
 		}
 		ip := net.ParseIP(host)
 		if ip == nil || !ip.IsLoopback() {
-			c.logger.Warn("Bootstrap CSR request rejected: not from loopback", "remote_addr", r.RemoteAddr)
+			c.logger.Warn("Local bootstrap CSR request rejected: not from loopback", "remote_addr", r.RemoteAddr)
 			c.responder.Error(w, http.StatusForbidden, "CSR auto-issue only available over loopback")
 			return
 		}
@@ -1017,7 +1011,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 		}
 	}
 
-	// Issue a web session cookie for passkey registration
+	// Create web session for local bootstrap
 	webSession, err := c.passkey.CreateWebSession(user.ID)
 	if err != nil {
 		c.logger.Error("Failed to create web session for bootstrap user", string(constants.ConnectionStateError), err, "user_id", user.ID)
@@ -1038,7 +1032,9 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 	response := map[string]interface{}{
 		string(constants.AuthAuditResultSuccess): true,
 		string(constants.HistoryActorUser):       user,
-		string(constants.SessionKeyPrefixWeb):    webSession,
+	}
+	if webSession != nil {
+		response[string(constants.SessionKeyPrefixWeb)] = webSession
 	}
 
 	// If CSR is requested and loopback, sign and return cert (plan §4.2)
@@ -1059,7 +1055,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 			Status:            constants.OperatorStatusActive,
 			OperatorSessionID: operatorSessionID,
 			OperatorType:      constants.OperatorTypeSystem,
-			SystemFingerprint: req.SystemFingerprint,
+			SystemFingerprint: "bootstrap-operator",
 			Claimed:           true,
 			ClaimedAt:         &now,
 			CreatedAt:         now,
@@ -1120,7 +1116,7 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 			user.ID,
 			orgID,
 			operatorID,
-			req.SystemFingerprint,
+			"bootstrap-operator",
 			cliCertFingerprint,
 			cliCertSerial,
 			string(constants.HeartbeatTypeBootstrap),
@@ -1146,6 +1142,189 @@ func (c *AuthController) handlePublicAuthBootstrap(w http.ResponseWriter, r *htt
 		c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user (no CSR)", "user_id", user.ID)
 	}
 
+	c.responder.JSON(w, http.StatusCreated, response)
+}
+
+func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req struct {
+		CSRPEM            string `json:"csr_pem"`
+		CLICSRPEM         string `json:"cli_csr_pem,omitempty"`
+		SystemFingerprint string `json:"system_fingerprint"`
+		Hostname          string `json:"hostname"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	// Validate required fields for device enrollment
+	if req.CSRPEM == "" {
+		c.responder.Error(w, http.StatusBadRequest, "csr_pem is required")
+		return
+	}
+	if req.SystemFingerprint == "" {
+		c.responder.Error(w, http.StatusBadRequest, "system_fingerprint is required")
+		return
+	}
+	if req.Hostname == "" {
+		c.responder.Error(w, http.StatusBadRequest, "hostname is required")
+		return
+	}
+
+	// Check for existing bootstrap user (plan §4.2, §9.1 rotation carve-out)
+	bootstrapUser, err := c.userSvc.FindBootstrapUser()
+	if err != nil {
+		c.logger.Error("Failed to check for existing bootstrap user", string(constants.ConnectionStateError), err)
+		c.responder.Error(w, http.StatusInternalServerError, "bootstrap check failed")
+		return
+	}
+
+	var user *models.User
+	if bootstrapUser != nil {
+		// Bootstrap user exists - check if rotation is allowed
+		if !bootstrapUser.IsActive() {
+			c.logger.Warn("Bootstrap user is disabled, refusing device enrollment", "user_id", bootstrapUser.ID)
+			c.responder.Error(w, http.StatusConflict, "bootstrap user is disabled, cannot enroll")
+			return
+		}
+		user = bootstrapUser
+		c.logger.Info("[DEVICE_ENROLLMENT] Using existing bootstrap user", "user_id", user.ID)
+	} else {
+		// No bootstrap user exists - create one
+		hasUsers, err := c.userSvc.HasAnyUsers()
+		if err != nil {
+			c.logger.Error("Failed to check for existing users during device enrollment", string(constants.ConnectionStateError), err)
+			c.responder.Error(w, http.StatusInternalServerError, "bootstrap check failed")
+			return
+		}
+		if hasUsers {
+			c.logger.Warn("Device enrollment attempted on non-empty system", "remote_addr", r.RemoteAddr)
+			c.responder.Error(w, http.StatusForbidden, "device enrollment only available for initial setup")
+			return
+		}
+
+		user, err = c.userSvc.CreateBootstrapUser()
+		if err != nil {
+			c.logger.Error("Failed to create bootstrap user for device enrollment", string(constants.ConnectionStateError), err)
+			c.responder.Error(w, http.StatusInternalServerError, "failed to create user")
+			return
+		}
+	}
+
+	// Create Operator slot for the device
+	operatorID := uuid.NewString()
+	operatorSessionID := uuid.NewString()
+	cliSessionID := uuid.NewString()
+	orgID := user.ID
+	now := time.Now().UTC()
+
+	operator := &models.OperatorDocumentGo{
+		ID:                operatorID,
+		UserID:            user.ID,
+		OrganizationID:    orgID,
+		Component:         constants.ComponentNameG8EO,
+		Name:              req.Hostname,
+		Status:            constants.OperatorStatusActive,
+		OperatorSessionID: operatorSessionID,
+		OperatorType:      constants.OperatorTypeSystem,
+		SystemFingerprint: req.SystemFingerprint,
+		Claimed:           true,
+		ClaimedAt:         &now,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+
+	// Sign the CSR
+	certPEM, chainPEM, err := c.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, orgID, operatorID, user.ID, operatorSessionID, "")
+	if err != nil {
+		c.logger.Error("Failed to sign device enrollment CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to sign CSR")
+		return
+	}
+
+	operator.OperatorCert = certPEM
+
+	// CLI certificate generation (mandatory)
+	if req.CLICSRPEM == "" {
+		c.logger.Error("Device enrollment request missing mandatory CLI CSR", "user_id", user.ID)
+		c.responder.Error(w, http.StatusBadRequest, "cli_csr_pem is mandatory")
+		return
+	}
+
+	cliCertPEM, cliCertChainPEM, err := c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "")
+	if err != nil {
+		c.logger.Error("Failed to sign device enrollment CLI CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to sign CLI CSR")
+		return
+	}
+
+	// Calculate CLI certificate fingerprint and serial for L3 verification
+	cliCertFingerprint := calculateFingerprintFromPEM(cliCertPEM)
+	cliCertSerial := calculateSerialFromPEM(cliCertPEM)
+
+	// Persist Operator document
+	opBytes, err := json.Marshal(operator)
+	if err != nil {
+		c.logger.Error("Failed to marshal Operator document", string(constants.ConnectionStateError), err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
+		return
+	}
+	if err := c.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
+		c.logger.Error("Failed to persist Operator document", string(constants.ConnectionStateError), err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
+		return
+	}
+
+	// Fetch trust bundle
+	hubBundle, err := c.pki.GatewayTrustBundle()
+	if err != nil {
+		c.logger.Warn("Failed to fetch hub trust bundle", string(constants.ConnectionStateError), err)
+		// Non-fatal - continue without bundle
+	}
+
+	err = c.sessionSvc.PersistSessions(
+		cliSessionID,
+		operatorSessionID,
+		user.ID,
+		orgID,
+		operatorID,
+		req.SystemFingerprint,
+		cliCertFingerprint,
+		cliCertSerial,
+		string(constants.HeartbeatTypeBootstrap),
+	)
+	if err != nil {
+		c.logger.Error("Failed to persist sessions during device enrollment", string(constants.ConnectionStateError), err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to persist sessions")
+		return
+	}
+
+	response := map[string]interface{}{
+		string(constants.AuthAuditResultSuccess): true,
+		string(constants.HistoryActorUser):       user,
+		"operator_cert":                          certPEM,
+		"operator_cert_chain":                    chainPEM,
+		"hub_trust_bundle":                       string(hubBundle),
+		"operator_session_id":                    operatorSessionID,
+		"operator_id":                            operatorID,
+		"cli_session_id":                         cliSessionID,
+		"cli_cert":                               cliCertPEM,
+		"cli_cert_chain":                         cliCertChainPEM,
+		"user_id":                                user.ID,
+	}
+
+	c.logger.Info("[DEVICE_ENROLLMENT] Device enrolled successfully", "user_id", user.ID, "operator_id", operatorID, "hostname", req.Hostname)
 	c.responder.JSON(w, http.StatusCreated, response)
 }
 

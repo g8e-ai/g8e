@@ -385,7 +385,7 @@ Generate an invitation for external IdP authentication:
 3. **Gateway validates**: Gateway checks JWT signature and verifies invitation exists for the `sub`
 4. **User provisioning**: If invitation exists, user is provisioned and bound to owner's organization
 5. **Invitation consumption**: Invitation is consumed after successful provisioning
-6. **Session issuance**: Gateway issues short-lived mTLS certificate (1-day TTL) and session (1-hour TTL)
+6. **Session issuance**: Gateway issues short-lived mTLS certificate (1-day TTL) and cli/web/operator session (1-hour TTL)
 7. **Session renewal**: Client must re-authenticate before expiry
 
 ---

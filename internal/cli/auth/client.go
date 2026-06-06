@@ -411,8 +411,6 @@ func DeleteCredentials(cfg *config.Config) error {
 	certFiles := []string{
 		cfg.CLICertFile(),
 		cfg.CLIKeyFile(),
-		cfg.OperatorCertFile(),
-		cfg.OperatorKeyFile(),
 		cfg.TrustBundlePath(),
 	}
 
@@ -584,31 +582,22 @@ func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint str
 		return fmt.Errorf("failed to get hostname: %w", err)
 	}
 
-	opCSR, opKey, err := GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
-	if err != nil {
-		return fmt.Errorf("failed to generate Operator CSR: %w", err)
-	}
-
 	cliCSR, cliKey, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
 	if err != nil {
 		return fmt.Errorf("failed to generate CLI CSR: %w", err)
 	}
 
-	regResp, err := ReEnroll(cfg, opCSR, cliCSR, caFingerprint)
+	regResp, err := ReEnroll(cfg, "", cliCSR, caFingerprint)
 	if err != nil {
 		return fmt.Errorf("automatic re-enrollment failed: %w", err)
 	}
 
-	if regResp.OperatorSessionID == "" || regResp.OperatorID == "" || regResp.OperatorCert == "" || regResp.CLISessionID == "" || regResp.CLICert == "" {
+	if regResp.CLISessionID == "" || regResp.CLICert == "" {
 		return fmt.Errorf("unexpected re-enrollment response (missing required fields)")
 	}
 
 	if err := SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
 		return fmt.Errorf("failed to save renewed CLI credentials: %w", err)
-	}
-
-	if err := SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey, cfg.OperatorCertFile(), cfg.OperatorKeyFile()); err != nil {
-		return fmt.Errorf("failed to save renewed Operator credentials: %w", err)
 	}
 
 	if regResp.HubTrustBundle != "" {
@@ -652,8 +641,8 @@ func EnrollWithGateway(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR 
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Use the bootstrap endpoint for initial enrollment (no mTLS required)
-	url := fmt.Sprintf("http://%s/api/v1/auth/bootstrap", gatewayEndpoint)
+	// Use the device enrollment endpoint for initial enrollment (no mTLS required)
+	url := fmt.Sprintf("http://%s/api/v1/auth/device/enroll", gatewayEndpoint)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)

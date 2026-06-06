@@ -34,9 +34,9 @@ import (
 
 const (
 	// Session binding KV prefixes
-	sessionWebBindPrefix      = "g8e:session:web:"
-	sessionOperatorBindPrefix = "g8e:session:operator:"
-	sessionCLIBindPrefix      = "g8e:session:cli:"
+	sessionWebBindPrefix      = "g8e:sessions:web:"
+	sessionOperatorBindPrefix = "g8e:sessions:operator:"
+	sessionCLIBindPrefix      = "g8e:sessions:cli:"
 	sessionBindSuffix         = ":bind"
 )
 
@@ -46,12 +46,12 @@ type RegistrationService struct {
 	pki        *PKIAuthority
 	logger     *slog.Logger
 	userSvc    *UserService
-	sessionSvc *SessionService
+	sessionSvc *SessionsService
 	cfg        *config.GatewayConfig
 }
 
 // NewRegistrationService creates a new RegistrationService.
-func NewRegistrationService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, sessionSvc *SessionService, cfg *config.GatewayConfig) *RegistrationService {
+func NewRegistrationService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, sessionSvc *SessionsService, cfg *config.GatewayConfig) *RegistrationService {
 	return &RegistrationService{
 		db:         db,
 		pki:        pki,
@@ -161,9 +161,7 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 	if req.CSR == "" {
 		return nil, fmt.Errorf("operator CSR is required")
 	}
-	if req.CLICSR == "" {
-		return nil, fmt.Errorf("CLI CSR is required for distinct SPIFFE identity")
-	}
+	// CLI CSR is optional for operator-only enrollment
 
 	// Sanitize fingerprint
 	sanitizedFingerprint := strings.ToLower(strings.Trim(req.SystemFingerprint, " \t\n\r"))
@@ -260,7 +258,11 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	// Mint a strictly-disjoint cli_session_id alongside the Operator session.
 	// See OperatorRegistrationResponse doc: the two session types must never
 	// share an identifier.
-	cliSessionID := uuid.NewString()
+	// Only generate CLI session ID if CLI CSR is provided
+	var cliSessionID string
+	if req.CLICSR != "" {
+		cliSessionID = uuid.NewString()
+	}
 
 	// CSR-based enrollment
 	if req.CSR != "" {
@@ -275,9 +277,9 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		if orgID == "" {
 			orgID = organizationID
 		}
-		certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, orgID, operator.ID, "", operatorSessionID, "")
-		if err != nil {
-			return nil, fmt.Errorf("failed to sign Operator CSR: %w", err)
+		certPEM, chainPEM, signErr := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, orgID, operator.ID, "", operatorSessionID, "")
+		if signErr != nil {
+			return nil, fmt.Errorf("failed to sign Operator CSR: %w", signErr)
 		}
 		update["operator_cert"] = certPEM
 		update["operator_cert_chain"] = chainPEM
@@ -286,26 +288,28 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		return nil, fmt.Errorf("CSR required for device registration")
 	}
 
-	// CLI certificate generation - CLI CSR is mandatory for distinct SPIFFE identity
+	// CLI certificate generation - CLI CSR is optional for operator-only enrollment
 	var cliCertPEM, cliCertChainPEM, cliCertFingerprint, cliCertSerial string
-	block, _ := pem.Decode([]byte(req.CLICSR))
-	if block == nil || block.Type != "CERTIFICATE REQUEST" {
-		return nil, fmt.Errorf("invalid CLI CSR PEM format")
-	}
+	if req.CLICSR != "" {
+		block, _ := pem.Decode([]byte(req.CLICSR))
+		if block == nil || block.Type != "CERTIFICATE REQUEST" {
+			return nil, fmt.Errorf("invalid CLI CSR PEM format")
+		}
 
-	var err error
-	cliCertPEM, cliCertChainPEM, err = s.pki.SignCSR(req.CLICSR, constants.LeafTypeCLI, "", "", userID, cliSessionID, "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to sign CLI CSR: %w", err)
+		var signErr error
+		cliCertPEM, cliCertChainPEM, signErr = s.pki.SignCSR(req.CLICSR, constants.LeafTypeCLI, "", "", userID, cliSessionID, "")
+		if signErr != nil {
+			return nil, fmt.Errorf("failed to sign CLI CSR: %w", signErr)
+		}
+		// Calculate fingerprint and serial from the issued CLI certificate
+		cliCertFingerprint = calculateFingerprintFromPEM(cliCertPEM)
+		cliCertSerial = calculateSerialFromPEM(cliCertPEM)
 	}
-	// Calculate fingerprint and serial from the issued CLI certificate
-	cliCertFingerprint = calculateFingerprintFromPEM(cliCertPEM)
-	cliCertSerial = calculateSerialFromPEM(cliCertPEM)
 
 	updateBytes, _ := json.Marshal(update)
-	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operator.ID, updateBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update Operator status: %w", err)
+	_, updateErr := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operator.ID, updateBytes)
+	if updateErr != nil {
+		return nil, fmt.Errorf("failed to update Operator status: %w", updateErr)
 	}
 
 	// Fetch trust bundle
@@ -315,7 +319,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	finalCertPEM := update["operator_cert"].(string)
 	finalChainPEM := update["operator_cert_chain"].(string)
 
-	err = s.sessionSvc.PersistSessions(
+	persistErr := s.sessionSvc.PersistSessions(
 		cliSessionID,
 		operatorSessionID,
 		userID,
@@ -326,8 +330,8 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		cliCertSerial,
 		"csr",
 	)
-	if err != nil {
-		return nil, err
+	if persistErr != nil {
+		return nil, persistErr
 	}
 
 	return &models.OperatorRegistrationResponse{

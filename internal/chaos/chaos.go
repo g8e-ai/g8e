@@ -424,13 +424,13 @@ func Run(cfg Config) {
 	for i := 0; i < workerCount; i++ {
 		sessionID := fmt.Sprintf("chaos-session-%03d", i+1)
 		sessionIDs[i] = sessionID
-		session, err := av.GetSession(sessionID)
+		operator_session, err := av.GetOperatorSession(sessionID)
 		if err != nil {
 			logger.Error("failed to inspect chaos audit session", "error", err)
 			av.Close()
 			os.Exit(1)
 		}
-		if session == nil {
+		if operator_session == nil {
 			if err := av.CreateSession(sessionID, "operator", fmt.Sprintf("Chaos Worker %d", i+1), "chaos@test.local"); err != nil {
 				logger.Error("failed to create chaos audit session", "error", err)
 				av.Close()

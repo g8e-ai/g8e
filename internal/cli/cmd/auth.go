@@ -28,7 +28,7 @@ import (
 func authCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth",
-		Short: "Authentication and session management",
+		Short: "Authentication and cli/web/operator session management",
 		Long:  `Manage mTLS enrollment and Operator sessions via CSR-based authentication.`,
 	}
 
@@ -73,32 +73,23 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 
 				cmd.Println("Generating keys and CSRs...")
 				hostname, _ := os.Hostname()
-				opCSR, opKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
-				if err != nil {
-					return fmt.Errorf("failed to generate Operator CSR: %w", err)
-				}
-
 				cliCSR, cliKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
 				if err != nil {
 					return fmt.Errorf("failed to generate CLI CSR: %w", err)
 				}
 
 				cmd.Println("Bootstrapping with operator...")
-				regResp, err := auth.Bootstrap(cfg, opCSR, cliCSR, "")
+				regResp, err := auth.Bootstrap(cfg, "", cliCSR, "")
 				if err != nil {
 					return err
 				}
 
-				if regResp.OperatorSessionID == "" || regResp.OperatorID == "" || regResp.OperatorCert == "" || regResp.CLISessionID == "" || regResp.CLICert == "" {
+				if regResp.CLISessionID == "" || regResp.CLICert == "" {
 					return fmt.Errorf("unexpected bootstrap response (missing required fields)")
 				}
 
 				if err := auth.SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
 					return fmt.Errorf("failed to save CLI credentials: %w", err)
-				}
-
-				if err := auth.SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey, cfg.OperatorCertFile(), cfg.OperatorKeyFile()); err != nil {
-					return fmt.Errorf("failed to save Operator credentials: %w", err)
 				}
 
 				if regResp.HubTrustBundle != "" {
@@ -122,9 +113,7 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 
 				cmd.Printf("\nClient enrollment complete\n")
 				cmd.Printf("User ID: %s\n", regResp.UserID)
-				cmd.Printf("Operator Session ID: %s\n", regResp.OperatorSessionID)
 				cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
-				cmd.Printf("Operator ID: %s\n", regResp.OperatorID)
 
 				return nil
 			}
@@ -137,24 +126,16 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 			if err := auth.AutoRenewCertificate(cfg, "cli", ""); err != nil {
 				return fmt.Errorf("CLI certificate auto-renewal failed: %w", err)
 			}
-			if err := auth.AutoRenewCertificate(cfg, "operator", ""); err != nil {
-				return fmt.Errorf("operator certificate auto-renewal failed: %w", err)
-			}
 
 			cmd.Println("Generating keys and CSRs...")
 			hostname, _ := os.Hostname()
-			opCSR, opKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
-			if err != nil {
-				return fmt.Errorf("failed to generate Operator CSR: %w", err)
-			}
-
 			cliCSR, cliKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
 			if err != nil {
 				return fmt.Errorf("failed to generate CLI CSR: %w", err)
 			}
 
 			cmd.Println("Re-enrolling with operator...")
-			regResp, err := auth.ReEnroll(cfg, opCSR, cliCSR, "")
+			regResp, err := auth.ReEnroll(cfg, "", cliCSR, "")
 			if err != nil {
 				// Check if this is a TLS verification error (stale trust bundle after gateway PKI regeneration)
 				if strings.Contains(err.Error(), "certificate signed by unknown authority") ||
@@ -164,16 +145,12 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 				return err
 			}
 
-			if regResp.OperatorSessionID == "" || regResp.OperatorID == "" || regResp.OperatorCert == "" || regResp.CLISessionID == "" || regResp.CLICert == "" {
+			if regResp.CLISessionID == "" || regResp.CLICert == "" {
 				return fmt.Errorf("unexpected registration response (missing required fields)")
 			}
 
 			if err := auth.SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
 				return fmt.Errorf("failed to save CLI credentials: %w", err)
-			}
-
-			if err := auth.SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey, cfg.OperatorCertFile(), cfg.OperatorKeyFile()); err != nil {
-				return fmt.Errorf("failed to save Operator credentials: %w", err)
 			}
 
 			if regResp.HubTrustBundle != "" {
@@ -197,9 +174,7 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 
 			cmd.Printf("\nClient re-enrollment complete\n")
 			cmd.Printf("User ID: %s\n", regResp.UserID)
-			cmd.Printf("Operator Session ID: %s\n", regResp.OperatorSessionID)
 			cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
-			cmd.Printf("Operator ID: %s\n", regResp.OperatorID)
 
 			return nil
 		},

@@ -560,7 +560,7 @@ func TestDBControllerHandlePubSubPublish(t *testing.T) {
 
 	t.Run("Reject mutation channels", func(t *testing.T) {
 		t.Parallel()
-		for _, channel := range []string{constants.CmdChannel("op-1", "session-1"), "auditor:op-1:session-1"} {
+		for _, channel := range []string{constants.CmdChannel("op-1", "session-1"), "auditor:op-1:sessions-1"} {
 			pubReq := models.PubSubPublishRequest{
 				Channel: channel,
 				Data:    mustDocJSON(t, map[string]string{"foo": "bar"}),

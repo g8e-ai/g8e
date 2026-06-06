@@ -20,7 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -60,7 +60,7 @@ func (hh *HistoryHandler) HandleFetchHistory(requestJSON []byte) (*operatorv1.Fe
 		"limit", limit,
 		"offset", offset)
 
-	session, err := hh.auditVault.GetSession(request.OperatorSessionId)
+	session, err := hh.auditVault.GetOperatorSession(request.OperatorSessionId)
 	if err != nil {
 		return hh.fetchHistoryError(fmt.Errorf("failed to get session: %w", err).Error()), nil
 	}

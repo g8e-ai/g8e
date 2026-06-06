@@ -24,22 +24,23 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
-// SessionService centralizes the logic for creating and binding Operator and CLI sessions.
-type SessionService struct {
+// SessionsService centralizes the logic for creating and binding Operator and CLI sessions.
+type SessionsService struct {
 	db     *GatewayDBService
 	logger *slog.Logger
 }
 
-// NewSessionService creates a new SessionService instance.
-func NewSessionService(db *GatewayDBService, logger *slog.Logger) *SessionService {
-	return &SessionService{
+// NewSessionService creates a new SessionsService instance.
+func NewSessionService(db *GatewayDBService, logger *slog.Logger) *SessionsService {
+	return &SessionsService{
 		db:     db,
 		logger: logger,
 	}
 }
 
 // PersistSessions binds an Operator session and a CLI session and persists both documents.
-func (s *SessionService) PersistSessions(cliSessionID, operatorSessionID, userID, orgID, operatorID, systemFingerprint, certFingerprint, certSerial, loginMethod string) error {
+// If cliSessionID is empty (operator-only enrollment), only the operator session is persisted.
+func (s *SessionsService) PersistSessions(cliSessionID, operatorSessionID, userID, orgID, operatorID, systemFingerprint, certFingerprint, certSerial, loginMethod string) error {
 	// CLI session id is a first-class session type, strictly disjoint from
 	// operator_session_id. The operator_session_id authenticates the host
 	// agent (mTLS URI SAN); the cli_session_id is the routing namespace
@@ -47,33 +48,36 @@ func (s *SessionService) PersistSessions(cliSessionID, operatorSessionID, userID
 	// outbound request bodies. Conflating the two would let an operator
 	// session drain another client's event stream - and vice versa.
 
-	// Store the binding between operator_session_id and cli_session_id in a first-class
-	// collection to support metadata, expiry, and revocation. Without this binding,
-	// any authenticated Operator could drain any cli_session_id's event buffer.
-	cliExpiry := time.Now().UTC().Add(1 * time.Hour)
-	cliSession := models.CLISession{
-		ID:                cliSessionID,
-		UserID:            userID,
-		OperatorSessionID: operatorSessionID,
-		SystemFingerprint: systemFingerprint,
-		CertFingerprint:   certFingerprint,
-		CertSerial:        certSerial,
-		CreatedAt:         time.Now().UTC(),
-		ExpiresAt:         cliExpiry,
-		AbsoluteExpiresAt: cliExpiry,
-		IdleExpiresAt:     cliExpiry,
-		SessionType:       string(constants.SessionTypeCLI),
-		IsActive:          true,
-		LoginMethod:       loginMethod,
-	}
-	cliSessionBytes, err := json.Marshal(cliSession)
-	if err != nil {
-		return fmt.Errorf("failed to marshal CLI session: %w", err)
-	}
+	// Only persist CLI session if cliSessionID is provided (not operator-only enrollment)
+	if cliSessionID != "" {
+		// Store the binding between operator_session_id and cli_session_id in a first-class
+		// collection to support metadata, expiry, and revocation. Without this binding,
+		// any authenticated Operator could drain any cli_session_id's event buffer.
+		cliExpiry := time.Now().UTC().Add(1 * time.Hour)
+		cliSession := models.CLISession{
+			ID:                cliSessionID,
+			UserID:            userID,
+			OperatorSessionID: operatorSessionID,
+			SystemFingerprint: systemFingerprint,
+			CertFingerprint:   certFingerprint,
+			CertSerial:        certSerial,
+			CreatedAt:         time.Now().UTC(),
+			ExpiresAt:         cliExpiry,
+			AbsoluteExpiresAt: cliExpiry,
+			IdleExpiresAt:     cliExpiry,
+			SessionType:       string(constants.SessionTypeCLI),
+			IsActive:          true,
+			LoginMethod:       loginMethod,
+		}
+		cliSessionBytes, err := json.Marshal(cliSession)
+		if err != nil {
+			return fmt.Errorf("failed to marshal CLI session: %w", err)
+		}
 
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
-		s.logger.Error("Failed to persist CLI session", string(constants.ConnectionStateError), err)
-		return fmt.Errorf("failed to persist CLI session: %w", err)
+		if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
+			s.logger.Error("Failed to persist CLI session", string(constants.ConnectionStateError), err)
+			return fmt.Errorf("failed to persist CLI session: %w", err)
+		}
 	}
 
 	// Write an operator_sessions document so g8e-compatible agentic ensembles can look up the

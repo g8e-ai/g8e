@@ -34,7 +34,7 @@ func TestNewRegistrationService(t *testing.T) {
 	pki := &PKIAuthority{}
 	logger := slog.New(slog.NewTextHandler(nil, nil))
 	userSvc := &UserService{}
-	sessionSvc := &SessionService{}
+	sessionSvc := &SessionsService{}
 	cfg := &config.GatewayConfig{}
 
 	service := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, cfg)
@@ -90,9 +90,9 @@ func TestSessionWebBindKey(t *testing.T) {
 		sessionID string
 		expected  string
 	}{
-		{"Valid session ID", "web-session-123", "g8e:session:web:web-session-123:bind"},
-		{"Empty session ID", "", "g8e:session:web::bind"},
-		{"Session with special chars", "session-abc-123", "g8e:session:web:session-abc-123:bind"},
+		{"Valid session ID", "web-session-123", "g8e:sessions:web:web-session-123:bind"},
+		{"Empty session ID", "", "g8e:sessions:web::bind"},
+		{"Session with special chars", "session-abc-123", "g8e:sessions:web:sessions-abc-123:bind"},
 	}
 
 	for _, tt := range tests {
@@ -112,9 +112,9 @@ func TestSessionOperatorBindKey(t *testing.T) {
 		sessionID string
 		expected  string
 	}{
-		{"Valid session ID", "op-session-456", "g8e:session:operator:op-session-456:bind"},
-		{"Empty session ID", "", "g8e:session:operator::bind"},
-		{"Session with special chars", "operator-xyz-789", "g8e:session:operator:operator-xyz-789:bind"},
+		{"Valid session ID", "op-session-456", "g8e:sessions:operator:op-session-456:bind"},
+		{"Empty session ID", "", "g8e:sessions:operator::bind"},
+		{"Session with special chars", "operator-xyz-789", "g8e:sessions:operator:operator-xyz-789:bind"},
 	}
 
 	for _, tt := range tests {
@@ -129,8 +129,9 @@ func TestSessionOperatorBindKey(t *testing.T) {
 // TestPKIPhase3_CLI_CSR_Mandatory verifies that enrollment without CLI CSR is rejected
 // This is the fix for C5 (SPIFFE drift fallback) in the PKI cleanup plan.
 // See: .local.dev/docs/plans/pki_cleanup.md C5
-func TestPKIPhase3_CLI_CSR_Mandatory(t *testing.T) {
-	t.Run("RegisterDeviceCSR rejects enrollment without CLI CSR", func(t *testing.T) {
+// Updated: CLI CSR is now optional for operator-only enrollment
+func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
+	t.Run("RegisterDeviceCSR accepts enrollment without CLI CSR (operator-only)", func(t *testing.T) {
 		t.Parallel()
 
 		dataDir := t.TempDir()
@@ -145,8 +146,8 @@ func TestPKIPhase3_CLI_CSR_Mandatory(t *testing.T) {
 		err = pki.EnsurePKI(nil)
 		require.NoError(t, err)
 
-		userSvc := &UserService{}
-		sessionSvc := &SessionService{}
+		userSvc := NewUserService(db, logger)
+		sessionSvc := NewSessionService(db, logger)
 		cfg := &config.GatewayConfig{}
 		regSvc := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, cfg)
 
@@ -157,11 +158,16 @@ func TestPKIPhase3_CLI_CSR_Mandatory(t *testing.T) {
 			SystemFingerprint: "test-fingerprint",
 			Hostname:          "test-host",
 			CSR:               opCSR,
-			CLICSR:            "", // Empty CLI CSR should be rejected
+			CLICSR:            "", // Empty CLI CSR is now allowed for operator-only enrollment
 		}
 
-		_, err = regSvc.RegisterDeviceCSR("user-123", "org-123", req)
-		assert.Error(t, err, "enrollment without CLI CSR should fail")
-		assert.Contains(t, err.Error(), "CLI CSR is required", "error should mention CLI CSR requirement")
+		resp, err := regSvc.RegisterDeviceCSR("user-123", "org-123", req)
+		assert.NoError(t, err, "enrollment without CLI CSR should succeed for operator-only")
+		assert.NotNil(t, resp)
+		assert.True(t, resp.Success)
+		assert.NotEmpty(t, resp.OperatorID)
+		assert.NotEmpty(t, resp.OperatorSessionID)
+		assert.Empty(t, resp.CLISessionID, "CLI session ID should be empty for operator-only enrollment")
+		assert.Empty(t, resp.CLICert, "CLI cert should be empty for operator-only enrollment")
 	})
 }

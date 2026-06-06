@@ -256,7 +256,7 @@ v1.0.4 introduces MCP stdio transport for local agent integration, adds a comple
 
 * **PKI trust bundle handling** - Enhanced trust bundle download and validation to prevent man-in-the-middle attacks during enrollment. Trust bundles are now verified before use.
 * **Certificate enrollment hardening** - Certificate enrollment flow now strictly validates certificate chains and SANs before accepting new certificates.
-* **mTLS boundary enforcement** - Improved mTLS boundary enforcement across gateway services with stricter certificate validation and session management.
+* **mTLS boundary enforcement** - Improved mTLS boundary enforcement across gateway services with stricter certificate validation and cli/web/operator session management.
 
 ---
 

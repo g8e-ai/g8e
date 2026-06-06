@@ -449,8 +449,8 @@ func (avs *AuditVaultService) CreateSession(id, sessionType, title, userIdentity
 	return nil
 }
 
-// GetSession retrieves a session by ID
-func (avs *AuditVaultService) GetSession(id string) (*OperatorSession, error) {
+// GetOperatorSession retrieves a session by ID
+func (avs *AuditVaultService) GetOperatorSession(id string) (*OperatorSession, error) {
 	if avs == nil || avs.db == nil {
 		return nil, fmt.Errorf("audit vault is disabled")
 	}

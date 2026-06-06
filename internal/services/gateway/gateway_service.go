@@ -48,7 +48,7 @@ type GatewayService struct {
 	reg          *RegistrationService
 	passkey      *PasskeyService
 	userSvc      *UserService
-	sessionSvc   *SessionService
+	sessionSvc   *SessionsService
 	mcpGateway   *mcp.GatewayService
 	responder    *responder.Responder
 	server       *http.Server

@@ -37,7 +37,7 @@ type TestInfrastructure struct {
 	PersonaSvc  *PersonaService
 	Responder   *responder.Responder
 	Auth        *AuthService
-	SessionSvc  *SessionService
+	SessionSvc  *SessionsService
 	Reg         *RegistrationService
 	Passkey     *PasskeyService
 	DBDir       string
