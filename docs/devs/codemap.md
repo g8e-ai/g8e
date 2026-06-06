@@ -246,7 +246,7 @@ services/
 │   └── native_tools.go
 │
 ├── sovereignty/
-│   └── boundary.go                 #   Sovereignty Boundary Plane: data scrubbing/rehydration
+│   └── boundary.go                 #   Sovereign Execution Boundary: data scrubbing/rehydration
 │
 ├── auth/
 │   ├── bootstrap.go                #   Device-link token auth + bootstrap config

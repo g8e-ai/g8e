@@ -19,13 +19,13 @@ The g8e Protocol platform is composed of two logically distinct roles, both impl
     - **L3 Notary**: Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) defined in `internal/services/governance/l3_notary.go`.
     - **L4 Warden**: Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) defined in `internal/services/governance/l4_warden.go`.
     - **L5 Actuator**: Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production defined in `internal/services/governance/l5_actuator.go`.
-- **mTLS-Everywhere**: All communication is strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts. The platform uses `g8e.local` as its canonical SPIFFE trust domain for workload identities defined in `protocol/workload_identity.go:24`.
+- **mTLS-Everywhere**: All communication is strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts. The platform uses `g8e.local` as its canonical SPIFFE trust domain for workload identities. See [Network Architecture](./network.md) for detailed mTLS enforcement, PKI hierarchy, and identity management.
 - **Local-First Audit (LFAA)**: The target host remains the source of truth for command history and file mutations, stored in a tamper-evident local ledger.
 - **Canonical JSON (GovernanceEnvelope)**: Every mutation action is governed by a canonical JSON `GovernanceEnvelope` (protojson). This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
 - **Transaction Invariants**: Every transaction is identified by a deterministic `transaction_hash` computed from its content. The envelope `id` must match this hash for the transaction to be valid.
 - **Protocol vs Implementation**: The protocol is the Gateway. Conforming implementations of the g8e Gateway and g8e Operator enforce these invariants.
-- **Sovereign Authority (PKI)**: The g8e Gateway owns the platform's PKI and is the only entity permitted to sign certificates.
-- **CSR-Based Enrollment**: Participants enroll by submitting a Certificate Signing Request (CSR) to the g8e Gateway. Identities are encoded as SPIFFE URI SANs.
+- **Sovereign Authority (PKI)**: The g8e Gateway owns the platform's PKI and is the only entity permitted to sign certificates. See [Network Architecture](./network.md) for the complete PKI hierarchy and certificate management.
+- **CSR-Based Enrollment**: Participants enroll by submitting a Certificate Signing Request (CSR) to the g8e Gateway. Identities are encoded as SPIFFE URI SANs. See [Network Architecture](./network.md) for detailed enrollment procedures.
 
 ---
 
@@ -94,20 +94,7 @@ By passing `--doctrine`, `--consensus`, or `--notary`, the g8e Node transforms i
 
 ### Port Topology
 
-The g8e Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port.
-
-Default ports are sourced from `internal/constants/ports.go:17`:
-
-| Surface | Port (default) | Auth | Purpose |
-|---|---|---|---|
-| **HTTP (Bootstrap + MCP)** | `8080` (plain HTTP) | No TLS | Bootstrap enrollment, CA bundle discovery, and plain HTTP MCP for development/testing. |
-| **HTTPS (mTLS API + Public)** | `8443` (mTLS) | mTLS + URI SAN | `/api/v1/governance/envelopes`, `/api/v1/db/*`, `/api/v1/kv/*`, `/api/v1/blob/*`, `/api/v1/pubsub/publish`, `/ws/v1/pubsub`, and public mTLS surface for external app enrollment. |
-
-#### Port Constraints
-
-- **HTTP Surface** (`8080`): Serves plain HTTP for bootstrap enrollment and MCP calls. Does not require TLS. Intended for development and initial provisioning.
-- **HTTPS Surface** (`8443`): Requires `tls.RequireAndVerifyClientCert`. This is the primary execution boundary for mTLS API and public surface.
-- **Collision Prevention**: The gateway fails startup if incompatible surfaces are assigned to the same port.
+The g8e Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port. See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
 
 ---
 
@@ -303,7 +290,7 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | L5 Actuator | `internal/services/governance/l5_actuator.go` |
 | PKI / CertStore | `internal/services/gateway/gateway_certs.go` |
 | Secret Manager | `internal/services/gateway/secret_manager.go` |
-| Workload identity | `protocol/workload_identity.go` |
+| Network architecture | `./network.md` |
 | Collections registry | `internal/constants/collections.go` |
 | MCP unified endpoint | `internal/services/mcp/mcp_endpoint.go` |
 | Native tool registry | `internal/services/mcp/registry.go` |

@@ -48,7 +48,7 @@ import (
 	gateway "github.com/g8e-ai/g8e/internal/services/gateway"
 	insecure_mcp "github.com/g8e-ai/g8e/internal/services/insecure_mcp"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	vault "github.com/g8e-ai/g8e/internal/services/vault"
@@ -1031,7 +1031,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		AuditVault:          auditVault,
 		Ledger:              nil, // P1: Ledger in gateway mode
 		HistoryHandler:      nil, // P1: History in gateway mode
-		Sovereignty:         sovereignty.NewSovereigntyService(sovereignty.DefaultConfig(), logger, nil),
+		Scrubbing:           scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 		ReplayStore:         govDeps.ReplayStore,
 		StateRootProvider:   govDeps.StateRootProvider,
 		TransactionAudit:    govDeps.TransactionAudit,

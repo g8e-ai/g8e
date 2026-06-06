@@ -536,7 +536,7 @@ func (ls *LocalStoreService) IsEncryptionEnabled() bool {
 	return ls != nil && ls.vault != nil && ls.vault.IsUnlocked()
 }
 
-// SetScrubber sets the text scrubber for AI data sovereignty.
+// SetScrubber sets the text scrubber for AI data scrubbing.
 // This is called after Sentinel is created to break the circular dependency.
 func (ls *LocalStoreService) SetScrubber(scrubber TextScrubber) {
 	ls.scrubber = scrubber

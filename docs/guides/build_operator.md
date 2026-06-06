@@ -121,7 +121,7 @@ The Operator must implement a single execution boundary permitted to mutate host
 
 - **Pre-execution Receipt**: Sign an ActionReceipt with status `EXECUTING` and commit it to the AuditVaultService. Abort execution if this write fails.
 - **Execution**: Dispatch the verified payload to the appropriate handler (shell, file edit, etc.).
-- **Sovereignty Boundary**: Process output to scrub sensitive PII, credentials, and connection strings before data leaves the boundary.
+- **Sovereign Execution Boundary**: Process output to scrub sensitive PII, credentials, and connection strings before data leaves the boundary.
 - **Post-execution Receipt**: Update the receipt to `COMPLETED` or `FAILED`, capture the new `state_root_after`, sign the result, and publish it back to the Gateway.
 
 #### 4. Identity and PKI
@@ -170,7 +170,7 @@ Your implementation must enforce these core invariants:
 6. **Sovereignty**: Sensitive data must be scrubbed before leaving the execution boundary.
 7. **Local-First Audit**: All audit entries must be written to the host-local AuditVaultService before execution.
 
-### Sovereignty Boundary Plane
+### Sovereign Execution Boundary
 
 The Operator must implement data sovereignty:
 
@@ -219,7 +219,7 @@ This runs unit tests covering:
 - Nonce management
 - PKI operations
 - MCP/A2A translation
-- Sovereignty scrubbing
+- Sensitive data scrubbing
 
 For integration tests:
 

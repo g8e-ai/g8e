@@ -27,7 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	system "github.com/g8e-ai/g8e/internal/services/system"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -42,7 +42,7 @@ type FileOpsService struct {
 	fsList      *execution.FsListService
 	fsGrep      *execution.FsGrepService
 	results     ResultsPublisher
-	sovereignty *sovereignty.SovereigntyService
+	scrubbing   *scrubbing.ScrubbingService
 	vaultWriter *VaultWriter
 	auditVault  *storage.AuditVaultService
 	ledger      *storage.LedgerService
@@ -217,13 +217,13 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 		}
 	}
 
-	if fs.sovereignty != nil && fs.sovereignty.IsEnabled() {
+	if fs.scrubbing != nil && fs.scrubbing.IsEnabled() {
 		if result.Content != nil {
-			scrubbed := fs.sovereignty.ScrubText(*result.Content)
+			scrubbed := fs.scrubbing.ScrubText(*result.Content)
 			result.Content = &scrubbed
 		}
 		if result.ErrorMessage != nil {
-			scrubbed := fs.sovereignty.ScrubText(*result.ErrorMessage)
+			scrubbed := fs.scrubbing.ScrubText(*result.ErrorMessage)
 			result.ErrorMessage = &scrubbed
 		}
 	}
@@ -615,8 +615,8 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg *PubSubCo
 	truncated := actualSize > readLimit
 	content := string(data)
 
-	if fs.sovereignty != nil && fs.sovereignty.IsEnabled() {
-		content = fs.sovereignty.ScrubText(content)
+	if fs.scrubbing != nil && fs.scrubbing.IsEnabled() {
+		content = fs.scrubbing.ScrubText(content)
 	}
 
 	payload := &operatorv1.FsReadResult{

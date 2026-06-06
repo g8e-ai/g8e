@@ -191,11 +191,11 @@ The mechanism by which L2 Consensus agents earn or lose standing based on the qu
 
 ## Scrubbed Vault
 
-The local SQLite database on the g8e Operator managed by the **Sovereignty Boundary Plane**. It stores command outputs where sensitive data (credentials, PII, network identifiers) has been replaced with safe placeholders like `{{UEI_N}}`. This ensures that raw sensitive data never leaves the sovereign host.
+The local SQLite database on the g8e Operator managed by the **Sovereign Execution Boundary**. It stores command outputs where sensitive data (credentials, PII, network identifiers) has been replaced with safe placeholders like `{{UEI_N}}`. This ensures that raw sensitive data never leaves the sovereign host.
 
 ---
 
-## Sovereignty Boundary Plane
+## Sovereign Execution Boundary
 
 The data sovereignty and scrubbing system running within the g8e Operator (PEP), implemented as the `SovereigntyService`. It provides:
 - **Egress Scrubbing**: Removes sensitive data (PII, credentials) from command output before transmission to the cloud.

@@ -62,7 +62,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/gateway"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
@@ -183,7 +183,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		Execution:          execSvc,
 		FileEdit:           fileSvc,
 		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
-		Sovereignty:        sovereignty.NewSovereigntyService(sovereignty.DefaultConfig(), testutil.NewTestLogger(), nil),
+		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
@@ -534,7 +534,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		Execution:          execSvc,
 		FileEdit:           fileSvc,
 		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
-		Sovereignty:        sovereignty.NewSovereigntyService(sovereignty.DefaultConfig(), testutil.NewTestLogger(), nil),
+		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
@@ -928,7 +928,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		Execution:          execSvc,
 		FileEdit:           fileSvc,
 		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
-		Sovereignty:        sovereignty.NewSovereigntyService(sovereignty.DefaultConfig(), testutil.NewTestLogger(), nil),
+		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,

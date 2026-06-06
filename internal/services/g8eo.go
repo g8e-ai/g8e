@@ -30,7 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/gateway"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
 )
@@ -259,9 +259,9 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 	vs.logger.Info("Trusted L2 signers loaded from filesystem", "directory", trustedSignersDir)
 
-	// Initialize SovereigntyService for data sovereignty (scrubbing/rehydration)
-	sovereigntyConfig := sovereignty.DefaultConfig()
-	sovereigntyService := sovereignty.NewSovereigntyService(sovereigntyConfig, vs.logger, vs.localStore)
+	// Initialize ScrubbingService for data scrubbing (scrubbing/rehydration)
+	scrubbingConfig := scrubbing.DefaultConfig()
+	scrubbingService := scrubbing.NewScrubbingService(scrubbingConfig, vs.logger, vs.localStore)
 
 	// PubSubCommandService Construction
 	psConfig := pubsub.CommandServiceConfig{
@@ -275,7 +275,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		AuditVault:          vs.auditVault,
 		Ledger:              vs.ledger,
 		HistoryHandler:      vs.historyHandler,
-		Sovereignty:         sovereigntyService,
+		Scrubbing:           scrubbingService,
 		ReplayStore:         vs.replayStore,
 		StateRootProvider:   stateRootProvider,
 		TransactionAudit:    transactionAudit,
@@ -292,10 +292,10 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize command service: %w", err)
 	}
 
-	// Wire SovereigntyService into LocalStoreService for AI data sovereignty scrubbing
-	// This must happen after SovereigntyService is created to break circular dependency
-	vs.localStore.SetScrubber(sovereigntyService)
-	vs.logger.Info("SovereigntyService wired to LocalStoreService for AI data sovereignty")
+	// Wire ScrubbingService into LocalStoreService for AI data scrubbing
+	// This must happen after ScrubbingService is created to break circular dependency
+	vs.localStore.SetScrubber(scrubbingService)
+	vs.logger.Info("ScrubbingService wired to LocalStoreService for AI data scrubbing")
 
 	if err = vs.pubSubCommands.Start(vs.ctx); err != nil {
 		return fmt.Errorf("failed to start command service: %w", err)

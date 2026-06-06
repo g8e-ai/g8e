@@ -50,7 +50,7 @@ We will not pursue legal action against researchers acting in good faith under t
 ### In Scope
 
 - **g8e Gateway (PDP)** — `GovernanceEnvelope` parsing, deterministic transaction hash binding, L1-L4 verification logic (Doctrine, Consensus, Notary, Warden), WebAuthn/Passkey L3 brokerage
-- **g8e Operator (PEP)** — execution boundary (L5 Actuator), signed `ActionReceipt` issuance, mTLS tunnel, `AuditVaultService`, Sovereignty Boundary Plane (scrubbing, rehydration)
+- **g8e Operator (PEP)** — execution boundary (L5 Actuator), signed `ActionReceipt` issuance, mTLS tunnel, `AuditVaultService`, Sovereign Execution Boundary (scrubbing, rehydration)
 - **g8e Protocol** — Protobuf schemas (`common.proto`, `operator.proto`), canonical JSON (protojson) serialization, envelope integrity
 - **Authentication** — WebAuthn/FIDO2 L3 Notary flow, Ed25519 signature verification (L2 Consensus, L4 Warden, L5 Actuator), replay protection (Nonce)
 - **CLI and bootstrap** — `g8e login`, mTLS credential and PKI handling
@@ -71,7 +71,7 @@ The following are structural properties of g8e, provided to help researchers und
 - **Fail-closed by design.** Any verification failure at the L1-L4 layers (Doctrine, Consensus, Notary, Warden) drops the payload and writes an audit record. There is no fallback execution path.
 - **Sovereign Execution Boundary.** The `g8e Operator` (PEP) acts as the sovereign boundary. It refuses to mutate host reality unless a transaction carries a valid L2 signature (Tribunal consensus) and, where required, an L3 proof (Human-in-the-loop).
 - **No ambient execution authority.** No component holds standing permission to mutate state. Authority is granted strictly per-transaction via the `GovernanceEnvelope`, verified independently at the PEP.
-- **Local audit sovereignty.** Raw forensic material is stored locally in the `AuditVaultService`. The Sovereignty Boundary Plane scrubs all outbound data before delivery to remote clients or AI systems.
+- **Local audit sovereignty.** Raw forensic material is stored locally in the `AuditVaultService`. The Sovereign Execution Boundary scrubs all outbound data before delivery to remote clients or AI systems.
 - **mTLS everywhere.** All platform communication (Operator-to-Gateway) requires mutual TLS. Unauthenticated or unverified connections are rejected.
 - **State & Replay Protection.** Transactions are bound to a `state_merkle_root`, protected by a unique `nonce`, and carry a temporal `expires_at` deadline.
 

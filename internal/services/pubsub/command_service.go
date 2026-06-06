@@ -23,7 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -39,7 +39,7 @@ type CommandService struct {
 	logger         *slog.Logger
 	execution      *execution.ExecutionService
 	results        ResultsPublisher
-	sovereignty    *sovereignty.SovereigntyService
+	scrubbing      *scrubbing.ScrubbingService
 	vaultWriter    *VaultWriter
 	auditVault     *storage.AuditVaultService
 	localStore     *storage.LocalStoreService
@@ -84,9 +84,9 @@ func (cs *CommandService) SetHistoryHandler(h *storage.HistoryHandler) {
 	cs.historyHandler = h
 }
 
-// SetSovereignty sets the sovereignty service for the CommandService.
-func (cs *CommandService) SetSovereignty(s *sovereignty.SovereigntyService) {
-	cs.sovereignty = s
+// SetScrubbing sets the scrubbing service for the CommandService.
+func (cs *CommandService) SetScrubbing(s *scrubbing.ScrubbingService) {
+	cs.scrubbing = s
 }
 
 // HandleExecutionRequest processes an inbound command execution request.
@@ -202,13 +202,13 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 		})
 	}
 
-	if cs.sovereignty != nil && cs.sovereignty.IsEnabled() {
-		cs.logger.Info("SovereigntyService scrubbing execution output",
+	if cs.scrubbing != nil && cs.scrubbing.IsEnabled() {
+		cs.logger.Info("ScrubbingService scrubbing execution output",
 			"execution_id", result.ExecutionID,
 			"raw_stdout_size", rawStdoutSize,
 			"raw_stderr_size", rawStderrSize)
-		result.Stdout = cs.sovereignty.ScrubText(result.Stdout)
-		result.Stderr = cs.sovereignty.ScrubText(result.Stderr)
+		result.Stdout = cs.scrubbing.ScrubText(result.Stdout)
+		result.Stderr = cs.scrubbing.ScrubText(result.Stderr)
 	}
 
 	if cs.auditVault != nil && cs.auditVault.IsEnabled() {

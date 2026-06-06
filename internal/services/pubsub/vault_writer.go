@@ -20,20 +20,20 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 )
 
 // VaultWriter owns consolidated vault persistence for command executions and file diffs.
 // All data is encrypted at rest in the consolidated execution vault.
 // Customer read path: decrypt → return full data
-// AI read path: decrypt → Sovereignty scrub → return redacted data
+// AI read path: decrypt → Sensitive data scrub → return redacted data
 // Both writes are best-effort - failures are logged but never propagate to callers.
 type VaultWriter struct {
-	config      *config.Config
-	logger      *slog.Logger
-	sovereignty *sovereignty.SovereigntyService
-	localStore  *storage.LocalStoreService
+	config     *config.Config
+	logger     *slog.Logger
+	scrubbing  *scrubbing.ScrubbingService
+	localStore *storage.LocalStoreService
 }
 
 // NewVaultWriter creates a VaultWriter. All service dependencies are optional - a nil
@@ -41,14 +41,14 @@ type VaultWriter struct {
 func NewVaultWriter(
 	cfg *config.Config,
 	logger *slog.Logger,
-	s *sovereignty.SovereigntyService,
+	s *scrubbing.ScrubbingService,
 	localStore *storage.LocalStoreService,
 ) *VaultWriter {
 	return &VaultWriter{
-		config:      cfg,
-		logger:      logger,
-		sovereignty: s,
-		localStore:  localStore,
+		config:     cfg,
+		logger:     logger,
+		scrubbing:  s,
+		localStore: localStore,
 	}
 }
 

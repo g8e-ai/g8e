@@ -240,7 +240,7 @@ func TestCommandService_Setters(t *testing.T) {
 		// Verify method can be called without panic
 	})
 
-	t.Run("SetSovereignty", func(t *testing.T) {
+	t.Run("SetScrubbing", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -248,7 +248,7 @@ func TestCommandService_Setters(t *testing.T) {
 		svc := NewCommandService(cfg, logger, execSvc)
 
 		// Use nil for test - just verify method can be called
-		svc.SetSovereignty(nil)
+		svc.SetScrubbing(nil)
 		// Verify method can be called without panic
 	})
 }

@@ -17,7 +17,7 @@ The g8e Protocol is the foundational wire contract for all mutations in the g8e 
 ### Core Design Principles
 
 - **Canonical JSON Wire Format**: All client-facing surfaces (HTTP, WSS pub/sub, receipts, audit exports) carry the `GovernanceEnvelope` as canonical JSON (protojson).Node Node Binary protobuf is strictly reserved for internal storage.
-- **g8e.local Canonical Alias**: The platform uses `g8e.local` as the stable internal hostname. The gateway translates this alias to installation-specific peer identity and endpoint data.
+- **g8e.local Canonical Alias**: The platform uses `g8e.local` as the stable internal hostname. The gateway translates this alias to installation-specific peer identity and endpoint data (see [Network Architecture](./network.md)).
 - **Hash-Based Signing**: A deterministic `transaction_hash` is computed from normalized envelope fields. The verifier enforces `id == transaction_hash == SHA256(canonical_fields)`.
 - **Fail-Closed Verification**: Any malformed envelope, expired transaction, reused nonce, stale state root, or missing proof is rejected immediately before execution.
 - **Body-Embedded Context**: Business and execution context (`web_session_id`, `cli_session_id`, `operator_session_id`, `user_id`) lives inside the envelope via typed fields.
@@ -104,7 +104,7 @@ The transaction lifecycle follows a strict sequence from intent to audited execu
 3. The payload is embedded into a `GovernanceEnvelope` alongside `nonce`, `expires_at`, and `state_merkle_root`.
 4. An L2 Consensus producer computes the `transaction_hash` and attaches a signature.
 5. For mutations, an L3 Notary (human) signs the same hash via WebAuthn, unless auto-approval policy applies.
-6. The client submits the canonical-JSON envelope over mTLS to the g8e Gateway, which validates and dispatches it to the target g8e Operator over WSS. Remote peers are resolved via `g8e.local` translation.
+6. The client submits the canonical-JSON envelope over mTLS to the g8e Gateway, which validates and dispatches it to the target g8e Operator over WSS. Remote peers are resolved via `g8e.local` translation (see [Network Architecture](./network.md)).
 
 ### Verification Phase (L4Warden)
 
@@ -157,7 +157,7 @@ The central Policy Execution Point (PEP) that validates the entire transaction p
 
 ### L5 Actuator: Execution Boundary
 The single fail-closed execution target that dispatches the verified payload and issues signed receipts. Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production are defined in `../../internal/services/governance/l5_actuator.go`.
-- **Rehydration**: Sensitive tokens scrubbed by the Sovereignty Boundary Plane are re-injected.
+- **Rehydration**: Sensitive tokens scrubbed by the Sovereign Execution Boundary are re-injected.
 - **Native Dispatch**: Executes the typed payload (bash, file edit, tool call).
 - **Signed Action Receipts**: Issues an immutable `ActionReceipt` proof of execution and result.
 
@@ -241,12 +241,7 @@ The g8e Gateway runs with three posture options:
 
 ### Port Configuration
 
-Default ports (configurable via flags or `../../internal/cli/config/paths.json`):
-
-| Port | Purpose | Auth |
-|---|---|---|
-| `8080` | HTTP (bootstrap + MCP) | Plain HTTP (no TLS) |
-| `8443` | HTTPS (mTLS API + public) | mTLS (RequireAndVerifyClientCert) |
+The g8e Gateway exposes two logical protocol surfaces. See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
 
 ### Configuration
 
@@ -270,7 +265,7 @@ Each Operator session owns an isolated, encrypted git repository tracking all mu
 
 The SQLite-backed `AuditVaultService` mandates valid session identifiers and rejects malformed events. If audit logging fails, execution is aborted.
 
-### Sovereignty Boundary
+### Sovereign Execution Boundary
 
 Output scrubbing is performed directly at the `L5Actuator` boundary to redact tokens, keys, and PII before any data leaves the host.
 
@@ -289,7 +284,7 @@ Output scrubbing is performed directly at the `L5Actuator` boundary to redact to
 | Audit storage | `../../internal/services/storage/audit_vault.go` |
 | Ledger storage | `../../internal/services/storage/ledger.go` |
 | Workload identity | `../../protocol/workload_identity.go` |
-| Network identity | `../../internal/services/network/identity.go` |
+| Network architecture | `./network.md` |
 | Gateway envelope construction | `../../internal/services/gateway/governance_envelope.go` |
 | Gateway HTTP routing | `../../internal/services/gateway/gateway_http.go` |
 | Pub/Sub command service | `../../internal/services/pubsub/pubsub_commands.go` |

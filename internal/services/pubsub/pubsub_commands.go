@@ -29,7 +29,7 @@ import (
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -102,7 +102,7 @@ type CommandServiceConfig struct {
 	AuditVault        *storage.AuditVaultService
 	Ledger            *storage.LedgerService
 	HistoryHandler    *storage.HistoryHandler
-	Sovereignty       *sovereignty.SovereigntyService
+	Scrubbing         *scrubbing.ScrubbingService
 	L3Notary          governance.L3Notary
 	ReplayStore       governance.ReplayStore
 	StateRootProvider governance.StateRootProvider
@@ -151,8 +151,8 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 	rs.commands = NewCommandService(c.Config, c.Logger, c.Execution)
 	rs.commands.results = c.ResultsService
-	rs.commands.sovereignty = c.Sovereignty
-	rs.commands.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Sovereignty, c.LocalStore)
+	rs.commands.scrubbing = c.Scrubbing
+	rs.commands.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Scrubbing, c.LocalStore)
 	rs.commands.auditVault = c.AuditVault
 	rs.commands.localStore = c.LocalStore
 	rs.commands.ledger = c.Ledger
@@ -160,8 +160,8 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 	rs.fileOps = NewFileOpsService(c.Config, c.Logger, c.FileEdit, client)
 	rs.fileOps.results = c.ResultsService
-	rs.fileOps.sovereignty = c.Sovereignty
-	rs.fileOps.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Sovereignty, c.LocalStore)
+	rs.fileOps.scrubbing = c.Scrubbing
+	rs.fileOps.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Scrubbing, c.LocalStore)
 	rs.fileOps.auditVault = c.AuditVault
 	rs.fileOps.ledger = c.Ledger
 
@@ -219,7 +219,7 @@ func (rs *PubSubCommandService) initializeGovernance(c CommandServiceConfig, ser
 	)
 
 	// Initialize L5Actuator with trusted nodes and audit vault
-	// SovereigntyService handles data scrubbing/rehydration at the execution boundary
+	// ScrubbingService handles data scrubbing/rehydration at the execution boundary
 	rs.actuator = &governance.L5Actuator{
 		Logger:            c.Logger,
 		SignerStore:       rs.signerStore,
@@ -230,7 +230,7 @@ func (rs *PubSubCommandService) initializeGovernance(c CommandServiceConfig, ser
 		StateRootProvider: c.StateRootProvider,
 		Ctx:               serviceCtx,
 		ExecutionHandler:  rs, // PubSubCommandService implements ExecutionHandler
-		Sovereignty:       c.Sovereignty,
+		Scrubbing:         c.Scrubbing,
 		SigningKey:        c.ActuatorSigningKey,
 		KeyID:             c.ActuatorKeyID,
 	}

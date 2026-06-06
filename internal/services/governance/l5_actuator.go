@@ -28,7 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -59,7 +59,7 @@ type L5Actuator struct {
 	StateRootProvider StateRootProvider
 	Ctx               context.Context
 	ExecutionHandler  ExecutionHandler
-	Sovereignty       *sovereignty.SovereigntyService
+	Scrubbing         *scrubbing.ScrubbingService
 	Posture           GovernancePosture
 
 	// L5Actuator's own signing identity for ActionReceipts
@@ -156,15 +156,15 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		return nil, fmt.Errorf("failed to log initial action receipt: %w", err)
 	}
 
-	// 3.5. Rehydrate payload if Sovereignty is available
-	if w.Sovereignty != nil && cmdMsg != nil {
+	// 3.5. Rehydrate payload if Scrubbing is available
+	if w.Scrubbing != nil && cmdMsg != nil {
 		if rehydratable, ok := cmdMsg.(interface {
 			GetPayload() []byte
 			SetPayload([]byte)
 		}); ok {
 			p := rehydratable.GetPayload()
 			if len(p) > 0 {
-				rehydrated, rehydrateErr := w.Sovereignty.RehydratePayload(p)
+				rehydrated, rehydrateErr := w.Scrubbing.RehydratePayload(p)
 				if rehydrateErr == nil {
 					rehydratable.SetPayload(rehydrated)
 				} else {
