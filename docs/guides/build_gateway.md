@@ -257,6 +257,86 @@ make ci
 
 ---
 
+## Manage
+
+Manage the gateway lifecycle and configuration:
+
+### Gateway Restart
+
+Restart the gateway without stopping it manually:
+
+```bash
+./g8e gw restart
+```
+
+### Gateway Settings
+
+View and manage gateway configuration:
+
+```bash
+./g8e gw settings
+```
+
+### Gateway Reset
+
+Reset gateway data and secrets while preserving the CA:
+
+```bash
+./g8e gw reset
+```
+
+Use `--force` or `--yes` to skip the confirmation prompt.
+
+### Gateway Clean
+
+Destructively remove all gateway state including databases, secrets, logs, and PKI certificates:
+
+```bash
+./g8e gw clean
+```
+
+**Warning:** This permanently destroys all trust routes and credentials. Use `--force` or `--yes` to skip the confirmation prompt.
+
+---
+
+## Monitor
+
+Monitor gateway status, logs, and data:
+
+### Gateway Status
+
+Check the gateway health and view endpoint information:
+
+```bash
+./g8e gw status
+```
+
+This displays:
+- Gateway state (RUNNING/STOPPED) and PID
+- Endpoint URLs for bootstrap, public API, and MCP
+
+### Gateway Logs
+
+View gateway logs in real-time:
+
+```bash
+./g8e gw logs -f
+```
+
+The `-f` flag follows log output (like `tail -f`). Use without `-f` to view historical logs.
+
+### Data Query
+
+Query the gateway's data store for operators, users, and audit events:
+
+```bash
+./g8e data operators
+./g8e data users
+./g8e data audit list --operator-session-id <session-id>
+```
+
+---
+
 ## Next Steps
 
 - **[Connect Apps to Gateway](connect_apps_to_gateway.md)** — Connect to, authenticate, use, maintain, and pull reports from a Gateway.
