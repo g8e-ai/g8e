@@ -927,6 +927,8 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		secretsDir = constants.Paths.Infra.SecretsDir
 	}
 
+	logger.Info("Gateway paths configured", "data_dir", dataDir, "pki_dir", pkiDir, "secrets_dir", secretsDir)
+
 	logger.Info("g8e - Gateway Mode",
 		"posture", posture,
 		"version", version,
@@ -999,6 +1001,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 
 	// Export Actuator public key for receipt verification by evals harness
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
+	logger.Info("Exporting Actuator public key", "pki_dir", cfg.PKIDir, "key_id", ActuatorKeyID)
 	if err := exportActuatorPublicKey(cfg.PKIDir, ActuatorPub, ActuatorKeyID, logger); err != nil {
 		logger.Warn("Failed to export Actuator public key for evals harness receipt verification", "error", err)
 	}

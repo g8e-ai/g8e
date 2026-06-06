@@ -18,17 +18,20 @@ package tests
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // NewLiveOperatorHTTPClient creates an HTTP client configured for mTLS
@@ -98,4 +101,59 @@ func ResolveRepoRootFromTestDir(t require.TestingT) string {
 	require.NotEmpty(t, repoRoot, "go list -m returned empty directory")
 
 	return repoRoot
+}
+
+// EnsureGatewayReady ensures the gateway is running and governance is ready.
+// It polls the health endpoint until governance_ready is true.
+func EnsureGatewayReady(t *testing.T, cliCfg *config.Config) {
+	t.Helper()
+
+	healthURL := fmt.Sprintf("http://127.0.0.1:%d%s", constants.Ports.OperatorHttp, "/api/v1/health")
+
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(healthURL)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return false
+		}
+
+		var health struct {
+			Status          string `json:"status"`
+			Mode            string `json:"mode"`
+			Version         string `json:"version"`
+			GovernanceReady bool   `json:"governance_ready"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+			return false
+		}
+
+		return health.GovernanceReady
+	}, 30*time.Second, 500*time.Millisecond, "gateway did not become governance-ready within timeout")
+}
+
+// EnsureAuthLogin ensures the CLI has a fresh session by running './g8e auth login'.
+// This is called automatically by integration tests to bootstrap credentials.
+func EnsureAuthLogin(t *testing.T, repoRoot string) {
+	t.Helper()
+
+	// Build the g8e binary if needed
+	g8ePath := filepath.Join(repoRoot, "g8e")
+	if _, err := os.Stat(g8ePath); os.IsNotExist(err) {
+		// Build the binary
+		buildCmd := exec.Command("go", "build", "-o", g8ePath, "./cmd/g8e")
+		buildCmd.Dir = repoRoot
+		if output, err := buildCmd.CombinedOutput(); err != nil {
+			require.NoError(t, err, "failed to build g8e binary: %s", string(output))
+		}
+	}
+
+	// Run './g8e auth login'
+	loginCmd := exec.Command(g8ePath, "auth", "login")
+	loginCmd.Dir = repoRoot
+	if output, err := loginCmd.CombinedOutput(); err != nil {
+		require.NoError(t, err, "failed to run './g8e auth login': %s", string(output))
+	}
 }

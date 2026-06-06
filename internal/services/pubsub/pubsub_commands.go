@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"sync"
 	"time"
 
@@ -271,9 +272,16 @@ func (rs *PubSubCommandService) initializeGovernance(c CommandServiceConfig, ser
 		rs.mcpGateway.SetA2ADependencies(c.Config.Gateway.A2ADownstreamURL)
 	}
 
+	var signerStoreType, l4wardenType string
+	if rs.signerStore != nil {
+		signerStoreType = reflect.TypeOf(rs.signerStore).Elem().Name()
+	}
+	if rs.l4warden != nil {
+		l4wardenType = reflect.TypeOf(rs.l4warden).Elem().Name()
+	}
 	c.Logger.Info("governance services initialized",
-		"signer_store_configured", rs.signerStore != nil,
-		"transaction_verifier_enabled", rs.l4warden != nil)
+		"signer_store", signerStoreType,
+		"transaction_verifier", l4wardenType)
 	if c.Config.OperatorID != "" {
 		c.Logger.Info("Consensus node identity", "node_id", c.Config.OperatorID)
 	}

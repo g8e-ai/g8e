@@ -66,6 +66,7 @@ func gatewayStartCmd() *cobra.Command {
 	var rateLimitBurst int
 	var logLevel string
 	var certIdentityMode string
+	var follow bool
 
 	cmd := &cobra.Command{
 		Use:   string(constants.ThinkingActionTypeStart),
@@ -162,6 +163,14 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Printf("  mTLS control plane:    https://localhost:%d\n", constants.Ports.OperatorHttps)
 			cmd.Printf("  Local MCP clients:     http://127.0.0.1:%d/mcp\n", constants.Ports.OperatorHttp)
 
+			if follow {
+				// The gateway is already in its own session (Setsid), so Ctrl+C here won't affect it
+				logPath := pm.GetLogPath()
+				if err := platform.TailLog(logPath, true); err != nil {
+					return fmt.Errorf("failed to follow logs: %w", err)
+				}
+			}
+
 			return nil
 		},
 	}
@@ -178,6 +187,7 @@ func gatewayStartCmd() *cobra.Command {
 	cmd.Flags().IntVar(&rateLimitBurst, "rate-limit-burst", 0, "Gateway rate limit burst size")
 	cmd.Flags().StringVar(&logLevel, "log", "info", "Log level: info, error, debug")
 	cmd.Flags().StringVar(&certIdentityMode, "cert-mode", "", "Certificate mode: full (all hostnames/IPs), localhost (only localhost)")
+	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow log output after starting (like tail -f)")
 
 	return cmd
 }

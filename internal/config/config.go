@@ -413,6 +413,8 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 
 	return &Config{
 		ComponentName: constants.ComponentNameG8EOGateway,
+		PKIDir:        pkiDir,
+		SecretsDir:    secretsDir,
 		Gateway: GatewayConfig{
 			Enabled: true,
 			Posture: posture,

@@ -436,12 +436,13 @@ func TestCheckOperatorRunning_NotRunning(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 99999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	err := CheckOperatorRunning(cfg)
@@ -763,26 +764,20 @@ func TestFetchRootCAFingerprint_Success(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: extractPortFromURL(server.URL), // Use test server port
 	}
 	cfg.Paths.Infra.CACertPath = certPEM
 
-	// Override the discovery URL to use our test server
-	originalURL := cfg.OperatorDiscoveryURL()
-	_ = originalURL
-	// We need to inject the test server URL - this requires a test hook
-	// For now, we'll test via the direct function if we can
-	// Actually, FetchRootCAFingerprint uses cfg.OperatorDiscoveryURL() internally
-	// Let's test with a direct HTTP mock by overriding the URL construction
-
-	// Since we can't easily inject, let's test the error case
+	// Since we can't easily inject the test server URL into OperatorDiscoveryURL,
+	// test the error case instead - the function will try to connect to the test port
+	// which won't have the right endpoint, so it will fail
 	_, err := FetchRootCAFingerprint(cfg)
-	// This will fail because the URL is not a valid running server
 	require.Error(t, err)
 }
 
@@ -791,12 +786,13 @@ func TestFetchRootCAFingerprint_HTTPError(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 99999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	// Test with a URL that will fail
@@ -883,12 +879,13 @@ func TestBootstrap_Success(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: extractPortFromURL(server.URL), // Use test server port
 	}
 
 	// Since Bootstrap uses cfg.OperatorDiscoveryURL() internally,
@@ -1194,14 +1191,17 @@ func TestCheckBootstrapStatus_NoCertFile(t *testing.T) {
 func TestReEnroll_InvalidURL(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
+	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 99999, // Use non-existent port to ensure gateway is not reachable
 	}
+	cfg.Paths.Infra.CACertPath = trustBundlePath
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
 	require.NoError(t, err)

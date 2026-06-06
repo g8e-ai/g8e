@@ -35,7 +35,9 @@ import (
 // and authenticated via `./g8e auth login`.
 func TestNativeRealOperator_Smoke(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
+	EnsureAuthLogin(t, repoRoot)
 	client, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	EnsureGatewayReady(t, cliCfg)
 
 	// Test basic connectivity to Operator via HTTPS
 	healthURL := fmt.Sprintf("https://localhost:%d/api/v1/health", constants.Ports.OperatorHttps)

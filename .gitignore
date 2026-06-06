@@ -51,7 +51,6 @@ coverage.txt
 .g8e
 .g8e/
 **/.g8e*
-g8e
 g8e.sha256
 .local.dev/
 /data/
@@ -91,11 +90,10 @@ target/
 
 # --- g8e Specific Binaries ---
 buf
-# Go binaries in cmd/ directories
-cmd/g8ea/g8ea
-cmd/g8eo/g8eo
-cmd/chaos_tester/chaos_tester
-cmd/auditor/auditor
+
+# Binaries
+g8e
+operator
 
 # --- Build-time artifacts ---
 # Temporary build directory for docs embedding
@@ -120,10 +118,7 @@ ENV/
 *.egg
 __pypackages__/
 .Python
-# Engine Models (GGUF/weights - too large for git, stage out-of-band)
-services/g8ee/models/*.gguf
-services/g8ee/models/*.bin
-!services/g8ee/models/README.md
+
 
 # --- Protocol Generation ---
 # Generated code is committed to avoid tool dependencies in air-gap

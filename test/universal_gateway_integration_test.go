@@ -57,9 +57,11 @@ import (
 // TestUniversalGateway_RealMCPFlow validates the complete MCP flow
 // with real operator, real gateway, and real MCP calls.
 func TestUniversalGateway_RealMCPFlow(t *testing.T) {
-	// Resolve repository root and create mTLS client using helper
+	// Resolve repository root and ensure gateway is ready with fresh auth
 	repoRoot := ResolveRepoRootFromTestDir(t)
+	EnsureAuthLogin(t, repoRoot)
 	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	EnsureGatewayReady(t, cliCfg)
 
 	// Read credentials file to get Operator session ID and Operator ID
 	credsFile := cliCfg.CredentialsFile()
@@ -206,9 +208,11 @@ func TestUniversalGateway_RealMCPFlow(t *testing.T) {
 // TestUniversalGateway_RealA2AFlow validates the complete A2A flow
 // with real operator, real gateway, and real A2A calls.
 func TestUniversalGateway_RealA2AFlow(t *testing.T) {
-	// Resolve repository root and create mTLS client using helper
+	// Resolve repository root and ensure gateway is ready with fresh auth
 	repoRoot := ResolveRepoRootFromTestDir(t)
+	EnsureAuthLogin(t, repoRoot)
 	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	EnsureGatewayReady(t, cliCfg)
 
 	// Read credentials file to get Operator session ID
 	credsFile := cliCfg.CredentialsFile()
@@ -274,9 +278,11 @@ func TestUniversalGateway_RealA2AFlow(t *testing.T) {
 // universal HTTP endpoint auto-detects MCP and A2A payloads.
 // This test requires a real downstream MCP/A2A server to be configured.
 func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
-	// Resolve repository root and create mTLS client using helper
+	// Resolve repository root and ensure gateway is ready with fresh auth
 	repoRoot := ResolveRepoRootFromTestDir(t)
+	EnsureAuthLogin(t, repoRoot)
 	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	EnsureGatewayReady(t, cliCfg)
 
 	// Read credentials file to get Operator session ID
 	credsFile := cliCfg.CredentialsFile()
@@ -345,9 +351,11 @@ func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 // TestUniversalGateway_GovernanceEnvelopeVerification validates that
 // all requests pass through the L1/L2/L3 governance gates with real infrastructure.
 func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
-	// Resolve repository root and create mTLS client using helper
+	// Resolve repository root and ensure gateway is ready with fresh auth
 	repoRoot := ResolveRepoRootFromTestDir(t)
+	EnsureAuthLogin(t, repoRoot)
 	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	EnsureGatewayReady(t, cliCfg)
 
 	// Read credentials file to get Operator session ID
 	credsFile := cliCfg.CredentialsFile()
@@ -478,9 +486,11 @@ func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 // TestUniversalGateway_OOBSuspensionAndApproval validates the OOB
 // suspension and WebAuthn approval flow with real infrastructure.
 func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
-	// Resolve repository root and create mTLS client using helper
+	// Resolve repository root and ensure gateway is ready with fresh auth
 	repoRoot := ResolveRepoRootFromTestDir(t)
+	EnsureAuthLogin(t, repoRoot)
 	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	EnsureGatewayReady(t, cliCfg)
 
 	// Read credentials file to get Operator session ID
 	credsFile := cliCfg.CredentialsFile()
@@ -567,9 +577,11 @@ func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 // with a real downstream MCP/A2A server configured in the gateway.
 // This test requires a real downstream server to be configured.
 func TestUniversalGateway_RealDownstreamIntegration(t *testing.T) {
-	// Resolve repository root and create mTLS client using helper
+	// Resolve repository root and ensure gateway is ready with fresh auth
 	repoRoot := ResolveRepoRootFromTestDir(t)
+	EnsureAuthLogin(t, repoRoot)
 	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	EnsureGatewayReady(t, cliCfg)
 
 	// Read credentials file to get Operator session ID
 	credsFile := cliCfg.CredentialsFile()
@@ -645,9 +657,11 @@ func TestUniversalGateway_RealDownstreamIntegration(t *testing.T) {
 // TestUniversalGateway_CanonicalJSONWireFormat validates that the gateway
 // uses canonical JSON (protojson) for all wire formats.
 func TestUniversalGateway_CanonicalJSONWireFormat(t *testing.T) {
-	// Resolve repository root and create mTLS client using helper
+	// Resolve repository root and ensure gateway is ready with fresh auth
 	repoRoot := ResolveRepoRootFromTestDir(t)
+	EnsureAuthLogin(t, repoRoot)
 	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	EnsureGatewayReady(t, cliCfg)
 
 	// Read credentials file to get Operator session ID
 	credsFile := cliCfg.CredentialsFile()
