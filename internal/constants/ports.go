@@ -19,7 +19,7 @@ var Ports = struct {
 	OperatorHttps      int
 	InsecureMcpGateway int
 }{
-	OperatorHttp:       8440,
+	OperatorHttp:       8080,
 	OperatorHttps:      8443,
 	InsecureMcpGateway: 18789,
 }

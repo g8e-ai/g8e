@@ -100,12 +100,12 @@ Default ports are sourced from `internal/constants/ports.go:17`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **HTTP (Bootstrap + MCP)** | `8440` (plain HTTP) | No TLS | Bootstrap enrollment, CA bundle discovery, and plain HTTP MCP for development/testing. |
+| **HTTP (Bootstrap + MCP)** | `8080` (plain HTTP) | No TLS | Bootstrap enrollment, CA bundle discovery, and plain HTTP MCP for development/testing. |
 | **HTTPS (mTLS API + Public)** | `8443` (mTLS) | mTLS + URI SAN | `/api/v1/governance/envelopes`, `/api/v1/db/*`, `/api/v1/kv/*`, `/api/v1/blob/*`, `/api/v1/pubsub/publish`, `/ws/v1/pubsub`, and public mTLS surface for external app enrollment. |
 
 #### Port Constraints
 
-- **HTTP Surface** (`8440`): Serves plain HTTP for bootstrap enrollment and MCP calls. Does not require TLS. Intended for development and initial provisioning.
+- **HTTP Surface** (`8080`): Serves plain HTTP for bootstrap enrollment and MCP calls. Does not require TLS. Intended for development and initial provisioning.
 - **HTTPS Surface** (`8443`): Requires `tls.RequireAndVerifyClientCert`. This is the primary execution boundary for mTLS API and public surface.
 - **Collision Prevention**: The gateway fails startup if incompatible surfaces are assigned to the same port.
 

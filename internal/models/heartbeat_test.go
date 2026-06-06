@@ -56,7 +56,7 @@ func TestHeartbeatNetworkInterface(t *testing.T) {
 func TestHeartbeatNetworkInfo(t *testing.T) {
 	t.Run("creates valid network info", func(t *testing.T) {
 		info := &HeartbeatNetworkInfo{
-			HTTPPort:   8440,
+			HTTPPort:   8080,
 			HTTPSPort:  8443,
 			Interfaces: []string{"eth0", "wlan0"},
 			ConnectivityStatus: []HeartbeatNetworkInterface{
@@ -64,7 +64,7 @@ func TestHeartbeatNetworkInfo(t *testing.T) {
 			},
 		}
 
-		assert.Equal(t, 8440, info.HTTPPort)
+		assert.Equal(t, 8080, info.HTTPPort)
 		assert.Equal(t, 8443, info.HTTPSPort)
 		assert.Len(t, info.Interfaces, 2)
 	})
@@ -235,7 +235,7 @@ func TestHeartbeat(t *testing.T) {
 				OS:       constants.PlatformLinux,
 			},
 			NetworkInfo: HeartbeatNetworkInfo{
-				HTTPPort:  8440,
+				HTTPPort:  8080,
 				HTTPSPort: 8443,
 			},
 			VersionInfo: HeartbeatVersionInfo{

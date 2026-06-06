@@ -70,7 +70,7 @@ Flags:
       --cert-mode string         Certificate mode: full (all hostnames/IPs), localhost (only localhost)
       --data-dir string          Data directory for SQLite database (default: .g8e/data in working directory)
   -h, --help                     help for start
-      --http-port int            Plain HTTP port for bootstrap and MCP routes (default: 8440)
+      --http-port int            Plain HTTP port for bootstrap and MCP routes (default: 8080)
       --https-port int           HTTPS port for mTLS API and public surface (default: 8443)
       --log string               Log level: info, error, debug (default "info")
       --passkey-rp-id string     RP ID for passkey operations (default: localhost)

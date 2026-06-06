@@ -32,7 +32,7 @@ The gateway exposes two logical communication surfaces. Canonical ports are defi
 
 | Surface | Port (default) | Authentication | Purpose |
 | :--- | :--- | :--- | :--- |
-| **HTTP (Bootstrap + MCP)** | `8440` (plain HTTP) | None | Serves local trust bundles, handles Certificate Signing Request (CSR) enrollment, and plain HTTP MCP for development/testing. |
+| **HTTP (Bootstrap + MCP)** | `8080` (plain HTTP) | None | Serves local trust bundles, handles Certificate Signing Request (CSR) enrollment, and plain HTTP MCP for development/testing. |
 | **HTTPS (mTLS API + Public)** | `8443` (mTLS) | mTLS + URI SAN | Receives `GovernanceEnvelope` mutation payloads, handles `/db` persistence, runs `/ws/pubsub` streaming, and provides browser management interface. |
 
 Surfaces with conflicting TLS client-authentication requirements do not share a network port. Sharing ports forces the use of `tls.VerifyClientCertIfGiven`, which degrades the mTLS execution boundary. The initialization sequence validates port isolation and fails if configurations overlap.

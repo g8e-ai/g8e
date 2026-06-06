@@ -11,13 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Overview
 
-v1.0.10 consolidates the gateway port configuration from 4 ports to 2 ports, reducing configuration complexity while preserving the fail-closed boundary. Bootstrap and MCP routes now share the HTTP port (8440), while the mTLS API and public surface share the HTTPS port (8443). This release also fixes a critical bug in the HTTP port default configuration.
+v1.0.10 consolidates the gateway port configuration from 4 ports to 2 ports, reducing configuration complexity while preserving the fail-closed boundary. Bootstrap and MCP routes now share the HTTP port (8080), while the mTLS API and public surface share the HTTPS port (8443). This release also fixes a critical bug in the HTTP port default configuration.
 
 ### Breaking Changes
 
 * **Port consolidation** - Gateway port configuration reduced from 4 ports to 2 ports:
   * Removed: `--bootstrap-listen-port` (8441) and `--mcp-http-port` (8442)
-  * New: `--http-port` (8440) for bootstrap and MCP routes
+  * New: `--http-port` (8080) for bootstrap and MCP routes
   * New: `--https-port` (8443) for mTLS API and public surface
   * CLI flags updated: `--http-listen-port` → `--http-port`, `--public-listen-port` → `--https-port`
   * Port constants updated in `internal/constants/ports.go` and `protocol/constants/ports.json`
@@ -26,7 +26,7 @@ v1.0.10 consolidates the gateway port configuration from 4 ports to 2 ports, red
 
 * **Gateway service** - Removed dead `bootstrapServer` and `mcpHttpServer` fields from `GatewayService` struct
 * **Gateway methods** - Removed dead `GetBootstrapPort()` and `GetMCPHttpPort()` methods
-* **PKI bootstrap scripts** - Updated to use `constants.Ports.OperatorHttp` (8440) instead of hardcoded 8441
+* **PKI bootstrap scripts** - Updated to use `constants.Ports.OperatorHttp` (8080) instead of hardcoded 8441
 * **HTTP routing** - Bootstrap and MCP routes now combined on HTTP port via `buildHTTPRouter()`
 * **Documentation** - Updated all documentation to reflect 2-port scheme:
   * `docs/protocols/mcp/mcp.md`
@@ -42,7 +42,7 @@ v1.0.10 consolidates the gateway port configuration from 4 ports to 2 ports, red
 
 ### Fixed
 
-* **Critical HTTP port default bug** - Fixed `internal/cli/platform/process.go` where HTTP port default was incorrectly set to `constants.Ports.OperatorHttps` (8443) instead of `constants.Ports.OperatorHttp` (8440)
+* **Critical HTTP port default bug** - Fixed `internal/cli/platform/process.go` where HTTP port default was incorrectly set to `constants.Ports.OperatorHttps` (8443) instead of `constants.Ports.OperatorHttp` (8080)
 * **Test configuration** - Fixed `internal/cli/cmd/auth_test.go` to remove hardcoded ports section from test fixture
 * **Config tests** - Updated `internal/config/config_test.go` to use 2-port `ResolveGatewayPorts` signature
 

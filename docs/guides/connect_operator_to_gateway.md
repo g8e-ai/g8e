@@ -40,7 +40,7 @@ On the remote host, generate a CSR and enroll with the g8e Gateway:
 ./g8e security pki enroll -e <gateway-ip>
 ```
 
-The endpoint is the g8e Gateway IP address. The HTTP port (8440) is appended automatically. This command generates g8e Operator and CLI CSRs, submits them to the g8e Gateway, and saves the signed certificates to the PKI directory.
+The endpoint is the g8e Gateway IP address. The HTTP port (8080) is appended automatically. This command generates g8e Operator and CLI CSRs, submits them to the g8e Gateway, and saves the signed certificates to the PKI directory.
 
 #### 2. Copy g8e Node and Certificates
 
@@ -56,7 +56,7 @@ On the remote host, start the g8e Gateway with the enrolled certificates:
 
 The g8e Gateway will:
 - Load the mTLS certificates from the PKI directory
-- Establish the control plane on port 8443 (HTTPS) and bootstrap on port 8440 (HTTP)
+- Establish the control plane on port 8443 (HTTPS) and bootstrap on port 8080 (HTTP)
 - Initialize the local in-process Pub/Sub broker
 - Initialize the SQLite-backed audit vault with Git ledger
 - Execute mutations through the L1/L2/L3/L4/L5 verification pipeline
@@ -104,7 +104,7 @@ AI clients can connect to the Gateway's MCP endpoint using mTLS:
 
 ```bash
 # For mTLS-based MCP
-curl -X POST https://localhost:8440/api/v1/mcp/tools/call \
+curl -X POST https://localhost:8080/api/v1/mcp/tools/call \
   --cert .g8e/credentials/cli.crt \
   --key .g8e/credentials/cli.key \
   -H "Content-Type: application/json" \
@@ -124,7 +124,7 @@ curl -X POST http://localhost:8080/api/v1/mcp/tools/call \
 For direct envelope submission to the Gateway:
 
 ```bash
-curl -X POST https://localhost:8440/api/v1/governance/envelopes \
+curl -X POST https://localhost:8080/api/v1/governance/envelopes \
   --cert .g8e/credentials/cli.crt \
   --key .g8e/credentials/cli.key \
   -H "Content-Type: application/json" \

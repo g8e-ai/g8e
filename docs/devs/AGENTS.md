@@ -66,7 +66,7 @@ These are the rules. Follow them unconditionally. If a task cannot be completed 
 
 **Always** use SPIFFE URI SANs for workload identity following the formats defined in `protocol/workload_identity.go`. Do not invent new identity formats.
 
-**Always** enforce `tls.RequireAndVerifyClientCert` on port `8440`. The mTLS surface never downgrades.
+**Always** enforce `tls.RequireAndVerifyClientCert` on port `8080`. The mTLS surface never downgrades.
 
 **Always** check revocation on every handshake. Revocation is not a startup check — it is a per-connection check.
 

@@ -36,7 +36,7 @@ When a gateway needs to communicate with a peer, it utilizes the `PeerConnection
 ```
 g8e.local -> {
   gateway_id: "gw-abc123-...",
-  endpoints: ["10.0.1.5:8440", "192.168.1.100:8440"],
+  endpoints: ["10.0.1.5:8080", "192.168.1.100:8080"],
   certificate: <gateway peer leaf cert>,
   last_seen: <timestamp>
 }

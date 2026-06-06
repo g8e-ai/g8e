@@ -121,7 +121,7 @@ GovernanceEnvelope action type constants:
 
 ### Additional Constant Files
 - `paths.go` - Filesystem paths for Operator data, certificates, ledger, runtime directories
-- `ports.go` - Network port numbers: `Ports.OperatorHttp` (8440), `Ports.OperatorHttps` (8443), `Ports.InsecureMcpGateway` (18789)
+- `ports.go` - Network port numbers: `Ports.OperatorHttp` (8080), `Ports.OperatorHttps` (8443), `Ports.InsecureMcpGateway` (18789)
 - `exit_codes.go` - Process exit code constants: `ExitSuccess` (0), `ExitGeneralError` (1), `ExitAuthFailure` (2), `ExitPermissionDenied` (3), `ExitNetworkError` (4), `ExitConfigError` (5), `ExitStorageError` (6), `ExitCertTrustFailure` (7)
 - `network.go` - Network-related constants: `DefaultEndpoint` (localhost)
 - `output.go` - Output format constants: `TruncatedOutputFormat`

@@ -1,10 +1,10 @@
 {
   "ports": {
     "InsecureMcpGateway": 18789,
-    "OperatorHttp": 8440,
+    "OperatorHttp": 8080,
     "OperatorHttps": 8443,
     "insecure_mcp_gateway": 18789,
-    "operator_http": 8440,
+    "operator_http": 8080,
     "operator_https": 8443
   }
 }
