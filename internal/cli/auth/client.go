@@ -449,7 +449,7 @@ func SaveCertAndKey(certPEM, chainPEM string, key *ecdsa.PrivateKey, certFile, k
 }
 
 func CheckOperatorRunning(cfg *config.Config) error {
-	return CheckOperatorRunningAtURL(cfg.OperatorHTTPURL())
+	return CheckOperatorRunningAtURL(cfg.OperatorDiscoveryURL())
 }
 
 func CheckOperatorRunningAtURL(operatorURL string) error {

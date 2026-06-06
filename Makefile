@@ -368,7 +368,7 @@ build-windows:
 # =============================================================================
 # Core test targets
 .PHONY: test
-test: test-unit test-gateway
+test: test-unit
 	@echo "All tests completed successfully."
 
 # Unit tests (no platform required)
@@ -430,8 +430,11 @@ test-scenario:
 # Gateway tests (subset of integration tests)
 .PHONY: test-gateway
 test-gateway:
-	@echo "Running gateway-specific tests (no platform required)..."
-	@go test $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/a2a_gateway_test.go ./test/mcp_gateway_test.go ./test/mcp_stdio_test.go
+	@echo "Running gateway-specific tests with real platform..."
+	@./g8e gw start --cert-mode localhost
+	@./g8e auth login
+	@go test $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/a2a_real_operator_test.go ./test/mcp_real_operator_test.go ./test/native_real_operator_test.go ./test/universal_gateway_integration_test.go
+	@./g8e gw stop
 
 # Protocol-specific integration tests (requires platform running and auth login)
 .PHONY: test-mcp
