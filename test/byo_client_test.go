@@ -128,9 +128,9 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 
 	// Since we used port 0, we need to know what ports were assigned.
 	// We'll add getters for the servers in GatewayService.
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
-	wssURL := fmt.Sprintf("wss://localhost:%d/ws/pubsub", ls.GetHTTPPort())
+	publicURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	mtlsURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	wssURL := fmt.Sprintf("wss://localhost:%d/ws/pubsub", constants.Ports.OperatorHttps)
 
 	// 1. Discover Operator trust metadata
 	// Hub bundle (Root + Hub CA) is available on public port via HTTPS for initial discovery
@@ -223,7 +223,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL = fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
+	mtlsURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		SystemFingerprint: "byo-fingerprint",

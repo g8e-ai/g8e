@@ -59,18 +59,9 @@ type TestContext struct {
 func setupTestContext(t *testing.T) *TestContext {
 	t.Helper()
 
-	// Load CLI config to get ports and paths (use project root, not test directory)
-	projectRoot, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	// Navigate to project root (test/scenario -> g8e root)
-	for len(projectRoot) > 0 && filepath.Base(projectRoot) != "g8e" {
-		projectRoot = filepath.Dir(projectRoot)
-		if projectRoot == "/" || projectRoot == "." {
-			t.Fatalf("could not find g8e project root from %s", projectRoot)
-		}
-	}
+	// Initialize paths relative to test directory
+	constants.InitPathsWithBase("../../")
+	projectRoot := constants.Paths.Infra.RuntimeDir
 
 	cliCfg, err := cliconfig.Load(projectRoot)
 	if err != nil {

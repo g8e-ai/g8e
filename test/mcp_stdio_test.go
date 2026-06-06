@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/stretchr/testify/assert"
 )
@@ -138,22 +139,9 @@ func TestMCPGateway_ConfigTemplate(t *testing.T) {
 // getTestNodeBinaryPath returns the path to the cached test binary, building it if necessary.
 // The binary is cached in .g8e/test-bin/g8e to avoid rebuilding on every test run.
 func getTestNodeBinaryPath() (string, error) {
-	// Find repo root by looking for go.mod
-	repoRoot, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("failed to get working directory: %w", err)
-	}
-
-	for {
-		if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err == nil {
-			break
-		}
-		parent := filepath.Dir(repoRoot)
-		if parent == repoRoot {
-			return "", fmt.Errorf("could not find repo root (go.mod)")
-		}
-		repoRoot = parent
-	}
+	// Initialize paths relative to test directory
+	constants.InitPathsWithBase("../../")
+	repoRoot := constants.Paths.Infra.RuntimeDir
 
 	// Use a dedicated test binary directory
 	testBinDir := filepath.Join(repoRoot, ".g8e", "test-bin")
@@ -197,22 +185,9 @@ func getTestNodeBinaryPath() (string, error) {
 
 // Helper function to run CLI commands for testing
 func runCLICommand(args ...string) (string, error) {
-	// Find repo root by looking for go.mod
-	repoRoot, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("failed to get working directory: %w", err)
-	}
-
-	for {
-		if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err == nil {
-			break
-		}
-		parent := filepath.Dir(repoRoot)
-		if parent == repoRoot {
-			return "", fmt.Errorf("could not find repo root (go.mod)")
-		}
-		repoRoot = parent
-	}
+	// Initialize paths relative to test directory
+	constants.InitPathsWithBase("../../")
+	repoRoot := constants.Paths.Infra.RuntimeDir
 
 	g8ePath, err := getTestNodeBinaryPath()
 	if err != nil {
@@ -233,22 +208,9 @@ func runCLICommand(args ...string) (string, error) {
 
 // Helper function to read file contents
 func readFile(path string) (string, error) {
-	// Find repo root by looking for go.mod
-	repoRoot, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("failed to get working directory: %w", err)
-	}
-
-	for {
-		if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err == nil {
-			break
-		}
-		parent := filepath.Dir(repoRoot)
-		if parent == repoRoot {
-			return "", fmt.Errorf("could not find repo root (go.mod)")
-		}
-		repoRoot = parent
-	}
+	// Initialize paths relative to test directory
+	constants.InitPathsWithBase("../../")
+	repoRoot := constants.Paths.Infra.RuntimeDir
 
 	fullPath := filepath.Join(repoRoot, path)
 	content, err := os.ReadFile(fullPath)

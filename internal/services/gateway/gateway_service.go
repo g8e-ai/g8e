@@ -22,7 +22,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -391,26 +390,6 @@ func (ls *GatewayService) GetPKIAuthority() *PKIAuthority {
 // GetHTTPHandler returns the HTTP handler.
 func (ls *GatewayService) GetHTTPHandler() *HTTPHandler {
 	return ls.handler
-}
-
-// GetHTTPPort returns the assigned port for the HTTP server.
-func (ls *GatewayService) GetHTTPPort() int {
-	if ls.server == nil || ls.server.Addr == "" {
-		return 0
-	}
-	_, portStr, _ := net.SplitHostPort(ls.server.Addr)
-	p, _ := strconv.Atoi(portStr)
-	return p
-}
-
-// GetPublicPort returns the assigned port for the public server.
-func (ls *GatewayService) GetPublicPort() int {
-	if ls.publicServer == nil || ls.publicServer.Addr == "" {
-		return 0
-	}
-	_, portStr, _ := net.SplitHostPort(ls.publicServer.Addr)
-	p, _ := strconv.Atoi(portStr)
-	return p
 }
 
 func (ls *GatewayService) IsRunning() bool {

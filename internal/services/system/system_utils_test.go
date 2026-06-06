@@ -130,7 +130,6 @@ func TestSystemUtilsIntegration(t *testing.T) {
 	})
 }
 
-
 func TestGetInitProcessName(t *testing.T) {
 	t.Parallel()
 	initName := getInitProcessName()
@@ -154,7 +153,6 @@ func TestGetEnvironmentDetails_ContainerFields(t *testing.T) {
 	assert.NotEmpty(t, details.InitSystem)
 	assert.NotEmpty(t, details.PWD)
 }
-
 
 func TestCPUStatConsistency(t *testing.T) {
 	t.Parallel()
@@ -377,14 +375,6 @@ func TestGetLocalIP(t *testing.T) {
 func TestGetLocalIP_CustomResolver(t *testing.T) {
 	t.Parallel()
 	ip := GetLocalIP("8.8.8.8:80")
-
-	assert.NotEmpty(t, ip)
-}
-
-func TestGetPublicIP(t *testing.T) {
-	t.Parallel()
-
-	ip := GetPublicIP("")
 
 	assert.NotEmpty(t, ip)
 }

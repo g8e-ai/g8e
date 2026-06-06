@@ -73,21 +73,12 @@ func (a2aGatewayRejectingL3Notary) VerifyL3Proof(_ string, _ string, _ string, _
 }
 
 func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
-	// Use shared test vault directory for persistent inspection
-	repoRoot, err := os.Getwd()
-	require.NoError(t, err)
-	// Navigate from test/ to repo root
-	for i := 0; i < 2; i++ {
-		repoRoot = filepath.Dir(repoRoot)
-	}
-	testVaultDir := filepath.Join(repoRoot, constants.Paths.Infra.TestVaultDir)
-	if err := os.MkdirAll(testVaultDir, 0755); err != nil {
-		t.Fatalf("failed to create test vault directory: %v", err)
-	}
+	// Initialize paths relative to test directory
+	constants.InitPathsWithBase("../../")
 
 	// Create unique subdirectory for this test run
 	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), t.Name())
-	dataDir := filepath.Join(testVaultDir, testRunID)
+	dataDir := filepath.Join(constants.Paths.Infra.TestVaultDir, testRunID)
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		t.Fatalf("failed to create test run directory: %v", err)
 	}
@@ -169,7 +160,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	mcpGateway.SetA2ADependencies(downstreamServer.URL)
 
 	// Seed platform_settings required for health check
-	ls.GetDB().DocSet("settings", "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
+	ls.GetDB().DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -200,7 +191,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(user)
 	require.NoError(t, err)
-	ls.GetDB().DocSet("users", userID, userBytes)
+	ls.GetDB().DocSet(string(constants.CollectionUsers), userID, userBytes)
 
 	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -277,7 +268,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
+	mtlsURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -285,7 +276,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 		Hostname:          "a2a-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/pki/devices/enroll", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.PKIDevicesEnroll, bytes.NewReader(regBody))
 	hResp, err := enrollClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, hResp.StatusCode)
@@ -305,7 +296,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 			},
 		},
 	}
-	mtlsURL = fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
+	mtlsURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 
 	// Helper function to add Authorization header
 	authHeader := func(req *http.Request) {
@@ -313,7 +304,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}
 
 	// Set public base URL for approval links
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
+	publicURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 	mcpGateway.SetPublicBaseURL(publicURL)
 
 	// 4. Test A2A Call (Suspends for L3, then Resume)
@@ -329,7 +320,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		authHeader(req)
 		resp, err := mtlsClient.Do(req)
@@ -357,21 +348,12 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 }
 
 func TestA2AGateway_PayloadVariations(t *testing.T) {
-	// Use shared test vault directory for persistent inspection
-	repoRoot, err := os.Getwd()
-	require.NoError(t, err)
-	// Navigate from test/ to repo root
-	for i := 0; i < 2; i++ {
-		repoRoot = filepath.Dir(repoRoot)
-	}
-	testVaultDir := filepath.Join(repoRoot, constants.Paths.Infra.TestVaultDir)
-	if err := os.MkdirAll(testVaultDir, 0755); err != nil {
-		t.Fatalf("failed to create test vault directory: %v", err)
-	}
+	// Initialize paths relative to test directory
+	constants.InitPathsWithBase("../../")
 
 	// Create unique subdirectory for this test run
 	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), t.Name())
-	dataDir := filepath.Join(testVaultDir, testRunID)
+	dataDir := filepath.Join(constants.Paths.Infra.TestVaultDir, testRunID)
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		t.Fatalf("failed to create test run directory: %v", err)
 	}
@@ -451,7 +433,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	mcpGateway.SetA2ADependencies(downstreamServer.URL)
 
 	// Seed platform_settings required for health check
-	ls.GetDB().DocSet("settings", "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
+	ls.GetDB().DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -480,7 +462,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(user)
 	require.NoError(t, err)
-	ls.GetDB().DocSet("users", userID, userBytes)
+	ls.GetDB().DocSet(string(constants.CollectionUsers), userID, userBytes)
 
 	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -557,7 +539,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
+	mtlsURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -565,7 +547,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		Hostname:          "a2a-payload-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/pki/devices/enroll", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.PKIDevicesEnroll, bytes.NewReader(regBody))
 	hResp, err := enrollClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, hResp.StatusCode)
@@ -586,7 +568,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		},
 	}
 
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
+	publicURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 	mcpGateway.SetPublicBaseURL(publicURL)
 
 	// Helper function to add Authorization header
@@ -615,7 +597,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		authHeader(req)
 		resp, err := mtlsClient.Do(req)
@@ -648,7 +630,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		authHeader(req)
 		resp, err := mtlsClient.Do(req)
@@ -681,7 +663,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		authHeader(req)
 		resp, err := mtlsClient.Do(req)
@@ -711,7 +693,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		authHeader(req)
 		resp, err := mtlsClient.Do(req)
@@ -741,7 +723,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		authHeader(req)
 		resp, err := mtlsClient.Do(req)
@@ -772,7 +754,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		authHeader(req)
 		resp, err := mtlsClient.Do(req)
@@ -854,7 +836,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, "")
 
 	// Seed platform_settings required for health check
-	ls.GetDB().DocSet("settings", "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
+	ls.GetDB().DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -883,7 +865,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(user)
 	require.NoError(t, err)
-	ls.GetDB().DocSet("users", userID, userBytes)
+	ls.GetDB().DocSet(string(constants.CollectionUsers), userID, userBytes)
 
 	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -960,7 +942,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
+	mtlsURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -968,7 +950,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 		Hostname:          "a2a-error-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/pki/devices/enroll", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.PKIDevicesEnroll, bytes.NewReader(regBody))
 	hResp, err := enrollClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, hResp.StatusCode)
@@ -989,7 +971,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 		},
 	}
 
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
+	publicURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 	mcpGateway.SetPublicBaseURL(publicURL)
 
 	// Helper function to add Authorization header
@@ -1002,7 +984,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"skill_name":"test"}}`
 
 		// Test with API key in header
-		req, _ := http.NewRequest("POST", mtlsURL+"/api/v1/a2a/call", bytes.NewReader([]byte(reqBody)))
+		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader([]byte(reqBody)))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-API-Key", "test-api-key")
 

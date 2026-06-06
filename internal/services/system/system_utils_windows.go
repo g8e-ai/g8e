@@ -334,12 +334,6 @@ func GetCurrentUser() string {
 	return currentUser.Username
 }
 
-func GetPublicIP(ipService string) string {
-	// Use the cross-platform implementation from the main file
-	// This will be available via the shared code
-	return "127.0.0.1" // Placeholder - would need HTTP client
-}
-
 func GetLocalIP(ipResolver string) string {
 	// Use the cross-platform implementation from the main file
 	return "127.0.0.1" // Placeholder

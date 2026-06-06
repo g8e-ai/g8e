@@ -19,10 +19,8 @@ package system
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"math"
 	"net"
-	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -443,7 +441,6 @@ type ContainerInfo struct {
 	Signals     []string `json:"container_signals"`
 }
 
-
 func getInitProcessName() string {
 	data, err := os.ReadFile("/proc/1/cmdline")
 	if err != nil {
@@ -507,22 +504,6 @@ func GetCurrentUser() string {
 		return string(constants.SystemHealthUnknown)
 	}
 	return currentUser.Username
-}
-
-func GetPublicIP(ipService string) string {
-	if ipService == "" {
-		ipService = "https://api.ipify.org?format=text"
-	}
-	resp, err := http.Get(ipService) //nolint:gosec // URL is a configurable IP-service endpoint
-	if err != nil {
-		return GetLocalIP("")
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return GetLocalIP("")
-	}
-	return strings.TrimSpace(string(body))
 }
 
 func GetLocalIP(ipResolver string) string {

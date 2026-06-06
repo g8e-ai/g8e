@@ -150,7 +150,8 @@ func TestHeartbeatService_Build(t *testing.T) {
 		svc := NewHeartbeatService(cfg, logger, nil)
 
 		heartbeat := svc.Build(models.HeartbeatTypeRequested)
-		assert.NotEmpty(t, heartbeat.NetworkInfo.InternalIP)
+		assert.NotZero(t, heartbeat.NetworkInfo.HTTPPort)
+		assert.NotZero(t, heartbeat.NetworkInfo.HTTPSPort)
 		assert.NotEmpty(t, heartbeat.NetworkInfo.Interfaces)
 		assert.NotEmpty(t, heartbeat.NetworkInfo.ConnectivityStatus)
 	})
@@ -282,8 +283,8 @@ func TestHeartbeatService_buildProtoHeartbeat(t *testing.T) {
 		protoHeartbeat := svc.buildProtoHeartbeat(heartbeat)
 
 		require.NotNil(t, protoHeartbeat.NetworkInfo)
-		assert.Equal(t, heartbeat.NetworkInfo.PublicIP, protoHeartbeat.NetworkInfo.PublicIp)
-		assert.Equal(t, heartbeat.NetworkInfo.InternalIP, protoHeartbeat.NetworkInfo.InternalIp)
+		assert.Equal(t, "", protoHeartbeat.NetworkInfo.PublicIp)
+		assert.Equal(t, "", protoHeartbeat.NetworkInfo.InternalIp)
 		assert.Equal(t, heartbeat.NetworkInfo.Interfaces, protoHeartbeat.NetworkInfo.Interfaces)
 		assert.Len(t, protoHeartbeat.NetworkInfo.ConnectivityStatus, len(heartbeat.NetworkInfo.ConnectivityStatus))
 	})

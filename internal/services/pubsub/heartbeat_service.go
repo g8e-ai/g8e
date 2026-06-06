@@ -86,8 +86,8 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 			MemoryMB:     system.GetMemoryMB(),
 		},
 		NetworkInfo: models.HeartbeatNetworkInfo{
-			PublicIP:           system.GetPublicIP(""),
-			InternalIP:         system.GetLocalIP(""),
+			HTTPPort:           hs.config.Gateway.HTTPPort,
+			HTTPSPort:          hs.config.Gateway.HTTPSPort,
 			Interfaces:         system.GetNetworkInterfaces(),
 			ConnectivityStatus: system.GetConnectivityStatus(),
 		},
@@ -140,8 +140,8 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 		"disk_percent", heartbeat.PerformanceMetrics.DiskPercent,
 		"network_latency", heartbeat.PerformanceMetrics.NetworkLatency,
 		"uptime_seconds", heartbeat.UptimeInfo.UptimeSeconds,
-		"public_ip", heartbeat.NetworkInfo.PublicIP,
-		"internal_ip", heartbeat.NetworkInfo.InternalIP)
+		"http_port", heartbeat.NetworkInfo.HTTPPort,
+		"https_port", heartbeat.NetworkInfo.HTTPSPort)
 
 	return heartbeat
 }
@@ -168,8 +168,8 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 			MemoryMb:     int32(h.SystemIdentity.MemoryMB), //nolint:gosec // realistically < 1TB (1,000,000 MB)
 		},
 		NetworkInfo: &operatorv1.NetworkInfo{
-			PublicIp:   h.NetworkInfo.PublicIP,
-			InternalIp: h.NetworkInfo.InternalIP,
+			PublicIp:   "",
+			InternalIp: "",
 			Interfaces: h.NetworkInfo.Interfaces,
 		},
 		VersionInfo: &operatorv1.VersionInfo{
