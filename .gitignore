@@ -1,6 +1,5 @@
 # ==============================================================================
 # g8e Gateway Git Ignore
-# Optimized for Air-Gap (Local-First) & Zero-Bloat
 # ==============================================================================
 
 # --- System & OS ---
@@ -29,7 +28,7 @@ Desktop.ini
 .devin/
 .devin/*
 .local.dev/
-.loal.dev/*
+.local.dev/*
 
 # --- Logs & Performance ---
 *.log
@@ -47,21 +46,20 @@ coverage.xml
 coverage.html
 coverage.txt
 
-# --- Runtime State & Persistence (CRITICAL: DO NOT COMMIT) ---
+# --- Runtime State & Persistence ---
 .g8e
 .g8e/
 **/.g8e*
 g8e.sha256
-.local.dev/
 /data/
 /db/
 *.db
 *.sqlite
 *.sqlite3
 *.sqlite3-journal
-operator
 
-# --- Secrets & PKI (CRITICAL: DO NOT COMMIT) ---
+
+# --- Secrets & PKI ---
 .env
 .env.*
 *.key
