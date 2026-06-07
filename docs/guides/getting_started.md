@@ -118,7 +118,17 @@ This produces the `g8e` g8e Node. It is self-contained and manages both g8e Gate
 - `make build`: Standard build (~35-38MB per platform)
 - `make build-compressed`: Compressed build (~15-17MB for Linux/Windows AMD64/ARM64, ~35-38MB for macOS and Windows ARM64)
 
-### 2. Start the g8e Gateway
+### 2. Initialize Vault
+
+The g8e Gateway requires a vault for encryption at rest. Initialize the vault before starting the gateway:
+
+```bash
+./g8e vault init
+```
+
+This creates a new vault in `.g8e/vault` and generates a private key in `.g8e/secrets/vault.key`. The vault is automatically unlocked when starting the gateway.
+
+### 3. Start the g8e Gateway
 
 Start the sovereign g8e Gateway (PDP) in **Doctrine Mode** (L1Doctrine enforced). This bootstraps the stateless gateway with PKI, persistence, and pub/sub:
 
@@ -126,7 +136,9 @@ Start the sovereign g8e Gateway (PDP) in **Doctrine Mode** (L1Doctrine enforced)
 ./g8e gw start
 ```
 
-### 3. Authenticate CLI to g8e Gateway
+The gateway will automatically unlock the vault using the key generated in step 2. If you need to configure custom vault paths, use the `--vault-dir` and `--vault-key` flags.
+
+### 4. Authenticate CLI to g8e Gateway
 
 Authenticate the CLI to the running g8e Gateway. This bootstraps the PKI hierarchy and issues your initial mTLS credentials. Required before any CLI or Operator can connect:
 
@@ -136,7 +148,7 @@ Authenticate the CLI to the running g8e Gateway. This bootstraps the PKI hierarc
 
 Credentials and trust material are stored in `.g8e/pki` and `.g8e/secrets` in the project directory.
 
-### 4. Deploy an Operator
+### 5. Deploy an Operator
 
 For remote host enforcement, use CSR-based enrollment:
 

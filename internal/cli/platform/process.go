@@ -182,7 +182,7 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 	return "./g8e", nil
 }
 
-func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int, dataDir, pkiDir, secretsDir, vaultDir, vaultKeyPath, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode string, identityData []byte) error {
+func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int, dataDir, pkiDir, secretsDir, vaultDir, vaultKeyPath string, vaultRequireUnlock bool, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode string, identityData []byte) error {
 	if err := pm.ensureDirectories(); err != nil {
 		return err
 	}
@@ -263,6 +263,9 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int,
 	}
 	if effectiveVaultKeyPath != "" {
 		args = append(args, "--vault-key", effectiveVaultKeyPath)
+	}
+	if vaultRequireUnlock {
+		args = append(args, "--vault-require-unlock")
 	}
 
 	if certIdentityMode != "" {

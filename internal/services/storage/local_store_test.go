@@ -66,6 +66,21 @@ func TestLocalStoreService_Disabled(t *testing.T) {
 	assert.Nil(t, ls)
 }
 
+func TestLocalStoreService_RequiresVault(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	tempDir := t.TempDir()
+	config := DefaultLocalStoreConfig()
+	config.DBPath = filepath.Join(tempDir, "test_requires_vault.db")
+
+	// Test that service fails to initialize with nil vault when enabled
+	ls, err := NewLocalStoreService(config, logger, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "vault is required")
+	assert.Nil(t, ls)
+}
+
 func TestLocalStoreService_StoreAndRetrieve(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
@@ -867,4 +882,48 @@ func TestLocalStoreService_Regression_UnscrubbedFileDiff(t *testing.T) {
 
 	// Verify sensitive data in diff is preserved (not scrubbed)
 	assert.Contains(t, string(retrieved.DiffCompressed), sensitiveContent, "Sensitive data in diff should be preserved")
+}
+
+func TestLocalStoreService_Regression_BinaryCiphertextStorage(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	tempDir := t.TempDir()
+	config := DefaultLocalStoreConfig()
+	config.DBPath = filepath.Join(tempDir, "test_binary_ciphertext.db")
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
+	require.NoError(t, err)
+	require.NotNil(t, ls)
+	defer ls.Close()
+
+	// Regression test: verify that binary ciphertext (encrypted data) is stored correctly
+	// without corruption from UTF-8 encoding issues. The vault encrypts data which produces
+	// binary ciphertext that may contain invalid UTF-8 sequences. Storing this as TEXT
+	// in SQLite can corrupt the data. This test verifies the fix uses BLOB storage.
+	key := "binary-test-key"
+	value := "test-value-with-unicode-😀-and-binary-safe-data"
+
+	err = ls.KVSet(key, value, 60)
+	require.NoError(t, err)
+
+	retrieved, found := ls.KVGet(key)
+	assert.True(t, found, "Key should be found after KVSet")
+	assert.Equal(t, value, retrieved, "Retrieved value should match stored value exactly")
+
+	// Test with KVScanPrefix as well
+	prefixKey := "prefix-test-key"
+	err = ls.KVSet(prefixKey, value, 60)
+	require.NoError(t, err)
+
+	results, err := ls.KVScanPrefix("prefix-")
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, value, results[prefixKey], "Scanned value should match stored value exactly")
 }

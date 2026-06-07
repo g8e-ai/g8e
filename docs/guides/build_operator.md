@@ -138,10 +138,10 @@ The Operator must establish workload identity via mTLS:
 
 The Operator must maintain the host as the authoritative source of truth:
 
-- **AuditVaultService**: Append-only, encrypted SQLite log of every event and signed ActionReceipt. Fail-closed: reject events missing a valid operator_session_id. Supports optional encryption vault for data-at-rest protection.
+- **AuditVaultService**: Append-only, encrypted SQLite log of every event and signed ActionReceipt. Fail-closed: reject events missing a valid operator_session_id. Requires encryption vault for data-at-rest protection (encryption is mandatory).
 - **LedgerService**: Git-backed version control for file mutations. Implements two-phase commit (LedgerHashBefore / LedgerHashAfter) and supports restoration to any prior state within the session.
-- **LocalStoreService**: SQLite storage for command execution results, file diffs, and suspended transactions. Provides token persistence for sovereignty scrubbing.
-- **CanonicalDBService**: (Gateway mode only) Unified SQLite persistence for state roots, nonces, trusted signers, app policies, and suspended transactions.
+- **LocalStoreService**: SQLite storage for command execution results, file diffs, and suspended transactions. Provides token persistence for sovereignty scrubbing. Requires encryption vault (encryption is mandatory).
+- **CanonicalDBService**: (Gateway mode only) Unified SQLite persistence for state roots, nonces, trusted signers, app policies, and suspended transactions. Requires encryption vault (encryption is mandatory).
 
 #### 6. Outbound-Only Connectivity
 
@@ -232,6 +232,53 @@ For the full CI pipeline:
 ```bash
 ./g8e test ci
 ```
+
+---
+
+## Vault Setup
+
+The g8e Operator requires a vault for encryption at rest. The vault must be initialized and unlocked before the Operator can start.
+
+### Initialize Vault
+
+```bash
+./g8e vault init
+```
+
+This creates a new vault in `.g8e/vault` and generates a private key in `.g8e/secrets/vault.key`.
+
+### Unlock Vault
+
+The vault is automatically unlocked when starting the Gateway or Operator. To manually unlock the vault:
+
+```bash
+./g8e vault unlock
+```
+
+### Vault Configuration
+
+The vault can be configured via CLI flags or environment variables:
+
+- `--vault-dir <dir>`: Directory for vault data (default: `.g8e/vault`)
+- `--vault-key <path>`: Path to vault private key (default: `.g8e/secrets/vault.key`)
+- `--vault-require-unlock`: Require vault to be unlocked at startup (fail if vault cannot be unlocked)
+
+Environment variables:
+- `G8E_VAULT_DIR`: Override vault directory
+- `G8E_VAULT_KEY`: Override vault key path
+- `G8E_VAULT_REQUIRE_UNLOCK`: Set to `true` to require vault unlock at startup
+
+### Vault Management
+
+Additional vault management commands:
+
+- `./g8e vault status`: Check vault status
+- `./g8e vault re-key`: Re-encrypt vault with new private key
+- `./g8e vault reset`: Reset vault (DESTROYS ALL DATA)
+- `./g8e vault export-key`: Export vault private key
+- `./g8e vault import-key`: Import vault private key
+
+For detailed vault architecture and security guarantees, see [Encryption Architecture](../architecture/encryption.md).
 
 ---
 

@@ -7,6 +7,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.12] - 2026-06-06
+
+### Breaking Changes
+
+* **Mandatory encryption at rest** - Encryption is now required for all storage services. Previously, vault parameters were optional and production deployments could run without encryption, storing sensitive data unencrypted. This is a critical security fix.
+  * `NewLocalStoreService` now requires vault parameter and returns error if nil
+  * `NewAuditVaultService` now requires `EncryptionVault` in config and returns error if nil
+  * `NewExecutionVaultService` now requires vault parameter and returns error if nil
+  * `NewTokenStoreService` now requires vault parameter and returns error if nil
+  * `NewSQLAuditStore` now requires `EncryptionVault` in config and returns error if nil
+  * Production initialization in `g8eo.go` and `gateway_db.go` now initializes and unlocks vault before creating storage services
+  * All nil-checks removed from encryption paths (fail-closed behavior enforced)
+
+### Migration Guide
+
+**For existing deployments:**
+
+1. **Initialize vault:**
+   ```bash
+   ./g8e vault init
+   ```
+
+2. **Generate or import vault key:**
+   ```bash
+   # Generate new key
+   ./g8e vault key generate
+
+   # Or import existing key
+   ./g8e vault key import <path-to-key>
+   ```
+
+3. **Unlock vault before starting services:**
+   ```bash
+   ./g8e vault unlock
+   ./g8e gw start
+   ```
+
+4. **Data migration (if needed):**
+   - Existing unencrypted data will remain unencrypted
+   - New data will be encrypted with the vault
+   - To encrypt existing data, use the migration tool (planned for future release)
+
+**For new deployments:**
+- Vault initialization is now part of the standard setup flow
+- Follow the updated `docs/guides/build_operator.md` for complete setup instructions
+
+### Security
+
+* **Critical security fix** - Encryption is now mandatory for all storage services. Previous versions could run without encryption, storing sensitive data (command stdout/stderr, file diffs, content) unencrypted at rest.
+* **Fail-closed behavior** - Storage services now fail to initialize if vault is not provided or cannot be unlocked. Encryption operations fail if vault is locked.
+* **Vault key management** - New CLI commands for vault key generation, import, export, and re-keying.
+
+### Added
+
+* **Vault CLI commands** - Complete vault management CLI:
+  * `./g8e vault init` - Initialize vault
+  * `./g8e vault unlock` - Unlock vault with key
+  * `./g8e vault key generate` - Generate new vault key
+  * `./g8e vault key import` - Import existing vault key
+  * `./g8e vault key export` - Export vault key
+  * `./g8e vault re-key` - Re-key vault with new key
+  * `./g8e vault status` - Check vault status
+  * `./g8e vault reset` - Destructive vault reset
+
+* **Vault configuration** - Added vault configuration to both Operator and Gateway modes:
+  * `VaultDir` - Vault data directory path
+  * `VaultKeyPath` - Path to vault private key
+  * Environment variables: `G8E_VAULT_DIR`, `G8E_VAULT_KEY`
+  * CLI flags: `--vault-dir`, `--vault-key`, `--vault-require-unlock`
+
+* **Comprehensive encryption documentation** - New `docs/architecture/encryption.md` with complete encryption architecture overview.
+
+### Changed
+
+* **Service constructors** - All storage service constructors now require vault and return error if vault is nil or cannot be unlocked.
+* **Production initialization** - Both `g8eo.go` (Operator mode) and `gateway_db.go` (Gateway mode) now initialize and unlock vault before creating storage services.
+* **Encryption paths** - Removed all nil-checks from encryption methods. Only `IsUnlocked()` checks remain (correct fail-closed behavior).
+* **TokenStoreService.KVScanPrefix** - Now decrypts values (previously returned encrypted ciphertext).
+
+### Documentation
+
+* Updated `docs/architecture/encryption.md` - Comprehensive encryption architecture (276 lines)
+* Updated `docs/architecture/auth.md` - Added vault management section
+* Updated `docs/guides/build_operator.md` - Added vault configuration and setup steps
+* Updated `docs/guides/getting_started.md` - Added vault unlock instructions
+* Updated `docs/reference/compliance-alignment.md` - Changed "Optional encryption at rest" to "Mandatory encryption at rest"
+* Updated `docs/devs/codemap.md` - Removed "(optional encryption)" annotations
+
+---
+
 ## [1.0.11] - 2026-06-06
 
 ### Breaking Changes

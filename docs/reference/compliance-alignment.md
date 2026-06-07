@@ -33,7 +33,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **CC1.1** | Logical and physical access controls | mTLS with SPIFFE workload identity, WebAuthn L3 Notary | `internal/services/gateway/pki_controller.go`, `docs/architecture/auth.md` |
 | **CC1.2** | Logical access security software | 5-layer verification pipeline (L1-L5) | `internal/services/governance/l4_warden.go` |
 | **CC1.3** | Logical access to system components | Role-based session isolation (operator_session_id, cli_session_id, web_session_id) | `docs/architecture/g8e.md` |
-| **CC1.4** | Logical access to stored data | Encrypted audit vault with optional encryption at rest | `internal/services/storage/audit_vault.go` |
+| **CC1.4** | Logical access to stored data | Encrypted audit vault with mandatory encryption at rest | `internal/services/storage/audit_vault.go` |
 | **CC1.5** | Authentication of external users | WebAuthn/FIDO2 hardware-bound authentication, mTLS certificate verification | `internal/services/governance/l3_notary.go` |
 | **CC1.6** | Identification and authentication | SPIFFE URI SAN binding in certificates, Ed25519 signature verification | `protocol/workload_identity.go` |
 | **CC1.7** | Logical access for support personnel | No standing privileges, JIT provisioning via CSR enrollment | `internal/services/gateway/pki_controller.go` |
@@ -55,7 +55,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 
 | Control ID | Control Description | g8e Implementation | Evidence Location |
 |------------|---------------------|-------------------|-------------------|
-| **C1.1** | Confidentiality of information at rest | Optional encryption vault for audit content fields | `internal/services/storage/audit_vault.go` |
+| **C1.1** | Confidentiality of information at rest | Mandatory encryption vault for audit content fields | `internal/services/storage/audit_vault.go` |
 | **C1.2** | Confidentiality of information in transit | mTLS with TLS 1.3 for all platform communication | `docs/architecture/auth.md` |
 | **C1.3** | Confidentiality of information during processing | Sovereign Execution Boundary with PII/secret scrubbing before cloud transmission | `internal/services/sovereignty/boundary.go` |
 | **C1.4** | Avoidance of unauthorized disclosure | Deterministic rehydration only at execution boundary | `internal/services/sovereignty/boundary.go` |
@@ -109,7 +109,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 - **A.12.2 Protection from malware:** L1 Doctrine with MITRE ATT&CK pattern detection
 - **A.12.3 Backup:** Git-backed ledger with per-mutation commits
 - **A.12.4 Logging and monitoring:** Audit vault with signed receipts
-- **A.12.5 Log information protection:** Optional encryption at rest
+- **A.12.5 Log information protection:** Mandatory encryption at rest
 - **A.12.6 Logging synchronization:** Local-first storage, no external dependency
 - **A.12.7 Information leak prevention:** Sovereign Execution Boundary scrubbing
 - **A.12.8 Information deletion:** Configurable retention policies
@@ -256,7 +256,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **AU-6** | Audit review, analysis, and reporting | Query capabilities via SQLite |
 | **AU-7** | Audit reduction and report generation | Truncation for large outputs |
 | **AU-8** | Time stamps | All events include UTC timestamps |
-| **AU-9** | Protection of audit information | Optional encryption at rest |
+| **AU-9** | Protection of audit information | Mandatory encryption at rest |
 | **AU-10** | Non-repudiation | Signed ActionReceipts with Ed25519 |
 | **AU-11** | Audit record retention | Configurable retention policies |
 | **AU-12** | Audit generation | All mutations generate audit records |
@@ -315,7 +315,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **2.2** | Configuration standards | Documented in architecture docs |
 | **2.3** | Encryption of non-console administrative access | mTLS for all access |
 | **3.1** | Keep cardholder data storage to minimum | Sensitive data scrubbing removes PII |
-| **3.2** | Protect stored cardholder data | Optional encryption at rest |
+| **3.2** | Protect stored cardholder data | Mandatory encryption at rest |
 | **3.3** | Mask PAN when displayed | Sensitive data scrubbing patterns |
 | **3.4** | Render PAN unreadable | Sensitive data scrubbing patterns |
 | **3.5** | Protect cryptographic keys | PKI hierarchy with key separation |
@@ -331,7 +331,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **8.4** | Multi-factor authentication | WebAuthn provides MFA |
 | **8.5** | Secure authentication for non-console access | mTLS required |
 | **9.1** | Use effective logging | Comprehensive audit vault |
-| **9.2** | Protect audit trails | Optional encryption at rest |
+| **9.2** | Protect audit trails | Mandatory encryption at rest |
 | **9.3** | Secure audit trails | Signed ActionReceipts |
 | **9.4** | Review audit trails | Query capabilities via SQLite |
 | **10.1** | Implement audit trails | All mutations generate audit records |
@@ -392,7 +392,7 @@ The NSA Zero Trust Implementation Guidelines (ZIG) provide a five-phase approach
 | **Device Trust Verification** | Cryptographic device identity | mTLS certificate verification | `docs/architecture/auth.md` |
 | **Network Segmentation** | Micro-segmentation via mTLS | Per-connection mTLS enforcement | `docs/architecture/auth.md` |
 | **Encryption in Transit** | TLS 1.3 for all communication | mTLS with TLS 1.3 | `docs/architecture/auth.md` |
-| **Encryption at Rest** | Protect stored data | Optional encryption vault for audit content | `internal/services/storage/audit_vault.go` |
+| **Encryption at Rest** | Protect stored data | Mandatory encryption vault for audit content | `internal/services/storage/audit_vault.go` |
 | **Identity and Access Management** | Centralized identity control | SPIFFE workload identity system | `protocol/workload_identity.go` |
 | **Continuous Monitoring** | Real-time security monitoring | Audit vault with signed receipts | `internal/services/storage/audit_vault.go` |
 | **Incident Response** | Coordinated disclosure and response | Coordinated disclosure policy | `SECURITY.md` |

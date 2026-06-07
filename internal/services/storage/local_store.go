@@ -192,7 +192,7 @@ CREATE TABLE IF NOT EXISTS file_diff_log (
 
 CREATE TABLE IF NOT EXISTS kv (
 	key TEXT PRIMARY KEY,
-	value TEXT NOT NULL,
+	value BLOB NOT NULL,
 	expires_at TEXT
 );
 
@@ -557,13 +557,15 @@ func (ls *LocalStoreService) KVSet(key, value string, ttlSeconds int) error {
 		expiresAt = &ts
 	}
 
-	valueToStore := value
+	var valueToStore []byte
 	if ls.vault.IsUnlocked() {
 		encrypted, err := ls.vault.Encrypt([]byte(value))
 		if err != nil {
 			return fmt.Errorf("failed to encrypt value for key %s: %w", key, err)
 		}
-		valueToStore = string(encrypted)
+		valueToStore = encrypted
+	} else {
+		valueToStore = []byte(value)
 	}
 
 	query := `
@@ -588,14 +590,14 @@ func (ls *LocalStoreService) KVGet(key string) (string, bool) {
 	WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)
 	`
 	now := sqliteutil.FormatTimestamp(time.Now())
-	var value string
+	var value []byte
 	err := ls.db.QueryRowWithRetry(query, key, now).Scan(&value)
 	if err != nil {
 		return "", false
 	}
 
 	if ls.vault.IsUnlocked() {
-		decrypted, err := ls.vault.Decrypt([]byte(value))
+		decrypted, err := ls.vault.Decrypt(value)
 		if err != nil {
 			ls.logger.Error("Failed to decrypt value for key", "key", key, "error", err)
 			return "", false
@@ -603,7 +605,7 @@ func (ls *LocalStoreService) KVGet(key string) (string, bool) {
 		return string(decrypted), true
 	}
 
-	return value, true
+	return string(value), true
 }
 
 // KVScanPrefix retrieves all key-value pairs with a given prefix, honoring TTL.
@@ -621,11 +623,12 @@ func (ls *LocalStoreService) KVScanPrefix(prefix string) (map[string]string, err
 
 	type kvPair struct {
 		key   string
-		value string
+		value []byte
 	}
 
 	pairs, err := sqliteutil.MaterializeRows(ls.db, query, []interface{}{prefix + "%", now}, func(rows *sql.Rows) (kvPair, error) {
-		var key, value string
+		var key string
+		var value []byte
 		if err := rows.Scan(&key, &value); err != nil {
 			return kvPair{}, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -637,16 +640,18 @@ func (ls *LocalStoreService) KVScanPrefix(prefix string) (map[string]string, err
 
 	result := make(map[string]string)
 	for _, pair := range pairs {
-		value := pair.value
+		var valueStr string
 		if ls.vault.IsUnlocked() {
-			decrypted, err := ls.vault.Decrypt([]byte(value))
+			decrypted, err := ls.vault.Decrypt(pair.value)
 			if err != nil {
 				ls.logger.Error("Failed to decrypt value for key", "key", pair.key, "error", err)
 				continue
 			}
-			value = string(decrypted)
+			valueStr = string(decrypted)
+		} else {
+			valueStr = string(pair.value)
 		}
-		result[pair.key] = value
+		result[pair.key] = valueStr
 	}
 
 	return result, nil

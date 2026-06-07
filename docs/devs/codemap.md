@@ -48,10 +48,10 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   └── storage.LocalStoreService
 ├── storage.LocalStoreService
 │   ├── sqliteutil.DB
-│   └── vault.Vault (optional encryption)
+│   └── vault.Vault
 ├── storage.AuditVaultService
 │   ├── sqliteutil.DB
-│   ├── vault.Vault (optional encryption)
+│   ├── vault.Vault
 │   └── go-git (native, for ledger repos)
 ├── storage.LedgerService
 │   ├── storage.AuditVaultService

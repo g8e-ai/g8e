@@ -62,6 +62,7 @@ func gatewayStartCmd() *cobra.Command {
 	var secretsDir string
 	var vaultDir string
 	var vaultKeyPath string
+	var vaultRequireUnlock bool
 	var passkeyRpID string
 	var passkeyRpName string
 	var rateLimitRPS float64
@@ -80,6 +81,9 @@ func gatewayStartCmd() *cobra.Command {
 			}
 			if vaultKeyPath == "" {
 				vaultKeyPath = os.Getenv("G8E_VAULT_KEY")
+			}
+			if !vaultRequireUnlock {
+				vaultRequireUnlock = os.Getenv("G8E_VAULT_REQUIRE_UNLOCK") == "true"
 			}
 
 			cfg, err := config.Load("")
@@ -138,6 +142,7 @@ func gatewayStartCmd() *cobra.Command {
 				secretsDir,
 				vaultDir,
 				vaultKeyPath,
+				vaultRequireUnlock,
 				passkeyRpID,
 				passkeyRpName,
 				rateLimitRPS,
@@ -210,6 +215,7 @@ func gatewayStartCmd() *cobra.Command {
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
 	cmd.Flags().StringVar(&vaultDir, "vault-dir", "", "Directory for vault data (default: .g8e/vault)")
 	cmd.Flags().StringVar(&vaultKeyPath, "vault-key", "", "Path to vault private key (default: .g8e/secrets/vault.key)")
+	cmd.Flags().BoolVar(&vaultRequireUnlock, "vault-require-unlock", false, "Require vault to be unlocked at startup (fail if vault cannot be unlocked)")
 	cmd.Flags().StringVar(&passkeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
 	cmd.Flags().StringVar(&passkeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
 	cmd.Flags().Float64Var(&rateLimitRPS, "rate-limit-rps", 0, "Gateway requests per second limit (set to 0 to disable)")
@@ -332,6 +338,7 @@ func gatewayRestartCmd() *cobra.Command {
 				"",
 				"",
 				"",
+				false,
 				"",
 				"",
 				0,
