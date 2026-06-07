@@ -36,10 +36,11 @@ type AuditService struct {
 }
 
 // NewAuditService creates a new AuditService.
-func NewAuditService(cfg *config.Config, logger *slog.Logger) *AuditService {
+func NewAuditService(cfg *config.Config, logger *slog.Logger, auditStore *storage.SQLAuditStore) *AuditService {
 	return &AuditService{
-		config: cfg,
-		logger: logger,
+		config:     cfg,
+		logger:     logger,
+		auditStore: auditStore,
 	}
 }
 
@@ -47,7 +48,7 @@ func NewAuditService(cfg *config.Config, logger *slog.Logger) *AuditService {
 func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording user message (via Protobuf)")
 
-	if as.auditStore == nil || !as.auditStore.IsEnabled() {
+	if !as.auditStore.IsEnabled() {
 		as.logger.Info("Audit store not enabled, skipping user message recording")
 		return
 	}
@@ -83,7 +84,7 @@ func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg *PubSubComma
 func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording AI message (via Protobuf)")
 
-	if as.auditStore == nil || !as.auditStore.IsEnabled() {
+	if !as.auditStore.IsEnabled() {
 		as.logger.Info("Audit store not enabled, skipping AI message recording")
 		return
 	}
@@ -119,7 +120,7 @@ func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg *PubSubCommand
 func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording direct terminal command (via Protobuf)")
 
-	if as.auditStore == nil || !as.auditStore.IsEnabled() {
+	if !as.auditStore.IsEnabled() {
 		as.logger.Info("Audit store not enabled, skipping direct command recording")
 		return
 	}
@@ -155,7 +156,7 @@ func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg *PubSubCom
 func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording direct terminal command result (via Protobuf)")
 
-	if as.auditStore == nil || !as.auditStore.IsEnabled() {
+	if !as.auditStore.IsEnabled() {
 		as.logger.Info("Audit store not enabled, skipping direct command result recording")
 		return
 	}

@@ -14,6 +14,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -241,10 +242,11 @@ func (ts *TokenStoreService) KVDelete(key string) error {
 
 // tokenStorePrune returns a PruneFunc for retention and size-based pruning.
 func tokenStorePrune(config *TokenStoreConfig) sqliteutil.PruneFunc {
-	return func(db *sqliteutil.DB, logger *slog.Logger) {
+	return func(ctx context.Context, db *sqliteutil.DB, logger *slog.Logger) error {
 		_, err := db.ExecWithRetry("DELETE FROM kv WHERE expires_at < ?", sqliteutil.FormatTimestamp(time.Now()))
 		if err != nil {
 			logger.Error("Failed to prune expired kv records", "error", err)
+			return err
 		}
 
 		dbSizeBytes, err := db.GetSizeBytes()
@@ -272,6 +274,7 @@ func tokenStorePrune(config *TokenStoreConfig) sqliteutil.PruneFunc {
 		if err := db.RunIncrementalVacuum(1000); err != nil {
 			logger.Info("Failed to run incremental vacuum", "error", err)
 		}
+		return nil
 	}
 }
 

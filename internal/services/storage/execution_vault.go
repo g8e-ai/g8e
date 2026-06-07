@@ -14,6 +14,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -574,13 +575,13 @@ func (ev *ExecutionVaultService) GetFileDiffsBySession(operatorSessionID string,
 
 // executionVaultPrune returns a PruneFunc for retention and size-based pruning.
 func executionVaultPrune(config *ExecutionVaultConfig) sqliteutil.PruneFunc {
-	return func(db *sqliteutil.DB, logger *slog.Logger) {
+	return func(ctx context.Context, db *sqliteutil.DB, logger *slog.Logger) error {
 		cutoff := sqliteutil.FormatTimestamp(time.Now().AddDate(0, 0, -config.RetentionDays))
 
 		result, err := db.ExecWithRetry("DELETE FROM execution_log WHERE timestamp_utc < ?", cutoff)
 		if err != nil {
 			logger.Error("Failed to prune old records", string(constants.ConnectionStateError), err)
-			return
+			return err
 		}
 		rowsDeleted, _ := result.RowsAffected()
 		if rowsDeleted > 0 {
@@ -590,11 +591,11 @@ func executionVaultPrune(config *ExecutionVaultConfig) sqliteutil.PruneFunc {
 		diffResult, err := db.ExecWithRetry("DELETE FROM file_diff_log WHERE timestamp_utc < ?", cutoff)
 		if err != nil {
 			logger.Error("Failed to prune old file diff records", string(constants.ConnectionStateError), err)
-		} else {
-			diffRowsDeleted, _ := diffResult.RowsAffected()
-			if diffRowsDeleted > 0 {
-				logger.Info("Pruned old file diff records (execution vault)", "rows_deleted", diffRowsDeleted)
-			}
+			return err
+		}
+		diffRowsDeleted, _ := diffResult.RowsAffected()
+		if diffRowsDeleted > 0 {
+			logger.Info("Pruned old file diff records (execution vault)", "rows_deleted", diffRowsDeleted)
 		}
 
 		dbSizeBytes, err := db.GetSizeBytes()
@@ -634,6 +635,7 @@ func executionVaultPrune(config *ExecutionVaultConfig) sqliteutil.PruneFunc {
 		if err := db.RunIncrementalVacuum(1000); err != nil {
 			logger.Info("Failed to run incremental vacuum", string(constants.ConnectionStateError), err)
 		}
+		return nil
 	}
 }
 

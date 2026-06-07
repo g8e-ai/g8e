@@ -39,14 +39,14 @@ func TestPubSubAvailable(t *testing.T, baseURL string) {
 	wsURL := baseURL + "/ws/pubsub"
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {
-		t.Fatalf("client pub/sub TLS setup failed: %v", err)
+		t.Fatalf("client pub/sub TLS setup failed: %w", err)
 	}
 	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		t.Fatalf("client pub/sub not available at %s: %v", baseURL, err)
+		t.Fatalf("client pub/sub not available at %s: %w", baseURL, err)
 	}
 	ws.Close()
 }
@@ -61,26 +61,26 @@ func SubscribeToChannel(t *testing.T, baseURL string, channel string) <-chan []b
 
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {
-		t.Fatalf("Failed to build TLS dialer for Operator pub/sub: %v", err)
+		t.Fatalf("Failed to build TLS dialer for Operator pub/sub: %w", err)
 	}
 	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		t.Fatalf("Failed to connect to Operator pub/sub at %s: %v", wsURL, err)
+		t.Fatalf("Failed to connect to Operator pub/sub at %s: %w", wsURL, err)
 	}
 
 	subMsg := &pubsubv1.PubSubMessage{Action: constants.PubSubActionSubscribe, Channel: channel}
 	subBytes, err := proto.Marshal(subMsg)
 	if err != nil {
 		ws.Close()
-		t.Fatalf("Failed to marshal subscribe message: %v", err)
+		t.Fatalf("Failed to marshal subscribe message: %w", err)
 	}
 
 	if err := ws.WriteMessage(websocket.BinaryMessage, subBytes); err != nil {
 		ws.Close()
-		t.Fatalf("Failed to subscribe to channel %s: %v", channel, err)
+		t.Fatalf("Failed to subscribe to channel %s: %w", channel, err)
 	}
 
 	out := make(chan []byte, 64)
@@ -125,25 +125,25 @@ func PublishTestMessage(t *testing.T, baseURL string, channel string, message st
 
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {
-		t.Fatalf("Failed to build TLS dialer for pub/sub publish: %v", err)
+		t.Fatalf("Failed to build TLS dialer for pub/sub publish: %w", err)
 	}
 	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		t.Fatalf("Failed to connect to client pub/sub for publish on channel %s: %v", channel, err)
+		t.Fatalf("Failed to connect to client pub/sub for publish on channel %s: %w", channel, err)
 	}
 	defer ws.Close()
 
 	pubMsg := &pubsubv1.PubSubMessage{Action: constants.PubSubActionPublish, Channel: channel, Data: []byte(message)}
 	pubBytes, err := proto.Marshal(pubMsg)
 	if err != nil {
-		t.Fatalf("Failed to marshal publish message: %v", err)
+		t.Fatalf("Failed to marshal publish message: %w", err)
 	}
 
 	if err := ws.WriteMessage(websocket.BinaryMessage, pubBytes); err != nil {
-		t.Fatalf("Failed to publish test message to channel %s: %v", channel, err)
+		t.Fatalf("Failed to publish test message to channel %s: %w", channel, err)
 	}
 }
 
@@ -157,7 +157,7 @@ func WaitForMessage(t *testing.T, msgChan <-chan []byte, timeout time.Duration) 
 	case msg := <-msgChan:
 		return msg
 	case <-timer.C:
-		t.Fatal("Timeout waiting for pub/sub message")
+		t.Fatalf("Timeout waiting for pub/sub message")
 		return nil
 	}
 }
@@ -168,7 +168,7 @@ func AssertMessageReceived(t *testing.T, msgChan <-chan []byte, timeout time.Dur
 
 	payload := WaitForMessage(t, msgChan, timeout)
 	if payload == nil {
-		t.Fatal("Expected message but got nil")
+		t.Fatalf("Expected message but got nil")
 	}
 
 	if expectedPattern != "" && !strings.Contains(string(payload), expectedPattern) {

@@ -27,8 +27,10 @@ func TestNewGatewayConfig(t *testing.T) {
 	clientKeyPath := "/path/to/client.key"
 	caCertPath := "/path/to/ca.crt"
 
-	config := NewGatewayConfig(gatewayURL, clientCertPath, clientKeyPath, caCertPath)
-
+	config, err := NewGatewayConfig(gatewayURL, clientCertPath, clientKeyPath, caCertPath)
+	if err != nil {
+		t.Fatalf("NewGatewayConfig failed: %v", err)
+	}
 	if config == nil {
 		t.Fatal("NewGatewayConfig returned nil")
 	}
@@ -93,12 +95,15 @@ func TestNewGatewayConfig(t *testing.T) {
 }
 
 func TestConfigJSONSerialization(t *testing.T) {
-	config := NewGatewayConfig(
+	config, err := NewGatewayConfig(
 		fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps),
 		"/path/to/client.crt",
 		"/path/to/client.key",
 		"/path/to/ca.crt",
 	)
+	if err != nil {
+		t.Fatalf("NewGatewayConfig failed: %v", err)
+	}
 
 	// Test JSON marshaling
 	data, err := json.Marshal(config)
@@ -171,5 +176,99 @@ func TestServerConfigDefaults(t *testing.T) {
 	// Notes should be optional (nil is valid)
 	if serverConfig.Notes != nil {
 		t.Error("Expected Notes to be nil when not provided")
+	}
+}
+
+func TestNewGatewayConfigValidation(t *testing.T) {
+	tests := []struct {
+		name          string
+		gatewayURL    string
+		clientCert    string
+		clientKey     string
+		caCert        string
+		verifyHostname string
+		wantErr       bool
+	}{
+		{
+			name:          "valid config",
+			gatewayURL:    "https://g8e.local:8443/mcp",
+			clientCert:    "/path/to/client.crt",
+			clientKey:     "/path/to/client.key",
+			caCert:        "/path/to/ca.crt",
+			verifyHostname: "g8e.local",
+			wantErr:       false,
+		},
+		{
+			name:          "empty gateway URL",
+			gatewayURL:    "",
+			clientCert:    "/path/to/client.crt",
+			clientKey:     "/path/to/client.key",
+			caCert:        "/path/to/ca.crt",
+			verifyHostname: "g8e.local",
+			wantErr:       true,
+		},
+		{
+			name:          "invalid URL scheme",
+			gatewayURL:    "http://g8e.local:8443/mcp",
+			clientCert:    "/path/to/client.crt",
+			clientKey:     "/path/to/client.key",
+			caCert:        "/path/to/ca.crt",
+			verifyHostname: "g8e.local",
+			wantErr:       true,
+		},
+		{
+			name:          "empty client cert",
+			gatewayURL:    "https://g8e.local:8443/mcp",
+			clientCert:    "",
+			clientKey:     "/path/to/client.key",
+			caCert:        "/path/to/ca.crt",
+			verifyHostname: "g8e.local",
+			wantErr:       true,
+		},
+		{
+			name:          "whitespace only client cert",
+			gatewayURL:    "https://g8e.local:8443/mcp",
+			clientCert:    "   ",
+			clientKey:     "/path/to/client.key",
+			caCert:        "/path/to/ca.crt",
+			verifyHostname: "g8e.local",
+			wantErr:       true,
+		},
+		{
+			name:          "empty client key",
+			gatewayURL:    "https://g8e.local:8443/mcp",
+			clientCert:    "/path/to/client.crt",
+			clientKey:     "",
+			caCert:        "/path/to/ca.crt",
+			verifyHostname: "g8e.local",
+			wantErr:       true,
+		},
+		{
+			name:          "empty CA cert",
+			gatewayURL:    "https://g8e.local:8443/mcp",
+			clientCert:    "/path/to/client.crt",
+			clientKey:     "/path/to/client.key",
+			caCert:        "",
+			verifyHostname: "g8e.local",
+			wantErr:       true,
+		},
+		{
+			name:          "empty verify hostname",
+			gatewayURL:    "https://g8e.local:8443/mcp",
+			clientCert:    "/path/to/client.crt",
+			clientKey:     "/path/to/client.key",
+			caCert:        "/path/to/ca.crt",
+			verifyHostname: "",
+			wantErr:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewGatewayConfigWithHostname(tt.gatewayURL, tt.clientCert, tt.clientKey, tt.caCert, tt.verifyHostname)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NewGatewayConfigWithHostname() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }

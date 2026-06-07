@@ -247,7 +247,7 @@ func TestHandleToolsList(t *testing.T) {
 		handleToolsList(encoder, 1, nativeToolHandler)
 
 		var resp JSONRPCResponse
-		err := json.Unmarshal(buf.Bytes(), &resp)
+		err = json.Unmarshal(buf.Bytes(), &resp)
 		assert.NoError(t, err)
 		assert.NotNil(t, resp.Result)
 
@@ -278,11 +278,12 @@ func TestHandleToolsCall(t *testing.T) {
 	t.Run("tools/call executes native tool", func(t *testing.T) {
 		var buf bytes.Buffer
 		encoder := json.NewEncoder(&buf)
-		nativeToolHandler := mcp.NewNativeToolHandler()
+		nativeToolHandler, err := mcp.NewNativeToolHandler()
+		require.NoError(t, err)
 		handleToolsCall(encoder, 1, json.RawMessage(`{"name":"sys_info","arguments":{}}`), nativeToolHandler)
 
 		var resp JSONRPCResponse
-		err := json.Unmarshal(buf.Bytes(), &resp)
+		err = json.Unmarshal(buf.Bytes(), &resp)
 		assert.NoError(t, err)
 		assert.NotNil(t, resp.Result)
 	})

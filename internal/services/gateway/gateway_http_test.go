@@ -72,12 +72,13 @@ func TestMCPOriginGuard(t *testing.T) {
 	t.Parallel()
 	infra := setupTestInfrastructure(t, false)
 
-	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
+	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          infra.Logger,
 		Responder:       infra.Responder,
 		SuspendedStore:  infra.DB,
 		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
 	})
+	require.NoError(t, err, "failed to create MCP gateway")
 	h := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:               infra.Cfg,
 		Logger:            infra.Logger,
@@ -156,12 +157,13 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
 
-	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
+	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          infra.Logger,
 		Responder:       infra.Responder,
 		SuspendedStore:  infra.DB,
 		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
 	})
+	require.NoError(t, err, "failed to create MCP gateway")
 	h := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:               infra.Cfg,
 		Logger:            infra.Logger,
@@ -185,12 +187,13 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 	t.Helper()
 	infra := setupTestInfrastructure(t, true)
 
-	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
+	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          infra.Logger,
 		Responder:       infra.Responder,
 		SuspendedStore:  infra.DB,
 		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
 	})
+	require.NoError(t, err, "failed to create MCP gateway")
 
 	infra.Cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
@@ -260,9 +263,16 @@ func TestAuthMiddleware(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
 
 	// Seed platform settings
-	err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
-		"session_encryption_key": "test-key",
-	}))
+	settings := models.SettingsDocument{
+		Settings: map[string]interface{}{
+			"session_encryption_key": "test-key",
+		},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	settingsBytes, err := json.Marshal(settings)
+	require.NoError(t, err)
+	err = h.db.DocSet("settings", "platform_settings", settingsBytes)
 	require.NoError(t, err)
 
 	handler := h.auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -344,9 +354,16 @@ func TestHandleHealth(t *testing.T) {
 
 	t.Run("Returns 200 when platform_settings exists", func(t *testing.T) {
 		t.Parallel()
-		err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
-			"session_encryption_key": "test-key",
-		}))
+		settings := models.SettingsDocument{
+			Settings: map[string]interface{}{
+				"session_encryption_key": "test-key",
+			},
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+		settingsBytes, err := json.Marshal(settings)
+		require.NoError(t, err)
+		err = h.db.DocSet("settings", "platform_settings", settingsBytes)
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
@@ -366,9 +383,16 @@ func TestHandleHealth_StateRootFailure(t *testing.T) {
 	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
-	err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
-		"session_encryption_key": "test-key",
-	}))
+	settings := models.SettingsDocument{
+		Settings: map[string]interface{}{
+			"session_encryption_key": "test-key",
+		},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	settingsBytes, err := json.Marshal(settings)
+	require.NoError(t, err)
+	err = h.db.DocSet("settings", "platform_settings", settingsBytes)
 	require.NoError(t, err)
 
 	// Force state root calculation to fail by dropping a table it queries
@@ -424,9 +448,16 @@ func TestInternalSSEBridge(t *testing.T) {
 	_, _ = h.db.SSEEventsWipe()
 
 	// Seed platform settings required for SSE push
-	err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
-		"session_encryption_key": "test-key",
-	}))
+	settings := models.SettingsDocument{
+		Settings: map[string]interface{}{
+			"session_encryption_key": "test-key",
+		},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	settingsBytes, err := json.Marshal(settings)
+	require.NoError(t, err)
+	err = h.db.DocSet("settings", "platform_settings", settingsBytes)
 	require.NoError(t, err)
 
 	pushWithOperator := func(body string, operatorID string) *httptest.ResponseRecorder {
@@ -489,14 +520,19 @@ func TestInternalSSEBridge(t *testing.T) {
 
 	t.Run("web session event is persisted and replayable", func(t *testing.T) {
 		// Create Operator document for op-session-1
-		opDoc := map[string]interface{}{
-			"id":                  "op-session-1",
-			"user_id":             "u-1",
-			"operator_session_id": "op-session-1",
-			"status":              constants.OperatorStatusActive,
+		opDoc := models.OperatorDocumentGo{
+			ID:                "op-session-1",
+			UserID:            "u-1",
+			OperatorSessionID: "op-session-1",
+			Status:            constants.OperatorStatusActive,
+			Component:         constants.ComponentNameG8EO,
+			CreatedAt:         time.Now(),
+			UpdatedAt:         time.Now(),
 		}
-		opBytes, _ := json.Marshal(opDoc)
-		h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-session-1", opBytes)
+		opBytes, err := json.Marshal(opDoc)
+		require.NoError(t, err)
+		err = h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-session-1", opBytes)
+		require.NoError(t, err)
 
 		// Set up the web->operator binding for authorization BEFORE push
 		// The handler checks sessionWebBindKey(webSessionID) for Operator session IDs
@@ -522,14 +558,19 @@ func TestInternalSSEBridge(t *testing.T) {
 
 	t.Run("cli session event is persisted and replayable as a first-class type", func(t *testing.T) {
 		// Create Operator document for op-session-1
-		opDoc := map[string]interface{}{
-			"id":                  "op-session-1",
-			"user_id":             "u-1",
-			"operator_session_id": "op-session-1",
-			"status":              constants.OperatorStatusActive,
+		opDoc := models.OperatorDocumentGo{
+			ID:                "op-session-1",
+			UserID:            "u-1",
+			OperatorSessionID: "op-session-1",
+			Status:            constants.OperatorStatusActive,
+			Component:         constants.ComponentNameG8EO,
+			CreatedAt:         time.Now(),
+			UpdatedAt:         time.Now(),
 		}
-		opBytes, _ := json.Marshal(opDoc)
-		h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-session-1", opBytes)
+		opBytes, err := json.Marshal(opDoc)
+		require.NoError(t, err)
+		err = h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-session-1", opBytes)
+		require.NoError(t, err)
 
 		// Set up the cli->operator binding for authorization BEFORE push
 		seedCLISession("cli-1", "op-session-1")
@@ -550,14 +591,19 @@ func TestInternalSSEBridge(t *testing.T) {
 	t.Run("cli and web with colliding ids do not cross namespaces", func(t *testing.T) {
 		_, _ = h.db.SSEEventsWipe()
 		// Create Operator document for op-session-1
-		opDoc := map[string]interface{}{
-			"id":                  "op-session-1",
-			"user_id":             "u-1",
-			"operator_session_id": "op-session-1",
-			"status":              constants.OperatorStatusActive,
+		opDoc := models.OperatorDocumentGo{
+			ID:                "op-session-1",
+			UserID:            "u-1",
+			OperatorSessionID: "op-session-1",
+			Status:            constants.OperatorStatusActive,
+			Component:         constants.ComponentNameG8EO,
+			CreatedAt:         time.Now(),
+			UpdatedAt:         time.Now(),
 		}
-		opBytes, _ := json.Marshal(opDoc)
-		h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-session-1", opBytes)
+		opBytes, err := json.Marshal(opDoc)
+		require.NoError(t, err)
+		err = h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-session-1", opBytes)
+		require.NoError(t, err)
 
 		// Set up bindings for authorization BEFORE push
 		seedCLISession("shared-id", "op-session-1")
@@ -590,14 +636,19 @@ func TestInternalSSEBridge(t *testing.T) {
 	t.Run("background event routes by user_id", func(t *testing.T) {
 		// Create a mock Operator session bound to user u-2 BEFORE push
 		// The app identity must match the operator's SPIFFE ID for authorization
-		opDoc := map[string]interface{}{
-			"id":                  "op-u2",
-			"user_id":             "u-2",
-			"operator_session_id": "op-session-u2",
-			"status":              constants.OperatorStatusActive,
+		opDoc := models.OperatorDocumentGo{
+			ID:                "op-u2",
+			UserID:            "u-2",
+			OperatorSessionID: "op-session-u2",
+			Status:            constants.OperatorStatusActive,
+			Component:         constants.ComponentNameG8EO,
+			CreatedAt:         time.Now(),
+			UpdatedAt:         time.Now(),
 		}
-		opBytes, _ := json.Marshal(opDoc)
-		h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-u2", opBytes)
+		opBytes, err := json.Marshal(opDoc)
+		require.NoError(t, err)
+		err = h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-u2", opBytes)
+		require.NoError(t, err)
 
 		body := `{"user_id":"u-2","event":{"type":"system.notice","data":{}}}`
 		rr := pushWithOperator(body, "op-u2")
@@ -695,14 +746,19 @@ func TestInternalSSEBridge(t *testing.T) {
 
 	t.Run("authorization: Operator cannot access user_id they don't belong to", func(t *testing.T) {
 		// Create Operator document for op-session-1 with user_id u-1
-		opDoc := map[string]interface{}{
-			"id":                  "op-session-1",
-			"user_id":             "u-1",
-			"operator_session_id": "op-session-1",
-			"status":              constants.OperatorStatusActive,
+		opDoc := models.OperatorDocumentGo{
+			ID:                "op-session-1",
+			UserID:            "u-1",
+			OperatorSessionID: "op-session-1",
+			Status:            constants.OperatorStatusActive,
+			Component:         constants.ComponentNameG8EO,
+			CreatedAt:         time.Now(),
+			UpdatedAt:         time.Now(),
 		}
-		opBytes, _ := json.Marshal(opDoc)
-		h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-session-1", opBytes)
+		opBytes, err := json.Marshal(opDoc)
+		require.NoError(t, err)
+		err = h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-session-1", opBytes)
+		require.NoError(t, err)
 
 		_ = h.db.SSEEventsAppend(SSERoute{UserID: "user-other"}, "test", `{"event":{"type":"x"}}`, "")
 
@@ -1014,22 +1070,28 @@ func TestSSEPushAuthorization(t *testing.T) {
 	operatorSessionID := "op-sess-456"
 	appID := "spiffe://g8e.local/app/test-sse-app"
 
-	userDoc := map[string]interface{}{
-		"id":       userID,
-		"username": "sse-test-user",
-		"status":   "active",
+	userDoc := models.User{
+		ID:     userID,
+		Status: constants.UserStatusActive,
 	}
-	userBytes, _ := json.Marshal(userDoc)
-	require.NoError(t, h.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	userBytes, err := json.Marshal(userDoc)
+	require.NoError(t, err)
+	err = h.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
+	require.NoError(t, err)
 
-	opDoc := map[string]interface{}{
-		"id":                  operatorSessionID,
-		"operator_session_id": operatorSessionID,
-		"user_id":             userID,
-		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
+	opDoc := models.OperatorDocumentGo{
+		ID:                operatorSessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusActive,
+		Component:         constants.ComponentNameG8EO,
+		CreatedAt:         time.Now(),
+		UpdatedAt:         time.Now(),
 	}
-	opBytes, _ := json.Marshal(opDoc)
-	require.NoError(t, h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorSessionID, opBytes))
+	opBytes, err := json.Marshal(opDoc)
+	require.NoError(t, err)
+	err = h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorSessionID, opBytes)
+	require.NoError(t, err)
 
 	webBindKey := sessionWebBindKey(webSessionID)
 	opSessionIDs := []string{operatorSessionID}

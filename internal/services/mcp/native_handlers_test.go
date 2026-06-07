@@ -1484,100 +1484,6 @@ func TestHandleCloudMetadata(t *testing.T) {
 	})
 }
 
-func TestHandleK8sInspect(t *testing.T) {
-	handler, err := NewNativeToolHandler()
-	require.NoError(t, err)
-
-	t.Run("kubectl not available", func(t *testing.T) {
-		if kubectlAvailable() {
-			t.Skip("kubectl is available, skipping unavailable test")
-		}
-
-		req := map[string]interface{}{
-			"operation": "pods",
-		}
-		reqJSON, _ := json.Marshal(req)
-
-		_, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
-		if err == nil {
-			t.Error("expected error when kubectl not available")
-		}
-	})
-
-	t.Run("cluster info", func(t *testing.T) {
-		if !kubectlAvailable() {
-			t.Skip("kubectl not available, skipping test")
-		}
-
-		req := map[string]interface{}{
-			"operation": "cluster_info",
-		}
-		reqJSON, _ := json.Marshal(req)
-
-		result, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
-		if err != nil {
-			t.Fatalf("HandleTool failed: %v", err)
-		}
-
-		var info map[string]interface{}
-		if err := json.Unmarshal([]byte(result.Content[0].Text), &info); err != nil {
-			t.Fatalf("failed to unmarshal result: %v", err)
-		}
-
-		if _, hasError := info["error"]; hasError {
-			t.Skip("kubectl not configured with cluster access, skipping test")
-		}
-
-		if _, ok := info["version"]; !ok {
-			t.Error("expected version in result")
-		}
-	})
-
-	t.Run("list namespaces", func(t *testing.T) {
-		if !kubectlAvailable() {
-			t.Skip("kubectl not available, skipping test")
-		}
-
-		req := map[string]interface{}{
-			"operation": "namespace",
-		}
-		reqJSON, _ := json.Marshal(req)
-
-		result, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
-		if err != nil {
-			t.Fatalf("HandleTool failed: %v", err)
-		}
-
-		var ns map[string]interface{}
-		if err := json.Unmarshal([]byte(result.Content[0].Text), &ns); err != nil {
-			t.Fatalf("failed to unmarshal result: %v", err)
-		}
-
-		if _, hasError := ns["error"]; hasError {
-			t.Skip("kubectl not configured with cluster access, skipping test")
-		}
-
-		if _, ok := ns["namespaces"]; !ok {
-			t.Error("expected namespaces in result")
-		}
-	})
-
-	t.Run("missing name for pod logs", func(t *testing.T) {
-		if !kubectlAvailable() {
-			t.Skip("kubectl not available, skipping test")
-		}
-
-		req := map[string]interface{}{
-			"operation": "pod_logs",
-		}
-		reqJSON, _ := json.Marshal(req)
-
-		_, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
-		if err == nil {
-			t.Error("expected error for missing pod name")
-		}
-	})
-}
 
 func TestHandleSysInfo(t *testing.T) {
 	handler, err := NewNativeToolHandler()
@@ -1866,6 +1772,146 @@ func TestHandleProcTree(t *testing.T) {
 
 		if _, ok := tree["root_pid"]; !ok {
 			t.Error("expected root_pid in result")
+		}
+	})
+}
+
+func TestHandleK8sInspect(t *testing.T) {
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
+
+	t.Run("kubectl not available", func(t *testing.T) {
+		if _, err := exec.LookPath("kubectl"); err == nil {
+			t.Skip("kubectl is available, skipping unavailable test")
+		}
+
+		req := K8sInspectRequest{Operation: "pods"}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
+		if err == nil {
+			t.Error("expected error when kubectl not available")
+		}
+	})
+
+	t.Run("invalid namespace format", func(t *testing.T) {
+		req := K8sInspectRequest{
+			Operation: "pods",
+			Namespace: "Invalid_Namespace",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var inspectResult K8sInspectResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &inspectResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if inspectResult.Error == "" {
+			t.Error("expected error for invalid namespace format")
+		}
+	})
+
+	t.Run("invalid resource name format", func(t *testing.T) {
+		req := K8sInspectRequest{
+			Operation: "pod_logs",
+			Name:      "Invalid_Pod_Name",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var inspectResult K8sInspectResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &inspectResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if inspectResult.Error == "" {
+			t.Error("expected error for invalid resource name format")
+		}
+	})
+
+	t.Run("pod_logs missing name", func(t *testing.T) {
+		req := K8sInspectRequest{
+			Operation: "pod_logs",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
+		if err == nil {
+			t.Error("expected error for missing pod name")
+		}
+	})
+
+	t.Run("pod_describe missing name", func(t *testing.T) {
+		req := K8sInspectRequest{
+			Operation: "pod_describe",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
+		if err == nil {
+			t.Error("expected error for missing pod name")
+		}
+	})
+
+	t.Run("unsupported operation", func(t *testing.T) {
+		req := K8sInspectRequest{
+			Operation: "invalid_operation",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
+		if err == nil {
+			t.Error("expected error for unsupported operation")
+		}
+	})
+
+	t.Run("default operation is pods", func(t *testing.T) {
+		req := K8sInspectRequest{}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var inspectResult K8sInspectResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &inspectResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if inspectResult.Operation != "pods" {
+			t.Errorf("expected default operation to be pods, got %s", inspectResult.Operation)
+		}
+	})
+
+	t.Run("context cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		req := K8sInspectRequest{Operation: "pods"}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(ctx, "k8s_inspect", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var inspectResult K8sInspectResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &inspectResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if inspectResult.Error == "" {
+			t.Error("expected error due to context cancellation")
 		}
 	})
 }

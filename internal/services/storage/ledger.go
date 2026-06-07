@@ -23,12 +23,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	vault "github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/storer"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+	vault "github.com/g8e-ai/g8e/internal/services/vault"
 )
 
 // LedgerConfig holds configuration for the git-backed ledger service
@@ -64,11 +65,11 @@ type LedgerResult struct {
 // EncryptionVault in config is required for encryption at rest.
 func NewGitLedgerService(config *LedgerConfig, logger *slog.Logger) (*GitLedgerService, error) {
 	if config == nil {
-		return nil, fmt.Errorf("config is required for git ledger service")
+		return nil, fmt.Errorf("ledger: config is required for git ledger service")
 	}
 
 	if config.EncryptionVault == nil {
-		return nil, fmt.Errorf("EncryptionVault is required for git ledger service")
+		return nil, fmt.Errorf("ledger: EncryptionVault is required for git ledger service")
 	}
 
 	return &GitLedgerService{
@@ -120,11 +121,11 @@ func (lms *GitLedgerService) GetSessionLedgerPath(operatorSessionID string) (str
 	}
 
 	if err := os.MkdirAll(sessionPath, 0755); err != nil {
-		return "", fmt.Errorf("failed to create Operator session ledger directory: %w", err)
+		return "", fmt.Errorf("ledger: failed to create Operator session ledger directory: %w", err)
 	}
 
 	if err := lms.initGitRepo(sessionPath); err != nil {
-		return "", fmt.Errorf("failed to initialize Operator session git repo: %w", err)
+		return "", fmt.Errorf("ledger: failed to initialize Operator session git repo: %w", err)
 	}
 
 	lms.logger.Info("Initialized new session ledger", "operator_session_id", operatorSessionID, "path", sessionPath)
@@ -141,21 +142,21 @@ func (lms *GitLedgerService) initGitRepo(path string) error {
 
 	repo, err := git.PlainInit(path, false)
 	if err != nil {
-		return fmt.Errorf("git init failed: %w", err)
+		return fmt.Errorf("ledger: git init failed: %w", err)
 	}
 
 	gitignore := filepath.Join(path, ".gitignore")
 	if err := os.WriteFile(gitignore, []byte("# g8e Ledger\n"), 0600); err != nil {
-		return fmt.Errorf("failed to create .gitignore: %w", err)
+		return fmt.Errorf("ledger: failed to create .gitignore: %w", err)
 	}
 
 	w, err := repo.Worktree()
 	if err != nil {
-		return fmt.Errorf("failed to get worktree: %w", err)
+		return fmt.Errorf("ledger: failed to get worktree: %w", err)
 	}
 
 	if _, err := w.Add(".gitignore"); err != nil {
-		return fmt.Errorf("failed to git add .gitignore: %w", err)
+		return fmt.Errorf("ledger: failed to git add .gitignore: %w", err)
 	}
 
 	_, err = w.Commit("Initial ledger commit", &git.CommitOptions{
@@ -166,7 +167,7 @@ func (lms *GitLedgerService) initGitRepo(path string) error {
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create initial commit: %w", err)
+		return fmt.Errorf("ledger: failed to create initial commit: %w", err)
 	}
 
 	return nil
@@ -189,7 +190,7 @@ func (lms *GitLedgerService) getLedgerPath(ledgerDir, filePath string) string {
 func (lms *GitLedgerService) copyToLedger(srcPath, dstPath string) error {
 	dstDir := filepath.Dir(dstPath)
 	if err := os.MkdirAll(dstDir, 0755); err != nil {
-		return fmt.Errorf("failed to create mirror directory: %w", err)
+		return fmt.Errorf("ledger: failed to create mirror directory: %w", err)
 	}
 
 	if lms.IsEncryptionEnabled() {
@@ -198,26 +199,26 @@ func (lms *GitLedgerService) copyToLedger(srcPath, dstPath string) error {
 		// We limit the size to prevent OOM.
 		info, err := os.Stat(srcPath)
 		if err != nil {
-			return fmt.Errorf("failed to stat source file: %w", err)
+			return fmt.Errorf("ledger: failed to stat source file: %w", err)
 		}
 
 		const maxEncryptedSize = 100 * 1024 * 1024 // 100MB safety limit
 		if info.Size() > maxEncryptedSize {
-			return fmt.Errorf("file too large for encrypted ledger mirror: %d bytes (max %d)", info.Size(), maxEncryptedSize)
+			return fmt.Errorf("ledger: file too large for encrypted ledger mirror: %d bytes (max %d)", info.Size(), maxEncryptedSize)
 		}
 
 		content, err := os.ReadFile(srcPath)
 		if err != nil {
-			return fmt.Errorf("failed to read source file: %w", err)
+			return fmt.Errorf("ledger: failed to read source file: %w", err)
 		}
 
 		encrypted, err := lms.encryptionVault.Encrypt(content)
 		if err != nil {
-			return fmt.Errorf("failed to encrypt file content: %w", err)
+			return fmt.Errorf("ledger: failed to encrypt file content: %w", err)
 		}
 
 		if err := os.WriteFile(dstPath+".enc", encrypted, 0600); err != nil {
-			return fmt.Errorf("failed to write encrypted destination file: %w", err)
+			return fmt.Errorf("ledger: failed to write encrypted destination file: %w", err)
 		}
 		return nil
 	}
@@ -225,18 +226,18 @@ func (lms *GitLedgerService) copyToLedger(srcPath, dstPath string) error {
 	// For unencrypted files, use streaming
 	srcFile, err := os.Open(srcPath)
 	if err != nil {
-		return fmt.Errorf("failed to open source file: %w", err)
+		return fmt.Errorf("ledger: failed to open source file: %w", err)
 	}
 	defer srcFile.Close()
 
 	dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
-		return fmt.Errorf("failed to create destination file: %w", err)
+		return fmt.Errorf("ledger: failed to create destination file: %w", err)
 	}
 	defer dstFile.Close()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		return fmt.Errorf("failed to stream copy to ledger: %w", err)
+		return fmt.Errorf("ledger: failed to stream copy to ledger: %w", err)
 	}
 
 	return nil
@@ -250,7 +251,7 @@ func (lms *GitLedgerService) LedgerFileWrite(operatorSessionID, filePath string)
 
 	ledgerDir, err := lms.GetSessionLedgerPath(operatorSessionID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get session ledger path: %w", err)
+		return nil, fmt.Errorf("ledger: failed to get session ledger path: %w", err)
 	}
 
 	lms.mu.Lock()
@@ -288,7 +289,7 @@ func (lms *GitLedgerService) CompleteMirrorWrite(result *LedgerResult, operatorS
 
 	ledgerDir, err := lms.GetSessionLedgerPath(operatorSessionID)
 	if err != nil {
-		return fmt.Errorf("failed to get session ledger path: %w", err)
+		return fmt.Errorf("ledger: failed to get session ledger path: %w", err)
 	}
 
 	lms.mu.Lock()
@@ -296,7 +297,7 @@ func (lms *GitLedgerService) CompleteMirrorWrite(result *LedgerResult, operatorS
 
 	if err := lms.copyToLedger(result.FilePath, result.LedgerPath); err != nil {
 		result.Error = fmt.Sprintf("failed to copy post-mutation file to ledger: %v", err)
-		return fmt.Errorf("failed to copy post-mutation file to ledger: %w", err)
+		return fmt.Errorf("ledger: failed to copy post-mutation file to ledger: %w", err)
 	}
 
 	hashAfter, err := lms.snapshotLedger(ledgerDir, fmt.Sprintf("Post-mutation: %s via OperatorSession %s", result.FilePath, operatorSessionID))
@@ -326,7 +327,7 @@ func (lms *GitLedgerService) MirrorFileDelete(operatorSessionID, filePath string
 
 	ledgerDir, err := lms.GetSessionLedgerPath(operatorSessionID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get session ledger path: %w", err)
+		return nil, fmt.Errorf("ledger: failed to get session ledger path: %w", err)
 	}
 
 	lms.mu.Lock()
@@ -364,7 +365,7 @@ func (lms *GitLedgerService) CompleteMirrorDelete(result *LedgerResult, operator
 
 	ledgerDir, err := lms.GetSessionLedgerPath(operatorSessionID)
 	if err != nil {
-		return fmt.Errorf("failed to get session ledger path: %w", err)
+		return fmt.Errorf("ledger: failed to get session ledger path: %w", err)
 	}
 
 	lms.mu.Lock()
@@ -400,7 +401,7 @@ func (lms *GitLedgerService) MirrorFileCreate(operatorSessionID, filePath string
 
 	ledgerDir, err := lms.GetSessionLedgerPath(operatorSessionID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get session ledger path: %w", err)
+		return nil, fmt.Errorf("ledger: failed to get session ledger path: %w", err)
 	}
 
 	lms.mu.Lock()
@@ -432,7 +433,7 @@ func (lms *GitLedgerService) CompleteMirrorCreate(result *LedgerResult, operator
 
 	ledgerDir, err := lms.GetSessionLedgerPath(operatorSessionID)
 	if err != nil {
-		return fmt.Errorf("failed to get session ledger path: %w", err)
+		return fmt.Errorf("ledger: failed to get session ledger path: %w", err)
 	}
 
 	lms.mu.Lock()
@@ -440,7 +441,7 @@ func (lms *GitLedgerService) CompleteMirrorCreate(result *LedgerResult, operator
 
 	if err := lms.copyToLedger(result.FilePath, result.LedgerPath); err != nil {
 		result.Error = fmt.Sprintf("failed to copy created file to ledger: %v", err)
-		return fmt.Errorf("failed to copy created file to ledger: %w", err)
+		return fmt.Errorf("ledger: failed to copy created file to ledger: %w", err)
 	}
 
 	hashAfter, err := lms.snapshotLedger(ledgerDir, fmt.Sprintf("Post-creation: %s via OperatorSession %s", result.FilePath, operatorSessionID))
@@ -478,11 +479,11 @@ func (lms *GitLedgerService) GetStateMerkleRoot() (string, error) {
 	ledgerDir := filepath.Join(lms.config.BaseDir, "files")
 	repo, err := git.PlainOpen(ledgerDir)
 	if err != nil {
-		return "", fmt.Errorf("failed to open ledger git repo: %w", err)
+		return "", fmt.Errorf("ledger: failed to open ledger git repo: %w", err)
 	}
 	ref, err := repo.Head()
 	if err != nil {
-		return "", fmt.Errorf("failed to get HEAD ref: %w", err)
+		return "", fmt.Errorf("ledger: failed to get HEAD ref: %w", err)
 	}
 	return ref.Hash().String(), nil
 }
@@ -491,17 +492,17 @@ func (lms *GitLedgerService) GetStateMerkleRoot() (string, error) {
 func (lms *GitLedgerService) snapshotLedger(ledgerDir, message string) (string, error) {
 	repo, err := git.PlainOpen(ledgerDir)
 	if err != nil {
-		return "", fmt.Errorf("failed to open git repo: %w", err)
+		return "", fmt.Errorf("ledger: failed to open git repo: %w", err)
 	}
 
 	w, err := repo.Worktree()
 	if err != nil {
-		return "", fmt.Errorf("failed to get worktree: %w", err)
+		return "", fmt.Errorf("ledger: failed to get worktree: %w", err)
 	}
 
 	err = w.AddWithOptions(&git.AddOptions{All: true})
 	if err != nil && err != git.ErrEmptyCommit {
-		return "", fmt.Errorf("git add failed: %w", err)
+		return "", fmt.Errorf("ledger: git add failed: %w", err)
 	}
 
 	commitMsg := fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), message)
@@ -514,7 +515,7 @@ func (lms *GitLedgerService) snapshotLedger(ledgerDir, message string) (string, 
 		AllowEmptyCommits: true,
 	})
 	if err != nil {
-		return "", fmt.Errorf("git commit failed: %w", err)
+		return "", fmt.Errorf("ledger: git commit failed: %w", err)
 	}
 
 	return hash.String(), nil
@@ -672,7 +673,7 @@ func (lms *GitLedgerService) GetFileHistory(filePath string, limit int, operator
 
 	ledgerDir, err := lms.GetSessionLedgerPath(operatorSessionID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get session ledger path: %w", err)
+		return nil, fmt.Errorf("ledger: failed to get session ledger path: %w", err)
 	}
 
 	ledgerPath := lms.getLedgerPath(ledgerDir, filePath)
@@ -683,12 +684,12 @@ func (lms *GitLedgerService) GetFileHistory(filePath string, limit int, operator
 
 	repo, err := git.PlainOpen(ledgerDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open git repo: %w", err)
+		return nil, fmt.Errorf("ledger: failed to open git repo: %w", err)
 	}
 
 	cIter, err := repo.Log(&git.LogOptions{FileName: &relPath})
 	if err != nil {
-		return nil, fmt.Errorf("git log failed: %w", err)
+		return nil, fmt.Errorf("ledger: git log failed: %w", err)
 	}
 	defer cIter.Close()
 
@@ -708,7 +709,7 @@ func (lms *GitLedgerService) GetFileHistory(filePath string, limit int, operator
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to iterate commits: %w", err)
+		return nil, fmt.Errorf("ledger: failed to iterate commits: %w", err)
 	}
 
 	return entries, nil
@@ -730,7 +731,7 @@ func (lms *GitLedgerService) GetFileAtCommit(filePath, commitHash, operatorSessi
 
 	ledgerDir, err := lms.GetSessionLedgerPath(operatorSessionID)
 	if err != nil {
-		return "", fmt.Errorf("failed to get session ledger path: %w", err)
+		return "", fmt.Errorf("ledger: failed to get session ledger path: %w", err)
 	}
 
 	ledgerPath := lms.getLedgerPath(ledgerDir, filePath)
@@ -740,18 +741,18 @@ func (lms *GitLedgerService) GetFileAtCommit(filePath, commitHash, operatorSessi
 	}
 
 	if !lms.IsEncryptionEnabled() {
-		return "", fmt.Errorf("vault is locked, cannot decrypt file from ledger")
+		return "", fmt.Errorf("ledger: vault is locked, cannot decrypt file from ledger")
 	}
 
 	encryptedRelPath := relPath + ".enc"
 	content, err := lms.gitShowFile(ledgerDir, commitHash, encryptedRelPath)
 	if err != nil {
-		return "", fmt.Errorf("encrypted file not found in commit: %w", err)
+		return "", fmt.Errorf("ledger: encrypted file not found in commit: %w", err)
 	}
 
 	decrypted, err := lms.encryptionVault.Decrypt([]byte(content))
 	if err != nil {
-		return "", fmt.Errorf("failed to decrypt file content: %w", err)
+		return "", fmt.Errorf("ledger: failed to decrypt file content: %w", err)
 	}
 	return string(decrypted), nil
 }
@@ -760,22 +761,22 @@ func (lms *GitLedgerService) GetFileAtCommit(filePath, commitHash, operatorSessi
 func (lms *GitLedgerService) gitShowFile(ledgerDir, commitHash, relPath string) (string, error) {
 	repo, err := git.PlainOpen(ledgerDir)
 	if err != nil {
-		return "", fmt.Errorf("failed to open git repo: %w", err)
+		return "", fmt.Errorf("ledger: failed to open git repo: %w", err)
 	}
 
 	commit, err := repo.CommitObject(plumbing.NewHash(commitHash))
 	if err != nil {
-		return "", fmt.Errorf("failed to find commit %s: %w", commitHash, err)
+		return "", fmt.Errorf("ledger: failed to find commit %s: %w", commitHash, err)
 	}
 
 	file, err := commit.File(relPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to find file %s in commit %s: %w", relPath, commitHash, err)
+		return "", fmt.Errorf("ledger: failed to find file %s in commit %s: %w", relPath, commitHash, err)
 	}
 
 	content, err := file.Contents()
 	if err != nil {
-		return "", fmt.Errorf("failed to read file contents: %w", err)
+		return "", fmt.Errorf("ledger: failed to read file contents: %w", err)
 	}
 
 	return content, nil
@@ -791,12 +792,12 @@ func (lms *GitLedgerService) RestoreFileFromCommit(filePath, commitHash, operato
 	// GetFileAtCommit internally calls GetSessionLedgerPath which also acquires the mutex
 	ledgerDir, err := lms.GetSessionLedgerPath(operatorSessionID)
 	if err != nil {
-		return fmt.Errorf("failed to get session ledger path: %w", err)
+		return fmt.Errorf("ledger: failed to get session ledger path: %w", err)
 	}
 
 	content, err := lms.GetFileAtCommit(filePath, commitHash, operatorSessionID)
 	if err != nil {
-		return fmt.Errorf("failed to get file at commit: %w", err)
+		return fmt.Errorf("ledger: failed to get file at commit: %w", err)
 	}
 
 	lms.mu.Lock()
@@ -812,7 +813,7 @@ func (lms *GitLedgerService) RestoreFileFromCommit(filePath, commitHash, operato
 	_, _ = lms.snapshotLedger(ledgerDir, fmt.Sprintf("Pre-restoration state: %s", filePath))
 
 	if err := os.WriteFile(filePath, []byte(content), 0600); err != nil {
-		return fmt.Errorf("failed to write restored file: %w", err)
+		return fmt.Errorf("ledger: failed to write restored file: %w", err)
 	}
 
 	if err := lms.copyToLedger(filePath, ledgerPath); err != nil {

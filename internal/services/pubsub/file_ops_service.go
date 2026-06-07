@@ -65,7 +65,7 @@ func NewFileOpsService(cfg *config.Config, logger *slog.Logger, fileEditSvc *exe
 func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoEdit operatorv1.FileEditRequested
 	if err := proto.Unmarshal(msg.Payload, &protoEdit); err != nil {
-		fs.logger.Error("Failed to decode file edit payload as protobuf FileEditRequested", string(constants.ConnectionStateError), err)
+		fs.logger.Error("Failed to decode file edit payload as protobuf FileEditRequested", "error", err)
 		return
 	}
 
@@ -84,37 +84,18 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 
 	editReq, err := payloadToFileEditRequest(msg)
 	if err != nil {
-		fs.logger.Error("Failed to create file edit request", string(constants.ConnectionStateError), err)
+		fs.logger.Error("Failed to create file edit request", "error", err)
 		return
 	}
 
-	var result *models.FileEditResult
-	result, err = fs.fileEdit.ExecuteFileEdit(ctx, editReq)
+	result, err := fs.fileEdit.ExecuteFileEdit(ctx, editReq)
 	if err != nil {
-		result = &models.FileEditResult{
-			ExecutionID:     editReq.ExecutionID,
-			CaseID:          editReq.CaseID,
-			TaskID:          editReq.TaskID,
-			InvestigationID: editReq.InvestigationID,
-			Operation:       editReq.Operation,
-			FilePath:        editReq.FilePath,
-			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-			ErrorMessage:    system.StringPtr(err.Error()),
-			ErrorType:       system.StringPtr("execution_error"),
-		}
+		fs.logger.Error("File edit execution failed", "error", err)
+		return
 	}
 	if result == nil {
-		result = &models.FileEditResult{
-			ExecutionID:     editReq.ExecutionID,
-			CaseID:          editReq.CaseID,
-			TaskID:          editReq.TaskID,
-			InvestigationID: editReq.InvestigationID,
-			Operation:       editReq.Operation,
-			FilePath:        editReq.FilePath,
-			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-			ErrorMessage:    system.StringPtr("file edit returned no result"),
-			ErrorType:       system.StringPtr("execution_error"),
-		}
+		fs.logger.Error("File edit returned no result")
+		return
 	}
 
 	commandStr := fmt.Sprintf("file_%s: %s", operation, filePath)
@@ -182,7 +163,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 
 		eventID, err := fs.auditStore.RecordEvent(event)
 		if err != nil {
-			fs.logger.Warn("Failed to record file mutation event in audit store", string(constants.ConnectionStateError), err)
+			fs.logger.Warn("Failed to record file mutation event in audit store", "error", err)
 		} else {
 			fs.logger.Info("File mutation event recorded in audit store (LFAA)",
 				"event_id", eventID,
@@ -207,7 +188,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 				}
 
 				if err := fs.auditStore.RecordFileMutation(mutation); err != nil {
-					fs.logger.Warn("Failed to record file mutation in audit log", string(constants.ConnectionStateError), err)
+					fs.logger.Warn("Failed to record file mutation in audit log", "error", err)
 				}
 
 				if fs.vaultWriter != nil {
@@ -246,10 +227,11 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 			protoResult.BytesWritten = *result.BytesWritten
 		}
 		if result.LinesChanged != nil {
-			if *result.LinesChanged > math.MaxInt32 {
-				*result.LinesChanged = math.MaxInt32
+			linesChanged := *result.LinesChanged
+			if linesChanged > math.MaxInt32 {
+				linesChanged = math.MaxInt32
 			}
-			protoResult.LinesChanged = int32(*result.LinesChanged) //nolint:gosec // bounds checked above
+			protoResult.LinesChanged = int32(linesChanged) //nolint:gosec // bounds checked above
 		}
 		if result.BackupPath != nil {
 			protoResult.BackupPath = *result.BackupPath
@@ -263,7 +245,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 		}
 
 		if err := fs.results.PublishFileEditResult(ctx, protoResult, msg); err != nil {
-			fs.logger.Error("Failed to publish file edit result", string(constants.ConnectionStateError), err)
+			fs.logger.Error("Failed to publish file edit result", "error", err)
 		}
 	}
 }
@@ -272,7 +254,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoList operatorv1.FsListRequested
 	if err := proto.Unmarshal(msg.Payload, &protoList); err != nil {
-		fs.logger.Error("Failed to decode fs list payload as protobuf FsListRequested", string(constants.ConnectionStateError), err)
+		fs.logger.Error("Failed to decode fs list payload as protobuf FsListRequested", "error", err)
 		return
 	}
 
@@ -290,7 +272,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 
 	fsListReq, err := payloadToFsListRequest(msg)
 	if err != nil {
-		fs.logger.Error("Failed to create fs list request", string(constants.ConnectionStateError), err)
+		fs.logger.Error("Failed to create fs list request", "error", err)
 		return
 	}
 
@@ -357,15 +339,16 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 	}
 
 	if fs.results != nil {
-		if result.TotalCount > math.MaxInt32 {
-			result.TotalCount = math.MaxInt32
+		totalCount := result.TotalCount
+		if totalCount > math.MaxInt32 {
+			totalCount = math.MaxInt32
 		}
 		protoResult := &operatorv1.FsListResult{
 			ExecutionId:     result.ExecutionID,
 			Status:          result.Status,
 			Path:            result.Path,
 			Truncated:       result.Truncated,
-			TotalCount:      int32(result.TotalCount), //nolint:gosec // bounds checked above
+			TotalCount:      int32(totalCount), //nolint:gosec // bounds checked above
 			DurationSeconds: float32(result.DurationSeconds),
 		}
 		if result.ErrorMessage != nil {
@@ -389,7 +372,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 		}
 
 		if err := fs.results.PublishFsListResult(ctx, protoResult, msg); err != nil {
-			fs.logger.Error("Failed to publish fs list result", string(constants.ConnectionStateError), err)
+			fs.logger.Error("Failed to publish fs list result", "error", err)
 		}
 	}
 }
@@ -398,7 +381,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoGrep operatorv1.FsGrepRequested
 	if err := proto.Unmarshal(msg.Payload, &protoGrep); err != nil {
-		fs.logger.Error("Failed to decode fs grep payload as protobuf FsGrepRequested", string(constants.ConnectionStateError), err)
+		fs.logger.Error("Failed to decode fs grep payload as protobuf FsGrepRequested", "error", err)
 		return
 	}
 
@@ -416,7 +399,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 
 	fsGrepReq, err := payloadToFsGrepRequest(msg)
 	if err != nil {
-		fs.logger.Error("Failed to create fs grep request", string(constants.ConnectionStateError), err)
+		fs.logger.Error("Failed to create fs grep request", "error", err)
 		return
 	}
 
@@ -484,14 +467,15 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 	}
 
 	if fs.results != nil {
-		if result.TotalMatches > math.MaxInt32 {
-			result.TotalMatches = math.MaxInt32
+		totalMatches := result.TotalMatches
+		if totalMatches > math.MaxInt32 {
+			totalMatches = math.MaxInt32
 		}
 		protoResult := &operatorv1.FsGrepResult{
 			ExecutionId:     result.ExecutionID,
 			Status:          result.Status,
 			Path:            result.Path,
-			TotalMatches:    int32(result.TotalMatches), //nolint:gosec // bounds checked above
+			TotalMatches:    int32(totalMatches), //nolint:gosec // bounds checked above
 			Truncated:       result.Truncated,
 			DurationSeconds: float32(result.DurationSeconds),
 		}
@@ -515,7 +499,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 		}
 
 		if err := fs.results.PublishFsGrepResult(ctx, protoResult, msg); err != nil {
-			fs.logger.Error("Failed to publish fs grep result", string(constants.ConnectionStateError), err)
+			fs.logger.Error("Failed to publish fs grep result", "error", err)
 		}
 	}
 }
@@ -524,7 +508,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoRead operatorv1.FsReadRequested
 	if err := proto.Unmarshal(msg.Payload, &protoRead); err != nil {
-		fs.logger.Error("Failed to decode fs read payload as protobuf FsReadRequested", string(constants.ConnectionStateError), err)
+		fs.logger.Error("Failed to decode fs read payload as protobuf FsReadRequested", "error", err)
 		fs.publishLFAAError(ctx, msg, constants.Event.Operator.FsRead.Failed, "invalid request payload")
 		return
 	}
@@ -662,12 +646,17 @@ func payloadToFileEditRequest(msg *PubSubCommandMessage) (*models.FileEditReques
 		justification = "pub/sub command request"
 	}
 
+	operation := constants.FileOperation(p.Operation)
+	if !isValidFileOperation(operation) {
+		return nil, fmt.Errorf("invalid file operation: %s", p.Operation)
+	}
+
 	req := &models.FileEditRequest{
 		ExecutionID:     requestID,
 		CaseID:          msg.CaseID,
 		TaskID:          msg.TaskID,
 		InvestigationID: msg.InvestigationID,
-		Operation:       constants.FileOperation(p.Operation),
+		Operation:       operation,
 		FilePath:        p.FilePath,
 		RequestedBy:     "g8e-system",
 		Justification:   justification,
@@ -769,4 +758,21 @@ func payloadToFsGrepRequest(msg *PubSubCommandMessage) (*models.FsGrepRequest, e
 		Includes:        p.Includes,
 		MaxMatches:      int(maxMatches),
 	}, nil
+}
+
+// isValidFileOperation checks if the operation is a valid typed constant.
+func isValidFileOperation(op constants.FileOperation) bool {
+	switch op {
+	case constants.FileOperationCreate,
+		constants.FileOperationDelete,
+		constants.FileOperationInsert,
+		constants.FileOperationPatch,
+		constants.FileOperationRead,
+		constants.FileOperationReplace,
+		constants.FileOperationUpdate,
+		constants.FileOperationWrite:
+		return true
+	default:
+		return false
+	}
 }

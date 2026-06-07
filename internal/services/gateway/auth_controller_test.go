@@ -75,12 +75,15 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
-	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
+	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       resp,
 		SuspendedStore:  db,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
 	})
+	if err != nil {
+		t.Fatalf("failed to create MCP gateway: %v", err)
+	}
 
 	authController := newAuthController(cfg, logger, db, auth, passkey, userSvc, reg, pki, sessionSvc, mcpGateway, resp)
 	return authController, cfg

@@ -161,36 +161,30 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	executionVaultConfig.DBPath = filepath.Join(dataDir, "execution_vault.db")
 	executionVaultConfig.MaxDBSizeMB = vs.config.ExecutionVaultMaxSizeMB
 	executionVaultConfig.RetentionDays = vs.config.ExecutionVaultRetentionDays
+	executionVaultConfig.Enabled = true
 	vs.executionVault, err = storage.NewExecutionVaultService(executionVaultConfig, vs.logger, encryptionVault)
 	if err != nil {
 		return fmt.Errorf("failed to initialize execution vault: %w", err)
-	}
-	if vs.executionVault == nil {
-		return fmt.Errorf("execution vault is required but was not initialized")
 	}
 	vs.logger.Info("Execution vault initialized")
 
 	// Initialize TokenStoreService for Sentinel token persistence
 	tokenStoreConfig := storage.DefaultTokenStoreConfig()
 	tokenStoreConfig.DBPath = filepath.Join(dataDir, "token_store.db")
+	tokenStoreConfig.Enabled = true
 	vs.tokenStore, err = storage.NewTokenStoreService(tokenStoreConfig, vs.logger, encryptionVault)
 	if err != nil {
 		return fmt.Errorf("failed to initialize token store: %w", err)
-	}
-	if vs.tokenStore == nil {
-		return fmt.Errorf("token store is required but was not initialized")
 	}
 	vs.logger.Info("Token store initialized")
 
 	// Initialize SuspendedTransactionService for L3 approval workflow
 	suspendedTxConfig := storage.DefaultSuspendedTransactionConfig()
 	suspendedTxConfig.DBPath = filepath.Join(dataDir, "suspended_transactions.db")
+	suspendedTxConfig.Enabled = true
 	vs.suspendedTxStore, err = storage.NewSuspendedTransactionService(suspendedTxConfig, vs.logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize suspended transaction store: %w", err)
-	}
-	if vs.suspendedTxStore == nil {
-		return fmt.Errorf("suspended transaction store is required but was not initialized")
 	}
 	vs.logger.Info("Suspended transaction store initialized")
 
@@ -210,12 +204,10 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	auditStoreConfig := storage.DefaultAuditStoreConfig()
 	auditStoreConfig.DataDir = filepath.Join(vs.config.WorkDir, ".g8e/data")
 	auditStoreConfig.EncryptionVault = encryptionVault
+	auditStoreConfig.Enabled = true
 	vs.auditStore, err = storage.NewSQLAuditStore(auditStoreConfig, vs.logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize audit store: %w", err)
-	}
-	if vs.auditStore == nil {
-		return fmt.Errorf("audit store is required but was not initialized")
 	}
 
 	if vs.config.OperatorSessionId == "" {

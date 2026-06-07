@@ -14,6 +14,7 @@
 package storagetest
 
 import (
+	"context"
 	"crypto/ed25519"
 	"fmt"
 	"os"
@@ -1338,7 +1339,8 @@ func TestAuditVaultPrune(t *testing.T) {
 
 	// 4. Run pruning
 	pruneFunc := auditVaultPrune(config)
-	pruneFunc(avs.db, logger)
+	err = pruneFunc(context.Background(), avs.db, logger)
+	require.NoError(t, err)
 
 	// 3. Verify results
 	var count int

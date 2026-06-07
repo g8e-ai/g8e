@@ -28,6 +28,10 @@ type JWTHeader struct {
 	Typ string `json:"typ"`
 }
 
+const (
+	clockSkewAllowance = 60
+)
+
 type NativeJWT struct {
 	Header JWTHeader
 	Claims JWTClaims
@@ -35,28 +39,26 @@ type NativeJWT struct {
 }
 
 func extractRoles(payloadBytes []byte, roleClaim string) []string {
-	var raw map[string]interface{}
+	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(payloadBytes, &raw); err != nil {
 		return nil
 	}
 
-	rolesVal, ok := raw[roleClaim]
+	rolesRaw, ok := raw[roleClaim]
 	if !ok {
 		return nil
 	}
 
-	switch v := rolesVal.(type) {
-	case []interface{}:
-		var roles []string
-		for _, item := range v {
-			if str, ok := item.(string); ok {
-				roles = append(roles, str)
-			}
-		}
-		return roles
-	case string:
-		return []string{v}
+	var rolesArray []string
+	if err := json.Unmarshal(rolesRaw, &rolesArray); err == nil {
+		return rolesArray
 	}
+
+	var roleString string
+	if err := json.Unmarshal(rolesRaw, &roleString); err == nil {
+		return []string{roleString}
+	}
+
 	return nil
 }
 
@@ -70,22 +72,22 @@ func ParseAndVerifyJWT(tokenString string, jwks *JWKSProvider, roleClaim string,
 
 	headerBytes, err := base64.RawURLEncoding.DecodeString(headerB64)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode header: %w", err)
+		return nil, fmt.Errorf("jwt: decode header: %w", err)
 	}
 
 	payloadBytes, err := base64.RawURLEncoding.DecodeString(payloadB64)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode payload: %w", err)
+		return nil, fmt.Errorf("jwt: decode payload: %w", err)
 	}
 
 	sigBytes, err := base64.RawURLEncoding.DecodeString(sigB64)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode signature: %w", err)
+		return nil, fmt.Errorf("jwt: decode signature: %w", err)
 	}
 
 	var header JWTHeader
 	if err := json.Unmarshal(headerBytes, &header); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal header: %w", err)
+		return nil, fmt.Errorf("jwt: unmarshal header: %w", err)
 	}
 
 	if header.Alg != "RS256" {
@@ -97,7 +99,7 @@ func ParseAndVerifyJWT(tokenString string, jwks *JWKSProvider, roleClaim string,
 
 	var claims JWTClaims
 	if err := json.Unmarshal(payloadBytes, &claims); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
+		return nil, fmt.Errorf("jwt: unmarshal payload: %w", err)
 	}
 
 	now := time.Now().Unix()
@@ -105,9 +107,9 @@ func ParseAndVerifyJWT(tokenString string, jwks *JWKSProvider, roleClaim string,
 		return nil, errors.New("token is expired")
 	}
 
-	// Validate not-before with 60-second clock skew allowance
+	// Validate not-before with clock skew allowance
 	if claims.Nbf != 0 {
-		nbfWithSkew := claims.Nbf - 60
+		nbfWithSkew := claims.Nbf - clockSkewAllowance
 		if now < nbfWithSkew {
 			return nil, errors.New("token is not yet valid (nbf)")
 		}
@@ -125,7 +127,7 @@ func ParseAndVerifyJWT(tokenString string, jwks *JWKSProvider, roleClaim string,
 
 	pubKey, err := jwks.GetKey(header.Kid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get public key: %w", err)
+		return nil, fmt.Errorf("jwt: get public key: %w", err)
 	}
 
 	signingString := headerB64 + "." + payloadB64
@@ -134,7 +136,7 @@ func ParseAndVerifyJWT(tokenString string, jwks *JWKSProvider, roleClaim string,
 	hashed := hasher.Sum(nil)
 
 	if err := rsa.VerifyPKCS1v15(pubKey, crypto.SHA256, hashed, sigBytes); err != nil {
-		return nil, fmt.Errorf("invalid signature: %w", err)
+		return nil, fmt.Errorf("jwt: verify signature: %w", err)
 	}
 
 	roles := extractRoles(payloadBytes, roleClaim)

@@ -127,6 +127,16 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		return nil, fmt.Errorf("failed to initialize passkey service: %w", err)
 	}
 
+	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
+		Logger:          logger,
+		Responder:       res,
+		SuspendedStore:  db,
+		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize MCP gateway: %w", err)
+	}
+
 	ls := &GatewayModeService{
 		cfg:        cfg,
 		logger:     logger,
@@ -139,12 +149,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		userSvc:    userSvc,
 		sessionSvc: sessionSvc,
 		extraIPs:   extraIPs,
-		mcpGateway: mcp.NewGatewayService(mcp.Dependencies{
-			Logger:          logger,
-			Responder:       res,
-			SuspendedStore:  db,
-			MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
-		}),
+		mcpGateway: mcpGateway,
 		responder: res,
 	}
 
@@ -259,6 +264,16 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 	// Passkey service initialization is optional; ignore errors for test configuration
 	passkey, _ := NewPasskeyService(db, logger, passkeyCfg) //nolint:errcheck
 
+	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
+		Logger:          logger,
+		Responder:       res,
+		SuspendedStore:  db,
+		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize MCP gateway: %w", err)
+	}
+
 	ls := &GatewayModeService{
 		cfg:        cfg,
 		logger:     logger,
@@ -271,12 +286,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 		userSvc:    userSvc,
 		sessionSvc: sessionSvc,
 		extraIPs:   nil, // Test configuration does not use extra IPs
-		mcpGateway: mcp.NewGatewayService(mcp.Dependencies{
-			Logger:          logger,
-			Responder:       res,
-			SuspendedStore:  db,
-			MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
-		}),
+		mcpGateway: mcpGateway,
 		responder: res,
 	}
 

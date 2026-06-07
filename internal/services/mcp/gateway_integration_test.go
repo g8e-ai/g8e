@@ -358,7 +358,7 @@ func TestCircuitBreakerIntegration(t *testing.T) {
 	g.HandleToolsList(w, req)
 
 	var resp JSONRPCResponse
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	require.Nil(t, resp.Error)
 

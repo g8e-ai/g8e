@@ -14,6 +14,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -965,7 +966,7 @@ func (ass *SQLAuditStore) GetFileMutations(eventID int64) ([]*FileMutationLog, e
 // auditStorePrune returns a PruneFunc that handles retention pruning
 // for events, orphaned sessions, and orphaned file mutations.
 func auditStorePrune(config *AuditStoreConfig) sqliteutil.PruneFunc {
-	return func(db *sqliteutil.DB, logger *slog.Logger) {
+	return func(ctx context.Context, db *sqliteutil.DB, logger *slog.Logger) error {
 		cutoff := sqliteutil.FormatTimestamp(time.Now().AddDate(0, 0, -config.RetentionDays))
 
 		// 1. Delete file mutations for old events first (satisfy FK constraints)
@@ -975,13 +976,14 @@ func auditStorePrune(config *AuditStoreConfig) sqliteutil.PruneFunc {
 		`, cutoff)
 		if err != nil {
 			logger.Error("Failed to prune old file mutations", string(constants.ConnectionStateError), err)
+			return err
 		}
 
 		// 2. Delete events older than retention period
 		result, err := db.ExecWithRetry("DELETE FROM events WHERE timestamp < ?", cutoff)
 		if err != nil {
 			logger.Error("Failed to prune old events", string(constants.ConnectionStateError), err)
-			return
+			return err
 		}
 
 		rowsDeleted, _ := result.RowsAffected()
@@ -993,11 +995,11 @@ func auditStorePrune(config *AuditStoreConfig) sqliteutil.PruneFunc {
 		result, err = db.ExecWithRetry("DELETE FROM receipts WHERE timestamp < ?", cutoff)
 		if err != nil {
 			logger.Error("Failed to prune old receipts", string(constants.ConnectionStateError), err)
-		} else {
-			rowsDeleted, _ = result.RowsAffected()
-			if rowsDeleted > 0 {
-				logger.Info("Pruned old receipts", "rows_deleted", rowsDeleted)
-			}
+			return err
+		}
+		rowsDeleted, _ = result.RowsAffected()
+		if rowsDeleted > 0 {
+			logger.Info("Pruned old receipts", "rows_deleted", rowsDeleted)
 		}
 
 		// 4. Delete sessions that no longer have any events or receipts
@@ -1013,6 +1015,7 @@ func auditStorePrune(config *AuditStoreConfig) sqliteutil.PruneFunc {
 		if err := db.RunIncrementalVacuum(1000); err != nil {
 			logger.Info("Failed to run incremental vacuum", string(constants.ConnectionStateError), err)
 		}
+		return nil
 	}
 }
 

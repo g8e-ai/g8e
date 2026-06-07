@@ -31,7 +31,7 @@ func (t *FSDiskUsageTool) Name() string {
 
 // Description returns a human-readable description.
 func (t *FSDiskUsageTool) Description() string {
-	return "Provides df-style free space reporting for mounted filesystems (Unix only)."
+	return "Provides df-style free space reporting for mounted filesystems (not supported on Windows)."
 }
 
 // InputSchema returns the JSON Schema for tool validation.
@@ -49,5 +49,5 @@ func (t *FSDiskUsageTool) InputSchema() map[string]interface{} {
 
 // Execute implements the tool logic (Windows stub).
 func (t *FSDiskUsageTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	return CallToolResult{}, fmt.Errorf("fs_disk_usage tool is not supported on Windows")
+	return CallToolResult{}, fmt.Errorf("fs_disk_usage: not supported on Windows")
 }

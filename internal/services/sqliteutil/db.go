@@ -22,8 +22,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
 	_ "modernc.org/sqlite"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // DBConfig holds common configuration for opening a SQLite database.
@@ -78,7 +79,7 @@ type DB struct {
 func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 	dir := filepath.Dir(cfg.Path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create database directory %s: %w", dir, err)
+		return nil, fmt.Errorf("sqliteutil: create database directory %s: %w", dir, err)
 	}
 
 	dsn := fmt.Sprintf("file:%s?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=%d&_mutex=full",
@@ -86,7 +87,7 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 
 	sqlDB, err := sql.Open("sqlite", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database %s: %w", cfg.Path, err)
+		return nil, fmt.Errorf("sqliteutil: open database %s: %w", cfg.Path, err)
 	}
 
 	// Increase connection pool size to fully utilize WAL mode
@@ -97,7 +98,7 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 
 	if err := sqlDB.Ping(); err != nil {
 		sqlDB.Close()
-		return nil, fmt.Errorf("failed to ping database %s: %w", cfg.Path, err)
+		return nil, fmt.Errorf("sqliteutil: ping database %s: %w", cfg.Path, err)
 	}
 
 	cacheSizeKB := cfg.CacheSizeMB * 1024
@@ -139,7 +140,7 @@ func (db *DB) GetPath() string {
 func (db *DB) RunIncrementalVacuum(pages int) error {
 	_, err := db.Exec(fmt.Sprintf("PRAGMA incremental_vacuum(%d)", pages))
 	if err != nil {
-		return fmt.Errorf("incremental vacuum failed: %w", err)
+		return fmt.Errorf("sqliteutil: incremental vacuum: %w", err)
 	}
 	return nil
 }
@@ -148,10 +149,10 @@ func (db *DB) RunIncrementalVacuum(pages int) error {
 func (db *DB) GetSizeBytes() (int64, error) {
 	var pageCount, pageSize int64
 	if err := db.QueryRow("PRAGMA page_count").Scan(&pageCount); err != nil {
-		return 0, fmt.Errorf("failed to query page_count: %w", err)
+		return 0, fmt.Errorf("sqliteutil: query page_count: %w", err)
 	}
 	if err := db.QueryRow("PRAGMA page_size").Scan(&pageSize); err != nil {
-		return 0, fmt.Errorf("failed to query page_size: %w", err)
+		return 0, fmt.Errorf("sqliteutil: query page_size: %w", err)
 	}
 	return pageCount * pageSize, nil
 }
@@ -160,7 +161,7 @@ func (db *DB) GetSizeBytes() (int64, error) {
 // This is used for fail-fast health checks during startup and runtime.
 func (db *DB) HealthCheck(ctx context.Context) error {
 	if err := db.PingContext(ctx); err != nil {
-		return fmt.Errorf("database health check failed: %w", err)
+		return fmt.Errorf("sqliteutil: health check: %w", err)
 	}
 	return nil
 }
@@ -189,7 +190,7 @@ func (db *DB) ExecWithRetry(query string, args ...interface{}) (sql.Result, erro
 		return nil, err
 	}
 
-	return nil, fmt.Errorf("exec failed after %d retries: %w", maxRetries, err)
+	return nil, fmt.Errorf("sqliteutil: exec failed after %d retries: %w", maxRetries, err)
 }
 
 // QueryWithRetry executes a query with automatic retry on SQLITE_BUSY.
@@ -213,7 +214,7 @@ func (db *DB) QueryWithRetry(query string, args ...interface{}) (*sql.Rows, erro
 		return nil, err
 	}
 
-	return nil, fmt.Errorf("query failed after %d retries: %w", maxRetries, err)
+	return nil, fmt.Errorf("sqliteutil: query failed after %d retries: %w", maxRetries, err)
 }
 
 // QueryRowWithRetry executes a query that returns a single row with automatic retry on SQLITE_BUSY.
@@ -298,7 +299,7 @@ func (db *DB) ExecInTxWithRetry(fn func(tx *sql.Tx) error) error {
 				lastErr = err
 				continue
 			}
-			return fmt.Errorf("failed to begin transaction: %w", err)
+			return fmt.Errorf("sqliteutil: begin transaction: %w", err)
 		}
 
 		err = fn(tx)
@@ -320,13 +321,13 @@ func (db *DB) ExecInTxWithRetry(fn func(tx *sql.Tx) error) error {
 				lastErr = err
 				continue
 			}
-			return fmt.Errorf("failed to commit transaction: %w", err)
+			return fmt.Errorf("sqliteutil: commit transaction: %w", err)
 		}
 
 		return nil
 	}
 
-	return fmt.Errorf("transaction failed after %d retries: %w", maxRetries, lastErr)
+	return fmt.Errorf("sqliteutil: transaction failed after %d retries: %w", maxRetries, lastErr)
 }
 
 // MaterializeRows executes a query and immediately materializes all rows into memory,

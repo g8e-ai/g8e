@@ -154,7 +154,10 @@ func (t *GitOpsTool) Execute(ctx context.Context, args json.RawMessage) (CallToo
 			RepoPath:  repoPath,
 			Error:     err.Error(),
 		}
-		resultJSON, _ := json.Marshal(errorResult)
+		resultJSON, marshalErr := json.Marshal(errorResult)
+		if marshalErr != nil {
+			return CallToolResult{}, fmt.Errorf("git_ops: failed to marshal error result: %w", marshalErr)
+		}
 		return CallToolResult{
 			Content: []TextContent{
 				{
@@ -171,7 +174,10 @@ func (t *GitOpsTool) Execute(ctx context.Context, args json.RawMessage) (CallToo
 			RepoPath:  repoPath,
 			Error:     "not a git repository",
 		}
-		resultJSON, _ := json.Marshal(errorResult)
+		resultJSON, marshalErr := json.Marshal(errorResult)
+		if marshalErr != nil {
+			return CallToolResult{}, fmt.Errorf("git_ops: failed to marshal error result: %w", marshalErr)
+		}
 		return CallToolResult{
 			Content: []TextContent{
 				{
@@ -218,7 +224,10 @@ func (t *GitOpsTool) Execute(ctx context.Context, args json.RawMessage) (CallToo
 			RepoPath:  repoPath,
 			Error:     err.Error(),
 		}
-		resultJSON, _ := json.Marshal(errorResult)
+		resultJSON, marshalErr := json.Marshal(errorResult)
+		if marshalErr != nil {
+			return CallToolResult{}, fmt.Errorf("git_ops: failed to marshal error result: %w", marshalErr)
+		}
 		return CallToolResult{
 			Content: []TextContent{
 				{

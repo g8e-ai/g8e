@@ -14,6 +14,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -359,15 +360,15 @@ func (sts *SuspendedTransactionService) CleanupExpiredSuspendedTransactions() (i
 
 // suspendedTransactionPrune returns a PruneFunc for retention and size-based pruning.
 func suspendedTransactionPrune(config *SuspendedTransactionConfig) sqliteutil.PruneFunc {
-	return func(db *sqliteutil.DB, logger *slog.Logger) {
+	return func(ctx context.Context, db *sqliteutil.DB, logger *slog.Logger) error {
 		result, err := db.ExecWithRetry("DELETE FROM suspended_transactions WHERE expires_at < ?", sqliteutil.NowTimestamp())
 		if err != nil {
 			logger.Error("Failed to prune expired suspended transactions", "error", err)
-		} else {
-			rowsDeleted, _ := result.RowsAffected()
-			if rowsDeleted > 0 {
-				logger.Info("Pruned expired suspended transactions", "rows_deleted", rowsDeleted)
-			}
+			return err
+		}
+		rowsDeleted, _ := result.RowsAffected()
+		if rowsDeleted > 0 {
+			logger.Info("Pruned expired suspended transactions", "rows_deleted", rowsDeleted)
 		}
 
 		dbSizeBytes, err := db.GetSizeBytes()
@@ -395,6 +396,7 @@ func suspendedTransactionPrune(config *SuspendedTransactionConfig) sqliteutil.Pr
 		if err := db.RunIncrementalVacuum(1000); err != nil {
 			logger.Info("Failed to run incremental vacuum", "error", err)
 		}
+		return nil
 	}
 }
 

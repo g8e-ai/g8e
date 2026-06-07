@@ -56,10 +56,7 @@ func (t *ConfigDiffMaskTool) InputSchema() map[string]interface{} {
 
 // Execute implements the tool logic.
 func (t *ConfigDiffMaskTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		ConfigPath string `json:"config_path"`
-		Baseline   string `json:"baseline"`
-	}
+	var req ConfigDiffMaskRequest
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
 	}
@@ -89,7 +86,7 @@ func (t *ConfigDiffMaskTool) Execute(ctx context.Context, args json.RawMessage) 
 	currentLines := strings.Split(string(currentBytes), "\n")
 	baselineLines := strings.Split(string(baselineBytes), "\n")
 
-	var differences []map[string]interface{}
+	var differences []ConfigDiff
 
 	maxLines := len(currentLines)
 	if len(baselineLines) > maxLines {
@@ -113,17 +110,17 @@ func (t *ConfigDiffMaskTool) Execute(ctx context.Context, args json.RawMessage) 
 				diffType = "changed"
 			}
 
-			differences = append(differences, map[string]interface{}{
-				"key":      fmt.Sprintf("line_%d", i),
-				"current":  maskSecret(current),
-				"baseline": maskSecret(baseline),
-				"type":     diffType,
+			differences = append(differences, ConfigDiff{
+				Key:      fmt.Sprintf("line_%d", i),
+				Current:  maskSecret(current),
+				Baseline: maskSecret(baseline),
+				Type:     diffType,
 			})
 		}
 	}
 
-	result := map[string]interface{}{
-		"differences": differences,
+	result := ConfigDiffMaskResult{
+		Differences: differences,
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {

@@ -168,8 +168,7 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 	rs.ports = NewPortService(c.Config, c.Logger, client)
 
-	rs.audit = NewAuditService(c.Config, c.Logger)
-	rs.audit.auditStore = c.AuditStore
+	rs.audit = NewAuditService(c.Config, c.Logger, c.AuditStore)
 
 	rs.history = NewHistoryService(c.Config, c.Logger, client)
 	rs.history.executionVault = c.ExecutionVault

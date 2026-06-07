@@ -21,8 +21,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // isValidIdentifier validates SQLite identifiers to prevent SQL injection.

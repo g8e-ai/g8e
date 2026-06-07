@@ -19,6 +19,8 @@ import (
 	"log/slog"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
@@ -27,7 +29,6 @@ import (
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-	"google.golang.org/protobuf/proto"
 )
 
 // StatusUpdateInterval is the interval between periodic status updates during long-running commands.
@@ -371,10 +372,10 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg *PubSubCo
 func payloadToExecutionRequest(msg *PubSubCommandMessage) (*models.ExecutionRequestPayload, error) {
 	var protoCmd operatorv1.CommandRequested
 	if err := proto.Unmarshal(msg.Payload, &protoCmd); err != nil {
-		return nil, fmt.Errorf("failed to decode command payload as protobuf CommandRequested: %w", err)
+		return nil, fmt.Errorf("pubsub: decode command payload: %w", err)
 	}
 	if protoCmd.Command == "" {
-		return nil, fmt.Errorf("missing command in protobuf CommandRequested")
+		return nil, fmt.Errorf("pubsub: missing command in protobuf CommandRequested")
 	}
 
 	executionID := executionIDFromMessage(msg)
