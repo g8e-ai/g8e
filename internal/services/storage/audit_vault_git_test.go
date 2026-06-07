@@ -38,7 +38,7 @@ func TestAuditVaultService_GitGetCurrentHash_ReturnsHash(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -52,7 +52,7 @@ func TestAuditVaultService_GitGetCurrentHash_ReturnsHash(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -71,7 +71,7 @@ func TestAuditVaultService_GitGetCurrentHash_HashChangesAfterCommit(t *testing.T
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -85,7 +85,7 @@ func TestAuditVaultService_GitGetCurrentHash_HashChangesAfterCommit(t *testing.T
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -134,7 +134,7 @@ func TestAuditVaultService_GitGetCurrentHash_ErrorWhenGitUnavailable(t *testing.
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -148,7 +148,7 @@ func TestAuditVaultService_GitGetCurrentHash_ErrorWhenGitUnavailable(t *testing.
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 

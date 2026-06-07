@@ -1,0 +1,58 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package storagetest
+
+import (
+	"os"
+	"os/exec"
+	"testing"
+
+	vault "github.com/g8e-ai/g8e/internal/services/vault"
+	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/stretchr/testify/require"
+)
+
+// testGitPath returns the system git binary path, skipping the test if git is unavailable.
+func testGitPath(t *testing.T) string {
+	t.Helper()
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git not available - skipping git-dependent test")
+	}
+	return gitPath
+}
+
+// createTestVault creates a new unlocked Vault in the given directory using the provided private key.
+// The vault header is initialized and the vault is unlocked. Cleanup closes it via t.Cleanup.
+func createTestVault(t testing.TB, dataDir string, privateKey []byte) *vault.Vault {
+	t.Helper()
+
+	require.NoError(t, os.MkdirAll(dataDir, 0700))
+
+	logger := testutil.NewTestLogger()
+
+	header, _, err := vault.NewVaultHeader(privateKey)
+	require.NoError(t, err)
+	require.NoError(t, header.Save(dataDir))
+
+	v, err := vault.NewVault(&vault.VaultConfig{
+		DataDir: dataDir,
+		Logger:  logger,
+	})
+	require.NoError(t, err)
+	require.NoError(t, v.Unlock(privateKey))
+
+	t.Cleanup(func() { v.Close() })
+	return v
+}

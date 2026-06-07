@@ -47,7 +47,7 @@ The **L4Warden** is the final verification gate before execution, defined in `..
 
 ### L5: Actuator (Execution Boundary)
 The **L5Actuator** is the singular execution boundary permitted to mutate host state, defined in `../../internal/services/governance/l5_actuator.go`. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model**:
-1. **Pre-execution**: Signs an `ActionReceipt` with status `EXECUTING` and commits it to the local `AuditVaultService`.
+1. **Pre-execution**: Signs an `ActionReceipt` with status `EXECUTING` and commits it to the local `SQLAuditStore`.
 2. **Rehydration**: Restores sensitive data (PII, credentials) that was scrubbed upstream by the **Sovereign Execution Boundary**, using local tokens.
 3. **Execution**: Dispatches to the handler and captures the output.
 4. **Post-execution**: Signs a final `ActionReceipt` with status `COMPLETED` or `FAILED`, captures the new `state_root_after`, and publishes the signed result back to the Gateway.
@@ -97,7 +97,7 @@ The g8e Operator is fully isolated from Identity Providers (IdP). The g8e Gatewa
 
 ### Local-First Audit Architecture (LFAA)
 The host is the authoritative source of truth for all mutations.
-- **AuditVaultService**: An append-only SQLite log of every event and signed `ActionReceipt`. It is fail-closed: events missing a valid `operator_session_id` are rejected as defined in `../../internal/services/storage/audit_vault.go`.
+- **TestSQLAuditStore **: An append-only SQLite log of every event and signed `ActionReceipt`. It is fail-closed: events missing a valid `operator_session_id` are rejected as defined in `../../internal/services/storage/audit_vault.go`.
 - **Scrubbed vs. Raw Logs**: Sensitive data scrubbing separates logs into a **Scrubbed Vault** (safe for AI reading) and a **Raw Vault** (unscrubbed forensic record for human security audits).
 - **Git-Backed Ledger**: Implements a two-phase commit (`state_root_before` / `state_root_after`) for file mutations using native `go-git`. Files are mirrored and can be restored to any prior state using `../../internal/services/storage/ledger.go`.
 

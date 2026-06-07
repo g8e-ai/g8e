@@ -72,7 +72,7 @@ Chaos engineering tests firing random payloads at the Operator to verify fail-cl
 - **Man-in-the-Middle (10%)** - Envelopes with corrupted transaction hashes that should fail hash validation
 - **File Mutation (10%)** - Valid FILE_EDIT mutations that should execute with L3 proof
 
-**Chaos Test Infrastructure** (`internal/chaos/chaos_test.go`):
+**Chaos Test Infrastructure** (`internal/test/chaos/chaos.go`):
 - **Envelope Construction** - Tests for signed envelope creation, timestamp handling, session ID binding, operator ID, state root, L2 signature, and nonce format
 - **Replay Protection** - In-memory replay store with ReserveNonce, FinalizeNonce, and ReleaseNonce operations
 - **L3 Notary Mock** - Chaos-specific L3 notary that always returns true for testing
@@ -82,6 +82,7 @@ Chaos engineering tests firing random payloads at the Operator to verify fail-cl
 - **Counters** - Atomic counters for executed, l1Blocked, hashFail, other, executedGoodActor, executedFileMut
 - **Category Distribution** - Verifies chaos category distribution matches expected percentages
 - **Envelope Variants** - Tests for good actor, prompt injection, file mutation, and MitM envelope construction
+- **Test-Only Audit Store** - Uses `storagetest.TestSQLAuditStore` (test infrastructure, not production code) which implements the `TransactionAuditStore` interface via a no-op `DocSet` method
 
 ---
 
@@ -278,7 +279,17 @@ CLI command and configuration tests:
 - `internal/auditor/client/mtls_test.go` - Auditor mTLS client tests
 - `internal/certs/embed_test.go` - Embedded certificates tests
 - `internal/certs/fetch_test.go` - Certificate fetch tests
-- `internal/chaos/chaos_test.go` - Chaos engineering tests (detailed above)
+- `internal/test/chaos/chaos_test.go` - Chaos engineering tests (detailed above)
+
+#### Storage Test Infrastructure (`internal/services/storage/storagetest/`)
+
+Test-only audit storage implementations separated from production code to avoid import cycles:
+
+- `audit_vault.go` - `TestSQLAuditStore` (test-only monolithic audit service with Git ledger integration)
+- `audit_vault_test.go` - Comprehensive tests for the test audit store
+- `helpers.go` - Test helper functions (`testGitPath`, `createTestVault`)
+
+**Key distinction**: `storagetest.TestSQLAuditStore` is test infrastructure and should only be used in test code (e.g., chaos tester). Production code uses `storage.SQLAuditStore` from `audit_store.go`.
 
 #### Command Tests
 

@@ -119,7 +119,7 @@ Any verification failure must result in a typed rejection and audit entry. No fa
 
 The Operator must implement a single execution boundary permitted to mutate host state:
 
-- **Pre-execution Receipt**: Sign an ActionReceipt with status `EXECUTING` and commit it to the AuditVaultService. Abort execution if this write fails.
+- **Pre-execution Receipt**: Sign an ActionReceipt with status `EXECUTING` and commit it to the SQLAuditStore. Abort execution if this write fails.
 - **Execution**: Dispatch the verified payload to the appropriate handler (shell, file edit, etc.).
 - **Sovereign Execution Boundary**: Process output to scrub sensitive PII, credentials, and connection strings before data leaves the boundary.
 - **Post-execution Receipt**: Update the receipt to `COMPLETED` or `FAILED`, capture the new `state_root_after`, sign the result, and publish it back to the Gateway.
@@ -138,7 +138,7 @@ The Operator must establish workload identity via mTLS:
 
 The Operator must maintain the host as the authoritative source of truth:
 
-- **AuditVaultService**: Append-only, encrypted SQLite log of every event and signed ActionReceipt. Fail-closed: reject events missing a valid operator_session_id. Requires encryption vault for data-at-rest protection (encryption is mandatory).
+- **SQLAuditStore**: Append-only, encrypted SQLite log of every event and signed ActionReceipt. Fail-closed: reject events missing a valid operator_session_id. Requires encryption vault for data-at-rest protection (encryption is mandatory).
 - **LedgerService**: Git-backed version control for file mutations. Implements two-phase commit (LedgerHashBefore / LedgerHashAfter) and supports restoration to any prior state within the session.
 - **LocalStoreService**: SQLite storage for command execution results, file diffs, and suspended transactions. Provides token persistence for sovereignty scrubbing. Requires encryption vault (encryption is mandatory).
 - **CanonicalDBService**: (Gateway mode only) Unified SQLite persistence for state roots, nonces, trusted signers, app policies, and suspended transactions. Requires encryption vault (encryption is mandatory).
@@ -168,7 +168,7 @@ Your implementation must enforce these core invariants:
 4. **Expiry Enforcement**: Transactions must be rejected if they have expired.
 5. **Fail-Closed Execution**: Any verification failure must result in a typed rejection and audit entry. No fallback paths or silent retries.
 6. **Sovereignty**: Sensitive data must be scrubbed before leaving the execution boundary.
-7. **Local-First Audit**: All audit entries must be written to the host-local AuditVaultService before execution.
+7. **Local-First Audit**: All audit entries must be written to the host-local SQLAuditStore before execution.
 
 ### Sovereign Execution Boundary
 
@@ -211,7 +211,7 @@ A custom Operator implementation must pass the platform test suite to claim g8e 
 
 This runs unit tests covering:
 - Pub/Sub command dispatch
-- AuditVaultService writes
+- SQLAuditStore writes
 - LedgerService commits
 - L1/L2/L3 verification gates
 - GovernanceEnvelope validation

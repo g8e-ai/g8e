@@ -25,11 +25,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *AuditVaultService, string) {
+func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *TestSQLAuditStore, string) {
 	gitPath := testGitPath(t)
 	tempDir := t.TempDir()
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -44,7 +44,7 @@ func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *AuditVaultService,
 
 	logger := testutil.NewTestLogger()
 
-	avs, err := NewAuditVaultService(config, logger)
+	avs, err := NewTestSQLAuditStore(config, logger)
 	require.NoError(t, err)
 
 	ledgerConfig := &LedgerConfig{
@@ -583,7 +583,7 @@ func TestHistoryHandler_EventWithTruncatedOutput(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// Small truncation threshold
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -596,7 +596,7 @@ func TestHistoryHandler_EventWithTruncatedOutput(t *testing.T) {
 	}
 
 	logger := testutil.NewTestLogger()
-	avs, err := NewAuditVaultService(config, logger)
+	avs, err := NewTestSQLAuditStore(config, logger)
 	require.NoError(t, err)
 	defer avs.Close()
 

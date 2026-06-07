@@ -93,7 +93,7 @@ The Actuator represents the execution boundary and final audit commitment.
 - **Egress Dispatch**: Dispatches the verified payload to downstream executors (Shell, MCP, A2A).
 - **Sensitive Data Rehydration**: Rehydrates scrubbed placeholders (such as `{{UEI_1}}`) with original sensitive data just before execution.
 - **Action Receipts**: Issues a signed `ActionReceipt` providing immutable proof of the outcome.
-- **Commitment**: Records the transaction in the `AuditVaultService` and chains it to the ledger.
+- **Commitment**: Records the transaction in the `SQLAuditStore` and chains it to the ledger.
 
 ---
 
@@ -126,10 +126,9 @@ The platform enforces mandatory encryption for all sensitive data at rest. See [
 
 All storage services require an unlocked vault at initialization:
 - **LocalStoreService**: Encrypts command stdout/stderr, file diffs, and content
-- **AuditVaultService**: Encrypts audit records and governance envelopes
+- **SQLAuditStore**: Encrypts audit records, governance envelopes, audit trail, and compliance records
 - **ExecutionVaultService**: Encrypts execution results and command outputs
 - **TokenStoreService**: Encrypts authentication tokens and session data
-- **SQLAuditStore**: Encrypts audit trail and compliance records
 
 ### Encryption Guarantees
 

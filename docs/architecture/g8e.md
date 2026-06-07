@@ -119,7 +119,7 @@ The `L4Warden` operates as the primary pre-dispatch validation gate, executing t
 
 ### Execution & Receipt Phase (L5Actuator)
 
-1. The `L5Actuator` signs an executing-state `ActionReceipt` and writes it to the fail-closed `AuditVault`.
+1. The `L5Actuator` signs an executing-state `ActionReceipt` and writes it to the fail-closed `SQLAuditStore`.
 2. The typed payload is dispatched to its execution handler (e.g., shell executor, file edit handler).
 3. The `L5Actuator` updates the receipt with the final status (`COMPLETED` or `FAILED`), the post-state root, and a fresh signature.
 4. The Operator publishes a result envelope carrying the typed result and signed receipt back to the Gateway.
@@ -261,9 +261,9 @@ The g8e platform uses **ZERO environment variables** for production configuratio
 
 Each Operator session owns an isolated, encrypted git repository tracking all mutations with `LedgerHashBefore` and `LedgerHashAfter`. Every file mutation triggers a native Go `go-git` commit.
 
-### Fail-Closed Audit Vault
+### Fail-Closed Audit Store
 
-The SQLite-backed `AuditVaultService` mandates valid session identifiers and rejects malformed events. If audit logging fails, execution is aborted.
+The SQLite-backed `SQLAuditStore` mandates valid session identifiers and rejects malformed events. If audit logging fails, execution is aborted.
 
 ### Sovereign Execution Boundary
 

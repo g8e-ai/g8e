@@ -32,7 +32,7 @@ import (
 type AuditService struct {
 	config     *config.Config
 	logger     *slog.Logger
-	auditVault *storage.AuditVaultService
+	auditStore *storage.SQLAuditStore
 }
 
 // NewAuditService creates a new AuditService.
@@ -47,7 +47,7 @@ func NewAuditService(cfg *config.Config, logger *slog.Logger) *AuditService {
 func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording user message (via Protobuf)")
 
-	if as.auditVault == nil || !as.auditVault.IsEnabled() {
+	if as.auditStore == nil || !as.auditStore.IsEnabled() {
 		as.logger.Info("Audit vault not enabled, skipping user message recording")
 		return
 	}
@@ -70,7 +70,7 @@ func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg *PubSubComma
 		ContentText:       content,
 	}
 
-	if _, err := as.auditVault.RecordEvent(event); err != nil {
+	if _, err := as.auditStore.RecordEvent(event); err != nil {
 		as.logger.Warn("Failed to record user message in audit vault", string(constants.ConnectionStateError), err)
 	} else {
 		as.logger.Info("User message recorded in audit vault (LFAA)",
@@ -83,7 +83,7 @@ func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg *PubSubComma
 func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording AI message (via Protobuf)")
 
-	if as.auditVault == nil || !as.auditVault.IsEnabled() {
+	if as.auditStore == nil || !as.auditStore.IsEnabled() {
 		as.logger.Info("Audit vault not enabled, skipping AI message recording")
 		return
 	}
@@ -106,7 +106,7 @@ func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg *PubSubCommand
 		ContentText:       content,
 	}
 
-	if _, err := as.auditVault.RecordEvent(event); err != nil {
+	if _, err := as.auditStore.RecordEvent(event); err != nil {
 		as.logger.Warn("Failed to record AI message in audit vault", string(constants.ConnectionStateError), err)
 	} else {
 		as.logger.Info("AI message recorded in audit vault (LFAA)",
@@ -119,7 +119,7 @@ func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg *PubSubCommand
 func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording direct terminal command (via Protobuf)")
 
-	if as.auditVault == nil || !as.auditVault.IsEnabled() {
+	if as.auditStore == nil || !as.auditStore.IsEnabled() {
 		as.logger.Info("Audit vault not enabled, skipping direct command recording")
 		return
 	}
@@ -142,7 +142,7 @@ func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg *PubSubCom
 		CommandRaw:        protoCmd.Command,
 	}
 
-	if _, err := as.auditVault.RecordEvent(event); err != nil {
+	if _, err := as.auditStore.RecordEvent(event); err != nil {
 		as.logger.Warn("Failed to record direct command in audit vault", string(constants.ConnectionStateError), err)
 	} else {
 		as.logger.Info("Direct terminal command recorded in audit vault (LFAA)",
@@ -155,7 +155,7 @@ func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg *PubSubCom
 func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording direct terminal command result (via Protobuf)")
 
-	if as.auditVault == nil || !as.auditVault.IsEnabled() {
+	if as.auditStore == nil || !as.auditStore.IsEnabled() {
 		as.logger.Info("Audit vault not enabled, skipping direct command result recording")
 		return
 	}
@@ -182,7 +182,7 @@ func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg *Pub
 		ExecutionDurationMs: int64(protoResult.ExecutionTimeSeconds * 1000),
 	}
 
-	if _, err := as.auditVault.RecordEvent(event); err != nil {
+	if _, err := as.auditStore.RecordEvent(event); err != nil {
 		as.logger.Warn("Failed to record direct command result in audit vault", string(constants.ConnectionStateError), err)
 	} else {
 		as.logger.Info("Direct terminal command result recorded in audit vault (LFAA)",

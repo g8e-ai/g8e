@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package storage
+package storagetest
 
 import (
 	"crypto/ed25519"
@@ -23,6 +23,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -34,7 +35,7 @@ func TestAuditVaultConfig_Default(t *testing.T) {
 	// Ensure no environment variable override is set
 	os.Unsetenv("G8E_DATA_DIR")
 
-	config := DefaultAuditVaultConfig()
+	config := DefaultTestSQLAuditStoreConfig()
 
 	// Default DataDir is now a relative path - caller must resolve based on workDir
 	assert.Equal(t, ".g8e/data", config.DataDir)
@@ -60,7 +61,7 @@ func TestAuditVaultService_Bootstrap(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -74,7 +75,7 @@ func TestAuditVaultService_Bootstrap(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	require.NotNil(t, avs)
 	defer avs.Close()
@@ -105,7 +106,7 @@ func TestAuditVaultService_Session(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -118,7 +119,7 @@ func TestAuditVaultService_Session(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -147,7 +148,7 @@ func TestAuditVaultService_Event(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -160,7 +161,7 @@ func TestAuditVaultService_Event(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -171,7 +172,7 @@ func TestAuditVaultService_Event(t *testing.T) {
 
 	// Record a command execution event
 	exitCode := 0
-	event := &Event{
+	event := &storage.Event{
 		OperatorSessionID:   operatorSessionID,
 		Timestamp:           time.Now().UTC(),
 		Type:                constants.Event.Operator.Audit.Command,
@@ -209,7 +210,7 @@ func TestAuditVaultService_RecordEvent_RejectsUnknownSession(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -222,13 +223,13 @@ func TestAuditVaultService_RecordEvent_RejectsUnknownSession(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
 	operatorSessionID := "session_1771888262981_ffafe0f4-9c9e-439c-8a97-89e5a9f04c1e"
 	exitCode := 0
-	event := &Event{
+	event := &storage.Event{
 		OperatorSessionID:   operatorSessionID,
 		Timestamp:           time.Now().UTC(),
 		Type:                constants.Event.Operator.Audit.Command,
@@ -241,7 +242,7 @@ func TestAuditVaultService_RecordEvent_RejectsUnknownSession(t *testing.T) {
 	}
 
 	eventID, err := avs.RecordEvent(event)
-	require.ErrorIs(t, err, ErrAuditSessionUnknown)
+	require.ErrorIs(t, err, storage.ErrAuditSessionUnknown)
 	assert.Equal(t, int64(0), eventID)
 
 	session, err := avs.GetOperatorSession(operatorSessionID)
@@ -259,7 +260,7 @@ func TestAuditVaultService_RecordEvent_RejectsMissingSession(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -272,17 +273,17 @@ func TestAuditVaultService_RecordEvent_RejectsMissingSession(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
-	eventID, err := avs.RecordEvent(&Event{
+	eventID, err := avs.RecordEvent(&storage.Event{
 		Timestamp:   time.Now().UTC(),
 		Type:        constants.Event.Operator.Audit.Command,
 		ContentText: "missing session",
 		CommandRaw:  "uptime",
 	})
-	require.ErrorIs(t, err, ErrAuditSessionMissing)
+	require.ErrorIs(t, err, storage.ErrAuditSessionMissing)
 	assert.Equal(t, int64(0), eventID)
 }
 
@@ -296,7 +297,7 @@ func TestAuditVaultService_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -309,7 +310,7 @@ func TestAuditVaultService_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -317,7 +318,7 @@ func TestAuditVaultService_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 	err = avs.CreateSession(operatorSessionID, "operator", "Batch Session", "user@example.com")
 	require.NoError(t, err)
 
-	err = avs.RecordEvents([]*Event{
+	err = avs.RecordEvents([]*storage.Event{
 		{
 			OperatorSessionID: operatorSessionID,
 			Timestamp:         time.Now().UTC(),
@@ -333,7 +334,7 @@ func TestAuditVaultService_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 			CommandRaw:        "id",
 		},
 	})
-	require.ErrorIs(t, err, ErrAuditSessionUnknown)
+	require.ErrorIs(t, err, storage.ErrAuditSessionUnknown)
 
 	events, err := avs.GetEvents(operatorSessionID, 10, 0)
 	require.NoError(t, err)
@@ -350,7 +351,7 @@ func TestAuditVaultService_RecordEvents_SucceedsWithExistingSessions(t *testing.
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -363,7 +364,7 @@ func TestAuditVaultService_RecordEvents_SucceedsWithExistingSessions(t *testing.
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -371,7 +372,7 @@ func TestAuditVaultService_RecordEvents_SucceedsWithExistingSessions(t *testing.
 	err = avs.CreateSession(operatorSessionID, "operator", "Batch Session", "user@example.com")
 	require.NoError(t, err)
 
-	err = avs.RecordEvents([]*Event{
+	err = avs.RecordEvents([]*storage.Event{
 		{
 			OperatorSessionID: operatorSessionID,
 			Timestamp:         time.Now().UTC(),
@@ -402,7 +403,7 @@ func TestAuditVaultService_OutputTruncation(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -415,7 +416,7 @@ func TestAuditVaultService_OutputTruncation(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -431,7 +432,7 @@ func TestAuditVaultService_OutputTruncation(t *testing.T) {
 	}
 
 	exitCode := 0
-	event := &Event{
+	event := &storage.Event{
 		OperatorSessionID:   operatorSessionID,
 		Timestamp:           time.Now().UTC(),
 		Type:                constants.Event.Operator.Audit.Command,
@@ -467,7 +468,7 @@ func TestAuditVaultService_FileMutation(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -480,7 +481,7 @@ func TestAuditVaultService_FileMutation(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -491,7 +492,7 @@ func TestAuditVaultService_FileMutation(t *testing.T) {
 
 	// Record a file mutation event
 	exitCode := 0
-	event := &Event{
+	event := &storage.Event{
 		OperatorSessionID:   operatorSessionID,
 		Timestamp:           time.Now().UTC(),
 		Type:                constants.Event.Operator.FileEdit.Completed,
@@ -505,10 +506,10 @@ func TestAuditVaultService_FileMutation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Record file mutation log
-	mutation := &FileMutationLog{
+	mutation := &storage.FileMutationLog{
 		EventID:          eventID,
 		Filepath:         "/etc/nginx/nginx.conf",
-		Operation:        FileMutationWrite,
+		Operation:        storage.FileMutationWrite,
 		LedgerHashBefore: "abc123",
 		LedgerHashAfter:  "def456",
 		DiffStat:         "+5 lines, -2 lines",
@@ -524,18 +525,18 @@ func TestAuditVaultService_FileMutation(t *testing.T) {
 
 	retrievedMutation := mutations[0]
 	assert.Equal(t, "/etc/nginx/nginx.conf", retrievedMutation.Filepath)
-	assert.Equal(t, FileMutationWrite, retrievedMutation.Operation)
+	assert.Equal(t, storage.FileMutationWrite, retrievedMutation.Operation)
 	assert.Equal(t, "abc123", retrievedMutation.LedgerHashBefore)
 	assert.Equal(t, "def456", retrievedMutation.LedgerHashAfter)
 }
 
 func TestAuditVaultService_Disabled(t *testing.T) {
 	t.Parallel()
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		Enabled: false,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	assert.Nil(t, avs)
 }
@@ -550,7 +551,7 @@ func TestAuditVaultService_MultipleSessions(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -563,7 +564,7 @@ func TestAuditVaultService_MultipleSessions(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -604,7 +605,7 @@ func TestAuditVaultService_EventPagination(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -617,7 +618,7 @@ func TestAuditVaultService_EventPagination(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -628,7 +629,7 @@ func TestAuditVaultService_EventPagination(t *testing.T) {
 	// Create 25 events
 	exitCode := 0
 	for i := 0; i < 25; i++ {
-		event := &Event{
+		event := &storage.Event{
 			OperatorSessionID:   operatorSessionID,
 			Timestamp:           time.Now().UTC(),
 			Type:                constants.Event.Operator.Audit.Command,
@@ -678,7 +679,7 @@ func TestAuditVaultService_EventOrdering(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -691,7 +692,7 @@ func TestAuditVaultService_EventOrdering(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -702,7 +703,7 @@ func TestAuditVaultService_EventOrdering(t *testing.T) {
 	// Create events with increasing timestamps
 	baseTime := time.Now().Add(-time.Hour)
 	for i := 0; i < 5; i++ {
-		event := &Event{
+		event := &storage.Event{
 			OperatorSessionID: operatorSessionID,
 			Timestamp:         baseTime.Add(time.Duration(i) * time.Minute),
 			Type:              constants.Event.Operator.Audit.Command,
@@ -734,7 +735,7 @@ func TestAuditVaultService_MultipleFileMutationsPerEvent(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -747,7 +748,7 @@ func TestAuditVaultService_MultipleFileMutationsPerEvent(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -757,7 +758,7 @@ func TestAuditVaultService_MultipleFileMutationsPerEvent(t *testing.T) {
 
 	// Create an event
 	exitCode := 0
-	event := &Event{
+	event := &storage.Event{
 		OperatorSessionID: operatorSessionID,
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.FileEdit.Completed,
@@ -770,10 +771,10 @@ func TestAuditVaultService_MultipleFileMutationsPerEvent(t *testing.T) {
 	// Record multiple file mutations for the same event
 	files := []string{"/etc/nginx/nginx.conf", "/etc/hosts", "/var/log/app.log"}
 	for i, file := range files {
-		mutation := &FileMutationLog{
+		mutation := &storage.FileMutationLog{
 			EventID:          eventID,
 			Filepath:         file,
-			Operation:        FileMutationWrite,
+			Operation:        storage.FileMutationWrite,
 			LedgerHashBefore: fmt.Sprintf("before_%d", i),
 			LedgerHashAfter:  fmt.Sprintf("after_%d", i),
 			DiffStat:         fmt.Sprintf("+%d lines", i+1),
@@ -790,7 +791,7 @@ func TestAuditVaultService_MultipleFileMutationsPerEvent(t *testing.T) {
 	// Verify each mutation
 	for i, m := range mutations {
 		assert.Equal(t, files[i], m.Filepath)
-		assert.Equal(t, FileMutationWrite, m.Operation)
+		assert.Equal(t, storage.FileMutationWrite, m.Operation)
 	}
 }
 
@@ -804,7 +805,7 @@ func TestAuditVaultService_NullExitCode(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -817,7 +818,7 @@ func TestAuditVaultService_NullExitCode(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -826,7 +827,7 @@ func TestAuditVaultService_NullExitCode(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create event with nil exit code
-	event := &Event{
+	event := &storage.Event{
 		OperatorSessionID: operatorSessionID,
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.UserMsg,
@@ -854,7 +855,7 @@ func TestAuditVaultService_DifferentEventTypes(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -867,7 +868,7 @@ func TestAuditVaultService_DifferentEventTypes(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -883,7 +884,7 @@ func TestAuditVaultService_DifferentEventTypes(t *testing.T) {
 	}
 
 	for _, eventType := range eventTypes {
-		event := &Event{
+		event := &storage.Event{
 			OperatorSessionID: operatorSessionID,
 			Timestamp:         time.Now().UTC(),
 			Type:              eventType,
@@ -917,7 +918,7 @@ func TestAuditVaultService_StderrTruncation(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -930,7 +931,7 @@ func TestAuditVaultService_StderrTruncation(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -945,7 +946,7 @@ func TestAuditVaultService_StderrTruncation(t *testing.T) {
 	}
 
 	exitCode := 1
-	event := &Event{
+	event := &storage.Event{
 		OperatorSessionID: operatorSessionID,
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.Command,
@@ -977,7 +978,7 @@ func TestAuditVaultService_GetSessionNotFound(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -990,7 +991,7 @@ func TestAuditVaultService_GetSessionNotFound(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -1009,7 +1010,7 @@ func TestAuditVaultService_GetEventsEmptySession(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1022,7 +1023,7 @@ func TestAuditVaultService_GetEventsEmptySession(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -1045,7 +1046,7 @@ func TestAuditVaultService_GetFileMutationsNoMutations(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1058,7 +1059,7 @@ func TestAuditVaultService_GetFileMutationsNoMutations(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -1078,7 +1079,7 @@ func TestAuditVaultService_WALMode(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1091,7 +1092,7 @@ func TestAuditVaultService_WALMode(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -1118,7 +1119,7 @@ func TestAuditVaultService_IsEnabled(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1131,14 +1132,14 @@ func TestAuditVaultService_IsEnabled(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
 	assert.True(t, avs.IsEnabled())
 
 	// Nil service
-	var nilService *AuditVaultService
+	var nilService *TestSQLAuditStore
 	assert.False(t, nilService.IsEnabled())
 }
 
@@ -1152,7 +1153,7 @@ func TestAuditVaultService_GetDataDir(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1165,14 +1166,14 @@ func TestAuditVaultService_GetDataDir(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
 	assert.Equal(t, tempDir, avs.GetDataDir())
 
 	// Nil service
-	var nilService *AuditVaultService
+	var nilService *TestSQLAuditStore
 	assert.Empty(t, nilService.GetDataDir())
 }
 
@@ -1186,7 +1187,7 @@ func TestAuditVaultService_GetLedgerPath(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1199,7 +1200,7 @@ func TestAuditVaultService_GetLedgerPath(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -1208,23 +1209,23 @@ func TestAuditVaultService_GetLedgerPath(t *testing.T) {
 	assert.DirExists(t, ledgerPath)
 
 	// Nil service
-	var nilService *AuditVaultService
+	var nilService *TestSQLAuditStore
 	assert.Empty(t, nilService.GetLedgerPath())
 }
 
 func TestAuditVaultService_NilServiceMethods(t *testing.T) {
 	t.Parallel()
-	var avs *AuditVaultService
+	var avs *TestSQLAuditStore
 
 	// These should not panic and return gracefully
 	err := avs.CreateSession("id", "operator", "title", "user")
 	assert.NoError(t, err)
 
-	eventID, err := avs.RecordEvent(&Event{})
+	eventID, err := avs.RecordEvent(&storage.Event{})
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), eventID)
 
-	err = avs.RecordFileMutation(&FileMutationLog{})
+	err = avs.RecordFileMutation(&storage.FileMutationLog{})
 	assert.NoError(t, err)
 
 	err = avs.Close()
@@ -1235,7 +1236,7 @@ func TestAuditVaultService_DefaultConfig(t *testing.T) {
 	t.Parallel()
 	// Verify default config uses relative paths (caller resolves them)
 	// g8eo uses CLI flags only, not environment variables for configuration
-	config := DefaultAuditVaultConfig()
+	config := DefaultTestSQLAuditStoreConfig()
 	assert.Equal(t, ".g8e/data", config.DataDir)
 	assert.Equal(t, "g8e.db", config.DBPath)
 	assert.Equal(t, "ledger", config.LedgerDir)
@@ -1249,12 +1250,12 @@ func TestAuditVaultService_GetEncryptionVault(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	// 1. Constructor should return error when vault is nil
-	config1 := &AuditVaultConfig{
+	config1 := &TestSQLAuditStoreConfig{
 		DataDir: tempDir,
 		DBPath:  "test1.db",
 		Enabled: true,
 	}
-	avs1, err := NewAuditVaultService(config1, logger)
+	avs1, err := NewTestSQLAuditStore(config1, logger)
 	require.Error(t, err)
 	require.Nil(t, avs1)
 	assert.Contains(t, err.Error(), "EncryptionVault is required")
@@ -1267,19 +1268,19 @@ func TestAuditVaultService_GetEncryptionVault(t *testing.T) {
 	require.NoError(t, err)
 	defer v.Close()
 
-	config2 := &AuditVaultConfig{
+	config2 := &TestSQLAuditStoreConfig{
 		DataDir:         tempDir,
 		DBPath:          "test2.db",
 		Enabled:         true,
 		EncryptionVault: v,
 	}
-	avs2, err := NewAuditVaultService(config2, logger)
+	avs2, err := NewTestSQLAuditStore(config2, logger)
 	require.NoError(t, err)
 	defer avs2.Close()
 	assert.Equal(t, v, avs2.GetEncryptionVault())
 
 	// 3. Nil service
-	var nilService *AuditVaultService
+	var nilService *TestSQLAuditStore
 	assert.Nil(t, nilService.GetEncryptionVault())
 }
 
@@ -1294,7 +1295,7 @@ func TestAuditVaultPrune(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:         tempDir,
 		DBPath:          "prune_test.db",
 		Enabled:         true,
@@ -1302,7 +1303,7 @@ func TestAuditVaultPrune(t *testing.T) {
 		EncryptionVault: testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, logger)
+	avs, err := NewTestSQLAuditStore(config, logger)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -1381,7 +1382,7 @@ func TestAuditVaultService_LongContentFields(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1394,7 +1395,7 @@ func TestAuditVaultService_LongContentFields(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -1409,7 +1410,7 @@ func TestAuditVaultService_LongContentFields(t *testing.T) {
 	}
 
 	exitCode := 0
-	event := &Event{
+	event := &storage.Event{
 		OperatorSessionID: operatorSessionID,
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.Command,
@@ -1442,7 +1443,7 @@ func TestAuditVaultService_FileMutationOperationTypes(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1455,7 +1456,7 @@ func TestAuditVaultService_FileMutationOperationTypes(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -1463,14 +1464,14 @@ func TestAuditVaultService_FileMutationOperationTypes(t *testing.T) {
 	err = avs.CreateSession(operatorSessionID, "operator", "Mutation Types Test", "user@test.com")
 	require.NoError(t, err)
 
-	operations := []FileMutationOperation{
-		FileMutationWrite,
-		FileMutationDelete,
-		FileMutationCreate,
+	operations := []storage.FileMutationOperation{
+		storage.FileMutationWrite,
+		storage.FileMutationDelete,
+		storage.FileMutationCreate,
 	}
 
 	for _, op := range operations {
-		event := &Event{
+		event := &storage.Event{
 			OperatorSessionID: operatorSessionID,
 			Timestamp:         time.Now().UTC(),
 			Type:              constants.Event.Operator.FileEdit.Completed,
@@ -1478,7 +1479,7 @@ func TestAuditVaultService_FileMutationOperationTypes(t *testing.T) {
 		eventID, err := avs.RecordEvent(event)
 		require.NoError(t, err)
 
-		mutation := &FileMutationLog{
+		mutation := &storage.FileMutationLog{
 			EventID:   eventID,
 			Filepath:  fmt.Sprintf("/test/%s_file.txt", op),
 			Operation: op,
@@ -1504,7 +1505,7 @@ func TestAuditVaultService_SessionWithNullFields(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1517,7 +1518,7 @@ func TestAuditVaultService_SessionWithNullFields(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -1544,7 +1545,7 @@ func TestAuditVaultService_CloseIdempotent(t *testing.T) {
 	require.NoError(t, err)
 	testVault := createTestVault(t, vaultDir, privKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1557,7 +1558,7 @@ func TestAuditVaultService_CloseIdempotent(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 
 	// Close multiple times should not panic
@@ -1583,7 +1584,7 @@ func TestAuditVaultService_WithEncryption(t *testing.T) {
 	require.True(t, encVault.IsUnlocked())
 
 	// Create audit vault with encryption enabled
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1596,7 +1597,7 @@ func TestAuditVaultService_WithEncryption(t *testing.T) {
 		EncryptionVault:           encVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -1610,7 +1611,7 @@ func TestAuditVaultService_WithEncryption(t *testing.T) {
 	// Record event with sensitive content
 	sensitiveContent := "This is highly confidential command output with secrets"
 	exitCode := 0
-	event := &Event{
+	event := &storage.Event{
 		OperatorSessionID: "encrypted-session-1",
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.Command,
@@ -1647,7 +1648,7 @@ func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 	vault1 := createTestVault(t, vaultDataDir, apiKey)
 
 	// Create audit vault with encryption
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1660,7 +1661,7 @@ func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 		EncryptionVault:           vault1,
 	}
 
-	avs1, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs1, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 
 	// Write encrypted data
@@ -1669,7 +1670,7 @@ func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 
 	secretData := "TOP SECRET: Password is hunter2"
 	exitCode := 0
-	_, err = avs1.RecordEvent(&Event{
+	_, err = avs1.RecordEvent(&storage.Event{
 		OperatorSessionID: "locked-test-session",
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.Command,
@@ -1684,7 +1685,7 @@ func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 
 	// Attempt to reopen database WITHOUT encryption vault should fail
 	// This is the new fail-closed behavior: service cannot be opened without vault
-	config2 := &AuditVaultConfig{
+	config2 := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1697,7 +1698,7 @@ func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 		EncryptionVault:           nil, // No vault = service fails to initialize
 	}
 
-	avs2, err := NewAuditVaultService(config2, testutil.NewTestLogger())
+	avs2, err := NewTestSQLAuditStore(config2, testutil.NewTestLogger())
 	require.Error(t, err)
 	require.Nil(t, avs2)
 	assert.Contains(t, err.Error(), "EncryptionVault is required")
@@ -1712,7 +1713,7 @@ func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 	require.NoError(t, err)
 	defer vault3.Close()
 
-	config3 := &AuditVaultConfig{
+	config3 := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1725,7 +1726,7 @@ func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 		EncryptionVault:           vault3,
 	}
 
-	avs3, err := NewAuditVaultService(config3, testutil.NewTestLogger())
+	avs3, err := NewTestSQLAuditStore(config3, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs3.Close()
 
@@ -1749,7 +1750,7 @@ func TestAuditVaultService_EncryptionWithRekey(t *testing.T) {
 	vaultDataDir := filepath.Join(tempDir, "vault")
 	vaultSvc := createTestVault(t, vaultDataDir, oldAPIKey)
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1762,7 +1763,7 @@ func TestAuditVaultService_EncryptionWithRekey(t *testing.T) {
 		EncryptionVault:           vaultSvc,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 
 	// Write data with old key
@@ -1771,7 +1772,7 @@ func TestAuditVaultService_EncryptionWithRekey(t *testing.T) {
 
 	originalData := "Data encrypted with old key"
 	exitCode := 0
-	_, err = avs.RecordEvent(&Event{
+	_, err = avs.RecordEvent(&storage.Event{
 		OperatorSessionID: "rekey-session",
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.Command,
@@ -1796,7 +1797,7 @@ func TestAuditVaultService_EncryptionWithRekey(t *testing.T) {
 	require.NoError(t, err)
 
 	// Reopen audit vault with rekeyed vault
-	config2 := &AuditVaultConfig{
+	config2 := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1809,7 +1810,7 @@ func TestAuditVaultService_EncryptionWithRekey(t *testing.T) {
 		EncryptionVault:           vault2,
 	}
 
-	avs2, err := NewAuditVaultService(config2, testutil.NewTestLogger())
+	avs2, err := NewTestSQLAuditStore(config2, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs2.Close()
 	defer vault2.Close()
@@ -1830,7 +1831,7 @@ func TestAuditVaultService_MixedEncryptedUnencrypted(t *testing.T) {
 	encVault := createTestVault(t, vaultDataDir, []byte("mixed-test-api-key"))
 	defer encVault.Close()
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1843,7 +1844,7 @@ func TestAuditVaultService_MixedEncryptedUnencrypted(t *testing.T) {
 		EncryptionVault:           encVault,
 	}
 
-	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -1853,7 +1854,7 @@ func TestAuditVaultService_MixedEncryptedUnencrypted(t *testing.T) {
 	// Write multiple events - all should be encrypted
 	exitCode := 0
 	data1 := "First encrypted data"
-	_, err = avs.RecordEvent(&Event{
+	_, err = avs.RecordEvent(&storage.Event{
 		OperatorSessionID: "mixed-session",
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.Command,
@@ -1864,7 +1865,7 @@ func TestAuditVaultService_MixedEncryptedUnencrypted(t *testing.T) {
 	require.NoError(t, err)
 
 	data2 := "Second encrypted data"
-	_, err = avs.RecordEvent(&Event{
+	_, err = avs.RecordEvent(&storage.Event{
 		OperatorSessionID: "mixed-session",
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.Command,

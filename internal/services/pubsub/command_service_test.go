@@ -212,7 +212,7 @@ func TestCommandService_Setters(t *testing.T) {
 		svc := NewCommandService(cfg, logger, execSvc)
 
 		// Use nil for test - just verify method can be called
-		svc.SetAuditVaultService(nil)
+		svc.SetAuditStore(nil)
 		// Verify method can be called without panic
 	})
 

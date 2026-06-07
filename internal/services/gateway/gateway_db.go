@@ -45,7 +45,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 )
 
@@ -73,7 +72,7 @@ func GatewaySchema() string {
 type CanonicalDBService struct {
 	db         *sqliteutil.DB
 	logger     *slog.Logger
-	AuditVault *storage.AuditVaultService
+	AuditStore *storage.SQLAuditStore
 
 	// Shutdown tracking
 	mu      sync.Mutex
@@ -148,22 +147,21 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, logger *slog.Logg
 		logger.Info("Vault unlocked successfully", "vault_dir", vaultDir)
 	}
 
-	// Initialize Audit Vault for transaction-native audit recording
-	auditVaultConfig := storage.DefaultAuditVaultConfig()
-	auditVaultConfig.DataDir = dataDir
-	auditVaultConfig.GitPath = system.GitEmbedded
-	auditVaultConfig.EncryptionVault = encryptionVault
-	auditVault, err := storage.NewAuditVaultService(auditVaultConfig, logger)
+	// Initialize SQLAuditStore for transaction-native audit recording
+	auditStoreConfig := storage.DefaultAuditStoreConfig()
+	auditStoreConfig.DataDir = dataDir
+	auditStoreConfig.EncryptionVault = encryptionVault
+	auditStore, err := storage.NewSQLAuditStore(auditStoreConfig, logger)
 	if err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to initialize audit vault: %w", err)
+		return nil, fmt.Errorf("failed to initialize audit store: %w", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	svc := &CanonicalDBService{
 		db:         db,
 		logger:     logger,
-		AuditVault: auditVault,
+		AuditStore: auditStore,
 		ctx:        ctx,
 		cancel:     cancel,
 		running:    true,

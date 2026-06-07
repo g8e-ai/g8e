@@ -13,10 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * **Mandatory encryption at rest** - Encryption is now required for all storage services. Previously, vault parameters were optional and production deployments could run without encryption, storing sensitive data unencrypted. This is a critical security fix.
   * `NewLocalStoreService` now requires vault parameter and returns error if nil
-  * `NewAuditVaultService` now requires `EncryptionVault` in config and returns error if nil
+  * `NewSQLAuditStore` now requires `EncryptionVault` in config and returns error if nil
   * `NewExecutionVaultService` now requires vault parameter and returns error if nil
   * `NewTokenStoreService` now requires vault parameter and returns error if nil
-  * `NewSQLAuditStore` now requires `EncryptionVault` in config and returns error if nil
   * Production initialization in `g8eo.go` and `gateway_db.go` now initializes and unlocks vault before creating storage services
   * All nil-checks removed from encryption paths (fail-closed behavior enforced)
 
@@ -552,7 +551,7 @@ gates with no optional application-layer coupling in the critical path.
 ### Security
 
 * **Sentinel encryption** - Sovereign Execution Boundary encrypts sensitive fields before audit publishing; decrypts at authorized egress.
-* **Fail-closed Audit Vault** - `AuditVaultService` now strictly rejects missing/malformed session IDs and unknown sessions prior to any audit writes, preventing invalid event relationships.
+* **Fail-closed Audit Store** - `SQLAuditStore` now strictly rejects missing/malformed session IDs and unknown sessions prior to any audit writes, preventing invalid event relationships.
 * **Bulk revocation with rate limiting** - Rapid revocation of compromised credentials at fleet scale without unbounded load.
 * **mTLS for non-native apps** - App enrollment service extends mTLS enforcement to heterogeneous clients.
 * **SPIFFE URI SAN hardening** - Fragile SPIFFE parsing that accepted malformed URIs on valid inputs fixed.

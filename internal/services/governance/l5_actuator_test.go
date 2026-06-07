@@ -436,25 +436,23 @@ func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
 	require.NoError(t, testVault.Unlock(privKey))
 	defer testVault.Close()
 
-	auditConfig := &storage.AuditVaultConfig{
+	auditConfig := &storage.AuditStoreConfig{
 		DataDir:         tempDir,
 		DBPath:          "test.db",
-		LedgerDir:       "ledger",
 		MaxDBSizeMB:     100,
 		RetentionDays:   1,
 		Enabled:         true,
-		GitPath:         "", // Disable git for test
 		EncryptionVault: testVault,
 	}
 
-	auditVault, err := storage.NewAuditVaultService(auditConfig, slog.Default())
+	auditStore, err := storage.NewSQLAuditStore(auditConfig, slog.Default())
 	require.NoError(t, err)
-	defer auditVault.Close()
+	defer auditStore.Close()
 
-	actuator.AuditVault = auditVault
+	actuator.SQLAuditStore = auditStore
 
 	// Create the Operator session first (required for fail-closed audit)
-	err = auditVault.CreateSession("test-operator-session", "operator", "Test Session", "test-user")
+	err = auditStore.CreateSession("test-operator-session", "operator", "Test Session", "test-user")
 	require.NoError(t, err)
 
 	envelope := &governance.GovernanceEnvelope{
@@ -477,7 +475,7 @@ func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
 	require.NotNil(t, receipt)
 
 	// Verify RecordActionReceipt was called by querying the audit vault
-	persistedReceipt, err := auditVault.GetActionReceipt(envelope.Id)
+	persistedReceipt, err := auditStore.GetActionReceipt(envelope.Id)
 	require.NoError(t, err)
 	require.NotNil(t, persistedReceipt, "Receipt should be persisted in audit vault")
 

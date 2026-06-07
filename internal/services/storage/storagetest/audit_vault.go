@@ -11,10 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package storage
+// Package storagetest provides test-only audit storage implementations.
+// This file provides a test-only monolithic audit service with Git ledger integration.
+// Production code uses SQLAuditStore (audit_store.go) instead.
+package storagetest
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -26,13 +30,14 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
-// AuditVaultConfig holds configuration for the Local-First Audit Architecture
-type AuditVaultConfig struct {
+// TestSQLAuditStoreConfig holds configuration for the test-only Local-First Audit Architecture
+type TestSQLAuditStoreConfig struct {
 	DataDir                   string
 	DBPath                    string
 	LedgerDir                 string
@@ -49,10 +54,10 @@ type AuditVaultConfig struct {
 	GitPath string
 }
 
-// DefaultAuditVaultConfig returns the default configuration for the audit vault.
+// DefaultTestSQLAuditStoreConfig returns the default configuration for the test audit store.
 // Note: DataDir should be set by the caller based on the actual work directory.
-func DefaultAuditVaultConfig() *AuditVaultConfig {
-	return &AuditVaultConfig{
+func DefaultTestSQLAuditStoreConfig() *TestSQLAuditStoreConfig {
+	return &TestSQLAuditStoreConfig{
 		DataDir:                   ".g8e/data",
 		DBPath:                    "g8e.db",
 		LedgerDir:                 "ledger",
@@ -65,10 +70,10 @@ func DefaultAuditVaultConfig() *AuditVaultConfig {
 	}
 }
 
-// AuditVaultService provides the Local-First Audit Architecture implementation
-type AuditVaultService struct {
+// TestSQLAuditStore provides the Local-First Audit Architecture implementation
+type TestSQLAuditStore struct {
 	db              *sqliteutil.DB
-	config          *AuditVaultConfig
+	config          *TestSQLAuditStoreConfig
 	logger          *slog.Logger
 	ledgerPath      string
 	filesPath       string
@@ -82,11 +87,11 @@ type AuditVaultService struct {
 	muWrites sync.WaitGroup
 }
 
-// NewAuditVaultService creates a new audit vault service
+// NewTestSQLAuditStore creates a new test-only audit store service
 // EncryptionVault in config is required for encryption at rest.
-func NewAuditVaultService(config *AuditVaultConfig, logger *slog.Logger) (*AuditVaultService, error) {
+func NewTestSQLAuditStore(config *TestSQLAuditStoreConfig, logger *slog.Logger) (*TestSQLAuditStore, error) {
 	if config == nil {
-		config = DefaultAuditVaultConfig()
+		config = DefaultTestSQLAuditStoreConfig()
 	}
 
 	if !config.Enabled {
@@ -98,7 +103,7 @@ func NewAuditVaultService(config *AuditVaultConfig, logger *slog.Logger) (*Audit
 		return nil, fmt.Errorf("EncryptionVault is required for audit vault service")
 	}
 
-	avs := &AuditVaultService{
+	avs := &TestSQLAuditStore{
 		config:          config,
 		logger:          logger,
 		ledgerPath:      filepath.Join(config.DataDir, config.LedgerDir),
@@ -127,7 +132,7 @@ func NewAuditVaultService(config *AuditVaultConfig, logger *slog.Logger) (*Audit
 }
 
 // bootstrap initializes the audit vault (directory structure, database, git repo)
-func (avs *AuditVaultService) bootstrap() error {
+func (avs *TestSQLAuditStore) bootstrap() error {
 	avs.logger.Info("Bootstrapping audit vault", "data_dir", avs.config.DataDir)
 
 	if err := avs.createDirectoryStructure(); err != nil {
@@ -155,7 +160,7 @@ func (avs *AuditVaultService) bootstrap() error {
 }
 
 // createDirectoryStructure creates the audit vault directory structure
-func (avs *AuditVaultService) createDirectoryStructure() error {
+func (avs *TestSQLAuditStore) createDirectoryStructure() error {
 	dirs := []string{
 		avs.config.DataDir,
 		avs.ledgerPath,
@@ -178,7 +183,7 @@ func (avs *AuditVaultService) createDirectoryStructure() error {
 }
 
 // verifyWritePermissions ensures the data directory is writable
-func (avs *AuditVaultService) verifyWritePermissions() error {
+func (avs *TestSQLAuditStore) verifyWritePermissions() error {
 	testFile := filepath.Join(avs.config.DataDir, ".write_test")
 
 	if err := os.WriteFile(testFile, []byte("write_test"), 0600); err != nil {
@@ -194,7 +199,7 @@ func (avs *AuditVaultService) verifyWritePermissions() error {
 }
 
 // GetSessionLedgerPath returns the ledger path for a specific session, initializing it if needed.
-func (avs *AuditVaultService) GetSessionLedgerPath(operatorSessionID string) (string, error) {
+func (avs *TestSQLAuditStore) GetSessionLedgerPath(operatorSessionID string) (string, error) {
 	if operatorSessionID == "" {
 		return avs.ledgerPath, nil
 	}
@@ -231,12 +236,12 @@ func (avs *AuditVaultService) GetSessionLedgerPath(operatorSessionID string) (st
 }
 
 // initLedgerGit initializes git repository in the global ledger directory
-func (avs *AuditVaultService) initLedgerGit() error {
+func (avs *TestSQLAuditStore) initLedgerGit() error {
 	return avs.initGitRepo(avs.ledgerPath)
 }
 
 // initGitRepo initializes a git repository in the specified directory using native go-git
-func (avs *AuditVaultService) initGitRepo(path string) error {
+func (avs *TestSQLAuditStore) initGitRepo(path string) error {
 	gitDir := filepath.Join(path, ".git")
 
 	if _, err := os.Stat(gitDir); err == nil {
@@ -277,7 +282,7 @@ func (avs *AuditVaultService) initGitRepo(path string) error {
 }
 
 // initDatabase creates the database and schema
-func (avs *AuditVaultService) initDatabase() error {
+func (avs *TestSQLAuditStore) initDatabase() error {
 	dbPath := filepath.Join(avs.config.DataDir, avs.config.DBPath)
 
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
@@ -381,12 +386,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_id_type ON sessions(id, session_t
 `
 
 // CreateSession creates a new session in the audit log
-func (avs *AuditVaultService) CreateSession(id, sessionType, title, userIdentity string) error {
+func (avs *TestSQLAuditStore) CreateSession(id, sessionType, title, userIdentity string) error {
 	if avs == nil || avs.db == nil {
 		return nil
 	}
 	if id == "" || strings.TrimSpace(id) != id {
-		return ErrAuditSessionMissing
+		return storage.ErrAuditSessionMissing
 	}
 	if sessionType == "" {
 		sessionType = string(constants.UserRoleOperator)
@@ -403,7 +408,7 @@ func (avs *AuditVaultService) CreateSession(id, sessionType, title, userIdentity
 }
 
 // GetOperatorSession retrieves a session by ID
-func (avs *AuditVaultService) GetOperatorSession(id string) (*OperatorSession, error) {
+func (avs *TestSQLAuditStore) GetOperatorSession(id string) (*storage.OperatorSession, error) {
 	if avs == nil || avs.db == nil {
 		return nil, fmt.Errorf("audit vault is disabled")
 	}
@@ -411,7 +416,7 @@ func (avs *AuditVaultService) GetOperatorSession(id string) (*OperatorSession, e
 	query := `SELECT id, title, created_at, user_identity FROM sessions WHERE id = ?`
 	row := avs.db.QueryRowWithRetry(query, id)
 
-	var session OperatorSession
+	var session storage.OperatorSession
 	var title, userIdentity sql.NullString
 	var createdAtStr string
 	err := row.Scan(&session.ID, &title, &createdAtStr, &userIdentity)
@@ -434,18 +439,18 @@ func (avs *AuditVaultService) GetOperatorSession(id string) (*OperatorSession, e
 	return &session, nil
 }
 
-func (avs *AuditVaultService) requireExistingSessionTx(tx *sql.Tx, event *Event) error {
+func (avs *TestSQLAuditStore) requireExistingSessionTx(tx *sql.Tx, event *storage.Event) error {
 	if event == nil {
-		return ErrAuditEventNil
+		return storage.ErrAuditEventNil
 	}
 	if event.OperatorSessionID == "" || strings.TrimSpace(event.OperatorSessionID) != event.OperatorSessionID {
-		return ErrAuditSessionMissing
+		return storage.ErrAuditSessionMissing
 	}
 
 	var exists int
 	err := tx.QueryRow(`SELECT 1 FROM sessions WHERE id = ?`, event.OperatorSessionID).Scan(&exists)
 	if err == sql.ErrNoRows {
-		return fmt.Errorf("%w: %s", ErrAuditSessionUnknown, event.OperatorSessionID)
+		return fmt.Errorf("%w: %s", storage.ErrAuditSessionUnknown, event.OperatorSessionID)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to verify audit session: %w", err)
@@ -454,7 +459,7 @@ func (avs *AuditVaultService) requireExistingSessionTx(tx *sql.Tx, event *Event)
 }
 
 // RecordEvents records multiple events in a single database transaction.
-func (avs *AuditVaultService) RecordEvents(events []*Event) error {
+func (avs *TestSQLAuditStore) RecordEvents(events []*storage.Event) error {
 	if avs == nil || avs.db == nil || len(events) == 0 {
 		return nil
 	}
@@ -532,7 +537,7 @@ func (avs *AuditVaultService) RecordEvents(events []*Event) error {
 }
 
 // RecordChaosEvent records a chaos test event in the chaos_events table
-func (avs *AuditVaultService) RecordChaosEvent(event *ChaosEvent) (int64, error) {
+func (avs *TestSQLAuditStore) RecordChaosEvent(event *storage.ChaosEvent) (int64, error) {
 	if avs == nil || avs.db == nil {
 		return 0, nil
 	}
@@ -567,7 +572,7 @@ func (avs *AuditVaultService) RecordChaosEvent(event *ChaosEvent) (int64, error)
 }
 
 // RecordChaosEvents records multiple chaos events in a single database transaction
-func (avs *AuditVaultService) RecordChaosEvents(events []*ChaosEvent) error {
+func (avs *TestSQLAuditStore) RecordChaosEvents(events []*storage.ChaosEvent) error {
 	if avs == nil || avs.db == nil {
 		return nil
 	}
@@ -612,7 +617,7 @@ func (avs *AuditVaultService) RecordChaosEvents(events []*ChaosEvent) error {
 
 // RecordEvent records an event in the audit log
 // Content fields are encrypted if an encryption vault is configured and unlocked
-func (avs *AuditVaultService) RecordEvent(event *Event) (int64, error) {
+func (avs *TestSQLAuditStore) RecordEvent(event *storage.Event) (int64, error) {
 	if avs == nil || avs.db == nil {
 		return 0, nil
 	}
@@ -697,7 +702,7 @@ func (avs *AuditVaultService) RecordEvent(event *Event) (int64, error) {
 
 // RecordActionReceipt records a signed ActionReceipt in the audit vault.
 // This is the authoritative transaction-native audit record.
-func (avs *AuditVaultService) RecordActionReceipt(record *models.ActionReceiptRecord) error {
+func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord) error {
 	if avs == nil || avs.db == nil {
 		return nil
 	}
@@ -749,7 +754,7 @@ func (avs *AuditVaultService) RecordActionReceipt(record *models.ActionReceiptRe
 }
 
 // GetActionReceipt retrieves a single action receipt by transaction ID.
-func (avs *AuditVaultService) GetActionReceipt(transactionID string) (*models.ActionReceiptRecord, error) {
+func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.ActionReceiptRecord, error) {
 	if avs == nil || avs.db == nil {
 		return nil, fmt.Errorf("audit vault is disabled")
 	}
@@ -786,7 +791,7 @@ func (avs *AuditVaultService) GetActionReceipt(transactionID string) (*models.Ac
 }
 
 // ListActionReceipts retrieves action receipts with optional filtering and pagination.
-func (avs *AuditVaultService) ListActionReceipts(operatorSessionID string, limit, offset int) ([]*models.ActionReceiptRecord, error) {
+func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit, offset int) ([]*models.ActionReceiptRecord, error) {
 	if avs == nil || avs.db == nil {
 		return nil, fmt.Errorf("audit vault is disabled")
 	}
@@ -844,7 +849,7 @@ func (avs *AuditVaultService) ListActionReceipts(operatorSessionID string, limit
 }
 
 // ListActionReceiptsSince retrieves action receipts newer than the given timestamp.
-func (avs *AuditVaultService) ListActionReceiptsSince(since time.Time, limit int) ([]*models.ActionReceiptRecord, error) {
+func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int) ([]*models.ActionReceiptRecord, error) {
 	if avs == nil || avs.db == nil {
 		return nil, fmt.Errorf("audit vault is disabled")
 	}
@@ -895,7 +900,7 @@ func (avs *AuditVaultService) ListActionReceiptsSince(since time.Time, limit int
 }
 
 // truncateOutput applies the head/tail truncation strategy for large outputs
-func (avs *AuditVaultService) truncateOutput(output string) (string, bool) {
+func (avs *TestSQLAuditStore) truncateOutput(output string) (string, bool) {
 	if len(output) <= avs.config.OutputTruncationThreshold {
 		return output, false
 	}
@@ -916,7 +921,7 @@ func (avs *AuditVaultService) truncateOutput(output string) (string, bool) {
 
 // GetEvents retrieves events for a session with pagination
 // Content fields are decrypted if they were stored encrypted and the vault is unlocked
-func (avs *AuditVaultService) GetEvents(operatorSessionID string, limit, offset int) ([]*Event, error) {
+func (avs *TestSQLAuditStore) GetEvents(operatorSessionID string, limit, offset int) ([]*storage.Event, error) {
 	if avs == nil || avs.db == nil {
 		return nil, fmt.Errorf("audit vault is disabled")
 	}
@@ -937,7 +942,7 @@ func (avs *AuditVaultService) GetEvents(operatorSessionID string, limit, offset 
 	`
 
 	type eventRow struct {
-		event              Event
+		event              storage.Event
 		timestampStr       string
 		contentTextBytes   []byte
 		commandStdoutBytes []byte
@@ -974,7 +979,7 @@ func (avs *AuditVaultService) GetEvents(operatorSessionID string, limit, offset 
 		return nil, fmt.Errorf("failed to query events: %w", err)
 	}
 
-	var events []*Event
+	var events []*storage.Event
 	for _, row := range rows {
 		row.event.Timestamp, _ = sqliteutil.ParseTimestamp(row.timestampStr)
 
@@ -1033,7 +1038,7 @@ func (avs *AuditVaultService) GetEvents(operatorSessionID string, limit, offset 
 }
 
 // RecordFileMutation records a file mutation in the audit log
-func (avs *AuditVaultService) RecordFileMutation(mutation *FileMutationLog) error {
+func (avs *TestSQLAuditStore) RecordFileMutation(mutation *storage.FileMutationLog) error {
 	if avs == nil || avs.db == nil {
 		return nil
 	}
@@ -1065,7 +1070,7 @@ func (avs *AuditVaultService) RecordFileMutation(mutation *FileMutationLog) erro
 }
 
 // GetFileMutations retrieves file mutations for an event
-func (avs *AuditVaultService) GetFileMutations(eventID int64) ([]*FileMutationLog, error) {
+func (avs *TestSQLAuditStore) GetFileMutations(eventID int64) ([]*storage.FileMutationLog, error) {
 	if avs == nil || avs.db == nil {
 		return nil, fmt.Errorf("audit vault is disabled")
 	}
@@ -1077,7 +1082,7 @@ func (avs *AuditVaultService) GetFileMutations(eventID int64) ([]*FileMutationLo
 	`
 
 	type mutationRow struct {
-		mutation   FileMutationLog
+		mutation   storage.FileMutationLog
 		hashBefore sql.NullString
 		hashAfter  sql.NullString
 		diffStat   sql.NullString
@@ -1100,7 +1105,7 @@ func (avs *AuditVaultService) GetFileMutations(eventID int64) ([]*FileMutationLo
 		return nil, fmt.Errorf("failed to query file mutations: %w", err)
 	}
 
-	var mutations []*FileMutationLog
+	var mutations []*storage.FileMutationLog
 	for _, row := range rows {
 		if row.hashBefore.Valid {
 			row.mutation.LedgerHashBefore = row.hashBefore.String
@@ -1119,7 +1124,7 @@ func (avs *AuditVaultService) GetFileMutations(eventID int64) ([]*FileMutationLo
 }
 
 // gitGetCurrentHash gets the current HEAD commit hash using native go-git
-func (avs *AuditVaultService) gitGetCurrentHash() (string, error) {
+func (avs *TestSQLAuditStore) gitGetCurrentHash() (string, error) {
 	repo, err := git.PlainOpen(avs.ledgerPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open git repo: %w", err)
@@ -1132,12 +1137,12 @@ func (avs *AuditVaultService) gitGetCurrentHash() (string, error) {
 }
 
 // GetLedgerGitDir returns the ledger path for use by LedgerMirrorService
-func (avs *AuditVaultService) GetLedgerGitDir() string {
+func (avs *TestSQLAuditStore) GetLedgerGitDir() string {
 	return avs.ledgerPath
 }
 
 // GetGitPath returns the resolved git binary path
-func (avs *AuditVaultService) GetGitPath() string {
+func (avs *TestSQLAuditStore) GetGitPath() string {
 	if avs == nil {
 		return ""
 	}
@@ -1145,13 +1150,13 @@ func (avs *AuditVaultService) GetGitPath() string {
 }
 
 // IsGitAvailable returns whether a functional git binary is available
-func (avs *AuditVaultService) IsGitAvailable() bool {
+func (avs *TestSQLAuditStore) IsGitAvailable() bool {
 	return avs != nil && avs.gitPath != ""
 }
 
 // auditVaultPrune returns a PruneFunc that handles retention pruning
 // for events, orphaned sessions, and orphaned file mutations.
-func auditVaultPrune(config *AuditVaultConfig) sqliteutil.PruneFunc {
+func auditVaultPrune(config *TestSQLAuditStoreConfig) sqliteutil.PruneFunc {
 	return func(db *sqliteutil.DB, logger *slog.Logger) {
 		cutoff := sqliteutil.FormatTimestamp(time.Now().AddDate(0, 0, -config.RetentionDays))
 
@@ -1204,7 +1209,7 @@ func auditVaultPrune(config *AuditVaultConfig) sqliteutil.PruneFunc {
 }
 
 // GetEncryptionVault returns the optional encryption vault used by this service.
-func (avs *AuditVaultService) GetEncryptionVault() *vault.Vault {
+func (avs *TestSQLAuditStore) GetEncryptionVault() *vault.Vault {
 	if avs == nil {
 		return nil
 	}
@@ -1212,7 +1217,7 @@ func (avs *AuditVaultService) GetEncryptionVault() *vault.Vault {
 }
 
 // Wait blocks until all in-flight writes have finished.
-func (avs *AuditVaultService) Wait() {
+func (avs *TestSQLAuditStore) Wait() {
 	if avs == nil {
 		return
 	}
@@ -1220,7 +1225,7 @@ func (avs *AuditVaultService) Wait() {
 }
 
 // Close shuts down the audit vault service. Idempotent.
-func (avs *AuditVaultService) Close() error {
+func (avs *TestSQLAuditStore) Close() error {
 	if avs == nil {
 		return nil
 	}
@@ -1241,12 +1246,12 @@ func (avs *AuditVaultService) Close() error {
 }
 
 // IsEnabled returns whether the audit vault is enabled
-func (avs *AuditVaultService) IsEnabled() bool {
+func (avs *TestSQLAuditStore) IsEnabled() bool {
 	return avs != nil && avs.db != nil
 }
 
 // GetDataDir returns the audit vault data directory
-func (avs *AuditVaultService) GetDataDir() string {
+func (avs *TestSQLAuditStore) GetDataDir() string {
 	if avs == nil {
 		return ""
 	}
@@ -1254,7 +1259,7 @@ func (avs *AuditVaultService) GetDataDir() string {
 }
 
 // GetLedgerPath returns the ledger directory path
-func (avs *AuditVaultService) GetLedgerPath() string {
+func (avs *TestSQLAuditStore) GetLedgerPath() string {
 	if avs == nil {
 		return ""
 	}
@@ -1263,12 +1268,12 @@ func (avs *AuditVaultService) GetLedgerPath() string {
 
 // IsEncryptionEnabled returns whether content encryption is enabled.
 // Vault is required, so only checks if unlocked.
-func (avs *AuditVaultService) IsEncryptionEnabled() bool {
+func (avs *TestSQLAuditStore) IsEncryptionEnabled() bool {
 	return avs.encryptionVault.IsUnlocked()
 }
 
 // encryptContent encrypts content. Vault is required and must be unlocked.
-func (avs *AuditVaultService) encryptContent(content string) ([]byte, error) {
+func (avs *TestSQLAuditStore) encryptContent(content string) ([]byte, error) {
 	if content == "" {
 		return nil, nil
 	}
@@ -1286,7 +1291,7 @@ func (avs *AuditVaultService) encryptContent(content string) ([]byte, error) {
 }
 
 // decryptContent decrypts content. Vault is required and must be unlocked.
-func (avs *AuditVaultService) decryptContent(data []byte) (string, error) {
+func (avs *TestSQLAuditStore) decryptContent(data []byte) (string, error) {
 	if len(data) == 0 {
 		return "", nil
 	}
@@ -1301,4 +1306,14 @@ func (avs *AuditVaultService) decryptContent(data []byte) (string, error) {
 	}
 
 	return string(decrypted), nil
+}
+
+// DocSet implements the TransactionAuditStore interface for test purposes.
+// This is a no-op implementation for the chaos tester since TestSQLAuditStore
+// is an audit store, not a document store. The actual audit data is stored
+// via RecordActionReceipt in the receipts table.
+func (avs *TestSQLAuditStore) DocSet(collection, id string, data json.RawMessage) error {
+	// No-op for test infrastructure - audit data is stored via RecordActionReceipt
+	avs.logger.Debug("DocSet called (no-op in test audit store)", "collection", collection, "id", id)
+	return nil
 }

@@ -41,7 +41,7 @@ type CommandService struct {
 	results        ResultsPublisher
 	scrubbing      *scrubbing.ScrubbingService
 	vaultWriter    *VaultWriter
-	auditVault     *storage.AuditVaultService
+	auditStore     *storage.SQLAuditStore
 	localStore     *storage.LocalStoreService
 	ledger         *storage.GitLedgerService
 	historyHandler *storage.HistoryHandler
@@ -69,9 +69,9 @@ func (cs *CommandService) SetLocalStoreService(ls *storage.LocalStoreService) {
 	}
 }
 
-// SetAuditVaultService sets the audit vault for the CommandService.
-func (cs *CommandService) SetAuditVaultService(av *storage.AuditVaultService) {
-	cs.auditVault = av
+// SetAuditStore sets the audit store for the CommandService.
+func (cs *CommandService) SetAuditStore(as *storage.SQLAuditStore) {
+	cs.auditStore = as
 }
 
 // SetLedgerService sets the ledger service for the CommandService.
@@ -211,7 +211,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 		result.Stderr = cs.scrubbing.ScrubText(result.Stderr)
 	}
 
-	if cs.auditVault != nil && cs.auditVault.IsEnabled() {
+	if cs.auditStore != nil && cs.auditStore.IsEnabled() {
 		event := &storage.Event{
 			OperatorSessionID:   cs.config.OperatorSessionId,
 			Timestamp:           time.Now().UTC(),
@@ -224,7 +224,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 			ExecutionDurationMs: int64(result.DurationSeconds * 1000),
 		}
 
-		if _, err := cs.auditVault.RecordEvent(event); err != nil {
+		if _, err := cs.auditStore.RecordEvent(event); err != nil {
 			cs.logger.Warn("Failed to record command event in audit vault", string(constants.ConnectionStateError), err)
 		} else {
 			cs.logger.Info("Scrubbed command event recorded in audit vault (LFAA)",

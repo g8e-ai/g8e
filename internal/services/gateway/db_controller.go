@@ -273,7 +273,7 @@ func (c *DBController) handleAuditReceipts(w http.ResponseWriter, r *http.Reques
 
 	txID := r.URL.Query().Get("tx_id")
 	if txID != "" {
-		receipt, err := c.db.AuditVault.GetActionReceipt(txID)
+		receipt, err := c.db.AuditStore.GetActionReceipt(txID)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -303,7 +303,7 @@ func (c *DBController) handleAuditReceipts(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	receipts, err := c.db.AuditVault.ListActionReceipts(operatorSessionID, limit, offset)
+	receipts, err := c.db.AuditStore.ListActionReceipts(operatorSessionID, limit, offset)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -340,7 +340,7 @@ func (c *DBController) handleAuditReceiptsExport(w http.ResponseWriter, r *http.
 		}
 	}
 
-	receipts, err := c.db.AuditVault.ListActionReceiptsSince(since, limit)
+	receipts, err := c.db.AuditStore.ListActionReceiptsSince(since, limit)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return

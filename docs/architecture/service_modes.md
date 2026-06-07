@@ -40,7 +40,7 @@ Outbound mode is the host-side Policy Execution Point (PEP) and MCP server mode.
   - Gateway mode: Full database service for all gateway operations
   - Outbound mode: Used only for canonical state root calculation (line 125 in g8eo.go)
 - **Status**: Reused with different scope per mode
-- **Dependencies**: `sqliteutil.DB`, `AuditVaultService`, keystore
+- **Dependencies**: `sqliteutil.DB`, `SQLAuditStore`, keystore
 
 ## Rationale for Shared vs Mode-Specific Services
 

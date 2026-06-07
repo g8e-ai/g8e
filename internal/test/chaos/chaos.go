@@ -21,6 +21,10 @@
 //	70%  Good Actor  – valid sig, safe intent (FS_LIST)       → EXECUTED
 //	20%  Prompt Inj  – valid sig, L1 forbidden cmd (sudo/rm)  → REJECTED (L1)
 //	10%  MitM        – corrupted transaction hash              → REJECTED (hash mismatch)
+//
+// This is a TEST-ONLY package for chaos testing of the governance stack.
+// It uses test infrastructure (storagetest.TestSQLAuditStore) and should not
+// be used in production code paths.
 package chaos
 
 import (
@@ -45,6 +49,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/services/storage/storagetest"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	vault "github.com/g8e-ai/g8e/internal/services/vault"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
@@ -439,7 +444,7 @@ func Run(cfg Config) {
 
 	// ── audit vault ───────────────────────────────────────────────────────────
 	gitPath, _ := findGit()
-	avCfg := &storage.AuditVaultConfig{
+	avCfg := &storagetest.TestSQLAuditStoreConfig{
 		DataDir:                   dataDir,
 		DBPath:                    "g8e.db",
 		LedgerDir:                 "ledger",
@@ -452,7 +457,7 @@ func Run(cfg Config) {
 		GitPath:                   gitPath,
 		EncryptionVault:           encryptionVault,
 	}
-	av, err := storage.NewAuditVaultService(avCfg, logger)
+	av, err := storagetest.NewTestSQLAuditStore(avCfg, logger)
 	if err != nil {
 		logger.Error("failed to initialise audit vault", "error", err)
 		os.Exit(1)
@@ -516,7 +521,7 @@ func Run(cfg Config) {
 	act := &governance.L5Actuator{
 		Logger:            logger,
 		SignerStore:       &governance.SimpleSignerStore{Signers: trustedSigners},
-		AuditVault:        av,
+		AuditStore:        av,
 		L3Notary:          l3Notary,
 		StateRootProvider: stateRootProvider,
 		ExecutionHandler:  &chaosExecutionHandler{ledger: ledger, stateRoot: stateRootProvider},
@@ -732,7 +737,7 @@ func fireOne(
 // batchEventWriter batches events to reduce SQLite lock contention
 type batchEventWriter struct {
 	mu         sync.Mutex
-	auditVault *storage.AuditVaultService
+	auditVault *storagetest.TestSQLAuditStore
 	logger     *slog.Logger
 	events     []*storage.ChaosEvent
 	flushSize  int

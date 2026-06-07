@@ -1032,14 +1032,14 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	// reach it for Actuator egress dispatch on verified MCP_CALL transactions.
 	mcpSvc := svc.GetHTTPHandler().GetMCPGateway()
 
-	// Get the GatewayDBService's AuditVault for full audit vault storage
+	// Get the GatewayDBService's AuditStore for full audit storage
 	// This ensures ActionReceipts are persisted in the receipts table
-	var auditVault *storage.AuditVaultService
-	if svc.GetDB() != nil && svc.GetDB().AuditVault != nil && svc.GetDB().AuditVault.IsEnabled() {
-		auditVault = svc.GetDB().AuditVault
-		logger.Info("Gateway AuditVault enabled for full audit vault storage")
+	var auditStore *storage.SQLAuditStore
+	if svc.GetDB() != nil && svc.GetDB().AuditStore != nil && svc.GetDB().AuditStore.IsEnabled() {
+		auditStore = svc.GetDB().AuditStore
+		logger.Info("Gateway AuditStore enabled for full audit storage")
 	} else {
-		logger.Warn("Gateway AuditVault not available or disabled - ActionReceipts will not be stored in audit vault")
+		logger.Warn("Gateway AuditStore not available or disabled - ActionReceipts will not be stored in audit store")
 	}
 
 	psConfig := pubsub.CommandServiceConfig{
@@ -1050,7 +1050,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		PubSubClient:        loopbackClient,
 		ResultsService:      nil, // Results handled via direct loopback publish if needed
 		LocalStore:          nil, // Not used in gateway mode
-		AuditVault:          auditVault,
+		AuditStore:          auditStore,
 		Ledger:              nil, // P1: Ledger in gateway mode
 		HistoryHandler:      nil, // P1: History in gateway mode
 		Scrubbing:           scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),

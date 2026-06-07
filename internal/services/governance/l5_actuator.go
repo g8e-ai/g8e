@@ -53,7 +53,7 @@ type L5Actuator struct {
 	Logger            *slog.Logger
 	SignerStore       SignerStore
 	Execution         *execution.ExecutionService
-	AuditVault        *storage.AuditVaultService
+	SQLAuditStore     *storage.SQLAuditStore
 	AuditStore        TransactionAuditStore
 	L3Notary          L3Notary
 	StateRootProvider StateRootProvider
@@ -265,7 +265,7 @@ func (w *L5Actuator) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 func (w *L5Actuator) LogReceipt(env *governance.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
 	docErr := w.logReceiptDocument(env, r)
 
-	if w.AuditVault == nil {
+	if w.SQLAuditStore == nil {
 		return docErr
 	}
 
@@ -289,7 +289,7 @@ func (w *L5Actuator) LogReceipt(env *governance.GovernanceEnvelope, r *operatorv
 		Timestamp:         time.Now().UTC(),
 	}
 
-	if err := w.AuditVault.RecordActionReceipt(&record); err != nil {
+	if err := w.SQLAuditStore.RecordActionReceipt(&record); err != nil {
 		if w.Logger != nil {
 			w.Logger.Error("Failed to record ActionReceipt in audit vault", string(constants.ConnectionStateError), err)
 		}

@@ -30,7 +30,7 @@ import (
 )
 
 // setupTestLedger creates a test environment for GitLedgerService
-func setupTestLedger(t *testing.T) (*GitLedgerService, *AuditVaultService, string) {
+func setupTestLedger(t *testing.T) (*GitLedgerService, *TestSQLAuditStore, string) {
 	gitPath := testGitPath(t)
 	tempDir := t.TempDir()
 
@@ -47,7 +47,7 @@ func setupTestLedger(t *testing.T) (*GitLedgerService, *AuditVaultService, strin
 	require.NoError(t, testVault.Unlock(privKey))
 	defer testVault.Close()
 
-	config := &AuditVaultConfig{
+	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -63,7 +63,7 @@ func setupTestLedger(t *testing.T) (*GitLedgerService, *AuditVaultService, strin
 
 	logger := testutil.NewTestLogger()
 
-	avs, err := NewAuditVaultService(config, logger)
+	avs, err := NewTestSQLAuditStore(config, logger)
 	require.NoError(t, err)
 
 	ledgerConfig := &LedgerConfig{
@@ -688,7 +688,7 @@ func TestLedgerService_MultiSessionConcurrency(t *testing.T) {
 			sessionID := fmt.Sprintf("parallel-session-%d", idx)
 			filePath := filepath.Join(tempDir, fmt.Sprintf("parallel_test_%d.txt", idx))
 
-			// Record session in DB first (required by AuditVaultService.RecordEvents check)
+			// Record session in DB first (required by TestSQLAuditStore .RecordEvents check)
 			err := avs.CreateSession(sessionID, "operator", "Parallel Session", "parallel@test.local")
 			require.NoError(t, err)
 

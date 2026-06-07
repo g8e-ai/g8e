@@ -100,7 +100,7 @@ type CommandServiceConfig struct {
 	PubSubClient      PubSubClient
 	ResultsService    ResultsPublisher
 	LocalStore        *storage.LocalStoreService
-	AuditVault        *storage.AuditVaultService
+	AuditStore        *storage.SQLAuditStore
 	Ledger            *storage.GitLedgerService
 	HistoryHandler    *storage.HistoryHandler
 	Scrubbing         *scrubbing.ScrubbingService
@@ -154,7 +154,7 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	rs.commands.results = c.ResultsService
 	rs.commands.scrubbing = c.Scrubbing
 	rs.commands.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Scrubbing, c.LocalStore)
-	rs.commands.auditVault = c.AuditVault
+	rs.commands.auditStore = c.AuditStore
 	rs.commands.localStore = c.LocalStore
 	rs.commands.ledger = c.Ledger
 	rs.commands.historyHandler = c.HistoryHandler
@@ -163,13 +163,13 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	rs.fileOps.results = c.ResultsService
 	rs.fileOps.scrubbing = c.Scrubbing
 	rs.fileOps.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Scrubbing, c.LocalStore)
-	rs.fileOps.auditVault = c.AuditVault
+	rs.fileOps.auditStore = c.AuditStore
 	rs.fileOps.ledger = c.Ledger
 
 	rs.ports = NewPortService(c.Config, c.Logger, client)
 
 	rs.audit = NewAuditService(c.Config, c.Logger)
-	rs.audit.auditVault = c.AuditVault
+	rs.audit.auditStore = c.AuditStore
 
 	rs.history = NewHistoryService(c.Config, c.Logger, client)
 	rs.history.localStore = c.LocalStore
@@ -225,7 +225,7 @@ func (rs *PubSubCommandService) initializeGovernance(c CommandServiceConfig, ser
 		Logger:            c.Logger,
 		SignerStore:       rs.signerStore,
 		Execution:         c.Execution,
-		AuditVault:        c.AuditVault,
+		SQLAuditStore:     c.AuditStore,
 		AuditStore:        c.TransactionAudit,
 		L3Notary:          c.L3Notary,
 		StateRootProvider: c.StateRootProvider,
@@ -876,7 +876,7 @@ func (rs *PubSubCommandService) SendAutomaticHeartbeat() {
 // logBlockedTransaction records a blocked/rejected transaction using the ActionReceiptRecord schema.
 // This ensures consistency with accepted/failed Actuator receipts - all transaction outcomes use the same canonical schema.
 func (rs *PubSubCommandService) logBlockedTransaction(env *govpkg.GovernanceEnvelope, rejectionReason error) {
-	if rs.audit == nil || rs.audit.auditVault == nil {
+	if rs.audit == nil || rs.audit.auditStore == nil {
 		return
 	}
 
@@ -899,7 +899,7 @@ func (rs *PubSubCommandService) logBlockedTransaction(env *govpkg.GovernanceEnve
 	}
 
 	// Log to audit vault using canonical RecordActionReceipt for unified query experience
-	if err := rs.audit.auditVault.RecordActionReceipt(&record); err != nil {
+	if err := rs.audit.auditStore.RecordActionReceipt(&record); err != nil {
 		rs.logger.Error("Failed to record blocked transaction in audit vault", string(constants.ConnectionStateError), err, "message_id", env.Id)
 	}
 }

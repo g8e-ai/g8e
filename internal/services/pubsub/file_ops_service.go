@@ -44,7 +44,7 @@ type FileOpsService struct {
 	results     ResultsPublisher
 	scrubbing   *scrubbing.ScrubbingService
 	vaultWriter *VaultWriter
-	auditVault  *storage.AuditVaultService
+	auditStore  *storage.SQLAuditStore
 	ledger      *storage.GitLedgerService
 	client      PubSubClient
 }
@@ -159,7 +159,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 		})
 	}
 
-	if fs.auditVault != nil && fs.auditVault.IsEnabled() && operation != "read" {
+	if fs.auditStore != nil && fs.auditStore.IsEnabled() && operation != "read" {
 		event := &storage.Event{
 			OperatorSessionID:   fs.config.OperatorSessionId,
 			Timestamp:           time.Now().UTC(),
@@ -180,7 +180,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 			}
 		}
 
-		eventID, err := fs.auditVault.RecordEvent(event)
+		eventID, err := fs.auditStore.RecordEvent(event)
 		if err != nil {
 			fs.logger.Warn("Failed to record file mutation event in audit vault", string(constants.ConnectionStateError), err)
 		} else {
@@ -206,7 +206,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 					Operation: mutationOp,
 				}
 
-				if err := fs.auditVault.RecordFileMutation(mutation); err != nil {
+				if err := fs.auditStore.RecordFileMutation(mutation); err != nil {
 					fs.logger.Warn("Failed to record file mutation in audit log", string(constants.ConnectionStateError), err)
 				}
 

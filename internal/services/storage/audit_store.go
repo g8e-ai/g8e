@@ -40,8 +40,8 @@ type AuditStoreConfig struct {
 	Enabled                   bool
 	OutputTruncationThreshold int
 	HeadTailSize              int
-	// EncryptionVault is the optional vault.Vault for encrypting sensitive content fields.
-	// When set, content_text, command_stdout, and command_stderr are encrypted at rest.
+	// EncryptionVault is the required vault.Vault for encrypting sensitive content fields.
+	// content_text, command_stdout, and command_stderr are encrypted at rest.
 	EncryptionVault *vault.Vault
 }
 

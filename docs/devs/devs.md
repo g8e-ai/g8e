@@ -139,11 +139,27 @@ The platform is built via the Makefile. Run `make help` for available targets.
 - No mocks; use real database, pub/sub, and LLM calls
 - Contract tests enforce alignment between components and `protocol/`
 - mTLS by default; test runner handles certificate injection
+- Test infrastructure separated from production code to avoid import cycles
 
 **Run tests via CLI:**
 - `./g8e test` - Full test suite (unit + integration)
 
 Never call `go test` directly for platform tests.
+
+### Test Infrastructure Separation
+
+Test-only code is separated from production code to avoid import cycles and maintain clear boundaries:
+
+**`internal/services/storage/storagetest/`** - Test-only audit storage implementations
+- `TestSQLAuditStore` - Test-only monolithic audit service with Git ledger integration
+- Used only in test code (e.g., chaos tester at `internal/test/chaos/chaos.go`)
+- Implements `TransactionAuditStore` interface via a no-op `DocSet` method
+- Production code uses `storage.SQLAuditStore` from `audit_store.go`
+
+**`internal/test/chaos/`** - Chaos engineering test infrastructure
+- Chaos tester uses `storagetest.TestSQLAuditStore` for audit storage
+- This is intentional test infrastructure, not production code
+- Located in `internal/test/` to clearly indicate test-only status
 
 ## Documentation
 

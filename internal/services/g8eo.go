@@ -55,7 +55,6 @@ type G8eoService struct {
 
 	pubSubClient pubsub.PubSubClient
 
-	auditVault     *storage.AuditVaultService
 	auditStore     *storage.SQLAuditStore
 	ledger         *storage.GitLedgerService
 	historyHandler *storage.HistoryHandler
@@ -263,27 +262,15 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("audit store is required but was not initialized")
 	}
 
-	// Initialize AuditVaultService for audit logging
-	auditVaultConfig := storage.DefaultAuditVaultConfig()
-	auditVaultConfig.DataDir = filepath.Join(vs.config.WorkDir, ".g8e/data")
-	auditVaultConfig.EncryptionVault = encryptionVault
-	auditVaultConfig.GitPath = gitPath
-	vs.auditVault, err = storage.NewAuditVaultService(auditVaultConfig, vs.logger)
-	if err != nil {
-		return fmt.Errorf("failed to initialize audit vault: %w", err)
-	}
-	if vs.auditVault == nil {
-		return fmt.Errorf("audit vault is required but was not initialized")
-	}
 	if vs.config.OperatorSessionId == "" {
-		return fmt.Errorf("operator session ID required before audit vault can accept events")
+		return fmt.Errorf("operator session ID required before audit store can accept events")
 	}
-	operator_session, err := vs.auditVault.GetOperatorSession(vs.config.OperatorSessionId)
+	operator_session, err := vs.auditStore.GetOperatorSession(vs.config.OperatorSessionId)
 	if err != nil {
 		return fmt.Errorf("failed to verify audit session: %w", err)
 	}
 	if operator_session == nil {
-		if err := vs.auditVault.CreateSession(vs.config.OperatorSessionId, string(constants.UserRoleOperator), "Operator Session", vs.config.OperatorID); err != nil {
+		if err := vs.auditStore.CreateSession(vs.config.OperatorSessionId, string(constants.UserRoleOperator), "Operator Session", vs.config.OperatorID); err != nil {
 			return fmt.Errorf("failed to create audit session: %w", err)
 		}
 	}
@@ -337,7 +324,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// Create governance dependencies for transaction verification
 	// Use CanonicalDBService for canonical state root calculation (same schema as gateway mode)
 	stateRootProvider := vs.gatewayDB
-	transactionAudit := &auditVaultTransactionStore{vault: vs.auditVault}
+	transactionAudit := &auditStoreTransactionStore{store: vs.auditStore}
 	// L3Notary for outbound mode: CLI-based approval via suspended transactions
 	// Mutations requiring L3 are suspended and must be approved via CLI command
 	cliL3Notary := governance.NewOutboundL3Notary(vs.suspendedTxStore, vs.logger)
@@ -374,7 +361,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		PubSubClient:        vs.pubSubClient,
 		ResultsService:      vs.pubSubResults,
 		LocalStore:          vs.localStore,
-		AuditVault:          vs.auditVault,
+		AuditStore:          vs.auditStore,
 		Ledger:              vs.ledger,
 		HistoryHandler:      vs.historyHandler,
 		Scrubbing:           scrubbingService,
@@ -458,10 +445,10 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 		vs.execution.Stop()
 	}
 
-	// Drain audit vault writes
-	if vs.auditVault != nil {
+	// Drain audit store writes
+	if vs.auditStore != nil {
 		vs.logger.Info("Waiting for audit writes to drain...")
-		vs.auditVault.Wait()
+		vs.auditStore.Wait()
 	}
 
 	// Close vaults and stores
@@ -495,9 +482,9 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 		}
 	}
 
-	if vs.auditVault != nil {
-		if err := vs.auditVault.Close(); err != nil {
-			vs.logger.Error("Failed to close audit vault", string(constants.ConnectionStateError), err)
+	if vs.auditStore != nil {
+		if err := vs.auditStore.Close(); err != nil {
+			vs.logger.Error("Failed to close audit store", string(constants.ConnectionStateError), err)
 		}
 	}
 
@@ -506,13 +493,13 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 	return nil
 }
 
-// auditVaultTransactionStore wraps AuditVaultService to implement governance.TransactionAuditStore.
-type auditVaultTransactionStore struct {
-	vault *storage.AuditVaultService
+// auditStoreTransactionStore wraps SQLAuditStore to implement governance.TransactionAuditStore.
+type auditStoreTransactionStore struct {
+	store *storage.SQLAuditStore
 }
 
-func (a *auditVaultTransactionStore) DocSet(collection, id string, data json.RawMessage) error {
-	if a.vault == nil {
+func (a *auditStoreTransactionStore) DocSet(collection, id string, data json.RawMessage) error {
+	if a.store == nil {
 		return nil
 	}
 	var receipt models.ActionReceiptRecord
@@ -520,7 +507,7 @@ func (a *auditVaultTransactionStore) DocSet(collection, id string, data json.Raw
 		return fmt.Errorf("failed to decode action receipt record: %w", err)
 	}
 	// Record directly in receipts table via transaction-native API
-	return a.vault.RecordActionReceipt(&receipt)
+	return a.store.RecordActionReceipt(&receipt)
 }
 
 // printOperatorStartupBanner prints the Operator startup banner to stdout

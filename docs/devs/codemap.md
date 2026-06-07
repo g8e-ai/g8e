@@ -36,8 +36,8 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   │               └── gateway.SessionsService
 │   ├── governance.L5Actuator
 │   │   ├── execution.ExecutionService
-│   │   ├── storage.AuditVaultService
-│   │   ├── storage.AuditStore (auditVaultTransactionStore wrapper)
+│   │   ├── storage.SQLAuditStore
+│   │   ├── storage.AuditStore (auditStoreTransactionStore wrapper)
 │   │   ├── scrubbing.ScrubbingService
 │   │   ├── governance.StateRootProvider
 │   │   └── governance.SignerStore
@@ -49,15 +49,14 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 ├── storage.LocalStoreService
 │   ├── sqliteutil.DB
 │   └── vault.Vault
-├── storage.AuditVaultService
+├── storage.SQLAuditStore
 │   ├── sqliteutil.DB
-│   ├── vault.Vault
-│   └── go-git (native, for ledger repos)
+│   └── vault.Vault
 ├── storage.LedgerService
-│   ├── storage.AuditVaultService
+│   ├── storage.SQLAuditStore
 │   └── vault.Vault
 ├── storage.HistoryHandler
-│   ├── storage.AuditVaultService
+│   ├── storage.SQLAuditStore
 │   └── storage.LedgerService
 ├── governance.ReplayStore (storage.SQLReplayStore)
 │   └── storage.LocalStoreService (shared DB)
@@ -67,7 +66,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ├── gateway.CanonicalDBService [SHARED]
 │   ├── sqliteutil.DB
-│   ├── storage.AuditVaultService
+│   ├── storage.SQLAuditStore
 │   └── keystore (embedded in schema)
 ├── gateway.PubSubBroker
 ├── gateway.AuthService
@@ -106,9 +105,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **Shared services**: `mcp.GatewayService` (used in both modes for MCP/A2A protocol handling), `CanonicalDBService` (used in both modes for state root calculation - full service in gateway mode, state root calculation only in outbound mode)
 
 ### Data Handling Convergence
-- **`gateway.CanonicalDBService`** is the canonical SQLite root for gateway mode; it also embeds `storage.AuditVaultService`. In outbound mode, it is used only for state root calculation.
+- **`gateway.CanonicalDBService`** is the canonical SQLite root for gateway mode; it also embeds `storage.SQLAuditStore`. In outbound mode, it is used only for state root calculation.
 - **`storage.LocalStoreService`** is the consolidated execution vault for outbound mode.
-- **`storage.AuditVaultService`** is shared by both modes and provides the git-backed ledger foundation.
+- **`storage.SQLAuditStore`** is shared by both modes and provides the SQL-based audit storage foundation.
 
 ### Dependency Flow
 - `scrubbing.ScrubbingService` depends on `storage.LocalStoreService` (as `TokenStore`).
@@ -135,7 +134,24 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 | Flow | Path |
 |------|------|
 | Command execution results | `ExecutionService` → `CommandService` → `PubSubResultsService` → Pub/Sub channel |
-| Audit events | `CommandService` / `FileOpsService` → `AuditVaultService` → SQLite + git ledger |
-| File mutations | `FileEditService` → `LedgerService` → `AuditVaultService` git commit |
+| Audit events | `CommandService` / `FileOpsService` → `SQLAuditStore` → SQLite |
+| File mutations | `FileEditService` → `LedgerService` → git commit |
 | Suspended transactions | `L4Warden` → `LocalStoreService` (outbound) or `CanonicalDBService` (gateway) |
-| Action receipts | `L5Actuator` → `AuditVaultService` (receipts table) + signed return |
+| Action receipts | `L5Actuator` → `SQLAuditStore` (receipts table) + signed return |
+
+## Test Infrastructure (Not Production)
+
+The following packages are test-only and are not part of the production dependency tree:
+
+**`internal/services/storage/storagetest/`** - Test-only audit storage implementations
+- `TestSQLAuditStore` - Test-only monolithic audit service with Git ledger integration
+- Used only in test code (e.g., chaos tester at `internal/test/chaos/chaos.go`)
+- Implements `TransactionAuditStore` interface via a no-op `DocSet` method
+- Production code uses `storage.SQLAuditStore` from `audit_store.go`
+
+**`internal/test/chaos/`** - Chaos engineering test infrastructure
+- Chaos tester uses `storagetest.TestSQLAuditStore` for audit storage
+- This is intentional test infrastructure, not production code
+- Located in `internal/test/` to clearly indicate test-only status
+
+**Key distinction**: Test infrastructure is separated from production code to avoid import cycles. The `storagetest` package provides test implementations that should never be used in production code paths.

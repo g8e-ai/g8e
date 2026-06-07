@@ -59,10 +59,9 @@ All storage services require an unlocked vault at initialization:
 | Service | Vault Required | Encrypted Data |
 |---------|---------------|----------------|
 | LocalStoreService | Yes | Command stdout/stderr, file diffs, content |
-| AuditVaultService | Yes | Audit records, governance envelopes |
+| SQLAuditStore | Yes | Audit records, governance envelopes, audit trail, compliance records |
 | ExecutionVaultService | Yes | Execution results, command outputs |
 | TokenStoreService | Yes | Authentication tokens, session data |
-| SQLAuditStore | Yes | Audit trail, compliance records |
 | GitLedgerService | Optional (graceful degradation) | File content in ledger |
 
 ## Vault Lifecycle

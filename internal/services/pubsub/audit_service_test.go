@@ -59,7 +59,7 @@ func TestAuditService_HandleUserMsgRequest(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewAuditService(cfg, logger)
-		svc.auditVault = &storage.AuditVaultService{} // Mock enabled but no storage
+		svc.auditStore = &storage.SQLAuditStore{} // Mock enabled but no storage
 
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -76,7 +76,7 @@ func TestAuditService_HandleUserMsgRequest(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewAuditService(cfg, logger)
-		svc.auditVault = &storage.AuditVaultService{} // Mock enabled but no storage
+		svc.auditStore = &storage.SQLAuditStore{} // Mock enabled but no storage
 
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -93,7 +93,7 @@ func TestAuditService_HandleUserMsgRequest(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewAuditService(cfg, logger)
-		svc.auditVault = &storage.AuditVaultService{} // Mock enabled but no storage
+		svc.auditStore = &storage.SQLAuditStore{} // Mock enabled but no storage
 
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -128,7 +128,7 @@ func TestAuditService_HandleAIMsgRequest(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewAuditService(cfg, logger)
-		svc.auditVault = &storage.AuditVaultService{}
+		svc.auditStore = &storage.SQLAuditStore{}
 
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -145,7 +145,7 @@ func TestAuditService_HandleAIMsgRequest(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewAuditService(cfg, logger)
-		svc.auditVault = &storage.AuditVaultService{}
+		svc.auditStore = &storage.SQLAuditStore{}
 
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -162,7 +162,7 @@ func TestAuditService_HandleAIMsgRequest(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewAuditService(cfg, logger)
-		svc.auditVault = &storage.AuditVaultService{}
+		svc.auditStore = &storage.SQLAuditStore{}
 
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -197,7 +197,7 @@ func TestAuditService_HandleDirectCmdRequest(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewAuditService(cfg, logger)
-		svc.auditVault = &storage.AuditVaultService{}
+		svc.auditStore = &storage.SQLAuditStore{}
 
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -214,7 +214,7 @@ func TestAuditService_HandleDirectCmdRequest(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewAuditService(cfg, logger)
-		svc.auditVault = &storage.AuditVaultService{}
+		svc.auditStore = &storage.SQLAuditStore{}
 
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -231,7 +231,7 @@ func TestAuditService_HandleDirectCmdRequest(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewAuditService(cfg, logger)
-		svc.auditVault = &storage.AuditVaultService{}
+		svc.auditStore = &storage.SQLAuditStore{}
 
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -266,7 +266,7 @@ func TestAuditService_HandleDirectCmdResultRequest(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewAuditService(cfg, logger)
-		svc.auditVault = &storage.AuditVaultService{}
+		svc.auditStore = &storage.SQLAuditStore{}
 
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -283,7 +283,7 @@ func TestAuditService_HandleDirectCmdResultRequest(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewAuditService(cfg, logger)
-		svc.auditVault = &storage.AuditVaultService{}
+		svc.auditStore = &storage.SQLAuditStore{}
 
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -300,7 +300,7 @@ func TestAuditService_HandleDirectCmdResultRequest(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewAuditService(cfg, logger)
-		svc.auditVault = &storage.AuditVaultService{}
+		svc.auditStore = &storage.SQLAuditStore{}
 
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
