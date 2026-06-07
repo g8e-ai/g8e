@@ -321,17 +321,21 @@ func BuildAuthMethods(r HostConfig, sshAuthSock, passphrase string) ([]ssh.AuthM
 
 // BuildHostKeyCallback returns a strict known_hosts-backed host-key callback.
 //
+// If khPath is empty, it defaults to ~/.ssh/known_hosts.
+//
 // Strict-only by design: there is no accept-new fallback. The caller MUST have
 // pre-populated ~/.ssh/known_hosts with every target host's key. Any unknown host
 // fails the SSH handshake immediately. Any I/O error reading the file is returned
 // to the caller, which surfaces it as a per-host failure rather than
 // silently degrading security.
-func BuildHostKeyCallback() (ssh.HostKeyCallback, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("ssh: resolve home directory for known_hosts: %w", err)
+func BuildHostKeyCallback(khPath string) (ssh.HostKeyCallback, error) {
+	if khPath == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("ssh: resolve home directory for known_hosts: %w", err)
+		}
+		khPath = filepath.Join(home, ".ssh", "known_hosts")
 	}
-	khPath := filepath.Join(home, ".ssh", "known_hosts")
 	if _, err := os.Stat(khPath); err != nil {
 		return nil, fmt.Errorf(
 			"ssh: known_hosts not found at %s: strict host-key checking requires every target "+

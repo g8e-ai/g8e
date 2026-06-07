@@ -291,8 +291,6 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 	}
 
 	clientIdentity.SetCertificate(newCert)
-	// Also set the global for compatibility during migration
-	certs.SetClientCertificate(newCert)
 
 	return nil
 }
@@ -475,7 +473,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -k, --key <key>         Private key\n")
 		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address or hostname of the operator\n")
-		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: "+constants.Paths.Infra.CaCertPath+" or fetch from /.well-known/g8e/pki/ca-bundle)\n")
+		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: %s or fetch from /.well-known/g8e/pki/ca-bundle)\n", constants.Paths.Infra.CaCertPath)
 		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory Operator was launched from)\n")
 		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")
 		fmt.Fprintf(os.Stderr, "  -c, --cloud             Cloud Operator mode (for AWS/cloud CLI)\n")
@@ -620,14 +618,14 @@ func main() {
 		if endpointURL != "" {
 			trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/ca-bundle", endpointURL, constants.Ports.OperatorHttp)
 			logger.Info("Fetching trust bundle from Operator PKI endpoint", "url", trustURL)
-			if err := certs.FetchAndSetCA(context.Background(), trustURL, ""); err != nil {
+			pemData, err := certs.FetchTrustBundle(context.Background(), trustURL, "")
+			if err != nil {
 				logger.Error("Failed to fetch trust bundle from Operator", "url", trustURL, string(constants.ConnectionStateError), err)
 				fmt.Fprintf(os.Stderr, "Failed to fetch trust bundle from Operator: %v\n", err)
 				fmt.Fprintf(os.Stderr, "  Ensure the platform is running: ./g8e gw start\n")
 				os.Exit(constants.ExitConfigError)
 			}
-			// Also set in trustStore for DI
-			trustStore.SetCA(certs.GetRawCA())
+			trustStore.SetCA(pemData)
 		} else {
 			logger.Error("No trust bundle available and no endpoint specified")
 			fmt.Fprintf(os.Stderr, "Error: No trust bundle available. Provide --trust-bundle or --endpoint\n")
@@ -635,6 +633,9 @@ func main() {
 		}
 	}
 	logger.Info("Trust bundle loaded")
+
+	// Create DI-based TLS config from trust store and client identity
+	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
 
 	// Resolve default client certificate paths if not explicitly provided
 	// Priority: 1. Explicit flags, 2. Project-local .g8e/pki/operator.*, 3. Project-local .g8e/pki/client.*
@@ -704,8 +705,6 @@ func main() {
 	}
 
 	clientIdentity.SetCertificate(cert)
-	// Also set the global for compatibility during migration
-	certs.SetClientCertificate(cert)
 
 	// Resolve the effective working directory: flag overrides launch dir.
 	effectiveWorkDir := launchDir
@@ -749,7 +748,7 @@ func main() {
 		logger.Info("Execution vault disabled (command output sent to cloud)")
 	}
 
-	g8eoService, err := services.NewG8eoService(cfg, logger)
+	g8eoService, err := services.NewG8eoService(cfg, logger, tlsConfig)
 	if err != nil {
 		logger.Error("Failed to create Operator service", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitCodeFromError(err))
@@ -821,8 +820,6 @@ func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string, trust
 			continue
 		}
 		trustStore.SetCA(pemData)
-		// Also set the global for compatibility during migration
-		certs.SetCA(pemData)
 		logger.Info("CA certificate loaded from local file")
 		return true
 	}

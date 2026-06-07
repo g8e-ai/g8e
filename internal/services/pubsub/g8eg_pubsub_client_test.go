@@ -37,14 +37,14 @@ func TestNewOperatorPubSubClient(t *testing.T) {
 	logger := slog.Default()
 
 	t.Run("rejects empty baseURL", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient("", "", logger)
+		client, err := NewOperatorPubSubClient("", "", logger, nil)
 		assert.Error(t, err)
 		assert.Nil(t, client)
 		assert.Contains(t, err.Error(), "operator pub/sub URL is required")
 	})
 
 	t.Run("accepts ws:// URL", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
 		assert.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.Equal(t, fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), client.baseURL)
@@ -53,7 +53,7 @@ func TestNewOperatorPubSubClient(t *testing.T) {
 	})
 
 	t.Run("accepts wss:// URL", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), "", logger)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
 		assert.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.Equal(t, fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), client.baseURL)
@@ -61,7 +61,7 @@ func TestNewOperatorPubSubClient(t *testing.T) {
 	})
 
 	t.Run("sets serverName for TLS SNI override", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://192.168.1.1:%d", constants.Ports.OperatorHttp), "gateway.local", logger)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://192.168.1.1:%d", constants.Ports.OperatorHttp), "gateway.local", logger, nil)
 		assert.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.Equal(t, "gateway.local", client.serverName)
@@ -73,13 +73,13 @@ func TestPubSubWSURL(t *testing.T) {
 	logger := slog.Default()
 
 	t.Run("returns correct URL for ws://", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
 		require.NoError(t, err)
 		assert.Equal(t, fmt.Sprintf("ws://localhost:%d/ws/pubsub", constants.Ports.OperatorHttp), client.pubSubWSURL())
 	})
 
 	t.Run("returns correct URL for wss://", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), "", logger)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
 		require.NoError(t, err)
 		assert.Equal(t, fmt.Sprintf("wss://localhost:%d/ws/pubsub", constants.Ports.OperatorHttp), client.pubSubWSURL())
 	})
@@ -89,7 +89,7 @@ func TestConnectPubWs(t *testing.T) {
 	logger := slog.Default()
 
 	t.Run("fails on invalid endpoint", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient("ws://invalid-host-that-does-not-exist:9999", "", logger)
+		client, err := NewOperatorPubSubClient("ws://invalid-host-that-does-not-exist:9999", "", logger, nil)
 		require.NoError(t, err)
 
 		client.mu.Lock()
@@ -110,7 +110,7 @@ func TestConnectPubWs(t *testing.T) {
 		defer server.Close()
 
 		wsURL := strings.Replace(server.URL, "http", "ws", 1)
-		client, err := NewOperatorPubSubClient(wsURL, "", logger)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
 		require.NoError(t, err)
 
 		client.mu.Lock()
@@ -128,7 +128,7 @@ func TestPublish(t *testing.T) {
 	logger := slog.Default()
 
 	t.Run("fails when client is closed", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
 		require.NoError(t, err)
 		client.Close()
 
@@ -138,7 +138,7 @@ func TestPublish(t *testing.T) {
 	})
 
 	t.Run("fails on connection error", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient("ws://invalid-host:9999", "", logger)
+		client, err := NewOperatorPubSubClient("ws://invalid-host:9999", "", logger, nil)
 		require.NoError(t, err)
 
 		err = client.Publish(context.Background(), "test-channel", []byte("test data"))
@@ -161,7 +161,7 @@ func TestPublish(t *testing.T) {
 		defer server.Close()
 
 		wsURL := strings.Replace(server.URL, "http", "ws", 1)
-		client, err := NewOperatorPubSubClient(wsURL, "", logger)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
 		require.NoError(t, err)
 
 		testData := []byte("test payload")
@@ -186,7 +186,7 @@ func TestClose(t *testing.T) {
 	logger := slog.Default()
 
 	t.Run("closes nil pubWs gracefully", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
 		require.NoError(t, err)
 		assert.NotPanics(t, func() {
 			client.Close()
@@ -204,7 +204,7 @@ func TestClose(t *testing.T) {
 		defer server.Close()
 
 		wsURL := strings.Replace(server.URL, "http", "ws", 1)
-		client, err := NewOperatorPubSubClient(wsURL, "", logger)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
 		require.NoError(t, err)
 
 		err = client.Publish(context.Background(), "test-channel", []byte("test"))
@@ -221,7 +221,7 @@ func TestSubscribe(t *testing.T) {
 	logger := slog.Default()
 
 	t.Run("fails on connection error", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient("ws://invalid-host:9999", "", logger)
+		client, err := NewOperatorPubSubClient("ws://invalid-host:9999", "", logger, nil)
 		require.NoError(t, err)
 
 		_, err = client.Subscribe(context.Background(), "test-channel")
@@ -267,7 +267,7 @@ func TestSubscribe(t *testing.T) {
 		defer server.Close()
 
 		wsURL := strings.Replace(server.URL, "http", "ws", 1)
-		client, err := NewOperatorPubSubClient(wsURL, "", logger)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
 		require.NoError(t, err)
 
 		ch, err := client.Subscribe(context.Background(), "test-channel")
@@ -322,7 +322,7 @@ func TestSubscribe(t *testing.T) {
 		defer server.Close()
 
 		wsURL := strings.Replace(server.URL, "http", "ws", 1)
-		client, err := NewOperatorPubSubClient(wsURL, "", logger)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
 		require.NoError(t, err)
 
 		ch, err := client.Subscribe(context.Background(), "test-channel")
@@ -369,7 +369,7 @@ func TestSubscribe(t *testing.T) {
 		defer server.Close()
 
 		wsURL := strings.Replace(server.URL, "http", "ws", 1)
-		client, err := NewOperatorPubSubClient(wsURL, "", logger)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
 		require.NoError(t, err)
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -413,7 +413,7 @@ func TestWaitForSubscribedACK(t *testing.T) {
 			resp.Body.Close()
 		}
 
-		client, err := NewOperatorPubSubClient(wsURL, "", logger)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
 		require.NoError(t, err)
 
 		var pending [][]byte
@@ -443,7 +443,7 @@ func TestWaitForSubscribedACK(t *testing.T) {
 			resp.Body.Close()
 		}
 
-		client, err := NewOperatorPubSubClient(wsURL, "", logger)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
 		require.NoError(t, err)
 
 		var pending [][]byte

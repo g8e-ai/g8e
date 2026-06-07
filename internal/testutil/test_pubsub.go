@@ -15,6 +15,7 @@ package testutil
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"strings"
 	"testing"
@@ -23,6 +24,7 @@ import (
 	"github.com/gorilla/websocket"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/httpclient"
 	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
@@ -38,7 +40,10 @@ func TestPubSubAvailable(t *testing.T, baseURL string) {
 		baseURL = GetTestOperatorDirectURL()
 	}
 	wsURL := baseURL + "/ws/pubsub"
-	dialer, err := httpclient.WebSocketDialer()
+	trustStore := certs.NewTrustStore(certs.GetRawCA())
+	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
+	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
+	dialer, err := httpclient.WebSocketDialerWithTLSConfig(tlsConfig)
 	if err != nil {
 		t.Fatalf("testutil: TLS setup failed: %v", err)
 	}
@@ -60,7 +65,10 @@ func SubscribeToChannel(t *testing.T, baseURL string, channel string) <-chan []b
 
 	wsURL := baseURL + "/ws/pubsub"
 
-	dialer, err := httpclient.WebSocketDialer()
+	trustStore := certs.NewTrustStore(certs.GetRawCA())
+	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
+	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
+	dialer, err := httpclient.WebSocketDialerWithTLSConfig(tlsConfig)
 	if err != nil {
 		t.Fatalf("testutil: TLS dialer build failed: %v", err)
 	}
@@ -124,7 +132,10 @@ func PublishTestMessage(t *testing.T, baseURL string, channel string, message st
 
 	wsURL := baseURL + "/ws/pubsub"
 
-	dialer, err := httpclient.WebSocketDialer()
+	trustStore := certs.NewTrustStore(certs.GetRawCA())
+	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
+	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
+	dialer, err := httpclient.WebSocketDialerWithTLSConfig(tlsConfig)
 	if err != nil {
 		t.Fatalf("testutil: TLS dialer build failed: %v", err)
 	}

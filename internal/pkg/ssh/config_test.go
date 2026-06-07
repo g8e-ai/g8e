@@ -439,14 +439,9 @@ func TestBuildAuthMethods(t *testing.T) {
 func TestBuildHostKeyCallback(t *testing.T) {
 	t.Run("known_hosts file does not exist", func(t *testing.T) {
 		dir := t.TempDir()
-		t.Setenv("HOME", dir)
-		// On Windows, os.UserHomeDir() uses USERPROFILE, not HOME
-		t.Setenv("USERPROFILE", dir)
-		// Ensure .ssh directory exists but known_hosts does not
-		sshDir := filepath.Join(dir, ".ssh")
-		require.NoError(t, os.Mkdir(sshDir, 0700))
+		khPath := filepath.Join(dir, "known_hosts")
 
-		cb, err := BuildHostKeyCallback()
+		cb, err := BuildHostKeyCallback(khPath)
 		require.Error(t, err)
 		assert.Nil(t, cb)
 		assert.Contains(t, err.Error(), "known_hosts not found")
@@ -454,14 +449,10 @@ func TestBuildHostKeyCallback(t *testing.T) {
 
 	t.Run("malformed known_hosts file", func(t *testing.T) {
 		dir := t.TempDir()
-		sshDir := filepath.Join(dir, ".ssh")
-		require.NoError(t, os.Mkdir(sshDir, 0700))
-		khPath := filepath.Join(sshDir, "known_hosts")
+		khPath := filepath.Join(dir, "known_hosts")
 		require.NoError(t, os.WriteFile(khPath, []byte("invalid known_hosts content"), 0600))
 
-		t.Setenv("HOME", dir)
-
-		_, err := BuildHostKeyCallback()
+		_, err := BuildHostKeyCallback(khPath)
 		assert.Error(t, err)
 	})
 }

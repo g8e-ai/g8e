@@ -81,6 +81,39 @@ func GenerateTestCSRP256(t *testing.T, commonName string) string {
 	return string(csrPEM)
 }
 
+// GenerateTestCA generates a minimal valid self-signed CA certificate and returns
+// the certificate PEM. The certificate has IsCA=true and the required key usages
+// so it can be used as a RootCAs trust anchor in TLS configs.
+func GenerateTestCA(t *testing.T, commonName string) string {
+	t.Helper()
+
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName: commonName,
+		},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+	}
+
+	certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	require.NoError(t, err)
+
+	return string(pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certBytes,
+	}))
+}
+
 // GenerateTestCertificate generates a minimal valid test certificate and returns
 // the certificate PEM and private key PEM.
 func GenerateTestCertificate(t *testing.T, commonName string) (certPEM string, keyPEM string) {

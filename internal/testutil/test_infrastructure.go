@@ -23,18 +23,28 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 )
+
+// testConfigCounter ensures unique OperatorIDs across parallel test calls.
+var testConfigCounter atomic.Uint64
 
 // NewTestConfig returns a test configuration with isolated workDir.
 // Does NOT modify global constants.Paths to avoid data races in parallel tests.
 func NewTestConfig(t *testing.T) *config.Config {
 	t.Helper()
-	n := time.Now().UnixNano()
+
+	// Ensure certs package has a valid CA configured for httpclient calls in tests
+	if len(certs.GetRawCA()) == 0 {
+		certs.SetCA([]byte(GenerateTestCA(t, "test-ca")))
+	}
+	n := testConfigCounter.Add(1)
 
 	safeName := strings.NewReplacer("/", "-", " ", "_", ":", "-").Replace(t.Name())
 	if len(safeName) > 40 {

@@ -70,17 +70,31 @@ type BootstrapService struct {
 	config     *config.Config
 	logger     *slog.Logger
 	httpClient *http.Client
+	tlsConfig  *certs.TLSConfig
 }
 
-// NewBootstrapService creates a new HTTP-based bootstrap service
-func NewBootstrapService(cfg *config.Config, logger *slog.Logger) (*BootstrapService, error) {
+// NewBootstrapService creates a new HTTP-based bootstrap service.
+// If tlsConfig is nil, it falls back to the deprecated global certs.GetTLSConfig().
+func NewBootstrapService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TLSConfig) (*BootstrapService, error) {
 	var client *http.Client
 	var err error
-	if cfg.TLSServerName != "" {
-		client, err = httpclient.NewWithServerName(cfg.TLSServerName)
+
+	if tlsConfig != nil {
+		// DI path: use provided TLSConfig
+		if cfg.TLSServerName != "" {
+			client, err = httpclient.NewWithTLSConfigAndServerName(tlsConfig, cfg.TLSServerName)
+		} else {
+			client, err = httpclient.NewWithTLSConfig(tlsConfig)
+		}
 	} else {
-		client, err = httpclient.New()
+		// Legacy path: use global state (will be removed after migration)
+		if cfg.TLSServerName != "" {
+			client, err = httpclient.NewWithServerName(cfg.TLSServerName)
+		} else {
+			client, err = httpclient.New()
+		}
 	}
+
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: failed to configure TLS: %w", err)
 	}
@@ -89,6 +103,7 @@ func NewBootstrapService(cfg *config.Config, logger *slog.Logger) (*BootstrapSer
 		config:     cfg,
 		logger:     logger,
 		httpClient: client,
+		tlsConfig:  tlsConfig,
 	}, nil
 }
 
@@ -309,9 +324,17 @@ func (bs *BootstrapService) rebuildTransportWithOperatorCert(certPEM, keyPEM str
 		return fmt.Errorf("bootstrap: failed to parse per-operator cert+key: %w", err)
 	}
 
-	baseTLSConfig, err := certs.GetTLSConfig()
-	if err != nil {
-		return fmt.Errorf("bootstrap: failed to get base TLS config: %w", err)
+	var baseTLSConfig *tls.Config
+	if bs.tlsConfig != nil {
+		baseTLSConfig, err = bs.tlsConfig.GetTLSConfig()
+		if err != nil {
+			return fmt.Errorf("bootstrap: failed to get base TLS config from DI: %w", err)
+		}
+	} else {
+		baseTLSConfig, err = certs.GetTLSConfig()
+		if err != nil {
+			return fmt.Errorf("bootstrap: failed to get base TLS config: %w", err)
+		}
 	}
 
 	operatorTLSConfig := &tls.Config{

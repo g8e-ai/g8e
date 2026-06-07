@@ -74,7 +74,7 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 		return fmt.Errorf("preFlightCheck: no SSH auth methods available")
 	}
 
-	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback()
+	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback("")
 	if cbErr != nil {
 		return fmt.Errorf("preFlightCheck: build host key callback: %w", cbErr)
 	}
@@ -251,7 +251,7 @@ func streamToHost(
 		return
 	}
 
-	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback()
+	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback("")
 	if cbErr != nil {
 		emit(constants.StreamStatusFailed, fmt.Sprintf("streamToHost: build host key callback: %v", cbErr))
 		return

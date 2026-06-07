@@ -31,10 +31,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMain(m *testing.M) {
-	keystore.ResetTestStorage()
-	os.Exit(m.Run())
-}
 
 // newSecretManagerTestDB opens a raw sqliteutil.DB with just the documents +
 // kv_store schema that SecretManager needs, without pulling in the full

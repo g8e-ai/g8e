@@ -31,7 +31,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
@@ -561,7 +560,8 @@ func TestHandleRekeyVault_Success_VaultDataVerified(t *testing.T) {
 
 func TestHandleVaultCommand_DataDirResolution(t *testing.T) {
 	dir := t.TempDir()
-	dataDir := filepath.Join(dir, constants.Paths.Infra.DataDir)
+	require.NoError(t, constants.InitPathsWithBase(dir))
+	dataDir := constants.Paths.Infra.DataDir
 	require.NoError(t, os.MkdirAll(dataDir, 0700))
 
 	logger, err := configureLogger("info")

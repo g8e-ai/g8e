@@ -128,7 +128,9 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	client := c.PubSubClient
 	if client == nil && c.Config.PubSubURL != "" {
 		var err error
-		client, err = NewOperatorPubSubClient(c.Config.PubSubURL, c.Config.TLSServerName, c.Logger)
+		// Pass nil for tlsConfig - this CLI command uses the legacy global state
+		// TODO: Migrate CLI commands to DI-based TLS config
+		client, err = NewOperatorPubSubClient(c.Config.PubSubURL, c.Config.TLSServerName, c.Logger, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Operator pub/sub client: %w", err)
 		}

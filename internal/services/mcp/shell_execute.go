@@ -468,7 +468,7 @@ func executeViaSSH(ctx context.Context, hostname, command string, args []string,
 	}
 
 	// Build host key callback
-	hostKeyCallback, err := ssh.BuildHostKeyCallback()
+	hostKeyCallback, err := ssh.BuildHostKeyCallback("")
 	if err != nil {
 		return ShellExecuteResult{}, fmt.Errorf("shell_execute: host key verification failed: %w", err)
 	}

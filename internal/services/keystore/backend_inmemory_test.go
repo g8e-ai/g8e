@@ -20,9 +20,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMain(m *testing.M) {
-	ResetTestStorage()
-}
 
 func TestNewTestBackend(t *testing.T) {
 	t.Parallel()

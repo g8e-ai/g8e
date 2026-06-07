@@ -16,8 +16,10 @@
 package pubsub
 
 import (
+	"crypto/tls"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -27,7 +29,10 @@ func NewTestPubSubClient(t *testing.T) *OperatorPubSubClient {
 	t.Helper()
 	testutil.TestPubSubAvailable(t)
 	logger := testutil.NewTestLogger()
-	client, err := NewOperatorPubSubClient(testutil.GetTestOperatorDirectURL(), "", logger)
+	trustStore := certs.NewTrustStore(certs.GetRawCA())
+	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
+	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
+	client, err := NewOperatorPubSubClient(testutil.GetTestOperatorDirectURL(), "", logger, tlsConfig)
 	if err != nil {
 		t.Fatalf("Failed to create OperatorPubSubClient: %v", err)
 	}

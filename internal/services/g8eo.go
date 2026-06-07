@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
@@ -52,6 +53,7 @@ type G8eoService struct {
 	gatewayDB        *gateway.CanonicalDBService
 
 	pubSubClient pubsub.PubSubClient
+	tlsConfig    *certs.TLSConfig
 
 	auditStore     *storage.SQLAuditStore
 	ledger         *storage.GitLedgerService
@@ -72,14 +74,16 @@ type G8eoService struct {
 // NewG8eoService creates a new Operator service in Outbound Mode.
 // In this mode, the Operator initiates all connections to the platform
 // on port 443 and performs command execution on the local host.
-func NewG8eoService(cfg *config.Config, logger *slog.Logger) (*G8eoService, error) {
+// If tlsConfig is nil, it falls back to the deprecated global certs.GetTLSConfig().
+func NewG8eoService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TLSConfig) (*G8eoService, error) {
 	service := &G8eoService{
 		config:    cfg,
 		logger:    logger,
 		startTime: time.Now().UTC(),
+		tlsConfig: tlsConfig,
 	}
 
-	bootstrapService, err := auth.NewBootstrapService(cfg, logger)
+	bootstrapService, err := auth.NewBootstrapService(cfg, logger, tlsConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bootstrap service: %w", err)
 	}
@@ -260,7 +264,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.logger.Info("Establishing g8e connectivity...")
 
 	if vs.pubSubClient == nil {
-		vs.pubSubClient, err = pubsub.NewOperatorPubSubClient(vs.config.PubSubURL, vs.config.TLSServerName, vs.logger)
+		vs.pubSubClient, err = pubsub.NewOperatorPubSubClient(vs.config.PubSubURL, vs.config.TLSServerName, vs.logger, vs.tlsConfig)
 		if err != nil {
 			return fmt.Errorf("failed to create Operator pub/sub client: %w", err)
 		}

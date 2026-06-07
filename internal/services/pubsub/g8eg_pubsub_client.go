@@ -59,6 +59,7 @@ type OperatorPubSubClient struct {
 	logger     *slog.Logger
 	tlsConfig  *tls.Config // embedded CA trust; nil falls back to system CAs (plain ws://)
 	serverName string      // TLS SNI override when endpoint is a raw IP
+	certsTLSConfig *certs.TLSConfig // DI-based TLS config
 
 	mu     sync.Mutex
 	closed bool
@@ -69,7 +70,9 @@ type OperatorPubSubClient struct {
 // baseURL must use ws:// or wss:// scheme.
 // serverName overrides the TLS SNI hostname; pass an empty string when the
 // endpoint is a hostname (no override needed).
-func NewOperatorPubSubClient(baseURL, serverName string, logger *slog.Logger) (*OperatorPubSubClient, error) {
+// If certsTLSConfig is provided, it uses the DI-based TLS config; otherwise it falls back
+// to the deprecated global certs.GetTLSConfig().
+func NewOperatorPubSubClient(baseURL, serverName string, logger *slog.Logger, certsTLSConfig *certs.TLSConfig) (*OperatorPubSubClient, error) {
 	if baseURL == "" {
 		return nil, fmt.Errorf("operator pub/sub URL is required")
 	}
@@ -81,7 +84,13 @@ func NewOperatorPubSubClient(baseURL, serverName string, logger *slog.Logger) (*
 	var tlsCfg *tls.Config
 	if isSecure {
 		var err error
-		tlsCfg, err = certs.GetTLSConfig()
+		if certsTLSConfig != nil {
+			// DI path: use provided TLSConfig
+			tlsCfg, err = certsTLSConfig.GetTLSConfig()
+		} else {
+			// Legacy path: use global state (will be removed after migration)
+			tlsCfg, err = certs.GetTLSConfig()
+		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to configure transport security: %w", err)
 		}
@@ -91,10 +100,11 @@ func NewOperatorPubSubClient(baseURL, serverName string, logger *slog.Logger) (*
 	}
 
 	return &OperatorPubSubClient{
-		baseURL:    baseURL,
-		logger:     logger,
-		tlsConfig:  tlsCfg,
-		serverName: serverName,
+		baseURL:         baseURL,
+		logger:          logger,
+		tlsConfig:       tlsCfg,
+		serverName:      serverName,
+		certsTLSConfig:  certsTLSConfig,
 	}, nil
 }
 

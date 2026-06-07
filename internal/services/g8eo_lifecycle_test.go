@@ -76,7 +76,7 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	vault.SecureZero(dek)
 	require.NoError(t, header.Save(vaultDir))
 
-	service, err := NewG8eoService(cfg, testutil.NewVerboseTestLogger(t))
+	service, err := NewG8eoService(cfg, testutil.NewVerboseTestLogger(t), nil)
 	require.NoError(t, err)
 
 	// 3. Inject mocks

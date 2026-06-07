@@ -46,6 +46,7 @@ func newBaseTransport(tlsCfg *tls.Config) *http.Transport {
 	}
 }
 
+// Deprecated: Use NewWithTLSConfig instead. This function relies on mutable global state.
 func New() (*http.Client, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {
@@ -72,6 +73,7 @@ func NewWithTLSConfig(tlsConfig *certs.TLSConfig) (*http.Client, error) {
 	}, nil
 }
 
+// Deprecated: Use NewWithTLSConfigAndTimeout instead. This function relies on mutable global state.
 func NewWithTimeout(timeout time.Duration) (*http.Client, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {
@@ -104,6 +106,7 @@ func NewWithTLS(tlsCfg *tls.Config) *http.Client {
 	}
 }
 
+// Deprecated: Use WebSocketDialerWithTLSConfig instead. This function relies on mutable global state.
 func WebSocketDialer() (*websocket.Dialer, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {
@@ -136,6 +139,7 @@ func WebSocketDialerWithTLS(tlsCfg *tls.Config) *websocket.Dialer {
 	}
 }
 
+// Deprecated: Use NewWithTLSConfig instead. This function relies on mutable global state.
 func MustNew() *http.Client {
 	client, err := New()
 	if err != nil {
@@ -144,6 +148,7 @@ func MustNew() *http.Client {
 	return client
 }
 
+// Deprecated: Use WebSocketDialerWithTLSConfig instead. This function relies on mutable global state.
 func MustWebSocketDialer() *websocket.Dialer {
 	dialer, err := WebSocketDialer()
 	if err != nil {
@@ -152,6 +157,7 @@ func MustWebSocketDialer() *websocket.Dialer {
 	return dialer
 }
 
+// Deprecated: Use NewWithTLSConfigAndServerName instead. This function relies on mutable global state.
 func NewWithServerName(serverName string) (*http.Client, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {
@@ -177,6 +183,7 @@ func NewWithTLSConfigAndServerName(tlsConfig *certs.TLSConfig, serverName string
 	}, nil
 }
 
+// Deprecated: Use WebSocketDialerWithTLSConfigAndServerName instead. This function relies on mutable global state.
 func WebSocketDialerWithServerName(serverName string) (*websocket.Dialer, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {

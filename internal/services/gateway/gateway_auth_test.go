@@ -28,7 +28,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -74,11 +73,13 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 
 	// Create an Operator session with terminated status
 	operatorSessionID := "terminated-session"
-	opDoc := map[string]interface{}{
-		"id":                  "op-123",
-		"operator_session_id": operatorSessionID,
-		"status":              marshaler.Status(constants.OperatorStatusTerminated),
-		"user_id":             "user-123",
+	opDoc := &models.OperatorDocumentGo{
+		ID:                "op-123",
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusTerminated,
+		UserID:            "user-123",
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
@@ -100,10 +101,9 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 
 	// Create an active user
 	userID := "user-456"
-	userDoc := map[string]interface{}{
-		"id":       userID,
-		"username": "expired-user",
-		"status":   "active",
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
@@ -112,11 +112,13 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	// Create an Operator session with old timestamp using the test hook
 	operatorSessionID := "expired-session"
 	oldTime := time.Now().UTC().Add(-25 * time.Hour)
-	opDoc := map[string]interface{}{
-		"id":                  "op-456",
-		"operator_session_id": operatorSessionID,
-		"status":              marshaler.Status(constants.OperatorStatusActive),
-		"user_id":             userID,
+	opDoc := &models.OperatorDocumentGo{
+		ID:                "op-456",
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusActive,
+		UserID:            userID,
+		CreatedAt:         oldTime,
+		UpdatedAt:         oldTime,
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
@@ -138,10 +140,9 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 
 	// Create an inactive user
 	userID := "inactive-user"
-	userDoc := map[string]interface{}{
-		"id":       userID,
-		"username": "inactive",
-		"status":   "inactive",
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusDisabled,
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
@@ -149,12 +150,13 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 
 	// Create an Operator session linked to the inactive user
 	operatorSessionID := "session-with-inactive-user"
-	opDoc := map[string]interface{}{
-		"id":                  "op-789",
-		"operator_session_id": operatorSessionID,
-		"status":              marshaler.Status(constants.OperatorStatusActive),
-		"user_id":             userID,
-		"created_at":          time.Now().Format(time.RFC3339),
+	opDoc := &models.OperatorDocumentGo{
+		ID:                "op-789",
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusActive,
+		UserID:            userID,
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
@@ -556,10 +558,9 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 
 	// Create an active user
 	userID := "user-123"
-	userDoc := map[string]interface{}{
-		"id":       userID,
-		"username": "test-user",
-		"status":   "active",
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
@@ -567,12 +568,14 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 
 	// Create an Operator session
 	operatorSessionID := "op-session-123"
-	opDoc := map[string]interface{}{
-		"id":                  "op-123",
-		"operator_session_id": operatorSessionID,
-		"status":              marshaler.Status(constants.OperatorStatusActive),
-		"user_id":             userID,
-		"organization_id":     "org-123",
+	opDoc := &models.OperatorDocumentGo{
+		ID:                "op-123",
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusActive,
+		UserID:            userID,
+		OrganizationID:    "org-123",
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
@@ -612,11 +615,13 @@ func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
 
 	// Create a terminated Operator session
 	operatorSessionID := "terminated-session"
-	opDoc := map[string]interface{}{
-		"id":                  "op-terminated",
-		"operator_session_id": operatorSessionID,
-		"status":              marshaler.Status(constants.OperatorStatusTerminated),
-		"user_id":             "user-123",
+	opDoc := &models.OperatorDocumentGo{
+		ID:                "op-terminated",
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusTerminated,
+		UserID:            "user-123",
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
@@ -633,10 +638,9 @@ func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
 
 	// Create an active user
 	userID := "user-456"
-	userDoc := map[string]interface{}{
-		"id":       userID,
-		"username": "cli-user",
-		"status":   "active",
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
@@ -644,9 +648,12 @@ func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
 
 	// Create a CLI session
 	cliSessionID := "cli-session-123"
-	cliDoc := map[string]interface{}{
-		"user_id":    userID,
-		"expires_at": time.Now().Add(1 * time.Hour).Format(time.RFC3339),
+	cliDoc := &models.CLISession{
+		ID:                cliSessionID,
+		UserID:            userID,
+		ExpiresAt:         time.Now().Add(1 * time.Hour),
+		CreatedAt:         time.Now().UTC(),
+		AbsoluteExpiresAt: time.Now().Add(1 * time.Hour),
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
@@ -681,9 +688,12 @@ func TestAuthService_HandleCLIAuth_SessionExpired(t *testing.T) {
 
 	// Create an expired CLI session
 	cliSessionID := "expired-cli-session"
-	cliDoc := map[string]interface{}{
-		"user_id":    "user-123",
-		"expires_at": time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+	cliDoc := &models.CLISession{
+		ID:                cliSessionID,
+		UserID:            "user-123",
+		ExpiresAt:         time.Now().Add(-1 * time.Hour),
+		CreatedAt:         time.Now().Add(-2 * time.Hour),
+		AbsoluteExpiresAt: time.Now().Add(-1 * time.Hour),
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
@@ -709,10 +719,9 @@ func TestAuthService_HandleCLIAuth_UserInactive(t *testing.T) {
 
 	// Create an inactive user
 	userID := "inactive-user"
-	userDoc := map[string]interface{}{
-		"id":       userID,
-		"username": "inactive",
-		"status":   "inactive",
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusDisabled,
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
@@ -823,10 +832,13 @@ func TestAuthService_CliCertBoundToOperator_Success(t *testing.T) {
 	operatorSessionID := "op-session-bound"
 	userID := "user-bound"
 
-	cliDoc := map[string]interface{}{
-		"user_id":             userID,
-		"operator_session_id": operatorSessionID,
-		"expires_at":          time.Now().Add(1 * time.Hour).Format(time.RFC3339),
+	cliDoc := &models.CLISession{
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
+		ExpiresAt:         time.Now().Add(1 * time.Hour),
+		CreatedAt:         time.Now().UTC(),
+		AbsoluteExpiresAt: time.Now().Add(1 * time.Hour),
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
@@ -859,10 +871,13 @@ func TestAuthService_CliCertBoundToOperator_SessionMismatch(t *testing.T) {
 	operatorSessionID := "op-session-1"
 	userID := "user-mismatch"
 
-	cliDoc := map[string]interface{}{
-		"user_id":             userID,
-		"operator_session_id": "op-session-2", // Different Operator session
-		"expires_at":          time.Now().Add(1 * time.Hour).Format(time.RFC3339),
+	cliDoc := &models.CLISession{
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: "op-session-2", // Different Operator session
+		ExpiresAt:         time.Now().Add(1 * time.Hour),
+		CreatedAt:         time.Now().UTC(),
+		AbsoluteExpiresAt: time.Now().Add(1 * time.Hour),
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
@@ -886,10 +901,13 @@ func TestAuthService_CliCertBoundToOperator_SessionExpired(t *testing.T) {
 	operatorSessionID := "op-session-expired"
 	userID := "user-expired"
 
-	cliDoc := map[string]interface{}{
-		"user_id":             userID,
-		"operator_session_id": operatorSessionID,
-		"expires_at":          time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+	cliDoc := &models.CLISession{
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
+		ExpiresAt:         time.Now().Add(-1 * time.Hour),
+		CreatedAt:         time.Now().Add(-2 * time.Hour),
+		AbsoluteExpiresAt: time.Now().Add(-1 * time.Hour),
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
@@ -912,10 +930,9 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 
 	// Create an active user
 	userID := "user-op-auth"
-	userDoc := map[string]interface{}{
-		"id":       userID,
-		"username": "op-auth-user",
-		"status":   "active",
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
@@ -924,12 +941,14 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	// Create an Operator session
 	operatorSessionID := "op-session-auth-test"
 	organizationID := "org-auth-test"
-	opDoc := map[string]interface{}{
-		"id":                  "op-auth-test",
-		"operator_session_id": operatorSessionID,
-		"status":              marshaler.Status(constants.OperatorStatusActive),
-		"user_id":             userID,
-		"organization_id":     organizationID,
+	opDoc := &models.OperatorDocumentGo{
+		ID:                "op-auth-test",
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusActive,
+		UserID:            userID,
+		OrganizationID:    organizationID,
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
@@ -996,10 +1015,9 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 
 	// Create an active user
 	userID := "user-cli-auth"
-	userDoc := map[string]interface{}{
-		"id":       userID,
-		"username": "cli-auth-user",
-		"status":   "active",
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
@@ -1008,10 +1026,13 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 	// Create a CLI session
 	cliSessionID := "cli-session-auth-test"
 	operatorSessionID := "op-session-cli-auth"
-	cliDoc := map[string]interface{}{
-		"user_id":             userID,
-		"operator_session_id": operatorSessionID,
-		"expires_at":          time.Now().Add(1 * time.Hour).Format(time.RFC3339),
+	cliDoc := &models.CLISession{
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
+		ExpiresAt:         time.Now().Add(1 * time.Hour),
+		CreatedAt:         time.Now().UTC(),
+		AbsoluteExpiresAt: time.Now().Add(1 * time.Hour),
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
@@ -1079,11 +1100,13 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 	// Create an app policy
 	operatorID := "test-operator"
 	appID := "spiffe://g8e.local/app/" + operatorID
-	policyDoc := map[string]interface{}{
-		"id":                  appID,
-		"rate_limit_rps":      10,
-		"max_payload_bytes":   1000000,
-		"allowed_collections": []string{"test_collection"},
+	policyDoc := &models.AppPolicy{
+		AppID:              appID,
+		RateLimitRPS:       10,
+		MaxPayloadBytes:    1000000,
+		AllowedCollections: []string{"test_collection"},
+		CreatedAt:          time.Now().UTC(),
+		UpdatedAt:          time.Now().UTC(),
 	}
 	policyBytes, err := json.Marshal(policyDoc)
 	require.NoError(t, err)

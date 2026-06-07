@@ -30,7 +30,7 @@ func TestG8eoService_Start_BootstrapFailure(t *testing.T) {
 cfg := testutil.NewTestConfig(t)
 logger := testutil.NewTestLogger()
 
-service, err := NewG8eoService(cfg, logger)
+service, err := NewG8eoService(cfg, logger, nil)
 require.NoError(t, err)
 
 ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -91,7 +91,7 @@ t.Run("pub/sub results service", func(t *testing.T) {
 cfg := testutil.NewTestConfig(t)
 logger := testutil.NewTestLogger()
 
-client, err := pubsub.NewOperatorPubSubClient(testutil.GetTestOperatorDirectURL(), "", logger)
+client, err := pubsub.NewOperatorPubSubClient(testutil.GetTestOperatorDirectURL(), "", logger, nil)
 require.NoError(t, err)
 t.Cleanup(func() { client.Close() })
 

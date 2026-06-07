@@ -14,6 +14,7 @@
 package testutil
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"log/slog"
@@ -23,7 +24,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/certs"
+	"github.com/g8e-ai/g8e/internal/httpclient"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 )
@@ -97,15 +98,14 @@ func (b *testPubSubBroker) Close() {
 // ---------------------------------------------------------------------------
 
 // newTLSPubSubServer starts a TLS httptest.Server backed by a real PubSubBroker.
-// It temporarily overrides certs.SetCA with the server's leaf certificate so
-// httpclient.WebSocketDialer() (used by the functions under test) trusts it.
-// Returns the base wss:// URL (no path); callers append /ws/pubsub as needed.
+// It returns the base wss:// URL (no path) and a *tls.Config that trusts the
+// server's leaf certificate. Callers append /ws/pubsub as needed.
 //
 // NOTE: This helper only supports TestPubSubAvailable_ReachableServer. The other
 // pubsub unit tests require mTLS with proper SPIFFE identity for ACL compliance,
 // which cannot be achieved with the current WebSocketDialer API. Those tests are
 // deleted - pubsub functionality is covered by integration tests with proper mTLS.
-func newTLSPubSubServer(t *testing.T) string {
+func newTLSPubSubServer(t *testing.T) (string, *tls.Config) {
 	t.Helper()
 
 	broker := newTestPubSubBroker(NewTestLogger())
@@ -113,24 +113,25 @@ func newTLSPubSubServer(t *testing.T) string {
 	t.Cleanup(srv.Close)
 	t.Cleanup(broker.Close)
 
-	// Extract the server's leaf certificate and temporarily set it as the
-	// trusted CA so httpclient.WebSocketDialer() accepts the connection.
+	// Extract the server's leaf certificate and build a trust pool.
 	leaf := srv.TLS.Certificates[0].Leaf
 	if leaf == nil {
-		// Parse from the raw DER bytes when Leaf is not pre-populated.
 		var err error
 		leaf, err = x509.ParseCertificate(srv.TLS.Certificates[0].Certificate[0])
 		require.NoError(t, err)
 	}
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leaf.Raw})
 
-	origCA := certs.GetRawCA()
-	certs.SetCA(certPEM)
-	t.Cleanup(func() { certs.SetCA(origCA) })
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(certPEM)
+	tlsCfg := &tls.Config{
+		RootCAs:    pool,
+		MinVersion: tls.VersionTLS13,
+	}
 
 	// Convert https:// -> wss://
 	wssBase := "wss" + strings.TrimPrefix(srv.URL, "https")
-	return wssBase
+	return wssBase, tlsCfg
 }
 
 // ---------------------------------------------------------------------------
@@ -138,9 +139,15 @@ func newTLSPubSubServer(t *testing.T) string {
 // ---------------------------------------------------------------------------
 
 // TestPubSubAvailable_ReachableServer exercises the full dial path of
-// TestPubSubAvailable against an in-process TLS server.
-// The in-process address is passed directly; certs.SetCA is overridden so the dialer trusts it.
+// TestPubSubAvailable against an in-process TLS server using DI-based TLS.
 func TestPubSubAvailable_ReachableServer(t *testing.T) {
-	wssBase := newTLSPubSubServer(t)
-	TestPubSubAvailable(t, wssBase)
+	wssBase, tlsCfg := newTLSPubSubServer(t)
+	wsURL := wssBase + "/ws/pubsub"
+	dialer := httpclient.WebSocketDialerWithTLS(tlsCfg)
+	ws, resp, err := dialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+	if resp != nil {
+		resp.Body.Close()
+	}
+	ws.Close()
 }

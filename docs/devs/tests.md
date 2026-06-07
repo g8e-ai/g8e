@@ -223,7 +223,6 @@ Authentication and PKI tests:
 - `bootstrap_test.go` - Auth bootstrap tests
 - `fingerprint_test.go` - Certificate fingerprint tests
 - `fingerprint_windows_test.go` - Windows-specific fingerprint tests
-- `testmain_test.go` - Auth test main setup
 
 #### Other Service Tests
 

@@ -66,7 +66,7 @@ func (b *testBackend) DeleteMasterKey() error {
 }
 
 // ResetTestStorage clears the shared test key storage.
-// Call in TestMain to prevent cross-test contamination.
+// Call in tests to prevent cross-test contamination.
 func ResetTestStorage() {
 	sharedTestKeyStorage.mu.Lock()
 	defer sharedTestKeyStorage.mu.Unlock()
