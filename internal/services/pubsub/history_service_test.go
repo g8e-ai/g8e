@@ -238,7 +238,8 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		// Create vault
 		_, privKey, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
-		vaultDir := filepath.Join(t.TempDir(), "vault")
+		tmpDir := t.TempDir()
+		vaultDir := filepath.Join(tmpDir, "vault")
 		require.NoError(t, os.MkdirAll(vaultDir, 0700))
 		vHeader, _, err := vault.NewVaultHeader(privKey)
 		require.NoError(t, err)
@@ -272,7 +273,8 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		// Create vault
 		_, privKey, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
-		vaultDir := filepath.Join(t.TempDir(), "vault")
+		tmpDir := t.TempDir()
+		vaultDir := filepath.Join(tmpDir, "vault")
 		require.NoError(t, os.MkdirAll(vaultDir, 0700))
 		vHeader, _, err := vault.NewVaultHeader(privKey)
 		require.NoError(t, err)

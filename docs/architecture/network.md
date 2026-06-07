@@ -99,13 +99,13 @@ Default ports are sourced from `internal/constants/ports.go:17`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **HTTP (Bootstrap + MCP)** | `8080` (plain HTTP) | No TLS | Bootstrap enrollment, CA bundle discovery, and plain HTTP MCP for development/testing. |
-| **HTTPS (mTLS API + Public)** | `8443` (mTLS) | mTLS + URI SAN | `/api/v1/governance/envelopes`, `/api/v1/db/*`, `/api/v1/kv/*`, `/api/v1/blob/*`, `/api/v1/pubsub/publish`, `/ws/v1/pubsub`, and public mTLS surface for external app enrollment. |
+| **HTTP (Bootstrap Only)** | `8080` (plain HTTP) | No TLS | Bootstrap enrollment (`/bootstrap`, `/enroll`) and CA bundle discovery (`/.well-known/g8e/pki/*`). |
+| **HTTPS (mTLS API + Public + MCP)** | `8443` (mTLS) | mTLS + URI SAN or JWT | `/api/v1/governance/envelopes`, `/api/v1/db/*`, `/api/v1/kv/*`, `/api/v1/blob/*`, `/api/v1/pubsub/publish`, `/ws/v1/pubsub`, MCP endpoints (`/mcp/*`), and public mTLS surface for external app enrollment. |
 
 ### Port Constraints
 
-- **HTTP Surface** (`8080`): Serves plain HTTP for bootstrap enrollment and MCP calls. Does not require TLS. Intended for development and initial provisioning.
-- **HTTPS Surface** (`8443`): Requires `tls.RequireAndVerifyClientCert`. This is the primary execution boundary for mTLS API and public surface.
+- **HTTP Surface** (`8080`): Serves plain HTTP for bootstrap enrollment and PKI discovery only. Does NOT serve MCP routes. Intended for initial provisioning only.
+- **HTTPS Surface** (`8443`): Requires `tls.RequireAndVerifyClientCert`. This is the primary execution boundary for mTLS API, public surface, and MCP endpoints. MCP routes are protected by `auth.Middleware` (mTLS) when JWKS is not configured, or `JWTAuthMiddleware` when JWKS is configured for external IdP auth.
 - **Collision Prevention**: The gateway fails startup if incompatible surfaces are assigned to the same port.
 
 ---

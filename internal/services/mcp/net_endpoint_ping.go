@@ -24,20 +24,20 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// NetEndpointPingTool performs TCP handshake or ICMP ping to verify connectivity.
+// NetEndpointPingTool performs TCP handshake to verify connectivity.
 type NetEndpointPingTool struct{}
 
-// Name returns the tool identifier.
+// Name returns the tool identifier
 func (t *NetEndpointPingTool) Name() string {
 	return "net_endpoint_ping"
 }
 
-// Description returns a human-readable description.
+// Description returns a human-readable description
 func (t *NetEndpointPingTool) Description() string {
-	return "Performs TCP handshake to verify network endpoint connectivity and measure latency."
+	return "Performs TCP handshake to verify network endpoint connectivity and measure latency"
 }
 
-// InputSchema returns the JSON Schema for tool validation.
+// InputSchema returns the JSON Schema for tool validation
 func (t *NetEndpointPingTool) InputSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"type": "object",
@@ -55,12 +55,9 @@ func (t *NetEndpointPingTool) InputSchema() map[string]interface{} {
 	}
 }
 
-// Execute implements the tool logic.
+// Execute implements the tool logic
 func (t *NetEndpointPingTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		Host string `json:"host"`
-		Port int    `json:"port"`
-	}
+	var req NetEndpointPingRequest
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
 	}
@@ -84,10 +81,10 @@ func (t *NetEndpointPingTool) Execute(ctx context.Context, args json.RawMessage)
 	latency := time.Since(start).Seconds() * 1000
 
 	if err != nil {
-		result := map[string]interface{}{
-			"reachable":  false,
-			"latency_ms": latency,
-			"error":      err.Error(),
+		result := NetEndpointPingResult{
+			Reachable: false,
+			LatencyMs: latency,
+			Error:     err.Error(),
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {
@@ -104,9 +101,9 @@ func (t *NetEndpointPingTool) Execute(ctx context.Context, args json.RawMessage)
 	}
 	defer conn.Close()
 
-	result := map[string]interface{}{
-		"reachable":  true,
-		"latency_ms": latency,
+	result := NetEndpointPingResult{
+		Reachable: true,
+		LatencyMs: latency,
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {

@@ -96,6 +96,8 @@ By passing `--doctrine`, `--consensus`, or `--notary`, the g8e Node transforms i
 
 The g8e Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port. See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
 
+**MCP Endpoint Availability**: MCP endpoints are exclusively available on the HTTPS port (8443) with mTLS authentication (or JWT when JWKS is configured). MCP routes are NOT available on the HTTP bootstrap port (8080), which is limited to bootstrap enrollment and PKI discovery endpoints only.
+
 ---
 
 ## MCP Endpoint Architecture

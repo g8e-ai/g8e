@@ -338,6 +338,25 @@ If no users exist, the first login automatically bootstraps the platform:
 
 This creates the first user and issues mTLS certificates for the g8e Gateway and CLI.
 
+### MCP mTLS Authentication Flow
+
+MCP gateway integration tests (`test/mcp_gateway_test.go`) use mTLS authentication to communicate with the Gateway. The test harness follows this flow:
+
+1. **Bootstrap Enrollment**: Tests first bootstrap the platform via the HTTP port (8080) using `/bootstrap` and `/enroll` endpoints
+2. **mTLS Client Creation**: Tests use `NewLiveOperatorHTTPClient` from `test/integration_helper.go` to create an HTTP client configured with:
+   - The enrolled operator certificate (`.g8e/pki/client/operator-cert.pem`)
+   - The operator private key (`.g8e/pki/client/operator-key.pem`)
+   - The canonical trust bundle (`.g8e/pki/trust/g8eg-ca-bundle.pem`)
+3. **HTTPS Port Targeting**: All post-enrollment MCP calls target the HTTPS port (8443) with mTLS enforced
+4. **SPIFFE Identity Extraction**: The Gateway's `auth.Middleware` extracts the `OperatorSessionID` from the mTLS certificate's SPIFFE URI SAN (format: `spiffe://g8e.local/operator/<org_id>/<operator_id>/<session_id>`)
+5. **Session Validation**: The extracted session ID is validated against the database to ensure the operator session is active
+
+**Key Implementation Details**:
+- MCP routes are exclusively available on the HTTPS port (8443) - they are NOT available on the HTTP bootstrap port (8080)
+- The HTTP port (8080) is limited to bootstrap endpoints only (`/bootstrap`, `/enroll`, `/.well-known/g8e/pki/*`)
+- The `ExtractOperatorSessionID` function in `protocol/workload_identity.go` parses the SPIFFE URI to extract the session ID from path segment 6
+- Tests include wait logic to ensure operator session persistence before making authenticated calls
+
 ### Trust Bundle Requirements
 
 Live Operator integration tests (MCP, A2A, Native) require the canonical trust bundle at `.g8e/pki/trust/g8eg-ca-bundle.pem`. This bundle contains the root CA, hub intermediate CA, Operator intermediate CA, and gateway peer CA certificates.

@@ -182,10 +182,11 @@ func TestApplyAuditorFlags(t *testing.T) {
 	})
 
 	t.Run("applyAuditorFlags sets out directory", func(t *testing.T) {
-		auditorOutDir = "/tmp/out"
+		testOutDir := t.TempDir()
+		auditorOutDir = testOutDir
 		cfg := config.Default()
 		applyAuditorFlags(&cfg)
-		assert.Equal(t, "/tmp/out", cfg.OutDir)
+		assert.Equal(t, testOutDir, cfg.OutDir)
 		auditorOutDir = ""
 	})
 

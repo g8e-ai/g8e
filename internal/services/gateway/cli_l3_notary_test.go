@@ -274,7 +274,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 
-	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+	sm, _ := NewSecretManager(db.db, secretsDir, logger)
 	pki := newPKIAuthority(dbDir, filepath.Join(dbDir, "pki"), db, sm, logger)
 	err = pki.EnsurePKI(nil)
 	require.NoError(t, err)

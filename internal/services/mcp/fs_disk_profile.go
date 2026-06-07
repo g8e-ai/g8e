@@ -55,16 +55,13 @@ func (t *FSDiskProfileTool) InputSchema() map[string]interface{} {
 
 // Execute implements the tool logic.
 func (t *FSDiskProfileTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		Path     string `json:"path"`
-		MaxDepth int    `json:"max_depth,omitempty"`
-	}
+	var req FSDiskProfileRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("fs_disk_profile: invalid arguments: %w", err)
 	}
 
 	if req.Path == "" {
-		return CallToolResult{}, fmt.Errorf("path required")
+		return CallToolResult{}, fmt.Errorf("fs_disk_profile: path required")
 	}
 
 	maxDepth := req.MaxDepth
@@ -72,7 +69,7 @@ func (t *FSDiskProfileTool) Execute(ctx context.Context, args json.RawMessage) (
 		maxDepth = defaultDiskProfileDepth
 	}
 
-	var entries []map[string]interface{}
+	var entries []DirEntry
 	var totalSize int64
 
 	err := filepath.Walk(req.Path, func(path string, info os.FileInfo, err error) error {
@@ -81,12 +78,12 @@ func (t *FSDiskProfileTool) Execute(ctx context.Context, args json.RawMessage) (
 		}
 
 		if err != nil {
-			return nil
+			return fmt.Errorf("fs_disk_profile: error accessing path %s: %w", path, err)
 		}
 
 		relPath, err := filepath.Rel(req.Path, path)
 		if err != nil {
-			return nil
+			return fmt.Errorf("fs_disk_profile: error computing relative path: %w", err)
 		}
 
 		depth := len(strings.Split(relPath, string(filepath.Separator)))
@@ -100,27 +97,27 @@ func (t *FSDiskProfileTool) Execute(ctx context.Context, args json.RawMessage) (
 		size := info.Size()
 		totalSize += size
 
-		entries = append(entries, map[string]interface{}{
-			"path":     relPath,
-			"size_mb":  size / (1024 * 1024),
-			"is_dir":   info.IsDir(),
-			"modified": info.ModTime().Unix(),
+		entries = append(entries, DirEntry{
+			Path:     relPath,
+			SizeMB:   size / (1024 * 1024),
+			IsDir:    info.IsDir(),
+			Modified: info.ModTime().Unix(),
 		})
 
 		return nil
 	})
 
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("error walking path: %w", err)
+		return CallToolResult{}, err
 	}
 
-	result := map[string]interface{}{
-		"entries":  entries,
-		"total_mb": totalSize / (1024 * 1024),
+	result := FSDiskProfileResult{
+		Entries:  entries,
+		TotalMB:  totalSize / (1024 * 1024),
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("fs_disk_profile: failed to marshal result: %w", err)
 	}
 
 	return CallToolResult{

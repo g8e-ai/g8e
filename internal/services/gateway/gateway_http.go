@@ -102,6 +102,7 @@ type HTTPHandler struct {
 	// Rate limiting state
 	muLimiters sync.Mutex
 	limiters   map[string]*rate.Limiter
+	limiterLastUsed map[string]time.Time
 }
 
 func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
@@ -122,6 +123,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
 		isReady:           deps.IsReady,
 		isGovernanceReady: deps.IsGovernanceReady,
 		limiters:          make(map[string]*rate.Limiter),
+		limiterLastUsed:   make(map[string]time.Time),
 	}
 
 	// Initialize script templates (panic on failure - this is a fatal startup error)
@@ -159,6 +161,16 @@ func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
 		if !ok {
 			limiter = rate.NewLimiter(rate.Limit(h.cfg.Gateway.RateLimitRPS), h.cfg.Gateway.RateLimitBurst)
 			h.limiters[ip] = limiter
+		}
+		h.limiterLastUsed[ip] = time.Now()
+		
+		// Clean up stale limiters (older than 5 minutes)
+		cutoff := time.Now().Add(-5 * time.Minute)
+		for key, lastUsed := range h.limiterLastUsed {
+			if lastUsed.Before(cutoff) {
+				delete(h.limiters, key)
+				delete(h.limiterLastUsed, key)
+			}
 		}
 		h.muLimiters.Unlock()
 

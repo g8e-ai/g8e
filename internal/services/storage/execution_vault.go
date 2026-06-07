@@ -702,5 +702,8 @@ func (ev *ExecutionVaultService) decryptContent(data []byte) (string, error) {
 
 // Wait blocks until all background workers and writes have finished.
 func (ev *ExecutionVaultService) Wait() {
+	if ev == nil {
+		return
+	}
 	ev.wg.Wait()
 }

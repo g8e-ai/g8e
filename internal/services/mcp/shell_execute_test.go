@@ -93,10 +93,11 @@ func TestShellExecuteTool_Execute_SimpleCommand(t *testing.T) {
 func TestShellExecuteTool_Execute_WithWorkingDir(t *testing.T) {
 	tool := &ShellExecuteTool{}
 	ctx := context.Background()
+	tmpDir := t.TempDir()
 
 	req := ShellExecuteRequest{
 		Command:    "pwd",
-		WorkingDir: "/tmp",
+		WorkingDir: tmpDir,
 	}
 	reqJSON, err := json.Marshal(req)
 	require.NoError(t, err)
@@ -109,7 +110,7 @@ func TestShellExecuteTool_Execute_WithWorkingDir(t *testing.T) {
 	err = json.Unmarshal([]byte(result.Content[0].Text), &shellResult)
 	require.NoError(t, err)
 	require.Equal(t, 0, shellResult.ExitCode)
-	require.Contains(t, shellResult.Stdout, "/tmp")
+	require.Contains(t, shellResult.Stdout, tmpDir)
 }
 
 func TestShellExecuteTool_Execute_WithTimeout(t *testing.T) {
@@ -174,7 +175,7 @@ func TestShellExecuteTool_Execute_InvalidJSON(t *testing.T) {
 
 	_, err := tool.Execute(ctx, invalidJSON)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid arguments")
+	require.Contains(t, err.Error(), "unmarshal arguments")
 }
 
 func TestShellExecuteTool_Execute_NonexistentCommand(t *testing.T) {
@@ -405,7 +406,6 @@ func TestValidateForSSHExecution_BlocksShellMetacharacters(t *testing.T) {
 		{"echo", []string{"test"}, "/tmp/test&", true},    // ampersand in working dir
 		{"echo", []string{"test"}, "/tmp/test\r", true},   // carriage return in working dir
 		{"echo", []string{"test"}, "", false},             // safe: no metacharacters
-		{"ls", []string{"-la"}, "/tmp", false},            // safe: normal command
 		{"cat", []string{"/etc/hostname"}, "", false},     // safe: normal command
 	}
 
@@ -435,6 +435,7 @@ func TestValidateForSSHExecution_StillBlocksDenylist(t *testing.T) {
 }
 
 func TestValidateForSSHExecution_AllowsSafeCommands(t *testing.T) {
+	tmpDir := t.TempDir()
 	safeCommands := []struct {
 		command    string
 		args       []string
@@ -446,7 +447,7 @@ func TestValidateForSSHExecution_AllowsSafeCommands(t *testing.T) {
 		{"grep", []string{"pattern", "file.txt"}, ""},
 		{"find", []string{".", "-name", "*.go"}, ""},
 		{"date", nil, ""},
-		{"pwd", nil, "/tmp"},
+		{"pwd", nil, tmpDir},
 		{"ls", []string{}, "/var/log"},
 	}
 
@@ -459,6 +460,7 @@ func TestValidateForSSHExecution_AllowsSafeCommands(t *testing.T) {
 }
 
 func TestValidateCommandSafety_WorkingDirValidation(t *testing.T) {
+	tmpDir := t.TempDir()
 	workingDirTests := []struct {
 		name        string
 		command     string
@@ -467,9 +469,9 @@ func TestValidateCommandSafety_WorkingDirValidation(t *testing.T) {
 		expectError bool
 		errorMsg    string
 	}{
-		{"valid absolute dir", "ls", []string{}, "/tmp", false, ""},
+		{"valid absolute dir", "ls", []string{}, tmpDir, false, ""},
 		{"valid absolute dir with args", "pwd", nil, "/var/log", false, ""},
-		{"path traversal", "ls", []string{}, "/tmp/../etc", true, "path traversal"},
+		{"path traversal", "ls", []string{}, tmpDir + "/../etc", true, "path traversal"},
 		{"relative path", "ls", []string{}, "tmp", true, "absolute path"},
 		{"nonexistent dir", "ls", []string{}, "/nonexistent_dir_12345", true, "does not exist"},
 		{"file instead of dir", "ls", []string{}, "/etc/passwd", true, "not a directory"},

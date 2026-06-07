@@ -23,6 +23,13 @@ import (
 	"strings"
 )
 
+const (
+	defaultRootPID    = 1
+	defaultMaxDepth   = 10
+	procDirectory     = "/proc"
+	minStatFields     = 4
+)
+
 // ProcTreeTool provides parent-child process relationships.
 type ProcTreeTool struct{}
 
@@ -65,15 +72,15 @@ func (t *ProcTreeTool) Execute(ctx context.Context, args json.RawMessage) (CallT
 
 	pid := req.PID
 	if pid <= 0 {
-		pid = 1
+		pid = defaultRootPID
 	}
 
 	maxDepth := req.MaxDepth
 	if maxDepth <= 0 {
-		maxDepth = 10
+		maxDepth = defaultMaxDepth
 	}
 
-	tree, err := buildProcessTree(pid, maxDepth)
+	tree, err := buildProcessTree(ctx, pid, maxDepth)
 	if err != nil {
 		return CallToolResult{}, fmt.Errorf("failed to build process tree: %w", err)
 	}
@@ -100,16 +107,25 @@ type processNode struct {
 	Children []processNode `json:"children,omitempty"`
 }
 
-func buildProcessTree(rootPID, maxDepth int) (map[string]interface{}, error) {
-	procDir := "/proc"
-	processes := make(map[int]*processNode)
+type processTreeResult struct {
+	RootPID int         `json:"root_pid"`
+	Tree    processNode `json:"tree"`
+	Error   string      `json:"error,omitempty"`
+}
 
-	entries, err := os.ReadDir(procDir)
+func buildProcessTree(ctx context.Context, rootPID, maxDepth int) (*processTreeResult, error) {
+	entries, err := os.ReadDir(procDirectory)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read %s: %w", procDirectory, err)
 	}
 
+	processes := make(map[int]*processNode)
+
 	for _, entry := range entries {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
 		if !entry.IsDir() {
 			continue
 		}
@@ -119,14 +135,14 @@ func buildProcessTree(rootPID, maxDepth int) (map[string]interface{}, error) {
 			continue
 		}
 
-		statPath := filepath.Join(procDir, entry.Name(), "stat")
+		statPath := filepath.Join(procDirectory, entry.Name(), "stat")
 		statBytes, err := os.ReadFile(statPath)
 		if err != nil {
 			continue
 		}
 
 		statFields := strings.Fields(string(statBytes))
-		if len(statFields) < 4 {
+		if len(statFields) < minStatFields {
 			continue
 		}
 
@@ -135,7 +151,10 @@ func buildProcessTree(rootPID, maxDepth int) (map[string]interface{}, error) {
 			name = name[1 : len(name)-1]
 		}
 
-		ppid, _ := strconv.Atoi(statFields[3])
+		ppid, err := strconv.Atoi(statFields[3])
+		if err != nil {
+			continue
+		}
 
 		processes[pid] = &processNode{
 			PID:  pid,
@@ -146,16 +165,17 @@ func buildProcessTree(rootPID, maxDepth int) (map[string]interface{}, error) {
 
 	rootNode := processes[rootPID]
 	if rootNode == nil {
-		return map[string]interface{}{
-			"error": fmt.Sprintf("process %d not found", rootPID),
+		return &processTreeResult{
+			RootPID: rootPID,
+			Error:   fmt.Sprintf("process %d not found", rootPID),
 		}, nil
 	}
 
 	tree := buildTreeRecursive(rootNode, processes, 0, maxDepth)
 
-	return map[string]interface{}{
-		"root_pid": rootPID,
-		"tree":     tree,
+	return &processTreeResult{
+		RootPID: rootPID,
+		Tree:    tree,
 	}, nil
 }
 

@@ -242,7 +242,8 @@ func TestHandleToolsList(t *testing.T) {
 	t.Run("tools/list response contains native tools", func(t *testing.T) {
 		var buf bytes.Buffer
 		encoder := json.NewEncoder(&buf)
-		nativeToolHandler := mcp.NewNativeToolHandler()
+		nativeToolHandler, err := mcp.NewNativeToolHandler()
+		require.NoError(t, err)
 		handleToolsList(encoder, 1, nativeToolHandler)
 
 		var resp JSONRPCResponse

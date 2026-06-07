@@ -114,11 +114,16 @@ type Dependencies struct {
 	MaxPayloadBytes int64
 }
 
-func NewGatewayService(deps Dependencies) *GatewayService {
+func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 	fieldPathRegistry, err := NewFieldPathRegistry(deps.Logger)
 	if err != nil {
 		deps.Logger.Error("Failed to initialize field path registry", "error", err)
 		// Continue without field path registry - read_field will be disabled
+	}
+
+	nativeToolHandler, err := NewNativeToolHandler()
+	if err != nil {
+		return nil, fmt.Errorf("initialize native tool handler: %w", err)
 	}
 
 	g := &GatewayService{
@@ -126,12 +131,12 @@ func NewGatewayService(deps Dependencies) *GatewayService {
 		responder:         deps.Responder,
 		suspendedStore:    deps.SuspendedStore,
 		fieldPathRegistry: fieldPathRegistry,
-		nativeToolHandler: NewNativeToolHandler(),
+		nativeToolHandler: nativeToolHandler,
 		maxFailures:       5,
 		cooldownDuration:  1 * time.Minute,
 		maxPayloadBytes:   deps.MaxPayloadBytes,
 	}
-	return g
+	return g, nil
 }
 
 // RunMaintenance periodically prunes expired suspended transactions.

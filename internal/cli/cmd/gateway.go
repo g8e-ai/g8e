@@ -617,7 +617,10 @@ func printMCPConfigLocal(cmd *cobra.Command) error {
 	actualKeyPath = filepath.ToSlash(actualKeyPath)
 	actualCAPath = filepath.ToSlash(actualCAPath)
 
-	mcpConfig := mcp.NewGatewayConfig(gatewayURL, actualCertPath, actualKeyPath, actualCAPath)
+	mcpConfig, err := mcp.NewGatewayConfig(gatewayURL, actualCertPath, actualKeyPath, actualCAPath)
+	if err != nil {
+		return fmt.Errorf("failed to create MCP config: %w", err)
+	}
 
 	configJSON, err := json.MarshalIndent(mcpConfig, "", "  ")
 	if err != nil {
@@ -649,7 +652,10 @@ func printMCPConfigIP(cmd *cobra.Command) error {
 	actualCAPath = filepath.ToSlash(actualCAPath)
 
 	// Use IP address as hostname for verification
-	mcpConfig := mcp.NewGatewayConfigWithHostname(gatewayURL, actualCertPath, actualKeyPath, actualCAPath, externalIP)
+	mcpConfig, err := mcp.NewGatewayConfigWithHostname(gatewayURL, actualCertPath, actualKeyPath, actualCAPath, externalIP)
+	if err != nil {
+		return fmt.Errorf("failed to create MCP config: %w", err)
+	}
 
 	configJSON, err := json.MarshalIndent(mcpConfig, "", "  ")
 	if err != nil {

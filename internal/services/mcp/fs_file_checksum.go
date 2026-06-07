@@ -95,7 +95,11 @@ func (t *FSFileChecksumTool) Execute(ctx context.Context, args json.RawMessage) 
 		return CallToolResult{}, fmt.Errorf("unsupported algorithm: %s", algorithm)
 	}
 
-	fileInfo, _ := os.Stat(req.FilePath)
+	fileInfo, err := os.Stat(req.FilePath)
+	if err != nil {
+		return CallToolResult{}, fmt.Errorf("failed to stat file: %w", err)
+	}
+
 	result := map[string]interface{}{
 		"file_path":  req.FilePath,
 		"algorithm":  algorithm,

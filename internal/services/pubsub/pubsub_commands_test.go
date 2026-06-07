@@ -59,7 +59,8 @@ func TestNewPubSubCommandService(t *testing.T) {
 func TestNewPubSubCommandService_StartsWithoutTrustedSignersButRejectsL2(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
-	cfg.PKIDir = filepath.Join(t.TempDir(), "pki")
+	tmpDir := t.TempDir()
+	cfg.PKIDir = filepath.Join(tmpDir, "pki")
 	cfg.Gateway.Posture = config.PostureConsensus // Set Consensus posture to enforce L2
 	svc, err := NewPubSubCommandService(CommandServiceConfig{
 		Config:            cfg,

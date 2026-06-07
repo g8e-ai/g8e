@@ -14,6 +14,7 @@
 package pubsub
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -136,13 +137,14 @@ func TestVaultWriter_WriteExecution(t *testing.T) {
 func TestVaultWriter_WriteFileDiff(t *testing.T) {
 	t.Run("skips when local store not enabled", func(t *testing.T) {
 		t.Parallel()
+		tmpDir := t.TempDir()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewVaultWriter(cfg, logger, nil, nil)
 
 		params := fileDiffWriteParams{
 			diffID:           "diff-1",
-			filePath:         "/tmp/test.txt",
+			filePath:         filepath.Join(tmpDir, "test.txt"),
 			operation:        "write",
 			ledgerHashBefore: "hash-before",
 			ledgerHashAfter:  "hash-after",
@@ -156,6 +158,7 @@ func TestVaultWriter_WriteFileDiff(t *testing.T) {
 
 	t.Run("writes file diff when local store enabled", func(t *testing.T) {
 		t.Parallel()
+		tmpDir := t.TempDir()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		mockVault := &mockExecutionVault{enabled: true}
@@ -163,7 +166,7 @@ func TestVaultWriter_WriteFileDiff(t *testing.T) {
 
 		params := fileDiffWriteParams{
 			diffID:            "diff-1",
-			filePath:          "/tmp/test.txt",
+			filePath:          filepath.Join(tmpDir, "test.txt"),
 			operation:         "write",
 			ledgerHashBefore:  "hash-before",
 			ledgerHashAfter:   "hash-after",
@@ -181,22 +184,24 @@ func TestVaultWriter_WriteFileDiff(t *testing.T) {
 func TestVaultWriter_StoreFileDiffFromLedger(t *testing.T) {
 	t.Run("skips when ledger is nil", func(t *testing.T) {
 		t.Parallel()
+		tmpDir := t.TempDir()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewVaultWriter(cfg, logger, nil, nil)
 
-		svc.StoreFileDiffFromLedger("/tmp/test.txt", "write", "event-1", "session-1", "case-1", nil)
+		svc.StoreFileDiffFromLedger(filepath.Join(tmpDir, "test.txt"), "write", "event-1", "session-1", "case-1", nil)
 		// Should not panic
 	})
 
 	t.Run("handles insufficient history", func(t *testing.T) {
 		t.Parallel()
+		tmpDir := t.TempDir()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		ledger := &storage.GitLedgerService{}
 		svc := NewVaultWriter(cfg, logger, nil, nil)
 
-		svc.StoreFileDiffFromLedger("/tmp/test.txt", "write", "event-1", "session-1", "case-1", ledger)
+		svc.StoreFileDiffFromLedger(filepath.Join(tmpDir, "test.txt"), "write", "event-1", "session-1", "case-1", ledger)
 		// Should handle gracefully
 	})
 }

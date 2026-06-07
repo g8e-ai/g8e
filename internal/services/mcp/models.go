@@ -349,6 +349,29 @@ type DirEntry struct {
 	Modified int64  `json:"modified"`
 }
 
+// FSDiskUsageRequest is the params for the "fs_disk_usage" tool.
+type FSDiskUsageRequest struct {
+	Path string `json:"path,omitempty"`
+}
+
+// FSDiskUsageResult is the result for the "fs_disk_usage" tool.
+type FSDiskUsageResult struct {
+	Path        string          `json:"path,omitempty"`
+	Filesystem *FilesystemInfo `json:"filesystem,omitempty"`
+	Filesystems []FilesystemInfo `json:"filesystems,omitempty"`
+	Count       int             `json:"count,omitempty"`
+}
+
+// FilesystemInfo represents filesystem disk usage information.
+type FilesystemInfo struct {
+	Path          string  `json:"path"`
+	TotalBytes    uint64  `json:"total_bytes"`
+	UsedBytes     uint64  `json:"used_bytes"`
+	FreeBytes     uint64  `json:"free_bytes"`
+	AvailableBytes uint64 `json:"available_bytes"`
+	UsedPercent   float64 `json:"used_percent"`
+}
+
 // ProcSignalSafeRequest is the params for the "proc_signal_safe" tool.
 type ProcSignalSafeRequest struct {
 	PID    int    `json:"pid"`
@@ -383,6 +406,27 @@ type SocketInfo struct {
 	State      string `json:"state,omitempty"`
 	PID        int    `json:"pid,omitempty"`
 	Process    string `json:"process,omitempty"`
+}
+
+// NetDNSResolveRequest is the params for the "net_dns_resolve" tool.
+type NetDNSResolveRequest struct {
+	Hostname   string `json:"hostname"`
+	RecordType string `json:"record_type,omitempty"`
+}
+
+// NetDNSResolveResult is the result for the "net_dns_resolve" tool.
+type NetDNSResolveResult struct {
+	Hostname    string      `json:"hostname"`
+	RecordType  string      `json:"record_type"`
+	Records     interface{} `json:"records"`
+	Count       int         `json:"count"`
+	Error       string      `json:"error,omitempty"`
+}
+
+// DNSMXRecord represents an MX DNS record.
+type DNSMXRecord struct {
+	Host string `json:"host"`
+	Pref uint16 `json:"pref"`
 }
 
 // NetEndpointPingRequest is the params for the "net_endpoint_ping" tool.
@@ -429,4 +473,149 @@ type ShellExecuteResult struct {
 	TimedOut bool   `json:"timed_out"`
 	Error    string `json:"error,omitempty"`
 	Hostname string `json:"hostname,omitempty"`
+}
+
+// SysInfoRequest is the params for the "sys_info" tool.
+type SysInfoRequest struct{}
+
+// SysInfoResult is the result for the "sys_info" tool.
+type SysInfoResult struct {
+	Hostname string      `json:"hostname"`
+	OS       OSInfo      `json:"os"`
+}
+
+// OSInfo represents operating system information.
+type OSInfo struct {
+	OS           string `json:"os"`
+	Arch         string `json:"arch"`
+	Kernel       string `json:"kernel"`
+	OSVersion    string `json:"os_version"`
+	Uptime       string `json:"uptime"`
+	LoadAverage  string `json:"load_average"`
+}
+
+// SysTimeClockRequest is the params for the "sys_time_clock" tool.
+type SysTimeClockRequest struct{}
+
+// SysTimeClockResult is the result for the "sys_time_clock" tool.
+type SysTimeClockResult struct {
+	SystemTime SystemTimeInfo `json:"system_time"`
+	NTP        NTPStatus      `json:"ntp"`
+}
+
+// SystemTimeInfo represents system time information.
+type SystemTimeInfo struct {
+	UTC       string `json:"utc"`
+	Local     string `json:"local"`
+	Unix      int64  `json:"unix"`
+	UnixNano  int64  `json:"unix_nano"`
+	Timezone  string `json:"timezone"`
+	Offset    string `json:"offset"`
+}
+
+// NTPStatus represents NTP synchronization status.
+type NTPStatus struct {
+	Synced          bool              `json:"synced"`
+	Status          string            `json:"status"`
+	NTPService      string            `json:"ntp_service,omitempty"`
+	NTPSynchronized  string            `json:"ntp_synchronized,omitempty"`
+	ReferenceID     string            `json:"reference_id,omitempty"`
+	Stratum         string            `json:"stratum,omitempty"`
+	SystemTimeOffset string           `json:"system_time_offset,omitempty"`
+	SelectedPeer    *NTPSelectedPeer  `json:"selected_peer,omitempty"`
+}
+
+// NTPSelectedPeer represents the selected NTP peer from ntpq.
+type NTPSelectedPeer struct {
+	Remote string `json:"remote"`
+	RefID  string `json:"refid"`
+	Stratum string `json:"stratum"`
+	When   string `json:"when"`
+	Poll   string `json:"poll"`
+	Reach  string `json:"reach"`
+	Delay  string `json:"delay"`
+	Offset string `json:"offset"`
+	Jitter string `json:"jitter"`
+}
+
+// K8sInspectRequest is the params for the "k8s_inspect" tool.
+type K8sInspectRequest struct {
+	Operation string `json:"operation,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Limit     int    `json:"limit,omitempty"`
+}
+
+// K8sInspectResult is the result for the "k8s_inspect" tool.
+type K8sInspectResult struct {
+	Operation string                 `json:"operation"`
+	Namespace string                 `json:"namespace,omitempty"`
+	Error     string                 `json:"error,omitempty"`
+	Pods      []K8sPodInfo           `json:"pods,omitempty"`
+	Nodes     []K8sNodeInfo          `json:"nodes,omitempty"`
+	Services  []K8sServiceInfo       `json:"services,omitempty"`
+	Deployments []K8sDeploymentInfo  `json:"deployments,omitempty"`
+	Namespaces []K8sNamespaceInfo    `json:"namespaces,omitempty"`
+	ClusterInfo *K8sClusterInfo      `json:"cluster_info,omitempty"`
+	PodLogs    *K8sPodLogs           `json:"pod_logs,omitempty"`
+	PodDescribe *K8sPodDescribe      `json:"pod_describe,omitempty"`
+	Count      int                   `json:"count,omitempty"`
+}
+
+// K8sPodInfo represents Kubernetes pod information.
+type K8sPodInfo struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Status    string `json:"status"`
+}
+
+// K8sNodeInfo represents Kubernetes node information.
+type K8sNodeInfo struct {
+	Name  string `json:"name"`
+	Ready bool   `json:"ready"`
+}
+
+// K8sServiceInfo represents Kubernetes service information.
+type K8sServiceInfo struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Type      string `json:"type"`
+}
+
+// K8sDeploymentInfo represents Kubernetes deployment information.
+type K8sDeploymentInfo struct {
+	Name               string `json:"name"`
+	Namespace          string `json:"namespace"`
+	DesiredReplicas    int    `json:"desired_replicas"`
+	AvailableReplicas  int    `json:"available_replicas"`
+	UpdatedReplicas    int    `json:"updated_replicas"`
+	Ready              bool   `json:"ready"`
+}
+
+// K8sNamespaceInfo represents Kubernetes namespace information.
+type K8sNamespaceInfo struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
+// K8sClusterInfo represents Kubernetes cluster information.
+type K8sClusterInfo struct {
+	Version string `json:"version"`
+	Context string `json:"context"`
+	Cluster string `json:"cluster"`
+}
+
+// K8sPodLogs represents Kubernetes pod logs.
+type K8sPodLogs struct {
+	Namespace string `json:"namespace"`
+	Pod       string `json:"pod"`
+	Logs      string `json:"logs"`
+	Truncated bool   `json:"truncated"`
+}
+
+// K8sPodDescribe represents Kubernetes pod describe output.
+type K8sPodDescribe struct {
+	Namespace string `json:"namespace"`
+	Pod       string `json:"pod"`
+	Describe  string `json:"describe"`
 }

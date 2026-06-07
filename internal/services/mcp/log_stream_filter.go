@@ -61,11 +61,7 @@ func (t *LogStreamFilterTool) InputSchema() map[string]interface{} {
 
 // Execute implements the tool logic.
 func (t *LogStreamFilterTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		LogPath string `json:"log_path"`
-		Pattern string `json:"pattern"`
-		Limit   int    `json:"limit,omitempty"`
-	}
+	var req LogStreamFilterRequest
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
 	}
@@ -119,9 +115,9 @@ func (t *LogStreamFilterTool) Execute(ctx context.Context, args json.RawMessage)
 		return CallToolResult{}, fmt.Errorf("error reading log file: %w", err)
 	}
 
-	result := map[string]interface{}{
-		"lines": lines,
-		"count": len(lines),
+	result := LogStreamFilterResult{
+		Lines: lines,
+		Count: len(lines),
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {

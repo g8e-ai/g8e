@@ -1328,11 +1328,12 @@ func TestAuditVaultPrune(t *testing.T) {
 	require.NoError(t, err)
 
 	// 3. Insert file mutations
+	tmpDir := t.TempDir()
 	_, err = avs.db.Exec("INSERT INTO file_mutation_log (event_id, filepath, operation) VALUES (?, ?, ?)",
-		1, "/tmp/old", "create")
+		1, filepath.Join(tmpDir, "old"), "create")
 	require.NoError(t, err)
 	_, err = avs.db.Exec("INSERT INTO file_mutation_log (event_id, filepath, operation) VALUES (?, ?, ?)",
-		2, "/tmp/recent", "create")
+		2, filepath.Join(tmpDir, "recent"), "create")
 	require.NoError(t, err)
 
 	// 4. Run pruning

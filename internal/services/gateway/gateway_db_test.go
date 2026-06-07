@@ -483,7 +483,8 @@ func TestSchemaIdempotent(t *testing.T) {
 
 func TestCreateDataDir(t *testing.T) {
 	t.Parallel()
-	dir := filepath.Join(t.TempDir(), "nested", "deep", "data")
+	tmpDir := t.TempDir()
+	dir := filepath.Join(tmpDir, "nested", "deep", "data")
 	secretsDir := t.TempDir()
 
 	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)

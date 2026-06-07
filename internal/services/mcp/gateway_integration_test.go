@@ -333,8 +333,12 @@ func TestCircuitBreakerIntegration(t *testing.T) {
 		maxFailures:       3, // Lower threshold for faster test
 		cooldownDuration:  100 * time.Millisecond,
 		downstreamURL:     "http://localhost:9999", // Invalid URL that will fail
-		nativeToolHandler: NewNativeToolHandler(),
 	}
+	nativeToolHandler, err := NewNativeToolHandler()
+	if err != nil {
+		t.Fatalf("failed to create native tool handler: %v", err)
+	}
+	g.nativeToolHandler = nativeToolHandler
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
 

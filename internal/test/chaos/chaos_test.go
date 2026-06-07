@@ -119,7 +119,7 @@ func TestSignedEnvelope(t *testing.T) {
 		{
 			name:       "valid read envelope",
 			actionType: "FS_LIST",
-			target:     "/tmp",
+			target:     "/test",
 			payload:    []byte("test payload"),
 			isMutation: false,
 			wantErr:    false,
@@ -130,8 +130,8 @@ func TestSignedEnvelope(t *testing.T) {
 				if env.ActionType != "FS_LIST" {
 					t.Errorf("ActionType = %s, want FS_LIST", env.ActionType)
 				}
-				if env.TargetResource != "/tmp" {
-					t.Errorf("TargetResource = %s, want /tmp", env.TargetResource)
+				if env.TargetResource != "/test" {
+					t.Errorf("TargetResource = %s, want /test", env.TargetResource)
 				}
 				if env.Governance == nil {
 					t.Error("Governance metadata is nil")
@@ -150,7 +150,7 @@ func TestSignedEnvelope(t *testing.T) {
 		{
 			name:       "valid mutation envelope",
 			actionType: "FILE_EDIT",
-			target:     "/tmp/test.txt",
+			target:     "/test/test.txt",
 			payload:    []byte("test content"),
 			isMutation: true,
 			wantErr:    false,
@@ -895,7 +895,7 @@ func TestSignedEnvelopeTimestamp(t *testing.T) {
 
 	before := time.Now()
 
-	env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", []byte("payload"), false, privKey, "key-id", "session-id")
+	env, err := signedEnvelope("FS_LIST", "/test", "state-root", "nonce", []byte("payload"), false, privKey, "key-id", "session-id")
 	if err != nil {
 		t.Fatalf("signedEnvelope() error = %v", err)
 	}
@@ -930,7 +930,7 @@ func TestSignedEnvelopeSessionID(t *testing.T) {
 
 	sessionID := "test-session-123"
 
-	env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", []byte("payload"), false, privKey, "key-id", sessionID)
+	env, err := signedEnvelope("FS_LIST", "/test", "state-root", "nonce", []byte("payload"), false, privKey, "key-id", sessionID)
 	if err != nil {
 		t.Fatalf("signedEnvelope() error = %v", err)
 	}
@@ -946,7 +946,7 @@ func TestSignedEnvelopeOperatorID(t *testing.T) {
 		t.Fatalf("failed to generate key: %v", err)
 	}
 
-	env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", []byte("payload"), false, privKey, "key-id", "session-id")
+	env, err := signedEnvelope("FS_LIST", "/test", "state-root", "nonce", []byte("payload"), false, privKey, "key-id", "session-id")
 	if err != nil {
 		t.Fatalf("signedEnvelope() error = %v", err)
 	}
@@ -964,7 +964,7 @@ func TestSignedEnvelopeStateRoot(t *testing.T) {
 
 	stateRoot := "test-state-root-456"
 
-	env, err := signedEnvelope("FS_LIST", "/tmp", stateRoot, "nonce", []byte("payload"), false, privKey, "key-id", "session-id")
+	env, err := signedEnvelope("FS_LIST", "/test", stateRoot, "nonce", []byte("payload"), false, privKey, "key-id", "session-id")
 	if err != nil {
 		t.Fatalf("signedEnvelope() error = %v", err)
 	}
@@ -982,7 +982,7 @@ func TestSignedEnvelopeL2Signature(t *testing.T) {
 
 	keyID := "test-key-id"
 
-	env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", []byte("payload"), false, privKey, keyID, "session-id")
+	env, err := signedEnvelope("FS_LIST", "/test", "state-root", "nonce", []byte("payload"), false, privKey, keyID, "session-id")
 	if err != nil {
 		t.Fatalf("signedEnvelope() error = %v", err)
 	}
@@ -1021,7 +1021,7 @@ func TestSignedEnvelopeNonceFormat(t *testing.T) {
 	nonceSuffix := "test-suffix"
 	payload := []byte("test-payload")
 
-	env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", nonceSuffix, payload, false, privKey, "key-id", "session-id")
+	env, err := signedEnvelope("FS_LIST", "/test", "state-root", nonceSuffix, payload, false, privKey, "key-id", "session-id")
 	if err != nil {
 		t.Fatalf("signedEnvelope() error = %v", err)
 	}
@@ -1045,7 +1045,7 @@ func TestRecordRejection(t *testing.T) {
 			OperatorSessionId: "test-session",
 			TransactionHash:   "test-hash",
 			ActionType:        "FS_LIST",
-			TargetResource:    "/tmp",
+			TargetResource:    "/test",
 		}
 
 		// Should not panic with nil audit vault
@@ -1059,7 +1059,7 @@ func TestRecordRejection(t *testing.T) {
 			OperatorSessionId: "test-session",
 			TransactionHash:   "test-hash",
 			ActionType:        "FS_LIST",
-			TargetResource:    "/tmp",
+			TargetResource:    "/test",
 		}
 
 		reason := classifyRejection(errors.New("TX_L1_FAILED: forbidden pattern"))
@@ -1127,7 +1127,7 @@ func TestRecordExecution(t *testing.T) {
 			OperatorSessionId: "test-session",
 			TransactionHash:   "test-hash-123456789012",
 			ActionType:        "FS_LIST",
-			TargetResource:    "/tmp",
+			TargetResource:    "/test",
 		}
 
 		// Should not panic with nil audit vault
@@ -1141,7 +1141,7 @@ func TestRecordExecution(t *testing.T) {
 			OperatorSessionId: "test-session",
 			TransactionHash:   "test-hash-123456789012",
 			ActionType:        "FS_LIST",
-			TargetResource:    "/tmp",
+			TargetResource:    "/test",
 		}
 
 		status := "COMPLETED"
@@ -1168,7 +1168,7 @@ func TestRecordExecution(t *testing.T) {
 			OperatorSessionId: "test-session",
 			TransactionHash:   "test-hash-123456789012",
 			ActionType:        "FS_LIST",
-			TargetResource:    "/tmp",
+			TargetResource:    "/test",
 		}
 
 		execErr := errors.New("execution failed")
@@ -1198,7 +1198,7 @@ func TestPrintSummaryRow(t *testing.T) {
 
 func TestPrintDemoQueries(t *testing.T) {
 	// This is a visual output function, just verify it doesn't panic
-	printDemoQueries("/tmp/test.db")
+	printDemoQueries("/test/test.db")
 }
 
 func TestChaosExecutionHandler(t *testing.T) {
@@ -1224,7 +1224,7 @@ func TestChaosExecutionHandler(t *testing.T) {
 		}
 
 		payload, _ := proto.Marshal(&operatorv1.FileEditRequested{
-			FilePath:    "/tmp/test.txt",
+			FilePath:    "/test/test.txt",
 			Content:     "test content",
 			ExecutionId: "exec-123",
 		})
@@ -1248,7 +1248,7 @@ func TestChaosExecutionHandler(t *testing.T) {
 
 	t.Run("non-FileEdit event type", func(t *testing.T) {
 		payload, _ := proto.Marshal(&operatorv1.FsListRequested{
-			Path:        "/tmp",
+			Path:        "/test",
 			ExecutionId: "exec-123",
 		})
 
@@ -1312,7 +1312,7 @@ func TestChaosExecutionHandler(t *testing.T) {
 		}
 
 		payload, _ := proto.Marshal(&operatorv1.FsListRequested{
-			Path:        "/tmp",
+			Path:        "/test",
 			ExecutionId: "exec-123",
 		})
 
@@ -1460,7 +1460,7 @@ func TestSignedEnvelopePayloadEdgeCases(t *testing.T) {
 	}
 
 	t.Run("empty payload", func(t *testing.T) {
-		env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", []byte{}, false, privKey, "key-id", "session-id")
+		env, err := signedEnvelope("FS_LIST", "/test", "state-root", "nonce", []byte{}, false, privKey, "key-id", "session-id")
 		if err != nil {
 			t.Fatalf("signedEnvelope() error = %v", err)
 		}
@@ -1473,7 +1473,7 @@ func TestSignedEnvelopePayloadEdgeCases(t *testing.T) {
 	})
 
 	t.Run("small payload", func(t *testing.T) {
-		env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", []byte("a"), false, privKey, "key-id", "session-id")
+		env, err := signedEnvelope("FS_LIST", "/test", "state-root", "nonce", []byte("a"), false, privKey, "key-id", "session-id")
 		if err != nil {
 			t.Fatalf("signedEnvelope() error = %v", err)
 		}
@@ -1487,7 +1487,7 @@ func TestSignedEnvelopePayloadEdgeCases(t *testing.T) {
 		for i := range largePayload {
 			largePayload[i] = byte(i % 256)
 		}
-		env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", largePayload, false, privKey, "key-id", "session-id")
+		env, err := signedEnvelope("FS_LIST", "/test", "state-root", "nonce", largePayload, false, privKey, "key-id", "session-id")
 		if err != nil {
 			t.Fatalf("signedEnvelope() error = %v", err)
 		}
@@ -1559,17 +1559,17 @@ func TestConfig(t *testing.T) {
 	t.Run("config with values", func(t *testing.T) {
 		cfg := Config{
 			Count:   100,
-			DataDir: "/tmp/test-data",
-			PKIDir:  "/tmp/test-pki",
+			DataDir: "/test/test-data",
+			PKIDir:  "/test/test-pki",
 		}
 		if cfg.Count != 100 {
 			t.Errorf("Count = %d, want 100", cfg.Count)
 		}
-		if cfg.DataDir != "/tmp/test-data" {
-			t.Errorf("DataDir = %s, want /tmp/test-data", cfg.DataDir)
+		if cfg.DataDir != "/test/test-data" {
+			t.Errorf("DataDir = %s, want /test/test-data", cfg.DataDir)
 		}
-		if cfg.PKIDir != "/tmp/test-pki" {
-			t.Errorf("PKIDir = %s, want /tmp/test-pki", cfg.PKIDir)
+		if cfg.PKIDir != "/test/test-pki" {
+			t.Errorf("PKIDir = %s, want /test/test-pki", cfg.PKIDir)
 		}
 	})
 }
@@ -1622,7 +1622,7 @@ func TestSignedEnvelopeSourceComponent(t *testing.T) {
 		t.Fatalf("failed to generate key: %v", err)
 	}
 
-	env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", []byte("payload"), false, privKey, "key-id", "session-id")
+	env, err := signedEnvelope("FS_LIST", "/test", "state-root", "nonce", []byte("payload"), false, privKey, "key-id", "session-id")
 	if err != nil {
 		t.Fatalf("signedEnvelope() error = %v", err)
 	}
@@ -1638,7 +1638,7 @@ func TestSignedEnvelopeProtocolVersion(t *testing.T) {
 		t.Fatalf("failed to generate key: %v", err)
 	}
 
-	env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", []byte("payload"), false, privKey, "key-id", "session-id")
+	env, err := signedEnvelope("FS_LIST", "/test", "state-root", "nonce", []byte("payload"), false, privKey, "key-id", "session-id")
 	if err != nil {
 		t.Fatalf("signedEnvelope() error = %v", err)
 	}
@@ -1758,7 +1758,7 @@ func TestSignedEnvelopeL3ProofStructure(t *testing.T) {
 	}
 
 	t.Run("mutation has L3 proof", func(t *testing.T) {
-		env, err := signedEnvelope("FILE_EDIT", "/tmp/test.txt", "state-root", "nonce", []byte("content"), true, privKey, "key-id", "session-id")
+		env, err := signedEnvelope("FILE_EDIT", "/test/test.txt", "state-root", "nonce", []byte("content"), true, privKey, "key-id", "session-id")
 		if err != nil {
 			t.Fatalf("signedEnvelope() error = %v", err)
 		}
@@ -1778,7 +1778,7 @@ func TestSignedEnvelopeL3ProofStructure(t *testing.T) {
 	})
 
 	t.Run("non-mutation has no L3 proof", func(t *testing.T) {
-		env, err := signedEnvelope("FS_LIST", "/tmp", "state-root", "nonce", []byte("content"), false, privKey, "key-id", "session-id")
+		env, err := signedEnvelope("FS_LIST", "/test", "state-root", "nonce", []byte("content"), false, privKey, "key-id", "session-id")
 		if err != nil {
 			t.Fatalf("signedEnvelope() error = %v", err)
 		}

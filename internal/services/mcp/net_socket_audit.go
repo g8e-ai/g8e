@@ -52,38 +52,35 @@ func (t *NetSocketAuditTool) InputSchema() map[string]interface{} {
 
 // Execute implements the tool logic.
 func (t *NetSocketAuditTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		Protocol string `json:"protocol,omitempty"`
-	}
+	var req NetSocketAuditRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("net_socket_audit: unmarshal arguments: %w", err)
 	}
 
-	var sockets []map[string]interface{}
+	var sockets []SocketInfo
 	protocols := []string{string(constants.NetworkProtocolTCP), string(constants.NetworkProtocolUDP)}
 
 	if req.Protocol != "" {
 		proto := strings.ToLower(req.Protocol)
 		if err := validateProcNetPath(proto); err != nil {
-			return CallToolResult{}, fmt.Errorf("invalid protocol: %w", err)
+			return CallToolResult{}, fmt.Errorf("net_socket_audit: validate protocol: %w", err)
 		}
 		protocols = []string{proto}
 	}
 
 	for _, proto := range protocols {
 		path := fmt.Sprintf("/proc/net/%s", proto)
-		// Protocol is validated by validateProcNetPath to satisfy CodeQL path-traversal rule.
 		file, err := os.Open(path)
 		if err != nil {
 			continue
 		}
+		defer file.Close()
 
 		scanner := bufio.NewScanner(file)
 		scanner.Scan()
 
 		for scanner.Scan() {
 			if ctx.Err() != nil {
-				file.Close()
 				return CallToolResult{}, ctx.Err()
 			}
 
@@ -100,32 +97,36 @@ func (t *NetSocketAuditTool) Execute(ctx context.Context, args json.RawMessage) 
 				state = fields[3]
 			}
 
-			localIP, localPort := parseSocketAddr(localAddr)
-			remoteIP, remotePort := parseSocketAddr(remoteAddr)
+			localIP, localPort, err := parseSocketAddr(localAddr)
+			if err != nil {
+				continue
+			}
+			remoteIP, remotePort, err := parseSocketAddr(remoteAddr)
+			if err != nil {
+				continue
+			}
 
-			sockets = append(sockets, map[string]interface{}{
-				"protocol":    proto,
-				"local_addr":  localIP,
-				"local_port":  localPort,
-				"remote_addr": remoteIP,
-				"remote_port": remotePort,
-				"state":       state,
+			sockets = append(sockets, SocketInfo{
+				Protocol:   proto,
+				LocalAddr:  localIP,
+				LocalPort:  localPort,
+				RemoteAddr: remoteIP,
+				RemotePort: remotePort,
+				State:      state,
 			})
 		}
 
 		if err := scanner.Err(); err != nil {
-			file.Close()
 			continue
 		}
-		file.Close()
 	}
 
-	result := map[string]interface{}{
-		"sockets": sockets,
+	result := NetSocketAuditResult{
+		Sockets: sockets,
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("net_socket_audit: marshal result: %w", err)
 	}
 
 	return CallToolResult{

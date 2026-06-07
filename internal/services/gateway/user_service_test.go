@@ -145,7 +145,10 @@ func TestUserService_Disable(t *testing.T) {
 	t.Run("Error - user not found", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		db, err := OpenCanonicalDBService(t.TempDir(), t.TempDir(), t.TempDir(), logger, true, "", false)
+		dataDir := t.TempDir()
+		secretsDir := t.TempDir()
+		vaultDir := t.TempDir()
+		db, err := OpenCanonicalDBService(dataDir, secretsDir, vaultDir, logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)

@@ -52,22 +52,22 @@ func NewToolRegistry() *ToolRegistry {
 // Returns an error if a tool with the same name is already registered.
 func (r *ToolRegistry) Register(tool NativeTool) error {
 	if tool == nil {
-		return fmt.Errorf("cannot register nil tool")
+		return fmt.Errorf("registry: cannot register nil tool")
 	}
 
 	name := tool.Name()
 	if name == "" {
-		return fmt.Errorf("tool name cannot be empty")
+		return fmt.Errorf("registry: tool name cannot be empty")
 	}
 
 	// Validate tool name format (must be valid identifier)
 	if !isValidToolName(name) {
-		return fmt.Errorf("invalid tool name '%s': must contain only lowercase letters, digits, and underscores", name)
+		return fmt.Errorf("registry: invalid tool name '%s': must contain only lowercase letters, digits, and underscores", name)
 	}
 
 	// Validate input schema
 	if err := validateInputSchema(tool.InputSchema()); err != nil {
-		return fmt.Errorf("invalid input schema for tool '%s': %w", name, err)
+		return fmt.Errorf("registry: invalid input schema for tool '%s': %w", name, err)
 	}
 
 	r.mu.Lock()
@@ -75,7 +75,7 @@ func (r *ToolRegistry) Register(tool NativeTool) error {
 
 	// Check for duplicate tool name
 	if _, exists := r.tools[name]; exists {
-		return fmt.Errorf("tool '%s' is already registered", name)
+		return fmt.Errorf("registry: tool '%s' is already registered", name)
 	}
 
 	r.tools[name] = tool
@@ -138,24 +138,24 @@ func isValidToolName(name string) bool {
 // validateInputSchema performs basic validation of a tool's input schema.
 func validateInputSchema(schema map[string]interface{}) error {
 	if schema == nil {
-		return fmt.Errorf("schema cannot be nil")
+		return fmt.Errorf("registry: schema cannot be nil")
 	}
 
 	// Check for required "type" field
 	typ, ok := schema["type"]
 	if !ok {
-		return fmt.Errorf("schema missing required 'type' field")
+		return fmt.Errorf("registry: schema missing required 'type' field")
 	}
 
 	typeStr, ok := typ.(string)
 	if !ok || typeStr != "object" {
-		return fmt.Errorf("schema 'type' must be 'object', got %T", typ)
+		return fmt.Errorf("registry: schema 'type' must be 'object', got %T", typ)
 	}
 
 	// If "properties" exists, validate it's a map
 	if props, ok := schema["properties"]; ok {
 		if _, ok := props.(map[string]interface{}); !ok {
-			return fmt.Errorf("schema 'properties' must be an object, got %T", props)
+			return fmt.Errorf("registry: schema 'properties' must be an object, got %T", props)
 		}
 	}
 
@@ -165,7 +165,7 @@ func validateInputSchema(schema map[string]interface{}) error {
 		case []interface{}, []string:
 			// valid
 		default:
-			return fmt.Errorf("schema 'required' must be an array, got %T", required)
+			return fmt.Errorf("registry: schema 'required' must be an array, got %T", required)
 		}
 	}
 

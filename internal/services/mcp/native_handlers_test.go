@@ -27,7 +27,8 @@ import (
 )
 
 func TestNativeToolHandler_HandleTool(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("unknown tool", func(t *testing.T) {
 		_, err := handler.HandleTool(context.Background(), "unknown_tool", json.RawMessage(`{}`))
@@ -98,7 +99,8 @@ func TestNativeToolHandler_HandleTool(t *testing.T) {
 }
 
 func TestHandleDBDiscoverTopology(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid database", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -159,7 +161,8 @@ func TestHandleDBDiscoverTopology(t *testing.T) {
 }
 
 func TestHandleDBQueryValidate(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("indexed SELECT query accepted", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -266,7 +269,8 @@ func TestHandleDBQueryValidate(t *testing.T) {
 }
 
 func TestHandleDBIsolatedRead(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid SELECT query", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -331,7 +335,8 @@ func TestHandleDBIsolatedRead(t *testing.T) {
 }
 
 func TestHandleDBIndexTriage(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid database", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -368,7 +373,8 @@ func TestHandleDBIndexTriage(t *testing.T) {
 }
 
 func TestHandleLogStreamFilter(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid log file", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -413,7 +419,8 @@ func TestHandleLogStreamFilter(t *testing.T) {
 }
 
 func TestHandleSysOOMDetect(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("default log path", func(t *testing.T) {
 		req := SysOOMDetectRequest{}
@@ -436,7 +443,8 @@ func TestHandleSysOOMDetect(t *testing.T) {
 }
 
 func TestHandleConfigDiffMask(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid config diff", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -509,7 +517,8 @@ func TestHandleConfigDiffMask(t *testing.T) {
 }
 
 func TestHandleProcMetricTop(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
 		req := ProcMetricTopRequest{Limit: 5}
@@ -532,7 +541,8 @@ func TestHandleProcMetricTop(t *testing.T) {
 }
 
 func TestHandleFSDiskProfile(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid path", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -570,7 +580,8 @@ func TestHandleFSDiskProfile(t *testing.T) {
 }
 
 func TestHandleProcSignalSafe(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("protected PID rejected", func(t *testing.T) {
 		req := ProcSignalSafeRequest{
@@ -690,7 +701,8 @@ func TestHandleProcSignalSafe(t *testing.T) {
 }
 
 func TestHandleNetSocketAudit(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
 		req := NetSocketAuditRequest{Protocol: "tcp"}
@@ -733,7 +745,8 @@ func TestHandleNetSocketAudit(t *testing.T) {
 }
 
 func TestHandleNetEndpointPing(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("invalid host", func(t *testing.T) {
 		req := NetEndpointPingRequest{
@@ -843,7 +856,8 @@ func TestHandleNetEndpointPing(t *testing.T) {
 }
 
 func TestHandleNetHTTPProbe(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("invalid URL", func(t *testing.T) {
 		req := NetHTTPProbeRequest{
@@ -1032,7 +1046,8 @@ func TestHandleNetHTTPProbe(t *testing.T) {
 }
 
 func TestNativeTools(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 	nativeTools := handler.ListTools()
 
 	if len(nativeTools) != 27 {
@@ -1237,7 +1252,8 @@ func TestParseSocketAddr(t *testing.T) {
 		t.Parallel()
 		// 127.0.0.1:8080 in hex (little-endian)
 		// IP: 0100007F (127.0.0.1), Port: 1F90 (8080)
-		ip, port := parseSocketAddr("0100007F1F90")
+		ip, port, err := parseSocketAddr("0100007F1F90")
+		require.NoError(t, err)
 		require.Equal(t, "127.0.0.1", ip)
 		require.Equal(t, 8080, port)
 	})
@@ -1246,14 +1262,16 @@ func TestParseSocketAddr(t *testing.T) {
 		t.Parallel()
 		// 0.0.0.0:443 in hex
 		// IP: 00000000 (0.0.0.0), Port: 01BB (443)
-		ip, port := parseSocketAddr("0000000001BB")
+		ip, port, err := parseSocketAddr("0000000001BB")
+		require.NoError(t, err)
 		require.Equal(t, "0.0.0.0", ip)
 		require.Equal(t, 443, port)
 	})
 
 	t.Run("invalid short address", func(t *testing.T) {
 		t.Parallel()
-		ip, port := parseSocketAddr("1234")
+		ip, port, err := parseSocketAddr("1234")
+		require.NoError(t, err)
 		require.Equal(t, "0.0.0.0", ip)
 		require.Equal(t, 0, port)
 	})
@@ -1261,14 +1279,16 @@ func TestParseSocketAddr(t *testing.T) {
 	t.Run("invalid IP length", func(t *testing.T) {
 		t.Parallel()
 		// IP part not 8 bytes
-		ip, port := parseSocketAddr("12345601BB")
+		ip, port, err := parseSocketAddr("12345601BB")
+		require.NoError(t, err)
 		require.Equal(t, "unknown", ip)
 		require.Equal(t, 443, port)
 	})
 }
 
 func TestHandleGitOps(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("git status on test repo", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -1418,7 +1438,8 @@ func TestHandleGitOps(t *testing.T) {
 }
 
 func TestHandleCloudMetadata(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("detect provider", func(t *testing.T) {
 		req := map[string]interface{}{
@@ -1464,7 +1485,8 @@ func TestHandleCloudMetadata(t *testing.T) {
 }
 
 func TestHandleK8sInspect(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("kubectl not available", func(t *testing.T) {
 		if kubectlAvailable() {
@@ -1558,7 +1580,8 @@ func TestHandleK8sInspect(t *testing.T) {
 }
 
 func TestHandleSysInfo(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
 		req := map[string]interface{}{}
@@ -1581,7 +1604,8 @@ func TestHandleSysInfo(t *testing.T) {
 }
 
 func TestHandleNetDNSResolve(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid hostname", func(t *testing.T) {
 		req := map[string]interface{}{
@@ -1594,12 +1618,12 @@ func TestHandleNetDNSResolve(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		var resolve map[string]interface{}
+		var resolve NetDNSResolveResult
 		if err := json.Unmarshal([]byte(result.Content[0].Text), &resolve); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if _, ok := resolve["records"]; !ok {
+		if resolve.Records == nil {
 			t.Error("expected records in result")
 		}
 	})
@@ -1616,7 +1640,8 @@ func TestHandleNetDNSResolve(t *testing.T) {
 }
 
 func TestHandleTLSCertInspect(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("missing cert path", func(t *testing.T) {
 		req := map[string]interface{}{}
@@ -1630,7 +1655,8 @@ func TestHandleTLSCertInspect(t *testing.T) {
 }
 
 func TestHandleSysEnvVars(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
 		req := map[string]interface{}{
@@ -1656,7 +1682,8 @@ func TestHandleSysEnvVars(t *testing.T) {
 }
 
 func TestHandleFSFileChecksum(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid file", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -1698,7 +1725,8 @@ func TestHandleFSFileChecksum(t *testing.T) {
 }
 
 func TestHandleSysServiceStatus(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("missing service name", func(t *testing.T) {
 		req := map[string]interface{}{}
@@ -1712,7 +1740,8 @@ func TestHandleSysServiceStatus(t *testing.T) {
 }
 
 func TestHandleSysContainerStatus(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("missing container name", func(t *testing.T) {
 		req := map[string]interface{}{}
@@ -1726,7 +1755,8 @@ func TestHandleSysContainerStatus(t *testing.T) {
 }
 
 func TestHandleFSDiskUsage(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid path", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -1772,7 +1802,8 @@ func TestHandleFSDiskUsage(t *testing.T) {
 }
 
 func TestHandleSysTimeClock(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
 		req := map[string]interface{}{}
@@ -1795,7 +1826,8 @@ func TestHandleSysTimeClock(t *testing.T) {
 }
 
 func TestHandleProcTree(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
 		req := map[string]interface{}{

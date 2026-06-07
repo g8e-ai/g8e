@@ -90,7 +90,7 @@ func TestLockedVaultHandling(t *testing.T) {
 		Logger:  logger,
 	})
 	require.NoError(t, err)
-	defer v.Close()
+	t.Cleanup(func() { v.Close() })
 
 	// Verify vault is locked
 	assert.False(t, v.IsUnlocked(), "Vault should be locked after creation")

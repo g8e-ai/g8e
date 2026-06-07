@@ -1751,8 +1751,12 @@ func newTestGatewayService(opts ...testGatewayOption) *GatewayService {
 		maxFailures:       5,
 		cooldownDuration:  1 * time.Minute,
 		maxPayloadBytes:   10 * 1024 * 1024,
-		nativeToolHandler: NewNativeToolHandler(),
 	}
+	nativeToolHandler, err := NewNativeToolHandler()
+	if err != nil {
+		t.Fatalf("failed to create native tool handler: %v", err)
+	}
+	g.nativeToolHandler = nativeToolHandler
 
 	// Apply options
 	for _, opt := range opts {

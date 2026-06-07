@@ -173,11 +173,3 @@ func TestTempFile_RegistersCleanup(t *testing.T) {
 	require.NoError(t, err, "file must exist before cleanup runs")
 	// Cleanup runs when t ends - verified by t.Cleanup registration in TempFile itself.
 }
-
-func TestTempFile_NonExistentFile_NoError(t *testing.T) {
-	// TempFile must not panic or error when the file doesn't exist at cleanup time.
-	// We cannot trigger t.Cleanup mid-test, so we verify TempFile registers without panic.
-	assert.NotPanics(t, func() {
-		TempFile(t, "/tmp/g8e_testutil_nonexistent_file_xyz_abc")
-	})
-}

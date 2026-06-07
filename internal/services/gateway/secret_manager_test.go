@@ -41,7 +41,8 @@ func TestMain(m *testing.M) {
 // CanonicalDBService wiring.
 func newSecretManagerTestDB(t *testing.T) *sqliteutil.DB {
 	t.Helper()
-	dbPath := filepath.Join(t.TempDir(), "secret_manager_test.db")
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "secret_manager_test.db")
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 	db, err := sqliteutil.OpenDB(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)

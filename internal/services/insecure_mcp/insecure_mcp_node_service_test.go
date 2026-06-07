@@ -453,8 +453,9 @@ func TestSystemRun_StderrCaptured(t *testing.T) {
 
 func TestSystemRun_WithCwd(t *testing.T) {
 	t.Parallel()
+	tmpDir := t.TempDir()
 	mg := newMockGateway(t)
-	mg.queueInvoke("sr-5", "test-node", "command", `{"command":["/bin/sh","-c","pwd"],"cwd":"/tmp"}`)
+	mg.queueInvoke("sr-5", "test-node", "command", fmt.Sprintf(`{"command":["/bin/sh","-c","pwd"],"cwd":"%s"}`, tmpDir))
 	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -472,8 +473,8 @@ func TestSystemRun_WithCwd(t *testing.T) {
 	}
 	var payload systemRunResult
 	json.Unmarshal([]byte(*r.PayloadJSON), &payload)
-	if !strings.Contains(payload.Stdout, "/tmp") {
-		t.Errorf("expected /tmp in stdout, got %q", payload.Stdout)
+	if !strings.Contains(payload.Stdout, tmpDir) {
+		t.Errorf("expected %s in stdout, got %q", tmpDir, payload.Stdout)
 	}
 }
 
@@ -603,13 +604,14 @@ func TestRunCommand_Timeout(t *testing.T) {
 
 func TestRunCommand_Cwd(t *testing.T) {
 	t.Parallel()
+	tmpDir := t.TempDir()
 	ctx := context.Background()
 	result, _ := runCommand(ctx, systemRunParams{
 		Command: []string{"/bin/sh", "-c", "pwd"},
-		Cwd:     "/tmp",
+		Cwd:     tmpDir,
 	})
-	if !strings.Contains(result.stdout, "/tmp") {
-		t.Errorf("expected /tmp in stdout, got %q", result.stdout)
+	if !strings.Contains(result.stdout, tmpDir) {
+		t.Errorf("expected %s in stdout, got %q", tmpDir, result.stdout)
 	}
 }
 

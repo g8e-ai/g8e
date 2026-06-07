@@ -16,11 +16,17 @@ package storage
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
+
+// containsString checks if a string contains a substring (case-sensitive).
+func containsString(s, substr string) bool {
+	return strings.Contains(s, substr)
+}
 
 // ReplayStoreConfig holds configuration for the replay store service.
 type ReplayStoreConfig struct {
@@ -120,9 +126,10 @@ func (rs *SQLReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool,
 	)
 	if err != nil {
 		// Check if this is a UNIQUE constraint violation (replay detected)
-		// SQLite returns "UNIQUE constraint failed: nonce_usage.nonce"
-		if err.Error() == "UNIQUE constraint failed: nonce_usage.nonce" ||
-			err.Error() == "constraint failed" {
+		// SQLite returns constraint violation errors with various formats
+		errStr := err.Error()
+		if containsString(errStr, "UNIQUE constraint failed") ||
+			containsString(errStr, "constraint failed") {
 			// Replay detected - fetch existing status for logging
 			var existingStatus string
 			_ = rs.db.QueryRowWithRetry("SELECT status FROM nonce_usage WHERE nonce = ?", nonce).Scan(&existingStatus)

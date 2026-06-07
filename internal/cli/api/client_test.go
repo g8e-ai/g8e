@@ -120,21 +120,21 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	constantsDir := filepath.Join(protocolDir, "constants")
 	require.NoError(t, os.MkdirAll(constantsDir, 0755))
 
-	pathsJSON := `{
+	pathsJSON := fmt.Sprintf(`{
 		"host": "localhost",
 		"infra": {
-			"app_cert_dir": "/tmp/app/certs",
+			"app_cert_dir": "%s/app/certs",
 			"ca_cert_path": ".g8e/pki/trust/g8eg-ca-bundle.pem",
-			"db_path": "/tmp/db",
-			"docs_dir": "/tmp/docs",
+			"db_path": "%s/db",
+			"docs_dir": "%s/docs",
 			"pki_dir": ".g8e/pki",
 			"protocol_constants_dir": "protocol/constants",
 			"protocol_dir": "protocol",
 			"protocol_models_dir": "protocol/models",
 			"secrets_dir": ".g8e/secrets",
-			"ssh_config_path": "/tmp/ssh/config"
+			"ssh_config_path": "%s/ssh/config"
 		}
-	}`
+	}`, tempDir, tempDir, tempDir, tempDir)
 	pathsPath := filepath.Join(constantsDir, "paths.json")
 	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 

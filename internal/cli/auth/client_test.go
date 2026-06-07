@@ -778,11 +778,10 @@ func TestFetchRootCAFingerprint_Success(t *testing.T) {
 	}
 	cfg.Paths.Infra.CACertPath = certPEM
 
-	// Since we can't easily inject the test server URL into OperatorDiscoveryURL,
-	// test the error case instead - the function will try to connect to the test port
-	// which won't have the right endpoint, so it will fail
-	_, err := FetchRootCAFingerprint(cfg)
-	require.Error(t, err)
+	// Test the success case - the function should successfully fetch the fingerprint
+	fp, err := FetchRootCAFingerprint(cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "sha256:"+expectedFP, fp)
 }
 
 func TestFetchRootCAFingerprint_HTTPError(t *testing.T) {
@@ -847,11 +846,7 @@ func TestFetchRootCAFingerprint_InvalidJSON(t *testing.T) {
 // Bootstrap
 // ---------------------------------------------------------------------------
 
-// TestBootstrap_Success is an integration test that requires a running gateway.
-// NOTE: This test is not isolated from the live gateway process. When running `make test`,
-// it will connect to the gateway running on ports 8443/8080 if one is available.
-// This is an environmental issue - the test should be properly isolated with a test-specific
-// gateway instance, but that requires significant test infrastructure changes.
+// TestBootstrap_Success tests the successful bootstrap flow with a mock server.
 func TestBootstrap_Success(t *testing.T) {
 	t.Parallel()
 
@@ -897,16 +892,18 @@ func TestBootstrap_Success(t *testing.T) {
 		TestPortOverride: extractPortFromURL(server.URL), // Use test server port
 	}
 
-	// Since Bootstrap uses cfg.OperatorDiscoveryURL() internally,
-	// we test the function signature and error paths
 	operatorCSR, _, err := GenerateCSR("test-operator")
 	require.NoError(t, err)
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	// This will fail because cfg.OperatorDiscoveryURL() won't point to our test server
-	_, err = Bootstrap(cfg, operatorCSR, cliCSR, "")
-	require.Error(t, err)
+	// Test the success case - the function should successfully bootstrap
+	resp, err := Bootstrap(cfg, operatorCSR, cliCSR, "")
+	require.NoError(t, err)
+	assert.Equal(t, "op-sess-123", resp.OperatorSessionID)
+	assert.Equal(t, "cli-sess-456", resp.CLISessionID)
+	assert.Equal(t, "op-789", resp.OperatorID)
+	assert.Equal(t, "user-abc", resp.UserID)
 }
 
 func TestBootstrap_ServerError(t *testing.T) {

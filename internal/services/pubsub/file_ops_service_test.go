@@ -15,6 +15,7 @@ package pubsub
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -30,8 +31,9 @@ import (
 func TestPayloadToFileEditRequest(t *testing.T) {
 	t.Run("converts valid payload", func(t *testing.T) {
 		t.Parallel()
+		tmpDir := t.TempDir()
 		req := &operatorv1.FileEditRequested{
-			FilePath:        "/tmp/test.txt",
+			FilePath:        filepath.Join(tmpDir, "test.txt"),
 			Operation:       "write",
 			ExecutionId:     "exec-1",
 			Justification:   "test",
@@ -63,7 +65,7 @@ func TestPayloadToFileEditRequest(t *testing.T) {
 		assert.Equal(t, "task-1", *editReq.TaskID)
 		assert.Equal(t, "investigation-1", editReq.InvestigationID)
 		assert.Equal(t, constants.FileOperation("write"), editReq.Operation)
-		assert.Equal(t, "/tmp/test.txt", editReq.FilePath)
+		assert.Equal(t, filepath.Join(tmpDir, "test.txt"), editReq.FilePath)
 		assert.Equal(t, "test", editReq.Justification)
 		assert.True(t, editReq.CreateBackup)
 		assert.True(t, editReq.CreateIfMissing)
@@ -107,7 +109,8 @@ func TestPayloadToFileEditRequest(t *testing.T) {
 
 	t.Run("rejects missing operation", func(t *testing.T) {
 		t.Parallel()
-		req := &operatorv1.FileEditRequested{FilePath: "/tmp/test.txt"}
+		tmpDir := t.TempDir()
+		req := &operatorv1.FileEditRequested{FilePath: filepath.Join(tmpDir, "test.txt")}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -122,7 +125,8 @@ func TestPayloadToFileEditRequest(t *testing.T) {
 
 	t.Run("uses message ID when payload has no execution_id", func(t *testing.T) {
 		t.Parallel()
-		req := &operatorv1.FileEditRequested{FilePath: "/tmp/test.txt", Operation: "write"}
+		tmpDir := t.TempDir()
+		req := &operatorv1.FileEditRequested{FilePath: filepath.Join(tmpDir, "test.txt"), Operation: "write"}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -137,7 +141,8 @@ func TestPayloadToFileEditRequest(t *testing.T) {
 
 	t.Run("uses default justification when not specified", func(t *testing.T) {
 		t.Parallel()
-		req := &operatorv1.FileEditRequested{FilePath: "/tmp/test.txt", Operation: "write"}
+		tmpDir := t.TempDir()
+		req := &operatorv1.FileEditRequested{FilePath: filepath.Join(tmpDir, "test.txt"), Operation: "write"}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -154,8 +159,9 @@ func TestPayloadToFileEditRequest(t *testing.T) {
 func TestPayloadToFsListRequest(t *testing.T) {
 	t.Run("converts valid payload", func(t *testing.T) {
 		t.Parallel()
+		tmpDir := t.TempDir()
 		req := &operatorv1.FsListRequested{
-			Path:        "/tmp",
+			Path:        tmpDir,
 			ExecutionId: "exec-1",
 			MaxDepth:    5,
 			MaxEntries:  200,
@@ -176,7 +182,7 @@ func TestPayloadToFsListRequest(t *testing.T) {
 		assert.Equal(t, "case-1", listReq.CaseID)
 		assert.Equal(t, "task-1", *listReq.TaskID)
 		assert.Equal(t, "investigation-1", listReq.InvestigationID)
-		assert.Equal(t, "/tmp", listReq.Path)
+		assert.Equal(t, tmpDir, listReq.Path)
 		assert.Equal(t, 5, listReq.MaxDepth)
 		assert.Equal(t, 200, listReq.MaxEntries)
 	})
@@ -211,7 +217,8 @@ func TestPayloadToFsListRequest(t *testing.T) {
 
 	t.Run("uses message ID when payload has no execution_id", func(t *testing.T) {
 		t.Parallel()
-		req := &operatorv1.FsListRequested{Path: "/tmp"}
+		tmpDir := t.TempDir()
+		req := &operatorv1.FsListRequested{Path: tmpDir}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -226,7 +233,8 @@ func TestPayloadToFsListRequest(t *testing.T) {
 
 	t.Run("uses default max_entries when not specified", func(t *testing.T) {
 		t.Parallel()
-		req := &operatorv1.FsListRequested{Path: "/tmp"}
+		tmpDir := t.TempDir()
+		req := &operatorv1.FsListRequested{Path: tmpDir}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -243,8 +251,9 @@ func TestPayloadToFsListRequest(t *testing.T) {
 func TestPayloadToFsGrepRequest(t *testing.T) {
 	t.Run("converts valid payload", func(t *testing.T) {
 		t.Parallel()
+		tmpDir := t.TempDir()
 		req := &operatorv1.FsGrepRequested{
-			Path:        "/tmp",
+			Path:        tmpDir,
 			Pattern:     "test",
 			ExecutionId: "exec-1",
 			Includes:    []string{"*.go", "*.py"},
@@ -266,7 +275,7 @@ func TestPayloadToFsGrepRequest(t *testing.T) {
 		assert.Equal(t, "case-1", grepReq.CaseID)
 		assert.Equal(t, "task-1", *grepReq.TaskID)
 		assert.Equal(t, "investigation-1", grepReq.InvestigationID)
-		assert.Equal(t, "/tmp", grepReq.Path)
+		assert.Equal(t, tmpDir, grepReq.Path)
 		assert.Equal(t, "test", grepReq.Pattern)
 		assert.Equal(t, []string{"*.go", "*.py"}, grepReq.Includes)
 		assert.Equal(t, 200, grepReq.MaxMatches)
@@ -302,7 +311,8 @@ func TestPayloadToFsGrepRequest(t *testing.T) {
 
 	t.Run("uses message ID when payload has no execution_id", func(t *testing.T) {
 		t.Parallel()
-		req := &operatorv1.FsGrepRequested{Path: "/tmp", Pattern: "test"}
+		tmpDir := t.TempDir()
+		req := &operatorv1.FsGrepRequested{Path: tmpDir, Pattern: "test"}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -317,7 +327,8 @@ func TestPayloadToFsGrepRequest(t *testing.T) {
 
 	t.Run("uses default max_matches when not specified", func(t *testing.T) {
 		t.Parallel()
-		req := &operatorv1.FsGrepRequested{Path: "/tmp", Pattern: "test"}
+		tmpDir := t.TempDir()
+		req := &operatorv1.FsGrepRequested{Path: tmpDir, Pattern: "test"}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",
@@ -372,13 +383,14 @@ func TestFileOpsService_HandleFileEditRequest(t *testing.T) {
 
 	t.Run("rejects missing operation", func(t *testing.T) {
 		t.Parallel()
+		tmpDir := t.TempDir()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		client := NewMockOperatorPubSubClient()
 		fileEditSvc := execution.NewFileEditService(cfg, logger)
 		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
 
-		req := &operatorv1.FileEditRequested{FilePath: "/tmp/test.txt"}
+		req := &operatorv1.FileEditRequested{FilePath: filepath.Join(tmpDir, "test.txt")}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
 			ID:        "msg-1",

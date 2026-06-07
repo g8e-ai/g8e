@@ -46,7 +46,7 @@ func setupTestLedger(t *testing.T) (*GitLedgerService, string) {
 	testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: testutil.NewTestLogger()})
 	require.NoError(t, err)
 	require.NoError(t, testVault.Unlock(privKey))
-	defer testVault.Close()
+	t.Cleanup(func() { testVault.Close() })
 
 	logger := testutil.NewTestLogger()
 
@@ -564,7 +564,7 @@ func TestLedgerService_RestoreFileFromCommit_DisabledVault(t *testing.T) {
 	t.Parallel()
 	// Test with config that has no vault (encryption disabled)
 	config := &LedgerConfig{
-		BaseDir: "/tmp/test",
+		BaseDir: t.TempDir(),
 		GitPath: "/usr/bin/git",
 	}
 	lms, err := NewGitLedgerService(config, testutil.NewTestLogger())

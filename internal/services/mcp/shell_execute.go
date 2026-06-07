@@ -25,8 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/pkg/ssh"
 	sshlib "golang.org/x/crypto/ssh"
+
+	"github.com/g8e-ai/g8e/internal/pkg/ssh"
 )
 
 // ShellExecuteTool runs shell commands with denylist enforcement and timeout limits.
@@ -76,33 +77,27 @@ func (t *ShellExecuteTool) InputSchema() map[string]interface{} {
 
 // Execute implements the tool logic.
 func (t *ShellExecuteTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		Command    string   `json:"command"`
-		Args       []string `json:"args,omitempty"`
-		Timeout    int      `json:"timeout,omitempty"`
-		WorkingDir string   `json:"working_dir,omitempty"`
-		Hostnames  []string `json:"hostnames,omitempty"`
-	}
+	var req ShellExecuteRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("shell_execute: unmarshal arguments: %w", err)
 	}
 
 	if req.Command == "" {
-		return CallToolResult{}, fmt.Errorf("command is required")
+		return CallToolResult{}, fmt.Errorf("shell_execute: command is required")
 	}
 
 	// Validate against denylist
 	if err := validateCommandSafety(req.Command, req.Args, req.WorkingDir); err != nil {
-		result := map[string]interface{}{
-			"exit_code": -1,
-			"stdout":    "",
-			"stderr":    err.Error(),
-			"timed_out": false,
-			"error":     "command rejected by safety policy",
+		result := ShellExecuteResult{
+			ExitCode: -1,
+			Stdout:   "",
+			Stderr:   err.Error(),
+			TimedOut: false,
+			Error:    "command rejected by safety policy",
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {
-			return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+			return CallToolResult{}, fmt.Errorf("shell_execute: marshal result: %w", err)
 		}
 		return CallToolResult{
 			Content: []TextContent{
@@ -124,26 +119,26 @@ func (t *ShellExecuteTool) Execute(ctx context.Context, args json.RawMessage) (C
 	timeout := 30 * time.Second
 	if req.Timeout > 0 {
 		if req.Timeout > 300 {
-			return CallToolResult{}, fmt.Errorf("timeout cannot exceed 300 seconds")
+			return CallToolResult{}, fmt.Errorf("shell_execute: timeout cannot exceed 300 seconds")
 		}
 		timeout = time.Duration(req.Timeout) * time.Second
 	}
 
 	// Execute on each host and collect results
-	var results []map[string]interface{}
+	var results []ShellExecuteResult
 	for _, hostname := range hostnames {
 		result, err := executeOnHost(ctx, hostname, req.Command, req.Args, req.WorkingDir, timeout)
 		if err != nil {
-			result = map[string]interface{}{
-				"exit_code": -1,
-				"stdout":    "",
-				"stderr":    err.Error(),
-				"timed_out": false,
-				"error":     err.Error(),
-				"hostname":  hostname,
+			result = ShellExecuteResult{
+				ExitCode: -1,
+				Stdout:   "",
+				Stderr:   err.Error(),
+				TimedOut: false,
+				Error:    err.Error(),
+				Hostname: hostname,
 			}
 		} else {
-			result["hostname"] = hostname
+			result.Hostname = hostname
 		}
 		results = append(results, result)
 	}
@@ -157,7 +152,7 @@ func (t *ShellExecuteTool) Execute(ctx context.Context, args json.RawMessage) (C
 		resultJSON, err = json.Marshal(results)
 	}
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("shell_execute: marshal result: %w", err)
 	}
 
 	return CallToolResult{
@@ -388,7 +383,7 @@ func validateForSSHExecution(command string, args []string, workingDir string) e
 }
 
 // executeOnHost executes a command on a specific host (localhost or remote via SSH).
-func executeOnHost(ctx context.Context, hostname, command string, args []string, workingDir string, timeout time.Duration) (map[string]interface{}, error) {
+func executeOnHost(ctx context.Context, hostname, command string, args []string, workingDir string, timeout time.Duration) (ShellExecuteResult, error) {
 	// Local execution
 	if hostname == "localhost" || hostname == "127.0.0.1" {
 		return executeLocally(ctx, command, args, workingDir, timeout)
@@ -399,7 +394,7 @@ func executeOnHost(ctx context.Context, hostname, command string, args []string,
 }
 
 // executeLocally executes a command on the local machine.
-func executeLocally(ctx context.Context, command string, args []string, workingDir string, timeout time.Duration) (map[string]interface{}, error) {
+func executeLocally(ctx context.Context, command string, args []string, workingDir string, timeout time.Duration) (ShellExecuteResult, error) {
 	// Create command context with timeout
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -430,46 +425,46 @@ func executeLocally(ctx context.Context, command string, args []string, workingD
 		}
 	}
 
-	result := map[string]interface{}{
-		"exit_code": exitCode,
-		"stdout":    string(stdout),
-		"stderr":    string(stderr),
-		"timed_out": timedOut,
+	result := ShellExecuteResult{
+		ExitCode: exitCode,
+		Stdout:   string(stdout),
+		Stderr:   string(stderr),
+		TimedOut: timedOut,
 	}
 
 	if timedOut {
-		result["error"] = "command timed out"
+		result.Error = "command timed out"
 	} else if err != nil {
-		result["error"] = err.Error()
+		result.Error = err.Error()
 	}
 
 	return result, nil
 }
 
 // executeViaSSH executes a command on a remote host via SSH.
-func executeViaSSH(ctx context.Context, hostname, command string, args []string, workingDir string, timeout time.Duration) (map[string]interface{}, error) {
+func executeViaSSH(ctx context.Context, hostname, command string, args []string, workingDir string, timeout time.Duration) (ShellExecuteResult, error) {
 	// Validate command and args for SSH execution to prevent shell injection
 	// SSH session.Run() executes through a remote shell, so we must be stricter
 	if err := validateForSSHExecution(command, args, workingDir); err != nil {
-		return nil, err
+		return ShellExecuteResult{}, err
 	}
 
 	// Resolve SSH connection parameters
 	r := ssh.ResolveHost(hostname, "", "", "", "")
 	if r.Hostname == "" {
-		return nil, fmt.Errorf("failed to resolve hostname: %s", hostname)
+		return ShellExecuteResult{}, fmt.Errorf("shell_execute: failed to resolve hostname: %s", hostname)
 	}
 
 	// Build auth methods
 	authMethods := ssh.BuildAuthMethods(r, "", "")
 	if len(authMethods) == 0 {
-		return nil, fmt.Errorf("no SSH auth methods available for %s", hostname)
+		return ShellExecuteResult{}, fmt.Errorf("shell_execute: no SSH auth methods available for %s", hostname)
 	}
 
 	// Build host key callback
 	hostKeyCallback, err := ssh.BuildHostKeyCallback()
 	if err != nil {
-		return nil, fmt.Errorf("host key verification failed: %w", err)
+		return ShellExecuteResult{}, fmt.Errorf("shell_execute: host key verification failed: %w", err)
 	}
 
 	// Create SSH client config
@@ -484,14 +479,14 @@ func executeViaSSH(ctx context.Context, hostname, command string, args []string,
 	addr := net.JoinHostPort(r.Hostname, r.Port)
 	client, err := sshlib.Dial("tcp", addr, clientConfig)
 	if err != nil {
-		return nil, fmt.Errorf("SSH dial failed: %w", err)
+		return ShellExecuteResult{}, fmt.Errorf("shell_execute: SSH dial failed: %w", err)
 	}
 	defer client.Close()
 
 	// Create session
 	session, err := client.NewSession()
 	if err != nil {
-		return nil, fmt.Errorf("SSH session creation failed: %w", err)
+		return ShellExecuteResult{}, fmt.Errorf("shell_execute: SSH session creation failed: %w", err)
 	}
 	defer session.Close()
 
@@ -521,17 +516,17 @@ func executeViaSSH(ctx context.Context, hostname, command string, args []string,
 		}
 	}
 
-	result := map[string]interface{}{
-		"exit_code": exitCode,
-		"stdout":    stdoutBuf.String(),
-		"stderr":    stderrBuf.String(),
-		"timed_out": timedOut,
+	result := ShellExecuteResult{
+		ExitCode: exitCode,
+		Stdout:   stdoutBuf.String(),
+		Stderr:   stderrBuf.String(),
+		TimedOut: timedOut,
 	}
 
 	if timedOut {
-		result["error"] = "command timed out"
+		result.Error = "command timed out"
 	} else if err != nil {
-		result["error"] = err.Error()
+		result.Error = err.Error()
 	}
 
 	return result, nil
