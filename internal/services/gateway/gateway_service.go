@@ -29,6 +29,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -397,6 +398,42 @@ func (ls *GatewayModeService) GetPKIAuthority() *PKIAuthority {
 // GetHTTPHandler returns the HTTP handler.
 func (ls *GatewayModeService) GetHTTPHandler() *HTTPHandler {
 	return ls.handler
+}
+
+// GetHTTPSPort returns the actual bound HTTPS port (useful when AllowTestPortZero is true).
+func (ls *GatewayModeService) GetHTTPSPort() int {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+	if ls.publicServer == nil {
+		return 0
+	}
+	_, port, err := net.SplitHostPort(ls.publicServer.Addr)
+	if err != nil {
+		return 0
+	}
+	p, err := strconv.Atoi(port)
+	if err != nil {
+		return 0
+	}
+	return p
+}
+
+// GetHTTPPort returns the actual bound HTTP port (useful when AllowTestPortZero is true).
+func (ls *GatewayModeService) GetHTTPPort() int {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+	if ls.server == nil {
+		return 0
+	}
+	_, port, err := net.SplitHostPort(ls.server.Addr)
+	if err != nil {
+		return 0
+	}
+	p, err := strconv.Atoi(port)
+	if err != nil {
+		return 0
+	}
+	return p
 }
 
 func (ls *GatewayModeService) IsRunning() bool {

@@ -175,8 +175,8 @@ func (w *WorkloadIdentity) ExtractOperatorSessionID(spiffeID string) (string, bo
 	}
 	// Format: spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
 	parts := strings.Split(spiffeID, "/")
-	if len(parts) < 6 {
+	if len(parts) < 7 {
 		return "", false
 	}
-	return parts[5], true
+	return parts[6], true
 }

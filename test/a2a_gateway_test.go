@@ -178,8 +178,8 @@ func setupA2AGatewayTest(t *testing.T, testName string, downstreamHandler http.H
 	ctx, cancel := context.WithCancel(context.Background())
 	go ls.Start(ctx)
 
-	// Wait for governance to be ready before returning
-	waitForGovernanceReady(t, "")
+	// Wait for the gateway service to be ready
+	require.Eventually(t, func() bool { return ls.IsReady() }, 10*time.Second, 100*time.Millisecond)
 
 	cleanup := func() {
 		cancel()
@@ -196,28 +196,6 @@ func setupA2AGatewayTest(t *testing.T, testName string, downstreamHandler http.H
 	}
 }
 
-// waitForGovernanceReady polls the health endpoint until governance_ready is true.
-// This fixes timing dependencies where tests proceed before governance is fully initialized.
-func waitForGovernanceReady(t *testing.T, baseURL string) {
-	t.Helper()
-	httpURL := fmt.Sprintf("http://localhost:%d", constants.Ports.OperatorHttp)
-	require.Eventually(t, func() bool {
-		resp, err := http.Get(httpURL + constants.APIPaths.Health)
-		if err != nil {
-			return false
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return false
-		}
-		var health models.HealthResponse
-		if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
-			return false
-		}
-		return health.GovernanceReady
-	}, 10*time.Second, 100*time.Millisecond, "governance_ready did not become true")
-}
-
 func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	// Setup test infrastructure using helper
 	ctx := setupA2AGatewayTest(t, t.Name(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -231,10 +209,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}), "")
 	defer ctx.cleanup()
 
-	// Wait for governance to be ready before proceeding with enrollment
-	waitForGovernanceReady(t, "")
-
-	// 3. Setup client identity via CSR enrollment
+	// Setup client identity via CSR enrollment
 	userID := "a2a-user"
 	organizationID := "a2a-org"
 	pkiDir := filepath.Join(ctx.dataDir, "pki")
@@ -337,7 +312,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	mtlsURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -372,7 +347,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}
 
 	// Set public base URL for approval links
-	publicURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	publicURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
 	ctx.mcpGateway.SetPublicBaseURL(publicURL)
 
 	// Test A2A Call (Suspends for L3, then Resume)
@@ -530,7 +505,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	mtlsURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -559,7 +534,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		},
 	}
 
-	publicURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	publicURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
 	ctx.mcpGateway.SetPublicBaseURL(publicURL)
 
 	authHeader := func(req *http.Request) {
@@ -877,7 +852,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	mtlsURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -906,7 +881,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 		},
 	}
 
-	publicURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	publicURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
 	ctx.mcpGateway.SetPublicBaseURL(publicURL)
 
 	authHeader := func(req *http.Request) {

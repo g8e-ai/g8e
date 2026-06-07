@@ -269,6 +269,9 @@ func (c *Config) OperatorPublicURL() string {
 
 // OperatorDiscoveryURL returns the HTTP port (constants.Ports.OperatorHttp) for CA download and bootstrap routes
 func (c *Config) OperatorDiscoveryURL() string {
+	if c.TestPortOverride != 0 {
+		return fmt.Sprintf("http://localhost:%d", c.TestPortOverride)
+	}
 	return fmt.Sprintf("http://localhost:%d", constants.Ports.OperatorHttp)
 }
 

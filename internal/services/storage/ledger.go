@@ -787,18 +787,20 @@ func (lms *GitLedgerService) RestoreFileFromCommit(filePath, commitHash, operato
 		return fmt.Errorf("ledger is disabled")
 	}
 
+	// Get session ledger path and file content before acquiring lock to avoid deadlock
+	// GetFileAtCommit internally calls GetSessionLedgerPath which also acquires the mutex
 	ledgerDir, err := lms.GetSessionLedgerPath(operatorSessionID)
 	if err != nil {
 		return fmt.Errorf("failed to get session ledger path: %w", err)
 	}
 
-	lms.mu.Lock()
-	defer lms.mu.Unlock()
-
 	content, err := lms.GetFileAtCommit(filePath, commitHash, operatorSessionID)
 	if err != nil {
 		return fmt.Errorf("failed to get file at commit: %w", err)
 	}
+
+	lms.mu.Lock()
+	defer lms.mu.Unlock()
 
 	ledgerPath := lms.getLedgerPath(ledgerDir, filePath)
 	if _, err := os.Stat(filePath); err == nil {

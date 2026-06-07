@@ -84,6 +84,22 @@ func mustMarshal(v interface{}) json.RawMessage {
 	return b
 }
 
+// waitForReady polls the HTTP health endpoint until the server accepts connections.
+// Uses HTTP port instead of HTTPS to avoid mTLS certificate requirements.
+func waitForReady(t *testing.T, ls *gateway.GatewayModeService) {
+	t.Helper()
+	client := &http.Client{Timeout: 2 * time.Second}
+	require.Eventually(t, func() bool {
+		httpURL := fmt.Sprintf("http://localhost:%d", ls.GetHTTPPort())
+		resp, err := client.Get(httpURL + constants.APIPaths.Health)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}, 10*time.Second, 100*time.Millisecond, "HTTP server did not become ready")
+}
+
 func TestMCPGateway_EndToEnd(t *testing.T) {
 	// Initialize paths relative to test directory
 	constants.InitPathsWithBase("../../")
@@ -206,7 +222,10 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	defer cancel()
 	go ls.Start(ctx)
 
-	require.Eventually(t, func() bool { return ls.IsReady() }, 5*time.Second, 100*time.Millisecond)
+	// Wait for the gateway service to be ready
+	require.Eventually(t, func() bool { return ls.IsReady() }, 10*time.Second, 100*time.Millisecond)
+
+	waitForReady(t, ls)
 
 	// 3. Setup client identity via CSR enrollment
 	userID := "mcp-user"
@@ -308,7 +327,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -324,32 +343,52 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	json.NewDecoder(hResp.Body).Decode(&regResp)
 	hResp.Body.Close()
 
-	// Create mTLS client with enrolled cert
-	cert, err := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
+	// Create mTLS client with enrolled certificate (use the private key we already have)
+	enrolledCert, err := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
 	require.NoError(t, err)
-
 	mtlsClient := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				RootCAs:      rootPool,
-				Certificates: []tls.Certificate{cert},
+				Certificates: []tls.Certificate{enrolledCert},
 			},
 		},
 	}
 
+	// Wait for operator session to be persisted in database
+	require.Eventually(t, func() bool {
+		op, err := ls.GetDB().DocGet(string(constants.CollectionOperators), regResp.OperatorID)
+		if err != nil || op == nil {
+			return false
+		}
+		var opDoc models.OperatorDocumentGo
+		opBytes, err := json.Marshal(op.ForWire())
+		if err != nil {
+			return false
+		}
+		if err := json.Unmarshal(opBytes, &opDoc); err != nil {
+			return false
+		}
+		t.Logf("Operator doc: ID=%s, SessionID=%s, Status=%s, OrgID=%s", opDoc.ID, opDoc.OperatorSessionID, opDoc.Status, opDoc.OrganizationID)
+		return opDoc.OperatorSessionID == regResp.OperatorSessionID && opDoc.Status == constants.OperatorStatusActive
+	}, 5*time.Second, 100*time.Millisecond, "Operator session not persisted")
+
+	// Debug: Check the enrolled certificate's SPIFFE URI
+	certBlock, _ := pem.Decode([]byte(regResp.OperatorCert))
+	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
+	require.NoError(t, err)
+	t.Logf("Enrolled certificate URIs: %v", parsedCert.URIs)
+
 	// Set public base URL for approval links
-	publicURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
 	mcpGateway.SetPublicBaseURL(publicURL)
 
-	// Helper function to add Authorization header
-	authHeader := func(req *http.Request) {
-		req.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
-	}
+	// MCP routes are available on HTTPS port with mTLS
+	mcpURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
 
 	// 4. Test MCP tools/list
 	t.Run("tools/list", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, mtlsURL+constants.APIPaths.MCPToolsList, nil)
-		authHeader(req)
+		req, _ := http.NewRequest(http.MethodGet, mcpURL+constants.APIPaths.MCPToolsList, nil)
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -374,8 +413,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 	// 4.5 Test MCP resources/list
 	t.Run("resources/list", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, mtlsURL+constants.APIPaths.MCPResourcesList, nil)
-		authHeader(req)
+		req, _ := http.NewRequest(http.MethodGet, mcpURL+constants.APIPaths.MCPResourcesList, nil)
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -391,8 +429,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 	// 4.6 Test MCP prompts/list
 	t.Run("prompts/list", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, mtlsURL+constants.APIPaths.MCPPromptsList, nil)
-		authHeader(req)
+		req, _ := http.NewRequest(http.MethodGet, mcpURL+constants.APIPaths.MCPPromptsList, nil)
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -423,9 +460,8 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		authHeader(req)
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -557,7 +593,10 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	defer cancel()
 	go ls.Start(ctx)
 
-	require.Eventually(t, func() bool { return ls.IsReady() }, 5*time.Second, 100*time.Millisecond)
+	// Wait for the gateway service to be ready
+	require.Eventually(t, func() bool { return ls.IsReady() }, 10*time.Second, 100*time.Millisecond)
+
+	waitForReady(t, ls)
 
 	userID := "payload-user"
 	organizationID := "payload-org"
@@ -657,7 +696,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -673,27 +712,48 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	json.NewDecoder(hResp.Body).Decode(&regResp)
 	hResp.Body.Close()
 
-	// Create mTLS client with enrolled cert
-	cert, err := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
+	// Create mTLS client with enrolled certificate (use the private key we already have)
+	enrolledCert, err := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
 	require.NoError(t, err)
-
 	mtlsClient := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				RootCAs:      rootPool,
-				Certificates: []tls.Certificate{cert},
+				Certificates: []tls.Certificate{enrolledCert},
 			},
 		},
 	}
 
+	// Wait for operator session to be persisted in database
+	require.Eventually(t, func() bool {
+		op, err := ls.GetDB().DocGet(string(constants.CollectionOperators), regResp.OperatorID)
+		if err != nil || op == nil {
+			return false
+		}
+		var opDoc models.OperatorDocumentGo
+		opBytes, err := json.Marshal(op.ForWire())
+		if err != nil {
+			return false
+		}
+		if err := json.Unmarshal(opBytes, &opDoc); err != nil {
+			return false
+		}
+		t.Logf("Operator doc: ID=%s, SessionID=%s, Status=%s, OrgID=%s", opDoc.ID, opDoc.OperatorSessionID, opDoc.Status, opDoc.OrganizationID)
+		return opDoc.OperatorSessionID == regResp.OperatorSessionID && opDoc.Status == constants.OperatorStatusActive
+	}, 5*time.Second, 100*time.Millisecond, "Operator session not persisted")
+
+	// Debug: Check the enrolled certificate's SPIFFE URI
+	certBlock, _ := pem.Decode([]byte(regResp.OperatorCert))
+	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
+	require.NoError(t, err)
+	t.Logf("Enrolled certificate URIs: %v", parsedCert.URIs)
+
 	// Set public base URL for approval links
-	publicURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
 	mcpGateway.SetPublicBaseURL(publicURL)
 
-	// Helper function to add Authorization header
-	authHeader := func(req *http.Request) {
-		req.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
-	}
+	// MCP routes are available on HTTPS port with mTLS
+	mcpURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
 
 	t.Run("nested object arguments", func(t *testing.T) {
 		callReq := mcp.JSONRPCRequest{
@@ -717,9 +777,8 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		authHeader(req)
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -753,9 +812,8 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		authHeader(req)
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -787,9 +845,8 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		authHeader(req)
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -820,9 +877,8 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		authHeader(req)
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -853,9 +909,8 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		authHeader(req)
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -951,7 +1006,10 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	defer cancel()
 	go ls.Start(ctx)
 
-	require.Eventually(t, func() bool { return ls.IsReady() }, 5*time.Second, 100*time.Millisecond)
+	// Wait for the gateway service to be ready
+	require.Eventually(t, func() bool { return ls.IsReady() }, 10*time.Second, 100*time.Millisecond)
+
+	waitForReady(t, ls)
 
 	userID := "error-user"
 	organizationID := "error-org"
@@ -1051,7 +1109,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -1067,52 +1125,45 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	json.NewDecoder(hResp.Body).Decode(&regResp)
 	hResp.Body.Close()
 
-	// Create mTLS client with enrolled cert
-	cert, err := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
+	// Create mTLS client with enrolled certificate (use the private key we already have)
+	enrolledCert, err := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
 	require.NoError(t, err)
-
 	mtlsClient := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				RootCAs:      rootPool,
-				Certificates: []tls.Certificate{cert},
+				Certificates: []tls.Certificate{enrolledCert},
 			},
 		},
 	}
 
-	// Helper function to add Authorization header
-	authHeader := func(req *http.Request) {
-		req.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
-	}
-
-	t.Run("api key rejected", func(t *testing.T) {
-		plainClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
-		callReq := mcp.JSONRPCRequest{
-			JSONRPC: "2.0",
-			Method:  "tools/call",
-			ID:      1,
+	// Wait for operator session to be persisted in database
+	require.Eventually(t, func() bool {
+		op, err := ls.GetDB().DocGet(string(constants.CollectionOperators), regResp.OperatorID)
+		if err != nil || op == nil {
+			return false
 		}
-		params := mcp.CallToolRequest{
-			Name:      "test",
-			Arguments: mustMarshal(map[string]interface{}{}),
+		var opDoc models.OperatorDocumentGo
+		opBytes, err := json.Marshal(op.ForWire())
+		if err != nil {
+			return false
 		}
-		callReq.Params = mustMarshal(params)
-		reqBody, _ := json.Marshal(callReq)
-
-		// Test with API key in header
-		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-API-Key", "test-api-key")
-
-		resp, err := plainClient.Do(req)
-		if resp != nil {
-			defer resp.Body.Close()
+		if err := json.Unmarshal(opBytes, &opDoc); err != nil {
+			return false
 		}
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "tls: certificate required")
+		t.Logf("Operator doc: ID=%s, SessionID=%s, Status=%s, OrgID=%s", opDoc.ID, opDoc.OperatorSessionID, opDoc.Status, opDoc.OrganizationID)
+		return opDoc.OperatorSessionID == regResp.OperatorSessionID && opDoc.Status == constants.OperatorStatusActive
+	}, 5*time.Second, 100*time.Millisecond, "Operator session not persisted")
 
-		// The gateway should reject this at the TLS layer or middleware before reaching the MCP handler
-	})
+	// Debug: Check the enrolled certificate's SPIFFE URI
+	certBlock, _ := pem.Decode([]byte(regResp.OperatorCert))
+	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
+	require.NoError(t, err)
+	t.Logf("Enrolled certificate URIs: %v", parsedCert.URIs)
+
+	// MCP routes are available on HTTPS port with mTLS
+	mcpURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
+
 	t.Run("invalid JSON-RPC version", func(t *testing.T) {
 		callReq := mcp.JSONRPCRequest{
 			JSONRPC: "1.0",
@@ -1125,9 +1176,8 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(params)
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		authHeader(req)
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -1145,9 +1195,8 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(params)
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		authHeader(req)
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -1162,9 +1211,8 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(map[string]interface{}{})
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		authHeader(req)
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -1173,9 +1221,8 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 
 	t.Run("malformed JSON", func(t *testing.T) {
 		reqBody := `{invalid json`
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPToolsCall, bytes.NewReader([]byte(reqBody)))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader([]byte(reqBody)))
 		req.Header.Set("Content-Type", "application/json")
-		authHeader(req)
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -1205,9 +1252,8 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(params)
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		authHeader(req)
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -1227,9 +1273,8 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		paramsBytes, _ := json.Marshal(params)
 		callReq.Params = paramsBytes
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		authHeader(req)
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()

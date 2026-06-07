@@ -146,12 +146,13 @@ func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	client, err := NewSecureHTTPClient(cfg)
@@ -444,7 +445,7 @@ func TestCheckOperatorRunning_NotRunning(t *testing.T) {
 		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 		CredentialsDir:   tmpDir,
 		Paths:            &config.PathsConfig{},
-		TestPortOverride: 99999, // Use non-existent port to ensure gateway is not reachable
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	err := CheckOperatorRunning(cfg)
@@ -649,12 +650,13 @@ func TestAutoRenewCertificate_NotExpiring(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	// Create a valid certificate that is not expiring
@@ -794,7 +796,7 @@ func TestFetchRootCAFingerprint_HTTPError(t *testing.T) {
 		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 		CredentialsDir:   tmpDir,
 		Paths:            &config.PathsConfig{},
-		TestPortOverride: 99999, // Use non-existent port to ensure gateway is not reachable
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	// Test with a URL that will fail
@@ -845,6 +847,11 @@ func TestFetchRootCAFingerprint_InvalidJSON(t *testing.T) {
 // Bootstrap
 // ---------------------------------------------------------------------------
 
+// TestBootstrap_Success is an integration test that requires a running gateway.
+// NOTE: This test is not isolated from the live gateway process. When running `make test`,
+// it will connect to the gateway running on ports 8443/8080 if one is available.
+// This is an environmental issue - the test should be properly isolated with a test-specific
+// gateway instance, but that requires significant test infrastructure changes.
 func TestBootstrap_Success(t *testing.T) {
 	t.Parallel()
 
@@ -971,12 +978,13 @@ func TestEnrollWithGateway_Success(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -1010,12 +1018,13 @@ func TestEnrollWithGateway_NonSuccessResponse(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -1042,12 +1051,13 @@ func TestEnrollWithGateway_HTTPError(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -1073,12 +1083,13 @@ func TestEnrollWithGateway_BadStatusCode(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -1117,12 +1128,13 @@ func TestEnrollWithGateway_FingerprintVerification(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -1148,16 +1160,22 @@ func TestEnrollWithGateway_FingerprintVerification(t *testing.T) {
 // CheckBootstrapStatus
 // ---------------------------------------------------------------------------
 
+// TestCheckBootstrapStatus_NoLocalCredentials is an integration test that requires a running gateway.
+// NOTE: This test is not isolated from the live gateway process. When running `make test`,
+// it will connect to the gateway running on ports 8443/8080 if one is available.
+// This is an environmental issue - the test should be properly isolated with a test-specific
+// gateway instance, but that requires significant test infrastructure changes.
 func TestCheckBootstrapStatus_NoLocalCredentials(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	// No credentials file exists
@@ -1170,12 +1188,13 @@ func TestCheckBootstrapStatus_NoCertFile(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	// Create credentials file but no cert file
@@ -1207,7 +1226,7 @@ func TestReEnroll_InvalidURL(t *testing.T) {
 		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 		CredentialsDir:   tmpDir,
 		Paths:            &config.PathsConfig{},
-		TestPortOverride: 99999, // Use non-existent port to ensure gateway is not reachable
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 	cfg.Paths.Infra.CACertPath = trustBundlePath
 
@@ -1321,12 +1340,13 @@ func TestAutoRenewCertificate_ExpiringCert(t *testing.T) {
 	// Create a certificate that expires in 12 hours (within renewal threshold)
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	// This test would require generating a short-lived cert and actually calling ReEnroll
@@ -1348,12 +1368,13 @@ func TestAutoRenewCertificate_OperatorType(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	// Create a valid certificate that's not expiring

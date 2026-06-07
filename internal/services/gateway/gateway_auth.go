@@ -87,9 +87,6 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	// JIT passkey bootstrap (only when JWKS is configured)
 	if jwksEnabled {
 		r.addPrefix(constants.APIPaths.AuthPasskeysJITPrefix)
-		r.addExact(constants.APIPaths.MCPEndpoint)
-		r.addPrefix(constants.APIPaths.MCPToolsList[:len(constants.APIPaths.MCPToolsList)-len("/list")])
-		r.addPrefix(constants.APIPaths.A2ACall[:len(constants.APIPaths.A2ACall)-len("/call")])
 	}
 
 	return r

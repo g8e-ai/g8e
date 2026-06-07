@@ -308,23 +308,30 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// Wrap MCP/A2A with Rate Limiting
 	mcpRateLimited := h.rateLimitMiddleware(mcpMux)
 
-	// Apply JWT middleware only when JWKS is configured (for external IdP auth)
-	// When JWKS is not configured, MCP/A2A routes are not available on public port
+	// Apply JWT middleware when JWKS is configured (for external IdP auth)
+	// When JWKS is not configured, MCP/A2A routes use mTLS via main middleware
 	var mcpHandler http.Handler
 	if h.auth != nil && h.auth.HasJWKS() {
 		mcpHandler = h.auth.JWTAuthMiddleware(mcpRateLimited)
-		mux.Handle(constants.APIPaths.MCPEndpoint, mcpHandler)
-		mux.Handle(constants.APIPaths.MCPToolsList, mcpHandler)
-		mux.Handle(constants.APIPaths.MCPToolsCall, mcpHandler)
-		mux.Handle(constants.APIPaths.MCPToolsCallSSE, mcpHandler)
-		mux.Handle(constants.APIPaths.MCPResourcesList, mcpHandler)
-		mux.Handle(constants.APIPaths.MCPResourcesRead, mcpHandler)
-		mux.Handle(constants.APIPaths.MCPPromptsList, mcpHandler)
-		mux.Handle(constants.APIPaths.MCPPromptsGet, mcpHandler)
-		mux.Handle(constants.APIPaths.A2ACall, mcpHandler)
+	} else {
+		// When JWKS is not configured, MCP/A2A must use mTLS via main middleware
+		mcpHandler = mcpRateLimited
+	}
 
-		// JIT passkey bootstrap: allow first-credential registration via JWT
-		// This unblocks OIDC/JIT users who have zero credentials and cannot reach WebSessionAuth
+	// Register MCP routes unconditionally - they are protected by auth.Middleware (mTLS) or JWTAuthMiddleware
+	mux.Handle(constants.APIPaths.MCPEndpoint, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPToolsList, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPToolsCall, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPToolsCallSSE, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPResourcesList, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPResourcesRead, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPPromptsList, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPPromptsGet, mcpHandler)
+	mux.Handle(constants.APIPaths.A2ACall, mcpHandler)
+
+	// JIT passkey bootstrap: allow first-credential registration via JWT
+	// This unblocks OIDC/JIT users who have zero credentials and cannot reach WebSessionAuth
+	if h.auth != nil && h.auth.HasJWKS() {
 		jwtPasskeyMux := http.NewServeMux()
 		jwtPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysJITRegisterChallenge, h.authController.handleAuthPasskeysRegisterChallenge)
 		jwtPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysJITRegisterVerify, h.authController.handleAuthPasskeysRegisterVerify)
@@ -369,20 +376,8 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)
 	mux.HandleFunc(constants.APIPaths.DeployScriptWindows, h.pkiController.handleDeployScriptWindows)
 
-	// MCP-only routes on plain HTTP for HTTP MCP calls
-	mux.HandleFunc(constants.APIPaths.MCPEndpoint, h.mcp.HandleMCP)
-	mux.HandleFunc(constants.APIPaths.MCPToolsList, h.mcp.HandleToolsList)
-	mux.HandleFunc(constants.APIPaths.MCPToolsCall, h.mcp.HandleToolsCall)
-	mux.HandleFunc(constants.APIPaths.MCPToolsCallSSE, h.mcp.HandleToolsCallSSE)
-	mux.HandleFunc(constants.APIPaths.MCPResourcesList, h.mcp.HandleResourcesList)
-	mux.HandleFunc(constants.APIPaths.MCPResourcesRead, h.mcp.HandleResourcesRead)
-	mux.HandleFunc(constants.APIPaths.MCPPromptsList, h.mcp.HandlePromptsList)
-	mux.HandleFunc(constants.APIPaths.MCPPromptsGet, h.mcp.HandlePromptsGet)
-	mux.HandleFunc(constants.APIPaths.A2ACall, h.mcp.HandleA2aCall)
-
-	// Wrap with Origin validation (DNS-rebinding protection per the MCP
-	// Streamable HTTP transport spec) and rate limiting.
-	return h.pathTraversalGuard(h.auth.Middleware(h.mcpOriginGuard(h.rateLimitMiddleware(mux))))
+	// Wrap with rate limiting
+	return h.pathTraversalGuard(h.rateLimitMiddleware(mux))
 }
 
 func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
