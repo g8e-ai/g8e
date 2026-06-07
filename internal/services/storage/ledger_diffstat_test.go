@@ -28,8 +28,7 @@ import (
 
 func TestLedgerService_GetDiffStat_EmptyHashesReturnsEmpty(t *testing.T) {
 	t.Parallel()
-	lms, avs, _ := setupTestLedger(t)
-	defer avs.Close()
+	lms, _ := setupTestLedger(t)
 
 	result := lms.GetDiffStat("", "", "operator-session")
 	assert.Empty(t, result)
@@ -37,8 +36,7 @@ func TestLedgerService_GetDiffStat_EmptyHashesReturnsEmpty(t *testing.T) {
 
 func TestLedgerService_GetDiffStat_BetweenTwoCommits(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	testFile := filepath.Join(tempDir, "diffstat_test.txt")
 
@@ -66,8 +64,7 @@ func TestLedgerService_GetDiffStat_BetweenTwoCommits(t *testing.T) {
 
 func TestLedgerService_GetDiffStat_SameHashReturnsEmpty(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	testFile := filepath.Join(tempDir, "same_hash.txt")
 
@@ -85,8 +82,7 @@ func TestLedgerService_GetDiffStat_SameHashReturnsEmpty(t *testing.T) {
 
 func TestLedgerService_GetDiffStat_InvalidHashesReturnsEmpty(t *testing.T) {
 	t.Parallel()
-	lms, avs, _ := setupTestLedger(t)
-	defer avs.Close()
+	lms, _ := setupTestLedger(t)
 
 	stat := lms.GetDiffStat("deadbeef", "cafebabe", "session")
 	assert.Empty(t, stat)

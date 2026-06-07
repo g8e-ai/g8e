@@ -26,6 +26,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/governance"
@@ -99,7 +100,7 @@ type CommandServiceConfig struct {
 	FileEdit          *execution.FileEditService
 	PubSubClient      PubSubClient
 	ResultsService    ResultsPublisher
-	LocalStore        *storage.LocalStoreService
+	ExecutionVault    interfaces.ExecutionVault
 	AuditStore        *storage.SQLAuditStore
 	Ledger            *storage.GitLedgerService
 	HistoryHandler    *storage.HistoryHandler
@@ -153,16 +154,15 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	rs.commands = NewCommandService(c.Config, c.Logger, c.Execution)
 	rs.commands.results = c.ResultsService
 	rs.commands.scrubbing = c.Scrubbing
-	rs.commands.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Scrubbing, c.LocalStore)
+	rs.commands.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Scrubbing, c.ExecutionVault)
 	rs.commands.auditStore = c.AuditStore
-	rs.commands.localStore = c.LocalStore
 	rs.commands.ledger = c.Ledger
 	rs.commands.historyHandler = c.HistoryHandler
 
 	rs.fileOps = NewFileOpsService(c.Config, c.Logger, c.FileEdit, client)
 	rs.fileOps.results = c.ResultsService
 	rs.fileOps.scrubbing = c.Scrubbing
-	rs.fileOps.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Scrubbing, c.LocalStore)
+	rs.fileOps.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Scrubbing, c.ExecutionVault)
 	rs.fileOps.auditStore = c.AuditStore
 	rs.fileOps.ledger = c.Ledger
 
@@ -172,7 +172,7 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	rs.audit.auditStore = c.AuditStore
 
 	rs.history = NewHistoryService(c.Config, c.Logger, client)
-	rs.history.localStore = c.LocalStore
+	rs.history.executionVault = c.ExecutionVault
 	rs.history.historyHandler = c.HistoryHandler
 
 	rs.mcpGateway = c.MCPGateway
@@ -219,14 +219,14 @@ func (rs *PubSubCommandService) initializeGovernance(c CommandServiceConfig, ser
 		c.ConsensusSigningKey,
 	)
 
-	// Initialize L5Actuator with trusted nodes and audit vault
+	// Initialize L5Actuator with trusted nodes and audit store
 	// ScrubbingService handles data scrubbing/rehydration at the execution boundary
 	rs.actuator = &governance.L5Actuator{
 		Logger:            c.Logger,
 		SignerStore:       rs.signerStore,
 		Execution:         c.Execution,
 		SQLAuditStore:     c.AuditStore,
-		AuditStore:        c.TransactionAudit,
+		ConsoleAuditStore: c.TransactionAudit,
 		L3Notary:          c.L3Notary,
 		StateRootProvider: c.StateRootProvider,
 		Ctx:               serviceCtx,
@@ -596,7 +596,7 @@ func (rs *PubSubCommandService) handleGovernanceEnvelope(env *govpkg.GovernanceE
 			rs.logger.Error("Transaction verification failed - command rejected",
 				string(constants.ConnectionStateError), err,
 				"message_id", env.Id)
-			// Log blocked transaction to audit vault
+			// Log blocked transaction to audit store
 			rs.logBlockedTransaction(env, err)
 			return
 		}
@@ -796,13 +796,13 @@ func (rs *PubSubCommandService) handleA2aCallRequestSync(ctx context.Context, ms
 func (rs *PubSubCommandService) handleAppInvestigationCreatedSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	rs.logger.Info("App investigation creation request received", "investigation_id", msg.ID)
 
-	if rs.actuator == nil || rs.actuator.AuditStore == nil {
-		return "", errors.New("actuator or AuditStore not configured")
+	if rs.actuator == nil || rs.actuator.ConsoleAuditStore == nil {
+		return "", errors.New("actuator or ConsoleAuditStore not configured")
 	}
 
 	// DocSet expects collection, id, and data.
 	// For APP_INVESTIGATION_CREATED, the ID is the investigation ID from the envelope.
-	if err := rs.actuator.AuditStore.DocSet(string(constants.CollectionInvestigations), msg.ID, msg.Payload); err != nil {
+	if err := rs.actuator.ConsoleAuditStore.DocSet(string(constants.CollectionInvestigations), msg.ID, msg.Payload); err != nil {
 		rs.logger.Error("Failed to create investigation document", string(constants.ConnectionStateError), err, "investigation_id", msg.ID)
 		return "", fmt.Errorf("failed to create investigation document: %w", err)
 	}
@@ -898,9 +898,9 @@ func (rs *PubSubCommandService) logBlockedTransaction(env *govpkg.GovernanceEnve
 		Timestamp:         time.Now().UTC(),
 	}
 
-	// Log to audit vault using canonical RecordActionReceipt for unified query experience
+	// Log to audit store using canonical RecordActionReceipt for unified query experience
 	if err := rs.audit.auditStore.RecordActionReceipt(&record); err != nil {
-		rs.logger.Error("Failed to record blocked transaction in audit vault", string(constants.ConnectionStateError), err, "message_id", env.Id)
+		rs.logger.Error("Failed to record blocked transaction in audit store", string(constants.ConnectionStateError), err, "message_id", env.Id)
 	}
 }
 func (m *PubSubCommandMessage) GetPayload() []byte {

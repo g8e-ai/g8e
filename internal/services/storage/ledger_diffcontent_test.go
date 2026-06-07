@@ -24,8 +24,7 @@ import (
 
 func TestLedgerService_GetDiffContent(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	testFilePath := filepath.Join(tempDir, "diff_content_test.txt")
 	operatorSessionID := "test-session-diff"

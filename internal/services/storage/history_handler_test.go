@@ -14,43 +14,41 @@
 package storage
 
 import (
+	"crypto/ed25519"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *TestSQLAuditStore, string) {
+func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *SQLAuditStore, *vault.Vault, string) {
 	gitPath := testGitPath(t)
 	tempDir := t.TempDir()
 
-	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
-		DBPath:                    "test.db",
-		LedgerDir:                 "ledger",
-		MaxDBSizeMB:               100,
-		RetentionDays:             7,
-		PruneIntervalMinutes:      60,
-		Enabled:                   true,
-		OutputTruncationThreshold: 102400,
-		HeadTailSize:              51200,
-		GitPath:                   gitPath,
-	}
+	// Create vault for encryption
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vaultDir := filepath.Join(tempDir, "vault")
+	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	vHeader, _, err := vault.NewVaultHeader(privKey)
+	require.NoError(t, err)
+	require.NoError(t, vHeader.Save(vaultDir))
+	testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: testutil.NewTestLogger()})
+	require.NoError(t, err)
+	require.NoError(t, testVault.Unlock(privKey))
 
 	logger := testutil.NewTestLogger()
-
-	avs, err := NewTestSQLAuditStore(config, logger)
-	require.NoError(t, err)
 
 	ledgerConfig := &LedgerConfig{
 		BaseDir:         filepath.Join(tempDir, "ledger"),
 		GitPath:         gitPath,
-		EncryptionVault: avs.GetEncryptionVault(),
+		EncryptionVault: testVault,
 	}
 	lms, err := NewGitLedgerService(ledgerConfig, logger)
 	require.NoError(t, err)
@@ -62,24 +60,25 @@ func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *TestSQLAuditStore,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 60,
 		Enabled:              true,
-		EncryptionVault:      avs.GetEncryptionVault(),
+		EncryptionVault:      testVault,
 	}
 	auditStore, err := NewSQLAuditStore(auditStoreConfig, logger)
 	require.NoError(t, err)
 
 	hh := NewHistoryHandler(auditStore, lms, logger)
 
-	return hh, avs, tempDir
+	return hh, auditStore, testVault, tempDir
 }
 
 func TestHistoryHandler_FetchHistory(t *testing.T) {
 	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	// Create test data
 	operatorSessionID := "test-session-history"
-	err := avs.CreateSession(operatorSessionID, "operator", "Test History OperatorSession", "user@test.com")
+	err := auditStore.CreateSession(operatorSessionID, "operator", "Test History OperatorSession", "user@test.com")
 	require.NoError(t, err)
 
 	// Add some events
@@ -95,7 +94,7 @@ func TestHistoryHandler_FetchHistory(t *testing.T) {
 			CommandStdout:       "test output",
 			ExecutionDurationMs: 100,
 		}
-		_, err := avs.RecordEvent(event)
+		_, err := auditStore.RecordEvent(event)
 		require.NoError(t, err)
 	}
 
@@ -114,8 +113,9 @@ func TestHistoryHandler_FetchHistory(t *testing.T) {
 
 func TestHistoryHandler_FetchHistoryMissingSession(t *testing.T) {
 	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	// Fetch history for non-existent session
 	requestJSON := testutil.MustBuildFetchHistoryRequestedPayload(t, "exec-123", "non-existent-session", 10, 0)
@@ -130,8 +130,9 @@ func TestHistoryHandler_FetchHistoryMissingSession(t *testing.T) {
 
 func TestHistoryHandler_FetchHistoryInvalidRequest(t *testing.T) {
 	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	// Empty operator_session_id
 	requestJSON := testutil.MustBuildFetchHistoryRequestedPayload(t, "exec-123", "", 10, 0)
@@ -145,8 +146,9 @@ func TestHistoryHandler_FetchHistoryInvalidRequest(t *testing.T) {
 
 func TestHistoryHandler_IsEnabled(t *testing.T) {
 	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	assert.True(t, hh.IsEnabled())
 
@@ -157,12 +159,13 @@ func TestHistoryHandler_IsEnabled(t *testing.T) {
 
 func TestHistoryHandler_FetchHistoryWithFileMutations(t *testing.T) {
 	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	// Create test data
 	operatorSessionID := "test-session-mutations"
-	err := avs.CreateSession(operatorSessionID, "operator", "Mutation Test OperatorSession", "user@test.com")
+	err := auditStore.CreateSession(operatorSessionID, "operator", "Mutation Test OperatorSession", "user@test.com")
 	require.NoError(t, err)
 
 	// Add file mutation event
@@ -176,7 +179,7 @@ func TestHistoryHandler_FetchHistoryWithFileMutations(t *testing.T) {
 		CommandExitCode:     &exitCode,
 		ExecutionDurationMs: 50,
 	}
-	eventID, err := avs.RecordEvent(event)
+	eventID, err := auditStore.RecordEvent(event)
 	require.NoError(t, err)
 
 	// Record file mutation
@@ -188,7 +191,7 @@ func TestHistoryHandler_FetchHistoryWithFileMutations(t *testing.T) {
 		LedgerHashAfter:  "hash2",
 		DiffStat:         "+10 lines",
 	}
-	err = avs.RecordFileMutation(mutation)
+	err = auditStore.RecordFileMutation(mutation)
 	require.NoError(t, err)
 
 	// Fetch history
@@ -209,11 +212,12 @@ func TestHistoryHandler_FetchHistoryWithFileMutations(t *testing.T) {
 
 func TestHistoryHandler_FetchHistoryPagination(t *testing.T) {
 	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	operatorSessionID := "test-pagination-session"
-	err := avs.CreateSession(operatorSessionID, "operator", "Pagination Test", "user@test.com")
+	err := auditStore.CreateSession(operatorSessionID, "operator", "Pagination Test", "user@test.com")
 	require.NoError(t, err)
 
 	// Create 15 events
@@ -227,7 +231,7 @@ func TestHistoryHandler_FetchHistoryPagination(t *testing.T) {
 			CommandRaw:        "echo test",
 			CommandExitCode:   &exitCode,
 		}
-		_, err := avs.RecordEvent(event)
+		_, err := auditStore.RecordEvent(event)
 		require.NoError(t, err)
 	}
 
@@ -255,11 +259,12 @@ func TestHistoryHandler_FetchHistoryPagination(t *testing.T) {
 
 func TestHistoryHandler_FetchHistoryDefaultLimit(t *testing.T) {
 	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	operatorSessionID := "test-default-limit"
-	err := avs.CreateSession(operatorSessionID, "operator", "Default Limit Test", "user@test.com")
+	err := auditStore.CreateSession(operatorSessionID, "operator", "Default Limit Test", "user@test.com")
 	require.NoError(t, err)
 
 	// Create 5 events
@@ -269,7 +274,7 @@ func TestHistoryHandler_FetchHistoryDefaultLimit(t *testing.T) {
 			Timestamp:         time.Now().UTC(),
 			Type:              constants.Event.Operator.Audit.Command,
 		}
-		_, err := avs.RecordEvent(event)
+		_, err := auditStore.RecordEvent(event)
 		require.NoError(t, err)
 	}
 
@@ -286,8 +291,9 @@ func TestHistoryHandler_FetchHistoryDefaultLimit(t *testing.T) {
 
 func TestHistoryHandler_FetchHistoryInvalidJSON(t *testing.T) {
 	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	// Invalid JSON
 	response, err := hh.HandleFetchHistory([]byte("invalid json"))
@@ -299,8 +305,9 @@ func TestHistoryHandler_FetchHistoryInvalidJSON(t *testing.T) {
 
 func TestHistoryHandler_FetchFileHistory(t *testing.T) {
 	t.Parallel()
-	hh, avs, tempDir := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, tempDir := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	// Create a file and track it through multiple versions
 	testFilePath := tempDir + "/test_file_history.txt"
@@ -332,8 +339,9 @@ func TestHistoryHandler_FetchFileHistory(t *testing.T) {
 
 func TestHistoryHandler_FetchFileHistoryMissingFilePath(t *testing.T) {
 	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	requestJSON := testutil.MustBuildFetchFileHistoryRequestedPayload(t, "exec-123", "", 10, "")
 
@@ -346,8 +354,9 @@ func TestHistoryHandler_FetchFileHistoryMissingFilePath(t *testing.T) {
 
 func TestHistoryHandler_FetchFileHistoryDefaultLimit(t *testing.T) {
 	t.Parallel()
-	hh, avs, tempDir := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, tempDir := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	testFilePath := tempDir + "/default_limit_file.txt"
 	err := os.WriteFile(testFilePath, []byte("content"), 0644)
@@ -368,8 +377,9 @@ func TestHistoryHandler_FetchFileHistoryDefaultLimit(t *testing.T) {
 
 func TestHistoryHandler_FetchFileHistoryInvalidJSON(t *testing.T) {
 	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	response, err := hh.HandleFetchFileHistory([]byte("invalid json"))
 	require.NoError(t, err)
@@ -380,8 +390,9 @@ func TestHistoryHandler_FetchFileHistoryInvalidJSON(t *testing.T) {
 
 func TestHistoryHandler_RestoreFile(t *testing.T) {
 	t.Parallel()
-	hh, avs, tempDir := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, tempDir := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	testFilePath := tempDir + "/restore_test.txt"
 	operatorSessionID := "test-restore-session"
@@ -421,8 +432,9 @@ func TestHistoryHandler_RestoreFile(t *testing.T) {
 
 func TestHistoryHandler_RestoreFileMissingFilePath(t *testing.T) {
 	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	requestJSON := testutil.MustBuildRestoreFileRequestedPayload(t, "exec-123", "", "abc123", "operator_session")
 
@@ -435,8 +447,9 @@ func TestHistoryHandler_RestoreFileMissingFilePath(t *testing.T) {
 
 func TestHistoryHandler_RestoreFileMissingCommitHash(t *testing.T) {
 	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	requestJSON := testutil.MustBuildRestoreFileRequestedPayload(t, "exec-123", "/some/file", "", "operator_session")
 
@@ -449,8 +462,9 @@ func TestHistoryHandler_RestoreFileMissingCommitHash(t *testing.T) {
 
 func TestHistoryHandler_RestoreFileMissingSessionID(t *testing.T) {
 	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	requestJSON := testutil.MustBuildRestoreFileRequestedPayload(t, "exec-123", "/some/file", "abc123", "")
 
@@ -463,8 +477,9 @@ func TestHistoryHandler_RestoreFileMissingSessionID(t *testing.T) {
 
 func TestHistoryHandler_RestoreFileInvalidJSON(t *testing.T) {
 	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	response, err := hh.HandleRestoreFile([]byte("invalid json"))
 	require.NoError(t, err)
@@ -474,9 +489,9 @@ func TestHistoryHandler_RestoreFileInvalidJSON(t *testing.T) {
 }
 
 func TestHistoryHandler_RestoreFileInvalidCommit(t *testing.T) {
-	t.Parallel()
-	hh, avs, tempDir := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, tempDir := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	testFilePath := tempDir + "/invalid_restore.txt"
 	os.WriteFile(testFilePath, []byte("content"), 0644)
@@ -492,8 +507,9 @@ func TestHistoryHandler_RestoreFileInvalidCommit(t *testing.T) {
 
 func TestHistoryHandler_GetFileAtCommit(t *testing.T) {
 	t.Parallel()
-	hh, avs, tempDir := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, tempDir := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	testFilePath := tempDir + "/get_at_commit.txt"
 	operatorSessionID := "test-get-at-commit"
@@ -522,7 +538,7 @@ func TestHistoryHandler_NilHandler(t *testing.T) {
 	assert.False(t, hh.IsEnabled())
 }
 
-func TestHistoryHandler_NilAuditVault(t *testing.T) {
+func TestHistoryHandler_NilAuditStore(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	hh := NewHistoryHandler(nil, nil, logger)
@@ -531,11 +547,12 @@ func TestHistoryHandler_NilAuditVault(t *testing.T) {
 
 func TestHistoryHandler_AllEventTypes(t *testing.T) {
 	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	operatorSessionID := "test-all-event-types"
-	err := avs.CreateSession(operatorSessionID, "operator", "All Event Types", "user@test.com")
+	err := auditStore.CreateSession(operatorSessionID, "operator", "All Event Types", "user@test.com")
 	require.NoError(t, err)
 
 	// Create events of all types
@@ -555,7 +572,7 @@ func TestHistoryHandler_AllEventTypes(t *testing.T) {
 			ContentText:       string(et) + " content",
 			CommandExitCode:   &exitCode,
 		}
-		_, err := avs.RecordEvent(event)
+		_, err := auditStore.RecordEvent(event)
 		require.NoError(t, err)
 	}
 
@@ -578,91 +595,13 @@ func TestHistoryHandler_AllEventTypes(t *testing.T) {
 	}
 }
 
-func TestHistoryHandler_EventWithTruncatedOutput(t *testing.T) {
-	t.Parallel()
-	tempDir := t.TempDir()
-
-	// Small truncation threshold
-	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
-		DBPath:                    "test.db",
-		LedgerDir:                 "ledger",
-		MaxDBSizeMB:               100,
-		RetentionDays:             7,
-		PruneIntervalMinutes:      60,
-		Enabled:                   true,
-		OutputTruncationThreshold: 100,
-		HeadTailSize:              30,
-	}
-
-	logger := testutil.NewTestLogger()
-	avs, err := NewTestSQLAuditStore(config, logger)
-	require.NoError(t, err)
-	defer avs.Close()
-
-	ledgerConfig := &LedgerConfig{
-		BaseDir:         filepath.Join(tempDir, "ledger"),
-		GitPath:         "",
-		EncryptionVault: avs.GetEncryptionVault(),
-	}
-	lms, err := NewGitLedgerService(ledgerConfig, logger)
-	require.NoError(t, err)
-
-	auditStoreConfig := &AuditStoreConfig{
-		DataDir:              tempDir,
-		DBPath:               "audit_store.db",
-		MaxDBSizeMB:          100,
-		RetentionDays:        7,
-		PruneIntervalMinutes: 60,
-		Enabled:              true,
-		EncryptionVault:      avs.GetEncryptionVault(),
-	}
-	auditStore, err := NewSQLAuditStore(auditStoreConfig, logger)
-	require.NoError(t, err)
-
-	hh := NewHistoryHandler(auditStore, lms, logger)
-
-	operatorSessionID := "test-truncated-output"
-	err = avs.CreateSession(operatorSessionID, "operator", "Truncated Output", "user@test.com")
-	require.NoError(t, err)
-
-	// Create event with large output
-	largeOutput := make([]byte, 200)
-	for i := range largeOutput {
-		largeOutput[i] = byte('A' + (i % 26))
-	}
-
-	exitCode := 0
-	event := &Event{
-		OperatorSessionID: operatorSessionID,
-		Timestamp:         time.Now().UTC(),
-		Type:              constants.Event.Operator.Audit.Command,
-		CommandRaw:        "large_output_cmd",
-		CommandExitCode:   &exitCode,
-		CommandStdout:     string(largeOutput),
-	}
-	_, err = avs.RecordEvent(event)
-	require.NoError(t, err)
-
-	// Fetch history
-	requestJSON := testutil.MustBuildFetchHistoryRequestedPayload(t, "exec-123", operatorSessionID, 10, 0)
-
-	response, err := hh.HandleFetchHistory(requestJSON)
-	require.NoError(t, err)
-
-	assert.True(t, response.Success)
-	require.Len(t, response.Events, 1)
-	assert.True(t, response.Events[0].StdoutTruncated)
-	assert.Contains(t, response.Events[0].CommandStdout, "[TRUNCATED:")
-}
-
 func TestHistoryHandler_MultipleFileMutationsInHistory(t *testing.T) {
-	t.Parallel()
-	hh, avs, _ := setupTestHistoryHandler(t)
-	defer avs.Close()
+	hh, auditStore, testVault, _ := setupTestHistoryHandler(t)
+	defer testVault.Close()
+	defer auditStore.Close()
 
 	operatorSessionID := "test-multi-mutations"
-	err := avs.CreateSession(operatorSessionID, "operator", "Multi Mutations", "user@test.com")
+	err := auditStore.CreateSession(operatorSessionID, "operator", "Multi Mutations", "user@test.com")
 	require.NoError(t, err)
 
 	// Create file mutation event with multiple files
@@ -674,7 +613,7 @@ func TestHistoryHandler_MultipleFileMutationsInHistory(t *testing.T) {
 		ContentText:       "Batch file update",
 		CommandExitCode:   &exitCode,
 	}
-	eventID, err := avs.RecordEvent(event)
+	eventID, err := auditStore.RecordEvent(event)
 	require.NoError(t, err)
 
 	// Record multiple file mutations
@@ -685,7 +624,7 @@ func TestHistoryHandler_MultipleFileMutationsInHistory(t *testing.T) {
 			Filepath:  f,
 			Operation: FileMutationWrite,
 		}
-		err = avs.RecordFileMutation(mutation)
+		err = auditStore.RecordFileMutation(mutation)
 		require.NoError(t, err)
 	}
 

@@ -52,12 +52,11 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 ├── storage.SQLAuditStore
 │   ├── sqliteutil.DB
 │   └── vault.Vault
-├── storage.LedgerService
-│   ├── storage.SQLAuditStore
+├── storage.GitLedgerService
 │   └── vault.Vault
 ├── storage.HistoryHandler
 │   ├── storage.SQLAuditStore
-│   └── storage.LedgerService
+│   └── storage.GitLedgerService
 ├── governance.ReplayStore (storage.SQLReplayStore)
 │   └── storage.LocalStoreService (shared DB)
 └── scrubbing.ScrubbingService

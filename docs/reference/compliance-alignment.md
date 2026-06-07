@@ -33,14 +33,14 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **CC1.1** | Logical and physical access controls | mTLS with SPIFFE workload identity, WebAuthn L3 Notary | `internal/services/gateway/pki_controller.go`, `docs/architecture/auth.md` |
 | **CC1.2** | Logical access security software | 5-layer verification pipeline (L1-L5) | `internal/services/governance/l4_warden.go` |
 | **CC1.3** | Logical access to system components | Role-based session isolation (operator_session_id, cli_session_id, web_session_id) | `docs/architecture/g8e.md` |
-| **CC1.4** | Logical access to stored data | Encrypted audit vault with mandatory encryption at rest | `internal/services/storage/audit_vault.go` |
+| **CC1.4** | Logical access to stored data | Encrypted audit store with mandatory encryption at rest | `internal/services/storage/audit_store.go` |
 | **CC1.5** | Authentication of external users | WebAuthn/FIDO2 hardware-bound authentication, mTLS certificate verification | `internal/services/governance/l3_notary.go` |
 | **CC1.6** | Identification and authentication | SPIFFE URI SAN binding in certificates, Ed25519 signature verification | `protocol/workload_identity.go` |
 | **CC1.7** | Logical access for support personnel | No standing privileges, JIT provisioning via CSR enrollment | `internal/services/gateway/pki_controller.go` |
 | **CC1.8** | Management of access security | Certificate revocation with database-backed denylist and CRL | `internal/services/gateway/pki_controller.go` |
 | **CC1.9** | Data transfer security | mTLS for all platform communication, outbound-only operator connections | `docs/architecture/auth.md` |
-| **CC1.10** | Security monitoring | Audit vault with immutable git-backed ledger, signed ActionReceipts | `internal/services/storage/audit_vault.go` |
-| **CC1.11** | Data disposal | Configurable retention policies (default 90 days), automated pruning | `internal/services/storage/audit_vault.go` |
+| **CC1.10** | Security monitoring | Audit store with immutable git-backed ledger, signed ActionReceipts | `internal/services/storage/audit_store.go`, `internal/services/storage/ledger.go` |
+| **CC1.11** | Data disposal | Configurable retention policies (default 90 days), automated pruning | `internal/services/storage/audit_store.go` |
 | **CC1.12** | Security incident response | Coordinated disclosure policy via `security@lateraluslabs.com` | `SECURITY.md` |
 
 #### TSC - Availability (A)
@@ -48,14 +48,14 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | Control ID | Control Description | g8e Implementation | Evidence Location |
 |------------|---------------------|-------------------|-------------------|
 | **A1.1** | Processing and recovery | Git-backed ledger for state recovery, replay protection via nonce | `internal/services/storage/ledger.go` |
-| **A1.2** | Availability monitoring | Health checks via audit vault status, session tracking | `internal/services/storage/audit_vault.go` |
+| **A1.2** | Availability monitoring | Health checks via audit store status, session tracking | `internal/services/storage/audit_store.go` |
 | **A1.3** | Data backup | Local-first storage with git commits per mutation | `internal/services/storage/ledger.go` |
 
 #### TSC - Confidentiality (C)
 
 | Control ID | Control Description | g8e Implementation | Evidence Location |
 |------------|---------------------|-------------------|-------------------|
-| **C1.1** | Confidentiality of information at rest | Mandatory encryption vault for audit content fields | `internal/services/storage/audit_vault.go` |
+| **C1.1** | Confidentiality of information at rest | Mandatory encryption vault for audit content fields | `internal/services/storage/audit_store.go` |
 | **C1.2** | Confidentiality of information in transit | mTLS with TLS 1.3 for all platform communication | `docs/architecture/auth.md` |
 | **C1.3** | Confidentiality of information during processing | Sovereign Execution Boundary with PII/secret scrubbing before cloud transmission | `internal/services/sovereignty/boundary.go` |
 | **C1.4** | Avoidance of unauthorized disclosure | Deterministic rehydration only at execution boundary | `internal/services/sovereignty/boundary.go` |
@@ -108,7 +108,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 - **A.12.1 Operational procedures:** Documented in architecture docs
 - **A.12.2 Protection from malware:** L1 Doctrine with MITRE ATT&CK pattern detection
 - **A.12.3 Backup:** Git-backed ledger with per-mutation commits
-- **A.12.4 Logging and monitoring:** Audit vault with signed receipts
+- **A.12.4 Logging and monitoring:** Audit store with signed receipts
 - **A.12.5 Log information protection:** Mandatory encryption at rest
 - **A.12.6 Logging synchronization:** Local-first storage, no external dependency
 - **A.12.7 Information leak prevention:** Sovereign Execution Boundary scrubbing
@@ -128,7 +128,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 - **A.14.5 Capacity management:** Configurable database size limits
 - **A.14.6 Change control:** Git-based version control
 - **A.14.7 Information on vulnerabilities:** Coordinated disclosure policy
-- **A.14.8 Audit logging:** Comprehensive audit vault
+- **A.14.8 Audit logging:** Comprehensive audit store
 - **A.14.9 System documentation:** Architecture docs, protocol specs
 
 #### A.15 Supplier Relationships
@@ -143,7 +143,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 #### A.17 Information Security Compliance
 - **A.17.1 Identification of applicable laws and requirements:** This compliance alignment document
 - **A.17.2 Intellectual property rights:** Apache 2.0 license
-- **A.17.3 Protection of records:** Audit vault with git ledger
+- **A.17.3 Protection of records:** Audit store with git ledger
 - **A.17.4 Privacy and protection of PII:** Sovereign Execution Boundary with PII scrubbing
 - **A.17.5 Independent review:** Third-party security assessment (planned)
 
@@ -159,16 +159,16 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **Purpose limitation** | Sensitive data scrubbing prevents data leakage to unintended systems | `internal/services/sovereignty/boundary.go` |
 | **Data minimization** | Scrubbing removes PII before cloud transmission | `internal/services/sovereignty/boundary.go` |
 | **Accuracy** | Immutable git-backed ledger with state roots | `internal/services/storage/ledger.go` |
-| **Storage limitation** | Configurable retention policies (default 90 days) | `internal/services/storage/audit_vault.go` |
-| **Integrity and confidentiality** | Encryption at rest, mTLS in transit, access controls | `internal/services/storage/audit_vault.go`, `docs/architecture/auth.md` |
+| **Storage limitation** | Configurable retention policies (default 90 days) | `internal/services/storage/audit_store.go` |
+| **Integrity and confidentiality** | Encryption at rest, mTLS in transit, access controls | `internal/services/storage/audit_store.go`, `docs/architecture/auth.md` |
 
 ### GDPR Rights Support
 
 | Right | g8e Capability | Implementation |
 |-------|----------------|----------------|
-| **Right to access** | Local audit vault export | User can query local SQLite database |
+| **Right to access** | Local audit store export | User can query local SQLite database |
 | **Right to rectification** | Git ledger allows state rollback | `internal/services/storage/ledger.go` |
-| **Right to erasure** | Configurable retention and pruning | `internal/services/storage/audit_vault.go` |
+| **Right to erasure** | Configurable retention and pruning | `internal/services/storage/audit_store.go` |
 | **Right to data portability** | SQLite export capability | User controls local data directory |
 | **Right to object** | Local-first architecture gives user control | All data stored on user's infrastructure |
 
@@ -210,7 +210,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | Standard | Implementation | Evidence |
 |----------|----------------|----------|
 | **Access Control** | mTLS with SPIFFE identity, session isolation | `docs/architecture/auth.md` |
-| **Audit Controls** | Comprehensive audit vault with signed receipts | `internal/services/storage/audit_vault.go` |
+| **Audit Controls** | Comprehensive audit store with signed receipts | `internal/services/storage/audit_store.go`, `internal/services/storage/ledger.go` |
 | **Integrity Controls** | State Merkle roots, git-backed ledger | `internal/services/storage/ledger.go` |
 | **Transmission Security** | mTLS with TLS 1.3 for all communication | `docs/architecture/auth.md` |
 
@@ -234,7 +234,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **AC-2** | Account management | CSR-based enrollment, session tracking |
 | **AC-3** | Access enforcement | 5-layer verification pipeline |
 | **AC-6** | Least privilege | JIT provisioning, no standing privileges |
-| **AC-7** | Successful/failed access attempts | Audit vault logging |
+| **AC-7** | Successful/failed access attempts | Audit store logging |
 | **AC-8** | System use notification | Session identifiers in envelopes |
 | **AC-11** | Session lock | Session-based isolation |
 | **AC-12** | Session termination | Configurable session timeouts |
@@ -249,7 +249,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | Control | g8e Implementation | Evidence |
 |---------|-------------------|----------|
 | **AU-1** | Audit and accountability policy | `SECURITY.md` |
-| **AU-2** | Audit events | Comprehensive event logging in audit vault |
+| **AU-2** | Audit events | Comprehensive event logging in audit store |
 | **AU-3** | Audit record content | Events include timestamp, user, action, result |
 | **AU-4** | Audit storage retention | Configurable retention (default 90 days) |
 | **AU-5** | Audit response to processing failures | Fail-closed: execution aborted if audit fails |
@@ -287,7 +287,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **SI-1** | System and information integrity policy | `SECURITY.md` |
 | **SI-2** | Flaw remediation | Coordinated disclosure, automated dependency scanning |
 | **SI-3** | Malicious code protection | L1 Doctrine with MITRE ATT&CK detection |
-| **SI-4** | System monitoring | Audit vault, signed receipts |
+| **SI-4** | System monitoring | Audit store, signed receipts |
 | **SI-5** | Security alerts | Session-based event routing |
 | **SI-6** | Integrity verification | State Merkle roots, hash-based transaction binding |
 | **SI-7** | Software, firmware, and information integrity | Git-backed ledger with per-mutation commits |
@@ -330,12 +330,12 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **8.3** | Secure authentication processes | Fail-closed verification |
 | **8.4** | Multi-factor authentication | WebAuthn provides MFA |
 | **8.5** | Secure authentication for non-console access | mTLS required |
-| **9.1** | Use effective logging | Comprehensive audit vault |
+| **9.1** | Use effective logging | Comprehensive audit store |
 | **9.2** | Protect audit trails | Mandatory encryption at rest |
 | **9.3** | Secure audit trails | Signed ActionReceipts |
 | **9.4** | Review audit trails | Query capabilities via SQLite |
 | **10.1** | Implement audit trails | All mutations generate audit records |
-| **10.2** | Audit trail automation | Automatic logging in audit vault |
+| **10.2** | Audit trail automation | Automatic logging in audit store |
 | **10.3** | Audit trail retention | Configurable retention policies |
 | **10.4** | Audit trail review | Query capabilities |
 | **10.5** | Audit trail reconstruction | Git-backed ledger |
@@ -392,9 +392,9 @@ The NSA Zero Trust Implementation Guidelines (ZIG) provide a five-phase approach
 | **Device Trust Verification** | Cryptographic device identity | mTLS certificate verification | `docs/architecture/auth.md` |
 | **Network Segmentation** | Micro-segmentation via mTLS | Per-connection mTLS enforcement | `docs/architecture/auth.md` |
 | **Encryption in Transit** | TLS 1.3 for all communication | mTLS with TLS 1.3 | `docs/architecture/auth.md` |
-| **Encryption at Rest** | Protect stored data | Mandatory encryption vault for audit content | `internal/services/storage/audit_vault.go` |
+| **Encryption at Rest** | Protect stored data | Mandatory encryption vault for audit content | `internal/services/storage/audit_store.go` |
 | **Identity and Access Management** | Centralized identity control | SPIFFE workload identity system | `protocol/workload_identity.go` |
-| **Continuous Monitoring** | Real-time security monitoring | Audit vault with signed receipts | `internal/services/storage/audit_vault.go` |
+| **Continuous Monitoring** | Real-time security monitoring | Audit store with signed receipts | `internal/services/storage/audit_store.go` |
 | **Incident Response** | Coordinated disclosure and response | Coordinated disclosure policy | `SECURITY.md` |
 
 ### Phase Two Alignment: Core Zero Trust Tools
@@ -410,7 +410,7 @@ The NSA Zero Trust Implementation Guidelines (ZIG) provide a five-phase approach
 | **Data Loss Prevention** | Prevent unauthorized data exfiltration | Sovereign Execution Boundary scrubbing | `internal/services/sovereignty/boundary.go` |
 | **Threat Detection** | Identify malicious activity | L1 Doctrine with MITRE ATT&CK patterns | `internal/services/governance/l1_doctrine.go` |
 | **Automated Response** | Automated containment of threats | Fail-closed verification pipeline | `internal/services/governance/l5_actuator.go` |
-| **Audit Logging** | Comprehensive audit trail | Audit vault with git-backed ledger | `internal/services/storage/audit_vault.go` |
+| **Audit Logging** | Comprehensive audit trail | Git-backed ledger | `internal/services/storage/ledger.go` |
 | **Session Management** | Secure session handling | Session-based isolation (operator_session_id, cli_session_id, web_session_id) | `docs/architecture/g8e.md` |
 | **Certificate Management** | PKI lifecycle management | Root/intermediate CA hierarchy, CRL | `internal/services/gateway/pki_controller.go` |
 | **Key Management** | Secure key storage and rotation | PKI hierarchy with key separation | `internal/services/gateway/pki_controller.go` |
@@ -467,12 +467,12 @@ The NSA ZIG framework aligns with the DoW Zero Trust pillars. g8e implements the
 
 | Mechanism | Scope | Implementation |
 |-----------|-------|----------------|
-| **Encryption at Rest** | Audit vault content fields | `internal/services/storage/audit_vault.go` |
+| **Encryption at Rest** | Audit store content fields | `internal/services/storage/audit_store.go` |
 | **Encryption in Transit** | All platform communication | mTLS with TLS 1.3 |
 | **PII Scrubbing** | Outbound data | `internal/services/sovereignty/boundary.go` |
 | **State Binding** | Transaction state | State Merkle roots |
 | **Replay Protection** | Transaction nonces | `internal/services/governance/l4_warden.go` |
-| **Audit Trail** | All mutations | `internal/services/storage/audit_vault.go` |
+| **Audit Trail** | All mutations | `internal/services/storage/audit_store.go` |
 
 ---
 
@@ -527,7 +527,7 @@ The NSA ZIG framework aligns with the DoW Zero Trust pillars. g8e implements the
 | Component | Location | Compliance Relevance |
 |-----------|----------|---------------------|
 | **PKI Controller** | `/internal/services/gateway/pki_controller.go` | Certificate issuance, revocation, CRL |
-| **Audit Vault** | `/internal/services/storage/audit_vault.go` | Audit logging, encryption, retention |
+| **Audit Store** | `/internal/services/storage/audit_store.go` | Audit logging, encryption, retention |
 | **Sovereign Execution Boundary** | `/internal/services/sovereignty/boundary.go` | PII scrubbing, data sovereignty |
 | **L1 Doctrine** | `/internal/services/governance/l1_doctrine.go` | Threat detection, input validation |
 | **L2 Consensus** | `/internal/services/governance/l2_consensus.go` | Cryptographic verification |
@@ -541,7 +541,7 @@ The NSA ZIG framework aligns with the DoW Zero Trust pillars. g8e implements the
 | Test Suite | Location | Coverage |
 |------------|----------|----------|
 | **PKI Tests** | `/internal/services/gateway/pki_controller_test.go` | Certificate issuance, revocation |
-| **Audit Vault Tests** | `/internal/services/storage/audit_vault_test.go` | Audit logging, encryption |
+| **Audit Store Tests** | `/internal/services/storage/storagetest/audit_store_test.go` | Audit logging, encryption |
 | **Sovereignty Tests** | `/internal/services/sovereignty/boundary_test.go` | PII scrubbing, rehydration |
 | **Governance Tests** | `/internal/services/governance/*_test.go` | L1-L5 verification |
 | **Integration Tests** | `/test/*_test.go` | End-to-end security flows |

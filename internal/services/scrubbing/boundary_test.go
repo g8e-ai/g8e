@@ -671,16 +671,16 @@ func TestScrubbingService_TokenPersistence(t *testing.T) {
 	require.NoError(t, testVault.Unlock(privKey))
 	defer testVault.Close()
 
-	// Create LocalStore
-	storageConfig := &storage.LocalStoreConfig{
+	// Create TokenStore
+	storageConfig := &storage.TokenStoreConfig{
 		DBPath:        filepath.Join(tempDir, "test_tokens.db"),
 		Enabled:       true,
 		RetentionDays: 30,
 	}
-	localStore, err := storage.NewLocalStoreService(storageConfig, logger, testVault)
+	tokenStore, err := storage.NewTokenStoreService(storageConfig, logger, testVault)
 	require.NoError(t, err)
-	require.NotNil(t, localStore)
-	defer localStore.Close()
+	require.NotNil(t, tokenStore)
+	defer tokenStore.Close()
 
 	// Create ScrubbingService with persistence
 	config := &Config{
@@ -688,7 +688,7 @@ func TestScrubbingService_TokenPersistence(t *testing.T) {
 		StrictMode:         false,
 		RequirePersistence: true,
 	}
-	service := NewScrubbingService(config, logger, localStore)
+	service := NewScrubbingService(config, logger, tokenStore)
 
 	// Test token creation and persistence
 	sensitiveValue := "my-secret-api-key-12345"
@@ -700,14 +700,14 @@ func TestScrubbingService_TokenPersistence(t *testing.T) {
 	rehydrated := service.RehydrateText(token)
 	assert.Equal(t, sensitiveValue, rehydrated)
 
-	// Verify token is persisted in LocalStore
+	// Verify token is persisted in TokenStore
 	key := fmt.Sprintf("sentinel_token_%s", token)
-	storedValue, found := localStore.KVGet(key)
+	storedValue, found := tokenStore.KVGet(key)
 	assert.True(t, found)
 	assert.Equal(t, sensitiveValue, storedValue)
 
 	// Test loading persisted tokens on new SovereigntyService instance
-	service2 := NewScrubbingService(config, logger, localStore)
+	service2 := NewScrubbingService(config, logger, tokenStore)
 	rehydrated2 := service2.RehydrateText(token)
 	assert.Equal(t, sensitiveValue, rehydrated2, "Should rehydrate from persisted storage")
 }
@@ -716,7 +716,7 @@ func TestScrubbingService_TokenPersistence_FailClosed(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
-	// Create ScrubbingService with persistence required but no LocalStore
+	// Create ScrubbingService with persistence required but no TokenStore
 	config := &Config{
 		Enabled:            true,
 		StrictMode:         false,
@@ -748,16 +748,16 @@ func TestScrubbingService_TokenPersistence_TTL(t *testing.T) {
 	require.NoError(t, testVault.Unlock(privKey))
 	defer testVault.Close()
 
-	// Create LocalStore
-	storageConfig := &storage.LocalStoreConfig{
+	// Create TokenStore
+	storageConfig := &storage.TokenStoreConfig{
 		DBPath:        filepath.Join(tempDir, "test_ttl.db"),
 		Enabled:       true,
 		RetentionDays: 30,
 	}
-	localStore, err := storage.NewLocalStoreService(storageConfig, logger, testVault)
+	tokenStore, err := storage.NewTokenStoreService(storageConfig, logger, testVault)
 	require.NoError(t, err)
-	require.NotNil(t, localStore)
-	defer localStore.Close()
+	require.NotNil(t, tokenStore)
+	defer tokenStore.Close()
 
 	// Create ScrubbingService with persistence
 	config := &Config{
@@ -765,23 +765,23 @@ func TestScrubbingService_TokenPersistence_TTL(t *testing.T) {
 		StrictMode:         false,
 		RequirePersistence: true,
 	}
-	service := NewScrubbingService(config, logger, localStore)
+	service := NewScrubbingService(config, logger, tokenStore)
 
 	// Create a token
 	sensitiveValue := "my-secret-api-key-12345"
 	token := service.GetTokenForValue(sensitiveValue)
 	assert.NotEmpty(t, token)
 
-	// Manually set a very short TTL in LocalStore to test expiration
+	// Manually set a very short TTL in TokenStore to test expiration
 	key := fmt.Sprintf("sentinel_token_%s", token)
-	err = localStore.KVSet(key, sensitiveValue, 1) // 1 second TTL
+	err = tokenStore.KVSet(key, sensitiveValue, 1) // 1 second TTL
 	require.NoError(t, err)
 
 	// Wait for expiration
 	time.Sleep(2 * time.Second)
 
 	// Token should no longer be retrievable from storage
-	_, found := localStore.KVGet(key)
+	_, found := tokenStore.KVGet(key)
 	assert.False(t, found, "Token should expire after TTL")
 }
 

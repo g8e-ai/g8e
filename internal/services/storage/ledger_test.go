@@ -30,9 +30,10 @@ import (
 )
 
 // setupTestLedger creates a test environment for GitLedgerService
-func setupTestLedger(t *testing.T) (*GitLedgerService, *TestSQLAuditStore, string) {
+func setupTestLedger(t *testing.T) (*GitLedgerService, string) {
 	gitPath := testGitPath(t)
 	tempDir := t.TempDir()
+	ledgerDir := filepath.Join(tempDir, "ledger")
 
 	// Create vault
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -47,41 +48,23 @@ func setupTestLedger(t *testing.T) (*GitLedgerService, *TestSQLAuditStore, strin
 	require.NoError(t, testVault.Unlock(privKey))
 	defer testVault.Close()
 
-	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
-		DBPath:                    "test.db",
-		LedgerDir:                 "ledger",
-		MaxDBSizeMB:               100,
-		RetentionDays:             7,
-		PruneIntervalMinutes:      60,
-		Enabled:                   true,
-		OutputTruncationThreshold: 102400,
-		HeadTailSize:              51200,
-		GitPath:                   gitPath,
-		EncryptionVault:           testVault,
-	}
-
 	logger := testutil.NewTestLogger()
 
-	avs, err := NewTestSQLAuditStore(config, logger)
-	require.NoError(t, err)
-
 	ledgerConfig := &LedgerConfig{
-		BaseDir:         filepath.Join(tempDir, "ledger"),
+		BaseDir:         ledgerDir,
 		GitPath:         gitPath,
-		EncryptionVault: avs.GetEncryptionVault(),
+		EncryptionVault: testVault,
 	}
 	lms, err := NewGitLedgerService(ledgerConfig, logger)
 	require.NoError(t, err)
 	require.NotNil(t, lms)
 
-	return lms, avs, tempDir
+	return lms, tempDir
 }
 
 func TestLedgerService_NewService(t *testing.T) {
 	t.Parallel()
-	lms, avs, _ := setupTestLedger(t)
-	defer avs.Close()
+	lms, _ := setupTestLedger(t)
 
 	assert.NotNil(t, lms)
 	assert.NotNil(t, lms.config)
@@ -97,8 +80,7 @@ func TestLedgerService_NewServiceWithNilConfig(t *testing.T) {
 
 func TestLedgerService_MirrorFileWrite_NewFile(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	// Create a test file path (file doesn't exist yet)
 	testFilePath := filepath.Join(tempDir, "test_write.txt")
@@ -136,8 +118,7 @@ func TestLedgerService_MirrorFileWrite_NewFile(t *testing.T) {
 
 func TestLedgerService_MirrorFileWrite_ExistingFile(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	// Create an existing file
 	testFilePath := filepath.Join(tempDir, "existing_file.txt")
@@ -182,8 +163,7 @@ func TestLedgerService_MirrorFileWrite_DisabledVault(t *testing.T) {
 
 func TestLedgerService_CompleteMirrorWrite_NilResult(t *testing.T) {
 	t.Parallel()
-	lms, avs, _ := setupTestLedger(t)
-	defer avs.Close()
+	lms, _ := setupTestLedger(t)
 
 	err := lms.CompleteMirrorWrite(nil, "operator_session")
 	assert.NoError(t, err)
@@ -191,8 +171,7 @@ func TestLedgerService_CompleteMirrorWrite_NilResult(t *testing.T) {
 
 func TestLedgerService_MirrorFileDelete(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	// Create a file to delete
 	testFilePath := filepath.Join(tempDir, "to_delete.txt")
@@ -225,8 +204,7 @@ func TestLedgerService_MirrorFileDelete(t *testing.T) {
 
 func TestLedgerService_MirrorFileDelete_NonExistentFile(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	// Try to mirror deletion of non-existent file
 	testFilePath := filepath.Join(tempDir, "non_existent.txt")
@@ -250,8 +228,7 @@ func TestLedgerService_MirrorFileDelete_DisabledVault(t *testing.T) {
 
 func TestLedgerService_MirrorFileCreate(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	testFilePath := filepath.Join(tempDir, "new_created_file.txt")
 	operatorSessionID := "test-session-create"
@@ -304,10 +281,9 @@ func TestLedgerService_CompleteMirrorCreate_DisabledVault(t *testing.T) {
 
 func TestLedgerService_GetLedgerPath(t *testing.T) {
 	t.Parallel()
-	lms, avs, _ := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
-	ledgerDir := avs.GetLedgerPath()
+	ledgerDir := filepath.Join(tempDir, "ledger")
 
 	// The mirror path should be within the ledger
 	ledgerPath := lms.getLedgerPath(ledgerDir, "/etc/nginx/nginx.conf")
@@ -322,8 +298,7 @@ func TestLedgerService_GetLedgerPath(t *testing.T) {
 
 func TestLedgerService_CopyToLedger(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	// Create source file
 	srcPath := filepath.Join(tempDir, "source.txt")
@@ -344,8 +319,7 @@ func TestLedgerService_CopyToLedger(t *testing.T) {
 
 func TestLedgerService_CopyToLedger_NonExistentSource(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	err := lms.copyToLedger("/nonexistent/file.txt", filepath.Join(tempDir, "dst.txt"))
 	assert.Error(t, err)
@@ -354,10 +328,9 @@ func TestLedgerService_CopyToLedger_NonExistentSource(t *testing.T) {
 
 func TestLedgerService_SnapshotLedger(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
-	ledgerDir := avs.GetLedgerPath()
+	ledgerDir := filepath.Join(tempDir, "ledger")
 
 	// Take a snapshot
 	hash1, err := lms.snapshotLedger(ledgerDir, "Test snapshot 1")
@@ -379,10 +352,9 @@ func TestLedgerService_SnapshotLedger(t *testing.T) {
 
 func TestLedgerService_CalculateDiffStat(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
-	ledgerDir := avs.GetLedgerPath()
+	ledgerDir := filepath.Join(tempDir, "ledger")
 
 	// Take initial snapshot
 	hash1, err := lms.snapshotLedger(ledgerDir, "Initial state")
@@ -405,10 +377,9 @@ func TestLedgerService_CalculateDiffStat(t *testing.T) {
 
 func TestLedgerService_CalculateDiffStat_EmptyHashes(t *testing.T) {
 	t.Parallel()
-	lms, avs, _ := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
-	ledgerDir := avs.GetLedgerPath()
+	ledgerDir := filepath.Join(tempDir, "ledger")
 
 	diffStat := lms.calculateDiffStat(ledgerDir, "", "")
 	assert.Empty(t, diffStat)
@@ -419,8 +390,7 @@ func TestLedgerService_CalculateDiffStat_EmptyHashes(t *testing.T) {
 
 func TestLedgerService_CountLines(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	// Create test file with multiple lines
 	testFile := filepath.Join(tempDir, "lines_test.txt")
@@ -445,8 +415,7 @@ func TestLedgerService_CountLines(t *testing.T) {
 
 func TestLedgerService_GetFileHistory(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	// Create a file and make multiple changes
 	testFilePath := filepath.Join(tempDir, "history_test.txt")
@@ -483,7 +452,7 @@ func TestLedgerService_GetFileHistory(t *testing.T) {
 
 // Regression: callers (e.g. HistoryHandler) may hold a nil *GitLedgerService when
 // the Operator was started without local storage. Public methods must degrade
-// to an error instead of panicking on the auditVault deref inside gitReady().
+// to an error instead of panicking on a nil receiver inside gitReady().
 func TestLedgerService_GetFileHistory_NilReceiver(t *testing.T) {
 	t.Parallel()
 	var lms *GitLedgerService
@@ -508,8 +477,7 @@ func TestLedgerService_GetFileHistory_DisabledVault(t *testing.T) {
 
 func TestLedgerService_GetFileHistory_DefaultLimit(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	// Create a file
 	testFilePath := filepath.Join(tempDir, "limit_test.txt")
@@ -525,8 +493,7 @@ func TestLedgerService_GetFileHistory_DefaultLimit(t *testing.T) {
 
 func TestLedgerService_GetFileAtCommit(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	testFilePath := filepath.Join(tempDir, "commit_test.txt")
 	operatorSessionID := "test-session-commit"
@@ -564,8 +531,7 @@ func TestLedgerService_GetFileAtCommit_DisabledVault(t *testing.T) {
 
 func TestLedgerService_RestoreFileFromCommit(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	testFilePath := filepath.Join(tempDir, "restore_test.txt")
 	operatorSessionID := "test-session-restore"
@@ -611,8 +577,7 @@ func TestLedgerService_RestoreFileFromCommit_DisabledVault(t *testing.T) {
 
 func TestLedgerService_RestoreFileFromCommit_InvalidCommit(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	testFilePath := filepath.Join(tempDir, "invalid_restore.txt")
 
@@ -622,8 +587,7 @@ func TestLedgerService_RestoreFileFromCommit_InvalidCommit(t *testing.T) {
 
 func TestLedgerService_CompleteWorkflow(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	operatorSessionID := "test-complete-workflow"
 	testFilePath := filepath.Join(tempDir, "workflow_test.txt")
@@ -676,8 +640,7 @@ func TestLedgerService_CompleteWorkflow(t *testing.T) {
 
 func TestLedgerService_MultiSessionConcurrency(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	// Test that multiple sessions can operate in parallel without blocking each other's git commits
 	sessionCount := 5
@@ -687,10 +650,6 @@ func TestLedgerService_MultiSessionConcurrency(t *testing.T) {
 		go func(idx int) {
 			sessionID := fmt.Sprintf("parallel-session-%d", idx)
 			filePath := filepath.Join(tempDir, fmt.Sprintf("parallel_test_%d.txt", idx))
-
-			// Record session in DB first (required by TestSQLAuditStore .RecordEvents check)
-			err := avs.CreateSession(sessionID, "operator", "Parallel Session", "parallel@test.local")
-			require.NoError(t, err)
 
 			// Start multi-phase operation
 			result, err := lms.MirrorFileCreate(sessionID, filePath)
@@ -719,8 +678,7 @@ func TestLedgerService_MultiSessionConcurrency(t *testing.T) {
 
 func TestLedgerService_LargeFile(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	testFilePath := filepath.Join(tempDir, "large_file.txt")
 	operatorSessionID := "test-large-file"
@@ -747,8 +705,7 @@ func TestLedgerService_LargeFile(t *testing.T) {
 
 func TestLedgerService_SpecialCharactersInPath(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	// File with spaces and special chars (that are valid in filenames)
 	testFilePath := filepath.Join(tempDir, "special file-name_v1.2.txt")
@@ -769,8 +726,7 @@ func TestLedgerService_SpecialCharactersInPath(t *testing.T) {
 
 func TestLedgerService_DeepNestedPath(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	// Create a deeply nested path
 	nestedPath := filepath.Join(tempDir, "level1", "level2", "level3", "level4", "deep_file.txt")
@@ -792,8 +748,7 @@ func TestLedgerService_DeepNestedPath(t *testing.T) {
 
 func TestLedgerService_NodeBinaryFile(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, tempDir := setupTestLedger(t)
 
 	testFilePath := filepath.Join(tempDir, "binary_file.bin")
 	operatorSessionID := "test-binary"

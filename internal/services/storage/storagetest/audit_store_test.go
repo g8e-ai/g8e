@@ -48,7 +48,7 @@ func TestAuditVaultConfig_Default(t *testing.T) {
 	assert.True(t, config.Enabled)
 }
 
-func TestAuditVaultService_Bootstrap(t *testing.T) {
+func TestSQLAuditStore_Bootstrap(t *testing.T) {
 	t.Parallel()
 	gitPath := testGitPath(t)
 
@@ -96,7 +96,7 @@ func TestAuditVaultService_Bootstrap(t *testing.T) {
 	assert.Equal(t, tempDir, avs.GetDataDir())
 }
 
-func TestAuditVaultService_Session(t *testing.T) {
+func TestSQLAuditStore_Session(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -138,7 +138,7 @@ func TestAuditVaultService_Session(t *testing.T) {
 	assert.Equal(t, "user@example.com", session.UserIdentity)
 }
 
-func TestAuditVaultService_Event(t *testing.T) {
+func TestSQLAuditStore_Event(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -200,7 +200,7 @@ func TestAuditVaultService_Event(t *testing.T) {
 	assert.Equal(t, "file1.txt\nfile2.txt", retrievedEvent.CommandStdout)
 }
 
-func TestAuditVaultService_RecordEvent_RejectsUnknownSession(t *testing.T) {
+func TestSQLAuditStore_RecordEvent_RejectsUnknownSession(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -250,7 +250,7 @@ func TestAuditVaultService_RecordEvent_RejectsUnknownSession(t *testing.T) {
 	assert.Nil(t, session)
 }
 
-func TestAuditVaultService_RecordEvent_RejectsMissingSession(t *testing.T) {
+func TestSQLAuditStore_RecordEvent_RejectsMissingSession(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -287,7 +287,7 @@ func TestAuditVaultService_RecordEvent_RejectsMissingSession(t *testing.T) {
 	assert.Equal(t, int64(0), eventID)
 }
 
-func TestAuditVaultService_RecordEvents_RollsBackUnknownSession(t *testing.T) {
+func TestSQLAuditStore_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -341,7 +341,7 @@ func TestAuditVaultService_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 	assert.Len(t, events, 0)
 }
 
-func TestAuditVaultService_RecordEvents_SucceedsWithExistingSessions(t *testing.T) {
+func TestSQLAuditStore_RecordEvents_SucceedsWithExistingSessions(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -393,7 +393,7 @@ func TestAuditVaultService_RecordEvents_SucceedsWithExistingSessions(t *testing.
 	assert.Len(t, events, 2)
 }
 
-func TestAuditVaultService_OutputTruncation(t *testing.T) {
+func TestSQLAuditStore_OutputTruncation(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -458,7 +458,7 @@ func TestAuditVaultService_OutputTruncation(t *testing.T) {
 	assert.Contains(t, retrievedEvent.CommandStdout, "[TRUNCATED:")
 }
 
-func TestAuditVaultService_FileMutation(t *testing.T) {
+func TestSQLAuditStore_FileMutation(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -530,7 +530,7 @@ func TestAuditVaultService_FileMutation(t *testing.T) {
 	assert.Equal(t, "def456", retrievedMutation.LedgerHashAfter)
 }
 
-func TestAuditVaultService_Disabled(t *testing.T) {
+func TestSQLAuditStore_Disabled(t *testing.T) {
 	t.Parallel()
 	config := &TestSQLAuditStoreConfig{
 		Enabled: false,
@@ -541,7 +541,7 @@ func TestAuditVaultService_Disabled(t *testing.T) {
 	assert.Nil(t, avs)
 }
 
-func TestAuditVaultService_MultipleSessions(t *testing.T) {
+func TestSQLAuditStore_MultipleSessions(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -595,7 +595,7 @@ func TestAuditVaultService_MultipleSessions(t *testing.T) {
 	}
 }
 
-func TestAuditVaultService_EventPagination(t *testing.T) {
+func TestSQLAuditStore_EventPagination(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -669,7 +669,7 @@ func TestAuditVaultService_EventPagination(t *testing.T) {
 	assert.Len(t, events, 25) // All events since we have less than 50
 }
 
-func TestAuditVaultService_EventOrdering(t *testing.T) {
+func TestSQLAuditStore_EventOrdering(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -725,7 +725,7 @@ func TestAuditVaultService_EventOrdering(t *testing.T) {
 	}
 }
 
-func TestAuditVaultService_MultipleFileMutationsPerEvent(t *testing.T) {
+func TestSQLAuditStore_MultipleFileMutationsPerEvent(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -795,7 +795,7 @@ func TestAuditVaultService_MultipleFileMutationsPerEvent(t *testing.T) {
 	}
 }
 
-func TestAuditVaultService_NullExitCode(t *testing.T) {
+func TestSQLAuditStore_NullExitCode(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -845,7 +845,7 @@ func TestAuditVaultService_NullExitCode(t *testing.T) {
 	assert.Nil(t, events[0].CommandExitCode)
 }
 
-func TestAuditVaultService_DifferentEventTypes(t *testing.T) {
+func TestSQLAuditStore_DifferentEventTypes(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -908,7 +908,7 @@ func TestAuditVaultService_DifferentEventTypes(t *testing.T) {
 	}
 }
 
-func TestAuditVaultService_StderrTruncation(t *testing.T) {
+func TestSQLAuditStore_StderrTruncation(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -968,7 +968,7 @@ func TestAuditVaultService_StderrTruncation(t *testing.T) {
 	assert.Contains(t, events[0].CommandStderr, "[TRUNCATED:")
 }
 
-func TestAuditVaultService_GetSessionNotFound(t *testing.T) {
+func TestSQLAuditStore_GetSessionNotFound(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -1000,7 +1000,7 @@ func TestAuditVaultService_GetSessionNotFound(t *testing.T) {
 	assert.Nil(t, session)
 }
 
-func TestAuditVaultService_GetEventsEmptySession(t *testing.T) {
+func TestSQLAuditStore_GetEventsEmptySession(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -1036,7 +1036,7 @@ func TestAuditVaultService_GetEventsEmptySession(t *testing.T) {
 	assert.Len(t, events, 0)
 }
 
-func TestAuditVaultService_GetFileMutationsNoMutations(t *testing.T) {
+func TestSQLAuditStore_GetFileMutationsNoMutations(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -1069,7 +1069,7 @@ func TestAuditVaultService_GetFileMutationsNoMutations(t *testing.T) {
 	assert.Len(t, mutations, 0)
 }
 
-func TestAuditVaultService_WALMode(t *testing.T) {
+func TestSQLAuditStore_WALMode(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -1109,7 +1109,7 @@ func TestAuditVaultService_WALMode(t *testing.T) {
 	assert.FileExists(t, dbPath)
 }
 
-func TestAuditVaultService_IsEnabled(t *testing.T) {
+func TestSQLAuditStore_IsEnabled(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -1143,7 +1143,7 @@ func TestAuditVaultService_IsEnabled(t *testing.T) {
 	assert.False(t, nilService.IsEnabled())
 }
 
-func TestAuditVaultService_GetDataDir(t *testing.T) {
+func TestSQLAuditStore_GetDataDir(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -1177,7 +1177,7 @@ func TestAuditVaultService_GetDataDir(t *testing.T) {
 	assert.Empty(t, nilService.GetDataDir())
 }
 
-func TestAuditVaultService_GetLedgerPath(t *testing.T) {
+func TestSQLAuditStore_GetLedgerPath(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -1213,7 +1213,7 @@ func TestAuditVaultService_GetLedgerPath(t *testing.T) {
 	assert.Empty(t, nilService.GetLedgerPath())
 }
 
-func TestAuditVaultService_NilServiceMethods(t *testing.T) {
+func TestSQLAuditStore_NilServiceMethods(t *testing.T) {
 	t.Parallel()
 	var avs *TestSQLAuditStore
 
@@ -1232,7 +1232,7 @@ func TestAuditVaultService_NilServiceMethods(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestAuditVaultService_DefaultConfig(t *testing.T) {
+func TestSQLAuditStore_DefaultConfig(t *testing.T) {
 	t.Parallel()
 	// Verify default config uses relative paths (caller resolves them)
 	// g8eo uses CLI flags only, not environment variables for configuration
@@ -1244,7 +1244,7 @@ func TestAuditVaultService_DefaultConfig(t *testing.T) {
 	assert.Equal(t, 90, config.RetentionDays)
 }
 
-func TestAuditVaultService_GetEncryptionVault(t *testing.T) {
+func TestSQLAuditStore_GetEncryptionVault(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -1372,7 +1372,7 @@ func TestAuditVaultPrune(t *testing.T) {
 	assert.Equal(t, 1, count)
 }
 
-func TestAuditVaultService_LongContentFields(t *testing.T) {
+func TestSQLAuditStore_LongContentFields(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -1433,7 +1433,7 @@ func TestAuditVaultService_LongContentFields(t *testing.T) {
 	assert.False(t, events[0].StdoutTruncated) // Below threshold
 }
 
-func TestAuditVaultService_FileMutationOperationTypes(t *testing.T) {
+func TestSQLAuditStore_FileMutationOperationTypes(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -1495,7 +1495,7 @@ func TestAuditVaultService_FileMutationOperationTypes(t *testing.T) {
 	}
 }
 
-func TestAuditVaultService_SessionWithNullFields(t *testing.T) {
+func TestSQLAuditStore_SessionWithNullFields(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -1535,7 +1535,7 @@ func TestAuditVaultService_SessionWithNullFields(t *testing.T) {
 	assert.Empty(t, session.UserIdentity)
 }
 
-func TestAuditVaultService_CloseIdempotent(t *testing.T) {
+func TestSQLAuditStore_CloseIdempotent(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
@@ -1573,7 +1573,7 @@ func TestAuditVaultService_CloseIdempotent(t *testing.T) {
 // Encryption Integration Tests
 // ============================================================================
 
-func TestAuditVaultService_WithEncryption(t *testing.T) {
+func TestSQLAuditStore_WithEncryption(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 
@@ -1637,7 +1637,7 @@ func TestAuditVaultService_WithEncryption(t *testing.T) {
 	assert.Equal(t, "Some error output", retrievedEvent.CommandStderr)
 }
 
-func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
+func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 
@@ -1739,7 +1739,7 @@ func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 	assert.Equal(t, secretData, events[0].CommandStdout)
 }
 
-func TestAuditVaultService_EncryptionWithRekey(t *testing.T) {
+func TestSQLAuditStore_EncryptionWithRekey(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 
@@ -1822,7 +1822,7 @@ func TestAuditVaultService_EncryptionWithRekey(t *testing.T) {
 	assert.Equal(t, originalData, events[0].CommandStdout)
 }
 
-func TestAuditVaultService_MixedEncryptedUnencrypted(t *testing.T) {
+func TestSQLAuditStore_MixedEncryptedUnencrypted(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// With the new fail-closed behavior, vault is mandatory

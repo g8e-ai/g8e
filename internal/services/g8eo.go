@@ -47,7 +47,6 @@ type G8eoService struct {
 	fileEdit         *execution.FileEditService
 	pubSubCommands   *pubsub.PubSubCommandService
 	pubSubResults    *pubsub.PubSubResultsService
-	localStore       *storage.LocalStoreService
 	executionVault   *storage.ExecutionVaultService
 	tokenStore       *storage.TokenStoreService
 	suspendedTxStore *storage.SuspendedTransactionService
@@ -121,7 +120,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.fileEdit = execution.NewFileEditService(vs.config, vs.logger)
 
 	// Initialize SecretManager for loading signing keys (Actuator and Consensus)
-	// This must be initialized before LocalStore to provide keystore for encrypted token storage
+	// This must be initialized before storage services to provide keystore for encrypted token storage
 	secretsDir := vs.config.SecretsDir
 
 	// Initialize CanonicalDBService for canonical state root calculation
@@ -145,7 +144,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize Data Services - mandatory for replay protection
 	if !vs.config.LocalStoreEnabled {
-		return fmt.Errorf("local storage must be enabled for replay protection - set LocalStorageEnabled=true")
+		return fmt.Errorf("execution vault must be enabled for replay protection - set LocalStorageEnabled=true")
 	}
 
 	// Initialize vault for encryption
@@ -236,20 +235,6 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.config.GitPath = gitPath
 	vs.config.GitAvailable = gitPath != ""
 
-	// Initialize LocalStoreService for sentinel token persistence and suspended transactions
-	localStoreConfig := storage.DefaultLocalStoreConfig()
-	localStoreConfig.DBPath = filepath.Join(dataDir, "local_state.db")
-	localStoreConfig.MaxDBSizeMB = vs.config.LocalStoreMaxSizeMB
-	localStoreConfig.RetentionDays = vs.config.LocalStoreRetentionDays
-	vs.localStore, err = storage.NewLocalStoreService(localStoreConfig, vs.logger, encryptionVault)
-	if err != nil {
-		return fmt.Errorf("failed to initialize local store: %w", err)
-	}
-	if vs.localStore == nil {
-		return fmt.Errorf("local store is required but was not initialized")
-	}
-	vs.logger.Info("Local store initialized")
-
 	// Initialize SQLAuditStore for history handler
 	auditStoreConfig := storage.DefaultAuditStoreConfig()
 	auditStoreConfig.DataDir = filepath.Join(vs.config.WorkDir, ".g8e/data")
@@ -279,7 +264,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		ledgerConfig := &storage.LedgerConfig{
 			BaseDir:         filepath.Join(vs.config.WorkDir, ".g8e/data/ledger"),
 			GitPath:         gitPath,
-			EncryptionVault: vs.auditStore.GetEncryptionVault(),
+			EncryptionVault: encryptionVault,
 		}
 		ledger, err := storage.NewGitLedgerService(ledgerConfig, vs.logger)
 		if err != nil {
@@ -316,7 +301,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		}
 	}
 
-	vs.pubSubResults, err = pubsub.NewPubSubResultsService(vs.config, vs.logger, vs.pubSubClient, vs.localStore)
+	vs.pubSubResults, err = pubsub.NewPubSubResultsService(vs.config, vs.logger, vs.pubSubClient)
 	if err != nil {
 		return fmt.Errorf("failed to initialize results service: %w", err)
 	}
@@ -360,7 +345,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		FileEdit:            vs.fileEdit,
 		PubSubClient:        vs.pubSubClient,
 		ResultsService:      vs.pubSubResults,
-		LocalStore:          vs.localStore,
+		ExecutionVault:      vs.executionVault,
 		AuditStore:          vs.auditStore,
 		Ledger:              vs.ledger,
 		HistoryHandler:      vs.historyHandler,

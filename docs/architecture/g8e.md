@@ -281,7 +281,7 @@ Output scrubbing is performed directly at the `L5Actuator` boundary to redact to
 | Envelope types | `../../pkg/governance/types.go` |
 | Warden logic | `../../internal/services/governance/l4_warden.go` |
 | Actuator logic | `../../internal/services/governance/l5_actuator.go` |
-| Audit storage | `../../internal/services/storage/audit_vault.go` |
+| Audit storage | `../../internal/services/storage/audit_store.go` |
 | Ledger storage | `../../internal/services/storage/ledger.go` |
 | Workload identity | `../../protocol/workload_identity.go` |
 | Network architecture | `./network.md` |

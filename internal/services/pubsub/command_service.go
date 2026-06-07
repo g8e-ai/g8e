@@ -42,7 +42,6 @@ type CommandService struct {
 	scrubbing      *scrubbing.ScrubbingService
 	vaultWriter    *VaultWriter
 	auditStore     *storage.SQLAuditStore
-	localStore     *storage.LocalStoreService
 	ledger         *storage.GitLedgerService
 	historyHandler *storage.HistoryHandler
 }
@@ -59,14 +58,6 @@ func NewCommandService(cfg *config.Config, logger *slog.Logger, execSvc *executi
 // SetResultsPublisher sets the results publisher for the CommandService.
 func (cs *CommandService) SetResultsPublisher(results ResultsPublisher) {
 	cs.results = results
-}
-
-// SetLocalStoreService sets the local store for the CommandService.
-func (cs *CommandService) SetLocalStoreService(ls *storage.LocalStoreService) {
-	cs.localStore = ls
-	if cs.vaultWriter != nil {
-		cs.vaultWriter.localStore = ls
-	}
 }
 
 // SetAuditStore sets the audit store for the CommandService.
@@ -225,9 +216,9 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 		}
 
 		if _, err := cs.auditStore.RecordEvent(event); err != nil {
-			cs.logger.Warn("Failed to record command event in audit vault", string(constants.ConnectionStateError), err)
+			cs.logger.Warn("Failed to record command event in audit store", string(constants.ConnectionStateError), err)
 		} else {
-			cs.logger.Info("Scrubbed command event recorded in audit vault (LFAA)",
+			cs.logger.Info("Scrubbed command event recorded in audit store (LFAA)",
 				"execution_id", result.ExecutionID,
 				"operator_session_id", cs.config.OperatorSessionId)
 		}

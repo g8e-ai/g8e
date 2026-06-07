@@ -182,9 +182,9 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 
 		eventID, err := fs.auditStore.RecordEvent(event)
 		if err != nil {
-			fs.logger.Warn("Failed to record file mutation event in audit vault", string(constants.ConnectionStateError), err)
+			fs.logger.Warn("Failed to record file mutation event in audit store", string(constants.ConnectionStateError), err)
 		} else {
-			fs.logger.Info("File mutation event recorded in audit vault (LFAA)",
+			fs.logger.Info("File mutation event recorded in audit store (LFAA)",
 				"event_id", eventID,
 				"file_path", filePath,
 				"operation", operation)

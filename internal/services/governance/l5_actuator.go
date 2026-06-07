@@ -54,7 +54,7 @@ type L5Actuator struct {
 	SignerStore       SignerStore
 	Execution         *execution.ExecutionService
 	SQLAuditStore     *storage.SQLAuditStore
-	AuditStore        TransactionAuditStore
+	ConsoleAuditStore TransactionAuditStore
 	L3Notary          L3Notary
 	StateRootProvider StateRootProvider
 	Ctx               context.Context
@@ -261,7 +261,7 @@ func (w *L5Actuator) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 	return hex.EncodeToString(sig), nil
 }
 
-// LogReceipt records the signed action receipt in the audit vault and console_audit.
+// LogReceipt records the signed action receipt in the audit store and console_audit.
 func (w *L5Actuator) LogReceipt(env *governance.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
 	docErr := w.logReceiptDocument(env, r)
 
@@ -291,10 +291,10 @@ func (w *L5Actuator) LogReceipt(env *governance.GovernanceEnvelope, r *operatorv
 
 	if err := w.SQLAuditStore.RecordActionReceipt(&record); err != nil {
 		if w.Logger != nil {
-			w.Logger.Error("Failed to record ActionReceipt in audit vault", string(constants.ConnectionStateError), err)
+			w.Logger.Error("Failed to record ActionReceipt in audit store", string(constants.ConnectionStateError), err)
 		}
 		if docErr != nil {
-			return fmt.Errorf("audit vault error: %v, doc store error: %v", err, docErr)
+			return fmt.Errorf("audit store error: %v, doc store error: %v", err, docErr)
 		}
 		return err
 	}
@@ -303,7 +303,7 @@ func (w *L5Actuator) LogReceipt(env *governance.GovernanceEnvelope, r *operatorv
 }
 
 func (w *L5Actuator) logReceiptDocument(env *governance.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
-	if w.AuditStore == nil || env == nil {
+	if w.ConsoleAuditStore == nil || env == nil {
 		return nil
 	}
 
@@ -335,7 +335,7 @@ func (w *L5Actuator) logReceiptDocument(env *governance.GovernanceEnvelope, r *o
 		return err
 	}
 
-	if err := w.AuditStore.DocSet(marshaler.CollectionName(constants.CollectionConsoleAudit), r.TransactionId, body); err != nil {
+	if err := w.ConsoleAuditStore.DocSet(marshaler.CollectionName(constants.CollectionConsoleAudit), r.TransactionId, body); err != nil {
 		if w.Logger != nil {
 			w.Logger.Error("Failed to record action receipt document", string(constants.ConnectionStateError), err, "message_id", r.TransactionId)
 		}

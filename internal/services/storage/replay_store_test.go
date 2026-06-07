@@ -41,6 +41,10 @@ func (m *FailingMockReplayStore) ReleaseNonce(nonce string) error {
 	return nil
 }
 
+func (m *FailingMockReplayStore) Close() error {
+	return nil
+}
+
 // TestFailingMockReplayStore_FailClosedOnReserveError verifies that
 // the TransactionVerifier properly propagates replay store errors.
 func TestFailingMockReplayStore_FailClosedOnReserveError(t *testing.T) {

@@ -111,19 +111,6 @@ type FileMutationLog struct {
 	DiffStat         string
 }
 
-// ChaosEvent represents a chaos test event
-type ChaosEvent struct {
-	ID                int64
-	OperatorSessionID string
-	Timestamp         time.Time
-	ChaosID           int
-	Category          string
-	Outcome           string
-	ContentText       string
-	CommandRaw        string
-	TransactionHash   string
-}
-
 // SQLAuditStore provides pure SQL audit data storage
 type SQLAuditStore struct {
 	db              *sqliteutil.DB
@@ -306,19 +293,6 @@ CREATE TABLE IF NOT EXISTS receipts (
 	FOREIGN KEY(operator_session_id) REFERENCES sessions(id)
 );
 
-CREATE TABLE IF NOT EXISTS chaos_events (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	operator_session_id TEXT,
-	timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
-	chaos_id INTEGER NOT NULL,
-	category TEXT NOT NULL,
-	outcome TEXT NOT NULL,
-	content_text TEXT,
-	command_raw TEXT,
-	transaction_hash TEXT,
-	FOREIGN KEY(operator_session_id) REFERENCES sessions(id)
-);
-
 CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(operator_session_id);
 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
@@ -326,9 +300,6 @@ CREATE INDEX IF NOT EXISTS idx_file_mutation_event_id ON file_mutation_log(event
 CREATE INDEX IF NOT EXISTS idx_file_mutation_filepath ON file_mutation_log(filepath);
 CREATE INDEX IF NOT EXISTS idx_receipts_session_id ON receipts(operator_session_id);
 CREATE INDEX IF NOT EXISTS idx_receipts_timestamp ON receipts(timestamp);
-CREATE INDEX IF NOT EXISTS idx_chaos_events_session_id ON chaos_events(operator_session_id);
-CREATE INDEX IF NOT EXISTS idx_chaos_events_timestamp ON chaos_events(timestamp);
-CREATE INDEX IF NOT EXISTS idx_chaos_events_category ON chaos_events(category);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_id_type ON sessions(id, session_type);
 `
 
@@ -479,85 +450,6 @@ func (ass *SQLAuditStore) RecordEvents(events []*Event) error {
 		}
 
 		ass.logger.Info("Batch of events recorded", "count", len(events))
-		return nil
-	})
-}
-
-// RecordChaosEvent records a chaos test event in the chaos_events table
-func (ass *SQLAuditStore) RecordChaosEvent(event *ChaosEvent) (int64, error) {
-	if ass == nil || ass.db == nil {
-		return 0, nil
-	}
-
-	query := `
-	INSERT INTO chaos_events (
-		operator_session_id, timestamp, chaos_id, category, outcome,
-		content_text, command_raw, transaction_hash
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`
-
-	result, err := ass.db.ExecWithRetry(query,
-		event.OperatorSessionID,
-		sqliteutil.FormatTimestamp(event.Timestamp),
-		event.ChaosID,
-		event.Category,
-		event.Outcome,
-		event.ContentText,
-		event.CommandRaw,
-		event.TransactionHash,
-	)
-	if err != nil {
-		return 0, fmt.Errorf("failed to record chaos event: %w", err)
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get chaos event id: %w", err)
-	}
-
-	return id, nil
-}
-
-// RecordChaosEvents records multiple chaos events in a single database transaction
-func (ass *SQLAuditStore) RecordChaosEvents(events []*ChaosEvent) error {
-	if ass == nil || ass.db == nil {
-		return nil
-	}
-
-	if len(events) == 0 {
-		return nil
-	}
-
-	return ass.db.ExecInTxWithRetry(func(tx *sql.Tx) error {
-		query := `
-		INSERT INTO chaos_events (
-			operator_session_id, timestamp, chaos_id, category, outcome,
-			content_text, command_raw, transaction_hash
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		`
-
-		stmt, err := tx.Prepare(query)
-		if err != nil {
-			return fmt.Errorf("failed to prepare statement: %w", err)
-		}
-		defer stmt.Close()
-
-		for _, event := range events {
-			_, err := stmt.Exec(
-				event.OperatorSessionID,
-				sqliteutil.FormatTimestamp(event.Timestamp),
-				event.ChaosID,
-				event.Category,
-				event.Outcome,
-				event.ContentText,
-				event.CommandRaw,
-				event.TransactionHash,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to record chaos event: %w", err)
-			}
-		}
-
 		return nil
 	})
 }

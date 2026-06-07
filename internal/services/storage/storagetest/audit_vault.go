@@ -36,6 +36,19 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
+// ChaosEvent represents a chaos test event (test-only).
+type ChaosEvent struct {
+	ID                int64
+	OperatorSessionID string
+	Timestamp         time.Time
+	ChaosID           int
+	Category          string
+	Outcome           string
+	ContentText       string
+	CommandRaw        string
+	TransactionHash   string
+}
+
 // TestSQLAuditStoreConfig holds configuration for the test-only Local-First Audit Architecture
 type TestSQLAuditStoreConfig struct {
 	DataDir                   string
@@ -537,7 +550,7 @@ func (avs *TestSQLAuditStore) RecordEvents(events []*storage.Event) error {
 }
 
 // RecordChaosEvent records a chaos test event in the chaos_events table
-func (avs *TestSQLAuditStore) RecordChaosEvent(event *storage.ChaosEvent) (int64, error) {
+func (avs *TestSQLAuditStore) RecordChaosEvent(event *ChaosEvent) (int64, error) {
 	if avs == nil || avs.db == nil {
 		return 0, nil
 	}
@@ -572,7 +585,7 @@ func (avs *TestSQLAuditStore) RecordChaosEvent(event *storage.ChaosEvent) (int64
 }
 
 // RecordChaosEvents records multiple chaos events in a single database transaction
-func (avs *TestSQLAuditStore) RecordChaosEvents(events []*storage.ChaosEvent) error {
+func (avs *TestSQLAuditStore) RecordChaosEvents(events []*ChaosEvent) error {
 	if avs == nil || avs.db == nil {
 		return nil
 	}

@@ -49,7 +49,7 @@ func TestNewPubSubResultsService(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 		assert.NotNil(t, svc)
 	})
@@ -61,7 +61,7 @@ func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		heartbeat := &pb.HeartbeatResult{
@@ -86,7 +86,7 @@ func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.CommandResult{
@@ -118,7 +118,7 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.FsListResult{
@@ -147,7 +147,7 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.FsListResult{
@@ -178,7 +178,7 @@ func TestPubSubResultsService_PublishFsGrepResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.FsGrepResult{
@@ -207,7 +207,7 @@ func TestPubSubResultsService_PublishFsGrepResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.FsGrepResult{
@@ -238,7 +238,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.CommandResult{
@@ -282,7 +282,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.CommandResult{
@@ -312,7 +312,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.CommandResult{
@@ -344,7 +344,7 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.FileEditResult{
@@ -374,7 +374,7 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.FileEditResult{

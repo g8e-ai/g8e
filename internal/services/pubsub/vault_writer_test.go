@@ -17,11 +17,51 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// mockExecutionVault is a simple mock for testing VaultWriter
+type mockExecutionVault struct {
+	enabled bool
+}
+
+func (m *mockExecutionVault) StoreExecution(record *models.ExecutionRecord) error {
+	return nil
+}
+
+func (m *mockExecutionVault) GetExecution(executionID string) (*models.ExecutionRecord, error) {
+	return nil, nil
+}
+
+func (m *mockExecutionVault) StoreFileDiff(record *models.FileDiffRecord) error {
+	return nil
+}
+
+func (m *mockExecutionVault) GetFileDiff(diffID string) (*models.FileDiffRecord, error) {
+	return nil, nil
+}
+
+func (m *mockExecutionVault) GetFileDiffsBySession(operatorSessionID string, limit int) ([]*models.FileDiffRecord, error) {
+	return nil, nil
+}
+
+func (m *mockExecutionVault) IsEnabled() bool {
+	return m.enabled
+}
+
+func (m *mockExecutionVault) IsEncryptionEnabled() bool {
+	return true
+}
+
+func (m *mockExecutionVault) Close() error {
+	return nil
+}
+
+func (m *mockExecutionVault) Wait() {}
 
 func TestNewVaultWriter(t *testing.T) {
 	t.Run("creates service successfully", func(t *testing.T) {
@@ -38,10 +78,10 @@ func TestNewVaultWriter(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		localStore := &storage.LocalStoreService{}
-		svc := NewVaultWriter(cfg, logger, nil, localStore)
+		mockVault := &mockExecutionVault{enabled: true}
+		svc := NewVaultWriter(cfg, logger, nil, mockVault)
 		require.NotNil(t, svc)
-		assert.Equal(t, localStore, svc.localStore)
+		assert.Equal(t, mockVault, svc.executionVault)
 	})
 }
 
@@ -70,8 +110,8 @@ func TestVaultWriter_WriteExecution(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		localStore := &storage.LocalStoreService{}
-		svc := NewVaultWriter(cfg, logger, nil, localStore)
+		mockVault := &mockExecutionVault{enabled: true}
+		svc := NewVaultWriter(cfg, logger, nil, mockVault)
 
 		params := executionWriteParams{
 			id:              "exec-1",
@@ -118,8 +158,8 @@ func TestVaultWriter_WriteFileDiff(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		localStore := &storage.LocalStoreService{}
-		svc := NewVaultWriter(cfg, logger, nil, localStore)
+		mockVault := &mockExecutionVault{enabled: true}
+		svc := NewVaultWriter(cfg, logger, nil, mockVault)
 
 		params := fileDiffWriteParams{
 			diffID:            "diff-1",

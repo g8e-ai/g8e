@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	storage "github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -248,14 +248,9 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		require.NoError(t, testVault.Unlock(privKey))
 		defer testVault.Close()
 
-		// Set localStore directly since there's no setter method
-		localStoreCfg := &storage.LocalStoreConfig{
-			Enabled: true,
-			DBPath:  ":memory:",
-		}
-		localStore, err := storage.NewLocalStoreService(localStoreCfg, logger, testVault)
-		require.NoError(t, err)
-		svc.localStore = localStore
+		// Set executionVault directly since there's no setter method
+		mockVault := &mockExecutionVault{enabled: true}
+		svc.executionVault = mockVault
 
 		msg := &PubSubCommandMessage{
 			Payload: []byte("invalid protobuf"),
@@ -287,14 +282,9 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		require.NoError(t, testVault.Unlock(privKey))
 		defer testVault.Close()
 
-		// Set localStore directly since there's no setter method
-		localStoreCfg := &storage.LocalStoreConfig{
-			Enabled: true,
-			DBPath:  ":memory:",
-		}
-		localStore, err := storage.NewLocalStoreService(localStoreCfg, logger, testVault)
-		require.NoError(t, err)
-		svc.localStore = localStore
+		// Set executionVault directly since there's no setter method
+		mockVault := &mockExecutionVault{enabled: true}
+		svc.executionVault = mockVault
 
 		req := &operatorv1.FetchFileDiffRequested{}
 		payload, _ := proto.Marshal(req)
@@ -317,7 +307,7 @@ func TestHistoryService_publishFetchLogsResult(t *testing.T) {
 		client := NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
-		record := &storage.ExecutionRecord{
+		record := &models.ExecutionRecord{
 			ID:               "exec-1",
 			Command:          "ls -la",
 			ExitCode:         system.IntPtr(0),

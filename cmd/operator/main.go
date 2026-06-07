@@ -1049,7 +1049,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		FileEdit:            fileSvc,
 		PubSubClient:        loopbackClient,
 		ResultsService:      nil, // Results handled via direct loopback publish if needed
-		LocalStore:          nil, // Not used in gateway mode
+		ExecutionVault:      nil, // Not used in gateway mode
 		AuditStore:          auditStore,
 		Ledger:              nil, // P1: Ledger in gateway mode
 		HistoryHandler:      nil, // P1: History in gateway mode

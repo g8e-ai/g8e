@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+* **Audit Vault Refactor** - Split the monolithic `AuditVaultService` into three cleanly separated concerns:
+  * `SQLAuditStore` (`audit_store.go`) — Pure SQL audit data storage
+  * `GitLedgerService` (`ledger.go`) — Pure git-backed file versioning
+  * `HistoryHandler` (`history_handler.go`) — Composes both for history queries
+  * `AuditVaultService` deleted from production code
+  * Chaos test infrastructure moved to `storagetest.TestSQLAuditStore` (test-only)
+  * L5Actuator field renamed from `AuditStore` to `ConsoleAuditStore` for clarity
+  * Ledger initialization decoupled from audit store (both receive vault independently)
+
 * **Mandatory encryption at rest** - Encryption is now required for all storage services. Previously, vault parameters were optional and production deployments could run without encryption, storing sensitive data unencrypted. This is a critical security fix.
   * `NewLocalStoreService` now requires vault parameter and returns error if nil
   * `NewSQLAuditStore` now requires `EncryptionVault` in config and returns error if nil

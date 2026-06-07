@@ -27,7 +27,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/services/storage/storagetest"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -689,11 +689,11 @@ func TestBuildEnvelope(t *testing.T) {
 func TestBatchEventWriter(t *testing.T) {
 	t.Run("queueEvent adds events", func(t *testing.T) {
 		writer := &batchEventWriter{
-			events:    make([]*storage.ChaosEvent, 0, 10),
+			events:    make([]*storagetest.ChaosEvent, 0, 10),
 			flushSize: 100,
 		}
 
-		event := &storage.ChaosEvent{
+		event := &storagetest.ChaosEvent{
 			OperatorSessionID: "test-session",
 			Timestamp:         time.Now(),
 			ChaosID:           1,
@@ -715,7 +715,7 @@ func TestBatchEventWriter(t *testing.T) {
 	t.Run("flush with nil audit vault", func(t *testing.T) {
 		writer := &batchEventWriter{
 			auditVault: nil,
-			events: []*storage.ChaosEvent{
+			events: []*storagetest.ChaosEvent{
 				{
 					OperatorSessionID: "test-session",
 					Timestamp:         time.Now(),
@@ -736,7 +736,7 @@ func TestBatchEventWriter(t *testing.T) {
 
 	t.Run("flush with empty events", func(t *testing.T) {
 		writer := &batchEventWriter{
-			events:    make([]*storage.ChaosEvent, 0),
+			events:    make([]*storagetest.ChaosEvent, 0),
 			flushSize: 2,
 		}
 
@@ -746,11 +746,11 @@ func TestBatchEventWriter(t *testing.T) {
 
 	t.Run("auto-flush on reaching flushSize", func(t *testing.T) {
 		writer := &batchEventWriter{
-			events:    make([]*storage.ChaosEvent, 0, 5),
+			events:    make([]*storagetest.ChaosEvent, 0, 5),
 			flushSize: 3,
 		}
 
-		event := &storage.ChaosEvent{
+		event := &storagetest.ChaosEvent{
 			OperatorSessionID: "test-session",
 			Timestamp:         time.Now(),
 			ChaosID:           1,
@@ -774,11 +774,11 @@ func TestBatchEventWriter(t *testing.T) {
 
 	t.Run("multiple flushes", func(t *testing.T) {
 		writer := &batchEventWriter{
-			events:    make([]*storage.ChaosEvent, 0, 2),
+			events:    make([]*storagetest.ChaosEvent, 0, 2),
 			flushSize: 2,
 		}
 
-		event := &storage.ChaosEvent{
+		event := &storagetest.ChaosEvent{
 			OperatorSessionID: "test-session",
 			Timestamp:         time.Now(),
 			ChaosID:           1,
@@ -1063,7 +1063,7 @@ func TestRecordRejection(t *testing.T) {
 		}
 
 		reason := classifyRejection(errors.New("TX_L1_FAILED: forbidden pattern"))
-		event := &storage.ChaosEvent{
+		event := &storagetest.ChaosEvent{
 			OperatorSessionID: env.OperatorSessionId,
 			Timestamp:         time.Now(),
 			ChaosID:           1,
@@ -1145,7 +1145,7 @@ func TestRecordExecution(t *testing.T) {
 		}
 
 		status := "COMPLETED"
-		event := &storage.ChaosEvent{
+		event := &storagetest.ChaosEvent{
 			OperatorSessionID: env.OperatorSessionId,
 			Timestamp:         time.Now(),
 			ChaosID:           1,
@@ -1173,7 +1173,7 @@ func TestRecordExecution(t *testing.T) {
 
 		execErr := errors.New("execution failed")
 		status := fmt.Sprintf("FAILED: %v", execErr)
-		event := &storage.ChaosEvent{
+		event := &storagetest.ChaosEvent{
 			OperatorSessionID: env.OperatorSessionId,
 			Timestamp:         time.Now(),
 			ChaosID:           1,

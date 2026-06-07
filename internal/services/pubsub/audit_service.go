@@ -43,12 +43,12 @@ func NewAuditService(cfg *config.Config, logger *slog.Logger) *AuditService {
 	}
 }
 
-// HandleUserMsgRequest records an inbound user message to the audit vault.
+// HandleUserMsgRequest records an inbound user message to the audit store.
 func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording user message (via Protobuf)")
 
 	if as.auditStore == nil || !as.auditStore.IsEnabled() {
-		as.logger.Info("Audit vault not enabled, skipping user message recording")
+		as.logger.Info("Audit store not enabled, skipping user message recording")
 		return
 	}
 
@@ -71,20 +71,20 @@ func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg *PubSubComma
 	}
 
 	if _, err := as.auditStore.RecordEvent(event); err != nil {
-		as.logger.Warn("Failed to record user message in audit vault", string(constants.ConnectionStateError), err)
+		as.logger.Warn("Failed to record user message in audit store", string(constants.ConnectionStateError), err)
 	} else {
-		as.logger.Info("User message recorded in audit vault (LFAA)",
+		as.logger.Info("User message recorded in audit store (LFAA)",
 			"operator_session_id", as.config.OperatorSessionId,
 			"content_length", len(content))
 	}
 }
 
-// HandleAIMsgRequest records an inbound AI message to the audit vault.
+// HandleAIMsgRequest records an inbound AI message to the audit store.
 func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording AI message (via Protobuf)")
 
 	if as.auditStore == nil || !as.auditStore.IsEnabled() {
-		as.logger.Info("Audit vault not enabled, skipping AI message recording")
+		as.logger.Info("Audit store not enabled, skipping AI message recording")
 		return
 	}
 
@@ -107,20 +107,20 @@ func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg *PubSubCommand
 	}
 
 	if _, err := as.auditStore.RecordEvent(event); err != nil {
-		as.logger.Warn("Failed to record AI message in audit vault", string(constants.ConnectionStateError), err)
+		as.logger.Warn("Failed to record AI message in audit store", string(constants.ConnectionStateError), err)
 	} else {
-		as.logger.Info("AI message recorded in audit vault (LFAA)",
+		as.logger.Info("AI message recorded in audit store (LFAA)",
 			"operator_session_id", as.config.OperatorSessionId,
 			"content_length", len(content))
 	}
 }
 
-// HandleDirectCmdRequest records an inbound direct terminal command to the audit vault.
+// HandleDirectCmdRequest records an inbound direct terminal command to the audit store.
 func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording direct terminal command (via Protobuf)")
 
 	if as.auditStore == nil || !as.auditStore.IsEnabled() {
-		as.logger.Info("Audit vault not enabled, skipping direct command recording")
+		as.logger.Info("Audit store not enabled, skipping direct command recording")
 		return
 	}
 
@@ -143,20 +143,20 @@ func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg *PubSubCom
 	}
 
 	if _, err := as.auditStore.RecordEvent(event); err != nil {
-		as.logger.Warn("Failed to record direct command in audit vault", string(constants.ConnectionStateError), err)
+		as.logger.Warn("Failed to record direct command in audit store", string(constants.ConnectionStateError), err)
 	} else {
-		as.logger.Info("Direct terminal command recorded in audit vault (LFAA)",
+		as.logger.Info("Direct terminal command recorded in audit store (LFAA)",
 			"operator_session_id", as.config.OperatorSessionId,
 			"execution_id", protoCmd.ExecutionId)
 	}
 }
 
-// HandleDirectCmdResultRequest records an inbound direct terminal command result to the audit vault.
+// HandleDirectCmdResultRequest records an inbound direct terminal command result to the audit store.
 func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg *PubSubCommandMessage) {
 	as.logger.Info("LFAA: Recording direct terminal command result (via Protobuf)")
 
 	if as.auditStore == nil || !as.auditStore.IsEnabled() {
-		as.logger.Info("Audit vault not enabled, skipping direct command result recording")
+		as.logger.Info("Audit store not enabled, skipping direct command result recording")
 		return
 	}
 
@@ -183,9 +183,9 @@ func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg *Pub
 	}
 
 	if _, err := as.auditStore.RecordEvent(event); err != nil {
-		as.logger.Warn("Failed to record direct command result in audit vault", string(constants.ConnectionStateError), err)
+		as.logger.Warn("Failed to record direct command result in audit store", string(constants.ConnectionStateError), err)
 	} else {
-		as.logger.Info("Direct terminal command result recorded in audit vault (LFAA)",
+		as.logger.Info("Direct terminal command result recorded in audit store (LFAA)",
 			"operator_session_id", as.config.OperatorSessionId,
 			"execution_id", protoResult.ExecutionId)
 	}

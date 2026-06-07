@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -79,7 +80,7 @@ func TestLockedVaultHandling(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	tempDir := t.TempDir()
-	config := DefaultLocalStoreConfig()
+	config := DefaultExecutionVaultConfig()
 	config.DBPath = filepath.Join(tempDir, "test_locked_vault.db")
 
 	// Create a vault but do NOT unlock it
@@ -95,14 +96,14 @@ func TestLockedVaultHandling(t *testing.T) {
 	assert.False(t, v.IsUnlocked(), "Vault should be locked after creation")
 
 	// Service should initialize with locked vault (constructor doesn't check IsUnlocked)
-	ls, err := NewLocalStoreService(config, logger, v)
+	evs, err := NewExecutionVaultService(config, logger, v)
 	require.NoError(t, err)
-	require.NotNil(t, ls)
-	defer ls.Close()
+	require.NotNil(t, evs)
+	defer evs.Close()
 
 	// Encryption operations should fail when vault is locked
 	exitCode := 0
-	record := &ExecutionRecord{
+	record := &models.ExecutionRecord{
 		ID:               "test-locked-123",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "echo 'test'",
@@ -116,7 +117,7 @@ func TestLockedVaultHandling(t *testing.T) {
 		CaseID:           "case-456",
 	}
 
-	err = ls.StoreExecution(record)
+	err = evs.StoreExecution(record)
 	assert.Error(t, err, "StoreExecution should fail when vault is locked")
 	assert.Contains(t, err.Error(), "vault is locked", "Error should indicate vault is locked")
 }

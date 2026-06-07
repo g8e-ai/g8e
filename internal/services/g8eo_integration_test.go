@@ -101,7 +101,7 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { client.Close() })
 
-		resultsSvc, err := pubsub.NewPubSubResultsService(cfg, logger, client, nil)
+		resultsSvc, err := pubsub.NewPubSubResultsService(cfg, logger, client)
 		require.NoError(t, err)
 		assert.NotNil(t, resultsSvc)
 	})

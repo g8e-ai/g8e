@@ -192,19 +192,7 @@ func TestCommandService_Setters(t *testing.T) {
 		assert.NotNil(t, svc.results)
 	})
 
-	t.Run("SetLocalStoreService", func(t *testing.T) {
-		t.Parallel()
-		cfg := testutil.NewTestConfig(t)
-		logger := testutil.NewTestLogger()
-		execSvc := execution.NewExecutionService(cfg, logger)
-		svc := NewCommandService(cfg, logger, execSvc)
-
-		// Use nil for test - just verify method can be called
-		svc.SetLocalStoreService(nil)
-		// Verify method can be called without panic
-	})
-
-	t.Run("SetAuditVaultService", func(t *testing.T) {
+	t.Run("SetAuditStore", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()

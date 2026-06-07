@@ -521,7 +521,7 @@ func Run(cfg Config) {
 	act := &governance.L5Actuator{
 		Logger:            logger,
 		SignerStore:       &governance.SimpleSignerStore{Signers: trustedSigners},
-		AuditStore:        av,
+		ConsoleAuditStore: av,
 		L3Notary:          l3Notary,
 		StateRootProvider: stateRootProvider,
 		ExecutionHandler:  &chaosExecutionHandler{ledger: ledger, stateRoot: stateRootProvider},
@@ -583,7 +583,7 @@ func Run(cfg Config) {
 		auditVault: av,
 		logger:     logger,
 		flushSize:  100,
-		events:     make([]*storage.ChaosEvent, 0, 100),
+		events:     make([]*storagetest.ChaosEvent, 0, 100),
 	}
 	defer rejectionBatch.flush() // ensure final batch is written
 
@@ -739,7 +739,7 @@ type batchEventWriter struct {
 	mu         sync.Mutex
 	auditVault *storagetest.TestSQLAuditStore
 	logger     *slog.Logger
-	events     []*storage.ChaosEvent
+	events     []*storagetest.ChaosEvent
 	flushSize  int
 }
 
@@ -749,7 +749,7 @@ func (b *batchEventWriter) recordRejection(id int, cat category, env *govpkg.Gov
 	}
 
 	reason := classifyRejection(verErr)
-	event := &storage.ChaosEvent{
+	event := &storagetest.ChaosEvent{
 		OperatorSessionID: env.OperatorSessionId,
 		Timestamp:         time.Now(),
 		ChaosID:           id,
@@ -773,7 +773,7 @@ func (b *batchEventWriter) recordExecution(id int, cat category, env *govpkg.Gov
 		status = fmt.Sprintf("FAILED: %v", execErr)
 	}
 
-	event := &storage.ChaosEvent{
+	event := &storagetest.ChaosEvent{
 		OperatorSessionID: env.OperatorSessionId,
 		Timestamp:         time.Now(),
 		ChaosID:           id,
@@ -787,7 +787,7 @@ func (b *batchEventWriter) recordExecution(id int, cat category, env *govpkg.Gov
 	b.queueEvent(event)
 }
 
-func (b *batchEventWriter) queueEvent(ev *storage.ChaosEvent) {
+func (b *batchEventWriter) queueEvent(ev *storagetest.ChaosEvent) {
 	b.mu.Lock()
 	b.events = append(b.events, ev)
 	shouldFlush := len(b.events) >= b.flushSize
@@ -801,7 +801,7 @@ func (b *batchEventWriter) queueEvent(ev *storage.ChaosEvent) {
 func (b *batchEventWriter) flush() {
 	b.mu.Lock()
 	events := b.events
-	b.events = make([]*storage.ChaosEvent, 0, b.flushSize)
+	b.events = make([]*storagetest.ChaosEvent, 0, b.flushSize)
 	b.mu.Unlock()
 
 	if len(events) == 0 {
