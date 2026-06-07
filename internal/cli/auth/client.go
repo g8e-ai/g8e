@@ -247,6 +247,59 @@ func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint str
 	return &regResp, nil
 }
 
+// CLIEnroll performs CLI-only enrollment after bootstrap when local CLI credentials are missing.
+// This is used when the gateway is already bootstrapped but the CLI has lost its credentials.
+// It uses the plain HTTP bootstrap port since the CLI has no mTLS credentials.
+func CLIEnroll(cfg *config.Config, cliCSR string) (*RegistrationResponse, error) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get hostname: %w", err)
+	}
+
+	req := map[string]string{
+		"cli_csr_pem":        cliCSR,
+		"system_fingerprint": fmt.Sprintf("g8e-cli-%s", hostname),
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Use bootstrap port (plain HTTP) for CLI enrollment
+	url := fmt.Sprintf("%s/api/v1/auth/cli/enroll", cfg.OperatorDiscoveryURL())
+	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	// Use plain HTTP client for enrollment (no TLS required)
+	client := &http.Client{}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to enroll CLI: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var regResp RegistrationResponse
+	if err := json.Unmarshal(respBody, &regResp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if regResp.Error != "" {
+		return nil, fmt.Errorf("CLI enrollment failed: %s", regResp.Error)
+	}
+
+	return &regResp, nil
+}
+
 // ReEnroll performs CSR-based re-enrollment using existing mTLS credentials.
 // This is used when the platform is already bootstrapped and the CLI has valid certificates.
 func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint string) (*RegistrationResponse, error) {
@@ -476,19 +529,9 @@ func CheckOperatorRunningAtURL(operatorURL string) error {
 	return nil
 }
 
-// CheckBootstrapStatus returns whether the platform has been bootstrapped and local credentials exist
+// CheckBootstrapStatus returns whether the platform has been bootstrapped
 func CheckBootstrapStatus(cfg *config.Config) (bool, error) {
-	// 1. Check local credential state first
-	credsFile := cfg.CredentialsFile()
-	if _, err := os.Stat(credsFile); os.IsNotExist(err) {
-		return false, nil
-	}
-
-	if _, err := os.Stat(cfg.CLICertFile()); os.IsNotExist(err) {
-		return false, nil
-	}
-
-	// 2. Check remote bootstrap status via bootstrap port (plain HTTP)
+	// Check remote bootstrap status via bootstrap port (plain HTTP)
 	url := fmt.Sprintf("%s/api/v1/auth/bootstrap/status", cfg.OperatorDiscoveryURL())
 	resp, err := http.Get(url)
 	if err != nil {

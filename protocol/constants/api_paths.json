@@ -1,4 +1,5 @@
 {
+  "auth_cli_enroll": "/api/v1/auth/cli/enroll",
   "auth_device_enroll": "/api/v1/auth/device/enroll",
   "client": {
     "chat": "/api/v1/chat",

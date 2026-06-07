@@ -77,6 +77,7 @@ var APIPaths = struct {
 	AuthLogout                        string `json:"auth_logout"`
 	AuthBootstrap                     string `json:"auth_bootstrap"`
 	AuthBootstrapStatus               string `json:"auth_bootstrap_status"`
+	AuthCLIEnroll                     string `json:"auth_cli_enroll"`
 	AuthDeviceEnroll                  string `json:"auth_device_enroll"`
 	AuthPasskeysRegisterChallenge     string `json:"auth_passkeys_register_challenge"`
 	AuthPasskeysRegisterVerify        string `json:"auth_passkeys_register_verify"`
@@ -180,6 +181,7 @@ var APIPaths = struct {
 	AuthLogout:                        "/api/v1/auth/logout",
 	AuthBootstrap:                     "/api/v1/auth/bootstrap",
 	AuthBootstrapStatus:               "/api/v1/auth/bootstrap/status",
+	AuthCLIEnroll:                     "/api/v1/auth/cli/enroll",
 	AuthDeviceEnroll:                  "/api/v1/auth/device/enroll",
 	AuthPasskeysRegisterChallenge:     "/api/v1/auth/passkeys/register/challenge",
 	AuthPasskeysRegisterVerify:        "/api/v1/auth/passkeys/register/verify",

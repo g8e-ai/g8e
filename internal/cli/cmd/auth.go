@@ -66,10 +66,18 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 				return fmt.Errorf("failed to check bootstrap status: %w", err)
 			}
 
-			// If platform is already bootstrapped but local credentials are missing or remote status is false, perform fresh enrollment
+			// Check if local credentials exist
+			hasLocalCreds := true
+			if _, err := os.Stat(cfg.CredentialsFile()); os.IsNotExist(err) {
+				hasLocalCreds = false
+			}
+			if _, err := os.Stat(cfg.CLICertFile()); os.IsNotExist(err) {
+				hasLocalCreds = false
+			}
+
+			// If platform is not bootstrapped, perform first-time bootstrap
 			if !bootstrapped {
-				// This covers both missing local credentials and a non-bootstrapped gateway
-				cmd.Println("Gateway not bootstrapped or local credentials missing. Performing first-time client enrollment...")
+				cmd.Println("Gateway not bootstrapped. Performing first-time client enrollment...")
 
 				cmd.Println("Generating keys and CSRs...")
 				hostname, _ := os.Hostname()
@@ -118,7 +126,57 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 				return nil
 			}
 
-			// Platform already bootstrapped - attempt CSR-based re-enrollment with mTLS
+			// Platform is bootstrapped but local credentials are missing
+			if !hasLocalCreds {
+				cmd.Println("Gateway already bootstrapped. Performing CLI enrollment...")
+
+				cmd.Println("Generating keys and CSRs...")
+				hostname, _ := os.Hostname()
+				cliCSR, cliKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
+				if err != nil {
+					return fmt.Errorf("failed to generate CLI CSR: %w", err)
+				}
+
+				cmd.Println("Enrolling with gateway...")
+				regResp, err := auth.CLIEnroll(cfg, cliCSR)
+				if err != nil {
+					return err
+				}
+
+				if regResp.CLISessionID == "" || regResp.CLICert == "" {
+					return fmt.Errorf("unexpected CLI enrollment response (missing required fields)")
+				}
+
+				if err := auth.SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
+					return fmt.Errorf("failed to save CLI credentials: %w", err)
+				}
+
+				if regResp.HubTrustBundle != "" {
+					hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8eg-ca-bundle.pem")
+					if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
+						return fmt.Errorf("failed to save hub trust bundle: %w", err)
+					}
+				}
+
+				creds := &auth.Credentials{
+					OperatorSessionID: regResp.OperatorSessionID,
+					UserID:            regResp.UserID,
+					OperatorID:        regResp.OperatorID,
+					CLISessionID:      regResp.CLISessionID,
+				}
+
+				if err := auth.SaveCredentials(cfg, creds); err != nil {
+					return fmt.Errorf("failed to save credentials: %w", err)
+				}
+
+				cmd.Printf("\nClient enrollment complete\n")
+				cmd.Printf("User ID: %s\n", regResp.UserID)
+				cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
+
+				return nil
+			}
+
+			// Platform already bootstrapped and has local credentials - attempt CSR-based re-enrollment with mTLS
 			cmd.Println("Gateway already bootstrapped. Attempting re-enrollment via CSR with mTLS...")
 
 			// Check if certificates are expiring soon and auto-renew if needed

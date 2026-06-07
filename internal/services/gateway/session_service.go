@@ -40,6 +40,7 @@ func NewSessionService(db *CanonicalDBService, logger *slog.Logger) *SessionsSer
 
 // PersistSessions binds an Operator session and a CLI session and persists both documents.
 // If cliSessionID is empty (operator-only enrollment), only the operator session is persisted.
+// If operatorSessionID is empty (CLI-only enrollment), only the CLI session is persisted.
 func (s *SessionsService) PersistSessions(cliSessionID, operatorSessionID, userID, orgID, operatorID, systemFingerprint, certFingerprint, certSerial, loginMethod string) error {
 	// CLI session id is a first-class session type, strictly disjoint from
 	// operator_session_id. The operator_session_id authenticates the host
@@ -83,28 +84,31 @@ func (s *SessionsService) PersistSessions(cliSessionID, operatorSessionID, userI
 	// Write an operator_sessions document so g8e-compatible agentic ensembles can look up the
 	// session by ID via GET /db/operator_sessions/{operator_session_id}.
 	// Field names match the canonical Operator session document schema.
-	sessionExpiry := time.Now().UTC().Add(1 * time.Hour)
-	operatorSessionDoc := map[string]interface{}{
-		"id":                  operatorSessionID,
-		"session_type":        string(constants.SessionTypeCLI),
-		"user_id":             userID,
-		"organization_id":     orgID,
-		"operator_id":         operatorID,
-		"is_active":           true,
-		"created_at":          time.Now().UTC().Format(time.RFC3339),
-		"absolute_expires_at": sessionExpiry.Format(time.RFC3339),
-		"idle_expires_at":     sessionExpiry.Format(time.RFC3339),
-		"last_activity":       time.Now().UTC().Format(time.RFC3339),
-		"login_method":        loginMethod,
-	}
-	operatorSessionBytes, err := json.Marshal(operatorSessionDoc)
-	if err != nil {
-		return fmt.Errorf("failed to marshal Operator session document: %w", err)
-	}
+	// Skip if operatorSessionID is empty (CLI-only enrollment).
+	if operatorSessionID != "" {
+		sessionExpiry := time.Now().UTC().Add(1 * time.Hour)
+		operatorSessionDoc := map[string]interface{}{
+			"id":                  operatorSessionID,
+			"session_type":        string(constants.SessionTypeOperator),
+			"user_id":             userID,
+			"organization_id":     orgID,
+			"operator_id":         operatorID,
+			"is_active":           true,
+			"created_at":          time.Now().UTC().Format(time.RFC3339),
+			"absolute_expires_at": sessionExpiry.Format(time.RFC3339),
+			"idle_expires_at":     sessionExpiry.Format(time.RFC3339),
+			"last_activity":       time.Now().UTC().Format(time.RFC3339),
+			"login_method":        loginMethod,
+		}
+		operatorSessionBytes, err := json.Marshal(operatorSessionDoc)
+		if err != nil {
+			return fmt.Errorf("failed to marshal Operator session document: %w", err)
+		}
 
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID, operatorSessionBytes); err != nil {
-		s.logger.Error("Failed to persist Operator session document", string(constants.ConnectionStateError), err)
-		return fmt.Errorf("failed to persist Operator session document: %w", err)
+		if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID, operatorSessionBytes); err != nil {
+			s.logger.Error("Failed to persist Operator session document", string(constants.ConnectionStateError), err)
+			return fmt.Errorf("failed to persist Operator session document: %w", err)
+		}
 	}
 
 	return nil

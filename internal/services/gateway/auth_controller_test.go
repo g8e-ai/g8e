@@ -978,6 +978,145 @@ func TestHandleCLIApproval(t *testing.T) {
 	})
 }
 
+func TestHandleCLIEnrollment(t *testing.T) {
+	t.Run("Success - CLI enrollment over loopback after bootstrap", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		require.NoError(t, err)
+		require.NotNil(t, bootstrapUser)
+
+		cliCSR := testutil.GenerateTestCSRP256(t, "test-cli")
+		body := map[string]string{
+			"cli_csr_pem":        cliCSR,
+			"system_fingerprint": "test-fp",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
+		req.RemoteAddr = "127.0.0.1:12345"
+		rr := httptest.NewRecorder()
+
+		c.handleCLIEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusCreated, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.NotEmpty(t, resp["cli_cert"])
+		assert.NotEmpty(t, resp["cli_cert_chain"])
+		assert.NotEmpty(t, resp["cli_session_id"])
+		assert.NotEmpty(t, resp["user_id"])
+		assert.NotEmpty(t, resp["hub_trust_bundle"])
+		// Verify operator_session_id is NOT returned (CLI-only enrollment)
+		_, hasOperatorSessionID := resp["operator_session_id"]
+		assert.False(t, hasOperatorSessionID, "operator_session_id should not be returned for CLI-only enrollment")
+	})
+
+	t.Run("Failure - Non-loopback request rejected", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		require.NoError(t, err)
+		require.NotNil(t, bootstrapUser)
+
+		cliCSR := testutil.GenerateTestCSRP256(t, "test-cli")
+		body := map[string]string{
+			"cli_csr_pem":        cliCSR,
+			"system_fingerprint": "test-fp",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
+		req.RemoteAddr = "192.168.1.1:12345"
+		rr := httptest.NewRecorder()
+
+		c.handleCLIEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "CLI enrollment only available over loopback")
+	})
+
+	t.Run("Failure - Rejected when not bootstrapped", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+
+		cliCSR := testutil.GenerateTestCSRP256(t, "test-cli")
+		body := map[string]string{
+			"cli_csr_pem":        cliCSR,
+			"system_fingerprint": "test-fp",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
+		req.RemoteAddr = "127.0.0.1:12345"
+		rr := httptest.NewRecorder()
+
+		c.handleCLIEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "CLI enrollment only available after bootstrap")
+	})
+
+	t.Run("Failure - Rejected when bootstrap user disabled", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		require.NoError(t, err)
+		c.userSvc.Disable(bootstrapUser.ID, "retired", "actor", "op")
+
+		cliCSR := testutil.GenerateTestCSRP256(t, "test-cli")
+		body := map[string]string{
+			"cli_csr_pem":        cliCSR,
+			"system_fingerprint": "test-fp",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
+		req.RemoteAddr = "127.0.0.1:12345"
+		rr := httptest.NewRecorder()
+
+		c.handleCLIEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusConflict, rr.Code)
+		assert.Contains(t, rr.Body.String(), "bootstrap user is disabled")
+	})
+
+	t.Run("Failure - Missing cli_csr_pem", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		require.NoError(t, err)
+		require.NotNil(t, bootstrapUser)
+
+		body := map[string]string{
+			"system_fingerprint": "test-fp",
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
+		req.RemoteAddr = "127.0.0.1:12345"
+		rr := httptest.NewRecorder()
+
+		c.handleCLIEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "cli_csr_pem is required")
+	})
+
+	t.Run("Failure - Method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		require.NoError(t, err)
+		require.NotNil(t, bootstrapUser)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/cli/enroll", nil)
+		req.RemoteAddr = "127.0.0.1:12345"
+		rr := httptest.NewRecorder()
+
+		c.handleCLIEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+}
+
 func TestHandleApprovalPage(t *testing.T) {
 	t.Run("Failure - method not allowed", func(t *testing.T) {
 		t.Parallel()

@@ -1031,6 +1031,12 @@ func TestEnrollWithGateway_NonSuccessResponse(t *testing.T) {
 	assert.Contains(t, err.Error(), "enrollment failed")
 }
 
+// ---------------------------------------------------------------------------
+// CLIEnroll
+// ---------------------------------------------------------------------------
+// Note: CLIEnroll requires actual HTTP connection to the gateway and is tested via integration tests.
+// The server-side handler is tested in auth_controller_test.go.
+
 func TestEnrollWithGateway_HTTPError(t *testing.T) {
 	t.Parallel()
 

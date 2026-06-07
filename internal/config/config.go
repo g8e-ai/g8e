@@ -426,7 +426,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			SecretsDir:         secretsDir,
 			VaultDir:           vaultDir,
 			VaultKeyPath:       vaultKeyPath,
-			VaultRequireUnlock: true,
+			VaultRequireUnlock: false,
 			PasskeyRpID:        passkeyRpID,
 			PasskeyRpName:      passkeyRpName,
 			MCPDownstreamURL:   mcpDownstreamURL,

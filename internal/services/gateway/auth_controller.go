@@ -944,7 +944,9 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Check if CSR signing is requested
+	// Check if operator CSR signing is requested for rotation.
+	// CLI CSR is handled by the dedicated /api/v1/auth/cli/enroll endpoint
+	// to avoid conflating CLI identity with operator identity.
 	csrRequested := req.CSRPEM != ""
 
 	// Enforce loopback gate for local bootstrap
@@ -1038,12 +1040,12 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 	}
 
 	// If CSR is requested and loopback, sign and return cert (plan §4.2)
+	var operatorID, operatorSessionID, orgID string
 	if csrRequested {
 		// Create Operator slot for the bootstrap user
-		operatorID := uuid.NewString()
-		operatorSessionID := uuid.NewString()
-		cliSessionID := uuid.NewString()
-		orgID := user.ID // Use user ID as org ID for bootstrap
+		operatorID = uuid.NewString()
+		operatorSessionID = uuid.NewString()
+		orgID = user.ID // Use user ID as org ID for bootstrap
 		now := time.Now().UTC()
 
 		operator := &models.OperatorDocumentGo{
@@ -1072,24 +1074,6 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 
 		operator.OperatorCert = certPEM
 
-		// CLI certificate generation (mandatory)
-		if req.CLICSRPEM == "" {
-			c.logger.Error("Bootstrap request missing mandatory CLI CSR", "user_id", user.ID)
-			c.responder.Error(w, http.StatusBadRequest, "cli_csr_pem is mandatory")
-			return
-		}
-
-		cliCertPEM, cliCertChainPEM, err := c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "")
-		if err != nil {
-			c.logger.Error("Failed to sign bootstrap CLI CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
-			c.responder.Error(w, http.StatusInternalServerError, "failed to sign CLI CSR")
-			return
-		}
-
-		// Calculate CLI certificate fingerprint and serial for L3 verification
-		cliCertFingerprint := calculateFingerprintFromPEM(cliCertPEM)
-		cliCertSerial := calculateSerialFromPEM(cliCertPEM)
-
 		// Persist Operator document
 		opBytes, err := json.Marshal(operator)
 		if err != nil {
@@ -1103,6 +1087,29 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 			return
 		}
 
+		response["operator_cert"] = certPEM
+		response["operator_cert_chain"] = chainPEM
+		response["operator_session_id"] = operatorSessionID
+		response["operator_id"] = operatorID
+	}
+
+	// CLI certificate generation (if provided)
+	var cliCertPEM, cliCertChainPEM string
+	var cliCertFingerprint, cliCertSerial string
+	var cliSessionID string
+	if req.CLICSRPEM != "" {
+		cliSessionID = uuid.NewString()
+		cliCertPEM, cliCertChainPEM, err = c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "")
+		if err != nil {
+			c.logger.Error("Failed to sign bootstrap CLI CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
+			c.responder.Error(w, http.StatusInternalServerError, "failed to sign CLI CSR")
+			return
+		}
+
+		// Calculate CLI certificate fingerprint and serial for L3 verification
+		cliCertFingerprint = calculateFingerprintFromPEM(cliCertPEM)
+		cliCertSerial = calculateSerialFromPEM(cliCertPEM)
+
 		// Fetch trust bundle
 		hubBundle, err := c.pki.GatewayTrustBundle()
 		if err != nil {
@@ -1110,39 +1117,147 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 			// Non-fatal - continue without bundle
 		}
 
-		err = c.sessionSvc.PersistSessions(
-			cliSessionID,
-			operatorSessionID,
-			user.ID,
-			orgID,
-			operatorID,
-			"bootstrap-operator",
-			cliCertFingerprint,
-			cliCertSerial,
-			string(constants.HeartbeatTypeBootstrap),
-		)
-		if err != nil {
-			c.logger.Error("Failed to persist sessions during bootstrap", string(constants.ConnectionStateError), err)
-			c.responder.Error(w, http.StatusInternalServerError, "failed to persist sessions")
-			return
-		}
-
-		response["operator_cert"] = certPEM
-		response["operator_cert_chain"] = chainPEM
 		response["hub_trust_bundle"] = string(hubBundle)
-		response["operator_session_id"] = operatorSessionID
-		response["operator_id"] = operatorID
 		response["cli_session_id"] = cliSessionID
 		response["cli_cert"] = cliCertPEM
 		response["cli_cert_chain"] = cliCertChainPEM
 		response["user_id"] = user.ID
 
-		c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user and CLI cert", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", cliSessionID[:8])
+		// Persist sessions only if we have both operator and CLI certs
+		if csrRequested {
+			err = c.sessionSvc.PersistSessions(
+				cliSessionID,
+				operatorSessionID,
+				user.ID,
+				orgID,
+				operatorID,
+				"bootstrap-operator",
+				cliCertFingerprint,
+				cliCertSerial,
+				string(constants.HeartbeatTypeBootstrap),
+			)
+			if err != nil {
+				c.logger.Error("Failed to persist sessions during bootstrap", string(constants.ConnectionStateError), err)
+				c.responder.Error(w, http.StatusInternalServerError, "failed to persist sessions")
+				return
+			}
+			c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user, operator and CLI cert", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", cliSessionID[:8])
+		} else {
+			c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user and CLI cert (no operator)", "user_id", user.ID, "cli_session_id_prefix", cliSessionID[:8])
+		}
 	} else {
 		c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user (no CSR)", "user_id", user.ID)
 	}
 
 	c.responder.JSON(w, http.StatusCreated, response)
+}
+
+// handleCLIEnrollment issues a CLI certificate for an already-bootstrapped system.
+// This endpoint is strictly for CLI credential recovery when local credentials are
+// missing; it does NOT create or rotate operator state. Loopback-only for defense.
+func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req struct {
+		CLICSRPEM         string `json:"cli_csr_pem"`
+		SystemFingerprint string `json:"system_fingerprint"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	if req.CLICSRPEM == "" {
+		c.responder.Error(w, http.StatusBadRequest, "cli_csr_pem is required")
+		return
+	}
+
+	// Enforce loopback gate for local CLI enrollment
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		c.logger.Warn("CLI enrollment request rejected: not from loopback", "remote_addr", r.RemoteAddr)
+		c.responder.Error(w, http.StatusForbidden, "CLI enrollment only available over loopback")
+		return
+	}
+
+	// This endpoint only works when the system is already bootstrapped
+	bootstrapUser, err := c.userSvc.FindBootstrapUser()
+	if err != nil {
+		c.logger.Error("Failed to check for existing bootstrap user", string(constants.ConnectionStateError), err)
+		c.responder.Error(w, http.StatusInternalServerError, "bootstrap check failed")
+		return
+	}
+	if bootstrapUser == nil {
+		c.logger.Warn("CLI enrollment attempted on unbootstrapped system", "remote_addr", r.RemoteAddr)
+		c.responder.Error(w, http.StatusForbidden, "CLI enrollment only available after bootstrap")
+		return
+	}
+	if !bootstrapUser.IsActive() {
+		c.logger.Warn("Bootstrap user is disabled, refusing CLI enrollment", "user_id", bootstrapUser.ID)
+		c.responder.Error(w, http.StatusConflict, "bootstrap user is disabled, cannot enroll")
+		return
+	}
+
+	// Sign the CLI CSR
+	cliSessionID := uuid.NewString()
+	cliCertPEM, cliCertChainPEM, err := c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", bootstrapUser.ID, cliSessionID, "")
+	if err != nil {
+		c.logger.Error("Failed to sign CLI enrollment CSR", string(constants.ConnectionStateError), err, "user_id", bootstrapUser.ID)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to sign CLI CSR")
+		return
+	}
+
+	// Calculate CLI certificate fingerprint and serial for L3 verification
+	cliCertFingerprint := calculateFingerprintFromPEM(cliCertPEM)
+	cliCertSerial := calculateSerialFromPEM(cliCertPEM)
+
+	// Persist CLI session only (no operator session for CLI-only enrollment)
+	err = c.sessionSvc.PersistSessions(
+		cliSessionID,
+		"",
+		bootstrapUser.ID,
+		bootstrapUser.ID,
+		"",
+		req.SystemFingerprint,
+		cliCertFingerprint,
+		cliCertSerial,
+		string(constants.HeartbeatTypeBootstrap),
+	)
+	if err != nil {
+		c.logger.Error("Failed to persist CLI session during enrollment", string(constants.ConnectionStateError), err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to persist session")
+		return
+	}
+
+	// Fetch trust bundle
+	hubBundle, err := c.pki.GatewayTrustBundle()
+	if err != nil {
+		c.logger.Warn("Failed to fetch hub trust bundle", string(constants.ConnectionStateError), err)
+		// Non-fatal - continue without bundle
+	}
+
+	c.logger.Info("[CLI_ENROLLMENT] CLI enrolled successfully", "user_id", bootstrapUser.ID, "cli_session_id_prefix", cliSessionID[:8])
+	c.responder.JSON(w, http.StatusCreated, map[string]interface{}{
+		string(constants.AuthAuditResultSuccess): true,
+		"cli_session_id":                         cliSessionID,
+		"cli_cert":                               cliCertPEM,
+		"cli_cert_chain":                         cliCertChainPEM,
+		"hub_trust_bundle":                       string(hubBundle),
+		"user_id":                                bootstrapUser.ID,
+	})
 }
 
 func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.Request) {
