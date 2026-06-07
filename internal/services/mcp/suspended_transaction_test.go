@@ -14,6 +14,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -45,11 +46,12 @@ func TestSuspendedTransactionStore_BasicOperations(t *testing.T) {
 		UserID:          "user-123",
 		OperatorID:      "op-456",
 	}
-	err := suspendedStore.StoreSuspendedTransaction(tx)
+	err := suspendedStore.StoreSuspendedTransaction(context.Background(), tx)
 	require.NoError(t, err)
 
 	// Test: Retrieve the stored transaction
-	retrievedTx, found := suspendedStore.GetSuspendedTransaction("test-tx-123")
+	retrievedTx, found, err := suspendedStore.GetSuspendedTransaction(context.Background(), "test-tx-123")
+	require.NoError(t, err)
 	require.True(t, found)
 	require.Equal(t, "test-tx-123", retrievedTx.TransactionHash)
 	require.Equal(t, "test-tool", retrievedTx.ToolName)
@@ -57,11 +59,12 @@ func TestSuspendedTransactionStore_BasicOperations(t *testing.T) {
 	require.NotEmpty(t, retrievedTx.ToolArguments)
 
 	// Test: Delete the transaction (simulating approval and execution)
-	err = suspendedStore.DeleteSuspendedTransaction("test-tx-123")
+	err = suspendedStore.DeleteSuspendedTransaction(context.Background(), "test-tx-123")
 	require.NoError(t, err)
 
 	// Test: Verify transaction is deleted
-	_, found = suspendedStore.GetSuspendedTransaction("test-tx-123")
+	_, found, err = suspendedStore.GetSuspendedTransaction(context.Background(), "test-tx-123")
+	require.NoError(t, err)
 	require.False(t, found, "Transaction should be deleted after execution")
 }
 
@@ -88,7 +91,7 @@ func TestSuspendedTransactionStore_ConcurrentSuspensions(t *testing.T) {
 			UserID:          "user-123",
 			OperatorID:      "op-456",
 		}
-		err := suspendedStore.StoreSuspendedTransaction(tx)
+		err := suspendedStore.StoreSuspendedTransaction(context.Background(), tx)
 		require.NoError(t, err)
 		txHashes[i] = txHash
 	}
@@ -98,7 +101,8 @@ func TestSuspendedTransactionStore_ConcurrentSuspensions(t *testing.T) {
 
 	// Verify: Each transaction can be retrieved
 	for _, txHash := range txHashes {
-		_, found := suspendedStore.GetSuspendedTransaction(txHash)
+		_, found, err := suspendedStore.GetSuspendedTransaction(context.Background(), txHash)
+		require.NoError(t, err)
 		require.True(t, found, "Transaction "+txHash+" should be retrievable")
 	}
 
@@ -135,11 +139,11 @@ func TestSuspendedTransactionStore_EnvelopePersistence(t *testing.T) {
 		UserID:          "user-123",
 		OperatorID:      "op-456",
 	}
-	err = suspendedStore.StoreSuspendedTransaction(tx)
+	err = suspendedStore.StoreSuspendedTransaction(context.Background(), tx)
 	require.NoError(t, err)
 
 	// Test: Retrieve and verify envelope persistence
-	retrievedTx, found := suspendedStore.GetSuspendedTransaction("test-tx-123")
+	retrievedTx, found, err := suspendedStore.GetSuspendedTransaction(context.Background(), "test-tx-123")
 	require.True(t, found)
 	require.NotEmpty(t, retrievedTx.Envelope)
 
@@ -168,7 +172,7 @@ func TestSuspendedTransactionStore_Expiry(t *testing.T) {
 		UserID:          "user-123",
 		OperatorID:      "op-456",
 	}
-	err := suspendedStore.StoreSuspendedTransaction(expiredTx)
+	err := suspendedStore.StoreSuspendedTransaction(context.Background(), expiredTx)
 	require.NoError(t, err)
 
 	// Test: Store a valid transaction
@@ -182,20 +186,24 @@ func TestSuspendedTransactionStore_Expiry(t *testing.T) {
 		UserID:          "user-123",
 		OperatorID:      "op-456",
 	}
-	err = suspendedStore.StoreSuspendedTransaction(validTx)
+	err = suspendedStore.StoreSuspendedTransaction(context.Background(), validTx)
 	require.NoError(t, err)
 
 	// Test: Both transactions can be retrieved
-	_, found := suspendedStore.GetSuspendedTransaction("expired-tx-123")
+	_, found, err := suspendedStore.GetSuspendedTransaction(context.Background(), "expired-tx-123")
+	require.NoError(t, err)
 	require.True(t, found, "Expired transaction should still be in store")
 
-	_, found = suspendedStore.GetSuspendedTransaction("valid-tx-456")
+	_, found, err = suspendedStore.GetSuspendedTransaction(context.Background(), "valid-tx-456")
+	require.NoError(t, err)
 	require.True(t, found, "Valid transaction should be in store")
 
 	// Test: Verify expiry timestamps
-	retrievedExpiredTx, _ := suspendedStore.GetSuspendedTransaction("expired-tx-123")
+	retrievedExpiredTx, _, err := suspendedStore.GetSuspendedTransaction(context.Background(), "expired-tx-123")
+	require.NoError(t, err)
 	require.True(t, retrievedExpiredTx.ExpiresAt.Before(time.Now()), "Expired transaction should have past expiry time")
 
-	retrievedValidTx, _ := suspendedStore.GetSuspendedTransaction("valid-tx-456")
+	retrievedValidTx, _, err := suspendedStore.GetSuspendedTransaction(context.Background(), "valid-tx-456")
+	require.NoError(t, err)
 	require.True(t, retrievedValidTx.ExpiresAt.After(time.Now()), "Valid transaction should have future expiry time")
 }

@@ -14,6 +14,7 @@
 package scrubbing
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
@@ -702,8 +703,8 @@ func TestScrubbingService_TokenPersistence(t *testing.T) {
 
 	// Verify token is persisted in TokenStore
 	key := fmt.Sprintf("sentinel_token_%s", token)
-	storedValue, found := tokenStore.KVGet(key)
-	assert.True(t, found)
+	storedValue, err := tokenStore.KVGet(context.Background(), key)
+	require.NoError(t, err)
 	assert.Equal(t, sensitiveValue, storedValue)
 
 	// Test loading persisted tokens on new SovereigntyService instance
@@ -774,15 +775,15 @@ func TestScrubbingService_TokenPersistence_TTL(t *testing.T) {
 
 	// Manually set a very short TTL in TokenStore to test expiration
 	key := fmt.Sprintf("sentinel_token_%s", token)
-	err = tokenStore.KVSet(key, sensitiveValue, 1) // 1 second TTL
+	err = tokenStore.KVSet(context.Background(), key, sensitiveValue, 1) // 1 second TTL
 	require.NoError(t, err)
 
 	// Wait for expiration
 	time.Sleep(2 * time.Second)
 
 	// Token should no longer be retrievable from storage
-	_, found := tokenStore.KVGet(key)
-	assert.False(t, found, "Token should expire after TTL")
+	_, err = tokenStore.KVGet(context.Background(), key)
+	assert.Error(t, err, "Token should expire after TTL")
 }
 
 func TestScrubbingService_ScrubText_ServiceTokens(t *testing.T) {

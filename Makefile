@@ -44,7 +44,7 @@ WINDOWS_EXTRA_FLAGS := -s -w
 # Test configuration
 TEST_TIMEOUT := 180s
 TEST_SHORT_TIMEOUT := 60s
-TEST_RACE := -race
+TEST_RACE := $(if $(filter windows,$(HOST_OS)),,-race)
 TEST_COUNT := -count=1
 COVERAGE_THRESHOLD := 60
 

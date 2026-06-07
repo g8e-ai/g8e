@@ -14,6 +14,7 @@
 package storage
 
 import (
+	"context"
 	"crypto/ed25519"
 	"path/filepath"
 	"testing"
@@ -268,7 +269,7 @@ func TestTokenStoreService_KVGetLockedVault(t *testing.T) {
 	testVault.Lock()
 
 	// Get should fail when vault is locked
-	retrieved, err := ts.KVGet(context.Background(), key)
+	_, err = ts.KVGet(context.Background(), key)
 	assert.Error(t, err)
 }
 
@@ -279,7 +280,7 @@ func TestTokenStoreService_KVGetNonExistent(t *testing.T) {
 	ts, testVault, _ := setupTestTokenStore(t)
 	defer testVault.Close()
 
-	retrieved, err := ts.KVGet(context.Background(), "non-existent-key")
+	_, err := ts.KVGet(context.Background(), "non-existent-key")
 	assert.Error(t, err)
 }
 
@@ -426,7 +427,7 @@ func TestTokenStoreService_NilService(t *testing.T) {
 	err := ts.KVSet(context.Background(), "key", "value", 0)
 	assert.NoError(t, err)
 
-	_, err := ts.KVGet(context.Background(), "key")
+	_, err = ts.KVGet(context.Background(), "key")
 	assert.Error(t, err)
 
 	result, err := ts.KVScanPrefix(context.Background(), "prefix:")

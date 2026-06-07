@@ -58,7 +58,7 @@ func TestOutboundL3Notary_VerifyL3Proof_NoApproval(t *testing.T) {
 		Approved:        false,
 	}
 
-	err = store.StoreSuspendedTransaction(tx)
+	err = store.StoreSuspendedTransaction(context.Background(), tx)
 	require.NoError(t, err)
 
 	proof := &commonv1.L3Proof{
@@ -103,7 +103,7 @@ func TestOutboundL3Notary_VerifyL3Proof_ExpiredApproval(t *testing.T) {
 		ApprovalSignature: "signature-123",
 	}
 
-	err = store.StoreSuspendedTransaction(tx)
+	err = store.StoreSuspendedTransaction(context.Background(), tx)
 	require.NoError(t, err)
 
 	proof := &commonv1.L3Proof{
@@ -148,7 +148,7 @@ func TestOutboundL3Notary_VerifyL3Proof_MissingSignature(t *testing.T) {
 		ApprovalSignature: "signature-123",
 	}
 
-	err = store.StoreSuspendedTransaction(tx)
+	err = store.StoreSuspendedTransaction(context.Background(), tx)
 	require.NoError(t, err)
 
 	proof := &commonv1.L3Proof{
@@ -193,7 +193,7 @@ func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureEncoding(t *testing.T) {
 		ApprovalSignature: "signature-123",
 	}
 
-	err = store.StoreSuspendedTransaction(tx)
+	err = store.StoreSuspendedTransaction(context.Background(), tx)
 	require.NoError(t, err)
 
 	proof := &commonv1.L3Proof{
@@ -238,7 +238,7 @@ func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureLength(t *testing.T) {
 		ApprovalSignature: "signature-123",
 	}
 
-	err = store.StoreSuspendedTransaction(tx)
+	err = store.StoreSuspendedTransaction(context.Background(), tx)
 	require.NoError(t, err)
 
 	shortSig := hex.EncodeToString([]byte("short"))
@@ -284,7 +284,7 @@ func TestOutboundL3Notary_VerifyL3Proof_SignatureMismatch(t *testing.T) {
 		ApprovalSignature: "signature-123",
 	}
 
-	err = store.StoreSuspendedTransaction(tx)
+	err = store.StoreSuspendedTransaction(context.Background(), tx)
 	require.NoError(t, err)
 
 	_, wrongPrivKey, err := ed25519.GenerateKey(nil)
@@ -338,7 +338,7 @@ func TestOutboundL3Notary_VerifyL3Proof_FingerprintMismatch(t *testing.T) {
 		ExpectedCertFingerprint: "cert-fingerprint-abc",
 	}
 
-	err = store.StoreSuspendedTransaction(tx)
+	err = store.StoreSuspendedTransaction(context.Background(), tx)
 	require.NoError(t, err)
 
 	proof := &commonv1.L3Proof{
@@ -389,7 +389,7 @@ func TestOutboundL3Notary_VerifyL3Proof_ValidProof(t *testing.T) {
 		ExpectedCertFingerprint: "cert-fingerprint-abc",
 	}
 
-	err = store.StoreSuspendedTransaction(tx)
+	err = store.StoreSuspendedTransaction(context.Background(), tx)
 	require.NoError(t, err)
 
 	proof := &commonv1.L3Proof{
@@ -461,7 +461,7 @@ func TestOutboundL3Notary_VerifyL3Proof_UserIDMismatch(t *testing.T) {
 		ApprovalSignature: "signature-123",
 	}
 
-	err = store.StoreSuspendedTransaction(tx)
+	err = store.StoreSuspendedTransaction(context.Background(), tx)
 	require.NoError(t, err)
 
 	proof := &commonv1.L3Proof{
@@ -511,7 +511,7 @@ func TestOutboundL3Notary_VerifyL3Proof_NoFingerprintCheckWhenNotSet(t *testing.
 		ExpectedCertFingerprint: "",
 	}
 
-	err = store.StoreSuspendedTransaction(tx)
+	err = store.StoreSuspendedTransaction(context.Background(), tx)
 	require.NoError(t, err)
 
 	proof := &commonv1.L3Proof{

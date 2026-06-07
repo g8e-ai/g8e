@@ -149,6 +149,7 @@ func TestLoad(t *testing.T) {
 
 func TestConfig_TrustBundlePath(t *testing.T) {
 	t.Run("returns absolute path as-is", func(t *testing.T) {
+		caPath := filepath.Join(t.TempDir(), "absolute", "path", "to", "ca.pem")
 		config := &Config{
 			ProjectRoot: "/project/root",
 			Paths: &PathsConfig{
@@ -166,18 +167,19 @@ func TestConfig_TrustBundlePath(t *testing.T) {
 					VaultDir             string `json:"vault_dir"`
 					VaultKeyPath         string `json:"vault_key_path"`
 				}{
-					CACertPath: "/absolute/path/to/ca.pem",
+					CACertPath: caPath,
 				},
 			},
 		}
 
 		result := config.TrustBundlePath()
-		assert.Equal(t, "/absolute/path/to/ca.pem", result)
+		assert.Equal(t, caPath, result)
 	})
 
 	t.Run("joins relative path with project root", func(t *testing.T) {
+		projectRoot := filepath.Join(string(filepath.Separator), "project", "root")
 		config := &Config{
-			ProjectRoot: "/project/root",
+			ProjectRoot: projectRoot,
 			Paths: &PathsConfig{
 				Infra: struct {
 					AppCertDir           string `json:"app_cert_dir"`
@@ -199,7 +201,7 @@ func TestConfig_TrustBundlePath(t *testing.T) {
 		}
 
 		result := config.TrustBundlePath()
-		assert.Equal(t, "/project/root/relative/path/to/ca.pem", result)
+		assert.Equal(t, filepath.Join(projectRoot, "relative", "path", "to", "ca.pem"), result)
 	})
 
 	t.Run("returns empty string when CACertPath is empty", func(t *testing.T) {
@@ -232,56 +234,61 @@ func TestConfig_TrustBundlePath(t *testing.T) {
 
 func TestConfig_CredentialsFile(t *testing.T) {
 	t.Run("returns credentials file path", func(t *testing.T) {
+		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: "/credentials/dir",
+			CredentialsDir: credentialsDir,
 		}
 
 		result := config.CredentialsFile()
-		assert.Equal(t, "/credentials/dir/credentials", result)
+		assert.Equal(t, filepath.Join(credentialsDir, "credentials"), result)
 	})
 }
 
 func TestConfig_CLICertFile(t *testing.T) {
 	t.Run("returns CLI cert file path", func(t *testing.T) {
+		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: "/credentials/dir",
+			CredentialsDir: credentialsDir,
 		}
 
 		result := config.CLICertFile()
-		assert.Equal(t, "/credentials/dir/cli.crt", result)
+		assert.Equal(t, filepath.Join(credentialsDir, "cli.crt"), result)
 	})
 }
 
 func TestConfig_CLIKeyFile(t *testing.T) {
 	t.Run("returns CLI key file path", func(t *testing.T) {
+		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: "/credentials/dir",
+			CredentialsDir: credentialsDir,
 		}
 
 		result := config.CLIKeyFile()
-		assert.Equal(t, "/credentials/dir/cli.key", result)
+		assert.Equal(t, filepath.Join(credentialsDir, "cli.key"), result)
 	})
 }
 
 func TestConfig_OperatorCertFile(t *testing.T) {
 	t.Run("returns Operator cert file path", func(t *testing.T) {
+		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: "/credentials/dir",
+			CredentialsDir: credentialsDir,
 		}
 
 		result := config.OperatorCertFile()
-		assert.Equal(t, "/credentials/dir/operator.crt", result)
+		assert.Equal(t, filepath.Join(credentialsDir, "operator.crt"), result)
 	})
 }
 
 func TestConfig_OperatorKeyFile(t *testing.T) {
 	t.Run("returns Operator key file path", func(t *testing.T) {
+		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: "/credentials/dir",
+			CredentialsDir: credentialsDir,
 		}
 
 		result := config.OperatorKeyFile()
-		assert.Equal(t, "/credentials/dir/operator.key", result)
+		assert.Equal(t, filepath.Join(credentialsDir, "operator.key"), result)
 	})
 }
 

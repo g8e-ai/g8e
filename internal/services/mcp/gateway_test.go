@@ -64,7 +64,7 @@ type fakeSuspendedStore struct {
 	txs map[string]*models.SuspendedTransaction
 }
 
-func (f *fakeSuspendedStore) StoreSuspendedTransaction(tx *models.SuspendedTransaction) error {
+func (f *fakeSuspendedStore) StoreSuspendedTransaction(_ context.Context, tx *models.SuspendedTransaction) error {
 	if f.txs == nil {
 		f.txs = make(map[string]*models.SuspendedTransaction)
 	}
@@ -72,12 +72,12 @@ func (f *fakeSuspendedStore) StoreSuspendedTransaction(tx *models.SuspendedTrans
 	return nil
 }
 
-func (f *fakeSuspendedStore) GetSuspendedTransaction(txHash string) (*models.SuspendedTransaction, bool) {
+func (f *fakeSuspendedStore) GetSuspendedTransaction(_ context.Context, txHash string) (*models.SuspendedTransaction, bool, error) {
 	tx, ok := f.txs[txHash]
-	return tx, ok
+	return tx, ok, nil
 }
 
-func (f *fakeSuspendedStore) DeleteSuspendedTransaction(txHash string) error {
+func (f *fakeSuspendedStore) DeleteSuspendedTransaction(_ context.Context, txHash string) error {
 	delete(f.txs, txHash)
 	return nil
 }
@@ -209,7 +209,7 @@ func TestGatewayService_ResumeWithL3Proof(t *testing.T) {
 		withSuspendedStore(store),
 	)
 
-	g.StoreSuspendedTransaction(txHash, []byte(envelope), "test-tool", json.RawMessage(`{}`), "user-1", "op-1", "")
+	g.StoreSuspendedTransaction(context.Background(), txHash, []byte(envelope), "test-tool", json.RawMessage(`{}`), "user-1", "op-1", "")
 
 	proof := &commonv1.L3Proof{
 		CredentialId: "cred-1",
@@ -1085,9 +1085,10 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 		store := &fakeSuspendedStore{}
 		g := newTestGatewayService(t, withSuspendedStore(store))
 
-		g.StoreSuspendedTransaction("hash-123", []byte(`{"id":"123"}`), "test-tool", json.RawMessage(`{"arg":"val"}`), "user-1", "op-1", "cert-fp-abc123")
+		g.StoreSuspendedTransaction(context.Background(), "hash-123", []byte(`{"id":"123"}`), "test-tool", json.RawMessage(`{"arg":"val"}`), "user-1", "op-1", "cert-fp-abc123")
 
-		tx, found := store.GetSuspendedTransaction("hash-123")
+		tx, found, err := store.GetSuspendedTransaction(context.Background(), "hash-123")
+		require.NoError(t, err)
 		require.True(t, found)
 		require.Equal(t, "hash-123", tx.TransactionHash)
 		require.Equal(t, "test-tool", tx.ToolName)
@@ -1101,7 +1102,7 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 		g := newTestGatewayService(t, withSuspendedStore(nil))
 
 		// Should not panic
-		g.StoreSuspendedTransaction("test-hash", []byte(`{}`), "test-tool", json.RawMessage(`{}`), "user-1", "op-1", "")
+		g.StoreSuspendedTransaction(context.Background(), "test-hash", []byte(`{}`), "test-tool", json.RawMessage(`{}`), "user-1", "op-1", "")
 	})
 }
 
@@ -1113,9 +1114,10 @@ func TestGatewayService_GetSuspendedTransaction(t *testing.T) {
 		store := &fakeSuspendedStore{}
 		g := newTestGatewayService(t, withSuspendedStore(store))
 
-		g.StoreSuspendedTransaction("test-hash", []byte(`{"test":"envelope"}`), "test-tool", json.RawMessage(`{"arg":"val"}`), "user-1", "op-1", "")
+		g.StoreSuspendedTransaction(context.Background(), "test-hash", []byte(`{"test":"envelope"}`), "test-tool", json.RawMessage(`{"arg":"val"}`), "user-1", "op-1", "")
 
-		retrieved, ok := g.GetSuspendedTransaction("test-hash")
+		retrieved, ok, err := g.GetSuspendedTransaction(context.Background(), "test-hash")
+		require.NoError(t, err)
 		require.True(t, ok)
 		require.Equal(t, "test-hash", retrieved.TransactionHash)
 		require.Equal(t, "test-tool", retrieved.ToolName)
@@ -1126,7 +1128,8 @@ func TestGatewayService_GetSuspendedTransaction(t *testing.T) {
 		store := &fakeSuspendedStore{}
 		g := newTestGatewayService(t, withSuspendedStore(store))
 
-		retrieved, ok := g.GetSuspendedTransaction("nonexistent")
+		retrieved, ok, err := g.GetSuspendedTransaction(context.Background(), "nonexistent")
+		require.NoError(t, err)
 		require.False(t, ok)
 		require.Nil(t, retrieved)
 	})
@@ -1135,7 +1138,8 @@ func TestGatewayService_GetSuspendedTransaction(t *testing.T) {
 		t.Parallel()
 		g := newTestGatewayService(t, withSuspendedStore(nil))
 
-		retrieved, ok := g.GetSuspendedTransaction("test-hash")
+		retrieved, ok, err := g.GetSuspendedTransaction(context.Background(), "test-hash")
+		require.NoError(t, err)
 		require.False(t, ok)
 		require.Nil(t, retrieved)
 	})
@@ -1149,11 +1153,12 @@ func TestGatewayService_DeleteSuspendedTransaction(t *testing.T) {
 		store := &fakeSuspendedStore{}
 		g := newTestGatewayService(t, withSuspendedStore(store))
 
-		g.StoreSuspendedTransaction("test-hash", []byte(`{}`), "test-tool", json.RawMessage(`{}`), "user-1", "op-1", "")
+		g.StoreSuspendedTransaction(context.Background(), "test-hash", []byte(`{}`), "test-tool", json.RawMessage(`{}`), "user-1", "op-1", "")
 
-		g.DeleteSuspendedTransaction("test-hash")
+		g.DeleteSuspendedTransaction(context.Background(), "test-hash")
 
-		_, ok := store.GetSuspendedTransaction("test-hash")
+		_, ok, err := store.GetSuspendedTransaction(context.Background(), "test-hash")
+		require.NoError(t, err)
 		require.False(t, ok)
 	})
 
@@ -1163,7 +1168,7 @@ func TestGatewayService_DeleteSuspendedTransaction(t *testing.T) {
 		g := newTestGatewayService(t, withSuspendedStore(store))
 
 		// Should not panic
-		g.DeleteSuspendedTransaction("nonexistent")
+		g.DeleteSuspendedTransaction(context.Background(), "nonexistent")
 	})
 
 	t.Run("nil store does not panic", func(t *testing.T) {
@@ -1171,7 +1176,7 @@ func TestGatewayService_DeleteSuspendedTransaction(t *testing.T) {
 		g := newTestGatewayService(t, withSuspendedStore(nil))
 
 		// Should not panic
-		g.DeleteSuspendedTransaction("test-hash")
+		g.DeleteSuspendedTransaction(context.Background(), "test-hash")
 	})
 }
 

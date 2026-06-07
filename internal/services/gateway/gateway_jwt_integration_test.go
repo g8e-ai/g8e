@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto"
-	"path/filepath"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -14,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -147,8 +147,10 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 	// Apply JWT configuration to AuthService's provider
 
-	sessionSvc := NewSessionBindingService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	operatorSessionSvc := NewOperatorSessionService(db, logger)
+	webSessionSvc := NewWebSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
@@ -165,20 +167,22 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:               cfg,
-		Logger:            logger,
-		DB:                db,
-		Pubsub:            pubsub,
-		Auth:              auth,
-		PKI:               pki,
-		SessionSvc:        sessionSvc,
-		Reg:               reg,
-		Passkey:           passkey,
-		UserSvc:           userSvc,
-		Responder:         resp,
-		MCPGateway:        mcpGateway,
-		IsReady:           func() bool { return true },
-		IsGovernanceReady: func() bool { return true },
+		Cfg:                cfg,
+		Logger:             logger,
+		DB:                 db,
+		Pubsub:             pubsub,
+		Auth:               auth,
+		PKI:                pki,
+		CLISessionSvc:      cliSessionSvc,
+		OperatorSessionSvc: operatorSessionSvc,
+		WebSessionSvc:      webSessionSvc,
+		Reg:                reg,
+		Passkey:            passkey,
+		UserSvc:            userSvc,
+		Responder:          resp,
+		MCPGateway:         mcpGateway,
+		IsReady:            func() bool { return true },
+		IsGovernanceReady:  func() bool { return true },
 	})
 	if err != nil {
 		t.Fatalf("failed to create HTTP handler: %v", err)
@@ -298,8 +302,10 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
-	sessionSvc := NewSessionBindingService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	operatorSessionSvc := NewOperatorSessionService(db, logger)
+	webSessionSvc := NewWebSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
@@ -316,20 +322,22 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:               cfg,
-		Logger:            logger,
-		DB:                db,
-		Pubsub:            pubsub,
-		Auth:              auth,
-		PKI:               pki,
-		SessionSvc:        sessionSvc,
-		Reg:               reg,
-		Passkey:           passkey,
-		UserSvc:           userSvc,
-		Responder:         resp,
-		MCPGateway:        mcpGateway,
-		IsReady:           func() bool { return true },
-		IsGovernanceReady: func() bool { return true },
+		Cfg:                cfg,
+		Logger:             logger,
+		DB:                 db,
+		Pubsub:             pubsub,
+		Auth:               auth,
+		PKI:                pki,
+		CLISessionSvc:      cliSessionSvc,
+		OperatorSessionSvc: operatorSessionSvc,
+		WebSessionSvc:      webSessionSvc,
+		Reg:                reg,
+		Passkey:            passkey,
+		UserSvc:            userSvc,
+		Responder:          resp,
+		MCPGateway:         mcpGateway,
+		IsReady:            func() bool { return true },
+		IsGovernanceReady:  func() bool { return true },
 	})
 	if err != nil {
 		t.Fatalf("failed to create HTTP handler: %v", err)
@@ -464,8 +472,10 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
-	sessionSvc := NewSessionBindingService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	operatorSessionSvc := NewOperatorSessionService(db, logger)
+	webSessionSvc := NewWebSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
@@ -482,20 +492,22 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:               cfg,
-		Logger:            logger,
-		DB:                db,
-		Pubsub:            pubsub,
-		Auth:              auth,
-		PKI:               pki,
-		SessionSvc:        sessionSvc,
-		Reg:               reg,
-		Passkey:           passkey,
-		UserSvc:           userSvc,
-		Responder:         resp,
-		MCPGateway:        mcpGateway,
-		IsReady:           func() bool { return true },
-		IsGovernanceReady: func() bool { return true },
+		Cfg:                cfg,
+		Logger:             logger,
+		DB:                 db,
+		Pubsub:             pubsub,
+		Auth:               auth,
+		PKI:                pki,
+		CLISessionSvc:      cliSessionSvc,
+		OperatorSessionSvc: operatorSessionSvc,
+		WebSessionSvc:      webSessionSvc,
+		Reg:                reg,
+		Passkey:            passkey,
+		UserSvc:            userSvc,
+		Responder:          resp,
+		MCPGateway:         mcpGateway,
+		IsReady:            func() bool { return true },
+		IsGovernanceReady:  func() bool { return true },
 	})
 	if err != nil {
 		t.Fatalf("failed to create HTTP handler: %v", err)

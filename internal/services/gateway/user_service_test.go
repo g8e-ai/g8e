@@ -138,7 +138,8 @@ func TestUserService_Disable(t *testing.T) {
 		var auditEntry models.AdminAuditEntry
 		err = json.Unmarshal(mustMarshal(t, results[0].ForWire()), &auditEntry)
 		require.NoError(t, err)
-		require.Equal(t, "test_reason", auditEntry.Details["reason"])
+		require.NotNil(t, auditEntry.Details)
+		require.Equal(t, "test_reason", auditEntry.Details.Reason)
 		require.Equal(t, "actor_user_id", auditEntry.Actor)
 		require.Equal(t, "operator_id", auditEntry.OperatorID)
 	})

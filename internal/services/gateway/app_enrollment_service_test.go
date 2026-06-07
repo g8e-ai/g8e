@@ -59,7 +59,7 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 			teardown: func() {
 				// Clean up the enrolled app (identity-only, no signer to delete)
 				appID := "spiffe://g8e.local/app/test-mcp-client"
-				if err := db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID); err != nil {
+				if _, err := db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID); err != nil {
 					t.Logf("Failed to delete signer document: %v", err)
 				}
 				if pki.secretManager != nil {

@@ -148,7 +148,7 @@ func (sw *streamingWriter) logLines(p []byte) {
 		// Trim the newline and log the complete line
 		line = strings.TrimRight(line, "\n\r")
 		if line != "" {
-			sw.logger.Info(line, "execution_id", sw.executionID, constants.ApprovalTypeStream, sw.prefix)
+			sw.logger.Info(line, "execution_id", sw.executionID, "stream", sw.prefix)
 		}
 	}
 }
@@ -161,7 +161,7 @@ func (sw *streamingWriter) Flush() {
 	if sw.lineBuffer.Len() > 0 {
 		line := strings.TrimSpace(sw.lineBuffer.String())
 		if line != "" {
-			sw.logger.Info(line, "execution_id", sw.executionID, constants.ApprovalTypeStream, sw.prefix)
+			sw.logger.Info(line, "execution_id", sw.executionID, "stream", sw.prefix)
 		}
 		sw.lineBuffer.Reset()
 	}
@@ -240,7 +240,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 	es.logger.Info("Executing command",
 		"execution_id", request.ExecutionID,
 		"case_id", request.CaseID,
-		constants.ApprovalTypeCommand, request.Command,
+		"command", request.Command,
 		"args", request.Args)
 
 	// SECURITY: Block cloud CLI commands unless --cloud flag is set
@@ -248,7 +248,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 		if isCloud, cloudCmd := isCloudCLICommand(request.Command, request.Args); isCloud {
 			es.logger.Warn("Cloud CLI command blocked - Operator not started with --cloud flag",
 				"execution_id", request.ExecutionID,
-				constants.ApprovalTypeCommand, request.Command,
+				"command", request.Command,
 				"blocked_tool", cloudCmd,
 				"cloud_mode", es.config.CloudMode)
 
@@ -359,7 +359,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 	es.logger.Info("Command execution completed",
 		"execution_id", request.ExecutionID,
 		"case_id", request.CaseID,
-		constants.ApprovalTypeCommand, request.Command,
+		"command", request.Command,
 		"status", result.Status,
 		"duration_seconds", result.DurationSeconds,
 		"return_code", system.IntPtrValue(result.ReturnCode),
@@ -419,7 +419,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 		}
 
 		es.logger.Info("Executing command via shell",
-			constants.ApprovalTypeCommand, shellScript,
+			"command", shellScript,
 			"execution_type", "shell")
 
 		// Use /bin/bash -c for shell execution.
@@ -740,14 +740,14 @@ func (es *ExecutionService) collectSystemInfo() *models.ExecutionSystemInfo {
 			info.LoadAverage = loadavg
 			es.logger.Info("Load average collected", "load_average", loadavg)
 		} else {
-			es.logger.Info("Failed to collect load average", constants.ConnectionStateError, err)
+			es.logger.Info("Failed to collect load average", "error", err)
 		}
 
 		if memInfo, err := getMemoryInfo(); err == nil {
 			info.Memory = memInfo
 			es.logger.Info("Memory information collected", "memory_info", memInfo)
 		} else {
-			es.logger.Info("Failed to collect memory information", constants.ConnectionStateError, err)
+			es.logger.Info("Failed to collect memory information", "error", err)
 		}
 	} else {
 		es.logger.Info("Non-Linux OS - skipping extended system metrics", "os", runtime.GOOS)

@@ -464,6 +464,12 @@ func (d *Detector) detectSSHKnownHosts() ([]string, error) {
 		"/etc/ssh/known_hosts",
 		"/etc/ssh/ssh_known_hosts",
 	}
+	if runtime.GOOS == "windows" {
+		knownHostsPaths = []string{
+			os.ExpandEnv("$USERPROFILE\\.ssh\\known_hosts"),
+			`C:\ProgramData\ssh\known_hosts`,
+		}
+	}
 
 	var lastErr error
 	for _, path := range knownHostsPaths {

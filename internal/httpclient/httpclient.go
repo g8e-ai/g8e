@@ -136,6 +136,22 @@ func WebSocketDialerWithTLS(tlsCfg *tls.Config) *websocket.Dialer {
 	}
 }
 
+func MustNew() *http.Client {
+	client, err := New()
+	if err != nil {
+		panic(fmt.Sprintf("httpclient: %v", err))
+	}
+	return client
+}
+
+func MustWebSocketDialer() *websocket.Dialer {
+	dialer, err := WebSocketDialer()
+	if err != nil {
+		panic(fmt.Sprintf("httpclient: %v", err))
+	}
+	return dialer
+}
+
 func NewWithServerName(serverName string) (*http.Client, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {

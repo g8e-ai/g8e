@@ -113,7 +113,7 @@ func TestHandleBootstrap(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 		var resp map[string]interface{}
-		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.True(t, resp["success"].(bool))
 		assert.NotEmpty(t, resp["operator_cert"])
@@ -851,7 +851,7 @@ func TestHandleApprovalChallenge(t *testing.T) {
 			ToolArguments:   []byte("{}"),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.db.StoreSuspendedTransaction(suspendedTx)
+		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/"+txHash+"/challenge", nil)
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user2.ID))
@@ -910,7 +910,7 @@ func TestHandleApprovalVerify(t *testing.T) {
 			ToolArguments:   []byte("{}"),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.db.StoreSuspendedTransaction(suspendedTx)
+		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash+"/verify", strings.NewReader("{invalid}"))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
@@ -959,7 +959,7 @@ func TestHandleCLIApproval(t *testing.T) {
 			ToolArguments:   []byte("{}"),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.db.StoreSuspendedTransaction(suspendedTx)
+		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		body := map[string]string{
 			"mtls_cert_fingerprint": "fp123",
@@ -990,7 +990,7 @@ func TestHandleCLIApproval(t *testing.T) {
 			ToolArguments:   []byte("{}"),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.db.StoreSuspendedTransaction(suspendedTx)
+		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		body := map[string]string{
 			"cli_signature": "sig123",
@@ -1202,7 +1202,7 @@ func TestHandleApprovalPage(t *testing.T) {
 			ToolArguments:   []byte(`{"arg":"value"}`),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.db.StoreSuspendedTransaction(suspendedTx)
+		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/approve/"+txHash, nil)
 		rr := httptest.NewRecorder()
@@ -1437,7 +1437,7 @@ func TestHandleUsers(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 		var resp map[string]interface{}
-		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.True(t, resp["success"].(bool))
 		assert.NotEmpty(t, resp["user_id"])

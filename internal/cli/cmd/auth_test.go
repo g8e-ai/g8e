@@ -111,8 +111,8 @@ func TestLogoutCmd(t *testing.T) {
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
 		// Set up minimal config structure so config loads, then auth fails
-		runtimeDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
-		credentialsParentDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
+		runtimeDir := filepath.Join(tmpDir, ".g8e")
+		credentialsParentDir := runtimeDir
 		require.NoError(t, os.MkdirAll(credentialsParentDir, 0700))
 		require.NoError(t, os.MkdirAll(filepath.Join(runtimeDir, "pki"), 0755))
 
@@ -121,21 +121,7 @@ func TestLogoutCmd(t *testing.T) {
 		constantsDir := filepath.Join(protocolDir, "constants")
 		require.NoError(t, os.MkdirAll(constantsDir, 0755))
 
-		pathsJSON := `{
-			"host": "localhost",
-			"infra": {
-				"app_cert_dir": "` + constants.Paths.Infra.AppCertDir + `",
-				"ca_cert_path": "` + constants.Paths.Infra.CaCertPath + `",
-				"db_path": "` + constants.Paths.Infra.DbPath + `",
-				"docs_dir": "` + constants.Paths.Infra.DocsDir + `",
-				"pki_dir": "` + constants.Paths.Infra.PkiDir + `",
-				"protocol_constants_dir": "` + constants.Paths.Infra.ProtocolConstantsDir + `",
-				"protocol_dir": "` + constants.Paths.Infra.ProtocolDir + `",
-				"protocol_models_dir": "` + constants.Paths.Infra.ProtocolModelsDir + `",
-				"secrets_dir": "` + constants.Paths.Infra.SecretsDir + `",
-				"ssh_config_path": "` + constants.Paths.Infra.SshConfigPath + `"
-			}
-		}`
+		pathsJSON := minimalPathsJSON(t)
 		pathsPath := filepath.Join(constantsDir, "paths.json")
 		require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 
@@ -285,9 +271,9 @@ func TestPKIPhase3_StaleTrustBundle_FailClosed(t *testing.T) {
 }
 
 func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
-	runtimeDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
-	pkiDir := filepath.Join(runtimeDir, constants.Paths.Infra.PkiDir)
-	secretsDir := filepath.Join(runtimeDir, constants.Paths.Infra.SecretsDir)
+	runtimeDir := filepath.Join(tmpDir, ".g8e")
+	pkiDir := filepath.Join(runtimeDir, "pki")
+	secretsDir := filepath.Join(runtimeDir, "secrets")
 
 	require.NoError(t, os.MkdirAll(pkiDir, 0755))
 	require.NoError(t, os.MkdirAll(secretsDir, 0700))
@@ -301,21 +287,7 @@ func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
 
 	// Use LoadWithPaths for hermetic test execution
 	// This ensures the test does not depend on any running operator
-	pathsJSON := `{
-		"host": "localhost",
-		"infra": {
-			"app_cert_dir": "` + constants.Paths.Infra.AppCertDir + `",
-			"ca_cert_path": "` + constants.Paths.Infra.CaCertPath + `",
-			"db_path": "` + constants.Paths.Infra.DbPath + `",
-			"docs_dir": "` + constants.Paths.Infra.DocsDir + `",
-			"pki_dir": "` + constants.Paths.Infra.PkiDir + `",
-			"protocol_constants_dir": "` + constants.Paths.Infra.ProtocolConstantsDir + `",
-			"protocol_dir": "` + constants.Paths.Infra.ProtocolDir + `",
-			"protocol_models_dir": "` + constants.Paths.Infra.ProtocolModelsDir + `",
-			"secrets_dir": "` + constants.Paths.Infra.SecretsDir + `",
-			"ssh_config_path": "` + constants.Paths.Infra.SshConfigPath + `"
-		}
-	}`
+	pathsJSON := minimalPathsJSON(t)
 
 	cfg, err := config.LoadWithPaths(tmpDir, []byte(pathsJSON))
 	require.NoError(t, err)

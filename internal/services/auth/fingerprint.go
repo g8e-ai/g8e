@@ -139,3 +139,12 @@ func getDarwinMachineID() (string, error) {
 	hasher.Write(data)
 	return hex.EncodeToString(hasher.Sum(nil))[:32], nil
 }
+
+func isHex(s string) bool {
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return true
+}

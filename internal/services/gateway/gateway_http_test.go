@@ -82,21 +82,23 @@ func TestMCPOriginGuard(t *testing.T) {
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:               infra.Cfg,
-		Logger:            infra.Logger,
-		DB:                infra.DB,
-		Pubsub:            infra.Pubsub,
-		Auth:              infra.Auth,
-		PKI:               infra.PKI,
-		SessionSvc:        infra.SessionSvc,
-		Reg:               infra.Reg,
-		Passkey:           infra.Passkey,
-		UserSvc:           infra.UserSvc,
-		Responder:         infra.Responder,
-		MCPGateway:        mcpGateway,
-		AppEnrollment:     nil,
-		IsReady:           func() bool { return true },
-		IsGovernanceReady: func() bool { return true },
+		Cfg:                infra.Cfg,
+		Logger:             infra.Logger,
+		DB:                 infra.DB,
+		Pubsub:             infra.Pubsub,
+		Auth:               infra.Auth,
+		PKI:                infra.PKI,
+		CLISessionSvc:      infra.CLISessionSvc,
+		OperatorSessionSvc: infra.OperatorSessionSvc,
+		WebSessionSvc:      infra.WebSessionSvc,
+		Reg:                infra.Reg,
+		Passkey:            infra.Passkey,
+		UserSvc:            infra.UserSvc,
+		Responder:          infra.Responder,
+		MCPGateway:         mcpGateway,
+		AppEnrollment:      nil,
+		IsReady:            func() bool { return true },
+		IsGovernanceReady:  func() bool { return true },
 	})
 	require.NoError(t, err, "failed to create HTTP handler")
 
@@ -168,20 +170,22 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:               infra.Cfg,
-		Logger:            infra.Logger,
-		DB:                infra.DB,
-		Pubsub:            infra.Pubsub,
-		Auth:              infra.Auth,
-		PKI:               infra.PKI,
-		SessionSvc:        infra.SessionSvc,
-		Reg:               infra.Reg,
-		Passkey:           infra.Passkey,
-		UserSvc:           infra.UserSvc,
-		Responder:         infra.Responder,
-		MCPGateway:        mcpGateway,
-		IsReady:           func() bool { return true },
-		IsGovernanceReady: func() bool { return true },
+		Cfg:                infra.Cfg,
+		Logger:             infra.Logger,
+		DB:                 infra.DB,
+		Pubsub:             infra.Pubsub,
+		Auth:               infra.Auth,
+		PKI:                infra.PKI,
+		CLISessionSvc:      infra.CLISessionSvc,
+		OperatorSessionSvc: infra.OperatorSessionSvc,
+		WebSessionSvc:      infra.WebSessionSvc,
+		Reg:                infra.Reg,
+		Passkey:            infra.Passkey,
+		UserSvc:            infra.UserSvc,
+		Responder:          infra.Responder,
+		MCPGateway:         mcpGateway,
+		IsReady:            func() bool { return true },
+		IsGovernanceReady:  func() bool { return true },
 	})
 	require.NoError(t, err, "failed to create HTTP handler")
 	return h, infra.Cfg
@@ -202,18 +206,20 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 	infra.Cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
 	ls := &GatewayModeService{
-		cfg:        infra.Cfg,
-		logger:     infra.Logger,
-		db:         infra.DB,
-		pubsub:     infra.Pubsub,
-		auth:       infra.Auth,
-		pki:        infra.PKI,
-		reg:        infra.Reg,
-		passkey:    infra.Passkey,
-		userSvc:    infra.UserSvc,
-		sessionSvc: infra.SessionSvc,
-		mcpGateway: mcpGateway,
-		responder:  infra.Responder,
+		cfg:                infra.Cfg,
+		logger:             infra.Logger,
+		db:                 infra.DB,
+		pubsub:             infra.Pubsub,
+		auth:               infra.Auth,
+		pki:                infra.PKI,
+		reg:                infra.Reg,
+		passkey:            infra.Passkey,
+		userSvc:            infra.UserSvc,
+		cliSessionSvc:      infra.CLISessionSvc,
+		operatorSessionSvc: infra.OperatorSessionSvc,
+		webSessionSvc:      infra.WebSessionSvc,
+		mcpGateway:         mcpGateway,
+		responder:          infra.Responder,
 	}
 
 	require.NoError(t, ls.initHandlersAndServers())
@@ -864,7 +870,9 @@ func TestNewHTTPHandler(t *testing.T) {
 	assert.NotNil(t, h.pubsub)
 	assert.NotNil(t, h.auth)
 	assert.NotNil(t, h.pki)
-	assert.NotNil(t, h.sessionSvc)
+	assert.NotNil(t, h.cliSessionSvc)
+	assert.NotNil(t, h.operatorSessionSvc)
+	assert.NotNil(t, h.webSessionSvc)
 	assert.NotNil(t, h.reg)
 	assert.NotNil(t, h.passkey)
 	assert.NotNil(t, h.userSvc)

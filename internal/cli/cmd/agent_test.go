@@ -16,6 +16,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
@@ -59,6 +60,9 @@ func TestDetectToolBinary(t *testing.T) {
 func TestDetectToolBinary_WithMockBinary(t *testing.T) {
 	tempDir := t.TempDir()
 	testBinary := filepath.Join(tempDir, "test-tool")
+	if runtime.GOOS == "windows" {
+		testBinary += ".exe"
+	}
 
 	err := os.WriteFile(testBinary, []byte("#!/bin/sh\necho test"), 0755)
 	assert.NoError(t, err)
@@ -91,8 +95,8 @@ func TestPrepareAgentEnvironment(t *testing.T) {
 				ProtocolModelsDir    string `json:"protocol_models_dir"`
 				SecretsDir           string `json:"secrets_dir"`
 				SSHConfigPath        string `json:"ssh_config_path"`
-			VaultDir             string `json:"vault_dir"`
-			VaultKeyPath         string `json:"vault_key_path"`
+				VaultDir             string `json:"vault_dir"`
+				VaultKeyPath         string `json:"vault_key_path"`
 			}{
 				CACertPath: constants.Paths.Infra.CaCertPath,
 			},

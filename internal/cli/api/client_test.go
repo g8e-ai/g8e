@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -120,21 +121,24 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	constantsDir := filepath.Join(protocolDir, "constants")
 	require.NoError(t, os.MkdirAll(constantsDir, 0755))
 
-	pathsJSON := fmt.Sprintf(`{
+	pathsData := map[string]any{
 		"host": "localhost",
-		"infra": {
-			"app_cert_dir": "%s/app/certs",
-			"ca_cert_path": ".g8e/pki/trust/g8eg-ca-bundle.pem",
-			"db_path": "%s/db",
-			"docs_dir": "%s/docs",
-			"pki_dir": ".g8e/pki",
+		"infra": map[string]any{
+			"app_cert_dir":           filepath.Join(tempDir, "app", "certs"),
+			"ca_cert_path":           ".g8e/pki/trust/g8eg-ca-bundle.pem",
+			"db_path":                filepath.Join(tempDir, "db"),
+			"docs_dir":               filepath.Join(tempDir, "docs"),
+			"pki_dir":                ".g8e/pki",
 			"protocol_constants_dir": "protocol/constants",
-			"protocol_dir": "protocol",
-			"protocol_models_dir": "protocol/models",
-			"secrets_dir": ".g8e/secrets",
-			"ssh_config_path": "%s/ssh/config"
-		}
-	}`, tempDir, tempDir, tempDir, tempDir)
+			"protocol_dir":           "protocol",
+			"protocol_models_dir":    "protocol/models",
+			"secrets_dir":            ".g8e/secrets",
+			"ssh_config_path":        filepath.Join(tempDir, "ssh", "config"),
+		},
+	}
+	pathsBytes, err := json.Marshal(pathsData)
+	require.NoError(t, err)
+	pathsJSON := string(pathsBytes)
 	pathsPath := filepath.Join(constantsDir, "paths.json")
 	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 

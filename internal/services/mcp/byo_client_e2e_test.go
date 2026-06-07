@@ -139,7 +139,8 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 	require.NotEmpty(t, txHash, "Transaction should be stored in suspended store")
 
 	// Verify suspended transaction details
-	suspendedTx, found := suspendedStore.GetSuspendedTransaction(txHash)
+	suspendedTx, found, err := suspendedStore.GetSuspendedTransaction(context.Background(), txHash)
+	require.NoError(t, err)
 	require.True(t, found)
 	require.Equal(t, "file_edit", suspendedTx.ToolName)
 	require.Equal(t, "user-byo-123", suspendedTx.UserID)
@@ -187,7 +188,8 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 	require.Equal(t, operatorv1.L3Status_L3_STATUS_REQUIRED_VALID, receipt.L3Status)
 
 	// Step 6: Verify transaction was deleted from suspended store after execution
-	_, found = suspendedStore.GetSuspendedTransaction(txHash)
+	_, found, err = suspendedStore.GetSuspendedTransaction(context.Background(), txHash)
+	require.NoError(t, err)
 	require.False(t, found, "Transaction should be deleted after successful execution")
 
 	// Step 7: Simulate client retry after approval (should now succeed)
@@ -332,7 +334,8 @@ func TestBYOClientA2AEndToEndProof(t *testing.T) {
 	require.Equal(t, "A2A skill executed successfully", receipt.ResultSummary)
 
 	// Verify cleanup
-	_, found := suspendedStore.GetSuspendedTransaction(txHash)
+	_, found, err := suspendedStore.GetSuspendedTransaction(context.Background(), txHash)
+	require.NoError(t, err)
 	require.False(t, found)
 }
 

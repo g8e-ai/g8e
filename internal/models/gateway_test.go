@@ -531,14 +531,14 @@ func TestSettingsDocument(t *testing.T) {
 	t.Run("creates valid settings document", func(t *testing.T) {
 		now := time.Now().UTC()
 		doc := &SettingsDocument{
-			Settings: map[string]interface{}{
-				"key": "value",
+			Settings: &PlatformSettings{
+				ActuatorKeyID: "value",
 			},
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
 
-		assert.Equal(t, "value", doc.Settings["key"])
+		assert.Equal(t, "value", doc.Settings.ActuatorKeyID)
 	})
 }
 
