@@ -96,13 +96,26 @@ func vaultInitCmd() *cobra.Command {
 		Short: "Initialize a new encryption vault",
 		Long:  `Generate a new encryption vault with a random key. The key is saved to the specified key path.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			// Initialize paths relative to current working directory
+			constants.InitPaths()
+			projectRoot, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("failed to get working directory: %w", err)
 			}
 
-			vaultDir = resolveVaultDir(cfg, vaultDir)
-			keyPath = resolveKeyPath(cfg, vaultDir, keyPath)
+			if vaultDir == "" {
+				vaultDir = constants.Paths.Infra.VaultDir
+			}
+			if !filepath.IsAbs(vaultDir) {
+				vaultDir = filepath.Join(projectRoot, vaultDir)
+			}
+
+			if keyPath == "" {
+				keyPath = filepath.Join(vaultDir, "key")
+			}
+			if !filepath.IsAbs(keyPath) {
+				keyPath = filepath.Join(projectRoot, keyPath)
+			}
 
 			if vault.VaultHeaderExists(vaultDir) {
 				return fmt.Errorf("vault already initialized at %s", vaultDir)
@@ -166,13 +179,26 @@ func vaultUnlockCmd() *cobra.Command {
 		Short: "Unlock the encryption vault",
 		Long:  `Unlock an existing vault using the private key.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			// Initialize paths relative to current working directory
+			constants.InitPaths()
+			projectRoot, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("failed to get working directory: %w", err)
 			}
 
-			vaultDir = resolveVaultDir(cfg, vaultDir)
-			keyPath = resolveKeyPath(cfg, vaultDir, keyPath)
+			if vaultDir == "" {
+				vaultDir = constants.Paths.Infra.VaultDir
+			}
+			if !filepath.IsAbs(vaultDir) {
+				vaultDir = filepath.Join(projectRoot, vaultDir)
+			}
+
+			if keyPath == "" {
+				keyPath = filepath.Join(vaultDir, "key")
+			}
+			if !filepath.IsAbs(keyPath) {
+				keyPath = filepath.Join(projectRoot, keyPath)
+			}
 
 			if !vault.VaultHeaderExists(vaultDir) {
 				return fmt.Errorf("vault not initialized at %s. Run 'g8e vault init' first", vaultDir)
@@ -217,13 +243,26 @@ func vaultRekeyCmd() *cobra.Command {
 		Short: "Re-key the vault with a new private key",
 		Long:  `Re-encrypt the vault's DEK with a new private key. Both old and new keys are required.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			// Initialize paths relative to current working directory
+			constants.InitPaths()
+			projectRoot, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("failed to get working directory: %w", err)
 			}
 
-			vaultDir = resolveVaultDir(cfg, vaultDir)
-			keyPath = resolveKeyPath(cfg, vaultDir, keyPath)
+			if vaultDir == "" {
+				vaultDir = constants.Paths.Infra.VaultDir
+			}
+			if !filepath.IsAbs(vaultDir) {
+				vaultDir = filepath.Join(projectRoot, vaultDir)
+			}
+
+			if keyPath == "" {
+				keyPath = filepath.Join(vaultDir, "key")
+			}
+			if !filepath.IsAbs(keyPath) {
+				keyPath = filepath.Join(projectRoot, keyPath)
+			}
 			if newKeyPath == "" {
 				newKeyPath = keyPath + ".new"
 			}
@@ -286,12 +325,19 @@ func vaultStatusCmd() *cobra.Command {
 		Short: "Show vault status",
 		Long:  `Display whether the vault is initialized and unlocked.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			// Initialize paths relative to current working directory
+			constants.InitPaths()
+			projectRoot, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("failed to get working directory: %w", err)
 			}
 
-			vaultDir = resolveVaultDir(cfg, vaultDir)
+			if vaultDir == "" {
+				vaultDir = constants.Paths.Infra.VaultDir
+			}
+			if !filepath.IsAbs(vaultDir) {
+				vaultDir = filepath.Join(projectRoot, vaultDir)
+			}
 
 			v, err := vault.NewVault(&vault.VaultConfig{
 				DataDir: vaultDir,
@@ -334,12 +380,19 @@ func vaultResetCmd() *cobra.Command {
 		Short: "Destroy the vault and all encrypted data",
 		Long:  `Reset the vault completely. This is a destructive operation that makes all encrypted data unrecoverable.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			// Initialize paths relative to current working directory
+			constants.InitPaths()
+			projectRoot, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("failed to get working directory: %w", err)
 			}
 
-			vaultDir = resolveVaultDir(cfg, vaultDir)
+			if vaultDir == "" {
+				vaultDir = constants.Paths.Infra.VaultDir
+			}
+			if !filepath.IsAbs(vaultDir) {
+				vaultDir = filepath.Join(projectRoot, vaultDir)
+			}
 
 			if !vault.VaultHeaderExists(vaultDir) {
 				return fmt.Errorf("vault not initialized at %s", vaultDir)
@@ -390,13 +443,24 @@ func vaultExportCmd() *cobra.Command {
 		Short: "Export the vault key",
 		Long:  `Export the vault private key in hex format. Use with extreme caution.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			// Initialize paths relative to current working directory
+			constants.InitPaths()
+			projectRoot, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("failed to get working directory: %w", err)
 			}
 
-			vaultDir := resolveVaultDir(cfg, "")
-			keyPath = resolveKeyPath(cfg, vaultDir, keyPath)
+			vaultDir := constants.Paths.Infra.VaultDir
+			if !filepath.IsAbs(vaultDir) {
+				vaultDir = filepath.Join(projectRoot, vaultDir)
+			}
+
+			if keyPath == "" {
+				keyPath = filepath.Join(vaultDir, "key")
+			}
+			if !filepath.IsAbs(keyPath) {
+				keyPath = filepath.Join(projectRoot, keyPath)
+			}
 
 			key, err := readKeyFile(keyPath)
 			if err != nil {
@@ -423,13 +487,24 @@ func vaultImportCmd() *cobra.Command {
 		Short: "Import a vault key",
 		Long:  `Import a vault private key from hex string or stdin.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			// Initialize paths relative to current working directory
+			constants.InitPaths()
+			projectRoot, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("failed to get working directory: %w", err)
 			}
 
-			vaultDir := resolveVaultDir(cfg, "")
-			keyPath = resolveKeyPath(cfg, vaultDir, keyPath)
+			vaultDir := constants.Paths.Infra.VaultDir
+			if !filepath.IsAbs(vaultDir) {
+				vaultDir = filepath.Join(projectRoot, vaultDir)
+			}
+
+			if keyPath == "" {
+				keyPath = filepath.Join(vaultDir, "key")
+			}
+			if !filepath.IsAbs(keyPath) {
+				keyPath = filepath.Join(projectRoot, keyPath)
+			}
 
 			var key []byte
 			if keyHex != "" {
@@ -440,9 +515,9 @@ func vaultImportCmd() *cobra.Command {
 			} else {
 				reader := bufio.NewReader(cmd.InOrStdin())
 				cmd.Print("Enter vault key (hex): ")
-				input, err := reader.ReadString('\n')
-				if err != nil {
-					return fmt.Errorf("failed to read key: %w", err)
+				input, readErr := reader.ReadString('\n')
+				if readErr != nil {
+					return fmt.Errorf("failed to read key: %w", readErr)
 				}
 				key, err = hex.DecodeString(strings.TrimSpace(input))
 				if err != nil {

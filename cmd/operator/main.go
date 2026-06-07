@@ -329,7 +329,7 @@ func main() {
 		return
 	}
 
-	// Check for CLI subcommands (gw, gateway, apps, auth, data, evals, security, setup, vars, test)
+	// Check for CLI subcommands (gw, gateway, apps, auth, data, evals, security, setup, vars, test, vault)
 	cliSubcommands := map[string]bool{
 		"gw":       true,
 		"gateway":  true,
@@ -345,6 +345,7 @@ func main() {
 		"chaos":    true,
 		"mcp":      true,
 		"operator": true,
+		"vault":    true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {

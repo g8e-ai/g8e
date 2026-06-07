@@ -549,8 +549,9 @@ func Load(opts LoadOptions) (*Config, error) {
 		cfg.VaultKeyPath = filepath.Join(cfg.VaultDir, "key")
 	}
 
-	// Default VaultRequireUnlock to true
-	cfg.VaultRequireUnlock = true
+	// Default VaultRequireUnlock to false (matches CLI flag default)
+	// Gateway can start with vault locked; vault key is optional
+	cfg.VaultRequireUnlock = false
 
 	// Read operator session ID from environment variable (in-memory only, never persisted)
 	// This is set by the deploy script after enrollment to track the operator's session
