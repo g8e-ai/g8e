@@ -182,7 +182,7 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 	return "./g8e", nil
 }
 
-func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode string, identityData []byte) error {
+func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int, dataDir, pkiDir, secretsDir, vaultDir, vaultKeyPath, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode string, identityData []byte) error {
 	if err := pm.ensureDirectories(); err != nil {
 		return err
 	}
@@ -193,6 +193,8 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int,
 	effectiveDataDir := dataDir
 	effectivePKIDir := pkiDir
 	effectiveSecretsDir := secretsDir
+	effectiveVaultDir := vaultDir
+	effectiveVaultKeyPath := vaultKeyPath
 	effectivePasskeyRpID := passkeyRpID
 	effectivePasskeyRpName := passkeyRpName
 	effectiveRateLimitRPS := rateLimitRPS
@@ -254,6 +256,13 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int,
 		"--http-port", strconv.Itoa(availableHTTPPort),
 		"--https-port", strconv.Itoa(availableHTTPSPort),
 		"--log", effectiveLogLevel,
+	}
+
+	if effectiveVaultDir != "" {
+		args = append(args, "--vault-dir", effectiveVaultDir)
+	}
+	if effectiveVaultKeyPath != "" {
+		args = append(args, "--vault-key", effectiveVaultKeyPath)
 	}
 
 	if certIdentityMode != "" {

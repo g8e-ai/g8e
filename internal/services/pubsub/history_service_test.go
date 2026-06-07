@@ -15,11 +15,15 @@ package pubsub
 
 import (
 	"context"
+	"crypto/ed25519"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
+	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
@@ -231,12 +235,25 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		client := NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
+		// Create vault
+		_, privKey, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+		vaultDir := filepath.Join(t.TempDir(), "vault")
+		require.NoError(t, os.MkdirAll(vaultDir, 0700))
+		vHeader, _, err := vault.NewVaultHeader(privKey)
+		require.NoError(t, err)
+		require.NoError(t, vHeader.Save(vaultDir))
+		testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: logger})
+		require.NoError(t, err)
+		require.NoError(t, testVault.Unlock(privKey))
+		defer testVault.Close()
+
 		// Set localStore directly since there's no setter method
 		localStoreCfg := &storage.LocalStoreConfig{
 			Enabled: true,
 			DBPath:  ":memory:",
 		}
-		localStore, err := storage.NewLocalStoreService(localStoreCfg, logger, nil)
+		localStore, err := storage.NewLocalStoreService(localStoreCfg, logger, testVault)
 		require.NoError(t, err)
 		svc.localStore = localStore
 
@@ -257,12 +274,25 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		client := NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
+		// Create vault
+		_, privKey, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+		vaultDir := filepath.Join(t.TempDir(), "vault")
+		require.NoError(t, os.MkdirAll(vaultDir, 0700))
+		vHeader, _, err := vault.NewVaultHeader(privKey)
+		require.NoError(t, err)
+		require.NoError(t, vHeader.Save(vaultDir))
+		testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: logger})
+		require.NoError(t, err)
+		require.NoError(t, testVault.Unlock(privKey))
+		defer testVault.Close()
+
 		// Set localStore directly since there's no setter method
 		localStoreCfg := &storage.LocalStoreConfig{
 			Enabled: true,
 			DBPath:  ":memory:",
 		}
-		localStore, err := storage.NewLocalStoreService(localStoreCfg, logger, nil)
+		localStore, err := storage.NewLocalStoreService(localStoreCfg, logger, testVault)
 		require.NoError(t, err)
 		svc.localStore = localStore
 

@@ -73,6 +73,10 @@ func NewExecutionVaultService(config *ExecutionVaultConfig, logger *slog.Logger,
 		return nil, nil
 	}
 
+	if v == nil {
+		return nil, fmt.Errorf("encryption vault is required")
+	}
+
 	cfg := sqliteutil.DefaultDBConfig(config.DBPath)
 	db, err := sqliteutil.OpenDB(cfg, logger)
 	if err != nil {
@@ -666,9 +670,6 @@ func (ev *ExecutionVaultService) encryptContent(content string) ([]byte, error) 
 		return nil, nil
 	}
 
-	if ev.vault == nil {
-		return nil, fmt.Errorf("encryption vault is required")
-	}
 	if !ev.vault.IsUnlocked() {
 		return nil, fmt.Errorf("vault is locked, cannot encrypt content")
 	}
@@ -687,9 +688,6 @@ func (ev *ExecutionVaultService) decryptContent(data []byte) (string, error) {
 		return "", nil
 	}
 
-	if ev.vault == nil {
-		return "", fmt.Errorf("encryption vault is required")
-	}
 	if !ev.vault.IsUnlocked() {
 		return "", fmt.Errorf("vault is locked, cannot decrypt content")
 	}

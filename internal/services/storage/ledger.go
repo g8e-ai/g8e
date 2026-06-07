@@ -61,12 +61,21 @@ type LedgerResult struct {
 }
 
 // NewGitLedgerService creates a new GitLedgerService.
-func NewGitLedgerService(config *LedgerConfig, logger *slog.Logger) *GitLedgerService {
+// EncryptionVault in config is required for encryption at rest.
+func NewGitLedgerService(config *LedgerConfig, logger *slog.Logger) (*GitLedgerService, error) {
+	if config == nil {
+		return nil, fmt.Errorf("config is required for git ledger service")
+	}
+
+	if config.EncryptionVault == nil {
+		return nil, fmt.Errorf("EncryptionVault is required for git ledger service")
+	}
+
 	return &GitLedgerService{
 		config:          config,
 		encryptionVault: config.EncryptionVault,
 		logger:          logger,
-	}
+	}, nil
 }
 
 // IsEncryptionEnabled returns whether file encryption is enabled.

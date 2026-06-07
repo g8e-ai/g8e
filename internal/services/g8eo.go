@@ -16,6 +16,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -127,7 +128,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// Initialize CanonicalDBService for canonical state root calculation
 	// This ensures outbound mode uses the same state root schema as gateway mode
 	dataDir := filepath.Join(vs.config.WorkDir, ".g8e")
-	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, secretsDir, vs.logger, false)
+	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, secretsDir, vs.logger, false, vs.config.VaultKeyPath)
 	if err != nil {
 		return fmt.Errorf("failed to initialize gateway database (required for state root calculation): %w", err)
 	}
@@ -149,16 +150,42 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 
 	// Initialize vault for encryption
+	vaultDir := filepath.Join(vs.config.WorkDir, ".g8e/vault")
 	vaultConfig := &vault.VaultConfig{
-		DataDir: filepath.Join(vs.config.WorkDir, ".g8e/vault"),
+		DataDir: vaultDir,
 		Logger:  vs.logger,
 	}
 	encryptionVault, err := vault.NewVault(vaultConfig)
 	if err != nil {
 		return fmt.Errorf("failed to initialize vault: %w", err)
 	}
-	// Note: Vault should be unlocked by the operator via bootstrap process
-	// For now, we'll initialize without unlocking - services will handle locked vault gracefully
+
+	// Unlock vault before initializing storage services
+	// Encryption is required for secure data storage at rest
+	vaultKeyPath := vs.config.VaultKeyPath
+	if vaultKeyPath == "" {
+		vaultKeyPath = filepath.Join(vaultDir, "key")
+	}
+	if !filepath.IsAbs(vaultKeyPath) {
+		vaultKeyPath = filepath.Join(vs.config.WorkDir, vaultKeyPath)
+	}
+
+	privateKey, err := vault.ReadVaultKey(vaultKeyPath)
+	if err != nil {
+		return fmt.Errorf("failed to read vault key: %w", err)
+	}
+	defer vault.SecureZero(privateKey)
+
+	if err := encryptionVault.Unlock(privateKey); err != nil {
+		if errors.Is(err, vault.ErrVaultNotInit) {
+			return fmt.Errorf("vault not initialized at %s. Run 'g8e vault init' first", vaultDir)
+		}
+		if errors.Is(err, vault.ErrInvalidPrivateKey) {
+			return fmt.Errorf("invalid vault key at %s. Verify the key file is correct", vaultKeyPath)
+		}
+		return fmt.Errorf("failed to unlock vault: %w", err)
+	}
+	vs.logger.Info("Vault unlocked successfully", "vault_dir", vaultDir)
 
 	// Initialize ExecutionVaultService for execution log and file diff storage
 	executionVaultConfig := storage.DefaultExecutionVaultConfig()
@@ -267,7 +294,11 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 			GitPath:         gitPath,
 			EncryptionVault: vs.auditStore.GetEncryptionVault(),
 		}
-		vs.ledger = storage.NewGitLedgerService(ledgerConfig, vs.logger)
+		ledger, err := storage.NewGitLedgerService(ledgerConfig, vs.logger)
+		if err != nil {
+			return fmt.Errorf("failed to initialize ledger: %w", err)
+		}
+		vs.ledger = ledger
 		vs.logger.Info("Ledger initialized")
 		vs.historyHandler = storage.NewHistoryHandler(vs.auditStore, vs.ledger, vs.logger)
 		vs.logger.Info("History Handler initialized (FETCH_HISTORY ready)")

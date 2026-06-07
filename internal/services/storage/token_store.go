@@ -71,6 +71,10 @@ func NewTokenStoreService(config *TokenStoreConfig, logger *slog.Logger, v *vaul
 		return nil, nil
 	}
 
+	if v == nil {
+		return nil, fmt.Errorf("encryption vault is required")
+	}
+
 	cfg := sqliteutil.DefaultDBConfig(config.DBPath)
 	db, err := sqliteutil.OpenDB(cfg, logger)
 	if err != nil {
@@ -126,9 +130,6 @@ func (ts *TokenStoreService) KVSet(key, value string, ttlSeconds int) error {
 		expiresAt = &tsTime
 	}
 
-	if ts.vault == nil {
-		return fmt.Errorf("encryption vault is required")
-	}
 	if !ts.vault.IsUnlocked() {
 		return fmt.Errorf("vault is locked, cannot encrypt value for key %s", key)
 	}
@@ -167,10 +168,6 @@ func (ts *TokenStoreService) KVGet(key string) (string, bool) {
 		return "", false
 	}
 
-	if ts.vault == nil {
-		ts.logger.Error("Encryption vault is required for key", "key", key)
-		return "", false
-	}
 	if !ts.vault.IsUnlocked() {
 		ts.logger.Error("Vault is locked, cannot decrypt value for key", "key", key)
 		return "", false
@@ -214,7 +211,17 @@ func (ts *TokenStoreService) KVScanPrefix(prefix string) (map[string]string, err
 
 	result := make(map[string]string)
 	for _, pair := range pairs {
-		result[pair.key] = pair.value
+		value := pair.value
+		if !ts.vault.IsUnlocked() {
+			ts.logger.Error("Vault is locked, cannot decrypt value for key", "key", pair.key)
+			continue
+		}
+		decrypted, err := ts.vault.Decrypt([]byte(value))
+		if err != nil {
+			ts.logger.Error("Failed to decrypt value for key", "key", pair.key, "error", err)
+			continue
+		}
+		result[pair.key] = string(decrypted)
 	}
 
 	return result, nil

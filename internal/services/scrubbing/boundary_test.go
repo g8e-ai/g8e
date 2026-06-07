@@ -14,8 +14,10 @@
 package scrubbing
 
 import (
+	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -23,6 +25,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -655,13 +658,26 @@ func TestScrubbingService_TokenPersistence(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	tempDir := t.TempDir()
 
+	// Create vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vaultDir := filepath.Join(tempDir, "vault")
+	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	vHeader, _, err := vault.NewVaultHeader(privKey)
+	require.NoError(t, err)
+	require.NoError(t, vHeader.Save(vaultDir))
+	testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: logger})
+	require.NoError(t, err)
+	require.NoError(t, testVault.Unlock(privKey))
+	defer testVault.Close()
+
 	// Create LocalStore
 	storageConfig := &storage.LocalStoreConfig{
 		DBPath:        filepath.Join(tempDir, "test_tokens.db"),
 		Enabled:       true,
 		RetentionDays: 30,
 	}
-	localStore, err := storage.NewLocalStoreService(storageConfig, logger, nil)
+	localStore, err := storage.NewLocalStoreService(storageConfig, logger, testVault)
 	require.NoError(t, err)
 	require.NotNil(t, localStore)
 	defer localStore.Close()
@@ -719,13 +735,26 @@ func TestScrubbingService_TokenPersistence_TTL(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	tempDir := t.TempDir()
 
+	// Create vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vaultDir := filepath.Join(tempDir, "vault")
+	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	vHeader, _, err := vault.NewVaultHeader(privKey)
+	require.NoError(t, err)
+	require.NoError(t, vHeader.Save(vaultDir))
+	testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: logger})
+	require.NoError(t, err)
+	require.NoError(t, testVault.Unlock(privKey))
+	defer testVault.Close()
+
 	// Create LocalStore
 	storageConfig := &storage.LocalStoreConfig{
 		DBPath:        filepath.Join(tempDir, "test_ttl.db"),
 		Enabled:       true,
 		RetentionDays: 30,
 	}
-	localStore, err := storage.NewLocalStoreService(storageConfig, logger, nil)
+	localStore, err := storage.NewLocalStoreService(storageConfig, logger, testVault)
 	require.NoError(t, err)
 	require.NotNil(t, localStore)
 	defer localStore.Close()

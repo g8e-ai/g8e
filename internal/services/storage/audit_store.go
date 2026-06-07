@@ -147,6 +147,10 @@ func NewSQLAuditStore(config *AuditStoreConfig, logger *slog.Logger) (*SQLAuditS
 		return nil, nil
 	}
 
+	if config.EncryptionVault == nil {
+		return nil, fmt.Errorf("EncryptionVault is required for audit store")
+	}
+
 	ass := &SQLAuditStore{
 		config:          config,
 		logger:          logger,
@@ -1181,9 +1185,6 @@ func (ass *SQLAuditStore) encryptContent(content string) ([]byte, error) {
 		return nil, nil
 	}
 
-	if ass.encryptionVault == nil {
-		return nil, fmt.Errorf("encryption vault is required")
-	}
 	if !ass.encryptionVault.IsUnlocked() {
 		return nil, fmt.Errorf("vault is locked, cannot encrypt content")
 	}
@@ -1202,9 +1203,6 @@ func (ass *SQLAuditStore) decryptContent(data []byte) (string, error) {
 		return "", nil
 	}
 
-	if ass.encryptionVault == nil {
-		return "", fmt.Errorf("encryption vault is required")
-	}
 	if !ass.encryptionVault.IsUnlocked() {
 		return "", fmt.Errorf("vault is locked, cannot decrypt content")
 	}

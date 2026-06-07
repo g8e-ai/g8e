@@ -16,13 +16,17 @@ package governance
 import (
 	"crypto/ed25519"
 	"encoding/hex"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"log/slog"
 
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/services/vault"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,11 +35,18 @@ import (
 func TestOutboundL3Notary_VerifyL3Proof_NoApproval(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
+	vaultDir := filepath.Join(tmpDir, "vault")
 	config := &storage.LocalStoreConfig{
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil)
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
+
+	store, err := storage.NewLocalStoreService(config, logger, testVault)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -44,7 +55,7 @@ func TestOutboundL3Notary_VerifyL3Proof_NoApproval(t *testing.T) {
 	userID := "user-123"
 	cliSessionID := "cli-session-456"
 
-	tx := &storage.SuspendedTransaction{
+	tx := &models.SuspendedTransaction{
 		TransactionHash: txHash,
 		Envelope:        []byte("{}"),
 		CreatedAt:       time.Now().UTC(),
@@ -71,11 +82,18 @@ func TestOutboundL3Notary_VerifyL3Proof_NoApproval(t *testing.T) {
 func TestOutboundL3Notary_VerifyL3Proof_ExpiredApproval(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
+	vaultDir := filepath.Join(tmpDir, "vault")
 	config := &storage.LocalStoreConfig{
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil)
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
+
+	store, err := storage.NewLocalStoreService(config, logger, testVault)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -85,7 +103,7 @@ func TestOutboundL3Notary_VerifyL3Proof_ExpiredApproval(t *testing.T) {
 	cliSessionID := "cli-session-456"
 
 	expiredTime := time.Now().UTC().Add(-31 * time.Minute)
-	tx := &storage.SuspendedTransaction{
+	tx := &models.SuspendedTransaction{
 		TransactionHash:   txHash,
 		Envelope:          []byte("{}"),
 		CreatedAt:         time.Now().UTC(),
@@ -115,11 +133,18 @@ func TestOutboundL3Notary_VerifyL3Proof_ExpiredApproval(t *testing.T) {
 func TestOutboundL3Notary_VerifyL3Proof_MissingSignature(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
+	vaultDir := filepath.Join(tmpDir, "vault")
 	config := &storage.LocalStoreConfig{
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil)
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
+
+	store, err := storage.NewLocalStoreService(config, logger, testVault)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -129,7 +154,7 @@ func TestOutboundL3Notary_VerifyL3Proof_MissingSignature(t *testing.T) {
 	cliSessionID := "cli-session-456"
 
 	now := time.Now().UTC()
-	tx := &storage.SuspendedTransaction{
+	tx := &models.SuspendedTransaction{
 		TransactionHash:   txHash,
 		Envelope:          []byte("{}"),
 		CreatedAt:         now,
@@ -159,11 +184,18 @@ func TestOutboundL3Notary_VerifyL3Proof_MissingSignature(t *testing.T) {
 func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureEncoding(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
+	vaultDir := filepath.Join(tmpDir, "vault")
 	config := &storage.LocalStoreConfig{
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil)
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
+
+	store, err := storage.NewLocalStoreService(config, logger, testVault)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -173,7 +205,7 @@ func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureEncoding(t *testing.T) {
 	cliSessionID := "cli-session-456"
 
 	now := time.Now().UTC()
-	tx := &storage.SuspendedTransaction{
+	tx := &models.SuspendedTransaction{
 		TransactionHash:   txHash,
 		Envelope:          []byte("{}"),
 		CreatedAt:         now,
@@ -203,11 +235,18 @@ func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureEncoding(t *testing.T) {
 func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureLength(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
+	vaultDir := filepath.Join(tmpDir, "vault")
 	config := &storage.LocalStoreConfig{
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil)
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
+
+	store, err := storage.NewLocalStoreService(config, logger, testVault)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -217,7 +256,7 @@ func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureLength(t *testing.T) {
 	cliSessionID := "cli-session-456"
 
 	now := time.Now().UTC()
-	tx := &storage.SuspendedTransaction{
+	tx := &models.SuspendedTransaction{
 		TransactionHash:   txHash,
 		Envelope:          []byte("{}"),
 		CreatedAt:         now,
@@ -248,11 +287,18 @@ func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureLength(t *testing.T) {
 func TestOutboundL3Notary_VerifyL3Proof_SignatureMismatch(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
+	vaultDir := filepath.Join(tmpDir, "vault")
 	config := &storage.LocalStoreConfig{
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil)
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
+
+	store, err := storage.NewLocalStoreService(config, logger, testVault)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -262,7 +308,7 @@ func TestOutboundL3Notary_VerifyL3Proof_SignatureMismatch(t *testing.T) {
 	cliSessionID := "cli-session-456"
 
 	now := time.Now().UTC()
-	tx := &storage.SuspendedTransaction{
+	tx := &models.SuspendedTransaction{
 		TransactionHash:   txHash,
 		Envelope:          []byte("{}"),
 		CreatedAt:         now,
@@ -279,9 +325,9 @@ func TestOutboundL3Notary_VerifyL3Proof_SignatureMismatch(t *testing.T) {
 	err = store.StoreSuspendedTransaction(tx)
 	require.NoError(t, err)
 
-	_, privKey, err := ed25519.GenerateKey(nil)
+	_, wrongPrivKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	wrongSig := hex.EncodeToString(ed25519.Sign(privKey, []byte(txHash)))
+	wrongSig := hex.EncodeToString(ed25519.Sign(wrongPrivKey, []byte(txHash)))
 
 	proof := &commonv1.L3Proof{
 		CliSignature: wrongSig,
@@ -296,11 +342,18 @@ func TestOutboundL3Notary_VerifyL3Proof_SignatureMismatch(t *testing.T) {
 func TestOutboundL3Notary_VerifyL3Proof_FingerprintMismatch(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
+	vaultDir := filepath.Join(tmpDir, "vault")
 	config := &storage.LocalStoreConfig{
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil)
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
+
+	store, err := storage.NewLocalStoreService(config, logger, testVault)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -310,11 +363,11 @@ func TestOutboundL3Notary_VerifyL3Proof_FingerprintMismatch(t *testing.T) {
 	cliSessionID := "cli-session-456"
 
 	now := time.Now().UTC()
-	_, privKey, err := ed25519.GenerateKey(nil)
+	_, sigPrivKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	signature := hex.EncodeToString(ed25519.Sign(privKey, []byte(txHash)))
+	signature := hex.EncodeToString(ed25519.Sign(sigPrivKey, []byte(txHash)))
 
-	tx := &storage.SuspendedTransaction{
+	tx := &models.SuspendedTransaction{
 		TransactionHash:         txHash,
 		Envelope:                []byte("{}"),
 		CreatedAt:               now,
@@ -346,11 +399,18 @@ func TestOutboundL3Notary_VerifyL3Proof_FingerprintMismatch(t *testing.T) {
 func TestOutboundL3Notary_VerifyL3Proof_ValidProof(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
+	vaultDir := filepath.Join(tmpDir, "vault")
 	config := &storage.LocalStoreConfig{
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil)
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
+
+	store, err := storage.NewLocalStoreService(config, logger, testVault)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -360,11 +420,11 @@ func TestOutboundL3Notary_VerifyL3Proof_ValidProof(t *testing.T) {
 	cliSessionID := "cli-session-456"
 
 	now := time.Now().UTC()
-	_, privKey, err := ed25519.GenerateKey(nil)
+	_, sigPrivKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	signature := hex.EncodeToString(ed25519.Sign(privKey, []byte(txHash)))
+	signature := hex.EncodeToString(ed25519.Sign(sigPrivKey, []byte(txHash)))
 
-	tx := &storage.SuspendedTransaction{
+	tx := &models.SuspendedTransaction{
 		TransactionHash:         txHash,
 		Envelope:                []byte("{}"),
 		CreatedAt:               now,
@@ -395,11 +455,18 @@ func TestOutboundL3Notary_VerifyL3Proof_ValidProof(t *testing.T) {
 func TestOutboundL3Notary_VerifyL3Proof_TransactionNotFound(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
+	vaultDir := filepath.Join(tmpDir, "vault")
 	config := &storage.LocalStoreConfig{
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil)
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
+
+	store, err := storage.NewLocalStoreService(config, logger, testVault)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -421,11 +488,18 @@ func TestOutboundL3Notary_VerifyL3Proof_TransactionNotFound(t *testing.T) {
 func TestOutboundL3Notary_VerifyL3Proof_UserIDMismatch(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
+	vaultDir := filepath.Join(tmpDir, "vault")
 	config := &storage.LocalStoreConfig{
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil)
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
+
+	store, err := storage.NewLocalStoreService(config, logger, testVault)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -435,7 +509,7 @@ func TestOutboundL3Notary_VerifyL3Proof_UserIDMismatch(t *testing.T) {
 	cliSessionID := "cli-session-456"
 
 	now := time.Now().UTC()
-	tx := &storage.SuspendedTransaction{
+	tx := &models.SuspendedTransaction{
 		TransactionHash:   txHash,
 		Envelope:          []byte("{}"),
 		CreatedAt:         now,
@@ -465,11 +539,18 @@ func TestOutboundL3Notary_VerifyL3Proof_UserIDMismatch(t *testing.T) {
 func TestOutboundL3Notary_VerifyL3Proof_NoFingerprintCheckWhenNotSet(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
+	vaultDir := filepath.Join(tmpDir, "vault")
 	config := &storage.LocalStoreConfig{
 		DBPath:  filepath.Join(tmpDir, "test.db"),
 		Enabled: true,
 	}
-	store, err := storage.NewLocalStoreService(config, logger, nil)
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
+
+	store, err := storage.NewLocalStoreService(config, logger, testVault)
 	require.NoError(t, err)
 	defer store.Close()
 	notary := NewOutboundL3Notary(store, logger)
@@ -479,11 +560,11 @@ func TestOutboundL3Notary_VerifyL3Proof_NoFingerprintCheckWhenNotSet(t *testing.
 	cliSessionID := "cli-session-456"
 
 	now := time.Now().UTC()
-	_, privKey, err := ed25519.GenerateKey(nil)
+	_, sigPrivKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	signature := hex.EncodeToString(ed25519.Sign(privKey, []byte(txHash)))
+	signature := hex.EncodeToString(ed25519.Sign(sigPrivKey, []byte(txHash)))
 
-	tx := &storage.SuspendedTransaction{
+	tx := &models.SuspendedTransaction{
 		TransactionHash:         txHash,
 		Envelope:                []byte("{}"),
 		CreatedAt:               now,
@@ -508,4 +589,28 @@ func TestOutboundL3Notary_VerifyL3Proof_NoFingerprintCheckWhenNotSet(t *testing.
 	allowed, err := notary.VerifyL3Proof(userID, txHash, cliSessionID, proof)
 	assert.NoError(t, err)
 	assert.True(t, allowed)
+}
+
+// createTestVault creates a new unlocked Vault in the given directory using the provided private key.
+// The vault header is initialized and the vault is unlocked. Cleanup closes it via t.Cleanup.
+func createTestVault(t *testing.T, dataDir string, privateKey []byte) *vault.Vault {
+	t.Helper()
+
+	require.NoError(t, os.MkdirAll(dataDir, 0700))
+
+	logger := testutil.NewTestLogger()
+
+	header, _, err := vault.NewVaultHeader(privateKey)
+	require.NoError(t, err)
+	require.NoError(t, header.Save(dataDir))
+
+	v, err := vault.NewVault(&vault.VaultConfig{
+		DataDir: dataDir,
+		Logger:  logger,
+	})
+	require.NoError(t, err)
+	require.NoError(t, v.Unlock(privateKey))
+
+	t.Cleanup(func() { v.Close() })
+	return v
 }

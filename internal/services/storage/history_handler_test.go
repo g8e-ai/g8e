@@ -52,7 +52,8 @@ func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *AuditVaultService,
 		GitPath:         gitPath,
 		EncryptionVault: avs.GetEncryptionVault(),
 	}
-	lms := NewGitLedgerService(ledgerConfig, logger)
+	lms, err := NewGitLedgerService(ledgerConfig, logger)
+	require.NoError(t, err)
 
 	auditStoreConfig := &AuditStoreConfig{
 		DataDir:              tempDir,
@@ -604,7 +605,8 @@ func TestHistoryHandler_EventWithTruncatedOutput(t *testing.T) {
 		GitPath:         "",
 		EncryptionVault: avs.GetEncryptionVault(),
 	}
-	lms := NewGitLedgerService(ledgerConfig, logger)
+	lms, err := NewGitLedgerService(ledgerConfig, logger)
+	require.NoError(t, err)
 
 	auditStoreConfig := &AuditStoreConfig{
 		DataDir:              tempDir,

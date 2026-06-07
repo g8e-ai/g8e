@@ -22,6 +22,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/interfaces"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 )
@@ -557,7 +558,7 @@ func (ls *LocalStoreService) KVSet(key, value string, ttlSeconds int) error {
 	}
 
 	valueToStore := value
-	if ls.vault != nil && ls.vault.IsUnlocked() {
+	if ls.vault.IsUnlocked() {
 		encrypted, err := ls.vault.Encrypt([]byte(value))
 		if err != nil {
 			return fmt.Errorf("failed to encrypt value for key %s: %w", key, err)
@@ -593,7 +594,7 @@ func (ls *LocalStoreService) KVGet(key string) (string, bool) {
 		return "", false
 	}
 
-	if ls.vault != nil && ls.vault.IsUnlocked() {
+	if ls.vault.IsUnlocked() {
 		decrypted, err := ls.vault.Decrypt([]byte(value))
 		if err != nil {
 			ls.logger.Error("Failed to decrypt value for key", "key", key, "error", err)
@@ -606,6 +607,7 @@ func (ls *LocalStoreService) KVGet(key string) (string, bool) {
 }
 
 // KVScanPrefix retrieves all key-value pairs with a given prefix, honoring TTL.
+// If a vault is configured, values are decrypted using AES-256-GCM.
 func (ls *LocalStoreService) KVScanPrefix(prefix string) (map[string]string, error) {
 	if ls == nil || ls.db == nil {
 		return nil, fmt.Errorf("local storage is disabled")
@@ -635,7 +637,16 @@ func (ls *LocalStoreService) KVScanPrefix(prefix string) (map[string]string, err
 
 	result := make(map[string]string)
 	for _, pair := range pairs {
-		result[pair.key] = pair.value
+		value := pair.value
+		if ls.vault.IsUnlocked() {
+			decrypted, err := ls.vault.Decrypt([]byte(value))
+			if err != nil {
+				ls.logger.Error("Failed to decrypt value for key", "key", pair.key, "error", err)
+				continue
+			}
+			value = string(decrypted)
+		}
+		result[pair.key] = value
 	}
 
 	return result, nil
@@ -894,26 +905,8 @@ func (ls *LocalStoreService) GetFileDiffsBySession(operatorSessionID string, lim
 	return records, nil
 }
 
-// SuspendedTransaction represents a transaction awaiting L3 approval.
-type SuspendedTransaction struct {
-	TransactionHash string
-	Envelope        []byte
-	CreatedAt       time.Time
-	ExpiresAt       time.Time
-	ToolName        string
-	ToolArguments   []byte
-	UserID          string
-	OperatorID      string
-	// Approval decision state (Finding 8)
-	Approved                bool
-	ApprovedAt              *time.Time
-	ApprovedBy              string
-	ApprovalSignature       string
-	ExpectedCertFingerprint string
-}
-
 // StoreSuspendedTransaction stores a transaction awaiting L3 approval.
-func (ls *LocalStoreService) StoreSuspendedTransaction(tx *SuspendedTransaction) error {
+func (ls *LocalStoreService) StoreSuspendedTransaction(tx *models.SuspendedTransaction) error {
 	if ls == nil || ls.db == nil {
 		return fmt.Errorf("local store not initialized")
 	}
@@ -963,7 +956,7 @@ func (ls *LocalStoreService) StoreSuspendedTransaction(tx *SuspendedTransaction)
 
 // GetSuspendedTransaction retrieves a suspended transaction by hash.
 // Returns (nil, false) if not found or expired.
-func (ls *LocalStoreService) GetSuspendedTransaction(txHash string) (*SuspendedTransaction, bool) {
+func (ls *LocalStoreService) GetSuspendedTransaction(txHash string) (*models.SuspendedTransaction, bool) {
 	if ls == nil || ls.db == nil {
 		return nil, false
 	}
@@ -996,7 +989,7 @@ func (ls *LocalStoreService) GetSuspendedTransaction(txHash string) (*SuspendedT
 		approvedAt = &ts
 	}
 
-	return &SuspendedTransaction{
+	return &models.SuspendedTransaction{
 		TransactionHash:         txHash,
 		Envelope:                []byte(envelopeStr.String),
 		CreatedAt:               createdAt,
@@ -1015,7 +1008,7 @@ func (ls *LocalStoreService) GetSuspendedTransaction(txHash string) (*SuspendedT
 
 // ListSuspendedTransactions retrieves all non-expired suspended transactions.
 // Optionally filters by user_id if provided.
-func (ls *LocalStoreService) ListSuspendedTransactions(userID string) ([]*SuspendedTransaction, error) {
+func (ls *LocalStoreService) ListSuspendedTransactions(userID string) ([]*models.SuspendedTransaction, error) {
 	if ls == nil || ls.db == nil {
 		return nil, fmt.Errorf("local store not initialized")
 	}
@@ -1056,7 +1049,7 @@ func (ls *LocalStoreService) ListSuspendedTransactions(userID string) ([]*Suspen
 		return nil, fmt.Errorf("failed to query suspended transactions: %w", err)
 	}
 
-	var transactions []*SuspendedTransaction
+	var transactions []*models.SuspendedTransaction
 	for _, row := range rows {
 		createdAt, _ := sqliteutil.ParseTimestamp(row.createdAtStr.String)
 		expiresAt, _ := sqliteutil.ParseTimestamp(row.expiresAtStr.String)
@@ -1072,7 +1065,7 @@ func (ls *LocalStoreService) ListSuspendedTransactions(userID string) ([]*Suspen
 			approvedAt = &ts
 		}
 
-		transactions = append(transactions, &SuspendedTransaction{
+		transactions = append(transactions, &models.SuspendedTransaction{
 			TransactionHash:         row.txHash.String,
 			Envelope:                []byte(row.envelopeStr.String),
 			CreatedAt:               createdAt,

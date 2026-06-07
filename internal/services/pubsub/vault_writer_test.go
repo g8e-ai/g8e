@@ -153,7 +153,7 @@ func TestVaultWriter_StoreFileDiffFromLedger(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		ledger := &storage.LedgerService{}
+		ledger := &storage.GitLedgerService{}
 		svc := NewVaultWriter(cfg, logger, nil, nil)
 
 		svc.StoreFileDiffFromLedger("/tmp/test.txt", "write", "event-1", "session-1", "case-1", ledger)

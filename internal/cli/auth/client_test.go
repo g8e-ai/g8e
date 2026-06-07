@@ -295,6 +295,8 @@ func TestDeleteCredentials_Success(t *testing.T) {
 				ProtocolModelsDir    string `json:"protocol_models_dir"`
 				SecretsDir           string `json:"secrets_dir"`
 				SSHConfigPath        string `json:"ssh_config_path"`
+				VaultDir             string `json:"vault_dir"`
+				VaultKeyPath         string `json:"vault_key_path"`
 			}{
 				CACertPath: filepath.Join(tmpDir, ".g8e/pki/trust/g8eg-ca-bundle.pem"),
 			},
@@ -352,6 +354,8 @@ func TestDeleteCredentials_NonExistentFiles(t *testing.T) {
 				ProtocolModelsDir    string `json:"protocol_models_dir"`
 				SecretsDir           string `json:"secrets_dir"`
 				SSHConfigPath        string `json:"ssh_config_path"`
+				VaultDir             string `json:"vault_dir"`
+				VaultKeyPath         string `json:"vault_key_path"`
 			}{
 				CACertPath: filepath.Join(tmpDir, ".g8e/pki/trust/g8eg-ca-bundle.pem"),
 			},
@@ -1268,6 +1272,8 @@ func TestDeleteCredentials_RemoveError(t *testing.T) {
 				ProtocolModelsDir    string `json:"protocol_models_dir"`
 				SecretsDir           string `json:"secrets_dir"`
 				SSHConfigPath        string `json:"ssh_config_path"`
+				VaultDir             string `json:"vault_dir"`
+				VaultKeyPath         string `json:"vault_key_path"`
 			}{
 				CACertPath: filepath.Join(tmpDir, ".g8e/pki/trust/g8eg-ca-bundle.pem"),
 			},

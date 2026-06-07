@@ -14,6 +14,7 @@
 package storage
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
 	"os"
@@ -31,11 +32,18 @@ func TestNewLocalStoreService(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
-	dbPath := filepath.Join(t.TempDir(), "test_local_state.db")
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test_local_state.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 	config := DefaultLocalStoreConfig()
 	config.DBPath = dbPath
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -62,10 +70,17 @@ func TestLocalStoreService_StoreAndRetrieve(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
+	tempDir := t.TempDir()
 	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(t.TempDir(), "test_store.db")
+	config.DBPath = filepath.Join(tempDir, "test_store.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -104,10 +119,17 @@ func TestLocalStoreService_KVScanPrefix(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
+	tempDir := t.TempDir()
 	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(t.TempDir(), "test_kv_scan.db")
+	config.DBPath = filepath.Join(tempDir, "test_kv_scan.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -142,10 +164,17 @@ func TestLocalStoreService_KVScanPrefix_TTL(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
+	tempDir := t.TempDir()
 	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(t.TempDir(), "test_kv_scan_ttl.db")
+	config.DBPath = filepath.Join(tempDir, "test_kv_scan_ttl.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -176,10 +205,17 @@ func TestLocalStoreService_HashConsistency(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
+	tempDir := t.TempDir()
 	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(t.TempDir(), "test_hash.db")
+	config.DBPath = filepath.Join(tempDir, "test_hash.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -199,10 +235,17 @@ func TestLocalStoreService_UpsertBehavior(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
+	tempDir := t.TempDir()
 	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(t.TempDir(), "test_upsert.db")
+	config.DBPath = filepath.Join(tempDir, "test_upsert.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -242,10 +285,17 @@ func TestLocalStoreService_NonExistentRecord(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
+	tempDir := t.TempDir()
 	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(t.TempDir(), "test_nonexistent.db")
+	config.DBPath = filepath.Join(tempDir, "test_nonexistent.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -287,10 +337,17 @@ func TestLocalStoreService_StoreAndRetrieveFileDiff(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
+	tempDir := t.TempDir()
 	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(t.TempDir(), "test_file_diff.db")
+	config.DBPath = filepath.Join(tempDir, "test_file_diff.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -338,10 +395,17 @@ func TestLocalStoreService_GetFileDiffsBySession(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
+	tempDir := t.TempDir()
 	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(t.TempDir(), "test_file_diff_session.db")
+	config.DBPath = filepath.Join(tempDir, "test_file_diff_session.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -388,10 +452,17 @@ func TestLocalStoreService_GetFileDiff_NotFound(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
+	tempDir := t.TempDir()
 	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(t.TempDir(), "test_file_diff_notfound.db")
+	config.DBPath = filepath.Join(tempDir, "test_file_diff_notfound.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -415,7 +486,13 @@ func TestLocalStorePrune(t *testing.T) {
 		PruneIntervalMinutes: 60,
 	}
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	vaultDir := filepath.Join(tempDir, "vault")
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	defer ls.Close()
 
@@ -506,10 +583,17 @@ func TestLocalStoreService_FileDiffUpsert(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
+	tempDir := t.TempDir()
 	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(t.TempDir(), "test_file_diff_upsert.db")
+	config.DBPath = filepath.Join(tempDir, "test_file_diff_upsert.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -541,10 +625,17 @@ func TestLocalStoreService_TokenStore_IsEnabled(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
+	tempDir := t.TempDir()
 	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(t.TempDir(), "test_is_enabled.db")
+	config.DBPath = filepath.Join(tempDir, "test_is_enabled.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -556,10 +647,17 @@ func TestLocalStoreService_TokenStore_KVSet_KVGet(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
+	tempDir := t.TempDir()
 	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(t.TempDir(), "test_kv_set_get.db")
+	config.DBPath = filepath.Join(tempDir, "test_kv_set_get.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -627,10 +725,17 @@ func TestLocalStoreService_TokenStore_KVGet_TTLExpiry(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
+	tempDir := t.TempDir()
 	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(t.TempDir(), "test_kv_ttl_expiry.db")
+	config.DBPath = filepath.Join(tempDir, "test_kv_ttl_expiry.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -673,10 +778,17 @@ func TestLocalStoreService_Regression_UnscrubbedData(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
+	tempDir := t.TempDir()
 	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(t.TempDir(), "test_unscrubbed.db")
+	config.DBPath = filepath.Join(tempDir, "test_unscrubbed.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -717,10 +829,17 @@ func TestLocalStoreService_Regression_UnscrubbedFileDiff(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
+	tempDir := t.TempDir()
 	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(t.TempDir(), "test_unscrubbed_diff.db")
+	config.DBPath = filepath.Join(tempDir, "test_unscrubbed_diff.db")
+	vaultDir := filepath.Join(tempDir, "vault")
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vault := createTestVault(t, vaultDir, privKey)
+
+	ls, err := NewLocalStoreService(config, logger, vault)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()

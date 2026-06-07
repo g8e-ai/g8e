@@ -842,9 +842,8 @@ func (s *ScrubbingService) RehydrateText(input string) string {
 	}
 
 	s.tokenMu.RLock()
-	defer s.tokenMu.RUnlock()
-
 	if len(s.tokenMap) == 0 && (s.tokenStore == nil || !s.tokenStore.IsEnabled()) {
+		s.tokenMu.RUnlock()
 		return input
 	}
 
@@ -853,6 +852,7 @@ func (s *ScrubbingService) RehydrateText(input string) string {
 	for token, value := range s.tokenMap {
 		result = strings.ReplaceAll(result, token, value)
 	}
+	s.tokenMu.RUnlock()
 
 	// If TokenStore is available, check for any remaining tokens not in memory
 	if s.tokenStore != nil && s.tokenStore.IsEnabled() {
@@ -860,18 +860,30 @@ func (s *ScrubbingService) RehydrateText(input string) string {
 		tokenPattern := regexp.MustCompile(`\{\{UEI_\d+\}\}`)
 		matches := tokenPattern.FindAllString(result, -1)
 
+		// Check which tokens are already in memory
+		s.tokenMu.RLock()
+		inMemory := make(map[string]bool)
+		for _, token := range matches {
+			if _, ok := s.tokenMap[token]; ok {
+				inMemory[token] = true
+			}
+		}
+		s.tokenMu.RUnlock()
+
 		for _, token := range matches {
 			// Skip if already in memory (already replaced above)
-			if _, ok := s.tokenMap[token]; ok {
+			if inMemory[token] {
 				continue
 			}
 
 			// Try to load from TokenStore
 			key := fmt.Sprintf("sentinel_token_%s", token)
 			if value, found := s.tokenStore.KVGet(key); found {
-				// Add to in-memory cache for future use
+				// Add to in-memory cache for future use (requires write lock)
+				s.tokenMu.Lock()
 				s.tokenMap[token] = value
 				s.reverseMap[value] = token
+				s.tokenMu.Unlock()
 				result = strings.ReplaceAll(result, token, value)
 			}
 		}

@@ -387,18 +387,14 @@ func TestHandleVaultCommand_ResetVault_NotInitialized_Subprocess(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRunGatewayMode_BadLogLevel_Subprocess(t *testing.T) {
-	if os.Getenv("G8E_TEST_GATEWAY_BAD_LOG") == "1" {
-		dir := os.Getenv("G8E_TEST_TMP_DIR")
-		runGatewayMode(config.PostureDoctrine, 0, 0, dir, "", "", "", "", 0, 0, "notavalidlevel", "", "")
+	if len(os.Args) > 1 && os.Args[1] == "subprocess" {
+		dir := os.Args[2]
+		runGatewayMode(config.PostureDoctrine, 0, 0, dir, "", "", "", "", "", "", 0, 0, "notavalidlevel", "", "")
 		return
 	}
 
 	dir := t.TempDir()
-	cmd := exec.Command(os.Args[0], "-test.run=TestRunGatewayMode_BadLogLevel_Subprocess")
-	cmd.Env = append(os.Environ(),
-		"G8E_TEST_GATEWAY_BAD_LOG=1",
-		"G8E_TEST_TMP_DIR"+"="+dir,
-	)
+	cmd := exec.Command(os.Args[0], "subprocess", dir)
 	err := cmd.Run()
 
 	exitErr, ok := err.(*exec.ExitError)

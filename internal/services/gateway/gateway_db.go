@@ -29,6 +29,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"hash"
 	"log/slog"
@@ -88,7 +89,8 @@ type CanonicalDBService struct {
 
 // OpenCanonicalDBService opens (or creates) the unified SQLite database.
 // testMode enables the in-memory keystore backend for unit tests.
-func OpenCanonicalDBService(dataDir string, secretsDir string, logger *slog.Logger, testMode bool) (*CanonicalDBService, error) {
+// vaultKeyPath is the path to the vault private key file (hex-encoded).
+func OpenCanonicalDBService(dataDir string, secretsDir string, logger *slog.Logger, testMode bool, vaultKeyPath string) (*CanonicalDBService, error) {
 	dbPath := filepath.Join(dataDir, "g8e.db")
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
@@ -98,8 +100,9 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, logger *slog.Logg
 	}
 
 	// Initialize vault for encryption
+	vaultDir := filepath.Join(dataDir, ".g8e/vault")
 	vaultConfig := &vault.VaultConfig{
-		DataDir: filepath.Join(dataDir, ".g8e/vault"),
+		DataDir: vaultDir,
 		Logger:  logger,
 	}
 	encryptionVault, err := vault.NewVault(vaultConfig)
@@ -107,8 +110,43 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, logger *slog.Logg
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize vault: %w", err)
 	}
-	// Note: Vault should be unlocked by the operator via bootstrap process
-	// For now, we'll initialize without unlocking - services will handle locked vault gracefully
+
+	// Unlock vault before initializing storage services
+	// Encryption is required for secure data storage at rest
+	if vaultKeyPath == "" {
+		if !testMode {
+			// In production mode, fall back to default vault key path
+			vaultKeyPath = filepath.Join(vaultDir, "key")
+		} else {
+			// In test mode with no vault key, vault remains locked (services will handle this gracefully)
+			logger.Info("No vault key provided in test mode, vault will remain locked")
+		}
+	}
+
+	if vaultKeyPath != "" {
+		if !filepath.IsAbs(vaultKeyPath) {
+			vaultKeyPath = filepath.Join(dataDir, vaultKeyPath)
+		}
+
+		privateKey, err := vault.ReadVaultKey(vaultKeyPath)
+		if err != nil {
+			db.Close()
+			return nil, fmt.Errorf("failed to read vault key: %w", err)
+		}
+		defer vault.SecureZero(privateKey)
+
+		if err := encryptionVault.Unlock(privateKey); err != nil {
+			db.Close()
+			if errors.Is(err, vault.ErrVaultNotInit) {
+				return nil, fmt.Errorf("vault not initialized at %s. Run 'g8e vault init' first", vaultDir)
+			}
+			if errors.Is(err, vault.ErrInvalidPrivateKey) {
+				return nil, fmt.Errorf("invalid vault key at %s. Verify the key file is correct", vaultKeyPath)
+			}
+			return nil, fmt.Errorf("failed to unlock vault: %w", err)
+		}
+		logger.Info("Vault unlocked successfully", "vault_dir", vaultDir)
+	}
 
 	// Initialize Audit Vault for transaction-native audit recording
 	auditVaultConfig := storage.DefaultAuditVaultConfig()

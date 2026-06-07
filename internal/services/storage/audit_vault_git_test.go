@@ -14,6 +14,7 @@
 package storage
 
 import (
+	"crypto/ed25519"
 	"os"
 	"path/filepath"
 	"testing"
@@ -30,6 +31,13 @@ import (
 func TestAuditVaultService_GitGetCurrentHash_ReturnsHash(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
+
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
@@ -41,6 +49,7 @@ func TestAuditVaultService_GitGetCurrentHash_ReturnsHash(t *testing.T) {
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		GitPath:                   system.GitEmbedded,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -55,6 +64,13 @@ func TestAuditVaultService_GitGetCurrentHash_ReturnsHash(t *testing.T) {
 func TestAuditVaultService_GitGetCurrentHash_HashChangesAfterCommit(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
+
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
@@ -66,6 +82,7 @@ func TestAuditVaultService_GitGetCurrentHash_HashChangesAfterCommit(t *testing.T
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		GitPath:                   system.GitEmbedded,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -110,6 +127,13 @@ func TestAuditVaultService_GitGetCurrentHash_HashChangesAfterCommit(t *testing.T
 func TestAuditVaultService_GitGetCurrentHash_ErrorWhenGitUnavailable(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
+
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
@@ -121,6 +145,7 @@ func TestAuditVaultService_GitGetCurrentHash_ErrorWhenGitUnavailable(t *testing.
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		GitPath:                   "",
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())

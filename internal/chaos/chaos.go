@@ -46,6 +46,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
+	vault "github.com/g8e-ai/g8e/internal/services/vault"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -403,6 +404,39 @@ func Run(cfg Config) {
 	const keyID = "chaos-l2-key"
 	trustedSigners := map[string]ed25519.PublicKey{keyID: pubKey}
 
+	// ── vault ────────────────────────────────────────────────────────────────
+	vaultDir := filepath.Join(dataDir, "vault")
+	if err := os.MkdirAll(vaultDir, 0700); err != nil {
+		logger.Error("failed to create vault directory", "error", err)
+		os.Exit(1)
+	}
+	_, vaultPrivKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		logger.Error("failed to generate vault key", "error", err)
+		os.Exit(1)
+	}
+	vaultHeader, _, err := vault.NewVaultHeader(vaultPrivKey)
+	if err != nil {
+		logger.Error("failed to create vault header", "error", err)
+		os.Exit(1)
+	}
+	if err := vaultHeader.Save(vaultDir); err != nil {
+		logger.Error("failed to save vault header", "error", err)
+		os.Exit(1)
+	}
+	encryptionVault, err := vault.NewVault(&vault.VaultConfig{
+		DataDir: vaultDir,
+		Logger:  logger,
+	})
+	if err != nil {
+		logger.Error("failed to create vault", "error", err)
+		os.Exit(1)
+	}
+	if err := encryptionVault.Unlock(vaultPrivKey); err != nil {
+		logger.Error("failed to unlock vault", "error", err)
+		os.Exit(1)
+	}
+
 	// ── audit vault ───────────────────────────────────────────────────────────
 	gitPath, _ := findGit()
 	avCfg := &storage.AuditVaultConfig{
@@ -416,6 +450,7 @@ func Run(cfg Config) {
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		GitPath:                   gitPath,
+		EncryptionVault:           encryptionVault,
 	}
 	av, err := storage.NewAuditVaultService(avCfg, logger)
 	if err != nil {
@@ -458,7 +493,7 @@ func Run(cfg Config) {
 	}
 
 	// Initialize Ledger (nil for chaos tester - no actual ledger needed)
-	ledger := storage.NewGitLedgerService(&storage.LedgerConfig{BaseDir: ".g8e/data/ledger", EncryptionVault: nil}, logger)
+	ledger, _ := storage.NewGitLedgerService(&storage.LedgerConfig{BaseDir: ".g8e/data/ledger", EncryptionVault: nil}, logger)
 
 	// Initialize L1 Doctrine for threat detection
 	doctrine := governance.NewL1Doctrine()

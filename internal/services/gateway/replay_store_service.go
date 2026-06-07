@@ -46,7 +46,7 @@ func (s *ReplayStoreService) ReserveNonce(nonce string, expiresAt time.Time) (bo
 	if err == nil {
 		return true, nil // Replay detected
 	}
-	if err != nil && err.Error() != "sql: no rows in result set" {
+	if err.Error() != "sql: no rows in result set" {
 		return false, err
 	}
 

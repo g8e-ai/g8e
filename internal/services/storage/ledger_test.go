@@ -14,6 +14,7 @@
 package storage
 
 import (
+	"crypto/ed25519"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -31,6 +33,19 @@ import (
 func setupTestLedger(t *testing.T) (*GitLedgerService, *AuditVaultService, string) {
 	gitPath := testGitPath(t)
 	tempDir := t.TempDir()
+
+	// Create vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vaultDir := filepath.Join(tempDir, "vault")
+	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	vHeader, _, err := vault.NewVaultHeader(privKey)
+	require.NoError(t, err)
+	require.NoError(t, vHeader.Save(vaultDir))
+	testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: testutil.NewTestLogger()})
+	require.NoError(t, err)
+	require.NoError(t, testVault.Unlock(privKey))
+	defer testVault.Close()
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -43,6 +58,7 @@ func setupTestLedger(t *testing.T) (*GitLedgerService, *AuditVaultService, strin
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		GitPath:                   gitPath,
+		EncryptionVault:           testVault,
 	}
 
 	logger := testutil.NewTestLogger()
@@ -55,7 +71,8 @@ func setupTestLedger(t *testing.T) (*GitLedgerService, *AuditVaultService, strin
 		GitPath:         gitPath,
 		EncryptionVault: avs.GetEncryptionVault(),
 	}
-	lms := NewGitLedgerService(ledgerConfig, logger)
+	lms, err := NewGitLedgerService(ledgerConfig, logger)
+	require.NoError(t, err)
 	require.NotNil(t, lms)
 
 	return lms, avs, tempDir
@@ -73,9 +90,9 @@ func TestLedgerService_NewService(t *testing.T) {
 
 func TestLedgerService_NewServiceWithNilConfig(t *testing.T) {
 	t.Parallel()
-	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
-	assert.NotNil(t, lms)
-	assert.Nil(t, lms.config)
+	lms, err := NewGitLedgerService(nil, testutil.NewTestLogger())
+	assert.Error(t, err)
+	assert.Nil(t, lms)
 }
 
 func TestLedgerService_MirrorFileWrite_NewFile(t *testing.T) {
@@ -156,7 +173,7 @@ func TestLedgerService_MirrorFileWrite_ExistingFile(t *testing.T) {
 
 func TestLedgerService_MirrorFileWrite_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	result, err := lms.LedgerFileWrite("operator_session", "/some/file")
 	assert.NoError(t, err)
@@ -224,7 +241,7 @@ func TestLedgerService_MirrorFileDelete_NonExistentFile(t *testing.T) {
 
 func TestLedgerService_MirrorFileDelete_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	result, err := lms.MirrorFileDelete("operator_session", "/some/file")
 	assert.NoError(t, err)
@@ -270,7 +287,7 @@ func TestLedgerService_MirrorFileCreate(t *testing.T) {
 
 func TestLedgerService_MirrorFileCreate_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	result, err := lms.MirrorFileCreate("operator_session", "/some/file")
 	assert.NoError(t, err)
@@ -279,7 +296,7 @@ func TestLedgerService_MirrorFileCreate_DisabledVault(t *testing.T) {
 
 func TestLedgerService_CompleteMirrorCreate_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	err := lms.CompleteMirrorCreate(&LedgerResult{}, "operator_session")
 	assert.NoError(t, err)
@@ -464,12 +481,12 @@ func TestLedgerService_GetFileHistory(t *testing.T) {
 	}
 }
 
-// Regression: callers (e.g. HistoryHandler) may hold a nil *LedgerService when
+// Regression: callers (e.g. HistoryHandler) may hold a nil *GitLedgerService when
 // the Operator was started without local storage. Public methods must degrade
 // to an error instead of panicking on the auditVault deref inside gitReady().
 func TestLedgerService_GetFileHistory_NilReceiver(t *testing.T) {
 	t.Parallel()
-	var lms *LedgerService
+	var lms *GitLedgerService
 
 	assert.NotPanics(t, func() {
 		history, err := lms.GetFileHistory("/some/file", 10, "session")
@@ -481,7 +498,7 @@ func TestLedgerService_GetFileHistory_NilReceiver(t *testing.T) {
 
 func TestLedgerService_GetFileHistory_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	history, err := lms.GetFileHistory("/some/file", 10, "session")
 	assert.Error(t, err)
@@ -537,7 +554,7 @@ func TestLedgerService_GetFileAtCommit(t *testing.T) {
 
 func TestLedgerService_GetFileAtCommit_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	content, err := lms.GetFileAtCommit("/some/file", "abc123", "session")
 	assert.Error(t, err)
@@ -579,9 +596,15 @@ func TestLedgerService_RestoreFileFromCommit(t *testing.T) {
 
 func TestLedgerService_RestoreFileFromCommit_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
+	// Test with config that has no vault (encryption disabled)
+	config := &LedgerConfig{
+		BaseDir: "/tmp/test",
+		GitPath: "/usr/bin/git",
+	}
+	lms, err := NewGitLedgerService(config, testutil.NewTestLogger())
+	require.NoError(t, err)
 
-	err := lms.RestoreFileFromCommit("/some/file", "abc123", "operator_session")
+	err = lms.RestoreFileFromCommit("/some/file", "abc123", "operator_session")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "disabled")
 }

@@ -60,6 +60,8 @@ func gatewayStartCmd() *cobra.Command {
 	var dataDir string
 	var pkiDir string
 	var secretsDir string
+	var vaultDir string
+	var vaultKeyPath string
 	var passkeyRpID string
 	var passkeyRpName string
 	var rateLimitRPS float64
@@ -72,6 +74,14 @@ func gatewayStartCmd() *cobra.Command {
 		Use:   string(constants.ThinkingActionTypeStart),
 		Short: "Start the g8e Gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Environment variables override CLI flags
+			if vaultDir == "" {
+				vaultDir = os.Getenv("G8E_VAULT_DIR")
+			}
+			if vaultKeyPath == "" {
+				vaultKeyPath = os.Getenv("G8E_VAULT_KEY")
+			}
+
 			cfg, err := config.Load("")
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
@@ -126,6 +136,8 @@ func gatewayStartCmd() *cobra.Command {
 				dataDir,
 				pkiDir,
 				secretsDir,
+				vaultDir,
+				vaultKeyPath,
 				passkeyRpID,
 				passkeyRpName,
 				rateLimitRPS,
@@ -196,6 +208,8 @@ func gatewayStartCmd() *cobra.Command {
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
 	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "Directory for TLS certificates (default: .g8e/pki)")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
+	cmd.Flags().StringVar(&vaultDir, "vault-dir", "", "Directory for vault data (default: .g8e/vault)")
+	cmd.Flags().StringVar(&vaultKeyPath, "vault-key", "", "Path to vault private key (default: .g8e/secrets/vault.key)")
 	cmd.Flags().StringVar(&passkeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
 	cmd.Flags().StringVar(&passkeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
 	cmd.Flags().Float64Var(&rateLimitRPS, "rate-limit-rps", 0, "Gateway requests per second limit (set to 0 to disable)")
@@ -313,6 +327,8 @@ func gatewayRestartCmd() *cobra.Command {
 				"doctrine",
 				cfg.OperatorHTTPSPort(),
 				constants.Ports.OperatorHttps,
+				"",
+				"",
 				"",
 				"",
 				"",

@@ -14,11 +14,11 @@
 package storage
 
 import (
+	"crypto/ed25519"
 	"fmt"
 	"path/filepath"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -29,25 +29,19 @@ func BenchmarkLocalStore_Streaming(b *testing.B) {
 	logger := testutil.NewTestLogger()
 	tempDir := b.TempDir()
 
-	// Create keystore for encryption
-	secretsDir := filepath.Join(tempDir, "secrets")
-	backend, err := keystore.NewTestBackend()
+	// Create vault for encryption
+	_, privKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
-		b.Fatalf("Failed to create test backend: %v", err)
+		b.Fatalf("Failed to generate key: %v", err)
 	}
-	ks, err := keystore.NewWithBackend(secretsDir, logger, backend)
-	if err != nil {
-		b.Fatalf("Failed to create keystore: %v", err)
-	}
-	if err := ks.Initialize(); err != nil {
-		b.Fatalf("Failed to initialize keystore: %v", err)
-	}
+	vaultDir := filepath.Join(tempDir, "vault")
+	testVault := createTestVault(b, vaultDir, privKey)
 
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(tempDir, "bench_streaming.db")
 	config.Enabled = true
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	ls, err := NewLocalStoreService(config, logger, testVault)
 	if err != nil {
 		b.Fatalf("Failed to create local store: %v", err)
 	}
@@ -76,42 +70,6 @@ func BenchmarkLocalStore_Streaming(b *testing.B) {
 	}
 }
 
-// BenchmarkLocalStore_Streaming_NoEncryption benchmarks operations without encryption
-// to establish baseline performance.
-func BenchmarkLocalStore_Streaming_NoEncryption(b *testing.B) {
-	logger := testutil.NewTestLogger()
-	tempDir := b.TempDir()
-
-	config := DefaultLocalStoreConfig()
-	config.DBPath = filepath.Join(tempDir, "bench_streaming_no_enc.db")
-	config.Enabled = true
-
-	ls, err := NewLocalStoreService(config, logger, nil)
-	if err != nil {
-		b.Fatalf("Failed to create local store: %v", err)
-	}
-	defer ls.Close()
-
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		token := fmt.Sprintf("{{UEI_%d}}", i%1000)
-		value := fmt.Sprintf("sensitive_value_%d", i)
-
-		if err := ls.KVSet(token, value, 86400); err != nil {
-			b.Fatalf("KVSet failed: %v", err)
-		}
-
-		retrieved, found := ls.KVGet(token)
-		if !found {
-			b.Fatalf("KVGet failed to find token %s", token)
-		}
-		if retrieved != value {
-			b.Fatalf("Value mismatch: got %s, want %s", retrieved, value)
-		}
-	}
-}
-
 // BenchmarkLocalStore_Streaming_Parallel benchmarks concurrent token operations
 // to simulate high-throughput scenarios.
 // Note: SQLite single-process has contention limits; this benchmark demonstrates
@@ -120,24 +78,19 @@ func BenchmarkLocalStore_Streaming_Parallel(b *testing.B) {
 	logger := testutil.NewTestLogger()
 	tempDir := b.TempDir()
 
-	secretsDir := filepath.Join(tempDir, "secrets")
-	backend, err := keystore.NewTestBackend()
+	// Create vault for encryption
+	_, privKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
-		b.Fatalf("Failed to create test backend: %v", err)
+		b.Fatalf("Failed to generate key: %v", err)
 	}
-	ks, err := keystore.NewWithBackend(secretsDir, logger, backend)
-	if err != nil {
-		b.Fatalf("Failed to create keystore: %v", err)
-	}
-	if err := ks.Initialize(); err != nil {
-		b.Fatalf("Failed to initialize keystore: %v", err)
-	}
+	vaultDir := filepath.Join(tempDir, "vault")
+	testVault := createTestVault(b, vaultDir, privKey)
 
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(tempDir, "bench_streaming_parallel.db")
 	config.Enabled = true
 
-	ls, err := NewLocalStoreService(config, logger, nil)
+	ls, err := NewLocalStoreService(config, logger, testVault)
 	if err != nil {
 		b.Fatalf("Failed to create local store: %v", err)
 	}

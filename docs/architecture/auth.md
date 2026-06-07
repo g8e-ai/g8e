@@ -115,3 +115,41 @@ Handling sensitive data without leaking it to upstream models is managed by the 
 - **Scrubbing**: Private data is replaced with opaque tokens (Uniform Element Identifiers, such as `{{UEI_1}}`) before sending to external LLMs.
 - **Deterministic Rehydration**: The L5 Actuator performs local rehydration of tokens just before execution via `RehydrateText`.
 - **Data Sovereignty**: Raw secrets never leave the sovereign host environment.
+
+---
+
+## 6. Encryption at Rest
+
+The platform enforces mandatory encryption for all sensitive data at rest. See [Encryption Architecture](./encryption.md) for complete details.
+
+### Vault-Based Encryption
+
+All storage services require an unlocked vault at initialization:
+- **LocalStoreService**: Encrypts command stdout/stderr, file diffs, and content
+- **AuditVaultService**: Encrypts audit records and governance envelopes
+- **ExecutionVaultService**: Encrypts execution results and command outputs
+- **TokenStoreService**: Encrypts authentication tokens and session data
+- **SQLAuditStore**: Encrypts audit trail and compliance records
+
+### Encryption Guarantees
+
+- **Fail-closed**: Services fail to initialize without a vault
+- **AES-256-GCM**: All data encrypted with NIST-approved algorithm
+- **Key rotation**: Support for re-keying without data loss
+- **Zero-knowledge**: Vault keys never written to disk in plaintext
+
+### Vault Management
+
+Vault operations are managed via CLI commands:
+- `./g8e vault init`: Initialize new vault
+- `./g8e vault unlock`: Unlock vault with key
+- `./g8e vault rekey`: Rotate vault keys
+- `./g8e vault status`: Check vault status
+- `./g8e vault reset`: Destroy vault (destructive)
+
+### Configuration
+
+Vault paths can be configured via:
+- CLI flags: `--vault-dir`, `--vault-key`
+- Environment variables: `G8E_VAULT_DIR`, `G8E_VAULT_KEY`
+- Configuration file: `paths_default.json`

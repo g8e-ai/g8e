@@ -14,6 +14,7 @@
 package storage
 
 import (
+	"crypto/ed25519"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -52,6 +53,12 @@ func TestAuditVaultService_Bootstrap(t *testing.T) {
 
 	// Create temporary directory for test
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -64,6 +71,7 @@ func TestAuditVaultService_Bootstrap(t *testing.T) {
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		GitPath:                   gitPath,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -90,6 +98,12 @@ func TestAuditVaultService_Bootstrap(t *testing.T) {
 func TestAuditVaultService_Session(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -101,6 +115,7 @@ func TestAuditVaultService_Session(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -125,6 +140,12 @@ func TestAuditVaultService_Session(t *testing.T) {
 func TestAuditVaultService_Event(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -136,6 +157,7 @@ func TestAuditVaultService_Event(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -180,6 +202,12 @@ func TestAuditVaultService_Event(t *testing.T) {
 func TestAuditVaultService_RecordEvent_RejectsUnknownSession(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -191,6 +219,7 @@ func TestAuditVaultService_RecordEvent_RejectsUnknownSession(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -223,6 +252,12 @@ func TestAuditVaultService_RecordEvent_RejectsUnknownSession(t *testing.T) {
 func TestAuditVaultService_RecordEvent_RejectsMissingSession(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -234,6 +269,7 @@ func TestAuditVaultService_RecordEvent_RejectsMissingSession(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -253,6 +289,12 @@ func TestAuditVaultService_RecordEvent_RejectsMissingSession(t *testing.T) {
 func TestAuditVaultService_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -264,6 +306,7 @@ func TestAuditVaultService_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -300,6 +343,12 @@ func TestAuditVaultService_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 func TestAuditVaultService_RecordEvents_SucceedsWithExistingSessions(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -311,6 +360,7 @@ func TestAuditVaultService_RecordEvents_SucceedsWithExistingSessions(t *testing.
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -345,6 +395,12 @@ func TestAuditVaultService_RecordEvents_SucceedsWithExistingSessions(t *testing.
 func TestAuditVaultService_OutputTruncation(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -356,6 +412,7 @@ func TestAuditVaultService_OutputTruncation(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 100,
 		HeadTailSize:              30,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -403,6 +460,12 @@ func TestAuditVaultService_OutputTruncation(t *testing.T) {
 func TestAuditVaultService_FileMutation(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -414,6 +477,7 @@ func TestAuditVaultService_FileMutation(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -479,6 +543,12 @@ func TestAuditVaultService_Disabled(t *testing.T) {
 func TestAuditVaultService_MultipleSessions(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -490,6 +560,7 @@ func TestAuditVaultService_MultipleSessions(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -526,6 +597,12 @@ func TestAuditVaultService_MultipleSessions(t *testing.T) {
 func TestAuditVaultService_EventPagination(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -537,6 +614,7 @@ func TestAuditVaultService_EventPagination(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -593,6 +671,12 @@ func TestAuditVaultService_EventPagination(t *testing.T) {
 func TestAuditVaultService_EventOrdering(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -604,6 +688,7 @@ func TestAuditVaultService_EventOrdering(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -642,6 +727,12 @@ func TestAuditVaultService_EventOrdering(t *testing.T) {
 func TestAuditVaultService_MultipleFileMutationsPerEvent(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -653,6 +744,7 @@ func TestAuditVaultService_MultipleFileMutationsPerEvent(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -705,6 +797,12 @@ func TestAuditVaultService_MultipleFileMutationsPerEvent(t *testing.T) {
 func TestAuditVaultService_NullExitCode(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -716,6 +814,7 @@ func TestAuditVaultService_NullExitCode(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -748,6 +847,12 @@ func TestAuditVaultService_NullExitCode(t *testing.T) {
 func TestAuditVaultService_DifferentEventTypes(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -759,6 +864,7 @@ func TestAuditVaultService_DifferentEventTypes(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -804,6 +910,12 @@ func TestAuditVaultService_DifferentEventTypes(t *testing.T) {
 func TestAuditVaultService_StderrTruncation(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -815,6 +927,7 @@ func TestAuditVaultService_StderrTruncation(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 100,
 		HeadTailSize:              30,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -857,6 +970,12 @@ func TestAuditVaultService_StderrTruncation(t *testing.T) {
 func TestAuditVaultService_GetSessionNotFound(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -868,6 +987,7 @@ func TestAuditVaultService_GetSessionNotFound(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -882,6 +1002,12 @@ func TestAuditVaultService_GetSessionNotFound(t *testing.T) {
 func TestAuditVaultService_GetEventsEmptySession(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -893,6 +1019,7 @@ func TestAuditVaultService_GetEventsEmptySession(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -911,6 +1038,12 @@ func TestAuditVaultService_GetEventsEmptySession(t *testing.T) {
 func TestAuditVaultService_GetFileMutationsNoMutations(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -922,6 +1055,7 @@ func TestAuditVaultService_GetFileMutationsNoMutations(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -937,6 +1071,12 @@ func TestAuditVaultService_GetFileMutationsNoMutations(t *testing.T) {
 func TestAuditVaultService_WALMode(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -948,6 +1088,7 @@ func TestAuditVaultService_WALMode(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -970,6 +1111,12 @@ func TestAuditVaultService_WALMode(t *testing.T) {
 func TestAuditVaultService_IsEnabled(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -981,6 +1128,7 @@ func TestAuditVaultService_IsEnabled(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -997,6 +1145,12 @@ func TestAuditVaultService_IsEnabled(t *testing.T) {
 func TestAuditVaultService_GetDataDir(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -1008,6 +1162,7 @@ func TestAuditVaultService_GetDataDir(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -1024,6 +1179,12 @@ func TestAuditVaultService_GetDataDir(t *testing.T) {
 func TestAuditVaultService_GetLedgerPath(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -1035,6 +1196,7 @@ func TestAuditVaultService_GetLedgerPath(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -1086,16 +1248,16 @@ func TestAuditVaultService_GetEncryptionVault(t *testing.T) {
 	tempDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
-	// 1. Without encryption vault
+	// 1. Constructor should return error when vault is nil
 	config1 := &AuditVaultConfig{
 		DataDir: tempDir,
 		DBPath:  "test1.db",
 		Enabled: true,
 	}
 	avs1, err := NewAuditVaultService(config1, logger)
-	require.NoError(t, err)
-	defer avs1.Close()
-	assert.Nil(t, avs1.GetEncryptionVault())
+	require.Error(t, err)
+	require.Nil(t, avs1)
+	assert.Contains(t, err.Error(), "EncryptionVault is required")
 
 	// 2. With encryption vault
 	v, err := vault.NewVault(&vault.VaultConfig{
@@ -1124,12 +1286,20 @@ func TestAuditVaultService_GetEncryptionVault(t *testing.T) {
 func TestAuditVaultPrune(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
 	logger := testutil.NewTestLogger()
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
+
 	config := &AuditVaultConfig{
-		DataDir:       tempDir,
-		DBPath:        "prune_test.db",
-		Enabled:       true,
-		RetentionDays: 7,
+		DataDir:         tempDir,
+		DBPath:          "prune_test.db",
+		Enabled:         true,
+		RetentionDays:   7,
+		EncryptionVault: testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, logger)
@@ -1204,6 +1374,12 @@ func TestAuditVaultPrune(t *testing.T) {
 func TestAuditVaultService_LongContentFields(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -1215,6 +1391,7 @@ func TestAuditVaultService_LongContentFields(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -1258,6 +1435,12 @@ func TestAuditVaultService_LongContentFields(t *testing.T) {
 func TestAuditVaultService_FileMutationOperationTypes(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -1269,6 +1452,7 @@ func TestAuditVaultService_FileMutationOperationTypes(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -1313,6 +1497,12 @@ func TestAuditVaultService_FileMutationOperationTypes(t *testing.T) {
 func TestAuditVaultService_SessionWithNullFields(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -1324,6 +1514,7 @@ func TestAuditVaultService_SessionWithNullFields(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -1346,6 +1537,12 @@ func TestAuditVaultService_SessionWithNullFields(t *testing.T) {
 func TestAuditVaultService_CloseIdempotent(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := createTestVault(t, vaultDir, privKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -1357,6 +1554,7 @@ func TestAuditVaultService_CloseIdempotent(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
 	}
 
 	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
@@ -1484,7 +1682,8 @@ func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 	avs1.Close()
 	vault1.Close()
 
-	// Reopen database WITHOUT encryption vault (simulating access without the key)
+	// Attempt to reopen database WITHOUT encryption vault should fail
+	// This is the new fail-closed behavior: service cannot be opened without vault
 	config2 := &AuditVaultConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
@@ -1495,25 +1694,48 @@ func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
-		EncryptionVault:           nil, // No vault = no decryption
+		EncryptionVault:           nil, // No vault = service fails to initialize
 	}
 
 	avs2, err := NewAuditVaultService(config2, testutil.NewTestLogger())
+	require.Error(t, err)
+	require.Nil(t, avs2)
+	assert.Contains(t, err.Error(), "EncryptionVault is required")
+
+	// Verify data can still be read with the correct vault
+	vault3, err := vault.NewVault(&vault.VaultConfig{
+		DataDir: vaultDataDir,
+		Logger:  testutil.NewTestLogger(),
+	})
 	require.NoError(t, err)
-	defer avs2.Close()
+	err = vault3.Unlock(apiKey)
+	require.NoError(t, err)
+	defer vault3.Close()
 
-	// Encryption should be disabled
-	assert.False(t, avs2.IsEncryptionEnabled())
+	config3 := &AuditVaultConfig{
+		DataDir:                   tempDir,
+		DBPath:                    "test.db",
+		LedgerDir:                 "ledger",
+		MaxDBSizeMB:               100,
+		RetentionDays:             7,
+		PruneIntervalMinutes:      60,
+		Enabled:                   true,
+		OutputTruncationThreshold: 102400,
+		HeadTailSize:              51200,
+		EncryptionVault:           vault3,
+	}
 
-	// Read events - they should be encrypted (gibberish)
-	events, err := avs2.GetEvents("locked-test-session", 10, 0)
+	avs3, err := NewAuditVaultService(config3, testutil.NewTestLogger())
+	require.NoError(t, err)
+	defer avs3.Close()
+
+	// Read events with correct vault - should decrypt successfully
+	events, err := avs3.GetEvents("locked-test-session", 10, 0)
 	require.NoError(t, err)
 	require.Len(t, events, 1)
 
-	// The stdout should NOT equal the original secret (it's encrypted binary)
-	assert.NotEqual(t, secretData, events[0].CommandStdout)
-	// It should contain binary data that doesn't match plaintext
-	assert.NotContains(t, events[0].CommandStdout, "hunter2")
+	// The stdout should equal the original secret (decrypted correctly)
+	assert.Equal(t, secretData, events[0].CommandStdout)
 }
 
 func TestAuditVaultService_EncryptionWithRekey(t *testing.T) {
@@ -1602,44 +1824,13 @@ func TestAuditVaultService_EncryptionWithRekey(t *testing.T) {
 func TestAuditVaultService_MixedEncryptedUnencrypted(t *testing.T) {
 	tempDir := t.TempDir()
 
-	config1 := &AuditVaultConfig{
-		DataDir:                   tempDir,
-		DBPath:                    "test.db",
-		LedgerDir:                 "ledger",
-		MaxDBSizeMB:               100,
-		RetentionDays:             7,
-		PruneIntervalMinutes:      60,
-		Enabled:                   true,
-		OutputTruncationThreshold: 102400,
-		HeadTailSize:              51200,
-		EncryptionVault:           nil, // No encryption
-	}
-
-	avs1, err := NewAuditVaultService(config1, testutil.NewTestLogger())
-	require.NoError(t, err)
-
-	err = avs1.CreateSession("mixed-session", "operator", "Mixed Test", "test-user")
-	require.NoError(t, err)
-
-	unencryptedData := "This is plaintext data"
-	exitCode := 0
-	_, err = avs1.RecordEvent(&Event{
-		OperatorSessionID: "mixed-session",
-		Timestamp:         time.Now().UTC(),
-		Type:              constants.Event.Operator.Audit.Command,
-		CommandRaw:        "echo plaintext",
-		CommandExitCode:   &exitCode,
-		CommandStdout:     unencryptedData,
-	})
-	require.NoError(t, err)
-
-	avs1.Close()
-
-	// Now create vault and write encrypted data
+	// With the new fail-closed behavior, vault is mandatory
+	// This test verifies that encryption is consistently applied
 	vaultDataDir := filepath.Join(tempDir, "vault")
 	encVault := createTestVault(t, vaultDataDir, []byte("mixed-test-api-key"))
+	defer encVault.Close()
 
-	config2 := &AuditVaultConfig{
+	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
@@ -1652,30 +1843,43 @@ func TestAuditVaultService_MixedEncryptedUnencrypted(t *testing.T) {
 		EncryptionVault:           encVault,
 	}
 
-	avs2, err := NewAuditVaultService(config2, testutil.NewTestLogger())
+	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	require.NoError(t, err)
+	defer avs.Close()
+
+	err = avs.CreateSession("mixed-session", "operator", "Mixed Test", "test-user")
 	require.NoError(t, err)
 
-	encryptedData := "This is encrypted data"
-	_, err = avs2.RecordEvent(&Event{
+	// Write multiple events - all should be encrypted
+	exitCode := 0
+	data1 := "First encrypted data"
+	_, err = avs.RecordEvent(&Event{
 		OperatorSessionID: "mixed-session",
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.Command,
-		CommandRaw:        "echo encrypted",
+		CommandRaw:        "echo first",
 		CommandExitCode:   &exitCode,
-		CommandStdout:     encryptedData,
+		CommandStdout:     data1,
 	})
 	require.NoError(t, err)
 
-	// Read all events - should handle both encrypted and unencrypted
-	events, err := avs2.GetEvents("mixed-session", 10, 0)
+	data2 := "Second encrypted data"
+	_, err = avs.RecordEvent(&Event{
+		OperatorSessionID: "mixed-session",
+		Timestamp:         time.Now().UTC(),
+		Type:              constants.Event.Operator.Audit.Command,
+		CommandRaw:        "echo second",
+		CommandExitCode:   &exitCode,
+		CommandStdout:     data2,
+	})
+	require.NoError(t, err)
+
+	// Read all events - all should be decrypted correctly
+	events, err := avs.GetEvents("mixed-session", 10, 0)
 	require.NoError(t, err)
 	require.Len(t, events, 2)
 
-	// Most recent first (encrypted)
-	assert.Equal(t, encryptedData, events[0].CommandStdout)
-	// Older one (unencrypted)
-	assert.Equal(t, unencryptedData, events[1].CommandStdout)
-
-	avs2.Close()
-	encVault.Close()
+	// Most recent first
+	assert.Equal(t, data2, events[0].CommandStdout)
+	assert.Equal(t, data1, events[1].CommandStdout)
 }
