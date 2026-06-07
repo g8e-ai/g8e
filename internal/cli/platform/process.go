@@ -332,8 +332,14 @@ func (pm *ProcessManager) StopOperator() error {
 		return err
 	}
 
+	if pid != 0 && !pm.isProcessRunning(pid) {
+		// Stale PID file - clean it up and fall through to process discovery
+		_ = pm.deletePID(operatorPIDFile)
+		pid = 0
+	}
+
 	if pid == 0 {
-		// PID file missing, try to find process via pgrep (same fallback as OperatorStatus)
+		// PID file missing or stale, try to find process via discovery
 		if pm.findOperatorProcessFn != nil {
 			pid = pm.findOperatorProcessFn()
 		} else {
@@ -357,16 +363,22 @@ func (pm *ProcessManager) OperatorStatus() (bool, int, error) {
 		return false, 0, err
 	}
 
+	if pid != 0 {
+		if pm.isProcessRunning(pid) {
+			return true, pid, nil
+		}
+		// Stale PID file - clean it up and fall through to process discovery
+		_ = pm.deletePID(operatorPIDFile)
+	}
+
+	// PID file missing or stale, try to find the process
+	if pm.findOperatorProcessFn != nil {
+		pid = pm.findOperatorProcessFn()
+	} else {
+		pid = pm.findOperatorProcess()
+	}
 	if pid == 0 {
-		// PID file missing, try to find process via pgrep
-		if pm.findOperatorProcessFn != nil {
-			pid = pm.findOperatorProcessFn()
-		} else {
-			pid = pm.findOperatorProcess()
-		}
-		if pid == 0 {
-			return false, 0, nil
-		}
+		return false, 0, nil
 	}
 
 	running := pm.isProcessRunning(pid)
