@@ -52,7 +52,9 @@ type ProcessManager struct {
 
 func NewProcessManager(projectRoot string) (*ProcessManager, error) {
 	// Initialize paths relative to projectRoot
-	constants.InitPathsWithBase(projectRoot)
+	if err := constants.InitPathsWithBase(projectRoot); err != nil {
+		return nil, fmt.Errorf("process manager: failed to initialize paths: %w", err)
+	}
 
 	runtimeDir := constants.Paths.Infra.RuntimeDir
 	pkiDir := constants.Paths.Infra.PkiDir

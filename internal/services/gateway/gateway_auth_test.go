@@ -77,7 +77,7 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 	opDoc := map[string]interface{}{
 		"id":                  "op-123",
 		"operator_session_id": operatorSessionID,
-		"status":              marshaler.OperatorStatus(constants.OperatorStatusTerminated),
+		"status":              marshaler.Status(constants.OperatorStatusTerminated),
 		"user_id":             "user-123",
 	}
 	opBytes, err := json.Marshal(opDoc)
@@ -115,7 +115,7 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	opDoc := map[string]interface{}{
 		"id":                  "op-456",
 		"operator_session_id": operatorSessionID,
-		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
+		"status":              marshaler.Status(constants.OperatorStatusActive),
 		"user_id":             userID,
 	}
 	opBytes, err := json.Marshal(opDoc)
@@ -152,7 +152,7 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	opDoc := map[string]interface{}{
 		"id":                  "op-789",
 		"operator_session_id": operatorSessionID,
-		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
+		"status":              marshaler.Status(constants.OperatorStatusActive),
 		"user_id":             userID,
 		"created_at":          time.Now().Format(time.RFC3339),
 	}
@@ -570,7 +570,7 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 	opDoc := map[string]interface{}{
 		"id":                  "op-123",
 		"operator_session_id": operatorSessionID,
-		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
+		"status":              marshaler.Status(constants.OperatorStatusActive),
 		"user_id":             userID,
 		"organization_id":     "org-123",
 	}
@@ -615,7 +615,7 @@ func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
 	opDoc := map[string]interface{}{
 		"id":                  "op-terminated",
 		"operator_session_id": operatorSessionID,
-		"status":              marshaler.OperatorStatus(constants.OperatorStatusTerminated),
+		"status":              marshaler.Status(constants.OperatorStatusTerminated),
 		"user_id":             "user-123",
 	}
 	opBytes, err := json.Marshal(opDoc)
@@ -927,7 +927,7 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	opDoc := map[string]interface{}{
 		"id":                  "op-auth-test",
 		"operator_session_id": operatorSessionID,
-		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
+		"status":              marshaler.Status(constants.OperatorStatusActive),
 		"user_id":             userID,
 		"organization_id":     organizationID,
 	}

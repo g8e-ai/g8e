@@ -92,47 +92,47 @@ func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {
 		{
 			name:         "invalid envelope",
 			GatewayErr:   governance.ErrInvalidEnvelope,
-			expectedCode: ErrCodeInvalidEnvelope,
+			expectedCode: constants.ErrCodeInvalidEnvelope,
 		},
 		{
 			name:         "hash mismatch",
 			GatewayErr:   governance.ErrTransactionHashMismatch,
-			expectedCode: ErrCodeHashMismatch,
+			expectedCode: constants.ErrCodeHashMismatch,
 		},
 		{
 			name:         "expired",
 			GatewayErr:   governance.ErrTransactionExpired,
-			expectedCode: ErrCodeExpired,
+			expectedCode: constants.ErrCodeExpired,
 		},
 		{
 			name:         "replay",
 			GatewayErr:   governance.ErrTransactionReplay,
-			expectedCode: ErrCodeReplay,
+			expectedCode: constants.ErrCodeReplay,
 		},
 		{
 			name:         "state root mismatch",
 			GatewayErr:   governance.ErrStateRootMismatch,
-			expectedCode: ErrCodeStateMismatch,
+			expectedCode: constants.ErrCodeStateMismatch,
 		},
 		{
 			name:         "L1 validation failed",
 			GatewayErr:   governance.ErrL1ValidationFailed,
-			expectedCode: ErrCodeL1ValidationFailed,
+			expectedCode: constants.ErrCodeL1ValidationFailed,
 		},
 		{
 			name:         "L2 signature invalid",
 			GatewayErr:   governance.ErrL2SignatureInvalid,
-			expectedCode: ErrCodeL2SignatureInvalid,
+			expectedCode: constants.ErrCodeL2SignatureInvalid,
 		},
 		{
 			name:         "L3 proof invalid",
 			GatewayErr:   governance.ErrL3ProofInvalid,
-			expectedCode: ErrCodeL3ProofInvalid,
+			expectedCode: constants.ErrCodeL3ProofInvalid,
 		},
 		{
 			name:         "payload decode failed",
 			GatewayErr:   governance.ErrPayloadDecodeFailed,
-			expectedCode: ErrCodePayloadDecodeFailed,
+			expectedCode: constants.ErrCodePayloadDecodeFailed,
 		},
 		{
 			name:         "internal error fallback",
@@ -1051,15 +1051,15 @@ func TestGatewayService_MapGatewayError(t *testing.T) {
 			err      error
 			wantCode int
 		}{
-			{governance.ErrInvalidEnvelope, ErrCodeInvalidEnvelope},
-			{governance.ErrTransactionHashMismatch, ErrCodeHashMismatch},
-			{governance.ErrTransactionExpired, ErrCodeExpired},
-			{governance.ErrTransactionReplay, ErrCodeReplay},
-			{governance.ErrStateRootMismatch, ErrCodeStateMismatch},
-			{governance.ErrL1ValidationFailed, ErrCodeL1ValidationFailed},
-			{governance.ErrL2SignatureInvalid, ErrCodeL2SignatureInvalid},
-			{governance.ErrL3ProofInvalid, ErrCodeL3ProofInvalid},
-			{governance.ErrPayloadDecodeFailed, ErrCodePayloadDecodeFailed},
+			{governance.ErrInvalidEnvelope, constants.ErrCodeInvalidEnvelope},
+			{governance.ErrTransactionHashMismatch, constants.ErrCodeHashMismatch},
+			{governance.ErrTransactionExpired, constants.ErrCodeExpired},
+			{governance.ErrTransactionReplay, constants.ErrCodeReplay},
+			{governance.ErrStateRootMismatch, constants.ErrCodeStateMismatch},
+			{governance.ErrL1ValidationFailed, constants.ErrCodeL1ValidationFailed},
+			{governance.ErrL2SignatureInvalid, constants.ErrCodeL2SignatureInvalid},
+			{governance.ErrL3ProofInvalid, constants.ErrCodeL3ProofInvalid},
+			{governance.ErrPayloadDecodeFailed, constants.ErrCodePayloadDecodeFailed},
 		}
 
 		for _, tt := range tests {

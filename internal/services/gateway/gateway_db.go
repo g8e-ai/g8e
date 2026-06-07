@@ -1257,8 +1257,8 @@ func (s *CanonicalDBService) KVScan(pattern string, cursor, count int) (int, []s
 
 // KVExists checks if a key exists and is not expired.
 func (s *CanonicalDBService) KVExists(key string) bool {
-	_, found := s.KVGet(key)
-	return found
+	_, err := s.KVGet(context.Background(), key)
+	return err == nil
 }
 
 // KVTTL returns the remaining TTL in seconds for a key. -1 if no expiry, -2 if not found.
@@ -1554,7 +1554,7 @@ func (s *CanonicalDBService) BlobDeleteNamespace(namespace string) (int64, error
 // =============================================================================
 
 // StoreSuspendedTransaction stores a transaction awaiting L3 approval.
-func (s *CanonicalDBService) StoreSuspendedTransaction(tx *models.SuspendedTransaction) error {
+func (s *CanonicalDBService) StoreSuspendedTransaction(ctx context.Context, tx *models.SuspendedTransaction) error {
 	now := sqliteutil.FormatTimestamp(tx.CreatedAt)
 	expires := sqliteutil.FormatTimestamp(tx.ExpiresAt)
 
@@ -1584,12 +1584,15 @@ func (s *CanonicalDBService) StoreSuspendedTransaction(tx *models.SuspendedTrans
 		tx.TransactionHash, string(tx.Envelope), now, expires, tx.ToolName, toolArgsStr, tx.UserID, tx.OperatorID,
 		tx.Approved, approvedAtStr, tx.ApprovedBy, tx.ApprovalSignature, tx.ExpectedCertFingerprint,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("gateway_db: store suspended transaction: %w", err)
+	}
+	return nil
 }
 
 // GetSuspendedTransaction retrieves a suspended transaction by hash.
-// Returns (nil, false) if not found or expired.
-func (s *CanonicalDBService) GetSuspendedTransaction(txHash string) (*models.SuspendedTransaction, bool) {
+// Returns (nil, false, nil) if not found or expired.
+func (s *CanonicalDBService) GetSuspendedTransaction(ctx context.Context, txHash string) (*models.SuspendedTransaction, bool, error) {
 	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID, approvedBy, approvalSignature, expectedCertFingerprint string
 	var approved int
 	var approvedAtStr sql.NullString
@@ -1598,16 +1601,16 @@ func (s *CanonicalDBService) GetSuspendedTransaction(txHash string) (*models.Sus
 		txHash, sqliteutil.NowTimestamp(),
 	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID, &approved, &approvedAtStr, &approvedBy, &approvalSignature, &expectedCertFingerprint)
 	if err != nil {
-		return nil, false
+		return nil, false, fmt.Errorf("gateway_db: get suspended transaction: %w", err)
 	}
 
 	createdAt, err := sqliteutil.ParseTimestamp(createdAtStr)
 	if err != nil {
-		return nil, false
+		return nil, false, fmt.Errorf("gateway_db: parse created_at: %w", err)
 	}
 	expiresAt, err := sqliteutil.ParseTimestamp(expiresAtStr)
 	if err != nil {
-		return nil, false
+		return nil, false, fmt.Errorf("gateway_db: parse expires_at: %w", err)
 	}
 
 	var toolArgs json.RawMessage
@@ -1619,7 +1622,7 @@ func (s *CanonicalDBService) GetSuspendedTransaction(txHash string) (*models.Sus
 	if approvedAtStr.Valid {
 		ts, err := sqliteutil.ParseTimestamp(approvedAtStr.String)
 		if err != nil {
-			return nil, false
+			return nil, false, fmt.Errorf("gateway_db: parse approved_at: %w", err)
 		}
 		approvedAt = &ts
 	}
@@ -1638,12 +1641,12 @@ func (s *CanonicalDBService) GetSuspendedTransaction(txHash string) (*models.Sus
 		ApprovedBy:              approvedBy,
 		ApprovalSignature:       approvalSignature,
 		ExpectedCertFingerprint: expectedCertFingerprint,
-	}, true
+	}, true, nil
 }
 
 // ListSuspendedTransactions retrieves all non-expired suspended transactions.
 // Optionally filters by user_id if provided.
-func (s *CanonicalDBService) ListSuspendedTransactions(userID string) ([]*models.SuspendedTransaction, error) {
+func (s *CanonicalDBService) ListSuspendedTransactions(ctx context.Context, userID string) ([]*models.SuspendedTransaction, error) {
 	var query string
 	var args []interface{}
 
@@ -1674,7 +1677,7 @@ func (s *CanonicalDBService) ListSuspendedTransactions(userID string) ([]*models
 		return row, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gateway_db: list suspended transactions: %w", err)
 	}
 
 	transactions := make([]*models.SuspendedTransaction, 0, len(rows))
@@ -1710,7 +1713,7 @@ func (s *CanonicalDBService) ListSuspendedTransactions(userID string) ([]*models
 
 // ApproveSuspendedTransaction marks a suspended transaction as approved with cryptographic signature.
 // This is called by the CLI approval command when a human approves a transaction.
-func (s *CanonicalDBService) ApproveSuspendedTransaction(txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error {
+func (s *CanonicalDBService) ApproveSuspendedTransaction(ctx context.Context, txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error {
 	now := time.Now().UTC()
 	nowStr := sqliteutil.FormatTimestamp(now)
 
@@ -1721,33 +1724,36 @@ func (s *CanonicalDBService) ApproveSuspendedTransaction(txHash, approvedBy, app
 		nowStr, approvedBy, approvalSignature, expectedCertFingerprint, txHash, sqliteutil.NowTimestamp(),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to approve suspended transaction: %w", err)
+		return fmt.Errorf("gateway_db: approve suspended transaction: %w", err)
 	}
 
 	// Check if any row was actually updated
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return fmt.Errorf("gateway_db: approve suspended transaction: failed to get rows affected: %w", err)
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("transaction not found or expired")
+		return fmt.Errorf("gateway_db: approve suspended transaction: transaction not found or expired")
 	}
 
 	return nil
 }
 
 // DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.
-func (s *CanonicalDBService) DeleteSuspendedTransaction(txHash string) error {
+func (s *CanonicalDBService) DeleteSuspendedTransaction(ctx context.Context, txHash string) error {
 	_, err := s.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE transaction_hash = ?", txHash)
-	return err
+	if err != nil {
+		return fmt.Errorf("gateway_db: delete suspended transaction: %w", err)
+	}
+	return nil
 }
 
 // CleanupExpiredSuspendedTransactions removes expired suspended transactions.
 // Returns the count of deleted transactions.
-func (s *CanonicalDBService) CleanupExpiredSuspendedTransactions() (int64, error) {
+func (s *CanonicalDBService) CleanupExpiredSuspendedTransactions(ctx context.Context) (int64, error) {
 	result, err := s.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE expires_at < ?", sqliteutil.NowTimestamp())
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("gateway_db: cleanup expired suspended transactions: %w", err)
 	}
 	return result.RowsAffected()
 }

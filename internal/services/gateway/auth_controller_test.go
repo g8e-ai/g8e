@@ -87,7 +87,7 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
 
-	authController := newAuthController(cfg, logger, db, auth, passkey, userSvc, reg, pki, webSessionSvc, mcpGateway, resp)
+	authController := newAuthController(cfg, logger, db, auth, passkey, userSvc, reg, pki, webSessionSvc, cliSessionSvc, operatorSessionSvc, mcpGateway, resp)
 	return authController, cfg
 }
 

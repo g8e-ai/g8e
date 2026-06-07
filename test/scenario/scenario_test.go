@@ -61,7 +61,9 @@ func setupTestContext(t *testing.T) *TestContext {
 	t.Helper()
 
 	// Initialize paths relative to test directory
-	constants.InitPathsWithBase("../../")
+	if err := constants.InitPathsWithBase("../../"); err != nil {
+		t.Fatalf("failed to initialize paths: %v", err)
+	}
 	projectRoot := constants.Paths.Infra.RuntimeDir
 
 	cliCfg, err := cliconfig.Load(projectRoot)

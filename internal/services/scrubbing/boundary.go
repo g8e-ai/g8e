@@ -878,7 +878,8 @@ func (s *ScrubbingService) RehydrateText(input string) string {
 
 			// Try to load from TokenStore
 			key := fmt.Sprintf("sentinel_token_%s", token)
-			if value, found := s.tokenStore.KVGet(key); found {
+			value, err := s.tokenStore.KVGet(context.Background(), key)
+			if err == nil {
 				// Add to in-memory cache for future use (requires write lock)
 				s.tokenMu.Lock()
 				s.tokenMap[token] = value
@@ -959,7 +960,7 @@ func (s *ScrubbingService) GetTokenForValue(value string) string {
 	if s.tokenStore != nil && s.tokenStore.IsEnabled() {
 		const tokenTTLSeconds = 24 * 60 * 60
 		key := fmt.Sprintf("sentinel_token_%s", token)
-		if err := s.tokenStore.KVSet(key, value, tokenTTLSeconds); err != nil {
+		if err := s.tokenStore.KVSet(context.Background(), key, value, tokenTTLSeconds); err != nil {
 			s.logger.Error("Failed to persist token to local store - failing closed", "token", token, "error", err)
 			// Rollback the in-memory token since persistence failed
 			delete(s.tokenMap, token)
@@ -984,7 +985,7 @@ func (s *ScrubbingService) loadPersistedTokens() {
 		return
 	}
 
-	tokens, err := s.tokenStore.KVScanPrefix("sentinel_token_")
+	tokens, err := s.tokenStore.KVScanPrefix(context.Background(), "sentinel_token_")
 	if err != nil {
 		s.logger.Error("Failed to load persisted tokens from TokenStore", "error", err)
 		return

@@ -436,7 +436,7 @@ func TestHandleBootstrapHealth(t *testing.T) {
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.Equal(t, constants.GatewayModeStatusOK, resp.Status)
-		assert.Equal(t, constants.GatewayModeMode, resp.Mode)
+		assert.Equal(t, constants.GatewayModeGateway, resp.Mode)
 		// Bootstrap health does not include governance_ready or state_merkle_root
 		assert.Empty(t, resp.StateMerkleRoot)
 	})

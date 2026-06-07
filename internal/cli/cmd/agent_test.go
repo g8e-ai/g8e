@@ -74,7 +74,9 @@ func TestDetectToolBinary_WithMockBinary(t *testing.T) {
 
 func TestPrepareAgentEnvironment(t *testing.T) {
 	tempDir := t.TempDir()
-	constants.InitPathsWithBase(tempDir)
+	if err := constants.InitPathsWithBase(tempDir); err != nil {
+		t.Fatalf("failed to initialize paths: %v", err)
+	}
 	cfg := &config.Config{
 		ProjectRoot: tempDir,
 		Paths: &config.PathsConfig{

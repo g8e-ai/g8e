@@ -281,8 +281,8 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
-	sessionSvc := NewSessionService(db, logger)
-	notary := NewCLIL3Notary(db, pki, logger, userSvc, sessionSvc)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	notary := NewCLIL3Notary(db, pki, logger, userSvc, cliSessionSvc)
 
 	userID := "user-123"
 	user := &models.User{
@@ -362,8 +362,8 @@ func TestCompositeL3Verifier_DelegatesToCLI(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	userSvc := NewUserService(db, logger)
-	sessionSvc := NewSessionService(db, logger)
-	cliL3 := NewCLIL3Notary(db, nil, logger, userSvc, sessionSvc)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	cliL3 := NewCLIL3Notary(db, nil, logger, userSvc, cliSessionSvc)
 	composite := NewCompositeL3Verifier(nil, cliL3, logger)
 
 	// Create an active user

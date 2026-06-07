@@ -14,6 +14,7 @@
 package pubsub
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"time"
@@ -74,7 +75,7 @@ type executionWriteParams struct {
 
 // WriteExecution persists a command execution result to the consolidated vault.
 // All data is encrypted at rest. Sentinel scrubbing is applied for AI access.
-func (vw *VaultWriter) WriteExecution(p executionWriteParams) {
+func (vw *VaultWriter) WriteExecution(ctx context.Context, p executionWriteParams) {
 	if vw.executionVault != nil && vw.executionVault.IsEnabled() {
 		execRecord := &models.ExecutionRecord{
 			ID:               p.id,
@@ -91,7 +92,7 @@ func (vw *VaultWriter) WriteExecution(p executionWriteParams) {
 			InvestigationID:  p.investigationID,
 			OperatorID:       vw.config.OperatorID,
 		}
-		if err := vw.executionVault.StoreExecution(execRecord); err != nil {
+		if err := vw.executionVault.StoreExecution(ctx, execRecord); err != nil {
 			vw.logger.Warn("Failed to store execution in consolidated vault", string(constants.ConnectionStateError), err)
 		} else {
 			vw.logger.Info("Execution stored in consolidated vault (encrypted at rest)",
@@ -118,7 +119,7 @@ type fileDiffWriteParams struct {
 
 // WriteFileDiff persists a file diff to the consolidated vault.
 // All data is encrypted at rest. Sentinel scrubbing is applied for AI access.
-func (vw *VaultWriter) WriteFileDiff(p fileDiffWriteParams) {
+func (vw *VaultWriter) WriteFileDiff(ctx context.Context, p fileDiffWriteParams) {
 	if vw.executionVault != nil && vw.executionVault.IsEnabled() {
 		diffRecord := &models.FileDiffRecord{
 			ID:                p.diffID,
@@ -134,7 +135,7 @@ func (vw *VaultWriter) WriteFileDiff(p fileDiffWriteParams) {
 			CaseID:            p.caseID,
 			OperatorID:        vw.config.OperatorID,
 		}
-		if err := vw.executionVault.StoreFileDiff(diffRecord); err != nil {
+		if err := vw.executionVault.StoreFileDiff(ctx, diffRecord); err != nil {
 			vw.logger.Warn("Failed to store file diff in consolidated vault", string(constants.ConnectionStateError), err)
 		} else {
 			vw.logger.Info("File diff stored in consolidated vault (encrypted at rest)",
@@ -147,7 +148,7 @@ func (vw *VaultWriter) WriteFileDiff(p fileDiffWriteParams) {
 
 // StoreFileDiffFromLedger fetches the two most recent ledger commits for filePath, computes
 // the diff, and writes it to both vaults. Called after a successful file mutation audit event.
-func (vw *VaultWriter) StoreFileDiffFromLedger(filePath, operation, eventID, operatorSessionID, caseID string, ledger *storage.GitLedgerService) {
+func (vw *VaultWriter) StoreFileDiffFromLedger(ctx context.Context, filePath, operation, eventID, operatorSessionID, caseID string, ledger *storage.GitLedgerService) {
 	if ledger == nil {
 		return
 	}
@@ -169,7 +170,7 @@ func (vw *VaultWriter) StoreFileDiffFromLedger(filePath, operation, eventID, ope
 		return
 	}
 
-	vw.WriteFileDiff(fileDiffWriteParams{
+	vw.WriteFileDiff(ctx, fileDiffWriteParams{
 		diffID:            fmt.Sprintf("diff_%s_%d", eventID, time.Now().UnixNano()),
 		timestamp:         time.Now().UTC(),
 		filePath:          filePath,

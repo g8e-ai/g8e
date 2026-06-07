@@ -295,11 +295,11 @@ func TestKVSetAndGet(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	err := db.KVSet("session:abc", `{"user":"alice"}`, 0)
+	err := db.KVSet(context.Background(), "session:abc", `{"user":"alice"}`, 0)
 	require.NoError(t, err)
 
-	val, found := db.KVGet("session:abc")
-	assert.True(t, found)
+	val, err := db.KVGet(context.Background(), "session:abc")
+	require.NoError(t, err)
 	assert.Equal(t, `{"user":"alice"}`, val)
 }
 
@@ -307,7 +307,7 @@ func TestKVGetNotFound(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	_, found := db.KVGet("nonexistent")
+	_, err := db.KVGet(context.Background(), "nonexistent")
 	assert.False(t, found)
 }
 
@@ -315,16 +315,16 @@ func TestKVSetWithTTL(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	err := db.KVSet("temp:key", "value", 1)
+	err := db.KVSet(context.Background(), "temp:key", "value", 1)
 	require.NoError(t, err)
 
-	val, found := db.KVGet("temp:key")
+	val, err := db.KVGet(context.Background(), "temp:key")
 	assert.True(t, found)
 	assert.Equal(t, "value", val)
 
 	// Wait for expiry with polling
 	require.Eventually(t, func() bool {
-		_, found := db.KVGet("temp:key")
+		_, err := db.KVGet(context.Background(), "temp:key")
 		return !found
 	}, 2*time.Second, 100*time.Millisecond, "temp key should expire")
 }
@@ -333,10 +333,10 @@ func TestKVDelete(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("key1", "val1", 0))
+	require.NoError(t, db.KVSet(context.Background(), "key1", "val1", 0))
 	require.NoError(t, db.KVDelete("key1"))
 
-	_, found := db.KVGet("key1")
+	_, err := db.KVGet(context.Background(), "key1")
 	assert.False(t, found)
 }
 
@@ -344,15 +344,15 @@ func TestKVDeletePattern(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("cache:user:1", "a", 0))
-	require.NoError(t, db.KVSet("cache:user:2", "b", 0))
-	require.NoError(t, db.KVSet("cache:config:1", "c", 0))
+	require.NoError(t, db.KVSet(context.Background(), "cache:user:1", "a", 0))
+	require.NoError(t, db.KVSet(context.Background(), "cache:user:2", "b", 0))
+	require.NoError(t, db.KVSet(context.Background(), "cache:config:1", "c", 0))
 
 	count, err := db.KVDeletePattern("cache:user:*")
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), count)
 
-	_, found := db.KVGet("cache:config:1")
+	_, err := db.KVGet(context.Background(), "cache:config:1")
 	assert.True(t, found)
 }
 
@@ -360,9 +360,9 @@ func TestKVKeys(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("session:a", "1", 0))
-	require.NoError(t, db.KVSet("session:b", "2", 0))
-	require.NoError(t, db.KVSet("other:c", "3", 0))
+	require.NoError(t, db.KVSet(context.Background(), "session:a", "1", 0))
+	require.NoError(t, db.KVSet(context.Background(), "session:b", "2", 0))
+	require.NoError(t, db.KVSet(context.Background(), "other:c", "3", 0))
 
 	keys, err := db.KVKeys("session:*")
 	require.NoError(t, err)
@@ -374,9 +374,9 @@ func TestKVKeys_SpecialCharacters(t *testing.T) {
 	db := newTestDB(t)
 
 	// Keys with dots - SQL GLOB treats dots as literal characters
-	require.NoError(t, db.KVSet("cache.doc", "1", 0))
-	require.NoError(t, db.KVSet("cache.doc.backup", "2", 0))
-	require.NoError(t, db.KVSet("cache:txt", "3", 0))
+	require.NoError(t, db.KVSet(context.Background(), "cache.doc", "1", 0))
+	require.NoError(t, db.KVSet(context.Background(), "cache.doc.backup", "2", 0))
+	require.NoError(t, db.KVSet(context.Background(), "cache:txt", "3", 0))
 
 	// Pattern with literal dot should match exactly
 	keys, err := db.KVKeys("cache.doc")
@@ -391,24 +391,24 @@ func TestKVKeys_SpecialCharacters(t *testing.T) {
 
 	// Keys with brackets - SQL GLOB treats brackets as character class delimiters
 	// To match literal brackets, we can use a pattern that matches the prefix
-	require.NoError(t, db.KVSet("array.0", "4", 0))
-	require.NoError(t, db.KVSet("array.1", "5", 0))
+	require.NoError(t, db.KVSet(context.Background(), "array.0", "4", 0))
+	require.NoError(t, db.KVSet(context.Background(), "array.1", "5", 0))
 
 	keys, err = db.KVKeys("array.*")
 	require.NoError(t, err)
 	assert.Len(t, keys, 2)
 
 	// Keys with plus signs - SQL GLOB treats plus as literal
-	require.NoError(t, db.KVSet("user+id", "6", 0))
-	require.NoError(t, db.KVSet("user+name", "7", 0))
+	require.NoError(t, db.KVSet(context.Background(), "user+id", "6", 0))
+	require.NoError(t, db.KVSet(context.Background(), "user+name", "7", 0))
 
 	keys, err = db.KVKeys("user+*")
 	require.NoError(t, err)
 	assert.Len(t, keys, 2)
 
 	// Keys with dollar signs - SQL GLOB treats dollar as literal
-	require.NoError(t, db.KVSet("$var1", "8", 0))
-	require.NoError(t, db.KVSet("$var2", "9", 0))
+	require.NoError(t, db.KVSet(context.Background(), "$var1", "8", 0))
+	require.NoError(t, db.KVSet(context.Background(), "$var2", "9", 0))
 
 	keys, err = db.KVKeys("$var*")
 	require.NoError(t, err)
@@ -419,7 +419,7 @@ func TestKVExists(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("exists:key", "val", 0))
+	require.NoError(t, db.KVSet(context.Background(), "exists:key", "val", 0))
 	assert.True(t, db.KVExists("exists:key"))
 	assert.False(t, db.KVExists("missing:key"))
 }
@@ -428,7 +428,7 @@ func TestKVTTL(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("ttl:key", "val", 60))
+	require.NoError(t, db.KVSet(context.Background(), "ttl:key", "val", 60))
 	ttl := db.KVTTL("ttl:key")
 	assert.True(t, ttl > 50 && ttl <= 60)
 
@@ -439,7 +439,7 @@ func TestKVExpire(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("exp:key", "val", 0))
+	require.NoError(t, db.KVSet(context.Background(), "exp:key", "val", 0))
 	assert.Equal(t, -1, db.KVTTL("exp:key"))
 
 	ok := db.KVExpire("exp:key", 30)
@@ -597,10 +597,10 @@ func TestKVSet_OverwriteReplacesValue(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("key1", "first", 0))
-	require.NoError(t, db.KVSet("key1", "second", 0))
+	require.NoError(t, db.KVSet(context.Background(), "key1", "first", 0))
+	require.NoError(t, db.KVSet(context.Background(), "key1", "second", 0))
 
-	val, found := db.KVGet("key1")
+	val, err := db.KVGet(context.Background(), "key1")
 	require.True(t, found)
 	assert.Equal(t, "second", val)
 }
@@ -613,7 +613,7 @@ func TestKVTTL_NoExpiry(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("persistent", "val", 0))
+	require.NoError(t, db.KVSet(context.Background(), "persistent", "val", 0))
 	assert.Equal(t, -1, db.KVTTL("persistent"))
 }
 
@@ -625,10 +625,10 @@ func TestKVScan_BasicScan(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("scan:a", "1", 0))
-	require.NoError(t, db.KVSet("scan:b", "2", 0))
-	require.NoError(t, db.KVSet("scan:c", "3", 0))
-	require.NoError(t, db.KVSet("other:d", "4", 0))
+	require.NoError(t, db.KVSet(context.Background(), "scan:a", "1", 0))
+	require.NoError(t, db.KVSet(context.Background(), "scan:b", "2", 0))
+	require.NoError(t, db.KVSet(context.Background(), "scan:c", "3", 0))
+	require.NoError(t, db.KVSet(context.Background(), "other:d", "4", 0))
 
 	next, keys, err := db.KVScan("scan:*", 0, 10)
 	require.NoError(t, err)
@@ -641,7 +641,7 @@ func TestKVScan_Pagination(t *testing.T) {
 	db := newTestDB(t)
 
 	for i := 0; i < 5; i++ {
-		require.NoError(t, db.KVSet(fmt.Sprintf("page:%d", i), "v", 0))
+		require.NoError(t, db.KVSet(context.Background(), fmt.Sprintf("page:%d", i), "v", 0))
 	}
 
 	next1, page1, err := db.KVScan("page:*", 0, 2)
@@ -675,7 +675,7 @@ func TestKVScan_DefaultCountApplied(t *testing.T) {
 	db := newTestDB(t)
 
 	for i := 0; i < 5; i++ {
-		require.NoError(t, db.KVSet(fmt.Sprintf("dc:%d", i), "v", 0))
+		require.NoError(t, db.KVSet(context.Background(), fmt.Sprintf("dc:%d", i), "v", 0))
 	}
 
 	_, keys, err := db.KVScan("dc:*", 0, 0)
@@ -687,8 +687,8 @@ func TestKVScan_ExcludesExpiredKeys(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("live:key", "val", 0))
-	require.NoError(t, db.KVSet("exp:key", "val", 1))
+	require.NoError(t, db.KVSet(context.Background(), "live:key", "val", 0))
+	require.NoError(t, db.KVSet(context.Background(), "exp:key", "val", 1))
 
 	// Wait for expiry with polling
 	require.Eventually(t, func() bool {
@@ -762,12 +762,12 @@ func TestRunTTLCleanup_RemovesExpiredKVEntries(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("ttl:keep", "val", 0))
-	require.NoError(t, db.KVSet("ttl:expire", "val", 1))
+	require.NoError(t, db.KVSet(context.Background(), "ttl:keep", "val", 0))
+	require.NoError(t, db.KVSet(context.Background(), "ttl:expire", "val", 1))
 
 	// Wait for expiry with polling
 	require.Eventually(t, func() bool {
-		_, found := db.KVGet("ttl:expire")
+		_, err := db.KVGet(context.Background(), "ttl:expire")
 		return !found
 	}, 2*time.Second, 100*time.Millisecond, "ttl:expire should expire")
 
@@ -787,7 +787,7 @@ func TestRunTTLCleanup_RemovesExpiredKVEntries(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		_, found := db.KVGet("ttl:expire")
+		_, err := db.KVGet(context.Background(), "ttl:expire")
 		return !found
 	}, 5*time.Second, 100*time.Millisecond)
 

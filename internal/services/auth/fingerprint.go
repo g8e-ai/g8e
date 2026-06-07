@@ -44,12 +44,12 @@ func GenerateSystemFingerprint(logger *slog.Logger) (*SystemFingerprint, error) 
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		hostname = string(constants.SystemHealthUnknown)
+		return nil, fmt.Errorf("auth: failed to get hostname: %w", err)
 	}
 
 	machineID, err := getMachineID(logger)
 	if err != nil {
-		logger.Warn("Failed to get machine ID, using fallback method", string(constants.ConnectionStateError), err)
+		logger.Warn("Failed to get machine ID, using fallback method", "error", err)
 		machineID = "fallback"
 	}
 
@@ -124,17 +124,14 @@ func getLinuxMachineID(logger *slog.Logger) (string, error) {
 	return "", fmt.Errorf("could not read machine ID from any known path")
 }
 
-// isHex checks if a string is a valid hexadecimal string
-func isHex(s string) bool {
-	_, err := hex.DecodeString(s)
-	return err == nil
-}
-
 // getDarwinMachineID uses the system preferences plist as a stable machine identifier on macOS
 func getDarwinMachineID() (string, error) {
 	data, err := os.ReadFile(constants.PathLibraryPreferencesSystemConfigurationPreferencesPlist)
 	if err != nil {
-		hostname, _ := os.Hostname()
+		hostname, err := os.Hostname()
+		if err != nil {
+			return "", fmt.Errorf("auth: failed to get hostname for darwin fallback: %w", err)
+		}
 		return fmt.Sprintf("darwin-%s", hostname), nil
 	}
 

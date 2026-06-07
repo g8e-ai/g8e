@@ -14,6 +14,7 @@
 package constants
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -81,17 +82,17 @@ var Paths = struct {
 // InitPaths initializes paths relative to the current working directory.
 // This should be called once at program startup.
 // All paths are resolved relative to cwd, making the binary fully self-contained.
-func InitPaths() {
+func InitPaths() error {
 	cwd, err := os.Getwd()
 	if err != nil {
-		cwd = "."
+		return fmt.Errorf("constants: failed to get working directory: %w", err)
 	}
-	InitPathsWithBase(cwd)
+	return InitPathsWithBase(cwd)
 }
 
 // InitPathsWithBase initializes paths relative to the specified base directory.
 // This allows tests and specific use cases to override the default cwd behavior.
-func InitPathsWithBase(baseDir string) {
+func InitPathsWithBase(baseDir string) error {
 	// Resolve all paths relative to baseDir
 	Paths.Infra.RuntimeDir = filepath.Join(baseDir, ".g8e")
 	Paths.Infra.DataDir = filepath.Join(baseDir, ".g8e/data")
@@ -111,6 +112,7 @@ func InitPathsWithBase(baseDir string) {
 	Paths.Infra.DocsDir = filepath.Join(baseDir, ".g8e/docs")
 	Paths.Infra.SshConfigPath = filepath.Join(baseDir, ".g8e/ssh_config")
 	Paths.Infra.TestVaultDir = filepath.Join(baseDir, ".g8e/test-vault")
+	return nil
 }
 
 // System path constants for critical system directories and files
@@ -177,9 +179,3 @@ const (
 	PathLibraryPreferencesSystemConfigurationPreferencesPlist = "/Library/Preferences/SystemConfiguration/preferences.plist"
 )
 
-// CA certificate path constants (deprecated - use Paths.Infra.CaCertPath instead)
-const (
-	CACertDir              = ".g8e/pki/trust"
-	CACertBundlePath       = ".g8e/pki/trust/g8eg-ca-bundle.pem"
-	CACertLegacyBundlePath = ".g8e/pki/ca-bundle.pem"
-)

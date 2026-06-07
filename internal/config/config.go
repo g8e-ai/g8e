@@ -357,7 +357,9 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	if projectRoot == "" {
 		projectRoot = "."
 	}
-	constants.InitPathsWithBase(projectRoot)
+	if err := constants.InitPathsWithBase(projectRoot); err != nil {
+		return nil, fmt.Errorf("config: failed to initialize paths: %w", err)
+	}
 
 	// Resolve paths using canonical constants
 	dataDir := opts.DataDir
@@ -466,7 +468,9 @@ func Load(opts LoadOptions) (*Config, error) {
 	if projectRoot == "" {
 		projectRoot = "."
 	}
-	constants.InitPathsWithBase(projectRoot)
+	if err := constants.InitPathsWithBase(projectRoot); err != nil {
+		return nil, fmt.Errorf("config: failed to initialize paths: %w", err)
+	}
 
 	// Resolve working directory - default to project root when not specified
 	workDir := opts.WorkDir

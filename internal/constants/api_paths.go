@@ -218,7 +218,3 @@ var APIPaths = struct {
 	// Landing
 	Landing: "/",
 }
-
-// APIPathsGenerated is a mirror of APIPaths for compatibility.
-// This is kept as a separate variable to avoid circular dependencies during build.
-var APIPathsGenerated = APIPaths

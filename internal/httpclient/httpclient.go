@@ -49,7 +49,7 @@ func newBaseTransport(tlsCfg *tls.Config) *http.Transport {
 func New() (*http.Client, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
 	}
 
 	return &http.Client{
@@ -63,7 +63,7 @@ func New() (*http.Client, error) {
 func NewWithTLSConfig(tlsConfig *certs.TLSConfig) (*http.Client, error) {
 	tlsCfg, err := tlsConfig.GetTLSConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("httpclient: get TLS config from TLSConfig: %w", err)
 	}
 
 	return &http.Client{
@@ -75,7 +75,7 @@ func NewWithTLSConfig(tlsConfig *certs.TLSConfig) (*http.Client, error) {
 func NewWithTimeout(timeout time.Duration) (*http.Client, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
 	}
 
 	return &http.Client{
@@ -88,7 +88,7 @@ func NewWithTimeout(timeout time.Duration) (*http.Client, error) {
 func NewWithTLSConfigAndTimeout(tlsConfig *certs.TLSConfig, timeout time.Duration) (*http.Client, error) {
 	tlsCfg, err := tlsConfig.GetTLSConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("httpclient: get TLS config from TLSConfig: %w", err)
 	}
 
 	return &http.Client{
@@ -107,7 +107,7 @@ func NewWithTLS(tlsCfg *tls.Config) *http.Client {
 func WebSocketDialer() (*websocket.Dialer, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
 	}
 
 	return &websocket.Dialer{
@@ -120,7 +120,7 @@ func WebSocketDialer() (*websocket.Dialer, error) {
 func WebSocketDialerWithTLSConfig(tlsConfig *certs.TLSConfig) (*websocket.Dialer, error) {
 	tlsCfg, err := tlsConfig.GetTLSConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("httpclient: get TLS config from TLSConfig: %w", err)
 	}
 
 	return &websocket.Dialer{
@@ -139,7 +139,7 @@ func WebSocketDialerWithTLS(tlsCfg *tls.Config) *websocket.Dialer {
 func NewWithServerName(serverName string) (*http.Client, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
 	}
 	tlsCfg.ServerName = serverName
 	return &http.Client{
@@ -152,7 +152,7 @@ func NewWithServerName(serverName string) (*http.Client, error) {
 func NewWithTLSConfigAndServerName(tlsConfig *certs.TLSConfig, serverName string) (*http.Client, error) {
 	tlsCfg, err := tlsConfig.GetTLSConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("httpclient: get TLS config from TLSConfig: %w", err)
 	}
 	tlsCfg.ServerName = serverName
 	return &http.Client{
@@ -164,7 +164,7 @@ func NewWithTLSConfigAndServerName(tlsConfig *certs.TLSConfig, serverName string
 func WebSocketDialerWithServerName(serverName string) (*websocket.Dialer, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
 	}
 	tlsCfg.ServerName = serverName
 	return &websocket.Dialer{
@@ -177,7 +177,7 @@ func WebSocketDialerWithServerName(serverName string) (*websocket.Dialer, error)
 func WebSocketDialerWithTLSConfigAndServerName(tlsConfig *certs.TLSConfig, serverName string) (*websocket.Dialer, error) {
 	tlsCfg, err := tlsConfig.GetTLSConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("httpclient: get TLS config from TLSConfig: %w", err)
 	}
 	tlsCfg.ServerName = serverName
 	return &websocket.Dialer{
@@ -186,20 +186,3 @@ func WebSocketDialerWithTLSConfigAndServerName(tlsConfig *certs.TLSConfig, serve
 	}, nil
 }
 
-// Deprecated: Use New() and handle the error properly
-func MustNew() *http.Client {
-	c, err := New()
-	if err != nil {
-		panic(fmt.Sprintf("httpclient error: %v", err))
-	}
-	return c
-}
-
-// Deprecated: Use WebSocketDialer() and handle the error properly
-func MustWebSocketDialer() *websocket.Dialer {
-	d, err := WebSocketDialer()
-	if err != nil {
-		panic(fmt.Sprintf("websocket dialer error: %v", err))
-	}
-	return d
-}

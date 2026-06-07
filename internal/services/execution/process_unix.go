@@ -17,6 +17,7 @@
 package execution
 
 import (
+	"fmt"
 	"os/exec"
 	"syscall"
 )
@@ -32,8 +33,11 @@ func setProcessGroup(cmd *exec.Cmd) {
 // killProcessGroup kills a process group on Unix
 func killProcessGroup(pid int) error {
 	pgid, err := syscall.Getpgid(pid)
-	if err == nil {
-		return syscall.Kill(-pgid, syscall.SIGKILL)
+	if err != nil {
+		return fmt.Errorf("execution: get process group ID: %w", err)
+	}
+	if err := syscall.Kill(-pgid, syscall.SIGKILL); err != nil {
+		return fmt.Errorf("execution: kill process group: %w", err)
 	}
 	return nil
 }

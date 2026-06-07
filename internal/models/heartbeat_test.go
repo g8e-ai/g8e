@@ -14,6 +14,7 @@
 package models
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -81,6 +82,28 @@ func TestHeartbeatCapabilityFlags(t *testing.T) {
 		assert.True(t, flags.ExecutionVaultEnabled)
 		assert.True(t, flags.GitAvailable)
 		assert.False(t, flags.LedgerMirrorEnabled)
+	})
+
+	t.Run("marshals with correct JSON tags", func(t *testing.T) {
+		flags := &HeartbeatCapabilityFlags{
+			ExecutionVaultEnabled: true,
+			GitAvailable:          true,
+			LedgerMirrorEnabled:   false,
+		}
+
+		data, err := json.Marshal(flags)
+		assert.NoError(t, err)
+
+		var raw map[string]interface{}
+		err = json.Unmarshal(data, &raw)
+		assert.NoError(t, err)
+
+		assert.Contains(t, raw, "execution_vault_enabled")
+		assert.Contains(t, raw, "git_available")
+		assert.Contains(t, raw, "ledger_enabled")
+		assert.True(t, raw["execution_vault_enabled"].(bool))
+		assert.True(t, raw["git_available"].(bool))
+		assert.False(t, raw["ledger_enabled"].(bool))
 	})
 }
 

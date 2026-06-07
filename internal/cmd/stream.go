@@ -26,7 +26,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+)
 
+import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
@@ -38,7 +40,10 @@ const (
 
 func getDefaultNodeBinaryDir() string {
 	// Initialize paths relative to current working directory
-	constants.InitPaths()
+	if err := constants.InitPaths(); err != nil {
+		// If we can't get cwd, fall back to current directory
+		_ = constants.InitPathsWithBase(".")
+	}
 	// Use project root (parent of .g8e) for bin directory
 	return filepath.Join(constants.Paths.Infra.RuntimeDir, "../bin")
 }
@@ -318,7 +323,7 @@ func collectHosts(positional []string, hostsFile string) ([]string, error) {
 		} else {
 			f, err := os.Open(hostsFile)
 			if err != nil {
-				return nil, fmt.Errorf("open hosts file: %w", err)
+				return nil, fmt.Errorf("stream: open hosts file: %w", err)
 			}
 			defer func() {
 				_ = f.Close()
@@ -329,7 +334,7 @@ func collectHosts(positional []string, hostsFile string) ([]string, error) {
 			add(scanner.Text())
 		}
 		if err := scanner.Err(); err != nil {
-			return nil, fmt.Errorf("read hosts file: %w", err)
+			return nil, fmt.Errorf("stream: read hosts file: %w", err)
 		}
 	}
 

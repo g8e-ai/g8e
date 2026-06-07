@@ -140,7 +140,9 @@ func TestMCPGateway_ConfigTemplate(t *testing.T) {
 // The binary is cached in .g8e/test-bin/g8e to avoid rebuilding on every test run.
 func getTestNodeBinaryPath() (string, error) {
 	// Initialize paths relative to test directory
-	constants.InitPathsWithBase("../../")
+	if err := constants.InitPathsWithBase("../../"); err != nil {
+		return "", fmt.Errorf("failed to initialize paths: %w", err)
+	}
 	repoRoot := constants.Paths.Infra.RuntimeDir
 
 	// Use a dedicated test binary directory
@@ -186,7 +188,9 @@ func getTestNodeBinaryPath() (string, error) {
 // Helper function to run CLI commands for testing
 func runCLICommand(args ...string) (string, error) {
 	// Initialize paths relative to test directory
-	constants.InitPathsWithBase("../../")
+	if err := constants.InitPathsWithBase("../../"); err != nil {
+		return "", fmt.Errorf("failed to initialize paths: %w", err)
+	}
 	repoRoot := constants.Paths.Infra.RuntimeDir
 
 	g8ePath, err := getTestNodeBinaryPath()
@@ -209,7 +213,9 @@ func runCLICommand(args ...string) (string, error) {
 // Helper function to read file contents
 func readFile(path string) (string, error) {
 	// Initialize paths relative to test directory
-	constants.InitPathsWithBase("../../")
+	if err := constants.InitPathsWithBase("../../"); err != nil {
+		return "", fmt.Errorf("failed to initialize paths: %w", err)
+	}
 	repoRoot := constants.Paths.Infra.RuntimeDir
 
 	fullPath := filepath.Join(repoRoot, path)

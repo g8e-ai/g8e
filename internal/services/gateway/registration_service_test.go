@@ -34,17 +34,19 @@ func TestNewRegistrationService(t *testing.T) {
 	pki := &PKIAuthority{}
 	logger := slog.New(slog.NewTextHandler(nil, nil))
 	userSvc := &UserService{}
-	sessionSvc := &SessionsService{}
+	cliSessionSvc := &CLISessionService{}
+	operatorSessionSvc := &OperatorSessionService{}
 	cfg := &config.GatewayConfig{}
 
-	service := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, cfg)
+	service := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 	assert.NotNil(t, service)
 	assert.Equal(t, db, service.db)
 	assert.Equal(t, pki, service.pki)
 	assert.Equal(t, logger, service.logger)
 	assert.Equal(t, userSvc, service.userSvc)
-	assert.Equal(t, sessionSvc, service.sessionSvc)
+	assert.Equal(t, cliSessionSvc, service.cliSessionSvc)
+	assert.Equal(t, operatorSessionSvc, service.operatorSessionSvc)
 	assert.Equal(t, cfg, service.cfg)
 }
 
@@ -153,9 +155,10 @@ func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
 		require.NoError(t, err)
 
 		userSvc := NewUserService(db, logger)
-		sessionSvc := NewSessionService(db, logger)
+		cliSessionSvc := NewCLISessionService(db, logger)
+		operatorSessionSvc := NewOperatorSessionService(db, logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, cfg)
+		regSvc := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		// Generate only Operator CSR, no CLI CSR
 		opCSR := testutil.GenerateTestCSRP256(t, "test-operator")

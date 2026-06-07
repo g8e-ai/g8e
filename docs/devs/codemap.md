@@ -33,7 +33,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   │               ├── gateway.CanonicalDBService [SHARED]
 │   │               ├── gateway.PKIAuthority
 │   │               ├── gateway.UserService
-│   │               └── gateway.SessionsService
+│   │               └── gateway.CLISessionService
 │   ├── governance.L5Actuator
 │   │   ├── execution.ExecutionService
 │   │   ├── storage.SQLAuditStore
@@ -81,12 +81,17 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.CanonicalDBService [SHARED]
 │   ├── gateway.PKIAuthority
 │   ├── gateway.UserService
-│   └── gateway.SessionsService
+│   ├── gateway.CLISessionService
+│   └── gateway.OperatorSessionService
 ├── gateway.PasskeyService
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.UserService
 │   └── gateway.CanonicalDBService [SHARED]
-├── gateway.SessionsService
+├── gateway.CLISessionService
+│   └── gateway.CanonicalDBService [SHARED]
+├── gateway.OperatorSessionService
+│   └── gateway.CanonicalDBService [SHARED]
+├── gateway.WebSessionService
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.AppEnrollmentService
 │   ├── gateway.CanonicalDBService [SHARED]

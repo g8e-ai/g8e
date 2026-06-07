@@ -43,7 +43,9 @@ func TestInitPaths(t *testing.T) {
 			t.Fatalf("Failed to chdir: %v", err)
 		}
 
-		InitPaths()
+		if err := InitPaths(); err != nil {
+			t.Fatalf("InitPaths failed: %v", err)
+		}
 
 		// All paths should be relative to the current working directory (subDir)
 		assert.Contains(t, Paths.Infra.RuntimeDir, subDir)

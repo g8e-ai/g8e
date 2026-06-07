@@ -11,34 +11,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package constants defines authentication and authorization constants used across the g8e platform.
+// This includes WebAuthn/passkey constants, PKI leaf types, HTTP headers, and context keys.
 package constants
 
-// Passkey purpose constants.
+// Passkey purpose constants define the intended use of a passkey credential.
 const (
+	// PasskeyPurposeRegister indicates the passkey is being created/registered.
 	PasskeyPurposeRegister = "register"
-	PasskeyPurposeAuth     = "auth"
+	// PasskeyPurposeAuth indicates the passkey is being used for authentication.
+	PasskeyPurposeAuth = "auth"
 )
 
-// WebAuthn algorithm and type constants.
+// WebAuthn algorithm and type constants define COSE algorithm identifiers and credential types.
 const (
+	// WebAuthnTypePublicKey is the credential type for public key credentials.
 	WebAuthnTypePublicKey = "public-key"
-	WebAuthnAlgES256      = -7
-	WebAuthnAlgRS256      = -257
+	// WebAuthnAlgES256 is the COSE algorithm identifier for ECDSA using P-256 and SHA-256 (COSE value -7).
+	WebAuthnAlgES256 = -7
+	// WebAuthnAlgRS256 is the COSE algorithm identifier for RSASSA-PKCS1-v1_5 using SHA-256 (COSE value -257).
+	WebAuthnAlgRS256 = -257
 )
 
-// WebAuthn attestation and selection constants.
+// WebAuthn attestation and selection constants define credential policy requirements.
 const (
-	WebAuthnAttestationNone          = "none"
-	WebAuthnResidentKeyRequired      = "required"
+	// WebAuthnAttestationNone indicates no attestation is required.
+	WebAuthnAttestationNone = "none"
+	// WebAuthnResidentKeyRequired indicates a resident key (discoverable credential) is required.
+	WebAuthnResidentKeyRequired = "required"
+	// WebAuthnUserVerificationRequired indicates user verification is required for credential usage.
 	WebAuthnUserVerificationRequired = "required"
 )
 
-// PKI leaf type constants.
+// PKI leaf type constants define the types of leaf certificates in the g8e PKI hierarchy.
 const (
+	// LeafTypeOperator identifies an operator node certificate.
 	LeafTypeOperator = "operator"
-	LeafTypeApp      = "app"
-	LeafTypeHub      = "hub"
-	LeafTypeCLI      = "cli"
+	// LeafTypeApp identifies an application certificate.
+	LeafTypeApp = "app"
+	// LeafTypeHub identifies a hub/gateway certificate.
+	LeafTypeHub = "hub"
+	// LeafTypeCLI identifies a CLI client certificate.
+	LeafTypeCLI = "cli"
 )
 
 // HTTP header constants.
@@ -84,12 +98,17 @@ const (
 	HeaderXRequestTimestamp             = "X-Request-Timestamp"
 )
 
-// ContextKey is a custom type for context keys to avoid collisions.
+// ContextKey is a custom type for context keys to avoid collisions with other packages.
+// Use these keys to store and retrieve values from context.Context values.
 type ContextKey string
 
 const (
-	ContextKeyUserID         ContextKey = "user_id"
-	ContextKeyAppID          ContextKey = "app_id"
-	ContextKeyTenantID       ContextKey = "tenant_id"
+	// ContextKeyUserID stores the authenticated user ID in context.
+	ContextKeyUserID ContextKey = "user_id"
+	// ContextKeyAppID stores the application ID in context.
+	ContextKeyAppID ContextKey = "app_id"
+	// ContextKeyTenantID stores the tenant/organization ID in context.
+	ContextKeyTenantID ContextKey = "tenant_id"
+	// ContextKeyBindingPersona stores the binding persona identifier in context.
 	ContextKeyBindingPersona ContextKey = "binding_persona"
 )

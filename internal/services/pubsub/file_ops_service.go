@@ -139,7 +139,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 		if result.TaskID != nil {
 			taskID = *result.TaskID
 		}
-		fs.vaultWriter.WriteExecution(executionWriteParams{
+		fs.vaultWriter.WriteExecution(ctx, executionWriteParams{
 			id:              result.ExecutionID,
 			command:         commandStr,
 			exitCode:        exitCode,
@@ -207,7 +207,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 				}
 
 				if fs.vaultWriter != nil {
-					fs.vaultWriter.StoreFileDiffFromLedger(filePath, operation, fmt.Sprintf("%d", eventID), fs.config.OperatorSessionId, result.CaseID, fs.ledger)
+					fs.vaultWriter.StoreFileDiffFromLedger(ctx, filePath, operation, fmt.Sprintf("%d", eventID), fs.config.OperatorSessionId, result.CaseID, fs.ledger)
 				}
 			}
 		}
@@ -334,7 +334,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 			taskID = *result.TaskID
 		}
 
-		fs.vaultWriter.WriteExecution(executionWriteParams{
+		fs.vaultWriter.WriteExecution(ctx, executionWriteParams{
 			id:              result.ExecutionID,
 			command:         commandStr,
 			exitCode:        exitCode,
@@ -467,7 +467,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 			taskID = *result.TaskID
 		}
 
-		fs.vaultWriter.WriteExecution(executionWriteParams{
+		fs.vaultWriter.WriteExecution(ctx, executionWriteParams{
 			id:              result.ExecutionID,
 			command:         commandStr,
 			exitCode:        exitCode,

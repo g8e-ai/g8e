@@ -14,6 +14,7 @@
 package pubsub
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -30,23 +31,23 @@ type mockExecutionVault struct {
 	enabled bool
 }
 
-func (m *mockExecutionVault) StoreExecution(record *models.ExecutionRecord) error {
+func (m *mockExecutionVault) StoreExecution(ctx context.Context, record *models.ExecutionRecord) error {
 	return nil
 }
 
-func (m *mockExecutionVault) GetExecution(executionID string) (*models.ExecutionRecord, error) {
+func (m *mockExecutionVault) GetExecution(ctx context.Context, executionID string) (*models.ExecutionRecord, error) {
 	return nil, nil
 }
 
-func (m *mockExecutionVault) StoreFileDiff(record *models.FileDiffRecord) error {
+func (m *mockExecutionVault) StoreFileDiff(ctx context.Context, record *models.FileDiffRecord) error {
 	return nil
 }
 
-func (m *mockExecutionVault) GetFileDiff(diffID string) (*models.FileDiffRecord, error) {
+func (m *mockExecutionVault) GetFileDiff(ctx context.Context, diffID string) (*models.FileDiffRecord, error) {
 	return nil, nil
 }
 
-func (m *mockExecutionVault) GetFileDiffsBySession(operatorSessionID string, limit int) ([]*models.FileDiffRecord, error) {
+func (m *mockExecutionVault) GetFileDiffsBySession(ctx context.Context, operatorSessionID string, limit int) ([]*models.FileDiffRecord, error) {
 	return nil, nil
 }
 
@@ -103,7 +104,7 @@ func TestVaultWriter_WriteExecution(t *testing.T) {
 			vaultMode:  constants.VaultModeRaw,
 		}
 
-		svc.WriteExecution(params)
+		svc.WriteExecution(context.Background(), params)
 		// Should not panic
 	})
 
@@ -129,7 +130,7 @@ func TestVaultWriter_WriteExecution(t *testing.T) {
 			vaultMode:       constants.VaultModeRaw,
 		}
 
-		svc.WriteExecution(params)
+		svc.WriteExecution(context.Background(), params)
 		// Should attempt to write (will fail due to mock, but should not panic)
 	})
 }
@@ -152,7 +153,7 @@ func TestVaultWriter_WriteFileDiff(t *testing.T) {
 			diffContent:      "diff content",
 		}
 
-		svc.WriteFileDiff(params)
+		svc.WriteFileDiff(context.Background(), params)
 		// Should not panic
 	})
 
@@ -176,7 +177,7 @@ func TestVaultWriter_WriteFileDiff(t *testing.T) {
 			operatorSessionID: "session-1",
 		}
 
-		svc.WriteFileDiff(params)
+		svc.WriteFileDiff(context.Background(), params)
 		// Should attempt to write
 	})
 }
@@ -189,7 +190,7 @@ func TestVaultWriter_StoreFileDiffFromLedger(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		svc := NewVaultWriter(cfg, logger, nil, nil)
 
-		svc.StoreFileDiffFromLedger(filepath.Join(tmpDir, "test.txt"), "write", "event-1", "session-1", "case-1", nil)
+		svc.StoreFileDiffFromLedger(context.Background(), filepath.Join(tmpDir, "test.txt"), "write", "event-1", "session-1", "case-1", nil)
 		// Should not panic
 	})
 
@@ -201,7 +202,7 @@ func TestVaultWriter_StoreFileDiffFromLedger(t *testing.T) {
 		ledger := &storage.GitLedgerService{}
 		svc := NewVaultWriter(cfg, logger, nil, nil)
 
-		svc.StoreFileDiffFromLedger(filepath.Join(tmpDir, "test.txt"), "write", "event-1", "session-1", "case-1", ledger)
+		svc.StoreFileDiffFromLedger(context.Background(), filepath.Join(tmpDir, "test.txt"), "write", "event-1", "session-1", "case-1", ledger)
 		// Should handle gracefully
 	})
 }

@@ -185,18 +185,17 @@ See [docs/architecture/g8e.md](../architecture/g8e.md) for doctrine schema detai
 
 ## Constants
 
-Cross-component constants are stored in JSON at `protocol/constants/` (SSOT). Go consumes these via generated registry files.
+Constants are defined in Go source files in `internal/constants/` (SSOT). JSON files in `protocol/constants/` serve as reference documentation and external protocol definitions.
 
 **Adding constants:**
-1. Add to appropriate JSON file in `protocol/constants/`
-2. Run `make constants` to regenerate Go registry
-3. Run `go run ./internal/constants/check_registry.go` to verify
-4. Commit both JSON and generated Go files
+1. Add the constant to the appropriate Go file in `internal/constants/`
+2. Update the corresponding JSON file in `protocol/constants/` if the constant is part of the public protocol
+3. Run tests to verify the constant is properly integrated
+4. Commit both the Go source file and any updated JSON reference files
 
 **Commands:**
-- `make constants` - Generate Go registry from JSON
-- `make generate` - Generate protobuf and constants
-- `make clean-constants` - Remove generated constants
+- `make generate` - Generate protobuf code from `.proto` files
+- `make proto` - Generate Go Protobuf code (alias for generate)
 
 See [docs/reference/constants.md](../reference/constants.md) for details.
 

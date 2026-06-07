@@ -130,3 +130,67 @@ func TestExitCodeFromError_ConfigError(t *testing.T) {
 func TestExitCodeFromError_GeneralError(t *testing.T) {
 	assert.Equal(t, ExitGeneralError, ExitCodeFromError(errors.New("something unexpected happened")))
 }
+
+func TestContainsAny(t *testing.T) {
+	tests := []struct {
+		name       string
+		s          string
+		substrings []string
+		want       bool
+	}{
+		{
+			name:       "contains one substring",
+			s:          "permission denied",
+			substrings: []string{"permission denied", "access denied"},
+			want:       true,
+		},
+		{
+			name:       "contains multiple substrings",
+			s:          "permission denied and access denied",
+			substrings: []string{"permission denied", "access denied"},
+			want:       true,
+		},
+		{
+			name:       "contains none",
+			s:          "something else",
+			substrings: []string{"permission denied", "access denied"},
+			want:       false,
+		},
+		{
+			name:       "case insensitive match",
+			s:          "PERMISSION DENIED",
+			substrings: []string{"permission denied"},
+			want:       true,
+		},
+		{
+			name:       "case insensitive substring",
+			s:          "permission denied",
+			substrings: []string{"PERMISSION DENIED"},
+			want:       true,
+		},
+		{
+			name:       "empty string",
+			s:          "",
+			substrings: []string{"permission denied"},
+			want:       false,
+		},
+		{
+			name:       "empty substrings",
+			s:          "permission denied",
+			substrings: []string{},
+			want:       false,
+		},
+		{
+			name:       "partial match",
+			s:          "permission denied error occurred",
+			substrings: []string{"permission denied"},
+			want:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, containsAny(tt.s, tt.substrings))
+		})
+	}
+}

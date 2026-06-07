@@ -11,6 +11,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package constants provides Go registry files generated from protocol/constants/ JSON.
+//
+// This file contains agent mode and prompt section identifier constants used throughout
+// the platform for agent configuration and prompt engineering. These constants are
+// generated from protocol/constants/prompts.json (SSOT).
+//
+// Adding new constants:
+// 1. Add to protocol/constants/prompts.json
+// 2. Run `make constants` to regenerate this file
+// 3. Run `go run ./internal/constants/check_registry.go` to verify
 package constants
 
 const (

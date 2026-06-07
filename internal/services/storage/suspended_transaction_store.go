@@ -120,9 +120,9 @@ CREATE INDEX IF NOT EXISTS idx_suspended_expires_at ON suspended_transactions(ex
 `
 
 // StoreSuspendedTransaction stores a transaction awaiting L3 approval.
-func (sts *SuspendedTransactionService) StoreSuspendedTransaction(tx *models.SuspendedTransaction) error {
+func (sts *SuspendedTransactionService) StoreSuspendedTransaction(ctx context.Context, tx *models.SuspendedTransaction) error {
 	if sts == nil || sts.db == nil {
-		return fmt.Errorf("suspended transaction store not initialized")
+		return fmt.Errorf("suspended_transaction_store: store transaction: store not initialized")
 	}
 	query := `
 	INSERT INTO suspended_transactions (
@@ -163,16 +163,16 @@ func (sts *SuspendedTransactionService) StoreSuspendedTransaction(tx *models.Sus
 		tx.ExpectedCertFingerprint,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to store suspended transaction: %w", err)
+		return fmt.Errorf("suspended_transaction_store: store transaction: %w", err)
 	}
 	return nil
 }
 
 // GetSuspendedTransaction retrieves a suspended transaction by hash.
-// Returns (nil, false) if not found or expired.
-func (sts *SuspendedTransactionService) GetSuspendedTransaction(txHash string) (*models.SuspendedTransaction, bool) {
+// Returns (nil, false, nil) if not found or expired.
+func (sts *SuspendedTransactionService) GetSuspendedTransaction(ctx context.Context, txHash string) (*models.SuspendedTransaction, bool, error) {
 	if sts == nil || sts.db == nil {
-		return nil, false
+		return nil, false, fmt.Errorf("suspended_transaction_store: get transaction: store not initialized")
 	}
 	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID, approvedBy, approvalSignature, expectedCertFingerprint sql.NullString
 	var approved int
@@ -183,10 +183,10 @@ func (sts *SuspendedTransactionService) GetSuspendedTransaction(txHash string) (
 	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID, &approved, &approvedAtStr, &approvedBy, &approvalSignature, &expectedCertFingerprint)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, false
+			return nil, false, nil
 		}
 		sts.logger.Error("Failed to query suspended transaction", "tx_hash", txHash, string(constants.ConnectionStateError), err)
-		return nil, false
+		return nil, false, fmt.Errorf("suspended_transaction_store: get transaction: %w", err)
 	}
 
 	createdAt, _ := sqliteutil.ParseTimestamp(createdAtStr.String)
@@ -217,14 +217,14 @@ func (sts *SuspendedTransactionService) GetSuspendedTransaction(txHash string) (
 		ApprovedBy:              approvedBy.String,
 		ApprovalSignature:       approvalSignature.String,
 		ExpectedCertFingerprint: expectedCertFingerprint.String,
-	}, true
+	}, true, nil
 }
 
 // ListSuspendedTransactions retrieves all non-expired suspended transactions.
 // Optionally filters by user_id if provided.
-func (sts *SuspendedTransactionService) ListSuspendedTransactions(userID string) ([]*models.SuspendedTransaction, error) {
+func (sts *SuspendedTransactionService) ListSuspendedTransactions(ctx context.Context, userID string) ([]*models.SuspendedTransaction, error) {
 	if sts == nil || sts.db == nil {
-		return nil, fmt.Errorf("suspended transaction store not initialized")
+		return nil, fmt.Errorf("suspended_transaction_store: list transactions: store not initialized")
 	}
 
 	var query string
@@ -260,7 +260,7 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(userID string)
 		return row, err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to query suspended transactions: %w", err)
+		return nil, fmt.Errorf("suspended_transaction_store: list transactions: %w", err)
 	}
 
 	var transactions []*models.SuspendedTransaction
@@ -301,9 +301,9 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(userID string)
 
 // ApproveSuspendedTransaction marks a suspended transaction as approved with cryptographic signature.
 // This is called by the CLI approval command when a human approves a transaction.
-func (sts *SuspendedTransactionService) ApproveSuspendedTransaction(txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error {
+func (sts *SuspendedTransactionService) ApproveSuspendedTransaction(ctx context.Context, txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error {
 	if sts == nil || sts.db == nil {
-		return fmt.Errorf("suspended transaction store not initialized")
+		return fmt.Errorf("suspended_transaction_store: approve transaction: store not initialized")
 	}
 	sts.wg.Add(1)
 	defer sts.wg.Done()
@@ -318,42 +318,42 @@ func (sts *SuspendedTransactionService) ApproveSuspendedTransaction(txHash, appr
 		nowStr, approvedBy, approvalSignature, expectedCertFingerprint, txHash, sqliteutil.NowTimestamp(),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to approve suspended transaction: %w", err)
+		return fmt.Errorf("suspended_transaction_store: approve transaction: %w", err)
 	}
 
 	// Check if any row was actually updated
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return fmt.Errorf("suspended_transaction_store: approve transaction: failed to get rows affected: %w", err)
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("transaction not found or expired")
+		return fmt.Errorf("suspended_transaction_store: approve transaction: transaction not found or expired")
 	}
 
 	return nil
 }
 
 // DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.
-func (sts *SuspendedTransactionService) DeleteSuspendedTransaction(txHash string) error {
+func (sts *SuspendedTransactionService) DeleteSuspendedTransaction(ctx context.Context, txHash string) error {
 	if sts == nil || sts.db == nil {
-		return fmt.Errorf("suspended transaction store not initialized")
+		return fmt.Errorf("suspended_transaction_store: delete transaction: store not initialized")
 	}
 	_, err := sts.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE transaction_hash = ?", txHash)
 	if err != nil {
-		return fmt.Errorf("failed to delete suspended transaction: %w", err)
+		return fmt.Errorf("suspended_transaction_store: delete transaction: %w", err)
 	}
 	return nil
 }
 
 // CleanupExpiredSuspendedTransactions removes expired suspended transactions.
 // Returns the count of deleted transactions.
-func (sts *SuspendedTransactionService) CleanupExpiredSuspendedTransactions() (int64, error) {
+func (sts *SuspendedTransactionService) CleanupExpiredSuspendedTransactions(ctx context.Context) (int64, error) {
 	if sts == nil || sts.db == nil {
-		return 0, nil
+		return 0, fmt.Errorf("suspended_transaction_store: cleanup expired: store not initialized")
 	}
 	result, err := sts.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE expires_at < ?", sqliteutil.NowTimestamp())
 	if err != nil {
-		return 0, fmt.Errorf("failed to cleanup expired suspended transactions: %w", err)
+		return 0, fmt.Errorf("suspended_transaction_store: cleanup expired: %w", err)
 	}
 	return result.RowsAffected()
 }

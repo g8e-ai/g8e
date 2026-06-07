@@ -81,11 +81,7 @@ func (s *WebSessionService) ValidateWebSession(webSessionID string) (*models.Web
 	}
 
 	var webSession models.WebSession
-	data, err := json.Marshal(doc.Data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal web session data: %w", err)
-	}
-	if err := json.Unmarshal(data, &webSession); err != nil {
+	if err := json.Unmarshal(doc.Data, &webSession); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal web session: %w", err)
 	}
 

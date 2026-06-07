@@ -23,9 +23,10 @@ import (
 	"strings"
 	"time"
 
+	sshlib "golang.org/x/crypto/ssh"
+
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/pkg/ssh"
-	sshlib "golang.org/x/crypto/ssh"
 )
 
 // streamResult is emitted by streamToHost for each host attempt.
@@ -65,14 +66,17 @@ func isTransientError(err error) bool {
 // preFlightCheck validates SSH connectivity and authentication before binary transfer.
 // Returns nil if the host is reachable and auth works, error otherwise.
 func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassphrase string, dialTimeout time.Duration) error {
-	authMethods := ssh.BuildAuthMethods(r, sshAuthSock, sshPassphrase)
+	authMethods, err := ssh.BuildAuthMethods(r, sshAuthSock, sshPassphrase)
+	if err != nil {
+		return fmt.Errorf("preFlightCheck: build auth methods: %w", err)
+	}
 	if len(authMethods) == 0 {
-		return fmt.Errorf("no SSH auth methods available")
+		return fmt.Errorf("preFlightCheck: no SSH auth methods available")
 	}
 
 	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback()
 	if cbErr != nil {
-		return fmt.Errorf("host key callback: %w", cbErr)
+		return fmt.Errorf("preFlightCheck: build host key callback: %w", cbErr)
 	}
 
 	clientConfig := &sshlib.ClientConfig{
@@ -104,7 +108,7 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 				dialDone <- struct {
 					client *sshlib.Client
 					err    error
-				}{nil, fmt.Errorf("proxy command stdin pipe: %w", err)}
+				}{nil, fmt.Errorf("preFlightCheck: proxy command stdin pipe: %w", err)}
 				return
 			}
 			stdout, err := cmd.StdoutPipe()
@@ -112,14 +116,14 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 				dialDone <- struct {
 					client *sshlib.Client
 					err    error
-				}{nil, fmt.Errorf("proxy command stdout pipe: %w", err)}
+				}{nil, fmt.Errorf("preFlightCheck: proxy command stdout pipe: %w", err)}
 				return
 			}
 			if err := cmd.Start(); err != nil {
 				dialDone <- struct {
 					client *sshlib.Client
 					err    error
-				}{nil, fmt.Errorf("proxy command start: %w", err)}
+				}{nil, fmt.Errorf("preFlightCheck: proxy command start: %w", err)}
 				return
 			}
 
@@ -172,14 +176,14 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 		// Run a simple command to verify the session works
 		session, err := result.client.NewSession()
 		if err != nil {
-			return fmt.Errorf("new session: %w", err)
+			return fmt.Errorf("preFlightCheck: new session: %w", err)
 		}
 		defer session.Close()
 
 		// Run 'true' command - minimal check that remote shell works
 		err = session.Run("true")
 		if err != nil {
-			return fmt.Errorf("remote command failed: %w", err)
+			return fmt.Errorf("preFlightCheck: remote command failed: %w", err)
 		}
 		return nil
 	}
@@ -222,7 +226,12 @@ func streamToHost(
 	default:
 	}
 
-	r = ssh.ResolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser)
+	var err error
+	r, err = ssh.ResolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser)
+	if err != nil {
+		emit(constants.StreamStatusFailed, fmt.Sprintf("resolve host: %v", err))
+		return
+	}
 
 	// Pre-flight check if enabled
 	if enablePreFlightCheck {
@@ -232,7 +241,11 @@ func streamToHost(
 		}
 	}
 
-	authMethods := ssh.BuildAuthMethods(r, sshAuthSock, sshPassphrase)
+	authMethods, err := ssh.BuildAuthMethods(r, sshAuthSock, sshPassphrase)
+	if err != nil {
+		emit(constants.StreamStatusFailed, fmt.Sprintf("build auth methods: %v", err))
+		return
+	}
 	if len(authMethods) == 0 {
 		emit(constants.StreamStatusFailed, "no SSH auth methods available (no keys found, no agent)")
 		return
@@ -240,7 +253,7 @@ func streamToHost(
 
 	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback()
 	if cbErr != nil {
-		emit(constants.StreamStatusFailed, cbErr.Error())
+		emit(constants.StreamStatusFailed, fmt.Sprintf("streamToHost: build host key callback: %v", cbErr))
 		return
 	}
 
@@ -292,7 +305,7 @@ func streamToHost(
 					dialDone <- struct {
 						client *sshlib.Client
 						err    error
-					}{nil, fmt.Errorf("proxy command stdin pipe: %w", err)}
+					}{nil, fmt.Errorf("streamToHost: proxy command stdin pipe: %w", err)}
 					return
 				}
 				stdout, err := cmd.StdoutPipe()
@@ -300,14 +313,14 @@ func streamToHost(
 					dialDone <- struct {
 						client *sshlib.Client
 						err    error
-					}{nil, fmt.Errorf("proxy command stdout pipe: %w", err)}
+					}{nil, fmt.Errorf("streamToHost: proxy command stdout pipe: %w", err)}
 					return
 				}
 				if err := cmd.Start(); err != nil {
 					dialDone <- struct {
 						client *sshlib.Client
 						err    error
-					}{nil, fmt.Errorf("proxy command start: %w", err)}
+					}{nil, fmt.Errorf("streamToHost: proxy command start: %w", err)}
 					return
 				}
 
@@ -363,7 +376,7 @@ func streamToHost(
 				if retryCount < maxRetries && isTransientError(result.err) {
 					continue // Retry transient errors
 				}
-				emit(constants.StreamStatusFailed, fmt.Sprintf("dial %s: %v (after %d retries)", addr, result.err, retryCount))
+				emit(constants.StreamStatusFailed, fmt.Sprintf("streamToHost: dial %s: %v (after %d retries)", addr, result.err, retryCount))
 				return
 			}
 			client = result.client
@@ -402,7 +415,7 @@ func streamToHost(
 			if retryCount < maxRetries && isTransientError(err) {
 				continue // Retry transient errors
 			}
-			emit(constants.StreamStatusFailed, fmt.Sprintf("new session: %v (after %d retries)", err, retryCount))
+			emit(constants.StreamStatusFailed, fmt.Sprintf("streamToHost: new session: %v (after %d retries)", err, retryCount))
 			return
 		}
 		defer func() {
@@ -513,7 +526,7 @@ wait "$PID"`,
 			if tail := strings.TrimSpace(stderrBuf.String()); tail != "" {
 				msg = fmt.Sprintf("%s: %s", msg, tail)
 			}
-			emit(constants.StreamStatusFailed, msg)
+			emit(constants.StreamStatusFailed, fmt.Sprintf("streamToHost: %s", msg))
 			return
 		}
 
@@ -522,7 +535,7 @@ wait "$PID"`,
 	}
 
 	// If we exhausted retries
-	emit(constants.StreamStatusFailed, fmt.Sprintf("failed after %d retries, last error: %v", maxRetries, lastErr))
+	emit(constants.StreamStatusFailed, fmt.Sprintf("streamToHost: failed after %d retries, last error: %v", maxRetries, lastErr))
 }
 
 // isSSHExitError checks whether err is an *ssh.ExitError and sets target.

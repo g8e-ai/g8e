@@ -136,7 +136,8 @@ func TestStreamToHost_Success(t *testing.T) {
 		}
 	})
 
-	_, port, _ := net.SplitHostPort(server.addr)
+	_, port, err := net.SplitHostPort(server.addr)
+	require.NoError(t, err)
 
 	resultCh := make(chan streamResult, 1)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -146,7 +147,7 @@ func TestStreamToHost_Success(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	sshDir := filepath.Join(home, ".ssh")
-	err := os.MkdirAll(sshDir, 0700)
+	err = os.MkdirAll(sshDir, 0700)
 	require.NoError(t, err)
 
 	keyPath := filepath.Join(sshDir, "id_rsa")
@@ -217,17 +218,20 @@ func TestStreamToHost_ContextCancelled(t *testing.T) {
 
 func TestStreamToHost_DialFailure(t *testing.T) {
 	// Use an unassigned port
-	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
 	addr := l.Addr().String()
-	l.Close()
+	err = l.Close()
+	require.NoError(t, err)
 
-	_, port, _ := net.SplitHostPort(addr)
+	_, port, err := net.SplitHostPort(addr)
+	require.NoError(t, err)
 
 	// Set HOME to temp dir so resolveHost finds our key
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	sshDir := filepath.Join(home, ".ssh")
-	err := os.MkdirAll(sshDir, 0700)
+	err = os.MkdirAll(sshDir, 0700)
 	require.NoError(t, err)
 
 	keyPath := filepath.Join(sshDir, "id_rsa")
@@ -235,7 +239,8 @@ func TestStreamToHost_DialFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	sshConfigPath := filepath.Join(sshDir, "config")
-	os.WriteFile(sshConfigPath, []byte(fmt.Sprintf("Host failedhost\n  Port %s\n", port)), 0600)
+	err = os.WriteFile(sshConfigPath, []byte(fmt.Sprintf("Host failedhost\n  Port %s\n", port)), 0600)
+	require.NoError(t, err)
 
 	// Strict mode requires known_hosts to exist; the dial itself is what we
 	// expect to fail in this test, not host-key validation.
@@ -311,11 +316,13 @@ func TestBuildAuthMethods_WithPassphrase(t *testing.T) {
 	}
 
 	// Test with empty passphrase (should work for unencrypted key)
-	methods := ssh.BuildAuthMethods(r, "", "")
+	methods, err := ssh.BuildAuthMethods(r, "", "")
+	require.NoError(t, err)
 	assert.Len(t, methods, 1)
 
 	// Test with wrong passphrase (should fall back to no passphrase)
-	methods = ssh.BuildAuthMethods(r, "", "wrongpassphrase")
+	methods, err = ssh.BuildAuthMethods(r, "", "wrongpassphrase")
+	require.NoError(t, err)
 	assert.Len(t, methods, 1)
 }
 
@@ -377,7 +384,8 @@ Host *.internal
 `
 	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0600))
 
-	blocks := ssh.ParseConfig(configPath)
+	blocks, err := ssh.ParseConfig(configPath)
+	require.NoError(t, err)
 	assert.NotEmpty(t, blocks)
 
 	// Test bastion host
@@ -402,7 +410,8 @@ func TestResolveHost_ProxyCommand(t *testing.T) {
 `
 	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0600))
 
-	r := ssh.ResolveHost("proxyhost", configPath, "", "", "")
+	r, err := ssh.ResolveHost("proxyhost", configPath, "", "", "")
+	require.NoError(t, err)
 	assert.Equal(t, "ssh -W %h:%p jump@bastion", r.ProxyCommand)
 	assert.Equal(t, "proxyuser", r.User)
 }

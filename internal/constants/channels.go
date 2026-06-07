@@ -16,8 +16,8 @@ package constants
 import "fmt"
 
 // Channel naming convention (shared across client, agent, g8eo):
-// Canonical values defined in protocol/constants/channels.json (the source of truth).
-// Agent and client are also consumers of that same JSON file.
+// Channel prefixes are defined here in Go (SSOT). Reference values are also
+// available in protocol/constants/channels.json for external consumers.
 //
 //	cmd:{operator_id}:{operator_session_id}       Agent -> Operator
 //	results:{operator_id}:{operator_session_id}    Operator -> Agent

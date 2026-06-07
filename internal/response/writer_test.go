@@ -307,10 +307,10 @@ func TestRPCError(t *testing.T) {
 		{
 			name:     "verification error",
 			id:       2,
-			code:     ErrCodeInvalidEnvelope,
+			code:     constants.ErrCodeInvalidEnvelope,
 			msg:      "Invalid envelope",
 			wantID:   float64(2),
-			wantCode: ErrCodeInvalidEnvelope,
+			wantCode: constants.ErrCodeInvalidEnvelope,
 			wantMsg:  "Invalid envelope",
 		},
 		{
@@ -387,17 +387,17 @@ func TestErrorCodes(t *testing.T) {
 		code  int
 		value int
 	}{
-		{"ErrCodeInvalidEnvelope", ErrCodeInvalidEnvelope, -32000},
-		{"ErrCodeHashMismatch", ErrCodeHashMismatch, -32001},
-		{"ErrCodeExpired", ErrCodeExpired, -32002},
-		{"ErrCodeReplay", ErrCodeReplay, -32003},
-		{"ErrCodeStateMismatch", ErrCodeStateMismatch, -32004},
-		{"ErrCodeL1ValidationFailed", ErrCodeL1ValidationFailed, -32005},
-		{"ErrCodeL2SignatureInvalid", ErrCodeL2SignatureInvalid, -32006},
-		{"ErrCodeL3ProofInvalid", ErrCodeL3ProofInvalid, -32007},
-		{"ErrCodePayloadDecodeFailed", ErrCodePayloadDecodeFailed, -32008},
-		{"ErrCodeResourceNotFound", ErrCodeResourceNotFound, -32100},
-		{"ErrCodeGatewayNotReady", ErrCodeGatewayNotReady, -32101},
+		{"ErrCodeInvalidEnvelope", constants.ErrCodeInvalidEnvelope, -32000},
+		{"ErrCodeHashMismatch", constants.ErrCodeHashMismatch, -32001},
+		{"ErrCodeExpired", constants.ErrCodeExpired, -32002},
+		{"ErrCodeReplay", constants.ErrCodeReplay, -32003},
+		{"ErrCodeStateMismatch", constants.ErrCodeStateMismatch, -32004},
+		{"ErrCodeL1ValidationFailed", constants.ErrCodeL1ValidationFailed, -32005},
+		{"ErrCodeL2SignatureInvalid", constants.ErrCodeL2SignatureInvalid, -32006},
+		{"ErrCodeL3ProofInvalid", constants.ErrCodeL3ProofInvalid, -32007},
+		{"ErrCodePayloadDecodeFailed", constants.ErrCodePayloadDecodeFailed, -32008},
+		{"ErrCodeResourceNotFound", constants.ErrCodeResourceNotFound, -32100},
+		{"ErrCodeGatewayNotReady", constants.ErrCodeGatewayNotReady, -32101},
 	}
 
 	for _, tt := range tests {

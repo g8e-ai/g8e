@@ -72,7 +72,11 @@ func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactio
 	}
 
 	// Check if the transaction exists in the suspended store
-	tx, ok := v.suspendedStore.GetSuspendedTransaction(transactionHash)
+	tx, ok, err := v.suspendedStore.GetSuspendedTransaction(ctx, transactionHash)
+	if err != nil {
+		v.logger.Warn("CLI L3 verification failed: error getting suspended transaction", "transaction_hash", transactionHash, "error", err)
+		return false, fmt.Errorf("failed to get suspended transaction: %w", err)
+	}
 	if !ok {
 		v.logger.Warn("CLI L3 verification failed: transaction not found in suspended store", "transaction_hash", transactionHash)
 		return false, fmt.Errorf("transaction not found in suspended store - must be approved via CLI")

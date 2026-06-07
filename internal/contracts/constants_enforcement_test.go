@@ -41,9 +41,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 var g8eoRoot string
@@ -72,7 +73,9 @@ func init() {
 		}
 		current = parent
 	}
-	constants.InitPathsWithBase(g8eoRoot)
+	if err := constants.InitPathsWithBase(g8eoRoot); err != nil {
+		panic(fmt.Errorf("constants_enforcement: init paths: %w", err))
+	}
 }
 
 // discoverScanDirs returns all subdirectories under internal/ to scan for violations
@@ -86,7 +89,7 @@ func discoverScanDirs() ([]string, error) {
 
 	entries, err := os.ReadDir(internalPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read internal/ directory: %w", err)
+		return nil, fmt.Errorf("discoverScanDirs: read internal/ directory: %w", err)
 	}
 
 	for _, entry := range entries {
@@ -105,7 +108,7 @@ func discoverRootFiles() ([]string, error) {
 
 	entries, err := os.ReadDir(g8eoRoot)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read root directory: %w", err)
+		return nil, fmt.Errorf("discoverRootFiles: read root directory: %w", err)
 	}
 
 	for _, entry := range entries {
@@ -204,7 +207,7 @@ func extractConstantsFromFile(filePath string, displayName string) (map[string]c
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse %s: %w", filePath, err)
+		return nil, fmt.Errorf("extractConstantsFromFile: parse %s: %w", filePath, err)
 	}
 
 	result := make(map[string]constantInfo)
@@ -292,7 +295,7 @@ func buildEnforcedValues() (map[string]constantInfo, map[string]map[string]const
 
 		constants, err := extractConstantsFromFile(fullPath, displayName)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("buildEnforcedValues: extract from %s: %w", displayName, err)
 		}
 
 		allConstants[displayName] = constants
@@ -371,7 +374,7 @@ func findViolationsInFile(filePath string, enforced map[string]constantInfo) ([]
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse %s: %w", filePath, err)
+		return nil, fmt.Errorf("findViolationsInFile: parse %s: %w", filePath, err)
 	}
 
 	var violations []violation
@@ -440,43 +443,51 @@ func findViolationsInFile(filePath string, enforced map[string]constantInfo) ([]
 // TESTS
 // =============================================================================
 
-func TestExtractConstantsFromEvents(t *testing.T) {
-	fullPath := filepath.Join(g8eoRoot, "internal/constants/events.go")
-	constants, err := extractConstantsFromFile(fullPath, "events.go")
-	require.NoError(t, err)
-	require.NotEmpty(t, constants, "should extract constants from events.go")
+func TestExtractConstants(t *testing.T) {
+	tests := []struct {
+		name           string
+		filePath       string
+		displayName    string
+		expectedValues []string
+	}{
+		{
+			name:           "events.go",
+			filePath:       "internal/constants/events.go",
+			displayName:    "events.go",
+			expectedValues: []string{"g8e.v1.operator.heartbeat.sent", "g8e.v1.operator.command.requested"},
+		},
+		{
+			name:           "status.go",
+			filePath:       "internal/constants/status.go",
+			displayName:    "status.go",
+			expectedValues: []string{"raw", "scrubbed"},
+		},
+		{
+			name:           "base.go",
+			filePath:       "internal/models/base.go",
+			displayName:    "base.go",
+			expectedValues: []string{},
+		},
+	}
 
-	t.Logf("Extracted %d constants from events.go", len(constants))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fullPath := filepath.Join(g8eoRoot, tt.filePath)
+			constants, err := extractConstantsFromFile(fullPath, tt.displayName)
+			require.NoError(t, err)
 
-	// Verify key constants exist
-	_, hasHeartbeat := constants["g8e.v1.operator.heartbeat.sent"]
-	assert.True(t, hasHeartbeat, "should contain g8e.v1.operator.heartbeat.sent")
+			if len(tt.expectedValues) > 0 {
+				require.NotEmpty(t, constants, "should extract constants from %s", tt.name)
+			}
 
-	_, hasCommandReq := constants["g8e.v1.operator.command.requested"]
-	assert.True(t, hasCommandReq, "should contain g8e.v1.operator.command.requested")
-}
+			t.Logf("Extracted %d constants from %s", len(constants), tt.name)
 
-func TestExtractConstantsFromVault(t *testing.T) {
-	fullPath := filepath.Join(g8eoRoot, "internal/constants/status.go")
-	constants, err := extractConstantsFromFile(fullPath, "status.go")
-	require.NoError(t, err)
-	require.NotEmpty(t, constants, "should extract constants from status.go")
-
-	t.Logf("Extracted %d constants from status.go", len(constants))
-
-	_, hasRaw := constants["raw"]
-	assert.True(t, hasRaw, "should contain raw (SentinelModeRaw)")
-
-	_, hasScrubbed := constants["scrubbed"]
-	assert.True(t, hasScrubbed, "should contain scrubbed (VaultModeScrubbed)")
-}
-
-func TestExtractConstantsFromModels(t *testing.T) {
-	t.Run("base.go execution statuses", func(t *testing.T) {
-		fullPath := filepath.Join(g8eoRoot, "internal/models/base.go")
-		_, err := extractConstantsFromFile(fullPath, "base.go")
-		require.NoError(t, err, "base.go must parse without error")
-	})
+			for _, expectedValue := range tt.expectedValues {
+				_, found := constants[expectedValue]
+				assert.True(t, found, "should contain %s", expectedValue)
+			}
+		})
+	}
 }
 
 func TestEnforcedValuesAfterAllowlist(t *testing.T) {
@@ -495,7 +506,9 @@ func TestEnforcedValuesAfterAllowlist(t *testing.T) {
 }
 
 func TestNoRawStringLiteralsWhereConstantsExist(t *testing.T) {
-	// g8e uses ZERO environment variables - strict constants lint is deprecated
+	// DEPRECATED: g8e uses ZERO environment variables - strict constants lint is deprecated.
+	// This test is skipped because the enforcement approach is no longer applicable.
+	// TODO: Remove this test entirely if the enforcement mechanism is permanently deprecated.
 	t.Skip("g8e uses ZERO environment variables - strict constants lint is deprecated")
 
 	enforced, _, err := buildEnforcedValues()

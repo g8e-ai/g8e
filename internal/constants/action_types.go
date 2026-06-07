@@ -13,6 +13,17 @@
 
 package constants
 
+// ActionType constants are manually maintained Go constants that mirror the
+// canonical values in protocol/constants/status.json (SSOT).
+//
+// These constants are verified by contract tests in internal/contracts/protocol_constants_test.go
+// to ensure they remain in sync with the JSON source of truth.
+//
+// Adding new action types:
+// 1. Add to protocol/constants/status.json under status.action_type
+// 2. Add corresponding constant here
+// 3. Run contract tests to verify alignment
+
 // ActionType is a typed string for action types.
 type ActionType string
 
@@ -72,18 +83,15 @@ func AllActionTypes() []ActionType {
 }
 
 // IsMutation returns true if the action type is a mutation (modifies system state).
+// This must match the "_mutation": true flag in protocol/constants/status.json.
 func IsMutation(actionType ActionType) bool {
 	switch actionType {
-	case ActionTypeExecuteBash,
+	case ActionTypeA2aCall,
+		ActionTypeExecuteBash,
 		ActionTypeFileEdit,
-		ActionTypeRestoreFile,
-		ActionTypeShutdown,
-		ActionTypeGrantIntent,
-		ActionTypeRevokeIntent,
-		ActionTypeA2aCall,
 		ActionTypeMcpCall,
-		ActionTypeEvalAnswer,
-		ActionTypeInvestigationCreate:
+		ActionTypeRestoreFile,
+		ActionTypeShutdown:
 		return true
 	default:
 		return false

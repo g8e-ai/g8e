@@ -97,7 +97,9 @@ func vaultInitCmd() *cobra.Command {
 		Long:  `Generate a new encryption vault with a random key. The key is saved to the specified key path.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Initialize paths relative to current working directory
-			constants.InitPaths()
+			if err := constants.InitPaths(); err != nil {
+				return fmt.Errorf("failed to initialize paths: %w", err)
+			}
 			projectRoot, err := os.Getwd()
 			if err != nil {
 				return fmt.Errorf("failed to get working directory: %w", err)
@@ -180,7 +182,9 @@ func vaultUnlockCmd() *cobra.Command {
 		Long:  `Unlock an existing vault using the private key.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Initialize paths relative to current working directory
-			constants.InitPaths()
+			if err := constants.InitPaths(); err != nil {
+				return fmt.Errorf("failed to initialize paths: %w", err)
+			}
 			projectRoot, err := os.Getwd()
 			if err != nil {
 				return fmt.Errorf("failed to get working directory: %w", err)
@@ -244,7 +248,9 @@ func vaultRekeyCmd() *cobra.Command {
 		Long:  `Re-encrypt the vault's DEK with a new private key. Both old and new keys are required.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Initialize paths relative to current working directory
-			constants.InitPaths()
+			if err := constants.InitPaths(); err != nil {
+				return fmt.Errorf("failed to initialize paths: %w", err)
+			}
 			projectRoot, err := os.Getwd()
 			if err != nil {
 				return fmt.Errorf("failed to get working directory: %w", err)
@@ -326,7 +332,9 @@ func vaultStatusCmd() *cobra.Command {
 		Long:  `Display whether the vault is initialized and unlocked.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Initialize paths relative to current working directory
-			constants.InitPaths()
+			if err := constants.InitPaths(); err != nil {
+				return fmt.Errorf("failed to initialize paths: %w", err)
+			}
 			projectRoot, err := os.Getwd()
 			if err != nil {
 				return fmt.Errorf("failed to get working directory: %w", err)
@@ -381,7 +389,9 @@ func vaultResetCmd() *cobra.Command {
 		Long:  `Reset the vault completely. This is a destructive operation that makes all encrypted data unrecoverable.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Initialize paths relative to current working directory
-			constants.InitPaths()
+			if err := constants.InitPaths(); err != nil {
+				return fmt.Errorf("failed to initialize paths: %w", err)
+			}
 			projectRoot, err := os.Getwd()
 			if err != nil {
 				return fmt.Errorf("failed to get working directory: %w", err)
@@ -444,7 +454,9 @@ func vaultExportCmd() *cobra.Command {
 		Long:  `Export the vault private key in hex format. Use with extreme caution.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Initialize paths relative to current working directory
-			constants.InitPaths()
+			if err := constants.InitPaths(); err != nil {
+				return fmt.Errorf("failed to initialize paths: %w", err)
+			}
 			projectRoot, err := os.Getwd()
 			if err != nil {
 				return fmt.Errorf("failed to get working directory: %w", err)
@@ -488,7 +500,9 @@ func vaultImportCmd() *cobra.Command {
 		Long:  `Import a vault private key from hex string or stdin.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Initialize paths relative to current working directory
-			constants.InitPaths()
+			if err := constants.InitPaths(); err != nil {
+				return fmt.Errorf("failed to initialize paths: %w", err)
+			}
 			projectRoot, err := os.Getwd()
 			if err != nil {
 				return fmt.Errorf("failed to get working directory: %w", err)

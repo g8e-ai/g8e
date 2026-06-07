@@ -49,7 +49,7 @@ type HeartbeatNetworkInfo struct {
 }
 
 type HeartbeatCapabilityFlags struct {
-	ExecutionVaultEnabled bool `json:"local_storage_enabled"`
+	ExecutionVaultEnabled bool `json:"execution_vault_enabled"`
 	GitAvailable          bool `json:"git_available"`
 	LedgerMirrorEnabled   bool `json:"ledger_enabled"`
 }

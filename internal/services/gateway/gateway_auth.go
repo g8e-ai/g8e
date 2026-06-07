@@ -218,7 +218,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	if op.Status == constants.OperatorStatusTerminated {
 		return nil, &AuthError{
 			Message: "operator identity disabled",
-			Reason:  marshaler.OperatorStatus(constants.OperatorStatusTerminated),
+			Reason:  marshaler.Status(constants.OperatorStatusTerminated),
 			Status:  http.StatusForbidden,
 		}
 	}

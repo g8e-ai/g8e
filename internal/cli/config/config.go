@@ -102,7 +102,9 @@ func Load(projectRoot string) (*Config, error) {
 	}
 
 	// Initialize paths relative to projectRoot
-	constants.InitPathsWithBase(projectRoot)
+	if err := constants.InitPathsWithBase(projectRoot); err != nil {
+		return nil, fmt.Errorf("cli config: failed to initialize paths: %w", err)
+	}
 
 	// Use centralized path constants
 	runtimeDir := constants.Paths.Infra.RuntimeDir

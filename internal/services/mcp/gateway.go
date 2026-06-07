@@ -55,9 +55,9 @@ type StateRootProvider interface {
 
 // SuspendedTransactionStore defines the interface for persistent storage of suspended transactions.
 type SuspendedTransactionStore interface {
-	StoreSuspendedTransaction(tx *models.SuspendedTransaction) error
-	GetSuspendedTransaction(txHash string) (*models.SuspendedTransaction, bool)
-	DeleteSuspendedTransaction(txHash string) error
+	StoreSuspendedTransaction(ctx context.Context, tx *models.SuspendedTransaction) error
+	GetSuspendedTransaction(ctx context.Context, txHash string) (*models.SuspendedTransaction, bool, error)
+	DeleteSuspendedTransaction(ctx context.Context, txHash string) error
 }
 
 // GatewayService handles MCP/A2A protocol translation and downstream dispatch.
@@ -646,7 +646,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 			operatorID := r.Header.Get(constants.HeaderOperatorID)
 			certFingerprint := extractCertFingerprint(r)
 
-			g.StoreSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
+			g.StoreSuspendedTransaction(ctx, hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
 
 			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 			return CallToolResult{
@@ -1062,7 +1062,7 @@ func (g *GatewayService) HandleToolsCallSSE(w http.ResponseWriter, r *http.Reque
 			operatorID := r.Header.Get(constants.HeaderOperatorID)
 			certFingerprint := extractCertFingerprint(r)
 
-			g.StoreSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
+			g.StoreSuspendedTransaction(ctx, hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
 
 			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 			g.responder.RPCResponse(w, req.ID, CallToolResult{
@@ -1272,37 +1272,37 @@ func (g *GatewayService) mapGatewayError(err error) (int, string) {
 		errors.Is(err, governance.ErrTransactionIDMissing),
 		errors.Is(err, governance.ErrPayloadMissing),
 		errors.Is(err, governance.ErrUnknownActionType):
-		return response.ErrCodeInvalidEnvelope, msg
+		return constants.ErrCodeInvalidEnvelope, msg
 
 	case errors.Is(err, governance.ErrPayloadDecodeFailed):
-		return response.ErrCodePayloadDecodeFailed, msg
+		return constants.ErrCodePayloadDecodeFailed, msg
 
 	case errors.Is(err, governance.ErrTransactionHashMissing),
 		errors.Is(err, governance.ErrTransactionHashMismatch):
-		return response.ErrCodeHashMismatch, msg
+		return constants.ErrCodeHashMismatch, msg
 
 	case errors.Is(err, governance.ErrTransactionExpired):
-		return response.ErrCodeExpired, msg
+		return constants.ErrCodeExpired, msg
 
 	case errors.Is(err, governance.ErrTransactionReplay):
-		return response.ErrCodeReplay, msg
+		return constants.ErrCodeReplay, msg
 
 	case errors.Is(err, governance.ErrStateRootMissing),
 		errors.Is(err, governance.ErrStateRootRequired),
 		errors.Is(err, governance.ErrStateRootMismatch):
-		return response.ErrCodeStateMismatch, msg
+		return constants.ErrCodeStateMismatch, msg
 
 	case errors.Is(err, governance.ErrL1ValidationFailed):
-		return response.ErrCodeL1ValidationFailed, msg
+		return constants.ErrCodeL1ValidationFailed, msg
 
 	case errors.Is(err, governance.ErrL2SignatureMissing),
 		errors.Is(err, governance.ErrL2SignatureInvalid),
 		errors.Is(err, governance.ErrL2KeyNotConfigured):
-		return response.ErrCodeL2SignatureInvalid, msg
+		return constants.ErrCodeL2SignatureInvalid, msg
 
 	case errors.Is(err, governance.ErrL3ProofInvalid),
 		errors.Is(err, governance.ErrL3NotaryNotConfigured):
-		return response.ErrCodeL3ProofInvalid, msg
+		return constants.ErrCodeL3ProofInvalid, msg
 	}
 
 	// Map other Gateway errors back to JSON-RPC error
@@ -1321,7 +1321,7 @@ func extractCertFingerprint(r *http.Request) string {
 }
 
 // StoreSuspendedTransaction stores a transaction awaiting L3 approval.
-func (g *GatewayService) StoreSuspendedTransaction(txHash string, envelope []byte, toolName string, toolArgs json.RawMessage, userID, operatorID string, certFingerprint string) {
+func (g *GatewayService) StoreSuspendedTransaction(ctx context.Context, txHash string, envelope []byte, toolName string, toolArgs json.RawMessage, userID, operatorID string, certFingerprint string) {
 	if g.suspendedStore == nil {
 		return
 	}
@@ -1336,25 +1336,25 @@ func (g *GatewayService) StoreSuspendedTransaction(txHash string, envelope []byt
 		OperatorID:              operatorID,
 		ExpectedCertFingerprint: certFingerprint,
 	}
-	if err := g.suspendedStore.StoreSuspendedTransaction(tx); err != nil {
+	if err := g.suspendedStore.StoreSuspendedTransaction(ctx, tx); err != nil {
 		g.logger.Error("Failed to store suspended transaction", "tx_hash", txHash, "error", err)
 	}
 }
 
 // GetSuspendedTransaction retrieves a suspended transaction by hash.
-func (g *GatewayService) GetSuspendedTransaction(txHash string) (*models.SuspendedTransaction, bool) {
+func (g *GatewayService) GetSuspendedTransaction(ctx context.Context, txHash string) (*models.SuspendedTransaction, bool, error) {
 	if g.suspendedStore == nil {
-		return nil, false
+		return nil, false, nil
 	}
-	return g.suspendedStore.GetSuspendedTransaction(txHash)
+	return g.suspendedStore.GetSuspendedTransaction(ctx, txHash)
 }
 
 // DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.
-func (g *GatewayService) DeleteSuspendedTransaction(txHash string) {
+func (g *GatewayService) DeleteSuspendedTransaction(ctx context.Context, txHash string) {
 	if g.suspendedStore == nil {
 		return
 	}
-	if err := g.suspendedStore.DeleteSuspendedTransaction(txHash); err != nil {
+	if err := g.suspendedStore.DeleteSuspendedTransaction(ctx, txHash); err != nil {
 		g.logger.Error("Failed to delete suspended transaction", "tx_hash", txHash, "error", err)
 	}
 }
@@ -1378,7 +1378,10 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 		return nil, fmt.Errorf("user_id required")
 	}
 
-	tx, ok := g.GetSuspendedTransaction(txHash)
+	tx, ok, err := g.GetSuspendedTransaction(ctx, txHash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get suspended transaction: %w", err)
+	}
 	if !ok {
 		return nil, fmt.Errorf("suspended transaction %s not found or expired", txHash)
 	}
@@ -1409,7 +1412,7 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 	}
 
 	// Successful execution - remove from the suspension list.
-	g.DeleteSuspendedTransaction(txHash)
+	g.DeleteSuspendedTransaction(ctx, txHash)
 	return receipt, nil
 }
 

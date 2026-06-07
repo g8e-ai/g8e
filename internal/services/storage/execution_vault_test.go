@@ -14,6 +14,7 @@
 package storage
 
 import (
+	"context"
 	"crypto/ed25519"
 	"fmt"
 	"os"
@@ -184,7 +185,7 @@ func TestExecutionVault_StoreExecution_Basic(t *testing.T) {
 		OperatorID:       "op-def",
 	}
 
-	err := ev.StoreExecution(record)
+	err := ev.StoreExecution(context.Background(), record)
 	require.NoError(t, err)
 
 	ev.Wait()
@@ -208,7 +209,7 @@ func TestExecutionVault_StoreExecution_WithStderr(t *testing.T) {
 		UserID:           "user-123",
 	}
 
-	err := ev.StoreExecution(record)
+	err := ev.StoreExecution(context.Background(), record)
 	require.NoError(t, err)
 
 	ev.Wait()
@@ -224,7 +225,7 @@ func TestExecutionVault_StoreExecution_NilService(t *testing.T) {
 		Command:      "test",
 	}
 
-	err := ev.StoreExecution(record)
+	err := ev.StoreExecution(context.Background(), record)
 	require.NoError(t, err)
 }
 
@@ -243,7 +244,7 @@ func TestExecutionVault_StoreExecution_UpdateExisting(t *testing.T) {
 		StdoutSize:       6,
 	}
 
-	err := ev.StoreExecution(record1)
+	err := ev.StoreExecution(context.Background(), record1)
 	require.NoError(t, err)
 	ev.Wait()
 
@@ -258,11 +259,11 @@ func TestExecutionVault_StoreExecution_UpdateExisting(t *testing.T) {
 		StdoutSize:       6,
 	}
 
-	err = ev.StoreExecution(record2)
+	err = ev.StoreExecution(context.Background(), record2)
 	require.NoError(t, err)
 	ev.Wait()
 
-	retrieved, err := ev.GetExecution("exec-update")
+	retrieved, err := ev.GetExecution(context.Background(), "exec-update")
 	require.NoError(t, err)
 	assert.Equal(t, "echo world", retrieved.Command)
 	assert.Equal(t, int64(15), retrieved.DurationMs)
@@ -290,11 +291,11 @@ func TestExecutionVault_GetExecution_Basic(t *testing.T) {
 		OperatorID:       "op-xyz",
 	}
 
-	err := ev.StoreExecution(record)
+	err := ev.StoreExecution(context.Background(), record)
 	require.NoError(t, err)
 	ev.Wait()
 
-	retrieved, err := ev.GetExecution("exec-get-123")
+	retrieved, err := ev.GetExecution(context.Background(), "exec-get-123")
 	require.NoError(t, err)
 	require.NotNil(t, retrieved)
 
@@ -313,7 +314,7 @@ func TestExecutionVault_GetExecution_NotFound(t *testing.T) {
 	t.Parallel()
 	ev, _ := setupTestExecutionVault(t)
 
-	retrieved, err := ev.GetExecution("non-existent-id")
+	retrieved, err := ev.GetExecution(context.Background(), "non-existent-id")
 	require.NoError(t, err)
 	assert.Nil(t, retrieved)
 }
@@ -323,7 +324,7 @@ func TestExecutionVault_GetExecution_NilService(t *testing.T) {
 
 	var ev *ExecutionVaultService
 
-	retrieved, err := ev.GetExecution("some-id")
+	retrieved, err := ev.GetExecution(context.Background(), "some-id")
 	require.Error(t, err)
 	assert.Nil(t, retrieved)
 	assert.Contains(t, err.Error(), "disabled")
@@ -349,7 +350,7 @@ func TestExecutionVault_StoreFileDiff_Basic(t *testing.T) {
 		OperatorID:        "op-123",
 	}
 
-	err := ev.StoreFileDiff(record)
+	err := ev.StoreFileDiff(context.Background(), record)
 	require.NoError(t, err)
 
 	ev.Wait()
@@ -375,7 +376,7 @@ func TestExecutionVault_StoreFileDiff_DeleteOperation(t *testing.T) {
 		OperatorID:        "op-456",
 	}
 
-	err := ev.StoreFileDiff(record)
+	err := ev.StoreFileDiff(context.Background(), record)
 	require.NoError(t, err)
 
 	ev.Wait()
@@ -392,7 +393,7 @@ func TestExecutionVault_StoreFileDiff_NilService(t *testing.T) {
 		Operation:    "write",
 	}
 
-	err := ev.StoreFileDiff(record)
+	err := ev.StoreFileDiff(context.Background(), record)
 	require.NoError(t, err)
 }
 
@@ -409,7 +410,7 @@ func TestExecutionVault_StoreFileDiff_UpdateExisting(t *testing.T) {
 		DiffSize:     8,
 	}
 
-	err := ev.StoreFileDiff(record1)
+	err := ev.StoreFileDiff(context.Background(), record1)
 	require.NoError(t, err)
 	ev.Wait()
 
@@ -422,11 +423,11 @@ func TestExecutionVault_StoreFileDiff_UpdateExisting(t *testing.T) {
 		DiffSize:     8,
 	}
 
-	err = ev.StoreFileDiff(record2)
+	err = ev.StoreFileDiff(context.Background(), record2)
 	require.NoError(t, err)
 	ev.Wait()
 
-	retrieved, err := ev.GetFileDiff("diff-update")
+	retrieved, err := ev.GetFileDiff(context.Background(), "diff-update")
 	require.NoError(t, err)
 	assert.Equal(t, 8, retrieved.DiffSize)
 }
@@ -451,11 +452,11 @@ func TestExecutionVault_GetFileDiff_Basic(t *testing.T) {
 		OperatorID:        "op-get",
 	}
 
-	err := ev.StoreFileDiff(record)
+	err := ev.StoreFileDiff(context.Background(), record)
 	require.NoError(t, err)
 	ev.Wait()
 
-	retrieved, err := ev.GetFileDiff("diff-get-123")
+	retrieved, err := ev.GetFileDiff(context.Background(), "diff-get-123")
 	require.NoError(t, err)
 	require.NotNil(t, retrieved)
 
@@ -475,7 +476,7 @@ func TestExecutionVault_GetFileDiff_NotFound(t *testing.T) {
 	t.Parallel()
 	ev, _ := setupTestExecutionVault(t)
 
-	retrieved, err := ev.GetFileDiff("non-existent-diff")
+	retrieved, err := ev.GetFileDiff(context.Background(), "non-existent-diff")
 	require.NoError(t, err)
 	assert.Nil(t, retrieved)
 }
@@ -485,7 +486,7 @@ func TestExecutionVault_GetFileDiff_NilService(t *testing.T) {
 
 	var ev *ExecutionVaultService
 
-	retrieved, err := ev.GetFileDiff("some-diff-id")
+	retrieved, err := ev.GetFileDiff(context.Background(), "some-diff-id")
 	require.Error(t, err)
 	assert.Nil(t, retrieved)
 	assert.Contains(t, err.Error(), "disabled")
@@ -510,12 +511,12 @@ func TestExecutionVault_GetFileDiffsBySession_Basic(t *testing.T) {
 			CaseID:            "case-123",
 			OperatorID:        "op-123",
 		}
-		err := ev.StoreFileDiff(record)
+		err := ev.StoreFileDiff(context.Background(), record)
 		require.NoError(t, err)
 	}
 	ev.Wait()
 
-	diffs, err := ev.GetFileDiffsBySession(sessionID, 10)
+	diffs, err := ev.GetFileDiffsBySession(context.Background(), sessionID, 10)
 	require.NoError(t, err)
 	assert.Len(t, diffs, 5)
 
@@ -540,12 +541,12 @@ func TestExecutionVault_GetFileDiffsBySession_WithLimit(t *testing.T) {
 			DiffSize:          8,
 			OperatorSessionID: sessionID,
 		}
-		err := ev.StoreFileDiff(record)
+		err := ev.StoreFileDiff(context.Background(), record)
 		require.NoError(t, err)
 	}
 	ev.Wait()
 
-	diffs, err := ev.GetFileDiffsBySession(sessionID, 3)
+	diffs, err := ev.GetFileDiffsBySession(context.Background(), sessionID, 3)
 	require.NoError(t, err)
 	assert.Len(t, diffs, 3)
 }
@@ -566,12 +567,12 @@ func TestExecutionVault_GetFileDiffsBySession_DefaultLimit(t *testing.T) {
 			DiffSize:          4,
 			OperatorSessionID: sessionID,
 		}
-		err := ev.StoreFileDiff(record)
+		err := ev.StoreFileDiff(context.Background(), record)
 		require.NoError(t, err)
 	}
 	ev.Wait()
 
-	diffs, err := ev.GetFileDiffsBySession(sessionID, 0)
+	diffs, err := ev.GetFileDiffsBySession(context.Background(), sessionID, 0)
 	require.NoError(t, err)
 	assert.Len(t, diffs, 5)
 }
@@ -580,7 +581,7 @@ func TestExecutionVault_GetFileDiffsBySession_EmptySession(t *testing.T) {
 	t.Parallel()
 	ev, _ := setupTestExecutionVault(t)
 
-	diffs, err := ev.GetFileDiffsBySession("empty-session", 10)
+	diffs, err := ev.GetFileDiffsBySession(context.Background(), "empty-session", 10)
 	require.NoError(t, err)
 	assert.Len(t, diffs, 0)
 }
@@ -590,7 +591,7 @@ func TestExecutionVault_GetFileDiffsBySession_NilService(t *testing.T) {
 
 	var ev *ExecutionVaultService
 
-	diffs, err := ev.GetFileDiffsBySession("session-id", 10)
+	diffs, err := ev.GetFileDiffsBySession(context.Background(), "session-id", 10)
 	require.Error(t, err)
 	assert.Nil(t, diffs)
 	assert.Contains(t, err.Error(), "disabled")
@@ -657,7 +658,7 @@ func TestExecutionVault_Wait(t *testing.T) {
 		StdoutCompressed: []byte("output"),
 	}
 
-	err := ev.StoreExecution(record)
+	err := ev.StoreExecution(context.Background(), record)
 	require.NoError(t, err)
 
 	ev.Wait()
@@ -694,7 +695,7 @@ func TestExecutionVault_ConcurrentStoreExecution(t *testing.T) {
 				StdoutCompressed: []byte(fmt.Sprintf("output-%d", idx)),
 				StdoutSize:       10,
 			}
-			err := ev.StoreExecution(record)
+			err := ev.StoreExecution(context.Background(), record)
 			require.NoError(t, err)
 			done <- true
 		}(i)
@@ -707,7 +708,7 @@ func TestExecutionVault_ConcurrentStoreExecution(t *testing.T) {
 	ev.Wait()
 
 	for i := 0; i < concurrency; i++ {
-		retrieved, err := ev.GetExecution(fmt.Sprintf("exec-concurrent-%d", i))
+		retrieved, err := ev.GetExecution(context.Background(), fmt.Sprintf("exec-concurrent-%d", i))
 		require.NoError(t, err)
 		assert.NotNil(t, retrieved)
 	}
@@ -732,7 +733,7 @@ func TestExecutionVault_ConcurrentStoreFileDiff(t *testing.T) {
 				DiffSize:          8,
 				OperatorSessionID: sessionID,
 			}
-			err := ev.StoreFileDiff(record)
+			err := ev.StoreFileDiff(context.Background(), record)
 			require.NoError(t, err)
 			done <- true
 		}(i)
@@ -744,7 +745,7 @@ func TestExecutionVault_ConcurrentStoreFileDiff(t *testing.T) {
 
 	ev.Wait()
 
-	diffs, err := ev.GetFileDiffsBySession(sessionID, 100)
+	diffs, err := ev.GetFileDiffsBySession(context.Background(), sessionID, 100)
 	require.NoError(t, err)
 	assert.Len(t, diffs, 10)
 }
@@ -769,11 +770,11 @@ func TestExecutionVault_LargeStdout(t *testing.T) {
 		StdoutSize:       len(largeOutput),
 	}
 
-	err := ev.StoreExecution(record)
+	err := ev.StoreExecution(context.Background(), record)
 	require.NoError(t, err)
 	ev.Wait()
 
-	retrieved, err := ev.GetExecution("exec-large")
+	retrieved, err := ev.GetExecution(context.Background(), "exec-large")
 	require.NoError(t, err)
 	assert.Equal(t, len(largeOutput), retrieved.StdoutSize)
 }
@@ -795,11 +796,11 @@ func TestExecutionVault_EmptyOutput(t *testing.T) {
 		StderrSize:       0,
 	}
 
-	err := ev.StoreExecution(record)
+	err := ev.StoreExecution(context.Background(), record)
 	require.NoError(t, err)
 	ev.Wait()
 
-	retrieved, err := ev.GetExecution("exec-empty")
+	retrieved, err := ev.GetExecution(context.Background(), "exec-empty")
 	require.NoError(t, err)
 	assert.Equal(t, 0, retrieved.StdoutSize)
 	assert.Equal(t, 0, retrieved.StderrSize)
@@ -823,13 +824,13 @@ func TestExecutionVault_MultipleExecutionsSameCase(t *testing.T) {
 			StdoutSize:       10,
 			CaseID:           caseID,
 		}
-		err := ev.StoreExecution(record)
+		err := ev.StoreExecution(context.Background(), record)
 		require.NoError(t, err)
 	}
 	ev.Wait()
 
 	for i := 0; i < 5; i++ {
-		retrieved, err := ev.GetExecution(fmt.Sprintf("exec-case-%d", i))
+		retrieved, err := ev.GetExecution(context.Background(), fmt.Sprintf("exec-case-%d", i))
 		require.NoError(t, err)
 		assert.Equal(t, caseID, retrieved.CaseID)
 	}
@@ -851,12 +852,12 @@ func TestExecutionVault_MultipleDiffsSameSession(t *testing.T) {
 			DiffSize:          8,
 			OperatorSessionID: sessionID,
 		}
-		err := ev.StoreFileDiff(record)
+		err := ev.StoreFileDiff(context.Background(), record)
 		require.NoError(t, err)
 	}
 	ev.Wait()
 
-	diffs, err := ev.GetFileDiffsBySession(sessionID, 10)
+	diffs, err := ev.GetFileDiffsBySession(context.Background(), sessionID, 10)
 	require.NoError(t, err)
 	assert.Len(t, diffs, 5)
 }
@@ -883,11 +884,11 @@ func TestExecutionVault_ExecutionWithAllFields(t *testing.T) {
 		OperatorID:       "op-all",
 	}
 
-	err := ev.StoreExecution(record)
+	err := ev.StoreExecution(context.Background(), record)
 	require.NoError(t, err)
 	ev.Wait()
 
-	retrieved, err := ev.GetExecution("exec-all-fields")
+	retrieved, err := ev.GetExecution(context.Background(), "exec-all-fields")
 	require.NoError(t, err)
 
 	assert.Equal(t, "comprehensive-test", retrieved.Command)
@@ -919,11 +920,11 @@ func TestExecutionVault_FileDiffWithAllFields(t *testing.T) {
 		OperatorID:        "op-all",
 	}
 
-	err := ev.StoreFileDiff(record)
+	err := ev.StoreFileDiff(context.Background(), record)
 	require.NoError(t, err)
 	ev.Wait()
 
-	retrieved, err := ev.GetFileDiff("diff-all-fields")
+	retrieved, err := ev.GetFileDiff(context.Background(), "diff-all-fields")
 	require.NoError(t, err)
 
 	assert.Equal(t, "/comprehensive/path/file.txt", retrieved.FilePath)

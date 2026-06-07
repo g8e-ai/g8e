@@ -178,7 +178,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 		if result.TaskID != nil {
 			taskID = *result.TaskID
 		}
-		cs.vaultWriter.WriteExecution(executionWriteParams{
+		cs.vaultWriter.WriteExecution(ctx, executionWriteParams{
 			id:              result.ExecutionID,
 			command:         cs.execution.BuildCommandString(result.Command, result.Args),
 			exitCode:        result.ReturnCode,

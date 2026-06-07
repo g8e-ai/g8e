@@ -13,30 +13,45 @@
 
 package constants
 
-const (
-	TriageComplexitySimple  = "simple"
-	TriageComplexityComplex = "complex"
-)
+// TriageComplexity is a typed string for triage complexity levels.
+type TriageComplexity string
 
 const (
-	TriageConfidenceHigh = "high"
-	TriageConfidenceLow  = "low"
+	TriageComplexitySimple  TriageComplexity = "simple"
+	TriageComplexityComplex TriageComplexity = "complex"
 )
 
-const (
-	TriageIntentInformation = "information"
-	TriageIntentAction      = "action"
-	TriageIntentUnknown     = "unknown"
-)
+// TriageConfidence is a typed string for triage confidence levels.
+type TriageConfidence string
 
 const (
-	TriagePostureNormal      = "normal"
-	TriagePostureEscalated   = "escalated"
-	TriagePostureAdversarial = "adversarial"
-	TriagePostureConfused    = "confused"
+	TriageConfidenceHigh TriageConfidence = "high"
+	TriageConfidenceLow  TriageConfidence = "low"
 )
 
+// TriageIntent is a typed string for triage intent classifications.
+type TriageIntent string
+
 const (
-	AgentNameSage = "sage"
-	AgentNameDash = "dash"
+	TriageIntentInformation TriageIntent = "information"
+	TriageIntentAction      TriageIntent = "action"
+	TriageIntentUnknown     TriageIntent = "unknown"
+)
+
+// TriagePosture is a typed string for triage posture classifications.
+type TriagePosture string
+
+const (
+	TriagePostureNormal      TriagePosture = "normal"
+	TriagePostureEscalated   TriagePosture = "escalated"
+	TriagePostureAdversarial TriagePosture = "adversarial"
+	TriagePostureConfused    TriagePosture = "confused"
+)
+
+// AgentName is a typed string for agent persona identifiers.
+type AgentName string
+
+const (
+	AgentNameSage AgentName = "sage"
+	AgentNameDash AgentName = "dash"
 )

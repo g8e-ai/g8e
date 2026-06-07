@@ -102,7 +102,9 @@ func waitForReady(t *testing.T, ls *gateway.GatewayModeService) {
 
 func TestMCPGateway_EndToEnd(t *testing.T) {
 	// Initialize paths relative to test directory
-	constants.InitPathsWithBase("../../")
+	if err := constants.InitPathsWithBase("../../"); err != nil {
+		t.Fatalf("failed to initialize paths: %v", err)
+	}
 
 	// Create unique subdirectory for this test run
 	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), t.Name())
@@ -484,7 +486,9 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 func TestMCPGateway_PayloadVariations(t *testing.T) {
 	// Initialize paths relative to test directory
-	constants.InitPathsWithBase("../../")
+	if err := constants.InitPathsWithBase("../../"); err != nil {
+		t.Fatalf("failed to initialize paths: %v", err)
+	}
 
 	// Create unique subdirectory for this test run
 	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), t.Name())
@@ -931,7 +935,9 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 
 func TestMCPGateway_ErrorCases(t *testing.T) {
 	// Initialize paths relative to test directory
-	constants.InitPathsWithBase("../../")
+	if err := constants.InitPathsWithBase("../../"); err != nil {
+		t.Fatalf("failed to initialize paths: %v", err)
+	}
 
 	// Create unique subdirectory for this test run
 	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), t.Name())

@@ -98,7 +98,7 @@ Internal enumeration constants:
 - `Environment`: `EnvironmentDev`, `EnvironmentProduction`, `EnvironmentTest`
 - `VersionStability`: `VersionStabilityBeta`, `VersionStabilityDev`, `VersionStabilityStable`
 - `UserRole`: `UserRoleAdmin`, `UserRoleOperator`, `UserRoleOwner`, `UserRoleUser`
-- `GatewayMode`: `GatewayModeMode`, `GatewayModeStatusOK`
+- `GatewayMode`: `GatewayModeGateway`, `GatewayModeStatusOK`
 - Additional enums for thinking actions, history events, heartbeat types, auth audit results, tool display categories, session key prefixes, history actors, and AI sources
 
 ### Headers (`auth.go`)
@@ -134,7 +134,7 @@ GovernanceEnvelope action type constants:
 - `document_ids.go` - Document ID prefixes: `DocIDPlatformSettings`, `DocIDUserSettingsPrefix`
 - `kv_keys.go` - Key-value store key patterns for caching, sessions, operators, users, investigations, auth, and execution
 - `env_vars.go` - Environment variable names (currently empty - g8e uses zero environment variables)
-- `timestamp.go` - Go-specific format strings: `TimestampFormatRFC3339`
+- `timestamp.go` - Go-specific format strings: `FormatRFC3339`
 - `field_paths.go` - Field path access control configurations for investigations, memories, and cases collections
 - `agents.go` - Agent persona details
 

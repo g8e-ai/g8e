@@ -118,9 +118,9 @@ CREATE INDEX IF NOT EXISTS idx_kv_expiry ON kv(expires_at);
 
 // KVSet sets a key-value pair with an optional TTL (in seconds).
 // If a vault is configured, the value is encrypted at rest using AES-256-GCM.
-func (ts *TokenStoreService) KVSet(key, value string, ttlSeconds int) error {
+func (ts *TokenStoreService) KVSet(ctx context.Context, key, value string, ttlSeconds int) error {
 	if ts == nil || ts.db == nil {
-		return nil
+		return fmt.Errorf("token store is disabled")
 	}
 	ts.wg.Add(1)
 	defer ts.wg.Done()
@@ -153,9 +153,9 @@ func (ts *TokenStoreService) KVSet(key, value string, ttlSeconds int) error {
 
 // KVGet retrieves a value by key, honoring TTL.
 // If a vault is configured, the value is decrypted using AES-256-GCM.
-func (ts *TokenStoreService) KVGet(key string) (string, bool) {
+func (ts *TokenStoreService) KVGet(ctx context.Context, key string) (string, error) {
 	if ts == nil || ts.db == nil {
-		return "", false
+		return "", fmt.Errorf("token store is disabled")
 	}
 
 	query := `
@@ -166,24 +166,25 @@ func (ts *TokenStoreService) KVGet(key string) (string, bool) {
 	var value string
 	err := ts.db.QueryRowWithRetry(query, key, now).Scan(&value)
 	if err != nil {
-		return "", false
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("key not found: %s", key)
+		}
+		return "", fmt.Errorf("failed to query key %s: %w", key, err)
 	}
 
 	if !ts.vault.IsUnlocked() {
-		ts.logger.Error("Vault is locked, cannot decrypt value for key", "key", key)
-		return "", false
+		return "", fmt.Errorf("vault is locked, cannot decrypt value for key %s", key)
 	}
 
 	decrypted, err := ts.vault.Decrypt([]byte(value))
 	if err != nil {
-		ts.logger.Error("Failed to decrypt value for key", "key", key, "error", err)
-		return "", false
+		return "", fmt.Errorf("failed to decrypt value for key %s: %w", key, err)
 	}
-	return string(decrypted), true
+	return string(decrypted), nil
 }
 
 // KVScanPrefix retrieves all key-value pairs with a given prefix, honoring TTL.
-func (ts *TokenStoreService) KVScanPrefix(prefix string) (map[string]string, error) {
+func (ts *TokenStoreService) KVScanPrefix(ctx context.Context, prefix string) (map[string]string, error) {
 	if ts == nil || ts.db == nil {
 		return nil, fmt.Errorf("token store is disabled")
 	}

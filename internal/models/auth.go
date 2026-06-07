@@ -268,6 +268,24 @@ type WebSession struct {
 	LoginMethod       string `json:"login_method,omitempty"`        // "passkey", "windows_cert_store", "p12_import", etc.
 }
 
+// OperatorSession represents an authenticated Operator session.
+// Operator sessions authenticate the host agent via mTLS URI SAN and are used
+// by g8e-compatible agentic ensembles to look up sessions by ID.
+// Authority: protocol/constants/collections.json (operator_sessions)
+type OperatorSession struct {
+	ID                string    `json:"id"`
+	SessionType       string    `json:"session_type"`
+	UserID            string    `json:"user_id"`
+	OrganizationID    string    `json:"organization_id"`
+	OperatorID        string    `json:"operator_id"`
+	IsActive          bool      `json:"is_active"`
+	CreatedAt         string    `json:"created_at"`
+	AbsoluteExpiresAt string    `json:"absolute_expires_at"`
+	IdleExpiresAt     string    `json:"idle_expires_at"`
+	LastActivity      string    `json:"last_activity"`
+	LoginMethod       string    `json:"login_method"`
+}
+
 // CLISession represents an authenticated CLI/BYO session.
 // Strictly disjoint from operator_session_id.
 type CLISession struct {

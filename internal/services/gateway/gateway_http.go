@@ -140,7 +140,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	// Initialize controllers
 	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.DB, deps.PKI, deps.AppEnrollment, deps.Reg, deps.Responder)
 	h.dbController = newDBController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Pubsub, deps.UserSvc, deps.Responder)
-	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.WebSessionSvc, deps.MCPGateway, deps.Responder)
+	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.WebSessionSvc, deps.CLISessionSvc, deps.OperatorSessionSvc, deps.MCPGateway, deps.Responder)
 	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.DB, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
 
@@ -651,7 +651,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	h.responder.JSON(w, http.StatusOK, models.HealthResponse{
 		Status:          constants.GatewayModeStatusOK,
-		Mode:            constants.GatewayModeMode,
+		Mode:            constants.GatewayModeGateway,
 		Version:         h.cfg.Version,
 		GovernanceReady: h.isGovernanceReady != nil && h.isGovernanceReady(),
 		StateMerkleRoot: root,
@@ -666,7 +666,7 @@ func (h *HTTPHandler) handleBootstrapHealth(w http.ResponseWriter, r *http.Reque
 
 	h.responder.JSON(w, http.StatusOK, models.HealthResponse{
 		Status:  constants.GatewayModeStatusOK,
-		Mode:    constants.GatewayModeMode,
+		Mode:    constants.GatewayModeGateway,
 		Version: h.cfg.Version,
 	})
 }
@@ -772,8 +772,8 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	// The app identity extracted from the peer certificate must be associated with the target.
 	if route.WebSessionID != "" {
 		webBindKey := sessionWebBindKey(route.WebSessionID)
-		raw, found := h.db.KVGet(webBindKey)
-		if !found {
+		raw, err := h.db.KVGet(r.Context(), webBindKey)
+		if err != nil {
 			h.logger.Warn("SSE push: target web session has no bound operators", "web_session_id", route.WebSessionID, "app_id", appID)
 			h.responder.Error(w, http.StatusForbidden, "target session not found or not bound")
 			return
@@ -959,8 +959,8 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
 		// Verify operator_session_id is bound to this web_session_id.
 		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
-		boundWebSessionID, found := h.db.KVGet(operatorBindKey)
-		if !found || boundWebSessionID != route.WebSessionID {
+		boundWebSessionID, err := h.db.KVGet(r.Context(), operatorBindKey)
+		if err != nil || boundWebSessionID != route.WebSessionID {
 			h.responder.Error(w, http.StatusForbidden, "operator session does not own this web session")
 			return
 		}
@@ -1041,8 +1041,8 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 		channel = "sse:cli:" + route.CLISessionID
 	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
 		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
-		boundWebSessionID, found := h.db.KVGet(operatorBindKey)
-		if !found || boundWebSessionID != route.WebSessionID {
+		boundWebSessionID, err := h.db.KVGet(r.Context(), operatorBindKey)
+		if err != nil || boundWebSessionID != route.WebSessionID {
 			h.responder.Error(w, http.StatusForbidden, "not authorized for this web session")
 			return
 		}

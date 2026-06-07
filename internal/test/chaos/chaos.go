@@ -354,7 +354,10 @@ func Run(cfg Config) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	// Initialize paths relative to current working directory
-	constants.InitPaths()
+	if err := constants.InitPaths(); err != nil {
+		logger.Error("failed to initialize paths", "error", err)
+		os.Exit(1)
+	}
 
 	// Use shared test vault directory for persistent inspection
 	dataDir := cfg.DataDir

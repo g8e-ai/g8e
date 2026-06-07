@@ -14,12 +14,20 @@
 package constants
 
 // Ports defines canonical G8E networking ports.
+// These values are generated from protocol/constants/ports.json (SSOT).
 var Ports = struct {
-	OperatorHttp       int
-	OperatorHttps      int
-	InsecureMcpGateway int
+	OperatorHttp       int `json:"OperatorHttp"`
+	OperatorHttps      int `json:"OperatorHttps"`
+	InsecureMcpGateway int `json:"InsecureMcpGateway"`
+	// Snake_case variants for protocol compatibility
+	InsecureMcpGatewaySnake int `json:"insecure_mcp_gateway"`
+	OperatorHttpSnake       int `json:"operator_http"`
+	OperatorHttpsSnake      int `json:"operator_https"`
 }{
-	OperatorHttp:       8080,
-	OperatorHttps:      8443,
-	InsecureMcpGateway: 18789,
+	OperatorHttp:            8080,
+	OperatorHttps:           8443,
+	InsecureMcpGateway:      18789,
+	InsecureMcpGatewaySnake: 18789,
+	OperatorHttpSnake:       8080,
+	OperatorHttpsSnake:      8443,
 }

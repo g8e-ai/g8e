@@ -17,7 +17,10 @@
 package execution
 
 import (
+	"fmt"
+	"os"
 	"os/exec"
+	"syscall"
 )
 
 // setProcessGroup is a no-op on Windows
@@ -30,5 +33,12 @@ func setProcessGroup(cmd *exec.Cmd) {
 func killProcessGroup(pid int) error {
 	// On Windows, we kill the process directly
 	// Process tree termination requires different APIs
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return fmt.Errorf("execution: failed to find process %d: %w", pid, err)
+	}
+	if err := proc.Kill(); err != nil {
+		return fmt.Errorf("execution: failed to kill process %d: %w", pid, err)
+	}
 	return nil
 }

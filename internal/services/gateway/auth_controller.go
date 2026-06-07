@@ -36,32 +36,36 @@ import (
 
 // AuthController handles authentication, passkey, and approval endpoints.
 type AuthController struct {
-	cfg        *config.Config
-	logger     *slog.Logger
-	db         *CanonicalDBService
-	auth       *AuthService
-	passkey    *PasskeyService
-	userSvc    *UserService
-	reg           *RegistrationService
-	pki           *PKIAuthority
-	webSessionSvc *WebSessionService
-	mcp           *mcp.GatewayService
-	responder  *response.Writer
+	cfg               *config.Config
+	logger            *slog.Logger
+	db                *CanonicalDBService
+	auth              *AuthService
+	passkey           *PasskeyService
+	userSvc           *UserService
+	reg               *RegistrationService
+	pki               *PKIAuthority
+	webSessionSvc     *WebSessionService
+	cliSessionSvc     *CLISessionService
+	operatorSessionSvc *OperatorSessionService
+	mcp               *mcp.GatewayService
+	responder         *response.Writer
 }
 
-func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, mcp *mcp.GatewayService, responder *response.Writer) *AuthController {
+func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, mcp *mcp.GatewayService, responder *response.Writer) *AuthController {
 	return &AuthController{
-		cfg:        cfg,
-		logger:     logger,
-		db:         db,
-		auth:       auth,
-		passkey:    passkey,
-		userSvc:    userSvc,
-		reg:           reg,
-		pki:           pki,
-		webSessionSvc: webSessionSvc,
-		mcp:        mcp,
-		responder:  responder,
+		cfg:               cfg,
+		logger:            logger,
+		db:                db,
+		auth:              auth,
+		passkey:           passkey,
+		userSvc:           userSvc,
+		reg:               reg,
+		pki:               pki,
+		webSessionSvc:     webSessionSvc,
+		cliSessionSvc:     cliSessionSvc,
+		operatorSessionSvc: operatorSessionSvc,
+		mcp:               mcp,
+		responder:         responder,
 	}
 }
 
@@ -1116,20 +1120,32 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 
 		// Persist sessions only if we have both operator and CLI certs
 		if csrRequested {
-			err = c.sessionSvc.PersistSessions(
+			// Persist CLI session
+			err = c.cliSessionSvc.PersistCLISession(
 				cliSessionID,
 				operatorSessionID,
 				user.ID,
-				orgID,
-				operatorID,
 				"bootstrap-operator",
 				cliCertFingerprint,
 				cliCertSerial,
 				string(constants.HeartbeatTypeBootstrap),
 			)
 			if err != nil {
-				c.logger.Error("Failed to persist sessions during bootstrap", string(constants.ConnectionStateError), err)
-				c.responder.Error(w, http.StatusInternalServerError, "failed to persist sessions")
+				c.logger.Error("Failed to persist CLI session during bootstrap", string(constants.ConnectionStateError), err)
+				c.responder.Error(w, http.StatusInternalServerError, "failed to persist CLI session")
+				return
+			}
+			// Persist operator session
+			err = c.operatorSessionSvc.PersistOperatorSession(
+				operatorSessionID,
+				user.ID,
+				orgID,
+				operatorID,
+				string(constants.HeartbeatTypeBootstrap),
+			)
+			if err != nil {
+				c.logger.Error("Failed to persist operator session during bootstrap", string(constants.ConnectionStateError), err)
+				c.responder.Error(w, http.StatusInternalServerError, "failed to persist operator session")
 				return
 			}
 			c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user, operator and CLI cert", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", cliSessionID[:8])
@@ -1216,12 +1232,10 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 	cliCertSerial := calculateSerialFromPEM(cliCertPEM)
 
 	// Persist CLI session only (no operator session for CLI-only enrollment)
-	err = c.sessionSvc.PersistSessions(
+	err = c.cliSessionSvc.PersistCLISession(
 		cliSessionID,
 		"",
 		bootstrapUser.ID,
-		bootstrapUser.ID,
-		"",
 		req.SystemFingerprint,
 		cliCertFingerprint,
 		cliCertSerial,
@@ -1399,20 +1413,32 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 		// Non-fatal - continue without bundle
 	}
 
-	err = c.sessionSvc.PersistSessions(
+	// Persist CLI session
+	err = c.cliSessionSvc.PersistCLISession(
 		cliSessionID,
 		operatorSessionID,
 		user.ID,
-		orgID,
-		operatorID,
 		req.SystemFingerprint,
 		cliCertFingerprint,
 		cliCertSerial,
 		string(constants.HeartbeatTypeBootstrap),
 	)
 	if err != nil {
-		c.logger.Error("Failed to persist sessions during device enrollment", string(constants.ConnectionStateError), err)
-		c.responder.Error(w, http.StatusInternalServerError, "failed to persist sessions")
+		c.logger.Error("Failed to persist CLI session during device enrollment", string(constants.ConnectionStateError), err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to persist CLI session")
+		return
+	}
+	// Persist operator session
+	err = c.operatorSessionSvc.PersistOperatorSession(
+		operatorSessionID,
+		user.ID,
+		orgID,
+		operatorID,
+		string(constants.HeartbeatTypeBootstrap),
+	)
+	if err != nil {
+		c.logger.Error("Failed to persist operator session during device enrollment", string(constants.ConnectionStateError), err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to persist operator session")
 		return
 	}
 

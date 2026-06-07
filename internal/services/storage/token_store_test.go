@@ -170,11 +170,11 @@ func TestTokenStoreService_KVSetAndGet(t *testing.T) {
 	key := "test-key-1"
 	value := "test-value-123"
 
-	err := ts.KVSet(key, value, 0)
+	err := ts.KVSet(context.Background(), key, value, 0)
 	require.NoError(t, err)
 
-	retrieved, found := ts.KVGet(key)
-	assert.True(t, found)
+	retrieved, err := ts.KVGet(context.Background(), key)
+	require.NoError(t, err)
 	assert.Equal(t, value, retrieved)
 }
 
@@ -189,21 +189,20 @@ func TestTokenStoreService_KVSetWithTTL(t *testing.T) {
 	value := "test-ttl-value"
 
 	// Set with 1 second TTL
-	err := ts.KVSet(key, value, 1)
+	err := ts.KVSet(context.Background(), key, value, 1)
 	require.NoError(t, err)
 
 	// Should be retrievable immediately
-	retrieved, found := ts.KVGet(key)
-	assert.True(t, found)
+	retrieved, err := ts.KVGet(context.Background(), key)
+	require.NoError(t, err)
 	assert.Equal(t, value, retrieved)
 
 	// Wait for expiration
 	time.Sleep(2 * time.Second)
 
 	// Should not be retrievable after TTL
-	retrieved, found = ts.KVGet(key)
-	assert.False(t, found)
-	assert.Empty(t, retrieved)
+	_, err = ts.KVGet(context.Background(), key)
+	assert.Error(t, err)
 }
 
 // TestTokenStoreService_KVSetUpdate verifies that setting an existing key
@@ -217,19 +216,19 @@ func TestTokenStoreService_KVSetUpdate(t *testing.T) {
 	value1 := "initial-value"
 	value2 := "updated-value"
 
-	err := ts.KVSet(key, value1, 0)
+	err := ts.KVSet(context.Background(), key, value1, 0)
 	require.NoError(t, err)
 
-	retrieved, found := ts.KVGet(key)
-	assert.True(t, found)
+	retrieved, err := ts.KVGet(context.Background(), key)
+	require.NoError(t, err)
 	assert.Equal(t, value1, retrieved)
 
 	// Update the key
-	err = ts.KVSet(key, value2, 0)
+	err = ts.KVSet(context.Background(), key, value2, 0)
 	require.NoError(t, err)
 
-	retrieved, found = ts.KVGet(key)
-	assert.True(t, found)
+	retrieved, err = ts.KVGet(context.Background(), key)
+	require.NoError(t, err)
 	assert.Equal(t, value2, retrieved)
 }
 
@@ -246,7 +245,7 @@ func TestTokenStoreService_KVSetLockedVault(t *testing.T) {
 	key := "test-locked-key"
 	value := "test-value"
 
-	err := ts.KVSet(key, value, 0)
+	err := ts.KVSet(context.Background(), key, value, 0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "vault is locked")
 }
@@ -262,16 +261,15 @@ func TestTokenStoreService_KVGetLockedVault(t *testing.T) {
 	value := "test-value"
 
 	// Set while unlocked
-	err := ts.KVSet(key, value, 0)
+	err := ts.KVSet(context.Background(), key, value, 0)
 	require.NoError(t, err)
 
 	// Lock the vault
 	testVault.Lock()
 
 	// Get should fail when vault is locked
-	retrieved, found := ts.KVGet(key)
-	assert.False(t, found)
-	assert.Empty(t, retrieved)
+	retrieved, err := ts.KVGet(context.Background(), key)
+	assert.Error(t, err)
 }
 
 // TestTokenStoreService_KVGetNonExistent verifies that KVGet returns
@@ -281,9 +279,8 @@ func TestTokenStoreService_KVGetNonExistent(t *testing.T) {
 	ts, testVault, _ := setupTestTokenStore(t)
 	defer testVault.Close()
 
-	retrieved, found := ts.KVGet("non-existent-key")
-	assert.False(t, found)
-	assert.Empty(t, retrieved)
+	retrieved, err := ts.KVGet(context.Background(), "non-existent-key")
+	assert.Error(t, err)
 }
 
 // TestTokenStoreService_KVDelete verifies that KVDelete removes
@@ -296,12 +293,12 @@ func TestTokenStoreService_KVDelete(t *testing.T) {
 	key := "test-delete-key"
 	value := "test-value"
 
-	err := ts.KVSet(key, value, 0)
+	err := ts.KVSet(context.Background(), key, value, 0)
 	require.NoError(t, err)
 
 	// Verify it exists
-	retrieved, found := ts.KVGet(key)
-	assert.True(t, found)
+	retrieved, err := ts.KVGet(context.Background(), key)
+	require.NoError(t, err)
 	assert.Equal(t, value, retrieved)
 
 	// Delete the key
@@ -309,9 +306,8 @@ func TestTokenStoreService_KVDelete(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify it's gone
-	retrieved, found = ts.KVGet(key)
-	assert.False(t, found)
-	assert.Empty(t, retrieved)
+	retrieved, err = ts.KVGet(context.Background(), key)
+	assert.Error(t, err)
 }
 
 // TestTokenStoreService_KVDeleteNonExistent verifies that KVDelete
@@ -341,12 +337,12 @@ func TestTokenStoreService_KVScanPrefix(t *testing.T) {
 	}
 
 	for key, value := range pairs {
-		err := ts.KVSet(key, value, 0)
+		err := ts.KVSet(context.Background(), key, value, 0)
 		require.NoError(t, err)
 	}
 
 	// Scan for prefix
-	result, err := ts.KVScanPrefix("prefix:")
+	result, err := ts.KVScanPrefix(context.Background(), "prefix:")
 	require.NoError(t, err)
 
 	assert.Len(t, result, 3)
@@ -364,14 +360,14 @@ func TestTokenStoreService_KVScanPrefixWithTTL(t *testing.T) {
 	defer testVault.Close()
 
 	// Set keys with and without TTL
-	err := ts.KVSet("prefix:permanent", "permanent-value", 0)
+	err := ts.KVSet(context.Background(), "prefix:permanent", "permanent-value", 0)
 	require.NoError(t, err)
 
-	err = ts.KVSet("prefix:temporary", "temporary-value", 1)
+	err = ts.KVSet(context.Background(), "prefix:temporary", "temporary-value", 1)
 	require.NoError(t, err)
 
 	// Both should be found immediately
-	result, err := ts.KVScanPrefix("prefix:")
+	result, err := ts.KVScanPrefix(context.Background(), "prefix:")
 	require.NoError(t, err)
 	assert.Len(t, result, 2)
 
@@ -379,7 +375,7 @@ func TestTokenStoreService_KVScanPrefixWithTTL(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Only permanent key should be found
-	result, err = ts.KVScanPrefix("prefix:")
+	result, err = ts.KVScanPrefix(context.Background(), "prefix:")
 	require.NoError(t, err)
 	assert.Len(t, result, 1)
 	assert.Equal(t, "permanent-value", result["prefix:permanent"])
@@ -393,7 +389,7 @@ func TestTokenStoreService_KVScanPrefixEmpty(t *testing.T) {
 	ts, testVault, _ := setupTestTokenStore(t)
 	defer testVault.Close()
 
-	result, err := ts.KVScanPrefix("nonexistent:")
+	result, err := ts.KVScanPrefix(context.Background(), "nonexistent:")
 	require.NoError(t, err)
 	assert.Empty(t, result)
 }
@@ -406,16 +402,16 @@ func TestTokenStoreService_KVScanPrefixLockedVault(t *testing.T) {
 	defer testVault.Close()
 
 	// Set keys while unlocked
-	err := ts.KVSet("prefix:key1", "value1", 0)
+	err := ts.KVSet(context.Background(), "prefix:key1", "value1", 0)
 	require.NoError(t, err)
-	err = ts.KVSet("prefix:key2", "value2", 0)
+	err = ts.KVSet(context.Background(), "prefix:key2", "value2", 0)
 	require.NoError(t, err)
 
 	// Lock the vault
 	testVault.Lock()
 
 	// Scan should return empty map (cannot decrypt)
-	result, err := ts.KVScanPrefix("prefix:")
+	result, err := ts.KVScanPrefix(context.Background(), "prefix:")
 	require.NoError(t, err)
 	assert.Empty(t, result)
 }
@@ -427,14 +423,13 @@ func TestTokenStoreService_NilService(t *testing.T) {
 	var ts *TokenStoreService
 
 	// All methods should handle nil gracefully
-	err := ts.KVSet("key", "value", 0)
+	err := ts.KVSet(context.Background(), "key", "value", 0)
 	assert.NoError(t, err)
 
-	value, found := ts.KVGet("key")
-	assert.False(t, found)
-	assert.Empty(t, value)
+	_, err := ts.KVGet(context.Background(), "key")
+	assert.Error(t, err)
 
-	result, err := ts.KVScanPrefix("prefix:")
+	result, err := ts.KVScanPrefix(context.Background(), "prefix:")
 	assert.Error(t, err)
 	assert.Nil(t, result)
 
@@ -466,7 +461,7 @@ func TestTokenStoreService_Wait(t *testing.T) {
 
 	// Perform some operations
 	for i := 0; i < 10; i++ {
-		err := ts.KVSet("wait-key", "value", 0)
+		err := ts.KVSet(context.Background(), "wait-key", "value", 0)
 		require.NoError(t, err)
 	}
 
@@ -514,7 +509,7 @@ func TestTokenStoreService_ConcurrentOperations(t *testing.T) {
 		go func(i int) {
 			key := "concurrent-key"
 			value := "value"
-			err := ts.KVSet(key, value, 0)
+			err := ts.KVSet(context.Background(), key, value, 0)
 			assert.NoError(t, err)
 			done <- true
 		}(i)
@@ -529,8 +524,8 @@ func TestTokenStoreService_ConcurrentOperations(t *testing.T) {
 	ts.Wait()
 
 	// Verify the key exists
-	retrieved, found := ts.KVGet("concurrent-key")
-	assert.True(t, found)
+	retrieved, err := ts.KVGet(context.Background(), "concurrent-key")
+	require.NoError(t, err)
 	assert.Equal(t, "value", retrieved)
 }
 
@@ -548,11 +543,11 @@ func TestTokenStoreService_LargeValue(t *testing.T) {
 	}
 
 	key := "large-value-key"
-	err := ts.KVSet(key, string(largeValue), 0)
+	err := ts.KVSet(context.Background(), key, string(largeValue), 0)
 	require.NoError(t, err)
 
-	retrieved, found := ts.KVGet(key)
-	assert.True(t, found)
+	retrieved, err := ts.KVGet(context.Background(), key)
+	require.NoError(t, err)
 	assert.Equal(t, string(largeValue), retrieved)
 }
 
@@ -575,11 +570,11 @@ func TestTokenStoreService_SpecialCharacters(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		err := ts.KVSet(tc.key, tc.value, 0)
+		err := ts.KVSet(context.Background(), tc.key, tc.value, 0)
 		require.NoError(t, err)
 
-		retrieved, found := ts.KVGet(tc.key)
-		assert.True(t, found)
+		retrieved, err := ts.KVGet(context.Background(), tc.key)
+		require.NoError(t, err)
 		assert.Equal(t, tc.value, retrieved)
 	}
 }
@@ -591,11 +586,11 @@ func TestTokenStoreService_EmptyKey(t *testing.T) {
 	ts, testVault, _ := setupTestTokenStore(t)
 	defer testVault.Close()
 
-	err := ts.KVSet("", "value", 0)
+	err := ts.KVSet(context.Background(), "", "value", 0)
 	require.NoError(t, err)
 
-	retrieved, found := ts.KVGet("")
-	assert.True(t, found)
+	retrieved, err := ts.KVGet(context.Background(), "")
+	require.NoError(t, err)
 	assert.Equal(t, "value", retrieved)
 }
 
@@ -607,11 +602,11 @@ func TestTokenStoreService_EmptyValue(t *testing.T) {
 	defer testVault.Close()
 
 	key := "empty-value-key"
-	err := ts.KVSet(key, "", 0)
+	err := ts.KVSet(context.Background(), key, "", 0)
 	require.NoError(t, err)
 
-	retrieved, found := ts.KVGet(key)
-	assert.True(t, found)
+	retrieved, err := ts.KVGet(context.Background(), key)
+	require.NoError(t, err)
 	assert.Equal(t, "", retrieved)
 }
 
@@ -625,17 +620,17 @@ func TestTokenStoreService_NegativeTTL(t *testing.T) {
 	key := "negative-ttl-key"
 	value := "value"
 
-	err := ts.KVSet(key, value, -1)
+	err := ts.KVSet(context.Background(), key, value, -1)
 	require.NoError(t, err)
 
 	// Should be retrievable immediately
-	retrieved, found := ts.KVGet(key)
-	assert.True(t, found)
+	retrieved, err := ts.KVGet(context.Background(), key)
+	require.NoError(t, err)
 	assert.Equal(t, value, retrieved)
 
 	// Should still be retrievable after time passes
 	time.Sleep(1 * time.Second)
-	retrieved, found = ts.KVGet(key)
-	assert.True(t, found)
+	retrieved, err = ts.KVGet(context.Background(), key)
+	require.NoError(t, err)
 	assert.Equal(t, value, retrieved)
 }

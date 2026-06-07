@@ -16,6 +16,7 @@ package mcp
 import (
 	"encoding/json"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
 )
@@ -29,23 +30,6 @@ type JSONRPCResponse = response.JSONRPCResponse
 // JSONRPCError is an alias for response.JSONRPCError
 type JSONRPCError = response.JSONRPCError
 
-// Protocol-specific error codes for g8eo (reserved range -32000 to -32099)
-const (
-	// Verification Errors (-32000 range)
-	ErrCodeInvalidEnvelope     = response.ErrCodeInvalidEnvelope
-	ErrCodeHashMismatch        = response.ErrCodeHashMismatch
-	ErrCodeExpired             = response.ErrCodeExpired
-	ErrCodeReplay              = response.ErrCodeReplay
-	ErrCodeStateMismatch       = response.ErrCodeStateMismatch
-	ErrCodeL1ValidationFailed  = response.ErrCodeL1ValidationFailed
-	ErrCodeL2SignatureInvalid  = response.ErrCodeL2SignatureInvalid
-	ErrCodeL3ProofInvalid      = response.ErrCodeL3ProofInvalid
-	ErrCodePayloadDecodeFailed = response.ErrCodePayloadDecodeFailed
-
-	// Resource/State Errors (-32100 range)
-	ErrCodeResourceNotFound = response.ErrCodeResourceNotFound
-	ErrCodeGatewayNotReady  = response.ErrCodeGatewayNotReady
-)
 
 // CallToolRequest is the params for the "tools/call" method.
 type CallToolRequest struct {

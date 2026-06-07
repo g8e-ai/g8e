@@ -14,6 +14,7 @@
 package storage
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -117,7 +118,7 @@ func TestLockedVaultHandling(t *testing.T) {
 		CaseID:           "case-456",
 	}
 
-	err = evs.StoreExecution(record)
+	err = evs.StoreExecution(context.Background(), record)
 	assert.Error(t, err, "StoreExecution should fail when vault is locked")
 	assert.Contains(t, err.Error(), "vault is locked", "Error should indicate vault is locked")
 }

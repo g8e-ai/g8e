@@ -21,6 +21,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
+	"github.com/g8e-ai/g8e/internal/models"
 )
 
 // OperatorSessionService handles operator session persistence and management.
@@ -43,19 +44,22 @@ func NewOperatorSessionService(db *CanonicalDBService, logger *slog.Logger) *Ope
 // Field names match the canonical Operator session document schema.
 func (s *OperatorSessionService) PersistOperatorSession(operatorSessionID, userID, orgID, operatorID, loginMethod string) error {
 	sessionExpiry := time.Now().UTC().Add(1 * time.Hour)
-	operatorSessionDoc := map[string]interface{}{
-		"id":                  operatorSessionID,
-		"session_type":        string(constants.SessionTypeOperator),
-		"user_id":             userID,
-		"organization_id":     orgID,
-		"operator_id":         operatorID,
-		"is_active":           true,
-		"created_at":          time.Now().UTC().Format(time.RFC3339),
-		"absolute_expires_at": sessionExpiry.Format(time.RFC3339),
-		"idle_expires_at":     sessionExpiry.Format(time.RFC3339),
-		"last_activity":       time.Now().UTC().Format(time.RFC3339),
-		"login_method":        loginMethod,
+	now := time.Now().UTC()
+	
+	operatorSessionDoc := models.OperatorSession{
+		ID:                operatorSessionID,
+		SessionType:       string(constants.SessionTypeOperator),
+		UserID:            userID,
+		OrganizationID:    orgID,
+		OperatorID:        operatorID,
+		IsActive:          true,
+		CreatedAt:         now.Format(time.RFC3339),
+		AbsoluteExpiresAt: sessionExpiry.Format(time.RFC3339),
+		IdleExpiresAt:     sessionExpiry.Format(time.RFC3339),
+		LastActivity:      now.Format(time.RFC3339),
+		LoginMethod:       loginMethod,
 	}
+	
 	operatorSessionBytes, err := json.Marshal(operatorSessionDoc)
 	if err != nil {
 		return fmt.Errorf("failed to marshal Operator session document: %w", err)

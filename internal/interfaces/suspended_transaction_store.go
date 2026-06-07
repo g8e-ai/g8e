@@ -13,29 +13,42 @@
 
 package interfaces
 
-import "github.com/g8e-ai/g8e/internal/models"
+import (
+	"context"
+
+	"github.com/g8e-ai/g8e/internal/models"
+)
 
 // SuspendedTransactionStore defines the interface for L3 approval workflow storage.
 // This service stores transactions awaiting human approval.
+//
+// All methods that return errors must wrap errors with context using
+// fmt.Errorf("suspended_transaction_store: action: %w", err) to provide clear error attribution.
 type SuspendedTransactionStore interface {
 	// StoreSuspendedTransaction stores a transaction awaiting L3 approval.
-	StoreSuspendedTransaction(tx *models.SuspendedTransaction) error
+	// Returns an error if storage fails, wrapping the underlying error with context.
+	StoreSuspendedTransaction(ctx context.Context, tx *models.SuspendedTransaction) error
 
 	// GetSuspendedTransaction retrieves a suspended transaction by hash.
 	// Returns (nil, false) if not found or expired.
-	GetSuspendedTransaction(txHash string) (*models.SuspendedTransaction, bool)
+	// Returns an error if retrieval fails, wrapping the underlying error with context.
+	GetSuspendedTransaction(ctx context.Context, txHash string) (*models.SuspendedTransaction, bool, error)
 
 	// ListSuspendedTransactions retrieves all non-expired suspended transactions.
 	// Optionally filters by user_id if provided.
-	ListSuspendedTransactions(userID string) ([]*models.SuspendedTransaction, error)
+	// Returns an error if retrieval fails, wrapping the underlying error with context.
+	ListSuspendedTransactions(ctx context.Context, userID string) ([]*models.SuspendedTransaction, error)
 
 	// ApproveSuspendedTransaction marks a suspended transaction as approved with cryptographic signature.
-	ApproveSuspendedTransaction(txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error
+	// Returns an error if approval fails, wrapping the underlying error with context.
+	ApproveSuspendedTransaction(ctx context.Context, txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error
 
 	// DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.
-	DeleteSuspendedTransaction(txHash string) error
+	// Returns an error if deletion fails, wrapping the underlying error with context.
+	DeleteSuspendedTransaction(ctx context.Context, txHash string) error
 
 	// CleanupExpiredSuspendedTransactions removes expired suspended transactions.
 	// Returns the count of deleted transactions.
-	CleanupExpiredSuspendedTransactions() (int64, error)
+	// Returns an error if cleanup fails, wrapping the underlying error with context.
+	CleanupExpiredSuspendedTransactions(ctx context.Context) (int64, error)
 }

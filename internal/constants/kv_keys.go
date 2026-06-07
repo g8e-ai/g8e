@@ -13,6 +13,9 @@
 
 package constants
 
+// KV key and session type constants.
+// Canonical values defined in protocol/constants/kv_keys.json (the source of truth).
+
 const (
 	KVCachePrefix = "g8e"
 )

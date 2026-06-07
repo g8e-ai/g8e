@@ -44,24 +44,6 @@ type JSONRPCError struct {
 	Data    json.RawMessage `json:"data,omitempty"`
 }
 
-// Protocol-specific error codes for g8eo (reserved range -32000 to -32099)
-const (
-	// Verification Errors (-32000 range)
-	ErrCodeInvalidEnvelope     = -32000
-	ErrCodeHashMismatch        = -32001
-	ErrCodeExpired             = -32002
-	ErrCodeReplay              = -32003
-	ErrCodeStateMismatch       = -32004
-	ErrCodeL1ValidationFailed  = -32005
-	ErrCodeL2SignatureInvalid  = -32006
-	ErrCodeL3ProofInvalid      = -32007
-	ErrCodePayloadDecodeFailed = -32008
-
-	// Resource/State Errors (-32100 range)
-	ErrCodeResourceNotFound = -32100
-	ErrCodeGatewayNotReady  = -32101
-)
-
 // Writer provides a unified way to write JSON and JSON-RPC responses.
 type Writer struct {
 	logger *slog.Logger

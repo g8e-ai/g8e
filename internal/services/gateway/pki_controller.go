@@ -264,7 +264,7 @@ set -e
 GATEWAY_HOST="${GATEWAY_HOST:-localhost}"
 GATEWAY_PORT="${GATEWAY_PORT:-` + port + `}"
 CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}/.well-known/g8e/pki/ca-bundle"
-LOCAL_CA_PATH="` + constants.CACertBundlePath + `"
+LOCAL_CA_PATH=".g8e/pki/trust/g8eg-ca-bundle.pem"
 
 echo "[g8e] Fetching platform CA bundle from ${CA_BUNDLE_URL}..."
 mkdir -p "$(dirname "${LOCAL_CA_PATH}")"
@@ -297,7 +297,7 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 		"$GatewayHost = if ($env:GATEWAY_HOST) { $env:GATEWAY_HOST } else { \"localhost\" }\n" +
 		"$GatewayPort = if ($env:GATEWAY_PORT) { $env:GATEWAY_PORT } else { \"" + port + "\" }\n" +
 		"$CABundleUrl = \"http://${GatewayHost}:${GatewayPort}/.well-known/g8e/pki/ca-bundle\"\n" +
-		"$LocalCAPath = \"" + constants.CACertBundlePath + "\"\n" +
+		"$LocalCAPath = \".g8e/pki/trust/g8eg-ca-bundle.pem\"\n" +
 		"$Node BinaryName = \"g8e-windows-amd64.exe\"\n" +
 		"$Node BinaryUrl = \"http://${GatewayHost}:${GatewayPort}/.well-known/g8e/bin/g8e-windows-amd64.exe\"\n\n" +
 		"Write-Host \"[g8e] Fetching platform CA bundle from ${CABundleUrl}...\"\n" +

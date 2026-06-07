@@ -450,13 +450,19 @@ func executeViaSSH(ctx context.Context, hostname, command string, args []string,
 	}
 
 	// Resolve SSH connection parameters
-	r := ssh.ResolveHost(hostname, "", "", "", "")
+	r, err := ssh.ResolveHost(hostname, "", "", "", "")
+	if err != nil {
+		return ShellExecuteResult{}, fmt.Errorf("shell_execute: resolve host: %w", err)
+	}
 	if r.Hostname == "" {
 		return ShellExecuteResult{}, fmt.Errorf("shell_execute: failed to resolve hostname: %s", hostname)
 	}
 
 	// Build auth methods
-	authMethods := ssh.BuildAuthMethods(r, "", "")
+	authMethods, err := ssh.BuildAuthMethods(r, "", "")
+	if err != nil {
+		return ShellExecuteResult{}, fmt.Errorf("shell_execute: build auth methods: %w", err)
+	}
 	if len(authMethods) == 0 {
 		return ShellExecuteResult{}, fmt.Errorf("shell_execute: no SSH auth methods available for %s", hostname)
 	}

@@ -76,7 +76,7 @@ func (hs *HistoryService) handleFetchFromConsolidatedVault(ctx context.Context, 
 		return
 	}
 
-	record, err := hs.executionVault.GetExecution(executionID)
+	record, err := hs.executionVault.GetExecution(ctx, executionID)
 	if err != nil {
 		hs.logger.Error("Failed to retrieve execution from consolidated vault", string(constants.ConnectionStateError), err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, fmt.Sprintf("failed to retrieve execution: %v", err))
@@ -215,7 +215,7 @@ func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg *P
 	}
 
 	if diffID != "" {
-		record, err := hs.executionVault.GetFileDiff(diffID)
+		record, err := hs.executionVault.GetFileDiff(ctx, diffID)
 		if err != nil {
 			hs.logger.Error("Failed to fetch file diff", "diff_id", diffID, string(constants.ConnectionStateError), err)
 			publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed,
@@ -249,7 +249,7 @@ func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg *P
 	}
 
 	if operatorSessionID != "" {
-		records, err := hs.executionVault.GetFileDiffsBySession(operatorSessionID, int(limit))
+		records, err := hs.executionVault.GetFileDiffsBySession(ctx, operatorSessionID, int(limit))
 		if err != nil {
 			hs.logger.Error("Failed to fetch file diffs by session", "operator_session_id", operatorSessionID, string(constants.ConnectionStateError), err)
 			publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed,

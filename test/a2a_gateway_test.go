@@ -96,7 +96,9 @@ func setupA2AGatewayTest(t *testing.T, testName string, downstreamHandler http.H
 	t.Helper()
 
 	// Initialize paths relative to project root
-	constants.InitPathsWithBase(".")
+	if err := constants.InitPathsWithBase("."); err != nil {
+		t.Fatalf("failed to initialize paths: %v", err)
+	}
 
 	// Create unique subdirectory for this test run if dataDir not provided
 	if dataDir == "" {

@@ -11,9 +11,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package constants provides network-related constants.
+//
+// Single source of truth: protocol/constants/network.json
+// This file is manually maintained to match the JSON SSOT.
 package constants
 
 // DefaultEndpoint is the default g8e Operator endpoint hostname.
 // It is also the TLS ServerName used when connecting to a raw IP address,
 // because the embedded CA certificate is issued to this hostname.
+//
+// Source: protocol/constants/network.json
 const DefaultEndpoint = "localhost"

@@ -27,13 +27,14 @@ import (
 	"syscall"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/security"
 	system "github.com/g8e-ai/g8e/internal/services/system"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 // ExecutionService handles command execution with security controls.
@@ -147,7 +148,7 @@ func (sw *streamingWriter) logLines(p []byte) {
 		// Trim the newline and log the complete line
 		line = strings.TrimRight(line, "\n\r")
 		if line != "" {
-			sw.logger.Info(line, "execution_id", sw.executionID, string(constants.ApprovalTypeStream), sw.prefix)
+			sw.logger.Info(line, "execution_id", sw.executionID, constants.ApprovalTypeStream, sw.prefix)
 		}
 	}
 }
@@ -160,7 +161,7 @@ func (sw *streamingWriter) Flush() {
 	if sw.lineBuffer.Len() > 0 {
 		line := strings.TrimSpace(sw.lineBuffer.String())
 		if line != "" {
-			sw.logger.Info(line, "execution_id", sw.executionID, string(constants.ApprovalTypeStream), sw.prefix)
+			sw.logger.Info(line, "execution_id", sw.executionID, constants.ApprovalTypeStream, sw.prefix)
 		}
 		sw.lineBuffer.Reset()
 	}
@@ -239,7 +240,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 	es.logger.Info("Executing command",
 		"execution_id", request.ExecutionID,
 		"case_id", request.CaseID,
-		string(constants.ApprovalTypeCommand), request.Command,
+		constants.ApprovalTypeCommand, request.Command,
 		"args", request.Args)
 
 	// SECURITY: Block cloud CLI commands unless --cloud flag is set
@@ -247,7 +248,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 		if isCloud, cloudCmd := isCloudCLICommand(request.Command, request.Args); isCloud {
 			es.logger.Warn("Cloud CLI command blocked - Operator not started with --cloud flag",
 				"execution_id", request.ExecutionID,
-				string(constants.ApprovalTypeCommand), request.Command,
+				constants.ApprovalTypeCommand, request.Command,
 				"blocked_tool", cloudCmd,
 				"cloud_mode", es.config.CloudMode)
 
@@ -280,7 +281,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 	select {
 	case es.semaphore <- struct{}{}:
 	case <-ctx.Done():
-		return nil, fmt.Errorf("execution cancelled while waiting for available slot")
+		return nil, fmt.Errorf("execution: wait for semaphore: %w", ctx.Err())
 	}
 
 	// Create execution context
@@ -358,7 +359,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 	es.logger.Info("Command execution completed",
 		"execution_id", request.ExecutionID,
 		"case_id", request.CaseID,
-		string(constants.ApprovalTypeCommand), request.Command,
+		constants.ApprovalTypeCommand, request.Command,
 		"status", result.Status,
 		"duration_seconds", result.DurationSeconds,
 		"return_code", system.IntPtrValue(result.ReturnCode),
@@ -395,7 +396,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	}
 
 	if strings.TrimSpace(fullCommand) == "" {
-		return fmt.Errorf("empty command")
+		return fmt.Errorf("execution: command validation: empty command")
 	}
 
 	// ALWAYS use direct execution for safety unless shell features are specifically required.
@@ -418,7 +419,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 		}
 
 		es.logger.Info("Executing command via shell",
-			string(constants.ApprovalTypeCommand), shellScript,
+			constants.ApprovalTypeCommand, shellScript,
 			"execution_type", "shell")
 
 		// Use /bin/bash -c for shell execution.
@@ -428,12 +429,12 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 		// Direct execution: split into command and args
 		parts := strings.Fields(fullCommand)
 		if len(parts) == 0 {
-			return fmt.Errorf("empty command")
+			return fmt.Errorf("execution: command validation: empty command")
 		}
 
 		bin, err := exec.LookPath(parts[0])
 		if err != nil {
-			return fmt.Errorf("command not found: %s", parts[0])
+			return fmt.Errorf("execution: command lookup: %w", err)
 		}
 
 		es.logger.Info("Executing command directly",
@@ -739,14 +740,14 @@ func (es *ExecutionService) collectSystemInfo() *models.ExecutionSystemInfo {
 			info.LoadAverage = loadavg
 			es.logger.Info("Load average collected", "load_average", loadavg)
 		} else {
-			es.logger.Info("Failed to collect load average", string(constants.ConnectionStateError), err)
+			es.logger.Info("Failed to collect load average", constants.ConnectionStateError, err)
 		}
 
 		if memInfo, err := getMemoryInfo(); err == nil {
 			info.Memory = memInfo
 			es.logger.Info("Memory information collected", "memory_info", memInfo)
 		} else {
-			es.logger.Info("Failed to collect memory information", string(constants.ConnectionStateError), err)
+			es.logger.Info("Failed to collect memory information", constants.ConnectionStateError, err)
 		}
 	} else {
 		es.logger.Info("Non-Linux OS - skipping extended system metrics", "os", runtime.GOOS)
@@ -829,7 +830,7 @@ func (es *ExecutionService) CancelExecution(requestID string) error {
 	es.executionsMutex.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("execution not found: %s", requestID)
+		return fmt.Errorf("execution: cancel: execution not found: %s", requestID)
 	}
 
 	es.logger.Info("Cancelling execution", "execution_id", requestID)
@@ -852,19 +853,19 @@ func (es *ExecutionService) CancelExecution(requestID string) error {
 func getLoadAverage() ([]float64, error) {
 	content, err := os.ReadFile("/proc/loadavg")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execution: loadavg: read /proc/loadavg: %w", err)
 	}
 
 	fields := strings.Fields(string(content))
 	if len(fields) < 3 {
-		return nil, fmt.Errorf("invalid loadavg format")
+		return nil, fmt.Errorf("execution: loadavg: invalid format")
 	}
 
 	var loads []float64
 	for i := 0; i < 3; i++ {
 		var load float64
 		if _, err := fmt.Sscanf(fields[i], "%f", &load); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("execution: loadavg: parse field %d: %w", i, err)
 		}
 		loads = append(loads, load)
 	}
@@ -875,7 +876,7 @@ func getLoadAverage() ([]float64, error) {
 func getMemoryInfo() (*models.MemoryInfo, error) {
 	file, err := os.Open("/proc/meminfo")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execution: memory: open /proc/meminfo: %w", err)
 	}
 	defer file.Close()
 
@@ -909,5 +910,8 @@ func getMemoryInfo() (*models.MemoryInfo, error) {
 		}
 	}
 
-	return info, scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("execution: memory: scan /proc/meminfo: %w", err)
+	}
+	return info, nil
 }

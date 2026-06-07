@@ -155,7 +155,7 @@ CREATE INDEX IF NOT EXISTS idx_file_diff_session ON file_diff_log(operator_sessi
 
 // StoreExecution stores a command execution result locally.
 // Content is encrypted at rest if an encryption vault is configured.
-func (ev *ExecutionVaultService) StoreExecution(record *models.ExecutionRecord) error {
+func (ev *ExecutionVaultService) StoreExecution(ctx context.Context, record *models.ExecutionRecord) error {
 	if ev == nil || ev.db == nil {
 		return nil
 	}
@@ -241,7 +241,7 @@ func (ev *ExecutionVaultService) StoreExecution(record *models.ExecutionRecord) 
 }
 
 // GetExecution retrieves a stored execution by ID.
-func (ev *ExecutionVaultService) GetExecution(executionID string) (*models.ExecutionRecord, error) {
+func (ev *ExecutionVaultService) GetExecution(ctx context.Context, executionID string) (*models.ExecutionRecord, error) {
 	if ev == nil || ev.db == nil {
 		return nil, fmt.Errorf("execution vault is disabled")
 	}
@@ -334,7 +334,7 @@ func (ev *ExecutionVaultService) GetExecution(executionID string) (*models.Execu
 
 // StoreFileDiff stores a file diff in the execution vault.
 // Content is encrypted at rest if an encryption vault is configured.
-func (ev *ExecutionVaultService) StoreFileDiff(record *models.FileDiffRecord) error {
+func (ev *ExecutionVaultService) StoreFileDiff(ctx context.Context, record *models.FileDiffRecord) error {
 	if ev == nil || ev.db == nil {
 		return nil
 	}
@@ -400,7 +400,7 @@ func (ev *ExecutionVaultService) StoreFileDiff(record *models.FileDiffRecord) er
 }
 
 // GetFileDiff retrieves a file diff by ID.
-func (ev *ExecutionVaultService) GetFileDiff(diffID string) (*models.FileDiffRecord, error) {
+func (ev *ExecutionVaultService) GetFileDiff(ctx context.Context, diffID string) (*models.FileDiffRecord, error) {
 	if ev == nil || ev.db == nil {
 		return nil, fmt.Errorf("execution vault is disabled")
 	}
@@ -487,7 +487,7 @@ func (ev *ExecutionVaultService) GetFileDiff(diffID string) (*models.FileDiffRec
 }
 
 // GetFileDiffsBySession retrieves all file diffs for a session from the execution vault.
-func (ev *ExecutionVaultService) GetFileDiffsBySession(operatorSessionID string, limit int) ([]*models.FileDiffRecord, error) {
+func (ev *ExecutionVaultService) GetFileDiffsBySession(ctx context.Context, operatorSessionID string, limit int) ([]*models.FileDiffRecord, error) {
 	if ev == nil || ev.db == nil {
 		return nil, fmt.Errorf("execution vault is disabled")
 	}

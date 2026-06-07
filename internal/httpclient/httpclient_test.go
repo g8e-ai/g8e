@@ -21,6 +21,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"log"
 	"math/big"
 	"net/http"
 	"os"
@@ -38,11 +39,11 @@ import (
 func TestMain(m *testing.M) {
 	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
-		panic(err)
+		log.Fatalf("failed to generate ECDSA key: %v", err)
 	}
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
-		panic(err)
+		log.Fatalf("failed to generate serial number: %v", err)
 	}
 	tmpl := &x509.Certificate{
 		SerialNumber:          serial,
@@ -56,7 +57,7 @@ func TestMain(m *testing.M) {
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
 	if err != nil {
-		panic(err)
+		log.Fatalf("failed to create certificate: %v", err)
 	}
 	certs.SetCA(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
 	os.Exit(m.Run())

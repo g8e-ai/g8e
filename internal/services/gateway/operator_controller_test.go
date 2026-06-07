@@ -67,7 +67,7 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 	opDoc := map[string]interface{}{
 		"id":                  "op-123",
 		"operator_session_id": operatorSessionID,
-		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
+		"status":              marshaler.Status(constants.OperatorStatusActive),
 		"user_id":             "user-123",
 		"organization_id":     "org-123",
 	}
