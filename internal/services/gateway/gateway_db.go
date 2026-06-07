@@ -45,6 +45,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
+	"github.com/g8e-ai/g8e/internal/services/vault"
 )
 
 // gatewaySchema is the canonical Operator SQLite schema, embedded at compile time
@@ -96,10 +97,24 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, logger *slog.Logg
 		return nil, fmt.Errorf("failed to open gateway database: %w", err)
 	}
 
+	// Initialize vault for encryption
+	vaultConfig := &vault.VaultConfig{
+		DataDir: filepath.Join(dataDir, ".g8e/vault"),
+		Logger:  logger,
+	}
+	encryptionVault, err := vault.NewVault(vaultConfig)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to initialize vault: %w", err)
+	}
+	// Note: Vault should be unlocked by the operator via bootstrap process
+	// For now, we'll initialize without unlocking - services will handle locked vault gracefully
+
 	// Initialize Audit Vault for transaction-native audit recording
 	auditVaultConfig := storage.DefaultAuditVaultConfig()
 	auditVaultConfig.DataDir = dataDir
 	auditVaultConfig.GitPath = system.GitEmbedded
+	auditVaultConfig.EncryptionVault = encryptionVault
 	auditVault, err := storage.NewAuditVaultService(auditVaultConfig, logger)
 	if err != nil {
 		db.Close()

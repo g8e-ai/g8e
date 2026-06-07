@@ -660,38 +660,46 @@ func (ev *ExecutionVaultService) IsEncryptionEnabled() bool {
 	return ev != nil && ev.vault != nil && ev.vault.IsUnlocked()
 }
 
-// encryptContent encrypts content if encryption is enabled, otherwise returns original
+// encryptContent encrypts content using the encryption vault
 func (ev *ExecutionVaultService) encryptContent(content string) ([]byte, error) {
 	if content == "" {
 		return nil, nil
 	}
 
-	if ev.vault != nil && ev.vault.IsUnlocked() {
-		encrypted, err := ev.vault.Encrypt([]byte(content))
-		if err != nil {
-			return nil, fmt.Errorf("failed to encrypt content: %w", err)
-		}
-		return encrypted, nil
+	if ev.vault == nil {
+		return nil, fmt.Errorf("encryption vault is required")
+	}
+	if !ev.vault.IsUnlocked() {
+		return nil, fmt.Errorf("vault is locked, cannot encrypt content")
 	}
 
-	return []byte(content), nil
+	encrypted, err := ev.vault.Encrypt([]byte(content))
+	if err != nil {
+		return nil, fmt.Errorf("failed to encrypt content: %w", err)
+	}
+
+	return encrypted, nil
 }
 
-// decryptContent decrypts content if encryption is enabled, otherwise returns original
+// decryptContent decrypts content using the encryption vault
 func (ev *ExecutionVaultService) decryptContent(data []byte) (string, error) {
 	if len(data) == 0 {
 		return "", nil
 	}
 
-	if ev.vault != nil && ev.vault.IsUnlocked() {
-		decrypted, err := ev.vault.Decrypt(data)
-		if err != nil {
-			return "", fmt.Errorf("failed to decrypt content: %w", err)
-		}
-		return string(decrypted), nil
+	if ev.vault == nil {
+		return "", fmt.Errorf("encryption vault is required")
+	}
+	if !ev.vault.IsUnlocked() {
+		return "", fmt.Errorf("vault is locked, cannot decrypt content")
 	}
 
-	return string(data), nil
+	decrypted, err := ev.vault.Decrypt(data)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt content: %w", err)
+	}
+
+	return string(decrypted), nil
 }
 
 // Wait blocks until all background workers and writes have finished.

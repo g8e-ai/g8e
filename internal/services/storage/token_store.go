@@ -126,14 +126,18 @@ func (ts *TokenStoreService) KVSet(key, value string, ttlSeconds int) error {
 		expiresAt = &tsTime
 	}
 
-	valueToStore := value
-	if ts.vault != nil && ts.vault.IsUnlocked() {
-		encrypted, err := ts.vault.Encrypt([]byte(value))
-		if err != nil {
-			return fmt.Errorf("failed to encrypt value for key %s: %w", key, err)
-		}
-		valueToStore = string(encrypted)
+	if ts.vault == nil {
+		return fmt.Errorf("encryption vault is required")
 	}
+	if !ts.vault.IsUnlocked() {
+		return fmt.Errorf("vault is locked, cannot encrypt value for key %s", key)
+	}
+
+	encrypted, err := ts.vault.Encrypt([]byte(value))
+	if err != nil {
+		return fmt.Errorf("failed to encrypt value for key %s: %w", key, err)
+	}
+	valueToStore := string(encrypted)
 
 	query := `
 	INSERT INTO kv (key, value, expires_at) VALUES (?, ?, ?)
@@ -141,7 +145,7 @@ func (ts *TokenStoreService) KVSet(key, value string, ttlSeconds int) error {
 		value = excluded.value,
 		expires_at = excluded.expires_at
 	`
-	_, err := ts.db.ExecWithRetry(query, key, valueToStore, expiresAt)
+	_, err = ts.db.ExecWithRetry(query, key, valueToStore, expiresAt)
 	return err
 }
 
@@ -163,16 +167,21 @@ func (ts *TokenStoreService) KVGet(key string) (string, bool) {
 		return "", false
 	}
 
-	if ts.vault != nil && ts.vault.IsUnlocked() {
-		decrypted, err := ts.vault.Decrypt([]byte(value))
-		if err != nil {
-			ts.logger.Error("Failed to decrypt value for key", "key", key, "error", err)
-			return "", false
-		}
-		return string(decrypted), true
+	if ts.vault == nil {
+		ts.logger.Error("Encryption vault is required for key", "key", key)
+		return "", false
+	}
+	if !ts.vault.IsUnlocked() {
+		ts.logger.Error("Vault is locked, cannot decrypt value for key", "key", key)
+		return "", false
 	}
 
-	return value, true
+	decrypted, err := ts.vault.Decrypt([]byte(value))
+	if err != nil {
+		ts.logger.Error("Failed to decrypt value for key", "key", key, "error", err)
+		return "", false
+	}
+	return string(decrypted), true
 }
 
 // KVScanPrefix retrieves all key-value pairs with a given prefix, honoring TTL.

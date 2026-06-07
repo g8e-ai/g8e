@@ -148,12 +148,24 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("local storage must be enabled for replay protection - set LocalStorageEnabled=true")
 	}
 
+	// Initialize vault for encryption
+	vaultConfig := &vault.VaultConfig{
+		DataDir: filepath.Join(vs.config.WorkDir, ".g8e/vault"),
+		Logger:  vs.logger,
+	}
+	encryptionVault, err := vault.NewVault(vaultConfig)
+	if err != nil {
+		return fmt.Errorf("failed to initialize vault: %w", err)
+	}
+	// Note: Vault should be unlocked by the operator via bootstrap process
+	// For now, we'll initialize without unlocking - services will handle locked vault gracefully
+
 	// Initialize ExecutionVaultService for execution log and file diff storage
 	executionVaultConfig := storage.DefaultExecutionVaultConfig()
 	executionVaultConfig.DBPath = filepath.Join(dataDir, "execution_vault.db")
 	executionVaultConfig.MaxDBSizeMB = vs.config.LocalStoreMaxSizeMB
 	executionVaultConfig.RetentionDays = vs.config.LocalStoreRetentionDays
-	vs.executionVault, err = storage.NewExecutionVaultService(executionVaultConfig, vs.logger, nil)
+	vs.executionVault, err = storage.NewExecutionVaultService(executionVaultConfig, vs.logger, encryptionVault)
 	if err != nil {
 		return fmt.Errorf("failed to initialize execution vault: %w", err)
 	}
@@ -165,7 +177,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// Initialize TokenStoreService for Sentinel token persistence
 	tokenStoreConfig := storage.DefaultTokenStoreConfig()
 	tokenStoreConfig.DBPath = filepath.Join(dataDir, "token_store.db")
-	vs.tokenStore, err = storage.NewTokenStoreService(tokenStoreConfig, vs.logger, nil)
+	vs.tokenStore, err = storage.NewTokenStoreService(tokenStoreConfig, vs.logger, encryptionVault)
 	if err != nil {
 		return fmt.Errorf("failed to initialize token store: %w", err)
 	}
@@ -203,7 +215,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	localStoreConfig.DBPath = filepath.Join(dataDir, "local_state.db")
 	localStoreConfig.MaxDBSizeMB = vs.config.LocalStoreMaxSizeMB
 	localStoreConfig.RetentionDays = vs.config.LocalStoreRetentionDays
-	vs.localStore, err = storage.NewLocalStoreService(localStoreConfig, vs.logger, nil)
+	vs.localStore, err = storage.NewLocalStoreService(localStoreConfig, vs.logger, encryptionVault)
 	if err != nil {
 		return fmt.Errorf("failed to initialize local store: %w", err)
 	}
@@ -211,18 +223,6 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("local store is required but was not initialized")
 	}
 	vs.logger.Info("Local store initialized")
-
-	// Initialize vault for encryption
-	vaultConfig := &vault.VaultConfig{
-		DataDir: filepath.Join(vs.config.WorkDir, ".g8e/vault"),
-		Logger:  vs.logger,
-	}
-	encryptionVault, err := vault.NewVault(vaultConfig)
-	if err != nil {
-		return fmt.Errorf("failed to initialize vault: %w", err)
-	}
-	// Note: Vault should be unlocked by the operator via bootstrap process
-	// For now, we'll initialize without unlocking - services will handle locked vault gracefully
 
 	// Initialize SQLAuditStore for history handler
 	auditStoreConfig := storage.DefaultAuditStoreConfig()

@@ -27,8 +27,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
-// setupTestLedger creates a test environment for LedgerService
-func setupTestLedger(t *testing.T) (*LedgerService, *AuditVaultService, string) {
+// setupTestLedger creates a test environment for GitLedgerService
+func setupTestLedger(t *testing.T) (*GitLedgerService, *AuditVaultService, string) {
 	gitPath := testGitPath(t)
 	tempDir := t.TempDir()
 
@@ -50,7 +50,12 @@ func setupTestLedger(t *testing.T) (*LedgerService, *AuditVaultService, string) 
 	avs, err := NewAuditVaultService(config, logger)
 	require.NoError(t, err)
 
-	lms := NewLedgerService(avs, nil, logger)
+	ledgerConfig := &LedgerConfig{
+		BaseDir:         filepath.Join(tempDir, "ledger"),
+		GitPath:         gitPath,
+		EncryptionVault: avs.GetEncryptionVault(),
+	}
+	lms := NewGitLedgerService(ledgerConfig, logger)
 	require.NotNil(t, lms)
 
 	return lms, avs, tempDir
@@ -62,15 +67,15 @@ func TestLedgerService_NewService(t *testing.T) {
 	defer avs.Close()
 
 	assert.NotNil(t, lms)
-	assert.NotNil(t, lms.auditVault)
+	assert.NotNil(t, lms.config)
 	assert.NotNil(t, lms.logger)
 }
 
-func TestLedgerService_NewServiceWithNilAuditVault(t *testing.T) {
+func TestLedgerService_NewServiceWithNilConfig(t *testing.T) {
 	t.Parallel()
-	lms := NewLedgerService(nil, nil, testutil.NewTestLogger())
+	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
 	assert.NotNil(t, lms)
-	assert.Nil(t, lms.auditVault)
+	assert.Nil(t, lms.config)
 }
 
 func TestLedgerService_MirrorFileWrite_NewFile(t *testing.T) {
@@ -151,7 +156,7 @@ func TestLedgerService_MirrorFileWrite_ExistingFile(t *testing.T) {
 
 func TestLedgerService_MirrorFileWrite_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms := NewLedgerService(nil, nil, testutil.NewTestLogger())
+	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	result, err := lms.LedgerFileWrite("operator_session", "/some/file")
 	assert.NoError(t, err)
@@ -219,7 +224,7 @@ func TestLedgerService_MirrorFileDelete_NonExistentFile(t *testing.T) {
 
 func TestLedgerService_MirrorFileDelete_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms := NewLedgerService(nil, nil, testutil.NewTestLogger())
+	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	result, err := lms.MirrorFileDelete("operator_session", "/some/file")
 	assert.NoError(t, err)
@@ -265,7 +270,7 @@ func TestLedgerService_MirrorFileCreate(t *testing.T) {
 
 func TestLedgerService_MirrorFileCreate_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms := NewLedgerService(nil, nil, testutil.NewTestLogger())
+	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	result, err := lms.MirrorFileCreate("operator_session", "/some/file")
 	assert.NoError(t, err)
@@ -274,7 +279,7 @@ func TestLedgerService_MirrorFileCreate_DisabledVault(t *testing.T) {
 
 func TestLedgerService_CompleteMirrorCreate_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms := NewLedgerService(nil, nil, testutil.NewTestLogger())
+	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	err := lms.CompleteMirrorCreate(&LedgerResult{}, "operator_session")
 	assert.NoError(t, err)
@@ -476,7 +481,7 @@ func TestLedgerService_GetFileHistory_NilReceiver(t *testing.T) {
 
 func TestLedgerService_GetFileHistory_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms := NewLedgerService(nil, nil, testutil.NewTestLogger())
+	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	history, err := lms.GetFileHistory("/some/file", 10, "session")
 	assert.Error(t, err)
@@ -532,7 +537,7 @@ func TestLedgerService_GetFileAtCommit(t *testing.T) {
 
 func TestLedgerService_GetFileAtCommit_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms := NewLedgerService(nil, nil, testutil.NewTestLogger())
+	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	content, err := lms.GetFileAtCommit("/some/file", "abc123", "session")
 	assert.Error(t, err)
@@ -574,7 +579,7 @@ func TestLedgerService_RestoreFileFromCommit(t *testing.T) {
 
 func TestLedgerService_RestoreFileFromCommit_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms := NewLedgerService(nil, nil, testutil.NewTestLogger())
+	lms := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	err := lms.RestoreFileFromCommit("/some/file", "abc123", "operator_session")
 	assert.Error(t, err)

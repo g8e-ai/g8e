@@ -1175,14 +1175,17 @@ func (ass *SQLAuditStore) IsEncryptionEnabled() bool {
 	return ass != nil && ass.encryptionVault != nil && ass.encryptionVault.IsUnlocked()
 }
 
-// encryptContent encrypts content if encryption is enabled, otherwise returns original
+// encryptContent encrypts content using the encryption vault
 func (ass *SQLAuditStore) encryptContent(content string) ([]byte, error) {
 	if content == "" {
 		return nil, nil
 	}
 
-	if !ass.IsEncryptionEnabled() {
-		return []byte(content), nil
+	if ass.encryptionVault == nil {
+		return nil, fmt.Errorf("encryption vault is required")
+	}
+	if !ass.encryptionVault.IsUnlocked() {
+		return nil, fmt.Errorf("vault is locked, cannot encrypt content")
 	}
 
 	encrypted, err := ass.encryptionVault.Encrypt([]byte(content))
@@ -1193,14 +1196,17 @@ func (ass *SQLAuditStore) encryptContent(content string) ([]byte, error) {
 	return encrypted, nil
 }
 
-// decryptContent decrypts content if encryption is enabled, otherwise returns original
+// decryptContent decrypts content using the encryption vault
 func (ass *SQLAuditStore) decryptContent(data []byte) (string, error) {
 	if len(data) == 0 {
 		return "", nil
 	}
 
-	if !ass.IsEncryptionEnabled() {
-		return string(data), nil
+	if ass.encryptionVault == nil {
+		return "", fmt.Errorf("encryption vault is required")
+	}
+	if !ass.encryptionVault.IsUnlocked() {
+		return "", fmt.Errorf("vault is locked, cannot decrypt content")
 	}
 
 	decrypted, err := ass.encryptionVault.Decrypt(data)

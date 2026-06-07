@@ -15,6 +15,7 @@ package storage
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -46,8 +47,26 @@ func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *AuditVaultService,
 	avs, err := NewAuditVaultService(config, logger)
 	require.NoError(t, err)
 
-	lms := NewLedgerService(avs, nil, logger)
-	hh := NewHistoryHandler(avs, lms, logger)
+	ledgerConfig := &LedgerConfig{
+		BaseDir:         filepath.Join(tempDir, "ledger"),
+		GitPath:         gitPath,
+		EncryptionVault: avs.GetEncryptionVault(),
+	}
+	lms := NewGitLedgerService(ledgerConfig, logger)
+
+	auditStoreConfig := &AuditStoreConfig{
+		DataDir:              tempDir,
+		DBPath:               "audit_store.db",
+		MaxDBSizeMB:          100,
+		RetentionDays:        7,
+		PruneIntervalMinutes: 60,
+		Enabled:              true,
+		EncryptionVault:      avs.GetEncryptionVault(),
+	}
+	auditStore, err := NewSQLAuditStore(auditStoreConfig, logger)
+	require.NoError(t, err)
+
+	hh := NewHistoryHandler(auditStore, lms, logger)
 
 	return hh, avs, tempDir
 }
@@ -580,8 +599,26 @@ func TestHistoryHandler_EventWithTruncatedOutput(t *testing.T) {
 	require.NoError(t, err)
 	defer avs.Close()
 
-	lms := NewLedgerService(avs, nil, logger)
-	hh := NewHistoryHandler(avs, lms, logger)
+	ledgerConfig := &LedgerConfig{
+		BaseDir:         filepath.Join(tempDir, "ledger"),
+		GitPath:         "",
+		EncryptionVault: avs.GetEncryptionVault(),
+	}
+	lms := NewGitLedgerService(ledgerConfig, logger)
+
+	auditStoreConfig := &AuditStoreConfig{
+		DataDir:              tempDir,
+		DBPath:               "audit_store.db",
+		MaxDBSizeMB:          100,
+		RetentionDays:        7,
+		PruneIntervalMinutes: 60,
+		Enabled:              true,
+		EncryptionVault:      avs.GetEncryptionVault(),
+	}
+	auditStore, err := NewSQLAuditStore(auditStoreConfig, logger)
+	require.NoError(t, err)
+
+	hh := NewHistoryHandler(auditStore, lms, logger)
 
 	operatorSessionID := "test-truncated-output"
 	err = avs.CreateSession(operatorSessionID, "operator", "Truncated Output", "user@test.com")
