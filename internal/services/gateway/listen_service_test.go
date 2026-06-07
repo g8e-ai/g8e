@@ -14,6 +14,7 @@
 package gateway
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -35,7 +36,7 @@ func TestNewGatewayModeService(t *testing.T) {
 
 	t.Run("Default configuration with self-signed certs", func(t *testing.T) {
 		t.Parallel()
-		db, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, logger, true, "")
+		db, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, filepath.Join(cfg.Gateway.DataDir, "vault"), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -64,7 +65,7 @@ func TestGatewayModeService_StateManagement(t *testing.T) {
 	cfg.Gateway.PKIDir = t.TempDir()
 	cfg.Gateway.SecretsDir = t.TempDir()
 
-	db, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, logger, true, "")
+	db, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, filepath.Join(cfg.Gateway.DataDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -123,7 +124,7 @@ func TestNewGatewayModeServiceFromComponents(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true, "")
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

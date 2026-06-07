@@ -115,9 +115,9 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 		MemoryDetails: system.GetMemoryDetails(),
 		Environment:   system.GetEnvironmentDetails(hs.config.Lang, hs.config.Term, hs.config.TZ),
 		CapabilityFlags: models.HeartbeatCapabilityFlags{
-			LocalStorageEnabled: hs.config.LocalStoreEnabled,
-			GitAvailable:        hs.config.GitAvailable,
-			LedgerMirrorEnabled: hs.config.GitAvailable && !hs.config.NoGit,
+			ExecutionVaultEnabled: hs.config.ExecutionVaultEnabled,
+			GitAvailable:          hs.config.GitAvailable,
+			LedgerMirrorEnabled:   hs.config.GitAvailable && !hs.config.NoGit,
 		},
 		FingerprintDetails: &models.HeartbeatFingerprintDetails{
 			OS:           constants.Platform(runtime.GOOS),
@@ -226,7 +226,7 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 			InitSystem:       h.Environment.InitSystem,
 		},
 		CapabilityFlags: &operatorv1.CapabilityFlags{
-			LocalStorageEnabled: h.CapabilityFlags.LocalStorageEnabled,
+			LocalStorageEnabled: h.CapabilityFlags.ExecutionVaultEnabled,
 			GitAvailable:        h.CapabilityFlags.GitAvailable,
 			LedgerMirrorEnabled: h.CapabilityFlags.LedgerMirrorEnabled,
 		},

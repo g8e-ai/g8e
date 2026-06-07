@@ -225,7 +225,7 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 
 		published := client.LastPublished()
 		require.NotNil(t, published)
-		assert.Contains(t, string(published.Data), "local storage not available")
+		assert.Contains(t, string(published.Data), "execution vault not available on this operator")
 	})
 
 	t.Run("rejects invalid protobuf payload when local store is available", func(t *testing.T) {

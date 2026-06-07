@@ -16,6 +16,7 @@ package gateway
 import (
 	"log/slog"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
@@ -56,7 +57,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true, "")
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

@@ -15,15 +15,20 @@ package services
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/auth"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
+	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -59,6 +64,17 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	fmt.Sscanf(u, "127.0.0.1:%d", &cfg.HTTPPort)
 	cfg.PubSubURL = "ws://127.0.0.1:0" // dummy
 	cfg.NoGit = true
+
+	// Initialize vault for encryption (required since storage refactor)
+	vaultDir := filepath.Join(cfg.WorkDir, constants.Paths.Infra.VaultDir)
+	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	testKey := []byte("g8e_test_abc123xyz789_TEST_KEY_1")
+	keyPath := filepath.Join(vaultDir, "key")
+	require.NoError(t, os.WriteFile(keyPath, []byte(hex.EncodeToString(testKey)), 0600))
+	header, dek, err := vault.NewVaultHeader(testKey)
+	require.NoError(t, err)
+	vault.SecureZero(dek)
+	require.NoError(t, header.Save(vaultDir))
 
 	service, err := NewG8eoService(cfg, testutil.NewVerboseTestLogger(t))
 	require.NoError(t, err)

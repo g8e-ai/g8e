@@ -50,8 +50,8 @@ type LoadOptions struct {
 	// Outbound mode requires L3 (human) authorization before sending mutations
 	Posture GatewayPosture
 
-	// Local storage
-	LocalStorageEnabled bool
+	// Execution vault
+	ExecutionVaultEnabled bool
 
 	// Git / Ledger
 	NoGit bool // --no-git flag: disables ledger (git-backed file versioning)
@@ -216,11 +216,10 @@ type Config struct {
 	VaultKeyPath       string // Path to vault key file (default: .g8e/vault/key)
 	VaultRequireUnlock bool   // Require vault to be unlocked before starting (default: true)
 
-	// Local storage configuration. All paths are relative to WorkDir - the directory the Operator was launched from.
-	LocalStoreEnabled       bool
-	LocalStoreDBPath        string
-	LocalStoreMaxSizeMB     int64
-	LocalStoreRetentionDays int
+	// Execution vault configuration. All paths are relative to WorkDir - the directory the Operator was launched from.
+	ExecutionVaultEnabled       bool
+	ExecutionVaultMaxSizeMB     int64
+	ExecutionVaultRetentionDays int
 
 	// Git / Ledger
 	NoGit        bool   // User explicitly disabled git via --no-git
@@ -490,7 +489,7 @@ func Load(opts LoadOptions) (*Config, error) {
 		// From options
 		CloudMode:         opts.CloudMode,
 		CloudProvider:     opts.CloudProvider,
-		LocalStoreEnabled: opts.LocalStorageEnabled,
+		ExecutionVaultEnabled: opts.ExecutionVaultEnabled,
 		WorkDir:           workDir,
 		PKIDir:            opts.PKIDir,
 		SecretsDir:        opts.SecretsDir,
@@ -510,10 +509,9 @@ func Load(opts LoadOptions) (*Config, error) {
 		MaxMemoryMB:        2048,
 		HeartbeatInterval:  heartbeatIntervalOrDefault(opts.HeartbeatInterval),
 
-		// Local storage - all paths anchored to WorkDir
-		LocalStoreDBPath:        filepath.Join(workDir, ".g8e", "local_state.db"),
-		LocalStoreMaxSizeMB:     1024,
-		LocalStoreRetentionDays: 30,
+		// Execution vault defaults
+		ExecutionVaultMaxSizeMB:     1024,
+		ExecutionVaultRetentionDays: 30,
 
 		// Git / Ledger
 		NoGit: opts.NoGit,

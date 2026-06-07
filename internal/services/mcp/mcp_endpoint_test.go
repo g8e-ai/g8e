@@ -289,13 +289,13 @@ func TestHandleMCP_GETMethodNotAllowed(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	r := httptest.NewRequest(http.MethodGet, "/mcp", nil).WithContext(ctx)
+	r := httptest.NewRequest(http.MethodDelete, "/mcp", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	g.HandleMCP(w, r)
 
 	require.Equal(t, http.StatusMethodNotAllowed, w.Code)
-	require.Equal(t, "POST", w.Header().Get("Allow"))
+	require.Equal(t, "POST, GET", w.Header().Get("Allow"))
 }
 
 func TestHandleMCP_InvalidJSON(t *testing.T) {

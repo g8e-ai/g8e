@@ -75,10 +75,12 @@ func NewTestConfig(t *testing.T) *config.Config {
 		WorkDir:                 workDir,
 		PKIDir:                  pkiDir,
 		SecretsDir:              secretsDir,
-		LocalStoreEnabled:       true,
-		LocalStoreDBPath:        filepath.Join(workDir, ".g8e/local_state.db"),
-		LocalStoreMaxSizeMB:     1024,
-		LocalStoreRetentionDays: 30,
+		VaultDir:                filepath.Join(workDir, ".g8e/vault"),
+		VaultKeyPath:            filepath.Join(workDir, ".g8e/vault/key"),
+		VaultRequireUnlock:      false,
+		ExecutionVaultEnabled:       true,
+		ExecutionVaultMaxSizeMB:     1024,
+		ExecutionVaultRetentionDays: 30,
 	}
 }
 

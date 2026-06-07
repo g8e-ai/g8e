@@ -19,7 +19,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -49,15 +48,12 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, PostureNotary, cfg.Posture)
 	assert.Equal(t, 2048, cfg.MaxMemoryMB)
 	assert.Equal(t, 30*time.Second, cfg.HeartbeatInterval)
-	assert.Equal(t, int64(1024), cfg.LocalStoreMaxSizeMB)
-	assert.Equal(t, 30, cfg.LocalStoreRetentionDays)
+	assert.Equal(t, int64(1024), cfg.ExecutionVaultMaxSizeMB)
+	assert.Equal(t, 30, cfg.ExecutionVaultRetentionDays)
 	assert.Equal(t, constants.Ports.OperatorHttps, cfg.HTTPPort)
 
 	// WorkDir defaults to the project root when --working-dir is not supplied
 	assert.Equal(t, wantWorkDir, cfg.WorkDir)
-	// LocalStoreDBPath is anchored to WorkDir
-	assert.Equal(t, filepath.Join(wantWorkDir, ".g8e", "local_state.db"), cfg.LocalStoreDBPath)
-	assert.True(t, filepath.IsAbs(cfg.LocalStoreDBPath))
 }
 
 func TestLoad_WorkDir_Flag(t *testing.T) {
@@ -70,8 +66,6 @@ func TestLoad_WorkDir_Flag(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, tmpDir, cfg.WorkDir)
-	assert.Equal(t, filepath.Join(tmpDir, ".g8e", "local_state.db"), cfg.LocalStoreDBPath)
-	assert.True(t, strings.HasPrefix(cfg.LocalStoreDBPath, tmpDir))
 }
 
 func TestLoad_FieldPassthrough(t *testing.T) {

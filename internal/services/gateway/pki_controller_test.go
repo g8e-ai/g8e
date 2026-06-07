@@ -63,7 +63,7 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
 
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true, "")
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err, "failed to open gateway DB service")
 	t.Cleanup(func() { db.Close() })
 

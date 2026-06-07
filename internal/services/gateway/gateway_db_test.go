@@ -61,7 +61,7 @@ func TestCanonicalDBService_GetDB(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
-	db, err := OpenCanonicalDBService(dataDir, secretsDir, logger, true, "")
+	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -74,7 +74,7 @@ func TestCanonicalDBService_Wait(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
-	db, err := OpenCanonicalDBService(dataDir, secretsDir, logger, true, "")
+	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 
 	// Close the database to stop background workers
@@ -90,7 +90,7 @@ func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
-	db, err := OpenCanonicalDBService(dataDir, secretsDir, logger, true, "")
+	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -116,7 +116,7 @@ func newTestDB(t *testing.T) *CanonicalDBService {
 	t.Helper()
 	dir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dir, secretsDir, testutil.NewTestLogger(), true, "")
+	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return db
@@ -461,13 +461,13 @@ func TestSchemaIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	secretsDir := t.TempDir()
 
-	db1, err := OpenCanonicalDBService(dir, secretsDir, testutil.NewTestLogger(), true, "")
+	db1, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(t, err)
 	require.NoError(t, db1.DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
 	// Re-open same database - schema init should not fail or lose data
-	db2, err := OpenCanonicalDBService(dir, secretsDir, testutil.NewTestLogger(), true, "")
+	db2, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db2.Close() })
 
@@ -486,7 +486,7 @@ func TestCreateDataDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "nested", "deep", "data")
 	secretsDir := t.TempDir()
 
-	db, err := OpenCanonicalDBService(dir, secretsDir, testutil.NewTestLogger(), true, "")
+	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

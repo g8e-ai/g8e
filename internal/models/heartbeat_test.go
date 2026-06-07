@@ -73,12 +73,12 @@ func TestHeartbeatNetworkInfo(t *testing.T) {
 func TestHeartbeatCapabilityFlags(t *testing.T) {
 	t.Run("creates valid capability flags", func(t *testing.T) {
 		flags := &HeartbeatCapabilityFlags{
-			LocalStorageEnabled: true,
-			GitAvailable:        true,
-			LedgerMirrorEnabled: false,
+			ExecutionVaultEnabled: true,
+			GitAvailable:          true,
+			LedgerMirrorEnabled:   false,
 		}
 
-		assert.True(t, flags.LocalStorageEnabled)
+		assert.True(t, flags.ExecutionVaultEnabled)
 		assert.True(t, flags.GitAvailable)
 		assert.False(t, flags.LedgerMirrorEnabled)
 	})
@@ -265,7 +265,7 @@ func TestHeartbeat(t *testing.T) {
 				PWD: "/home/user",
 			},
 			CapabilityFlags: HeartbeatCapabilityFlags{
-				LocalStorageEnabled: true,
+				ExecutionVaultEnabled: true,
 			},
 			FingerprintDetails: &HeartbeatFingerprintDetails{
 				OS:           constants.PlatformLinux,

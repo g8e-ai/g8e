@@ -16,6 +16,7 @@ package gateway
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -190,7 +191,7 @@ func TestStateRootCaching(t *testing.T) {
 func BenchmarkStateRootCalculation(b *testing.B) {
 	dir := b.TempDir()
 	secretsDir := b.TempDir()
-	db, err := OpenCanonicalDBService(dir, secretsDir, testutil.NewTestLogger(), true, "")
+	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(b, err)
 	defer db.Close()
 
@@ -214,7 +215,7 @@ func BenchmarkStateRootCalculation(b *testing.B) {
 func BenchmarkStateRootLargeDataset(b *testing.B) {
 	dir := b.TempDir()
 	secretsDir := b.TempDir()
-	db, err := OpenCanonicalDBService(dir, secretsDir, testutil.NewTestLogger(), true, "")
+	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(b, err)
 	defer db.Close()
 

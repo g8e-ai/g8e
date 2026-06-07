@@ -72,7 +72,7 @@ type GatewayModeService struct {
 
 // NewGatewayModeService creates a new gateway mode service.
 func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayModeService, error) {
-	db, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, logger, false, cfg.Gateway.VaultKeyPath)
+	db, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, cfg.Gateway.VaultDir, logger, false, cfg.Gateway.VaultKeyPath, cfg.Gateway.VaultRequireUnlock)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}

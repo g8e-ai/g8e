@@ -328,8 +328,6 @@ func TestDeleteCredentials_Success(t *testing.T) {
 	assert.NoFileExists(t, cfg.CredentialsFile())
 	assert.NoFileExists(t, cfg.CLICertFile())
 	assert.NoFileExists(t, cfg.CLIKeyFile())
-	assert.NoFileExists(t, cfg.OperatorCertFile())
-	assert.NoFileExists(t, cfg.OperatorKeyFile())
 	assert.NoFileExists(t, hubBundle)
 }
 
@@ -950,7 +948,7 @@ func TestEnrollWithGateway_Success(t *testing.T) {
 	certPEM, _ := testutil.GenerateTestCertificate(t, "test-ca")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/auth/bootstrap", r.URL.Path)
+		assert.Equal(t, "/api/v1/auth/device/enroll", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
 
 		var req map[string]string

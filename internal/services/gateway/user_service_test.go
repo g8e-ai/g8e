@@ -16,6 +16,7 @@ package gateway
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -30,7 +31,7 @@ func TestNewUserService(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true, "")
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -47,7 +48,7 @@ func TestUserService_CreateUser(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		dbDir := t.TempDir()
 		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true, "")
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -66,7 +67,7 @@ func TestUserService_CreateBootstrapUser(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		dbDir := t.TempDir()
 		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true, "")
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -83,7 +84,7 @@ func TestUserService_CreateBootstrapUser(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		dbDir := t.TempDir()
 		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true, "")
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -105,7 +106,7 @@ func TestUserService_Disable(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		dbDir := t.TempDir()
 		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true, "")
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -144,7 +145,7 @@ func TestUserService_Disable(t *testing.T) {
 	t.Run("Error - user not found", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		db, err := OpenCanonicalDBService(t.TempDir(), t.TempDir(), logger, true, "")
+		db, err := OpenCanonicalDBService(t.TempDir(), t.TempDir(), t.TempDir(), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)
@@ -166,7 +167,7 @@ func TestUserService_FindBootstrapUser(t *testing.T) {
 	t.Run("Success - finds bootstrap user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		db, err := OpenCanonicalDBService(t.TempDir(), t.TempDir(), logger, true, "")
+		db, err := OpenCanonicalDBService(t.TempDir(), t.TempDir(), t.TempDir(), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)
@@ -186,7 +187,7 @@ func TestUserService_FindBootstrapUser(t *testing.T) {
 	t.Run("Success - returns nil when no bootstrap user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		db, err := OpenCanonicalDBService(t.TempDir(), t.TempDir(), logger, true, "")
+		db, err := OpenCanonicalDBService(t.TempDir(), t.TempDir(), t.TempDir(), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)
@@ -243,7 +244,7 @@ func TestUserService_HasAnyUsers(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		dbDir := t.TempDir()
 		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true, "")
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -258,7 +259,7 @@ func TestUserService_HasAnyUsers(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		dbDir := t.TempDir()
 		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true, "")
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 

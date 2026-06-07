@@ -49,9 +49,9 @@ type HeartbeatNetworkInfo struct {
 }
 
 type HeartbeatCapabilityFlags struct {
-	LocalStorageEnabled bool `json:"local_storage_enabled"`
-	GitAvailable        bool `json:"git_available"`
-	LedgerMirrorEnabled bool `json:"ledger_enabled"`
+	ExecutionVaultEnabled bool `json:"local_storage_enabled"`
+	GitAvailable          bool `json:"git_available"`
+	LedgerMirrorEnabled   bool `json:"ledger_enabled"`
 }
 
 type HeartbeatVersionInfo struct {

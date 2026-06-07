@@ -73,6 +73,7 @@ type CanonicalDBService struct {
 	db         *sqliteutil.DB
 	logger     *slog.Logger
 	AuditStore *storage.SQLAuditStore
+	vault      *vault.Vault
 
 	// Shutdown tracking
 	mu      sync.Mutex
@@ -89,7 +90,8 @@ type CanonicalDBService struct {
 // OpenCanonicalDBService opens (or creates) the unified SQLite database.
 // testMode enables the in-memory keystore backend for unit tests.
 // vaultKeyPath is the path to the vault private key file (hex-encoded).
-func OpenCanonicalDBService(dataDir string, secretsDir string, logger *slog.Logger, testMode bool, vaultKeyPath string) (*CanonicalDBService, error) {
+// vaultRequireUnlock requires the vault to be unlocked before starting.
+func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, logger *slog.Logger, testMode bool, vaultKeyPath string, vaultRequireUnlock bool) (*CanonicalDBService, error) {
 	dbPath := filepath.Join(dataDir, "g8e.db")
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
@@ -98,8 +100,6 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, logger *slog.Logg
 		return nil, fmt.Errorf("failed to open gateway database: %w", err)
 	}
 
-	// Initialize vault for encryption
-	vaultDir := filepath.Join(dataDir, ".g8e/vault")
 	vaultConfig := &vault.VaultConfig{
 		DataDir: vaultDir,
 		Logger:  logger,
@@ -112,14 +112,8 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, logger *slog.Logg
 
 	// Unlock vault before initializing storage services
 	// Encryption is required for secure data storage at rest
-	if vaultKeyPath == "" {
-		if !testMode {
-			// In production mode, fall back to default vault key path
-			vaultKeyPath = filepath.Join(vaultDir, "key")
-		} else {
-			// In test mode with no vault key, vault remains locked (services will handle this gracefully)
-			logger.Info("No vault key provided in test mode, vault will remain locked")
-		}
+	if vaultKeyPath == "" && vaultRequireUnlock {
+		vaultKeyPath = filepath.Join(vaultDir, "key")
 	}
 
 	if vaultKeyPath != "" {
@@ -129,22 +123,32 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, logger *slog.Logg
 
 		privateKey, err := vault.ReadVaultKey(vaultKeyPath)
 		if err != nil {
-			db.Close()
-			return nil, fmt.Errorf("failed to read vault key: %w", err)
-		}
-		defer vault.SecureZero(privateKey)
+			if vaultRequireUnlock {
+				db.Close()
+				return nil, fmt.Errorf("failed to read vault key: %w", err)
+			}
+			logger.Info("Vault key not found, vault will remain locked", "path", vaultKeyPath, "error", err)
+		} else {
+			defer vault.SecureZero(privateKey)
 
-		if err := encryptionVault.Unlock(privateKey); err != nil {
-			db.Close()
-			if errors.Is(err, vault.ErrVaultNotInit) {
-				return nil, fmt.Errorf("vault not initialized at %s. Run 'g8e vault init' first", vaultDir)
+			if err := encryptionVault.Unlock(privateKey); err != nil {
+				if vaultRequireUnlock {
+					db.Close()
+					if errors.Is(err, vault.ErrVaultNotInit) {
+						return nil, fmt.Errorf("vault not initialized at %s. Run 'g8e vault init' first", vaultDir)
+					}
+					if errors.Is(err, vault.ErrInvalidPrivateKey) {
+						return nil, fmt.Errorf("invalid vault key at %s. Verify the key file is correct", vaultKeyPath)
+					}
+					return nil, fmt.Errorf("failed to unlock vault: %w", err)
+				}
+				logger.Info("Failed to unlock vault, vault will remain locked", "error", err)
+			} else {
+				logger.Info("Vault unlocked successfully", "vault_dir", vaultDir)
 			}
-			if errors.Is(err, vault.ErrInvalidPrivateKey) {
-				return nil, fmt.Errorf("invalid vault key at %s. Verify the key file is correct", vaultKeyPath)
-			}
-			return nil, fmt.Errorf("failed to unlock vault: %w", err)
 		}
-		logger.Info("Vault unlocked successfully", "vault_dir", vaultDir)
+	} else {
+		logger.Info("No vault key provided, vault will remain locked")
 	}
 
 	// Initialize SQLAuditStore for transaction-native audit recording
@@ -162,6 +166,7 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, logger *slog.Logg
 		db:         db,
 		logger:     logger,
 		AuditStore: auditStore,
+		vault:      encryptionVault,
 		ctx:        ctx,
 		cancel:     cancel,
 		running:    true,
@@ -617,6 +622,10 @@ func (s *CanonicalDBService) migrateStateVersion() error {
 // GetDB returns the underlying SQLite database connection.
 func (s *CanonicalDBService) GetDB() *sqliteutil.DB {
 	return s.db
+}
+
+func (s *CanonicalDBService) GetVault() *vault.Vault {
+	return s.vault
 }
 
 // Close closes the database connection and waits for background workers.

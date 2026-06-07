@@ -146,6 +146,8 @@ func TestHeartbeatService_Build(t *testing.T) {
 	t.Run("includes network info", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
+		cfg.Gateway.HTTPPort = 8080
+		cfg.Gateway.HTTPSPort = 8443
 		logger := testutil.NewTestLogger()
 		svc := NewHeartbeatService(cfg, logger, nil)
 
@@ -201,7 +203,7 @@ func TestHeartbeatService_Build(t *testing.T) {
 		svc := NewHeartbeatService(cfg, logger, nil)
 
 		heartbeat := svc.Build(models.HeartbeatTypeRequested)
-		assert.Equal(t, cfg.LocalStoreEnabled, heartbeat.CapabilityFlags.LocalStorageEnabled)
+		assert.Equal(t, cfg.ExecutionVaultEnabled, heartbeat.CapabilityFlags.ExecutionVaultEnabled)
 		assert.Equal(t, cfg.GitAvailable, heartbeat.CapabilityFlags.GitAvailable)
 		assert.Equal(t, cfg.GitAvailable && !cfg.NoGit, heartbeat.CapabilityFlags.LedgerMirrorEnabled)
 	})
@@ -319,7 +321,7 @@ func TestHeartbeatService_buildProtoHeartbeat(t *testing.T) {
 		protoHeartbeat := svc.buildProtoHeartbeat(heartbeat)
 
 		require.NotNil(t, protoHeartbeat.CapabilityFlags)
-		assert.Equal(t, heartbeat.CapabilityFlags.LocalStorageEnabled, protoHeartbeat.CapabilityFlags.LocalStorageEnabled)
+		assert.Equal(t, heartbeat.CapabilityFlags.ExecutionVaultEnabled, protoHeartbeat.CapabilityFlags.LocalStorageEnabled)
 		assert.Equal(t, heartbeat.CapabilityFlags.GitAvailable, protoHeartbeat.CapabilityFlags.GitAvailable)
 		assert.Equal(t, heartbeat.CapabilityFlags.LedgerMirrorEnabled, protoHeartbeat.CapabilityFlags.LedgerMirrorEnabled)
 	})

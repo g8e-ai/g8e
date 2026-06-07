@@ -139,11 +139,11 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 	)
 
 	runtimeConfig := &models.RuntimeConfig{
-		CloudMode:           bs.config.CloudMode,
-		CloudProvider:       bs.config.CloudProvider,
-		LocalStorageEnabled: bs.config.LocalStoreEnabled,
-		NoGit:               bs.config.NoGit,
-		LogLevel:            bs.config.LogLevel,
+		CloudMode:             bs.config.CloudMode,
+		CloudProvider:         bs.config.CloudProvider,
+		ExecutionVaultEnabled: bs.config.ExecutionVaultEnabled,
+		NoGit:                 bs.config.NoGit,
+		LogLevel:              bs.config.LogLevel,
 
 		HTTPPort: bs.config.HTTPPort,
 	}

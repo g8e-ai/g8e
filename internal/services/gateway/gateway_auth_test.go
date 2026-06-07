@@ -17,6 +17,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"path/filepath"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -326,7 +327,7 @@ func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
 
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, logger, true, "")
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

@@ -25,9 +25,9 @@ type FsGrepMatch struct {
 // RuntimeConfig captures the CLI flags and env var overrides active when the Operator was started.
 // Sent to client at bootstrap and stored in operator_document.runtime_config.
 type RuntimeConfig struct {
-	CloudMode           bool   `json:"cloud_mode"`
-	CloudProvider       string `json:"cloud_provider,omitempty"`
-	LocalStorageEnabled bool   `json:"local_storage_enabled"`
+	CloudMode             bool   `json:"cloud_mode"`
+	CloudProvider         string `json:"cloud_provider,omitempty"`
+	ExecutionVaultEnabled bool   `json:"local_storage_enabled"`
 	NoGit               bool   `json:"no_git"`
 	LogLevel            string `json:"log_level"`
 

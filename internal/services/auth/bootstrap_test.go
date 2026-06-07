@@ -255,7 +255,7 @@ func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
 	cfg.HTTPPort = port
 	cfg.CloudMode = true
 	cfg.CloudProvider = "aws"
-	cfg.LocalStoreEnabled = true
+	cfg.ExecutionVaultEnabled = true
 	cfg.NoGit = false
 	cfg.LogLevel = "debug"
 
@@ -271,7 +271,7 @@ func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
 	require.NotNil(t, capturedBody.RuntimeConfig)
 	assert.True(t, capturedBody.RuntimeConfig.CloudMode)
 	assert.Equal(t, "aws", capturedBody.RuntimeConfig.CloudProvider)
-	assert.True(t, capturedBody.RuntimeConfig.LocalStorageEnabled)
+	assert.True(t, capturedBody.RuntimeConfig.ExecutionVaultEnabled)
 	assert.False(t, capturedBody.RuntimeConfig.NoGit)
 	assert.Equal(t, "debug", capturedBody.RuntimeConfig.LogLevel)
 

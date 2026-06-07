@@ -369,7 +369,7 @@ func main() {
 	var workingDir string
 	var cloudMode bool
 	var cloudProvider string
-	var localStorage bool
+	var executionVault bool
 	var logLevel string
 	var showVersion bool
 
@@ -411,7 +411,7 @@ func main() {
 	flag.StringVar(&endpointURL, "e", "", "Endpoint (hostname or IP)")
 	flag.BoolVar(&cloudMode, "c", true, "Cloud mode")
 	flag.StringVar(&cloudProvider, "p", "", "Cloud provider")
-	flag.BoolVar(&localStorage, "s", true, "Enable local storage (stores data in current directory)")
+	flag.BoolVar(&executionVault, "s", true, "Enable execution vault (stores execution data in current directory)")
 	flag.StringVar(&logLevel, "l", "info", "Log level")
 	flag.BoolVar(&noGit, "G", false, "Disable git (ledger)")
 	flag.BoolVar(&showVersion, "v", false, "Version")
@@ -422,7 +422,7 @@ func main() {
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory Operator was launched from)")
 	flag.BoolVar(&cloudMode, string(constants.OperatorTypeCloud), true, "Cloud mode")
 	flag.StringVar(&cloudProvider, "provider", "", "Cloud provider")
-	flag.BoolVar(&localStorage, "local-storage", true, "Enable local storage (stores data in current directory)")
+	flag.BoolVar(&executionVault, "execution-vault", true, "Enable execution vault (stores execution data in current directory)")
 	flag.StringVar(&logLevel, "log", "info", "Log level")
 	flag.BoolVar(&noGit, "no-git", false, "Disable git (ledger)")
 	flag.BoolVar(&showVersion, "version", false, "Version")
@@ -718,7 +718,7 @@ func main() {
 		HTTPPort:            httpPort,
 		CloudMode:           cloudMode,
 		CloudProvider:       cloudProvider,
-		LocalStorageEnabled: localStorage,
+		ExecutionVaultEnabled: executionVault,
 		NoGit:               noGit,
 		LogLevel:            logLevel,
 		WorkDir:             effectiveWorkDir,
@@ -742,10 +742,10 @@ func main() {
 		logger.Info("Cloud Operator mode enabled", "provider", cfg.CloudProvider)
 	}
 
-	if cfg.LocalStoreEnabled {
-		logger.Info("Local storage enabled - data stays in working directory", "db_path", cfg.LocalStoreDBPath, "working_dir", cfg.WorkDir)
+	if cfg.ExecutionVaultEnabled {
+		logger.Info("Execution vault enabled - data stays in working directory", "working_dir", cfg.WorkDir)
 	} else {
-		logger.Info("Local storage disabled (command output sent to cloud)")
+		logger.Info("Execution vault disabled (command output sent to cloud)")
 	}
 
 	g8eoService, err := services.NewG8eoService(cfg, logger)

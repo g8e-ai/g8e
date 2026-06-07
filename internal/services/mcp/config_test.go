@@ -87,8 +87,8 @@ func TestNewGatewayConfig(t *testing.T) {
 	}
 
 	// Verify notes
-	if len(serverConfig.Notes) != 2 {
-		t.Errorf("Expected 2 notes, got %d", len(serverConfig.Notes))
+	if len(serverConfig.Notes) != 1 {
+		t.Errorf("Expected 1 note, got %d", len(serverConfig.Notes))
 	}
 }
 

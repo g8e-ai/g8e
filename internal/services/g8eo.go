@@ -16,7 +16,6 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -34,7 +33,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
-	"github.com/g8e-ai/g8e/internal/services/vault"
 )
 
 type G8eoService struct {
@@ -125,8 +123,12 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize CanonicalDBService for canonical state root calculation
 	// This ensures outbound mode uses the same state root schema as gateway mode
-	dataDir := filepath.Join(vs.config.WorkDir, ".g8e")
-	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, secretsDir, vs.logger, false, vs.config.VaultKeyPath)
+	dataDir := filepath.Join(vs.config.WorkDir, constants.Paths.Infra.DataDir)
+	vaultKeyPath := vs.config.VaultKeyPath
+	if vaultKeyPath != "" && !filepath.IsAbs(vaultKeyPath) {
+		vaultKeyPath = filepath.Join(vs.config.WorkDir, vaultKeyPath)
+	}
+	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, secretsDir, vs.config.VaultDir, vs.logger, false, vaultKeyPath, vs.config.VaultRequireUnlock)
 	if err != nil {
 		return fmt.Errorf("failed to initialize gateway database (required for state root calculation): %w", err)
 	}
@@ -143,53 +145,22 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.logger.Info("Secret manager initialized")
 
 	// Initialize Data Services - mandatory for replay protection
-	if !vs.config.LocalStoreEnabled {
-		return fmt.Errorf("execution vault must be enabled for replay protection - set LocalStorageEnabled=true")
+	if !vs.config.ExecutionVaultEnabled {
+		return fmt.Errorf("execution vault must be enabled for replay protection - set ExecutionVaultEnabled=true")
 	}
 
-	// Initialize vault for encryption
-	vaultDir := filepath.Join(vs.config.WorkDir, ".g8e/vault")
-	vaultConfig := &vault.VaultConfig{
-		DataDir: vaultDir,
-		Logger:  vs.logger,
+	// Reuse vault from CanonicalDBService (already initialized and unlocked)
+	encryptionVault := vs.gatewayDB.GetVault()
+	if encryptionVault == nil {
+		return fmt.Errorf("vault not available from CanonicalDBService")
 	}
-	encryptionVault, err := vault.NewVault(vaultConfig)
-	if err != nil {
-		return fmt.Errorf("failed to initialize vault: %w", err)
-	}
-
-	// Unlock vault before initializing storage services
-	// Encryption is required for secure data storage at rest
-	vaultKeyPath := vs.config.VaultKeyPath
-	if vaultKeyPath == "" {
-		vaultKeyPath = filepath.Join(vaultDir, "key")
-	}
-	if !filepath.IsAbs(vaultKeyPath) {
-		vaultKeyPath = filepath.Join(vs.config.WorkDir, vaultKeyPath)
-	}
-
-	privateKey, err := vault.ReadVaultKey(vaultKeyPath)
-	if err != nil {
-		return fmt.Errorf("failed to read vault key: %w", err)
-	}
-	defer vault.SecureZero(privateKey)
-
-	if err := encryptionVault.Unlock(privateKey); err != nil {
-		if errors.Is(err, vault.ErrVaultNotInit) {
-			return fmt.Errorf("vault not initialized at %s. Run 'g8e vault init' first", vaultDir)
-		}
-		if errors.Is(err, vault.ErrInvalidPrivateKey) {
-			return fmt.Errorf("invalid vault key at %s. Verify the key file is correct", vaultKeyPath)
-		}
-		return fmt.Errorf("failed to unlock vault: %w", err)
-	}
-	vs.logger.Info("Vault unlocked successfully", "vault_dir", vaultDir)
+	vs.logger.Info("Vault reused from CanonicalDBService")
 
 	// Initialize ExecutionVaultService for execution log and file diff storage
 	executionVaultConfig := storage.DefaultExecutionVaultConfig()
 	executionVaultConfig.DBPath = filepath.Join(dataDir, "execution_vault.db")
-	executionVaultConfig.MaxDBSizeMB = vs.config.LocalStoreMaxSizeMB
-	executionVaultConfig.RetentionDays = vs.config.LocalStoreRetentionDays
+	executionVaultConfig.MaxDBSizeMB = vs.config.ExecutionVaultMaxSizeMB
+	executionVaultConfig.RetentionDays = vs.config.ExecutionVaultRetentionDays
 	vs.executionVault, err = storage.NewExecutionVaultService(executionVaultConfig, vs.logger, encryptionVault)
 	if err != nil {
 		return fmt.Errorf("failed to initialize execution vault: %w", err)
