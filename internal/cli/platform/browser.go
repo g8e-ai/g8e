@@ -15,20 +15,30 @@ package platform
 
 import (
 	"fmt"
+	"net/url"
 	"os/exec"
 	"runtime"
 )
 
-func OpenBrowser(url string) error {
+func OpenBrowser(urlStr string) error {
+	if urlStr == "" {
+		return fmt.Errorf("failed to open browser: URL cannot be empty")
+	}
+
+	// Validate URL format
+	if _, err := url.Parse(urlStr); err != nil {
+		return fmt.Errorf("failed to open browser: invalid URL: %w", err)
+	}
+
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", urlStr)
 	case "darwin":
-		cmd = exec.Command("open", url)
+		cmd = exec.Command("open", urlStr)
 	default: // linux, bsd, etc.
-		cmd = exec.Command("xdg-open", url)
+		cmd = exec.Command("xdg-open", urlStr)
 	}
 
 	if err := cmd.Start(); err != nil {

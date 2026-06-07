@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -99,7 +100,7 @@ func TestExecutionService_Integration(t *testing.T) {
 	t.Run("complex command with file I/O", func(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
-		testFile := filepath.Join(tmpDir, "test-output.txt")
+		testFile := filepath.ToSlash(filepath.Join(tmpDir, "test-output.txt"))
 
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "complex-exec-1",
@@ -142,7 +143,9 @@ func TestExecutionService_Integration(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.Contains(t, result.Stdout, tmpDir)
+		// On Windows, bash might return a Posix-style path (e.g. /c/Users/...)
+		actualStdout := filepath.ToSlash(strings.TrimSpace(result.Stdout))
+		assert.Contains(t, actualStdout, filepath.Base(tmpDir))
 		assert.Contains(t, result.Stdout, "custom_value_123")
 
 	})
@@ -156,7 +159,7 @@ func TestExecutionService_Integration(t *testing.T) {
 			ExecutionID:    "pipeline-exec-1",
 			CaseID:         "test-case-pipeline",
 			Command:        "sh",
-			Args:           []string{"-c", fmt.Sprintf("echo 'Initial content' > %s/data.txt", tmpDir)},
+			Args:           []string{"-c", fmt.Sprintf("echo 'Initial content' > %s/data.txt", filepath.ToSlash(tmpDir))},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
 		}
@@ -170,7 +173,7 @@ func TestExecutionService_Integration(t *testing.T) {
 			ExecutionID:    "pipeline-exec-2",
 			CaseID:         "test-case-pipeline",
 			Command:        "sh",
-			Args:           []string{"-c", fmt.Sprintf("echo 'Appended content' >> %s/data.txt", tmpDir)},
+			Args:           []string{"-c", fmt.Sprintf("echo 'Appended content' >> %s/data.txt", filepath.ToSlash(tmpDir))},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
 		}
@@ -184,7 +187,7 @@ func TestExecutionService_Integration(t *testing.T) {
 			ExecutionID:    "pipeline-exec-3",
 			CaseID:         "test-case-pipeline",
 			Command:        "cat",
-			Args:           []string{fmt.Sprintf("%s/data.txt", tmpDir)},
+			Args:           []string{fmt.Sprintf("%s/data.txt", filepath.ToSlash(tmpDir))},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
 		}
@@ -233,10 +236,10 @@ func TestExecutionService_Integration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.NotEmpty(t, result.Stdout)
-		assert.NotNil(t, result.TerminalOutput)
+		require.NotNil(t, result.TerminalOutput)
 
 		// Terminal output should be truncated to last 50 lines
-		if result.TerminalOutput.TruncatedStdout {
+		if result.TerminalOutput != nil && result.TerminalOutput.TruncatedStdout {
 			assert.Equal(t, 50, len(result.TerminalOutput.LastLines))
 			assert.Equal(t, 100, result.TerminalOutput.OriginalStdoutLines)
 		}
@@ -392,8 +395,8 @@ exit 0
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "script-exec-1",
 			CaseID:         "test-case-script",
-			Command:        scriptPath,
-			Args:           []string{},
+			Command:        "sh",
+			Args:           []string{filepath.ToSlash(scriptPath)},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
 		}
@@ -452,7 +455,7 @@ exit 0
 			ExecutionID:    "resource-exec-1",
 			CaseID:         "test-case-resource",
 			Command:        "sh",
-			Args:           []string{"-c", fmt.Sprintf("for i in $(seq 1 50); do echo $i >> %s/output.txt; done && wc -l %s/output.txt", tmpDir, tmpDir)},
+			Args:           []string{"-c", fmt.Sprintf("for i in $(seq 1 50); do echo $i >> %s/output.txt; done && wc -l %s/output.txt", filepath.ToSlash(tmpDir), filepath.ToSlash(tmpDir))},
 			TimeoutSeconds: 10,
 			RequestedBy:    "test-user",
 		}

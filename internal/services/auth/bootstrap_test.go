@@ -477,7 +477,8 @@ func TestSystemInfoTools(t *testing.T) {
 		t.Parallel()
 		osName := system.GetOSName()
 		assert.NotEmpty(t, osName)
-		assert.Contains(t, []string{"linux", "darwin"}, osName)
+		// Accept all standard Go OS names (linux, darwin, windows, etc.)
+		assert.Contains(t, []string{"linux", "darwin", "windows", "freebsd", "openbsd", "netbsd"}, osName)
 	})
 
 	t.Run("system.GetArchitecture", func(t *testing.T) {

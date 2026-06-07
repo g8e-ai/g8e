@@ -287,7 +287,7 @@ func TestGetMachineID_UnsupportedOS(t *testing.T) {
 	// Since we can't easily mock runtime.GOOS, we rely on the fact that
 	// the test will run on a supported OS and this is a documentation
 	// of the expected behavior
-	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" && runtime.GOOS != "freebsd" {
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" && runtime.GOOS != "freebsd" && runtime.GOOS != "windows" {
 		_, err := getMachineID(testutil.NewTestLogger())
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "unsupported operating system")

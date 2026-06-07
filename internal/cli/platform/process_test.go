@@ -18,6 +18,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 )
@@ -67,9 +68,12 @@ func TestEnsureDirectories(t *testing.T) {
 		if !info.IsDir() {
 			t.Errorf("%s is not a directory", dir)
 		}
-		// Verify permissions are 0700
-		if info.Mode().Perm() != 0700 {
-			t.Errorf("directory %s has incorrect permissions %o, expected 0700", dir, info.Mode().Perm())
+		// Verify permissions are 0700 on Unix systems
+		// Windows uses ACLs and doesn't support Unix-style permissions
+		if runtime.GOOS != "windows" {
+			if info.Mode().Perm() != 0700 {
+				t.Errorf("directory %s has incorrect permissions %o, expected 0700", dir, info.Mode().Perm())
+			}
 		}
 	}
 }
@@ -192,13 +196,16 @@ func TestWritePID(t *testing.T) {
 		t.Errorf("expected PID %d, got %d", testPID, pid)
 	}
 
-	// Verify file permissions
-	info, err := os.Stat(pidFile)
-	if err != nil {
-		t.Fatalf("failed to stat PID file: %v", err)
-	}
-	if info.Mode().Perm() != 0600 {
-		t.Errorf("PID file has incorrect permissions %o, expected 0600", info.Mode().Perm())
+	// Verify file permissions on Unix systems
+	// Windows uses ACLs and doesn't support Unix-style permissions
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(pidFile)
+		if err != nil {
+			t.Fatalf("failed to stat PID file: %v", err)
+		}
+		if info.Mode().Perm() != 0600 {
+			t.Errorf("PID file has incorrect permissions %o, expected 0600", info.Mode().Perm())
+		}
 	}
 }
 
@@ -251,9 +258,13 @@ func TestIsProcessRunning(t *testing.T) {
 	}
 
 	// Test with current process (should be running)
-	currentPID := os.Getpid()
-	if !pm.isProcessRunning(currentPID) {
-		t.Error("isProcessRunning should return true for current process")
+	// On Windows, isG8eProcess checks if the process is g8e.exe, which the test binary is not
+	// So we skip this check on Windows
+	if runtime.GOOS != "windows" {
+		currentPID := os.Getpid()
+		if !pm.isProcessRunning(currentPID) {
+			t.Error("isProcessRunning should return true for current process")
+		}
 	}
 }
 
@@ -284,6 +295,8 @@ func TestOperatorStatus(t *testing.T) {
 	}
 
 	// Test with PID file for non-existent process
+	// On Windows, isG8eProcess checks if the process is g8e.exe, which the test binary is not
+	// So the PID file will be deleted and 0 will be returned
 	if err := pm.writePID(operatorPIDFile, 999999); err != nil {
 		t.Fatalf("writePID failed: %v", err)
 	}
@@ -295,24 +308,36 @@ func TestOperatorStatus(t *testing.T) {
 	if running {
 		t.Error("expected running=false for non-existent process")
 	}
-	if pid != 999999 {
-		t.Errorf("expected pid=999999, got %d", pid)
+	// On Unix, the PID file is read and returned even if process is not running
+	// On Windows, the PID file is deleted if isG8eProcess check fails
+	if runtime.GOOS != "windows" {
+		if pid != 999999 {
+			t.Errorf("expected pid=999999, got %d", pid)
+		}
+	} else {
+		if pid != 0 {
+			t.Errorf("expected pid=0 on Windows after stale PID cleanup, got %d", pid)
+		}
 	}
 
 	// Test with PID file for current process
-	if err := pm.writePID(operatorPIDFile, os.Getpid()); err != nil {
-		t.Fatalf("writePID failed: %v", err)
-	}
+	// On Windows, isG8eProcess checks if the process is g8e.exe, which the test binary is not
+	// So we skip this check on Windows
+	if runtime.GOOS != "windows" {
+		if err := pm.writePID(operatorPIDFile, os.Getpid()); err != nil {
+			t.Fatalf("writePID failed: %v", err)
+		}
 
-	running, pid, err = pm.OperatorStatus()
-	if err != nil {
-		t.Errorf("OperatorStatus failed: %v", err)
-	}
-	if !running {
-		t.Error("expected running=true for current process")
-	}
-	if pid != os.Getpid() {
-		t.Errorf("expected pid=%d, got %d", os.Getpid(), pid)
+		running, pid, err = pm.OperatorStatus()
+		if err != nil {
+			t.Errorf("OperatorStatus failed: %v", err)
+		}
+		if !running {
+			t.Error("expected running=true for current process")
+		}
+		if pid != os.Getpid() {
+			t.Errorf("expected pid=%d, got %d", os.Getpid(), pid)
+		}
 	}
 }
 
@@ -572,15 +597,18 @@ func TestProcessManagerDirectoryPermissions(t *testing.T) {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
-	// Check each directory has 0700 permissions
-	dirs := []string{pm.runtimeDir, pm.pkiDir, pm.secretsDir, pm.dataDir, pm.logDir, pm.pidDir}
-	for _, dir := range dirs {
-		info, err := os.Stat(dir)
-		if err != nil {
-			t.Fatalf("failed to stat directory %s: %v", dir, err)
-		}
-		if info.Mode().Perm() != 0700 {
-			t.Errorf("directory %s has incorrect permissions %o, expected 0700", dir, info.Mode().Perm())
+	// Check each directory has 0700 permissions on Unix systems
+	// Windows uses ACLs and doesn't support Unix-style permissions
+	if runtime.GOOS != "windows" {
+		dirs := []string{pm.runtimeDir, pm.pkiDir, pm.secretsDir, pm.dataDir, pm.logDir, pm.pidDir}
+		for _, dir := range dirs {
+			info, err := os.Stat(dir)
+			if err != nil {
+				t.Fatalf("failed to stat directory %s: %v", dir, err)
+			}
+			if info.Mode().Perm() != 0700 {
+				t.Errorf("directory %s has incorrect permissions %o, expected 0700", dir, info.Mode().Perm())
+			}
 		}
 	}
 }
@@ -619,20 +647,23 @@ func TestWritePIDPermissions(t *testing.T) {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
-	// Test that PID files are written with 0600 permissions
-	testPID := 99999
-	if err := pm.writePID("perms.pid", testPID); err != nil {
-		t.Fatalf("writePID failed: %v", err)
-	}
+	// Test that PID files are written with 0600 permissions on Unix systems
+	// Windows uses ACLs and doesn't support Unix-style permissions
+	if runtime.GOOS != "windows" {
+		testPID := 99999
+		if err := pm.writePID("perms.pid", testPID); err != nil {
+			t.Fatalf("writePID failed: %v", err)
+		}
 
-	pidFile := filepath.Join(pm.pidDir, "perms.pid")
-	info, err := os.Stat(pidFile)
-	if err != nil {
-		t.Fatalf("failed to stat PID file: %v", err)
-	}
+		pidFile := filepath.Join(pm.pidDir, "perms.pid")
+		info, err := os.Stat(pidFile)
+		if err != nil {
+			t.Fatalf("failed to stat PID file: %v", err)
+		}
 
-	if info.Mode().Perm() != 0600 {
-		t.Errorf("PID file has incorrect permissions %o, expected 0600", info.Mode().Perm())
+		if info.Mode().Perm() != 0600 {
+			t.Errorf("PID file has incorrect permissions %o, expected 0600", info.Mode().Perm())
+		}
 	}
 }
 

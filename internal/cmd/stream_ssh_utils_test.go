@@ -52,11 +52,16 @@ func TestBuildHostKeyCallback(t *testing.T) {
 	t.Run("known_hosts missing, strict mode returns an error (no insecure fallback)", func(t *testing.T) {
 		tempDir := t.TempDir()
 		t.Setenv("HOME", tempDir)
+		// On Windows, os.UserHomeDir() uses USERPROFILE, not HOME
+		t.Setenv("USERPROFILE", tempDir)
 		// No env var to unset - ~/.ssh/known_hosts is the only path
+		// Ensure .ssh directory exists but known_hosts does not
+		sshDir := filepath.Join(tempDir, ".ssh")
+		require.NoError(t, os.MkdirAll(sshDir, 0700))
 
 		cb, err := ssh.BuildHostKeyCallback()
-		assert.Nil(t, cb)
 		require.Error(t, err)
+		assert.Nil(t, cb)
 		assert.Contains(t, err.Error(), "known_hosts not found")
 	})
 

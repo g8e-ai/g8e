@@ -440,9 +440,15 @@ func TestBuildHostKeyCallback(t *testing.T) {
 	t.Run("known_hosts file does not exist", func(t *testing.T) {
 		dir := t.TempDir()
 		t.Setenv("HOME", dir)
+		// On Windows, os.UserHomeDir() uses USERPROFILE, not HOME
+		t.Setenv("USERPROFILE", dir)
+		// Ensure .ssh directory exists but known_hosts does not
+		sshDir := filepath.Join(dir, ".ssh")
+		require.NoError(t, os.Mkdir(sshDir, 0700))
 
-		_, err := BuildHostKeyCallback()
-		assert.Error(t, err)
+		cb, err := BuildHostKeyCallback()
+		require.Error(t, err)
+		assert.Nil(t, cb)
 		assert.Contains(t, err.Error(), "known_hosts not found")
 	})
 

@@ -410,9 +410,9 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	useShell = isShellCommand || security.IsShellRequired(fullCommand)
 
 	if useShell {
-		// Apply memory limit via ulimit if configured
+		// Apply memory limit via ulimit if configured - only on Linux
 		shellScript := fullCommand
-		if es.maxMemoryMB > 0 {
+		if es.maxMemoryMB > 0 && runtime.GOOS == "linux" {
 			// ulimit -v is virtual memory limit in KB
 			limitKB := es.maxMemoryMB * 1024
 			shellScript = fmt.Sprintf("ulimit -v %d; %s", limitKB, fullCommand)
@@ -422,9 +422,13 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 			"command", shellScript,
 			"execution_type", "shell")
 
-		// Use /bin/bash -c for shell execution.
+		// Use bash for shell execution if available, otherwise sh.
+		// On Windows, we search for bash.exe or sh.exe in PATH.
+		// On Unix, we prefer /bin/bash then /bin/sh.
+		shell := es.getShellPath()
+
 		// SECURITY: We use "--" to signify the end of bash options.
-		cmd = exec.CommandContext(ctx, "/bin/bash", "-c", "--", shellScript)
+		cmd = exec.CommandContext(ctx, shell, "-c", "--", shellScript)
 	} else {
 		// Direct execution: split into command and args
 		parts := strings.Fields(fullCommand)
@@ -631,7 +635,9 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	}
 
 	// Create terminal output for UI
-	result.TerminalOutput = es.createTerminalOutput(request.Command, request.Args, stdoutBuf.String(), stderrBuf.String())
+	if result.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED || (stdoutBuf.Len() > 0 || stderrBuf.Len() > 0) {
+		result.TerminalOutput = es.createTerminalOutput(request.Command, request.Args, stdoutBuf.String(), stderrBuf.String())
+	}
 
 	// Collect system information
 	result.SystemInfo = es.collectSystemInfo()
@@ -640,6 +646,34 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	execCtx.mu.Unlock()
 
 	return nil
+}
+
+// getShellPath returns the path to a Posix-compatible shell
+func (es *ExecutionService) getShellPath() string {
+	// Priority: bash, then sh
+	shells := []string{"bash", "sh"}
+
+	if runtime.GOOS != "windows" {
+		// On Unix-like systems, try absolute paths first
+		for _, s := range []string{"/bin/bash", "/usr/bin/bash", "/bin/sh", "/usr/bin/sh"} {
+			if _, err := os.Stat(s); err == nil {
+				return s
+			}
+		}
+	}
+
+	// Search PATH
+	for _, s := range shells {
+		if path, err := exec.LookPath(s); err == nil {
+			return path
+		}
+	}
+
+	// Fallback
+	if runtime.GOOS == "windows" {
+		return "cmd.exe"
+	}
+	return "/bin/sh"
 }
 
 // createTerminalOutput creates terminal-formatted output for UI interfaces

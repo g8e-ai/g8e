@@ -138,7 +138,12 @@ func TestFileEditService_ReadOperations(t *testing.T) {
 		symlinkFile := filepath.Join(tmpDir, "link.txt")
 
 		os.WriteFile(targetFile, []byte("target content"), 0644)
-		os.Symlink(targetFile, symlinkFile)
+		err := os.Symlink(targetFile, symlinkFile)
+		if err != nil {
+			// Symlinks may not be supported on all systems or require elevated permissions
+			t.Skip("symlink creation failed, skipping test")
+			return
+		}
 
 		includeStats := true
 		req := &models.FileEditRequest{

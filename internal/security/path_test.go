@@ -180,6 +180,9 @@ func TestValidatePath(t *testing.T) {
 func TestValidatePathResolution(t *testing.T) {
 	// Test that the returned path is absolute and cleaned
 	root := "/safe/root"
+	if runtime.GOOS == "windows" {
+		root = `C:\safe\root`
+	}
 
 	t.Run("relative path becomes absolute", func(t *testing.T) {
 		got, err := ValidatePath("file.txt", root)
@@ -196,15 +199,19 @@ func TestValidatePathResolution(t *testing.T) {
 	})
 
 	t.Run("absolute path remains absolute", func(t *testing.T) {
-		got, err := ValidatePath("/etc/passwd", root)
+		absPath := "/etc/passwd"
+		if runtime.GOOS == "windows" {
+			absPath = "C:\\etc\\passwd"
+		}
+		got, err := ValidatePath(absPath, root)
 		if err != nil {
 			t.Fatalf("ValidatePath() unexpected error: %v", err)
 		}
 		if !filepath.IsAbs(got) {
 			t.Errorf("ValidatePath() returned non-absolute path: %s", got)
 		}
-		if got != "/etc/passwd" {
-			t.Errorf("ValidatePath() = %s, want /etc/passwd", got)
+		if got != absPath {
+			t.Errorf("ValidatePath() = %s, want %s", got, absPath)
 		}
 	})
 
