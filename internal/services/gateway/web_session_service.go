@@ -26,10 +26,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
-const (
-	webSessionTTL = 24 * time.Hour
-)
-
 // WebSessionService handles web session persistence and management.
 // Web sessions are used for browser-based authentication via WebAuthn/passkeys.
 type WebSessionService struct {
@@ -80,8 +76,12 @@ func (s *WebSessionService) ValidateWebSession(webSessionID string) (*models.Web
 		return nil, fmt.Errorf("web session not found")
 	}
 
+	dataBytes, err := json.Marshal(doc.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal web session data: %w", err)
+	}
 	var webSession models.WebSession
-	if err := json.Unmarshal(doc.Data, &webSession); err != nil {
+	if err := json.Unmarshal(dataBytes, &webSession); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal web session: %w", err)
 	}
 

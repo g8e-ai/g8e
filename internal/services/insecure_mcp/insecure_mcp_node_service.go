@@ -32,7 +32,6 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/marshaler"
 )
 
 // ────────────────────────────────────────────────────────────────
@@ -323,7 +322,7 @@ func (s *InsecureMcpNodeService) handshake(ctx context.Context, conn *websocket.
 			},
 			Role:     "node",
 			Scopes:   []string{},
-			Caps:     []string{marshaler.OperatorType(constants.OperatorTypeSystem)},
+			Caps:     []string{string(constants.OperatorTypeSystem)},
 			Commands: []string{"system.run", "system.which"},
 			PathEnv:  s.pathEnv,
 			Auth:     auth,

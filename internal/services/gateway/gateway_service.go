@@ -356,7 +356,7 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 		IsGovernanceReady: ls.IsGovernanceReady,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("gateway: failed to create HTTP handler: %w", err)
+		return fmt.Errorf("gateway: failed to create HTTP handler: %w", err)
 	}
 	ls.handler = handler
 

@@ -1062,7 +1062,7 @@ func (g *GatewayService) HandleToolsCallSSE(w http.ResponseWriter, r *http.Reque
 			operatorID := r.Header.Get(constants.HeaderOperatorID)
 			certFingerprint := extractCertFingerprint(r)
 
-			g.StoreSuspendedTransaction(ctx, hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
+			g.StoreSuspendedTransaction(r.Context(), hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
 
 			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 			g.responder.RPCResponse(w, req.ID, CallToolResult{
@@ -1239,7 +1239,7 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 			operatorID := r.Header.Get(constants.HeaderOperatorID)
 			certFingerprint := extractCertFingerprint(r)
 
-			g.StoreSuspendedTransaction(hash, envelopeBytes, req.SkillName, req.PayloadJSON, userID, operatorID, certFingerprint)
+			g.StoreSuspendedTransaction(ctx, hash, envelopeBytes, req.SkillName, req.PayloadJSON, userID, operatorID, certFingerprint)
 
 			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 			return A2ASuspensionResponse{

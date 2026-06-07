@@ -1257,8 +1257,8 @@ func (s *CanonicalDBService) KVScan(pattern string, cursor, count int) (int, []s
 
 // KVExists checks if a key exists and is not expired.
 func (s *CanonicalDBService) KVExists(key string) bool {
-	_, err := s.KVGet(context.Background(), key)
-	return err == nil
+	_, found := s.KVGet(key)
+	return found
 }
 
 // KVTTL returns the remaining TTL in seconds for a key. -1 if no expiry, -2 if not found.

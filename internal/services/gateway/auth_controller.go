@@ -472,8 +472,8 @@ func (c *AuthController) handleApprovalChallenge(w http.ResponseWriter, r *http.
 
 	// Retrieve suspended transaction to ensure it exists and belongs to the user
 	// (or the user is authorized to approve it)
-	suspendedTx, ok := c.mcp.GetSuspendedTransaction(txHash)
-	if !ok {
+	suspendedTx, ok, err := c.mcp.GetSuspendedTransaction(r.Context(), txHash)
+	if err != nil || !ok {
 		c.responder.Error(w, http.StatusNotFound, "transaction not found or expired")
 		return
 	}
@@ -502,8 +502,8 @@ func (c *AuthController) handleApprovalVerify(w http.ResponseWriter, r *http.Req
 	}
 
 	// Retrieve suspended transaction to ensure it exists and belongs to the user
-	suspendedTx, ok := c.mcp.GetSuspendedTransaction(txHash)
-	if !ok {
+	suspendedTx, ok, err := c.mcp.GetSuspendedTransaction(r.Context(), txHash)
+	if err != nil || !ok {
 		c.responder.Error(w, http.StatusNotFound, "transaction not found or expired")
 		return
 	}
@@ -551,8 +551,8 @@ func (c *AuthController) handleApprovalVerify(w http.ResponseWriter, r *http.Req
 
 func (c *AuthController) handleCLIApproval(w http.ResponseWriter, r *http.Request, txHash, userID string) {
 	// Retrieve suspended transaction to ensure it exists and belongs to the user
-	suspendedTx, ok := c.mcp.GetSuspendedTransaction(txHash)
-	if !ok {
+	suspendedTx, ok, err := c.mcp.GetSuspendedTransaction(r.Context(), txHash)
+	if err != nil || !ok {
 		c.responder.Error(w, http.StatusNotFound, "transaction not found or expired")
 		return
 	}
@@ -589,7 +589,7 @@ func (c *AuthController) handleCLIApproval(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Persist the approval with signature before resuming
-	if err := c.db.ApproveSuspendedTransaction(txHash, userID, req.CliSignature, req.MtlsCertFingerprint); err != nil {
+	if err := c.db.ApproveSuspendedTransaction(r.Context(), txHash, userID, req.CliSignature, req.MtlsCertFingerprint); err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("auth controller: failed to approve transaction: %w", err).Error())
 		return
 	}
@@ -629,8 +629,8 @@ func (c *AuthController) handleApprovalPage(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Retrieve suspended transaction from MCP gateway
-	suspendedTx, ok := c.mcp.GetSuspendedTransaction(txHash)
-	if !ok {
+	suspendedTx, ok, err := c.mcp.GetSuspendedTransaction(r.Context(), txHash)
+	if err != nil || !ok {
 		http.Error(w, "transaction not found or expired", http.StatusNotFound)
 		return
 	}
@@ -817,7 +817,7 @@ func (c *AuthController) handleListSuspendedTransactions(w http.ResponseWriter, 
 	}
 
 	// Get suspended transactions from the gateway DB service
-	transactions, err := c.db.ListSuspendedTransactions(queryUserID)
+	transactions, err := c.db.ListSuspendedTransactions(r.Context(), queryUserID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("auth controller: failed to list suspended transactions: %w", err).Error())
 		return
@@ -872,7 +872,7 @@ func (c *AuthController) handlePublicAuthLoginVerify(w http.ResponseWriter, r *h
 		return
 	}
 
-	webSession, err := c.passkey.CreateWebSession(req.UserID)
+	webSession, err := c.webSessionSvc.CreateWebSession(req.UserID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to create web session")
 		return
@@ -1009,7 +1009,7 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 	}
 
 	// Create web session for local bootstrap
-	webSession, err := c.passkey.CreateWebSession(user.ID)
+	webSession, err := c.webSessionSvc.CreateWebSession(user.ID)
 	if err != nil {
 		c.logger.Error("Failed to create web session for bootstrap user", string(constants.ConnectionStateError), err, "user_id", user.ID)
 		c.responder.Error(w, http.StatusInternalServerError, "user created but web session failed")

@@ -126,7 +126,8 @@ func (b *PubSubBroker) Publish(channel string, data []byte) int {
 		msg, err := proto.Marshal(event)
 		if err != nil {
 			b.logger.Error("pubsub: failed to marshal event", "channel", channel, "error", err)
-			continue
+			b.mu.RUnlock()
+			return 0
 		}
 		for sub := range subs {
 			deliveries = append(deliveries, delivery{sub: sub, msg: msg})

@@ -91,7 +91,7 @@ func (s *InvitationService) FindActiveInvitationBySub(sub string) (*models.Invit
 	}
 	invitation.ID = docs[0].ID
 
-	if !invitation.IsValid() {
+	if invitation.IsValid() != nil {
 		return nil, nil // Expired
 	}
 

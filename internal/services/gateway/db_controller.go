@@ -497,8 +497,8 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		value, err := c.db.KVGet(r.Context(), key)
-		if err != nil {
+		value, ok := c.db.KVGet(key)
+		if !ok {
 			c.responder.Error(w, http.StatusNotFound, "key not found")
 			return
 		}
@@ -515,7 +515,7 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
-		if err := c.db.KVSet(r.Context(), key, req.Value, req.TTL); err != nil {
+		if err := c.db.KVSet(key, req.Value, req.TTL); err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}

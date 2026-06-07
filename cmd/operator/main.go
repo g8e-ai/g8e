@@ -419,7 +419,7 @@ func main() {
 	flag.StringVar(&privateKey, "key", "", "Private key")
 	flag.StringVar(&clientCert, "client-cert", "", "Client certificate (for mTLS)")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
-	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: "+constants.CACertLegacyBundlePath+" or fetch from /.well-known/g8e/pki/ca-bundle)")
+	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: "+constants.Paths.Infra.CaCertPath+" or fetch from /.well-known/g8e/pki/ca-bundle)")
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory Operator was launched from)")
 	flag.BoolVar(&cloudMode, string(constants.OperatorTypeCloud), true, "Cloud mode")
 	flag.StringVar(&cloudProvider, "provider", "", "Cloud provider")
@@ -475,7 +475,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -k, --key <key>         Private key\n")
 		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address or hostname of the operator\n")
-		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: "+constants.CACertLegacyBundlePath+" or fetch from /.well-known/g8e/pki/ca-bundle)\n")
+		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: "+constants.Paths.Infra.CaCertPath+" or fetch from /.well-known/g8e/pki/ca-bundle)\n")
 		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory Operator was launched from)\n")
 		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")
 		fmt.Fprintf(os.Stderr, "  -c, --cloud             Cloud Operator mode (for AWS/cloud CLI)\n")
@@ -613,7 +613,7 @@ func main() {
 
 	// Load trust bundle for TLS verification. Priority:
 	// 1. Explicit --trust-bundle path
-	// 2. Local PKI directory ("+constants.CACertLegacyBundlePath+")
+	// 2. Local PKI directory ("+constants.Paths.Infra.CaCertPath+")
 	// 3. Fetch from Operator /.well-known/g8e/pki/ca-bundle endpoint
 	trustLoaded := loadTrustBundle(logger, trustBundlePath, workingDir, trustStore)
 	if !trustLoaded {

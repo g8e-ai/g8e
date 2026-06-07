@@ -772,8 +772,8 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	// The app identity extracted from the peer certificate must be associated with the target.
 	if route.WebSessionID != "" {
 		webBindKey := sessionWebBindKey(route.WebSessionID)
-		raw, err := h.db.KVGet(r.Context(), webBindKey)
-		if err != nil {
+		raw, ok := h.db.KVGet(webBindKey)
+		if !ok {
 			h.logger.Warn("SSE push: target web session has no bound operators", "web_session_id", route.WebSessionID, "app_id", appID)
 			h.responder.Error(w, http.StatusForbidden, "target session not found or not bound")
 			return
@@ -959,8 +959,8 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
 		// Verify operator_session_id is bound to this web_session_id.
 		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
-		boundWebSessionID, err := h.db.KVGet(r.Context(), operatorBindKey)
-		if err != nil || boundWebSessionID != route.WebSessionID {
+		boundWebSessionID, ok := h.db.KVGet(operatorBindKey)
+		if !ok || boundWebSessionID != route.WebSessionID {
 			h.responder.Error(w, http.StatusForbidden, "operator session does not own this web session")
 			return
 		}
@@ -1041,8 +1041,8 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 		channel = "sse:cli:" + route.CLISessionID
 	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
 		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
-		boundWebSessionID, err := h.db.KVGet(r.Context(), operatorBindKey)
-		if err != nil || boundWebSessionID != route.WebSessionID {
+		boundWebSessionID, ok := h.db.KVGet(operatorBindKey)
+		if !ok || boundWebSessionID != route.WebSessionID {
 			h.responder.Error(w, http.StatusForbidden, "not authorized for this web session")
 			return
 		}

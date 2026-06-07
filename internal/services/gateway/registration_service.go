@@ -133,7 +133,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		TerminationReason string    `json:"termination_reason,omitempty"`
 	}
 	update := operatorTerminationUpdate{
-		Status:    constants.OperatorStatusTerminated,
+		Status:    string(constants.OperatorStatusTerminated),
 		UpdatedAt: time.Now().UTC(),
 	}
 	if reason != "" {
@@ -268,7 +268,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		OperatorCertSerial  string    `json:"operator_cert_serial,omitempty"`
 	}
 	update := operatorClaimUpdate{
-		Status:            constants.OperatorStatusActive,
+		Status:            string(constants.OperatorStatusActive),
 		OperatorSessionID: operatorSessionID,
 		SystemFingerprint: sanitizedFingerprint,
 		Claimed:           true,
@@ -368,13 +368,15 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	}
 
 	// Persist operator session
-	persistErr := s.operatorSessionSvc.PersistOperatorSession(
+	if persistErr := s.operatorSessionSvc.PersistOperatorSession(
 		operatorSessionID,
 		userID,
 		organizationID,
 		operator.ID,
 		"csr",
-	)
+	); persistErr != nil {
+		return nil, persistErr
+	}
 	return &models.OperatorRegistrationResponse{
 		Success:                true,
 		UserID:                 userID,
@@ -490,7 +492,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 
 		// 1. Update KV binding
 		// sessionBindOperators(operatorSessionId) -> webSessionId
-		if err := s.db.KVSet(r.Context(), sessionOperatorBindKey(op.OperatorSessionID), req.WebSessionID, 0); err != nil {
+		if err := s.db.KVSet(sessionOperatorBindKey(op.OperatorSessionID), req.WebSessionID, 0); err != nil {
 			failed = append(failed, opID)
 			lastErr = err
 			continue
@@ -499,9 +501,9 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 		// sessionWebBind(webSessionId) -> operatorSessionId (SET)
 		// We use a JSON array for the SET since our KV store is simple
 		webBindKey := sessionWebBindKey(req.WebSessionID)
-		raw, err := s.db.KVGet(r.Context(), webBindKey)
+		raw, kvFound := s.db.KVGet(webBindKey)
 		var sessionIDs []string
-		if err == nil {
+		if kvFound {
 			if err := json.Unmarshal([]byte(raw), &sessionIDs); err != nil {
 				s.logger.Warn("[REGISTRATION] Failed to unmarshal session IDs", "error", err)
 			}
@@ -521,7 +523,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				lastErr = fmt.Errorf("failed to marshal session IDs: %w", err)
 				continue
 			}
-			if err := s.db.KVSet(r.Context(), webBindKey, string(body), 0); err != nil {
+			if err := s.db.KVSet(webBindKey, string(body), 0); err != nil {
 				failed = append(failed, opID)
 				lastErr = fmt.Errorf("failed to set KV binding: %w", err)
 				continue
@@ -663,8 +665,8 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 			}
 
 			webBindKey := sessionWebBindKey(req.WebSessionID)
-			raw, err := s.db.KVGet(r.Context(), webBindKey)
-			if err == nil {
+			raw, kvFound := s.db.KVGet(webBindKey)
+			if kvFound {
 				var sessionIDs []string
 				if err := json.Unmarshal([]byte(raw), &sessionIDs); err != nil {
 					s.logger.Warn("[REGISTRATION] Failed to unmarshal session IDs", "error", err)
@@ -686,7 +688,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 						s.logger.Warn("[REGISTRATION] Failed to marshal session IDs", "error", err)
 						continue
 					}
-					if err := s.db.KVSet(r.Context(), webBindKey, string(body), 0); err != nil {
+					if err := s.db.KVSet(webBindKey, string(body), 0); err != nil {
 						s.logger.Warn("[REGISTRATION] Failed to set session IDs", "error", err)
 					}
 				}
