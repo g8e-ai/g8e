@@ -26,6 +26,9 @@ import (
 	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -36,9 +39,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 	t.Parallel()
 	// Generate test key
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		t.Fatalf("failed to generate signer: %v", err)
-	}
+	require.NoError(t, err, "failed to generate signer")
 
 	// Create verifier with EVAL_ANSWER in known action types
 	verifier := NewL4Warden(
@@ -63,9 +64,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 	}
 
 	payloadBytes, err := proto.Marshal(payload)
-	if err != nil {
-		t.Fatalf("Failed to marshal payload: %v", err)
-	}
+	require.NoError(t, err, "Failed to marshal payload")
 
 	// Create envelope with proper structure
 	envelope := &governance.GovernanceEnvelope{
@@ -84,9 +83,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 
 	// Compute transaction hash
 	computedHash, err := governance.GenerateMessageID(envelope)
-	if err != nil {
-		t.Fatalf("Failed to compute transaction hash: %v", err)
-	}
+	require.NoError(t, err, "Failed to compute transaction hash")
 	envelope.Id = computedHash
 	envelope.TransactionHash = computedHash
 
@@ -100,35 +97,18 @@ func TestEvalAnswerVerification(t *testing.T) {
 
 	// Verify the envelope
 	verified, err := verifier.VerifyEnvelope(context.Background(), envelope)
-	if err != nil {
-		t.Fatalf("VerifyEnvelope failed: %v", err)
-	}
+	require.NoError(t, err, "VerifyEnvelope failed")
 
-	if verified.ActionType != constants.ActionTypeEvalAnswer {
-		t.Errorf("Expected action type EVAL_ANSWER, got %s", verified.ActionType)
-	}
+	assert.Equal(t, constants.ActionTypeEvalAnswer, verified.ActionType, "Expected action type EVAL_ANSWER")
 
 	// Check that the decoded payload is correct
 	evalPayload, ok := verified.DecodedPayload.(*operatorv1.EvalAnswerRequested)
-	if !ok {
-		t.Fatalf("Decoded payload is not EvalAnswerRequested, got %T", verified.DecodedPayload)
-	}
+	require.True(t, ok, "Decoded payload is not EvalAnswerRequested, got %T", verified.DecodedPayload)
 
-	if evalPayload.PromptId != "test-prompt-001" {
-		t.Errorf("Expected prompt_id test-prompt-001, got %s", evalPayload.PromptId)
-	}
-
-	if evalPayload.Benchmark != "ifeval" {
-		t.Errorf("Expected benchmark ifeval, got %s", evalPayload.Benchmark)
-	}
-
-	if evalPayload.Answer != "This is a test answer." {
-		t.Errorf("Expected answer 'This is a test answer.', got %s", evalPayload.Answer)
-	}
-
-	if evalPayload.Model != "openai:gpt-4" {
-		t.Errorf("Expected model openai:gpt-4, got %s", evalPayload.Model)
-	}
+	assert.Equal(t, "test-prompt-001", evalPayload.PromptId, "Expected prompt_id test-prompt-001")
+	assert.Equal(t, "ifeval", evalPayload.Benchmark, "Expected benchmark ifeval")
+	assert.Equal(t, "This is a test answer.", evalPayload.Answer, "Expected answer 'This is a test answer.'")
+	assert.Equal(t, "openai:gpt-4", evalPayload.Model, "Expected model openai:gpt-4")
 
 	// 4. Execute through L5Actuator
 	keyID := "test-key-id"
@@ -146,25 +126,12 @@ func TestEvalAnswerVerification(t *testing.T) {
 	}
 
 	receipt, err := actuator.Execute(context.Background(), verified, nil)
-	if err != nil {
-		t.Fatalf("L5Actuator execution failed: %v", err)
-	}
+	require.NoError(t, err, "L5Actuator execution failed")
 
-	if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
-		t.Errorf("Expected status COMPLETED, got %v", receipt.Status)
-	}
-
-	if receipt.ResultSummary != payload.Answer {
-		t.Errorf("Expected result summary '%s', got '%s'", payload.Answer, receipt.ResultSummary)
-	}
-
-	if receipt.SignerKeyId != keyID {
-		t.Errorf("Expected signer key ID %s, got %s", keyID, receipt.SignerKeyId)
-	}
-
-	if receipt.Signature == "" {
-		t.Error("Expected non-empty signature in receipt")
-	}
+	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, receipt.Status, "Expected status COMPLETED")
+	assert.Equal(t, payload.Answer, receipt.ResultSummary, "Expected result summary '%s'", payload.Answer)
+	assert.Equal(t, keyID, receipt.SignerKeyId, "Expected signer key ID %s", keyID)
+	assert.NotEmpty(t, receipt.Signature, "Expected non-empty signature in receipt")
 }
 
 // TestEvalAnswerIsNotMutation verifies that EVAL_ANSWER is not treated as a mutation
@@ -173,16 +140,9 @@ func TestEvalAnswerIsNotMutation(t *testing.T) {
 	t.Parallel()
 	verifier := &L4Warden{}
 
-	if !verifier.isMutation(constants.ActionTypeEvalAnswer) {
-		t.Error("EVAL_ANSWER should be treated as a mutation")
-	}
+	assert.False(t, verifier.isMutation(constants.ActionTypeEvalAnswer), "EVAL_ANSWER should not be treated as a mutation")
 
 	// Verify that actual mutations are still detected
-	if !verifier.isMutation(constants.ActionTypeExecuteBash) {
-		t.Error("EXECUTE_BASH should be treated as a mutation")
-	}
-
-	if !verifier.isMutation(constants.ActionTypeFileEdit) {
-		t.Error("FILE_EDIT should be treated as a mutation")
-	}
+	assert.True(t, verifier.isMutation(constants.ActionTypeExecuteBash), "EXECUTE_BASH should be treated as a mutation")
+	assert.True(t, verifier.isMutation(constants.ActionTypeFileEdit), "FILE_EDIT should be treated as a mutation")
 }

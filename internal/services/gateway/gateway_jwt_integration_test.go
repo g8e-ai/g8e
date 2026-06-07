@@ -126,12 +126,19 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	}
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
-	err = pki.EnsurePKI(nil)
+	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	require.NoError(t, personaSvc.GetOrCreateDefaultPersonas())
+	// Initialize default personas
+	for _, persona := range DefaultPersonaDefinitions() {
+		existing, err := personaSvc.GetByID(persona.ID)
+		require.NoError(t, err)
+		if existing == nil {
+			require.NoError(t, personaSvc.CreatePersona(&persona))
+		}
+	}
 
 	// Create an invitation for JIT provisioning
 	_, err = userSvc.CreateInvitation("tenant-abc", "user-1234", "bootstrap", []string{"admin"}, 24*time.Hour)
@@ -157,7 +164,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
 
-	h := newHTTPHandler(HTTPHandlerDependencies{
+	h, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:               cfg,
 		Logger:            logger,
 		DB:                db,
@@ -173,6 +180,9 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		IsReady:           func() bool { return true },
 		IsGovernanceReady: func() bool { return true },
 	})
+	if err != nil {
+		t.Fatalf("failed to create HTTP handler: %v", err)
+	}
 
 	cfg.Gateway.RateLimitRPS = 1000
 	cfg.Gateway.RateLimitBurst = 1000
@@ -268,12 +278,19 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 	}
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
-	err = pki.EnsurePKI(nil)
+	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	require.NoError(t, personaSvc.GetOrCreateDefaultPersonas())
+	// Initialize default personas
+	for _, persona := range DefaultPersonaDefinitions() {
+		existing, err := personaSvc.GetByID(persona.ID)
+		require.NoError(t, err)
+		if existing == nil {
+			require.NoError(t, personaSvc.CreatePersona(&persona))
+		}
+	}
 
 	// Create an invitation for JIT provisioning
 	_, err = userSvc.CreateInvitation("tenant-abc", "jit-user-001", "bootstrap", []string{"admin"}, 24*time.Hour)
@@ -298,7 +315,7 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
 
-	h := newHTTPHandler(HTTPHandlerDependencies{
+	h, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:               cfg,
 		Logger:            logger,
 		DB:                db,
@@ -314,6 +331,9 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 		IsReady:           func() bool { return true },
 		IsGovernanceReady: func() bool { return true },
 	})
+	if err != nil {
+		t.Fatalf("failed to create HTTP handler: %v", err)
+	}
 
 	cfg.Gateway.RateLimitRPS = 1000
 	cfg.Gateway.RateLimitBurst = 1000
@@ -424,12 +444,19 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	}
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
-	err = pki.EnsurePKI(nil)
+	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	require.NoError(t, personaSvc.GetOrCreateDefaultPersonas())
+	// Initialize default personas
+	for _, persona := range DefaultPersonaDefinitions() {
+		existing, err := personaSvc.GetByID(persona.ID)
+		require.NoError(t, err)
+		if existing == nil {
+			require.NoError(t, personaSvc.CreatePersona(&persona))
+		}
+	}
 
 	// Create an invitation for JIT provisioning
 	_, err = userSvc.CreateInvitation("tenant-abc", "stepup-user-001", "bootstrap", []string{"admin"}, 24*time.Hour)
@@ -454,7 +481,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
 
-	h := newHTTPHandler(HTTPHandlerDependencies{
+	h, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:               cfg,
 		Logger:            logger,
 		DB:                db,
@@ -470,6 +497,9 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 		IsReady:           func() bool { return true },
 		IsGovernanceReady: func() bool { return true },
 	})
+	if err != nil {
+		t.Fatalf("failed to create HTTP handler: %v", err)
+	}
 
 	cfg.Gateway.RateLimitRPS = 1000
 	cfg.Gateway.RateLimitBurst = 1000
@@ -488,12 +518,20 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	token := generateSignedJWT(t, privKey, claims)
 
 	// Add a mock passkey credential directly to the user to simulate first credential already registered
-	user, err := userSvc.GetOrCreateBySub("stepup-user-001")
+	user, err := userSvc.GetBySub("stepup-user-001")
 	require.NoError(t, err)
+	if user == nil {
+		// Create user if doesn't exist
+		invitation, err := userSvc.FindActiveInvitationBySub("stepup-user-001")
+		require.NoError(t, err)
+		require.NotNil(t, invitation)
+		user, err = userSvc.CreateUserFromInvitation("stepup-user-001", invitation)
+		require.NoError(t, err)
+	}
 	require.NotNil(t, user)
 
 	// Manually add a credential to simulate having already registered one
-	user.PasskeyCredentials = []models.PasskeyCredential{
+	credentials := []models.PasskeyCredential{
 		{
 			ID:              []byte("mock-credential-id"),
 			PublicKey:       []byte("mock-public-key"),
@@ -505,9 +543,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 			},
 		},
 	}
-	_, err = userSvc.UpdateUser(user.ID, map[string]interface{}{
-		"passkey_credentials": user.PasskeyCredentials,
-	})
+	err = userSvc.UpdatePasskeyCredentials(user.ID, credentials)
 	require.NoError(t, err)
 
 	t.Run("After one credential exists, JWT-only path is rejected and step-up required", func(t *testing.T) {
@@ -562,12 +598,19 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	require.NoError(t, err)
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
-	err = pki.EnsurePKI(nil)
+	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	require.NoError(t, personaSvc.GetOrCreateDefaultPersonas())
+	// Initialize default personas
+	for _, persona := range DefaultPersonaDefinitions() {
+		existing, err := personaSvc.GetByID(persona.ID)
+		require.NoError(t, err)
+		if existing == nil {
+			require.NoError(t, personaSvc.CreatePersona(&persona))
+		}
+	}
 
 	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
@@ -582,7 +625,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		}
 		token := generateSignedJWT(t, privKey, claims)
 
-		_, err := ParseAndVerifyJWT(token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
+		_, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "audience mismatch")
 	})
@@ -597,7 +640,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		}
 		token := generateSignedJWT(t, privKey, claims)
 
-		_, err := ParseAndVerifyJWT(token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
+		_, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "issuer mismatch")
 	})
@@ -613,7 +656,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		}
 		token := generateSignedJWT(t, privKey, claims)
 
-		_, err := ParseAndVerifyJWT(token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
+		_, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "not yet valid")
 	})
@@ -629,7 +672,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		}
 		token := generateSignedJWT(t, privKey, claims)
 
-		jwt, err := ParseAndVerifyJWT(token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
+		jwt, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
 		assert.NoError(t, err)
 		assert.Equal(t, "user-123", jwt.Claims.Sub)
 		assert.Equal(t, "https://test-idp.example.com", jwt.Claims.Iss)
@@ -646,7 +689,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		}
 		token := generateSignedJWT(t, privKey, claims)
 
-		jwt, err := ParseAndVerifyJWT(token, authNoValidation.jwks, authNoValidation.jwtRole, authNoValidation.jwtIssuer, authNoValidation.jwtAudience)
+		jwt, err := ParseAndVerifyJWT(context.Background(), token, authNoValidation.jwks, authNoValidation.jwtRole, authNoValidation.jwtIssuer, authNoValidation.jwtAudience)
 		assert.NoError(t, err)
 		assert.Equal(t, "user-123", jwt.Claims.Sub)
 	})

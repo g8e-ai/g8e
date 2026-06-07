@@ -653,6 +653,12 @@ func (s *CanonicalDBService) Close() error {
 		s.logger.Warn("CanonicalDBService shutdown timeout, forcing close")
 	}
 
+	if s.AuditStore != nil {
+		if err := s.AuditStore.Close(); err != nil {
+			s.logger.Error("AuditStore close error", "error", err)
+		}
+	}
+
 	if err := s.db.Close(); err != nil {
 		s.logger.Error("Database close error", "error", err)
 		return err

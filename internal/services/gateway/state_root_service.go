@@ -17,6 +17,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"hash"
 	"log/slog"
 	"sync"
@@ -66,7 +67,7 @@ func (s *StateRootService) GetCurrentStateRoot() (string, error) {
 	// Version changed or cache is empty, recalculate
 	root, err := s.calculateStateRoot()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("state_root_service: calculate state root: %w", err)
 	}
 
 	// Update cache
@@ -82,7 +83,7 @@ func (s *StateRootService) GetCurrentStateRoot() (string, error) {
 		sqliteutil.FormatTimestamp(time.Now().UTC()),
 	)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("state_root_service: persist state root: %w", err)
 	}
 	return root, nil
 }
@@ -101,7 +102,7 @@ func (s *StateRootService) InvalidateCache() error {
 func (s *StateRootService) calculateStateRootUncached() (string, error) {
 	root, err := s.calculateStateRoot()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("state_root_service: calculate state root uncached: %w", err)
 	}
 	_, err = s.db.ExecWithRetry(
 		`INSERT INTO state_root (id, root, updated_at)
@@ -111,7 +112,7 @@ func (s *StateRootService) calculateStateRootUncached() (string, error) {
 		sqliteutil.FormatTimestamp(time.Now().UTC()),
 	)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("state_root_service: persist state root uncached: %w", err)
 	}
 	return root, nil
 }
@@ -126,12 +127,12 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 	if err := s.hashTableToStream(h, "SELECT collection, id, data FROM documents ORDER BY collection, id", nil, func(r *sql.Rows) error {
 		var collection, id, data string
 		if err := r.Scan(&collection, &id, &data); err != nil {
-			return err
+			return fmt.Errorf("state_root_service: scan documents row: %w", err)
 		}
 		return writeRowToHash(h, "documents", collection, id, data)
 	}); err != nil {
 		s.logger.Error("Failed to query documents for state root calculation", "error", err)
-		return "", err
+		return "", fmt.Errorf("state_root_service: hash documents table: %w", err)
 	}
 
 	now := sqliteutil.NowTimestamp()
@@ -142,12 +143,12 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 	if err := s.hashTableToStream(h, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", []interface{}{now}, func(r *sql.Rows) error {
 		var key, value, expiresAt string
 		if err := r.Scan(&key, &value, &expiresAt); err != nil {
-			return err
+			return fmt.Errorf("state_root_service: scan kv_store row: %w", err)
 		}
 		return writeRowToHash(h, "kv_store", key, value, expiresAt)
 	}); err != nil {
 		s.logger.Error("Failed to query kv_store for state root calculation", "error", err)
-		return "", err
+		return "", fmt.Errorf("state_root_service: hash kv_store table: %w", err)
 	}
 
 	// 3. Blobs (Authoritative)
@@ -157,12 +158,12 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 		var namespace, id, contentType, dataHex, expiresAt string
 		var size int64
 		if err := r.Scan(&namespace, &id, &size, &contentType, &dataHex, &expiresAt); err != nil {
-			return err
+			return fmt.Errorf("state_root_service: scan blobs row: %w", err)
 		}
 		return writeRowToHash(h, "blobs", namespace, id, size, contentType, dataHex, expiresAt)
 	}); err != nil {
 		s.logger.Error("Failed to query blobs for state root calculation", "error", err)
-		return "", err
+		return "", fmt.Errorf("state_root_service: hash blobs table: %w", err)
 	}
 
 	// 4. Nonces and SSE events are EXCLUDED (volatile/metadata)
@@ -176,7 +177,7 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 func (s *StateRootService) hashTableToStream(h hash.Hash, query string, args []interface{}, scan func(*sql.Rows) error) error {
 	rows, err := s.db.QueryWithRetry(query, args...)
 	if err != nil {
-		return err
+		return fmt.Errorf("state_root_service: query table: %w", err)
 	}
 	defer rows.Close()
 
@@ -185,5 +186,8 @@ func (s *StateRootService) hashTableToStream(h hash.Hash, query string, args []i
 			return err
 		}
 	}
-	return rows.Err()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("state_root_service: iterate rows: %w", err)
+	}
+	return nil
 }

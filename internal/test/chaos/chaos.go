@@ -267,7 +267,7 @@ func (m *memReplayStore) Close() error {
 
 type chaosL3Notary struct{}
 
-func (c *chaosL3Notary) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+func (c *chaosL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	return true, nil
 }
 

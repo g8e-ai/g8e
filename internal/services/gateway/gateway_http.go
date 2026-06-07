@@ -50,7 +50,9 @@ type HTTPHandlerDependencies struct {
 	Pubsub            *PubSubBroker
 	Auth              *AuthService
 	PKI               *PKIAuthority
-	SessionSvc        *SessionsService
+	CLISessionSvc     *CLISessionService
+	OperatorSessionSvc *OperatorSessionService
+	WebSessionSvc     *WebSessionService
 	Reg               *RegistrationService
 	Passkey           *PasskeyService
 	UserSvc           *UserService
@@ -74,7 +76,9 @@ type HTTPHandler struct {
 	pubsub            *PubSubBroker
 	auth              *AuthService
 	pki               *PKIAuthority
-	sessionSvc        *SessionsService
+	cliSessionSvc     *CLISessionService
+	operatorSessionSvc *OperatorSessionService
+	webSessionSvc     *WebSessionService
 	reg               *RegistrationService
 	passkey           *PasskeyService
 	userSvc           *UserService
@@ -105,7 +109,7 @@ type HTTPHandler struct {
 	limiterLastUsed map[string]time.Time
 }
 
-func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
+func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	h := &HTTPHandler{
 		cfg:               deps.Cfg,
 		logger:            deps.Logger,
@@ -113,7 +117,9 @@ func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
 		pubsub:            deps.Pubsub,
 		auth:              deps.Auth,
 		pki:               deps.PKI,
-		sessionSvc:        deps.SessionSvc,
+		cliSessionSvc:     deps.CLISessionSvc,
+		operatorSessionSvc: deps.OperatorSessionSvc,
+		webSessionSvc:     deps.WebSessionSvc,
 		reg:               deps.Reg,
 		passkey:           deps.Passkey,
 		userSvc:           deps.UserSvc,
@@ -126,22 +132,22 @@ func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
 		limiterLastUsed:   make(map[string]time.Time),
 	}
 
-	// Initialize script templates (panic on failure - this is a fatal startup error)
+	// Initialize script templates
 	if err := scripts.Init(deps.Logger); err != nil {
-		panic(fmt.Sprintf("failed to initialize script templates: %v", err))
+		return nil, fmt.Errorf("gateway: failed to initialize script templates: %w", err)
 	}
 
 	// Initialize controllers
 	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.DB, deps.PKI, deps.AppEnrollment, deps.Reg, deps.Responder)
 	h.dbController = newDBController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Pubsub, deps.UserSvc, deps.Responder)
-	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.SessionSvc, deps.MCPGateway, deps.Responder)
+	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.WebSessionSvc, deps.MCPGateway, deps.Responder)
 	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.DB, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
 
 	// Build router once to avoid per-request overhead
 	h.router = h.buildRouter()
 
-	return h
+	return h, nil
 }
 
 func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
@@ -814,7 +820,12 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		var cliSess models.CLISession
-		b, _ := json.Marshal(doc.Data)
+		b, err := json.Marshal(doc.Data)
+		if err != nil {
+			h.logger.Error("SSE push: failed to marshal CLI session", "cli_session_id", route.CLISessionID, "error", err)
+			h.responder.Error(w, http.StatusInternalServerError, "failed to verify session ownership")
+			return
+		}
 		if err := json.Unmarshal(b, &cliSess); err != nil {
 			h.logger.Error("SSE push: failed to parse CLI session", "cli_session_id", route.CLISessionID, "error", err)
 			h.responder.Error(w, http.StatusInternalServerError, "failed to verify session ownership")
@@ -930,7 +941,12 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 			return
 		}
 		var cliSess models.CLISession
-		b, _ := json.Marshal(doc.ForWire())
+		b, err := json.Marshal(doc.ForWire())
+		if err != nil {
+			h.logger.Error("Failed to marshal CLI session", string(constants.ConnectionStateError), err)
+			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
+			return
+		}
 		if err := json.Unmarshal(b, &cliSess); err != nil {
 			h.logger.Error("Failed to unmarshal CLI session", string(constants.ConnectionStateError), err)
 			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
@@ -1009,7 +1025,11 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 			return
 		}
 		var cliSess models.CLISession
-		b, _ := json.Marshal(doc.ForWire())
+		b, err := json.Marshal(doc.ForWire())
+		if err != nil {
+			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
+			return
+		}
 		if err := json.Unmarshal(b, &cliSess); err != nil {
 			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
 			return

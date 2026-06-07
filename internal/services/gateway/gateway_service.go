@@ -55,9 +55,11 @@ type GatewayModeService struct {
 	pki          *PKIAuthority
 	reg          *RegistrationService
 	passkey      *PasskeyService
-	userSvc      *UserService
-	sessionSvc   *SessionsService
-	mcpGateway   *mcp.GatewayService
+	userSvc             *UserService
+	cliSessionSvc       *CLISessionService
+	operatorSessionSvc  *OperatorSessionService
+	webSessionSvc       *WebSessionService
+	mcpGateway          *mcp.GatewayService
 	responder    *response.Writer
 	server       *http.Server
 	publicServer *http.Server
@@ -93,12 +95,23 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 	}
 
 	personaSvc := NewPersonaService(db, logger)
-	if err := personaSvc.GetOrCreateDefaultPersonas(); err != nil {
-		return nil, fmt.Errorf("failed to initialize default personas: %w", err)
+	// Initialize default personas
+	for _, persona := range DefaultPersonaDefinitions() {
+		existing, err := personaSvc.GetByID(persona.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check existing persona %s: %w", persona.ID, err)
+		}
+		if existing == nil {
+			if err := personaSvc.CreatePersona(&persona); err != nil {
+				return nil, fmt.Errorf("failed to create persona %s: %w", persona.ID, err)
+			}
+		}
 	}
 
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, jwksProvider, cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
-	sessionSvc := NewSessionService(db, logger)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	operatorSessionSvc := NewOperatorSessionService(db, logger)
+	webSessionSvc := NewWebSessionService(db, logger)
 
 	// Detect network identity for certificate generation based on mode
 	extraIPs, extraDNSNames, err := resolveGatewayCertificateIdentity(cfg.Gateway.CertMode, cfg.Gateway.NetworkIdentityFile, network.NewDetector(logger), logger)
@@ -106,16 +119,16 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		return nil, err
 	}
 	if len(extraDNSNames) > 0 {
-		if err := pki.EnsurePKIWithNames(extraIPs, extraDNSNames); err != nil {
-			return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
+		if err := pki.InitializePKIWithNames(extraIPs, extraDNSNames); err != nil {
+			return nil, fmt.Errorf("failed to initialize PKI hierarchy: %w", err)
 		}
 	} else {
-		if err := pki.EnsurePKI(extraIPs); err != nil {
-			return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
+		if err := pki.InitializePKI(extraIPs); err != nil {
+			return nil, fmt.Errorf("failed to initialize PKI hierarchy: %w", err)
 		}
 	}
 
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 
 	// Initialize passkey service for L3 brokerage
 	passkeyCfg := &PasskeyConfig{
@@ -146,9 +159,11 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		pki:        pki,
 		reg:        reg,
 		passkey:    passkey,
-		userSvc:    userSvc,
-		sessionSvc: sessionSvc,
-		extraIPs:   extraIPs,
+		userSvc:             userSvc,
+		cliSessionSvc:       cliSessionSvc,
+		operatorSessionSvc:  operatorSessionSvc,
+		webSessionSvc:       webSessionSvc,
+		extraIPs:            extraIPs,
 		mcpGateway: mcpGateway,
 		responder: res,
 	}
@@ -253,8 +268,10 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 	personaSvc := NewPersonaService(db, logger)
 	res := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, nil, "", "", "")
-	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	operatorSessionSvc := NewOperatorSessionService(db, logger)
+	webSessionSvc := NewWebSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 
 	// Initialize passkey service for L3 brokerage (test configuration)
 	passkeyCfg := &PasskeyConfig{
@@ -283,9 +300,11 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 		pki:        pki,
 		reg:        reg,
 		passkey:    passkey,
-		userSvc:    userSvc,
-		sessionSvc: sessionSvc,
-		extraIPs:   nil, // Test configuration does not use extra IPs
+		userSvc:             userSvc,
+		cliSessionSvc:       cliSessionSvc,
+		operatorSessionSvc:  operatorSessionSvc,
+		webSessionSvc:       webSessionSvc,
+		extraIPs:            nil, // Test configuration does not use extra IPs
 		mcpGateway: mcpGateway,
 		responder: res,
 	}
@@ -304,7 +323,9 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 	pubsub := ls.pubsub
 	auth := ls.auth
 	pki := ls.pki
-	sessionSvc := ls.sessionSvc
+	cliSessionSvc := ls.cliSessionSvc
+	operatorSessionSvc := ls.operatorSessionSvc
+	webSessionSvc := ls.webSessionSvc
 	reg := ls.reg
 	passkey := ls.passkey
 	userSvc := ls.userSvc
@@ -315,14 +336,16 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 	ls.mcpGateway.SetA2ADependencies(cfg.Gateway.A2ADownstreamURL)
 	publicBaseURL := fmt.Sprintf("https://localhost:%d", cfg.Gateway.HTTPSPort)
 	ls.mcpGateway.SetPublicBaseURL(publicBaseURL)
-	ls.handler = newHTTPHandler(HTTPHandlerDependencies{
+	handler, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:               cfg,
 		Logger:            logger,
 		DB:                db,
 		Pubsub:            pubsub,
 		Auth:              auth,
 		PKI:               pki,
-		SessionSvc:        sessionSvc,
+		CLISessionSvc:     cliSessionSvc,
+		OperatorSessionSvc: operatorSessionSvc,
+		WebSessionSvc:     webSessionSvc,
 		Reg:               reg,
 		Passkey:           passkey,
 		UserSvc:           userSvc,
@@ -332,6 +355,10 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 		IsReady:           ls.IsReady,
 		IsGovernanceReady: ls.IsGovernanceReady,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("gateway: failed to create HTTP handler: %w", err)
+	}
+	ls.handler = handler
 
 	// Build a map of ports to identify port assignments.
 	// HTTP port uses plain HTTP for bootstrap and MCP routes.
@@ -484,7 +511,7 @@ type GovernanceDeps struct {
 // The L3 notary is a composite that handles both WebAuthn (web sessions) and mTLS (CLI sessions).
 func (ls *GatewayModeService) GetGovernanceDeps() *GovernanceDeps {
 	// Create composite L3 notary that handles both web and CLI sessions
-	cliL3 := NewCLIL3Notary(ls.db, ls.pki, ls.logger, ls.userSvc, ls.sessionSvc)
+	cliL3 := NewCLIL3Notary(ls.db, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
 	compositeL3 := NewCompositeL3Verifier(ls.passkey, cliL3, ls.logger)
 
 	return &GovernanceDeps{

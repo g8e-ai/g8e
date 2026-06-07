@@ -43,6 +43,15 @@ type fakeEnvelopeProcessor struct {
 	calls      int
 }
 
+// actionReceiptJSON represents the JSON response format for ActionReceipt
+// using protojson field naming conventions.
+type actionReceiptJSON struct {
+	TransactionID   string `json:"transaction_id"`
+	TransactionHash string `json:"transaction_hash"`
+	Signature       string `json:"signature"`
+	SignerKeyID     string `json:"signer_key_id"`
+}
+
 func (f *fakeEnvelopeProcessor) ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error) {
 	f.calls++
 	f.gotPayload = append([]byte(nil), payload...)
@@ -193,12 +202,12 @@ func TestGovernanceEnvelope_Success_Returns200WithSignedReceipt(t *testing.T) {
 	require.Equal(t, body, proc.gotPayload, "handler must forward the body unchanged to the processor")
 
 	// Receipt should be returned as JSON. Field names follow protojson.
-	var got map[string]interface{}
+	var got actionReceiptJSON
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
-	require.Equal(t, "tx-abc", got["transaction_id"])
-	require.Equal(t, "abc123", got["transaction_hash"])
-	require.Equal(t, "deadbeef", got["signature"])
-	require.Equal(t, "Actuator-key-id", got["signer_key_id"])
+	require.Equal(t, "tx-abc", got.TransactionID)
+	require.Equal(t, "abc123", got.TransactionHash)
+	require.Equal(t, "deadbeef", got.Signature)
+	require.Equal(t, "Actuator-key-id", got.SignerKeyID)
 }
 
 func TestGovernanceEnvelope_FailedExecution_StillReturns200(t *testing.T) {
@@ -262,7 +271,8 @@ func TestVerifyEnvelopeIdentityBinding_NoURISAN_ReturnsError(t *testing.T) {
 
 func TestVerifyEnvelopeIdentityBinding_MatchingOperatorSPIFFEID_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	spiffeURL, _ := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
+	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
+	require.NoError(t, parseErr)
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{
@@ -276,7 +286,8 @@ func TestVerifyEnvelopeIdentityBinding_MatchingOperatorSPIFFEID_ReturnsNil(t *te
 
 func TestVerifyEnvelopeIdentityBinding_MismatchedOperatorID_ReturnsError(t *testing.T) {
 	t.Parallel()
-	spiffeURL, _ := url.Parse("spiffe://g8e.local/operator/org-1/op-2/sess-1")
+	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/operator/org-1/op-2/sess-1")
+	require.NoError(t, parseErr)
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{
@@ -291,7 +302,8 @@ func TestVerifyEnvelopeIdentityBinding_MismatchedOperatorID_ReturnsError(t *test
 
 func TestVerifyEnvelopeIdentityBinding_MatchingAppSPIFFEID_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	spiffeURL, _ := url.Parse("spiffe://g8e.local/app/op-1")
+	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/app/op-1")
+	require.NoError(t, parseErr)
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{
@@ -305,7 +317,8 @@ func TestVerifyEnvelopeIdentityBinding_MatchingAppSPIFFEID_ReturnsNil(t *testing
 
 func TestVerifyEnvelopeIdentityBinding_InvalidJSON_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	spiffeURL, _ := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
+	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
+	require.NoError(t, parseErr)
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{
@@ -319,7 +332,8 @@ func TestVerifyEnvelopeIdentityBinding_InvalidJSON_ReturnsNil(t *testing.T) {
 
 func TestVerifyEnvelopeIdentityBinding_NoIdentityFields_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	spiffeURL, _ := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
+	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
+	require.NoError(t, parseErr)
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{

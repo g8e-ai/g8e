@@ -288,12 +288,131 @@ type WebSessionResponse struct {
 	WebSessionID string `json:"web_session_id"`
 }
 
+// PasskeyRegisterChallengeResponse is the typed response for POST /api/auth/passkeys/register/challenge.
+type PasskeyRegisterChallengeResponse struct {
+	Success bool                  `json:"success"`
+	Options *protocol.CredentialCreation `json:"options,omitempty"`
+}
+
+// PasskeyAuthVerifyResponse is the typed response for POST /api/auth/passkeys/authenticate/verify.
+type PasskeyAuthVerifyResponse struct {
+	Success    bool               `json:"success"`
+	UserID     string             `json:"user_id,omitempty"`
+	Credential *PasskeyCredential `json:"credential,omitempty"`
+	Error      string             `json:"error,omitempty"`
+	WebSession *WebSessionInfo    `json:"web_session,omitempty"`
+}
+
+// WebSessionInfo contains web session details.
+type WebSessionInfo struct {
+	ID                 string `json:"id"`
+	ExpiresAtUnixMs    int64  `json:"expires_at_unix_ms"`
+}
+
+// UserCreateResponse is the typed response for POST /api/users.
+type UserCreateResponse struct {
+	Success bool   `json:"success"`
+	UserID  string `json:"user_id"`
+}
+
+// SuspendedTransactionsResponse is the typed response for GET /api/approvals.
+type SuspendedTransactionsResponse struct {
+	Transactions []SuspendedTxResponse `json:"transactions"`
+}
+
+// SuspendedTxResponse represents a suspended transaction.
+type SuspendedTxResponse struct {
+	TransactionHash string    `json:"transaction_hash"`
+	CreatedAt       time.Time `json:"created_at"`
+	ExpiresAt       time.Time `json:"expires_at"`
+	ToolName        string    `json:"tool_name"`
+	UserID          string    `json:"user_id"`
+	OperatorID      string    `json:"operator_id"`
+}
+
+// BootstrapResponse is the typed response for POST /api/auth/bootstrap.
+type BootstrapResponse struct {
+	Success            bool          `json:"success"`
+	User               *User         `json:"user,omitempty"`
+	WebSession         *WebSessionInfo `json:"web_session,omitempty"`
+	OperatorCert       string        `json:"operator_cert,omitempty"`
+	OperatorCertChain  string        `json:"operator_cert_chain,omitempty"`
+	OperatorSessionID  string        `json:"operator_session_id,omitempty"`
+	OperatorID         string        `json:"operator_id,omitempty"`
+	CLISessionID       string        `json:"cli_session_id,omitempty"`
+	CLICert            string        `json:"cli_cert,omitempty"`
+	CLICertChain       string        `json:"cli_cert_chain,omitempty"`
+	HubTrustBundle     string        `json:"hub_trust_bundle,omitempty"`
+}
+
+// CLIEnrollmentResponse is the typed response for POST /api/auth/cli/enroll.
+type CLIEnrollmentResponse struct {
+	Success        bool   `json:"success"`
+	CLISessionID   string `json:"cli_session_id"`
+	CLICert        string `json:"cli_cert"`
+	CLICertChain   string `json:"cli_cert_chain"`
+	HubTrustBundle string `json:"hub_trust_bundle"`
+	UserID         string `json:"user_id"`
+}
+
+// DeviceEnrollmentResponse is the typed response for POST /api/auth/device/enroll.
+type DeviceEnrollmentResponse struct {
+	Success            bool   `json:"success"`
+	User               *User  `json:"user,omitempty"`
+	OperatorCert       string `json:"operator_cert"`
+	OperatorCertChain  string `json:"operator_cert_chain"`
+	HubTrustBundle     string `json:"hub_trust_bundle"`
+	OperatorSessionID  string `json:"operator_session_id"`
+	OperatorID         string `json:"operator_id"`
+	CLISessionID       string `json:"cli_session_id"`
+	CLICert            string `json:"cli_cert"`
+	CLICertChain       string `json:"cli_cert_chain"`
+	UserID             string `json:"user_id"`
+}
+
+// PKIFingerprintResponse is the typed response for GET /.well-known/g8e/pki/fingerprint.
+type PKIFingerprintResponse struct {
+	RootCA string `json:"root_ca"`
+}
+
+// PKICSRSignResponse is the typed response for POST /.well-known/g8e/pki/csr/sign.
+type PKICSRSignResponse struct {
+	CertificatePEM       string `json:"certificate_pem"`
+	CertificateChainPEM string `json:"certificate_chain_pem"`
+}
+
+// PlatformSettings represents the typed settings within platform_settings.
+// Authority: protocol/models/platform_settings.json
+type PlatformSettings struct {
+	ActuatorKeyID              string `json:"actuator_key_id"`
+	OperatorSessionID          string `json:"operator_session_id,omitempty"`
+	LLMCommandGenEnabled       bool   `json:"llm_command_gen_enabled,omitempty"`
+	LLMCommandGenVerifier      bool   `json:"llm_command_gen_verifier,omitempty"`
+	LLMCommandGenPasses        int    `json:"llm_command_gen_passes,omitempty"`
+	GoogleSearchEnabled        bool   `json:"google_search_enabled,omitempty"`
+	GoogleSearchAPIKey         string `json:"google_search_api_key,omitempty"`
+	GoogleSearchEngineID       string `json:"google_search_engine_id,omitempty"`
+	VertexSearchEnabled        bool   `json:"vertex_search_enabled,omitempty"`
+	VertexSearchProjectID      string `json:"vertex_search_project_id,omitempty"`
+	VertexSearchEngineID      string `json:"vertex_search_engine_id,omitempty"`
+	VertexSearchLocation      string `json:"vertex_search_location,omitempty"`
+	VertexSearchAPIKey        string `json:"vertex_search_api_key,omitempty"`
+	EnableCommandWhitelisting  bool   `json:"enable_command_whitelisting,omitempty"`
+	EnableCommandBlacklisting bool   `json:"enable_command_blacklisting,omitempty"`
+	PasskeyRPName              string `json:"passkey_rp_name,omitempty"`
+	PasskeyRPID                string `json:"passkey_rp_id,omitempty"`
+	PasskeyOrigin              string `json:"passkey_origin,omitempty"`
+	AppURL                     string `json:"app_url,omitempty"`
+	AllowedOrigins             string `json:"allowed_origins,omitempty"`
+	SupervisorPort             int    `json:"supervisor_port,omitempty"`
+}
+
 // SettingsDocument represents the platform_settings document structure.
 // Authority: protocol/models/platform_settings.json
 type SettingsDocument struct {
-	Settings  map[string]interface{} `json:"settings"`
-	CreatedAt time.Time              `json:"created_at"`
-	UpdatedAt time.Time              `json:"updated_at"`
+	Settings  *PlatformSettings `json:"settings"`
+	CreatedAt time.Time          `json:"created_at"`
+	UpdatedAt time.Time          `json:"updated_at"`
 }
 
 // UserSettingsDocument represents the user_settings document structure.

@@ -254,6 +254,14 @@ func isBusyError(err error) bool {
 	return contains(errStr, "database is locked") || contains(errStr, "SQLITE_BUSY")
 }
 
+// IsUniqueConstraintError checks if an error is a UNIQUE constraint violation.
+func IsUniqueConstraintError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return contains(err.Error(), "UNIQUE constraint failed")
+}
+
 // backoff implements exponential backoff with jitter to avoid thundering herd.
 // Delay = baseDelay * 2^attempt + random jitter (0-25% of delay)
 func (db *DB) backoff(attempt int) {

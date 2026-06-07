@@ -92,7 +92,7 @@ func setupTestPKI(t *testing.T) *testPKIContext {
 	require.NoError(t, err, "failed to create secret manager")
 
 	pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-	err = pki.EnsurePKI(nil)
+	err = pki.InitializePKI(nil)
 	require.NoError(t, err, "failed to initialize PKI hierarchy")
 
 	return &testPKIContext{
@@ -181,7 +181,7 @@ func TestPKIAuthority_VerifyCertificate(t *testing.T) {
 	})
 }
 
-func TestPKIAuthority_EnsurePKI(t *testing.T) {
+func TestPKIAuthority_InitializePKI(t *testing.T) {
 	t.Parallel()
 	t.Run("Full PKI hierarchy initialization", func(t *testing.T) {
 		t.Parallel()
@@ -506,7 +506,7 @@ func TestPKIAuthority_ReuseExisting(t *testing.T) {
 	serial1 := cert1.SerialNumber
 
 	pki2 := newPKIAuthority(ctx.dataDir, ctx.pkiDir, ctx.db, ctx.sm, ctx.logger)
-	err := pki2.EnsurePKI(nil)
+	err := pki2.InitializePKI(nil)
 	require.NoError(t, err)
 
 	rootCertPEM2 := testutil.ReadRootCA(t, ctx.pkiDir)
@@ -721,7 +721,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-		err = pki.EnsurePKI(nil)
+		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Generate a P-384 CSR (should be rejected)
@@ -752,7 +752,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-		err = pki.EnsurePKI(nil)
+		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Generate a P-256 CSR (should be accepted)
@@ -774,7 +774,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-		err = pki.EnsurePKI(nil)
+		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Check root CA curve
@@ -804,7 +804,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-		err = pki.EnsurePKI(nil)
+		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Check public certificate files have 0644 permissions
@@ -837,7 +837,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-		err = pki.EnsurePKI(nil)
+		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Check sensitive chain file has 0600 permissions
@@ -859,7 +859,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-		err = pki.EnsurePKI(nil)
+		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Verify issued/apps directory does not exist
@@ -882,7 +882,7 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-		err = pki.EnsurePKI(nil)
+		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Check public certificate files have 0644 permissions
@@ -915,7 +915,7 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-		err = pki.EnsurePKI(nil)
+		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Check sensitive chain file has 0600 permissions
@@ -939,7 +939,7 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-		err = pki.EnsurePKI(nil)
+		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Load root.pem bundle
@@ -969,7 +969,7 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-		err = pki.EnsurePKI(nil)
+		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Load operator-bundle.pem
@@ -998,7 +998,7 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-		err = pki.EnsurePKI(nil)
+		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Load g8eg-ca-bundle.pem
@@ -1027,7 +1027,7 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-		err = pki.EnsurePKI(nil)
+		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Load the serving certificate

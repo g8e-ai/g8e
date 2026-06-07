@@ -911,7 +911,7 @@ func (p *realL3EnvelopeProcessor) ProcessEnvelope(ctx context.Context, payload [
 			p.lastError = governance.ErrL3ProofInvalid
 			return nil, governance.ErrL3ProofInvalid
 		}
-		valid, err := p.l3Notary.VerifyL3Proof(envelope.OperatorId, envelope.TransactionHash, envelope.OperatorSessionId, l3Metadata.Proof)
+		valid, err := p.l3Notary.VerifyL3Proof(context.Background(), envelope.OperatorId, envelope.TransactionHash, envelope.OperatorSessionId, l3Metadata.Proof)
 		if err != nil {
 			p.lastError = err
 			return nil, err

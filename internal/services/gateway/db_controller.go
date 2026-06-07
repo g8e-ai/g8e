@@ -414,7 +414,15 @@ func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http
 			c.responder.Error(w, http.StatusNotFound, "signer not found")
 			return
 		}
-		doc, _ := c.db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), id)
+		doc, err := c.db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), id)
+		if err != nil {
+			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if doc == nil {
+			c.responder.Error(w, http.StatusNotFound, "signer not found")
+			return
+		}
 		c.responder.JSON(w, http.StatusOK, doc.ForWire())
 
 	case http.MethodDelete:
@@ -638,8 +646,14 @@ func blobNamespaceAllowed(namespace string) bool {
 // extractCallerIdentity extracts the caller's identity from the request context.
 // Returns user_id, app_id, operator_session_id, cli_session_id.
 func (c *DBController) extractCallerIdentity(r *http.Request) (string, string, string, string) {
-	userID, _ := r.Context().Value(userIDKey).(string)
-	appID, _ := r.Context().Value(appIDKey).(string)
+	userID, ok := r.Context().Value(userIDKey).(string)
+	if !ok {
+		userID = ""
+	}
+	appID, ok := r.Context().Value(appIDKey).(string)
+	if !ok {
+		appID = ""
+	}
 	operatorSessionID := c.auth.extractOperatorSessionIDFromMTLS(r)
 	cliSessionID := r.Header.Get(constants.HeaderCLISessionID)
 	return userID, appID, operatorSessionID, cliSessionID

@@ -14,6 +14,7 @@
 package governance
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"path/filepath"
@@ -64,7 +65,7 @@ func TestOutboundL3Notary_VerifyL3Proof_NoApproval(t *testing.T) {
 		CliSignature: "valid-signature",
 	}
 
-	allowed, err := notary.VerifyL3Proof(userID, txHash, cliSessionID, proof)
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, proof)
 	assert.Error(t, err)
 	assert.False(t, allowed)
 	assert.Contains(t, err.Error(), "not approved")
@@ -109,7 +110,7 @@ func TestOutboundL3Notary_VerifyL3Proof_ExpiredApproval(t *testing.T) {
 		CliSignature: "signature-123",
 	}
 
-	allowed, err := notary.VerifyL3Proof(userID, txHash, cliSessionID, proof)
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, proof)
 	assert.Error(t, err)
 	assert.False(t, allowed)
 	assert.Contains(t, err.Error(), "approval expired")
@@ -154,7 +155,7 @@ func TestOutboundL3Notary_VerifyL3Proof_MissingSignature(t *testing.T) {
 		CliSignature: "",
 	}
 
-	allowed, err := notary.VerifyL3Proof(userID, txHash, cliSessionID, proof)
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, proof)
 	assert.Error(t, err)
 	assert.False(t, allowed)
 	assert.Contains(t, err.Error(), "CLI signature required")
@@ -199,7 +200,7 @@ func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureEncoding(t *testing.T) {
 		CliSignature: "not-valid-hex!!!",
 	}
 
-	allowed, err := notary.VerifyL3Proof(userID, txHash, cliSessionID, proof)
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, proof)
 	assert.Error(t, err)
 	assert.False(t, allowed)
 	assert.Contains(t, err.Error(), "invalid signature encoding")
@@ -245,7 +246,7 @@ func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureLength(t *testing.T) {
 		CliSignature: shortSig,
 	}
 
-	allowed, err := notary.VerifyL3Proof(userID, txHash, cliSessionID, proof)
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, proof)
 	assert.Error(t, err)
 	assert.False(t, allowed)
 	assert.Contains(t, err.Error(), "invalid signature length")
@@ -294,7 +295,7 @@ func TestOutboundL3Notary_VerifyL3Proof_SignatureMismatch(t *testing.T) {
 		CliSignature: wrongSig,
 	}
 
-	allowed, err := notary.VerifyL3Proof(userID, txHash, cliSessionID, proof)
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, proof)
 	assert.Error(t, err)
 	assert.False(t, allowed)
 	assert.Contains(t, err.Error(), "signature mismatch")
@@ -345,7 +346,7 @@ func TestOutboundL3Notary_VerifyL3Proof_FingerprintMismatch(t *testing.T) {
 		MtlsCertFingerprint: "cert-fingerprint-xyz",
 	}
 
-	allowed, err := notary.VerifyL3Proof(userID, txHash, cliSessionID, proof)
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, proof)
 	assert.Error(t, err)
 	assert.False(t, allowed)
 	assert.Contains(t, err.Error(), "certificate fingerprint mismatch")
@@ -396,7 +397,7 @@ func TestOutboundL3Notary_VerifyL3Proof_ValidProof(t *testing.T) {
 		MtlsCertFingerprint: "cert-fingerprint-abc",
 	}
 
-	allowed, err := notary.VerifyL3Proof(userID, txHash, cliSessionID, proof)
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, proof)
 	assert.NoError(t, err)
 	assert.True(t, allowed)
 }
@@ -422,7 +423,7 @@ func TestOutboundL3Notary_VerifyL3Proof_TransactionNotFound(t *testing.T) {
 		CliSignature: "signature-123",
 	}
 
-	allowed, err := notary.VerifyL3Proof(userID, txHash, cliSessionID, proof)
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, proof)
 	assert.Error(t, err)
 	assert.False(t, allowed)
 	assert.Contains(t, err.Error(), "not found in suspended store")
@@ -467,7 +468,7 @@ func TestOutboundL3Notary_VerifyL3Proof_UserIDMismatch(t *testing.T) {
 		CliSignature: "signature-123",
 	}
 
-	allowed, err := notary.VerifyL3Proof(userID, txHash, cliSessionID, proof)
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, proof)
 	assert.Error(t, err)
 	assert.False(t, allowed)
 	assert.Contains(t, err.Error(), "user ID mismatch")
@@ -517,7 +518,7 @@ func TestOutboundL3Notary_VerifyL3Proof_NoFingerprintCheckWhenNotSet(t *testing.
 		CliSignature: signature,
 	}
 
-	allowed, err := notary.VerifyL3Proof(userID, txHash, cliSessionID, proof)
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, proof)
 	assert.NoError(t, err)
 	assert.True(t, allowed)
 }

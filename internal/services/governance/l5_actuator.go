@@ -79,10 +79,10 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	defer w.wg.Done()
 
 	if w.ExecutionHandler == nil {
-		return nil, errors.New("L5Actuator ExecutionHandler not set")
+		return nil, fmt.Errorf("L5Actuator: ExecutionHandler not set")
 	}
 	if len(w.SigningKey) == 0 {
-		return nil, errors.New("L5Actuator signing key missing - cannot execute mutations")
+		return nil, fmt.Errorf("L5Actuator: signing key missing - cannot execute mutations")
 	}
 
 	stateBefore := ""
@@ -221,25 +221,42 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	return receipt, err
 }
 
+// canonicalReceipt is the typed representation for ActionReceipt canonicalization.
+// This ensures strict typing and deterministic JSON marshaling for signing/verification.
+type canonicalReceipt struct {
+	TransactionID    string `json:"transaction_id"`
+	TransactionHash  string `json:"transaction_hash"`
+	Status           int32  `json:"status"`
+	ResultSummary    string `json:"result_summary"`
+	StateRootBefore  string `json:"state_root_before"`
+	StateRootAfter   string `json:"state_root_after"`
+	ExecutedAtUnixMs int64  `json:"executed_at_unix_ms"`
+	SignerKeyID      string `json:"signer_key_id"`
+	GatewaySigned    bool   `json:"gateway_signed"`
+	L2Status         int32  `json:"l2_status"`
+	L3Status         int32  `json:"l3_status"`
+}
+
 // CanonicalizeActionReceipt produces a deterministic byte representation for signing/verification.
 // This function must be used by both signing and verification to ensure consistency.
 // Field order: transaction_id, transaction_hash, status, result_summary, state_root_before,
 // state_root_after, executed_at_unix_ms, signer_key_id, gateway_signed, l2_status, l3_status.
 // All fields are included in the canonical form.
 func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
-	payload, err := json.Marshal(map[string]interface{}{
-		"transaction_id":      r.TransactionId,
-		"transaction_hash":    r.TransactionHash,
-		"status":              int32(r.Status),
-		"result_summary":      r.ResultSummary,
-		"state_root_before":   r.StateRootBefore,
-		"state_root_after":    r.StateRootAfter,
-		"executed_at_unix_ms": r.ExecutedAtUnixMs,
-		"signer_key_id":       r.SignerKeyId,
-		"gateway_signed":      r.GatewaySigned,
-		"l2_status":           int32(r.L2Status),
-		"l3_status":           int32(r.L3Status),
-	})
+	canonical := canonicalReceipt{
+		TransactionID:    r.TransactionId,
+		TransactionHash:  r.TransactionHash,
+		Status:           int32(r.Status),
+		ResultSummary:    r.ResultSummary,
+		StateRootBefore:  r.StateRootBefore,
+		StateRootAfter:   r.StateRootAfter,
+		ExecutedAtUnixMs: r.ExecutedAtUnixMs,
+		SignerKeyID:      r.SignerKeyId,
+		GatewaySigned:    r.GatewaySigned,
+		L2Status:         int32(r.L2Status),
+		L3Status:         int32(r.L3Status),
+	}
+	payload, err := json.Marshal(canonical)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal receipt for canonicalization: %w", err)
 	}
@@ -248,7 +265,7 @@ func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 
 func (w *L5Actuator) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 	if len(w.SigningKey) == 0 {
-		return "", errors.New("signing key missing")
+		return "", fmt.Errorf("L5Actuator: signing key missing")
 	}
 
 	// Use canonical serialization for signing - shared with verification

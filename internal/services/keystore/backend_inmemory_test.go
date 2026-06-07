@@ -20,6 +20,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// ResetTestStorage clears the shared test key storage.
+// This should be called in TestMain to prevent cross-test contamination.
+func ResetTestStorage() {
+	sharedTestKeyStorage.mu.Lock()
+	defer sharedTestKeyStorage.mu.Unlock()
+	sharedTestKeyStorage.key = nil
+}
+
 func TestMain(m *testing.M) {
 	ResetTestStorage()
 }

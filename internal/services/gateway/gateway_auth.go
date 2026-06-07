@@ -125,7 +125,10 @@ type AuthError struct {
 }
 
 func (e *AuthError) Error() string {
-	b, _ := json.Marshal(e)
+	b, err := json.Marshal(e)
+	if err != nil {
+		return fmt.Sprintf("{\"error\":\"%s\"}", e.Message)
+	}
 	return string(b)
 }
 
@@ -404,7 +407,12 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 		}
 
 		var cliSession models.CLISession
-		b, _ := json.Marshal(cliDoc.Data)
+		b, err := json.Marshal(cliDoc.Data)
+		if err != nil {
+			s.logger.Error("failed to marshal CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
+			s.responder.Error(w, http.StatusInternalServerError, "failed to parse session")
+			return true
+		}
 		if err := json.Unmarshal(b, &cliSession); err != nil {
 			s.logger.Error("failed to parse CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
 			s.responder.Error(w, http.StatusInternalServerError, "failed to parse session")
@@ -465,7 +473,12 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 				}
 
 				var policy models.AppPolicy
-				data, _ := json.Marshal(doc.Data)
+				data, err := json.Marshal(doc.Data)
+				if err != nil {
+					s.logger.Error("Failed to marshal app policy", "app_id", appID, "error", err)
+					s.responder.Error(w, http.StatusInternalServerError, "invalid app policy")
+					return true
+				}
 				if err := json.Unmarshal(data, &policy); err != nil {
 					s.logger.Error("Failed to parse app policy", "app_id", appID, "error", err)
 					s.responder.Error(w, http.StatusInternalServerError, "invalid app policy")
@@ -492,8 +505,8 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 	return false
 }
 
-// getOrCreateLimiter returns a rate limiter for the given app ID, creating one if needed.
-func (s *AuthService) getOrCreateLimiter(appID string, rps int) *rate.Limiter {
+// getLimiter returns a rate limiter for the given app ID, creating one if needed.
+func (s *AuthService) getLimiter(appID string, rps int) *rate.Limiter {
 	s.muLimiters.Lock()
 	defer s.muLimiters.Unlock()
 
@@ -511,7 +524,7 @@ func (s *AuthService) getOrCreateLimiter(appID string, rps int) *rate.Limiter {
 func (s *AuthService) enforceAppPolicy(r *http.Request, policy *models.AppPolicy, appID string) error {
 	// Check rate limit (if configured)
 	if policy.RateLimitRPS > 0 {
-		limiter := s.getOrCreateLimiter(appID, policy.RateLimitRPS)
+		limiter := s.getLimiter(appID, policy.RateLimitRPS)
 		if !limiter.Allow() {
 			s.logger.Warn("App rate limit exceeded", "app_id", appID, "rate_limit_rps", policy.RateLimitRPS, "path", r.URL.Path)
 			return fmt.Errorf("rate limit exceeded (%d RPS)", policy.RateLimitRPS)
@@ -575,7 +588,10 @@ func (s *AuthService) cliCertBoundToOperator(certURIs []*url.URL, cliSessionID, 
 		return false
 	}
 	var cliSession models.CLISession
-	b, _ := json.Marshal(doc.Data)
+	b, err := json.Marshal(doc.Data)
+	if err != nil {
+		return false
+	}
 	if err := json.Unmarshal(b, &cliSession); err != nil {
 		return false
 	}
@@ -682,7 +698,7 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		jwt, err := ParseAndVerifyJWT(tokenString, s.jwks, s.jwtRole, s.jwtIssuer, s.jwtAudience)
+		jwt, err := ParseAndVerifyJWT(r.Context(), tokenString, s.jwks, s.jwtRole, s.jwtIssuer, s.jwtAudience)
 		if err != nil {
 			s.logger.Warn("JWT validation failed", "error", err)
 			s.responder.Error(w, http.StatusUnauthorized, "invalid JWT token")
@@ -695,11 +711,31 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// JIT User Provisioning: get or create user by subject
-		user, err := s.userSvc.GetOrCreateBySub(jwt.Claims.Sub)
+		user, err := s.userSvc.GetBySub(jwt.Claims.Sub)
 		if err != nil {
-			s.logger.Error("JIT user provisioning failed", "sub", jwt.Claims.Sub, "error", err)
-			s.responder.Error(w, http.StatusInternalServerError, "user provisioning failed")
+			s.logger.Error("JIT user lookup failed", "sub", jwt.Claims.Sub, "error", err)
+			s.responder.Error(w, http.StatusInternalServerError, "user lookup failed")
 			return
+		}
+		if user == nil {
+			// User doesn't exist, check for an active invitation
+			invitation, err := s.userSvc.FindActiveInvitationBySub(jwt.Claims.Sub)
+			if err != nil {
+				s.logger.Error("JIT invitation lookup failed", "sub", jwt.Claims.Sub, "error", err)
+				s.responder.Error(w, http.StatusInternalServerError, "invitation lookup failed")
+				return
+			}
+			if invitation == nil {
+				s.logger.Warn("JIT provisioning rejected: no active invitation found", "sub", jwt.Claims.Sub)
+				s.responder.Error(w, http.StatusForbidden, "no active invitation found")
+				return
+			}
+			user, err = s.userSvc.CreateUserFromInvitation(jwt.Claims.Sub, invitation)
+			if err != nil {
+				s.logger.Error("JIT user creation failed", "sub", jwt.Claims.Sub, "error", err)
+				s.responder.Error(w, http.StatusInternalServerError, "user creation failed")
+				return
+			}
 		}
 
 		if !user.IsActive() {

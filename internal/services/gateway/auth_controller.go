@@ -42,14 +42,14 @@ type AuthController struct {
 	auth       *AuthService
 	passkey    *PasskeyService
 	userSvc    *UserService
-	reg        *RegistrationService
-	pki        *PKIAuthority
-	sessionSvc *SessionsService
-	mcp        *mcp.GatewayService
+	reg           *RegistrationService
+	pki           *PKIAuthority
+	webSessionSvc *WebSessionService
+	mcp           *mcp.GatewayService
 	responder  *response.Writer
 }
 
-func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, sessionSvc *SessionsService, mcp *mcp.GatewayService, responder *response.Writer) *AuthController {
+func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, mcp *mcp.GatewayService, responder *response.Writer) *AuthController {
 	return &AuthController{
 		cfg:        cfg,
 		logger:     logger,
@@ -57,9 +57,9 @@ func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBS
 		auth:       auth,
 		passkey:    passkey,
 		userSvc:    userSvc,
-		reg:        reg,
-		pki:        pki,
-		sessionSvc: sessionSvc,
+		reg:           reg,
+		pki:           pki,
+		webSessionSvc: webSessionSvc,
 		mcp:        mcp,
 		responder:  responder,
 	}
@@ -134,9 +134,9 @@ func (c *AuthController) handleAuthPasskeysRegisterChallenge(w http.ResponseWrit
 		return
 	}
 
-	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		"options":                                options,
+	c.responder.JSON(w, http.StatusOK, models.PasskeyRegisterChallengeResponse{
+		Success: true,
+		Options: options,
 	})
 }
 
@@ -299,30 +299,30 @@ func (c *AuthController) handleAuthPasskeysAuthenticateVerify(w http.ResponseWri
 	cred, err := c.passkey.VerifyAuthentication(userID, r)
 	if err != nil {
 		c.logger.Warn("Passkey auth verify failed", string(constants.ConnectionStateError), err, "userID", userID)
-		c.responder.JSON(w, http.StatusOK, map[string]interface{}{
-			string(constants.AuthAuditResultSuccess): false,
-			string(constants.ConnectionStateError):   err.Error(),
+		c.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
+			Success: false,
+			Error:   err.Error(),
 		})
 		return
 	}
 
-	webSession, err := c.passkey.CreateWebSession(userID)
+	webSession, err := c.webSessionSvc.CreateWebSession(userID)
 	if err != nil {
 		c.logger.Error("Failed to create web session after auth", string(constants.ConnectionStateError), err, "userID", userID)
-		c.responder.JSON(w, http.StatusOK, map[string]interface{}{
-			string(constants.AuthAuditResultSuccess): false,
-			string(constants.ConnectionStateError):   "authentication succeeded but session creation failed",
+		c.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
+			Success: false,
+			Error:   "authentication succeeded but session creation failed",
 		})
 		return
 	}
 
-	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		"user_id":                                userID,
-		"credential":                             cred,
-		string(constants.SessionKeyPrefixWeb): map[string]interface{}{
-			"id":                 webSession.ID,
-			"expires_at_unix_ms": webSession.ExpiresAtUnixMs,
+	c.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
+		Success:    true,
+		UserID:     userID,
+		Credential: cred,
+		WebSession: &models.WebSessionInfo{
+			ID:              webSession.ID,
+			ExpiresAtUnixMs: webSession.ExpiresAtUnixMs,
 		},
 	})
 }
@@ -413,9 +413,9 @@ func (c *AuthController) handleUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c.responder.JSON(w, http.StatusCreated, map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		"user_id":                                user.ID,
+	c.responder.JSON(w, http.StatusCreated, models.UserCreateResponse{
+		Success: true,
+		UserID:  user.ID,
 	})
 }
 
@@ -586,7 +586,7 @@ func (c *AuthController) handleCLIApproval(w http.ResponseWriter, r *http.Reques
 
 	// Persist the approval with signature before resuming
 	if err := c.db.ApproveSuspendedTransaction(txHash, userID, req.CliSignature, req.MtlsCertFingerprint); err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to approve transaction: %v", err))
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("auth controller: failed to approve transaction: %w", err).Error())
 		return
 	}
 
@@ -815,23 +815,14 @@ func (c *AuthController) handleListSuspendedTransactions(w http.ResponseWriter, 
 	// Get suspended transactions from the gateway DB service
 	transactions, err := c.db.ListSuspendedTransactions(queryUserID)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to list suspended transactions: %v", err))
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("auth controller: failed to list suspended transactions: %w", err).Error())
 		return
 	}
 
 	// Convert to JSON-serializable format
-	type SuspendedTxResponse struct {
-		TransactionHash string    `json:"transaction_hash"`
-		CreatedAt       time.Time `json:"created_at"`
-		ExpiresAt       time.Time `json:"expires_at"`
-		ToolName        string    `json:"tool_name"`
-		UserID          string    `json:"user_id"`
-		OperatorID      string    `json:"operator_id"`
-	}
-
-	var txResponses []SuspendedTxResponse
+	var txResponses []models.SuspendedTxResponse
 	for _, tx := range transactions {
-		txResponses = append(txResponses, SuspendedTxResponse{
+		txResponses = append(txResponses, models.SuspendedTxResponse{
 			TransactionHash: tx.TransactionHash,
 			CreatedAt:       tx.CreatedAt,
 			ExpiresAt:       tx.ExpiresAt,
@@ -841,8 +832,8 @@ func (c *AuthController) handleListSuspendedTransactions(w http.ResponseWriter, 
 		})
 	}
 
-	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
-		"transactions": txResponses,
+	c.responder.JSON(w, http.StatusOK, models.SuspendedTransactionsResponse{
+		Transactions: txResponses,
 	})
 }
 
@@ -1031,12 +1022,13 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	response := map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		string(constants.HistoryActorUser):       user,
-	}
-	if webSession != nil {
-		response[string(constants.SessionKeyPrefixWeb)] = webSession
+	response := models.BootstrapResponse{
+		Success:    true,
+		User:       user,
+		WebSession: &models.WebSessionInfo{
+			ID:              webSession.ID,
+			ExpiresAtUnixMs: webSession.ExpiresAtUnixMs,
+		},
 	}
 
 	// If CSR is requested and loopback, sign and return cert (plan §4.2)
@@ -1087,10 +1079,10 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		response["operator_cert"] = certPEM
-		response["operator_cert_chain"] = chainPEM
-		response["operator_session_id"] = operatorSessionID
-		response["operator_id"] = operatorID
+		response.OperatorCert = certPEM
+		response.OperatorCertChain = chainPEM
+		response.OperatorSessionID = operatorSessionID
+		response.OperatorID = operatorID
 	}
 
 	// CLI certificate generation (if provided)
@@ -1117,11 +1109,10 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 			// Non-fatal - continue without bundle
 		}
 
-		response["hub_trust_bundle"] = string(hubBundle)
-		response["cli_session_id"] = cliSessionID
-		response["cli_cert"] = cliCertPEM
-		response["cli_cert_chain"] = cliCertChainPEM
-		response["user_id"] = user.ID
+		response.HubTrustBundle = string(hubBundle)
+		response.CLISessionID = cliSessionID
+		response.CLICert = cliCertPEM
+		response.CLICertChain = cliCertChainPEM
 
 		// Persist sessions only if we have both operator and CLI certs
 		if csrRequested {
@@ -1250,13 +1241,13 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 	}
 
 	c.logger.Info("[CLI_ENROLLMENT] CLI enrolled successfully", "user_id", bootstrapUser.ID, "cli_session_id_prefix", cliSessionID[:8])
-	c.responder.JSON(w, http.StatusCreated, map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		"cli_session_id":                         cliSessionID,
-		"cli_cert":                               cliCertPEM,
-		"cli_cert_chain":                         cliCertChainPEM,
-		"hub_trust_bundle":                       string(hubBundle),
-		"user_id":                                bootstrapUser.ID,
+	c.responder.JSON(w, http.StatusCreated, models.CLIEnrollmentResponse{
+		Success:        true,
+		CLISessionID:   cliSessionID,
+		CLICert:        cliCertPEM,
+		CLICertChain:   cliCertChainPEM,
+		HubTrustBundle: string(hubBundle),
+		UserID:         bootstrapUser.ID,
 	})
 }
 
@@ -1425,18 +1416,18 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	response := map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		string(constants.HistoryActorUser):       user,
-		"operator_cert":                          certPEM,
-		"operator_cert_chain":                    chainPEM,
-		"hub_trust_bundle":                       string(hubBundle),
-		"operator_session_id":                    operatorSessionID,
-		"operator_id":                            operatorID,
-		"cli_session_id":                         cliSessionID,
-		"cli_cert":                               cliCertPEM,
-		"cli_cert_chain":                         cliCertChainPEM,
-		"user_id":                                user.ID,
+	response := models.DeviceEnrollmentResponse{
+		Success:           true,
+		User:              user,
+		OperatorCert:      certPEM,
+		OperatorCertChain: chainPEM,
+		HubTrustBundle:    string(hubBundle),
+		OperatorSessionID: operatorSessionID,
+		OperatorID:        operatorID,
+		CLISessionID:      cliSessionID,
+		CLICert:           cliCertPEM,
+		CLICertChain:      cliCertChainPEM,
+		UserID:            user.ID,
 	}
 
 	c.logger.Info("[DEVICE_ENROLLMENT] Device enrolled successfully", "user_id", user.ID, "operator_id", operatorID, "hostname", req.Hostname)

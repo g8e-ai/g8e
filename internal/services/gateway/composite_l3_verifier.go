@@ -14,7 +14,9 @@
 package gateway
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -49,7 +51,7 @@ func NewCompositeL3Verifier(passkeyL3 *PasskeyService, cliL3 *CLIL3Notary, logge
 // based on the proof type.
 // - If the proof contains mtls_cert_fingerprint, it uses the CLI mTLS verifier
 // - Otherwise, it uses the WebAuthn passkey verifier
-func (v *CompositeL3Verifier) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+func (v *CompositeL3Verifier) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	if proof == nil {
 		return false, ErrL3ProofRequired
 	}
@@ -57,24 +59,29 @@ func (v *CompositeL3Verifier) VerifyL3Proof(userID, transactionHash, cliSessionI
 	// Check if this is a CLI mTLS proof
 	if proof.MtlsCertFingerprint != "" {
 		if v.cliL3 == nil {
-			return false, ErrCLIL3NotaryNotConfigured
+			return false, fmt.Errorf("composite_l3_verifier: CLI L3Notary verification: %w", ErrCLIL3NotaryNotConfigured)
 		}
-		hashPrefix := transactionHash
-		if len(transactionHash) > 8 {
-			hashPrefix = transactionHash[:8]
-		}
-		v.logger.Debug("Delegating to CLI L3Notary verifier", "user_id", userID, "transaction_hash", hashPrefix, "cli_session_id", cliSessionID)
-		return v.cliL3.VerifyL3Proof(userID, transactionHash, cliSessionID, proof)
+		v.logDelegation("CLI L3Notary", userID, transactionHash, cliSessionID)
+		return v.cliL3.VerifyL3Proof(ctx, userID, transactionHash, cliSessionID, proof)
 	}
 
 	// Otherwise, use WebAuthn passkey verifier (web sessions don't use cli_session_id)
 	if v.passkeyL3 == nil {
-		return false, ErrPasskeyL3NotaryNotConfigured
+		return false, fmt.Errorf("composite_l3_verifier: passkey L3Notary verification: %w", ErrPasskeyL3NotaryNotConfigured)
 	}
+	v.logDelegation("Passkey L3Notary", userID, transactionHash, "")
+	return v.passkeyL3.VerifyL3Proof(ctx, userID, transactionHash, cliSessionID, proof)
+}
+
+// logDelegation logs delegation to a specific L3Notary verifier with a truncated hash prefix.
+func (v *CompositeL3Verifier) logDelegation(verifierName, userID, transactionHash, cliSessionID string) {
 	hashPrefix := transactionHash
 	if len(transactionHash) > 8 {
 		hashPrefix = transactionHash[:8]
 	}
-	v.logger.Debug("Delegating to Passkey L3Notary verifier", "user_id", userID, "transaction_hash", hashPrefix)
-	return v.passkeyL3.VerifyL3Proof(userID, transactionHash, cliSessionID, proof)
+	if cliSessionID != "" {
+		v.logger.Debug("Delegating to "+verifierName+" verifier", "user_id", userID, "transaction_hash", hashPrefix, "cli_session_id", cliSessionID)
+	} else {
+		v.logger.Debug("Delegating to "+verifierName+" verifier", "user_id", userID, "transaction_hash", hashPrefix)
+	}
 }

@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -62,7 +63,7 @@ func extractRoles(payloadBytes []byte, roleClaim string) []string {
 	return nil
 }
 
-func ParseAndVerifyJWT(tokenString string, jwks *JWKSProvider, roleClaim string, expectedIssuer, expectedAudience string) (*NativeJWT, error) {
+func ParseAndVerifyJWT(ctx context.Context, tokenString string, jwks *JWKSProvider, roleClaim string, expectedIssuer, expectedAudience string) (*NativeJWT, error) {
 	parts := strings.Split(tokenString, ".")
 	if len(parts) != 3 {
 		return nil, errors.New("invalid JWT format")
@@ -125,7 +126,7 @@ func ParseAndVerifyJWT(tokenString string, jwks *JWKSProvider, roleClaim string,
 		return nil, fmt.Errorf("token audience mismatch: expected %s, got %s", expectedAudience, claims.Aud)
 	}
 
-	pubKey, err := jwks.GetKey(header.Kid)
+	pubKey, err := jwks.GetKey(ctx, header.Kid)
 	if err != nil {
 		return nil, fmt.Errorf("jwt: get public key: %w", err)
 	}

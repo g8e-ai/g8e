@@ -14,9 +14,9 @@
 package gateway
 
 import (
+	"database/sql"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
@@ -46,7 +46,7 @@ func (s *ReplayStoreService) ReserveNonce(nonce string, expiresAt time.Time) (bo
 	if err == nil {
 		return true, nil // Replay detected
 	}
-	if err.Error() != "sql: no rows in result set" {
+	if err != sql.ErrNoRows {
 		return false, err
 	}
 
@@ -55,7 +55,7 @@ func (s *ReplayStoreService) ReserveNonce(nonce string, expiresAt time.Time) (bo
 	_, err = s.db.ExecWithRetry("INSERT INTO nonces (nonce, expires_at, status) VALUES (?, ?, 'reserved')", nonce, expStr)
 	if err != nil {
 		// Concurrent insert might fail with constraint violation - that's a replay
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if sqliteutil.IsUniqueConstraintError(err) {
 			return true, nil
 		}
 		return false, err

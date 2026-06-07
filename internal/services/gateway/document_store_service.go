@@ -84,10 +84,13 @@ func (s *DocumentStoreService) DocCreate(collection, id string, data json.RawMes
 		 VALUES (?, ?, ?, ?, ?)`,
 		collection, id, string(dataJSON), nowStr, nowStr,
 	)
-	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
-		return fmt.Errorf("DocumentStoreService: document already exists")
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return fmt.Errorf("DocumentStoreService: document already exists")
+		}
+		return err
 	}
-	return err
+	return nil
 }
 
 // DocSet creates or replaces a document. data must be valid JSON.
@@ -170,7 +173,8 @@ func (s *DocumentStoreService) DocUpdate(collection, id string, fields json.RawM
 		if k == "id" || k == "created_at" || k == "updated_at" {
 			continue
 		}
-		if string(v) == "null" {
+		var nullCheck interface{}
+		if err := json.Unmarshal(v, &nullCheck); err == nil && nullCheck == nil {
 			delete(doc, k)
 		} else {
 			doc[k] = v
@@ -253,8 +257,7 @@ func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (json.
 	// Parse the extracted value back into a Go type
 	var result json.RawMessage
 	if err := json.Unmarshal([]byte(fieldValue), &result); err != nil {
-		// If it's a simple string, return it directly
-		return json.RawMessage(fieldValue), nil
+		return nil, fmt.Errorf("DocumentStoreService: unmarshal field value: %w", err)
 	}
 
 	return result, nil
@@ -304,11 +307,7 @@ func (s *DocumentStoreService) DocQuery(collection string, filters []models.DocF
 		}
 		query.WriteString(" ?")
 
-		var nativeVal json.RawMessage
-		if err := json.Unmarshal(f.Value, &nativeVal); err != nil {
-			return nil, fmt.Errorf("DocumentStoreService: invalid filter value: %w", err)
-		}
-		args = append(args, "$."+f.Field, nativeVal)
+		args = append(args, "$."+f.Field, string(f.Value))
 	}
 
 	if orderBy != "" {

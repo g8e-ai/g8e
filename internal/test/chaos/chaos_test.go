@@ -379,7 +379,7 @@ func TestChaosL3Notary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := notary.VerifyL3Proof(tt.userID, tt.transactionHash, tt.cliSessionID, nil)
+			got, err := notary.VerifyL3Proof(context.Background(), tt.userID, tt.transactionHash, tt.cliSessionID, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("VerifyL3Proof() error = %v, wantErr %v", err, tt.wantErr)
 				return

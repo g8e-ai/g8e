@@ -11,13 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build linux
+//go:build windows
 
 package keystore
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -26,122 +25,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewLibsecretBackend(t *testing.T) {
-	t.Parallel()
-
-	if _, err := exec.LookPath("secret-tool"); err != nil {
-		t.Skip("secret-tool not available, skipping libsecret backend test")
-	}
-
-	backend, err := newLibsecretBackend()
-	require.NoError(t, err)
-	assert.Equal(t, "libsecret", backend.Name())
-}
-
-func TestLibsecretBackend_StoreRetrieveDelete(t *testing.T) {
-	t.Parallel()
-
-	if _, err := exec.LookPath("secret-tool"); err != nil {
-		t.Skip("secret-tool not available, skipping libsecret backend test")
-	}
-
-	backend, err := newLibsecretBackend()
-	require.NoError(t, err)
-
-	testKey := make([]byte, keySize)
-	for i := range testKey {
-		testKey[i] = byte(i)
-	}
-
-	tests := []struct {
-		name string
-		fn   func(t *testing.T)
-	}{
-		{
-			name: "store",
-			fn: func(t *testing.T) {
-				err := backend.StoreMasterKey(testKey)
-				assert.NoError(t, err)
-			},
-		},
-		{
-			name: "retrieve",
-			fn: func(t *testing.T) {
-				retrievedKey, err := backend.RetrieveMasterKey()
-				assert.NoError(t, err)
-				assert.Equal(t, testKey, retrievedKey)
-			},
-		},
-		{
-			name: "delete",
-			fn: func(t *testing.T) {
-				err := backend.DeleteMasterKey()
-				assert.NoError(t, err)
-			},
-		},
-		{
-			name: "retrieve after delete",
-			fn: func(t *testing.T) {
-				_, err := backend.RetrieveMasterKey()
-				assert.Error(t, err)
-				assert.Equal(t, ErrKeyNotFound, err)
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, tt.fn)
-	}
-}
-
-func TestLibsecretBackend_RetrieveNotFound(t *testing.T) {
-	t.Parallel()
-
-	if _, err := exec.LookPath("secret-tool"); err != nil {
-		t.Skip("secret-tool not available, skipping libsecret backend test")
-	}
-
-	backend, err := newLibsecretBackend()
-	require.NoError(t, err)
-
-	// Ensure key doesn't exist
-	err = backend.DeleteMasterKey()
-	require.NoError(t, err)
-
-	_, err = backend.RetrieveMasterKey()
-	assert.Error(t, err)
-	assert.Equal(t, ErrKeyNotFound, err)
-}
-
-func TestNewLinux_FallbackToFileBackend(t *testing.T) {
+func TestNewFileBackend(t *testing.T) {
 	t.Parallel()
 
 	secretsDir := t.TempDir()
-	logger := testutil.NewTestLogger()
-
-	backupPath := os.Getenv("PATH")
-	defer func() { os.Setenv("PATH", backupPath) }()
-
-	os.Setenv("PATH", "")
-
-	ks, err := New(secretsDir, logger)
+	backend, err := newFileBackend(secretsDir)
 	require.NoError(t, err)
-	assert.Equal(t, "file", ks.BackendName())
-}
-
-func TestNewLinux_WithLibsecret(t *testing.T) {
-	t.Parallel()
-
-	if _, err := exec.LookPath("secret-tool"); err != nil {
-		t.Skip("secret-tool not available, skipping libsecret backend test")
-	}
-
-	secretsDir := t.TempDir()
-	logger := testutil.NewTestLogger()
-
-	ks, err := New(secretsDir, logger)
-	require.NoError(t, err)
-	assert.Equal(t, "libsecret", ks.BackendName())
+	assert.Equal(t, "file", backend.Name())
 }
 
 func TestFileBackend_StoreRetrieveDelete(t *testing.T) {

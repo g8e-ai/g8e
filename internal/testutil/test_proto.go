@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/proto"
-
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/pkg/governance"

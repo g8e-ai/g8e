@@ -15,8 +15,11 @@ package pubsub
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -24,7 +27,6 @@ import (
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-	"google.golang.org/protobuf/proto"
 )
 
 // AuditService owns LFAA audit event recording for user messages, AI messages,
@@ -45,23 +47,22 @@ func NewAuditService(cfg *config.Config, logger *slog.Logger, auditStore *storag
 }
 
 // HandleUserMsgRequest records an inbound user message to the audit store.
-func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg *PubSubCommandMessage) {
+func (as *AuditService) HandleUserMsgRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording user message (via Protobuf)")
 
 	if !as.auditStore.IsEnabled() {
 		as.logger.Info("Audit store not enabled, skipping user message recording")
-		return
+		return nil
 	}
 
 	var protoMsg operatorv1.AuditMsgRequested
 	if err := proto.Unmarshal(msg.Payload, &protoMsg); err != nil {
-		as.logger.Error("Failed to decode audit user msg payload as protobuf AuditMsgRequested", string(constants.ConnectionStateError), err)
-		return
+		return fmt.Errorf("audit service: failed to decode user msg payload as protobuf AuditMsgRequested: %w", err)
 	}
 	content := protoMsg.Content
 	if content == "" {
 		as.logger.Warn("LFAA: User message has no content")
-		return
+		return nil
 	}
 
 	event := &storage.Event{
@@ -72,32 +73,32 @@ func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg *PubSubComma
 	}
 
 	if _, err := as.auditStore.RecordEvent(event); err != nil {
-		as.logger.Warn("Failed to record user message in audit store", string(constants.ConnectionStateError), err)
-	} else {
-		as.logger.Info("User message recorded in audit store (LFAA)",
-			"operator_session_id", as.config.OperatorSessionId,
-			"content_length", len(content))
+		return fmt.Errorf("audit service: failed to record user message in audit store: %w", err)
 	}
+
+	as.logger.Info("User message recorded in audit store (LFAA)",
+		"operator_session_id", as.config.OperatorSessionId,
+		"content_length", len(content))
+	return nil
 }
 
 // HandleAIMsgRequest records an inbound AI message to the audit store.
-func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg *PubSubCommandMessage) {
+func (as *AuditService) HandleAIMsgRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording AI message (via Protobuf)")
 
 	if !as.auditStore.IsEnabled() {
 		as.logger.Info("Audit store not enabled, skipping AI message recording")
-		return
+		return nil
 	}
 
 	var protoMsg operatorv1.AuditMsgRequested
 	if err := proto.Unmarshal(msg.Payload, &protoMsg); err != nil {
-		as.logger.Error("Failed to decode audit AI msg payload as protobuf AuditMsgRequested", string(constants.ConnectionStateError), err)
-		return
+		return fmt.Errorf("audit service: failed to decode AI msg payload as protobuf AuditMsgRequested: %w", err)
 	}
 	content := protoMsg.Content
 	if content == "" {
 		as.logger.Warn("LFAA: AI message has no content")
-		return
+		return nil
 	}
 
 	event := &storage.Event{
@@ -108,31 +109,31 @@ func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg *PubSubCommand
 	}
 
 	if _, err := as.auditStore.RecordEvent(event); err != nil {
-		as.logger.Warn("Failed to record AI message in audit store", string(constants.ConnectionStateError), err)
-	} else {
-		as.logger.Info("AI message recorded in audit store (LFAA)",
-			"operator_session_id", as.config.OperatorSessionId,
-			"content_length", len(content))
+		return fmt.Errorf("audit service: failed to record AI message in audit store: %w", err)
 	}
+
+	as.logger.Info("AI message recorded in audit store (LFAA)",
+		"operator_session_id", as.config.OperatorSessionId,
+		"content_length", len(content))
+	return nil
 }
 
 // HandleDirectCmdRequest records an inbound direct terminal command to the audit store.
-func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg *PubSubCommandMessage) {
+func (as *AuditService) HandleDirectCmdRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording direct terminal command (via Protobuf)")
 
 	if !as.auditStore.IsEnabled() {
 		as.logger.Info("Audit store not enabled, skipping direct command recording")
-		return
+		return nil
 	}
 
 	var protoCmd operatorv1.DirectCommandAuditRequested
 	if err := proto.Unmarshal(msg.Payload, &protoCmd); err != nil {
-		as.logger.Error("Failed to decode audit direct cmd payload as protobuf DirectCommandAuditRequested", string(constants.ConnectionStateError), err)
-		return
+		return fmt.Errorf("audit service: failed to decode direct cmd payload as protobuf DirectCommandAuditRequested: %w", err)
 	}
 	if protoCmd.Command == "" {
 		as.logger.Warn("LFAA: Direct command audit has no command")
-		return
+		return nil
 	}
 
 	event := &storage.Event{
@@ -144,31 +145,31 @@ func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg *PubSubCom
 	}
 
 	if _, err := as.auditStore.RecordEvent(event); err != nil {
-		as.logger.Warn("Failed to record direct command in audit store", string(constants.ConnectionStateError), err)
-	} else {
-		as.logger.Info("Direct terminal command recorded in audit store (LFAA)",
-			"operator_session_id", as.config.OperatorSessionId,
-			"execution_id", protoCmd.ExecutionId)
+		return fmt.Errorf("audit service: failed to record direct command in audit store: %w", err)
 	}
+
+	as.logger.Info("Direct terminal command recorded in audit store (LFAA)",
+		"operator_session_id", as.config.OperatorSessionId,
+		"execution_id", protoCmd.ExecutionId)
+	return nil
 }
 
 // HandleDirectCmdResultRequest records an inbound direct terminal command result to the audit store.
-func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg *PubSubCommandMessage) {
+func (as *AuditService) HandleDirectCmdResultRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording direct terminal command result (via Protobuf)")
 
 	if !as.auditStore.IsEnabled() {
 		as.logger.Info("Audit store not enabled, skipping direct command result recording")
-		return
+		return nil
 	}
 
 	var protoResult operatorv1.DirectCommandResultAuditRequested
 	if err := proto.Unmarshal(msg.Payload, &protoResult); err != nil {
-		as.logger.Error("Failed to decode audit direct cmd result payload as protobuf DirectCommandResultAuditRequested", string(constants.ConnectionStateError), err)
-		return
+		return fmt.Errorf("audit service: failed to decode direct cmd result payload as protobuf DirectCommandResultAuditRequested: %w", err)
 	}
 	if protoResult.Command == "" {
 		as.logger.Warn("LFAA: Direct command result audit has no command")
-		return
+		return nil
 	}
 
 	event := &storage.Event{
@@ -184,10 +185,11 @@ func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg *Pub
 	}
 
 	if _, err := as.auditStore.RecordEvent(event); err != nil {
-		as.logger.Warn("Failed to record direct command result in audit store", string(constants.ConnectionStateError), err)
-	} else {
-		as.logger.Info("Direct terminal command result recorded in audit store (LFAA)",
-			"operator_session_id", as.config.OperatorSessionId,
-			"execution_id", protoResult.ExecutionId)
+		return fmt.Errorf("audit service: failed to record direct command result in audit store: %w", err)
 	}
+
+	as.logger.Info("Direct terminal command result recorded in audit store (LFAA)",
+		"operator_session_id", as.config.OperatorSessionId,
+		"execution_id", protoResult.ExecutionId)
+	return nil
 }

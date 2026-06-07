@@ -47,7 +47,7 @@ func newSecretManagerTestDB(t *testing.T) *sqliteutil.DB {
 	db, err := sqliteutil.OpenDB(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
-	_, err = db.Exec(gatewaySchema)
+	_, err = db.Exec(GatewaySchema())
 	require.NoError(t, err)
 	return db
 }
@@ -78,8 +78,13 @@ func readSecretFromDB(t *testing.T, db *sqliteutil.DB, name string) string {
 	require.NoError(t, err)
 	var doc models.SettingsDocument
 	require.NoError(t, json.Unmarshal([]byte(dataJSON), &doc))
-	value, _ := doc.Settings[name].(string)
-	return value
+	require.NotNil(t, doc.Settings)
+	switch name {
+	case "actuator_key_id":
+		return doc.Settings.ActuatorKeyID
+	default:
+		return ""
+	}
 }
 
 // readSecretFromKeystore reads a secret directly from the keystore for testing
@@ -99,7 +104,10 @@ func updatePlatformSetting(t *testing.T, db *sqliteutil.DB, name string, value s
 	var doc models.SettingsDocument
 	require.NoError(t, json.Unmarshal([]byte(dataJSON), &doc))
 	require.NotNil(t, doc.Settings)
-	doc.Settings[name] = value
+	switch name {
+	case "actuator_key_id":
+		doc.Settings.ActuatorKeyID = value
+	}
 	mutated, err := json.Marshal(doc)
 	require.NoError(t, err)
 	_, err = db.Exec(
@@ -162,7 +170,7 @@ func TestSecretManager_GetActuatorKey_RejectsMalformedSeedLength(t *testing.T) {
 
 	_, _, err = sm.GetActuatorKey()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "actuator_signing_key decoded to 64 bytes; expected 32")
+	assert.Contains(t, err.Error(), "invalid seed length")
 }
 
 func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
@@ -176,7 +184,7 @@ func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
 
 	_, _, err := sm.GetActuatorKey()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "actuator_key_id does not match actuator_signing_key")
+	assert.Contains(t, err.Error(), "key_id mismatch")
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenFileWriteFails(t *testing.T) {
@@ -283,7 +291,7 @@ func TestSecretManager_InitAppSettings_RejectsPreexistingSecretWithoutAppSetting
 	sm := newTestSecretManager(t, db, secretsDir)
 	err := sm.InitAppSettings()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "found preexisting bootstrap secret session_encryption_key without platform_settings")
+	assert.Contains(t, err.Error(), "found preexisting secret")
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *testing.T) {
@@ -338,8 +346,7 @@ func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *te
 	sm2 := newTestSecretManager(t, db, secretsDir)
 	err = sm2.InitAppSettings()
 	require.Error(t, err)
-	// With shared test backend, decryption succeeds and manifest validation fails
-	assert.Contains(t, err.Error(), "bootstrap digest manifest missing required entry session_encryption_key")
+	assert.Contains(t, err.Error(), "manifest missing entry")
 }
 
 func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedPlatformSettings(t *testing.T) {
@@ -495,5 +502,5 @@ func TestSecretManager_SessionToken_InvalidFormat(t *testing.T) {
 
 	_, err = sm.GetSessionToken()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid session token format")
+	assert.Contains(t, err.Error(), "invalid format")
 }

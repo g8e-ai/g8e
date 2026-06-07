@@ -37,9 +37,11 @@ type TestInfrastructure struct {
 	UserSvc     *UserService
 	PersonaSvc  *PersonaService
 	Responder   *response.Writer
-	Auth        *AuthService
-	SessionSvc  *SessionsService
-	Reg         *RegistrationService
+	Auth              *AuthService
+	CLISessionSvc     *CLISessionService
+	OperatorSessionSvc *OperatorSessionService
+	WebSessionSvc     *WebSessionService
+	Reg               *RegistrationService
 	Passkey     *PasskeyService
 	DBDir       string
 	PKIDir      string
@@ -86,15 +88,17 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	}
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
-	err = pki.EnsurePKI(nil)
+	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
 	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "", "", "")
-	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	operatorSessionSvc := NewOperatorSessionService(db, logger)
+	webSessionSvc := NewWebSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
 	return &TestInfrastructure{
@@ -107,9 +111,11 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 		UserSvc:     userSvc,
 		PersonaSvc:  personaSvc,
 		Responder:   resp,
-		Auth:        auth,
-		SessionSvc:  sessionSvc,
-		Reg:         reg,
+		Auth:              auth,
+		CLISessionSvc:     cliSessionSvc,
+		OperatorSessionSvc: operatorSessionSvc,
+		WebSessionSvc:     webSessionSvc,
+		Reg:               reg,
 		Passkey:     passkey,
 		DBDir:       dbDir,
 		PKIDir:      pkiDir,

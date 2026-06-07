@@ -330,7 +330,14 @@ type AdminAuditEntry struct {
 	Actor      string                 `json:"actor,omitempty"`
 	Target     string                 `json:"target,omitempty"`
 	OperatorID string                 `json:"operator_id,omitempty"`
-	Details    map[string]interface{} `json:"details,omitempty"`
+	Details    *AdminAuditDetails `json:"details,omitempty"`
+}
+
+// AdminAuditDetails represents the typed details field for AdminAuditEntry.
+type AdminAuditDetails struct {
+	Reason  string `json:"reason,omitempty"`
+	Noop    bool   `json:"noop,omitempty"`
+	Comment string `json:"comment,omitempty"`
 }
 
 // Admin audit action constants. Keep these stable - downstream tooling and

@@ -181,7 +181,7 @@ func TestDocUpdateDeleteField(t *testing.T) {
 	err := db.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "temp": "remove_me"}))
 	require.NoError(t, err)
 
-	updated, err := db.DocUpdate("users", "u1", mustDocJSON(t, map[string]interface{}{"temp": nil}))
+	updated, err := db.DocUpdate("users", "u1", mustDocJSON(t, map[string]json.RawMessage{"temp": nil}))
 	require.NoError(t, err)
 	_, hasTmp := updated.Data["temp"]
 	assert.False(t, hasTmp)
@@ -255,9 +255,9 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.DocSet("things", "t1", mustDocJSON(t, map[string]interface{}{"label": "foo", "count": 5})))
-	require.NoError(t, db.DocSet("things", "t2", mustDocJSON(t, map[string]interface{}{"label": "bar", "count": 10})))
-	require.NoError(t, db.DocSet("things", "t3", mustDocJSON(t, map[string]interface{}{"label": "foo", "count": 20})))
+	require.NoError(t, db.DocSet("things", "t1", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"foo"`), "count": json.RawMessage(`5`)})))
+	require.NoError(t, db.DocSet("things", "t2", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"bar"`), "count": json.RawMessage(`10`)})))
+	require.NoError(t, db.DocSet("things", "t3", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"foo"`), "count": json.RawMessage(`20`)})))
 
 	t.Run("string equality", func(t *testing.T) {
 		t.Parallel()
@@ -811,7 +811,8 @@ func TestHasTrustedSigners(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
-	signerBytes, _ := json.Marshal(signer)
+	signerBytes, err := json.Marshal(signer)
+	require.NoError(t, err)
 	err = db.DocSet("trusted_signers", "test-signer-1", signerBytes)
 	require.NoError(t, err)
 
@@ -826,7 +827,8 @@ func TestHasTrustedSigners(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   false,
 	}
-	disabledSignerBytes, _ := json.Marshal(disabledSigner)
+	disabledSignerBytes, err := json.Marshal(disabledSigner)
+	require.NoError(t, err)
 	err = db.DocSet("trusted_signers", "test-signer-2", disabledSignerBytes)
 	require.NoError(t, err)
 
@@ -859,12 +861,13 @@ func TestGetField(t *testing.T) {
 	db := newTestDB(t)
 
 	// Create a document with multiple fields
-	doc := map[string]interface{}{
-		"name":  "test-doc",
-		"value": 42,
-		"flag":  true,
+	doc := map[string]json.RawMessage{
+		"name":  json.RawMessage(`"test-doc"`),
+		"value": json.RawMessage(`42`),
+		"flag":  json.RawMessage(`true`),
 	}
-	docBytes, _ := json.Marshal(doc)
+	docBytes, err := json.Marshal(doc)
+	require.NoError(t, err)
 	err := db.DocSet("test_collection", "doc1", docBytes)
 	require.NoError(t, err)
 
@@ -893,16 +896,18 @@ func TestDocDeleteNamespace(t *testing.T) {
 	// Create multiple documents in a namespace
 	for i := 0; i < 5; i++ {
 		doc := map[string]string{"id": fmt.Sprintf("doc%d", i)}
-		docBytes, _ := json.Marshal(doc)
-		err := db.DocSet("test_namespace", fmt.Sprintf("doc%d", i), docBytes)
+		docBytes, err := json.Marshal(doc)
+		require.NoError(t, err)
+		err = db.DocSet("test_namespace", fmt.Sprintf("doc%d", i), docBytes)
 		require.NoError(t, err)
 	}
 
 	// Create documents in another namespace
 	for i := 0; i < 3; i++ {
 		doc := map[string]string{"id": fmt.Sprintf("other%d", i)}
-		docBytes, _ := json.Marshal(doc)
-		err := db.DocSet("other_namespace", fmt.Sprintf("other%d", i), docBytes)
+		docBytes, err := json.Marshal(doc)
+		require.NoError(t, err)
+		err = db.DocSet("other_namespace", fmt.Sprintf("other%d", i), docBytes)
 		require.NoError(t, err)
 	}
 
@@ -942,8 +947,9 @@ func TestDocCreate(t *testing.T) {
 
 	// Create a new document
 	doc := map[string]string{"name": "test-doc"}
-	docBytes, _ := json.Marshal(doc)
-	err := db.DocCreate("test_collection", "doc1", docBytes)
+	docBytes, err := json.Marshal(doc)
+	require.NoError(t, err)
+	err = db.DocCreate("test_collection", "doc1", docBytes)
 	require.NoError(t, err)
 
 	// Verify document was created
@@ -963,13 +969,14 @@ func TestDocCreate_WithSystemFields(t *testing.T) {
 	db := newTestDB(t)
 
 	// Create a document with system fields that should be stripped
-	doc := map[string]interface{}{
-		"name":       "test-doc",
-		"id":         "should-be-stripped",
-		"created_at": "should-be-stripped",
-		"updated_at": "should-be-stripped",
+	doc := map[string]json.RawMessage{
+		"name":       json.RawMessage(`"test-doc"`),
+		"id":         json.RawMessage(`"should-be-stripped"`),
+		"created_at": json.RawMessage(`"should-be-stripped"`),
+		"updated_at": json.RawMessage(`"should-be-stripped"`),
 	}
-	docBytes, _ := json.Marshal(doc)
+	docBytes, err := json.Marshal(doc)
+	require.NoError(t, err)
 	err := db.DocCreate("test_collection", "doc1", docBytes)
 	require.NoError(t, err)
 

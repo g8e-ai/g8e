@@ -84,7 +84,8 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	assert.NotNil(t, cliDoc)
 
 	var loadedCLISession models.CLISession
-	b, _ := json.Marshal(cliDoc.Data)
+	b, err := json.Marshal(cliDoc.Data)
+	require.NoError(t, err)
 	err = json.Unmarshal(b, &loadedCLISession)
 	require.NoError(t, err)
 	assert.Equal(t, userID, loadedCLISession.UserID)

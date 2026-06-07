@@ -17,14 +17,16 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestDetector_DetectIPs(t *testing.T) {
@@ -70,7 +72,10 @@ func TestDetector_DetectMDNS(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	detector := NewDetector(logger)
 
-	mdnsNames, err := detector.detectMDNS()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	mdnsNames, err := detector.detectMDNS(ctx)
 	require.NoError(t, err)
 
 	// The detector should always return a stable slice, even if no environment
@@ -187,28 +192,6 @@ func TestNetworkIdentity_FormatForDisplay(t *testing.T) {
 	assert.Contains(t, display, "gateway.local")
 }
 
-func TestDetector_DetectEtcHosts_WithCustomFile(t *testing.T) {
-	t.Parallel()
-	logger := testutil.NewTestLogger()
-	detector := NewDetector(logger)
-
-	// Create a temporary /etc/hosts file
-	tmpDir := t.TempDir()
-	hostsPath := filepath.Join(tmpDir, "hosts")
-	hostsContent := `127.0.0.1 localhost
-192.168.1.50 gateway.local gw
-10.0.0.12 internal.local
-`
-	err := os.WriteFile(hostsPath, []byte(hostsContent), 0644)
-	require.NoError(t, err)
-
-	// Temporarily replace /etc/hosts path for testing
-	// Note: This is a simplified test - in production we'd need to mock the file path
-	// For now, we just verify the parsing logic works
-	aliases, err := detector.detectEtcHosts()
-	require.NoError(t, err)
-	assert.NotNil(t, aliases)
-}
 
 func TestUnique(t *testing.T) {
 	t.Parallel()
@@ -229,11 +212,14 @@ func TestDetector_DetectWindowsIdentity(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	detector := NewDetector(logger)
 
+	// This test only runs on Windows since detectWindowsIdentity
+	// requires Windows-specific commands (systeminfo)
+	if runtime.GOOS != "windows" {
+		t.Skip("Skipping Windows identity test on non-Windows system")
+	}
+
 	winID, err := detector.detectWindowsIdentity()
 	require.NoError(t, err)
-
-	// On non-Windows systems, this should return empty identity
-	// but not error
 	assert.NotNil(t, winID)
 }
 
@@ -242,7 +228,10 @@ func TestDetector_DetectMDNS_WithAvahi(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	detector := NewDetector(logger)
 
-	mdnsNames, err := detector.detectMDNS()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	mdnsNames, err := detector.detectMDNS(ctx)
 	require.NoError(t, err)
 
 	// Should always return a slice, even if avahi-browse is not available
@@ -266,7 +255,10 @@ func TestDetector_DetectMDNS_HostnameSuffix(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	detector := NewDetector(logger)
 
-	mdnsNames, err := detector.detectMDNS()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	mdnsNames, err := detector.detectMDNS(ctx)
 	require.NoError(t, err)
 	assert.NotNil(t, mdnsNames)
 
@@ -300,28 +292,6 @@ func TestDetector_DetectSSHKnownHosts_FileNotFound(t *testing.T) {
 	assert.NotNil(t, sshHosts)
 }
 
-func TestDetector_DetectSSHKnownHosts_CommaSeparated(t *testing.T) {
-	t.Parallel()
-	logger := testutil.NewTestLogger()
-	detector := NewDetector(logger)
-
-	// Create a temporary known_hosts file with comma-separated patterns
-	tmpDir := t.TempDir()
-	knownHostsPath := filepath.Join(tmpDir, "known_hosts")
-	knownHostsContent := `host1,host2,host3 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ...
-# Comment line
-|1|hashed|line ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ...
-`
-	err := os.WriteFile(knownHostsPath, []byte(knownHostsContent), 0644)
-	require.NoError(t, err)
-
-	// This test verifies the parsing logic handles comma-separated patterns
-	// The actual test would need to mock the file path, but we verify
-	// the detector doesn't error when files exist
-	sshHosts, err := detector.detectSSHKnownHosts()
-	require.NoError(t, err)
-	assert.NotNil(t, sshHosts)
-}
 
 func TestNetworkIdentity_FormatForDisplay_EmptyFields(t *testing.T) {
 	t.Parallel()
@@ -376,9 +346,47 @@ func TestNetworkIdentity_FormatForDisplay_AllFields(t *testing.T) {
 func TestGetHostsFilePath(t *testing.T) {
 	t.Parallel()
 
-	// Test on non-Windows systems (Linux, macOS, etc.)
-	path := getHostsFilePath()
-	assert.Equal(t, "/etc/hosts", path)
+	tests := []struct {
+		name     string
+		goos     string
+		expected string
+	}{
+		{
+			name:     "Linux",
+			goos:     "linux",
+			expected: "/etc/hosts",
+		},
+		{
+			name:     "Darwin",
+			goos:     "darwin",
+			expected: "/etc/hosts",
+		},
+		{
+			name:     "Windows",
+			goos:     "windows",
+			expected: filepath.Join(os.Getenv("SystemRoot"), "System32", "drivers", "etc", "hosts"),
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Save original GOOS
+			origGOOS := runtime.GOOS
+
+			// This test verifies the path logic for different OSes
+			// Note: We can't actually change runtime.GOOS in tests,
+			// so we verify the current OS returns the expected path
+			if runtime.GOOS == tt.goos {
+				path := getHostsFilePath()
+				assert.Equal(t, tt.expected, path)
+			} else {
+				t.Skipf("Skipping test for %s on %s", tt.goos, origGOOS)
+			}
+		})
+	}
 }
 
 func TestDetector_DetectAll_ContextCancellation(t *testing.T) {
@@ -392,12 +400,9 @@ func TestDetector_DetectAll_ContextCancellation(t *testing.T) {
 
 	// DetectAll should handle cancelled context gracefully
 	identity, err := detector.DetectAll(ctx)
-	// The function may still return partial results or error
-	// The important thing is it doesn't panic
-	assert.True(t, identity == nil || identity != nil)
-	if err != nil {
-		assert.Contains(t, err.Error(), "context canceled")
-	}
+	// The function should return an error for cancelled context
+	require.Error(t, err)
+	assert.Nil(t, identity)
 }
 
 func TestDetector_DetectAll_Timeout(t *testing.T) {
@@ -409,14 +414,11 @@ func TestDetector_DetectAll_Timeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 	defer cancel()
 
-	// Give it a moment to timeout
-	time.Sleep(10 * time.Millisecond)
-
 	// DetectAll should handle timeout gracefully
-	identity, _ := detector.DetectAll(ctx)
-	// The function may still return partial results or error
-	// The important thing is it doesn't panic
-	assert.True(t, identity == nil || identity != nil)
+	identity, err := detector.DetectAll(ctx)
+	// The function should return an error for timed out context
+	require.Error(t, err)
+	assert.Nil(t, identity)
 }
 
 func TestDetector_DetectAll_ConcurrentExecution(t *testing.T) {

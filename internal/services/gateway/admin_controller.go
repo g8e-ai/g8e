@@ -49,8 +49,8 @@ func newAdminController(cfg *config.Config, logger *slog.Logger, db *CanonicalDB
 	}
 }
 
-func (c *AdminController) readBody(r *http.Request) ([]byte, error) {
-	r.Body = http.MaxBytesReader(nil, r.Body, c.cfg.Gateway.MaxPayloadBytes)
+func (c *AdminController) readBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, c.cfg.Gateway.MaxPayloadBytes)
 	return io.ReadAll(r.Body)
 }
 
@@ -93,7 +93,7 @@ func (c *AdminController) handleAppPolicySigner(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	body, err := c.readBody(r)
+	body, err := c.readBody(w, r)
 	if err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
@@ -129,7 +129,8 @@ func (c *AdminController) handleAppPolicySigner(w http.ResponseWriter, r *http.R
 	}
 
 	if err := c.db.AddTrustedSigner(signer); err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.logger.Error("failed to add trusted signer", "error", err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to add trusted signer")
 		return
 	}
 
@@ -159,7 +160,7 @@ func (c *AdminController) handleRevokeApp(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	body, err := c.readBody(r)
+	body, err := c.readBody(w, r)
 	if err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return

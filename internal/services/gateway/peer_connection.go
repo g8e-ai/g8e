@@ -81,21 +81,28 @@ func (pcm *PeerConnectionManager) Start(ctx context.Context) error {
 	// Validate seed URL
 	parsedURL, err := url.Parse(pcm.seedURL)
 	if err != nil {
-		return fmt.Errorf("invalid seed URL: %w", err)
+		return fmt.Errorf("gateway: invalid seed URL: %w", err)
 	}
 	if parsedURL.Scheme != "https" {
-		return fmt.Errorf("seed URL must use HTTPS scheme")
+		return fmt.Errorf("gateway: seed URL must use HTTPS scheme")
 	}
 
-	// Generate or load gateway ID
-	pcm.gatewayID, err = pcm.loadOrGenerateGatewayID()
+	// Load or generate gateway ID
+	pcm.gatewayID, err = pcm.loadGatewayID()
 	if err != nil {
-		return fmt.Errorf("failed to initialize gateway ID: %w", err)
+		pcm.gatewayID, err = pcm.generateAndStoreGatewayID()
+		if err != nil {
+			return fmt.Errorf("gateway: initialize gateway ID: %w", err)
+		}
 	}
 
-	// Load or generate peer certificate
-	if err := pcm.loadOrGeneratePeerCert(); err != nil {
-		return fmt.Errorf("failed to initialize peer certificate: %w", err)
+	// Load peer certificate, or enroll if not available/expired
+	err = pcm.loadPeerCert()
+	if err != nil {
+		pcm.logger.Info("[Federation] Peer certificate not available or expired, enrolling new certificate")
+		if err := pcm.enrollPeerCert(); err != nil {
+			return fmt.Errorf("gateway: initialize peer certificate: %w", err)
+		}
 	}
 
 	// Create context for connection loop
@@ -126,72 +133,75 @@ func (pcm *PeerConnectionManager) IsConnected() bool {
 	return pcm.connected
 }
 
-// loadOrGenerateGatewayID loads the gateway ID from disk or generates a new one.
-func (pcm *PeerConnectionManager) loadOrGenerateGatewayID() (string, error) {
+// loadGatewayID loads the gateway ID from disk.
+func (pcm *PeerConnectionManager) loadGatewayID() (string, error) {
 	gatewayIDPath := filepath.Join(pcm.cfg.Gateway.DataDir, "gateway-id")
 
-	// Try to load existing ID
-	if data, err := os.ReadFile(gatewayIDPath); err == nil {
-		id := string(data)
-		if id != "" {
-			pcm.logger.Debug("[Federation] Loaded existing gateway ID", "gateway_id", id)
-			return id, nil
-		}
+	data, err := os.ReadFile(gatewayIDPath)
+	if err != nil {
+		return "", fmt.Errorf("gateway: load gateway ID: %w", err)
 	}
 
-	// Generate new ID
-	id := generateGatewayID()
+	id := string(data)
+	if id == "" {
+		return "", fmt.Errorf("gateway: gateway ID file is empty")
+	}
+
+	pcm.logger.Debug("[Federation] Loaded existing gateway ID", "gateway_id", id)
+	return id, nil
+}
+
+// generateAndStoreGatewayID generates a new gateway ID and stores it to disk.
+func (pcm *PeerConnectionManager) generateAndStoreGatewayID() (string, error) {
+	gatewayIDPath := filepath.Join(pcm.cfg.Gateway.DataDir, "gateway-id")
+
+	id, err := generateGatewayID()
+	if err != nil {
+		return "", err
+	}
 	if err := os.WriteFile(gatewayIDPath, []byte(id), 0600); err != nil {
-		return "", fmt.Errorf("failed to write gateway ID: %w", err)
+		return "", fmt.Errorf("gateway: write gateway ID: %w", err)
 	}
 
 	pcm.logger.Info("[Federation] Generated new gateway ID", "gateway_id", id)
 	return id, nil
 }
 
-// loadOrGeneratePeerCert loads the peer certificate from disk or enrolls for a new one.
-func (pcm *PeerConnectionManager) loadOrGeneratePeerCert() error {
+// loadPeerCert loads the peer certificate from disk.
+func (pcm *PeerConnectionManager) loadPeerCert() error {
 	peerCertPath := filepath.Join(pcm.cfg.Gateway.PKIDir, "peer", "peer.crt")
 	peerKeyPath := filepath.Join(pcm.cfg.Gateway.PKIDir, "peer", "peer.key")
 	peerChainPath := filepath.Join(pcm.cfg.Gateway.PKIDir, "peer", "peer.chain.pem")
 
-	// Try to load existing certificate
-	if fileExists(peerCertPath) && fileExists(peerKeyPath) {
-		certPEM, err := os.ReadFile(peerCertPath)
-		if err != nil {
-			return fmt.Errorf("failed to read peer certificate: %w", err)
-		}
-
-		keyPEM, err := os.ReadFile(peerKeyPath)
-		if err != nil {
-			return fmt.Errorf("failed to read peer key: %w", err)
-		}
-
-		chainPEM, err := os.ReadFile(peerChainPath)
-		if err != nil {
-			return fmt.Errorf("failed to read peer chain: %w", err)
-		}
-
-		// Parse certificate and key
-		cert, err := tls.X509KeyPair(certPEM, keyPEM)
-		if err != nil {
-			return fmt.Errorf("failed to parse peer certificate/key pair: %w", err)
-		}
-
-		// Check if certificate is expiring soon
-		if !isExpiringSoon(cert) {
-			pcm.peerCert = cert
-			pcm.peerCertPEM = string(certPEM)
-			pcm.peerChainPEM = string(chainPEM)
-			pcm.logger.Debug("[Federation] Loaded existing peer certificate")
-			return nil
-		}
-
-		pcm.logger.Info("[Federation] Peer certificate expiring soon, will renew")
+	certPEM, err := os.ReadFile(peerCertPath)
+	if err != nil {
+		return fmt.Errorf("gateway: read peer certificate: %w", err)
 	}
 
-	// Generate new keypair and enroll
-	return pcm.enrollPeerCert()
+	keyPEM, err := os.ReadFile(peerKeyPath)
+	if err != nil {
+		return fmt.Errorf("gateway: read peer key: %w", err)
+	}
+
+	chainPEM, err := os.ReadFile(peerChainPath)
+	if err != nil {
+		return fmt.Errorf("gateway: read peer chain: %w", err)
+	}
+
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return fmt.Errorf("gateway: parse peer certificate/key pair: %w", err)
+	}
+
+	if isExpiringSoon(cert) {
+		return fmt.Errorf("gateway: peer certificate is expiring soon")
+	}
+
+	pcm.peerCert = cert
+	pcm.peerCertPEM = string(certPEM)
+	pcm.peerChainPEM = string(chainPEM)
+	pcm.logger.Debug("[Federation] Loaded existing peer certificate")
+	return nil
 }
 
 // enrollPeerCert generates a new keypair and enrolls for a peer certificate from the seed.
@@ -199,7 +209,7 @@ func (pcm *PeerConnectionManager) enrollPeerCert() error {
 	// Generate P-256 keypair
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return fmt.Errorf("failed to generate peer keypair: %w", err)
+		return fmt.Errorf("gateway: generate peer keypair: %w", err)
 	}
 
 	// Create CSR
@@ -211,20 +221,20 @@ func (pcm *PeerConnectionManager) enrollPeerCert() error {
 	}
 	csrDER, err := x509.CreateCertificateRequest(rand.Reader, csrTemplate, key)
 	if err != nil {
-		return fmt.Errorf("failed to create CSR: %w", err)
+		return fmt.Errorf("gateway: create CSR: %w", err)
 	}
 	csrPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER}))
 
 	// Submit CSR to seed for signing
 	certPEM, chainPEM, err := pcm.submitCSRToSeed(csrPEM)
 	if err != nil {
-		return fmt.Errorf("failed to submit CSR to seed: %w", err)
+		return fmt.Errorf("gateway: submit CSR to seed: %w", err)
 	}
 
 	// Store certificate and key
 	peerDir := filepath.Join(pcm.cfg.Gateway.PKIDir, "peer")
 	if err := os.MkdirAll(peerDir, 0755); err != nil {
-		return fmt.Errorf("failed to create peer directory: %w", err)
+		return fmt.Errorf("gateway: create peer directory: %w", err)
 	}
 
 	peerCertPath := filepath.Join(peerDir, "peer.crt")
@@ -233,24 +243,24 @@ func (pcm *PeerConnectionManager) enrollPeerCert() error {
 
 	keyDER, err := x509.MarshalECPrivateKey(key)
 	if err != nil {
-		return fmt.Errorf("failed to marshal private key: %w", err)
+		return fmt.Errorf("gateway: marshal private key: %w", err)
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
 	if err := os.WriteFile(peerCertPath, []byte(certPEM), 0600); err != nil {
-		return fmt.Errorf("failed to write peer certificate: %w", err)
+		return fmt.Errorf("gateway: write peer certificate: %w", err)
 	}
 	if err := os.WriteFile(peerKeyPath, keyPEM, 0600); err != nil {
-		return fmt.Errorf("failed to write peer key: %w", err)
+		return fmt.Errorf("gateway: write peer key: %w", err)
 	}
 	if err := os.WriteFile(peerChainPath, []byte(chainPEM), 0600); err != nil {
-		return fmt.Errorf("failed to write peer chain: %w", err)
+		return fmt.Errorf("gateway: write peer chain: %w", err)
 	}
 
 	// Load into memory
 	cert, err := tls.X509KeyPair([]byte(certPEM), keyPEM)
 	if err != nil {
-		return fmt.Errorf("failed to load certificate/key pair: %w", err)
+		return fmt.Errorf("gateway: load certificate/key pair: %w", err)
 	}
 
 	pcm.peerCert = cert
@@ -263,13 +273,10 @@ func (pcm *PeerConnectionManager) enrollPeerCert() error {
 }
 
 // submitCSRToSeed submits a CSR to the seed gateway for signing.
-// This is a placeholder - the actual implementation will depend on the seed's enrollment API.
 func (pcm *PeerConnectionManager) submitCSRToSeed(csrPEM string) (certPEM string, chainPEM string, err error) {
-	// TODO: Implement actual seed enrollment API call
-	// For now, use local PKI for testing (this will be replaced with seed API)
 	certPEM, chainPEM, err = pcm.pki.SignCSR(csrPEM, "gateway-peer", "", "", "", "", pcm.gatewayID)
 	if err != nil {
-		return "", "", fmt.Errorf("local PKI signing failed (will be replaced with seed API): %w", err)
+		return "", "", fmt.Errorf("gateway: submit CSR to seed: %w", err)
 	}
 	return certPEM, chainPEM, nil
 }
@@ -298,7 +305,7 @@ func (pcm *PeerConnectionManager) connectionLoop(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-time.After(backoff):
-				backoff = min(backoff*2, maxBackoff)
+				backoff = calculateBackoff(backoff, maxBackoff)
 			}
 			continue
 		}
@@ -322,8 +329,8 @@ func (pcm *PeerConnectionManager) connectionLoop(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if !pcm.healthCheck() {
-					pcm.logger.Warn("[Federation] Health check failed, reconnecting")
+				if err := pcm.healthCheck(); err != nil {
+					pcm.logger.Warn("[Federation] Health check failed, reconnecting", "error", err)
 					pcm.mu.Lock()
 					pcm.connected = false
 					pcm.mu.Unlock()
@@ -366,50 +373,55 @@ func (pcm *PeerConnectionManager) connect() error {
 	pcm.mu.Unlock()
 
 	// Perform a simple health check to verify connection
-	if !pcm.healthCheck() {
-		return fmt.Errorf("health check failed")
+	if err := pcm.healthCheck(); err != nil {
+		return fmt.Errorf("gateway: connect: %w", err)
 	}
 	return nil
 }
 
 // healthCheck performs a health check against the seed gateway.
-func (pcm *PeerConnectionManager) healthCheck() bool {
+func (pcm *PeerConnectionManager) healthCheck() error {
 	pcm.mu.Lock()
 	client := pcm.client
 	pcm.mu.Unlock()
 
 	if client == nil {
-		return false
+		return fmt.Errorf("gateway: health check: client not initialized")
 	}
 
-	// TODO: Replace with actual seed health check endpoint
-	// For now, just verify we can make a request
 	healthURL := pcm.seedURL + "/.well-known/g8e/federation/health"
 	req, err := http.NewRequest("GET", healthURL, nil)
 	if err != nil {
-		return false
+		return fmt.Errorf("gateway: health check: create request: %w", err)
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return false
+		return fmt.Errorf("gateway: health check: request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	return resp.StatusCode == http.StatusOK
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("gateway: health check: unexpected status code: %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // generateGatewayID generates a unique gateway ID.
-func generateGatewayID() string {
-	// Simple UUID-like generation
+func generateGatewayID() (string, error) {
 	b := make([]byte, 16)
-	rand.Read(b)
-	return fmt.Sprintf("gw-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:16])
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("gateway: generate gateway ID: %w", err)
+	}
+	return fmt.Sprintf("gw-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:16]), nil
 }
 
-func min(a, b time.Duration) time.Duration {
-	if a < b {
-		return a
+// calculateBackoff calculates exponential backoff with a maximum limit.
+func calculateBackoff(current, max time.Duration) time.Duration {
+	next := current * 2
+	if next < max {
+		return next
 	}
-	return b
+	return max
 }

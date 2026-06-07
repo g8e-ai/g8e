@@ -29,7 +29,7 @@ type libsecretBackend struct{}
 func newLibsecretBackend() (Backend, error) {
 	// Check if secret-tool is available
 	if _, err := exec.LookPath("secret-tool"); err != nil {
-		return nil, fmt.Errorf("secret-tool not found: %w (install libsecret-tools)", err)
+		return nil, fmt.Errorf("libsecret: check secret-tool availability: %w (install libsecret-tools)", err)
 	}
 	return &libsecretBackend{}, nil
 }
@@ -52,13 +52,13 @@ func (b *libsecretBackend) RetrieveMasterKey() ([]byte, error) {
 			// secret-tool returns exit code 1 when item not found
 			return nil, ErrKeyNotFound
 		}
-		return nil, fmt.Errorf("secret-tool lookup: %w", err)
+		return nil, fmt.Errorf("libsecret: lookup master key: %w", err)
 	}
 
 	// secret-tool returns base64-encoded value
 	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(output)))
 	if err != nil {
-		return nil, fmt.Errorf("decode base64 key: %w", err)
+		return nil, fmt.Errorf("libsecret: decode base64 key: %w", err)
 	}
 
 	if len(key) == 0 {
@@ -82,7 +82,7 @@ func (b *libsecretBackend) StoreMasterKey(key []byte) error {
 
 	cmd := exec.Command("secret-tool", args...)
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("secret-tool store: %w", err)
+		return fmt.Errorf("libsecret: store master key: %w", err)
 	}
 
 	return nil
@@ -104,7 +104,7 @@ func (b *libsecretBackend) DeleteMasterKey() error {
 		if strings.Contains(stderr.String(), "not found") {
 			return nil
 		}
-		return fmt.Errorf("secret-tool clear: %w", err)
+		return fmt.Errorf("libsecret: clear master key: %w", err)
 	}
 
 	return nil

@@ -704,6 +704,7 @@ func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *governance.Go
 	}
 
 	ok, err := tv.l3Notary.VerifyL3Proof(
+		ctx,
 		envelope.OperatorId,
 		envelope.TransactionHash,
 		envelope.CliSessionId,

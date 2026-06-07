@@ -27,14 +27,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/protocol"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestIsLoopbackOrigin(t *testing.T) {
@@ -79,7 +81,7 @@ func TestMCPOriginGuard(t *testing.T) {
 		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
-	h := newHTTPHandler(HTTPHandlerDependencies{
+	h, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:               infra.Cfg,
 		Logger:            infra.Logger,
 		DB:                infra.DB,
@@ -96,6 +98,7 @@ func TestMCPOriginGuard(t *testing.T) {
 		IsReady:           func() bool { return true },
 		IsGovernanceReady: func() bool { return true },
 	})
+	require.NoError(t, err, "failed to create HTTP handler")
 
 	router := h.buildMCPHttpRouter()
 
@@ -164,7 +167,7 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
-	h := newHTTPHandler(HTTPHandlerDependencies{
+	h, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:               infra.Cfg,
 		Logger:            infra.Logger,
 		DB:                infra.DB,
@@ -180,6 +183,7 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 		IsReady:           func() bool { return true },
 		IsGovernanceReady: func() bool { return true },
 	})
+	require.NoError(t, err, "failed to create HTTP handler")
 	return h, infra.Cfg
 }
 
@@ -264,8 +268,8 @@ func TestAuthMiddleware(t *testing.T) {
 
 	// Seed platform settings
 	settings := models.SettingsDocument{
-		Settings: map[string]interface{}{
-			"session_encryption_key": "test-key",
+		Settings: &models.PlatformSettings{
+			ActuatorKeyID: "test-key-id",
 		},
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -355,8 +359,8 @@ func TestHandleHealth(t *testing.T) {
 	t.Run("Returns 200 when platform_settings exists", func(t *testing.T) {
 		t.Parallel()
 		settings := models.SettingsDocument{
-			Settings: map[string]interface{}{
-				"session_encryption_key": "test-key",
+			Settings: &models.PlatformSettings{
+				ActuatorKeyID: "test-key-id",
 			},
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
@@ -384,8 +388,8 @@ func TestHandleHealth_StateRootFailure(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
 
 	settings := models.SettingsDocument{
-		Settings: map[string]interface{}{
-			"session_encryption_key": "test-key",
+		Settings: &models.PlatformSettings{
+			ActuatorKeyID: "test-key-id",
 		},
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -449,8 +453,8 @@ func TestInternalSSEBridge(t *testing.T) {
 
 	// Seed platform settings required for SSE push
 	settings := models.SettingsDocument{
-		Settings: map[string]interface{}{
-			"session_encryption_key": "test-key",
+		Settings: &models.PlatformSettings{
+			ActuatorKeyID: "test-key-id",
 		},
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -991,12 +995,14 @@ func TestMCPEndpointIntegration(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, w.Code)
 
-		var respBody map[string]interface{}
-		err := json.Unmarshal(w.Body.Bytes(), &respBody)
+		var resp response.JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		require.NoError(t, err)
 
-		require.Equal(t, float64(1), respBody["id"])
-		result := respBody["result"].(map[string]interface{})
+		require.Equal(t, float64(1), resp.ID)
+		var result map[string]interface{}
+		err = json.Unmarshal(resp.Result, &result)
+		require.NoError(t, err)
 		require.Equal(t, "2025-06-18", result["protocolVersion"])
 	})
 
@@ -1010,12 +1016,12 @@ func TestMCPEndpointIntegration(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, w.Code)
 
-		var respBody map[string]interface{}
-		err := json.Unmarshal(w.Body.Bytes(), &respBody)
+		var resp response.JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		require.NoError(t, err)
 
-		require.Equal(t, float64(42), respBody["id"])
-		require.NotNil(t, respBody["result"])
+		require.Equal(t, float64(42), resp.ID)
+		require.NotNil(t, resp.Result)
 	})
 
 	t.Run("tools/list returns tools", func(t *testing.T) {
@@ -1028,12 +1034,14 @@ func TestMCPEndpointIntegration(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, w.Code)
 
-		var respBody map[string]interface{}
-		err := json.Unmarshal(w.Body.Bytes(), &respBody)
+		var resp response.JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		require.NoError(t, err)
 
-		require.Equal(t, float64(1), respBody["id"])
-		result := respBody["result"].(map[string]interface{})
+		require.Equal(t, float64(1), resp.ID)
+		var result map[string]interface{}
+		err = json.Unmarshal(resp.Result, &result)
+		require.NoError(t, err)
 		require.Contains(t, result, "tools")
 	})
 

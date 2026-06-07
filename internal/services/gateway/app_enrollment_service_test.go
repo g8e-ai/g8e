@@ -16,11 +16,12 @@ package gateway
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/testutil"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestAppEnrollmentService_EnrollApp(t *testing.T) {
@@ -58,9 +59,13 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 			teardown: func() {
 				// Clean up the enrolled app (identity-only, no signer to delete)
 				appID := "spiffe://g8e.local/app/test-mcp-client"
-				_, _ = db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
+				if err := db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID); err != nil {
+					t.Logf("Failed to delete signer document: %v", err)
+				}
 				if pki.secretManager != nil {
-					_ = pki.secretManager.DeleteServicePrivateKey(appID)
+					if err := pki.secretManager.DeleteServicePrivateKey(appID); err != nil {
+						t.Logf("Failed to delete service private key: %v", err)
+					}
 				}
 			},
 		},
@@ -278,19 +283,3 @@ func TestIsValidAppName(t *testing.T) {
 	}
 }
 
-func TestAppEnrollmentService_RollbackOnFailure(t *testing.T) {
-	// Not running in parallel because setupTestGatewayService resets global keystore state
-	gateway, _ := setupTestGatewayService(t)
-	db := gateway.db
-	logger := gateway.logger
-	pki := gateway.pki
-	_ = NewAppEnrollmentService(db, pki, logger)
-
-	t.Run("rollback deletes signer and private key on CSR signing failure", func(t *testing.T) {
-		// Not running in parallel
-
-		// This test requires mocking PKI.SignCSR to fail
-		// For now, we'll skip this as it requires more complex test setup
-		t.Skip("requires PKI.SignCSR failure mock")
-	})
-}

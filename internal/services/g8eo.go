@@ -25,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+
 	"github.com/g8e-ai/g8e/internal/services/auth"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/gateway"
@@ -65,6 +66,7 @@ type G8eoService struct {
 	running   bool
 	mu        sync.RWMutex
 	startTime time.Time
+	wg        sync.WaitGroup
 }
 
 // NewG8eoService creates a new Operator service in Outbound Mode.
@@ -336,7 +338,9 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.running = true
 
 	// Handle external shutdown requests (remote shutdown or SSL failure)
+	vs.wg.Add(1)
 	go func() {
+		defer vs.wg.Done()
 		select {
 		case reason := <-vs.pubSubCommands.ShutdownChan:
 			vs.logger.Info("g8eo Service received external shutdown request", "reason", reason)
@@ -384,7 +388,7 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 			vs.pubSubCommands.Actuator().Wait()
 		}
 		if err := vs.pubSubCommands.Stop(); err != nil {
-			vs.logger.Error("Failed to stop pubsub command service", string(constants.ConnectionStateError), err)
+			vs.logger.Error("g8eo: failed to stop pubsub command service", "error", err)
 		}
 	}
 
@@ -399,40 +403,43 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 		vs.auditStore.Wait()
 	}
 
+	// Wait for shutdown handler goroutine to complete
+	vs.wg.Wait()
+
 	// Close vaults and stores
 	if vs.gatewayDB != nil {
 		if err := vs.gatewayDB.Close(); err != nil {
-			vs.logger.Error("Failed to close gateway database", string(constants.ConnectionStateError), err)
+			vs.logger.Error("g8eo: failed to close gateway database", "error", err)
 		}
 	}
 
 	if vs.executionVault != nil {
 		if err := vs.executionVault.Close(); err != nil {
-			vs.logger.Error("Failed to close execution vault", string(constants.ConnectionStateError), err)
+			vs.logger.Error("g8eo: failed to close execution vault", "error", err)
 		}
 	}
 
 	if vs.tokenStore != nil {
 		if err := vs.tokenStore.Close(); err != nil {
-			vs.logger.Error("Failed to close token store", string(constants.ConnectionStateError), err)
+			vs.logger.Error("g8eo: failed to close token store", "error", err)
 		}
 	}
 
 	if vs.suspendedTxStore != nil {
 		if err := vs.suspendedTxStore.Close(); err != nil {
-			vs.logger.Error("Failed to close suspended transaction store", string(constants.ConnectionStateError), err)
+			vs.logger.Error("g8eo: failed to close suspended transaction store", "error", err)
 		}
 	}
 
 	if vs.replayStore != nil {
 		if err := vs.replayStore.Close(); err != nil {
-			vs.logger.Error("Failed to close replay store", string(constants.ConnectionStateError), err)
+			vs.logger.Error("g8eo: failed to close replay store", "error", err)
 		}
 	}
 
 	if vs.auditStore != nil {
 		if err := vs.auditStore.Close(); err != nil {
-			vs.logger.Error("Failed to close audit store", string(constants.ConnectionStateError), err)
+			vs.logger.Error("g8eo: failed to close audit store", "error", err)
 		}
 	}
 
@@ -447,12 +454,9 @@ type auditStoreTransactionStore struct {
 }
 
 func (a *auditStoreTransactionStore) DocSet(collection, id string, data json.RawMessage) error {
-	if a.store == nil {
-		return nil
-	}
 	var receipt models.ActionReceiptRecord
 	if err := json.Unmarshal(data, &receipt); err != nil {
-		return fmt.Errorf("failed to decode action receipt record: %w", err)
+		return fmt.Errorf("auditStoreTransactionStore: failed to decode action receipt record: %w", err)
 	}
 	// Record directly in receipts table via transaction-native API
 	return a.store.RecordActionReceipt(&receipt)

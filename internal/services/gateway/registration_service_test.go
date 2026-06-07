@@ -64,7 +64,7 @@ func TestPKIPhase2_CalculateSerialFromPEM(t *testing.T) {
 	require.NoError(t, err)
 
 	pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-	err = pki.EnsurePKI(nil)
+	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
 	// Generate a CSR and sign it
@@ -149,7 +149,7 @@ func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
 		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
-		err = pki.EnsurePKI(nil)
+		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		userSvc := NewUserService(db, logger)

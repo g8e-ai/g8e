@@ -1016,16 +1016,16 @@ func (v *L1Doctrine) AnalyzeCommand(command string) []ThreatSignal {
 // AnalyzeMCPArguments recursively analyzes MCP tool arguments for L1 forbidden patterns.
 // This extends L1 validation beyond tool_name to include the arguments_json payload.
 func (v *L1Doctrine) AnalyzeMCPArguments(argumentsJSON string) ([]ThreatSignal, error) {
-	// Parse the JSON arguments
-	var args map[string]interface{}
-	if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
+	// Parse the JSON arguments using json.RawMessage to avoid untyped maps
+	var raw json.RawMessage
+	if err := json.Unmarshal([]byte(argumentsJSON), &raw); err != nil {
 		return nil, fmt.Errorf("invalid JSON arguments: %w", err)
 	}
 
 	// Recursively analyze all string values in the arguments with depth limit
 	const maxDepth = 50
 	signals := []ThreatSignal{}
-	if err := v.analyzeValueRecursive(args, "", &signals, 0, maxDepth); err != nil {
+	if err := v.analyzeJSONRecursive(raw, "", &signals, 0, maxDepth); err != nil {
 		return nil, err
 	}
 
@@ -1042,51 +1042,64 @@ func (e *MaxDepthExceededError) Error() string {
 	return fmt.Sprintf("JSON recursion depth exceeded maximum limit of %d at path: %s", e.MaxDepth, e.Path)
 }
 
-// analyzeValueRecursive recursively traverses a value and detects threats in string fields.
+// analyzeJSONRecursive recursively traverses JSON raw message and detects threats in string fields.
 // Returns MaxDepthExceededError if the recursion depth exceeds maxDepth.
-func (v *L1Doctrine) analyzeValueRecursive(value interface{}, path string, signals *[]ThreatSignal, currentDepth int, maxDepth int) error {
+func (v *L1Doctrine) analyzeJSONRecursive(raw json.RawMessage, path string, signals *[]ThreatSignal, currentDepth int, maxDepth int) error {
 	if currentDepth > maxDepth {
 		return &MaxDepthExceededError{MaxDepth: maxDepth, Path: path}
 	}
 
-	switch val := value.(type) {
-	case string:
+	// Try to parse as string first
+	var strVal string
+	if err := json.Unmarshal(raw, &strVal); err == nil {
 		// Analyze string values for threat patterns
 		for _, detector := range v.inputThreatDetectors {
-			detected := detector.Detect(val)
+			detected := detector.Detect(strVal)
 			for _, sig := range detected {
 				// Add path context to the signal
 				sig.Context = path
 				*signals = append(*signals, sig)
 			}
 		}
-	case map[string]interface{}:
+		return nil
+	}
+
+	// Try to parse as object
+	var objVal map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &objVal); err == nil {
 		// Recursively analyze object fields
-		for key, val := range val {
+		for key, val := range objVal {
 			newPath := path
 			if newPath != "" {
 				newPath += "."
 			}
 			newPath += key
-			if err := v.analyzeValueRecursive(val, newPath, signals, currentDepth+1, maxDepth); err != nil {
+			if err := v.analyzeJSONRecursive(val, newPath, signals, currentDepth+1, maxDepth); err != nil {
 				return err
 			}
 		}
-	case []interface{}:
+		return nil
+	}
+
+	// Try to parse as array
+	var arrVal []json.RawMessage
+	if err := json.Unmarshal(raw, &arrVal); err == nil {
 		// Recursively analyze array elements
-		for i, val := range val {
+		for i, val := range arrVal {
 			newPath := path
 			if newPath != "" {
 				newPath += "["
 				newPath += fmt.Sprintf("%d", i)
 				newPath += "]"
 			}
-			if err := v.analyzeValueRecursive(val, newPath, signals, currentDepth+1, maxDepth); err != nil {
+			if err := v.analyzeJSONRecursive(val, newPath, signals, currentDepth+1, maxDepth); err != nil {
 				return err
 			}
 		}
-		// Numbers, booleans, and null are ignored
+		return nil
 	}
+
+	// Numbers, booleans, and null are ignored - they don't contain string threats
 	return nil
 }
 

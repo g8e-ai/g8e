@@ -22,10 +22,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
-	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/models"
 )
 
 func setupTestAdminController(t *testing.T) *AdminController {
@@ -50,10 +52,17 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	t.Cleanup(func() { adminController.db.DocDelete("users", regularUser.ID) })
 
 	// Create an app policy document for testing
-	appPolicy := map[string]interface{}{
-		"app_id":      "test-app-id",
-		"policy_name": "test-policy",
-		"enabled":     true,
+	now := time.Now()
+	appPolicy := models.AppPolicy{
+		AppID:              "test-app-id",
+		AllowedCollections: []string{"test-collection"},
+		AllowedEventTypes:  []string{"test-event"},
+		AllowedIntents:     []string{"test-intent"},
+		RateLimitRPS:       100,
+		MaxPayloadBytes:    1024 * 1024,
+		RequireL3Approval:  false,
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 	policyDoc, err := json.Marshal(appPolicy)
 	require.NoError(t, err)

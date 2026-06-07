@@ -73,7 +73,7 @@ func (c *PKIController) handlePKICABundle(w http.ResponseWriter, r *http.Request
 	pem, err := c.pki.GatewayTrustBundle()
 	if err != nil {
 		c.logger.Error("Failed to read trust bundle", "error", err, "bundle_path", bundlePath, "pki_dir", c.pki.PKIDir())
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to read hub bundle: %v", err))
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: read trust bundle: %w", err).Error())
 		return
 	}
 	w.Header().Set(constants.HeaderContentType, "application/x-pem-file")
@@ -90,21 +90,24 @@ func (c *PKIController) handlePKIFingerprint(w http.ResponseWriter, r *http.Requ
 	}
 	pemData, err := os.ReadFile(filepath.Join(c.pki.PKIDir(), "root", "root_ca.crt"))
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, "failed to read root CA")
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: read root CA: %w", err).Error())
 		return
 	}
 
-	block, _ := pem.Decode(pemData)
+	block, rest := pem.Decode(pemData)
 	if block == nil {
 		c.responder.Error(w, http.StatusInternalServerError, "invalid root CA PEM")
 		return
+	}
+	if len(rest) > 0 {
+		c.logger.Warn("Unexpected data after PEM block", "extra_bytes", len(rest))
 	}
 
 	hash := sha256.Sum256(block.Bytes)
 	fingerprint := hex.EncodeToString(hash[:])
 
-	c.responder.JSON(w, http.StatusOK, map[string]string{
-		"root_ca": "sha256:" + fingerprint,
+	c.responder.JSON(w, http.StatusOK, models.PKIFingerprintResponse{
+		RootCA: "sha256:" + fingerprint,
 	})
 }
 
@@ -116,7 +119,7 @@ func (c *PKIController) handlePKICSRSign(w http.ResponseWriter, r *http.Request)
 
 	body, err := c.readBody(r)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: read request body: %w", err).Error())
 		return
 	}
 
@@ -129,19 +132,19 @@ func (c *PKIController) handlePKICSRSign(w http.ResponseWriter, r *http.Request)
 		WorkloadSessionID string `json:"workload_session_id"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: unmarshal CSR sign request: %w", err).Error())
 		return
 	}
 
 	certPEM, chainPEM, err := c.pki.SignCSR(req.CSR, req.LeafType, req.OrganizationID, req.OperatorID, req.UserID, req.WorkloadSessionID, "")
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: sign CSR: %w", err).Error())
 		return
 	}
 
-	c.responder.JSON(w, http.StatusOK, map[string]string{
-		"certificate_pem":       certPEM,
-		"certificate_chain_pem": chainPEM,
+	c.responder.JSON(w, http.StatusOK, models.PKICSRSignResponse{
+		CertificatePEM:       certPEM,
+		CertificateChainPEM: chainPEM,
 	})
 }
 
@@ -153,7 +156,7 @@ func (c *PKIController) handlePKICertificatesRevoke(w http.ResponseWriter, r *ht
 
 	body, err := c.readBody(r)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: read request body: %w", err).Error())
 		return
 	}
 
@@ -162,7 +165,7 @@ func (c *PKIController) handlePKICertificatesRevoke(w http.ResponseWriter, r *ht
 		Reason string `json:"reason"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: unmarshal revoke request: %w", err).Error())
 		return
 	}
 
@@ -172,7 +175,7 @@ func (c *PKIController) handlePKICertificatesRevoke(w http.ResponseWriter, r *ht
 	}
 
 	if err := c.pki.RevokeCertificate(req.Serial, req.Reason); err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: revoke certificate: %w", err).Error())
 		return
 	}
 
@@ -187,7 +190,7 @@ func (c *PKIController) handlePKIRevocationBundle(w http.ResponseWriter, r *http
 
 	crlDER, err := c.pki.GenerateCRL()
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: generate CRL: %w", err).Error())
 		return
 	}
 
@@ -216,22 +219,23 @@ func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Re
 
 	userID, err := ExtractUserIDFromCert(r.TLS.PeerCertificates[0])
 	if err != nil {
-		c.responder.Error(w, http.StatusUnauthorized, "failed to extract user_id from client certificate")
+		c.responder.Error(w, http.StatusUnauthorized, fmt.Errorf("pki: extract user ID from certificate: %w", err).Error())
 		return
 	}
 
 	body, err := c.readBody(r)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: read request body: %w", err).Error())
 		return
 	}
 
 	var req models.OperatorRegistrationRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: unmarshal enrollment request: %w", err).Error())
 		return
 	}
 
+	// Device enrollment does not require an organization context
 	organizationID := ""
 	if req.CSR == "" {
 		c.responder.Error(w, http.StatusBadRequest, "csr_pem is required")
@@ -240,7 +244,7 @@ func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Re
 
 	resp, err := c.registration.RegisterDeviceCSR(userID, organizationID, req)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: register device CSR: %w", err).Error())
 		return
 	}
 
@@ -416,7 +420,7 @@ func (c *PKIController) handleDeployScriptLinux(w http.ResponseWriter, r *http.R
 	script, err := scripts.RenderLinuxDeployScript(data)
 	if err != nil {
 		c.logger.Error("Failed to render Linux deploy script", "error", err)
-		c.responder.Error(w, http.StatusInternalServerError, "failed to render deploy script")
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: render Linux deploy script: %w", err).Error())
 		return
 	}
 
@@ -442,7 +446,7 @@ func (c *PKIController) handleDeployScriptWindows(w http.ResponseWriter, r *http
 	script, err := scripts.RenderWindowsDeployScript(data)
 	if err != nil {
 		c.logger.Error("Failed to render Windows deploy script", "error", err)
-		c.responder.Error(w, http.StatusInternalServerError, "failed to render deploy script")
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: render Windows deploy script: %w", err).Error())
 		return
 	}
 

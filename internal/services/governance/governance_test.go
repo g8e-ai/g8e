@@ -84,7 +84,7 @@ type MockHumanSigner struct {
 }
 
 // VerifyL3Proof mimics L3Notary.VerifyL3Proof for testing.
-func (m *MockHumanSigner) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+func (m *MockHumanSigner) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	m.VerifyCallCount++
 	if m.ReturnError != nil {
 		return false, m.ReturnError

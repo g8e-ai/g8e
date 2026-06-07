@@ -23,5 +23,7 @@ import (
 // returning a signed ActionReceipt or a governance verification error.
 // It is the primary entry point for the g8e Gateway's fail-closed mutation gate.
 type EnvelopeProcessor interface {
+	// ProcessEnvelope validates and executes a GovernanceEnvelope payload through
+	// the 5-layer verification gauntlet, returning a signed ActionReceipt on success.
 	ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error)
 }

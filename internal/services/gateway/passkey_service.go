@@ -15,6 +15,7 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -311,36 +312,11 @@ func (s *PasskeyService) RevokeCredential(userID, credentialID string) (found bo
 	return true, len(newCreds), nil
 }
 
-// CreateWebSession creates a web session after successful authentication.
-func (s *PasskeyService) CreateWebSession(userID string) (*models.WebSession, error) {
-	webSessionID := uuid.New().String()
-	now := time.Now()
-
-	webSession := &models.WebSession{
-		ID:              webSessionID,
-		UserID:          userID,
-		CreatedAtUnixMs: now.UnixMilli(),
-		ExpiresAtUnixMs: now.Add(webSessionTTL).UnixMilli(),
-	}
-
-	data, err := json.Marshal(webSession)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal web session: %w", err)
-	}
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, data); err != nil {
-		s.logger.Error("Failed to create web session", string(constants.ConnectionStateError), err, "userID", userID)
-		return nil, fmt.Errorf("failed to create web session: %w", err)
-	}
-
-	s.logger.Info("Web session created", "userID", userID, "webSessionID", webSessionID[:8])
-	return webSession, nil
-}
-
 // VerifyL3Proof verifies a WebAuthn assertion against a registered passkey.
 // The challenge is the transaction_hash.
 // The cliSessionID parameter is ignored for web sessions (WebAuthn) but is required
 // for interface compatibility with CLI mTLS-based L3 verification.
-func (s *PasskeyService) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+func (s *PasskeyService) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	if userID == "" {
 		return false, fmt.Errorf("user_id is required for L3 WebAuthn verification")
 	}

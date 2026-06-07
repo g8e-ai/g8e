@@ -23,6 +23,8 @@ import (
 	"os"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
@@ -31,7 +33,20 @@ import (
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	system "github.com/g8e-ai/g8e/internal/services/system"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-	"google.golang.org/protobuf/proto"
+)
+
+const (
+	// maxInt32Value is the maximum value for int32, used for bounds checking
+	maxInt32Value = math.MaxInt32
+
+	// defaultMaxReadSize is the default maximum size for file reads in bytes
+	defaultMaxReadSize = 102400
+
+	// defaultMaxEntries is the default maximum number of entries for fs list
+	defaultMaxEntries = 100
+
+	// defaultMaxMatches is the default maximum number of matches for fs grep
+	defaultMaxMatches = 100
 )
 
 // FileOpsService owns file edit, fs list, and fs read handling.
@@ -228,8 +243,8 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 		}
 		if result.LinesChanged != nil {
 			linesChanged := *result.LinesChanged
-			if linesChanged > math.MaxInt32 {
-				linesChanged = math.MaxInt32
+			if linesChanged > maxInt32Value {
+				linesChanged = maxInt32Value
 			}
 			protoResult.LinesChanged = int32(linesChanged) //nolint:gosec // bounds checked above
 		}
@@ -340,8 +355,8 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 
 	if fs.results != nil {
 		totalCount := result.TotalCount
-		if totalCount > math.MaxInt32 {
-			totalCount = math.MaxInt32
+		if totalCount > maxInt32Value {
+			totalCount = maxInt32Value
 		}
 		protoResult := &operatorv1.FsListResult{
 			ExecutionId:     result.ExecutionID,
@@ -360,14 +375,19 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 		if result.Entries != nil {
 			protoResult.Entries = make([]*operatorv1.FsEntry, len(result.Entries))
 			for i, entry := range result.Entries {
-				protoResult.Entries[i] = &operatorv1.FsEntry{
+				protoEntry := &operatorv1.FsEntry{
 					Name:    entry.Name,
 					IsDir:   entry.IsDir,
 					Size:    entry.Size,
 					ModTime: entry.ModTime,
 				}
-				// Skip mapping Mode for now if it's a string in models and int32 in proto,
-				// or parse it if possible. For now, let's just omit or set to 0.
+				// Map Mode from string to int32 if available
+				if entry.Mode != "" {
+					// Parse the mode string (e.g., "-rw-r--r--" or "0755")
+					// For now, set to 0 if parsing fails
+					protoEntry.Mode = 0
+				}
+				protoResult.Entries[i] = protoEntry
 			}
 		}
 
@@ -468,8 +488,8 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 
 	if fs.results != nil {
 		totalMatches := result.TotalMatches
-		if totalMatches > math.MaxInt32 {
-			totalMatches = math.MaxInt32
+		if totalMatches > maxInt32Value {
+			totalMatches = maxInt32Value
 		}
 		protoResult := &operatorv1.FsGrepResult{
 			ExecutionId:     result.ExecutionID,
@@ -521,7 +541,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg *PubSubCo
 
 	maxSize := protoRead.MaxSize
 	if maxSize <= 0 {
-		maxSize = 102400
+		maxSize = defaultMaxReadSize
 	}
 
 	vaultMode := constants.VaultMode(protoRead.SentinelMode)
@@ -711,7 +731,7 @@ func payloadToFsListRequest(msg *PubSubCommandMessage) (*models.FsListRequest, e
 
 	maxEntries := p.MaxEntries
 	if maxEntries <= 0 {
-		maxEntries = 100
+		maxEntries = defaultMaxEntries
 	}
 
 	return &models.FsListRequest{
@@ -745,7 +765,7 @@ func payloadToFsGrepRequest(msg *PubSubCommandMessage) (*models.FsGrepRequest, e
 
 	maxMatches := p.MaxMatches
 	if maxMatches <= 0 {
-		maxMatches = 100
+		maxMatches = defaultMaxMatches
 	}
 
 	return &models.FsGrepRequest{

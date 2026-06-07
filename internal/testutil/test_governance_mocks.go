@@ -14,6 +14,7 @@
 package testutil
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 	"time"
@@ -95,7 +96,7 @@ func NewMockStateRootProvider(root string) *MockStateRootProvider {
 // Simple version that always approves (returns true).
 type MockL3Notary struct{}
 
-func (m *MockL3Notary) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+func (m *MockL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	return true, nil
 }
 
@@ -107,7 +108,7 @@ type ConfigurableMockL3Notary struct {
 	ShouldPass bool
 }
 
-func (m *ConfigurableMockL3Notary) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+func (m *ConfigurableMockL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	return m.ShouldPass, nil
 }
 
@@ -121,7 +122,7 @@ type SlowMockL3Notary struct {
 	Delay time.Duration
 }
 
-func (m *SlowMockL3Notary) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+func (m *SlowMockL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	time.Sleep(m.Delay)
 	return true, nil
 }

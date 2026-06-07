@@ -69,7 +69,7 @@ import (
 
 type a2aGatewayRejectingL3Notary struct{}
 
-func (a2aGatewayRejectingL3Notary) VerifyL3Proof(_ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
+func (a2aGatewayRejectingL3Notary) VerifyL3Proof(_ context.Context, _ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
 	return false, nil
 }
 

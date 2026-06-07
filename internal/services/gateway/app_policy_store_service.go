@@ -17,7 +17,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+)
 
+import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
@@ -53,7 +55,7 @@ func (s *AppPolicyStoreService) GetAppPolicy(appID string) (*models.AppPolicy, e
 
 	data, err := json.Marshal(doc.Data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal app policy data: %w", err)
 	}
 
 	var policy models.AppPolicy

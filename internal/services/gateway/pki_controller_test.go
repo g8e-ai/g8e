@@ -86,7 +86,7 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	}
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
-	require.NoError(t, pki.EnsurePKI(nil), "failed to ensure PKI")
+	require.NoError(t, pki.InitializePKI(nil), "failed to ensure PKI")
 
 	appEnrollment := NewAppEnrollmentService(db, pki, logger)
 	resp := response.NewWriter(logger)

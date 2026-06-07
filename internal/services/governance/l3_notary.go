@@ -14,6 +14,7 @@
 package governance
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
@@ -31,7 +32,7 @@ import (
 type L3Notary interface {
 	// VerifyL3Proof verifies an L3 proof for a transaction.
 	// Returns true if the proof is valid and the transaction should be allowed.
-	VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error)
+	VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error)
 }
 
 // outboundL3Notary provides L3 verification for outbound mode using CLI-based approval.
@@ -59,7 +60,7 @@ func NewOutboundL3Notary(suspendedStore interfaces.SuspendedTransactionStore, lo
 // 4. The approval has not expired
 //
 // This replaces the previous string-only acceptance with cryptographic verification.
-func (v *outboundL3Notary) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	if userID == "" {
 		return false, fmt.Errorf("user_id is required for CLI L3 verification")
 	}
