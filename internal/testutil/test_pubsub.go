@@ -20,11 +20,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/httpclient"
 	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
-	"github.com/gorilla/websocket"
-	"google.golang.org/protobuf/proto"
 )
 
 // TestPubSubAvailable checks if the client pub/sub gateway is reachable.
@@ -39,14 +40,14 @@ func TestPubSubAvailable(t *testing.T, baseURL string) {
 	wsURL := baseURL + "/ws/pubsub"
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {
-		t.Fatalf("client pub/sub TLS setup failed: %w", err)
+		t.Fatalf("testutil: TLS setup failed: %v", err)
 	}
 	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		t.Fatalf("client pub/sub not available at %s: %w", baseURL, err)
+		t.Fatalf("testutil: pub/sub not available at %s: %v", baseURL, err)
 	}
 	ws.Close()
 }
@@ -61,26 +62,26 @@ func SubscribeToChannel(t *testing.T, baseURL string, channel string) <-chan []b
 
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {
-		t.Fatalf("Failed to build TLS dialer for Operator pub/sub: %w", err)
+		t.Fatalf("testutil: TLS dialer build failed: %v", err)
 	}
 	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		t.Fatalf("Failed to connect to Operator pub/sub at %s: %w", wsURL, err)
+		t.Fatalf("testutil: pub/sub connection failed at %s: %v", wsURL, err)
 	}
 
 	subMsg := &pubsubv1.PubSubMessage{Action: constants.PubSubActionSubscribe, Channel: channel}
 	subBytes, err := proto.Marshal(subMsg)
 	if err != nil {
 		ws.Close()
-		t.Fatalf("Failed to marshal subscribe message: %w", err)
+		t.Fatalf("testutil: subscribe message marshal failed: %v", err)
 	}
 
 	if err := ws.WriteMessage(websocket.BinaryMessage, subBytes); err != nil {
 		ws.Close()
-		t.Fatalf("Failed to subscribe to channel %s: %w", channel, err)
+		t.Fatalf("testutil: channel %s subscribe failed: %v", channel, err)
 	}
 
 	out := make(chan []byte, 64)
@@ -125,25 +126,25 @@ func PublishTestMessage(t *testing.T, baseURL string, channel string, message st
 
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {
-		t.Fatalf("Failed to build TLS dialer for pub/sub publish: %w", err)
+		t.Fatalf("testutil: TLS dialer build failed: %v", err)
 	}
 	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		t.Fatalf("Failed to connect to client pub/sub for publish on channel %s: %w", channel, err)
+		t.Fatalf("testutil: pub/sub connection failed for channel %s: %v", channel, err)
 	}
 	defer ws.Close()
 
 	pubMsg := &pubsubv1.PubSubMessage{Action: constants.PubSubActionPublish, Channel: channel, Data: []byte(message)}
 	pubBytes, err := proto.Marshal(pubMsg)
 	if err != nil {
-		t.Fatalf("Failed to marshal publish message: %w", err)
+		t.Fatalf("testutil: publish message marshal failed: %v", err)
 	}
 
 	if err := ws.WriteMessage(websocket.BinaryMessage, pubBytes); err != nil {
-		t.Fatalf("Failed to publish test message to channel %s: %w", channel, err)
+		t.Fatalf("testutil: channel %s publish failed: %v", channel, err)
 	}
 }
 

@@ -254,7 +254,7 @@ func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (json.
 	var result json.RawMessage
 	if err := json.Unmarshal([]byte(fieldValue), &result); err != nil {
 		// If it's a simple string, return it directly
-		return fieldValue, nil
+		return json.RawMessage(fieldValue), nil
 	}
 
 	return result, nil

@@ -14,10 +14,12 @@
 package testutil
 
 import (
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,9 +28,52 @@ import (
 // NewTestConfig
 // ---------------------------------------------------------------------------
 
-func TestNewTestConfig_ReturnsNonNil(t *testing.T) {
-	cfg := NewTestConfig(t)
-	require.NotNil(t, cfg)
+func TestNewTestConfig(t *testing.T) {
+	tests := []struct {
+		name string
+		test func(t *testing.T, cfg *config.Config)
+	}{
+		{
+			name: "ReturnsNonNil",
+			test: func(t *testing.T, cfg *config.Config) {
+				require.NotNil(t, cfg)
+			},
+		},
+		{
+			name: "FieldsPopulated",
+			test: func(t *testing.T, cfg *config.Config) {
+				assert.Equal(t, "test-project", cfg.ProjectID)
+				assert.NotEmpty(t, cfg.OperatorID)
+				assert.NotEmpty(t, cfg.OperatorSessionId)
+				assert.NotEmpty(t, cfg.PubSubURL)
+				assert.NotEmpty(t, cfg.WorkDir)
+			},
+		},
+		{
+			name: "WorkDirExists",
+			test: func(t *testing.T, cfg *config.Config) {
+				_, err := os.Stat(cfg.WorkDir)
+				require.NoError(t, err, "WorkDir from t.TempDir() must exist")
+			},
+		},
+		{
+			name: "OperatorIDContainsTestName",
+			test: func(t *testing.T, cfg *config.Config) {
+				safeName := strings.NewReplacer("/", "-", " ", "_", ":", "-").Replace(t.Name())
+				if len(safeName) > 40 {
+					safeName = safeName[:40]
+				}
+				assert.Contains(t, cfg.OperatorID, safeName)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := NewTestConfig(t)
+			tt.test(t, cfg)
+		})
+	}
 }
 
 func TestNewTestConfig_HasUniqueIDs(t *testing.T) {
@@ -36,30 +81,6 @@ func TestNewTestConfig_HasUniqueIDs(t *testing.T) {
 	cfg2 := NewTestConfig(t)
 	assert.NotEqual(t, cfg1.OperatorID, cfg2.OperatorID)
 	assert.NotEqual(t, cfg1.OperatorSessionId, cfg2.OperatorSessionId)
-}
-
-func TestNewTestConfig_OperatorIDContainsTestName(t *testing.T) {
-	cfg := NewTestConfig(t)
-	safeName := strings.NewReplacer("/", "-", " ", "_", ":", "-").Replace(t.Name())
-	if len(safeName) > 40 {
-		safeName = safeName[:40]
-	}
-	assert.Contains(t, cfg.OperatorID, safeName)
-}
-
-func TestNewTestConfig_FieldsPopulated(t *testing.T) {
-	cfg := NewTestConfig(t)
-	assert.Equal(t, "test-project", cfg.ProjectID)
-	assert.NotEmpty(t, cfg.OperatorID)
-	assert.NotEmpty(t, cfg.OperatorSessionId)
-	assert.NotEmpty(t, cfg.PubSubURL)
-	assert.NotEmpty(t, cfg.WorkDir)
-}
-
-func TestNewTestConfig_WorkDirExists(t *testing.T) {
-	cfg := NewTestConfig(t)
-	_, err := os.Stat(cfg.WorkDir)
-	require.NoError(t, err, "WorkDir from t.TempDir() must exist")
 }
 
 func TestNewTestConfig_ParallelUnique(t *testing.T) {
@@ -79,80 +100,149 @@ func TestNewTestConfig_ParallelUnique(t *testing.T) {
 // NewTestLogger
 // ---------------------------------------------------------------------------
 
-func TestNewTestLogger_ReturnsNonNil(t *testing.T) {
-	logger := NewTestLogger()
-	require.NotNil(t, logger)
-}
+func TestNewTestLogger(t *testing.T) {
+	tests := []struct {
+		name string
+		test func(t *testing.T, logger *slog.Logger)
+	}{
+		{
+			name: "ReturnsNonNil",
+			test: func(t *testing.T, logger *slog.Logger) {
+				require.NotNil(t, logger)
+			},
+		},
+		{
+			name: "DoesNotPanic",
+			test: func(t *testing.T, logger *slog.Logger) {
+				assert.NotPanics(t, func() {
+					logger.Info("info message")
+					logger.Info("debug message")
+					logger.Error("error message")
+					logger.Warn("warn message")
+				})
+			},
+		},
+	}
 
-func TestNewTestLogger_DoesNotPanic(t *testing.T) {
-	logger := NewTestLogger()
-	assert.NotPanics(t, func() {
-		logger.Info("info message")
-		logger.Info("debug message")
-		logger.Error("error message")
-		logger.Warn("warn message")
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := NewTestLogger()
+			tt.test(t, logger)
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
 // NewVerboseTestLogger
 // ---------------------------------------------------------------------------
 
-func TestNewVerboseTestLogger_ReturnsNonNil(t *testing.T) {
-	logger := NewVerboseTestLogger(t)
-	require.NotNil(t, logger)
-}
+func TestNewVerboseTestLogger(t *testing.T) {
+	tests := []struct {
+		name string
+		test func(t *testing.T, logger *slog.Logger)
+	}{
+		{
+			name: "ReturnsNonNil",
+			test: func(t *testing.T, logger *slog.Logger) {
+				require.NotNil(t, logger)
+			},
+		},
+		{
+			name: "WritesToTestLog",
+			test: func(t *testing.T, logger *slog.Logger) {
+				assert.NotPanics(t, func() {
+					logger.Info("verbose test log message")
+					logger.Info("verbose debug message")
+				})
+			},
+		},
+	}
 
-func TestNewVerboseTestLogger_WritesToTestLog(t *testing.T) {
-	logger := NewVerboseTestLogger(t)
-	assert.NotPanics(t, func() {
-		logger.Info("verbose test log message")
-		logger.Info("verbose debug message")
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := NewVerboseTestLogger(t)
+			tt.test(t, logger)
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
 // testLogWriter.Write
 // ---------------------------------------------------------------------------
 
-func TestTestLogWriter_Write_ReturnsLenAndNoError(t *testing.T) {
-	w := testLogWriter{t: t}
-	msg := []byte("test log line\n")
-	n, err := w.Write(msg)
-	require.NoError(t, err)
-	assert.Equal(t, len(msg), n)
-}
+func TestTestLogWriter_Write(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  []byte
+		test func(t *testing.T, n int, err error)
+	}{
+		{
+			name: "ReturnsLenAndNoError",
+			msg:  []byte("test log line\n"),
+			test: func(t *testing.T, n int, err error) {
+				require.NoError(t, err)
+				assert.Equal(t, len([]byte("test log line\n")), n)
+			},
+		},
+		{
+			name: "EmptySlice",
+			msg:  []byte{},
+			test: func(t *testing.T, n int, err error) {
+				require.NoError(t, err)
+				assert.Equal(t, 0, n)
+			},
+		},
+		{
+			name: "MultiLine",
+			msg:  []byte("line1\nline2\nline3\n"),
+			test: func(t *testing.T, n int, err error) {
+				require.NoError(t, err)
+				assert.Equal(t, len([]byte("line1\nline2\nline3\n")), n)
+			},
+		},
+	}
 
-func TestTestLogWriter_Write_EmptySlice(t *testing.T) {
-	w := testLogWriter{t: t}
-	n, err := w.Write([]byte{})
-	require.NoError(t, err)
-	assert.Equal(t, 0, n)
-}
-
-func TestTestLogWriter_Write_MultiLine(t *testing.T) {
-	w := testLogWriter{t: t}
-	msg := []byte("line1\nline2\nline3\n")
-	n, err := w.Write(msg)
-	require.NoError(t, err)
-	assert.Equal(t, len(msg), n)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := testLogWriter{t: t}
+			n, err := w.Write(tt.msg)
+			tt.test(t, n, err)
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
 // GetTestOperatorDirectURL
 // ---------------------------------------------------------------------------
 
-func TestGetTestOperatorDirectURL_DefaultScheme(t *testing.T) {
-	// g8e uses ZERO environment variables - always uses default URL
-	url := GetTestOperatorDirectURL()
-	assert.True(t, strings.HasPrefix(url, "wss://"), "default URL must use wss:// scheme, got: %s", url)
-	assert.NotEmpty(t, url)
-}
+func TestGetTestOperatorDirectURL(t *testing.T) {
+	tests := []struct {
+		name string
+		test func(t *testing.T, url string)
+	}{
+		{
+			name: "DefaultScheme",
+			test: func(t *testing.T, url string) {
+				// g8e uses ZERO environment variables - always uses default URL
+				assert.True(t, strings.HasPrefix(url, "wss://"), "default URL must use wss:// scheme, got: %s", url)
+				assert.NotEmpty(t, url)
+			},
+		},
+		{
+			name: "NotEmpty",
+			test: func(t *testing.T, url string) {
+				// g8e uses ZERO environment variables - always uses default URL
+				assert.NotEmpty(t, url)
+			},
+		},
+	}
 
-func TestGetTestOperatorDirectURL_NotEmpty(t *testing.T) {
-	// g8e uses ZERO environment variables - always uses default URL
-	url := GetTestOperatorDirectURL()
-	assert.NotEmpty(t, url)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			url := GetTestOperatorDirectURL()
+			tt.test(t, url)
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
