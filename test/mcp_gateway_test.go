@@ -402,8 +402,8 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		}
 		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
 		require.NoError(t, err)
-		// Gateway merges native tools (27) with downstream tools (1 echo)
-		require.Len(t, mcpResp.Result.Tools, 28)
+		// Gateway merges native tools (29) with downstream tools (1 echo)
+		require.Len(t, mcpResp.Result.Tools, 30)
 		// Verify downstream tool is present
 		hasEcho := false
 		for _, tool := range mcpResp.Result.Tools {

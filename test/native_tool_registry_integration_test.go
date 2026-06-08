@@ -16,6 +16,8 @@
 package tests
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -210,11 +212,18 @@ func (m *mockTool) Description() string { return m.description }
 func (m *mockTool) InputSchema() *mcp.InputSchema {
 	return m.schema
 }
+func (m *mockTool) Execute(ctx context.Context, args json.RawMessage) (mcp.CallToolResult, error) {
+	return mcp.CallToolResult{
+		Content: []mcp.TextContent{
+			{Type: "text", Text: "mock execution"},
+		},
+	}, nil
+}
 
 func isValidToolName(name string) bool {
-	// Simple validation: tool names should be lowercase with underscores
+	// Simple validation: tool names should be lowercase alphanumeric with underscores
 	for _, r := range name {
-		if !((r >= 'a' && r <= 'z') || r == '_') {
+		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_') {
 			return false
 		}
 	}
