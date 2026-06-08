@@ -148,7 +148,7 @@ func generateMCPConfigForStdio(cfg *config.Config) string {
       "transport": {
         "type": "stdio",
         "command": "%s",
-        "args": ["mcp", "stdio-proxy"]
+        "args": ["mcp", "gov"]
       },
       "capabilities": {
         "tools": true,

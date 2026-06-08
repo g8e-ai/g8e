@@ -290,10 +290,10 @@ func TestHandleToolsCall(t *testing.T) {
 }
 
 func TestMcpStdioProxyCmd(t *testing.T) {
-	t.Run("stdio-proxy command exists", func(t *testing.T) {
+	t.Run("gov command exists", func(t *testing.T) {
 		cmd := mcpStdioProxyCmd()
 		assert.NotNil(t, cmd)
-		assert.Contains(t, cmd.Use, "stdio-proxy")
+		assert.Contains(t, cmd.Use, "gov")
 		assert.Contains(t, cmd.Short, "Proxy stdio MCP requests")
 	})
 }

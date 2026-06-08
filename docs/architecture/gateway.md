@@ -320,7 +320,7 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 
 ## Agent Integration
 
-The g8e Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, Cursor, VS Code, Cline) through the agent wrapper and stdio-proxy components.
+The g8e Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, Cursor, VS Code, Cline) through the agent wrapper and gov components.
 
 ### Agent Wrapper
 

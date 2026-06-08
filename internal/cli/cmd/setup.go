@@ -265,7 +265,7 @@ func generateMCPConfigForTool(cfg *config.Config, _ string) string {
 func generateMCPConfig(cfg *config.Config) string {
 	config := map[string]interface{}{
 		"command": cfg.ProjectRoot + "/g8e",
-		"args":    []string{"mcp", "stdio-proxy"},
+		"args":    []string{"mcp", "gov"},
 	}
 	configJSON, _ := json.MarshalIndent(config, "  ", "  ")
 	return string(configJSON)

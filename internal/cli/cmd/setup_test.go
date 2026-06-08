@@ -111,7 +111,7 @@ func TestMergeMCPConfig(t *testing.T) {
 		{
 			name:      "merge into empty config",
 			existing:  map[string]interface{}{},
-			mcpConfig: `{"command": "/test/g8e", "args": ["mcp", "stdio-proxy"]}`,
+			mcpConfig: `{"command": "/test/g8e", "args": ["mcp", "gov"]}`,
 			wantErr:   false,
 			checkResult: func(result map[string]interface{}) error {
 				if result["mcpServers"] == nil {
@@ -129,7 +129,7 @@ func TestMergeMCPConfig(t *testing.T) {
 					},
 				},
 			},
-			mcpConfig: `{"command": "/test/g8e", "args": ["mcp", "stdio-proxy"]}`,
+			mcpConfig: `{"command": "/test/g8e", "args": ["mcp", "gov"]}`,
 			wantErr:   false,
 			checkResult: func(result map[string]interface{}) error {
 				mcpServers, ok := result["mcpServers"].(map[string]interface{})
@@ -155,7 +155,7 @@ func TestMergeMCPConfig(t *testing.T) {
 					},
 				},
 			},
-			mcpConfig: `{"command": "/new/g8e", "args": ["mcp", "stdio-proxy"]}`,
+			mcpConfig: `{"command": "/new/g8e", "args": ["mcp", "gov"]}`,
 			wantErr:   false,
 			checkResult: func(result map[string]interface{}) error {
 				mcpServers, ok := result["mcpServers"].(map[string]interface{})
@@ -179,7 +179,7 @@ func TestMergeMCPConfig(t *testing.T) {
 			existing: map[string]interface{}{
 				"mcpServers": "invalid",
 			},
-			mcpConfig: `{"command": "/test/g8e", "args": ["mcp", "stdio-proxy"]}`,
+			mcpConfig: `{"command": "/test/g8e", "args": ["mcp", "gov"]}`,
 			wantErr:   false,
 			checkResult: func(result map[string]interface{}) error {
 				mcpServers, ok := result["mcpServers"].(map[string]interface{})
@@ -199,7 +199,7 @@ func TestMergeMCPConfig(t *testing.T) {
 				"otherField":   "value",
 				"anotherField": 123,
 			},
-			mcpConfig: `{"command": "/test/g8e", "args": ["mcp", "stdio-proxy"]}`,
+			mcpConfig: `{"command": "/test/g8e", "args": ["mcp", "gov"]}`,
 			wantErr:   false,
 			checkResult: func(result map[string]interface{}) error {
 				if result["otherField"] != "value" {
@@ -237,7 +237,7 @@ func TestMergeMCPConfig(t *testing.T) {
 		{
 			name:      "complex nested mcpConfig",
 			existing:  map[string]interface{}{},
-			mcpConfig: `{"command": "/test/g8e", "args": ["mcp", "stdio-proxy"], "env": {"KEY": "value"}}`,
+			mcpConfig: `{"command": "/test/g8e", "args": ["mcp", "gov"], "env": {"KEY": "value"}}`,
 			wantErr:   false,
 			checkResult: func(result map[string]interface{}) error {
 				mcpServers, ok := result["mcpServers"].(map[string]interface{})

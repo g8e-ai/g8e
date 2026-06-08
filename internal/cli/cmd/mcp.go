@@ -272,7 +272,7 @@ func sendSuccess(encoder *json.Encoder, id interface{}, result interface{}) {
 
 func mcpStdioProxyCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "stdio-proxy",
+		Use:   "gov",
 		Short: "Proxy stdio MCP requests to the gateway HTTP endpoint",
 		Long:  `Run as an MCP stdio server that proxies all requests to the running gateway's HTTP endpoint. This enables tools that only support stdio transport to use the full gateway governance layer.`,
 		RunE: func(cmd *cobra.Command, args []string) error {

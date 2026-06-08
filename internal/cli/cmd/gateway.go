@@ -187,10 +187,10 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Printf("  ./g8e data operators\n")
 			cmd.Printf("  ./g8e data users\n")
 			cmd.Printf("  ./g8e data audit list --operator-session-id <session-id>\n\n")
-			cmd.Println("Endpoints:")
-			cmd.Printf("  Root CA enrollment:    http://%s:%d/bootstrap-ca\n", externalIP, constants.Ports.OperatorHttp)
-			cmd.Printf("  mTLS control plane:    https://localhost:%d\n", constants.Ports.OperatorHttps)
-			cmd.Printf("  Local MCP clients:     http://127.0.0.1:%d/mcp\n", constants.Ports.OperatorHttp)
+			cmd.Println("MCP:")
+			cmd.Printf("  ./g8e mcp show          Print MCP client configuration for connecting to the gateway\n")
+			cmd.Printf("  ./g8e mcp stdio         Run MCP stdio server with native tools only (no gateway)\n")
+			cmd.Printf("  ./g8e mcp gov   Proxy stdio MCP requests to the gateway (with governance)\n")
 
 			if follow {
 				// The gateway is already in its own session (Setsid), so Ctrl+C here won't affect it

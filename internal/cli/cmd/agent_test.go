@@ -144,7 +144,7 @@ func TestGenerateMCPConfigForStdio(t *testing.T) {
 
 	assert.Contains(t, config, "mcpServers")
 	assert.Contains(t, config, "g8e-gateway")
-	assert.Contains(t, config, "stdio-proxy")
+	assert.Contains(t, config, "gov")
 	assert.Contains(t, config, tempDir)
 }
 

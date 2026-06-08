@@ -644,7 +644,7 @@ Usage:
 
 Available Commands:
   stdio       Run MCP stdio server with native tools only
-  stdio-proxy Proxy stdio MCP requests to the gateway HTTP endpoint
+  gov         Proxy stdio MCP requests to the gateway HTTP endpoint
 
 Flags:
   -h, --help   help for mcp
@@ -661,15 +661,15 @@ Flags:
   -h, --help   help for stdio
 ```
 
-### mcp stdio-proxy
+### mcp gov
 ```
 Proxy stdio MCP requests to the gateway HTTP endpoint. Run as an MCP stdio server that proxies all requests to the running gateway's HTTP endpoint. This enables tools that only support stdio transport to use the full gateway governance layer.
 
 Usage:
-  g8e mcp stdio-proxy [flags]
+  g8e mcp gov [flags]
 
 Flags:
-  -h, --help   help for stdio-proxy
+  -h, --help   help for gov
 ```
 
 ## Agent Integration
