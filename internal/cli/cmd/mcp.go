@@ -529,6 +529,16 @@ func mcpShowCmd() *cobra.Command {
 			if err := printMCPConfigHTTP(cmd); err != nil {
 				return err
 			}
+			cmd.Println()
+
+			cmd.Println("┌─ Stdio Transport ────────────────────────────────────────────────────────────")
+			cmd.Println("│ Use: Direct native tool access without gateway")
+			cmd.Println("│ Apps: Cursor, Windsurf, VS Code MCP clients")
+			cmd.Println("│ Requires: g8e binary in PATH or full path in config")
+			cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
+			if err := printMCPConfigStdio(cmd); err != nil {
+				return err
+			}
 
 			return nil
 		},
@@ -545,8 +555,7 @@ func printMCPConfigLocal(cmd *cobra.Command) error {
 
 	externalIP := config.GetExternalInterfaceIP()
 	cmd.Printf("# Add this entry to /etc/hosts to enable g8e.local resolution:\n")
-	cmd.Printf("%s g8e.local\n", externalIP)
-	cmd.Println()
+	cmd.Printf("%s g8e.local\n\n", externalIP)
 
 	// Use the canonical g8e.local internal hostname with unified /mcp endpoint
 	gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps)
@@ -621,6 +630,23 @@ func printMCPConfigHTTP(cmd *cobra.Command) error {
   }
 }`, constants.Ports.OperatorHttp)
 	cmd.Println(staticConfig)
+	return nil
+}
+
+func printMCPConfigStdio(cmd *cobra.Command) error {
+	// Use "g8e" as the binary name, assuming it's in PATH
+	// User can edit the config to use full path if needed
+	mcpConfig, err := mcp.NewStdioConfig("g8e")
+	if err != nil {
+		return fmt.Errorf("failed to create MCP stdio config: %w", err)
+	}
+
+	configJSON, err := json.MarshalIndent(mcpConfig, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal MCP config: %w", err)
+	}
+
+	cmd.Println(string(configJSON))
 	return nil
 }
 
