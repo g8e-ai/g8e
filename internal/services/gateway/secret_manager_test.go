@@ -200,7 +200,7 @@ func TestSecretManager_InitAppSettings_FailsWhenFileWriteFails(t *testing.T) {
 	err := sm.InitAppSettings()
 	require.Error(t, err)
 	// Error occurs during preexisting bootstrap state check when stat fails on a file
-	assert.Contains(t, err.Error(), "create directory")
+	assert.Contains(t, err.Error(), "not a directory")
 }
 
 func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {

@@ -53,6 +53,7 @@ func mcpCmd() *cobra.Command {
 		mcpStdioCmd(),
 		mcpStdioProxyCmd(),
 		mcpShowCmd(),
+		agentCmd(),
 	)
 
 	return cmd

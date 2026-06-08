@@ -16,6 +16,7 @@ package storage
 import (
 	"context"
 	"crypto/ed25519"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -149,10 +150,15 @@ func TestNewTokenStoreService_DatabaseInitFailure(t *testing.T) {
 	testVault := createTestVault(t, vaultDir, privKey)
 	defer testVault.Close()
 
-	// Use an invalid path that cannot be created
-	// On Windows, this path is definitely invalid. On Unix, it's also invalid.
+	// Create a file (not a directory) and try to use a path inside it
+	// This will fail because you can't create directories inside a file
+	tempFile, err := os.CreateTemp("", "test-file-*")
+	require.NoError(t, err)
+	tempFile.Close()
+	defer os.Remove(tempFile.Name())
+
 	config := &TokenStoreConfig{
-		DBPath:  "Z:\\invalid\\path\\that\\cannot\\be\\created\\token_store.db",
+		DBPath:  filepath.Join(tempFile.Name(), "db", "token_store.db"),
 		Enabled: true,
 	}
 

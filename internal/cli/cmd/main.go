@@ -35,8 +35,6 @@ The CLI manages the g8e Gateway (g8eg) and g8e Operator (g8eo).`,
 		gatewayCmd(),
 		mcpCmd(),
 		operatorCmd(),
-		agentCmd(),
-		claudeCmd(),
 		vaultCmd(),
 		testCmd(),
 	)
@@ -45,8 +43,4 @@ The CLI manages the g8e Gateway (g8eg) and g8e Operator (g8eo).`,
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-}
-
-func claudeCmd() *cobra.Command {
-	return agentClaudeCmd()
 }

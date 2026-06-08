@@ -100,17 +100,17 @@ func TestLoad_TLSServerName(t *testing.T) {
 		{
 			name:           "IPv4 sets TLSServerName",
 			endpoint:       "10.0.1.42",
-			wantServerName: constants.DefaultEndpoint,
+			wantServerName: constants.GatewayInternalHostname,
 		},
 		{
 			name:           "IPv6 sets TLSServerName",
 			endpoint:       "::1",
-			wantServerName: constants.DefaultEndpoint,
+			wantServerName: constants.GatewayInternalHostname,
 		},
 		{
 			name:           "full IPv4 address sets TLSServerName",
 			endpoint:       "192.168.100.200",
-			wantServerName: constants.DefaultEndpoint,
+			wantServerName: constants.GatewayInternalHostname,
 		},
 	}
 
@@ -432,11 +432,11 @@ func TestTLSServerName(t *testing.T) {
 	}{
 		{"hostname returns empty", constants.DefaultEndpoint, ""},
 		{"plain hostname returns empty", "example.com", ""},
-		{"IPv4 returns localhost", "10.0.0.1", constants.DefaultEndpoint},
-		{"IPv4 loopback returns localhost", "127.0.0.1", constants.DefaultEndpoint},
-		{"IPv6 loopback returns localhost", "::1", constants.DefaultEndpoint},
-		{"IPv6 full returns localhost", "2001:db8::1", constants.DefaultEndpoint},
-		{"IPv4-mapped IPv6 returns localhost", "::ffff:192.0.2.1", constants.DefaultEndpoint},
+		{"IPv4 returns localhost", "10.0.0.1", constants.GatewayInternalHostname},
+		{"IPv4 loopback returns localhost", "127.0.0.1", constants.GatewayInternalHostname},
+		{"IPv6 loopback returns localhost", "::1", constants.GatewayInternalHostname},
+		{"IPv6 full returns localhost", "2001:db8::1", constants.GatewayInternalHostname},
+		{"IPv4-mapped IPv6 returns localhost", "::ffff:192.0.2.1", constants.GatewayInternalHostname},
 	}
 
 	for _, tt := range tests {

@@ -593,7 +593,7 @@ func httpPortOrDefault(p int) int {
 
 // tlsServerName returns the TLS ServerName override to use when endpoint is a
 // raw IP address. When connecting to a Gateway via IP, we use the internal
-// Gateway hostname (g8.local) for TLS verification since the Gateway's
+// Gateway hostname (g8e.local) for TLS verification since the Gateway's
 // certificate is issued to this name.
 // Returns an empty string when endpoint is already a hostname (no override needed).
 func tlsServerName(endpoint string) string {

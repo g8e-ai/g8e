@@ -11,10 +11,8 @@ Usage:
   g8e [command]
 
 Available Commands:
-  agent       Wrap agentic coding tools with g8e zero-trust gateway
   approve     Approve a suspended L3 transaction with CLI signature
   auth        Authentication and cli/web/operator session management
-  claude      Execute Claude Code proxied through g8e gateway
   data        Administer the local platform over mTLS
   gw          Manage the g8e Gateway lifecycle
   help        Help about any command
@@ -588,42 +586,6 @@ Flags:
 ```
 
 
-## agent
-```
-Wrap agentic coding tools with g8e zero-trust gateway. Wrap agentic coding tools (Claude Code, Cursor, VS Code, Cline) with g8e governance.
-
-Usage:
-  g8e agent [tool-name] -- [tool-args]
-
-Available Commands:
-  claude      Execute Claude Code proxied through g8e gateway
-
-Flags:
-  -h, --help   help for agent
-```
-
-### agent claude
-```
-Execute Claude Code proxied through g8e gateway. Execute Claude Code with all tool calls proxied through the g8e zero-trust gateway. Automatically configures MCP integration and handles L3 approvals.
-
-Usage:
-  g8e agent claude -- [claude-args]
-
-Flags:
-  -h, --help   help for claude
-```
-
-## claude
-```
-Execute Claude Code proxied through g8e gateway. This is a convenience alias for `g8e agent claude`.
-
-Usage:
-  g8e claude -- [claude-args]
-
-Flags:
-  -h, --help   help for claude
-```
-
 ## mcp
 ```
 MCP protocol operations (stdio transport). Run g8e as an MCP server using stdio transport for local agent integration.
@@ -632,8 +594,10 @@ Usage:
   g8e mcp [command]
 
 Available Commands:
-  stdio       Run MCP stdio server with native tools only
+  agent       Wrap agentic coding tools with g8e zero-trust gateway
   gov         Proxy stdio MCP requests to the gateway HTTP endpoint
+  show        Print MCP client configuration for the Gateway
+  stdio       Run MCP stdio server with native tools only
 
 Flags:
   -h, --help   help for mcp
@@ -661,6 +625,31 @@ Flags:
   -h, --help   help for gov
 ```
 
+### mcp agent
+```
+Wrap agentic coding tools with g8e zero-trust gateway. Wrap agentic coding tools (Claude Code, Cursor, VS Code, Cline) with g8e governance.
+
+Usage:
+  g8e mcp agent [tool-name] -- [tool-args]
+
+Available Commands:
+  claude      Execute Claude Code proxied through g8e gateway
+
+Flags:
+  -h, --help   help for agent
+```
+
+#### mcp agent claude
+```
+Execute Claude Code proxied through g8e gateway. Execute Claude Code with all tool calls proxied through the g8e zero-trust gateway. Automatically configures MCP integration and handles L3 approvals.
+
+Usage:
+  g8e mcp agent claude -- [claude-args]
+
+Flags:
+  -h, --help   help for claude
+```
+
 ## Agent Integration
 
 ### Quick Start
@@ -677,15 +666,15 @@ Flags:
 
 3. Run Claude Code with g8e governance:
    ```bash
-   ./g8e claude -- --help
+   ./g8e mcp agent claude -- --help
    ```
 
 ### Supported Tools
 
-- Claude Code: `./g8e agent claude` or `./g8e claude`
-- Cursor: `./g8e agent cursor`
-- VS Code: `./g8e agent code`
-- Cline: `./g8e agent cline`
+- Claude Code: `./g8e mcp agent claude`
+- Cursor: `./g8e mcp agent cursor`
+- VS Code: `./g8e mcp agent code`
+- Cline: `./g8e mcp agent cline`
 
 ### L3 Approval Flow
 
