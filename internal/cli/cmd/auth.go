@@ -179,6 +179,12 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 			// Platform already bootstrapped and has local credentials - attempt CSR-based re-enrollment with mTLS
 			cmd.Println("Gateway already bootstrapped. Attempting re-enrollment via CSR with mTLS...")
 
+			// Check if operator certificate exists (CLI-only bootstrap has no operator)
+			hasOperatorCert := true
+			if _, err := os.Stat(cfg.OperatorCertFile()); os.IsNotExist(err) {
+				hasOperatorCert = false
+			}
+
 			// Check if certificates are expiring soon and auto-renew if needed
 			cmd.Println("Checking certificate expiry...")
 			if err := auth.AutoRenewCertificate(cfg, "cli", ""); err != nil {
@@ -192,15 +198,26 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 				return fmt.Errorf("failed to generate CLI CSR: %w", err)
 			}
 
-			cmd.Println("Re-enrolling with operator...")
-			regResp, err := auth.ReEnroll(cfg, "", cliCSR, "")
-			if err != nil {
-				// Check if this is a TLS verification error (stale trust bundle after gateway PKI regeneration)
-				if strings.Contains(err.Error(), "certificate signed by unknown authority") ||
-					strings.Contains(err.Error(), "x509: certificate") {
-					return fmt.Errorf("mTLS re-enrollment failed: trust bundle is stale (gateway PKI was regenerated). To recover, run: ./g8e auth logout && ./g8e auth login. Original error: %w", err)
+			var regResp *auth.RegistrationResponse
+			if hasOperatorCert {
+				// Full re-enrollment with operator CSR
+				cmd.Println("Re-enrolling with operator...")
+				regResp, err = auth.ReEnroll(cfg, "", cliCSR, "")
+				if err != nil {
+					// Check if this is a TLS verification error (stale trust bundle after gateway PKI regeneration)
+					if strings.Contains(err.Error(), "certificate signed by unknown authority") ||
+						strings.Contains(err.Error(), "x509: certificate") {
+						return fmt.Errorf("mTLS re-enrollment failed: trust bundle is stale (gateway PKI was regenerated). To recover, run: ./g8e auth logout && ./g8e auth login. Original error: %w", err)
+					}
+					return err
 				}
-				return err
+			} else {
+				// CLI-only re-enrollment (no operator)
+				cmd.Println("Re-enrolling CLI credentials...")
+				regResp, err = auth.CLIEnroll(cfg, cliCSR)
+				if err != nil {
+					return err
+				}
 			}
 
 			if regResp.CLISessionID == "" || regResp.CLICert == "" {

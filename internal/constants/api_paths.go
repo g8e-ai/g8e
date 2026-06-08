@@ -103,6 +103,7 @@ var APIPaths = struct {
 	// Well-known routes
 	WellKnownPKICABundle    string `json:"well_known_pki_ca_bundle"`
 	WellKnownPKIFingerprint string `json:"well_known_pki_fingerprint"`
+	WellKnownBinPrefix      string `json:"well_known_bin_prefix"`
 	// Bootstrap scripts
 	BootstrapCALinux   string `json:"bootstrap_ca_linux"`
 	BootstrapCAWindows string `json:"bootstrap_ca_windows"`
@@ -207,6 +208,7 @@ var APIPaths = struct {
 	// Well-known routes
 	WellKnownPKICABundle:    "/.well-known/g8e/pki/ca-bundle",
 	WellKnownPKIFingerprint: "/.well-known/g8e/pki/fingerprint",
+	WellKnownBinPrefix:      "/.well-known/g8e/bin/",
 	// Bootstrap scripts
 	BootstrapCALinux:   "/bootstrap-ca",
 	BootstrapCAWindows: "/bootstrap-ca.ps1",

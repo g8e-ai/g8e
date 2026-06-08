@@ -92,9 +92,29 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
           govulncheck ./...
 
-  test:
-    name: CI / Platform Tests
+  test-unit-integration:
+    name: CI / Unit & In-Memory Integration Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+
+      - name: Run Unit Tests
+        run: make test-unit
+
+      - name: Run In-Memory Integration Tests
+        run: make test-integration
+
+  test-e2e:
+    name: CI / Live Platform E2E Tests
+    runs-on: ubuntu-latest
+    needs: verify-lint
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -105,11 +125,21 @@ jobs:
         with:
           go-version: '1.26.4'
 
-      - name: Build CLI
+      - name: Build Platform CLI
         run: make build
 
-      - name: Run platform tests
-        run: make _ci-test
+      - name: Start Gateway
+        run: ./g8e gw start --cert-mode localhost
+
+      - name: Authenticate CLI
+        run: ./g8e auth login --skip-prompt
+
+      - name: Run E2E Tests
+        run: make test-e2e
+
+      - name: Stop Gateway
+        if: always()
+        run: ./g8e gw stop
 
       - name: Show Operator logs
         if: failure()

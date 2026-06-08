@@ -56,8 +56,8 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 		SourceComponent   string `json:"source_component"`
 	}
 	if err := json.Unmarshal(envelopeBody, &envelope); err != nil {
-		// If we can't parse the envelope, return the error for proper handling
-		return fmt.Errorf("verifyEnvelopeIdentityBinding: failed to parse envelope: %w", err)
+		// If we can't parse the envelope, let the downstream processor handle the parsing/decode error
+		return nil
 	}
 
 	// If envelope has no identity fields, let the processor handle validation

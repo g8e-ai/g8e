@@ -1,3 +1,5 @@
+//go:build integration
+
 package gateway
 
 import (
@@ -99,9 +101,9 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := tempDir(t)
+	pkiDir := tempDir(t)
+	secretsDir := tempDir(t)
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -114,7 +116,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	backend, err := keystore.NewTestBackend()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnsurePermissions())
@@ -255,9 +257,9 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := tempDir(t)
+	pkiDir := tempDir(t)
+	secretsDir := tempDir(t)
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -270,7 +272,7 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 
 	backend, err := keystore.NewTestBackend()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnsurePermissions())
@@ -425,9 +427,9 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := tempDir(t)
+	pkiDir := tempDir(t)
+	secretsDir := tempDir(t)
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -440,7 +442,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 
 	backend, err := keystore.NewTestBackend()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnsurePermissions())
@@ -589,9 +591,9 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := tempDir(t)
+	pkiDir := tempDir(t)
+	secretsDir := tempDir(t)
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -601,7 +603,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 
 	backend, err := keystore.NewTestBackend()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnsurePermissions())

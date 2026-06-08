@@ -68,19 +68,22 @@ func (c *PKIController) handlePKICABundle(w http.ResponseWriter, r *http.Request
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	bundlePath := filepath.Join(c.pki.PKIDir(), "trust", "g8eg-ca-bundle.pem")
-	c.logger.Debug("Attempting to read trust bundle", "path", bundlePath, "pki_dir", c.pki.PKIDir())
-	pem, err := c.pki.GatewayTrustBundle()
+
+	bundlePath := c.pki.TrustBundlePath()
+	c.logger.Debug("Reading gateway trust bundle", "path", bundlePath)
+
+	pemData, err := c.pki.GatewayTrustBundle()
 	if err != nil {
-		c.logger.Error("Failed to read trust bundle", "error", err, "bundle_path", bundlePath, "pki_dir", c.pki.PKIDir())
+		c.logger.Error("Failed to read gateway trust bundle", "error", err, "path", bundlePath)
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: read trust bundle: %w", err).Error())
 		return
 	}
-	w.Header().Set(constants.HeaderContentType, "application/x-pem-file")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "DENY")
+
+	w.Header().Set(constants.HeaderContentType, constants.HeaderValuePEM)
+	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
+	w.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(pem)
+	_, _ = w.Write(pemData)
 }
 
 func (c *PKIController) handlePKIFingerprint(w http.ResponseWriter, r *http.Request) {
@@ -88,19 +91,23 @@ func (c *PKIController) handlePKIFingerprint(w http.ResponseWriter, r *http.Requ
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	pemData, err := os.ReadFile(filepath.Join(c.pki.PKIDir(), "root", "root_ca.crt"))
+
+	rootCAPath := filepath.Join(c.pki.PKIDir(), constants.PkiSubdirRoot, constants.PkiFileRootCA)
+	pemData, err := os.ReadFile(rootCAPath)
 	if err != nil {
+		c.logger.Error("Failed to read root CA", "error", err, "path", rootCAPath)
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: read root CA: %w", err).Error())
 		return
 	}
 
 	block, rest := pem.Decode(pemData)
 	if block == nil {
-		c.responder.Error(w, http.StatusInternalServerError, "invalid root CA PEM")
+		c.logger.Error("Invalid root CA PEM", "path", rootCAPath)
+		c.responder.Error(w, http.StatusInternalServerError, "pki: invalid root CA PEM")
 		return
 	}
 	if len(rest) > 0 {
-		c.logger.Warn("Unexpected data after PEM block", "extra_bytes", len(rest))
+		c.logger.Warn("Unexpected data after root CA PEM block", "extra_bytes", len(rest))
 	}
 
 	hash := sha256.Sum256(block.Bytes)
@@ -170,7 +177,7 @@ func (c *PKIController) handlePKICertificatesRevoke(w http.ResponseWriter, r *ht
 	}
 
 	if req.Serial == "" {
-		c.responder.Error(w, http.StatusBadRequest, "serial required")
+		c.responder.Error(w, http.StatusBadRequest, "pki: serial required")
 		return
 	}
 
@@ -194,9 +201,9 @@ func (c *PKIController) handlePKIRevocationBundle(w http.ResponseWriter, r *http
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/pkix-crl")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set(constants.HeaderContentType, constants.HeaderValueCRL)
+	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
+	w.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(crlDER)
 }
@@ -208,12 +215,12 @@ func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Re
 	}
 
 	if c.registration == nil {
-		c.responder.Error(w, http.StatusServiceUnavailable, "registration service not available")
+		c.responder.Error(w, http.StatusServiceUnavailable, "pki: registration service not available")
 		return
 	}
 
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
-		c.responder.Error(w, http.StatusUnauthorized, "mTLS client certificate required")
+		c.responder.Error(w, http.StatusUnauthorized, "pki: mTLS client certificate required")
 		return
 	}
 
@@ -238,7 +245,7 @@ func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Re
 	// Device enrollment does not require an organization context
 	organizationID := ""
 	if req.CSR == "" {
-		c.responder.Error(w, http.StatusBadRequest, "csr_pem is required")
+		c.responder.Error(w, http.StatusBadRequest, "pki: csr_pem is required")
 		return
 	}
 
@@ -258,13 +265,16 @@ func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Re
 	}
 
 	port := strconv.Itoa(constants.Ports.OperatorHttp)
-	script := `#!/bin/sh
+	caBundleURL := constants.APIPaths.WellKnownPKICABundle
+	localCAPath := filepath.ToSlash(constants.Paths.Infra.CaCertPath)
+
+	script := fmt.Sprintf(`#!/bin/sh
 set -e
 
 GATEWAY_HOST="${GATEWAY_HOST:-localhost}"
-GATEWAY_PORT="${GATEWAY_PORT:-` + port + `}"
-CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}/.well-known/g8e/pki/ca-bundle"
-LOCAL_CA_PATH=".g8e/pki/trust/g8eg-ca-bundle.pem"
+GATEWAY_PORT="${GATEWAY_PORT:-%s}"
+CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}%s"
+LOCAL_CA_PATH="%s"
 
 echo "[g8e] Fetching platform CA bundle from ${CA_BUNDLE_URL}..."
 mkdir -p "$(dirname "${LOCAL_CA_PATH}")"
@@ -277,11 +287,11 @@ fi
 
 echo "[g8e] CA bundle installed to ${LOCAL_CA_PATH}"
 echo "[g8e] You can now use: ./g8e auth login"
-`
+`, port, caBundleURL, localCAPath)
 
-	w.Header().Set("Content-Type", "application/x-sh")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set(constants.HeaderContentType, constants.HeaderValueShell)
+	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
+	w.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(script))
 }
@@ -293,60 +303,75 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 	}
 
 	port := strconv.Itoa(constants.Ports.OperatorHttp)
-	script := "$ErrorActionPreference = \"Continue\"\n\n" +
-		"$GatewayHost = if ($env:GATEWAY_HOST) { $env:GATEWAY_HOST } else { \"localhost\" }\n" +
-		"$GatewayPort = if ($env:GATEWAY_PORT) { $env:GATEWAY_PORT } else { \"" + port + "\" }\n" +
-		"$CABundleUrl = \"http://${GatewayHost}:${GatewayPort}/.well-known/g8e/pki/ca-bundle\"\n" +
-		"$LocalCAPath = \".g8e/pki/trust/g8eg-ca-bundle.pem\"\n" +
-		"$Node BinaryName = \"g8e-windows-amd64.exe\"\n" +
-		"$Node BinaryUrl = \"http://${GatewayHost}:${GatewayPort}/.well-known/g8e/bin/g8e-windows-amd64.exe\"\n\n" +
-		"Write-Host \"[g8e] Fetching platform CA bundle from ${CABundleUrl}...\"\n" +
-		"$LocalDir = Split-Path -Parent $LocalCAPath\n" +
-		"if (-not (Test-Path $LocalDir)) {\n" +
-		"    New-Item -ItemType Directory -Path $LocalDir -Force | Out-Null\n" +
-		"}\n" +
-		"try {\n" +
-		"    Invoke-RestMethod -Uri $CABundleUrl -OutFile $LocalCAPath\n" +
-		"} catch {\n" +
-		"    Write-Host \"[g8e] ERROR: Failed to download CA bundle: $_\"\n" +
-		"    return\n" +
-		"}\n\n" +
-		"if (-not (Test-Path $LocalCAPath)) {\n" +
-		"    Write-Host \"[g8e] ERROR: Failed to download CA bundle\"\n" +
-		"    return\n" +
-		"}\n\n" +
-		"Write-Host \"[g8e] CA bundle installed to ${LocalCAPath}\"\n\n" +
-		"# Download g8e Node\n" +
-		"Write-Host \"[g8e] Downloading g8e Node from ${Node BinaryUrl}...\"\n" +
-		"try {\n" +
-		"    Invoke-RestMethod -Uri $Node BinaryUrl -OutFile $Node BinaryName\n" +
-		"} catch {\n" +
-		"    Write-Host \"[g8e] ERROR: Failed to download g8e Node: $_\"\n" +
-		"    return\n" +
-		"}\n" +
-		"\n" +
-		"if (-not (Test-Path $Node BinaryName)) {\n" +
-		"    Write-Host \"[g8e] ERROR: Failed to download g8e Node\"\n" +
-		"    return\n" +
-		"}\n\n" +
-		"Write-Host \"[g8e]Node Node Binary downloaded to ${Node BinaryName}\"\n\n" +
-		"# Run enrollment\n" +
-		"Write-Host \"[g8e] Running PKI enrollment with endpoint ${GatewayHost}...\"\n" +
-		"& .\\$Node BinaryName security pki enroll --endpoint \"${GatewayHost}\"\n" +
-		"\n" +
-		"if ($LASTEXITCODE -ne 0) {\n" +
-		"    Write-Host \"[g8e] ERROR: Enrollment failed with exit code ${LASTEXITCODE}\"\n" +
-		"    return\n" +
-		"}\n\n" +
-		"Write-Host \"[g8e] Enrollment complete\"\n\n" +
-		"# Start the operator\n" +
-		"Write-Host \"[g8e] Starting Operator with endpoint ${GatewayHost}...\"\n" +
-		"Write-Host \"[g8e] The Operator will run in this terminal. Press Ctrl+C to stop.\"\n" +
-		"& .\\$Node BinaryName -e $GatewayHost\n"
+	caBundleURL := constants.APIPaths.WellKnownPKICABundle
+	localCAPath := filepath.ToSlash(constants.Paths.Infra.CaCertPath)
+	binaryName := constants.BinaryNameWindows
+	binaryURL := constants.APIPaths.WellKnownBinPrefix + binaryName
 
-	w.Header().Set("Content-Type", "application/x-powershell")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "DENY")
+	script := fmt.Sprintf(`$ErrorActionPreference = "Continue"
+
+$GatewayHost = if ($env:GATEWAY_HOST) { $env:GATEWAY_HOST } else { "localhost" }
+$GatewayPort = if ($env:GATEWAY_PORT) { $env:GATEWAY_PORT } else { "%s" }
+$CABundleUrl = "http://${GatewayHost}:${GatewayPort}%s"
+$LocalCAPath = "%s"
+$NodeBinaryName = "%s"
+$NodeBinaryUrl = "http://${GatewayHost}:${GatewayPort}%s"
+
+Write-Host "[g8e] Fetching platform CA bundle from ${CABundleUrl}..."
+$LocalDir = Split-Path -Parent $LocalCAPath
+if (-not (Test-Path $LocalDir)) {
+    New-Item -ItemType Directory -Path $LocalDir -Force | Out-Null
+}
+try {
+    Invoke-RestMethod -Uri $CABundleUrl -OutFile $LocalCAPath
+} catch {
+    Write-Host "[g8e] ERROR: Failed to download CA bundle: $_"
+    return
+}
+
+if (-not (Test-Path $LocalCAPath)) {
+    Write-Host "[g8e] ERROR: Failed to download CA bundle"
+    return
+}
+
+Write-Host "[g8e] CA bundle installed to ${LocalCAPath}"
+
+# Download g8e Node
+Write-Host "[g8e] Downloading g8e Node from ${NodeBinaryUrl}..."
+try {
+    Invoke-RestMethod -Uri $NodeBinaryUrl -OutFile $NodeBinaryName
+} catch {
+    Write-Host "[g8e] ERROR: Failed to download g8e Node: $_"
+    return
+}
+
+if (-not (Test-Path $NodeBinaryName)) {
+    Write-Host "[g8e] ERROR: Failed to download g8e Node"
+    return
+}
+
+Write-Host "[g8e] Node Binary downloaded to ${NodeBinaryName}"
+
+# Run enrollment
+Write-Host "[g8e] Running PKI enrollment with endpoint ${GatewayHost}..."
+& .\$NodeBinaryName security pki enroll --endpoint "${GatewayHost}"
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[g8e] ERROR: Enrollment failed with exit code ${LASTEXITCODE}"
+    return
+}
+
+Write-Host "[g8e] Enrollment complete"
+
+# Start the operator
+Write-Host "[g8e] Starting Operator with endpoint ${GatewayHost}..."
+Write-Host "[g8e] The Operator will run in this terminal. Press Ctrl+C to stop."
+& .\$NodeBinaryName -e $GatewayHost
+`, port, caBundleURL, localCAPath, binaryName, binaryURL)
+
+	w.Header().Set(constants.HeaderContentType, constants.HeaderValuePowerShell)
+	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
+	w.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(script))
 }
@@ -363,30 +388,30 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 
 	filename := filepath.Base(r.URL.Path)
 	if filename == "" || filename == "." {
-		c.responder.Error(w, http.StatusBadRequest, "invalid filename")
+		c.responder.Error(w, http.StatusBadRequest, "pki: invalid filename")
 		return
 	}
 
+	// Validate binary name pattern for security
 	binaryPattern := regexp.MustCompile(`^g8e-(linux|darwin|windows)-(amd64|arm64|386)(\.exe)?$`)
 	if !binaryPattern.MatchString(filename) {
-		c.responder.Error(w, http.StatusBadRequest, "invalid binary name")
+		c.responder.Error(w, http.StatusBadRequest, "pki: invalid binary name")
 		return
 	}
 
 	possiblePaths := []string{}
 
+	// Check relative to executable
 	if execPath, err := os.Executable(); err == nil {
 		possiblePaths = append(possiblePaths, filepath.Join(filepath.Dir(execPath), "bin", filename))
 	}
 
-	possiblePaths = append(possiblePaths, filepath.Join(c.pki.PKIDir(), "binaries", filename))
+	// Check in PKI binaries directory
+	possiblePaths = append(possiblePaths, filepath.Join(c.pki.PKIDir(), constants.PkiSubdirBinaries, filename))
 
 	var binaryPath string
-	var fileInfo os.FileInfo
-	var err error
-
 	for _, path := range possiblePaths {
-		fileInfo, err = os.Stat(path)
+		fileInfo, err := os.Stat(path)
 		if err == nil && !fileInfo.IsDir() {
 			binaryPath = path
 			break
@@ -394,14 +419,15 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 	}
 
 	if binaryPath == "" {
-		c.responder.Error(w, http.StatusNotFound, fmt.Sprintf("binary not found: %s (checked: %v)", filename, possiblePaths))
+		c.logger.Error("Binary not found", "filename", filename, "checked_paths", possiblePaths)
+		c.responder.Error(w, http.StatusNotFound, fmt.Sprintf("pki: binary not found: %s", filename))
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set(constants.HeaderContentType, constants.HeaderValueOctetStream)
+	w.Header().Set(constants.HeaderContentDisposition, fmt.Sprintf("attachment; filename=%s", filename))
+	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
+	w.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
 	http.ServeFile(w, r, binaryPath)
 }
 
@@ -414,7 +440,7 @@ func (c *PKIController) handleDeployScriptLinux(w http.ResponseWriter, r *http.R
 	gatewayHost := c.extractGatewayHost(r.Host)
 	data := scripts.TemplateData{
 		GatewayHost: gatewayHost,
-		GatewayPort: "8080",
+		GatewayPort: strconv.Itoa(constants.Ports.OperatorHttp),
 	}
 
 	script, err := scripts.RenderLinuxDeployScript(data)
@@ -424,9 +450,9 @@ func (c *PKIController) handleDeployScriptLinux(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/x-sh")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set(constants.HeaderContentType, constants.HeaderValueShell)
+	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
+	w.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(script))
 }
@@ -440,7 +466,7 @@ func (c *PKIController) handleDeployScriptWindows(w http.ResponseWriter, r *http
 	gatewayHost := c.extractGatewayHost(r.Host)
 	data := scripts.TemplateData{
 		GatewayHost: gatewayHost,
-		GatewayPort: "8080",
+		GatewayPort: strconv.Itoa(constants.Ports.OperatorHttp),
 	}
 
 	script, err := scripts.RenderWindowsDeployScript(data)
@@ -450,16 +476,16 @@ func (c *PKIController) handleDeployScriptWindows(w http.ResponseWriter, r *http
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/x-powershell")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set(constants.HeaderContentType, constants.HeaderValuePowerShell)
+	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
+	w.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(script))
 }
 
 func (c *PKIController) extractGatewayHost(host string) string {
 	if host == "" {
-		return "localhost"
+		return constants.DefaultEndpoint
 	}
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		return h

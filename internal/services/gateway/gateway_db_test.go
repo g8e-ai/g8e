@@ -57,8 +57,8 @@ func TestGatewaySchema(t *testing.T) {
 
 func TestCanonicalDBService_GetDB(t *testing.T) {
 	t.Parallel()
-	dataDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dataDir := tempDir(t)
+	secretsDir := tempDir(t)
 	logger := testutil.NewTestLogger()
 
 	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, "vault"), logger, true, "", false)
@@ -70,8 +70,8 @@ func TestCanonicalDBService_GetDB(t *testing.T) {
 
 func TestCanonicalDBService_Wait(t *testing.T) {
 	t.Parallel()
-	dataDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dataDir := tempDir(t)
+	secretsDir := tempDir(t)
 	logger := testutil.NewTestLogger()
 
 	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, "vault"), logger, true, "", false)
@@ -86,8 +86,8 @@ func TestCanonicalDBService_Wait(t *testing.T) {
 
 func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 	t.Parallel()
-	dataDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dataDir := tempDir(t)
+	secretsDir := tempDir(t)
 	logger := testutil.NewTestLogger()
 
 	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, "vault"), logger, true, "", false)
@@ -114,8 +114,8 @@ func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 
 func newTestDB(t *testing.T) *CanonicalDBService {
 	t.Helper()
-	dir := t.TempDir()
-	secretsDir := t.TempDir()
+	dir := tempDir(t)
+	secretsDir := tempDir(t)
 	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -458,8 +458,8 @@ func TestKVExpire(t *testing.T) {
 
 func TestSchemaIdempotent(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	secretsDir := t.TempDir()
+	dir := tempDir(t)
+	secretsDir := tempDir(t)
 
 	db1, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(t, err)
@@ -483,9 +483,9 @@ func TestSchemaIdempotent(t *testing.T) {
 
 func TestCreateDataDir(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := tempDir(t)
 	dir := filepath.Join(tmpDir, "nested", "deep", "data")
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 
 	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(t, err)

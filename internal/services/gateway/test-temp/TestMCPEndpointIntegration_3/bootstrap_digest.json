@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "updated_at": "2026-06-08T00:34:58.5968627Z",
+  "secrets": {
+    "actuator_key_id": {
+      "sha256": "c887e6dc58cccb32f3c849f45a325835872b4f8b48c32ba62e879ffd22937198"
+    },
+    "actuator_signing_key": {
+      "sha256": "e79bbf4228353aedd7bf76afa38cbd1e0058b83806fd43c8ec1092a233e0f0c9"
+    },
+    "auditor_hmac_key": {
+      "sha256": "8b7888ea0141da19301c577043b4e300518dfd5180f4db1343bd375d11e14828"
+    },
+    "consensus_signing_key": {
+      "sha256": "258d8bc99540e9b0ccfaf96f631956d6eb42dc45d708299e8d78212e0a24ef78"
+    },
+    "session_encryption_key": {
+      "sha256": "e3e4df82603df85116746d5b156d6509823c7044827dfcc883c9a9ffcc38081a"
+    }
+  }
+}

@@ -190,7 +190,9 @@ func resolveGatewayCertificateIdentity(certMode, identityFile string, detector n
 
 func resolveLocalhostCertificateIdentity(detector networkIdentityDetector, logger *slog.Logger) ([]net.IP, []string, error) {
 	logger.Info("Using localhost-only mode for certificate")
-	netIdentity, err := detector.DetectAll(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	netIdentity, err := detector.DetectAll(ctx)
 	if err != nil {
 		logger.Warn("Failed to detect localhost identities, using defaults", "error", err)
 		return []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}, []string{"localhost"}, nil
@@ -224,7 +226,9 @@ func resolveFullCertificateIdentity(identityFile string, detector networkIdentit
 		return extraIPs, extraDNSNames, nil
 	}
 
-	netIdentity, err := detector.DetectAll(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	netIdentity, err := detector.DetectAll(ctx)
 	if err != nil {
 		logger.Warn("Failed to detect full network identity, falling back to basic IP detection", "error", err)
 		extraIPs := detectBasicNonLoopbackIPv4Addresses()

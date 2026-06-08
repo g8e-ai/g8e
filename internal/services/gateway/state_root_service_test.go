@@ -68,8 +68,8 @@ func TestStateRootService_InvalidateCache(t *testing.T) {
 
 func TestStateRootService_StateChangeDetection(t *testing.T) {
 	t.Parallel()
-	svc := newStateRootService(t)
 	db := newTestDB(t)
+	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
 
 	// Get initial state root
 	root1, err := svc.GetCurrentStateRoot()

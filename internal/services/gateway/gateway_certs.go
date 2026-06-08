@@ -198,6 +198,11 @@ func (pki *PKIAuthority) ensureRootCA() error {
 		if err := pki.loadCACertificate(rootCertPath, &pki.rootCert); err != nil {
 			return fmt.Errorf("pki: load existing root CA: %w", err)
 		}
+		// Verify private key exists in keystore; regenerate if missing
+		if _, err := pki.secretManager.GetCAPrivateKey("root"); err != nil {
+			pki.logger.Info("[PKI] Root CA private key missing from keystore, regenerating")
+			return pki.generateRootCA(rootCertPath)
+		}
 		return nil
 	}
 
@@ -211,6 +216,16 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	if fileExists(hubCertPath) {
 		if err := pki.loadCACertificate(hubCertPath, &pki.hubCert); err != nil {
 			return fmt.Errorf("pki: load existing hub CA: %w", err)
+		}
+		// Verify private key exists in keystore; regenerate if missing
+		if _, err := pki.secretManager.GetCAPrivateKey("hub"); err != nil {
+			pki.logger.Info("[PKI] Hub CA private key missing from keystore, regenerating")
+			if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
+				return fmt.Errorf("pki: load root CA private key for hub intermediate: %w", err)
+			}
+			if err := pki.generateIntermediateCA(hubCertPath, pki.rootCert, pki.rootKey, hubCommonName); err != nil {
+				return err
+			}
 		}
 	} else {
 		pki.logger.Info("[PKI] Generating hub intermediate CA")
@@ -228,6 +243,16 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 		if err := pki.loadCACertificate(operatorCertPath, &pki.operatorCert); err != nil {
 			return fmt.Errorf("pki: load existing operator CA: %w", err)
 		}
+		// Verify private key exists in keystore; regenerate if missing
+		if _, err := pki.secretManager.GetCAPrivateKey("operator"); err != nil {
+			pki.logger.Info("[PKI] Operator CA private key missing from keystore, regenerating")
+			if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
+				return fmt.Errorf("pki: load root CA private key for operator intermediate: %w", err)
+			}
+			if err := pki.generateIntermediateCA(operatorCertPath, pki.rootCert, pki.rootKey, operatorCommonName); err != nil {
+				return err
+			}
+		}
 	} else {
 		pki.logger.Info("[PKI] Generating Operator intermediate CA")
 		if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
@@ -243,6 +268,16 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	if fileExists(gatewayPeerCertPath) {
 		if err := pki.loadCACertificate(gatewayPeerCertPath, &pki.gatewayPeerCert); err != nil {
 			return fmt.Errorf("pki: load existing gateway peer CA: %w", err)
+		}
+		// Verify private key exists in keystore; regenerate if missing
+		if _, err := pki.secretManager.GetCAPrivateKey("gateway-peer"); err != nil {
+			pki.logger.Info("[PKI] Gateway peer CA private key missing from keystore, regenerating")
+			if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
+				return fmt.Errorf("pki: load root CA private key for gateway peer intermediate: %w", err)
+			}
+			if err := pki.generateIntermediateCA(gatewayPeerCertPath, pki.rootCert, pki.rootKey, gatewayPeerCommonName); err != nil {
+				return err
+			}
 		}
 	} else {
 		pki.logger.Info("[PKI] Generating gateway peer intermediate CA")

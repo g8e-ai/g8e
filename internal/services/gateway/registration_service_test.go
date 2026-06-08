@@ -54,14 +54,15 @@ func TestPKIPhase2_CalculateSerialFromPEM(t *testing.T) {
 	t.Parallel()
 
 	// Test that calculateSerialFromPEM correctly extracts serial from a certificate
-	dataDir := t.TempDir()
+	dataDir := tempDir(t)
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
+	dbDir := tempDir(t)
 	vaultDir := filepath.Join(dataDir, "vault")
 	db, err := OpenCanonicalDBService(dataDir, dbDir, vaultDir, logger, true, "", false)
 	require.NoError(t, err)
-	smDir := t.TempDir()
+	t.Cleanup(func() { db.Close() })
+	smDir := tempDir(t)
 	sm, err := NewSecretManager(db.db, smDir, logger)
 	require.NoError(t, err)
 
@@ -97,7 +98,7 @@ func TestSessionWebBindKey(t *testing.T) {
 	}{
 		{"Valid session ID", "web-session-123", "g8e:sessions:web:web-session-123:bind"},
 		{"Empty session ID", "", "g8e:sessions:web::bind"},
-		{"Session with special chars", "session-abc-123", "g8e:sessions:web:sessions-abc-123:bind"},
+		{"Session with special chars", "session-abc-123", "g8e:sessions:web:session-abc-123:bind"},
 	}
 
 	for _, tt := range tests {
@@ -139,14 +140,15 @@ func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
 	t.Run("RegisterDeviceCSR accepts enrollment without CLI CSR (operator-only)", func(t *testing.T) {
 		t.Parallel()
 
-		dataDir := t.TempDir()
+		dataDir := tempDir(t)
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
+		dbDir := tempDir(t)
 		vaultDir := filepath.Join(dataDir, "vault")
 		db, err := OpenCanonicalDBService(dataDir, dbDir, vaultDir, logger, true, "", false)
 		require.NoError(t, err)
-		smDir := t.TempDir()
+		t.Cleanup(func() { db.Close() })
+		smDir := tempDir(t)
 		sm, err := NewSecretManager(db.db, smDir, logger)
 		require.NoError(t, err)
 

@@ -328,8 +328,8 @@ func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := tempDir(t)
+	secretsDir := tempDir(t)
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -984,7 +984,7 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	t.Run("operator auth with mismatched URI SAN is rejected", func(t *testing.T) {
 		t.Parallel()
 		wid := protocol.NewWorkloadIdentity()
-		wrongURI, err := wid.OperatorSPIFFEURL("wrong-org", "wrong-op", "wrong-session")
+		wrongURI, err := wid.OperatorSPIFFEURL("wrong-org", "wrong-op", operatorSessionID)
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)

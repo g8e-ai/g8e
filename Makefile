@@ -105,6 +105,7 @@ help:
 	@echo "Test:"
 	@echo "  test                  Run all tests with race detection (unit + gateway)"
 	@echo "  test-short            Run short tests with race detection"
+	@echo "  test-pkg-<path>       Run tests for a specific package (e.g., make test-pkg-internal/services/auth)"
 	@echo "  test-coverage         Run tests with coverage (enforces 60% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
 	@echo "  test-shuffle          Run all tests with randomized order"
 	@echo "  test-integration      Run integration tests (requires platform running and auth login)"
@@ -368,97 +369,70 @@ build-windows:
 # =============================================================================
 # Core test targets
 .PHONY: test
-test: test-unit test-gateway
+test: test-unit test-integration test-e2e
 	@echo "All tests completed successfully."
 
-# Unit tests (no platform required)
+# Unit Tests: Run immediately without any build tags (excludes integration and e2e)
 .PHONY: test-unit
 test-unit:
-	@echo "Running unit tests..."
-	@go test $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) $(TEST_PKGS)
+	@echo "Running Tier 1 (Unit) tests..."
+	@go test $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 
 .PHONY: test-short
 test-short:
 	@echo "Running short unit tests (skips long-running tests)..."
 	@go test $(TEST_RACE) -short $(TEST_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 
-.PHONY: test-coverage
-test-coverage:
-	@echo "Running tests with coverage analysis..."
-	@if [ -n "$(PKG)" ]; then \
-		echo "Testing package: $(PKG)"; \
-		if [ "$(VERBOSE)" = "true" ]; then \
-			go test -v $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(PKG); \
-		else \
-			go test $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(PKG); \
-		fi; \
-	else \
-		echo "Testing all packages (excluding mocks, cmd, testutil, test, proto)"; \
-		if [ "$(VERBOSE)" = "true" ]; then \
-			go test -v $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(TEST_PKGS); \
-		else \
-			go test $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(TEST_PKGS); \
-		fi; \
-	fi
-	@echo "Coverage report generated in coverage.out"
-	@go tool cover -func=coverage.out | tail -1
-	@if [ -z "$(PKG)" ]; then \
-		COVERAGE=$$(go tool cover -func=coverage.out $(COVERAGE_EXCLUDE) | tail -1 | awk '{print $$3}' | sed 's/%//'); \
-		if [ $$(echo "$$COVERAGE < $(COVERAGE_THRESHOLD)" | bc -l) -eq 1 ]; then \
-			echo "Coverage $$COVERAGE% is below $(COVERAGE_THRESHOLD)% threshold"; \
-			exit 1; \
-		fi; \
-		echo "Coverage $$COVERAGE% meets $(COVERAGE_THRESHOLD)% threshold"; \
-	fi
-
-.PHONY: test-shuffle
-test-shuffle:
-	@echo "Running unit tests with randomized execution order..."
-	@go test $(TEST_RACE) $(TEST_COUNT) -shuffle=on -timeout $(TEST_TIMEOUT) $(TEST_PKGS)
-
-# Integration tests (requires platform running and auth login)
+# In-Memory Integration Tests: Requires the integration tag
 .PHONY: test-integration
 test-integration:
-	@echo "Running all integration tests (requires platform running and auth login)..."
-	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/...
+	@echo "Running Tier 2 (In-Memory Integration) tests..."
+	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./...
 
+# Live-Platform E2E Tests: Requires the e2e tag, running platform, and auth login
+.PHONY: test-e2e
+test-e2e:
+	@echo "Running Tier 3 (Live Platform E2E) tests..."
+	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/...
+
+# Scenario-specific Live Tests
 .PHONY: test-scenario
 test-scenario:
-	@echo "Running scenario integration tests (requires platform running)..."
-	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/scenario/...
+	@echo "Running Tier 3 (Scenario) tests..."
+	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/scenario/...
 
 # Gateway tests (subset of integration tests)
 .PHONY: test-gateway
 test-gateway:
 	@echo "Running gateway-specific tests (no platform required)..."
-	@go test $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/a2a_gateway_test.go ./test/mcp_gateway_test.go ./test/mcp_stdio_test.go
+	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/a2a_gateway_test.go ./test/mcp_gateway_test.go ./test/mcp_stdio_test.go
 
 # Protocol-specific integration tests (requires platform running and auth login)
 .PHONY: test-mcp
 test-mcp:
 	@echo "Running MCP (Model Context Protocol) integration tests (requires platform running and auth login)..."
-	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/mcp_gateway_test.go ./test/mcp_real_operator_test.go ./test/mcp_stdio_test.go
+	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/mcp_gateway_test.go ./test/mcp_real_operator_test.go ./test/mcp_stdio_test.go
 
 .PHONY: test-a2a
 test-a2a:
 	@echo "Running A2A (Agent-to-Agent) integration tests (requires platform running and auth login)..."
-	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/a2a_gateway_test.go ./test/a2a_real_operator_test.go
+	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/a2a_gateway_test.go ./test/a2a_real_operator_test.go
 
 .PHONY: test-universal-gateway
 test-universal-gateway:
 	@echo "Running universal gateway integration tests (requires platform running and auth login)..."
-	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/universal_gateway_integration_test.go
+	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/universal_gateway_integration_test.go
 
 # Client integration tests (requires platform running and auth login)
 .PHONY: test-byo
 test-byo:
 	@echo "Running BYO (Bring Your Own) client integration tests (requires platform running and auth login)..."
-	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/byo_client_test.go
+	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/byo_client_test.go
 
 .PHONY: test-native
 test-native:
 	@echo "Running native real Operator integration tests (requires platform running and auth login)..."
-	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/native_real_operator_test.go
+	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/native_real_operator_test.go
 
 
 # =============================================================================

@@ -1029,6 +1029,7 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 	response := models.BootstrapResponse{
 		Success:    true,
 		User:       user,
+		UserID:     user.ID,
 		WebSession: &models.WebSessionInfo{
 			ID:              webSession.ID,
 			ExpiresAtUnixMs: webSession.ExpiresAtUnixMs,
@@ -1093,8 +1094,11 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 	var cliCertPEM, cliCertChainPEM string
 	var cliCertFingerprint, cliCertSerial string
 	var cliSessionID string
+	
+	// Always create a CLI session ID for CLI-only bootstrap (user_id binding is required)
+	cliSessionID = uuid.NewString()
+	
 	if req.CLICSRPEM != "" {
-		cliSessionID = uuid.NewString()
 		cliCertPEM, cliCertChainPEM, err = c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "")
 		if err != nil {
 			c.logger.Error("Failed to sign bootstrap CLI CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
@@ -1114,46 +1118,48 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 		}
 
 		response.HubTrustBundle = string(hubBundle)
-		response.CLISessionID = cliSessionID
 		response.CLICert = cliCertPEM
 		response.CLICertChain = cliCertChainPEM
+	}
 
-		// Persist sessions only if we have both operator and CLI certs
-		if csrRequested {
-			// Persist CLI session
-			err = c.cliSessionSvc.PersistCLISession(
-				cliSessionID,
-				operatorSessionID,
-				user.ID,
-				"bootstrap-operator",
-				cliCertFingerprint,
-				cliCertSerial,
-				string(constants.HeartbeatTypeBootstrap),
-			)
-			if err != nil {
-				c.logger.Error("Failed to persist CLI session during bootstrap", string(constants.ConnectionStateError), err)
-				c.responder.Error(w, http.StatusInternalServerError, "failed to persist CLI session")
-				return
-			}
-			// Persist operator session
-			err = c.operatorSessionSvc.PersistOperatorSession(
-				operatorSessionID,
-				user.ID,
-				orgID,
-				operatorID,
-				string(constants.HeartbeatTypeBootstrap),
-			)
-			if err != nil {
-				c.logger.Error("Failed to persist operator session during bootstrap", string(constants.ConnectionStateError), err)
-				c.responder.Error(w, http.StatusInternalServerError, "failed to persist operator session")
-				return
-			}
-			c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user, operator and CLI cert", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", cliSessionID[:8])
-		} else {
-			c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user and CLI cert (no operator)", "user_id", user.ID, "cli_session_id_prefix", cliSessionID[:8])
+	// Always persist CLI session (even without certificate for CLI-only bootstrap)
+	// This ensures user_id binding exists for later CLI enrollment
+	err = c.cliSessionSvc.PersistCLISession(
+		cliSessionID,
+		operatorSessionID, // Empty if no operator CSR
+		user.ID,
+		"bootstrap-cli",
+		cliCertFingerprint,
+		cliCertSerial,
+		string(constants.HeartbeatTypeBootstrap),
+	)
+	if err != nil {
+		c.logger.Error("Failed to persist CLI session during bootstrap", string(constants.ConnectionStateError), err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to persist CLI session")
+		return
+	}
+
+	response.CLISessionID = cliSessionID
+
+	// Persist operator session only if operator CSR was requested
+	if csrRequested {
+		err = c.operatorSessionSvc.PersistOperatorSession(
+			operatorSessionID,
+			user.ID,
+			orgID,
+			operatorID,
+			string(constants.HeartbeatTypeBootstrap),
+		)
+		if err != nil {
+			c.logger.Error("Failed to persist operator session during bootstrap", string(constants.ConnectionStateError), err)
+			c.responder.Error(w, http.StatusInternalServerError, "failed to persist operator session")
+			return
 		}
+		c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user, operator and CLI session", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", cliSessionID[:8])
+	} else if req.CLICSRPEM != "" {
+		c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user and CLI cert (no operator)", "user_id", user.ID, "cli_session_id_prefix", cliSessionID[:8])
 	} else {
-		c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user (no CSR)", "user_id", user.ID)
+		c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user and CLI session (no CSR)", "user_id", user.ID, "cli_session_id_prefix", cliSessionID[:8])
 	}
 
 	c.responder.JSON(w, http.StatusCreated, response)

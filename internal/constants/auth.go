@@ -90,12 +90,31 @@ const (
 	HeaderUserID                        = "X-G8E-User-ID"
 	HeaderWebSessionID                  = "X-G8E-Web-Session-ID"
 	HeaderXAccelBuffering               = "X-Accel-Buffering"
+	HeaderXContentTypeOptions           = "X-Content-Type-Options"
 	HeaderXForwardedFor                 = "X-Forwarded-For"
 	HeaderXForwardedHost                = "X-Forwarded-Host"
 	HeaderXForwardedProto               = "X-Forwarded-Proto"
+	HeaderXFrameOptions                 = "X-Frame-Options"
 	HeaderXProxyOrganizationID          = "X-Proxy-Organization-Id"
 	HeaderXProxyUserID                  = "X-Proxy-User-Id"
 	HeaderXRequestTimestamp             = "X-Request-Timestamp"
+)
+
+// HTTP header value constants.
+const (
+	HeaderValueNoSniff    = "nosniff"
+	HeaderValueDeny       = "DENY"
+	HeaderValueKeepAlive  = "keep-alive"
+	HeaderValueNoCache    = "no-cache"
+	HeaderValueTextEvent  = "text/event-stream"
+	HeaderValueApplicationJSON = "application/json"
+	HeaderValueXHTML      = "application/xhtml+xml"
+	HeaderValueXML        = "application/xml"
+	HeaderValueOctetStream = "application/octet-stream"
+	HeaderValuePEM        = "application/x-pem-file"
+	HeaderValueCRL        = "application/pkix-crl"
+	HeaderValueShell      = "application/x-sh"
+	HeaderValuePowerShell = "application/x-powershell"
 )
 
 // ContextKey is a custom type for context keys to avoid collisions with other packages.

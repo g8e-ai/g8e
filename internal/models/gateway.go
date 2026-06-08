@@ -334,6 +334,7 @@ type SuspendedTxResponse struct {
 type BootstrapResponse struct {
 	Success            bool          `json:"success"`
 	User               *User         `json:"user,omitempty"`
+	UserID             string        `json:"user_id,omitempty"`
 	WebSession         *WebSessionInfo `json:"web_session,omitempty"`
 	OperatorCert       string        `json:"operator_cert,omitempty"`
 	OperatorCertChain  string        `json:"operator_cert_chain,omitempty"`

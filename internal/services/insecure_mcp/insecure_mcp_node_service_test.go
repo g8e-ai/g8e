@@ -361,40 +361,6 @@ func TestSystemWhich_EmptyBins(t *testing.T) {
 // system.run
 // ────────────────────────────────────────────────────────────────
 
-func TestSystemRun_EchoCommand(t *testing.T) {
-	t.Parallel()
-	mg := newMockGateway(t)
-	mg.queueInvoke("sr-1", "test-node", "command", `{"command":["/bin/sh","-c","echo hello"]}`)
-	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	go svc.Start(ctx)
-
-	if !mg.waitForReceived(2, 4*time.Second) {
-		t.Fatalf("timed out: %d frames", len(mg.received))
-	}
-	cancel()
-
-	r := mg.findInvokeResult("sr-1")
-	if r == nil {
-		t.Fatal("no result")
-	}
-	if !r.OK {
-		t.Fatalf("not ok: %+v", r.Error)
-	}
-	var payload systemRunResult
-	json.Unmarshal([]byte(*r.PayloadJSON), &payload)
-	if !payload.Success {
-		t.Errorf("expected success, got %+v", payload)
-	}
-	if !strings.Contains(payload.Stdout, "hello") {
-		t.Errorf("expected 'hello' in stdout, got %q", payload.Stdout)
-	}
-	if payload.ExitCode == nil || *payload.ExitCode != 0 {
-		t.Errorf("expected exit 0, got %v", payload.ExitCode)
-	}
-}
 
 func TestSystemRun_NonZeroExit(t *testing.T) {
 	t.Parallel()

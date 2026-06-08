@@ -179,3 +179,22 @@ const (
 	PathLibraryPreferencesSystemConfigurationPreferencesPlist = "/Library/Preferences/SystemConfiguration/preferences.plist"
 )
 
+// PKI filesystem constants for subdirectories and filenames.
+const (
+	PkiSubdirRoot        = "root"
+	PkiSubdirAuthorities = "authorities"
+	PkiSubdirIssued      = "issued"
+	PkiSubdirTrust       = "trust"
+	PkiSubdirRevocation  = "revocation"
+	PkiSubdirBinaries    = "binaries"
+
+	PkiFileRootCA          = "root_ca.crt"
+	PkiFileHubCA           = "hub_ca.crt"
+	PkiFileOperatorCA      = "operator_ca.crt"
+	PkiFileGatewayPeerCA   = "gateway_peer_ca.crt"
+	PkiFileGatewayBundle   = "g8eg-ca-bundle.pem"
+	PkiFileRootBundle      = "root.pem"
+	PkiFileOperatorBundle  = "operator-bundle.pem"
+	PkiFileTrustDomainJSON = "trust-domain.json"
+)
+

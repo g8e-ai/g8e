@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-06-06
+Last Updated: 2026-06-07
 
 g8e tests run directly on the host using real infrastructure. The test environment is the production environment. If it does not work in tests, it will not work in production.
 
@@ -21,22 +21,42 @@ g8e tests run directly on the host using real infrastructure. The test environme
 
 ---
 
+## Test Architecture (4-Tier Model)
+
+g8e tests are organized into four clearly defined tiers using Go build tags:
+
+| Tier | Name | Target Directory | Build Tag | External Deps | Execution Time |
+| --- | --- | --- | --- | --- | --- |
+| **Tier 1** | **Unit Tests** | `internal/...` & `pkg/...` | *No tags* (Runs by default) | None (mock/stub-only, no files/network/DB) | < 10ms per test |
+| **Tier 2** | **In-Memory Integration** | `internal/...` & `test/` | `//go:build integration` | SQLite in-memory, local PKI generation, local pubsub | < 2s per suite |
+| **Tier 3** | **Live-Platform E2E** | `test/` & `test/scenario/` | `//go:build e2e` | Running g8e gateway & operator processes | < 30s per suite |
+| **Tier 4** | **Chaos & Stress** | `internal/test/chaos/` | `//go:build chaos` | Fuzz/load driver (can run in-process) | Custom |
+
+---
+
 ## Test Harness
 
 ### CLI Test Commands
 
 ```bash
-./g8e test            # runs all Go tests (unit + integration)
-./g8e test ci         # CI suite: proto, lint, vulncheck, platform tests with coverage
-./g8e test unit       # unit tests only
-./g8e test integration # integration tests only
-./g8e test chaos      # Chaos engineering tests
-./g8e test scenario   # Scenario integration tests
-./g8e test review     # Review integration test vault results
-./g8e test summary    # Show summary of all integration test results
+./g8e test unit        # Run Tier 1 (Unit) tests - no external dependencies
+./g8e test integration # Run Tier 2 (In-Memory Integration) tests - SQLite in-memory, local PKI
+./g8e test e2e         # Run Tier 3 (Live Platform E2E) tests - requires running gateway
+./g8e test scenario    # Run Tier 3 (Scenario) tests - requires running gateway
+./g8e test chaos       # Run Tier 4 (Chaos & Stress) tests
 ```
 
-The `./g8e test` command runs the full test suite including unit tests across `cmd/`, `internal/`, `pkg/`, and `test/` packages, followed by integration tests from `test/scenario/`. The `ci` subcommand mirrors the GitHub Actions CI pipeline exactly, running proto generation, linting, vulncheck, and platform tests with coverage enforcement.
+The CLI test commands map directly to the 4-tier test architecture:
+
+- **`./g8e test unit`** - Runs unit tests without build tags. These tests use mocks/stubs and have no external dependencies (no files, network, or DB). Fast feedback loop for local development.
+
+- **`./g8e test integration`** - Runs in-memory integration tests with the `integration` build tag. These tests use SQLite in-memory databases, local PKI generation, and local pubsub. No running gateway required.
+
+- **`./g8e test e2e`** - Runs live-platform E2E tests with the `e2e` build tag. These tests require a running g8e gateway and authenticated CLI session (`./g8e gw start` and `./g8e auth login`).
+
+- **`./g8e test scenario`** - Runs scenario-specific E2E tests with the `e2e` build tag. These tests exercise end-to-end governance workflows across doctrine, consensus, and notary modes. Requires running gateway.
+
+- **`./g8e test chaos`** - Runs chaos engineering tests with the `chaos` build tag. These tests fire random payloads at the Operator to verify fail-closed behavior and invariant enforcement.
 
 Validates the g8e Node and protocol enforcement (`GovernanceEnvelope`, 5-layer governance, Audit Vault). Tests cover pub/sub command dispatch, L1/L2/L3/L4/L5 verification, transaction replay protection, state root validation, and audit vault integrity.
 
@@ -47,7 +67,7 @@ Validates the g8e Node and protocol enforcement (`GovernanceEnvelope`, 5-layer g
 ./g8e test scenario --run forge_signature
 ```
 
-Integration tests exercising end-to-end governance workflows across doctrine, consensus, and notary modes. Tests cover the 5-layer verification sequence (L1-L5), transaction replay protection, state root validation, and receipt verification. Requires the g8e Gateway to be running.
+Integration tests exercising end-to-end governance workflows across doctrine, consensus, and notary modes. Tests cover the 5-layer verification sequence (L1-L5), transaction replay protection, state root validation, and receipt verification. Requires the g8e Gateway to be running and authenticated CLI session.
 
 **Test Types**:
 - **Table-driven scenarios** - JSON fixtures in `test/scenario/fixtures/` covering security gates (bad integrity, hash mismatch, replay, stale state root, L2/L3 validation) and finance workflows
@@ -314,15 +334,20 @@ Test-only audit storage implementations separated from production code to avoid 
 ## Workflow
 
 ```bash
-# 1. Start the Gateway
+# 1. Run unit tests (no gateway required)
+./g8e test unit
+
+# 2. Run in-memory integration tests (no gateway required)
+./g8e test integration
+
+# 3. For E2E tests, start the Gateway
 ./g8e gw start
 
-# 2. Authenticate (required for mTLS tests)
+# 4. Authenticate (required for mTLS tests)
 ./g8e auth login
 
-# 3. Run tests
-./g8e test
-./g8e test unit
+# 5. Run E2E tests
+./g8e test e2e
 ./g8e test scenario
 ```
 
@@ -415,18 +440,20 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 
 ### Makefile Test Targets
 
-- **`make test`** - Runs all tests with race detection and 180s timeout.
-- **`make test-short`** - Runs short tests with race detection and 60s timeout.
+- **`make test`** - Runs all tests (unit + integration + e2e).
+- **`make test-unit`** - Runs Tier 1 (Unit) tests without build tags. No external dependencies.
+- **`make test-integration`** - Runs Tier 2 (In-Memory Integration) tests with `integration` build tag. Uses SQLite in-memory, local PKI, local pubsub.
+- **`make test-e2e`** - Runs Tier 3 (Live Platform E2E) tests with `e2e` build tag. Requires running gateway and auth login.
+- **`make test-scenario`** - Runs Tier 3 (Scenario) tests with `e2e` build tag. Requires running gateway and auth login.
+- **`make test-short`** - Runs short unit tests with race detection and 60s timeout.
 - **`make test-coverage`** - Runs tests with coverage and enforces 60% threshold. Use `PKG=./path/to/pkg` for specific packages, `VERBOSE=true` for verbose output.
 - **`make test-shuffle`** - Runs all tests with randomized order.
-- **`make test-integration`** - Runs integration tests (requires platform running and auth login).
-- **`make test-scenario`** - Runs scenario integration tests (requires platform running).
-- **`make test-gateway`** - Runs gateway tests (A2A gateway, MCP gateway, MCP stdio).
-- **`make test-mcp`** - Runs MCP tests (MCP gateway, MCP real operator, MCP stdio).
-- **`make test-a2a`** - Runs A2A tests (A2A gateway, A2A real operator).
-- **`make test-universal-gateway`** - Runs universal gateway integration tests (requires platform running and auth login).
-- **`make test-byo`** - Runs BYO client tests (requires platform running and auth login).
-- **`make test-native`** - Runs native real Operator tests (requires platform running and auth login).
+- **`make test-gateway`** - Runs gateway-specific tests (A2A gateway, MCP gateway, MCP stdio).
+- **`make test-mcp`** - Runs MCP tests (MCP gateway, MCP real operator, MCP stdio). Requires running gateway and auth login.
+- **`make test-a2a`** - Runs A2A tests (A2A gateway, A2A real operator). Requires running gateway and auth login.
+- **`make test-universal-gateway`** - Runs universal gateway integration tests. Requires running gateway and auth login.
+- **`make test-byo`** - Runs BYO client tests. Requires running gateway and auth login.
+- **`make test-native`** - Runs native real Operator tests. Requires running gateway and auth login.
 
 ### Lints
 
@@ -453,11 +480,7 @@ All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NE
 
 GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 
-- **`verify-proto`** - Generated Go and Python code sync with `.proto` definitions.
-- **`lint-g8eo`** - Runs `golangci-lint` on the g8e Node and protocol code.
-- **`vulncheck-g8eo`** - Scans Go dependencies for known vulnerabilities.
-- **`test-g8eo`** (blocking) - Installs Go, starts the gateway, runs `./g8e test ci` with 60% coverage threshold.
-- **`test-scenarios`** - Runs scenario integration tests with `-tags=integration`.
-- **`constants-lint`** - Enforces use of constants instead of raw string literals.
-- **`docs-lint`** - Validates Markdown formatting with markdownlint.
-- **`docs-build`** - Builds CLI reference and documentation site.
+- **`verify-lint`** - Runs proto generation, linting, and vulnerability scanning.
+- **`security`** - Scans Go dependencies for known vulnerabilities.
+- **`test-unit-integration`** - Runs Tier 1 (Unit) and Tier 2 (In-Memory Integration) tests. Does not start the gateway.
+- **`test-e2e`** - Runs Tier 3 (Live Platform E2E) tests. Starts the gateway, authenticates, runs tests, and stops the gateway. Depends on `verify-lint` to save resources.

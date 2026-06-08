@@ -103,7 +103,7 @@ func TestResolveGatewayCertificateIdentity(t *testing.T) {
 			t.Parallel()
 
 			logger := testutil.NewTestLogger()
-			dir := t.TempDir()
+			dir := tempDir(t)
 			identityFile := tt.identityFile
 
 			if tt.setupFile != nil {

@@ -326,6 +326,9 @@ func (m *SecretManager) readDigestManifest() (*bootstrapDigestManifest, error) {
 	manifestPath := filepath.Join(m.secretsDir, BootstrapDigestManifestFile)
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("secret_manager: read digest manifest: bootstrap digest manifest file %s is required but does not exist: %w", manifestPath, err)
+		}
 		return nil, fmt.Errorf("secret_manager: read digest manifest: read file %s: %w", manifestPath, err)
 	}
 
