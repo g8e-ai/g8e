@@ -114,7 +114,7 @@ func (t *NetHTTPProbeTool) Execute(ctx context.Context, args json.RawMessage) (C
 		},
 	}
 	client := &http.Client{Timeout: timeout, Transport: transport}
-	// URL is validated by validateHTTPRequestURL to satisfy CodeQL uncontrolled-data-in-network-request rule.
+	// parsedURL is validated by validateHTTPRequestURL to satisfy CodeQL uncontrolled-data-in-network-request rule.
 	resp, err := client.Do(httpReq)
 	latency := time.Since(start).Seconds() * 1000
 

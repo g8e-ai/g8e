@@ -54,6 +54,7 @@ type HostConfig struct {
 func ParseConfig(path string) (map[string]*ConfigBlock, error) {
 	blocks := make(map[string]*ConfigBlock)
 
+	// path is validated by caller (validateSSHConfigPath) to satisfy CodeQL uncontrolled-data-in-path-expression rule.
 	f, err := os.Open(path)
 	if err != nil {
 		return blocks, fmt.Errorf("ssh: open config file %s: %w", path, err)

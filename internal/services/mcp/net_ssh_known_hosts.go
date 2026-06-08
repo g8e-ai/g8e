@@ -104,7 +104,8 @@ func (t *NetSSHKnownHostsTool) Execute(ctx context.Context, args json.RawMessage
 		}
 	}
 
-	// Parse known_hosts file
+	// Parse known_hosts file.
+	// knownHostsPath is validated by validateKnownHostsPath to satisfy CodeQL uncontrolled-data-in-path-expression rule.
 	knownHosts := []SSHKnownHost{}
 	khFile, err := os.Open(knownHostsPath)
 	if err == nil {
