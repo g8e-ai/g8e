@@ -29,6 +29,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func getBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return "./g8e.exe"
+	}
+	return "./g8e"
+}
+
 func gatewayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "gw",
@@ -167,37 +174,37 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Println("╚════════════════════════════════════════════════════════════════════════════╝")
 			cmd.Println()
 			cmd.Println("Bootstrap Authentication:")
-			cmd.Printf("  ./g8e auth login\n\n")
+			cmd.Printf("  %s auth login\n\n", getBinaryName())
 			cmd.Println("Deploy/Stream Operators from this machine to Remote Hosts:")
-			cmd.Printf("  ./g8e operator deploy --hosts <host1,host2>\n")
-			cmd.Printf("  ./g8e operator stream --hosts <host1,host2>\n")
+			cmd.Printf("  %s operator deploy --hosts <host1,host2>\n", getBinaryName())
+			cmd.Printf("  %s operator stream --hosts <host1,host2>\n", getBinaryName())
 			cmd.Println()
 			cmd.Println("Copy/Paste Deploy Scripts (run on remote hosts):")
 			cmd.Printf("  Linux/macOS:   curl -fsSL http://%s:%d/deploy.sh | bash\n", externalIP, constants.Ports.OperatorHttp)
 			cmd.Printf("  Windows:       iwr http://%s:%d/deploy.ps1 -UseBasicParsing | iex\n\n", externalIP, constants.Ports.OperatorHttp)
 			cmd.Println("PKI Enrollment for Operators already on Remote Hosts:")
-			cmd.Printf("  ./g8e security pki enroll -e %s\n\n", externalIP)
+			cmd.Printf("  %s security pki enroll -e %s\n\n", getBinaryName(), externalIP)
 			cmd.Println("Manage:")
-			cmd.Printf("  ./g8e gw restart\n")
-			cmd.Printf("  ./g8e gw settings\n")
-			cmd.Printf("  ./g8e gw reset\n")
-			cmd.Printf("  ./g8e gw clean\n\n")
+			cmd.Printf("  %s gw restart\n", getBinaryName())
+			cmd.Printf("  %s gw settings\n", getBinaryName())
+			cmd.Printf("  %s gw reset\n", getBinaryName())
+			cmd.Printf("  %s gw clean\n\n", getBinaryName())
 			cmd.Println("Monitor:")
-			cmd.Printf("  ./g8e gw status\n")
-			cmd.Printf("  ./g8e gw logs -f\n")
-			cmd.Printf("  ./g8e data operators\n")
-			cmd.Printf("  ./g8e data users\n")
-			cmd.Printf("  ./g8e data audit list --operator-session-id <session-id>\n\n")
+			cmd.Printf("  %s gw status\n", getBinaryName())
+			cmd.Printf("  %s gw logs -f\n", getBinaryName())
+			cmd.Printf("  %s data operators\n", getBinaryName())
+			cmd.Printf("  %s data users\n", getBinaryName())
+			cmd.Printf("  %s data audit list --operator-session-id <session-id>\n\n", getBinaryName())
 			cmd.Println("MCP (Operator commands):")
-			cmd.Printf("  ./g8e mcp show    Print MCP client configuration for connecting to the gateway\n")
-			cmd.Printf("  ./g8e mcp stdio   Run Operator as MCP stdio server with native tools only (no Gateway)\n")
-			cmd.Printf("  ./g8e mcp gov     Run Operator as MCP stdio proxy to Gateway (with governance)\n")
+			cmd.Printf("  %s mcp show    Print MCP client configuration for connecting to the gateway\n", getBinaryName())
+			cmd.Printf("  %s mcp stdio   Run Operator as MCP stdio server with native tools only (no Gateway)\n", getBinaryName())
+			cmd.Printf("  %s mcp gov     Run Operator as MCP stdio proxy to Gateway (with governance)\n", getBinaryName())
 
 			if runtime.GOOS == "windows" {
 				cmd.Println()
 				cmd.Println("Windows (Passkey Authentication):")
-				cmd.Printf("  ./g8e auth enroll-windows  Enroll via Windows Certificate Store\n")
-				cmd.Printf("  ./g8e auth serve-https     Start HTTPS server with passkey auth UI\n")
+				cmd.Printf("  %s auth enroll-windows  Enroll via Windows Certificate Store\n", getBinaryName())
+				cmd.Printf("  %s auth serve-https     Start HTTPS server with passkey auth UI\n", getBinaryName())
 			}
 
 			if follow {
@@ -357,7 +364,7 @@ func gatewayRestartCmd() *cobra.Command {
 
 			cmd.Println("g8e Gateway restarted successfully")
 			cmd.Printf("Governance mode: doctrine (L1 enforced, L2/L3 audited)\n")
-			cmd.Printf("\nNext step: Run './g8e auth login' to authenticate\n")
+			cmd.Printf("\nNext step: Run '%s auth login' to authenticate\n", getBinaryName())
 			return nil
 		},
 	}

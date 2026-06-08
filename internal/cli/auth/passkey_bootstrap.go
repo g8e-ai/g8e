@@ -53,8 +53,8 @@ func NewPasskeyBootstrapServer(gatewayURL, userID, userName string) *PasskeyBoot
 
 // Start starts the localhost server on a random available port
 func (s *PasskeyBootstrapServer) Start() (string, error) {
-	// Find an available port
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	// Find an available port on localhost (not 127.0.0.1) to match WebAuthn RP ID
+	listener, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		return "", fmt.Errorf("failed to find available port: %w", err)
 	}
@@ -77,7 +77,7 @@ func (s *PasskeyBootstrapServer) Start() (string, error) {
 		}
 	}()
 
-	return fmt.Sprintf("http://127.0.0.1:%d", port), nil
+	return fmt.Sprintf("http://localhost:%d", port), nil
 }
 
 // Stop stops the server
