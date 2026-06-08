@@ -39,10 +39,10 @@ func (t *SysInfoTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *SysInfoTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type":       "object",
-		"properties": map[string]interface{}{},
+func (t *SysInfoTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type:       "object",
+		Properties: make(map[string]*PropertySchema),
 	}
 }
 

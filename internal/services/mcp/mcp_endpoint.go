@@ -44,10 +44,10 @@ const (
 
 // initializeResult is the response to the MCP "initialize" handshake.
 type initializeResult struct {
-	ProtocolVersion string          `json:"protocolVersion"`
+	ProtocolVersion string             `json:"protocolVersion"`
 	Capabilities    serverCapabilities `json:"capabilities"`
-	ServerInfo      mcpServerInfo    `json:"serverInfo"`
-	Instructions    string          `json:"instructions,omitempty"`
+	ServerInfo      mcpServerInfo      `json:"serverInfo"`
+	Instructions    string             `json:"instructions,omitempty"`
 }
 
 type mcpServerInfo struct {
@@ -267,7 +267,7 @@ func (g *GatewayService) listToolsResult(ctx context.Context) (interface{}, erro
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
+				InputSchema: nt.InputSchema().ToMap(),
 			})
 		}
 		return ToolsListResult{Tools: tools}, nil

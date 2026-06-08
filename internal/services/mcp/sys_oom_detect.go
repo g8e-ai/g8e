@@ -53,13 +53,13 @@ func (t *SysOOMDetectTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *SysOOMDetectTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"log_path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to the log file (default /var/log/dmesg)",
+func (t *SysOOMDetectTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"log_path": {
+				Type:        "string",
+				Description: "Path to the log file (default /var/log/dmesg)",
 			},
 		},
 	}

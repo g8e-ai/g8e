@@ -35,21 +35,21 @@ func (t *NetDNSResolveTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *NetDNSResolveTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"hostname": map[string]interface{}{
-				"type":        "string",
-				"description": "Hostname to resolve",
+func (t *NetDNSResolveTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"hostname": {
+				Type:        "string",
+				Description: "Hostname to resolve",
 			},
-			"record_type": map[string]interface{}{
-				"type":        "string",
-				"description": "DNS record type (A, AAAA, MX, TXT, CNAME, NS)",
-				"enum":        []string{"A", "AAAA", "MX", "TXT", "CNAME", "NS"},
+			"record_type": {
+				Type:        "string",
+				Description: "DNS record type (A, AAAA, MX, TXT, CNAME, NS)",
+				Enum:        []string{"A", "AAAA", "MX", "TXT", "CNAME", "NS"},
 			},
 		},
-		"required": []string{"hostname"},
+		Required: []string{"hostname"},
 	}
 }
 

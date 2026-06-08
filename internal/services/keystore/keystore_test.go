@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -298,16 +299,20 @@ func TestKeystore_EnsurePermissions(t *testing.T) {
 
 	info, err := os.Stat(secretsDir)
 	require.NoError(t, err)
-	// Windows doesn't support Unix permissions exactly, so just check directory is not world-writable
-	perm := info.Mode().Perm()
-	assert.NotEqual(t, os.FileMode(0777), perm, "directory should not be world-writable")
+	// Windows doesn't support Unix permissions exactly, so skip the permission check on Windows
+	if runtime.GOOS != "windows" {
+		perm := info.Mode().Perm()
+		assert.NotEqual(t, os.FileMode(0777), perm, "directory should not be world-writable")
+	}
 
 	secretPath := filepath.Join(secretsDir, "test-secret")
 	info, err = os.Stat(secretPath)
 	require.NoError(t, err)
-	// Windows doesn't support Unix permissions exactly, so just check file is not world-writable
-	perm = info.Mode().Perm()
-	assert.NotEqual(t, os.FileMode(0777), perm, "secret file should not be world-writable")
+	// Windows doesn't support Unix permissions exactly, so skip the permission check on Windows
+	if runtime.GOOS != "windows" {
+		perm := info.Mode().Perm()
+		assert.NotEqual(t, os.FileMode(0777), perm, "secret file should not be world-writable")
+	}
 }
 
 func TestKeystore_BackendName(t *testing.T) {

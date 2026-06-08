@@ -538,7 +538,7 @@ func TestHandleAuthPasskeysAuthenticateChallenge(t *testing.T) {
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.False(t, resp["success"].(bool))
-		assert.Contains(t, resp["error"].(string), "Found no credentials")
+		assert.Contains(t, resp["error"].(string), "no passkeys registered")
 	})
 
 	t.Run("Success - session context user_id", func(t *testing.T) {

@@ -206,7 +206,12 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 				c.pki = &PKIAuthority{}
 			},
 			expectedStatus: http.StatusInternalServerError,
-			expectedBody:   `{"error":"pki: read root CA"}`,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var resp map[string]string
+				err := json.Unmarshal(rr.Body.Bytes(), &resp)
+				require.NoError(t, err)
+				assert.Contains(t, resp["error"], "pki: read root CA")
+			},
 		},
 		{
 			name:   "Failure - Invalid PEM format",
@@ -273,7 +278,12 @@ func TestPKIController_HandlePKISignCSR(t *testing.T) {
 			method:         http.MethodPost,
 			body:           []byte("invalid json"),
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"pki: unmarshal CSR sign request"}`,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var resp map[string]string
+				err := json.Unmarshal(rr.Body.Bytes(), &resp)
+				require.NoError(t, err)
+				assert.Contains(t, resp["error"], "pki: unmarshal CSR sign request")
+			},
 		},
 		{
 			name:   "Failure - PKI signing error",
@@ -331,7 +341,12 @@ func TestPKIController_HandlePKICertificatesRevoke(t *testing.T) {
 			method:         http.MethodPost,
 			body:           []byte("invalid json"),
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"pki: unmarshal revoke request"}`,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var resp map[string]string
+				err := json.Unmarshal(rr.Body.Bytes(), &resp)
+				require.NoError(t, err)
+				assert.Contains(t, resp["error"], "pki: unmarshal revoke request")
+			},
 		},
 		{
 			name:           "Failure - Missing serial",

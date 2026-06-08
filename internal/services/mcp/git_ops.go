@@ -102,26 +102,26 @@ func (t *GitOpsTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *GitOpsTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"operation": map[string]interface{}{
-				"type":        "string",
-				"description": "Git operation to perform",
-				"enum":        []string{"status", "log", "branches", "remotes", "remote_url", "current_branch", "diff"},
+func (t *GitOpsTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"operation": {
+				Type:        "string",
+				Description: "Git operation to perform",
+				Enum:        []string{"status", "log", "branches", "remotes", "remote_url", "current_branch", "diff"},
 			},
-			"repo_path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to git repository (defaults to current directory)",
+			"repo_path": {
+				Type:        "string",
+				Description: "Path to git repository (defaults to current directory)",
 			},
-			"limit": map[string]interface{}{
-				"type":        "integer",
-				"description": "Limit for log entries (default: 10)",
+			"limit": {
+				Type:        "integer",
+				Description: "Limit for log entries (default: 10)",
 			},
-			"ref": map[string]interface{}{
-				"type":        "string",
-				"description": "Git reference for diff or log (e.g., HEAD~1, main)",
+			"ref": {
+				Type:        "string",
+				Description: "Git reference for diff or log (e.g., HEAD~1, main)",
 			},
 		},
 	}

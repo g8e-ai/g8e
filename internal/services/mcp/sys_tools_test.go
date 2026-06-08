@@ -34,17 +34,16 @@ func TestSysEnvVarsTool_InputSchema(t *testing.T) {
 	tool := &SysEnvVarsTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	props, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 
-	patternProp, ok := props["pattern"].(map[string]interface{})
+	patternProp, ok := schema.Properties["pattern"]
 	require.True(t, ok)
-	require.Equal(t, "string", patternProp["type"])
+	require.Equal(t, "string", patternProp.Type)
 
-	redactProp, ok := props["redact_secrets"].(map[string]interface{})
+	redactProp, ok := schema.Properties["redact_secrets"]
 	require.True(t, ok)
-	require.Equal(t, "boolean", redactProp["type"])
+	require.Equal(t, "boolean", redactProp.Type)
 }
 
 func TestSysInfoTool_Name(t *testing.T) {
@@ -62,9 +61,8 @@ func TestSysInfoTool_InputSchema(t *testing.T) {
 	tool := &SysInfoTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	_, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 }
 
 func TestSysOOMDetectTool_Name(t *testing.T) {
@@ -82,13 +80,12 @@ func TestSysOOMDetectTool_InputSchema(t *testing.T) {
 	tool := &SysOOMDetectTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	props, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 
-	logPathProp, ok := props["log_path"].(map[string]interface{})
+	logPathProp, ok := schema.Properties["log_path"]
 	require.True(t, ok)
-	require.Equal(t, "string", logPathProp["type"])
+	require.Equal(t, "string", logPathProp.Type)
 }
 
 func TestSysServiceStatusTool_Name(t *testing.T) {
@@ -106,17 +103,14 @@ func TestSysServiceStatusTool_InputSchema(t *testing.T) {
 	tool := &SysServiceStatusTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	props, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 
-	required, ok := schema["required"].([]string)
-	require.True(t, ok)
-	require.Contains(t, required, "service_name")
+	require.Contains(t, schema.Required, "service_name")
 
-	serviceNameProp, ok := props["service_name"].(map[string]interface{})
+	serviceNameProp, ok := schema.Properties["service_name"]
 	require.True(t, ok)
-	require.Equal(t, "string", serviceNameProp["type"])
+	require.Equal(t, "string", serviceNameProp.Type)
 }
 
 func TestSysTimeClockTool_Name(t *testing.T) {
@@ -134,9 +128,8 @@ func TestSysTimeClockTool_InputSchema(t *testing.T) {
 	tool := &SysTimeClockTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	_, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 }
 
 func TestTLSCertInspectTool_Name(t *testing.T) {
@@ -154,21 +147,20 @@ func TestTLSCertInspectTool_InputSchema(t *testing.T) {
 	tool := &TLSCertInspectTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	props, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 
-	certPathProp, ok := props["cert_path"].(map[string]interface{})
+	certPathProp, ok := schema.Properties["cert_path"]
 	require.True(t, ok)
-	require.Equal(t, "string", certPathProp["type"])
+	require.Equal(t, "string", certPathProp.Type)
 
-	hostProp, ok := props["host"].(map[string]interface{})
+	hostProp, ok := schema.Properties["host"]
 	require.True(t, ok)
-	require.Equal(t, "string", hostProp["type"])
+	require.Equal(t, "string", hostProp.Type)
 
-	portProp, ok := props["port"].(map[string]interface{})
+	portProp, ok := schema.Properties["port"]
 	require.True(t, ok)
-	require.Equal(t, "integer", portProp["type"])
+	require.Equal(t, "integer", portProp.Type)
 }
 
 func TestMatchPattern(t *testing.T) {
@@ -357,18 +349,15 @@ func TestCloudMetadataTool_InputSchema(t *testing.T) {
 	tool := &CloudMetadataTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	props, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 
-	operationProp, ok := props["operation"].(map[string]interface{})
+	operationProp, ok := schema.Properties["operation"]
 	require.True(t, ok)
-	require.Equal(t, "string", operationProp["type"])
-	enum, ok := operationProp["enum"].([]string)
-	require.True(t, ok)
-	require.Contains(t, enum, "detect")
-	require.Contains(t, enum, "instance")
-	require.Contains(t, enum, "region")
+	require.Equal(t, "string", operationProp.Type)
+	require.Contains(t, operationProp.Enum, "detect")
+	require.Contains(t, operationProp.Enum, "instance")
+	require.Contains(t, operationProp.Enum, "region")
 }
 
 func TestConfigDiffMaskTool_Name(t *testing.T) {
@@ -386,9 +375,8 @@ func TestConfigDiffMaskTool_InputSchema(t *testing.T) {
 	tool := &ConfigDiffMaskTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	_, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 }
 
 func TestDBDiscoverTopologyTool_Name(t *testing.T) {
@@ -406,7 +394,6 @@ func TestDBDiscoverTopologyTool_InputSchema(t *testing.T) {
 	tool := &DBDiscoverTopologyTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	_, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 }

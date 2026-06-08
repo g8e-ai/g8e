@@ -35,16 +35,16 @@ func (t *SysServiceStatusTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *SysServiceStatusTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"service_name": map[string]interface{}{
-				"type":        "string",
-				"description": "Name of the systemd service (e.g., g8e-operator, g8e-gateway)",
+func (t *SysServiceStatusTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"service_name": {
+				Type:        "string",
+				Description: "Name of the systemd service (e.g., g8e-operator, g8e-gateway)",
 			},
 		},
-		"required": []string{"service_name"},
+		Required: []string{"service_name"},
 	}
 }
 

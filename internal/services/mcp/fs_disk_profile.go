@@ -36,20 +36,20 @@ func (t *FSDiskProfileTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *FSDiskProfileTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to profile",
+func (t *FSDiskProfileTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"path": {
+				Type:        "string",
+				Description: "Path to profile",
 			},
-			"max_depth": map[string]interface{}{
-				"type":        "integer",
-				"description": "Maximum directory depth (default 2)",
+			"max_depth": {
+				Type:        "integer",
+				Description: "Maximum directory depth (default 2)",
 			},
 		},
-		"required": []string{"path"},
+		Required: []string{"path"},
 	}
 }
 
@@ -112,8 +112,8 @@ func (t *FSDiskProfileTool) Execute(ctx context.Context, args json.RawMessage) (
 	}
 
 	result := FSDiskProfileResult{
-		Entries:  entries,
-		TotalMB:  totalSize / (1024 * 1024),
+		Entries: entries,
+		TotalMB: totalSize / (1024 * 1024),
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {

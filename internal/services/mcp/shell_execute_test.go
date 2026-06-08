@@ -38,34 +38,31 @@ func TestShellExecuteTool_InputSchema(t *testing.T) {
 	tool := &ShellExecuteTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	props, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 
 	// Check required fields
-	required, ok := schema["required"].([]string)
-	require.True(t, ok)
-	require.Contains(t, required, "command")
+	require.Contains(t, schema.Required, "command")
 
 	// Check command property
-	cmdProp, ok := props["command"].(map[string]interface{})
+	cmdProp, ok := schema.Properties["command"]
 	require.True(t, ok)
-	require.Equal(t, "string", cmdProp["type"])
+	require.Equal(t, "string", cmdProp.Type)
 
 	// Check optional properties
-	_, ok = props["args"]
+	_, ok = schema.Properties["args"]
 	require.True(t, ok)
-	_, ok = props["timeout"]
+	_, ok = schema.Properties["timeout"]
 	require.True(t, ok)
-	_, ok = props["working_dir"]
+	_, ok = schema.Properties["working_dir"]
 	require.True(t, ok)
-	_, ok = props["hostnames"]
+	_, ok = schema.Properties["hostnames"]
 	require.True(t, ok)
 
 	// Check hostnames property structure
-	hostnamesProp, ok := props["hostnames"].(map[string]interface{})
+	hostnamesProp, ok := schema.Properties["hostnames"]
 	require.True(t, ok)
-	require.Equal(t, "array", hostnamesProp["type"])
+	require.Equal(t, "array", hostnamesProp.Type)
 }
 
 func TestShellExecuteTool_Execute_SimpleCommand(t *testing.T) {
@@ -457,7 +454,15 @@ func TestValidateForSSHExecution_AllowsSafeCommands(t *testing.T) {
 		{"find", []string{".", "-name", "*.go"}, ""},
 		{"date", nil, ""},
 		{"pwd", nil, tmpDir},
-		{"ls", []string{}, "/var/log"},
+	}
+
+	// Skip Linux-specific paths on Windows
+	if runtime.GOOS != "windows" {
+		safeCommands = append(safeCommands, struct {
+			command    string
+			args       []string
+			workingDir string
+		}{"ls", []string{}, "/var/log"})
 	}
 
 	for _, tc := range safeCommands {
@@ -479,13 +484,47 @@ func TestValidateCommandSafety_WorkingDirValidation(t *testing.T) {
 		errorMsg    string
 	}{
 		{"valid absolute dir", "ls", []string{}, tmpDir, false, ""},
-		{"valid absolute dir with args", "pwd", nil, "/var/log", false, ""},
 		{"path traversal", "ls", []string{}, tmpDir + "/../etc", true, "path traversal"},
 		{"relative path", "ls", []string{}, "tmp", true, "absolute path"},
-		{"nonexistent dir", "ls", []string{}, "/nonexistent_dir_12345", true, "does not exist"},
-		{"file instead of dir", "ls", []string{}, "/etc/passwd", true, "not a directory"},
 		{"empty working dir", "ls", []string{}, "", false, ""},
-		{"complex valid path", "ls", []string{}, "/var/log/apt", false, ""},
+	}
+
+	// Add Linux-specific tests only on non-Windows platforms
+	if runtime.GOOS != "windows" {
+		workingDirTests = append(workingDirTests,
+			struct {
+				name        string
+				command     string
+				args        []string
+				workingDir  string
+				expectError bool
+				errorMsg    string
+			}{"valid absolute dir with args", "pwd", nil, "/var/log", false, ""},
+			struct {
+				name        string
+				command     string
+				args        []string
+				workingDir  string
+				expectError bool
+				errorMsg    string
+			}{"nonexistent dir", "ls", []string{}, "/nonexistent_dir_12345", true, "does not exist"},
+			struct {
+				name        string
+				command     string
+				args        []string
+				workingDir  string
+				expectError bool
+				errorMsg    string
+			}{"file instead of dir", "ls", []string{}, "/etc/passwd", true, "not a directory"},
+			struct {
+				name        string
+				command     string
+				args        []string
+				workingDir  string
+				expectError bool
+				errorMsg    string
+			}{"complex valid path", "ls", []string{}, "/var/log/apt", false, ""},
+		)
 	}
 
 	for _, tc := range workingDirTests {

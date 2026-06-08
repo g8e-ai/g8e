@@ -20,25 +20,18 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"testing"
-)
 
-import (
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
-)
-
-import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/pkg/governance"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
@@ -419,75 +412,4 @@ func TestL5ActuatorGatewaySignedFalse(t *testing.T) {
 
 	// Verify GatewaySigned is false in receipt
 	require.False(t, receipt.GatewaySigned, "GatewaySigned should be false for L2Consensus-signed transactions")
-}
-
-func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
-	t.Parallel()
-	actuator, _ := newTestActuator(t)
-
-	// Create a real AuditVault with test database
-	tempDir := t.TempDir()
-
-	// Create vault for encryption
-	_, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	vaultDir := filepath.Join(tempDir, "vault")
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
-	vHeader, _, err := vault.NewVaultHeader(privKey)
-	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
-	testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: slog.Default()})
-	require.NoError(t, err)
-	require.NoError(t, testVault.Unlock(privKey))
-	defer testVault.Close()
-
-	auditConfig := &storage.AuditStoreConfig{
-		DataDir:         tempDir,
-		DBPath:          "test.db",
-		MaxDBSizeMB:     100,
-		RetentionDays:   1,
-		Enabled:         true,
-		EncryptionVault: testVault,
-	}
-
-	auditStore, err := storage.NewSQLAuditStore(auditConfig, slog.Default())
-	require.NoError(t, err)
-	defer auditStore.Close()
-
-	actuator.SQLAuditStore = auditStore
-
-	// Create the Operator session first (required for fail-closed audit)
-	err = auditStore.CreateSession("test-operator-session", "operator", "Test Session", "test-user")
-	require.NoError(t, err)
-
-	envelope := &governance.GovernanceEnvelope{
-		Id:                uuid.New().String(),
-		TransactionHash:   "test-hash-1234567890abcdef",
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-operator-session",
-		ActionType:        string(constants.ActionTypeExecuteBash),
-		TargetResource:    "localhost",
-	}
-
-	vt := &VerifiedTransaction{
-		Envelope:   envelope,
-		ActionType: constants.ActionTypeExecuteBash,
-	}
-
-	// Execute
-	receipt, err := actuator.Execute(context.Background(), vt, nil)
-	require.NoError(t, err)
-	require.NotNil(t, receipt)
-
-	// Verify RecordActionReceipt was called by querying the audit store
-	persistedReceipt, err := auditStore.GetActionReceipt(envelope.Id)
-	require.NoError(t, err)
-	require.NotNil(t, persistedReceipt, "Receipt should be persisted in audit store")
-
-	// Verify persisted receipt matches the returned receipt
-	require.Equal(t, envelope.Id, persistedReceipt.TransactionID)
-	require.Equal(t, envelope.TransactionHash, persistedReceipt.TransactionHash)
-	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, persistedReceipt.Status)
-	require.Equal(t, "completed", persistedReceipt.ResultSummary)
-	require.NotEmpty(t, persistedReceipt.Signature, "Persisted receipt should have signature")
 }

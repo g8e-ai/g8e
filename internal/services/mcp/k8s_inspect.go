@@ -36,26 +36,26 @@ func (t *K8sInspectTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *K8sInspectTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"operation": map[string]interface{}{
-				"type":        "string",
-				"description": "Kubernetes operation to perform",
-				"enum":        []string{"pods", "nodes", "services", "deployments", "namespace", "cluster_info", "pod_logs", "pod_describe"},
+func (t *K8sInspectTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"operation": {
+				Type:        "string",
+				Description: "Kubernetes operation to perform",
+				Enum:        []string{"pods", "nodes", "services", "deployments", "namespace", "cluster_info", "pod_logs", "pod_describe"},
 			},
-			"namespace": map[string]interface{}{
-				"type":        "string",
-				"description": "Kubernetes namespace (defaults to current or default)",
+			"namespace": {
+				Type:        "string",
+				Description: "Kubernetes namespace (defaults to current or default)",
 			},
-			"name": map[string]interface{}{
-				"type":        "string",
-				"description": "Resource name for describe or logs operations",
+			"name": {
+				Type:        "string",
+				Description: "Resource name for describe or logs operations",
 			},
-			"limit": map[string]interface{}{
-				"type":        "integer",
-				"description": "Limit for list operations (default: 50)",
+			"limit": {
+				Type:        "integer",
+				Description: "Limit for list operations (default: 50)",
 			},
 		},
 	}
@@ -512,4 +512,3 @@ func k8sPodDescribe(ctx context.Context, namespace string, name string) (K8sInsp
 		},
 	}, nil
 }
-

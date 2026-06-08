@@ -38,24 +38,24 @@ func (t *LogStreamFilterTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *LogStreamFilterTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"log_path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to the log file",
+func (t *LogStreamFilterTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"log_path": {
+				Type:        "string",
+				Description: "Path to the log file",
 			},
-			"pattern": map[string]interface{}{
-				"type":        "string",
-				"description": "Regex pattern to filter lines",
+			"pattern": {
+				Type:        "string",
+				Description: "Regex pattern to filter lines",
 			},
-			"limit": map[string]interface{}{
-				"type":        "integer",
-				"description": "Maximum number of lines to return (default 100)",
+			"limit": {
+				Type:        "integer",
+				Description: "Maximum number of lines to return (default 100)",
 			},
 		},
-		"required": []string{"log_path", "pattern"},
+		Required: []string{"log_path", "pattern"},
 	}
 }
 

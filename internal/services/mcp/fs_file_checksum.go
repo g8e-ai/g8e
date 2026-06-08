@@ -30,8 +30,8 @@ type FSFileChecksumRequest struct {
 // FSFileChecksumResult represents the output of the file checksum tool.
 type FSFileChecksumResult struct {
 	FilePath  string `json:"file_path"`
-	Algorithm  string `json:"algorithm"`
-	Checksum   string `json:"checksum"`
+	Algorithm string `json:"algorithm"`
+	Checksum  string `json:"checksum"`
 	SizeBytes int64  `json:"size_bytes"`
 }
 
@@ -49,16 +49,16 @@ func (t *FSFileChecksumTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *FSFileChecksumTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"file_path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to the file to checksum",
+func (t *FSFileChecksumTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"file_path": {
+				Type:        "string",
+				Description: "Path to the file to checksum",
 			},
 		},
-		"required": []string{"file_path"},
+		Required: []string{"file_path"},
 	}
 }
 
@@ -92,8 +92,8 @@ func (t *FSFileChecksumTool) Execute(ctx context.Context, args json.RawMessage) 
 
 	result := FSFileChecksumResult{
 		FilePath:  req.FilePath,
-		Algorithm:  "sha256",
-		Checksum:   checksum,
+		Algorithm: "sha256",
+		Checksum:  checksum,
 		SizeBytes: fileInfo.Size(),
 	}
 

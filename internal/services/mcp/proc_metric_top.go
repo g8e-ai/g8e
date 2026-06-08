@@ -39,13 +39,13 @@ func (t *ProcMetricTopTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *ProcMetricTopTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"limit": map[string]interface{}{
-				"type":        "integer",
-				"description": "Maximum number of processes to return (default 10)",
+func (t *ProcMetricTopTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"limit": {
+				Type:        "integer",
+				Description: "Maximum number of processes to return (default 10)",
 			},
 		},
 	}

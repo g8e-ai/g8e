@@ -34,6 +34,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -856,11 +857,11 @@ func TestBootstrap_Success(t *testing.T) {
 		assert.Equal(t, "POST", r.Method)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		var req map[string]string
+		var req models.BootstrapRequest
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
-		assert.NotEmpty(t, req["csr_pem"])
-		assert.NotEmpty(t, req["cli_csr_pem"])
-		assert.NotEmpty(t, req["system_fingerprint"])
+		assert.NotEmpty(t, req.CSR)
+		assert.NotEmpty(t, req.CLICSR)
+		assert.NotEmpty(t, req.SystemFingerprint)
 
 		resp := RegistrationResponse{
 			Success:           true,

@@ -173,7 +173,7 @@ func handleToolsList(encoder *json.Encoder, id interface{}, nativeToolHandler *m
 		tools = append(tools, Tool{
 			Name:        nt.Name(),
 			Description: nt.Description(),
-			InputSchema: nt.InputSchema(),
+			InputSchema: nt.InputSchema().ToMap(),
 		})
 	}
 

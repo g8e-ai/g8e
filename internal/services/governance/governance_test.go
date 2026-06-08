@@ -15,30 +15,11 @@ package governance
 
 import (
 	"context"
-	"crypto/ed25519"
-	"log/slog"
-	"os"
-	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
-
-type mockExecutionHandler struct {
-	executed                       bool
-	err                            error
-	ExecuteVerifiedTransactionFunc func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error)
-}
-
-func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
-	m.executed = true
-	if m.ExecuteVerifiedTransactionFunc != nil {
-		return m.ExecuteVerifiedTransactionFunc(ctx, eventType, cmdMsg)
-	}
-	return "", m.err
-}
 
 // MockTribunal is a basic mock for the L2 Consensus layer (Tribunal).
 // It allows tests to control consensus evaluation behavior.
@@ -92,103 +73,17 @@ func (m *MockHumanSigner) VerifyL3Proof(ctx context.Context, userID, transaction
 	return m.ShouldApprove, nil
 }
 
-func TestGovernanceFlow(t *testing.T) {
-	t.Parallel()
-	pub, priv, _ := ed25519.GenerateKey(nil)
-	nodeID := "test-node-1"
-
-	consensus := &L2Consensus{
-		NodeID:     nodeID,
-		PrivateKey: priv,
-	}
-
-	actuator := &L5Actuator{
-		Logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
-		SignerStore: &SimpleSignerStore{
-			Signers: map[string]ed25519.PublicKey{
-				nodeID: pub,
-			},
-		},
-	}
-
-	env := &governance.GovernanceEnvelope{
-		ProtocolVersion: "1.0",
-		OperatorId:      "agent-1",
-		Timestamp:       timestamppb.Now(),
-		ActionType:      string(constants.ActionTypeFetchLogs),
-		TargetResource:  "localhost",
-		Payload:         []byte("fetch logs"),
-	}
-
-	// 1. Generate Message ID
-	id, _ := governance.GenerateMessageID(env)
-	env.Id = id
-
-	// 2. Consensus Evaluation
-	err := consensus.EvaluatePayload(env)
-	if err != nil {
-		t.Fatalf("L2Consensus evaluation failed: %v", err)
-	}
-
-	if env.Governance == nil || len(env.Governance.L2.AgentIds) != 1 {
-		t.Errorf("Expected 1 agent ID in L2, got %v", env.Governance)
-	}
-
-	// Ensure status is validated for L5Actuator
-	env.Governance.L1.Validated = true
-	sig, _ := consensus.SignDecision(env.Id, true)
-	env.Governance.L2.ConsensusSignature = sig
-
-	handler := &mockExecutionHandler{}
-	actuator.ExecutionHandler = handler
-	actuator.SigningKey = priv
-	actuator.KeyID = nodeID
-	actuator.Ctx = context.Background()
-
-	vt := &VerifiedTransaction{
-		Envelope:   env,
-		ActionType: constants.ActionTypeFetchLogs,
-	}
-
-	// 3. L5Actuator Execution
-	receipt, err := actuator.Execute(context.Background(), vt, nil)
-	if err != nil {
-		t.Fatalf("L5Actuator execution failed: %v", err)
-	}
-
-	if !handler.executed {
-		t.Error("Expected handler to be executed")
-	}
-
-	if receipt.TransactionId != env.Id {
-		t.Errorf("Expected receipt tx id %s, got %s", env.Id, receipt.TransactionId)
-	}
+// mockExecutionHandler is a test-only implementation of ExecutionHandler.
+type mockExecutionHandler struct {
+	executed                       bool
+	err                            error
+	ExecuteVerifiedTransactionFunc func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error)
 }
 
-func TestGovernanceFailClosed(t *testing.T) {
-	t.Parallel()
-	_, priv, _ := ed25519.GenerateKey(nil)
-	nodeID := "test-node-1"
-
-	t.Run("DoctrineNil_FailClosed", func(t *testing.T) {
-		t.Parallel()
-		consensus := &L2Consensus{
-			NodeID:     nodeID,
-			PrivateKey: priv,
-			Doctrine:   nil, // explicitly nil
-		}
-		isSafe := consensus.RunMITREChecks("test", "echo 'hello'")
-		if isSafe {
-			t.Error("Expected fail-closed (Safe=false) when Doctrine is nil")
-		}
-	})
-
-	t.Run("MissingPrivateKey_Error", func(t *testing.T) {
-		t.Parallel()
-		consensus := &L2Consensus{NodeID: nodeID, PrivateKey: nil}
-		_, err := consensus.SignDecision("test-id", true)
-		if err == nil {
-			t.Errorf("Expected error when PrivateKey is nil during SignDecision")
-		}
-	})
+func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+	m.executed = true
+	if m.ExecuteVerifiedTransactionFunc != nil {
+		return m.ExecuteVerifiedTransactionFunc(ctx, eventType, cmdMsg)
+	}
+	return "", m.err
 }

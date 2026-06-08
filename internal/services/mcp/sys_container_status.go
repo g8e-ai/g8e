@@ -34,16 +34,16 @@ func (t *SysContainerStatusTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *SysContainerStatusTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"container_name": map[string]interface{}{
-				"type":        "string",
-				"description": "Name or ID of the container to check",
+func (t *SysContainerStatusTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"container_name": {
+				Type:        "string",
+				Description: "Name or ID of the container to check",
 			},
 		},
-		"required": []string{"container_name"},
+		Required: []string{"container_name"},
 	}
 }
 

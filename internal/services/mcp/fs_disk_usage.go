@@ -38,13 +38,13 @@ func (t *FSDiskUsageTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *FSDiskUsageTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to check disk usage for (default all mounted filesystems)",
+func (t *FSDiskUsageTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"path": {
+				Type:        "string",
+				Description: "Path to check disk usage for (default all mounted filesystems)",
 			},
 		},
 	}
@@ -100,12 +100,12 @@ func getDiskUsageForPath(path string) (FSDiskUsageResult, error) {
 	return FSDiskUsageResult{
 		Path: path,
 		Filesystem: &FilesystemInfo{
-			Path:          path,
-			TotalBytes:    total,
-			UsedBytes:     used,
-			FreeBytes:     free,
+			Path:           path,
+			TotalBytes:     total,
+			UsedBytes:      used,
+			FreeBytes:      free,
 			AvailableBytes: available,
-			UsedPercent:   usedPercent,
+			UsedPercent:    usedPercent,
 		},
 	}, nil
 }

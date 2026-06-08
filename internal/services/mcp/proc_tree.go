@@ -24,10 +24,10 @@ import (
 )
 
 const (
-	defaultRootPID    = 1
-	defaultMaxDepth   = 10
-	procDirectory     = "/proc"
-	minStatFields     = 4
+	defaultRootPID  = 1
+	defaultMaxDepth = 10
+	procDirectory   = "/proc"
+	minStatFields   = 4
 )
 
 // ProcTreeTool provides parent-child process relationships.
@@ -44,17 +44,17 @@ func (t *ProcTreeTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *ProcTreeTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"pid": map[string]interface{}{
-				"type":        "integer",
-				"description": "Process ID to start tree from (default 1 for init)",
+func (t *ProcTreeTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"pid": {
+				Type:        "integer",
+				Description: "Process ID to start tree from (default 1 for init)",
 			},
-			"max_depth": map[string]interface{}{
-				"type":        "integer",
-				"description": "Maximum depth to traverse (default 10)",
+			"max_depth": {
+				Type:        "integer",
+				Description: "Maximum depth to traverse (default 10)",
 			},
 		},
 	}

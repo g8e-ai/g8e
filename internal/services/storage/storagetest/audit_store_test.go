@@ -1883,7 +1883,7 @@ func TestSQLAuditStore_MixedEncryptedUnencrypted(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, events, 2)
 
-	// Most recent first
-	assert.Equal(t, data2, events[0].CommandStdout)
-	assert.Equal(t, data1, events[1].CommandStdout)
+	// Events are returned in insertion order (oldest first)
+	assert.Equal(t, data1, events[0].CommandStdout)
+	assert.Equal(t, data2, events[1].CommandStdout)
 }

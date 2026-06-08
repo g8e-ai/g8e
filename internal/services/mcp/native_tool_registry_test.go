@@ -157,7 +157,7 @@ func TestRegisterNativeTools_PartialRegistration(t *testing.T) {
 	manualTool := &mockTool{
 		name:        "db_discover_topology",
 		description: "Manually registered",
-		schema:      map[string]interface{}{"type": "object"},
+		schema:      &InputSchema{Type: "object"},
 	}
 	err := registry.Register(manualTool)
 	if err != nil {

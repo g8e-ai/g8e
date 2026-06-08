@@ -17,9 +17,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
-)
 
-import (
 	"github.com/stretchr/testify/assert"
 )
 
@@ -193,7 +191,7 @@ func TestL1Doctrine_AnalyzeMCPArguments(t *testing.T) {
 	}{
 		{
 			name:        "safe_arguments",
-			arguments:   fmt.Sprintf(`{"path": "%s", "recursive": false}`, tmpDir),
+			arguments:   fmt.Sprintf(`{"path": %q, "recursive": false}`, tmpDir),
 			expectError: false,
 			expectBlock: false,
 		},
@@ -1226,7 +1224,6 @@ func TestL1Doctrine_AnalyzeCommand_AllCryptominer(t *testing.T) {
 	}
 }
 
-
 func TestL1Doctrine_AnalyzeCommand_AllNetworkManipulation(t *testing.T) {
 	t.Parallel()
 	doctrine := NewL1Doctrine()
@@ -1296,7 +1293,7 @@ func TestL1Doctrine_AnalyzeMCPArguments_RecursiveAnalysis(t *testing.T) {
 		},
 		{
 			name:        "safe nested structure",
-			arguments:   fmt.Sprintf(`{"config": {"path": "%s", "recursive": false}}`, tmpDir),
+			arguments:   fmt.Sprintf(`{"config": {"path": %q, "recursive": false}}`, tmpDir),
 			expectBlock: false,
 		},
 		{

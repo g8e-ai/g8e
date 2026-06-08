@@ -38,20 +38,20 @@ func (t *NetEndpointPingTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation
-func (t *NetEndpointPingTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"host": map[string]interface{}{
-				"type":        "string",
-				"description": "Hostname or IP address",
+func (t *NetEndpointPingTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"host": {
+				Type:        "string",
+				Description: "Hostname or IP address",
 			},
-			"port": map[string]interface{}{
-				"type":        "integer",
-				"description": "Port number",
+			"port": {
+				Type:        "integer",
+				Description: "Port number",
 			},
 		},
-		"required": []string{"host", "port"},
+		Required: []string{"host", "port"},
 	}
 }
 

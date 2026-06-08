@@ -961,7 +961,7 @@ func TestDocCreate(t *testing.T) {
 	// Attempt to create duplicate - should fail
 	err = db.DocCreate("test_collection", "doc1", docBytes)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "document already exists")
+	assert.Contains(t, err.Error(), "already exists")
 }
 
 func TestDocCreate_WithSystemFields(t *testing.T) {

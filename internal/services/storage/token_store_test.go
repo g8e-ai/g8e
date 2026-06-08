@@ -426,7 +426,7 @@ func TestTokenStoreService_NilService(t *testing.T) {
 
 	// All methods should handle nil gracefully
 	err := ts.KVSet(context.Background(), "key", "value", 0)
-	assert.NoError(t, err)
+	assert.Error(t, err, "KVSet should error on nil service")
 
 	_, err = ts.KVGet(context.Background(), "key")
 	assert.Error(t, err)
@@ -436,7 +436,7 @@ func TestTokenStoreService_NilService(t *testing.T) {
 	assert.Nil(t, result)
 
 	err = ts.KVDelete("key")
-	assert.NoError(t, err)
+	assert.Error(t, err, "KVDelete should error on nil service")
 
 	assert.False(t, ts.IsEnabled())
 }

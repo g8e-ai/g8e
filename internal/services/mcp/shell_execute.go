@@ -44,34 +44,32 @@ func (t *ShellExecuteTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *ShellExecuteTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"command": map[string]interface{}{
-				"type":        "string",
-				"description": "Command to execute (e.g., 'ls', 'echo')",
+func (t *ShellExecuteTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"command": {
+				Type:        "string",
+				Description: "Command to execute (e.g., 'ls', 'echo')",
 			},
-			"args": map[string]interface{}{
-				"type":        "array",
-				"items":       map[string]interface{}{"type": "string"},
-				"description": "Command arguments (optional)",
+			"args": {
+				Type:        "array",
+				Description: "Command arguments (optional)",
 			},
-			"timeout": map[string]interface{}{
-				"type":        "integer",
-				"description": "Timeout in seconds (default: 30, max: 300)",
+			"timeout": {
+				Type:        "integer",
+				Description: "Timeout in seconds (default: 30, max: 300)",
 			},
-			"working_dir": map[string]interface{}{
-				"type":        "string",
-				"description": "Working directory (optional, defaults to current directory)",
+			"working_dir": {
+				Type:        "string",
+				Description: "Working directory (optional, defaults to current directory)",
 			},
-			"hostnames": map[string]interface{}{
-				"type":        "array",
-				"items":       map[string]interface{}{"type": "string"},
-				"description": "List of hostnames to execute on (optional, defaults to localhost). Uses SSH config for remote hosts.",
+			"hostnames": {
+				Type:        "array",
+				Description: "List of hostnames to execute on (optional, defaults to localhost). Uses SSH config for remote hosts.",
 			},
 		},
-		"required": []string{"command"},
+		Required: []string{"command"},
 	}
 }
 

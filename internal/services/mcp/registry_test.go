@@ -23,7 +23,7 @@ import (
 type mockTool struct {
 	name        string
 	description string
-	schema      map[string]interface{}
+	schema      *InputSchema
 	executeFunc func(ctx context.Context, args json.RawMessage) (CallToolResult, error)
 }
 
@@ -35,7 +35,7 @@ func (m *mockTool) Description() string {
 	return m.description
 }
 
-func (m *mockTool) InputSchema() map[string]interface{} {
+func (m *mockTool) InputSchema() *InputSchema {
 	return m.schema
 }
 
@@ -62,8 +62,8 @@ func TestToolRegistry_Register(t *testing.T) {
 	tool := &mockTool{
 		name:        "test_tool",
 		description: "A test tool",
-		schema: map[string]interface{}{
-			"type": "object",
+		schema: &InputSchema{
+			Type: "object",
 		},
 	}
 
@@ -92,16 +92,16 @@ func TestToolRegistry_RegisterDuplicate(t *testing.T) {
 	tool1 := &mockTool{
 		name:        "duplicate_tool",
 		description: "First tool",
-		schema: map[string]interface{}{
-			"type": "object",
+		schema: &InputSchema{
+			Type: "object",
 		},
 	}
 
 	tool2 := &mockTool{
 		name:        "duplicate_tool",
 		description: "Second tool with same name",
-		schema: map[string]interface{}{
-			"type": "object",
+		schema: &InputSchema{
+			Type: "object",
 		},
 	}
 
@@ -141,8 +141,8 @@ func TestToolRegistry_RegisterEmptyName(t *testing.T) {
 	tool := &mockTool{
 		name:        "",
 		description: "Tool with empty name",
-		schema: map[string]interface{}{
-			"type": "object",
+		schema: &InputSchema{
+			Type: "object",
 		},
 	}
 
@@ -197,8 +197,8 @@ func TestToolRegistry_RegisterInvalidName(t *testing.T) {
 			tool := &mockTool{
 				name:        tc.toolName,
 				description: "Tool with invalid name",
-				schema: map[string]interface{}{
-					"type": "object",
+				schema: &InputSchema{
+					Type: "object",
 				},
 			}
 
@@ -228,8 +228,8 @@ func TestToolRegistry_RegisterValidNames(t *testing.T) {
 		tool := &mockTool{
 			name:        name,
 			description: "Valid tool",
-			schema: map[string]interface{}{
-				"type": "object",
+			schema: &InputSchema{
+				Type: "object",
 			},
 		}
 
@@ -245,7 +245,7 @@ func TestToolRegistry_RegisterInvalidSchema(t *testing.T) {
 
 	testCases := []struct {
 		name        string
-		schema      map[string]interface{}
+		schema      *InputSchema
 		expectedErr string
 	}{
 		{
@@ -255,23 +255,13 @@ func TestToolRegistry_RegisterInvalidSchema(t *testing.T) {
 		},
 		{
 			name:        "missing type",
-			schema:      map[string]interface{}{},
+			schema:      &InputSchema{},
 			expectedErr: "registry: invalid input schema for tool 'test_tool': registry: schema missing required 'type' field",
 		},
 		{
 			name:        "invalid type",
-			schema:      map[string]interface{}{"type": "array"},
-			expectedErr: "registry: invalid input schema for tool 'test_tool': registry: schema 'type' must be 'object', got string",
-		},
-		{
-			name:        "invalid properties type",
-			schema:      map[string]interface{}{"type": "object", "properties": "invalid"},
-			expectedErr: "registry: invalid input schema for tool 'test_tool': registry: schema 'properties' must be an object, got string",
-		},
-		{
-			name:        "invalid required type",
-			schema:      map[string]interface{}{"type": "object", "required": "invalid"},
-			expectedErr: "registry: invalid input schema for tool 'test_tool': registry: schema 'required' must be an array, got string",
+			schema:      &InputSchema{Type: "array"},
+			expectedErr: "registry: invalid input schema for tool 'test_tool': registry: schema 'type' must be 'object'",
 		},
 	}
 
@@ -301,8 +291,8 @@ func TestToolRegistry_Get(t *testing.T) {
 	tool := &mockTool{
 		name:        "get_test",
 		description: "Tool for get test",
-		schema: map[string]interface{}{
-			"type": "object",
+		schema: &InputSchema{
+			Type: "object",
 		},
 	}
 
@@ -328,9 +318,9 @@ func TestToolRegistry_List(t *testing.T) {
 	registry := NewToolRegistry()
 
 	tools := []*mockTool{
-		{name: "tool1", description: "First", schema: map[string]interface{}{"type": "object"}},
-		{name: "tool2", description: "Second", schema: map[string]interface{}{"type": "object"}},
-		{name: "tool3", description: "Third", schema: map[string]interface{}{"type": "object"}},
+		{name: "tool1", description: "First", schema: &InputSchema{Type: "object"}},
+		{name: "tool2", description: "Second", schema: &InputSchema{Type: "object"}},
+		{name: "tool3", description: "Third", schema: &InputSchema{Type: "object"}},
 	}
 
 	for _, tool := range tools {
@@ -365,7 +355,7 @@ func TestToolRegistry_Count(t *testing.T) {
 	registry.Register(&mockTool{
 		name:        "tool1",
 		description: "First",
-		schema:      map[string]interface{}{"type": "object"},
+		schema:      &InputSchema{Type: "object"},
 	})
 
 	if registry.Count() != 1 {
@@ -375,7 +365,7 @@ func TestToolRegistry_Count(t *testing.T) {
 	registry.Register(&mockTool{
 		name:        "tool2",
 		description: "Second",
-		schema:      map[string]interface{}{"type": "object"},
+		schema:      &InputSchema{Type: "object"},
 	})
 
 	if registry.Count() != 2 {
@@ -393,7 +383,7 @@ func TestToolRegistry_ConcurrentAccess(t *testing.T) {
 			tool := &mockTool{
 				name:        "concurrent_tool",
 				description: "Concurrent test",
-				schema:      map[string]interface{}{"type": "object"},
+				schema:      &InputSchema{Type: "object"},
 			}
 			registry.Register(tool)
 			done <- true
@@ -444,24 +434,17 @@ func TestIsValidToolName(t *testing.T) {
 }
 
 func TestValidateInputSchema(t *testing.T) {
-	validSchemas := []map[string]interface{}{
-		{"type": "object"},
+	validSchemas := []*InputSchema{
+		{Type: "object"},
 		{
-			"type":       "object",
-			"properties": map[string]interface{}{"param": map[string]interface{}{"type": "string"}},
+			Type: "object",
+			Properties: map[string]*PropertySchema{
+				"param": {Type: "string"},
+			},
 		},
 		{
-			"type":     "object",
-			"required": []interface{}{"param1", "param2"},
-		},
-		{
-			"type":     "object",
-			"required": []string{"param1", "param2"},
-		},
-		{
-			"type":       "object",
-			"properties": map[string]interface{}{"param": map[string]interface{}{"type": "string"}},
-			"required":   []interface{}{"param"},
+			Type:     "object",
+			Required: []string{"param1", "param2"},
 		},
 	}
 
@@ -473,14 +456,12 @@ func TestValidateInputSchema(t *testing.T) {
 	}
 
 	invalidSchemas := []struct {
-		schema      map[string]interface{}
+		schema      *InputSchema
 		expectedErr string
 	}{
-		{nil, "schema cannot be nil"},
-		{map[string]interface{}{}, "schema missing required 'type' field"},
-		{map[string]interface{}{"type": "array"}, "schema 'type' must be 'object', got string"},
-		{map[string]interface{}{"type": "object", "properties": "invalid"}, "schema 'properties' must be an object, got string"},
-		{map[string]interface{}{"type": "object", "required": "invalid"}, "schema 'required' must be an array, got string"},
+		{nil, ErrSchemaNil},
+		{&InputSchema{Type: ""}, ErrSchemaInvalidType},
+		{&InputSchema{Type: "array"}, ErrSchemaInvalidType},
 	}
 
 	for _, tc := range invalidSchemas {

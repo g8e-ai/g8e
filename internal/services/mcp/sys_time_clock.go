@@ -36,10 +36,10 @@ func (t *SysTimeClockTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *SysTimeClockTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type":       "object",
-		"properties": map[string]interface{}{},
+func (t *SysTimeClockTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type:       "object",
+		Properties: make(map[string]*PropertySchema),
 	}
 }
 
@@ -50,12 +50,12 @@ func (t *SysTimeClockTool) Execute(ctx context.Context, args json.RawMessage) (C
 
 	result := SysTimeClockResult{
 		SystemTime: SystemTimeInfo{
-			UTC:       now.UTC().Format(time.RFC3339),
-			Local:     now.Format(time.RFC3339),
-			Unix:      now.Unix(),
-			UnixNano:  now.UnixNano(),
-			Timezone:  now.Location().String(),
-			Offset:    formatOffset(offset),
+			UTC:      now.UTC().Format(time.RFC3339),
+			Local:    now.Format(time.RFC3339),
+			Unix:     now.Unix(),
+			UnixNano: now.UnixNano(),
+			Timezone: now.Location().String(),
+			Offset:   formatOffset(offset),
 		},
 		NTP: getNTPStatus(),
 	}
@@ -200,15 +200,15 @@ func parseNtpqOutput(output string) NTPStatus {
 					result.Synced = true
 					result.Status = "synchronized"
 					result.SelectedPeer = &NTPSelectedPeer{
-						Remote: fields[0],
-						RefID:  fields[1],
+						Remote:  fields[0],
+						RefID:   fields[1],
 						Stratum: fields[2],
-						When:   fields[3],
-						Poll:   fields[4],
-						Reach:  fields[5],
-						Delay:  fields[6],
-						Offset: fields[7],
-						Jitter: fields[8],
+						When:    fields[3],
+						Poll:    fields[4],
+						Reach:   fields[5],
+						Delay:   fields[6],
+						Offset:  fields[7],
+						Jitter:  fields[8],
 					}
 				}
 			}

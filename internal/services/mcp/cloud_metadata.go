@@ -38,14 +38,14 @@ func (t *CloudMetadataTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *CloudMetadataTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"operation": map[string]interface{}{
-				"type":        "string",
-				"description": "Metadata operation to perform",
-				"enum":        []string{"detect", "instance", "region", "availability_zone", "instance_type", "all"},
+func (t *CloudMetadataTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"operation": {
+				Type:        "string",
+				Description: "Metadata operation to perform",
+				Enum:        []string{"detect", "instance", "region", "availability_zone", "instance_type", "all"},
 			},
 		},
 	}

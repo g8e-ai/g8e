@@ -38,13 +38,13 @@ func (t *NetSocketAuditTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *NetSocketAuditTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"protocol": map[string]interface{}{
-				"type":        "string",
-				"description": "Protocol filter (tcp, udp, or empty for both)",
+func (t *NetSocketAuditTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"protocol": {
+				Type:        "string",
+				Description: "Protocol filter (tcp, udp, or empty for both)",
 			},
 		},
 	}

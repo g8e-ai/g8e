@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -419,6 +420,10 @@ func TestHandleLogStreamFilter(t *testing.T) {
 }
 
 func TestHandleSysOOMDetect(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows - /var/log/dmesg not available")
+	}
+
 	handler, err := NewNativeToolHandler()
 	require.NoError(t, err)
 
@@ -517,6 +522,10 @@ func TestHandleConfigDiffMask(t *testing.T) {
 }
 
 func TestHandleProcMetricTop(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows - /proc not available")
+	}
+
 	handler, err := NewNativeToolHandler()
 	require.NoError(t, err)
 
@@ -701,6 +710,10 @@ func TestHandleProcSignalSafe(t *testing.T) {
 }
 
 func TestHandleNetSocketAudit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows - /proc not available")
+	}
+
 	handler, err := NewNativeToolHandler()
 	require.NoError(t, err)
 
@@ -1484,7 +1497,6 @@ func TestHandleCloudMetadata(t *testing.T) {
 	})
 }
 
-
 func TestHandleSysInfo(t *testing.T) {
 	handler, err := NewNativeToolHandler()
 	require.NoError(t, err)
@@ -1732,6 +1744,10 @@ func TestHandleSysTimeClock(t *testing.T) {
 }
 
 func TestHandleProcTree(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows - /proc not available")
+	}
+
 	handler, err := NewNativeToolHandler()
 	require.NoError(t, err)
 

@@ -264,7 +264,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
+				InputSchema: nt.InputSchema().ToMap(),
 			})
 		}
 		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -283,7 +283,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
+				InputSchema: nt.InputSchema().ToMap(),
 			})
 		}
 		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -329,7 +329,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
+				InputSchema: nt.InputSchema().ToMap(),
 			})
 		}
 		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -353,7 +353,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
+				InputSchema: nt.InputSchema().ToMap(),
 			})
 		}
 		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -376,7 +376,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
+				InputSchema: nt.InputSchema().ToMap(),
 			})
 		}
 		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -398,7 +398,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 				tools = append(tools, Tool{
 					Name:        nt.Name(),
 					Description: nt.Description(),
-					InputSchema: nt.InputSchema(),
+					InputSchema: nt.InputSchema().ToMap(),
 				})
 			}
 			g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -415,7 +415,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 				tools = append(tools, Tool{
 					Name:        nt.Name(),
 					Description: nt.Description(),
-					InputSchema: nt.InputSchema(),
+					InputSchema: nt.InputSchema().ToMap(),
 				})
 			}
 			g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -441,7 +441,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			downstreamResult.Tools = append(downstreamResult.Tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
+				InputSchema: nt.InputSchema().ToMap(),
 			})
 		}
 	}

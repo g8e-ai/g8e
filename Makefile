@@ -440,7 +440,7 @@ test-native:
 # =============================================================================
 .PHONY: lint
 lint: lint-no-embedded-newlines vulncheck validate-doctrines
-	@golangci-lint run
+	@golangci-lint run --build-tags=integration
 	@echo "All linting and quality checks complete."
 
 .PHONY: lint-no-embedded-newlines

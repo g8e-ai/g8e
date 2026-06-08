@@ -28,23 +28,23 @@ import (
 
 // certInspectResult represents the structured output of the TLS certificate inspection tool.
 type certInspectResult struct {
-	Subject              string   `json:"subject"`
-	Issuer               string   `json:"issuer"`
-	SerialNumber         string   `json:"serial_number"`
-	NotBefore            string   `json:"not_before"`
-	NotAfter             string   `json:"not_after"`
-	IsExpired            bool     `json:"is_expired"`
-	DaysUntilExpiry      int      `json:"days_until_expiry"`
-	IsNearExpiry         bool     `json:"is_near_expiry"`
-	SignatureAlgorithm   string   `json:"signature_algorithm"`
-	PublicKeyAlgorithm   string   `json:"public_key_algorithm"`
-	KeyUsage             x509.KeyUsage `json:"key_usage"`
-	ExtKeyUsage          []x509.ExtKeyUsage `json:"ext_key_usage"`
-	DNSNames             []string `json:"dns_names"`
-	EmailAddresses       []string `json:"email_addresses"`
-	IPAddresses          []string `json:"ip_addresses"`
-	Organization         string   `json:"organization,omitempty"`
-	OrganizationalUnit   string   `json:"organizational_unit,omitempty"`
+	Subject            string             `json:"subject"`
+	Issuer             string             `json:"issuer"`
+	SerialNumber       string             `json:"serial_number"`
+	NotBefore          string             `json:"not_before"`
+	NotAfter           string             `json:"not_after"`
+	IsExpired          bool               `json:"is_expired"`
+	DaysUntilExpiry    int                `json:"days_until_expiry"`
+	IsNearExpiry       bool               `json:"is_near_expiry"`
+	SignatureAlgorithm string             `json:"signature_algorithm"`
+	PublicKeyAlgorithm string             `json:"public_key_algorithm"`
+	KeyUsage           x509.KeyUsage      `json:"key_usage"`
+	ExtKeyUsage        []x509.ExtKeyUsage `json:"ext_key_usage"`
+	DNSNames           []string           `json:"dns_names"`
+	EmailAddresses     []string           `json:"email_addresses"`
+	IPAddresses        []string           `json:"ip_addresses"`
+	Organization       string             `json:"organization,omitempty"`
+	OrganizationalUnit string             `json:"organizational_unit,omitempty"`
 }
 
 // TLSCertInspectTool parses TLS certificates, verifies chains, and checks expiration.
@@ -61,25 +61,25 @@ func (t *TLSCertInspectTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *TLSCertInspectTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"cert_path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to certificate file (PEM format)",
+func (t *TLSCertInspectTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"cert_path": {
+				Type:        "string",
+				Description: "Path to certificate file (PEM format)",
 			},
-			"host": map[string]interface{}{
-				"type":        "string",
-				"description": "Remote host to fetch certificate from via TLS handshake",
+			"host": {
+				Type:        "string",
+				Description: "Remote host to fetch certificate from via TLS handshake",
 			},
-			"port": map[string]interface{}{
-				"type":        "integer",
-				"description": "Port number for remote host (default 443)",
+			"port": {
+				Type:        "integer",
+				Description: "Port number for remote host (default 443)",
 			},
-			"insecure_skip_verify": map[string]interface{}{
-				"type":        "boolean",
-				"description": "Skip TLS certificate verification (default: false, use with caution)",
+			"insecure_skip_verify": {
+				Type:        "boolean",
+				Description: "Skip TLS certificate verification (default: false, use with caution)",
 			},
 		},
 	}

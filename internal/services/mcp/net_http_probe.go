@@ -36,20 +36,20 @@ func (t *NetHTTPProbeTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *NetHTTPProbeTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"url": map[string]interface{}{
-				"type":        "string",
-				"description": "URL to probe",
+func (t *NetHTTPProbeTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"url": {
+				Type:        "string",
+				Description: "URL to probe",
 			},
-			"method": map[string]interface{}{
-				"type":        "string",
-				"description": "HTTP method (default HEAD)",
+			"method": {
+				Type:        "string",
+				Description: "HTTP method (default HEAD)",
 			},
 		},
-		"required": []string{"url"},
+		Required: []string{"url"},
 	}
 }
 

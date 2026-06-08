@@ -37,20 +37,20 @@ func (t *ConfigDiffMaskTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *ConfigDiffMaskTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"config_path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to the current configuration file",
+func (t *ConfigDiffMaskTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"config_path": {
+				Type:        "string",
+				Description: "Path to the current configuration file",
 			},
-			"baseline": map[string]interface{}{
-				"type":        "string",
-				"description": "Baseline configuration content as string",
+			"baseline": {
+				Type:        "string",
+				Description: "Baseline configuration content as string",
 			},
 		},
-		"required": []string{"config_path", "baseline"},
+		Required: []string{"config_path", "baseline"},
 	}
 }
 
