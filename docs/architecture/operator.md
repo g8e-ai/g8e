@@ -235,4 +235,4 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 | Event Constants | `../../protocol/constants/events.json` |
 | Port Constants | `../../protocol/constants/ports.json` |
 
-See also: [g8e Protocol](./g8e.md), [g8e Gateway](./gateway.md).
+See also: [g8e Protocol](./protocol.md), [g8e Gateway](./gateway.md).

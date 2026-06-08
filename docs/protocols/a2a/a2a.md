@@ -238,6 +238,6 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 
 ## Related Documentation
 
-- [**g8e Protocol**](../../architecture/g8e.md) - The wire contract and governance hierarchy
+- [**g8e Protocol**](../../architecture/protocol.md) - The wire contract and governance hierarchy
 - [**Operator (g8eo)**](../../architecture/operator.md) - Operator architecture and gateway mode
 - [**MCP Protocol**](../mcp/mcp.md) - MCP protocol specification and integration

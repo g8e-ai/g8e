@@ -17,7 +17,7 @@ g8e is a zero-trust execution platform for agentic infrastructure. The platform 
 - **BYO clients**: The platform is UI-less by design. The CLI (`./g8e`) is the default interface.
 
 For detailed architecture, see:
-- [docs/architecture/g8e.md](../architecture/g8e.md) - Platform architecture and governance model
+- [docs/architecture/protocol.md](../architecture/protocol.md) - Platform architecture and governance model
 - [docs/architecture/protocol.md](../architecture/protocol.md) - Protocol and wire format
 - [docs/architecture/operator.md](../architecture/operator.md) - Operator service details
 
@@ -183,7 +183,7 @@ Security doctrines are stored in `protocol/constants/doctrine/` as canonical JSO
 2. Run `make validate-doctrines`
 3. Restart g8e Operator to load new doctrines
 
-See [docs/architecture/g8e.md](../architecture/g8e.md) for doctrine schema details.
+See [docs/architecture/protocol.md](../architecture/protocol.md) for doctrine schema details.
 
 ## Constants
 

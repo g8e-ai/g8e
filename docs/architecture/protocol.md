@@ -295,7 +295,7 @@ Output scrubbing is performed directly at the `L5Actuator` boundary to redact to
 | Composite L3 verifier | `../../internal/services/gateway/composite_l3_verifier.go` |
 | Doctrine registry | `../../protocol/constants/doctrine/doctrine_registry.json` |
 | MCP vectors doctrine | `../../protocol/constants/doctrine/mcp_vectors_doctrine.json` |
-| Internal translation | `../../docs/architecture/g8e_local_translation.md` |
+| Internal translation | `../../docs/architecture/network.md` |
 
 ---
 

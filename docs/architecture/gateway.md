@@ -369,6 +369,6 @@ The browser utility (`internal/cli/platform/browser.go`) provides cross-platform
 
 ## Related Documentation
 
-- [**g8e Protocol**](./g8e.md) - The wire contract and governance hierarchy.
+- [**g8e Protocol**](./protocol.md) - The wire contract and governance hierarchy.
 - [**g8e Operator**](./operator.md) - Sovereign host-side execution agent and MCP server.
 - [**CLI Reference**](../guides/cli.md) - Complete CLI command documentation including agent integration.

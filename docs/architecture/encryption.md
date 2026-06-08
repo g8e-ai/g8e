@@ -268,7 +268,7 @@ If services fail with "vault not initialized":
 
 ## References
 
-- [Vault Service](../architecture/g8e.md#vault-service)
+- [Vault Service](../architecture/protocol.md#vault-service)
 - [Storage Services](../architecture/operator.md#storage-layer)
 - [CLI Reference](../g8e-help.md#vault-commands)
 - [Security Documentation](../reference/compliance-alignment.md)

@@ -149,7 +149,7 @@ v1.0.10 consolidates the gateway port configuration from 4 ports to 2 ports, red
   * `docs/protocols/mcp/mcp.md`
   * `docs/protocols/a2a/a2a.md`
   * `docs/architecture/gateway.md`
-  * `docs/architecture/g8e.md`
+  * `docs/architecture/protocol.md`
   * `docs/guides/air_gap.md`
   * `docs/guides/connect_operator_to_gateway.md`
   * `docs/reference/constants.md`

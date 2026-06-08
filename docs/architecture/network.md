@@ -3,6 +3,12 @@
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
 ## Overview
+#### Design Goals
+The use of g8e.local is driven by several key goals:
+1. **Canonical stability**: g8e.local remains the stable mesh-facing name across all installations
+2. **Hidden complexity**: Real host identity and addressing are resolved internally by the gateway
+3. **Frictionless bootstrap**: Users never configure DNS or host-specific addressing
+4. **Security**: Translation preserves mTLS identity binding and SPIFFE URI SAN validation
 
 The g8e platform uses a zero-trust networking model where all communication is authenticated via mutual TLS (mTLS) with verified SPIFFE workload identities. The platform uses `g8e.local` as the canonical internal hostname for mesh communication.
 
@@ -254,7 +260,6 @@ The gateway detects the machine's network identity (IPs, hostnames, and aliases)
 ## Related Documentation
 
 - [**Authentication & Authorization**](./auth.md) - Authentication and authorization architecture
-- [**g8e Protocol**](./g8e.md) - The wire contract and governance hierarchy
+- [**g8e Protocol**](./protocol.md) - The wire contract and governance hierarchy
 - [**g8e Gateway**](./gateway.md) - Gateway architecture and capabilities
 - [**g8e Operator**](./operator.md) - Operator architecture and execution boundary
-- [**g8e.local Translation**](./g8e_local_translation.md) - Internal translation layer details

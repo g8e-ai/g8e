@@ -485,6 +485,6 @@ The template file at `docs/protocols/mcp/tool_template.go` provides a complete s
 
 ## Related Documentation
 
-- [**g8e Protocol**](../../architecture/g8e.md) - The wire contract and governance hierarchy
+- [**g8e Protocol**](../../architecture/protocol.md) - The wire contract and governance hierarchy
 - [**g8e Operator (g8eo)**](../../architecture/operator.md) - Operator architecture and gateway mode
 - [**A2A Protocol**](../a2a/a2a.md) - A2A protocol specification and integration

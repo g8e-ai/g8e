@@ -1,0 +1,67 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+version: '3.8'
+
+services:
+  g8e-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: g8e-gateway:latest
+    container_name: g8e-gateway
+    
+    # Volume mounts for runtime data and configuration
+    volumes:
+      # Mount protocol constants for doctrine mode
+      - ./protocol/constants:/protocol/constants:ro
+      # Mount .g8e directory for runtime state (certificates, database, etc.)
+      - g8e-data:/root/.g8e
+    
+    # Port mappings - can be customized via environment or override
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+      - "${HTTPS_PORT:-8443}:8443"
+    
+    # Environment variables for runtime configuration
+    environment:
+      - G8E_HTTP_PORT=${HTTP_PORT:-8080}
+      - G8E_HTTPS_PORT=${HTTPS_PORT:-8443}
+    
+    # Override command to use custom ports if needed
+    command: ["--doctrine", "gw", "start", "--http-port", "8080", "--https-port", "8443"]
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Health check
+    healthcheck:
+      test: ["/g8e", "gw", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    
+    # Resource limits (adjust as needed)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+volumes:
+  g8e-data:
+    driver: local
