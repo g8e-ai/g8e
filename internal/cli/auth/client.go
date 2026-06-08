@@ -29,6 +29,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -41,6 +42,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/auth"
 )
 
 type RegistrationRequest struct {
@@ -72,6 +74,36 @@ type Credentials struct {
 	UserID            string `json:"user_id"`
 	OperatorID        string `json:"operator_id"`
 	CLISessionID      string `json:"cli_session_id"`
+}
+
+// getLocalOSUser retrieves the current OS user information.
+func getLocalOSUser() *models.LocalOSUser {
+	currentUser, err := user.Current()
+	if err != nil {
+		return nil
+	}
+
+	var domain, username string
+	parts := strings.SplitN(currentUser.Username, "\\", 2)
+	if len(parts) == 2 {
+		domain = parts[0]
+		username = parts[1]
+	} else {
+		username = currentUser.Username
+	}
+
+	var sid string
+	if runtime.GOOS == "windows" {
+		sid = currentUser.Uid
+	}
+
+	return &models.LocalOSUser{
+		Domain:   domain,
+		Username: username,
+		UID:      currentUser.Uid,
+		GID:      currentUser.Gid,
+		SID:      sid,
+	}
 }
 
 func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
@@ -165,14 +197,11 @@ func FetchRootCAFingerprint(cfg *config.Config) (string, error) {
 }
 
 // VerifyCAFingerprint verifies that a PEM-encoded CA bundle matches the expected fingerprint.
-// The fingerprint should be in the format "sha256:<hex>" or just hex.
+// The fingerprint should be a hex-encoded SHA-256 hash (64 characters).
 func VerifyCAFingerprint(caPEM []byte, expectedFingerprint string) error {
 	if expectedFingerprint == "" {
 		return nil
 	}
-
-	// Normalize fingerprint: strip "sha256:" prefix if present
-	expectedFP := strings.TrimPrefix(expectedFingerprint, "sha256:")
 
 	// Parse the PEM to extract the DER-encoded certificate
 	block, _ := pem.Decode(caPEM)
@@ -188,23 +217,29 @@ func VerifyCAFingerprint(caPEM []byte, expectedFingerprint string) error {
 	hash := sha256.Sum256(block.Bytes)
 	actualFP := hex.EncodeToString(hash[:])
 
-	if actualFP != expectedFP {
-		return fmt.Errorf("CA fingerprint mismatch: expected %s, got %s", expectedFP, actualFP)
+	if actualFP != expectedFingerprint {
+		return fmt.Errorf("CA fingerprint mismatch: expected %s, got %s", expectedFingerprint, actualFP)
 	}
 
 	return nil
 }
 
 func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint string) (*RegistrationResponse, error) {
-	hostname, err := os.Hostname()
+	// Generate proper system fingerprint
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	systemFp, err := auth.GenerateSystemFingerprint(logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get hostname: %w", err)
+		return nil, fmt.Errorf("failed to generate system fingerprint: %w", err)
 	}
+
+	// Get local OS user information to send to gateway
+	localOSUser := getLocalOSUser()
 
 	req := models.BootstrapRequest{
 		CSR:               operatorCSR,
 		CLICSR:            cliCSR,
-		SystemFingerprint: fmt.Sprintf("g8e-cli-%s", hostname),
+		SystemFingerprint: systemFp.Fingerprint,
+		LocalOSUser:       localOSUser,
 	}
 
 	body, err := json.Marshal(req)
@@ -257,14 +292,20 @@ func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint str
 // This is used when the gateway is already bootstrapped but the CLI has lost its credentials.
 // It uses the plain HTTP bootstrap port since the CLI has no mTLS credentials.
 func CLIEnroll(cfg *config.Config, cliCSR string) (*RegistrationResponse, error) {
-	hostname, err := os.Hostname()
+	// Generate proper system fingerprint
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	systemFp, err := auth.GenerateSystemFingerprint(logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get hostname: %w", err)
+		return nil, fmt.Errorf("failed to generate system fingerprint: %w", err)
 	}
+
+	// Get local OS user information to send to gateway
+	localOSUser := getLocalOSUser()
 
 	req := models.CLIEnrollRequest{
 		CLICSR:            cliCSR,
-		SystemFingerprint: fmt.Sprintf("g8e-cli-%s", hostname),
+		SystemFingerprint: systemFp.Fingerprint,
+		LocalOSUser:       localOSUser,
 	}
 
 	body, err := json.Marshal(req)
@@ -309,9 +350,11 @@ func CLIEnroll(cfg *config.Config, cliCSR string) (*RegistrationResponse, error)
 // ReEnroll performs CSR-based re-enrollment using existing mTLS credentials.
 // This is used when the platform is already bootstrapped and the CLI has valid certificates.
 func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint string) (*RegistrationResponse, error) {
-	hostname, err := os.Hostname()
+	// Generate proper system fingerprint
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	systemFp, err := auth.GenerateSystemFingerprint(logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get hostname: %w", err)
+		return nil, fmt.Errorf("failed to generate system fingerprint: %w", err)
 	}
 
 	// Fetch current trust bundle from Operator bootstrap endpoint to handle CA rotation
@@ -381,7 +424,7 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 	req := models.BootstrapRequest{
 		CSR:               operatorCSR,
 		CLICSR:            cliCSR,
-		SystemFingerprint: fmt.Sprintf("g8e-cli-%s", hostname),
+		SystemFingerprint: systemFp.Fingerprint,
 	}
 
 	body, err := json.Marshal(req)
@@ -648,34 +691,15 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID string) error {
 	gatewayURL := cfg.OperatorPublicURL()
 
-	// Get current Windows username for Windows Hello registration
-	currentUser, err := user.Current()
+	// Fetch user information from gateway to get stored OS user information
+	userMeURL := fmt.Sprintf("%s/api/v1/users/me", gatewayURL)
+	userMeReq, err := http.NewRequest("GET", userMeURL, nil)
 	if err != nil {
-		return fmt.Errorf("failed to get current user: %w", err)
+		return fmt.Errorf("failed to create user me request: %w", err)
 	}
-	userName := currentUser.Username
+	userMeReq.Header.Set("X-G8E-CLI-Session-ID", cliSessionID)
 
-	// 1. Get Registration Challenge
-	challengeURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli-register/challenge", gatewayURL)
-	reqBody, err := json.Marshal(models.PasskeyRegisterChallengeRequest{
-		UserID:   userID,
-		UserName: userName,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to marshal challenge request: %w", err)
-	}
-	req, err := http.NewRequest("POST", challengeURL, bytes.NewReader(reqBody))
-	if err != nil {
-		return fmt.Errorf("failed to create challenge request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-G8E-CLI-Session-ID", cliSessionID)
-
-	// Use mTLS client for registration too since the user has an operator cert
-	if _, err := LoadCredentials(cfg); err != nil {
-		return fmt.Errorf("failed to load credentials: %w", err)
-	}
-
+	// Use mTLS client for user me request
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
 		return fmt.Errorf("failed to load CLI cert: %w", err)
@@ -699,6 +723,54 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	}
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: tlsConfig}}
 
+	userMeResp, err := client.Do(userMeReq)
+	if err != nil {
+		return fmt.Errorf("failed to fetch user information: %w", err)
+	}
+	defer userMeResp.Body.Close()
+
+	if userMeResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(userMeResp.Body)
+		return fmt.Errorf("failed to get user information (%d): %s", userMeResp.StatusCode, string(body))
+	}
+
+	var userMeData struct {
+		Success bool         `json:"success"`
+		User    *models.User `json:"user"`
+	}
+	if err := json.NewDecoder(userMeResp.Body).Decode(&userMeData); err != nil {
+		return fmt.Errorf("failed to decode user information: %w", err)
+	}
+
+	if !userMeData.Success || userMeData.User == nil {
+		return fmt.Errorf("failed to get user information from gateway")
+	}
+
+	// Use stored OS user username
+	userName := ""
+	if userMeData.User.LocalOSUser != nil && userMeData.User.LocalOSUser.Username != "" {
+		userName = userMeData.User.LocalOSUser.Username
+	} else {
+		return fmt.Errorf("OS user information not found in user record - this should have been set during enrollment")
+	}
+
+	// 1. Get Registration Challenge
+	challengeURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli-register/challenge", gatewayURL)
+	reqBody, err := json.Marshal(models.PasskeyRegisterChallengeRequest{
+		UserID:   userID,
+		UserName: userName,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal challenge request: %w", err)
+	}
+	req, err := http.NewRequest("POST", challengeURL, bytes.NewReader(reqBody))
+	if err != nil {
+		return fmt.Errorf("failed to create challenge request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-G8E-CLI-Session-ID", cliSessionID)
+
+	// Reuse the existing mTLS client for registration challenge
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to get registration challenge: %w", err)
@@ -994,6 +1066,13 @@ func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint str
 // EnrollWithGateway enrolls a device with a remote Gateway via CSR-based enrollment.
 // This is used for deploying operators on remote hosts that need to connect to a central Gateway.
 func EnrollWithGateway(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR string, caFingerprint string) (*RegistrationResponse, error) {
+	// Generate proper system fingerprint
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	systemFp, err := auth.GenerateSystemFingerprint(logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate system fingerprint: %w", err)
+	}
+
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get hostname: %w", err)
@@ -1002,7 +1081,7 @@ func EnrollWithGateway(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR 
 	req := models.DeviceEnrollRequest{
 		CSR:               operatorCSR,
 		CLICSR:            cliCSR,
-		SystemFingerprint: fmt.Sprintf("g8e-operator-%s", hostname),
+		SystemFingerprint: systemFp.Fingerprint,
 		Hostname:          hostname,
 	}
 

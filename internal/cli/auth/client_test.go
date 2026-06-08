@@ -699,12 +699,8 @@ func TestVerifyCAFingerprint_Match(t *testing.T) {
 	hash := sha256.Sum256(block.Bytes)
 	expectedFP := hex.EncodeToString(hash[:])
 
-	// Test with sha256: prefix
-	err := VerifyCAFingerprint([]byte(certPEM), "sha256:"+expectedFP)
-	require.NoError(t, err)
-
-	// Test without prefix
-	err = VerifyCAFingerprint([]byte(certPEM), expectedFP)
+	// Test with hex fingerprint (no prefix)
+	err := VerifyCAFingerprint([]byte(certPEM), expectedFP)
 	require.NoError(t, err)
 }
 
@@ -712,7 +708,7 @@ func TestVerifyCAFingerprint_Mismatch(t *testing.T) {
 	t.Parallel()
 	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
 
-	err := VerifyCAFingerprint([]byte(certPEM), "sha256:deadbeef")
+	err := VerifyCAFingerprint([]byte(certPEM), "deadbeef")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "CA fingerprint mismatch")
 }
@@ -728,7 +724,7 @@ func TestVerifyCAFingerprint_EmptyPin(t *testing.T) {
 
 func TestVerifyCAFingerprint_InvalidPEM(t *testing.T) {
 	t.Parallel()
-	err := VerifyCAFingerprint([]byte("not valid pem"), "sha256:deadbeef")
+	err := VerifyCAFingerprint([]byte("not valid pem"), "deadbeef")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to decode CA PEM")
 }
@@ -740,7 +736,7 @@ func TestVerifyCAFingerprint_NonCertificatePEM(t *testing.T) {
 		Bytes: []byte("dummy"),
 	})
 
-	err := VerifyCAFingerprint(keyPEM, "sha256:deadbeef")
+	err := VerifyCAFingerprint(keyPEM, "deadbeef")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "PEM block is not a certificate")
 }
@@ -760,7 +756,7 @@ func TestFetchRootCAFingerprint_Success(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/.well-known/g8e/pki/fingerprint", r.URL.Path)
-		resp := map[string]string{"root_ca": "sha256:" + expectedFP}
+		resp := map[string]string{"root_ca": expectedFP}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
 	}))
@@ -781,7 +777,7 @@ func TestFetchRootCAFingerprint_Success(t *testing.T) {
 	// Test the success case - the function should successfully fetch the fingerprint
 	fp, err := FetchRootCAFingerprint(cfg)
 	require.NoError(t, err)
-	assert.Equal(t, "sha256:"+expectedFP, fp)
+	assert.Equal(t, expectedFP, fp)
 }
 
 func TestFetchRootCAFingerprint_HTTPError(t *testing.T) {
@@ -1142,12 +1138,12 @@ func TestEnrollWithGateway_FingerprintVerification(t *testing.T) {
 	serverURL := strings.TrimPrefix(server.URL, "http://")
 
 	// Test with correct fingerprint
-	resp, err := EnrollWithGateway(cfg, serverURL, operatorCSR, cliCSR, "sha256:"+expectedFP)
+	resp, err := EnrollWithGateway(cfg, serverURL, operatorCSR, cliCSR, expectedFP)
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
 
 	// Test with wrong fingerprint
-	resp, err = EnrollWithGateway(cfg, serverURL, operatorCSR, cliCSR, "sha256:deadbeef")
+	resp, err = EnrollWithGateway(cfg, serverURL, operatorCSR, cliCSR, "deadbeef")
 	require.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "CA fingerprint verification failed")

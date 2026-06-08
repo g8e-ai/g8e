@@ -190,7 +190,7 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 				err := json.Unmarshal(rr.Body.Bytes(), &resp)
 				require.NoError(t, err, "failed to unmarshal response")
 				assert.NotEmpty(t, resp["root_ca"], "root_ca fingerprint should not be empty")
-				assert.Contains(t, resp["root_ca"], "sha256:", "fingerprint should contain sha256 prefix")
+				assert.Len(t, resp["root_ca"], 64, "fingerprint should be 64 hex characters (SHA256)")
 			},
 		},
 		{

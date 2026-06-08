@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -99,9 +98,6 @@ func verifyCAFingerprint(caPEM []byte, expectedFingerprint string) error {
 		return nil
 	}
 
-	// Normalize fingerprint: strip "sha256:" prefix if present
-	expectedFP := strings.TrimPrefix(expectedFingerprint, "sha256:")
-
 	// Parse the PEM to extract the DER-encoded certificate
 	block, _ := pem.Decode(caPEM)
 	if block == nil {
@@ -116,8 +112,8 @@ func verifyCAFingerprint(caPEM []byte, expectedFingerprint string) error {
 	hash := sha256.Sum256(block.Bytes)
 	actualFP := hex.EncodeToString(hash[:])
 
-	if actualFP != expectedFP {
-		return fmt.Errorf("CA fingerprint mismatch: expected %s, got %s", expectedFP, actualFP)
+	if actualFP != expectedFingerprint {
+		return fmt.Errorf("CA fingerprint mismatch: expected %s, got %s", expectedFingerprint, actualFP)
 	}
 
 	return nil

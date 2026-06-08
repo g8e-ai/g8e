@@ -1151,9 +1151,11 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 	}
 
 	var req struct {
-		Name      string `json:"name"`
-		CSRPEM    string `json:"csr_pem"`
-		CLICSRPEM string `json:"cli_csr_pem,omitempty"`
+		Name              string              `json:"name"`
+		CSRPEM            string              `json:"csr_pem"`
+		CLICSRPEM         string              `json:"cli_csr_pem,omitempty"`
+		SystemFingerprint string              `json:"system_fingerprint"`
+		LocalOSUser       *models.LocalOSUser `json:"local_os_user,omitempty"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
@@ -1219,9 +1221,9 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		// Create the bootstrap user
-		// Zero-PII: Bootstrap user created with only generated ID
-		user, err = c.userSvc.CreateBootstrapUser()
+		// Create the bootstrap user with client-provided OS user information
+		// Zero-PII: Bootstrap user created with only generated ID and OS user info
+		user, err = c.userSvc.CreateBootstrapUserWithOSUser(req.LocalOSUser)
 		if err != nil {
 			c.logger.Error("Failed to create bootstrap user", string(constants.ConnectionStateError), err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to create user")
@@ -1253,7 +1255,7 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 			Status:            constants.OperatorStatusActive,
 			OperatorSessionID: operatorSessionID,
 			OperatorType:      constants.OperatorTypeSystem,
-			SystemFingerprint: "bootstrap-operator",
+			SystemFingerprint: req.SystemFingerprint,
 			Claimed:           true,
 			ClaimedAt:         &now,
 			CreatedAt:         now,
@@ -1380,8 +1382,9 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 	}
 
 	var req struct {
-		CLICSRPEM         string `json:"cli_csr_pem"`
-		SystemFingerprint string `json:"system_fingerprint"`
+		CLICSRPEM         string              `json:"cli_csr_pem"`
+		SystemFingerprint string              `json:"system_fingerprint"`
+		LocalOSUser       *models.LocalOSUser `json:"local_os_user,omitempty"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
@@ -1421,6 +1424,23 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 		c.logger.Warn("Bootstrap user is disabled, refusing CLI enrollment", "user_id", bootstrapUser.ID)
 		c.responder.Error(w, http.StatusConflict, "bootstrap user is disabled, cannot enroll")
 		return
+	}
+
+	// Update bootstrap user with client-provided OS user information if available
+	if req.LocalOSUser != nil {
+		bootstrapUser.LocalOSUser = req.LocalOSUser
+		userData, err := json.Marshal(bootstrapUser)
+		if err != nil {
+			c.logger.Error("Failed to marshal bootstrap user for OS user update", string(constants.ConnectionStateError), err)
+			c.responder.Error(w, http.StatusInternalServerError, "failed to update user")
+			return
+		}
+		if err := c.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), bootstrapUser.ID, userData); err != nil {
+			c.logger.Error("Failed to update bootstrap user with OS user info", string(constants.ConnectionStateError), err)
+			c.responder.Error(w, http.StatusInternalServerError, "failed to update user")
+			return
+		}
+		c.logger.Info("[CLI_ENROLLMENT] Updated bootstrap user with OS user information", "user_id", bootstrapUser.ID)
 	}
 
 	// Sign the CLI CSR

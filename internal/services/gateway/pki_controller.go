@@ -114,7 +114,7 @@ func (c *PKIController) handlePKIFingerprint(w http.ResponseWriter, r *http.Requ
 	fingerprint := hex.EncodeToString(hash[:])
 
 	c.responder.JSON(w, http.StatusOK, models.PKIFingerprintResponse{
-		RootCA: "sha256:" + fingerprint,
+		RootCA: fingerprint,
 	})
 }
 
@@ -150,7 +150,7 @@ func (c *PKIController) handlePKICSRSign(w http.ResponseWriter, r *http.Request)
 	}
 
 	c.responder.JSON(w, http.StatusOK, models.PKICSRSignResponse{
-		CertificatePEM:       certPEM,
+		CertificatePEM:      certPEM,
 		CertificateChainPEM: chainPEM,
 	})
 }

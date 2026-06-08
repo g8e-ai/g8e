@@ -47,7 +47,7 @@ func NewUserService(db *CanonicalDBService, logger *slog.Logger) *UserService {
 // CreateUser creates a new active user with a generated ID.
 // Zero-PII: No email or name is stored - only the user ID and passkey credentials.
 func (s *UserService) CreateUser() (*models.User, error) {
-	return s.createUser(false)
+	return s.createUser(false, nil)
 }
 
 // CreateBootstrapUser creates the ephemeral local-owner identity used by
@@ -55,7 +55,13 @@ func (s *UserService) CreateUser() (*models.User, error) {
 // the CSR-based registration path can identify and retire it the first time
 // a real identity is provisioned.
 func (s *UserService) CreateBootstrapUser() (*models.User, error) {
-	return s.createUser(true)
+	return s.CreateBootstrapUserWithOSUser(nil)
+}
+
+// CreateBootstrapUserWithOSUser creates a bootstrap user with the provided OS user information.
+// If localOSUser is nil, it falls back to the gateway's local OS user (for backward compatibility).
+func (s *UserService) CreateBootstrapUserWithOSUser(localOSUser *models.LocalOSUser) (*models.User, error) {
+	return s.createUser(true, localOSUser)
 }
 
 func getLocalOSUser() *models.LocalOSUser {
@@ -87,7 +93,7 @@ func getLocalOSUser() *models.LocalOSUser {
 	}
 }
 
-func (s *UserService) createUser(isBootstrap bool) (*models.User, error) {
+func (s *UserService) createUser(isBootstrap bool, localOSUser *models.LocalOSUser) (*models.User, error) {
 	s.logger.Info("[USER-SERVICE] Creating new user", "is_bootstrap", isBootstrap)
 
 	if isBootstrap {
@@ -102,6 +108,11 @@ func (s *UserService) createUser(isBootstrap bool) (*models.User, error) {
 
 	userID := uuid.New().String()
 
+	// Use provided OS user info, or fall back to gateway's local OS user
+	if localOSUser == nil {
+		localOSUser = getLocalOSUser()
+	}
+
 	// Zero-PII: Only user ID and passkey credentials are stored
 	user := &models.User{
 		ID:                 userID,
@@ -109,7 +120,7 @@ func (s *UserService) createUser(isBootstrap bool) (*models.User, error) {
 		Provider:           string(constants.AuthProviderPasskey),
 		Status:             constants.UserStatusActive,
 		IsBootstrap:        isBootstrap,
-		LocalOSUser:        getLocalOSUser(),
+		LocalOSUser:        localOSUser,
 	}
 
 	data, err := json.Marshal(user)

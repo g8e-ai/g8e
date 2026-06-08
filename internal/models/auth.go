@@ -36,15 +36,17 @@ type OperatorRegistrationRequest struct {
 
 // BootstrapRequest is the inbound body for /api/v1/auth/bootstrap.
 type BootstrapRequest struct {
-	CSR               string `json:"csr_pem"`
-	CLICSR            string `json:"cli_csr_pem,omitempty"`
-	SystemFingerprint string `json:"system_fingerprint"`
+	CSR               string       `json:"csr_pem"`
+	CLICSR            string       `json:"cli_csr_pem,omitempty"`
+	SystemFingerprint string       `json:"system_fingerprint"`
+	LocalOSUser       *LocalOSUser `json:"local_os_user,omitempty"`
 }
 
 // CLIEnrollRequest is the inbound body for /api/v1/auth/cli/enroll.
 type CLIEnrollRequest struct {
-	CLICSR            string `json:"cli_csr_pem"`
-	SystemFingerprint string `json:"system_fingerprint"`
+	CLICSR            string       `json:"cli_csr_pem"`
+	SystemFingerprint string       `json:"system_fingerprint"`
+	LocalOSUser       *LocalOSUser `json:"local_os_user,omitempty"`
 }
 
 // DeviceEnrollRequest is the inbound body for /api/v1/auth/device/enroll.
