@@ -23,6 +23,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os/exec"
+	"runtime"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -31,12 +33,12 @@ import (
 // PasskeyBootstrapServer handles the localhost HTTP server for passkey registration
 // during CLI bootstrap. It serves a simple HTML page that performs WebAuthn registration.
 type PasskeyBootstrapServer struct {
-	server   *http.Server
+	server     *http.Server
 	gatewayURL string
-	userID    string
-	userName  string
-	done      chan struct{}
-	success   bool
+	userID     string
+	userName   string
+	done       chan struct{}
+	success    bool
 }
 
 // NewPasskeyBootstrapServer creates a new localhost server for passkey registration
@@ -278,17 +280,34 @@ func (s *PasskeyBootstrapServer) handleRegister(w http.ResponseWriter, r *http.R
 	_, _ = w.Write([]byte("OK"))
 }
 
+// openBrowser opens the default system browser to the given URL.
+func openBrowser(url string) error {
+	switch runtime.GOOS {
+	case "windows":
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		return exec.Command("open", url).Start()
+	default: // linux and other unix-like
+		return exec.Command("xdg-open", url).Start()
+	}
+}
+
 // RegisterPasskeyViaLocalhost starts a localhost server and guides the user through passkey registration
 func RegisterPasskeyViaLocalhost(cfg *config.Config, userID string) error {
 	gatewayURL := cfg.OperatorDiscoveryURL()
-	
+
 	server := NewPasskeyBootstrapServer(gatewayURL, userID, "g8e-cli-user")
-	
+
 	url, err := server.Start()
 	if err != nil {
 		return fmt.Errorf("failed to start passkey bootstrap server: %w", err)
 	}
 	defer server.Stop()
+
+	// Attempt to auto-open the browser (best-effort)
+	if err := openBrowser(url); err != nil {
+		log.Printf("Could not auto-open browser: %v", err)
+	}
 
 	fmt.Printf("\n")
 	fmt.Printf("═══════════════════════════════════════════════════════════════\n")
@@ -298,7 +317,8 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID string) error {
 	fmt.Printf("To complete your CLI enrollment, you need to register a passkey.\n")
 	fmt.Printf("This will enable secure passwordless authentication.\n")
 	fmt.Printf("\n")
-	fmt.Printf("Please open the following URL in your browser:\n")
+	fmt.Printf("A browser window should have opened automatically.\n")
+	fmt.Printf("If not, please open the following URL manually:\n")
 	fmt.Printf("\n")
 	fmt.Printf("  %s\n", url)
 	fmt.Printf("\n")
@@ -327,7 +347,7 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID string) error {
 // VerifyPasskeyRegistration checks if a user has a passkey registered
 func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) {
 	url := fmt.Sprintf("%s/api/v1/auth/passkeys?user_id=%s", cfg.OperatorPublicURL(), userID)
-	
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return false, fmt.Errorf("failed to check passkey status: %w", err)
@@ -372,8 +392,8 @@ func RegisterPasskeyDirectly(cfg *config.Config, userID string) error {
 	// Get challenge
 	challengeURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli-register/challenge", cfg.OperatorDiscoveryURL())
 	challengeReq := map[string]string{
-		"user_id":    userID,
-		"user_name":  "g8e-cli-user",
+		"user_id":   userID,
+		"user_name": "g8e-cli-user",
 	}
 	challengeBody, err := json.Marshal(challengeReq)
 	if err != nil {
@@ -396,9 +416,9 @@ func RegisterPasskeyDirectly(cfg *config.Config, userID string) error {
 		Options struct {
 			PublicKey struct {
 				Challenge string `json:"challenge"`
-				User struct {
-					ID   string `json:"id"`
-					Name string `json:"name"`
+				User      struct {
+					ID          string `json:"id"`
+					Name        string `json:"name"`
 					DisplayName string `json:"displayName"`
 				} `json:"user"`
 			} `json:"publicKey"`

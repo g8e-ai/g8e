@@ -44,23 +44,23 @@ var governanceEnvelopeRedirectError = "submit via POST " + constants.APIPaths.Go
 
 // HTTPHandlerDependencies groups all dependencies for HTTPHandler to reduce constructor bloat.
 type HTTPHandlerDependencies struct {
-	Cfg               *config.Config
-	Logger            *slog.Logger
-	DB                *CanonicalDBService
-	Pubsub            *PubSubBroker
-	Auth              *AuthService
-	PKI               *PKIAuthority
-	CLISessionSvc     *CLISessionService
+	Cfg                *config.Config
+	Logger             *slog.Logger
+	DB                 *CanonicalDBService
+	Pubsub             *PubSubBroker
+	Auth               *AuthService
+	PKI                *PKIAuthority
+	CLISessionSvc      *CLISessionService
 	OperatorSessionSvc *OperatorSessionService
-	WebSessionSvc     *WebSessionService
-	Reg               *RegistrationService
-	Passkey           *PasskeyService
-	UserSvc           *UserService
-	Responder         *response.Writer
-	MCPGateway        *mcp.GatewayService
-	AppEnrollment     *AppEnrollmentService
-	IsReady           func() bool
-	IsGovernanceReady func() bool
+	WebSessionSvc      *WebSessionService
+	Reg                *RegistrationService
+	Passkey            *PasskeyService
+	UserSvc            *UserService
+	Responder          *response.Writer
+	MCPGateway         *mcp.GatewayService
+	AppEnrollment      *AppEnrollmentService
+	IsReady            func() bool
+	IsGovernanceReady  func() bool
 }
 
 func (h *HTTPHandler) readBody(r *http.Request) ([]byte, error) {
@@ -70,23 +70,23 @@ func (h *HTTPHandler) readBody(r *http.Request) ([]byte, error) {
 
 // HTTPHandler manages the web API for the gateway service.
 type HTTPHandler struct {
-	cfg               *config.Config
-	logger            *slog.Logger
-	db                *CanonicalDBService
-	pubsub            *PubSubBroker
-	auth              *AuthService
-	pki               *PKIAuthority
-	cliSessionSvc     *CLISessionService
+	cfg                *config.Config
+	logger             *slog.Logger
+	db                 *CanonicalDBService
+	pubsub             *PubSubBroker
+	auth               *AuthService
+	pki                *PKIAuthority
+	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
-	webSessionSvc     *WebSessionService
-	reg               *RegistrationService
-	passkey           *PasskeyService
-	userSvc           *UserService
-	responder         *response.Writer
-	mcp               *mcp.GatewayService
-	appEnrollment     *AppEnrollmentService
-	isReady           func() bool
-	isGovernanceReady func() bool
+	webSessionSvc      *WebSessionService
+	reg                *RegistrationService
+	passkey            *PasskeyService
+	userSvc            *UserService
+	responder          *response.Writer
+	mcp                *mcp.GatewayService
+	appEnrollment      *AppEnrollmentService
+	isReady            func() bool
+	isGovernanceReady  func() bool
 	// envProc is the synchronous fail-closed Gateway mutation gate. It is
 	// nil until SetEnvelopeProcessor is called by the boot sequence after
 	// the in-process command service has initialized the verifier and
@@ -104,32 +104,32 @@ type HTTPHandler struct {
 	router http.Handler
 
 	// Rate limiting state
-	muLimiters sync.Mutex
-	limiters   map[string]*rate.Limiter
+	muLimiters      sync.Mutex
+	limiters        map[string]*rate.Limiter
 	limiterLastUsed map[string]time.Time
 }
 
 func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	h := &HTTPHandler{
-		cfg:               deps.Cfg,
-		logger:            deps.Logger,
-		db:                deps.DB,
-		pubsub:            deps.Pubsub,
-		auth:              deps.Auth,
-		pki:               deps.PKI,
-		cliSessionSvc:     deps.CLISessionSvc,
+		cfg:                deps.Cfg,
+		logger:             deps.Logger,
+		db:                 deps.DB,
+		pubsub:             deps.Pubsub,
+		auth:               deps.Auth,
+		pki:                deps.PKI,
+		cliSessionSvc:      deps.CLISessionSvc,
 		operatorSessionSvc: deps.OperatorSessionSvc,
-		webSessionSvc:     deps.WebSessionSvc,
-		reg:               deps.Reg,
-		passkey:           deps.Passkey,
-		userSvc:           deps.UserSvc,
-		responder:         deps.Responder,
-		mcp:               deps.MCPGateway,
-		appEnrollment:     deps.AppEnrollment,
-		isReady:           deps.IsReady,
-		isGovernanceReady: deps.IsGovernanceReady,
-		limiters:          make(map[string]*rate.Limiter),
-		limiterLastUsed:   make(map[string]time.Time),
+		webSessionSvc:      deps.WebSessionSvc,
+		reg:                deps.Reg,
+		passkey:            deps.Passkey,
+		userSvc:            deps.UserSvc,
+		responder:          deps.Responder,
+		mcp:                deps.MCPGateway,
+		appEnrollment:      deps.AppEnrollment,
+		isReady:            deps.IsReady,
+		isGovernanceReady:  deps.IsGovernanceReady,
+		limiters:           make(map[string]*rate.Limiter),
+		limiterLastUsed:    make(map[string]time.Time),
 	}
 
 	// Initialize script templates
@@ -169,7 +169,7 @@ func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
 			h.limiters[ip] = limiter
 		}
 		h.limiterLastUsed[ip] = time.Now()
-		
+
 		// Clean up stale limiters (older than 5 minutes)
 		cutoff := time.Now().Add(-5 * time.Minute)
 		for key, lastUsed := range h.limiterLastUsed {
@@ -186,6 +186,19 @@ func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (h *HTTPHandler) corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -362,8 +375,9 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	cliPasskeyMux := http.NewServeMux()
 	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, h.authController.handleCLIPasskeyRegisterChallenge)
 	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterVerify, h.authController.handleCLIPasskeyRegisterVerify)
-	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, cliPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterVerify, cliPasskeyMux)
+	corsCLIPasskeyMux := h.corsMiddleware(cliPasskeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, corsCLIPasskeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterVerify, corsCLIPasskeyMux)
 
 	// Browser-facing data routes (require web session cookie)
 	authedMux := http.NewServeMux()
