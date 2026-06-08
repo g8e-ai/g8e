@@ -14,13 +14,14 @@
 package governance
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/interfaces"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
@@ -31,7 +32,7 @@ import (
 type L3Notary interface {
 	// VerifyL3Proof verifies an L3 proof for a transaction.
 	// Returns true if the proof is valid and the transaction should be allowed.
-	VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error)
+	VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error)
 }
 
 // outboundL3Notary provides L3 verification for outbound mode using CLI-based approval.
@@ -39,12 +40,12 @@ type L3Notary interface {
 // a CLI command (e.g., `g8e approve <tx_hash>`). This notary verifies cryptographic
 // signatures over the transaction hash to prove human presence.
 type outboundL3Notary struct {
-	suspendedStore *storage.LocalStoreService
+	suspendedStore interfaces.SuspendedTransactionStore
 	logger         *slog.Logger
 }
 
 // NewOutboundL3Notary creates a new CLI L3 notary for outbound mode.
-func NewOutboundL3Notary(suspendedStore *storage.LocalStoreService, logger *slog.Logger) L3Notary {
+func NewOutboundL3Notary(suspendedStore interfaces.SuspendedTransactionStore, logger *slog.Logger) L3Notary {
 	return &outboundL3Notary{
 		suspendedStore: suspendedStore,
 		logger:         logger,
@@ -59,7 +60,7 @@ func NewOutboundL3Notary(suspendedStore *storage.LocalStoreService, logger *slog
 // 4. The approval has not expired
 //
 // This replaces the previous string-only acceptance with cryptographic verification.
-func (v *outboundL3Notary) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	if userID == "" {
 		return false, fmt.Errorf("user_id is required for CLI L3 verification")
 	}
@@ -71,7 +72,11 @@ func (v *outboundL3Notary) VerifyL3Proof(userID, transactionHash, cliSessionID s
 	}
 
 	// Check if the transaction exists in the suspended store
-	tx, ok := v.suspendedStore.GetSuspendedTransaction(transactionHash)
+	tx, ok, err := v.suspendedStore.GetSuspendedTransaction(ctx, transactionHash)
+	if err != nil {
+		v.logger.Warn("CLI L3 verification failed: error getting suspended transaction", "transaction_hash", transactionHash, "error", err)
+		return false, fmt.Errorf("failed to get suspended transaction: %w", err)
+	}
 	if !ok {
 		v.logger.Warn("CLI L3 verification failed: transaction not found in suspended store", "transaction_hash", transactionHash)
 		return false, fmt.Errorf("transaction not found in suspended store - must be approved via CLI")

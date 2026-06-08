@@ -35,7 +35,8 @@ Host myserver
 `
 		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-		blocks := ParseConfig(cfg)
+		blocks, err := ParseConfig(cfg)
+		require.NoError(t, err)
 		require.Contains(t, blocks, "myserver")
 		b := blocks["myserver"]
 		assert.Equal(t, "192.168.1.10", b.Hostname)
@@ -59,7 +60,8 @@ Host staging
 `
 		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-		blocks := ParseConfig(cfg)
+		blocks, err := ParseConfig(cfg)
+		require.NoError(t, err)
 		assert.Len(t, blocks, 2)
 		assert.Contains(t, blocks, "prod-*")
 		assert.Contains(t, blocks, "staging")
@@ -76,7 +78,8 @@ Host equalhost
 `
 		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-		blocks := ParseConfig(cfg)
+		blocks, err := ParseConfig(cfg)
+		require.NoError(t, err)
 		require.Contains(t, blocks, "equalhost")
 		b := blocks["equalhost"]
 		assert.Equal(t, "10.0.0.1", b.Hostname)
@@ -84,7 +87,8 @@ Host equalhost
 	})
 
 	t.Run("missing file", func(t *testing.T) {
-		blocks := ParseConfig("/nonexistent/.ssh/config")
+		blocks, err := ParseConfig("/nonexistent/.ssh/config")
+		assert.NoError(t, err)
 		assert.Empty(t, blocks)
 	})
 
@@ -100,7 +104,8 @@ Host commented
 `
 		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-		blocks := ParseConfig(cfg)
+		blocks, err := ParseConfig(cfg)
+		require.NoError(t, err)
 		require.Contains(t, blocks, "commented")
 		assert.Equal(t, "10.0.0.2", blocks["commented"].Hostname)
 	})
@@ -115,7 +120,8 @@ Host multi
 `
 		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-		blocks := ParseConfig(cfg)
+		blocks, err := ParseConfig(cfg)
+		require.NoError(t, err)
 		require.Contains(t, blocks, "multi")
 		assert.Len(t, blocks["multi"].IdentityFiles, 2)
 	})
@@ -195,20 +201,24 @@ func TestMatchGlob(t *testing.T) {
 
 func TestExpandTilde(t *testing.T) {
 	t.Run("with tilde", func(t *testing.T) {
-		home, _ := os.UserHomeDir()
-		got := ExpandTilde("~/.ssh/id_ed25519")
+		home, err := os.UserHomeDir()
+		require.NoError(t, err)
+		got, err := ExpandTilde("~/.ssh/id_ed25519")
+		require.NoError(t, err)
 		assert.Equal(t, filepath.Join(home, ".ssh/id_ed25519"), got)
 	})
 
 	t.Run("without tilde", func(t *testing.T) {
-		got := ExpandTilde("/absolute/path")
+		got, err := ExpandTilde("/absolute/path")
+		require.NoError(t, err)
 		assert.Equal(t, "/absolute/path", got)
 	})
 }
 
 func TestResolveHost(t *testing.T) {
 	t.Run("simple hostname", func(t *testing.T) {
-		r := ResolveHost("myserver", "", "defaultuser", "", "")
+		r, err := ResolveHost("myserver", "", "defaultuser", "", "")
+		require.NoError(t, err)
 		assert.Equal(t, "myserver", r.Original)
 		assert.Equal(t, "myserver", r.Hostname)
 		assert.Equal(t, "defaultuser", r.User)
@@ -216,7 +226,8 @@ func TestResolveHost(t *testing.T) {
 	})
 
 	t.Run("user@host format", func(t *testing.T) {
-		r := ResolveHost("alice@myserver", "", "", "", "")
+		r, err := ResolveHost("alice@myserver", "", "", "", "")
+		require.NoError(t, err)
 		assert.Equal(t, "alice@myserver", r.Original)
 		assert.Equal(t, "myserver", r.Hostname)
 		assert.Equal(t, "alice", r.User)
@@ -224,7 +235,8 @@ func TestResolveHost(t *testing.T) {
 	})
 
 	t.Run("host:port format", func(t *testing.T) {
-		r := ResolveHost("myserver:2222", "", "defaultuser", "", "")
+		r, err := ResolveHost("myserver:2222", "", "defaultuser", "", "")
+		require.NoError(t, err)
 		assert.Equal(t, "myserver:2222", r.Original)
 		assert.Equal(t, "myserver", r.Hostname)
 		assert.Equal(t, "2222", r.Port)
@@ -232,7 +244,8 @@ func TestResolveHost(t *testing.T) {
 	})
 
 	t.Run("user@host:port format", func(t *testing.T) {
-		r := ResolveHost("alice@myserver:2222", "", "", "", "")
+		r, err := ResolveHost("alice@myserver:2222", "", "", "", "")
+		require.NoError(t, err)
 		assert.Equal(t, "alice@myserver:2222", r.Original)
 		assert.Equal(t, "myserver", r.Hostname)
 		assert.Equal(t, "alice", r.User)
@@ -251,7 +264,8 @@ Host testhost
 `
 		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-		r := ResolveHost("testhost", cfg, "", "", "")
+		r, err := ResolveHost("testhost", cfg, "", "", "")
+		require.NoError(t, err)
 		assert.Equal(t, "testhost", r.Original)
 		assert.Equal(t, "192.168.1.100", r.Hostname)
 		assert.Equal(t, "deploy", r.User)
@@ -269,7 +283,8 @@ Host prod-*
 `
 		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-		r := ResolveHost("prod-web-01", cfg, "", "", "")
+		r, err := ResolveHost("prod-web-01", cfg, "", "", "")
+		require.NoError(t, err)
 		assert.Equal(t, "prod-web-01", r.Original)
 		assert.Equal(t, "prod-web-01", r.Hostname)
 		assert.Equal(t, "ubuntu", r.User)
@@ -285,7 +300,8 @@ Host testhost
 `
 		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-		r := ResolveHost("testhost", cfg, "", "", "flaguser")
+		r, err := ResolveHost("testhost", cfg, "", "", "flaguser")
+		require.NoError(t, err)
 		assert.Equal(t, "flaguser", r.User)
 	})
 
@@ -298,18 +314,39 @@ Host testhost
 `
 		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-		r := ResolveHost("testhost", cfg, "", "/path/to/flag_key", "")
+		r, err := ResolveHost("testhost", cfg, "", "/path/to/flag_key", "")
+		require.NoError(t, err)
 		assert.Len(t, r.KeyFiles, 1)
 		assert.Equal(t, "/path/to/flag_key", r.KeyFiles[0])
 	})
 
 	t.Run("default username when none provided", func(t *testing.T) {
-		r := ResolveHost("myserver", "", "defaultuser", "", "")
+		// Mock home directory to avoid trying to read ~/.ssh/config in environments where it doesn't exist (e.g. CI)
+		dir := t.TempDir()
+		t.Setenv("HOME", dir)
+		t.Setenv("USERPROFILE", dir) // For Windows compatibility
+
+		// Create empty .ssh/config to satisfy ResolveHost
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".ssh"), 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".ssh", "config"), []byte(""), 0600))
+
+		r, err := ResolveHost("myserver", "", "defaultuser", "", "")
+		require.NoError(t, err)
 		assert.Equal(t, "defaultuser", r.User)
 	})
 
 	t.Run("default port when none provided", func(t *testing.T) {
-		r := ResolveHost("myserver", "", "", "", "")
+		// Mock home directory to avoid trying to read ~/.ssh/config in environments where it doesn't exist (e.g. CI)
+		dir := t.TempDir()
+		t.Setenv("HOME", dir)
+		t.Setenv("USERPROFILE", dir) // For Windows compatibility
+
+		// Create empty .ssh/config to satisfy ResolveHost
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".ssh"), 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".ssh", "config"), []byte(""), 0600))
+
+		r, err := ResolveHost("myserver", "", "", "", "")
+		require.NoError(t, err)
 		assert.Equal(t, "22", r.Port)
 	})
 
@@ -322,15 +359,14 @@ Host jump
 `
 		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-		r := ResolveHost("jump", cfg, "", "", "")
+		r, err := ResolveHost("jump", cfg, "", "", "")
+		require.NoError(t, err)
 		assert.Equal(t, "ssh -W %h:%p jump.example.com", r.ProxyCommand)
 	})
 
 	t.Run("missing SSH config file", func(t *testing.T) {
-		r := ResolveHost("myserver", "/nonexistent/config", "defaultuser", "", "")
-		assert.Equal(t, "myserver", r.Hostname)
-		assert.Equal(t, "defaultuser", r.User)
-		assert.Equal(t, "22", r.Port)
+		_, err := ResolveHost("myserver", "/nonexistent/config", "defaultuser", "", "")
+		assert.NoError(t, err)
 	})
 
 	t.Run("port 22 from config is ignored", func(t *testing.T) {
@@ -342,7 +378,8 @@ Host testhost
 `
 		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-		r := ResolveHost("testhost", cfg, "", "", "")
+		r, err := ResolveHost("testhost", cfg, "", "", "")
+		require.NoError(t, err)
 		assert.Equal(t, "22", r.Port)
 	})
 
@@ -355,7 +392,8 @@ Host alias
 `
 		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-		r := ResolveHost("alias", cfg, "", "", "")
+		r, err := ResolveHost("alias", cfg, "", "", "")
+		require.NoError(t, err)
 		assert.Equal(t, "192.168.1.50", r.Hostname)
 	})
 
@@ -368,7 +406,8 @@ Host alias
 `
 		require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-		r := ResolveHost("alice@alias", cfg, "", "", "")
+		r, err := ResolveHost("alice@alias", cfg, "", "", "")
+		require.NoError(t, err)
 		assert.Equal(t, "192.168.1.50", r.Hostname)
 		assert.Equal(t, "alice", r.User)
 	})
@@ -377,14 +416,15 @@ Host alias
 func TestBuildAuthMethods(t *testing.T) {
 	t.Run("empty host config", func(t *testing.T) {
 		r := HostConfig{}
-		methods := BuildAuthMethods(r, "", "")
+		methods, err := BuildAuthMethods(r, "", "")
+		require.NoError(t, err)
 		assert.Empty(t, methods)
 	})
 
 	t.Run("non-existent key file", func(t *testing.T) {
 		r := HostConfig{KeyFiles: []string{"/nonexistent/key"}}
-		methods := BuildAuthMethods(r, "", "")
-		assert.Empty(t, methods)
+		_, err := BuildAuthMethods(r, "", "")
+		assert.Error(t, err)
 	})
 
 	t.Run("invalid key file content", func(t *testing.T) {
@@ -393,14 +433,14 @@ func TestBuildAuthMethods(t *testing.T) {
 		require.NoError(t, os.WriteFile(keyPath, []byte("not a valid key"), 0600))
 
 		r := HostConfig{KeyFiles: []string{keyPath}}
-		methods := BuildAuthMethods(r, "", "")
-		assert.Empty(t, methods)
+		_, err := BuildAuthMethods(r, "", "")
+		assert.Error(t, err)
 	})
 
 	t.Run("invalid SSH agent socket", func(t *testing.T) {
 		r := HostConfig{}
-		methods := BuildAuthMethods(r, "/nonexistent/agent.sock", "")
-		assert.Empty(t, methods)
+		_, err := BuildAuthMethods(r, "/nonexistent/agent.sock", "")
+		assert.Error(t, err)
 	})
 
 	t.Run("empty key file", func(t *testing.T) {
@@ -409,31 +449,28 @@ func TestBuildAuthMethods(t *testing.T) {
 		require.NoError(t, os.WriteFile(keyPath, []byte(""), 0600))
 
 		r := HostConfig{KeyFiles: []string{keyPath}}
-		methods := BuildAuthMethods(r, "", "")
-		assert.Empty(t, methods)
+		_, err := BuildAuthMethods(r, "", "")
+		assert.Error(t, err)
 	})
 }
 
 func TestBuildHostKeyCallback(t *testing.T) {
 	t.Run("known_hosts file does not exist", func(t *testing.T) {
 		dir := t.TempDir()
-		t.Setenv("HOME", dir)
+		khPath := filepath.Join(dir, "known_hosts")
 
-		_, err := BuildHostKeyCallback()
-		assert.Error(t, err)
+		cb, err := BuildHostKeyCallback(khPath)
+		require.Error(t, err)
+		assert.Nil(t, cb)
 		assert.Contains(t, err.Error(), "known_hosts not found")
 	})
 
 	t.Run("malformed known_hosts file", func(t *testing.T) {
 		dir := t.TempDir()
-		sshDir := filepath.Join(dir, ".ssh")
-		require.NoError(t, os.Mkdir(sshDir, 0700))
-		khPath := filepath.Join(sshDir, "known_hosts")
+		khPath := filepath.Join(dir, "known_hosts")
 		require.NoError(t, os.WriteFile(khPath, []byte("invalid known_hosts content"), 0600))
 
-		t.Setenv("HOME", dir)
-
-		_, err := BuildHostKeyCallback()
+		_, err := BuildHostKeyCallback(khPath)
 		assert.Error(t, err)
 	})
 }

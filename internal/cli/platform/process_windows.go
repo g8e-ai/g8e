@@ -18,6 +18,7 @@ package platform
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -52,7 +53,28 @@ func (pm *ProcessManager) isProcessRunning(pid int) bool {
 	}
 
 	// STILL_ACTIVE (259) indicates the process is still running
-	return exitCode == 259
+	if exitCode != 259 {
+		return false
+	}
+
+	// Verify the process is actually g8e to prevent false positives from PID reuse
+	return pm.isG8eProcess(pid)
+}
+
+// isG8eProcess verifies that the given PID belongs to a g8e.exe process.
+func (pm *ProcessManager) isG8eProcess(pid int) bool {
+	cmd := exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/FI", "IMAGENAME eq g8e.exe", "/FO", "CSV", "/NH")
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "INFO:") {
+			return true
+		}
+	}
+	return false
 }
 
 // findProcessOnPort finds the PID of the process listening on the given port on Windows.
@@ -77,6 +99,39 @@ func (pm *ProcessManager) findProcessOnPort(port int) int {
 				if _, err := fmt.Sscanf(pidStr, "%d", &pid); err == nil {
 					return pid
 				}
+			}
+		}
+	}
+
+	return 0
+}
+
+// findOperatorProcess finds the PID of the running g8e operator process using tasklist.
+// This is used as a fallback when the PID file is missing or stale.
+// It excludes the current process's own PID to avoid detecting the CLI itself.
+func (pm *ProcessManager) findOperatorProcess() int {
+	ownPID := os.Getpid()
+	cmd := exec.Command("tasklist", "/FI", "IMAGENAME eq g8e.exe", "/FO", "CSV")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for i, line := range lines {
+		if i == 0 { // Skip header line
+			continue
+		}
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Split(line, ",")
+		if len(fields) >= 2 {
+			pidStr := strings.Trim(fields[1], "\"")
+			var pid int
+			if _, err := fmt.Sscanf(pidStr, "%d", &pid); err == nil && pid != ownPID {
+				return pid
 			}
 		}
 	}
@@ -109,6 +164,14 @@ func (pm *ProcessManager) stopProcess(pid int, name string) error {
 	cmd = exec.Command("taskkill", "/F", "/PID", fmt.Sprintf("%d", pid), "/T")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to force kill process: %w", err)
+	}
+
+	// Wait for process to actually exit and release file handles
+	for i := 0; i < 20; i++ {
+		if !pm.isProcessRunning(pid) {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	return nil

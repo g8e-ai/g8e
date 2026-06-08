@@ -19,42 +19,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSysContainerStatusTool_Name(t *testing.T) {
-	tool := &SysContainerStatusTool{}
-	require.Equal(t, "sys_container_status", tool.Name())
-}
-
-func TestSysContainerStatusTool_Description(t *testing.T) {
-	tool := &SysContainerStatusTool{}
-	require.NotEmpty(t, tool.Description())
-	require.Contains(t, tool.Description(), "container")
-}
-
-func TestSysContainerStatusTool_InputSchema(t *testing.T) {
-	tool := &SysContainerStatusTool{}
-	schema := tool.InputSchema()
-
-	require.Equal(t, "object", schema["type"])
-	props, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
-
-	required, ok := schema["required"].([]string)
-	require.True(t, ok)
-	require.Contains(t, required, "container_name")
-
-	containerNameProp, ok := props["container_name"].(map[string]interface{})
-	require.True(t, ok)
-	require.Equal(t, "string", containerNameProp["type"])
-
-	runtimeProp, ok := props["runtime"].(map[string]interface{})
-	require.True(t, ok)
-	require.Equal(t, "string", runtimeProp["type"])
-	enum, ok := runtimeProp["enum"].([]string)
-	require.True(t, ok)
-	require.Contains(t, enum, "docker")
-	require.Contains(t, enum, "podman")
-}
-
 func TestSysEnvVarsTool_Name(t *testing.T) {
 	tool := &SysEnvVarsTool{}
 	require.Equal(t, "sys_env_vars", tool.Name())
@@ -70,17 +34,16 @@ func TestSysEnvVarsTool_InputSchema(t *testing.T) {
 	tool := &SysEnvVarsTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	props, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 
-	patternProp, ok := props["pattern"].(map[string]interface{})
+	patternProp, ok := schema.Properties["pattern"]
 	require.True(t, ok)
-	require.Equal(t, "string", patternProp["type"])
+	require.Equal(t, "string", patternProp.Type)
 
-	redactProp, ok := props["redact_secrets"].(map[string]interface{})
+	redactProp, ok := schema.Properties["redact_secrets"]
 	require.True(t, ok)
-	require.Equal(t, "boolean", redactProp["type"])
+	require.Equal(t, "boolean", redactProp.Type)
 }
 
 func TestSysInfoTool_Name(t *testing.T) {
@@ -98,9 +61,8 @@ func TestSysInfoTool_InputSchema(t *testing.T) {
 	tool := &SysInfoTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	_, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 }
 
 func TestSysOOMDetectTool_Name(t *testing.T) {
@@ -118,13 +80,12 @@ func TestSysOOMDetectTool_InputSchema(t *testing.T) {
 	tool := &SysOOMDetectTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	props, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 
-	logPathProp, ok := props["log_path"].(map[string]interface{})
+	logPathProp, ok := schema.Properties["log_path"]
 	require.True(t, ok)
-	require.Equal(t, "string", logPathProp["type"])
+	require.Equal(t, "string", logPathProp.Type)
 }
 
 func TestSysServiceStatusTool_Name(t *testing.T) {
@@ -142,17 +103,14 @@ func TestSysServiceStatusTool_InputSchema(t *testing.T) {
 	tool := &SysServiceStatusTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	props, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 
-	required, ok := schema["required"].([]string)
-	require.True(t, ok)
-	require.Contains(t, required, "service_name")
+	require.Contains(t, schema.Required, "service_name")
 
-	serviceNameProp, ok := props["service_name"].(map[string]interface{})
+	serviceNameProp, ok := schema.Properties["service_name"]
 	require.True(t, ok)
-	require.Equal(t, "string", serviceNameProp["type"])
+	require.Equal(t, "string", serviceNameProp.Type)
 }
 
 func TestSysTimeClockTool_Name(t *testing.T) {
@@ -170,9 +128,8 @@ func TestSysTimeClockTool_InputSchema(t *testing.T) {
 	tool := &SysTimeClockTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	_, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 }
 
 func TestTLSCertInspectTool_Name(t *testing.T) {
@@ -190,21 +147,20 @@ func TestTLSCertInspectTool_InputSchema(t *testing.T) {
 	tool := &TLSCertInspectTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	props, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 
-	certPathProp, ok := props["cert_path"].(map[string]interface{})
+	certPathProp, ok := schema.Properties["cert_path"]
 	require.True(t, ok)
-	require.Equal(t, "string", certPathProp["type"])
+	require.Equal(t, "string", certPathProp.Type)
 
-	hostProp, ok := props["host"].(map[string]interface{})
+	hostProp, ok := schema.Properties["host"]
 	require.True(t, ok)
-	require.Equal(t, "string", hostProp["type"])
+	require.Equal(t, "string", hostProp.Type)
 
-	portProp, ok := props["port"].(map[string]interface{})
+	portProp, ok := schema.Properties["port"]
 	require.True(t, ok)
-	require.Equal(t, "integer", portProp["type"])
+	require.Equal(t, "integer", portProp.Type)
 }
 
 func TestMatchPattern(t *testing.T) {
@@ -337,85 +293,6 @@ func TestRedactEnvValue(t *testing.T) {
 	}
 }
 
-func TestGetNested(t *testing.T) {
-	tests := []struct {
-		name     string
-		m        map[string]interface{}
-		keys     []string
-		expected interface{}
-	}{
-		{
-			name:     "single level key exists",
-			m:        map[string]interface{}{"key1": "value1"},
-			keys:     []string{"key1"},
-			expected: "value1",
-		},
-		{
-			name:     "single level key missing",
-			m:        map[string]interface{}{"key1": "value1"},
-			keys:     []string{"key2"},
-			expected: nil,
-		},
-		{
-			name: "nested key exists",
-			m: map[string]interface{}{
-				"level1": map[string]interface{}{
-					"level2": "value2",
-				},
-			},
-			keys:     []string{"level1", "level2"},
-			expected: "value2",
-		},
-		{
-			name: "nested key missing at second level",
-			m: map[string]interface{}{
-				"level1": map[string]interface{}{
-					"level2": "value2",
-				},
-			},
-			keys:     []string{"level1", "level3"},
-			expected: nil,
-		},
-		{
-			name: "nested key missing at first level",
-			m: map[string]interface{}{
-				"level1": map[string]interface{}{
-					"level2": "value2",
-				},
-			},
-			keys:     []string{"level2", "level3"},
-			expected: nil,
-		},
-		{
-			name: "three levels deep",
-			m: map[string]interface{}{
-				"level1": map[string]interface{}{
-					"level2": map[string]interface{}{
-						"level3": "value3",
-					},
-				},
-			},
-			keys:     []string{"level1", "level2", "level3"},
-			expected: "value3",
-		},
-		{
-			name: "intermediate value is not a map",
-			m: map[string]interface{}{
-				"level1": "string_value",
-			},
-			keys:     []string{"level1", "level2"},
-			expected: "string_value",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := getNested(tt.m, tt.keys...)
-			require.Equal(t, tt.expected, got)
-		})
-	}
-}
-
 func TestGetProp(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -472,18 +349,15 @@ func TestCloudMetadataTool_InputSchema(t *testing.T) {
 	tool := &CloudMetadataTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	props, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 
-	operationProp, ok := props["operation"].(map[string]interface{})
+	operationProp, ok := schema.Properties["operation"]
 	require.True(t, ok)
-	require.Equal(t, "string", operationProp["type"])
-	enum, ok := operationProp["enum"].([]string)
-	require.True(t, ok)
-	require.Contains(t, enum, "detect")
-	require.Contains(t, enum, "instance")
-	require.Contains(t, enum, "region")
+	require.Equal(t, "string", operationProp.Type)
+	require.Contains(t, operationProp.Enum, "detect")
+	require.Contains(t, operationProp.Enum, "instance")
+	require.Contains(t, operationProp.Enum, "region")
 }
 
 func TestConfigDiffMaskTool_Name(t *testing.T) {
@@ -501,9 +375,8 @@ func TestConfigDiffMaskTool_InputSchema(t *testing.T) {
 	tool := &ConfigDiffMaskTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	_, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 }
 
 func TestDBDiscoverTopologyTool_Name(t *testing.T) {
@@ -521,7 +394,6 @@ func TestDBDiscoverTopologyTool_InputSchema(t *testing.T) {
 	tool := &DBDiscoverTopologyTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	_, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 }

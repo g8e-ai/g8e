@@ -22,38 +22,80 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLedgerService_GetDiffContent(t *testing.T) {
+// ---------------------------------------------------------------------------
+// GetDiffContent - wraps git diff between two commits
+// ---------------------------------------------------------------------------
+
+func TestLedgerService_GetDiffContent_EmptyHashesReturnsEmpty(t *testing.T) {
 	t.Parallel()
-	lms, avs, tempDir := setupTestLedger(t)
-	defer avs.Close()
+	lms, _ := setupTestLedger(t)
 
-	testFilePath := filepath.Join(tempDir, "diff_content_test.txt")
-	operatorSessionID := "test-session-diff"
+	result := lms.GetDiffContent("", "", "operator-session")
+	assert.Empty(t, result)
+}
 
-	// 1. Create file (initial commit)
-	result1, err := lms.MirrorFileCreate(operatorSessionID, testFilePath)
-	require.NoError(t, err)
-	err = os.WriteFile(testFilePath, []byte("Line 1\n"), 0644)
-	require.NoError(t, err)
-	err = lms.CompleteMirrorCreate(result1, operatorSessionID)
-	require.NoError(t, err)
-	hash1 := result1.LedgerHashAfter
+func TestLedgerService_GetDiffContent_BetweenTwoCommits(t *testing.T) {
+	t.Parallel()
+	lms, tempDir := setupTestLedger(t)
 
-	// 2. Modify file (second commit)
-	result2, err := lms.LedgerFileWrite(operatorSessionID, testFilePath)
-	require.NoError(t, err)
-	err = os.WriteFile(testFilePath, []byte("Line 1\nLine 2\n"), 0644)
-	require.NoError(t, err)
-	err = lms.CompleteMirrorWrite(result2, operatorSessionID)
-	require.NoError(t, err)
-	hash2 := result2.LedgerHashAfter
+	testFile := filepath.Join(tempDir, "diffcontent_test.txt")
+	operatorSessionID := "sess-diffcontent"
 
-	// 3. Verify diff content via GetDiffContent
-	diff := lms.GetDiffContent(hash1, hash2, operatorSessionID)
+	// First commit: write initial file content
+	result1, err := lms.MirrorFileCreate(operatorSessionID, testFile)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(testFile, []byte("Line 1\n"), 0644))
+	require.NoError(t, lms.CompleteMirrorCreate(result1, operatorSessionID))
+
+	hashBefore := result1.LedgerHashAfter
+	require.NotEmpty(t, hashBefore)
+
+	// Second commit: modify file content
+	result2, err := lms.LedgerFileWrite(operatorSessionID, testFile)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(testFile, []byte("Line 1\nLine 2\n"), 0644))
+	require.NoError(t, lms.CompleteMirrorWrite(result2, operatorSessionID))
+
+	hashAfter := result2.LedgerHashAfter
+	require.NotEmpty(t, hashAfter)
+
+	// Verify diff content shows the added line
+	diff := lms.GetDiffContent(hashBefore, hashAfter, operatorSessionID)
 	assert.NotEmpty(t, diff)
 	assert.Contains(t, diff, "+Line 2")
+}
 
-	// 4. Verify empty hashes return empty string
-	assert.Empty(t, lms.GetDiffContent("", hash2, operatorSessionID))
-	assert.Empty(t, lms.GetDiffContent(hash1, "", operatorSessionID))
+func TestLedgerService_GetDiffContent_SameHashReturnsEmpty(t *testing.T) {
+	t.Parallel()
+	lms, tempDir := setupTestLedger(t)
+
+	testFile := filepath.Join(tempDir, "same_hash.txt")
+	operatorSessionID := "sess-same"
+
+	result, err := lms.MirrorFileCreate(operatorSessionID, testFile)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(testFile, []byte("content\n"), 0644))
+	require.NoError(t, lms.CompleteMirrorCreate(result, operatorSessionID))
+
+	hash := result.LedgerHashAfter
+	require.NotEmpty(t, hash)
+
+	diff := lms.GetDiffContent(hash, hash, operatorSessionID)
+	assert.Empty(t, diff)
+}
+
+func TestLedgerService_GetDiffContent_InvalidHashesReturnsEmpty(t *testing.T) {
+	t.Parallel()
+	lms, _ := setupTestLedger(t)
+
+	diff := lms.GetDiffContent("deadbeef", "cafebabe", "session")
+	assert.Empty(t, diff)
+}
+
+func TestLedgerService_GetDiffContent_GitDisabledReturnsEmpty(t *testing.T) {
+	t.Parallel()
+	lms, _ := NewGitLedgerService(nil, nil)
+
+	diff := lms.GetDiffContent("abc123", "def456", "operator-session")
+	assert.Empty(t, diff)
 }

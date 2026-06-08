@@ -20,17 +20,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/marshaler"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
-	"github.com/g8e-ai/g8e/internal/testutil"
-	"github.com/g8e-ai/g8e/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/g8e-ai/g8e/protocol"
 )
 
 func TestAuthService_ValidateOperatorSession_MissingSessionID(t *testing.T) {
@@ -39,7 +40,7 @@ func TestAuthService_ValidateOperatorSession_MissingSessionID(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	_, err := auth.ValidateOperatorSession("")
@@ -53,7 +54,7 @@ func TestAuthService_ValidateOperatorSession_SessionNotFound(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	_, err := auth.ValidateOperatorSession("nonexistent-session")
@@ -67,22 +68,24 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	// Create an Operator session with terminated status
-	sessionID := "terminated-session"
-	opDoc := map[string]interface{}{
-		"id":                  "op-123",
-		"operator_session_id": sessionID,
-		"status":              marshaler.OperatorStatus(constants.OperatorStatusTerminated),
-		"user_id":             "user-123",
+	operatorSessionID := "terminated-session"
+	opDoc := &models.OperatorDocumentGo{
+		ID:                "op-123",
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusTerminated,
+		UserID:            "user-123",
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("operators", "op-123", opBytes))
 
-	_, err = auth.ValidateOperatorSession(sessionID)
+	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "operator identity disabled")
 }
@@ -93,34 +96,35 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	// Create an active user
 	userID := "user-456"
-	userDoc := map[string]interface{}{
-		"id":       userID,
-		"username": "expired-user",
-		"status":   "active",
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("users", userID, userBytes))
 
 	// Create an Operator session with old timestamp using the test hook
-	sessionID := "expired-session"
+	operatorSessionID := "expired-session"
 	oldTime := time.Now().UTC().Add(-25 * time.Hour)
-	opDoc := map[string]interface{}{
-		"id":                  "op-456",
-		"operator_session_id": sessionID,
-		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
-		"user_id":             userID,
+	opDoc := &models.OperatorDocumentGo{
+		ID:                "op-456",
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusActive,
+		UserID:            userID,
+		CreatedAt:         oldTime,
+		UpdatedAt:         oldTime,
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.DocSetWithTimestamps("operators", "op-456", opBytes, oldTime, oldTime))
 
-	_, err = auth.ValidateOperatorSession(sessionID)
+	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "operator session expired")
 }
@@ -131,83 +135,36 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	// Create an inactive user
 	userID := "inactive-user"
-	userDoc := map[string]interface{}{
-		"id":       userID,
-		"username": "inactive",
-		"status":   "inactive",
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusDisabled,
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("users", userID, userBytes))
 
 	// Create an Operator session linked to the inactive user
-	sessionID := "session-with-inactive-user"
-	opDoc := map[string]interface{}{
-		"id":                  "op-789",
-		"operator_session_id": sessionID,
-		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
-		"user_id":             userID,
-		"created_at":          time.Now().Format(time.RFC3339),
+	operatorSessionID := "session-with-inactive-user"
+	opDoc := &models.OperatorDocumentGo{
+		ID:                "op-789",
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusActive,
+		UserID:            userID,
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("operators", "op-789", opBytes))
 
-	_, err = auth.ValidateOperatorSession(sessionID)
+	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "identity disabled")
-}
-
-func TestAuthService_ExtractOperatorSessionID_BearerToken(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(db, logger)
-	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Authorization", "Bearer test-token-123")
-
-	sessionID := auth.ExtractOperatorSessionID(req)
-	assert.Equal(t, "test-token-123", sessionID)
-}
-
-func TestAuthService_ExtractOperatorSessionID_NoBearer(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(db, logger)
-	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Authorization", "Basic dGVzdDp0ZXN0")
-
-	sessionID := auth.ExtractOperatorSessionID(req)
-	assert.Empty(t, sessionID)
-}
-
-func TestAuthService_ExtractOperatorSessionID_NoHeader(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(db, logger)
-	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
-
-	req := httptest.NewRequest("GET", "/", nil)
-
-	sessionID := auth.ExtractOperatorSessionID(req)
-	assert.Empty(t, sessionID)
 }
 
 func TestAuthError_Error(t *testing.T) {
@@ -371,9 +328,9 @@ func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -392,7 +349,7 @@ func TestAuthService_Middleware_PublicBypass(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -418,7 +375,7 @@ func TestAuthService_Middleware_HealthBypassConsolidated(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -455,7 +412,7 @@ func TestAuthService_Middleware_MTLSRequired(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -480,7 +437,7 @@ func TestAuthService_WebSessionAuth_MissingCookie(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -504,7 +461,7 @@ func TestAuthService_WebSessionAuth_InvalidSession(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -529,7 +486,7 @@ func TestAuthService_HasJWKS(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 
 	// Without JWKS
 	authWithout := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
@@ -547,7 +504,7 @@ func TestAuthService_JWTAuthMiddleware_NotConfigured(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -571,7 +528,7 @@ func TestAuthService_JWTAuthMiddleware_MissingBearer(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	jwks := &JWKSProvider{}
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", jwks, "", "", "")
 
@@ -596,38 +553,39 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	// Create an active user
 	userID := "user-123"
-	userDoc := map[string]interface{}{
-		"id":       userID,
-		"username": "test-user",
-		"status":   "active",
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("users", userID, userBytes))
 
 	// Create an Operator session
-	sessionID := "op-session-123"
-	opDoc := map[string]interface{}{
-		"id":                  "op-123",
-		"operator_session_id": sessionID,
-		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
-		"user_id":             userID,
-		"organization_id":     "org-123",
+	operatorSessionID := "op-session-123"
+	opDoc := &models.OperatorDocumentGo{
+		ID:                "op-123",
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusActive,
+		UserID:            userID,
+		OrganizationID:    "org-123",
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("operators", "op-123", opBytes))
 
 	// Test ValidateOperatorSession directly (the core validation logic)
-	op, err := auth.ValidateOperatorSession(sessionID)
+	op, err := auth.ValidateOperatorSession(operatorSessionID)
 	assert.NoError(t, err)
 	assert.NotNil(t, op)
-	assert.Equal(t, sessionID, op.OperatorSessionID)
+	assert.Equal(t, operatorSessionID, op.OperatorSessionID)
 	assert.Equal(t, userID, op.UserID)
 }
 
@@ -637,7 +595,7 @@ func TestAuthService_HandleOperatorAuth_InvalidSession(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	// Test with invalid session
@@ -652,22 +610,24 @@ func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	// Create a terminated Operator session
-	sessionID := "terminated-session"
-	opDoc := map[string]interface{}{
-		"id":                  "op-terminated",
-		"operator_session_id": sessionID,
-		"status":              marshaler.OperatorStatus(constants.OperatorStatusTerminated),
-		"user_id":             "user-123",
+	operatorSessionID := "terminated-session"
+	opDoc := &models.OperatorDocumentGo{
+		ID:                "op-terminated",
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusTerminated,
+		UserID:            "user-123",
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("operators", "op-terminated", opBytes))
 
-	_, err = auth.ValidateOperatorSession(sessionID)
+	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "operator identity disabled")
 }
@@ -678,10 +638,9 @@ func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
 
 	// Create an active user
 	userID := "user-456"
-	userDoc := map[string]interface{}{
-		"id":       userID,
-		"username": "cli-user",
-		"status":   "active",
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
@@ -689,9 +648,12 @@ func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
 
 	// Create a CLI session
 	cliSessionID := "cli-session-123"
-	cliDoc := map[string]interface{}{
-		"user_id":    userID,
-		"expires_at": time.Now().Add(1 * time.Hour).Format(time.RFC3339),
+	cliDoc := &models.CLISession{
+		ID:                cliSessionID,
+		UserID:            userID,
+		ExpiresAt:         time.Now().Add(1 * time.Hour),
+		CreatedAt:         time.Now().UTC(),
+		AbsoluteExpiresAt: time.Now().Add(1 * time.Hour),
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
@@ -726,9 +688,12 @@ func TestAuthService_HandleCLIAuth_SessionExpired(t *testing.T) {
 
 	// Create an expired CLI session
 	cliSessionID := "expired-cli-session"
-	cliDoc := map[string]interface{}{
-		"user_id":    "user-123",
-		"expires_at": time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+	cliDoc := &models.CLISession{
+		ID:                cliSessionID,
+		UserID:            "user-123",
+		ExpiresAt:         time.Now().Add(-1 * time.Hour),
+		CreatedAt:         time.Now().Add(-2 * time.Hour),
+		AbsoluteExpiresAt: time.Now().Add(-1 * time.Hour),
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
@@ -754,10 +719,9 @@ func TestAuthService_HandleCLIAuth_UserInactive(t *testing.T) {
 
 	// Create an inactive user
 	userID := "inactive-user"
-	userDoc := map[string]interface{}{
-		"id":       userID,
-		"username": "inactive",
-		"status":   "inactive",
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusDisabled,
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
@@ -776,7 +740,7 @@ func TestAuthService_HandleAppAuth_NoAppPolicy(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
@@ -796,7 +760,7 @@ func TestAuthService_HandleAppAuth_PolicyNotFound(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
@@ -813,7 +777,7 @@ func TestAuthService_EnforceAppPolicy_RateLimit(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	// Create a policy with rate limit
@@ -843,7 +807,7 @@ func TestAuthService_EnforceAppPolicy_PayloadSize(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	// Create a policy with max payload size
@@ -868,10 +832,13 @@ func TestAuthService_CliCertBoundToOperator_Success(t *testing.T) {
 	operatorSessionID := "op-session-bound"
 	userID := "user-bound"
 
-	cliDoc := map[string]interface{}{
-		"user_id":             userID,
-		"operator_session_id": operatorSessionID,
-		"expires_at":          time.Now().Add(1 * time.Hour).Format(time.RFC3339),
+	cliDoc := &models.CLISession{
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
+		ExpiresAt:         time.Now().Add(1 * time.Hour),
+		CreatedAt:         time.Now().UTC(),
+		AbsoluteExpiresAt: time.Now().Add(1 * time.Hour),
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
@@ -896,7 +863,7 @@ func TestAuthService_CliCertBoundToOperator_SessionMismatch(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	// Create a CLI session with different Operator session
@@ -904,16 +871,20 @@ func TestAuthService_CliCertBoundToOperator_SessionMismatch(t *testing.T) {
 	operatorSessionID := "op-session-1"
 	userID := "user-mismatch"
 
-	cliDoc := map[string]interface{}{
-		"user_id":             userID,
-		"operator_session_id": "op-session-2", // Different Operator session
-		"expires_at":          time.Now().Add(1 * time.Hour).Format(time.RFC3339),
+	cliDoc := &models.CLISession{
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: "op-session-2", // Different Operator session
+		ExpiresAt:         time.Now().Add(1 * time.Hour),
+		CreatedAt:         time.Now().UTC(),
+		AbsoluteExpiresAt: time.Now().Add(1 * time.Hour),
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("cli_sessions", cliSessionID, cliBytes))
 
-	bound := auth.cliCertBoundToOperator(nil, cliSessionID, userID, operatorSessionID)
+	bound, err := auth.cliCertBoundToOperator(nil, cliSessionID, userID, operatorSessionID)
+	require.NoError(t, err)
 	assert.False(t, bound)
 }
 
@@ -923,7 +894,7 @@ func TestAuthService_CliCertBoundToOperator_SessionExpired(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	// Create an expired CLI session
@@ -931,16 +902,20 @@ func TestAuthService_CliCertBoundToOperator_SessionExpired(t *testing.T) {
 	operatorSessionID := "op-session-expired"
 	userID := "user-expired"
 
-	cliDoc := map[string]interface{}{
-		"user_id":             userID,
-		"operator_session_id": operatorSessionID,
-		"expires_at":          time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+	cliDoc := &models.CLISession{
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
+		ExpiresAt:         time.Now().Add(-1 * time.Hour),
+		CreatedAt:         time.Now().Add(-2 * time.Hour),
+		AbsoluteExpiresAt: time.Now().Add(-1 * time.Hour),
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("cli_sessions", cliSessionID, cliBytes))
 
-	bound := auth.cliCertBoundToOperator(nil, cliSessionID, userID, operatorSessionID)
+	bound, err := auth.cliCertBoundToOperator(nil, cliSessionID, userID, operatorSessionID)
+	require.NoError(t, err)
 	assert.False(t, bound)
 }
 
@@ -952,29 +927,30 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	// Create an active user
 	userID := "user-op-auth"
-	userDoc := map[string]interface{}{
-		"id":       userID,
-		"username": "op-auth-user",
-		"status":   "active",
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("users", userID, userBytes))
 
 	// Create an Operator session
-	sessionID := "op-session-auth-test"
+	operatorSessionID := "op-session-auth-test"
 	organizationID := "org-auth-test"
-	opDoc := map[string]interface{}{
-		"id":                  "op-auth-test",
-		"operator_session_id": sessionID,
-		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
-		"user_id":             userID,
-		"organization_id":     organizationID,
+	opDoc := &models.OperatorDocumentGo{
+		ID:                "op-auth-test",
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusActive,
+		UserID:            userID,
+		OrganizationID:    organizationID,
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
@@ -990,11 +966,11 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	t.Run("operator auth with valid mTLS URI SAN succeeds", func(t *testing.T) {
 		t.Parallel()
 		wid := protocol.NewWorkloadIdentity()
-		opURI, err := wid.OperatorSPIFFEURL(organizationID, "op-auth-test", sessionID)
+		opURI, err := wid.OperatorSPIFFEURL(organizationID, "op-auth-test", operatorSessionID)
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		req.Header.Set("Authorization", "Bearer "+sessionID)
+		req.Header.Set("Authorization", "Bearer "+operatorSessionID)
 		req.TLS = &tls.ConnectionState{
 			PeerCertificates: []*x509.Certificate{
 				{URIs: []*url.URL{opURI}},
@@ -1010,11 +986,11 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	t.Run("operator auth with mismatched URI SAN is rejected", func(t *testing.T) {
 		t.Parallel()
 		wid := protocol.NewWorkloadIdentity()
-		wrongURI, err := wid.OperatorSPIFFEURL("wrong-org", "wrong-op", "wrong-session")
+		wrongURI, err := wid.OperatorSPIFFEURL("wrong-org", "wrong-op", operatorSessionID)
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		req.Header.Set("Authorization", "Bearer "+sessionID)
+		req.Header.Set("Authorization", "Bearer "+operatorSessionID)
 		req.TLS = &tls.ConnectionState{
 			PeerCertificates: []*x509.Certificate{
 				{URIs: []*url.URL{wrongURI}},
@@ -1036,15 +1012,14 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	// Create an active user
 	userID := "user-cli-auth"
-	userDoc := map[string]interface{}{
-		"id":       userID,
-		"username": "cli-auth-user",
-		"status":   "active",
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
@@ -1053,10 +1028,13 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 	// Create a CLI session
 	cliSessionID := "cli-session-auth-test"
 	operatorSessionID := "op-session-cli-auth"
-	cliDoc := map[string]interface{}{
-		"user_id":             userID,
-		"operator_session_id": operatorSessionID,
-		"expires_at":          time.Now().Add(1 * time.Hour).Format(time.RFC3339),
+	cliDoc := &models.CLISession{
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
+		ExpiresAt:         time.Now().Add(1 * time.Hour),
+		CreatedAt:         time.Now().UTC(),
+		AbsoluteExpiresAt: time.Now().Add(1 * time.Hour),
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
@@ -1118,17 +1096,19 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	// Create an app policy
 	operatorID := "test-operator"
 	appID := "spiffe://g8e.local/app/" + operatorID
-	policyDoc := map[string]interface{}{
-		"id":                  appID,
-		"rate_limit_rps":      10,
-		"max_payload_bytes":   1000000,
-		"allowed_collections": []string{"test_collection"},
+	policyDoc := &models.AppPolicy{
+		AppID:              appID,
+		RateLimitRPS:       10,
+		MaxPayloadBytes:    1000000,
+		AllowedCollections: []string{"test_collection"},
+		CreatedAt:          time.Now().UTC(),
+		UpdatedAt:          time.Now().UTC(),
 	}
 	policyBytes, err := json.Marshal(policyDoc)
 	require.NoError(t, err)

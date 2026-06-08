@@ -23,7 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/governance"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -78,7 +78,7 @@ func TestPubSubCommandService_L3Rejection_FailClosed(t *testing.T) {
 		ActuatorSigningKey:  privKey,
 		ActuatorKeyID:       "test-key",
 		ConsensusSigningKey: privKey,
-		Sovereignty:         sovereignty.NewSovereigntyService(sovereignty.DefaultConfig(), logger, nil),
+		Scrubbing:           scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)
@@ -202,7 +202,7 @@ func TestPubSubCommandService_L3Acceptance_Success(t *testing.T) {
 		ActuatorSigningKey:  privKey,
 		ActuatorKeyID:       "test-key",
 		ConsensusSigningKey: privKey,
-		Sovereignty:         sovereignty.NewSovereigntyService(sovereignty.DefaultConfig(), logger, nil),
+		Scrubbing:           scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)
@@ -327,7 +327,7 @@ func TestPubSubCommandService_L3NilNotary_FailClosed(t *testing.T) {
 		ActuatorSigningKey:  privKey,
 		ActuatorKeyID:       "test-key",
 		ConsensusSigningKey: privKey,
-		Sovereignty:         sovereignty.NewSovereigntyService(sovereignty.DefaultConfig(), logger, nil),
+		Scrubbing:           scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)

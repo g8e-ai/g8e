@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 concurrency:
@@ -14,13 +14,11 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
-  verify-lint:
-    name: CI / Verify & Lint
+  ci:
+    name: Build & Test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -29,88 +27,43 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: '1.26.4'
+          cache: true
+          check-latest: true
 
-      - name: Install Buf
+      - name: Install dependencies
         run: |
           go install github.com/bufbuild/buf/cmd/buf@v1.70.0
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-
-      - name: Install protoc-gen plugins
-        # Keep these versions in sync with Makefile PROTOC_GEN_*_VERSION variables
-        run: |
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
           go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@v1.5.1
+          go install golang.org/x/vuln/cmd/govulncheck@latest
 
       - name: Install protoc
-        # Keep this version in sync with Makefile PROTOC_VERSION variable
         run: |
-          cd /tmp
-          curl -fSL https://github.com/protocolbuffers/protobuf/releases/download/v35.0/protoc-35.0-linux-x86_64.zip -o protoc.zip
-          unzip -o protoc.zip -d protoc
-          sudo cp protoc/bin/protoc /usr/local/bin/protoc
+          PROTOC_ZIP=protoc-35.0-linux-x86_64.zip
+          curl -fSL https://github.com/protocolbuffers/protobuf/releases/download/v35.0/$PROTOC_ZIP -o /tmp/protoc.zip
+          sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc
           sudo chmod +x /usr/local/bin/protoc
-          rm -rf /tmp/protoc /tmp/protoc.zip
+          rm /tmp/protoc.zip
 
-      - name: Generate Proto
-        run: make proto
-
-      - name: Check for drift
+      - name: Verify Proto & Doctrines
         run: |
-          CHANGES=$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$|^\s*M.*\.proto$" || true)
-          if [ -n "$CHANGES" ]; then
-            echo "Error: Generated proto files are out of sync with protocol/proto/*.proto"
-            echo "$CHANGES"
-            git diff -- $(git status --porcelain | grep -E "^\s*M" | awk '{print $2}')
-            exit 1
-          fi
+          make proto
+          git diff --exit-code
+          make validate-doctrines
 
-      - name: Validate doctrine JSON schema
-        run: make validate-doctrines
-
-      - name: Run golangci-lint
+      - name: Lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
-          args: --timeout=5m --disable=gocritic,gosec
-          skip-pkg-cache: true
+          args: --timeout=5m
 
-  security:
-    name: CI / Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - name: Security Scan
+        run: make vulncheck
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: '1.26.4'
+      - name: Unit Tests
+        run: make test-unit
 
-      - name: Run govulncheck
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
-          govulncheck ./...
+      - name: Integration Tests
+        run: make test-integration
 
-  test:
-    name: CI / Platform Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: '1.26.4'
-
-      - name: Build CLI
-        run: make build
-
-      - name: Run platform tests
-        run: make _ci-test
-
-      - name: Show Operator logs
-        if: failure()
-        run: tail -n 200 .g8e/logs/operator-listen.log || true

@@ -14,8 +14,8 @@
 
 """Example usage of g8e-protocol models."""
 
-from g8e_protocol.constants import ComponentName
-from g8e_protocol.models import RequestContext, BoundOperator, PlatformSettings
+from g8e.constants import ComponentName
+from g8e.models import RequestContext, BoundOperator, PlatformSettings
 
 
 def main():

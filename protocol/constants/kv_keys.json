@@ -1,5 +1,110 @@
 {
-  "cache.prefix": "",
-  "key.schema": {},
-  "session.type": {}
+  "kv_keys": {
+    "CachePrefix": {
+      "_go_const": "KVCachePrefix",
+      "value": "g8e"
+    },
+    "CacheDoc": {
+      "_go_const": "KVKeyCacheDoc",
+      "value": "g8e:cache:doc:{collection}:{id}"
+    },
+    "CacheQuery": {
+      "_go_const": "KVKeyCacheQuery",
+      "value": "g8e:cache:query:{collection}:{hash}"
+    },
+    "SessionWeb": {
+      "_go_const": "KVKeySessionWeb",
+      "value": "g8e:sessions:{session.type}:{session.id}"
+    },
+    "SessionOperatorBind": {
+      "_go_const": "KVKeySessionOperatorBind",
+      "value": "g8e:sessions:operator:{operator.session.id}:bind"
+    },
+    "SessionWebBind": {
+      "_go_const": "KVKeySessionWebBind",
+      "value": "g8e:sessions:web:{web.session.id}:bind"
+    },
+    "OperatorFirstDeployed": {
+      "_go_const": "KVKeyOperatorFirstDeployed",
+      "value": "g8e:operator:{operator.id}:first.deployed"
+    },
+    "OperatorTrackedStatus": {
+      "_go_const": "KVKeyOperatorTrackedStatus",
+      "value": "g8e:operator:{operator.id}:tracked.status"
+    },
+    "UserOperators": {
+      "_go_const": "KVKeyUserOperators",
+      "value": "g8e:user:{user.id}:operators"
+    },
+    "UserWebSessions": {
+      "_go_const": "KVKeyUserWebSessions",
+      "value": "g8e:user:{user.id}:web_sessions"
+    },
+    "UserMemories": {
+      "_go_const": "KVKeyUserMemories",
+      "value": "g8e:user:{user.id}:memories"
+    },
+    "InvestigationAttachment": {
+      "_go_const": "KVKeyInvestigationAttachment",
+      "value": "g8e:investigation:{investigation.id}:attachment:{attachment.id}"
+    },
+    "InvestigationAttachmentIndex": {
+      "_go_const": "KVKeyInvestigationAttachmentIndex",
+      "value": "g8e:investigation:{investigation.id}:attachment.index"
+    },
+    "AuthNonce": {
+      "_go_const": "KVKeyAuthNonce",
+      "value": "g8e:auth:nonce:{nonce}"
+    },
+    "AuthTokenDownload": {
+      "_go_const": "KVKeyAuthTokenDownload",
+      "value": "g8e:auth:token:download:{token}"
+    },
+    "AuthTokenDevice": {
+      "_go_const": "KVKeyAuthTokenDevice",
+      "value": "g8e:auth:token:device:{token}"
+    },
+    "AuthTokenDeviceUses": {
+      "_go_const": "KVKeyAuthTokenDeviceUses",
+      "value": "g8e:auth:token:device:{token}:uses"
+    },
+    "AuthTokenDeviceFingerprints": {
+      "_go_const": "KVKeyAuthTokenDeviceFingerprints",
+      "value": "g8e:auth:token:device:{token}:fingerprints"
+    },
+    "AuthTokenDeviceRegLock": {
+      "_go_const": "KVKeyAuthTokenDeviceRegLock",
+      "value": "g8e:auth:token:device:{token}:reg.lock"
+    },
+    "AuthDeviceList": {
+      "_go_const": "KVKeyAuthDeviceList",
+      "value": "g8e:auth:device.list:{user.id}"
+    },
+    "AuthLoginFailed": {
+      "_go_const": "KVKeyAuthLoginFailed",
+      "value": "g8e:auth:login:{identifier}:failed"
+    },
+    "AuthLoginLock": {
+      "_go_const": "KVKeyAuthLoginLock",
+      "value": "g8e:auth:login:{identifier}:lock"
+    },
+    "AuthLoginIPAccounts": {
+      "_go_const": "KVKeyAuthLoginIPAccounts",
+      "value": "g8e:auth:login:ip:{ip}:accounts"
+    },
+    "ExecutionPendingCmd": {
+      "_go_const": "KVKeyExecutionPendingCmd",
+      "value": "g8e:execution:{execution.id}:pending.cmd"
+    }
+  },
+  "session_types": {
+    "Web": {
+      "_go_const": "KVSessionTypeWeb",
+      "value": "web"
+    },
+    "Operator": {
+      "_go_const": "KVSessionTypeOperator",
+      "value": "operator"
+    }
+  }
 }

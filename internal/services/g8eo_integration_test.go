@@ -1,3 +1,5 @@
+//go:build integration
+
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,12 +28,11 @@ import (
 )
 
 func TestG8eoService_Start_BootstrapFailure(t *testing.T) {
-	t.Parallel()
 
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	service, err := NewG8eoService(cfg, logger)
+	service, err := NewG8eoService(cfg, logger, nil)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -48,9 +49,7 @@ func TestG8eoService_Start_BootstrapFailure(t *testing.T) {
 }
 
 func TestG8eoService_SubServices_Initialization(t *testing.T) {
-	t.Parallel()
 	t.Run("execution service", func(t *testing.T) {
-		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 
@@ -59,7 +58,6 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 	})
 
 	t.Run("file edit service", func(t *testing.T) {
-		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 
@@ -68,7 +66,6 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 	})
 
 	t.Run("pub/sub command service", func(t *testing.T) {
-		t.Parallel()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -92,16 +89,15 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 	})
 
 	t.Run("pub/sub results service", func(t *testing.T) {
-		t.Parallel()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 
-		client, err := pubsub.NewOperatorPubSubClient(testutil.GetTestOperatorDirectURL(), "", logger)
+		client, err := pubsub.NewOperatorPubSubClient(testutil.GetTestOperatorDirectURL(), "", logger, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { client.Close() })
 
-		resultsSvc, err := pubsub.NewPubSubResultsService(cfg, logger, client, nil)
+		resultsSvc, err := pubsub.NewPubSubResultsService(cfg, logger, client)
 		require.NoError(t, err)
 		assert.NotNil(t, resultsSvc)
 	})

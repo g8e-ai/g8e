@@ -19,7 +19,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -33,12 +32,8 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestLoad_Defaults(t *testing.T) {
-	wantWorkDir := FindProjectRoot()
-	if wantWorkDir == "" {
-		var err error
-		wantWorkDir, err = os.Getwd()
-		require.NoError(t, err)
-	}
+	wantWorkDir, err := os.Getwd()
+	require.NoError(t, err)
 
 	cfg, err := Load(LoadOptions{
 		OperatorEndpoint: constants.DefaultEndpoint,
@@ -53,15 +48,12 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, PostureNotary, cfg.Posture)
 	assert.Equal(t, 2048, cfg.MaxMemoryMB)
 	assert.Equal(t, 30*time.Second, cfg.HeartbeatInterval)
-	assert.Equal(t, int64(1024), cfg.LocalStoreMaxSizeMB)
-	assert.Equal(t, 30, cfg.LocalStoreRetentionDays)
+	assert.Equal(t, int64(1024), cfg.ExecutionVaultMaxSizeMB)
+	assert.Equal(t, 30, cfg.ExecutionVaultRetentionDays)
 	assert.Equal(t, constants.Ports.OperatorHttps, cfg.HTTPPort)
 
 	// WorkDir defaults to the project root when --working-dir is not supplied
 	assert.Equal(t, wantWorkDir, cfg.WorkDir)
-	// LocalStoreDBPath is anchored to WorkDir
-	assert.Equal(t, filepath.Join(wantWorkDir, ".g8e", "local_state.db"), cfg.LocalStoreDBPath)
-	assert.True(t, filepath.IsAbs(cfg.LocalStoreDBPath))
 }
 
 func TestLoad_WorkDir_Flag(t *testing.T) {
@@ -74,8 +66,6 @@ func TestLoad_WorkDir_Flag(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, tmpDir, cfg.WorkDir)
-	assert.Equal(t, filepath.Join(tmpDir, ".g8e", "local_state.db"), cfg.LocalStoreDBPath)
-	assert.True(t, strings.HasPrefix(cfg.LocalStoreDBPath, tmpDir))
 }
 
 func TestLoad_FieldPassthrough(t *testing.T) {
@@ -110,17 +100,17 @@ func TestLoad_TLSServerName(t *testing.T) {
 		{
 			name:           "IPv4 sets TLSServerName",
 			endpoint:       "10.0.1.42",
-			wantServerName: constants.DefaultEndpoint,
+			wantServerName: constants.GatewayInternalHostname,
 		},
 		{
 			name:           "IPv6 sets TLSServerName",
 			endpoint:       "::1",
-			wantServerName: constants.DefaultEndpoint,
+			wantServerName: constants.GatewayInternalHostname,
 		},
 		{
 			name:           "full IPv4 address sets TLSServerName",
 			endpoint:       "192.168.100.200",
-			wantServerName: constants.DefaultEndpoint,
+			wantServerName: constants.GatewayInternalHostname,
 		},
 	}
 
@@ -172,25 +162,19 @@ func TestResolveGatewayPorts(t *testing.T) {
 	takenPort, _ := strconv.Atoi(portStr)
 
 	t.Run("resolves when port is taken", func(t *testing.T) {
-		h, b, p, m := ResolveGatewayPorts(takenPort, takenPort+1, takenPort+2, takenPort+3)
+		h, s := ResolveGatewayPorts(takenPort, takenPort+1)
 		assert.NotEqual(t, takenPort, h)
 		assert.True(t, h > takenPort)
-		assert.Equal(t, b, h+1)
-		assert.Equal(t, p, h+2)
-		assert.Equal(t, m, h+3)
+		assert.Equal(t, s, h+1)
 	})
 
 	t.Run("resolves when all are available", func(t *testing.T) {
 		// Use very high ports that are likely free
-		h, b, p, m := ResolveGatewayPorts(55000, 55001, 55002, 55003)
+		h, s := ResolveGatewayPorts(55000, 55001)
 		// Verify ports are sequential and >= requested values
 		assert.True(t, h >= 55000)
-		assert.True(t, b >= 55001)
-		assert.True(t, p >= 55002)
-		assert.True(t, m >= 55003)
-		assert.Equal(t, b, h+1)
-		assert.Equal(t, p, h+2)
-		assert.Equal(t, m, h+3)
+		assert.True(t, s >= 55001)
+		assert.Equal(t, s, h+1)
 	})
 }
 
@@ -215,8 +199,7 @@ func TestLoadGateway_IncrementalPorts(t *testing.T) {
 	// Now try to load gateway with that base port
 	cfg, err := LoadGateway(GatewayOptions{
 		HTTPPort:          basePort,
-		BootstrapPort:     basePort + 10, // Far enough away
-		PublicPort:        basePort + 20,
+		HTTPSPort:         basePort + 10,
 		AllowTestPortZero: false,
 	})
 	require.NoError(t, err)
@@ -225,12 +208,8 @@ func TestLoadGateway_IncrementalPorts(t *testing.T) {
 }
 
 func TestLoadGateway_Defaults(t *testing.T) {
-	wantWorkDir := FindProjectRoot()
-	if wantWorkDir == "" {
-		var err error
-		wantWorkDir, err = os.Getwd()
-		require.NoError(t, err)
-	}
+	wantWorkDir, err := os.Getwd()
+	require.NoError(t, err)
 
 	cfg, err := LoadGateway(GatewayOptions{AllowTestPortZero: true})
 	require.NoError(t, err)
@@ -247,8 +226,7 @@ func TestLoadGateway_Defaults(t *testing.T) {
 func TestLoadGateway_ExplicitValues(t *testing.T) {
 	cfg, err := LoadGateway(GatewayOptions{
 		HTTPPort:          443,
-		BootstrapPort:     80,
-		PublicPort:        8443,
+		HTTPSPort:         constants.Ports.OperatorHttps,
 		DataDir:           "/var/data",
 		PKIDir:            "/var/pki",
 		SecretsDir:        "/var/secrets",
@@ -259,8 +237,7 @@ func TestLoadGateway_ExplicitValues(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 443, cfg.Gateway.HTTPPort)
-	assert.Equal(t, 80, cfg.Gateway.BootstrapPort)
-	assert.Equal(t, 8443, cfg.Gateway.PublicPort)
+	assert.Equal(t, constants.Ports.OperatorHttps, cfg.Gateway.HTTPSPort)
 	assert.Equal(t, "/var/data", cfg.Gateway.DataDir)
 	assert.Equal(t, "/var/pki", cfg.Gateway.PKIDir)
 	assert.Equal(t, "/var/secrets", cfg.Gateway.SecretsDir)
@@ -293,41 +270,27 @@ func TestLoadGateway_RejectsPortZeroInProduction(t *testing.T) {
 	t.Run("reject httpPort 0", func(t *testing.T) {
 		_, err := LoadGateway(GatewayOptions{
 			HTTPPort:          0,
-			BootstrapPort:     constants.Ports.OperatorBootstrapHttps,
-			PublicPort:        constants.Ports.OperatorPublicHttps,
+			HTTPSPort:         constants.Ports.OperatorHttps,
 			AllowTestPortZero: false,
 		})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "httpPort cannot be 0 in production")
 	})
 
-	t.Run("reject bootstrapPort 0", func(t *testing.T) {
+	t.Run("reject httpsPort 0", func(t *testing.T) {
 		_, err := LoadGateway(GatewayOptions{
-			HTTPPort:          constants.Ports.OperatorHttps,
-			BootstrapPort:     0,
-			PublicPort:        constants.Ports.OperatorPublicHttps,
+			HTTPPort:          constants.Ports.OperatorHttp,
+			HTTPSPort:         0,
 			AllowTestPortZero: false,
 		})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "bootstrapPort cannot be 0 in production")
-	})
-
-	t.Run("reject publicPort 0", func(t *testing.T) {
-		_, err := LoadGateway(GatewayOptions{
-			HTTPPort:          constants.Ports.OperatorHttps,
-			BootstrapPort:     constants.Ports.OperatorBootstrapHttps,
-			PublicPort:        0,
-			AllowTestPortZero: false,
-		})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "publicPort cannot be 0 in production")
+		assert.Contains(t, err.Error(), "httpsPort cannot be 0 in production")
 	})
 
 	t.Run("accept all non-zero ports in production", func(t *testing.T) {
 		_, err := LoadGateway(GatewayOptions{
-			HTTPPort:          constants.Ports.OperatorHttps,
-			BootstrapPort:     constants.Ports.OperatorBootstrapHttps,
-			PublicPort:        constants.Ports.OperatorPublicHttps,
+			HTTPPort:          constants.Ports.OperatorHttp,
+			HTTPSPort:         constants.Ports.OperatorHttps,
 			AllowTestPortZero: false,
 		})
 		require.NoError(t, err)
@@ -469,16 +432,39 @@ func TestTLSServerName(t *testing.T) {
 	}{
 		{"hostname returns empty", constants.DefaultEndpoint, ""},
 		{"plain hostname returns empty", "example.com", ""},
-		{"IPv4 returns localhost", "10.0.0.1", constants.DefaultEndpoint},
-		{"IPv4 loopback returns localhost", "127.0.0.1", constants.DefaultEndpoint},
-		{"IPv6 loopback returns localhost", "::1", constants.DefaultEndpoint},
-		{"IPv6 full returns localhost", "2001:db8::1", constants.DefaultEndpoint},
-		{"IPv4-mapped IPv6 returns localhost", "::ffff:192.0.2.1", constants.DefaultEndpoint},
+		{"IPv4 returns localhost", "10.0.0.1", constants.GatewayInternalHostname},
+		{"IPv4 loopback returns localhost", "127.0.0.1", constants.GatewayInternalHostname},
+		{"IPv6 loopback returns localhost", "::1", constants.GatewayInternalHostname},
+		{"IPv6 full returns localhost", "2001:db8::1", constants.GatewayInternalHostname},
+		{"IPv4-mapped IPv6 returns localhost", "::ffff:192.0.2.1", constants.GatewayInternalHostname},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, tlsServerName(tt.endpoint))
+		})
+	}
+}
+
+func TestBuildPubSubURL(t *testing.T) {
+	tests := []struct {
+		name          string
+		endpoint      string
+		tlsServerName string
+		httpPort      int
+		want          string
+	}{
+		{"hostname with no tlsServerName", "localhost", "", 0, "wss://localhost:8443"},
+		{"hostname with tlsServerName", "localhost", "g8e.local", 0, "wss://g8e.local:8443"},
+		{"IP with tlsServerName", "192.168.1.1", "g8e.local", 0, "wss://g8e.local:8443"},
+		{"IP with no tlsServerName", "192.168.1.1", "", 0, "wss://192.168.1.1:8443"},
+		{"custom port", "localhost", "", 9000, "wss://localhost:9000"},
+		{"custom port with tlsServerName", "192.168.1.1", "g8e.local", 9000, "wss://g8e.local:9000"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, buildPubSubURL(tt.endpoint, tt.tlsServerName, tt.httpPort))
 		})
 	}
 }

@@ -147,10 +147,10 @@ func TestDataCommandFlags(t *testing.T) {
 }
 
 func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
-	runtimeDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
-	pkiDir := filepath.Join(runtimeDir, constants.Paths.Infra.PkiDir)
-	secretsDir := filepath.Join(runtimeDir, constants.Paths.Infra.SecretsDir)
-	credentialsDir := filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir)
+	runtimeDir := filepath.Join(tmpDir, ".g8e")
+	pkiDir := filepath.Join(runtimeDir, "pki")
+	secretsDir := filepath.Join(runtimeDir, "secrets")
+	credentialsDir := runtimeDir
 
 	require.NoError(t, os.MkdirAll(pkiDir, 0755))
 	require.NoError(t, os.MkdirAll(secretsDir, 0700))
@@ -164,27 +164,7 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 	constantsDir := filepath.Join(protocolDir, "constants")
 	require.NoError(t, os.MkdirAll(constantsDir, 0755))
 
-	pathsJSON := `{
-		"host": "localhost",
-		"infra": {
-			"app_cert_dir": "` + constants.Paths.Infra.AppCertDir + `",
-			"ca_cert_path": "` + constants.Paths.Infra.CaCertPath + `",
-			"db_path": "` + constants.Paths.Infra.DbPath + `",
-			"docs_dir": "` + constants.Paths.Infra.DocsDir + `",
-			"pki_dir": "` + constants.Paths.Infra.PkiDir + `",
-			"protocol_constants_dir": "` + constants.Paths.Infra.ProtocolConstantsDir + `",
-			"protocol_dir": "` + constants.Paths.Infra.ProtocolDir + `",
-			"protocol_models_dir": "` + constants.Paths.Infra.ProtocolModelsDir + `",
-			"secrets_dir": "` + constants.Paths.Infra.SecretsDir + `",
-			"ssh_config_path": "` + constants.Paths.Infra.SshConfigPath + `"
-		},
-		"ports": {
-			"insecure_mcp_gateway": 18789,
-			"operator_bootstrap_https": 8441,
-			"operator_https": 8440,
-			"operator_public_https": 8443
-		}
-	}`
+	pathsJSON := minimalPathsJSON(t)
 	pathsPath := filepath.Join(constantsDir, "paths.json")
 	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 
@@ -207,6 +187,8 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 				ProtocolModelsDir    string `json:"protocol_models_dir"`
 				SecretsDir           string `json:"secrets_dir"`
 				SSHConfigPath        string `json:"ssh_config_path"`
+				VaultDir             string `json:"vault_dir"`
+				VaultKeyPath         string `json:"vault_key_path"`
 			}{
 				AppCertDir:           filepath.Join(tmpDir, constants.Paths.Infra.AppCertDir),
 				CACertPath:           filepath.Join(tmpDir, constants.Paths.Infra.CaCertPath),
@@ -218,19 +200,6 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 				ProtocolModelsDir:    filepath.Join(tmpDir, constants.Paths.Infra.ProtocolModelsDir),
 				SecretsDir:           filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 				SSHConfigPath:        filepath.Join(tmpDir, constants.Paths.Infra.SshConfigPath),
-			},
-			Ports: struct {
-				InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-				OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-				OperatorHTTPS          int `json:"operator_https"`
-				OperatorMcpHttp        int `json:"operator_mcp_http"`
-				OperatorPublicHTTPS    int `json:"operator_public_https"`
-			}{
-				InsecureMcpGateway:     18789,
-				OperatorBootstrapHTTPS: 8441,
-				OperatorHTTPS:          8440,
-				OperatorMcpHttp:        8442,
-				OperatorPublicHTTPS:    8443,
 			},
 		},
 	}

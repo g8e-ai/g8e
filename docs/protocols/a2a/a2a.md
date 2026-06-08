@@ -178,9 +178,8 @@ Default ports (configurable via config or paths.json):
 
 | Port | Purpose | Auth |
 |---|---|---|
-| `8440` | mTLS API + Pub/Sub | mTLS (RequireAndVerifyClientCert) |
-| `8441` | Bootstrap enrollment | Plain HTTP (no TLS) |
-| `8443` | Public web session | TLS (no client cert) |
+| `8080` | HTTP (bootstrap + MCP) | Plain HTTP (no TLS) |
+| `8443` | HTTPS (mTLS API + public) | mTLS (RequireAndVerifyClientCert) |
 
 ### Configuration
 
@@ -189,9 +188,8 @@ The g8e platform uses **ZERO environment variables** for production configuratio
 - `--data-dir <dir>`: Data directory for SQLite database (default: `.g8e/data` in working directory)
 - `--pki-dir <dir>`: Directory for TLS certificates (default: `.g8e/pki`)
 - `--secrets-dir <dir>`: Directory for platform secrets (default: `.g8e/secrets`)
-- `--http-port <port>`: mTLS API port (default: 8440)
-- `--bootstrap-port <port>`: Bootstrap enrollment port (default: 8441)
-- `--public-port <port>`: Public web session port (default: 8443)
+- `--http-port <port>`: HTTP port for bootstrap and MCP routes (default: 8080)
+- `--https-port <port>`: HTTPS port for mTLS API and public surface (default: 8443)
 
 ### Circuit Breaker
 
@@ -240,6 +238,6 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 
 ## Related Documentation
 
-- [**g8e Protocol**](../../architecture/g8e.md) - The wire contract and governance hierarchy
+- [**g8e Protocol**](../../architecture/protocol.md) - The wire contract and governance hierarchy
 - [**Operator (g8eo)**](../../architecture/operator.md) - Operator architecture and gateway mode
 - [**MCP Protocol**](../mcp/mcp.md) - MCP protocol specification and integration

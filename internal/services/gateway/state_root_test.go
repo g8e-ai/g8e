@@ -16,13 +16,15 @@ package gateway
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestStateRootSemantics(t *testing.T) {
@@ -188,18 +190,18 @@ func TestStateRootCaching(t *testing.T) {
 }
 
 func BenchmarkStateRootCalculation(b *testing.B) {
-	dir := b.TempDir()
-	secretsDir := b.TempDir()
-	db, err := OpenGatewayDBService(dir, secretsDir, testutil.NewTestLogger(), true)
+	dir := tempDir(b)
+	secretsDir := tempDir(b)
+	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(b, err)
 	defer db.Close()
 
 	// Populate with realistic data
 	for i := 0; i < 100; i++ {
 		docData := fmt.Sprintf(`{"field1":"value%d","field2":%d}`, i, i*2)
-		_ = db.DocSet("benchmark", fmt.Sprintf("doc%d", i), json.RawMessage(docData))
-		_ = db.KVSet(fmt.Sprintf("key%d", i), fmt.Sprintf("val%d", i), 0)
-		_ = db.BlobPut("ns", fmt.Sprintf("blob%d", i), []byte(fmt.Sprintf("data%d", i)), "text/plain", 0)
+		require.NoError(b, db.DocSet("benchmark", fmt.Sprintf("doc%d", i), json.RawMessage(docData)))
+		require.NoError(b, db.KVSet(fmt.Sprintf("key%d", i), fmt.Sprintf("val%d", i), 0))
+		require.NoError(b, db.BlobPut("ns", fmt.Sprintf("blob%d", i), []byte(fmt.Sprintf("data%d", i)), "text/plain", 0))
 	}
 
 	b.ResetTimer()
@@ -212,18 +214,18 @@ func BenchmarkStateRootCalculation(b *testing.B) {
 }
 
 func BenchmarkStateRootLargeDataset(b *testing.B) {
-	dir := b.TempDir()
-	secretsDir := b.TempDir()
-	db, err := OpenGatewayDBService(dir, secretsDir, testutil.NewTestLogger(), true)
+	dir := tempDir(b)
+	secretsDir := tempDir(b)
+	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(b, err)
 	defer db.Close()
 
 	// Populate with larger dataset to test scalability
 	for i := 0; i < 1000; i++ {
 		docData := fmt.Sprintf(`{"field1":"value%d","field2":%d,"field3":"%s"}`, i, i*2, strings.Repeat("x", 100))
-		_ = db.DocSet("benchmark", fmt.Sprintf("doc%d", i), json.RawMessage(docData))
-		_ = db.KVSet(fmt.Sprintf("key%d", i), fmt.Sprintf("val%d", i), 0)
-		_ = db.BlobPut("ns", fmt.Sprintf("blob%d", i), []byte(strings.Repeat("y", 500)), "text/plain", 0)
+		require.NoError(b, db.DocSet("benchmark", fmt.Sprintf("doc%d", i), json.RawMessage(docData)))
+		require.NoError(b, db.KVSet(fmt.Sprintf("key%d", i), fmt.Sprintf("val%d", i), 0))
+		require.NoError(b, db.BlobPut("ns", fmt.Sprintf("blob%d", i), []byte(strings.Repeat("y", 500)), "text/plain", 0))
 	}
 
 	b.ResetTimer()

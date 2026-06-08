@@ -11,8 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build integration
-// +build integration
+//go:build e2e
 
 package tests
 
@@ -61,7 +60,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/gateway"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -84,7 +83,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
+	ls, err := gateway.NewGatewayModeService(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
@@ -100,7 +99,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 		Execution:          execSvc,
 		FileEdit:           fileSvc,
 		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
-		Sovereignty:        sovereignty.NewSovereigntyService(sovereignty.DefaultConfig(), testutil.NewTestLogger(), nil),
+		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
@@ -128,9 +127,9 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 
 	// Since we used port 0, we need to know what ports were assigned.
 	// We'll add getters for the servers in GatewayService.
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
-	wssURL := fmt.Sprintf("wss://localhost:%d/ws/pubsub", ls.GetHTTPPort())
+	publicURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	mtlsURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	wssURL := fmt.Sprintf("wss://localhost:%d/ws/pubsub", constants.Ports.OperatorHttps)
 
 	// 1. Discover Operator trust metadata
 	// Hub bundle (Root + Hub CA) is available on public port via HTTPS for initial discovery
@@ -223,7 +222,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL = fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
+	mtlsURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		SystemFingerprint: "byo-fingerprint",

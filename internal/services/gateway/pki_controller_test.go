@@ -24,7 +24,8 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -47,22 +48,22 @@ type httpTestCase struct {
 	method         string
 	body           []byte
 	headers        map[string]string
-	setup          func(*testing.T, *PKIController, *GatewayDBService)
+	setup          func(*testing.T, *PKIController, *CanonicalDBService)
 	expectedStatus int
 	expectedBody   string
 	validateResp   func(*testing.T, *httptest.ResponseRecorder)
 }
 
-func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *GatewayDBService) {
+func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *CanonicalDBService) {
 	t.Helper()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := tempDir(t)
+	pkiDir := tempDir(t)
+	secretsDir := tempDir(t)
 
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err, "failed to open gateway DB service")
 	t.Cleanup(func() { db.Close() })
 
@@ -72,23 +73,28 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Gate
 	backend, err := keystore.NewTestBackend()
 	require.NoError(t, err, "failed to create test keystore backend")
 
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err, "failed to create keystore")
 	require.NoError(t, ks.Initialize(), "failed to initialize keystore")
 	require.NoError(t, ks.EnsurePermissions(), "failed to ensure keystore permissions")
 
 	sm := &SecretManager{
 		db:         db.db,
-		secretsDir: t.TempDir(),
+		secretsDir: tempDir(t),
 		logger:     logger,
 		keystore:   ks,
 	}
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
-	require.NoError(t, pki.EnsurePKI(nil), "failed to ensure PKI")
+	require.NoError(t, pki.InitializePKI(nil), "failed to ensure PKI")
 
 	appEnrollment := NewAppEnrollmentService(db, pki, logger)
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
+
+	// Initialize script templates
+	if err := scripts.Init(logger); err != nil {
+		t.Fatalf("Failed to initialize script templates: %v", err)
+	}
 
 	controller := newPKIController(cfg, logger, db, pki, appEnrollment, nil, resp)
 	return controller, cfg, db
@@ -145,7 +151,7 @@ func TestPKIController_HandlePKIHubBundle(t *testing.T) {
 		{
 			name:   "Failure - PKI error returns 500",
 			method: http.MethodGet,
-			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+			setup: func(t *testing.T, c *PKIController, _ *CanonicalDBService) {
 				c.pki = &PKIAuthority{}
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -153,7 +159,7 @@ func TestPKIController_HandlePKIHubBundle(t *testing.T) {
 				var resp map[string]string
 				err := json.Unmarshal(rr.Body.Bytes(), &resp)
 				require.NoError(t, err)
-				assert.Contains(t, resp["error"], "failed to read hub bundle")
+				assert.Contains(t, resp["error"], "pki: read trust bundle")
 			},
 		},
 	}
@@ -184,7 +190,7 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 				err := json.Unmarshal(rr.Body.Bytes(), &resp)
 				require.NoError(t, err, "failed to unmarshal response")
 				assert.NotEmpty(t, resp["root_ca"], "root_ca fingerprint should not be empty")
-				assert.Contains(t, resp["root_ca"], "sha256:", "fingerprint should contain sha256 prefix")
+				assert.Len(t, resp["root_ca"], 64, "fingerprint should be 64 hex characters (SHA256)")
 			},
 		},
 		{
@@ -196,23 +202,28 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 		{
 			name:   "Failure - Root CA file not found",
 			method: http.MethodGet,
-			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+			setup: func(t *testing.T, c *PKIController, _ *CanonicalDBService) {
 				c.pki = &PKIAuthority{}
 			},
 			expectedStatus: http.StatusInternalServerError,
-			expectedBody:   `{"error":"failed to read root CA"}`,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var resp map[string]string
+				err := json.Unmarshal(rr.Body.Bytes(), &resp)
+				require.NoError(t, err)
+				assert.Contains(t, resp["error"], "pki: read root CA")
+			},
 		},
 		{
 			name:   "Failure - Invalid PEM format",
 			method: http.MethodGet,
-			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+			setup: func(t *testing.T, c *PKIController, _ *CanonicalDBService) {
 				pkiDir := c.pki.PKIDir()
 				rootPath := filepath.Join(pkiDir, "root", "root_ca.crt")
 				err := os.WriteFile(rootPath, []byte("invalid pem data"), 0644)
 				require.NoError(t, err, "failed to write invalid PEM data")
 			},
 			expectedStatus: http.StatusInternalServerError,
-			expectedBody:   `{"error":"invalid root CA PEM"}`,
+			expectedBody:   `{"error":"pki: invalid root CA PEM"}`,
 		},
 	}
 
@@ -267,7 +278,12 @@ func TestPKIController_HandlePKISignCSR(t *testing.T) {
 			method:         http.MethodPost,
 			body:           []byte("invalid json"),
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"invalid JSON"}`,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var resp map[string]string
+				err := json.Unmarshal(rr.Body.Bytes(), &resp)
+				require.NoError(t, err)
+				assert.Contains(t, resp["error"], "pki: unmarshal CSR sign request")
+			},
 		},
 		{
 			name:   "Failure - PKI signing error",
@@ -325,20 +341,25 @@ func TestPKIController_HandlePKICertificatesRevoke(t *testing.T) {
 			method:         http.MethodPost,
 			body:           []byte("invalid json"),
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"invalid JSON"}`,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var resp map[string]string
+				err := json.Unmarshal(rr.Body.Bytes(), &resp)
+				require.NoError(t, err)
+				assert.Contains(t, resp["error"], "pki: unmarshal revoke request")
+			},
 		},
 		{
 			name:           "Failure - Missing serial",
 			method:         http.MethodPost,
 			body:           mustMarshalJSON(t, map[string]string{"reason": testRevocationReason}),
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"serial required"}`,
+			expectedBody:   `{"error":"pki: serial required"}`,
 		},
 		{
 			name:   "Failure - PKI revocation error",
 			method: http.MethodPost,
 			body:   mustMarshalJSON(t, validRevokePayload),
-			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+			setup: func(t *testing.T, c *PKIController, _ *CanonicalDBService) {
 				c.pki = &PKIAuthority{}
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -386,7 +407,7 @@ func TestPKIController_HandlePKIRevocationBundle(t *testing.T) {
 		{
 			name:   "Failure - PKI bundle generation error",
 			method: http.MethodGet,
-			setup: func(t *testing.T, c *PKIController, _ *GatewayDBService) {
+			setup: func(t *testing.T, c *PKIController, _ *CanonicalDBService) {
 				c.pki = &PKIAuthority{}
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -437,11 +458,17 @@ func TestNewPKIController(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
-	db := &GatewayDBService{}
+
+	// Initialize script templates
+	if err := scripts.Init(logger); err != nil {
+		t.Fatalf("Failed to initialize script templates: %v", err)
+	}
+
+	db := &CanonicalDBService{}
 	pki := &PKIAuthority{}
 	appEnrollment := &AppEnrollmentService{}
 	registration := &RegistrationService{}
-	responder := &responder.Responder{}
+	responder := &response.Writer{}
 
 	controller := newPKIController(cfg, logger, db, pki, appEnrollment, registration, responder)
 
@@ -516,7 +543,7 @@ func TestPKIController_HandleNodeBinaryDownload(t *testing.T) {
 	testNodeBinaryContent := []byte("test binary content")
 	require.NoError(t, os.WriteFile(testNodeBinaryPath, testNodeBinaryContent, 0644))
 
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/binary/g8e-windows-amd64.exe", nil)
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/g8e-windows-amd64.exe", nil)
 	rr := httptest.NewRecorder()
 
 	c.handleNodeBinaryDownload(rr, req)
@@ -531,7 +558,7 @@ func TestPKIController_HandleNodeBinaryDownload_NotFound(t *testing.T) {
 	t.Parallel()
 	c, _, _ := setupTestPKIController(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/binary/g8e-linux-amd64", nil)
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/g8e-linux-amd64", nil)
 	rr := httptest.NewRecorder()
 
 	c.handleNodeBinaryDownload(rr, req)
@@ -554,7 +581,7 @@ func TestPKIController_HandleNodeBinaryDownload_InvalidName(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/binary/"+tc, nil)
+			req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/"+tc, nil)
 			rr := httptest.NewRecorder()
 
 			c.handleNodeBinaryDownload(rr, req)

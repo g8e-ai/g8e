@@ -14,6 +14,7 @@
 package mcp
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
@@ -22,8 +23,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,7 +46,7 @@ func newEndpointTestGatewayService(opts ...endpointTestOption) *GatewayService {
 	logger := slog.Default()
 	g := &GatewayService{
 		logger:          logger,
-		responder:       responder.New(logger),
+		responder:       response.NewWriter(logger),
 		maxPayloadBytes: 10 * 1024 * 1024,
 	}
 
@@ -284,13 +286,16 @@ func TestHandleMCP_GETMethodNotAllowed(t *testing.T) {
 	t.Parallel()
 	g := newEndpointTestGatewayService()
 
-	r := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	r := httptest.NewRequest(http.MethodDelete, "/mcp", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	g.HandleMCP(w, r)
 
 	require.Equal(t, http.StatusMethodNotAllowed, w.Code)
-	require.Equal(t, "POST", w.Header().Get("Allow"))
+	require.Equal(t, "POST, GET", w.Header().Get("Allow"))
 }
 
 func TestHandleMCP_InvalidJSON(t *testing.T) {

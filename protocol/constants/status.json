@@ -1105,8 +1105,8 @@
     },
     "gateway_mode": {
       "gateway": {
-        "_go_const": "GatewayModeMode",
-        "_python_const": "MODE",
+        "_go_const": "GatewayModeGateway",
+        "_python_const": "GATEWAY",
         "value": "gateway"
       },
       "ok": {

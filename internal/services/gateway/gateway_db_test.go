@@ -55,26 +55,26 @@ func TestGatewaySchema(t *testing.T) {
 	assert.Contains(t, schema, "CREATE TABLE", "Schema should contain CREATE TABLE statements")
 }
 
-func TestGatewayDBService_GetDB(t *testing.T) {
+func TestCanonicalDBService_GetDB(t *testing.T) {
 	t.Parallel()
-	dataDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dataDir := tempDir(t)
+	secretsDir := tempDir(t)
 	logger := testutil.NewTestLogger()
 
-	db, err := OpenGatewayDBService(dataDir, secretsDir, logger, true)
+	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	defer db.Close()
 
 	assert.NotNil(t, db.GetDB(), "GetDB should return non-nil database")
 }
 
-func TestGatewayDBService_Wait(t *testing.T) {
+func TestCanonicalDBService_Wait(t *testing.T) {
 	t.Parallel()
-	dataDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dataDir := tempDir(t)
+	secretsDir := tempDir(t)
 	logger := testutil.NewTestLogger()
 
-	db, err := OpenGatewayDBService(dataDir, secretsDir, logger, true)
+	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 
 	// Close the database to stop background workers
@@ -84,13 +84,13 @@ func TestGatewayDBService_Wait(t *testing.T) {
 	db.Wait()
 }
 
-func TestGatewayDBService_SSEEventsListAllSince(t *testing.T) {
+func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 	t.Parallel()
-	dataDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dataDir := tempDir(t)
+	secretsDir := tempDir(t)
 	logger := testutil.NewTestLogger()
 
-	db, err := OpenGatewayDBService(dataDir, secretsDir, logger, true)
+	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -112,11 +112,11 @@ func TestGatewayDBService_SSEEventsListAllSince(t *testing.T) {
 	assert.Len(t, rows, 2, "Should return 2 events after ID 3")
 }
 
-func newTestDB(t *testing.T) *GatewayDBService {
+func newTestDB(t *testing.T) *CanonicalDBService {
 	t.Helper()
-	dir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dir, secretsDir, testutil.NewTestLogger(), true)
+	dir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return db
@@ -181,7 +181,7 @@ func TestDocUpdateDeleteField(t *testing.T) {
 	err := db.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "temp": "remove_me"}))
 	require.NoError(t, err)
 
-	updated, err := db.DocUpdate("users", "u1", mustDocJSON(t, map[string]interface{}{"temp": nil}))
+	updated, err := db.DocUpdate("users", "u1", mustDocJSON(t, map[string]json.RawMessage{"temp": nil}))
 	require.NoError(t, err)
 	_, hasTmp := updated.Data["temp"]
 	assert.False(t, hasTmp)
@@ -255,9 +255,9 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.DocSet("things", "t1", mustDocJSON(t, map[string]interface{}{"label": "foo", "count": 5})))
-	require.NoError(t, db.DocSet("things", "t2", mustDocJSON(t, map[string]interface{}{"label": "bar", "count": 10})))
-	require.NoError(t, db.DocSet("things", "t3", mustDocJSON(t, map[string]interface{}{"label": "foo", "count": 20})))
+	require.NoError(t, db.DocSet("things", "t1", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"foo"`), "count": json.RawMessage(`5`)})))
+	require.NoError(t, db.DocSet("things", "t2", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"bar"`), "count": json.RawMessage(`10`)})))
+	require.NoError(t, db.DocSet("things", "t3", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"foo"`), "count": json.RawMessage(`20`)})))
 
 	t.Run("string equality", func(t *testing.T) {
 		t.Parallel()
@@ -299,7 +299,7 @@ func TestKVSetAndGet(t *testing.T) {
 	require.NoError(t, err)
 
 	val, found := db.KVGet("session:abc")
-	assert.True(t, found)
+	require.True(t, found)
 	assert.Equal(t, `{"user":"alice"}`, val)
 }
 
@@ -458,16 +458,16 @@ func TestKVExpire(t *testing.T) {
 
 func TestSchemaIdempotent(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	secretsDir := t.TempDir()
+	dir := tempDir(t)
+	secretsDir := tempDir(t)
 
-	db1, err := OpenGatewayDBService(dir, secretsDir, testutil.NewTestLogger(), true)
+	db1, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(t, err)
 	require.NoError(t, db1.DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
 	// Re-open same database - schema init should not fail or lose data
-	db2, err := OpenGatewayDBService(dir, secretsDir, testutil.NewTestLogger(), true)
+	db2, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db2.Close() })
 
@@ -483,10 +483,11 @@ func TestSchemaIdempotent(t *testing.T) {
 
 func TestCreateDataDir(t *testing.T) {
 	t.Parallel()
-	dir := filepath.Join(t.TempDir(), "nested", "deep", "data")
-	secretsDir := t.TempDir()
+	tmpDir := tempDir(t)
+	dir := filepath.Join(tmpDir, "nested", "deep", "data")
+	secretsDir := tempDir(t)
 
-	db, err := OpenGatewayDBService(dir, secretsDir, testutil.NewTestLogger(), true)
+	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -810,7 +811,8 @@ func TestHasTrustedSigners(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
-	signerBytes, _ := json.Marshal(signer)
+	signerBytes, err := json.Marshal(signer)
+	require.NoError(t, err)
 	err = db.DocSet("trusted_signers", "test-signer-1", signerBytes)
 	require.NoError(t, err)
 
@@ -825,7 +827,8 @@ func TestHasTrustedSigners(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   false,
 	}
-	disabledSignerBytes, _ := json.Marshal(disabledSigner)
+	disabledSignerBytes, err := json.Marshal(disabledSigner)
+	require.NoError(t, err)
 	err = db.DocSet("trusted_signers", "test-signer-2", disabledSignerBytes)
 	require.NoError(t, err)
 
@@ -858,13 +861,14 @@ func TestGetField(t *testing.T) {
 	db := newTestDB(t)
 
 	// Create a document with multiple fields
-	doc := map[string]interface{}{
-		"name":  "test-doc",
-		"value": 42,
-		"flag":  true,
+	doc := map[string]json.RawMessage{
+		"name":  json.RawMessage(`"test-doc"`),
+		"value": json.RawMessage(`42`),
+		"flag":  json.RawMessage(`true`),
 	}
-	docBytes, _ := json.Marshal(doc)
-	err := db.DocSet("test_collection", "doc1", docBytes)
+	docBytes, err := json.Marshal(doc)
+	require.NoError(t, err)
+	err = db.DocSet("test_collection", "doc1", docBytes)
 	require.NoError(t, err)
 
 	// Get existing field
@@ -892,16 +896,18 @@ func TestDocDeleteNamespace(t *testing.T) {
 	// Create multiple documents in a namespace
 	for i := 0; i < 5; i++ {
 		doc := map[string]string{"id": fmt.Sprintf("doc%d", i)}
-		docBytes, _ := json.Marshal(doc)
-		err := db.DocSet("test_namespace", fmt.Sprintf("doc%d", i), docBytes)
+		docBytes, err := json.Marshal(doc)
+		require.NoError(t, err)
+		err = db.DocSet("test_namespace", fmt.Sprintf("doc%d", i), docBytes)
 		require.NoError(t, err)
 	}
 
 	// Create documents in another namespace
 	for i := 0; i < 3; i++ {
 		doc := map[string]string{"id": fmt.Sprintf("other%d", i)}
-		docBytes, _ := json.Marshal(doc)
-		err := db.DocSet("other_namespace", fmt.Sprintf("other%d", i), docBytes)
+		docBytes, err := json.Marshal(doc)
+		require.NoError(t, err)
+		err = db.DocSet("other_namespace", fmt.Sprintf("other%d", i), docBytes)
 		require.NoError(t, err)
 	}
 
@@ -941,8 +947,9 @@ func TestDocCreate(t *testing.T) {
 
 	// Create a new document
 	doc := map[string]string{"name": "test-doc"}
-	docBytes, _ := json.Marshal(doc)
-	err := db.DocCreate("test_collection", "doc1", docBytes)
+	docBytes, err := json.Marshal(doc)
+	require.NoError(t, err)
+	err = db.DocCreate("test_collection", "doc1", docBytes)
 	require.NoError(t, err)
 
 	// Verify document was created
@@ -954,7 +961,7 @@ func TestDocCreate(t *testing.T) {
 	// Attempt to create duplicate - should fail
 	err = db.DocCreate("test_collection", "doc1", docBytes)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "document already exists")
+	assert.Contains(t, err.Error(), "already exists")
 }
 
 func TestDocCreate_WithSystemFields(t *testing.T) {
@@ -962,14 +969,15 @@ func TestDocCreate_WithSystemFields(t *testing.T) {
 	db := newTestDB(t)
 
 	// Create a document with system fields that should be stripped
-	doc := map[string]interface{}{
-		"name":       "test-doc",
-		"id":         "should-be-stripped",
-		"created_at": "should-be-stripped",
-		"updated_at": "should-be-stripped",
+	doc := map[string]json.RawMessage{
+		"name":       json.RawMessage(`"test-doc"`),
+		"id":         json.RawMessage(`"should-be-stripped"`),
+		"created_at": json.RawMessage(`"should-be-stripped"`),
+		"updated_at": json.RawMessage(`"should-be-stripped"`),
 	}
-	docBytes, _ := json.Marshal(doc)
-	err := db.DocCreate("test_collection", "doc1", docBytes)
+	docBytes, err := json.Marshal(doc)
+	require.NoError(t, err)
+	err = db.DocCreate("test_collection", "doc1", docBytes)
 	require.NoError(t, err)
 
 	// Verify system fields were stripped
@@ -1080,7 +1088,7 @@ func TestApproveSuspendedTransaction(t *testing.T) {
 	require.NoError(t, err)
 
 	// Approve the transaction
-	err = db.ApproveSuspendedTransaction("tx123", "approved-by-user", "signature123", "cert-fingerprint")
+	err = db.ApproveSuspendedTransaction(context.Background(), "tx123", "approved-by-user", "signature123", "cert-fingerprint")
 	require.NoError(t, err)
 
 	// Verify transaction was updated by querying the table directly
@@ -1097,7 +1105,7 @@ func TestApproveSuspendedTransaction_NonExistent(t *testing.T) {
 	db := newTestDB(t)
 
 	// Approve non-existent transaction should error
-	err := db.ApproveSuspendedTransaction("nonexistent", "user", "sig", "cert")
+	err := db.ApproveSuspendedTransaction(context.Background(), "nonexistent", "user", "sig", "cert")
 	assert.Error(t, err)
 }
 
@@ -1112,7 +1120,7 @@ func TestDeleteSuspendedTransaction(t *testing.T) {
 	require.NoError(t, err)
 
 	// Delete the transaction
-	err = db.DeleteSuspendedTransaction("tx456")
+	err = db.DeleteSuspendedTransaction(context.Background(), "tx456")
 	require.NoError(t, err)
 
 	// Verify transaction was deleted by querying the table directly
@@ -1127,7 +1135,7 @@ func TestDeleteSuspendedTransaction_NonExistent(t *testing.T) {
 	db := newTestDB(t)
 
 	// Delete non-existent transaction
-	err := db.DeleteSuspendedTransaction("nonexistent")
+	err := db.DeleteSuspendedTransaction(context.Background(), "nonexistent")
 	require.NoError(t, err)
 }
 
@@ -1148,7 +1156,7 @@ func TestCleanupExpiredSuspendedTransactions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Cleanup expired transactions
-	deleted, err := db.CleanupExpiredSuspendedTransactions()
+	deleted, err := db.CleanupExpiredSuspendedTransactions(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), deleted)
 
@@ -1176,7 +1184,7 @@ func TestCleanupExpiredSuspendedTransactions_NoExpired(t *testing.T) {
 	require.NoError(t, err)
 
 	// Cleanup should delete nothing
-	deleted, err := db.CleanupExpiredSuspendedTransactions()
+	deleted, err := db.CleanupExpiredSuspendedTransactions(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), deleted)
 }

@@ -14,6 +14,7 @@
 package sqliteutil
 
 import (
+	"context"
 	"log/slog"
 	"path/filepath"
 	"sync/atomic"
@@ -29,21 +30,21 @@ import (
 func TestNewPruner_DefaultsNegativeIntervalToOneHour(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	p := NewPruner(nil, logger, -1*time.Second, func(_ *DB, _ *slog.Logger) {})
+	p := NewPruner(nil, logger, -1*time.Second, func(_ context.Context, _ *DB, _ *slog.Logger) error { return nil })
 	assert.Equal(t, time.Hour, p.interval)
 }
 
 func TestNewPruner_DefaultsZeroIntervalToOneHour(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	p := NewPruner(nil, logger, 0, func(_ *DB, _ *slog.Logger) {})
+	p := NewPruner(nil, logger, 0, func(_ context.Context, _ *DB, _ *slog.Logger) error { return nil })
 	assert.Equal(t, time.Hour, p.interval)
 }
 
 func TestNewPruner_RespectsPositiveInterval(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	p := NewPruner(nil, logger, 5*time.Minute, func(_ *DB, _ *slog.Logger) {})
+	p := NewPruner(nil, logger, 5*time.Minute, func(_ context.Context, _ *DB, _ *slog.Logger) error { return nil })
 	assert.Equal(t, 5*time.Minute, p.interval)
 }
 
@@ -58,8 +59,9 @@ func TestPruner_InvokesFnOnTick(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	var callCount atomic.Int64
-	fn := func(_ *DB, _ *slog.Logger) {
+	fn := func(_ context.Context, _ *DB, _ *slog.Logger) error {
 		callCount.Add(1)
+		return nil
 	}
 
 	p := NewPruner(db, logger, 20*time.Millisecond, fn)
@@ -74,7 +76,7 @@ func TestPruner_InvokesFnOnTick(t *testing.T) {
 func TestPruner_Stop_IsIdempotent(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	p := NewPruner(nil, logger, time.Hour, func(_ *DB, _ *slog.Logger) {})
+	p := NewPruner(nil, logger, time.Hour, func(_ context.Context, _ *DB, _ *slog.Logger) error { return nil })
 	p.Start()
 
 	p.Stop()
@@ -84,7 +86,7 @@ func TestPruner_Stop_IsIdempotent(t *testing.T) {
 func TestPruner_Stop_BeforeStart_DoesNotPanic(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	p := NewPruner(nil, logger, time.Hour, func(_ *DB, _ *slog.Logger) {})
+	p := NewPruner(nil, logger, time.Hour, func(_ context.Context, _ *DB, _ *slog.Logger) error { return nil })
 
 	assert.NotPanics(t, func() { p.Stop() })
 }
@@ -100,8 +102,9 @@ func TestPruner_Stop_HaltsInvocations(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	var callCount atomic.Int64
-	fn := func(_ *DB, _ *slog.Logger) {
+	fn := func(_ context.Context, _ *DB, _ *slog.Logger) error {
 		callCount.Add(1)
+		return nil
 	}
 
 	p := NewPruner(db, logger, 20*time.Millisecond, fn)
@@ -131,13 +134,14 @@ func TestPruner_FnReceivesCorrectLogger(t *testing.T) {
 
 	var receivedLogger *slog.Logger
 	done := make(chan struct{})
-	fn := func(_ *DB, l *slog.Logger) {
+	fn := func(_ context.Context, _ *DB, l *slog.Logger) error {
 		receivedLogger = l
 		select {
 		case <-done:
 		default:
 			close(done)
 		}
+		return nil
 	}
 
 	p := NewPruner(db, logger, 20*time.Millisecond, fn)
@@ -164,8 +168,9 @@ func TestPruner_StartAfterStop_DoesNotInvokeFn(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	var callCount atomic.Int64
-	fn := func(_ *DB, _ *slog.Logger) {
+	fn := func(_ context.Context, _ *DB, _ *slog.Logger) error {
 		callCount.Add(1)
+		return nil
 	}
 
 	p := NewPruner(db, logger, 20*time.Millisecond, fn)
@@ -198,13 +203,14 @@ func TestPruner_FnReceivesCorrectDB(t *testing.T) {
 
 	var receivedDB *DB
 	done := make(chan struct{})
-	fn := func(d *DB, _ *slog.Logger) {
+	fn := func(_ context.Context, d *DB, _ *slog.Logger) error {
 		receivedDB = d
 		select {
 		case <-done:
 		default:
 			close(done)
 		}
+		return nil
 	}
 
 	p := NewPruner(db, logger, 20*time.Millisecond, fn)

@@ -20,59 +20,53 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   release:
     name: Release Go Protocol
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '1.26.4'
           cache: true
 
       - name: Run tests
         working-directory: ./protocol
-        run: |
-          go test -race -count=1 ./...
+        run: go test -race -count=1 ./...
 
-      - name: Tag version
-        id: tag_version
+      - name: Parse Version
+        id: parse_version
         run: |
           TAG=${GITHUB_REF#refs/tags/protocol/v}
           echo "version=${TAG}" >> $GITHUB_OUTPUT
           echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag_version.outputs.tag }}
-          release_name: g8e Protocol v${{ steps.tag_version.outputs.version }}
+          tag_name: ${{ steps.parse_version.outputs.tag }}
+          name: g8e Protocol v${{ steps.parse_version.outputs.version }}
           body: |
-            ## g8e Protocol Go Module v${{ steps.tag_version.outputs.version }}
+            ## g8e Protocol Go Module v${{ steps.parse_version.outputs.version }}
 
             Official Go protocol library for the g8e zero-trust execution platform.
 
             ### Installation
-
             ```bash
-            go get github.com/g8e-ai/g8e/protocol@v${{ steps.tag_version.outputs.version }}
+            go get github.com/g8e-ai/g8e/protocol@v${{ steps.parse_version.outputs.version }}
             ```
 
             ### Changes
-
             See [CHANGELOG.md](https://github.com/g8e-ai/g8e/blob/main/CHANGELOG.md) for details.
           draft: false
           prerelease: false
+          generate_release_notes: true
+

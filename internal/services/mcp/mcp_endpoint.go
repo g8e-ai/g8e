@@ -44,15 +44,35 @@ const (
 
 // initializeResult is the response to the MCP "initialize" handshake.
 type initializeResult struct {
-	ProtocolVersion string                 `json:"protocolVersion"`
-	Capabilities    map[string]interface{} `json:"capabilities"`
-	ServerInfo      mcpServerInfo          `json:"serverInfo"`
-	Instructions    string                 `json:"instructions,omitempty"`
+	ProtocolVersion string             `json:"protocolVersion"`
+	Capabilities    serverCapabilities `json:"capabilities"`
+	ServerInfo      mcpServerInfo      `json:"serverInfo"`
+	Instructions    string             `json:"instructions,omitempty"`
 }
 
 type mcpServerInfo struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
+}
+
+// serverCapabilities describes the server's supported MCP features.
+type serverCapabilities struct {
+	Tools     toolsCapability     `json:"tools"`
+	Resources resourcesCapability `json:"resources"`
+	Prompts   promptsCapability   `json:"prompts"`
+}
+
+type toolsCapability struct {
+	ListChanged bool `json:"listChanged"`
+}
+
+type resourcesCapability struct{}
+
+type promptsCapability struct{}
+
+// resourceTemplatesList is the result for "resources/templates/list".
+type resourceTemplatesList struct {
+	ResourceTemplates []interface{} `json:"resourceTemplates"`
 }
 
 // initializeParams captures the subset of initialize params we negotiate on.
@@ -62,20 +82,18 @@ type initializeParams struct {
 
 // HandleMCP is the unified MCP Streamable HTTP endpoint. It accepts a single
 // JSON-RPC 2.0 request via POST and dispatches by method, reusing the same
-// governed execution paths as the per-method REST handlers. GET is reserved
-// for the optional server-initiated SSE stream, which this server does not
-// provide, so it responds 405.
+// governed execution paths as the per-method REST handlers. GET is used for
+// SSE streaming support.
 func (g *GatewayService) HandleMCP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		// handled below
 	case http.MethodGet:
-		// No server-initiated streaming; advertise POST-only.
-		w.Header().Set("Allow", "POST")
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		// SSE endpoint for server-sent events
+		g.handleMCPSSE(w, r)
 		return
 	default:
-		w.Header().Set("Allow", "POST")
+		w.Header().Set("Allow", "POST, GET")
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
@@ -171,7 +189,7 @@ func (g *GatewayService) dispatchMCP(r *http.Request, req *JSONRPCRequest) (inte
 	case "resources/templates/list":
 		// We expose no resource templates; return an empty set so clients
 		// that probe capability-gated methods do not surface errors.
-		return map[string]interface{}{"resourceTemplates": []interface{}{}}, nil
+		return resourceTemplatesList{ResourceTemplates: []interface{}{}}, nil
 
 	case "resources/read":
 		res, err := g.readResource(ctx, req.Params)
@@ -222,10 +240,10 @@ func (g *GatewayService) mcpInitialize(params json.RawMessage) initializeResult 
 
 	return initializeResult{
 		ProtocolVersion: protocolVersion,
-		Capabilities: map[string]interface{}{
-			"tools":     map[string]interface{}{"listChanged": true},
-			"resources": map[string]interface{}{},
-			"prompts":   map[string]interface{}{},
+		Capabilities: serverCapabilities{
+			Tools:     toolsCapability{ListChanged: true},
+			Resources: resourcesCapability{},
+			Prompts:   promptsCapability{},
 		},
 		ServerInfo: mcpServerInfo{
 			Name:    mcpServerName,
@@ -249,7 +267,7 @@ func (g *GatewayService) listToolsResult(ctx context.Context) (interface{}, erro
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
+				InputSchema: nt.InputSchema().ToMap(),
 			})
 		}
 		return ToolsListResult{Tools: tools}, nil
@@ -289,13 +307,13 @@ func (g *GatewayService) listPromptsResult(ctx context.Context) (interface{}, er
 // returns the raw JSON-RPC result payload. It honours the circuit breaker.
 func (g *GatewayService) proxyListMethod(ctx context.Context, method string) (json.RawMessage, error) {
 	if g.isCircuitOpen() {
-		return nil, fmt.Errorf("downstream MCP server is temporarily unavailable (circuit open)")
+		return nil, fmt.Errorf("mcp_endpoint: downstream MCP server is temporarily unavailable (circuit open)")
 	}
 
 	reqBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":%q}`, method)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, g.downstreamURL, strings.NewReader(reqBody))
 	if err != nil {
-		return nil, fmt.Errorf("failed to build downstream request: %w", err)
+		return nil, fmt.Errorf("mcp_endpoint: failed to build downstream request: %w", err)
 	}
 	httpReq.Header.Set(constants.HeaderContentType, "application/json")
 
@@ -303,26 +321,64 @@ func (g *GatewayService) proxyListMethod(ctx context.Context, method string) (js
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		g.recordFailure()
-		return nil, fmt.Errorf("failed to query downstream MCP server: %w", err)
+		return nil, fmt.Errorf("mcp_endpoint: failed to query downstream MCP server: %w", err)
 	}
 	defer func() {
 		if cerr := resp.Body.Close(); cerr != nil {
-			g.logger.Error("Failed to close response body", "error", cerr)
+			g.logger.Error("mcp_endpoint: failed to close response body", "error", cerr)
 		}
 	}()
 
 	if resp.StatusCode >= 500 {
 		g.recordFailure()
-		return nil, fmt.Errorf("downstream MCP server returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("mcp_endpoint: downstream MCP server returned status %d", resp.StatusCode)
 	}
 	g.recordSuccess()
 
 	var rpcResp JSONRPCResponse
 	if err := json.NewDecoder(resp.Body).Decode(&rpcResp); err != nil {
-		return nil, fmt.Errorf("failed to decode downstream response: %w", err)
+		return nil, fmt.Errorf("mcp_endpoint: failed to decode downstream response: %w", err)
 	}
 	if rpcResp.Error != nil {
-		return nil, fmt.Errorf("downstream MCP error: %s", rpcResp.Error.Message)
+		return nil, fmt.Errorf("mcp_endpoint: downstream MCP error: %s", rpcResp.Error.Message)
 	}
 	return rpcResp.Result, nil
+}
+
+// handleMCPSSE handles SSE GET requests on the unified /mcp endpoint.
+// This is used by Claude Code and other MCP clients that support SSE transport.
+func (g *GatewayService) handleMCPSSE(w http.ResponseWriter, r *http.Request) {
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("X-Accel-Buffering", "no") // For Nginx
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	// Send initial SSE event to confirm connection
+	fmt.Fprintf(w, "event: connected\ndata: {\"status\":\"connected\"}\n\n")
+	flusher.Flush()
+
+	// Keep connection alive with periodic heartbeats
+	// In a full implementation, this would subscribe to events and push them
+	// For now, we maintain the connection for tool call responses
+	ctx := r.Context()
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			fmt.Fprintf(w, ": keepalive\n\n")
+			flusher.Flush()
+		}
+	}
 }

@@ -36,16 +36,16 @@ func (t *DBDiscoverTopologyTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *DBDiscoverTopologyTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"database_path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to the SQLite database file",
+func (t *DBDiscoverTopologyTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"database_path": {
+				Type:        "string",
+				Description: "Path to the SQLite database file",
 			},
 		},
-		"required": []string{"database_path"},
+		Required: []string{"database_path"},
 	}
 }
 

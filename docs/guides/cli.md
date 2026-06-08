@@ -12,12 +12,11 @@ Usage:
 
 Available Commands:
   approve     Approve a suspended L3 transaction with CLI signature
-  auth        Authentication and session management
-  auditor     Universal agent emulator for a real g8e Gateway/Operator
-  chaos       Generate realistic governance events against the local g8e audit stack
+  auth        Authentication and cli/web/operator session management
   data        Administer the local platform over mTLS
   gw          Manage the g8e Gateway lifecycle
   help        Help about any command
+  mcp         MCP protocol operations (stdio transport)
   security    Security validation checks
   test        Run test suites
 
@@ -64,18 +63,16 @@ Usage:
   g8e gw start [flags]
 
 Flags:
-      --bootstrap-port int       Bootstrap TLS port for CSR enrollment (default: from paths.json)
       --cert-mode string         Certificate mode: full (all hostnames/IPs), localhost (only localhost)
       --data-dir string          Data directory for SQLite database (default: .g8e/data in working directory)
   -h, --help                     help for start
-      --http-port int            HTTPS port for mTLS API (default: from paths.json)
+      --http-port int            Plain HTTP port for bootstrap and MCP routes (default: 8080)
+      --https-port int           HTTPS port for mTLS API and public surface (default: 8443)
       --log string               Log level: info, error, debug (default "info")
-      --mcp-http-port int        Plain HTTP port for MCP calls (default: from paths.json)
       --passkey-rp-id string     RP ID for passkey operations (default: localhost)
       --passkey-rp-name string   RP Name for passkey operations (default: g8e)
       --pki-dir string           Directory for TLS certificates (default: .g8e/pki)
       --posture string           Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced) (default "doctrine")
-      --public-port int          Public browser/BYO bootstrap port (default: from paths.json)
       --rate-limit-burst int     Gateway rate limit burst size
       --rate-limit-rps float     Gateway requests per second limit (set to 0 to disable)
       --secrets-dir string       Directory for platform secrets (default: .g8e/secrets)
@@ -357,11 +354,12 @@ Usage:
   g8e test [command]
 
 Available Commands:
+  chaos       Generate realistic governance events against the local g8e audit stack
   ci          Run full CI test suite (mirrors GitHub Actions exactly)
+  emulator    Universal agent emulator for a real g8e Gateway/Operator
+  e2e         Run Tier 3 (Live Platform E2E) tests
   integration Run integration tests
-  review      Review integration test vault results
   scenario    Run scenario integration tests
-  summary     Show summary of all integration test results
   unit        Run unit tests
 
 Flags:
@@ -423,15 +421,98 @@ Flags:
   -v, --verbose      Verbose output
 ```
 
-### test summary
+### test emulator
 ```
-Show summary of all integration test results
+Universal agent emulator for a real g8e Gateway/g8e Operator. emulator impersonates arbitrary AI tools and agents against a REAL g8e Gateway + g8e Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the g8e Operator's signed receipts.
 
 Usage:
-  g8e test summary [flags]
+  g8e test emulator [command]
+
+Available Commands:
+  audit       Audit signed receipts from the g8e Operator
+  list        List available scenarios
+  run         Run scenarios against a real g8e Gateway/g8e Operator
 
 Flags:
-  -h, --help   help for summary
+  -h, --help   help for emulator
+
+Use "g8e test emulator [command] --help" for more information about a command.
+```
+
+#### test emulator list
+```
+List available scenarios
+
+Usage:
+  g8e test emulator list [flags]
+
+Flags:
+  -h, --help   help for list
+```
+
+#### test emulator run
+```
+Run scenarios against a real Gateway/Operator
+
+Usage:
+  g8e test emulator run [flags] [scenario ...]
+
+Flags:
+      --api-key string           Operator API key for MCP/A2A surface
+      --ca string                gateway CA bundle PEM
+      --cert string              client cert PEM
+      --config string            JSON config overlay
+      --ensemble int             mock consensus voters (default 3)
+      --insecure                 skip TLS verify (local dev only)
+      --key string               client key PEM
+      --l3-mode string           mock|suspend
+      --mtls-url string          Gateway mTLS surface
+      --out string               report output dir
+      --operator-session string   scope audit to a specific Operator session
+      --phase string             doctrine|notary|all (default "all")
+      --public-url string        Gateway public surface for OOB approve
+  -h, --help                     help for run
+      --verbose                  echo each request/response
+```
+
+#### test emulator audit
+```
+Audit signed receipts from the Operator
+
+Usage:
+  g8e test emulator audit [flags]
+
+Flags:
+      --api-key string           Operator API key
+      --ca string                gateway CA bundle PEM
+      --cert string              client cert PEM
+      --config string            JSON config overlay
+      --insecure                 skip TLS verify
+      --key string               client key PEM
+      --mtls-url string          Gateway mTLS surface
+      --out string               report output dir
+      --operator-session string   Operator session id
+      --public-url string        Gateway public surface
+  -h, --help                     help for audit
+```
+
+### test chaos
+```
+Generate realistic governance events against the local g8e audit stack. chaos generates a realistic distribution of governance events against the local g8e audit stack. It bypasses network/TLS by driving the TransactionVerifier + Actuator stack directly in-process, which is the same path exercised by the live g8e Operator when payloads arrive over pub/sub.
+
+Distribution:
+  70%  Good Actor  – valid sig, safe intent (FS_LIST)       → EXECUTED
+  20%  Prompt Inj  – valid sig, L1 forbidden cmd (sudo/rm)  → REJECTED (L1)
+  10%  MitM        – corrupted transaction hash              → REJECTED (hash mismatch)
+
+Usage:
+  g8e test chaos [flags]
+
+Flags:
+      --count int      number of payloads to fire (default 100)
+      --data-dir string audit vault data dir (default: <project-root>/.g8e/test-vault/<timestamp>)
+  -h, --help            help for chaos
+      --pki-dir string  PKI dir for trusted_signers (default: <cwd>/.g8e/pki)
 ```
 
 ## security
@@ -504,95 +585,110 @@ Flags:
   -h, --help   help for approve
 ```
 
-## auditor
+
+## mcp
 ```
-Universal agent emulator for a real g8e Gateway/g8e Operator. auditor impersonates arbitrary AI tools and agents against a REAL g8e Gateway + g8e Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the g8e Operator's signed receipts.
+MCP protocol operations (stdio transport). Run g8e as an MCP server using stdio transport for local agent integration.
 
 Usage:
-  g8e auditor [command]
+  g8e mcp [command]
 
 Available Commands:
-  audit       Audit signed receipts from the g8e Operator
-  list        List available scenarios
-  run         Run scenarios against a real g8e Gateway/g8e Operator
+  agent       Wrap agentic coding tools with g8e zero-trust gateway
+  gov         Proxy stdio MCP requests to the gateway HTTP endpoint
+  show        Print MCP client configuration for the Gateway
+  stdio       Run MCP stdio server with native tools only
 
 Flags:
-  -h, --help   help for auditor
-
-Use "g8e auditor [command] --help" for more information about a command.
+  -h, --help   help for mcp
 ```
 
-### auditor list
+### mcp stdio
 ```
-List available scenarios
+Run MCP stdio server with native tools only. Run g8e as an MCP server using stdio transport for local agent integration. Exposes all native tools without requiring gateway mode.
 
 Usage:
-  g8e auditor list [flags]
+  g8e mcp stdio [flags]
 
 Flags:
-  -h, --help   help for list
+  -h, --help   help for stdio
 ```
 
-### auditor run
+### mcp gov
 ```
-Run scenarios against a real Gateway/Operator
+Proxy stdio MCP requests to the gateway HTTP endpoint. Run as an MCP stdio server that proxies all requests to the running gateway's HTTP endpoint. This enables tools that only support stdio transport to use the full gateway governance layer.
 
 Usage:
-  g8e auditor run [flags] [scenario ...]
+  g8e mcp gov [flags]
 
 Flags:
-      --api-key string           Operator API key for MCP/A2A surface
-      --ca string                gateway CA bundle PEM
-      --cert string              client cert PEM
-      --config string            JSON config overlay
-      --ensemble int             mock consensus voters (default 3)
-      --insecure                 skip TLS verify (local dev only)
-      --key string               client key PEM
-      --l3-mode string           mock|suspend
-      --mtls-url string          Gateway mTLS surface
-      --out string               report output dir
-      --operator-session string   scope audit to a specific Operator session
-      --phase string             doctrine|notary|all (default "all")
-      --public-url string        Gateway public surface for OOB approve
-  -h, --help                     help for run
-      --verbose                  echo each request/response
+  -h, --help   help for gov
 ```
 
-### auditor audit
+### mcp agent
 ```
-Audit signed receipts from the Operator
+Wrap agentic coding tools with g8e zero-trust gateway. Wrap agentic coding tools (Claude Code, Cursor, VS Code, Cline) with g8e governance.
 
 Usage:
-  g8e auditor audit [flags]
+  g8e mcp agent [tool-name] -- [tool-args]
+
+Available Commands:
+  claude      Execute Claude Code proxied through g8e gateway
 
 Flags:
-      --api-key string           Operator API key
-      --ca string                gateway CA bundle PEM
-      --cert string              client cert PEM
-      --config string            JSON config overlay
-      --insecure                 skip TLS verify
-      --key string               client key PEM
-      --mtls-url string          Gateway mTLS surface
-      --out string               report output dir
-      --operator-session string   Operator session id
-      --public-url string        Gateway public surface
-  -h, --help                     help for audit
+  -h, --help   help for agent
 ```
 
-## chaos
+#### mcp agent claude
 ```
-Generate realistic governance events against the local g8e audit stack. chaos generates a realistic distribution of governance events against the local g8e audit stack. It bypasses network/TLS by driving the TransactionVerifier + Actuator stack directly in-process, which is the same path exercised by the live g8e Operator when payloads arrive over pub/sub.
-
-Distribution:
-  70%  Good Actor  – valid sig, safe intent (FS_LIST)       → EXECUTED
-  20%  Prompt Inj  – valid sig, L1 forbidden cmd (sudo/rm)  → REJECTED (L1)
-  10%  MitM        – corrupted transaction hash              → REJECTED (hash mismatch)
+Execute Claude Code proxied through g8e gateway. Execute Claude Code with all tool calls proxied through the g8e zero-trust gateway. Automatically configures MCP integration and handles L3 approvals.
 
 Usage:
-  g8e chaos [flags]
+  g8e mcp agent claude -- [claude-args]
 
 Flags:
-      --count int      number of payloads to fire (default 100)
-      --data-dir string audit vault data dir (default: <project-root>/.g8e/test-vault/<timestamp>)
-  -h, --help            help for chaos
-      --pki-dir string  PKI dir for trusted_signers (default: <cwd>/.g8e/pki)
+  -h, --help   help for claude
+```
+
+## Agent Integration
+
+### Quick Start
+
+1. Start the gateway:
+   ```bash
+   ./g8e gw start
+   ```
+
+2. Authenticate your CLI:
+   ```bash
+   ./g8e auth login
+   ```
+
+3. Run Claude Code with g8e governance:
+   ```bash
+   ./g8e mcp agent claude -- --help
+   ```
+
+### Supported Tools
+
+- Claude Code: `./g8e mcp agent claude`
+- Cursor: `./g8e mcp agent cursor`
+- VS Code: `./g8e mcp agent code`
+- Cline: `./g8e mcp agent cline`
+
+### L3 Approval Flow
+
+When a tool requires L3 approval, g8e will:
+1. Automatically open your browser to the approval URL
+2. Wait for you to authorize via WebAuthn
+3. Retry the tool call automatically
+4. Return the result to the tool
+
+### Manual MCP Configuration
+
+For tools that don't support the agent wrapper, use the MCP config commands:
+
+```bash
+./g8e gw mcp-config       # mTLS with g8e.local
+./g8e gw mcp-config-http  # Plain HTTP (localhost only)
+```

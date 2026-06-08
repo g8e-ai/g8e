@@ -14,6 +14,7 @@
 package sqliteutil
 
 import (
+	"context"
 	"log/slog"
 	"sync"
 	"time"
@@ -21,7 +22,7 @@ import (
 
 // PruneFunc is the callback invoked on each prune tick.
 // Implementations should perform their table-specific deletion logic.
-type PruneFunc func(db *DB, logger *slog.Logger)
+type PruneFunc func(ctx context.Context, db *DB, logger *slog.Logger) error
 
 // Pruner manages a background goroutine that periodically invokes a PruneFunc.
 type Pruner struct {
@@ -29,7 +30,10 @@ type Pruner struct {
 	logger   *slog.Logger
 	interval time.Duration
 	fn       PruneFunc
-	stop     chan struct{}
+	ctx      context.Context
+	cancel   context.CancelFunc
+	mu       sync.Mutex
+	started  bool
 	wg       sync.WaitGroup
 }
 
@@ -38,17 +42,28 @@ func NewPruner(db *DB, logger *slog.Logger, interval time.Duration, fn PruneFunc
 	if interval <= 0 {
 		interval = time.Hour
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Pruner{
 		db:       db,
 		logger:   logger,
 		interval: interval,
 		fn:       fn,
-		stop:     make(chan struct{}),
+		ctx:      ctx,
+		cancel:   cancel,
 	}
 }
 
 // Start begins the background pruning goroutine.
+// It is safe to call Start multiple times (subsequent calls are no-ops).
 func (p *Pruner) Start() {
+	p.mu.Lock()
+	if p.started {
+		p.mu.Unlock()
+		return
+	}
+	p.started = true
+	p.mu.Unlock()
+
 	p.wg.Add(1)
 	go func() {
 		defer p.wg.Done()
@@ -58,10 +73,12 @@ func (p *Pruner) Start() {
 
 		for {
 			select {
-			case <-p.stop:
+			case <-p.ctx.Done():
 				return
 			case <-ticker.C:
-				p.fn(p.db, p.logger)
+				if err := p.fn(p.ctx, p.db, p.logger); err != nil {
+					p.logger.Error("pruner: prune function failed", "error", err)
+				}
 			}
 		}
 	}()
@@ -70,10 +87,14 @@ func (p *Pruner) Start() {
 // Stop signals the pruning goroutine to exit and waits for it to finish.
 // It is safe to call Stop multiple times (subsequent calls are no-ops).
 func (p *Pruner) Stop() {
-	select {
-	case <-p.stop:
-	default:
-		close(p.stop)
+	p.mu.Lock()
+	if !p.started {
+		p.mu.Unlock()
+		return
 	}
+	p.started = false
+	p.mu.Unlock()
+
+	p.cancel()
 	p.wg.Wait()
 }

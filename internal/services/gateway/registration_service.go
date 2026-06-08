@@ -34,31 +34,33 @@ import (
 
 const (
 	// Session binding KV prefixes
-	sessionWebBindPrefix      = "g8e:session:web:"
-	sessionOperatorBindPrefix = "g8e:session:operator:"
-	sessionCLIBindPrefix      = "g8e:session:cli:"
+	sessionWebBindPrefix      = "g8e:sessions:web:"
+	sessionOperatorBindPrefix = "g8e:sessions:operator:"
+	sessionCLIBindPrefix      = "g8e:sessions:cli:"
 	sessionBindSuffix         = ":bind"
 )
 
 // RegistrationService handles Gateway-native device enrollment via CSR-based authentication.
 type RegistrationService struct {
-	db         *GatewayDBService
-	pki        *PKIAuthority
-	logger     *slog.Logger
-	userSvc    *UserService
-	sessionSvc *SessionService
-	cfg        *config.GatewayConfig
+	db                 *CanonicalDBService
+	pki                *PKIAuthority
+	logger             *slog.Logger
+	userSvc            *UserService
+	cliSessionSvc      *CLISessionService
+	operatorSessionSvc *OperatorSessionService
+	cfg                *config.GatewayConfig
 }
 
 // NewRegistrationService creates a new RegistrationService.
-func NewRegistrationService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, sessionSvc *SessionService, cfg *config.GatewayConfig) *RegistrationService {
+func NewRegistrationService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, cfg *config.GatewayConfig) *RegistrationService {
 	return &RegistrationService{
-		db:         db,
-		pki:        pki,
-		logger:     logger,
-		userSvc:    userSvc,
-		sessionSvc: sessionSvc,
-		cfg:        cfg,
+		db:                 db,
+		pki:                pki,
+		logger:             logger,
+		userSvc:            userSvc,
+		cliSessionSvc:      cliSessionSvc,
+		operatorSessionSvc: operatorSessionSvc,
+		cfg:                cfg,
 	}
 }
 
@@ -120,19 +122,27 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		return fmt.Errorf("operator does not belong to user")
 	}
 
-	if op.Status == constants.OperatorStatus(marshaler.OperatorStatus(constants.OperatorStatusTerminated)) {
+	if op.Status == constants.OperatorStatusTerminated {
 		return nil // Already terminated
 	}
 
 	// Update Operator to terminated status
-	update := map[string]interface{}{
-		"status":     constants.OperatorStatusTerminated,
-		"updated_at": time.Now().UTC(),
+	type operatorTerminationUpdate struct {
+		Status            string    `json:"status"`
+		UpdatedAt         time.Time `json:"updated_at"`
+		TerminationReason string    `json:"termination_reason,omitempty"`
+	}
+	update := operatorTerminationUpdate{
+		Status:    string(constants.OperatorStatusTerminated),
+		UpdatedAt: time.Now().UTC(),
 	}
 	if reason != "" {
-		update["termination_reason"] = reason
+		update.TerminationReason = reason
 	}
-	updateBytes, _ := json.Marshal(update)
+	updateBytes, err := json.Marshal(update)
+	if err != nil {
+		return fmt.Errorf("failed to marshal update: %w", err)
+	}
 	if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, updateBytes); err != nil {
 		return fmt.Errorf("failed to update Operator status: %w", err)
 	}
@@ -161,9 +171,7 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 	if req.CSR == "" {
 		return nil, fmt.Errorf("operator CSR is required")
 	}
-	if req.CLICSR == "" {
-		return nil, fmt.Errorf("CLI CSR is required for distinct SPIFFE identity")
-	}
+	// CLI CSR is optional for operator-only enrollment
 
 	// Sanitize fingerprint
 	sanitizedFingerprint := strings.ToLower(strings.Trim(req.SystemFingerprint, " \t\n\r"))
@@ -219,14 +227,14 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 	if s.userSvc != nil && userID != "" {
 		bootstrapUser, err := s.userSvc.FindBootstrapUser()
 		if err != nil {
-			s.logger.Error("[REGISTRATION] Failed to check for bootstrap user", string(constants.ConnectionStateError), err)
+			s.logger.Error("[REGISTRATION] Failed to check for bootstrap user", "error", err)
 		} else if bootstrapUser != nil && bootstrapUser.ID != userID {
 			s.logger.Info("[REGISTRATION] Retiring bootstrap user on real login",
 				"bootstrap_user_id", bootstrapUser.ID,
 				"new_user_id", userID,
 				"operator_id", operator.ID)
 			if err := s.userSvc.Disable(bootstrapUser.ID, "retired_by_real_login", userID, operator.ID); err != nil {
-				s.logger.Error("[REGISTRATION] Failed to retire bootstrap user", string(constants.ConnectionStateError), err)
+				s.logger.Error("[REGISTRATION] Failed to retire bootstrap user", "error", err)
 				return nil, fmt.Errorf("registration failed: bootstrap retirement failed: %w", err)
 			}
 		}
@@ -249,25 +257,42 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	}
 
 	// Update Operator document
-	update := map[string]interface{}{
-		"status":              constants.OperatorStatusActive,
-		"operator_session_id": operatorSessionID,
-		"system_fingerprint":  sanitizedFingerprint,
-		string(constants.HistoryEventTypeClaimed): true,
-		"claimed_at": time.Now().UTC(),
+	type operatorClaimUpdate struct {
+		Status             string    `json:"status"`
+		OperatorSessionID  string    `json:"operator_session_id"`
+		SystemFingerprint  string    `json:"system_fingerprint"`
+		Claimed            bool      `json:"claimed"`
+		ClaimedAt          time.Time `json:"claimed_at"`
+		OperatorCert       string    `json:"operator_cert,omitempty"`
+		OperatorCertChain  string    `json:"operator_cert_chain,omitempty"`
+		OperatorCertSerial string    `json:"operator_cert_serial,omitempty"`
+	}
+	update := operatorClaimUpdate{
+		Status:            string(constants.OperatorStatusActive),
+		OperatorSessionID: operatorSessionID,
+		SystemFingerprint: sanitizedFingerprint,
+		Claimed:           true,
+		ClaimedAt:         time.Now().UTC(),
 	}
 
 	// Mint a strictly-disjoint cli_session_id alongside the Operator session.
 	// See OperatorRegistrationResponse doc: the two session types must never
 	// share an identifier.
-	cliSessionID := uuid.NewString()
+	// Only generate CLI session ID if CLI CSR is provided
+	var cliSessionID string
+	if req.CLICSR != "" {
+		cliSessionID = uuid.NewString()
+	}
 
 	// CSR-based enrollment
 	if req.CSR != "" {
 		// Basic CSR validation
 		block, _ := pem.Decode([]byte(req.CSR))
-		if block == nil || block.Type != "CERTIFICATE REQUEST" {
-			return nil, fmt.Errorf("invalid CSR PEM format")
+		if block == nil {
+			return nil, fmt.Errorf("invalid CSR PEM format: failed to decode PEM block")
+		}
+		if block.Type != "CERTIFICATE REQUEST" {
+			return nil, fmt.Errorf("invalid CSR PEM format: expected CERTIFICATE REQUEST, got %s", block.Type)
 		}
 
 		// Use operator.OrganizationID, fallback to provided organizationID
@@ -275,61 +300,83 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		if orgID == "" {
 			orgID = organizationID
 		}
-		certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, orgID, operator.ID, "", operatorSessionID, "")
-		if err != nil {
-			return nil, fmt.Errorf("failed to sign Operator CSR: %w", err)
+		certPEM, chainPEM, signErr := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, orgID, operator.ID, "", operatorSessionID, "")
+		if signErr != nil {
+			return nil, fmt.Errorf("failed to sign Operator CSR: %w", signErr)
 		}
-		update["operator_cert"] = certPEM
-		update["operator_cert_chain"] = chainPEM
-		update["operator_cert_serial"] = calculateSerialFromPEM(certPEM)
+		update.OperatorCert = certPEM
+		update.OperatorCertChain = chainPEM
+		update.OperatorCertSerial = calculateSerialFromPEM(certPEM)
 	} else {
 		return nil, fmt.Errorf("CSR required for device registration")
 	}
 
-	// CLI certificate generation - CLI CSR is mandatory for distinct SPIFFE identity
+	// CLI certificate generation - CLI CSR is optional for operator-only enrollment
 	var cliCertPEM, cliCertChainPEM, cliCertFingerprint, cliCertSerial string
-	block, _ := pem.Decode([]byte(req.CLICSR))
-	if block == nil || block.Type != "CERTIFICATE REQUEST" {
-		return nil, fmt.Errorf("invalid CLI CSR PEM format")
+	if req.CLICSR != "" {
+		block, _ := pem.Decode([]byte(req.CLICSR))
+		if block == nil {
+			return nil, fmt.Errorf("invalid CLI CSR PEM format: failed to decode PEM block")
+		}
+		if block.Type != "CERTIFICATE REQUEST" {
+			return nil, fmt.Errorf("invalid CLI CSR PEM format: expected CERTIFICATE REQUEST, got %s", block.Type)
+		}
+
+		var signErr error
+		cliCertPEM, cliCertChainPEM, signErr = s.pki.SignCSR(req.CLICSR, constants.LeafTypeCLI, "", "", userID, cliSessionID, "")
+		if signErr != nil {
+			return nil, fmt.Errorf("failed to sign CLI CSR: %w", signErr)
+		}
+		// Calculate fingerprint and serial from the issued CLI certificate
+		cliCertFingerprint = calculateFingerprintFromPEM(cliCertPEM)
+		cliCertSerial = calculateSerialFromPEM(cliCertPEM)
 	}
 
-	var err error
-	cliCertPEM, cliCertChainPEM, err = s.pki.SignCSR(req.CLICSR, constants.LeafTypeCLI, "", "", userID, cliSessionID, "")
+	updateBytes, err := json.Marshal(update)
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign CLI CSR: %w", err)
+		return nil, fmt.Errorf("failed to marshal update: %w", err)
 	}
-	// Calculate fingerprint and serial from the issued CLI certificate
-	cliCertFingerprint = calculateFingerprintFromPEM(cliCertPEM)
-	cliCertSerial = calculateSerialFromPEM(cliCertPEM)
-
-	updateBytes, _ := json.Marshal(update)
-	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operator.ID, updateBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update Operator status: %w", err)
+	_, updateErr := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operator.ID, updateBytes)
+	if updateErr != nil {
+		return nil, fmt.Errorf("failed to update Operator status: %w", updateErr)
 	}
 
 	// Fetch trust bundle
-	hubBundle, _ := s.pki.GatewayTrustBundle()
+	hubBundle, err := s.pki.GatewayTrustBundle()
+	if err != nil {
+		s.logger.Warn("[REGISTRATION] Failed to fetch trust bundle", "error", err)
+	}
 
 	// Resolve Operator cert and chain from updated doc
-	finalCertPEM := update["operator_cert"].(string)
-	finalChainPEM := update["operator_cert_chain"].(string)
+	finalCertPEM := update.OperatorCert
+	finalChainPEM := update.OperatorCertChain
 
-	err = s.sessionSvc.PersistSessions(
-		cliSessionID,
+	// Persist CLI session if CLI CSR was provided
+	if cliSessionID != "" {
+		persistErr := s.cliSessionSvc.PersistCLISession(
+			cliSessionID,
+			operatorSessionID,
+			userID,
+			sanitizedFingerprint,
+			cliCertFingerprint,
+			cliCertSerial,
+			"csr",
+		)
+		if persistErr != nil {
+			return nil, persistErr
+		}
+	}
+
+	// Persist operator session
+	if persistErr := s.operatorSessionSvc.PersistOperatorSession(
 		operatorSessionID,
 		userID,
 		organizationID,
 		operator.ID,
-		sanitizedFingerprint,
-		cliCertFingerprint,
-		cliCertSerial,
 		"csr",
-	)
-	if err != nil {
-		return nil, err
+	); persistErr != nil {
+		return nil, persistErr
 	}
-
 	return &models.OperatorRegistrationResponse{
 		Success:                true,
 		UserID:                 userID,
@@ -379,7 +426,7 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 		OrganizationID: orgID,
 		Component:      constants.ComponentName(marshaler.Status(constants.ComponentNameG8EO)),
 		Name:           fmt.Sprintf("operator-%d", slotNumber),
-		Status:         constants.OperatorStatus(marshaler.OperatorStatus(constants.OperatorStatusOffline)),
+		Status:         constants.OperatorStatusOffline,
 		SlotNumber:     slotNumber,
 		IsSlot:         true,
 		OperatorType:   constants.OperatorTypeSystem,
@@ -387,9 +434,12 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 		UpdatedAt:      time.Now().UTC(),
 	}
 
-	b, _ := json.Marshal(op)
+	b, err := json.Marshal(op)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal operator: %w", err)
+	}
 	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), id, b); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to set operator: %w", err)
 	}
 
 	return op, nil
@@ -451,10 +501,12 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 		// sessionWebBind(webSessionId) -> operatorSessionId (SET)
 		// We use a JSON array for the SET since our KV store is simple
 		webBindKey := sessionWebBindKey(req.WebSessionID)
-		raw, found := s.db.KVGet(webBindKey)
+		raw, kvFound := s.db.KVGet(webBindKey)
 		var sessionIDs []string
-		if found {
-			_ = json.Unmarshal([]byte(raw), &sessionIDs)
+		if kvFound {
+			if err := json.Unmarshal([]byte(raw), &sessionIDs); err != nil {
+				s.logger.Warn("[REGISTRATION] Failed to unmarshal session IDs", "error", err)
+			}
 		}
 		exists := false
 		for _, sid := range sessionIDs {
@@ -465,13 +517,27 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 		}
 		if !exists {
 			sessionIDs = append(sessionIDs, op.OperatorSessionID)
-			body, _ := json.Marshal(sessionIDs)
-			_ = s.db.KVSet(webBindKey, string(body), 0)
+			body, err := json.Marshal(sessionIDs)
+			if err != nil {
+				failed = append(failed, opID)
+				lastErr = fmt.Errorf("failed to marshal session IDs: %w", err)
+				continue
+			}
+			if err := s.db.KVSet(webBindKey, string(body), 0); err != nil {
+				failed = append(failed, opID)
+				lastErr = fmt.Errorf("failed to set KV binding: %w", err)
+				continue
+			}
 		}
 
 		// 2. Update durability document
 		docID := req.WebSessionID
-		existingDoc, _ := s.db.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
+		existingDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
+		if err != nil {
+			failed = append(failed, opID)
+			lastErr = fmt.Errorf("failed to get bound sessions document: %w", err)
+			continue
+		}
 		if existingDoc == nil {
 			newDoc := models.BoundSessionsDocumentGo{
 				ID:                 docID,
@@ -481,14 +547,32 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				OperatorIDs:        []string{opID},
 				BoundAt:            time.Now().UTC(),
 				LastUpdatedAt:      time.Now().UTC(),
-				Status:             constants.OperatorStatus(marshaler.OperatorStatus(constants.OperatorStatusActive)),
+				Status:             constants.OperatorStatusActive,
 			}
-			body, _ := json.Marshal(newDoc)
-			_ = s.db.DocSet(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
+			body, err := json.Marshal(newDoc)
+			if err != nil {
+				failed = append(failed, opID)
+				lastErr = fmt.Errorf("failed to marshal bound sessions document: %w", err)
+				continue
+			}
+			if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body); err != nil {
+				failed = append(failed, opID)
+				lastErr = fmt.Errorf("failed to set bound sessions document: %w", err)
+				continue
+			}
 		} else {
 			var bDoc models.BoundSessionsDocumentGo
-			b, _ := json.Marshal(existingDoc.ForWire())
-			_ = json.Unmarshal(b, &bDoc)
+			b, err := json.Marshal(existingDoc.ForWire())
+			if err != nil {
+				failed = append(failed, opID)
+				lastErr = fmt.Errorf("failed to marshal existing document: %w", err)
+				continue
+			}
+			if err := json.Unmarshal(b, &bDoc); err != nil {
+				failed = append(failed, opID)
+				lastErr = fmt.Errorf("failed to unmarshal bound sessions document: %w", err)
+				continue
+			}
 
 			opExists := false
 			for _, id := range bDoc.OperatorIDs {
@@ -501,14 +585,25 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				bDoc.OperatorIDs = append(bDoc.OperatorIDs, opID)
 				bDoc.OperatorSessionIDs = append(bDoc.OperatorSessionIDs, op.OperatorSessionID)
 				bDoc.LastUpdatedAt = time.Now().UTC()
-				bDoc.Status = constants.OperatorStatus(marshaler.OperatorStatus(constants.OperatorStatusActive))
-				body, _ := json.Marshal(bDoc)
-				_, _ = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
+				bDoc.Status = constants.OperatorStatusActive
+				body, err := json.Marshal(bDoc)
+				if err != nil {
+					failed = append(failed, opID)
+					lastErr = fmt.Errorf("failed to marshal updated bound sessions document: %w", err)
+					continue
+				}
+				if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body); err != nil {
+					failed = append(failed, opID)
+					lastErr = fmt.Errorf("failed to update bound sessions document: %w", err)
+					continue
+				}
 			}
 		}
 
 		// 3. Update Operator document itself (for UI)
-		_, _ = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(fmt.Sprintf(`{"bound_web_session_id": %q}`, req.WebSessionID)))
+		if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(fmt.Sprintf(`{"bound_web_session_id": %q}`, req.WebSessionID))); err != nil {
+			s.logger.Warn("[REGISTRATION] Failed to update operator bound session", "error", err, "operator_id", opID)
+		}
 
 		bound = append(bound, opID)
 	}
@@ -565,13 +660,18 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 
 		// 1. Update KV binding
 		if op.OperatorSessionID != "" {
-			_ = s.db.KVDelete(sessionOperatorBindKey(op.OperatorSessionID))
+			if err := s.db.KVDelete(sessionOperatorBindKey(op.OperatorSessionID)); err != nil {
+				s.logger.Warn("[REGISTRATION] Failed to delete operator session binding", "error", err, "operator_session_id", op.OperatorSessionID)
+			}
 
 			webBindKey := sessionWebBindKey(req.WebSessionID)
-			raw, found := s.db.KVGet(webBindKey)
-			if found {
+			raw, kvFound := s.db.KVGet(webBindKey)
+			if kvFound {
 				var sessionIDs []string
-				_ = json.Unmarshal([]byte(raw), &sessionIDs)
+				if err := json.Unmarshal([]byte(raw), &sessionIDs); err != nil {
+					s.logger.Warn("[REGISTRATION] Failed to unmarshal session IDs", "error", err)
+					continue
+				}
 				newSessionIDs := []string{}
 				for _, sid := range sessionIDs {
 					if sid != op.OperatorSessionID {
@@ -579,21 +679,40 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 					}
 				}
 				if len(newSessionIDs) == 0 {
-					_ = s.db.KVDelete(webBindKey)
+					if err := s.db.KVDelete(webBindKey); err != nil {
+						s.logger.Warn("[REGISTRATION] Failed to delete web session binding", "error", err)
+					}
 				} else {
-					body, _ := json.Marshal(newSessionIDs)
-					_ = s.db.KVSet(webBindKey, string(body), 0)
+					body, err := json.Marshal(newSessionIDs)
+					if err != nil {
+						s.logger.Warn("[REGISTRATION] Failed to marshal session IDs", "error", err)
+						continue
+					}
+					if err := s.db.KVSet(webBindKey, string(body), 0); err != nil {
+						s.logger.Warn("[REGISTRATION] Failed to set session IDs", "error", err)
+					}
 				}
 			}
 		}
 
 		// 2. Update durability document
 		docID := req.WebSessionID
-		existingDoc, _ := s.db.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
+		existingDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
+		if err != nil {
+			s.logger.Warn("[REGISTRATION] Failed to get bound sessions document", "error", err)
+			continue
+		}
 		if existingDoc != nil {
 			var bDoc models.BoundSessionsDocumentGo
-			b, _ := json.Marshal(existingDoc.ForWire())
-			_ = json.Unmarshal(b, &bDoc)
+			b, err := json.Marshal(existingDoc.ForWire())
+			if err != nil {
+				s.logger.Warn("[REGISTRATION] Failed to marshal existing document", "error", err)
+				continue
+			}
+			if err := json.Unmarshal(b, &bDoc); err != nil {
+				s.logger.Warn("[REGISTRATION] Failed to unmarshal bound sessions document", "error", err)
+				continue
+			}
 
 			newOpIDs := []string{}
 			newSessIDs := []string{}
@@ -607,14 +726,22 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 			bDoc.OperatorSessionIDs = newSessIDs
 			bDoc.LastUpdatedAt = time.Now().UTC()
 			if len(newOpIDs) == 0 {
-				bDoc.Status = constants.OperatorStatus(marshaler.OperatorStatus(constants.OperatorStatusTerminated))
+				bDoc.Status = constants.OperatorStatusTerminated
 			}
-			body, _ := json.Marshal(bDoc)
-			_, _ = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
+			body, err := json.Marshal(bDoc)
+			if err != nil {
+				s.logger.Warn("[REGISTRATION] Failed to marshal updated bound sessions document", "error", err)
+				continue
+			}
+			if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body); err != nil {
+				s.logger.Warn("[REGISTRATION] Failed to update bound sessions document", "error", err)
+			}
 		}
 
 		// 3. Update Operator document itself
-		_, _ = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(`{"bound_web_session_id": ""}`))
+		if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(`{"bound_web_session_id": ""}`)); err != nil {
+			s.logger.Warn("[REGISTRATION] Failed to update operator bound session", "error", err, "operator_id", opID)
+		}
 
 		unbound = append(unbound, opID)
 	}

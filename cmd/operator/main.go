@@ -44,11 +44,12 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services"
+	"github.com/g8e-ai/g8e/internal/services/auth"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	gateway "github.com/g8e-ai/g8e/internal/services/gateway"
 	insecure_mcp "github.com/g8e-ai/g8e/internal/services/insecure_mcp"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	vault "github.com/g8e-ai/g8e/internal/services/vault"
@@ -119,6 +120,171 @@ func generateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 	})
 
 	return string(csrPEM), privKey, nil
+}
+
+// performAutomaticEnrollment handles automatic enrollment with a Gateway when -e flag is provided.
+// It fetches the trust bundle, generates a CSR, enrolls with the Gateway, and saves certificates.
+func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) error {
+	// Create PKI directory
+	pkiDir := filepath.Join(workDir, ".g8e", "pki")
+	trustDir := filepath.Join(pkiDir, "trust")
+	if err := os.MkdirAll(trustDir, 0700); err != nil {
+		return fmt.Errorf("failed to create PKI directory: %w", err)
+	}
+
+	// Check if operator certificate and key already exist
+	operatorKeyPath := filepath.Join(pkiDir, "operator.key")
+	operatorCertPath := filepath.Join(pkiDir, "operator.crt")
+	if _, err := os.Stat(operatorKeyPath); err == nil {
+		if _, err := os.Stat(operatorCertPath); err == nil {
+			logger.Info("Operator certificates already exist, skipping enrollment")
+			return nil
+		}
+	}
+
+	// Fetch trust bundle from Gateway HTTP endpoint
+	trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/ca-bundle", gatewayIP, constants.Ports.OperatorHttp)
+	logger.Info("Fetching trust bundle from Gateway", "url", trustURL)
+	trustBundle, err := certs.FetchTrustBundle(context.Background(), trustURL, "")
+	if err != nil {
+		return fmt.Errorf("failed to fetch trust bundle: %w", err)
+	}
+
+	// Save trust bundle
+	trustBundlePath := filepath.Join(trustDir, "g8eg-ca-bundle.pem")
+	if err := os.WriteFile(trustBundlePath, trustBundle, 0644); err != nil {
+		return fmt.Errorf("failed to save trust bundle: %w", err)
+	}
+	logger.Info("Trust bundle saved", "path", trustBundlePath)
+
+	// Generate system fingerprint for enrollment
+	systemFp, err := auth.GenerateSystemFingerprint(logger)
+	if err != nil {
+		return fmt.Errorf("failed to generate system fingerprint: %w", err)
+	}
+
+	// Generate CSR for enrollment
+	hostname, err := os.Hostname()
+	if err != nil {
+		return fmt.Errorf("failed to get hostname: %w", err)
+	}
+	opCSR, opKey, err := generateCSR(hostname)
+	if err != nil {
+		return fmt.Errorf("failed to generate Operator CSR: %w", err)
+	}
+
+	// Generate CLI CSR (required by device enrollment endpoint even for operator-only deployment)
+	cliCSR, _, err := generateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
+	if err != nil {
+		return fmt.Errorf("failed to generate CLI CSR: %w", err)
+	}
+
+	// Enroll with Gateway
+	gatewayEndpoint := fmt.Sprintf("%s:%d", gatewayIP, constants.Ports.OperatorHttp)
+	logger.Info("Enrolling with Gateway", "endpoint", gatewayEndpoint)
+
+	// Use the HTTP device enrollment endpoint (not PKI mTLS endpoint)
+	enrollURL := fmt.Sprintf("http://%s/api/v1/auth/device/enroll", gatewayEndpoint)
+	reqBody := struct {
+		CSRPEM            string `json:"csr_pem"`
+		CLICSRPEM         string `json:"cli_csr_pem"`
+		SystemFingerprint string `json:"system_fingerprint"`
+		Hostname          string `json:"hostname"`
+	}{
+		CSRPEM:            opCSR,
+		CLICSRPEM:         cliCSR,
+		SystemFingerprint: systemFp.Fingerprint,
+		Hostname:          hostname,
+	}
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal enrollment request: %w", err)
+	}
+
+	httpReq, err := http.NewRequest("POST", enrollURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create enrollment request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to send enrollment request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read enrollment response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("enrollment failed with HTTP %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var enrollResp struct {
+		OperatorCert      string `json:"operator_cert"`
+		OperatorCertChain string `json:"operator_cert_chain,omitempty"`
+		HubTrustBundle    string `json:"hub_trust_bundle,omitempty"`
+		OperatorID        string `json:"operator_id"`
+		OperatorSessionID string `json:"operator_session_id"`
+		Error             string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(respBody, &enrollResp); err != nil {
+		return fmt.Errorf("failed to parse enrollment response: %w", err)
+	}
+
+	if enrollResp.Error != "" {
+		return fmt.Errorf("enrollment failed: %s", enrollResp.Error)
+	}
+
+	if enrollResp.OperatorCert == "" {
+		return fmt.Errorf("enrollment response missing operator certificate")
+	}
+
+	// Save operator private key
+	keyBytes, err := x509.MarshalECPrivateKey(opKey)
+	if err != nil {
+		return fmt.Errorf("failed to marshal private key: %w", err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: keyBytes,
+	})
+	keyPath := filepath.Join(pkiDir, "operator.key")
+	logger.Info("Saving operator private key", "path", keyPath)
+	if err := os.WriteFile(keyPath, keyPEM, 0600); err != nil {
+		return fmt.Errorf("failed to save private key: %w", err)
+	}
+	logger.Info("Operator private key saved successfully")
+
+	// Save operator certificate
+	certPath := filepath.Join(pkiDir, "operator.crt")
+	certContent := enrollResp.OperatorCert
+	if enrollResp.OperatorCertChain != "" {
+		certContent += "\n" + enrollResp.OperatorCertChain
+	}
+	logger.Info("Saving operator certificate", "path", certPath)
+	if err := os.WriteFile(certPath, []byte(certContent), 0600); err != nil {
+		return fmt.Errorf("failed to save operator certificate: %w", err)
+	}
+	logger.Info("Operator certificate saved successfully")
+
+	// Update trust bundle if Gateway returned a new one
+	if enrollResp.HubTrustBundle != "" {
+		if err := os.WriteFile(trustBundlePath, []byte(enrollResp.HubTrustBundle), 0644); err != nil {
+			return fmt.Errorf("failed to save updated trust bundle: %w", err)
+		}
+		logger.Info("Updated trust bundle from Gateway")
+	}
+
+	logger.Info("Enrollment successful", "operator_id", enrollResp.OperatorID, "operator_session_id", enrollResp.OperatorSessionID)
+
+	// Set environment variable for operator session ID
+	os.Setenv("G8E_OPERATOR_SESSION_ID", enrollResp.OperatorSessionID)
+
+	return nil
 }
 
 // renewOperatorCertificate performs automatic re-enrollment for the Operator certificate.
@@ -291,8 +457,6 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 	}
 
 	clientIdentity.SetCertificate(newCert)
-	// Also set the global for compatibility during migration
-	certs.SetClientCertificate(newCert)
 
 	return nil
 }
@@ -329,21 +493,19 @@ func main() {
 		return
 	}
 
-	// Check for CLI subcommands (gw, gateway, apps, auth, data, evals, security, setup, vars, test)
+	// Check for CLI subcommands
 	cliSubcommands := map[string]bool{
 		"gw":       true,
 		"gateway":  true,
-		"apps":     true,
-		"auth":     true,
-		"data":     true,
-		"evals":    true,
-		"security": true,
-		"setup":    true,
-		"vars":     true,
-		"test":     true,
-		"auditor":  true,
+		"emulator": true,
 		"chaos":    true,
 		"mcp":      true,
+		"operator": true,
+		"agent":    true,
+		"claude":   true,
+		"vault":    true,
+		"test":     true,
+		"setup":    true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
@@ -368,24 +530,23 @@ func main() {
 	var workingDir string
 	var cloudMode bool
 	var cloudProvider string
-	var localStorage bool
+	var executionVault bool
 	var logLevel string
 	var showVersion bool
 
 	var noGit bool
 
-	var httpPort int
-
 	var doctrineMode bool
 	var consensusMode bool
 	var notaryMode bool
 	var gatewayHTTPPort int
-	var gatewayBootstrapPort int
-	var gatewayPublicPort int
-	var gatewayMCPHttpPort int
+	var gatewayHTTPSPort int
 	var gatewayDataDir string
 	var gatewayPKIDir string
 	var gatewaySecretsDir string
+	var gatewayVaultDir string
+	var gatewayVaultKeyPath string
+	var gatewayVaultRequireUnlock bool
 	var gatewayPasskeyRpID string
 	var gatewayPasskeyRpName string
 	var gatewayRateLimitRPS float64
@@ -405,37 +566,37 @@ func main() {
 	var verifyVault bool
 	var resetVault bool
 	flag.StringVar(&privateKey, "k", "", "Private key")
-	flag.StringVar(&clientCert, "cert", "", "Client certificate (for mTLS)")
-	flag.StringVar(&endpointURL, "e", "", "Endpoint (hostname or IP)")
-	flag.BoolVar(&cloudMode, "c", true, "Cloud mode")
-	flag.StringVar(&cloudProvider, "p", "", "Cloud provider")
-	flag.BoolVar(&localStorage, "s", true, "Enable local storage (stores data in current directory)")
-	flag.StringVar(&logLevel, "l", "info", "Log level")
-	flag.BoolVar(&noGit, "G", false, "Disable git (ledger)")
-	flag.BoolVar(&showVersion, "v", false, "Version")
-	flag.IntVar(&httpPort, "http-port", constants.Ports.OperatorHttps, "HTTPS port for auth/bootstrap via Operator proxy (default: from paths.json)")
 	flag.StringVar(&privateKey, "key", "", "Private key")
+	flag.StringVar(&clientCert, "cert", "", "Client certificate (for mTLS)")
 	flag.StringVar(&clientCert, "client-cert", "", "Client certificate (for mTLS)")
+	flag.StringVar(&endpointURL, "e", "", "Endpoint (hostname or IP)")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
-	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: "+constants.CACertLegacyBundlePath+" or fetch from /.well-known/g8e/pki/ca-bundle)")
+	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: "+constants.Paths.Infra.CaCertPath+" or fetch from /.well-known/g8e/pki/ca-bundle)")
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory Operator was launched from)")
+	flag.BoolVar(&cloudMode, "c", true, "Cloud mode")
 	flag.BoolVar(&cloudMode, string(constants.OperatorTypeCloud), true, "Cloud mode")
+	flag.StringVar(&cloudProvider, "p", "", "Cloud provider")
 	flag.StringVar(&cloudProvider, "provider", "", "Cloud provider")
-	flag.BoolVar(&localStorage, "local-storage", true, "Enable local storage (stores data in current directory)")
+	flag.BoolVar(&executionVault, "s", true, "Enable execution vault (stores execution data in current directory)")
+	flag.BoolVar(&executionVault, "execution-vault", true, "Enable execution vault (stores execution data in current directory)")
+	flag.StringVar(&logLevel, "l", "info", "Log level")
 	flag.StringVar(&logLevel, "log", "info", "Log level")
+	flag.BoolVar(&noGit, "G", false, "Disable git (ledger)")
 	flag.BoolVar(&noGit, "no-git", false, "Disable git (ledger)")
+	flag.BoolVar(&showVersion, "v", false, "Version")
 	flag.BoolVar(&showVersion, "version", false, "Version")
 
 	flag.BoolVar(&doctrineMode, "doctrine", false, "Gateway mode: L1 enforced, L2/L3 audited (default)")
 	flag.BoolVar(&consensusMode, "consensus", false, "Gateway mode: L1/L2 enforced, L3 audited")
 	flag.BoolVar(&notaryMode, "notary", false, "Gateway mode: L1/L2/L3 strictly enforced")
-	flag.IntVar(&gatewayHTTPPort, "http-listen-port", constants.Ports.OperatorHttps, "HTTPS port for mTLS API (default: from paths.json)")
-	flag.IntVar(&gatewayBootstrapPort, "bootstrap-listen-port", constants.Ports.OperatorBootstrapHttps, "Bootstrap TLS port for CSR enrollment (default: from paths.json)")
-	flag.IntVar(&gatewayPublicPort, "public-listen-port", constants.Ports.OperatorPublicHttps, "Public browser/BYO bootstrap port (default: from paths.json)")
-	flag.IntVar(&gatewayMCPHttpPort, "mcp-http-port", constants.Ports.OperatorMcpHttp, "Plain HTTP port for MCP calls (default: from paths.json)")
+	flag.IntVar(&gatewayHTTPPort, "http-port", constants.Ports.OperatorHttp, "HTTP port for bootstrap and MCP routes (default: from paths.json)")
+	flag.IntVar(&gatewayHTTPSPort, "https-port", constants.Ports.OperatorHttps, "HTTPS port for mTLS API and public surface (default: from paths.json)")
 	flag.StringVar(&gatewayDataDir, "data-dir", "", "Data directory for SQLite database (default: "+constants.Paths.Infra.DataDir+" in working directory)")
 	flag.StringVar(&gatewayPKIDir, "pki-dir", "", "Directory for TLS certificates (default: "+constants.Paths.Infra.PkiDir+")")
 	flag.StringVar(&gatewaySecretsDir, "secrets-dir", "", "Directory for platform secrets (default: "+constants.Paths.Infra.SecretsDir+")")
+	flag.StringVar(&gatewayVaultDir, "vault-dir", "", "Directory for vault data (default: .g8e/vault)")
+	flag.StringVar(&gatewayVaultKeyPath, "vault-key", "", "Path to vault private key (default: .g8e/secrets/vault.key)")
+	flag.BoolVar(&gatewayVaultRequireUnlock, "vault-require-unlock", false, "Require vault to be unlocked at startup (fail if vault cannot be unlocked)")
 	flag.StringVar(&gatewayPasskeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
 	flag.StringVar(&gatewayPasskeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
 	flag.Float64Var(&gatewayRateLimitRPS, "rate-limit-rps", 5.0, "Gateway requests per second limit (set to 0 to disable)")
@@ -455,84 +616,12 @@ func main() {
 	flag.StringVar(&insecureNodeID, "insecure-node-id", "", "Node ID to advertise (default: hostname)")
 	flag.StringVar(&insecureDisplayName, "insecure-name", "", "Display name shown in MCP gateway UI (default: node ID)")
 
-	// Customize usage
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: g8e [options]\n")
-		fmt.Fprintf(os.Stderr, "   or: g8e <command> [command-options]\n\n")
-		fmt.Fprintf(os.Stderr, "Platform Commands:\n")
-		fmt.Fprintf(os.Stderr, "  gw          Gateway lifecycle (start, stop, status, logs)\n")
-		fmt.Fprintf(os.Stderr, "  auth        Authentication (login, logout)\n")
-		fmt.Fprintf(os.Stderr, "  approve     Approve suspended L3 transactions\n")
-		fmt.Fprintf(os.Stderr, "  data        Data operations (export, import, query)\n")
-		fmt.Fprintf(os.Stderr, "  test        Run platform tests\n")
-		fmt.Fprintf(os.Stderr, "  security    Security operations (pki, certificates)\n")
-		fmt.Fprintf(os.Stderr, "  auditor     Governance auditor (list, run, audit, self-test)\n")
-		fmt.Fprintf(os.Stderr, "  chaos       Chaos testing (generate governance events)\n")
-		fmt.Fprintf(os.Stderr, "  mcp         MCP protocol operations\n\n")
-		fmt.Fprintf(os.Stderr, "Options:\n")
-		fmt.Fprintf(os.Stderr, "  -k, --key <key>         Private key\n")
-		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running operator\n")
-		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: "+constants.CACertLegacyBundlePath+" or fetch from /.well-known/g8e/pki/ca-bundle)\n")
-		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory Operator was launched from)\n")
-		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")
-		fmt.Fprintf(os.Stderr, "      --http-port <port>    HTTPS port to dial for auth/bootstrap (default: %d)\n", constants.Ports.OperatorHttps)
-		fmt.Fprintf(os.Stderr, "  -c, --cloud             Cloud Operator mode (for AWS/cloud CLI)\n")
-		fmt.Fprintf(os.Stderr, "  -p, --provider <name>   Cloud provider: aws, gcp, azure\n")
-		fmt.Fprintf(os.Stderr, "  -s, --local-storage     Store audit data locally instead of cloud (default: on)\n")
-		fmt.Fprintf(os.Stderr, "                          When enabled, data is stored in ./%s/ relative to launch directory\n", constants.Paths.Infra.RuntimeDir)
-		fmt.Fprintf(os.Stderr, "  -l, --log <level>       Log level: info, error, debug (default: info)\n")
-		fmt.Fprintf(os.Stderr, "  -G, --no-git            Disable ledger (git-backed file versioning)\n")
-		fmt.Fprintf(os.Stderr, "      --heartbeat-interval <dur> Heartbeat interval (e.g. 60s, 2m); overrides the 30s default\n")
-		fmt.Fprintf(os.Stderr, "  -v, --version           Show version\n")
-		fmt.Fprintf(os.Stderr, "\nGateway Mode (platform persistence + pub/sub broker):\n")
-		fmt.Fprintf(os.Stderr, "  --doctrine                Gateway mode: L1 enforced, L2/L3 audited (default)\n")
-		fmt.Fprintf(os.Stderr, "  --consensus               Gateway mode: L1/L2 enforced, L3 audited\n")
-		fmt.Fprintf(os.Stderr, "  --notary                  Gateway mode: L1/L2/L3 strictly enforced\n")
-		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for mTLS API (default: %d)\n", constants.Ports.OperatorHttps)
-		fmt.Fprintf(os.Stderr, "  --bootstrap-listen-port <port> Bootstrap TLS port for CSR-based enrollment (default: %d)\n", constants.Ports.OperatorBootstrapHttps)
-		fmt.Fprintf(os.Stderr, "  --public-listen-port <port> Public browser/BYO bootstrap port (default: %d)\n", constants.Ports.OperatorPublicHttps)
-		fmt.Fprintf(os.Stderr, "  --mcp-http-port <port>      Plain HTTP port for MCP calls (default: %d)\n", constants.Ports.OperatorMcpHttp)
-		fmt.Fprintf(os.Stderr, "  --data-dir <dir>            Data directory for SQLite (default: %s in working directory)\n", constants.Paths.Infra.DataDir)
-		fmt.Fprintf(os.Stderr, "  --pki-dir <dir>             Directory for TLS certificates (default: %s)\n", constants.Paths.Infra.PkiDir)
-		fmt.Fprintf(os.Stderr, "  --secrets-dir <dir>         Directory for platform secrets (default: %s)\n", constants.Paths.Infra.SecretsDir)
-		fmt.Fprintf(os.Stderr, "  --passkey-rp-id <id>        RP ID for passkey operations (default: localhost)\n")
-		fmt.Fprintf(os.Stderr, "  --passkey-rp-name <name>    RP Name for passkey operations (default: g8e)\n")
-		fmt.Fprintf(os.Stderr, "  --rate-limit-rps <rps>      Requests per second limit (default: 5.0, set to 0 to disable)\n")
-		fmt.Fprintf(os.Stderr, "  --rate-limit-burst <burst>  Rate limit burst size (default: 10)\n")
-		fmt.Fprintf(os.Stderr, "  --cert-mode <mode>         Certificate mode: full (all hostnames/IPs), localhost (only localhost)\n")
-		fmt.Fprintf(os.Stderr, "  --network-identity-file <path> Path to JSON file containing pre-detected network identity\n")
-		fmt.Fprintf(os.Stderr, "\nVault Management:\n")
-		fmt.Fprintf(os.Stderr, "  --rekey-vault           Re-encrypt vault with new API key\n")
-		fmt.Fprintf(os.Stderr, "  --old-key <key>         Old API key (required for --rekey-vault)\n")
-		fmt.Fprintf(os.Stderr, "  --verify-vault          Verify vault integrity\n")
-		fmt.Fprintf(os.Stderr, "  --reset-vault           Reset vault (DESTROYS ALL DATA)\n")
-		fmt.Fprintf(os.Stderr, "\nInsecure MCP Node Host Mode:\n")
-		fmt.Fprintf(os.Stderr, "  --insecure              Connect to MCP gateway without governance (DANGEROUS - bypasses all L1/L2/L3 verification)\n")
-		fmt.Fprintf(os.Stderr, "  --insecure-url <url>    MCP Gateway WebSocket URL (e.g. ws://"+constants.DefaultEndpoint+":18789)\n")
-		fmt.Fprintf(os.Stderr, "  --insecure-token <tok>  Auth token\n")
-		fmt.Fprintf(os.Stderr, "  --insecure-node-id <id> Node ID advertised to the Gateway (default: hostname)\n")
-		fmt.Fprintf(os.Stderr, "  --insecure-name <name>  Display name shown in MCP gateway UI (default: node ID)\n")
-		fmt.Fprintf(os.Stderr, "\nExample Scenarios:\n")
-		fmt.Fprintf(os.Stderr, "  # Initialize Gateway in Doctrine Mode\n")
-		fmt.Fprintf(os.Stderr, "  ./g8e gw start\n\n")
-		fmt.Fprintf(os.Stderr, "  # Authenticate and bootstrap PKI\n")
-		fmt.Fprintf(os.Stderr, "  ./g8e auth login\n\n")
-		fmt.Fprintf(os.Stderr, "  # Deploy an Operator on a remote host\n")
-		fmt.Fprintf(os.Stderr, "  ./g8e security pki enroll --endpoint <gateway-ip>\n\n")
-		fmt.Fprintf(os.Stderr, "  # Verify platform status\n")
-		fmt.Fprintf(os.Stderr, "  ./g8e gw status\n\n")
-		fmt.Fprintf(os.Stderr, "  # Query audit trail\n")
-		fmt.Fprintf(os.Stderr, "  ./g8e data query --collection audit_vault\n\n")
-		fmt.Fprintf(os.Stderr, "  # Start Gateway in Notary Mode (L1/L2/L3 enforced)\n")
-		fmt.Fprintf(os.Stderr, "  ./g8e gw start --posture notary\n")
-	}
-
 	flag.Parse()
 
 	// Show help if no arguments provided
 	if len(os.Args) == 1 {
-		flag.Usage()
-		os.Exit(0)
+		clicmd.Execute()
+		return
 	}
 
 	if showVersion {
@@ -571,7 +660,17 @@ func main() {
 	}
 
 	if postureCount > 0 {
-		runGatewayMode(posture, gatewayHTTPPort, gatewayBootstrapPort, gatewayPublicPort, gatewayMCPHttpPort, gatewayDataDir, gatewayPKIDir, gatewaySecretsDir, gatewayPasskeyRpID, gatewayPasskeyRpName, gatewayRateLimitRPS, gatewayRateLimitBurst, logLevel, gatewayCertIdentityMode, gatewayNetworkIdentityFile)
+		// Environment variables override CLI flags
+		if gatewayVaultDir == "" {
+			gatewayVaultDir = os.Getenv("G8E_VAULT_DIR")
+		}
+		if gatewayVaultKeyPath == "" {
+			gatewayVaultKeyPath = os.Getenv("G8E_VAULT_KEY")
+		}
+		if !gatewayVaultRequireUnlock {
+			gatewayVaultRequireUnlock = os.Getenv("G8E_VAULT_REQUIRE_UNLOCK") == "true"
+		}
+		runGatewayMode(posture, gatewayHTTPPort, gatewayHTTPSPort, gatewayDataDir, gatewayPKIDir, gatewaySecretsDir, gatewayVaultDir, gatewayVaultKeyPath, gatewayVaultRequireUnlock, gatewayPasskeyRpID, gatewayPasskeyRpName, gatewayRateLimitRPS, gatewayRateLimitBurst, logLevel, gatewayCertIdentityMode, gatewayNetworkIdentityFile)
 		return
 	}
 
@@ -600,21 +699,21 @@ func main() {
 
 	// Load trust bundle for TLS verification. Priority:
 	// 1. Explicit --trust-bundle path
-	// 2. Local PKI directory ("+constants.CACertLegacyBundlePath+")
+	// 2. Local PKI directory ("+constants.Paths.Infra.CaCertPath+")
 	// 3. Fetch from Operator /.well-known/g8e/pki/ca-bundle endpoint
 	trustLoaded := loadTrustBundle(logger, trustBundlePath, workingDir, trustStore)
 	if !trustLoaded {
 		if endpointURL != "" {
-			trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/ca-bundle", endpointURL, constants.Ports.OperatorBootstrapHttps)
+			trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/ca-bundle", endpointURL, constants.Ports.OperatorHttp)
 			logger.Info("Fetching trust bundle from Operator PKI endpoint", "url", trustURL)
-			if err := certs.FetchAndSetCA(context.Background(), trustURL, ""); err != nil {
+			pemData, err := certs.FetchTrustBundle(context.Background(), trustURL, "")
+			if err != nil {
 				logger.Error("Failed to fetch trust bundle from Operator", "url", trustURL, string(constants.ConnectionStateError), err)
 				fmt.Fprintf(os.Stderr, "Failed to fetch trust bundle from Operator: %v\n", err)
 				fmt.Fprintf(os.Stderr, "  Ensure the platform is running: ./g8e gw start\n")
 				os.Exit(constants.ExitConfigError)
 			}
-			// Also set in trustStore for DI
-			trustStore.SetCA(certs.GetRawCA())
+			trustStore.SetCA(pemData)
 		} else {
 			logger.Error("No trust bundle available and no endpoint specified")
 			fmt.Fprintf(os.Stderr, "Error: No trust bundle available. Provide --trust-bundle or --endpoint\n")
@@ -657,10 +756,29 @@ func main() {
 		}
 	}
 
+	// If certificates don't exist and endpoint is provided, perform automatic enrollment
+	if (privateKey == "" || clientCert == "") && endpointURL != "" {
+		logger.Info("No local certificates found, performing automatic enrollment with Gateway", "endpoint", endpointURL)
+		if err := performAutomaticEnrollment(endpointURL, launchDir, logger); err != nil {
+			logger.Error("Automatic enrollment failed", string(constants.ConnectionStateError), err)
+			fmt.Fprintf(os.Stderr, "Automatic enrollment failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "  Ensure the Gateway is running and accessible at %s\n", endpointURL)
+			os.Exit(constants.ExitConfigError)
+		}
+
+		// After enrollment, set the certificate paths
+		privateKey = filepath.Join(launchDir, ".g8e/pki/operator.key")
+		clientCert = filepath.Join(launchDir, ".g8e/pki/operator.crt")
+
+		// Keep using the original endpoint (localhost or provided IP) for Gateway connections
+		logger.Info("Automatic enrollment completed, using enrolled certificates")
+	}
+
 	if privateKey == "" {
 		fmt.Fprintf(os.Stderr, "Private key is required (-k or --key). Expected locations:\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/operator.key (project directory)\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/client.key (project directory)\n")
+		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform automatic enrollment\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -668,8 +786,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Client certificate is required (--cert or --client-cert). Expected locations:\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/operator.crt (project directory)\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/client.crt (project directory)\n")
+		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform automatic enrollment\n")
 		os.Exit(constants.ExitConfigError)
 	}
+
+	// Create DI-based TLS config from trust store and client identity
+	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
 
 	// Load client certificate for mTLS
 	certPEM, err := os.ReadFile(clientCert)
@@ -691,8 +813,6 @@ func main() {
 	}
 
 	clientIdentity.SetCertificate(cert)
-	// Also set the global for compatibility during migration
-	certs.SetClientCertificate(cert)
 
 	// Resolve the effective working directory: flag overrides launch dir.
 	effectiveWorkDir := launchDir
@@ -703,21 +823,21 @@ func main() {
 	cfg, err := config.Load(config.LoadOptions{
 		OperatorEndpoint: operatorEndpoint,
 
-		HTTPPort:            httpPort,
-		CloudMode:           cloudMode,
-		CloudProvider:       cloudProvider,
-		LocalStorageEnabled: localStorage,
-		NoGit:               noGit,
-		LogLevel:            logLevel,
-		WorkDir:             effectiveWorkDir,
-		PKIDir:              settings.PKIDir,
-		SecretsDir:          settings.SecretsDir,
-		HeartbeatInterval:   heartbeatInterval,
-		Shell:               os.Getenv("SHELL"),
-		Lang:                os.Getenv("LANG"),
-		Term:                os.Getenv("TERM"),
-		TZ:                  os.Getenv("TZ"),
-		Posture:             "", // Will default to PostureNotary in Load() since L3Notary is nil
+		HTTPPort:              0, // Will default to constants.Ports.OperatorHttps (8443)
+		CloudMode:             cloudMode,
+		CloudProvider:         cloudProvider,
+		ExecutionVaultEnabled: executionVault,
+		NoGit:                 noGit,
+		LogLevel:              logLevel,
+		WorkDir:               effectiveWorkDir,
+		PKIDir:                settings.PKIDir,
+		SecretsDir:            settings.SecretsDir,
+		HeartbeatInterval:     heartbeatInterval,
+		Shell:                 os.Getenv("SHELL"),
+		Lang:                  os.Getenv("LANG"),
+		Term:                  os.Getenv("TERM"),
+		TZ:                    os.Getenv("TZ"),
+		Posture:               "", // Will default to PostureNotary in Load() since L3Notary is nil
 	})
 	if err != nil {
 		logger.Error("Failed to load configuration", string(constants.ConnectionStateError), err)
@@ -730,13 +850,13 @@ func main() {
 		logger.Info("Cloud Operator mode enabled", "provider", cfg.CloudProvider)
 	}
 
-	if cfg.LocalStoreEnabled {
-		logger.Info("Local storage enabled - data stays in working directory", "db_path", cfg.LocalStoreDBPath, "working_dir", cfg.WorkDir)
+	if cfg.ExecutionVaultEnabled {
+		logger.Info("Execution vault enabled - data stays in working directory", "working_dir", cfg.WorkDir)
 	} else {
-		logger.Info("Local storage disabled (command output sent to cloud)")
+		logger.Info("Execution vault disabled (command output sent to cloud)")
 	}
 
-	g8eoService, err := services.NewG8eoService(cfg, logger)
+	g8eoService, err := services.NewG8eoService(cfg, logger, tlsConfig)
 	if err != nil {
 		logger.Error("Failed to create Operator service", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitCodeFromError(err))
@@ -808,8 +928,6 @@ func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string, trust
 			continue
 		}
 		trustStore.SetCA(pemData)
-		// Also set the global for compatibility during migration
-		certs.SetCA(pemData)
 		logger.Info("CA certificate loaded from local file")
 		return true
 	}
@@ -913,16 +1031,18 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 // runGatewayMode starts the Operator in gateway mode - the platform's central
 // persistence (operator) and pub/sub broker. In this mode, the Operator also
 // runs an in-process command service to act as the sovereign execution Gateway.
-func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publicPort, mcpHttpPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode, networkIdentityFile string) {
+func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, dataDir, pkiDir, secretsDir, vaultDir, vaultKeyPath string, vaultRequireUnlock bool, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode, networkIdentityFile string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
 		os.Exit(constants.ExitConfigError)
 	}
 
-	// Resolve paths to ensure constants are initialized
-	projectRoot := constants.ResolveProjectRoot()
-	constants.ResolvePaths(projectRoot)
+	// Initialize paths relative to current working directory
+	if err := constants.InitPaths(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize paths: %v\n", err)
+		os.Exit(constants.ExitConfigError)
+	}
 
 	// Apply defaults for empty directory flags (constants are now absolute)
 	if dataDir == "" {
@@ -935,6 +1055,8 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		secretsDir = constants.Paths.Infra.SecretsDir
 	}
 
+	logger.Info("Gateway paths configured", "data_dir", dataDir, "pki_dir", pkiDir, "secrets_dir", secretsDir)
+
 	logger.Info("g8e - Gateway Mode",
 		"posture", posture,
 		"version", version,
@@ -943,9 +1065,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	cfg, err := config.LoadGateway(config.GatewayOptions{
 		Posture:             posture,
 		HTTPPort:            httpPort,
-		BootstrapPort:       bootstrapPort,
-		PublicPort:          publicPort,
-		MCPHttpPort:         mcpHttpPort,
+		HTTPSPort:           httpsPort,
 		DataDir:             dataDir,
 		PKIDir:              pkiDir,
 		SecretsDir:          secretsDir,
@@ -965,7 +1085,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	}
 	cfg.Version = version
 
-	svc, err := gateway.NewGatewayService(cfg, logger)
+	svc, err := gateway.NewGatewayModeService(cfg, logger)
 	if err != nil {
 		logger.Error("Failed to create gateway service", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitCodeFromError(err))
@@ -1009,6 +1129,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 
 	// Export Actuator public key for receipt verification by evals harness
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
+	logger.Info("Exporting Actuator public key", "pki_dir", cfg.PKIDir, "key_id", ActuatorKeyID)
 	if err := exportActuatorPublicKey(cfg.PKIDir, ActuatorPub, ActuatorKeyID, logger); err != nil {
 		logger.Warn("Failed to export Actuator public key for evals harness receipt verification", "error", err)
 	}
@@ -1020,14 +1141,14 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	// reach it for Actuator egress dispatch on verified MCP_CALL transactions.
 	mcpSvc := svc.GetHTTPHandler().GetMCPGateway()
 
-	// Get the GatewayDBService's AuditVault for full audit vault storage
+	// Get the GatewayDBService's AuditStore for full audit storage
 	// This ensures ActionReceipts are persisted in the receipts table
-	var auditVault *storage.AuditVaultService
-	if svc.GetDB() != nil && svc.GetDB().AuditVault != nil && svc.GetDB().AuditVault.IsEnabled() {
-		auditVault = svc.GetDB().AuditVault
-		logger.Info("Gateway AuditVault enabled for full audit vault storage")
+	var auditStore *storage.SQLAuditStore
+	if svc.GetDB() != nil && svc.GetDB().AuditStore != nil && svc.GetDB().AuditStore.IsEnabled() {
+		auditStore = svc.GetDB().AuditStore
+		logger.Info("Gateway AuditStore enabled for full audit storage")
 	} else {
-		logger.Warn("Gateway AuditVault not available or disabled - ActionReceipts will not be stored in audit vault")
+		logger.Warn("Gateway AuditStore not available or disabled - ActionReceipts will not be stored in audit store")
 	}
 
 	psConfig := pubsub.CommandServiceConfig{
@@ -1037,11 +1158,11 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		FileEdit:            fileSvc,
 		PubSubClient:        loopbackClient,
 		ResultsService:      nil, // Results handled via direct loopback publish if needed
-		LocalStore:          nil, // Not used in gateway mode
-		AuditVault:          auditVault,
+		ExecutionVault:      nil, // Not used in gateway mode
+		AuditStore:          auditStore,
 		Ledger:              nil, // P1: Ledger in gateway mode
 		HistoryHandler:      nil, // P1: History in gateway mode
-		Sovereignty:         sovereignty.NewSovereigntyService(sovereignty.DefaultConfig(), logger, nil),
+		Scrubbing:           scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 		ReplayStore:         govDeps.ReplayStore,
 		StateRootProvider:   govDeps.StateRootProvider,
 		TransactionAudit:    govDeps.TransactionAudit,

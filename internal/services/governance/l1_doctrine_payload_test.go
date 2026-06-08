@@ -3,8 +3,9 @@ package governance
 import (
 	"testing"
 
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
+
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 func TestL1Doctrine_ValidatePayload_McpCallRequested(t *testing.T) {
@@ -24,9 +25,9 @@ func TestL1Doctrine_ValidatePayload_McpCallRequested(t *testing.T) {
 		{"blocked_su", "su", true},
 		{"blocked_rm_rf_root", "rm-rf-root", true},
 		{"blocked_rm_rf_root_spaces", "rm rf root", true},
-		{"safe_substring_rm_rf", "format_rm_rf_root_tool", false}, // It's not anchored, so this will be blocked. Is that correct?
+		{"safe_substring_rm_rf", "format_rm_rf_root_tool", false},
 		{"blocked_drop_database", "drop_database", true},
-		{"safe_substring_drop_database", "my_drop_database_test", false}, // Not anchored.
+		{"safe_substring_drop_database", "my_drop_database_test", false},
 	}
 
 	for _, tt := range tests {

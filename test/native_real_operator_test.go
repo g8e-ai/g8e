@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build integration
+//go:build e2e
 
 package tests
 
@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,10 +35,12 @@ import (
 // and authenticated via `./g8e auth login`.
 func TestNativeRealOperator_Smoke(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
+	EnsureAuthLogin(t, repoRoot)
 	client, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	EnsureGatewayReady(t, cliCfg)
 
 	// Test basic connectivity to Operator via HTTPS
-	healthURL := fmt.Sprintf("https://localhost:%d/api/v1/health", cliCfg.Paths.Ports.OperatorPublicHTTPS)
+	healthURL := fmt.Sprintf("https://localhost:%d/api/v1/health", constants.Ports.OperatorHttps)
 
 	resp, err := client.Get(healthURL)
 	require.NoError(t, err)

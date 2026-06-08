@@ -14,6 +14,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -40,14 +41,14 @@ import (
 func TestCLIL3Notary_VerifyL3Proof_RejectsMissingInputs(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	userSvc := NewUserService(db, logger)
-	sessionSvc := NewSessionService(db, logger)
-	notary := NewCLIL3Notary(db, nil, logger, userSvc, sessionSvc)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	notary := NewCLIL3Notary(db, nil, logger, userSvc, cliSessionSvc)
 
 	tests := []struct {
 		name            string
@@ -96,7 +97,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsMissingInputs(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			ok, err := notary.VerifyL3Proof(tc.userID, tc.transactionHash, "", tc.proof)
+			ok, err := notary.VerifyL3Proof(context.Background(), tc.userID, tc.transactionHash, "", tc.proof)
 			require.Error(t, err)
 			require.False(t, ok)
 			require.Contains(t, err.Error(), tc.wantErr)
@@ -107,14 +108,14 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsMissingInputs(t *testing.T) {
 func TestCLIL3Notary_VerifyL3Proof_RejectsInactiveUser(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	userSvc := NewUserService(db, logger)
-	sessionSvc := NewSessionService(db, logger)
-	notary := NewCLIL3Notary(db, nil, logger, userSvc, sessionSvc)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	notary := NewCLIL3Notary(db, nil, logger, userSvc, cliSessionSvc)
 
 	// Create a disabled user
 	userID := "disabled-user"
@@ -127,7 +128,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInactiveUser(t *testing.T) {
 
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	ok, err := notary.VerifyL3Proof(userID, txHash, "", &commonv1.L3Proof{MtlsCertFingerprint: validFingerprint})
+	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "", &commonv1.L3Proof{MtlsCertFingerprint: validFingerprint})
 	require.Error(t, err)
 	require.False(t, ok)
 	require.Contains(t, err.Error(), "user is not active")
@@ -136,14 +137,14 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInactiveUser(t *testing.T) {
 func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	userSvc := NewUserService(db, logger)
-	sessionSvc := NewSessionService(db, logger)
-	notary := NewCLIL3Notary(db, nil, logger, userSvc, sessionSvc)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	notary := NewCLIL3Notary(db, nil, logger, userSvc, cliSessionSvc)
 
 	// Create an active user
 	userID := "active-user"
@@ -175,7 +176,7 @@ func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
 
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	ok, err := notary.VerifyL3Proof(userID, txHash, cliSessionID, &commonv1.L3Proof{MtlsCertFingerprint: validFingerprint})
+	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, &commonv1.L3Proof{MtlsCertFingerprint: validFingerprint})
 	require.NoError(t, err)
 	require.True(t, ok)
 }
@@ -183,14 +184,14 @@ func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
 func TestCLIL3Notary_VerifyL3Proof_RejectsUnknownFingerprint(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	userSvc := NewUserService(db, logger)
-	sessionSvc := NewSessionService(db, logger)
-	notary := NewCLIL3Notary(db, nil, logger, userSvc, sessionSvc)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	notary := NewCLIL3Notary(db, nil, logger, userSvc, cliSessionSvc)
 
 	// Create an active user
 	userID := "active-user"
@@ -204,7 +205,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsUnknownFingerprint(t *testing.T) {
 	// No CLI session created - verification should fail
 	unknownFingerprint := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	ok, err := notary.VerifyL3Proof(userID, txHash, "non-existent-session", &commonv1.L3Proof{MtlsCertFingerprint: unknownFingerprint})
+	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "non-existent-session", &commonv1.L3Proof{MtlsCertFingerprint: unknownFingerprint})
 	require.Error(t, err)
 	require.False(t, ok)
 	require.Contains(t, err.Error(), "CLI session not found")
@@ -269,19 +270,20 @@ func TestExtractCLISessionFromCert(t *testing.T) {
 func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
-	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+	sm, _ := NewSecretManager(db.db, secretsDir, logger)
 	pki := newPKIAuthority(dbDir, filepath.Join(dbDir, "pki"), db, sm, logger)
-	err = pki.EnsurePKI(nil)
+	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
-	sessionSvc := NewSessionService(db, logger)
-	notary := NewCLIL3Notary(db, pki, logger, userSvc, sessionSvc)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	notary := NewCLIL3Notary(db, pki, logger, userSvc, cliSessionSvc)
 
 	userID := "user-123"
 	user := &models.User{
@@ -316,7 +318,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	ok, err := notary.VerifyL3Proof(userID, txHash, cliSessionID, &commonv1.L3Proof{MtlsCertFingerprint: validFingerprint})
+	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, &commonv1.L3Proof{MtlsCertFingerprint: validFingerprint})
 	require.NoError(t, err)
 	require.False(t, ok)
 }
@@ -355,14 +357,14 @@ func TestExtractUserIDFromCert(t *testing.T) {
 func TestCompositeL3Verifier_DelegatesToCLI(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	userSvc := NewUserService(db, logger)
-	sessionSvc := NewSessionService(db, logger)
-	cliL3 := NewCLIL3Notary(db, nil, logger, userSvc, sessionSvc)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	cliL3 := NewCLIL3Notary(db, nil, logger, userSvc, cliSessionSvc)
 	composite := NewCompositeL3Verifier(nil, cliL3, logger)
 
 	// Create an active user
@@ -395,7 +397,7 @@ func TestCompositeL3Verifier_DelegatesToCLI(t *testing.T) {
 
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	ok, err := composite.VerifyL3Proof(userID, txHash, cliSessionID, &commonv1.L3Proof{MtlsCertFingerprint: validFingerprint})
+	ok, err := composite.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, &commonv1.L3Proof{MtlsCertFingerprint: validFingerprint})
 	require.NoError(t, err)
 	require.True(t, ok)
 }
@@ -419,7 +421,7 @@ func TestCompositeL3Verifier_DelegatesToPasskey(t *testing.T) {
 	// Create a WebAuthn proof (no mtls_cert_fingerprint)
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	clientData := `{"type":"webauthn.get","challenge":"` + base64.RawURLEncoding.EncodeToString([]byte(txHash)) + `","origin":"localhost"}`
-	ok, err := composite.VerifyL3Proof(userID, txHash, "", &commonv1.L3Proof{
+	ok, err := composite.VerifyL3Proof(context.Background(), userID, txHash, "", &commonv1.L3Proof{
 		CredentialId:      base64.RawURLEncoding.EncodeToString(credID),
 		ClientDataJson:    base64.RawURLEncoding.EncodeToString([]byte(clientData)),
 		AuthenticatorData: base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("a", 37))),
@@ -434,14 +436,14 @@ func TestCompositeL3Verifier_DelegatesToPasskey(t *testing.T) {
 func TestVerifyCLICertificate(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	userSvc := NewUserService(db, logger)
-	sessionSvc := NewSessionService(db, logger)
-	notary := NewCLIL3Notary(db, nil, logger, userSvc, sessionSvc)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	notary := NewCLIL3Notary(db, nil, logger, userSvc, cliSessionSvc)
 
 	t.Run("nil certificate", func(t *testing.T) {
 		t.Parallel()
@@ -558,14 +560,14 @@ func TestVerifyCLICertificate(t *testing.T) {
 func TestVerifyCertificate(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	userSvc := NewUserService(db, logger)
-	sessionSvc := NewSessionService(db, logger)
-	notary := NewCLIL3Notary(db, nil, logger, userSvc, sessionSvc)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	notary := NewCLIL3Notary(db, nil, logger, userSvc, cliSessionSvc)
 
 	t.Run("PKI authority not configured", func(t *testing.T) {
 		t.Parallel()

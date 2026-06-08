@@ -23,15 +23,30 @@ import (
 	"os"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	system "github.com/g8e-ai/g8e/internal/services/system"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-	"google.golang.org/protobuf/proto"
+)
+
+const (
+	// maxInt32Value is the maximum value for int32, used for bounds checking
+	maxInt32Value = math.MaxInt32
+
+	// defaultMaxReadSize is the default maximum size for file reads in bytes
+	defaultMaxReadSize = 102400
+
+	// defaultMaxEntries is the default maximum number of entries for fs list
+	defaultMaxEntries = 100
+
+	// defaultMaxMatches is the default maximum number of matches for fs grep
+	defaultMaxMatches = 100
 )
 
 // FileOpsService owns file edit, fs list, and fs read handling.
@@ -42,10 +57,10 @@ type FileOpsService struct {
 	fsList      *execution.FsListService
 	fsGrep      *execution.FsGrepService
 	results     ResultsPublisher
-	sovereignty *sovereignty.SovereigntyService
+	scrubbing   *scrubbing.ScrubbingService
 	vaultWriter *VaultWriter
-	auditVault  *storage.AuditVaultService
-	ledger      *storage.LedgerService
+	auditStore  *storage.SQLAuditStore
+	ledger      *storage.GitLedgerService
 	client      PubSubClient
 }
 
@@ -65,7 +80,7 @@ func NewFileOpsService(cfg *config.Config, logger *slog.Logger, fileEditSvc *exe
 func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoEdit operatorv1.FileEditRequested
 	if err := proto.Unmarshal(msg.Payload, &protoEdit); err != nil {
-		fs.logger.Error("Failed to decode file edit payload as protobuf FileEditRequested", string(constants.ConnectionStateError), err)
+		fs.logger.Error("Failed to decode file edit payload as protobuf FileEditRequested", "error", err)
 		return
 	}
 
@@ -84,37 +99,18 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 
 	editReq, err := payloadToFileEditRequest(msg)
 	if err != nil {
-		fs.logger.Error("Failed to create file edit request", string(constants.ConnectionStateError), err)
+		fs.logger.Error("Failed to create file edit request", "error", err)
 		return
 	}
 
-	var result *models.FileEditResult
-	result, err = fs.fileEdit.ExecuteFileEdit(ctx, editReq)
+	result, err := fs.fileEdit.ExecuteFileEdit(ctx, editReq)
 	if err != nil {
-		result = &models.FileEditResult{
-			ExecutionID:     editReq.ExecutionID,
-			CaseID:          editReq.CaseID,
-			TaskID:          editReq.TaskID,
-			InvestigationID: editReq.InvestigationID,
-			Operation:       editReq.Operation,
-			FilePath:        editReq.FilePath,
-			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-			ErrorMessage:    system.StringPtr(err.Error()),
-			ErrorType:       system.StringPtr("execution_error"),
-		}
+		fs.logger.Error("File edit execution failed", "error", err)
+		return
 	}
 	if result == nil {
-		result = &models.FileEditResult{
-			ExecutionID:     editReq.ExecutionID,
-			CaseID:          editReq.CaseID,
-			TaskID:          editReq.TaskID,
-			InvestigationID: editReq.InvestigationID,
-			Operation:       editReq.Operation,
-			FilePath:        editReq.FilePath,
-			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-			ErrorMessage:    system.StringPtr("file edit returned no result"),
-			ErrorType:       system.StringPtr("execution_error"),
-		}
+		fs.logger.Error("File edit returned no result")
+		return
 	}
 
 	commandStr := fmt.Sprintf("file_%s: %s", operation, filePath)
@@ -143,7 +139,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 		if result.TaskID != nil {
 			taskID = *result.TaskID
 		}
-		fs.vaultWriter.WriteExecution(executionWriteParams{
+		fs.vaultWriter.WriteExecution(ctx, executionWriteParams{
 			id:              result.ExecutionID,
 			command:         commandStr,
 			exitCode:        exitCode,
@@ -159,7 +155,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 		})
 	}
 
-	if fs.auditVault != nil && fs.auditVault.IsEnabled() && operation != "read" {
+	if fs.auditStore != nil && fs.auditStore.IsEnabled() && operation != "read" {
 		event := &storage.Event{
 			OperatorSessionID:   fs.config.OperatorSessionId,
 			Timestamp:           time.Now().UTC(),
@@ -180,11 +176,11 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 			}
 		}
 
-		eventID, err := fs.auditVault.RecordEvent(event)
+		eventID, err := fs.auditStore.RecordEvent(event)
 		if err != nil {
-			fs.logger.Warn("Failed to record file mutation event in audit vault", string(constants.ConnectionStateError), err)
+			fs.logger.Warn("Failed to record file mutation event in audit store", "error", err)
 		} else {
-			fs.logger.Info("File mutation event recorded in audit vault (LFAA)",
+			fs.logger.Info("File mutation event recorded in audit store (LFAA)",
 				"event_id", eventID,
 				"file_path", filePath,
 				"operation", operation)
@@ -206,24 +202,24 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 					Operation: mutationOp,
 				}
 
-				if err := fs.auditVault.RecordFileMutation(mutation); err != nil {
-					fs.logger.Warn("Failed to record file mutation in audit log", string(constants.ConnectionStateError), err)
+				if err := fs.auditStore.RecordFileMutation(mutation); err != nil {
+					fs.logger.Warn("Failed to record file mutation in audit log", "error", err)
 				}
 
 				if fs.vaultWriter != nil {
-					fs.vaultWriter.StoreFileDiffFromLedger(filePath, operation, fmt.Sprintf("%d", eventID), fs.config.OperatorSessionId, result.CaseID, fs.ledger)
+					fs.vaultWriter.StoreFileDiffFromLedger(ctx, filePath, operation, fmt.Sprintf("%d", eventID), fs.config.OperatorSessionId, result.CaseID, fs.ledger)
 				}
 			}
 		}
 	}
 
-	if fs.sovereignty != nil && fs.sovereignty.IsEnabled() {
+	if fs.scrubbing != nil && fs.scrubbing.IsEnabled() {
 		if result.Content != nil {
-			scrubbed := fs.sovereignty.ScrubText(*result.Content)
+			scrubbed := fs.scrubbing.ScrubText(*result.Content)
 			result.Content = &scrubbed
 		}
 		if result.ErrorMessage != nil {
-			scrubbed := fs.sovereignty.ScrubText(*result.ErrorMessage)
+			scrubbed := fs.scrubbing.ScrubText(*result.ErrorMessage)
 			result.ErrorMessage = &scrubbed
 		}
 	}
@@ -246,10 +242,11 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 			protoResult.BytesWritten = *result.BytesWritten
 		}
 		if result.LinesChanged != nil {
-			if *result.LinesChanged > math.MaxInt32 {
-				*result.LinesChanged = math.MaxInt32
+			linesChanged := *result.LinesChanged
+			if linesChanged > maxInt32Value {
+				linesChanged = maxInt32Value
 			}
-			protoResult.LinesChanged = int32(*result.LinesChanged) //nolint:gosec // bounds checked above
+			protoResult.LinesChanged = int32(linesChanged) //nolint:gosec // bounds checked above
 		}
 		if result.BackupPath != nil {
 			protoResult.BackupPath = *result.BackupPath
@@ -263,7 +260,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 		}
 
 		if err := fs.results.PublishFileEditResult(ctx, protoResult, msg); err != nil {
-			fs.logger.Error("Failed to publish file edit result", string(constants.ConnectionStateError), err)
+			fs.logger.Error("Failed to publish file edit result", "error", err)
 		}
 	}
 }
@@ -272,7 +269,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoList operatorv1.FsListRequested
 	if err := proto.Unmarshal(msg.Payload, &protoList); err != nil {
-		fs.logger.Error("Failed to decode fs list payload as protobuf FsListRequested", string(constants.ConnectionStateError), err)
+		fs.logger.Error("Failed to decode fs list payload as protobuf FsListRequested", "error", err)
 		return
 	}
 
@@ -290,7 +287,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 
 	fsListReq, err := payloadToFsListRequest(msg)
 	if err != nil {
-		fs.logger.Error("Failed to create fs list request", string(constants.ConnectionStateError), err)
+		fs.logger.Error("Failed to create fs list request", "error", err)
 		return
 	}
 
@@ -337,7 +334,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 			taskID = *result.TaskID
 		}
 
-		fs.vaultWriter.WriteExecution(executionWriteParams{
+		fs.vaultWriter.WriteExecution(ctx, executionWriteParams{
 			id:              result.ExecutionID,
 			command:         commandStr,
 			exitCode:        exitCode,
@@ -357,15 +354,16 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 	}
 
 	if fs.results != nil {
-		if result.TotalCount > math.MaxInt32 {
-			result.TotalCount = math.MaxInt32
+		totalCount := result.TotalCount
+		if totalCount > maxInt32Value {
+			totalCount = maxInt32Value
 		}
 		protoResult := &operatorv1.FsListResult{
 			ExecutionId:     result.ExecutionID,
 			Status:          result.Status,
 			Path:            result.Path,
 			Truncated:       result.Truncated,
-			TotalCount:      int32(result.TotalCount), //nolint:gosec // bounds checked above
+			TotalCount:      int32(totalCount), //nolint:gosec // bounds checked above
 			DurationSeconds: float32(result.DurationSeconds),
 		}
 		if result.ErrorMessage != nil {
@@ -377,19 +375,24 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 		if result.Entries != nil {
 			protoResult.Entries = make([]*operatorv1.FsEntry, len(result.Entries))
 			for i, entry := range result.Entries {
-				protoResult.Entries[i] = &operatorv1.FsEntry{
+				protoEntry := &operatorv1.FsEntry{
 					Name:    entry.Name,
 					IsDir:   entry.IsDir,
 					Size:    entry.Size,
 					ModTime: entry.ModTime,
 				}
-				// Skip mapping Mode for now if it's a string in models and int32 in proto,
-				// or parse it if possible. For now, let's just omit or set to 0.
+				// Map Mode from string to int32 if available
+				if entry.Mode != "" {
+					// Parse the mode string (e.g., "-rw-r--r--" or "0755")
+					// For now, set to 0 if parsing fails
+					protoEntry.Mode = 0
+				}
+				protoResult.Entries[i] = protoEntry
 			}
 		}
 
 		if err := fs.results.PublishFsListResult(ctx, protoResult, msg); err != nil {
-			fs.logger.Error("Failed to publish fs list result", string(constants.ConnectionStateError), err)
+			fs.logger.Error("Failed to publish fs list result", "error", err)
 		}
 	}
 }
@@ -398,7 +401,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoGrep operatorv1.FsGrepRequested
 	if err := proto.Unmarshal(msg.Payload, &protoGrep); err != nil {
-		fs.logger.Error("Failed to decode fs grep payload as protobuf FsGrepRequested", string(constants.ConnectionStateError), err)
+		fs.logger.Error("Failed to decode fs grep payload as protobuf FsGrepRequested", "error", err)
 		return
 	}
 
@@ -416,7 +419,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 
 	fsGrepReq, err := payloadToFsGrepRequest(msg)
 	if err != nil {
-		fs.logger.Error("Failed to create fs grep request", string(constants.ConnectionStateError), err)
+		fs.logger.Error("Failed to create fs grep request", "error", err)
 		return
 	}
 
@@ -464,7 +467,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 			taskID = *result.TaskID
 		}
 
-		fs.vaultWriter.WriteExecution(executionWriteParams{
+		fs.vaultWriter.WriteExecution(ctx, executionWriteParams{
 			id:              result.ExecutionID,
 			command:         commandStr,
 			exitCode:        exitCode,
@@ -484,14 +487,15 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 	}
 
 	if fs.results != nil {
-		if result.TotalMatches > math.MaxInt32 {
-			result.TotalMatches = math.MaxInt32
+		totalMatches := result.TotalMatches
+		if totalMatches > maxInt32Value {
+			totalMatches = maxInt32Value
 		}
 		protoResult := &operatorv1.FsGrepResult{
 			ExecutionId:     result.ExecutionID,
 			Status:          result.Status,
 			Path:            result.Path,
-			TotalMatches:    int32(result.TotalMatches), //nolint:gosec // bounds checked above
+			TotalMatches:    int32(totalMatches), //nolint:gosec // bounds checked above
 			Truncated:       result.Truncated,
 			DurationSeconds: float32(result.DurationSeconds),
 		}
@@ -515,7 +519,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 		}
 
 		if err := fs.results.PublishFsGrepResult(ctx, protoResult, msg); err != nil {
-			fs.logger.Error("Failed to publish fs grep result", string(constants.ConnectionStateError), err)
+			fs.logger.Error("Failed to publish fs grep result", "error", err)
 		}
 	}
 }
@@ -524,7 +528,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoRead operatorv1.FsReadRequested
 	if err := proto.Unmarshal(msg.Payload, &protoRead); err != nil {
-		fs.logger.Error("Failed to decode fs read payload as protobuf FsReadRequested", string(constants.ConnectionStateError), err)
+		fs.logger.Error("Failed to decode fs read payload as protobuf FsReadRequested", "error", err)
 		fs.publishLFAAError(ctx, msg, constants.Event.Operator.FsRead.Failed, "invalid request payload")
 		return
 	}
@@ -537,7 +541,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg *PubSubCo
 
 	maxSize := protoRead.MaxSize
 	if maxSize <= 0 {
-		maxSize = 102400
+		maxSize = defaultMaxReadSize
 	}
 
 	vaultMode := constants.VaultMode(protoRead.SentinelMode)
@@ -615,8 +619,8 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg *PubSubCo
 	truncated := actualSize > readLimit
 	content := string(data)
 
-	if fs.sovereignty != nil && fs.sovereignty.IsEnabled() {
-		content = fs.sovereignty.ScrubText(content)
+	if fs.scrubbing != nil && fs.scrubbing.IsEnabled() {
+		content = fs.scrubbing.ScrubText(content)
 	}
 
 	payload := &operatorv1.FsReadResult{
@@ -662,12 +666,17 @@ func payloadToFileEditRequest(msg *PubSubCommandMessage) (*models.FileEditReques
 		justification = "pub/sub command request"
 	}
 
+	operation := constants.FileOperation(p.Operation)
+	if !isValidFileOperation(operation) {
+		return nil, fmt.Errorf("invalid file operation: %s", p.Operation)
+	}
+
 	req := &models.FileEditRequest{
 		ExecutionID:     requestID,
 		CaseID:          msg.CaseID,
 		TaskID:          msg.TaskID,
 		InvestigationID: msg.InvestigationID,
-		Operation:       constants.FileOperation(p.Operation),
+		Operation:       operation,
 		FilePath:        p.FilePath,
 		RequestedBy:     "g8e-system",
 		Justification:   justification,
@@ -722,7 +731,7 @@ func payloadToFsListRequest(msg *PubSubCommandMessage) (*models.FsListRequest, e
 
 	maxEntries := p.MaxEntries
 	if maxEntries <= 0 {
-		maxEntries = 100
+		maxEntries = defaultMaxEntries
 	}
 
 	return &models.FsListRequest{
@@ -756,7 +765,7 @@ func payloadToFsGrepRequest(msg *PubSubCommandMessage) (*models.FsGrepRequest, e
 
 	maxMatches := p.MaxMatches
 	if maxMatches <= 0 {
-		maxMatches = 100
+		maxMatches = defaultMaxMatches
 	}
 
 	return &models.FsGrepRequest{
@@ -769,4 +778,21 @@ func payloadToFsGrepRequest(msg *PubSubCommandMessage) (*models.FsGrepRequest, e
 		Includes:        p.Includes,
 		MaxMatches:      int(maxMatches),
 	}, nil
+}
+
+// isValidFileOperation checks if the operation is a valid typed constant.
+func isValidFileOperation(op constants.FileOperation) bool {
+	switch op {
+	case constants.FileOperationCreate,
+		constants.FileOperationDelete,
+		constants.FileOperationInsert,
+		constants.FileOperationPatch,
+		constants.FileOperationRead,
+		constants.FileOperationReplace,
+		constants.FileOperationUpdate,
+		constants.FileOperationWrite:
+		return true
+	default:
+		return false
+	}
 }

@@ -35,7 +35,8 @@ func TestFileEditService_ExecuteFileEdit_Write(t *testing.T) {
 
 	t.Run("write to new file", func(t *testing.T) {
 		t.Parallel()
-		tmpFile := filepath.Join(t.TempDir(), "test.txt")
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.txt")
 		content := "test content"
 
 		req := &models.FileEditRequest{
@@ -99,7 +100,8 @@ func TestFileEditService_ExecuteFileEdit_Write(t *testing.T) {
 
 	t.Run("write without create_if_missing fails", func(t *testing.T) {
 		t.Parallel()
-		tmpFile := filepath.Join(t.TempDir(), "nonexistent.txt")
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "nonexistent.txt")
 		content := "test"
 
 		req := &models.FileEditRequest{
@@ -128,7 +130,8 @@ func TestFileEditService_ExecuteFileEdit_Read(t *testing.T) {
 
 	t.Run("read entire file", func(t *testing.T) {
 		t.Parallel()
-		tmpFile := filepath.Join(t.TempDir(), "test.txt")
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.txt")
 		content := "line1\nline2\nline3"
 		os.WriteFile(tmpFile, []byte(content), 0644)
 
@@ -150,7 +153,8 @@ func TestFileEditService_ExecuteFileEdit_Read(t *testing.T) {
 
 	t.Run("read specific lines", func(t *testing.T) {
 		t.Parallel()
-		tmpFile := filepath.Join(t.TempDir(), "test.txt")
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.txt")
 		os.WriteFile(tmpFile, []byte("line1\nline2\nline3\nline4\nline5"), 0644)
 
 		startLine := 2
@@ -195,7 +199,8 @@ func TestFileEditService_ExecuteFileEdit_Read(t *testing.T) {
 
 	t.Run("read with file stats", func(t *testing.T) {
 		t.Parallel()
-		tmpFile := filepath.Join(t.TempDir(), "test.txt")
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.txt")
 		os.WriteFile(tmpFile, []byte("test content"), 0644)
 
 		includeStats := true
@@ -226,7 +231,8 @@ func TestFileEditService_ExecuteFileEdit_Replace(t *testing.T) {
 
 	t.Run("replace content", func(t *testing.T) {
 		t.Parallel()
-		tmpFile := filepath.Join(t.TempDir(), "test.txt")
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.txt")
 		os.WriteFile(tmpFile, []byte("hello world"), 0644)
 
 		oldContent := "world"
@@ -254,7 +260,8 @@ func TestFileEditService_ExecuteFileEdit_Replace(t *testing.T) {
 
 	t.Run("replace missing content fails", func(t *testing.T) {
 		t.Parallel()
-		tmpFile := filepath.Join(t.TempDir(), "test.txt")
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.txt")
 		os.WriteFile(tmpFile, []byte("hello world"), 0644)
 
 		oldContent := "missing"
@@ -285,7 +292,8 @@ func TestFileEditService_ExecuteFileEdit_Insert(t *testing.T) {
 
 	t.Run("insert at position", func(t *testing.T) {
 		t.Parallel()
-		tmpFile := filepath.Join(t.TempDir(), "test.txt")
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.txt")
 		os.WriteFile(tmpFile, []byte("line1\nline3"), 0644)
 
 		insertContent := "line2"
@@ -313,7 +321,8 @@ func TestFileEditService_ExecuteFileEdit_Insert(t *testing.T) {
 
 	t.Run("insert at invalid position fails", func(t *testing.T) {
 		t.Parallel()
-		tmpFile := filepath.Join(t.TempDir(), "test.txt")
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.txt")
 		os.WriteFile(tmpFile, []byte("line1"), 0644)
 
 		insertContent := "test"
@@ -343,7 +352,8 @@ func TestFileEditService_ExecuteFileEdit_Delete(t *testing.T) {
 
 	t.Run("delete lines", func(t *testing.T) {
 		t.Parallel()
-		tmpFile := filepath.Join(t.TempDir(), "test.txt")
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.txt")
 		os.WriteFile(tmpFile, []byte("line1\nline2\nline3\nline4"), 0644)
 
 		startLine := 2
@@ -374,7 +384,8 @@ func TestFileEditService_ExecuteFileEdit_Delete(t *testing.T) {
 
 	t.Run("delete invalid range fails", func(t *testing.T) {
 		t.Parallel()
-		tmpFile := filepath.Join(t.TempDir(), "test.txt")
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.txt")
 		os.WriteFile(tmpFile, []byte("line1"), 0644)
 
 		startLine := 5
@@ -404,7 +415,8 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 
 	t.Run("patch not implemented", func(t *testing.T) {
 		t.Parallel()
-		tmpFile := filepath.Join(t.TempDir(), "test.txt")
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.txt")
 		os.WriteFile(tmpFile, []byte("test"), 0644)
 
 		patchContent := "diff patch"
@@ -426,7 +438,8 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 
 	t.Run("missing patch content returns error", func(t *testing.T) {
 		t.Parallel()
-		tmpFile := filepath.Join(t.TempDir(), "test.txt")
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.txt")
 		os.WriteFile(tmpFile, []byte("test"), 0644)
 
 		req := &models.FileEditRequest{
@@ -447,7 +460,8 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 
 	t.Run("backup creation attempted before patch", func(t *testing.T) {
 		t.Parallel()
-		tmpFile := filepath.Join(t.TempDir(), "test.txt")
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.txt")
 		os.WriteFile(tmpFile, []byte("original content"), 0644)
 
 		patchContent := "diff patch"
@@ -508,7 +522,8 @@ func TestFileEditService_ValidateFilePath(t *testing.T) {
 
 	t.Run("valid path", func(t *testing.T) {
 		t.Parallel()
-		err := svc.validateFilePath("/tmp/test.txt")
+		tmpDir := t.TempDir()
+		err := svc.validateFilePath(filepath.Join(tmpDir, "test.txt"))
 		assert.NoError(t, err)
 	})
 
@@ -526,7 +541,8 @@ func TestFileEditService_CreateBackup(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	svc := NewFileEditService(cfg, logger)
 
-	tmpFile := filepath.Join(t.TempDir(), "test.txt")
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.txt")
 	content := "original content"
 	os.WriteFile(tmpFile, []byte(content), 0644)
 

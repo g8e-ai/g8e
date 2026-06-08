@@ -25,13 +25,14 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/pkg/governance"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 func newTestActuator(t *testing.T) (*L5Actuator, ed25519.PublicKey) {
@@ -53,7 +54,7 @@ func newTestActuator(t *testing.T) (*L5Actuator, ed25519.PublicKey) {
 		SigningKey:        privKey,
 		KeyID:             "test-Actuator-key",
 		ExecutionHandler:  mockHandler,
-		AuditStore:        mockAuditStore,
+		ConsoleAuditStore: mockAuditStore,
 		StateRootProvider: mockStateRoot,
 	}
 
@@ -107,24 +108,24 @@ func TestL5ActuatorExecuteHappyPath(t *testing.T) {
 	require.True(t, valid, "Receipt signature should verify against L5Actuator public key")
 
 	// Verify audit store was called twice (initial EXECUTING receipt + final COMPLETED receipt)
-	auditStore := actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
-	require.Len(t, auditStore.Calls, 2)
+	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)
+	require.Len(t, consoleAuditStore.Calls, 2)
 
 	// Verify both calls were to console_audit collection
-	for _, call := range auditStore.Calls {
+	for _, call := range consoleAuditStore.Calls {
 		require.Equal(t, marshaler.CollectionName(constants.CollectionConsoleAudit), call.Collection)
 		require.Equal(t, envelope.Id, call.ID)
 	}
 
 	// Verify initial receipt has EXECUTING status
 	var initialRecord models.ActionReceiptRecord
-	err = json.Unmarshal(auditStore.Calls[0].Data, &initialRecord)
+	err = json.Unmarshal(consoleAuditStore.Calls[0].Data, &initialRecord)
 	require.NoError(t, err)
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING, initialRecord.Status)
 
 	// Verify final receipt has COMPLETED status
 	var finalRecord models.ActionReceiptRecord
-	err = json.Unmarshal(auditStore.Calls[1].Data, &finalRecord)
+	err = json.Unmarshal(consoleAuditStore.Calls[1].Data, &finalRecord)
 	require.NoError(t, err)
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, finalRecord.Status)
 }
@@ -171,13 +172,13 @@ func TestL5ActuatorExecuteHandlerError(t *testing.T) {
 	valid := ed25519.Verify(pubKey, canonical, sigBytes)
 	require.True(t, valid, "Receipt signature should verify even when handler fails")
 
-	// Verify audit store was called twice
-	auditStore := actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
-	require.Len(t, auditStore.Calls, 2)
+	// Verify console audit store was called twice
+	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)
+	require.Len(t, consoleAuditStore.Calls, 2)
 
 	// Verify final receipt has FAILED status
 	var finalRecord models.ActionReceiptRecord
-	err = json.Unmarshal(auditStore.Calls[1].Data, &finalRecord)
+	err = json.Unmarshal(consoleAuditStore.Calls[1].Data, &finalRecord)
 	require.NoError(t, err)
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, finalRecord.Status)
 }
@@ -186,10 +187,10 @@ func TestL5ActuatorExecuteAuditWriteFailInitial(t *testing.T) {
 	t.Parallel()
 	actuator, _ := newTestActuator(t)
 
-	// Configure audit store to fail on first call (initial receipt)
-	auditStore := actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
+	// Configure console audit store to fail on first call (initial receipt)
+	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)
 	callCount := 0
-	auditStore.DocSetFunc = func(collection, id string, data json.RawMessage) error {
+	consoleAuditStore.DocSetFunc = func(collection, id string, data json.RawMessage) error {
 		callCount++
 		if callCount == 1 {
 			return errors.New("audit write failed")
@@ -225,9 +226,9 @@ func TestL5ActuatorExecuteReceiptPersistFail(t *testing.T) {
 	t.Parallel()
 	actuator, _ := newTestActuator(t)
 
-	// Configure audit store to fail on DocSet
-	auditStore := actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
-	auditStore.DocSetFunc = func(collection, id string, data json.RawMessage) error {
+	// Configure console audit store to fail on DocSet
+	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)
+	consoleAuditStore.DocSetFunc = func(collection, id string, data json.RawMessage) error {
 		return errors.New("doc set failed")
 	}
 
@@ -274,7 +275,7 @@ func TestL5ActuatorExecuteMissingSigningKey(t *testing.T) {
 	// Execute - should fail immediately
 	receipt, err := actuator.Execute(context.Background(), vt, nil)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "L5Actuator signing key missing")
+	require.Contains(t, err.Error(), "L5Actuator: signing key missing")
 	require.Nil(t, receipt)
 }
 
@@ -300,7 +301,7 @@ func TestL5ActuatorExecuteMissingExecutionHandler(t *testing.T) {
 	// Execute - should fail immediately
 	receipt, err := actuator.Execute(context.Background(), vt, nil)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "L5Actuator ExecutionHandler not set")
+	require.Contains(t, err.Error(), "L5Actuator: ExecutionHandler not set")
 	require.Nil(t, receipt)
 }
 
@@ -373,11 +374,11 @@ func TestL5ActuatorGatewaySignedPropagation(t *testing.T) {
 	require.True(t, receipt.GatewaySigned, "GatewaySigned should be propagated from envelope to receipt")
 
 	// Verify audit record also has GatewaySigned
-	auditStore := actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
-	require.Len(t, auditStore.Calls, 2)
+	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)
+	require.Len(t, consoleAuditStore.Calls, 2)
 
 	var finalRecord models.ActionReceiptRecord
-	err = json.Unmarshal(auditStore.Calls[1].Data, &finalRecord)
+	err = json.Unmarshal(consoleAuditStore.Calls[1].Data, &finalRecord)
 	require.NoError(t, err)
 	require.True(t, finalRecord.GatewaySigned, "Audit record should have GatewaySigned=true")
 }
@@ -411,62 +412,4 @@ func TestL5ActuatorGatewaySignedFalse(t *testing.T) {
 
 	// Verify GatewaySigned is false in receipt
 	require.False(t, receipt.GatewaySigned, "GatewaySigned should be false for L2Consensus-signed transactions")
-}
-
-func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
-	t.Parallel()
-	actuator, _ := newTestActuator(t)
-
-	// Create a real AuditVault with test database
-	tempDir := t.TempDir()
-	auditConfig := &storage.AuditVaultConfig{
-		DataDir:       tempDir,
-		DBPath:        "test.db",
-		LedgerDir:     "ledger",
-		MaxDBSizeMB:   100,
-		RetentionDays: 1,
-		Enabled:       true,
-		GitPath:       "", // Disable git for test
-	}
-
-	auditVault, err := storage.NewAuditVaultService(auditConfig, slog.Default())
-	require.NoError(t, err)
-	defer auditVault.Close()
-
-	actuator.AuditVault = auditVault
-
-	// Create the Operator session first (required for fail-closed audit)
-	err = auditVault.CreateSession("test-operator-session", "operator", "Test Session", "test-user")
-	require.NoError(t, err)
-
-	envelope := &governance.GovernanceEnvelope{
-		Id:                uuid.New().String(),
-		TransactionHash:   "test-hash-1234567890abcdef",
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-operator-session",
-		ActionType:        string(constants.ActionTypeExecuteBash),
-		TargetResource:    "localhost",
-	}
-
-	vt := &VerifiedTransaction{
-		Envelope:   envelope,
-		ActionType: constants.ActionTypeExecuteBash,
-	}
-
-	// Execute
-	receipt, err := actuator.Execute(context.Background(), vt, nil)
-	require.NoError(t, err)
-	require.NotNil(t, receipt)
-
-	// Verify RecordActionReceipt was called by querying the audit vault
-	persistedReceipt, err := auditVault.GetActionReceipt(envelope.Id)
-	require.NoError(t, err)
-	require.NotNil(t, persistedReceipt, "Receipt should be persisted in audit vault")
-
-	// Verify persisted receipt matches the returned receipt
-	require.Equal(t, envelope.Id, persistedReceipt.TransactionID)
-	require.Equal(t, envelope.TransactionHash, persistedReceipt.TransactionHash)
-	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, persistedReceipt.Status)
-	require.Equal(t, "completed", persistedReceipt.ResultSummary)
-	require.NotEmpty(t, persistedReceipt.Signature, "Persisted receipt should have signature")
 }

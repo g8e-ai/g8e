@@ -31,32 +31,25 @@ import (
 func TestBuildHostKeyCallback(t *testing.T) {
 	t.Run("known_hosts exists and is valid", func(t *testing.T) {
 		tempDir := t.TempDir()
-		// Mock home directory by setting HOME env var (os.UserHomeDir respects it on Linux)
-		t.Setenv("HOME", tempDir)
-		// No env var to unset - ~/.ssh/known_hosts is the only path
-
-		sshDir := filepath.Join(tempDir, ".ssh")
-		require.NoError(t, os.MkdirAll(sshDir, 0700))
-		khPath := filepath.Join(sshDir, "known_hosts")
+		khPath := filepath.Join(tempDir, "known_hosts")
 
 		// Empty known_hosts is valid - knownhosts.New handles it. Any host attempt
 		// against the returned callback will fail with an unknown-host error,
 		// which is exactly the strict semantic we want.
 		require.NoError(t, os.WriteFile(khPath, []byte(""), 0600))
 
-		cb, err := ssh.BuildHostKeyCallback()
+		cb, err := ssh.BuildHostKeyCallback(khPath)
 		require.NoError(t, err)
 		assert.NotNil(t, cb)
 	})
 
 	t.Run("known_hosts missing, strict mode returns an error (no insecure fallback)", func(t *testing.T) {
 		tempDir := t.TempDir()
-		t.Setenv("HOME", tempDir)
-		// No env var to unset - ~/.ssh/known_hosts is the only path
+		khPath := filepath.Join(tempDir, "known_hosts")
 
-		cb, err := ssh.BuildHostKeyCallback()
-		assert.Nil(t, cb)
+		cb, err := ssh.BuildHostKeyCallback(khPath)
 		require.Error(t, err)
+		assert.Nil(t, cb)
 		assert.Contains(t, err.Error(), "known_hosts not found")
 	})
 
@@ -69,14 +62,10 @@ func TestBuildHostKeyCallback(t *testing.T) {
 
 	t.Run("strict callback rejects unknown host", func(t *testing.T) {
 		tempDir := t.TempDir()
-		t.Setenv("HOME", tempDir)
-		// No env var to unset - ~/.ssh/known_hosts is the only path
-		sshDir := filepath.Join(tempDir, ".ssh")
-		require.NoError(t, os.MkdirAll(sshDir, 0700))
-		khPath := filepath.Join(sshDir, "known_hosts")
+		khPath := filepath.Join(tempDir, "known_hosts")
 		require.NoError(t, os.WriteFile(khPath, []byte(""), 0600))
 
-		cb, err := ssh.BuildHostKeyCallback()
+		cb, err := ssh.BuildHostKeyCallback(khPath)
 		require.NoError(t, err)
 
 		// Build a real RSA public key so the callback actually invokes its

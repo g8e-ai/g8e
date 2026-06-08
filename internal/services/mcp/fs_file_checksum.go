@@ -15,7 +15,6 @@ package mcp
 
 import (
 	"context"
-	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -23,7 +22,20 @@ import (
 	"os"
 )
 
-// FSFileChecksumTool computes SHA256/MD5 checksums for file integrity verification.
+// FSFileChecksumRequest represents the input for the file checksum tool.
+type FSFileChecksumRequest struct {
+	FilePath string `json:"file_path"`
+}
+
+// FSFileChecksumResult represents the output of the file checksum tool.
+type FSFileChecksumResult struct {
+	FilePath  string `json:"file_path"`
+	Algorithm string `json:"algorithm"`
+	Checksum  string `json:"checksum"`
+	SizeBytes int64  `json:"size_bytes"`
+}
+
+// FSFileChecksumTool computes SHA256 checksums for file integrity verification.
 type FSFileChecksumTool struct{}
 
 // Name returns the tool identifier.
@@ -33,79 +45,61 @@ func (t *FSFileChecksumTool) Name() string {
 
 // Description returns a human-readable description.
 func (t *FSFileChecksumTool) Description() string {
-	return "Computes SHA256/MD5 checksums for file integrity verification."
+	return "Computes SHA256 checksums for file integrity verification."
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *FSFileChecksumTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"file_path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to the file to checksum",
-			},
-			"algorithm": map[string]interface{}{
-				"type":        "string",
-				"description": "Checksum algorithm (sha256 or md5, default sha256)",
-				"enum":        []string{"sha256", "md5"},
+func (t *FSFileChecksumTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"file_path": {
+				Type:        "string",
+				Description: "Path to the file to checksum",
 			},
 		},
-		"required": []string{"file_path"},
+		Required: []string{"file_path"},
 	}
 }
 
 // Execute implements the tool logic.
 func (t *FSFileChecksumTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		FilePath  string `json:"file_path"`
-		Algorithm string `json:"algorithm,omitempty"`
-	}
+	var req FSFileChecksumRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("fs_file_checksum: unmarshal arguments: %w", err)
 	}
 
 	if req.FilePath == "" {
-		return CallToolResult{}, fmt.Errorf("file_path required")
+		return CallToolResult{}, fmt.Errorf("fs_file_checksum: file_path required")
 	}
 
 	if err := validateFilePath(req.FilePath); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid file path: %w", err)
-	}
-
-	algorithm := req.Algorithm
-	if algorithm == "" {
-		algorithm = "sha256"
+		return CallToolResult{}, fmt.Errorf("fs_file_checksum: invalid file path: %w", err)
 	}
 
 	data, err := os.ReadFile(req.FilePath)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to read file: %w", err)
+		return CallToolResult{}, fmt.Errorf("fs_file_checksum: failed to read file: %w", err)
 	}
 
-	var checksum string
-	switch algorithm {
-	case "sha256":
-		hash := sha256.Sum256(data)
-		checksum = hex.EncodeToString(hash[:])
-	case "md5":
-		hash := md5.Sum(data)
-		checksum = hex.EncodeToString(hash[:])
-	default:
-		return CallToolResult{}, fmt.Errorf("unsupported algorithm: %s", algorithm)
+	hash := sha256.Sum256(data)
+	checksum := hex.EncodeToString(hash[:])
+
+	fileInfo, err := os.Stat(req.FilePath)
+	if err != nil {
+		return CallToolResult{}, fmt.Errorf("fs_file_checksum: failed to stat file: %w", err)
 	}
 
-	fileInfo, _ := os.Stat(req.FilePath)
-	result := map[string]interface{}{
-		"file_path":  req.FilePath,
-		"algorithm":  algorithm,
-		"checksum":   checksum,
-		"size_bytes": fileInfo.Size(),
+	result := FSFileChecksumResult{
+		FilePath:  req.FilePath,
+		Algorithm: "sha256",
+		Checksum:  checksum,
+		SizeBytes: fileInfo.Size(),
 	}
 
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("fs_file_checksum: failed to marshal result: %w", err)
 	}
 
 	return CallToolResult{

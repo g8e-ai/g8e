@@ -434,8 +434,8 @@ func TestAdminAuditEntry(t *testing.T) {
 			Actor:      "user-123",
 			Target:     "target-123",
 			OperatorID: "operator-123",
-			Details: map[string]interface{}{
-				"reason": "test",
+			Details: &AdminAuditDetails{
+				Reason: "test",
 			},
 		}
 

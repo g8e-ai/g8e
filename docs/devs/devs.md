@@ -17,7 +17,7 @@ g8e is a zero-trust execution platform for agentic infrastructure. The platform 
 - **BYO clients**: The platform is UI-less by design. The CLI (`./g8e`) is the default interface.
 
 For detailed architecture, see:
-- [docs/architecture/g8e.md](../architecture/g8e.md) - Platform architecture and governance model
+- [docs/architecture/protocol.md](../architecture/protocol.md) - Platform architecture and governance model
 - [docs/architecture/protocol.md](../architecture/protocol.md) - Protocol and wire format
 - [docs/architecture/operator.md](../architecture/operator.md) - Operator service details
 
@@ -112,6 +112,8 @@ The platform is built via the Makefile. Run `make help` for available targets.
 
 **Error handling:** Always check errors; wrap with context using `fmt.Errorf("component: action: %w", err)`
 
+**Typed errors:** Define typed error constants for error reasons instead of hand-trolled strings. When adding error types, check for any hand-trolled strings that should be properly typed errors (e.g., error reason strings, status codes, rejection reasons). Define these as typed constants in `internal/constants/` and use them consistently across the codebase.
+
 **No panics** in production paths; return errors instead
 
 **Concurrency:** Use `context.Context` for cancellation; manage goroutines with `sync.WaitGroup` or channels
@@ -139,11 +141,27 @@ The platform is built via the Makefile. Run `make help` for available targets.
 - No mocks; use real database, pub/sub, and LLM calls
 - Contract tests enforce alignment between components and `protocol/`
 - mTLS by default; test runner handles certificate injection
+- Test infrastructure separated from production code to avoid import cycles
 
 **Run tests via CLI:**
 - `./g8e test` - Full test suite (unit + integration)
 
 Never call `go test` directly for platform tests.
+
+### Test Infrastructure Separation
+
+Test-only code is separated from production code to avoid import cycles and maintain clear boundaries:
+
+**`internal/services/storage/storagetest/`** - Test-only audit storage implementations
+- `TestSQLAuditStore` - Test-only monolithic audit service with Git ledger integration
+- Used only in test code (e.g., chaos tester at `internal/test/chaos/chaos.go`)
+- Implements `TransactionAuditStore` interface via a no-op `DocSet` method
+- Production code uses `storage.SQLAuditStore` from `audit_store.go`
+
+**`internal/test/chaos/`** - Chaos engineering test infrastructure
+- Chaos tester uses `storagetest.TestSQLAuditStore` for audit storage
+- This is intentional test infrastructure, not production code
+- Located in `internal/test/` to clearly indicate test-only status
 
 ## Documentation
 
@@ -165,22 +183,21 @@ Security doctrines are stored in `protocol/constants/doctrine/` as canonical JSO
 2. Run `make validate-doctrines`
 3. Restart g8e Operator to load new doctrines
 
-See [docs/architecture/g8e.md](../architecture/g8e.md) for doctrine schema details.
+See [docs/architecture/protocol.md](../architecture/protocol.md) for doctrine schema details.
 
 ## Constants
 
-Cross-component constants are stored in JSON at `protocol/constants/` (SSOT). Go consumes these via generated registry files.
+Constants are defined in Go source files in `internal/constants/` (SSOT). JSON files in `protocol/constants/` serve as reference documentation and external protocol definitions.
 
 **Adding constants:**
-1. Add to appropriate JSON file in `protocol/constants/`
-2. Run `make constants` to regenerate Go registry
-3. Run `go run ./internal/constants/check_registry.go` to verify
-4. Commit both JSON and generated Go files
+1. Add the constant to the appropriate Go file in `internal/constants/`
+2. Update the corresponding JSON file in `protocol/constants/` if the constant is part of the public protocol
+3. Run tests to verify the constant is properly integrated
+4. Commit both the Go source file and any updated JSON reference files
 
 **Commands:**
-- `make constants` - Generate Go registry from JSON
-- `make generate` - Generate protobuf and constants
-- `make clean-constants` - Remove generated constants
+- `make generate` - Generate protobuf code from `.proto` files
+- `make proto` - Generate Go Protobuf code (alias for generate)
 
 See [docs/reference/constants.md](../reference/constants.md) for details.
 

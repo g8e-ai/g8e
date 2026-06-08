@@ -24,16 +24,16 @@ import (
 // New creates a new Keystore instance with file-based storage on Windows.
 // Windows Credential Manager integration could be added in the future.
 func New(secretsDir string, logger *slog.Logger) (*Keystore, error) {
+	if err := os.MkdirAll(secretsDir, 0700); err != nil {
+		return nil, fmt.Errorf("create secrets directory: %w", err)
+	}
+
 	backend, err := newFileBackend(secretsDir)
 	if err != nil {
 		return nil, fmt.Errorf("initialize file backend: %w", err)
 	}
 
 	logger.Info("[Keystore] Using file-based storage (Windows)", "backend", backend.Name())
-
-	if err := os.MkdirAll(secretsDir, 0700); err != nil {
-		return nil, fmt.Errorf("create secrets directory: %w", err)
-	}
 
 	return &Keystore{
 		logger:     logger,

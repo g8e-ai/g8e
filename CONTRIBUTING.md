@@ -32,7 +32,7 @@ When [filing an issue](https://github.com/g8e-ai/g8e/issues/new), please include
 
 1. **Version**: Output of `./g8e version`.
 2. **Environment**: OS and processor architecture.
-3. **Traceability**: If applicable, include the `transaction_hash` or relevant entries from the `AuditVaultService`.
+3. **Traceability**: If applicable, include the `transaction_hash` or relevant entries from the `SQLAuditStore`.
 4. **Reproduction**: A minimal set of steps to reproduce the behavior.
 5. **Expected vs Actual**: Clear description of what you expected to see and what happened instead.
 

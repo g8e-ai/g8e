@@ -27,11 +27,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestBootstrapFlow(t *testing.T) {
@@ -68,9 +69,9 @@ func TestBootstrapFlow(t *testing.T) {
 	rr := httptest.NewRecorder()
 	h.authController.handleBootstrapStatus(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
-	var statusResp map[string]interface{}
+	var statusResp models.BootstrapStatusResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &statusResp))
-	assert.Equal(t, false, statusResp["bootstrapped"])
+	assert.Equal(t, false, statusResp.Bootstrapped)
 
 	// 2. Perform bootstrap
 	bootstrapBody := map[string]string{
@@ -78,26 +79,27 @@ func TestBootstrapFlow(t *testing.T) {
 		"cli_csr_pem":        string(cliCsrPEM),
 		"system_fingerprint": "test-fingerprint",
 	}
-	body, _ := json.Marshal(bootstrapBody)
+	body, err := json.Marshal(bootstrapBody)
+	require.NoError(t, err)
 	req = httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", bytes.NewReader(body))
 	req.RemoteAddr = "127.0.0.1:12345" // Simulate loopback
 	rr = httptest.NewRecorder()
-	h.authController.handlePublicAuthBootstrap(rr, req)
+	h.authController.handleLocalBootstrap(rr, req)
 	require.Equal(t, http.StatusCreated, rr.Code, "Bootstrap failed: %s", rr.Body.String())
 
-	var resp map[string]interface{}
+	var resp models.BootstrapResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	require.Equal(t, true, resp["success"], "Bootstrap response success: %v", resp)
-	require.NotNil(t, resp["operator_cert"], "operator_cert is missing: %v", resp)
-	require.NotNil(t, resp["operator_cert_chain"], "operator_cert_chain is missing: %v", resp)
-	require.NotNil(t, resp["hub_trust_bundle"], "hub_trust_bundle is missing: %v", resp)
-	require.NotNil(t, resp["operator_session_id"], "operator_session_id is missing: %v", resp)
-	require.NotNil(t, resp["cli_session_id"], "cli_session_id is missing: %v", resp)
+	require.Equal(t, true, resp.Success, "Bootstrap response success: %v", resp)
+	require.NotEmpty(t, resp.OperatorCert, "operator_cert is missing: %v", resp)
+	require.NotEmpty(t, resp.OperatorCertChain, "operator_cert_chain is missing: %v", resp)
+	require.NotEmpty(t, resp.HubTrustBundle, "hub_trust_bundle is missing: %v", resp)
+	require.NotEmpty(t, resp.OperatorSessionID, "operator_session_id is missing: %v", resp)
+	require.NotEmpty(t, resp.CLISessionID, "cli_session_id is missing: %v", resp)
 
-	userMap := resp["user"].(map[string]interface{})
-	bootstrapUserID := userMap["id"].(string)
-	bootstrapSessionID := resp["operator_session_id"].(string)
-	cliSessionID := resp["cli_session_id"].(string)
+	require.NotNil(t, resp.User, "user is missing: %v", resp)
+	bootstrapUserID := resp.User.ID
+	bootstrapSessionID := resp.OperatorSessionID
+	cliSessionID := resp.CLISessionID
 	require.NotEmpty(t, cliSessionID, "cli_session_id must be non-empty")
 	require.NotEqual(t, bootstrapSessionID, cliSessionID,
 		"cli_session_id MUST be a distinct identifier from operator_session_id - session types are strictly disjoint")
@@ -108,7 +110,7 @@ func TestBootstrapFlow(t *testing.T) {
 	h.authController.handleBootstrapStatus(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &statusResp))
-	assert.Equal(t, true, statusResp["bootstrapped"])
+	assert.Equal(t, true, statusResp.Bootstrapped)
 
 	// 4. Verify bootstrap user is active
 	user, err := h.userSvc.GetByID(bootstrapUserID)
@@ -151,7 +153,8 @@ func TestBootstrapFlow(t *testing.T) {
 	assert.Equal(t, models.AdminAuditActionRetireLocalOwner, auditEntry.Action)
 	assert.Equal(t, realUserID, auditEntry.Actor)
 	assert.Equal(t, realOperatorID, auditEntry.OperatorID)
-	assert.Equal(t, "retired_by_real_login", auditEntry.Details["reason"])
+	require.NotNil(t, auditEntry.Details)
+	assert.Equal(t, "retired_by_real_login", auditEntry.Details.Reason)
 
 	// 8. Verify bootstrap user is REJECTED during authentication
 	op, err = h.auth.ValidateOperatorSession(bootstrapSessionID)

@@ -13,6 +13,12 @@
 
 package mcp
 
+import (
+	"fmt"
+	"net/url"
+	"strings"
+)
+
 // Config represents the top-level MCP client configuration structure.
 // This is the single source of truth for the MCP config schema used by:
 // - CLI commands (gw mcp-config)
@@ -60,7 +66,28 @@ type Capabilities struct {
 }
 
 // NewGatewayConfig creates a standard gateway MCP configuration with the given gateway URL and cert paths.
-func NewGatewayConfig(gatewayURL, clientCertPath, clientKeyPath, caCertPath string) *Config {
+func NewGatewayConfig(gatewayURL, clientCertPath, clientKeyPath, caCertPath string) (*Config, error) {
+	return NewGatewayConfigWithHostname(gatewayURL, clientCertPath, clientKeyPath, caCertPath, "g8e.local")
+}
+
+// NewGatewayConfigWithHostname creates a gateway MCP configuration with a custom hostname for verification.
+func NewGatewayConfigWithHostname(gatewayURL, clientCertPath, clientKeyPath, caCertPath, verifyHostname string) (*Config, error) {
+	if err := validateGatewayURL(gatewayURL); err != nil {
+		return nil, fmt.Errorf("mcp: validate gateway URL: %w", err)
+	}
+	if err := validateCertPath(clientCertPath, "client certificate"); err != nil {
+		return nil, fmt.Errorf("mcp: validate client certificate path: %w", err)
+	}
+	if err := validateCertPath(clientKeyPath, "client key"); err != nil {
+		return nil, fmt.Errorf("mcp: validate client key path: %w", err)
+	}
+	if err := validateCertPath(caCertPath, "CA certificate"); err != nil {
+		return nil, fmt.Errorf("mcp: validate CA certificate path: %w", err)
+	}
+	if verifyHostname == "" {
+		return nil, fmt.Errorf("mcp: verify hostname cannot be empty")
+	}
+
 	return &Config{
 		MCPServers: map[string]ServerConfig{
 			"g8e-gateway": {
@@ -73,7 +100,7 @@ func NewGatewayConfig(gatewayURL, clientCertPath, clientKeyPath, caCertPath stri
 					ClientKey:         clientKeyPath,
 					CACertificate:     caCertPath,
 					VerifyServer:      true,
-					VerifyHostname:    "g8e.local",
+					VerifyHostname:    verifyHostname,
 				},
 				Capabilities: Capabilities{
 					Tools:     true,
@@ -82,10 +109,110 @@ func NewGatewayConfig(gatewayURL, clientCertPath, clientKeyPath, caCertPath stri
 				},
 				Description: "g8e Gateway MCP endpoint",
 				Notes: []string{
-					"Use the canonical g8e.local internal hostname through gateway-managed translation.",
 					"mTLS is required for production access.",
 				},
 			},
 		},
+	}, nil
+}
+
+// validateGatewayURL validates that the gateway URL is a valid HTTPS URL.
+func validateGatewayURL(gatewayURL string) error {
+	if gatewayURL == "" {
+		return fmt.Errorf("gateway URL cannot be empty")
 	}
+
+	parsedURL, err := url.Parse(gatewayURL)
+	if err != nil {
+		return fmt.Errorf("parse URL: %w", err)
+	}
+
+	if parsedURL.Scheme != "https" {
+		return fmt.Errorf("URL scheme must be https, got %s", parsedURL.Scheme)
+	}
+
+	if parsedURL.Host == "" {
+		return fmt.Errorf("URL host cannot be empty")
+	}
+
+	return nil
+}
+
+// NewStdioConfig creates a stdio transport MCP configuration for local native tools.
+func NewStdioConfig(g8eBinaryPath string) (*Config, error) {
+	if g8eBinaryPath == "" {
+		return nil, fmt.Errorf("g8e binary path cannot be empty")
+	}
+	if strings.TrimSpace(g8eBinaryPath) == "" {
+		return nil, fmt.Errorf("g8e binary path cannot be whitespace only")
+	}
+
+	return &Config{
+		MCPServers: map[string]ServerConfig{
+			"g8e-native": {
+				Transport: TransportConfig{
+					Type:    "stdio",
+					Command: g8eBinaryPath,
+					Args:    []string{"mcp", "stdio"},
+				},
+				TLS: nil,
+				Capabilities: Capabilities{
+					Tools:     true,
+					Resources: false,
+					Prompts:   false,
+				},
+				Description: "g8e native tools (stdio transport)",
+				Notes: []string{
+					"Uses stdio transport for direct native tool access.",
+					"No gateway governance layer applied.",
+					"Requires g8e binary in PATH or full path specified.",
+				},
+			},
+		},
+	}, nil
+}
+
+// SimpleStdioServerConfig represents a simplified MCP server configuration for stdio transport.
+// This format is compatible with Cursor/Windsurf MCP clients.
+type SimpleStdioServerConfig struct {
+	Command  string   `json:"command"`
+	Args     []string `json:"args"`
+	Disabled bool     `json:"disabled"`
+}
+
+// SimpleConfig represents a simplified MCP client configuration structure.
+type SimpleConfig struct {
+	MCPServers map[string]SimpleStdioServerConfig `json:"mcpServers"`
+}
+
+// NewStdioConfigSimple creates a simplified stdio transport MCP configuration for local native tools.
+// This format is compatible with Cursor/Windsurf MCP clients.
+func NewStdioConfigSimple(g8eBinaryPath string) (*SimpleConfig, error) {
+	if g8eBinaryPath == "" {
+		return nil, fmt.Errorf("g8e binary path cannot be empty")
+	}
+	if strings.TrimSpace(g8eBinaryPath) == "" {
+		return nil, fmt.Errorf("g8e binary path cannot be whitespace only")
+	}
+
+	return &SimpleConfig{
+		MCPServers: map[string]SimpleStdioServerConfig{
+			"g8e-native": {
+				Command:  g8eBinaryPath,
+				Args:     []string{"mcp", "stdio"},
+				Disabled: false,
+			},
+		},
+	}, nil
+}
+
+// validateCertPath validates that a certificate path is non-empty.
+func validateCertPath(path, certType string) error {
+	if path == "" {
+		return fmt.Errorf("%s path cannot be empty", certType)
+	}
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("%s path cannot be whitespace only", certType)
+	}
+	return nil
 }

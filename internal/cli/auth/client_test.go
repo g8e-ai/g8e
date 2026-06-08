@@ -27,12 +27,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -145,12 +147,13 @@ func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	client, err := NewSecureHTTPClient(cfg)
@@ -294,6 +297,8 @@ func TestDeleteCredentials_Success(t *testing.T) {
 				ProtocolModelsDir    string `json:"protocol_models_dir"`
 				SecretsDir           string `json:"secrets_dir"`
 				SSHConfigPath        string `json:"ssh_config_path"`
+				VaultDir             string `json:"vault_dir"`
+				VaultKeyPath         string `json:"vault_key_path"`
 			}{
 				CACertPath: filepath.Join(tmpDir, ".g8e/pki/trust/g8eg-ca-bundle.pem"),
 			},
@@ -325,8 +330,6 @@ func TestDeleteCredentials_Success(t *testing.T) {
 	assert.NoFileExists(t, cfg.CredentialsFile())
 	assert.NoFileExists(t, cfg.CLICertFile())
 	assert.NoFileExists(t, cfg.CLIKeyFile())
-	assert.NoFileExists(t, cfg.OperatorCertFile())
-	assert.NoFileExists(t, cfg.OperatorKeyFile())
 	assert.NoFileExists(t, hubBundle)
 }
 
@@ -351,6 +354,8 @@ func TestDeleteCredentials_NonExistentFiles(t *testing.T) {
 				ProtocolModelsDir    string `json:"protocol_models_dir"`
 				SecretsDir           string `json:"secrets_dir"`
 				SSHConfigPath        string `json:"ssh_config_path"`
+				VaultDir             string `json:"vault_dir"`
+				VaultKeyPath         string `json:"vault_key_path"`
 			}{
 				CACertPath: filepath.Join(tmpDir, ".g8e/pki/trust/g8eg-ca-bundle.pem"),
 			},
@@ -435,17 +440,18 @@ func TestCheckOperatorRunning_NotRunning(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	err := CheckOperatorRunning(cfg)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "operator is not running or not responding")
+	assert.Contains(t, err.Error(), "g8e Gateway is not running or not responding")
 }
 
 func TestCheckOperatorRunning_HealthCheckFailed(t *testing.T) {
@@ -484,7 +490,7 @@ func TestCheckOperatorRunning_InvalidURL(t *testing.T) {
 func TestCheckOperatorRunning_URLWithoutProtocol(t *testing.T) {
 	t.Parallel()
 
-	err := CheckOperatorRunningAtURL("localhost:8440")
+	err := CheckOperatorRunningAtURL("localhost:" + strconv.Itoa(constants.Ports.OperatorHttp))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid Operator URL")
 }
@@ -645,12 +651,13 @@ func TestAutoRenewCertificate_NotExpiring(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	// Create a valid certificate that is not expiring
@@ -693,12 +700,8 @@ func TestVerifyCAFingerprint_Match(t *testing.T) {
 	hash := sha256.Sum256(block.Bytes)
 	expectedFP := hex.EncodeToString(hash[:])
 
-	// Test with sha256: prefix
-	err := VerifyCAFingerprint([]byte(certPEM), "sha256:"+expectedFP)
-	require.NoError(t, err)
-
-	// Test without prefix
-	err = VerifyCAFingerprint([]byte(certPEM), expectedFP)
+	// Test with hex fingerprint (no prefix)
+	err := VerifyCAFingerprint([]byte(certPEM), expectedFP)
 	require.NoError(t, err)
 }
 
@@ -706,7 +709,7 @@ func TestVerifyCAFingerprint_Mismatch(t *testing.T) {
 	t.Parallel()
 	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
 
-	err := VerifyCAFingerprint([]byte(certPEM), "sha256:deadbeef")
+	err := VerifyCAFingerprint([]byte(certPEM), "deadbeef")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "CA fingerprint mismatch")
 }
@@ -722,7 +725,7 @@ func TestVerifyCAFingerprint_EmptyPin(t *testing.T) {
 
 func TestVerifyCAFingerprint_InvalidPEM(t *testing.T) {
 	t.Parallel()
-	err := VerifyCAFingerprint([]byte("not valid pem"), "sha256:deadbeef")
+	err := VerifyCAFingerprint([]byte("not valid pem"), "deadbeef")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to decode CA PEM")
 }
@@ -734,7 +737,7 @@ func TestVerifyCAFingerprint_NonCertificatePEM(t *testing.T) {
 		Bytes: []byte("dummy"),
 	})
 
-	err := VerifyCAFingerprint(keyPEM, "sha256:deadbeef")
+	err := VerifyCAFingerprint(keyPEM, "deadbeef")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "PEM block is not a certificate")
 }
@@ -754,7 +757,7 @@ func TestFetchRootCAFingerprint_Success(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/.well-known/g8e/pki/fingerprint", r.URL.Path)
-		resp := map[string]string{"root_ca": "sha256:" + expectedFP}
+		resp := map[string]string{"root_ca": expectedFP}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
 	}))
@@ -762,27 +765,20 @@ func TestFetchRootCAFingerprint_Success(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: extractPortFromURL(server.URL), // Use test server port
 	}
 	cfg.Paths.Infra.CACertPath = certPEM
 
-	// Override the discovery URL to use our test server
-	originalURL := cfg.OperatorDiscoveryURL()
-	_ = originalURL
-	// We need to inject the test server URL - this requires a test hook
-	// For now, we'll test via the direct function if we can
-	// Actually, FetchRootCAFingerprint uses cfg.OperatorDiscoveryURL() internally
-	// Let's test with a direct HTTP mock by overriding the URL construction
-
-	// Since we can't easily inject, let's test the error case
-	_, err := FetchRootCAFingerprint(cfg)
-	// This will fail because the URL is not a valid running server
-	require.Error(t, err)
+	// Test the success case - the function should successfully fetch the fingerprint
+	fp, err := FetchRootCAFingerprint(cfg)
+	require.NoError(t, err)
+	assert.Equal(t, expectedFP, fp)
 }
 
 func TestFetchRootCAFingerprint_HTTPError(t *testing.T) {
@@ -790,12 +786,13 @@ func TestFetchRootCAFingerprint_HTTPError(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	// Test with a URL that will fail
@@ -846,6 +843,7 @@ func TestFetchRootCAFingerprint_InvalidJSON(t *testing.T) {
 // Bootstrap
 // ---------------------------------------------------------------------------
 
+// TestBootstrap_Success tests the successful bootstrap flow with a mock server.
 func TestBootstrap_Success(t *testing.T) {
 	t.Parallel()
 
@@ -859,11 +857,11 @@ func TestBootstrap_Success(t *testing.T) {
 		assert.Equal(t, "POST", r.Method)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		var req map[string]string
+		var req models.BootstrapRequest
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
-		assert.NotEmpty(t, req["csr_pem"])
-		assert.NotEmpty(t, req["cli_csr_pem"])
-		assert.NotEmpty(t, req["system_fingerprint"])
+		assert.NotEmpty(t, req.CSR)
+		assert.NotEmpty(t, req.CLICSR)
+		assert.NotEmpty(t, req.SystemFingerprint)
 
 		resp := RegistrationResponse{
 			Success:           true,
@@ -882,24 +880,27 @@ func TestBootstrap_Success(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: extractPortFromURL(server.URL), // Use test server port
 	}
 
-	// Since Bootstrap uses cfg.OperatorDiscoveryURL() internally,
-	// we test the function signature and error paths
 	operatorCSR, _, err := GenerateCSR("test-operator")
 	require.NoError(t, err)
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	// This will fail because cfg.OperatorDiscoveryURL() won't point to our test server
-	_, err = Bootstrap(cfg, operatorCSR, cliCSR, "")
-	require.Error(t, err)
+	// Test the success case - the function should successfully bootstrap
+	resp, err := Bootstrap(cfg, operatorCSR, cliCSR, "")
+	require.NoError(t, err)
+	assert.Equal(t, "op-sess-123", resp.OperatorSessionID)
+	assert.Equal(t, "cli-sess-456", resp.CLISessionID)
+	assert.Equal(t, "op-789", resp.OperatorID)
+	assert.Equal(t, "user-abc", resp.UserID)
 }
 
 func TestBootstrap_ServerError(t *testing.T) {
@@ -948,7 +949,7 @@ func TestEnrollWithGateway_Success(t *testing.T) {
 	certPEM, _ := testutil.GenerateTestCertificate(t, "test-ca")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/auth/bootstrap", r.URL.Path)
+		assert.Equal(t, "/api/v1/auth/device/enroll", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
 
 		var req map[string]string
@@ -971,12 +972,13 @@ func TestEnrollWithGateway_Success(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -1010,12 +1012,13 @@ func TestEnrollWithGateway_NonSuccessResponse(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -1031,17 +1034,24 @@ func TestEnrollWithGateway_NonSuccessResponse(t *testing.T) {
 	assert.Contains(t, err.Error(), "enrollment failed")
 }
 
+// ---------------------------------------------------------------------------
+// CLIEnroll
+// ---------------------------------------------------------------------------
+// Note: CLIEnroll requires actual HTTP connection to the gateway and is tested via integration tests.
+// The server-side handler is tested in auth_controller_test.go.
+
 func TestEnrollWithGateway_HTTPError(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -1067,12 +1077,13 @@ func TestEnrollWithGateway_BadStatusCode(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -1111,12 +1122,13 @@ func TestEnrollWithGateway_FingerprintVerification(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -1127,12 +1139,12 @@ func TestEnrollWithGateway_FingerprintVerification(t *testing.T) {
 	serverURL := strings.TrimPrefix(server.URL, "http://")
 
 	// Test with correct fingerprint
-	resp, err := EnrollWithGateway(cfg, serverURL, operatorCSR, cliCSR, "sha256:"+expectedFP)
+	resp, err := EnrollWithGateway(cfg, serverURL, operatorCSR, cliCSR, expectedFP)
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
 
 	// Test with wrong fingerprint
-	resp, err = EnrollWithGateway(cfg, serverURL, operatorCSR, cliCSR, "sha256:deadbeef")
+	resp, err = EnrollWithGateway(cfg, serverURL, operatorCSR, cliCSR, "deadbeef")
 	require.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "CA fingerprint verification failed")
@@ -1142,16 +1154,22 @@ func TestEnrollWithGateway_FingerprintVerification(t *testing.T) {
 // CheckBootstrapStatus
 // ---------------------------------------------------------------------------
 
+// TestCheckBootstrapStatus_NoLocalCredentials is an integration test that requires a running gateway.
+// NOTE: This test is not isolated from the live gateway process. When running `make test`,
+// it will connect to the gateway running on ports 8443/8080 if one is available.
+// This is an environmental issue - the test should be properly isolated with a test-specific
+// gateway instance, but that requires significant test infrastructure changes.
 func TestCheckBootstrapStatus_NoLocalCredentials(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	// No credentials file exists
@@ -1164,12 +1182,13 @@ func TestCheckBootstrapStatus_NoCertFile(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	// Create credentials file but no cert file
@@ -1193,14 +1212,17 @@ func TestCheckBootstrapStatus_NoCertFile(t *testing.T) {
 func TestReEnroll_InvalidURL(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
+	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
+	cfg.Paths.Infra.CACertPath = trustBundlePath
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
 	require.NoError(t, err)
@@ -1267,6 +1289,8 @@ func TestDeleteCredentials_RemoveError(t *testing.T) {
 				ProtocolModelsDir    string `json:"protocol_models_dir"`
 				SecretsDir           string `json:"secrets_dir"`
 				SSHConfigPath        string `json:"ssh_config_path"`
+				VaultDir             string `json:"vault_dir"`
+				VaultKeyPath         string `json:"vault_key_path"`
 			}{
 				CACertPath: filepath.Join(tmpDir, ".g8e/pki/trust/g8eg-ca-bundle.pem"),
 			},
@@ -1310,12 +1334,13 @@ func TestAutoRenewCertificate_ExpiringCert(t *testing.T) {
 	// Create a certificate that expires in 12 hours (within renewal threshold)
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	// This test would require generating a short-lived cert and actually calling ReEnroll
@@ -1337,12 +1362,13 @@ func TestAutoRenewCertificate_OperatorType(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot:      tmpDir,
+		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir:   tmpDir,
+		Paths:            &config.PathsConfig{},
+		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
 	}
 
 	// Create a valid certificate that's not expiring

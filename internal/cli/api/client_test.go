@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -120,27 +121,24 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	constantsDir := filepath.Join(protocolDir, "constants")
 	require.NoError(t, os.MkdirAll(constantsDir, 0755))
 
-	pathsJSON := `{
+	pathsData := map[string]any{
 		"host": "localhost",
-		"infra": {
-			"app_cert_dir": "/tmp/app/certs",
-			"ca_cert_path": ".g8e/pki/trust/g8eg-ca-bundle.pem",
-			"db_path": "/tmp/db",
-			"docs_dir": "/tmp/docs",
-			"pki_dir": ".g8e/pki",
+		"infra": map[string]any{
+			"app_cert_dir":           filepath.Join(tempDir, "app", "certs"),
+			"ca_cert_path":           ".g8e/pki/trust/g8eg-ca-bundle.pem",
+			"db_path":                filepath.Join(tempDir, "db"),
+			"docs_dir":               filepath.Join(tempDir, "docs"),
+			"pki_dir":                ".g8e/pki",
 			"protocol_constants_dir": "protocol/constants",
-			"protocol_dir": "protocol",
-			"protocol_models_dir": "protocol/models",
-			"secrets_dir": ".g8e/secrets",
-			"ssh_config_path": "/tmp/ssh/config"
+			"protocol_dir":           "protocol",
+			"protocol_models_dir":    "protocol/models",
+			"secrets_dir":            ".g8e/secrets",
+			"ssh_config_path":        filepath.Join(tempDir, "ssh", "config"),
 		},
-		"ports": {
-			"insecure_mcp_gateway": 18789,
-			"operator_bootstrap_https": 8441,
-			"operator_https": 8440,
-			"operator_public_https": 8443
-		}
-	}`
+	}
+	pathsBytes, err := json.Marshal(pathsData)
+	require.NoError(t, err)
+	pathsJSON := string(pathsBytes)
 	pathsPath := filepath.Join(constantsDir, "paths.json")
 	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 
@@ -183,7 +181,7 @@ func setupTLSClient(t *testing.T, cfg *config.Config, server *httptest.Server) *
 	var port int
 	_, err = fmt.Sscanf(portStr, "%d", &port)
 	require.NoError(t, err)
-	cfg.Paths.Ports.OperatorPublicHTTPS = port
+	cfg.TestPortOverride = port
 
 	client, err := NewClient(cfg)
 	require.NoError(t, err)

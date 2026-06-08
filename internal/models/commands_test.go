@@ -14,6 +14,7 @@
 package models
 
 import (
+	"path/filepath"
 	"testing"
 
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -48,12 +49,13 @@ func TestCommandCancelRequestPayload(t *testing.T) {
 
 func TestFileEditRequestPayload(t *testing.T) {
 	t.Run("creates write request", func(t *testing.T) {
+		tmpDir := t.TempDir()
 		insertPos := 10
 		startLine := 5
 		endLine := 10
 
 		req := &FileEditRequestPayload{
-			FilePath:        "/tmp/test.txt",
+			FilePath:        filepath.Join(tmpDir, "test.txt"),
 			Operation:       "write",
 			ExecutionID:     "req-123",
 			SentinelMode:    "strict",
@@ -70,7 +72,7 @@ func TestFileEditRequestPayload(t *testing.T) {
 			CreateIfMissing: true,
 		}
 
-		assert.Equal(t, "/tmp/test.txt", req.FilePath)
+		assert.Equal(t, filepath.Join(tmpDir, "test.txt"), req.FilePath)
 		assert.Equal(t, "write", req.Operation)
 		assert.True(t, req.CreateBackup)
 		assert.Equal(t, 10, *req.InsertPosition)
@@ -79,14 +81,15 @@ func TestFileEditRequestPayload(t *testing.T) {
 
 func TestFsListRequestPayload(t *testing.T) {
 	t.Run("creates valid list request", func(t *testing.T) {
+		tmpDir := t.TempDir()
 		req := &FsListRequestPayload{
-			Path:        "/tmp",
+			Path:        tmpDir,
 			ExecutionID: "req-123",
 			MaxDepth:    3,
 			MaxEntries:  100,
 		}
 
-		assert.Equal(t, "/tmp", req.Path)
+		assert.Equal(t, tmpDir, req.Path)
 		assert.Equal(t, 3, req.MaxDepth)
 		assert.Equal(t, 100, req.MaxEntries)
 	})
@@ -94,8 +97,9 @@ func TestFsListRequestPayload(t *testing.T) {
 
 func TestFsGrepRequestPayload(t *testing.T) {
 	t.Run("creates valid grep request", func(t *testing.T) {
+		tmpDir := t.TempDir()
 		req := &FsGrepRequestPayload{
-			Path:        "/tmp",
+			Path:        tmpDir,
 			ExecutionID: "req-123",
 			Pattern:     "test",
 			Includes:    []string{"*.go"},
@@ -121,10 +125,11 @@ func TestFetchLogsRequestPayload(t *testing.T) {
 
 func TestFetchFileDiffRequestPayload(t *testing.T) {
 	t.Run("creates valid diff request", func(t *testing.T) {
+		tmpDir := t.TempDir()
 		req := &FetchFileDiffRequestPayload{
 			DiffID:            "diff-123",
 			OperatorSessionID: "session-123",
-			FilePath:          "/tmp/test.txt",
+			FilePath:          filepath.Join(tmpDir, "test.txt"),
 			Limit:             10,
 		}
 
@@ -142,22 +147,24 @@ func TestFetchHistoryRequestPayload(t *testing.T) {
 
 func TestFetchFileHistoryRequestPayload(t *testing.T) {
 	t.Run("creates valid file history request", func(t *testing.T) {
+		tmpDir := t.TempDir()
 		req := &FetchFileHistoryRequestPayload{
-			FilePath: "/tmp/test.txt",
+			FilePath: filepath.Join(tmpDir, "test.txt"),
 		}
 
-		assert.Equal(t, "/tmp/test.txt", req.FilePath)
+		assert.Equal(t, filepath.Join(tmpDir, "test.txt"), req.FilePath)
 	})
 }
 
 func TestRestoreFileRequestPayload(t *testing.T) {
 	t.Run("creates valid restore request", func(t *testing.T) {
+		tmpDir := t.TempDir()
 		req := &RestoreFileRequestPayload{
-			FilePath:   "/tmp/test.txt",
+			FilePath:   filepath.Join(tmpDir, "test.txt"),
 			CommitHash: "abc123",
 		}
 
-		assert.Equal(t, "/tmp/test.txt", req.FilePath)
+		assert.Equal(t, filepath.Join(tmpDir, "test.txt"), req.FilePath)
 		assert.Equal(t, "abc123", req.CommitHash)
 	})
 }
@@ -219,13 +226,14 @@ func TestAuditDirectCmdResultPayload(t *testing.T) {
 
 func TestFsReadRequestPayload(t *testing.T) {
 	t.Run("creates valid read request", func(t *testing.T) {
+		tmpDir := t.TempDir()
 		req := &FsReadRequestPayload{
-			Path:        "/tmp/test.txt",
+			Path:        filepath.Join(tmpDir, "test.txt"),
 			ExecutionID: "req-123",
 			MaxSize:     1024,
 		}
 
-		assert.Equal(t, "/tmp/test.txt", req.Path)
+		assert.Equal(t, filepath.Join(tmpDir, "test.txt"), req.Path)
 		assert.Equal(t, 1024, req.MaxSize)
 	})
 }

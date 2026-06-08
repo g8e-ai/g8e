@@ -46,13 +46,20 @@ type ProcessManager struct {
 	dataDir     string
 	logDir      string
 	pidDir      string
+	// findOperatorProcessFn allows mocking for tests
+	findOperatorProcessFn func() int
 }
 
 func NewProcessManager(projectRoot string) (*ProcessManager, error) {
-	runtimeDir := filepath.Join(projectRoot, constants.Paths.Infra.RuntimeDir)
-	pkiDir := filepath.Join(projectRoot, constants.Paths.Infra.PkiDir)
-	secretsDir := filepath.Join(projectRoot, constants.Paths.Infra.SecretsDir)
-	dataDir := filepath.Join(projectRoot, constants.Paths.Infra.DataDir)
+	// Initialize paths relative to projectRoot
+	if err := constants.InitPathsWithBase(projectRoot); err != nil {
+		return nil, fmt.Errorf("process manager: failed to initialize paths: %w", err)
+	}
+
+	runtimeDir := constants.Paths.Infra.RuntimeDir
+	pkiDir := constants.Paths.Infra.PkiDir
+	secretsDir := constants.Paths.Infra.SecretsDir
+	dataDir := constants.Paths.Infra.DataDir
 	logDir := filepath.Join(runtimeDir, "logs")
 	pidDir := filepath.Join(runtimeDir, "pids")
 
@@ -177,33 +184,37 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 	return "./g8e", nil
 }
 
-func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort, publicPort, mcpHttpPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode string, identityData []byte) error {
+func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int, dataDir, pkiDir, secretsDir, vaultDir, vaultKeyPath string, vaultRequireUnlock bool, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode string, identityData []byte) error {
 	if err := pm.ensureDirectories(); err != nil {
 		return err
 	}
 
 	// Use provided values or defaults
 	effectiveHTTPPort := httpPort
-	effectivePublicPort := publicPort
-	effectiveMCPHttpPort := mcpHttpPort
+	effectiveHTTPSPort := httpsPort
 	effectiveDataDir := dataDir
 	effectivePKIDir := pkiDir
 	effectiveSecretsDir := secretsDir
+	effectiveVaultDir := vaultDir
+	effectiveVaultKeyPath := vaultKeyPath
 	effectivePasskeyRpID := passkeyRpID
 	effectivePasskeyRpName := passkeyRpName
+
+	// Normalize 127.0.0.1 to localhost for passkey RP ID
+	// WebAuthn requires RP ID to be a valid domain, not an IP address
+	if effectivePasskeyRpID == "127.0.0.1" {
+		effectivePasskeyRpID = "localhost"
+	}
 	effectiveRateLimitRPS := rateLimitRPS
 	effectiveRateLimitBurst := rateLimitBurst
 	effectiveLogLevel := logLevel
 
 	// Use defaults if not provided
 	if effectiveHTTPPort == 0 {
-		effectiveHTTPPort = constants.Ports.OperatorHttps
+		effectiveHTTPPort = constants.Ports.OperatorHttp
 	}
-	if effectivePublicPort == 0 {
-		effectivePublicPort = 8443
-	}
-	if effectiveMCPHttpPort == 0 {
-		effectiveMCPHttpPort = 8442
+	if effectiveHTTPSPort == 0 {
+		effectiveHTTPSPort = constants.Ports.OperatorHttps
 	}
 	if effectiveDataDir == "" {
 		effectiveDataDir = pm.dataDir
@@ -219,24 +230,18 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 	}
 
 	// Find the first available port starting from httpPort
-	availableHTTPPort, err := pm.findAvailablePort(effectiveHTTPPort, "Operator HTTP API")
+	availableHTTPPort, err := pm.findAvailablePort(effectiveHTTPPort, "Operator HTTP")
 	if err != nil {
-		return fmt.Errorf("failed to find available HTTP API port: %w", err)
+		return fmt.Errorf("failed to find available HTTP port: %w", err)
 	}
 
 	// Calculate offset from original httpPort to maintain port spacing
 	offset := availableHTTPPort - effectiveHTTPPort
-	availablePublicPort := effectivePublicPort + offset
-	availableMCPHttpPort := effectiveMCPHttpPort + offset
+	availableHTTPSPort := effectiveHTTPSPort + offset
 
-	// Verify the calculated Public port is available (Bootstrap now shares this port)
-	if err := pm.checkPortAvailable(availablePublicPort, "Operator Public API"); err != nil {
-		return fmt.Errorf("failed to verify Public API port %d: %w", availablePublicPort, err)
-	}
-
-	// Verify the calculated MCP HTTP port is available
-	if err := pm.checkPortAvailable(availableMCPHttpPort, "Operator MCP HTTP"); err != nil {
-		return fmt.Errorf("failed to verify MCP HTTP port %d: %w", availableMCPHttpPort, err)
+	// Verify the calculated HTTPS port is available
+	if err := pm.checkPortAvailable(availableHTTPSPort, "Operator HTTPS"); err != nil {
+		return fmt.Errorf("failed to verify HTTPS port %d: %w", availableHTTPSPort, err)
 	}
 
 	binPath, err := pm.getOperatorBinary()
@@ -256,10 +261,19 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, bootstrapPort,
 		"--data-dir", effectiveDataDir,
 		"--pki-dir", effectivePKIDir,
 		"--secrets-dir", effectiveSecretsDir,
-		"--http-listen-port", strconv.Itoa(availableHTTPPort),
-		"--public-listen-port", strconv.Itoa(availablePublicPort),
-		"--mcp-http-port", strconv.Itoa(availableMCPHttpPort),
+		"--http-port", strconv.Itoa(availableHTTPPort),
+		"--https-port", strconv.Itoa(availableHTTPSPort),
 		"--log", effectiveLogLevel,
+	}
+
+	if effectiveVaultDir != "" {
+		args = append(args, "--vault-dir", effectiveVaultDir)
+	}
+	if effectiveVaultKeyPath != "" {
+		args = append(args, "--vault-key", effectiveVaultKeyPath)
+	}
+	if vaultRequireUnlock {
+		args = append(args, "--vault-require-unlock")
 	}
 
 	if certIdentityMode != "" {
@@ -324,8 +338,22 @@ func (pm *ProcessManager) StopOperator() error {
 		return err
 	}
 
+	if pid != 0 && !pm.isProcessRunning(pid) {
+		// Stale PID file - clean it up and fall through to process discovery
+		_ = pm.deletePID(operatorPIDFile)
+		pid = 0
+	}
+
 	if pid == 0 {
-		return nil
+		// PID file missing or stale, try to find process via discovery
+		if pm.findOperatorProcessFn != nil {
+			pid = pm.findOperatorProcessFn()
+		} else {
+			pid = pm.findOperatorProcess()
+		}
+		if pid == 0 {
+			return nil
+		}
 	}
 
 	if err := pm.stopProcess(pid, "operator"); err != nil {
@@ -341,6 +369,20 @@ func (pm *ProcessManager) OperatorStatus() (bool, int, error) {
 		return false, 0, err
 	}
 
+	if pid != 0 {
+		if pm.isProcessRunning(pid) {
+			return true, pid, nil
+		}
+		// Stale PID file - clean it up and fall through to process discovery
+		_ = pm.deletePID(operatorPIDFile)
+	}
+
+	// PID file missing or stale, try to find the process
+	if pm.findOperatorProcessFn != nil {
+		pid = pm.findOperatorProcessFn()
+	} else {
+		pid = pm.findOperatorProcess()
+	}
 	if pid == 0 {
 		return false, 0, nil
 	}

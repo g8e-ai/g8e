@@ -24,7 +24,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
@@ -35,19 +34,17 @@ func (rr *PubSubResultsService) resultsChannel(operatorSessionID string) string 
 
 // PubSubResultsService handles publishing results back to g8e-Compliant Agentic Ensemble via Operator pub/sub
 type PubSubResultsService struct {
-	client     PubSubClient
-	config     *config.Config
-	logger     *slog.Logger
-	localStore *storage.LocalStoreService
+	client PubSubClient
+	config *config.Config
+	logger *slog.Logger
 }
 
 // NewPubSubResultsService creates a new Operator pub/sub results service
-func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client PubSubClient, localStore *storage.LocalStoreService) (*PubSubResultsService, error) {
+func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client PubSubClient) (*PubSubResultsService, error) {
 	return &PubSubResultsService{
-		client:     client,
-		config:     cfg,
-		logger:     logger,
-		localStore: localStore,
+		client: client,
+		config: cfg,
+		logger: logger,
 	}, nil
 }
 

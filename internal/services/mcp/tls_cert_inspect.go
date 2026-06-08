@@ -26,6 +26,27 @@ import (
 	"time"
 )
 
+// certInspectResult represents the structured output of the TLS certificate inspection tool.
+type certInspectResult struct {
+	Subject            string             `json:"subject"`
+	Issuer             string             `json:"issuer"`
+	SerialNumber       string             `json:"serial_number"`
+	NotBefore          string             `json:"not_before"`
+	NotAfter           string             `json:"not_after"`
+	IsExpired          bool               `json:"is_expired"`
+	DaysUntilExpiry    int                `json:"days_until_expiry"`
+	IsNearExpiry       bool               `json:"is_near_expiry"`
+	SignatureAlgorithm string             `json:"signature_algorithm"`
+	PublicKeyAlgorithm string             `json:"public_key_algorithm"`
+	KeyUsage           x509.KeyUsage      `json:"key_usage"`
+	ExtKeyUsage        []x509.ExtKeyUsage `json:"ext_key_usage"`
+	DNSNames           []string           `json:"dns_names"`
+	EmailAddresses     []string           `json:"email_addresses"`
+	IPAddresses        []string           `json:"ip_addresses"`
+	Organization       string             `json:"organization,omitempty"`
+	OrganizationalUnit string             `json:"organizational_unit,omitempty"`
+}
+
 // TLSCertInspectTool parses TLS certificates, verifies chains, and checks expiration.
 type TLSCertInspectTool struct{}
 
@@ -40,25 +61,25 @@ func (t *TLSCertInspectTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *TLSCertInspectTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"cert_path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to certificate file (PEM format)",
+func (t *TLSCertInspectTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"cert_path": {
+				Type:        "string",
+				Description: "Path to certificate file (PEM format)",
 			},
-			"host": map[string]interface{}{
-				"type":        "string",
-				"description": "Remote host to fetch certificate from via TLS handshake",
+			"host": {
+				Type:        "string",
+				Description: "Remote host to fetch certificate from via TLS handshake",
 			},
-			"port": map[string]interface{}{
-				"type":        "integer",
-				"description": "Port number for remote host (default 443)",
+			"port": {
+				Type:        "integer",
+				Description: "Port number for remote host (default 443)",
 			},
-			"insecure_skip_verify": map[string]interface{}{
-				"type":        "boolean",
-				"description": "Skip TLS certificate verification (default: false, use with caution)",
+			"insecure_skip_verify": {
+				Type:        "boolean",
+				Description: "Skip TLS certificate verification (default: false, use with caution)",
 			},
 		},
 	}
@@ -73,7 +94,7 @@ func (t *TLSCertInspectTool) Execute(ctx context.Context, args json.RawMessage) 
 		InsecureSkipVerify bool   `json:"insecure_skip_verify,omitempty"`
 	}
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("tls_cert_inspect: invalid arguments: %w", err)
 	}
 
 	var cert *x509.Certificate
@@ -81,11 +102,11 @@ func (t *TLSCertInspectTool) Execute(ctx context.Context, args json.RawMessage) 
 
 	if req.CertPath != "" {
 		if err := validateFilePath(req.CertPath); err != nil {
-			return CallToolResult{}, fmt.Errorf("invalid cert path: %w", err)
+			return CallToolResult{}, fmt.Errorf("tls_cert_inspect: invalid cert path: %w", err)
 		}
 		cert, err = loadCertFromFile(req.CertPath)
 		if err != nil {
-			return CallToolResult{}, fmt.Errorf("failed to load certificate from file: %w", err)
+			return CallToolResult{}, fmt.Errorf("tls_cert_inspect: failed to load certificate from file: %w", err)
 		}
 	} else if req.Host != "" {
 		port := req.Port
@@ -94,16 +115,16 @@ func (t *TLSCertInspectTool) Execute(ctx context.Context, args json.RawMessage) 
 		}
 		cert, err = fetchCertFromHost(ctx, req.Host, port, req.InsecureSkipVerify)
 		if err != nil {
-			return CallToolResult{}, fmt.Errorf("failed to fetch certificate from host: %w", err)
+			return CallToolResult{}, fmt.Errorf("tls_cert_inspect: failed to fetch certificate from host: %w", err)
 		}
 	} else {
-		return CallToolResult{}, fmt.Errorf("either cert_path or host must be specified")
+		return CallToolResult{}, fmt.Errorf("tls_cert_inspect: either cert_path or host must be specified")
 	}
 
 	result := inspectCertificate(cert)
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("tls_cert_inspect: failed to marshal result: %w", err)
 	}
 
 	return CallToolResult{
@@ -119,17 +140,17 @@ func (t *TLSCertInspectTool) Execute(ctx context.Context, args json.RawMessage) 
 func loadCertFromFile(path string) (*x509.Certificate, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("tls_cert_inspect: failed to read file: %w", err)
 	}
 
 	block, _ := pem.Decode(data)
 	if block == nil {
-		return nil, fmt.Errorf("failed to decode PEM block")
+		return nil, fmt.Errorf("tls_cert_inspect: failed to decode PEM block")
 	}
 
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("tls_cert_inspect: failed to parse certificate: %w", err)
 	}
 
 	return cert, nil
@@ -143,47 +164,52 @@ func fetchCertFromHost(ctx context.Context, host string, port int, insecureSkipV
 		InsecureSkipVerify: insecureSkipVerify,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("tls_cert_inspect: failed to dial host: %w", err)
 	}
 	defer conn.Close()
 
 	certs := conn.ConnectionState().PeerCertificates
 	if len(certs) == 0 {
-		return nil, fmt.Errorf("no certificates presented")
+		return nil, fmt.Errorf("tls_cert_inspect: no certificates presented")
 	}
 
 	return certs[0], nil
 }
 
-func inspectCertificate(cert *x509.Certificate) map[string]interface{} {
+func inspectCertificate(cert *x509.Certificate) certInspectResult {
 	now := time.Now()
 	daysUntilExpiry := int(cert.NotAfter.Sub(now).Hours() / 24)
 	isExpired := now.After(cert.NotAfter)
 	isNearExpiry := daysUntilExpiry > 0 && daysUntilExpiry <= 30
 
-	result := map[string]interface{}{
-		"subject":              cert.Subject.CommonName,
-		"issuer":               cert.Issuer.CommonName,
-		"serial_number":        cert.SerialNumber.String(),
-		"not_before":           cert.NotBefore.Format(time.RFC3339),
-		"not_after":            cert.NotAfter.Format(time.RFC3339),
-		"is_expired":           isExpired,
-		"days_until_expiry":    daysUntilExpiry,
-		"is_near_expiry":       isNearExpiry,
-		"signature_algorithm":  cert.SignatureAlgorithm.String(),
-		"public_key_algorithm": cert.PublicKeyAlgorithm.String(),
-		"key_usage":            cert.KeyUsage,
-		"ext_key_usage":        cert.ExtKeyUsage,
-		"dns_names":            cert.DNSNames,
-		"email_addresses":      cert.EmailAddresses,
-		"ip_addresses":         cert.IPAddresses,
+	ipAddresses := make([]string, len(cert.IPAddresses))
+	for i, ip := range cert.IPAddresses {
+		ipAddresses[i] = ip.String()
+	}
+
+	result := certInspectResult{
+		Subject:            cert.Subject.CommonName,
+		Issuer:             cert.Issuer.CommonName,
+		SerialNumber:       cert.SerialNumber.String(),
+		NotBefore:          cert.NotBefore.Format(time.RFC3339),
+		NotAfter:           cert.NotAfter.Format(time.RFC3339),
+		IsExpired:          isExpired,
+		DaysUntilExpiry:    daysUntilExpiry,
+		IsNearExpiry:       isNearExpiry,
+		SignatureAlgorithm: cert.SignatureAlgorithm.String(),
+		PublicKeyAlgorithm: cert.PublicKeyAlgorithm.String(),
+		KeyUsage:           cert.KeyUsage,
+		ExtKeyUsage:        cert.ExtKeyUsage,
+		DNSNames:           cert.DNSNames,
+		EmailAddresses:     cert.EmailAddresses,
+		IPAddresses:        ipAddresses,
 	}
 
 	if len(cert.Subject.Organization) > 0 {
-		result["organization"] = cert.Subject.Organization[0]
+		result.Organization = cert.Subject.Organization[0]
 	}
 	if len(cert.Subject.OrganizationalUnit) > 0 {
-		result["organizational_unit"] = cert.Subject.OrganizationalUnit[0]
+		result.OrganizationalUnit = cert.Subject.OrganizationalUnit[0]
 	}
 
 	return result

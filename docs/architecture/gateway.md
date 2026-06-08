@@ -19,13 +19,13 @@ The g8e Protocol platform is composed of two logically distinct roles, both impl
     - **L3 Notary**: Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) defined in `internal/services/governance/l3_notary.go`.
     - **L4 Warden**: Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) defined in `internal/services/governance/l4_warden.go`.
     - **L5 Actuator**: Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production defined in `internal/services/governance/l5_actuator.go`.
-- **mTLS-Everywhere**: All communication is strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts. The platform uses `g8e.local` as its canonical SPIFFE trust domain for workload identities defined in `protocol/workload_identity.go:24`.
+- **mTLS-Everywhere**: All communication is strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts. The platform uses `g8e.local` as its canonical SPIFFE trust domain for workload identities. See [Network Architecture](./network.md) for detailed mTLS enforcement, PKI hierarchy, and identity management.
 - **Local-First Audit (LFAA)**: The target host remains the source of truth for command history and file mutations, stored in a tamper-evident local ledger.
 - **Canonical JSON (GovernanceEnvelope)**: Every mutation action is governed by a canonical JSON `GovernanceEnvelope` (protojson). This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
 - **Transaction Invariants**: Every transaction is identified by a deterministic `transaction_hash` computed from its content. The envelope `id` must match this hash for the transaction to be valid.
 - **Protocol vs Implementation**: The protocol is the Gateway. Conforming implementations of the g8e Gateway and g8e Operator enforce these invariants.
-- **Sovereign Authority (PKI)**: The g8e Gateway owns the platform's PKI and is the only entity permitted to sign certificates.
-- **CSR-Based Enrollment**: Participants enroll by submitting a Certificate Signing Request (CSR) to the g8e Gateway. Identities are encoded as SPIFFE URI SANs.
+- **Sovereign Authority (PKI)**: The g8e Gateway owns the platform's PKI and is the only entity permitted to sign certificates. See [Network Architecture](./network.md) for the complete PKI hierarchy and certificate management.
+- **CSR-Based Enrollment**: Participants enroll by submitting a Certificate Signing Request (CSR) to the g8e Gateway. Identities are encoded as SPIFFE URI SANs. See [Network Architecture](./network.md) for detailed enrollment procedures.
 
 ---
 
@@ -94,24 +94,9 @@ By passing `--doctrine`, `--consensus`, or `--notary`, the g8e Node transforms i
 
 ### Port Topology
 
-The g8e Gateway exposes four logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port.
+The g8e Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port. See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
 
-Default ports are sourced from `internal/constants/ports.go:17`:
-
-| Surface | Port (default) | Auth | Purpose |
-|---|---|---|---|
-| **mTLS API + Pub/Sub** | `8440` (mTLS) | mTLS + URI SAN | `/api/v1/governance/envelopes`, `/api/v1/db/*`, `/api/v1/kv/*`, `/api/v1/blob/*`, `/api/v1/pubsub/publish`, and `/ws/v1/pubsub` real-time fan-out. |
-| **Bootstrap Port** | `8441` (plain HTTP) | CSR Enrollment | Certificate Signing Requests, CA bundle discovery, and initial provisioning. |
-| **MCP HTTP Port** | `8442` (plain HTTP) | Rate-limited HTTP | Plain HTTP endpoint for MCP calls without mTLS requirements. Useful for development and testing. |
-| **Public Port** | `8443` (mTLS) | mTLS + URI SAN | Public mTLS surface for external app enrollment and BYO bootstrap. |
-
-#### Port Constraints
-
-- **mTLS Surface** (`8440`): Requires `tls.RequireAndVerifyClientCert`. This is the primary execution boundary.
-- **Bootstrap Surface** (`8441`): Serves plain HTTP for initial CA discovery and bootstrap (no TLS).
-- **MCP HTTP Surface** (`8442`): Serves plain HTTP for MCP calls with rate limiting. Does not require mTLS but may have different security policies.
-- **Public Surface** (`8443`): Requires `tls.RequireAndVerifyClientCert` for mTLS-based external app enrollment.
-- **Collision Prevention**: The gateway fails startup if incompatible surfaces (e.g., mTLS and Bootstrap) are assigned to the same port, as this forces a downgrade to `VerifyClientCertIfGiven`.
+**MCP Endpoint Availability**: MCP endpoints are exclusively available on the HTTPS port (8443) with mTLS authentication (or JWT when JWKS is configured). MCP routes are NOT available on the HTTP bootstrap port (8080), which is limited to bootstrap enrollment and PKI discovery endpoints only.
 
 ---
 
@@ -217,8 +202,9 @@ Defined in `internal/services/governance/l2_consensus.go`. Verifies multi-agent 
 
 ### L3 Notary (Human Authorization)
 Defined in `internal/services/governance/l3_notary.go`. Enforces human-in-the-loop authorization using a cryptographic proof of human intent:
-- **BYO Clients**: Use WebAuthn or Passkey proofs (FIDO2).
+- **Web Sessions**: Use WebAuthn or Passkey proofs (FIDO2).
 - **CLI Sessions**: Use mTLS certificate fingerprints or Ed25519 signatures bound to the session.
+- **Operator Sessions**: Use mTLS certificate fingerprints only (passkey auth is not available for operators).
 
 ### L4 Warden (Pre-Dispatch Gating)
 Defined in `internal/services/governance/l4_warden.go`. Enforces final pre-execution verification gates:
@@ -307,7 +293,7 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | L5 Actuator | `internal/services/governance/l5_actuator.go` |
 | PKI / CertStore | `internal/services/gateway/gateway_certs.go` |
 | Secret Manager | `internal/services/gateway/secret_manager.go` |
-| Workload identity | `protocol/workload_identity.go` |
+| Network architecture | `./network.md` |
 | Collections registry | `internal/constants/collections.go` |
 | MCP unified endpoint | `internal/services/mcp/mcp_endpoint.go` |
 | Native tool registry | `internal/services/mcp/registry.go` |
@@ -333,7 +319,57 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 
 ---
 
+## Agent Integration
+
+The g8e Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, Cursor, VS Code, Cline) through the agent wrapper and gov components.
+
+### Agent Wrapper
+
+The agent wrapper (`internal/cli/cmd/agent.go`) is a generic wrapper that:
+- Detects tool binaries on the system
+- Verifies gateway status before execution
+- Checks CLI authentication status
+- Injects G8E_* environment variables with MCP configuration
+- Executes tools with proper process group management
+
+The wrapper automatically configures MCP integration by setting:
+- `G8E_MCP_CONFIG`: JSON configuration for stdio transport to g8e
+- `G8E_GATEWAY_URL`: Gateway HTTPS endpoint for mTLS
+- `G8E_CLIENT_CERT`/`G8E_CLIENT_KEY`: mTLS certificate paths
+- `G8E_CA_BUNDLE`: Trust bundle path
+- `G8E_OPERATOR_SESSION_ID`: Session identity
+- `G8E_USER_ID`: User identity
+
+### Stdio Proxy
+
+The stdio proxy (`internal/cli/cmd/mcp.go`) bridges stdio MCP transport to the gateway HTTP endpoint:
+- Accepts JSON-RPC 2.0 requests over stdin/stdout
+- Proxies requests to the gateway HTTPS endpoint with mTLS
+- Detects L3 approval responses and polls for completion
+- Auto-opens browser for L3 approval URLs
+- Implements retry logic with configurable timeout (5 minutes default)
+
+### L3 Approval Polling
+
+When the gateway returns an L3 approval response, the stdio proxy:
+1. Extracts the approval URL from the response (structured field or text content)
+2. Opens the browser automatically using `internal/cli/platform/browser.go`
+3. Polls the gateway every 10 seconds for up to 30 iterations
+4. Returns the final result once approval is complete
+
+The polling logic is implemented in `proxyToGatewayWithRetry` with constants:
+- `l3ApprovalMaxIterations`: 30
+- `l3ApprovalPollInterval`: 10 seconds
+- `l3ApprovalTotalTimeout`: 5 minutes
+
+### Browser Utility
+
+The browser utility (`internal/cli/platform/browser.go`) provides cross-platform browser opening for L3 approval URLs, supporting macOS, Linux, and Windows.
+
+---
+
 ## Related Documentation
 
-- [**g8e Protocol**](./g8e.md) - The wire contract and governance hierarchy.
+- [**g8e Protocol**](./protocol.md) - The wire contract and governance hierarchy.
 - [**g8e Operator**](./operator.md) - Sovereign host-side execution agent and MCP server.
+- [**CLI Reference**](../guides/cli.md) - Complete CLI command documentation including agent integration.

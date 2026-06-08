@@ -21,7 +21,6 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
-
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -124,7 +123,12 @@ func (b *PubSubBroker) Publish(channel string, data []byte) int {
 			Channel: channel,
 			Data:    data,
 		}
-		msg, _ := proto.Marshal(event)
+		msg, err := proto.Marshal(event)
+		if err != nil {
+			b.logger.Error("pubsub: failed to marshal event", "channel", channel, "error", err)
+			b.mu.RUnlock()
+			return 0
+		}
 		for sub := range subs {
 			deliveries = append(deliveries, delivery{sub: sub, msg: msg})
 		}
@@ -185,7 +189,7 @@ func (b *PubSubBroker) RegisterHandler(channel string, handler func(string, []by
 func (b *PubSubBroker) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ws, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
-		b.logger.Warn("WebSocket upgrade failed", string(constants.ConnectionStateError), err)
+		b.logger.Error("gateway: websocket upgrade failed", "error", err)
 		return
 	}
 
@@ -239,6 +243,7 @@ func (h *pubSubSessionHandler) run() {
 
 		var msg pubsubv1.PubSubMessage
 		if err := proto.Unmarshal(raw, &msg); err != nil {
+			h.broker.logger.Warn("pubsub: failed to unmarshal message", "error", err)
 			continue
 		}
 
@@ -257,7 +262,9 @@ func (h *pubSubSessionHandler) handleAction(msg *pubsubv1.PubSubMessage) {
 			return
 		}
 		h.broker.subscribe(msg.Channel, h.sub)
-		h.broker.sendAck(h.sub, msg.Channel)
+		if err := h.broker.sendAck(h.sub, msg.Channel); err != nil {
+			h.broker.logger.Warn("pubsub: failed to send subscription ack", "channel", msg.Channel, "error", err)
+		}
 	case constants.PubSubActionUnsubscribe:
 		h.broker.unsubscribe(msg.Channel, h.sub)
 	case constants.PubSubActionPublish:
@@ -270,13 +277,17 @@ func (h *pubSubSessionHandler) cleanup() {
 	h.sub.shutdown()
 }
 
-func (b *PubSubBroker) sendAck(sub *wsSubscriber, channel string) {
+func (b *PubSubBroker) sendAck(sub *wsSubscriber, channel string) error {
 	event := &pubsubv1.PubSubEvent{
 		Type:    constants.PubSubEventSubscribed,
 		Channel: channel,
 	}
-	msg, _ := proto.Marshal(event)
+	msg, err := proto.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("gateway: failed to marshal ack event: %w", err)
+	}
 	b.trySend(sub, msg)
+	return nil
 }
 
 func (b *PubSubBroker) subscribe(channel string, sub *wsSubscriber) {

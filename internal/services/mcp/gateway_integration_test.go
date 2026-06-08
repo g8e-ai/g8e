@@ -34,7 +34,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
@@ -333,8 +333,12 @@ func TestCircuitBreakerIntegration(t *testing.T) {
 		maxFailures:       3, // Lower threshold for faster test
 		cooldownDuration:  100 * time.Millisecond,
 		downstreamURL:     "http://localhost:9999", // Invalid URL that will fail
-		nativeToolHandler: NewNativeToolHandler(),
 	}
+	nativeToolHandler, err := NewNativeToolHandler()
+	if err != nil {
+		t.Fatalf("failed to create native tool handler: %v", err)
+	}
+	g.nativeToolHandler = nativeToolHandler
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
 
@@ -354,7 +358,7 @@ func TestCircuitBreakerIntegration(t *testing.T) {
 	g.HandleToolsList(w, req)
 
 	var resp JSONRPCResponse
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	require.Nil(t, resp.Error)
 
@@ -460,7 +464,7 @@ func TestNativeToolExecutionIntegration(t *testing.T) {
 
 	g := &GatewayService{
 		logger:            logger,
-		responder:         responder.New(logger),
+		responder:         response.NewWriter(logger),
 		envProc:           processor,
 		signingKey:        privKey,
 		keyID:             "native-test-key",
@@ -536,7 +540,7 @@ func TestReadFieldIntegration(t *testing.T) {
 
 	g := &GatewayService{
 		logger:            logger,
-		responder:         responder.New(logger),
+		responder:         response.NewWriter(logger),
 		envProc:           nil, // read_field doesn't use envelope processor
 		signingKey:        privKey,
 		keyID:             "readfield-test-key",
@@ -907,7 +911,7 @@ func (p *realL3EnvelopeProcessor) ProcessEnvelope(ctx context.Context, payload [
 			p.lastError = governance.ErrL3ProofInvalid
 			return nil, governance.ErrL3ProofInvalid
 		}
-		valid, err := p.l3Notary.VerifyL3Proof(envelope.OperatorId, envelope.TransactionHash, envelope.OperatorSessionId, l3Metadata.Proof)
+		valid, err := p.l3Notary.VerifyL3Proof(context.Background(), envelope.OperatorId, envelope.TransactionHash, envelope.OperatorSessionId, l3Metadata.Proof)
 		if err != nil {
 			p.lastError = err
 			return nil, err

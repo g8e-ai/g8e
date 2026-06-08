@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"errors"
+	"fmt"
+	"time"
+)
 
 // Invitation represents an owner-created invitation for a user to join an organization.
 // This is used for JIT provisioning and onboarding.
@@ -18,9 +22,15 @@ type Invitation struct {
 }
 
 // IsValid checks if the invitation is active and not expired.
-func (i *Invitation) IsValid() bool {
-	if i == nil || i.IsConsumed {
-		return false
+func (i *Invitation) IsValid() error {
+	if i == nil {
+		return errors.New("models: invitation is nil")
 	}
-	return time.Now().UTC().Before(i.ExpiresAt)
+	if i.IsConsumed {
+		return fmt.Errorf("models: invitation %s is already consumed", i.ID)
+	}
+	if time.Now().UTC().After(i.ExpiresAt) {
+		return fmt.Errorf("models: invitation %s expired at %s", i.ID, i.ExpiresAt.UTC().Format(time.RFC3339))
+	}
+	return nil
 }

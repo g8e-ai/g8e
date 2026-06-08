@@ -94,10 +94,8 @@ To start the gateway, use the CLI gateway command:
 ### Gateway Mode Flags
 
 - `--posture <mode>` — g8e Gateway posture: doctrine (L1 enforced, L2/L3 audited, default), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)
-- `--http-listen-port <port>` — HTTPS port for mTLS API (default: 8440)
-- `--bootstrap-listen-port <port>` — Bootstrap TLS port for CSR-based enrollment (default: 8441)
-- `--public-listen-port <port>` — Public browser/BYO bootstrap port (default: 8443)
-- `--mcp-http-port <port>` — Plain HTTP port for MCP calls (default: 8442)
+- `--http-port <port>` — Plain HTTP port for bootstrap and MCP routes (default: 8080)
+- `--https-port <port>` — HTTPS port for mTLS API and public surface (default: 8443)
 - `--data-dir <dir>` — Data directory for SQLite database (default: .g8e/data in working directory)
 - `--pki-dir <dir>` — Directory for TLS certificates (default: .g8e/pki)
 - `--secrets-dir <dir>` — Directory for platform secrets (default: .g8e/secrets)
@@ -142,7 +140,7 @@ The gateway must serve as the Pub/Sub broker:
 
 - **WebSocket Fan-Out**: Real-time event streaming to subscribed clients.
 - **Channel Format**: Use the `{prefix}:{operator_id}:{operator_session_id}` channel format.
-- **Mutation Channels**: Restrict `cmd:*` and `auditor:*` channels to envelope-based mutations only.
+- **Mutation Channels**: Restrict `cmd:*` and `emulator:*` channels to envelope-based mutations only.
 - **Non-Mutation Channels**: Allow direct publishing to `heartbeat:*`, `results:*`, `sse:*`, `ws_session:*`, `internal:*`.
 - **Subscribe-and-Wait**: Require subscribers to wait for the broker's subscription acknowledgment before publishing.
 
@@ -255,6 +253,86 @@ For CI-quality testing with coverage enforcement:
 
 ```bash
 make ci
+```
+
+---
+
+## Manage
+
+Manage the gateway lifecycle and configuration:
+
+### Gateway Restart
+
+Restart the gateway without stopping it manually:
+
+```bash
+./g8e gw restart
+```
+
+### Gateway Settings
+
+View and manage gateway configuration:
+
+```bash
+./g8e gw settings
+```
+
+### Gateway Reset
+
+Reset gateway data and secrets while preserving the CA:
+
+```bash
+./g8e gw reset
+```
+
+Use `--force` or `--yes` to skip the confirmation prompt.
+
+### Gateway Clean
+
+Destructively remove all gateway state including databases, secrets, logs, and PKI certificates:
+
+```bash
+./g8e gw clean
+```
+
+**Warning:** This permanently destroys all trust routes and credentials. Use `--force` or `--yes` to skip the confirmation prompt.
+
+---
+
+## Monitor
+
+Monitor gateway status, logs, and data:
+
+### Gateway Status
+
+Check the gateway health and view endpoint information:
+
+```bash
+./g8e gw status
+```
+
+This displays:
+- Gateway state (RUNNING/STOPPED) and PID
+- Endpoint URLs for bootstrap, public API, and MCP
+
+### Gateway Logs
+
+View gateway logs in real-time:
+
+```bash
+./g8e gw logs -f
+```
+
+The `-f` flag follows log output (like `tail -f`). Use without `-f` to view historical logs.
+
+### Data Query
+
+Query the gateway's data store for operators, users, and audit events:
+
+```bash
+./g8e data operators
+./g8e data users
+./g8e data audit list --operator-session-id <session-id>
 ```
 
 ---

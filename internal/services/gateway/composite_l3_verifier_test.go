@@ -14,6 +14,7 @@
 package gateway
 
 import (
+	"context"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -36,7 +37,7 @@ func TestCompositeL3Verifier_VerifyL3Proof_NilProof(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	verifier := NewCompositeL3Verifier(nil, nil, logger)
 
-	_, err := verifier.VerifyL3Proof("user-123", "tx-hash-456", "cli-session-789", nil)
+	_, err := verifier.VerifyL3Proof(context.Background(), "user-123", "tx-hash-456", "cli-session-789", nil)
 	require.ErrorIs(t, err, ErrL3ProofRequired)
 }
 
@@ -49,7 +50,7 @@ func TestCompositeL3Verifier_VerifyL3Proof_MTLSProof_NoCLIVerifier(t *testing.T)
 		MtlsCertFingerprint: "cert-fp-123",
 	}
 
-	_, err := verifier.VerifyL3Proof("user-123", "tx-hash-456", "cli-session-789", proof)
+	_, err := verifier.VerifyL3Proof(context.Background(), "user-123", "tx-hash-456", "cli-session-789", proof)
 	require.ErrorIs(t, err, ErrCLIL3NotaryNotConfigured)
 }
 
@@ -63,7 +64,7 @@ func TestCompositeL3Verifier_VerifyL3Proof_WebAuthnProof_NoPasskeyVerifier(t *te
 		CredentialId: "cred-id-123",
 	}
 
-	_, err := verifier.VerifyL3Proof("user-123", "tx-hash-456", "", proof)
+	_, err := verifier.VerifyL3Proof(context.Background(), "user-123", "tx-hash-456", "", proof)
 	require.ErrorIs(t, err, ErrPasskeyL3NotaryNotConfigured)
 }
 
@@ -72,8 +73,8 @@ func TestCompositeL3Verifier_VerifyL3Proof_MTLSProof_DelegatesToCLI(t *testing.T
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
-	sessionSvc := NewSessionService(db, logger)
-	cliL3 := NewCLIL3Notary(db, nil, logger, userSvc, sessionSvc)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	cliL3 := NewCLIL3Notary(db, nil, logger, userSvc, cliSessionSvc)
 	verifier := NewCompositeL3Verifier(nil, cliL3, logger)
 
 	proof := &commonv1.L3Proof{
@@ -82,7 +83,7 @@ func TestCompositeL3Verifier_VerifyL3Proof_MTLSProof_DelegatesToCLI(t *testing.T
 
 	// This will fail because we don't have a valid CLI session set up,
 	// but it should delegate to the CLI verifier
-	_, err := verifier.VerifyL3Proof("user-123", "tx-hash-789", "cli-session-101", proof)
+	_, err := verifier.VerifyL3Proof(context.Background(), "user-123", "tx-hash-789", "cli-session-101", proof)
 	assert.Error(t, err)
 	// The error should come from the CLI verifier, not about missing verifier
 	assert.NotErrorIs(t, err, ErrCLIL3NotaryNotConfigured)
@@ -104,7 +105,7 @@ func TestCompositeL3Verifier_VerifyL3Proof_WebAuthnProof_DelegatesToPasskey(t *t
 
 	// This will fail because we don't have a valid passkey set up,
 	// but it should delegate to the passkey verifier
-	_, err := verifier.VerifyL3Proof("user-123", "tx-hash-101", "", proof)
+	_, err := verifier.VerifyL3Proof(context.Background(), "user-123", "tx-hash-101", "", proof)
 	assert.Error(t, err)
 	// The error should come from the passkey verifier, not about missing verifier
 	assert.NotErrorIs(t, err, ErrPasskeyL3NotaryNotConfigured)

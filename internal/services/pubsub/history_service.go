@@ -21,6 +21,8 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/interfaces"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -32,7 +34,7 @@ type HistoryService struct {
 	config         *config.Config
 	logger         *slog.Logger
 	client         PubSubClient
-	localStore     *storage.LocalStoreService
+	executionVault interfaces.ExecutionVault
 	historyHandler *storage.HistoryHandler
 }
 
@@ -68,13 +70,13 @@ func (hs *HistoryService) HandleFetchLogsRequest(ctx context.Context, msg *PubSu
 }
 
 func (hs *HistoryService) handleFetchFromConsolidatedVault(ctx context.Context, msg *PubSubCommandMessage, executionID string) {
-	if hs.localStore == nil || !hs.localStore.IsEnabled() {
+	if hs.executionVault == nil || !hs.executionVault.IsEnabled() {
 		hs.logger.Warn("Consolidated execution vault not available")
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "consolidated execution vault is not enabled on this operator")
 		return
 	}
 
-	record, err := hs.localStore.GetExecution(executionID, false)
+	record, err := hs.executionVault.GetExecution(ctx, executionID)
 	if err != nil {
 		hs.logger.Error("Failed to retrieve execution from consolidated vault", string(constants.ConnectionStateError), err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, fmt.Sprintf("failed to retrieve execution: %v", err))
@@ -90,7 +92,7 @@ func (hs *HistoryService) handleFetchFromConsolidatedVault(ctx context.Context, 
 	hs.publishFetchLogsResult(ctx, msg, record)
 }
 
-func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg *PubSubCommandMessage, record *storage.ExecutionRecord) {
+func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg *PubSubCommandMessage, record *models.ExecutionRecord) {
 	publishLFAATypedResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Completed,
 		&operatorv1.FetchLogsResult{
 			ExecutionId: record.ID,
@@ -191,10 +193,10 @@ func (hs *HistoryService) HandleRestoreFileRequest(ctx context.Context, msg *Pub
 func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	hs.logger.Info("FETCH_FILE_DIFF requested (LFAA, via Protobuf)")
 
-	if hs.localStore == nil || !hs.localStore.IsEnabled() {
-		hs.logger.Warn("Local store (scrubbed vault) not available")
+	if hs.executionVault == nil || !hs.executionVault.IsEnabled() {
+		hs.logger.Warn("Execution vault not available")
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed,
-			"local storage not available on this operator")
+			"execution vault not available on this operator")
 		return
 	}
 
@@ -213,7 +215,7 @@ func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg *P
 	}
 
 	if diffID != "" {
-		record, err := hs.localStore.GetFileDiff(diffID, false)
+		record, err := hs.executionVault.GetFileDiff(ctx, diffID)
 		if err != nil {
 			hs.logger.Error("Failed to fetch file diff", "diff_id", diffID, string(constants.ConnectionStateError), err)
 			publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed,
@@ -247,7 +249,7 @@ func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg *P
 	}
 
 	if operatorSessionID != "" {
-		records, err := hs.localStore.GetFileDiffsBySession(operatorSessionID, int(limit))
+		records, err := hs.executionVault.GetFileDiffsBySession(ctx, operatorSessionID, int(limit))
 		if err != nil {
 			hs.logger.Error("Failed to fetch file diffs by session", "operator_session_id", operatorSessionID, string(constants.ConnectionStateError), err)
 			publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed,

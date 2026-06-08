@@ -24,7 +24,6 @@ import (
 	"os/user"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 	"unsafe"
 
@@ -281,7 +280,6 @@ func GetMemoryDetails() models.HeartbeatMemoryDetails {
 func GetEnvironmentDetails(lang, term, tz string) models.HeartbeatEnvironment {
 	pwd, _ := os.Getwd()
 
-	containerInfo := detectContainerEnvironment()
 	initSystem := "Windows Service Manager"
 
 	return models.HeartbeatEnvironment{
@@ -289,43 +287,11 @@ func GetEnvironmentDetails(lang, term, tz string) models.HeartbeatEnvironment {
 		Lang:             lang,
 		Timezone:         getTimezone(tz),
 		Term:             term,
-		IsContainer:      containerInfo.IsContainer,
-		ContainerRuntime: containerInfo.Runtime,
-		ContainerSignals: containerInfo.Signals,
+		IsContainer:      false,
+		ContainerRuntime: "none",
+		ContainerSignals: []string{},
 		InitSystem:       initSystem,
 	}
-}
-
-func detectContainerEnvironment() ContainerInfo {
-	// Windows container detection via WSL or Docker Desktop
-	info := ContainerInfo{
-		Runtime: "none",
-	}
-
-	// Check for WSL
-	if _, err := os.Stat("/proc/version"); err == nil {
-		data, _ := os.ReadFile("/proc/version")
-		if strings.Contains(strings.ToLower(string(data)), "microsoft") {
-			info.IsContainer = true
-			info.Runtime = "wsl"
-			info.Signals = append(info.Signals, "wsl_proc_version")
-		}
-	}
-
-	// Check for Docker Desktop on Windows
-	if _, err := os.ReadFile("/.dockerenv"); err == nil {
-		info.IsContainer = true
-		if info.Runtime == "none" {
-			info.Runtime = "docker"
-		}
-		info.Signals = append(info.Signals, "dockerenv_file")
-	}
-
-	if info.Signals == nil {
-		info.Signals = []string{}
-	}
-
-	return info
 }
 
 func GetHostname() string {
@@ -368,21 +334,31 @@ func GetCurrentUser() string {
 	return currentUser.Username
 }
 
-func GetPublicIP(ipService string) string {
-	// Use the cross-platform implementation from the main file
-	// This will be available via the shared code
-	return "127.0.0.1" // Placeholder - would need HTTP client
-}
-
 func GetLocalIP(ipResolver string) string {
-	// Use the cross-platform implementation from the main file
-	return "127.0.0.1" // Placeholder
+	if ipResolver == "" {
+		ipResolver = "8.8.8.8:80"
+	}
+	conn, err := net.Dial(string(constants.NetworkProtocolUDP), ipResolver)
+	if err != nil {
+		return "127.0.0.1"
+	}
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String()
 }
 
 func GetNetworkInterfaces() []string {
-	// Windows network interface enumeration requires Win32 API
-	// For now, return empty
-	return []string{}
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return []string{}
+	}
+	var interfaceNames []string
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagUp != 0 {
+			interfaceNames = append(interfaceNames, iface.Name)
+		}
+	}
+	return interfaceNames
 }
 
 func GetConnectivityStatus() []models.HeartbeatNetworkInterface {

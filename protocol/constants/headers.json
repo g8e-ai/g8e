@@ -132,6 +132,10 @@
       "_go_const": "HeaderXAccelBuffering",
       "value": "X-Accel-Buffering"
     },
+    "XContentTypeOptions": {
+      "_go_const": "HeaderXContentTypeOptions",
+      "value": "X-Content-Type-Options"
+    },
     "XForwardedFor": {
       "_go_const": "HeaderXForwardedFor",
       "value": "X-Forwarded-For"
@@ -143,6 +147,10 @@
     "XForwardedProto": {
       "_go_const": "HeaderXForwardedProto",
       "value": "X-Forwarded-Proto"
+    },
+    "XFrameOptions": {
+      "_go_const": "HeaderXFrameOptions",
+      "value": "X-Frame-Options"
     },
     "XProxyOrganizationID": {
       "_go_const": "HeaderXProxyOrganizationID",

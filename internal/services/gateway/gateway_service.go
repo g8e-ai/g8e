@@ -11,6 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package gateway provides services for gateway mode (operator platform mode).
+//
+// This package contains mode-specific services that are only used in gateway mode,
+// including GatewayModeService (the top-level orchestrator) and CanonicalDBService
+// (shared with outbound mode for state root calculation).
+//
+// For more information on service modes, see docs/architecture/service_modes.md.
 package gateway
 
 import (
@@ -28,34 +35,34 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/network"
 )
 
-// GatewayService is the top-level orchestrator for gateway mode (operator).
+// GatewayModeService is the top-level orchestrator for gateway mode (operator).
 // It acts as the platform's central persistence and messaging backbone.
 // In this mode, the Operator does NOT execute commands or initiate outbound
 // connections. It strictly serves inbound requests from platform components.
-type GatewayService struct {
+type GatewayModeService struct {
 	cfg    *config.Config
 	logger *slog.Logger
 
-	db              *GatewayDBService
-	pubsub          *PubSubBroker
-	auth            *AuthService
-	pki             *PKIAuthority
-	reg             *RegistrationService
-	passkey         *PasskeyService
-	userSvc         *UserService
-	sessionSvc      *SessionService
-	mcpGateway      *mcp.GatewayService
-	responder       *responder.Responder
-	server          *http.Server
-	publicServer    *http.Server
-	bootstrapServer *http.Server
-	mcpHttpServer   *http.Server
+	db                 *CanonicalDBService
+	pubsub             *PubSubBroker
+	auth               *AuthService
+	pki                *PKIAuthority
+	reg                *RegistrationService
+	passkey            *PasskeyService
+	userSvc            *UserService
+	cliSessionSvc      *CLISessionService
+	operatorSessionSvc *OperatorSessionService
+	webSessionSvc      *WebSessionService
+	mcpGateway         *mcp.GatewayService
+	responder          *response.Writer
+	server             *http.Server
+	publicServer       *http.Server
 
 	handler *HTTPHandler
 
@@ -66,9 +73,9 @@ type GatewayService struct {
 	ready   bool
 }
 
-// NewGatewayService creates a new gateway mode service.
-func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService, error) {
-	db, err := OpenGatewayDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, logger, false)
+// NewGatewayModeService creates a new gateway mode service.
+func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayModeService, error) {
+	db, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, cfg.Gateway.VaultDir, logger, false, cfg.Gateway.VaultKeyPath, cfg.Gateway.VaultRequireUnlock)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
@@ -80,7 +87,7 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 	}
 	pki := newPKIAuthority(cfg.Gateway.DataDir, cfg.Gateway.PKIDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 
 	var jwksProvider *JWKSProvider
 	if cfg.Gateway.JWKSURL != "" {
@@ -88,12 +95,23 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 	}
 
 	personaSvc := NewPersonaService(db, logger)
-	if err := personaSvc.GetOrCreateDefaultPersonas(); err != nil {
-		return nil, fmt.Errorf("failed to initialize default personas: %w", err)
+	// Initialize default personas
+	for _, persona := range DefaultPersonaDefinitions() {
+		existing, err := personaSvc.GetByID(persona.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check existing persona %s: %w", persona.ID, err)
+		}
+		if existing == nil {
+			if err := personaSvc.CreatePersona(&persona); err != nil {
+				return nil, fmt.Errorf("failed to create persona %s: %w", persona.ID, err)
+			}
+		}
 	}
 
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, jwksProvider, cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
-	sessionSvc := NewSessionService(db, logger)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	operatorSessionSvc := NewOperatorSessionService(db, logger)
+	webSessionSvc := NewWebSessionService(db, logger)
 
 	// Detect network identity for certificate generation based on mode
 	extraIPs, extraDNSNames, err := resolveGatewayCertificateIdentity(cfg.Gateway.CertMode, cfg.Gateway.NetworkIdentityFile, network.NewDetector(logger), logger)
@@ -101,16 +119,16 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 		return nil, err
 	}
 	if len(extraDNSNames) > 0 {
-		if err := pki.EnsurePKIWithNames(extraIPs, extraDNSNames); err != nil {
-			return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
+		if err := pki.InitializePKIWithNames(extraIPs, extraDNSNames); err != nil {
+			return nil, fmt.Errorf("failed to initialize PKI hierarchy: %w", err)
 		}
 	} else {
-		if err := pki.EnsurePKI(extraIPs); err != nil {
-			return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
+		if err := pki.InitializePKI(extraIPs); err != nil {
+			return nil, fmt.Errorf("failed to initialize PKI hierarchy: %w", err)
 		}
 	}
 
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 
 	// Initialize passkey service for L3 brokerage
 	passkeyCfg := &PasskeyConfig{
@@ -122,25 +140,32 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 		return nil, fmt.Errorf("failed to initialize passkey service: %w", err)
 	}
 
-	ls := &GatewayService{
-		cfg:        cfg,
-		logger:     logger,
-		db:         db,
-		pubsub:     pubsub,
-		auth:       auth,
-		pki:        pki,
-		reg:        reg,
-		passkey:    passkey,
-		userSvc:    userSvc,
-		sessionSvc: sessionSvc,
-		extraIPs:   extraIPs,
-		mcpGateway: mcp.NewGatewayService(mcp.Dependencies{
-			Logger:          logger,
-			Responder:       res,
-			SuspendedStore:  db,
-			MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
-		}),
-		responder: res,
+	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
+		Logger:          logger,
+		Responder:       res,
+		SuspendedStore:  db,
+		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize MCP gateway: %w", err)
+	}
+
+	ls := &GatewayModeService{
+		cfg:                cfg,
+		logger:             logger,
+		db:                 db,
+		pubsub:             pubsub,
+		auth:               auth,
+		pki:                pki,
+		reg:                reg,
+		passkey:            passkey,
+		userSvc:            userSvc,
+		cliSessionSvc:      cliSessionSvc,
+		operatorSessionSvc: operatorSessionSvc,
+		webSessionSvc:      webSessionSvc,
+		extraIPs:           extraIPs,
+		mcpGateway:         mcpGateway,
+		responder:          res,
 	}
 
 	if err := ls.initHandlersAndServers(); err != nil {
@@ -165,7 +190,9 @@ func resolveGatewayCertificateIdentity(certMode, identityFile string, detector n
 
 func resolveLocalhostCertificateIdentity(detector networkIdentityDetector, logger *slog.Logger) ([]net.IP, []string, error) {
 	logger.Info("Using localhost-only mode for certificate")
-	netIdentity, err := detector.DetectAll(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	netIdentity, err := detector.DetectAll(ctx)
 	if err != nil {
 		logger.Warn("Failed to detect localhost identities, using defaults", "error", err)
 		return []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}, []string{"localhost"}, nil
@@ -199,7 +226,9 @@ func resolveFullCertificateIdentity(identityFile string, detector networkIdentit
 		return extraIPs, extraDNSNames, nil
 	}
 
-	netIdentity, err := detector.DetectAll(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	netIdentity, err := detector.DetectAll(ctx)
 	if err != nil {
 		logger.Warn("Failed to detect full network identity, falling back to basic IP detection", "error", err)
 		extraIPs := detectBasicNonLoopbackIPv4Addresses()
@@ -234,17 +263,19 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 	return extraIPs
 }
 
-// newGatewayServiceFromComponents assembles a GatewayService from pre-built components.
+// newGatewayModeServiceFromComponents assembles a GatewayModeService from pre-built components.
 // Used in tests where the DB and pub/sub broker are constructed independently.
-func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, pubsub *PubSubBroker) (*GatewayService, error) {
+func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, pubsub *PubSubBroker) (*GatewayModeService, error) {
 	sm, _ := NewSecretManager(db.db, cfg.Gateway.SecretsDir, logger)
 	pki := newPKIAuthority(cfg.Gateway.DataDir, cfg.Gateway.PKIDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, nil, "", "", "")
-	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	operatorSessionSvc := NewOperatorSessionService(db, logger)
+	webSessionSvc := NewWebSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 
 	// Initialize passkey service for L3 brokerage (test configuration)
 	passkeyCfg := &PasskeyConfig{
@@ -254,25 +285,32 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 	// Passkey service initialization is optional; ignore errors for test configuration
 	passkey, _ := NewPasskeyService(db, logger, passkeyCfg) //nolint:errcheck
 
-	ls := &GatewayService{
-		cfg:        cfg,
-		logger:     logger,
-		db:         db,
-		pubsub:     pubsub,
-		auth:       auth,
-		pki:        pki,
-		reg:        reg,
-		passkey:    passkey,
-		userSvc:    userSvc,
-		sessionSvc: sessionSvc,
-		extraIPs:   nil, // Test configuration does not use extra IPs
-		mcpGateway: mcp.NewGatewayService(mcp.Dependencies{
-			Logger:          logger,
-			Responder:       res,
-			SuspendedStore:  db,
-			MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
-		}),
-		responder: res,
+	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
+		Logger:          logger,
+		Responder:       res,
+		SuspendedStore:  db,
+		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize MCP gateway: %w", err)
+	}
+
+	ls := &GatewayModeService{
+		cfg:                cfg,
+		logger:             logger,
+		db:                 db,
+		pubsub:             pubsub,
+		auth:               auth,
+		pki:                pki,
+		reg:                reg,
+		passkey:            passkey,
+		userSvc:            userSvc,
+		cliSessionSvc:      cliSessionSvc,
+		operatorSessionSvc: operatorSessionSvc,
+		webSessionSvc:      webSessionSvc,
+		extraIPs:           nil, // Test configuration does not use extra IPs
+		mcpGateway:         mcpGateway,
+		responder:          res,
 	}
 
 	if err := ls.initHandlersAndServers(); err != nil {
@@ -282,14 +320,16 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 	return ls, nil
 }
 
-func (ls *GatewayService) initHandlersAndServers() error {
+func (ls *GatewayModeService) initHandlersAndServers() error {
 	cfg := ls.cfg
 	logger := ls.logger
 	db := ls.db
 	pubsub := ls.pubsub
 	auth := ls.auth
 	pki := ls.pki
-	sessionSvc := ls.sessionSvc
+	cliSessionSvc := ls.cliSessionSvc
+	operatorSessionSvc := ls.operatorSessionSvc
+	webSessionSvc := ls.webSessionSvc
 	reg := ls.reg
 	passkey := ls.passkey
 	userSvc := ls.userSvc
@@ -298,35 +338,38 @@ func (ls *GatewayService) initHandlersAndServers() error {
 	appEnrollment := NewAppEnrollmentService(db, pki, logger)
 
 	ls.mcpGateway.SetA2ADependencies(cfg.Gateway.A2ADownstreamURL)
-	publicBaseURL := fmt.Sprintf("https://localhost:%d", cfg.Gateway.PublicPort)
+	publicBaseURL := fmt.Sprintf("https://localhost:%d", cfg.Gateway.HTTPSPort)
 	ls.mcpGateway.SetPublicBaseURL(publicBaseURL)
-	ls.handler = newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:               cfg,
-		Logger:            logger,
-		DB:                db,
-		Pubsub:            pubsub,
-		Auth:              auth,
-		PKI:               pki,
-		SessionSvc:        sessionSvc,
-		Reg:               reg,
-		Passkey:           passkey,
-		UserSvc:           userSvc,
-		Responder:         ls.responder,
-		MCPGateway:        ls.mcpGateway,
-		AppEnrollment:     appEnrollment,
-		IsReady:           ls.IsReady,
-		IsGovernanceReady: ls.IsGovernanceReady,
+	handler, err := newHTTPHandler(HTTPHandlerDependencies{
+		Cfg:                cfg,
+		Logger:             logger,
+		DB:                 db,
+		Pubsub:             pubsub,
+		Auth:               auth,
+		PKI:                pki,
+		CLISessionSvc:      cliSessionSvc,
+		OperatorSessionSvc: operatorSessionSvc,
+		WebSessionSvc:      webSessionSvc,
+		Reg:                reg,
+		Passkey:            passkey,
+		UserSvc:            userSvc,
+		Responder:          ls.responder,
+		MCPGateway:         ls.mcpGateway,
+		AppEnrollment:      appEnrollment,
+		IsReady:            ls.IsReady,
+		IsGovernanceReady:  ls.IsGovernanceReady,
 	})
+	if err != nil {
+		return fmt.Errorf("gateway: failed to create HTTP handler: %w", err)
+	}
+	ls.handler = handler
 
 	// Build a map of ports to identify port assignments.
-	// Bootstrap port uses plain HTTP for initial CA discovery and bootstrap.
-	// MCP HTTP port uses plain HTTP for MCP-only calls.
-	// All other surfaces use mTLS (RequireAndVerifyClientCert).
+	// HTTP port uses plain HTTP for bootstrap and MCP routes.
+	// HTTPS port uses mTLS for all other surfaces.
 	portUsage := make(map[int][]string)
 	portUsage[cfg.Gateway.HTTPPort] = append(portUsage[cfg.Gateway.HTTPPort], "HTTP")
-	portUsage[cfg.Gateway.BootstrapPort] = append(portUsage[cfg.Gateway.BootstrapPort], "Bootstrap")
-	portUsage[cfg.Gateway.PublicPort] = append(portUsage[cfg.Gateway.PublicPort], "Public")
-	portUsage[cfg.Gateway.MCPHttpPort] = append(portUsage[cfg.Gateway.MCPHttpPort], "MCPHTTP")
+	portUsage[cfg.Gateway.HTTPSPort] = append(portUsage[cfg.Gateway.HTTPSPort], "HTTPS")
 
 	// Validate up front so collisions fail during init.
 	// Port 0 is reserved for tests (net.Listen picks a random free port per server).
@@ -355,8 +398,7 @@ func (ls *GatewayService) initHandlersAndServers() error {
 	// the execution boundary to an L7 check.
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Gateway.HTTPPort),
-		Handler:           ls.handler,
-		TLSConfig:         tlsConfig,
+		Handler:           ls.handler.buildHTTPRouter(),
 		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
 		ReadTimeout:       cfg.Gateway.ReadTimeout,
 		WriteTimeout:      cfg.Gateway.WriteTimeout,
@@ -364,35 +406,11 @@ func (ls *GatewayService) initHandlersAndServers() error {
 		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
 	}
 
-	// Public server: mTLS-only for all routes (CSR-based enrollment)
+	// HTTPS server: mTLS for all routes (API, public, enrollment)
 	ls.publicServer = &http.Server{
-		Addr:              fmt.Sprintf(":%d", cfg.Gateway.PublicPort),
+		Addr:              fmt.Sprintf(":%d", cfg.Gateway.HTTPSPort),
 		Handler:           ls.handler.buildPublicRouter(),
 		TLSConfig:         tlsConfig,
-		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
-		ReadTimeout:       cfg.Gateway.ReadTimeout,
-		WriteTimeout:      cfg.Gateway.WriteTimeout,
-		IdleTimeout:       cfg.Gateway.IdleTimeout,
-		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
-	}
-
-	// Bootstrap server: plain HTTP for CA discovery and initial bootstrap
-	// Serves /api/v1/auth/bootstrap and /api/v1/auth/bootstrap/status
-	ls.bootstrapServer = &http.Server{
-		Addr:              fmt.Sprintf(":%d", cfg.Gateway.BootstrapPort),
-		Handler:           ls.handler.buildBootstrapRouter(),
-		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
-		ReadTimeout:       cfg.Gateway.ReadTimeout,
-		WriteTimeout:      cfg.Gateway.WriteTimeout,
-		IdleTimeout:       cfg.Gateway.IdleTimeout,
-		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
-	}
-
-	// MCP HTTP server: plain HTTP for MCP-only calls
-	// Serves MCP endpoints without TLS/mTLS for HTTP MCP clients
-	ls.mcpHttpServer = &http.Server{
-		Addr:              fmt.Sprintf(":%d", cfg.Gateway.MCPHttpPort),
-		Handler:           ls.handler.buildMCPHttpRouter(),
 		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
 		ReadTimeout:       cfg.Gateway.ReadTimeout,
 		WriteTimeout:      cfg.Gateway.WriteTimeout,
@@ -404,78 +422,74 @@ func (ls *GatewayService) initHandlersAndServers() error {
 }
 
 // GetDB returns the underlying database service.
-func (ls *GatewayService) GetDB() *GatewayDBService {
+func (ls *GatewayModeService) GetDB() *CanonicalDBService {
 	return ls.db
 }
 
 // GetSecretManager returns the secret manager.
-func (ls *GatewayService) GetSecretManager() (*SecretManager, error) {
+func (ls *GatewayModeService) GetSecretManager() (*SecretManager, error) {
 	return NewSecretManager(ls.db.db, ls.cfg.Gateway.SecretsDir, ls.logger)
 }
 
 // GetPKIAuthority returns the underlying PKI authority.
-func (ls *GatewayService) GetPKIAuthority() *PKIAuthority {
+func (ls *GatewayModeService) GetPKIAuthority() *PKIAuthority {
 	return ls.pki
 }
 
 // GetHTTPHandler returns the HTTP handler.
-func (ls *GatewayService) GetHTTPHandler() *HTTPHandler {
+func (ls *GatewayModeService) GetHTTPHandler() *HTTPHandler {
 	return ls.handler
 }
 
-// GetHTTPPort returns the assigned port for the HTTP server.
-func (ls *GatewayService) GetHTTPPort() int {
-	if ls.server == nil || ls.server.Addr == "" {
+// GetHTTPSPort returns the actual bound HTTPS port (useful when AllowTestPortZero is true).
+func (ls *GatewayModeService) GetHTTPSPort() int {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+	if ls.publicServer == nil {
 		return 0
 	}
-	_, portStr, _ := net.SplitHostPort(ls.server.Addr)
-	p, _ := strconv.Atoi(portStr)
+	_, port, err := net.SplitHostPort(ls.publicServer.Addr)
+	if err != nil {
+		return 0
+	}
+	p, err := strconv.Atoi(port)
+	if err != nil {
+		return 0
+	}
 	return p
 }
 
-// GetPublicPort returns the assigned port for the public server.
-func (ls *GatewayService) GetPublicPort() int {
-	if ls.publicServer == nil || ls.publicServer.Addr == "" {
+// GetHTTPPort returns the actual bound HTTP port (useful when AllowTestPortZero is true).
+func (ls *GatewayModeService) GetHTTPPort() int {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+	if ls.server == nil {
 		return 0
 	}
-	_, portStr, _ := net.SplitHostPort(ls.publicServer.Addr)
-	p, _ := strconv.Atoi(portStr)
+	_, port, err := net.SplitHostPort(ls.server.Addr)
+	if err != nil {
+		return 0
+	}
+	p, err := strconv.Atoi(port)
+	if err != nil {
+		return 0
+	}
 	return p
 }
 
-// GetBootstrapPort returns the assigned port for the bootstrap server.
-func (ls *GatewayService) GetBootstrapPort() int {
-	if ls.bootstrapServer == nil || ls.bootstrapServer.Addr == "" {
-		return 0
-	}
-	_, portStr, _ := net.SplitHostPort(ls.bootstrapServer.Addr)
-	p, _ := strconv.Atoi(portStr)
-	return p
-}
-
-// GetMCPHttpPort returns the assigned port for the MCP HTTP server.
-func (ls *GatewayService) GetMCPHttpPort() int {
-	if ls.mcpHttpServer == nil || ls.mcpHttpServer.Addr == "" {
-		return 0
-	}
-	_, portStr, _ := net.SplitHostPort(ls.mcpHttpServer.Addr)
-	p, _ := strconv.Atoi(portStr)
-	return p
-}
-
-func (ls *GatewayService) IsRunning() bool {
+func (ls *GatewayModeService) IsRunning() bool {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 	return ls.running
 }
 
-func (ls *GatewayService) IsReady() bool {
+func (ls *GatewayModeService) IsReady() bool {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 	return ls.ready
 }
 
-func (ls *GatewayService) IsGovernanceReady() bool {
+func (ls *GatewayModeService) IsGovernanceReady() bool {
 	ready, err := ls.db.HasTrustedSigners()
 	if err != nil {
 		ls.logger.Error("Failed to check if governance is ready", string(constants.ConnectionStateError), err)
@@ -485,7 +499,7 @@ func (ls *GatewayService) IsGovernanceReady() bool {
 }
 
 // GovernanceDeps holds the governance dependencies required for transaction verification.
-// These interfaces are implemented by GatewayDBService (ReplayStore, StateRootProvider,
+// These interfaces are implemented by CanonicalDBService (ReplayStore, StateRootProvider,
 // TransactionAuditStore) and CompositeL3Verifier (L3Notary).
 type GovernanceDeps struct {
 	ReplayStore       governance.ReplayStore
@@ -499,9 +513,9 @@ type GovernanceDeps struct {
 // GetGovernanceDeps returns the governance dependencies for transaction verification.
 // This enables the in-process PubSubCommandService to perform fail-closed verification.
 // The L3 notary is a composite that handles both WebAuthn (web sessions) and mTLS (CLI sessions).
-func (ls *GatewayService) GetGovernanceDeps() *GovernanceDeps {
+func (ls *GatewayModeService) GetGovernanceDeps() *GovernanceDeps {
 	// Create composite L3 notary that handles both web and CLI sessions
-	cliL3 := NewCLIL3Notary(ls.db, ls.pki, ls.logger, ls.userSvc, ls.sessionSvc)
+	cliL3 := NewCLIL3Notary(ls.db, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
 	compositeL3 := NewCompositeL3Verifier(ls.passkey, cliL3, ls.logger)
 
 	return &GovernanceDeps{
@@ -516,7 +530,7 @@ func (ls *GatewayService) GetGovernanceDeps() *GovernanceDeps {
 
 // Start begins serving HTTP/WS requests. Blocks until the context is cancelled
 // or the server encounters a fatal error.
-func (ls *GatewayService) Start(ctx context.Context) error {
+func (ls *GatewayModeService) Start(ctx context.Context) error {
 	ls.mu.Lock()
 	if ls.running {
 		ls.mu.Unlock()
@@ -528,11 +542,10 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	ls.logger.Info("operator Gateway Mode ready",
 		"posture", ls.cfg.Gateway.Posture,
 		"http_port", ls.cfg.Gateway.HTTPPort,
-		"bootstrap_port", ls.cfg.Gateway.BootstrapPort,
-		"mcp_http_port", ls.cfg.Gateway.MCPHttpPort,
+		"https_port", ls.cfg.Gateway.HTTPSPort,
 		"data_dir", ls.cfg.Gateway.DataDir)
 
-	ls.logger.Info("Gateway servers starting", "http_port", ls.cfg.Gateway.HTTPPort, "bootstrap_port", ls.cfg.Gateway.BootstrapPort, "mcp_http_port", ls.cfg.Gateway.MCPHttpPort)
+	ls.logger.Info("Gateway servers starting", "http_port", ls.cfg.Gateway.HTTPPort, "https_port", ls.cfg.Gateway.HTTPSPort)
 
 	// Start background maintenance for MCP gateway
 	go ls.mcpGateway.RunMaintenance(ctx)
@@ -548,19 +561,9 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	if ls.server != nil {
 		uniqueServers[ls.server] = "HTTP"
 	}
-	if ls.bootstrapServer != nil {
-		if _, ok := uniqueServers[ls.bootstrapServer]; !ok {
-			uniqueServers[ls.bootstrapServer] = "Bootstrap"
-		}
-	}
 	if ls.publicServer != nil {
 		if _, ok := uniqueServers[ls.publicServer]; !ok {
-			uniqueServers[ls.publicServer] = "Public"
-		}
-	}
-	if ls.mcpHttpServer != nil {
-		if _, ok := uniqueServers[ls.mcpHttpServer]; !ok {
-			uniqueServers[ls.mcpHttpServer] = "MCPHTTP"
+			uniqueServers[ls.publicServer] = "HTTPS"
 		}
 	}
 
@@ -626,7 +629,7 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 // Stop gracefully shuts down the HTTP server and closes the database.
 // Enforces a strict 30-second timeout - if shutdown hangs, the process will
 // force-kill itself to prevent zombie processes.
-func (ls *GatewayService) Stop(ctx context.Context) error {
+func (ls *GatewayModeService) Stop(ctx context.Context) error {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
@@ -649,19 +652,12 @@ func (ls *GatewayService) Stop(ctx context.Context) error {
 		}
 		ls.logger.Error("HTTP server shutdown error", string(constants.ConnectionStateError), err)
 	}
-	if err := ls.bootstrapServer.Shutdown(shutdownCtx); err != nil {
-		if shutdownCtx.Err() == context.DeadlineExceeded {
-			ls.logger.Error("Bootstrap server shutdown timeout - forcing exit to prevent zombie process")
-			return fmt.Errorf("shutdown timeout exceeded")
-		}
-		ls.logger.Error("Bootstrap server shutdown error", string(constants.ConnectionStateError), err)
-	}
 	if err := ls.publicServer.Shutdown(shutdownCtx); err != nil {
 		if shutdownCtx.Err() == context.DeadlineExceeded {
-			ls.logger.Error("Public server shutdown timeout - forcing exit to prevent zombie process")
+			ls.logger.Error("HTTPS server shutdown timeout - forcing exit to prevent zombie process")
 			return fmt.Errorf("shutdown timeout exceeded")
 		}
-		ls.logger.Error("Public server shutdown error", string(constants.ConnectionStateError), err)
+		ls.logger.Error("HTTPS server shutdown error", string(constants.ConnectionStateError), err)
 	}
 
 	// Close pub/sub broker (disconnects all WebSocket clients)
@@ -679,7 +675,7 @@ func (ls *GatewayService) Stop(ctx context.Context) error {
 
 // runServiceCertRenewalLoop runs a background goroutine that periodically checks
 // and renews the service certificate if it is expiring soon.
-func (ls *GatewayService) runServiceCertRenewalLoop(ctx context.Context) {
+func (ls *GatewayModeService) runServiceCertRenewalLoop(ctx context.Context) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
@@ -701,7 +697,7 @@ func (ls *GatewayService) runServiceCertRenewalLoop(ctx context.Context) {
 }
 
 // renewServiceCertWithIdentity renews the service certificate with current network identity.
-func (ls *GatewayService) renewServiceCertWithIdentity(ctx context.Context) error {
+func (ls *GatewayModeService) renewServiceCertWithIdentity(ctx context.Context) error {
 	// Detect current network identity
 	netDetector := network.NewDetector(ls.logger)
 	netIdentity, err := netDetector.DetectAll(ctx)

@@ -74,89 +74,117 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 	var identity NetworkIdentity
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	errChan := make(chan error, 10)
+	var firstErr error
 
 	// Detect network interfaces (IPs)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if ips, err := d.detectIPs(); err != nil {
-			d.logger.Warn("Failed to detect IPs", "error", err)
-		} else {
+		ips, err := d.detectIPs()
+		if err != nil {
 			mu.Lock()
-			identity.IPs = ips
+			if firstErr == nil {
+				firstErr = fmt.Errorf("network: detect IPs: %w", err)
+			}
 			mu.Unlock()
+			return
 		}
+		mu.Lock()
+		identity.IPs = ips
+		mu.Unlock()
 	}()
 
 	// Detect hostnames
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if hostnames, err := d.detectHostnames(); err != nil {
-			d.logger.Warn("Failed to detect hostnames", "error", err)
-		} else {
+		hostnames, err := d.detectHostnames()
+		if err != nil {
 			mu.Lock()
-			identity.Hostnames = hostnames
+			if firstErr == nil {
+				firstErr = fmt.Errorf("network: detect hostnames: %w", err)
+			}
 			mu.Unlock()
+			return
 		}
+		mu.Lock()
+		identity.Hostnames = hostnames
+		mu.Unlock()
 	}()
 
 	// Detect hosts file aliases
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if aliases, err := d.detectEtcHosts(); err != nil {
-			d.logger.Warn("Failed to detect hosts file aliases", "error", err)
-		} else {
+		aliases, err := d.detectEtcHosts()
+		if err != nil {
 			mu.Lock()
-			identity.EtcHosts = aliases
+			if firstErr == nil {
+				firstErr = fmt.Errorf("network: detect hosts file aliases: %w", err)
+			}
 			mu.Unlock()
+			return
 		}
+		mu.Lock()
+		identity.EtcHosts = aliases
+		mu.Unlock()
 	}()
 
 	// Detect mDNS/Bonjour names
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if mdnsNames, err := d.detectMDNS(); err != nil {
-			d.logger.Warn("Failed to detect mDNS names", "error", err)
-		} else {
+		mdnsNames, err := d.detectMDNS(ctx)
+		if err != nil {
 			mu.Lock()
-			identity.MDNSNames = mdnsNames
+			if firstErr == nil {
+				firstErr = fmt.Errorf("network: detect mDNS names: %w", err)
+			}
 			mu.Unlock()
+			return
 		}
+		mu.Lock()
+		identity.MDNSNames = mdnsNames
+		mu.Unlock()
 	}()
 
 	// Detect DNS PTR records (after IPs are detected)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		// Wait a bit for IPs to be detected
-		time.Sleep(100 * time.Millisecond)
 		mu.Lock()
 		ips := identity.IPs
 		mu.Unlock()
-		if ptrs, err := d.detectDNSPTRs(ctx, ips); err != nil {
-			d.logger.Warn("Failed to detect DNS PTR records", "error", err)
-		} else {
+		ptrs, err := d.detectDNSPTRs(ctx, ips)
+		if err != nil {
 			mu.Lock()
-			identity.DNSPTRs = ptrs
+			if firstErr == nil {
+				firstErr = fmt.Errorf("network: detect DNS PTR records: %w", err)
+			}
 			mu.Unlock()
+			return
 		}
+		mu.Lock()
+		identity.DNSPTRs = ptrs
+		mu.Unlock()
 	}()
 
 	// Detect SSH known hosts
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if sshHosts, err := d.detectSSHKnownHosts(); err != nil {
-			d.logger.Warn("Failed to detect SSH known hosts", "error", err)
-		} else {
+		sshHosts, err := d.detectSSHKnownHosts()
+		if err != nil {
 			mu.Lock()
-			identity.SSHHostnames = sshHosts
+			if firstErr == nil {
+				firstErr = fmt.Errorf("network: detect SSH known hosts: %w", err)
+			}
 			mu.Unlock()
+			return
 		}
+		mu.Lock()
+		identity.SSHHostnames = sshHosts
+		mu.Unlock()
 	}()
 
 	// Detect Windows identities
@@ -164,23 +192,29 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if winID, err := d.detectWindowsIdentity(); err != nil {
-				d.logger.Warn("Failed to detect Windows identity", "error", err)
-			} else {
+			winID, err := d.detectWindowsIdentity()
+			if err != nil {
 				mu.Lock()
-				identity.Windows = winID
+				if firstErr == nil {
+					firstErr = fmt.Errorf("network: detect Windows identity: %w", err)
+				}
 				mu.Unlock()
+				return
 			}
+			mu.Lock()
+			identity.Windows = winID
+			mu.Unlock()
 		}()
 	}
 
 	wg.Wait()
 
-	// Check for errors
-	select {
-	case err := <-errChan:
-		return nil, err
-	default:
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	if firstErr != nil {
+		return nil, firstErr
 	}
 
 	return &identity, nil
@@ -188,7 +222,7 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 
 // detectIPs detects all IP addresses on all network interfaces.
 func (d *Detector) detectIPs() ([]string, error) {
-	var ips []string
+	ips := make([]string, 0)
 
 	interfaces, err := net.Interfaces()
 	if err != nil {
@@ -228,7 +262,7 @@ func (d *Detector) detectIPs() ([]string, error) {
 
 // detectHostnames detects hostnames from /etc/hostname and hostname command.
 func (d *Detector) detectHostnames() ([]string, error) {
-	var hostnames []string
+	hostnames := make([]string, 0)
 
 	// Try /etc/hostname first
 	if hostname, err := os.ReadFile("/etc/hostname"); err == nil {
@@ -267,7 +301,7 @@ func getHostsFilePath() string {
 
 // detectEtcHosts parses the hosts file for aliases pointing to this machine's IPs.
 func (d *Detector) detectEtcHosts() ([]HostAlias, error) {
-	var aliases []HostAlias
+	aliases := make([]HostAlias, 0)
 
 	// Get local IPs first
 	localIPs, err := d.detectIPs()
@@ -319,13 +353,13 @@ func (d *Detector) detectEtcHosts() ([]HostAlias, error) {
 }
 
 // detectMDNS detects mDNS/Bonjour *.local names.
-func (d *Detector) detectMDNS() ([]string, error) {
+func (d *Detector) detectMDNS(ctx context.Context) ([]string, error) {
 	mdnsNames := make([]string, 0)
 
 	// Get hostname and append .local
 	hostnames, err := d.detectHostnames()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("detectMDNS: get hostnames: %w", err)
 	}
 
 	for _, hn := range hostnames {
@@ -337,10 +371,10 @@ func (d *Detector) detectMDNS() ([]string, error) {
 
 	// Try to use avahi-browse if available (Linux)
 	if _, err := exec.LookPath("avahi-browse"); err == nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		lookupCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, "avahi-browse", "-ar", "-t")
+		cmd := exec.CommandContext(lookupCtx, "avahi-browse", "-ar", "-t")
 		if output, err := cmd.Output(); err == nil {
 			// Parse avahi-browse output for .local names
 			lines := strings.Split(string(output), "\n")
@@ -360,10 +394,10 @@ func (d *Detector) detectMDNS() ([]string, error) {
 	// Try dns-sd on macOS
 	if runtime.GOOS == "darwin" {
 		if _, err := exec.LookPath("dns-sd"); err == nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			lookupCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 			defer cancel()
 
-			cmd := exec.CommandContext(ctx, "dns-sd", "-B", "_services._local")
+			cmd := exec.CommandContext(lookupCtx, "dns-sd", "-B", "_services._local")
 			if output, err := cmd.Output(); err == nil {
 				lines := strings.Split(string(output), "\n")
 				for _, line := range lines {
@@ -385,7 +419,7 @@ func (d *Detector) detectMDNS() ([]string, error) {
 
 // detectDNSPTRs performs reverse DNS lookups on detected IPs.
 func (d *Detector) detectDNSPTRs(ctx context.Context, ips []string) ([]DNSPTRRecord, error) {
-	var ptrs []DNSPTRRecord
+	ptrs := make([]DNSPTRRecord, 0)
 
 	for _, ip := range ips {
 		// Skip localhost and link-local
@@ -420,7 +454,7 @@ func (d *Detector) detectSSHKnownHosts() ([]string, error) {
 	// Get local IPs
 	localIPs, err := d.detectIPs()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("detectSSHKnownHosts: get local IPs: %w", err)
 	}
 
 	localIPSet := make(map[string]bool)
@@ -434,10 +468,24 @@ func (d *Detector) detectSSHKnownHosts() ([]string, error) {
 		"/etc/ssh/known_hosts",
 		"/etc/ssh/ssh_known_hosts",
 	}
+	if runtime.GOOS == "windows" {
+		knownHostsPaths = []string{
+			os.ExpandEnv("$USERPROFILE\\.ssh\\known_hosts"),
+			`C:\ProgramData\ssh\known_hosts`,
+		}
+	}
 
 	for _, path := range knownHostsPaths {
+		// Check if file exists before attempting to open
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			// File doesn't exist, skip it silently (this is normal)
+			continue
+		}
+
 		file, err := os.Open(path)
 		if err != nil {
+			// Real error (e.g., permission denied), log and continue
+			d.logger.Debug("detectSSHKnownHosts: failed to open known_hosts file", "path", path, "error", err)
 			continue
 		}
 
@@ -471,11 +519,13 @@ func (d *Detector) detectSSHKnownHosts() ([]string, error) {
 		}
 		if err := scanner.Err(); err != nil {
 			file.Close()
+			d.logger.Debug("detectSSHKnownHosts: error scanning known_hosts file", "path", path, "error", err)
 			continue
 		}
 		file.Close()
 	}
 
+	// Return empty slice if no hostnames found (not an error - files may not exist)
 	return hostnames, nil
 }
 
@@ -484,21 +534,25 @@ func (d *Detector) detectWindowsIdentity() (WindowsIdentity, error) {
 	var winID WindowsIdentity
 
 	// Try to get NetBIOS name using hostname command
-	if hn, err := exec.Command("hostname").Output(); err == nil {
-		winID.NetBIOSName = strings.TrimSpace(string(hn))
+	hn, err := exec.Command("hostname").Output()
+	if err != nil {
+		return winID, fmt.Errorf("detectWindowsIdentity: get hostname: %w", err)
 	}
+	winID.NetBIOSName = strings.TrimSpace(string(hn))
 
 	// Try to get AD FQDN using systeminfo
-	if info, err := exec.Command("systeminfo").Output(); err == nil {
-		lines := strings.Split(string(info), "\n")
-		for _, line := range lines {
-			if strings.Contains(line, "Domain:") {
-				fields := strings.Fields(line)
-				if len(fields) >= 2 {
-					domain := fields[len(fields)-1]
-					if winID.NetBIOSName != "" && domain != "WORKGROUP" {
-						winID.ADFQDN = winID.NetBIOSName + "." + domain
-					}
+	info, err := exec.Command("systeminfo").Output()
+	if err != nil {
+		return winID, fmt.Errorf("detectWindowsIdentity: get systeminfo: %w", err)
+	}
+	lines := strings.Split(string(info), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "Domain:") {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				domain := fields[len(fields)-1]
+				if winID.NetBIOSName != "" && domain != "WORKGROUP" {
+					winID.ADFQDN = winID.NetBIOSName + "." + domain
 				}
 			}
 		}

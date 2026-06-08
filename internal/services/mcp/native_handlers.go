@@ -21,10 +21,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/g8e-ai/g8e/internal/constants"
-
-	_ "modernc.org/sqlite"
 )
 
 // isValidIdentifier validates SQLite identifiers to prevent SQL injection.
@@ -63,17 +59,14 @@ type NativeToolHandler struct {
 // NewNativeToolHandler creates a new native tool handler with all native tools
 // explicitly registered. This avoids init()-based auto-registration and
 // mutable global state.
-func NewNativeToolHandler() *NativeToolHandler {
+func NewNativeToolHandler() (*NativeToolHandler, error) {
 	registry := NewToolRegistry()
 	if err := RegisterNativeTools(registry); err != nil {
-		// Registration of built-in tools should never fail at runtime because
-		// the schemas are statically defined and validated in tests.
-		// If it does fail, it indicates a programming error that must be fixed.
-		panic(fmt.Sprintf("native tool registration failed: %v", err))
+		return nil, fmt.Errorf("native tool registration failed: %w", err)
 	}
 	return &NativeToolHandler{
 		registry: registry,
-	}
+	}, nil
 }
 
 // NewNativeToolHandlerWithRegistry creates a new native tool handler with a custom registry.
@@ -132,26 +125,41 @@ func maskSecret(line string) string {
 }
 
 // parseSocketAddr parses /proc/net socket address format.
-func parseSocketAddr(hexAddr string) (string, int) {
+func parseSocketAddr(hexAddr string) (string, int, error) {
 	if len(hexAddr) < 8 {
-		return "0.0.0.0", 0
+		return "0.0.0.0", 0, nil
 	}
 
 	portHex := hexAddr[len(hexAddr)-4:]
 	ipHex := hexAddr[:len(hexAddr)-4]
 
-	port, _ := strconv.ParseInt(portHex, 16, 32)
+	port, err := strconv.ParseInt(portHex, 16, 32)
+	if err != nil {
+		return "0.0.0.0", 0, fmt.Errorf("parse port: %w", err)
+	}
 
 	var ip string
 	if len(ipHex) == 8 {
-		p1, _ := strconv.ParseInt(ipHex[6:8], 16, 32)
-		p2, _ := strconv.ParseInt(ipHex[4:6], 16, 32)
-		p3, _ := strconv.ParseInt(ipHex[2:4], 16, 32)
-		p4, _ := strconv.ParseInt(ipHex[0:2], 16, 32)
+		p1, err := strconv.ParseInt(ipHex[6:8], 16, 32)
+		if err != nil {
+			return "0.0.0.0", 0, fmt.Errorf("parse ip octet 1: %w", err)
+		}
+		p2, err := strconv.ParseInt(ipHex[4:6], 16, 32)
+		if err != nil {
+			return "0.0.0.0", 0, fmt.Errorf("parse ip octet 2: %w", err)
+		}
+		p3, err := strconv.ParseInt(ipHex[2:4], 16, 32)
+		if err != nil {
+			return "0.0.0.0", 0, fmt.Errorf("parse ip octet 3: %w", err)
+		}
+		p4, err := strconv.ParseInt(ipHex[0:2], 16, 32)
+		if err != nil {
+			return "0.0.0.0", 0, fmt.Errorf("parse ip octet 4: %w", err)
+		}
 		ip = fmt.Sprintf("%d.%d.%d.%d", p1, p2, p3, p4)
 	} else {
-		ip = string(constants.SystemHealthUnknown)
+		ip = "unknown"
 	}
 
-	return ip, int(port)
+	return ip, int(port), nil
 }

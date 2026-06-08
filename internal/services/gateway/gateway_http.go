@@ -32,7 +32,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/protocol"
@@ -43,21 +44,23 @@ var governanceEnvelopeRedirectError = "submit via POST " + constants.APIPaths.Go
 
 // HTTPHandlerDependencies groups all dependencies for HTTPHandler to reduce constructor bloat.
 type HTTPHandlerDependencies struct {
-	Cfg               *config.Config
-	Logger            *slog.Logger
-	DB                *GatewayDBService
-	Pubsub            *PubSubBroker
-	Auth              *AuthService
-	PKI               *PKIAuthority
-	SessionSvc        *SessionService
-	Reg               *RegistrationService
-	Passkey           *PasskeyService
-	UserSvc           *UserService
-	Responder         *responder.Responder
-	MCPGateway        *mcp.GatewayService
-	AppEnrollment     *AppEnrollmentService
-	IsReady           func() bool
-	IsGovernanceReady func() bool
+	Cfg                *config.Config
+	Logger             *slog.Logger
+	DB                 *CanonicalDBService
+	Pubsub             *PubSubBroker
+	Auth               *AuthService
+	PKI                *PKIAuthority
+	CLISessionSvc      *CLISessionService
+	OperatorSessionSvc *OperatorSessionService
+	WebSessionSvc      *WebSessionService
+	Reg                *RegistrationService
+	Passkey            *PasskeyService
+	UserSvc            *UserService
+	Responder          *response.Writer
+	MCPGateway         *mcp.GatewayService
+	AppEnrollment      *AppEnrollmentService
+	IsReady            func() bool
+	IsGovernanceReady  func() bool
 }
 
 func (h *HTTPHandler) readBody(r *http.Request) ([]byte, error) {
@@ -67,21 +70,23 @@ func (h *HTTPHandler) readBody(r *http.Request) ([]byte, error) {
 
 // HTTPHandler manages the web API for the gateway service.
 type HTTPHandler struct {
-	cfg               *config.Config
-	logger            *slog.Logger
-	db                *GatewayDBService
-	pubsub            *PubSubBroker
-	auth              *AuthService
-	pki               *PKIAuthority
-	sessionSvc        *SessionService
-	reg               *RegistrationService
-	passkey           *PasskeyService
-	userSvc           *UserService
-	responder         *responder.Responder
-	mcp               *mcp.GatewayService
-	appEnrollment     *AppEnrollmentService
-	isReady           func() bool
-	isGovernanceReady func() bool
+	cfg                *config.Config
+	logger             *slog.Logger
+	db                 *CanonicalDBService
+	pubsub             *PubSubBroker
+	auth               *AuthService
+	pki                *PKIAuthority
+	cliSessionSvc      *CLISessionService
+	operatorSessionSvc *OperatorSessionService
+	webSessionSvc      *WebSessionService
+	reg                *RegistrationService
+	passkey            *PasskeyService
+	userSvc            *UserService
+	responder          *response.Writer
+	mcp                *mcp.GatewayService
+	appEnrollment      *AppEnrollmentService
+	isReady            func() bool
+	isGovernanceReady  func() bool
 	// envProc is the synchronous fail-closed Gateway mutation gate. It is
 	// nil until SetEnvelopeProcessor is called by the boot sequence after
 	// the in-process command service has initialized the verifier and
@@ -99,41 +104,50 @@ type HTTPHandler struct {
 	router http.Handler
 
 	// Rate limiting state
-	muLimiters sync.Mutex
-	limiters   map[string]*rate.Limiter
+	muLimiters      sync.Mutex
+	limiters        map[string]*rate.Limiter
+	limiterLastUsed map[string]time.Time
 }
 
-func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
+func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	h := &HTTPHandler{
-		cfg:               deps.Cfg,
-		logger:            deps.Logger,
-		db:                deps.DB,
-		pubsub:            deps.Pubsub,
-		auth:              deps.Auth,
-		pki:               deps.PKI,
-		sessionSvc:        deps.SessionSvc,
-		reg:               deps.Reg,
-		passkey:           deps.Passkey,
-		userSvc:           deps.UserSvc,
-		responder:         deps.Responder,
-		mcp:               deps.MCPGateway,
-		appEnrollment:     deps.AppEnrollment,
-		isReady:           deps.IsReady,
-		isGovernanceReady: deps.IsGovernanceReady,
-		limiters:          make(map[string]*rate.Limiter),
+		cfg:                deps.Cfg,
+		logger:             deps.Logger,
+		db:                 deps.DB,
+		pubsub:             deps.Pubsub,
+		auth:               deps.Auth,
+		pki:                deps.PKI,
+		cliSessionSvc:      deps.CLISessionSvc,
+		operatorSessionSvc: deps.OperatorSessionSvc,
+		webSessionSvc:      deps.WebSessionSvc,
+		reg:                deps.Reg,
+		passkey:            deps.Passkey,
+		userSvc:            deps.UserSvc,
+		responder:          deps.Responder,
+		mcp:                deps.MCPGateway,
+		appEnrollment:      deps.AppEnrollment,
+		isReady:            deps.IsReady,
+		isGovernanceReady:  deps.IsGovernanceReady,
+		limiters:           make(map[string]*rate.Limiter),
+		limiterLastUsed:    make(map[string]time.Time),
+	}
+
+	// Initialize script templates
+	if err := scripts.Init(deps.Logger); err != nil {
+		return nil, fmt.Errorf("gateway: failed to initialize script templates: %w", err)
 	}
 
 	// Initialize controllers
 	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.DB, deps.PKI, deps.AppEnrollment, deps.Reg, deps.Responder)
 	h.dbController = newDBController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Pubsub, deps.UserSvc, deps.Responder)
-	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.SessionSvc, deps.MCPGateway, deps.Responder)
+	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.WebSessionSvc, deps.CLISessionSvc, deps.OperatorSessionSvc, deps.MCPGateway, deps.Responder)
 	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.DB, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
 
 	// Build router once to avoid per-request overhead
 	h.router = h.buildRouter()
 
-	return h
+	return h, nil
 }
 
 func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
@@ -154,6 +168,16 @@ func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
 			limiter = rate.NewLimiter(rate.Limit(h.cfg.Gateway.RateLimitRPS), h.cfg.Gateway.RateLimitBurst)
 			h.limiters[ip] = limiter
 		}
+		h.limiterLastUsed[ip] = time.Now()
+
+		// Clean up stale limiters (older than 5 minutes)
+		cutoff := time.Now().Add(-5 * time.Minute)
+		for key, lastUsed := range h.limiterLastUsed {
+			if lastUsed.Before(cutoff) {
+				delete(h.limiters, key)
+				delete(h.limiterLastUsed, key)
+			}
+		}
 		h.muLimiters.Unlock()
 
 		if !limiter.Allow() {
@@ -162,6 +186,32 @@ func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		next.ServeHTTP(w, r)
+	})
+}
+
+// corsMiddlewareForCLIPasskey is a more permissive CORS middleware that allows
+// local network IPs to support port forwarding scenarios for CLI passkey bootstrap.
+func (h *HTTPHandler) corsMiddlewareForCLIPasskey(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			// Security: validate origin is loopback or local network IP for CLI bootstrap
+			// This allows port forwarding scenarios while still preventing external CSRF attacks
+			if !isLocalNetworkOrigin(origin) {
+				h.logger.Warn("CORS request rejected: non-local network Origin", "origin", origin, "path", r.URL.Path)
+				h.responder.Error(w, http.StatusForbidden, "origin not allowed")
+				return
+			}
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		}
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -268,6 +318,9 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux := http.NewServeMux()
 
+	// Health endpoint
+	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
+
 	// Bootstrap routes (CA discovery, trust scripts) - now on public HTTPS
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
@@ -278,8 +331,10 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.Landing, h.handleLandingPage)
 	mux.HandleFunc(constants.APIPaths.AuthLoginVerify, h.authController.handlePublicAuthLoginVerify)
 	mux.HandleFunc(constants.APIPaths.AuthLogout, h.authController.handlePublicAuthLogout)
-	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handlePublicAuthBootstrap)
+	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handleLocalBootstrap)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)
+	mux.HandleFunc(constants.APIPaths.AuthCLIEnroll, h.authController.handleCLIEnrollment)
+	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.authController.handleDeviceEnrollment)
 	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
 
 	// MCP/A2A Ingress routes with JWT authentication for remote clients
@@ -297,29 +352,54 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// Wrap MCP/A2A with Rate Limiting
 	mcpRateLimited := h.rateLimitMiddleware(mcpMux)
 
-	// Apply JWT middleware only when JWKS is configured (for external IdP auth)
-	// When JWKS is not configured, MCP/A2A routes are not available on public port
+	// Apply JWT middleware when JWKS is configured (for external IdP auth)
+	// When JWKS is not configured, MCP/A2A routes use mTLS via main middleware
 	var mcpHandler http.Handler
 	if h.auth != nil && h.auth.HasJWKS() {
 		mcpHandler = h.auth.JWTAuthMiddleware(mcpRateLimited)
-		mux.Handle(constants.APIPaths.MCPEndpoint, mcpHandler)
-		mux.Handle(constants.APIPaths.MCPToolsList, mcpHandler)
-		mux.Handle(constants.APIPaths.MCPToolsCall, mcpHandler)
-		mux.Handle(constants.APIPaths.MCPToolsCallSSE, mcpHandler)
-		mux.Handle(constants.APIPaths.MCPResourcesList, mcpHandler)
-		mux.Handle(constants.APIPaths.MCPResourcesRead, mcpHandler)
-		mux.Handle(constants.APIPaths.MCPPromptsList, mcpHandler)
-		mux.Handle(constants.APIPaths.MCPPromptsGet, mcpHandler)
-		mux.Handle(constants.APIPaths.A2ACall, mcpHandler)
+	} else {
+		// When JWKS is not configured, MCP/A2A must use mTLS via main middleware
+		mcpHandler = mcpRateLimited
+	}
 
-		// JIT passkey bootstrap: allow first-credential registration via JWT
-		// This unblocks OIDC/JIT users who have zero credentials and cannot reach WebSessionAuth
+	// Register MCP routes unconditionally - they are protected by auth.Middleware (mTLS) or JWTAuthMiddleware
+	mux.Handle(constants.APIPaths.MCPEndpoint, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPToolsList, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPToolsCall, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPToolsCallSSE, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPResourcesList, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPResourcesRead, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPPromptsList, mcpHandler)
+	mux.Handle(constants.APIPaths.MCPPromptsGet, mcpHandler)
+	mux.Handle(constants.APIPaths.A2ACall, mcpHandler)
+
+	// JIT passkey bootstrap: allow first-credential registration via JWT
+	// This unblocks OIDC/JIT users who have zero credentials and cannot reach WebSessionAuth
+	if h.auth != nil && h.auth.HasJWKS() {
 		jwtPasskeyMux := http.NewServeMux()
 		jwtPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysJITRegisterChallenge, h.authController.handleAuthPasskeysRegisterChallenge)
 		jwtPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysJITRegisterVerify, h.authController.handleAuthPasskeysRegisterVerify)
 		mux.Handle(constants.APIPaths.AuthPasskeysJITRegisterChallenge, h.auth.JWTAuthMiddleware(jwtPasskeyMux))
 		mux.Handle(constants.APIPaths.AuthPasskeysJITRegisterVerify, h.auth.JWTAuthMiddleware(jwtPasskeyMux))
 	}
+
+	// CLI passkey bootstrap: allow first-credential registration for CLI bootstrap flow
+	// This is a public endpoint (no auth) for the initial bootstrap where no credentials exist yet
+	cliPasskeyMux := http.NewServeMux()
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, h.authController.handleCLIPasskeyRegisterChallenge)
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterVerify, h.authController.handleCLIPasskeyRegisterVerify)
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, h.authController.handleCLIPasskeyAuthenticateChallenge)
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify, h.authController.handleCLIPasskeyAuthenticateVerify)
+	// Browser-based CLI bootstrap endpoints (create web session after registration)
+	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/challenge", h.authController.handleCLIBrowserPasskeyRegisterChallenge)
+	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/verify", h.authController.handleCLIBrowserPasskeyRegisterVerify)
+	corsCLIPasskeyMux := h.corsMiddlewareForCLIPasskey(cliPasskeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, corsCLIPasskeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterVerify, corsCLIPasskeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, corsCLIPasskeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify, corsCLIPasskeyMux)
+	mux.Handle("/api/v1/auth/passkeys/cli-browser-register/challenge", corsCLIPasskeyMux)
+	mux.Handle("/api/v1/auth/passkeys/cli-browser-register/verify", corsCLIPasskeyMux)
 
 	// Browser-facing data routes (require web session cookie)
 	authedMux := http.NewServeMux()
@@ -339,27 +419,53 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }
 
-func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
+func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux := http.NewServeMux()
 
-	// Health check - available on bootstrap port for initialization monitoring
+	// Health check - available on HTTP port for initialization monitoring
 	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
 
 	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
-	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handlePublicAuthBootstrap)
+	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handleLocalBootstrap)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)
+	mux.HandleFunc(constants.APIPaths.AuthCLIEnroll, h.authController.handleCLIEnrollment)
+	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.authController.handleDeviceEnrollment)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
 	mux.HandleFunc(constants.APIPaths.BootstrapCALinux, h.pkiController.handleTrustScriptLinux)
 	mux.HandleFunc(constants.APIPaths.BootstrapCAWindows, h.pkiController.handleTrustScriptWindows)
 	mux.HandleFunc("/.well-known/g8e/pki/trust-windows", h.pkiController.handleTrustScriptWindowsAlias)
-	mux.HandleFunc("/.well-known/g8e/binary/", h.pkiController.handleNodeBinaryDownload)
+	mux.HandleFunc("/.well-known/g8e/bin/", h.pkiController.handleNodeBinaryDownload)
+	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)
+	mux.HandleFunc(constants.APIPaths.DeployScriptWindows, h.pkiController.handleDeployScriptWindows)
 
-	return h.pathTraversalGuard(h.auth.Middleware(mux))
+	// CLI passkey bootstrap: allow first-credential registration for CLI bootstrap flow
+	// This is a public endpoint (no auth) for the initial bootstrap where no credentials exist yet
+	cliPasskeyMux := http.NewServeMux()
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, h.authController.handleCLIPasskeyRegisterChallenge)
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterVerify, h.authController.handleCLIPasskeyRegisterVerify)
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, h.authController.handleCLIPasskeyAuthenticateChallenge)
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify, h.authController.handleCLIPasskeyAuthenticateVerify)
+	// Browser-based CLI bootstrap endpoints (create web session after registration)
+	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/challenge", h.authController.handleCLIBrowserPasskeyRegisterChallenge)
+	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/verify", h.authController.handleCLIBrowserPasskeyRegisterVerify)
+	corsCLIPasskeyMux := h.corsMiddlewareForCLIPasskey(cliPasskeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, corsCLIPasskeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterVerify, corsCLIPasskeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, corsCLIPasskeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify, corsCLIPasskeyMux)
+	mux.Handle("/api/v1/auth/passkeys/cli-browser-register/challenge", corsCLIPasskeyMux)
+	mux.Handle("/api/v1/auth/passkeys/cli-browser-register/verify", corsCLIPasskeyMux)
+
+	// Wrap with rate limiting
+	return h.pathTraversalGuard(h.rateLimitMiddleware(mux))
 }
 
 func (h *HTTPHandler) buildMCPHttpRouter() http.Handler {
 	mux := http.NewServeMux()
+
+	// Health endpoint
+	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
 
 	// Unified MCP Streamable HTTP endpoint for standard MCP clients (e.g.
 	// Claude Code custom connectors). This is the canonical single-URL
@@ -411,6 +517,51 @@ func isLoopbackOrigin(origin string) bool {
 	}
 	if ip := net.ParseIP(host); ip != nil {
 		return ip.IsLoopback()
+	}
+	return false
+}
+
+// isLocalNetworkOrigin reports whether an Origin header value refers to a
+// loopback host or a local network IP (same subnet as the gateway).
+// This is used for CLI passkey bootstrap to support port forwarding scenarios.
+func isLocalNetworkOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+
+	// Allow loopback addresses
+	if host == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() {
+			return true
+		}
+		// Allow private network IPs (RFC 1918)
+		if isPrivateIP(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// isPrivateIP reports whether an IP address is in a private network range.
+func isPrivateIP(ip net.IP) bool {
+	if ip4 := ip.To4(); ip4 != nil {
+		// 10.0.0.0/8
+		if ip4[0] == 10 {
+			return true
+		}
+		// 172.16.0.0/12
+		if ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31 {
+			return true
+		}
+		// 192.168.0.0/16
+		if ip4[0] == 192 && ip4[1] == 168 {
+			return true
+		}
 	}
 	return false
 }
@@ -587,7 +738,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	h.responder.JSON(w, http.StatusOK, models.HealthResponse{
 		Status:          constants.GatewayModeStatusOK,
-		Mode:            constants.GatewayModeMode,
+		Mode:            constants.GatewayModeGateway,
 		Version:         h.cfg.Version,
 		GovernanceReady: h.isGovernanceReady != nil && h.isGovernanceReady(),
 		StateMerkleRoot: root,
@@ -602,7 +753,7 @@ func (h *HTTPHandler) handleBootstrapHealth(w http.ResponseWriter, r *http.Reque
 
 	h.responder.JSON(w, http.StatusOK, models.HealthResponse{
 		Status:  constants.GatewayModeStatusOK,
-		Mode:    constants.GatewayModeMode,
+		Mode:    constants.GatewayModeGateway,
 		Version: h.cfg.Version,
 	})
 }
@@ -708,8 +859,8 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	// The app identity extracted from the peer certificate must be associated with the target.
 	if route.WebSessionID != "" {
 		webBindKey := sessionWebBindKey(route.WebSessionID)
-		raw, found := h.db.KVGet(webBindKey)
-		if !found {
+		raw, ok := h.db.KVGet(webBindKey)
+		if !ok {
 			h.logger.Warn("SSE push: target web session has no bound operators", "web_session_id", route.WebSessionID, "app_id", appID)
 			h.responder.Error(w, http.StatusForbidden, "target session not found or not bound")
 			return
@@ -756,7 +907,12 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		var cliSess models.CLISession
-		b, _ := json.Marshal(doc.Data)
+		b, err := json.Marshal(doc.Data)
+		if err != nil {
+			h.logger.Error("SSE push: failed to marshal CLI session", "cli_session_id", route.CLISessionID, "error", err)
+			h.responder.Error(w, http.StatusInternalServerError, "failed to verify session ownership")
+			return
+		}
 		if err := json.Unmarshal(b, &cliSess); err != nil {
 			h.logger.Error("SSE push: failed to parse CLI session", "cli_session_id", route.CLISessionID, "error", err)
 			h.responder.Error(w, http.StatusInternalServerError, "failed to verify session ownership")
@@ -849,7 +1005,7 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	// to access the requested routing buffer. Without this check, any operator
 	// could drain any other client's event buffer, creating a multi-tenant
 	// data leak.
-	operatorSessionID := h.auth.ExtractOperatorSessionID(r)
+	operatorSessionID := h.auth.extractOperatorSessionIDFromMTLS(r)
 	if operatorSessionID == "" {
 		h.responder.Error(w, http.StatusUnauthorized, "missing Operator session id")
 		return
@@ -872,7 +1028,12 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 			return
 		}
 		var cliSess models.CLISession
-		b, _ := json.Marshal(doc.ForWire())
+		b, err := json.Marshal(doc.ForWire())
+		if err != nil {
+			h.logger.Error("Failed to marshal CLI session", string(constants.ConnectionStateError), err)
+			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
+			return
+		}
 		if err := json.Unmarshal(b, &cliSess); err != nil {
 			h.logger.Error("Failed to unmarshal CLI session", string(constants.ConnectionStateError), err)
 			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
@@ -885,8 +1046,8 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
 		// Verify operator_session_id is bound to this web_session_id.
 		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
-		boundWebSessionID, found := h.db.KVGet(operatorBindKey)
-		if !found || boundWebSessionID != route.WebSessionID {
+		boundWebSessionID, ok := h.db.KVGet(operatorBindKey)
+		if !ok || boundWebSessionID != route.WebSessionID {
 			h.responder.Error(w, http.StatusForbidden, "operator session does not own this web session")
 			return
 		}
@@ -936,7 +1097,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	sinceID, _ := strconv.ParseInt(sinceIDStr, 10, 64)
 
 	// 1. Authorization (re-use logic from handleInternalSSEEvents)
-	operatorSessionID := h.auth.ExtractOperatorSessionID(r)
+	operatorSessionID := h.auth.extractOperatorSessionIDFromMTLS(r)
 	if operatorSessionID == "" {
 		h.responder.Error(w, http.StatusUnauthorized, "missing Operator session id")
 		return
@@ -951,7 +1112,11 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 			return
 		}
 		var cliSess models.CLISession
-		b, _ := json.Marshal(doc.ForWire())
+		b, err := json.Marshal(doc.ForWire())
+		if err != nil {
+			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
+			return
+		}
 		if err := json.Unmarshal(b, &cliSess); err != nil {
 			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
 			return
@@ -963,8 +1128,8 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 		channel = "sse:cli:" + route.CLISessionID
 	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
 		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
-		boundWebSessionID, found := h.db.KVGet(operatorBindKey)
-		if !found || boundWebSessionID != route.WebSessionID {
+		boundWebSessionID, ok := h.db.KVGet(operatorBindKey)
+		if !ok || boundWebSessionID != route.WebSessionID {
 			h.responder.Error(w, http.StatusForbidden, "not authorized for this web session")
 			return
 		}
@@ -985,7 +1150,13 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	origin := r.Header.Get("Origin")
+	if origin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+	} else {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+	}
 	w.Header().Set("X-Accel-Buffering", "no") // For Nginx
 
 	flusher, ok := w.(http.Flusher)

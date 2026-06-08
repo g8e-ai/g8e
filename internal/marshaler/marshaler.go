@@ -54,28 +54,3 @@ func DocumentID(d constants.DocumentID) string {
 func Status[T ~string](s T) string {
 	return string(s)
 }
-
-// OperatorStatus converts OperatorStatus to string.
-func OperatorStatus(s constants.OperatorStatus) string {
-	return string(s)
-}
-
-// OperatorType converts OperatorType to string.
-func OperatorType(t constants.OperatorType) string {
-	return string(t)
-}
-
-// ExecutionStatus converts ExecutionStatus to string.
-func ExecutionStatus(s constants.ExecutionStatus) string {
-	return string(s)
-}
-
-// ActionType converts ActionType to string.
-func ActionType(a constants.ActionType) string {
-	return string(a)
-}
-
-// Event converts event-type constants to string for pub/sub and logging.
-func Event(e constants.EventType) string {
-	return string(e)
-}

@@ -24,10 +24,6 @@
       "_go_const": "CollectionCases",
       "value": "cases"
     },
-    "chaos_events": {
-      "_go_const": "CollectionChaosEvents",
-      "value": "chaos_events"
-    },
     "cli_sessions": {
       "_go_const": "CollectionCLISessions",
       "value": "cli_sessions"

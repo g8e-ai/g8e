@@ -1,10 +1,10 @@
 {
-  "_comment": "This is an example template. The canonical schema is defined in internal/services/mcp/config.go. Use the unified /mcp endpoint.",
+  "_comment": "This is an example template. The canonical schema is defined in internal/services/mcp/config.go. Use the unified /mcp endpoint. Port must be constants.Ports.OperatorHttps.",
   "mcpServers": {
     "g8e-gateway": {
       "transport": {
         "type": "http",
-        "url": "https://g8e.local:8443/mcp"
+        "url": "https://g8e.local:{{OPERATOR_HTTPS_PORT}}/mcp"
       },
       "tls": {
         "clientCertificate": "/path/to/cli.crt",

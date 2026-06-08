@@ -27,6 +27,70 @@ import (
 // GitOpsTool provides git repository operations including status, log, branch info, and remote management.
 type GitOpsTool struct{}
 
+// gitStatusResult represents the result of a git status operation
+type gitStatusResult struct {
+	Branch    string   `json:"branch"`
+	Modified  []string `json:"modified"`
+	Added     []string `json:"added"`
+	Deleted   []string `json:"deleted"`
+	Untracked []string `json:"untracked"`
+	Clean     bool     `json:"clean"`
+}
+
+// gitLogResult represents the result of a git log operation
+type gitLogResult struct {
+	Commits []gitCommit `json:"commits"`
+	Count   int         `json:"count"`
+}
+
+// gitCommit represents a single git commit
+type gitCommit struct {
+	Hash      string `json:"hash"`
+	ShortHash string `json:"short_hash"`
+	Author    string `json:"author"`
+	Email     string `json:"email"`
+	Date      string `json:"date"`
+	Message   string `json:"message"`
+}
+
+// gitBranchesResult represents the result of a git branches operation
+type gitBranchesResult struct {
+	Current string   `json:"current"`
+	Local   []string `json:"local"`
+	Remote  []string `json:"remote"`
+}
+
+// gitRemotesResult represents the result of a git remotes operation
+type gitRemotesResult struct {
+	Remotes map[string]map[string]string `json:"remotes"`
+}
+
+// gitRemoteURLResult represents the result of a git remote URL operation
+type gitRemoteURLResult struct {
+	URL      string `json:"url"`
+	Platform string `json:"platform"`
+}
+
+// gitCurrentBranchResult represents the result of a git current branch operation
+type gitCurrentBranchResult struct {
+	Branch string `json:"branch"`
+}
+
+// gitDiffResult represents the result of a git diff operation
+type gitDiffResult struct {
+	Ref     string   `json:"ref"`
+	Diff    string   `json:"diff"`
+	Changes bool     `json:"changes"`
+	Files   []string `json:"files"`
+}
+
+// gitErrorResult represents an error result from a git operation
+type gitErrorResult struct {
+	Operation string `json:"operation"`
+	RepoPath  string `json:"repo_path"`
+	Error     string `json:"error"`
+}
+
 // Name returns the tool identifier.
 func (t *GitOpsTool) Name() string {
 	return "git_ops"
@@ -38,26 +102,26 @@ func (t *GitOpsTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *GitOpsTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"operation": map[string]interface{}{
-				"type":        "string",
-				"description": "Git operation to perform",
-				"enum":        []string{"status", "log", "branches", "remotes", "remote_url", "current_branch", "diff"},
+func (t *GitOpsTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"operation": {
+				Type:        "string",
+				Description: "Git operation to perform",
+				Enum:        []string{"status", "log", "branches", "remotes", "remote_url", "current_branch", "diff"},
 			},
-			"repo_path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to git repository (defaults to current directory)",
+			"repo_path": {
+				Type:        "string",
+				Description: "Path to git repository (defaults to current directory)",
 			},
-			"limit": map[string]interface{}{
-				"type":        "integer",
-				"description": "Limit for log entries (default: 10)",
+			"limit": {
+				Type:        "integer",
+				Description: "Limit for log entries (default: 10)",
 			},
-			"ref": map[string]interface{}{
-				"type":        "string",
-				"description": "Git reference for diff or log (e.g., HEAD~1, main)",
+			"ref": {
+				Type:        "string",
+				Description: "Git reference for diff or log (e.g., HEAD~1, main)",
 			},
 		},
 	}
@@ -72,7 +136,7 @@ func (t *GitOpsTool) Execute(ctx context.Context, args json.RawMessage) (CallToo
 		Ref       string `json:"ref,omitempty"`
 	}
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("git_ops: invalid arguments: %w", err)
 	}
 
 	if req.Operation == "" {
@@ -85,12 +149,15 @@ func (t *GitOpsTool) Execute(ctx context.Context, args json.RawMessage) (CallToo
 	}
 
 	if err := validateGitRepoPath(repoPath); err != nil {
-		result := map[string]interface{}{
-			"operation": req.Operation,
-			"repo_path": repoPath,
-			"error":     err.Error(),
+		errorResult := gitErrorResult{
+			Operation: req.Operation,
+			RepoPath:  repoPath,
+			Error:     err.Error(),
 		}
-		resultJSON, _ := json.Marshal(result)
+		resultJSON, marshalErr := json.Marshal(errorResult)
+		if marshalErr != nil {
+			return CallToolResult{}, fmt.Errorf("git_ops: failed to marshal error result: %w", marshalErr)
+		}
 		return CallToolResult{
 			Content: []TextContent{
 				{
@@ -102,12 +169,15 @@ func (t *GitOpsTool) Execute(ctx context.Context, args json.RawMessage) (CallToo
 	}
 
 	if !isGitRepo(repoPath) {
-		result := map[string]interface{}{
-			"operation": req.Operation,
-			"repo_path": repoPath,
-			"error":     "not a git repository",
+		errorResult := gitErrorResult{
+			Operation: req.Operation,
+			RepoPath:  repoPath,
+			Error:     "not a git repository",
 		}
-		resultJSON, _ := json.Marshal(result)
+		resultJSON, marshalErr := json.Marshal(errorResult)
+		if marshalErr != nil {
+			return CallToolResult{}, fmt.Errorf("git_ops: failed to marshal error result: %w", marshalErr)
+		}
 		return CallToolResult{
 			Content: []TextContent{
 				{
@@ -118,47 +188,59 @@ func (t *GitOpsTool) Execute(ctx context.Context, args json.RawMessage) (CallToo
 		}, nil
 	}
 
-	var result map[string]interface{}
+	var result interface{}
 	var err error
 
 	switch req.Operation {
 	case "status":
-		result, err = gitStatus(repoPath)
+		result, err = gitStatus(ctx, repoPath)
 	case "log":
 		limit := req.Limit
 		if limit <= 0 {
 			limit = 10
 		}
-		result, err = gitLog(repoPath, limit)
+		result, err = gitLog(ctx, repoPath, limit)
 	case "branches":
-		result, err = gitBranches(repoPath)
+		result, err = gitBranches(ctx, repoPath)
 	case "remotes":
-		result, err = gitRemotes(repoPath)
+		result, err = gitRemotes(ctx, repoPath)
 	case "remote_url":
-		result, err = gitRemoteURL(repoPath)
+		result, err = gitRemoteURL(ctx, repoPath)
 	case "current_branch":
-		result, err = gitCurrentBranch(repoPath)
+		result, err = gitCurrentBranch(ctx, repoPath)
 	case "diff":
 		ref := req.Ref
 		if ref == "" {
 			ref = "HEAD"
 		}
-		result, err = gitDiff(repoPath, ref)
+		result, err = gitDiff(ctx, repoPath, ref)
 	default:
-		return CallToolResult{}, fmt.Errorf("unsupported operation: %s", req.Operation)
+		return CallToolResult{}, fmt.Errorf("git_ops: unsupported operation: %s", req.Operation)
 	}
 
 	if err != nil {
-		result = map[string]interface{}{
-			"operation": req.Operation,
-			"repo_path": repoPath,
-			"error":     err.Error(),
+		errorResult := gitErrorResult{
+			Operation: req.Operation,
+			RepoPath:  repoPath,
+			Error:     err.Error(),
 		}
+		resultJSON, marshalErr := json.Marshal(errorResult)
+		if marshalErr != nil {
+			return CallToolResult{}, fmt.Errorf("git_ops: failed to marshal error result: %w", marshalErr)
+		}
+		return CallToolResult{
+			Content: []TextContent{
+				{
+					Type: "text",
+					Text: string(resultJSON),
+				},
+			},
+		}, nil
 	}
 
 	resultJSON, marshalErr := json.Marshal(result)
 	if marshalErr != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", marshalErr)
+		return CallToolResult{}, fmt.Errorf("git_ops: failed to marshal result: %w", marshalErr)
 	}
 
 	return CallToolResult{
@@ -179,10 +261,10 @@ func isGitRepo(path string) bool {
 	return false
 }
 
-func runGitCommand(repoPath string, args ...string) (string, error) {
+func runGitCommand(ctx context.Context, repoPath string, args ...string) (string, error) {
 	// Validate git subcommand is safe
 	if len(args) == 0 {
-		return "", fmt.Errorf("no git subcommand provided")
+		return "", fmt.Errorf("git_ops: no git subcommand provided")
 	}
 
 	// Whitelist of safe git subcommands
@@ -200,27 +282,27 @@ func runGitCommand(repoPath string, args ...string) (string, error) {
 
 	subcommand := args[0]
 	if !safeSubcommands[subcommand] {
-		return "", fmt.Errorf("git subcommand '%s' is not allowed", subcommand)
+		return "", fmt.Errorf("git_ops: git subcommand '%s' is not allowed", subcommand)
 	}
 
 	// Validate repo path to prevent path traversal
 	if err := validateGitRepoPath(repoPath); err != nil {
-		return "", err
+		return "", fmt.Errorf("git_ops: invalid repo path: %w", err)
 	}
 
-	cmd := exec.Command("git", args...)
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return string(output), err
+		return string(output), fmt.Errorf("git_ops: git %s failed: %w", subcommand, err)
 	}
 	return strings.TrimSpace(string(output)), nil
 }
 
-func gitStatus(repoPath string) (map[string]interface{}, error) {
-	output, err := runGitCommand(repoPath, "status", "--porcelain")
+func gitStatus(ctx context.Context, repoPath string) (*gitStatusResult, error) {
+	output, err := runGitCommand(ctx, repoPath, "status", "--porcelain")
 	if err != nil {
-		return nil, fmt.Errorf("git status failed: %w", err)
+		return nil, fmt.Errorf("git_ops: git status failed: %w", err)
 	}
 
 	lines := strings.Split(output, "\n")
@@ -251,19 +333,22 @@ func gitStatus(repoPath string) (map[string]interface{}, error) {
 		}
 	}
 
-	branch, _ := gitCurrentBranch(repoPath)
+	branchResult, err := gitCurrentBranch(ctx, repoPath)
+	if err != nil {
+		return nil, fmt.Errorf("git_ops: failed to get current branch: %w", err)
+	}
 
-	return map[string]interface{}{
-		"branch":    branch,
-		"modified":  modified,
-		"added":     added,
-		"deleted":   deleted,
-		"untracked": untracked,
-		"clean":     len(modified) == 0 && len(added) == 0 && len(deleted) == 0 && len(untracked) == 0,
+	return &gitStatusResult{
+		Branch:    branchResult.Branch,
+		Modified:  modified,
+		Added:     added,
+		Deleted:   deleted,
+		Untracked: untracked,
+		Clean:     len(modified) == 0 && len(added) == 0 && len(deleted) == 0 && len(untracked) == 0,
 	}, nil
 }
 
-func gitLog(repoPath string, limit int) (map[string]interface{}, error) {
+func gitLog(ctx context.Context, repoPath string, limit int) (*gitLogResult, error) {
 	// Bound the limit to prevent resource exhaustion
 	if limit <= 0 {
 		limit = 10
@@ -272,12 +357,12 @@ func gitLog(repoPath string, limit int) (map[string]interface{}, error) {
 		limit = 1000
 	}
 
-	output, err := runGitCommand(repoPath, "log", "--max-count", strconv.Itoa(limit), "--pretty=format:%H|%an|%ae|%ad|%s", "--date=iso")
+	output, err := runGitCommand(ctx, repoPath, "log", "--max-count", strconv.Itoa(limit), "--pretty=format:%H|%an|%ae|%ad|%s", "--date=iso")
 	if err != nil {
-		return nil, fmt.Errorf("git log failed: %w", err)
+		return nil, fmt.Errorf("git_ops: git log failed: %w", err)
 	}
 
-	var commits []map[string]interface{}
+	var commits []gitCommit
 	lines := strings.Split(output, "\n")
 
 	for _, line := range lines {
@@ -289,31 +374,39 @@ func gitLog(repoPath string, limit int) (map[string]interface{}, error) {
 			continue
 		}
 
-		commits = append(commits, map[string]interface{}{
-			"hash":       parts[0],
-			"author":     parts[1],
-			"email":      parts[2],
-			"date":       parts[3],
-			"message":    parts[4],
-			"short_hash": parts[0][:7],
-		})
+		commit := gitCommit{
+			Hash:    parts[0],
+			Author:  parts[1],
+			Email:   parts[2],
+			Date:    parts[3],
+			Message: parts[4],
+		}
+		if len(parts[0]) >= 7 {
+			commit.ShortHash = parts[0][:7]
+		} else {
+			commit.ShortHash = parts[0]
+		}
+		commits = append(commits, commit)
 	}
 
-	return map[string]interface{}{
-		"commits": commits,
-		"count":   len(commits),
+	return &gitLogResult{
+		Commits: commits,
+		Count:   len(commits),
 	}, nil
 }
 
-func gitBranches(repoPath string) (map[string]interface{}, error) {
-	output, err := runGitCommand(repoPath, "branch", "-a")
+func gitBranches(ctx context.Context, repoPath string) (*gitBranchesResult, error) {
+	output, err := runGitCommand(ctx, repoPath, "branch", "-a")
 	if err != nil {
-		return nil, fmt.Errorf("git branch failed: %w", err)
+		return nil, fmt.Errorf("git_ops: git branch failed: %w", err)
 	}
 
 	var local []string
 	var remote []string
-	current, _ := gitCurrentBranch(repoPath)
+	currentResult, err := gitCurrentBranch(ctx, repoPath)
+	if err != nil {
+		return nil, fmt.Errorf("git_ops: failed to get current branch: %w", err)
+	}
 
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
@@ -331,17 +424,17 @@ func gitBranches(repoPath string) (map[string]interface{}, error) {
 		}
 	}
 
-	return map[string]interface{}{
-		"current": current,
-		"local":   local,
-		"remote":  remote,
+	return &gitBranchesResult{
+		Current: currentResult.Branch,
+		Local:   local,
+		Remote:  remote,
 	}, nil
 }
 
-func gitRemotes(repoPath string) (map[string]interface{}, error) {
-	output, err := runGitCommand(repoPath, "remote", "-v")
+func gitRemotes(ctx context.Context, repoPath string) (*gitRemotesResult, error) {
+	output, err := runGitCommand(ctx, repoPath, "remote", "-v")
 	if err != nil {
-		return nil, fmt.Errorf("git remote failed: %w", err)
+		return nil, fmt.Errorf("git_ops: git remote failed: %w", err)
 	}
 
 	remotes := make(map[string]map[string]string)
@@ -368,15 +461,15 @@ func gitRemotes(repoPath string) (map[string]interface{}, error) {
 		remotes[name][typ] = url
 	}
 
-	return map[string]interface{}{
-		"remotes": remotes,
+	return &gitRemotesResult{
+		Remotes: remotes,
 	}, nil
 }
 
-func gitRemoteURL(repoPath string) (map[string]interface{}, error) {
-	output, err := runGitCommand(repoPath, "config", "--get", "remote.origin.url")
+func gitRemoteURL(ctx context.Context, repoPath string) (*gitRemoteURLResult, error) {
+	output, err := runGitCommand(ctx, repoPath, "config", "--get", "remote.origin.url")
 	if err != nil {
-		return nil, fmt.Errorf("git remote url failed: %w", err)
+		return nil, fmt.Errorf("git_ops: git remote url failed: %w", err)
 	}
 
 	platform := "unknown"
@@ -388,38 +481,38 @@ func gitRemoteURL(repoPath string) (map[string]interface{}, error) {
 		platform = "bitbucket"
 	}
 
-	return map[string]interface{}{
-		"url":      output,
-		"platform": platform,
+	return &gitRemoteURLResult{
+		URL:      output,
+		Platform: platform,
 	}, nil
 }
 
-func gitCurrentBranch(repoPath string) (map[string]interface{}, error) {
-	output, err := runGitCommand(repoPath, "rev-parse", "--abbrev-ref", "HEAD")
+func gitCurrentBranch(ctx context.Context, repoPath string) (*gitCurrentBranchResult, error) {
+	output, err := runGitCommand(ctx, repoPath, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
-		return nil, fmt.Errorf("git current branch failed: %w", err)
+		return nil, fmt.Errorf("git_ops: git current branch failed: %w", err)
 	}
 
-	return map[string]interface{}{
-		"branch": strings.Trim(output, "'"),
+	return &gitCurrentBranchResult{
+		Branch: strings.Trim(output, "'"),
 	}, nil
 }
 
-func gitDiff(repoPath string, ref string) (map[string]interface{}, error) {
+func gitDiff(ctx context.Context, repoPath string, ref string) (*gitDiffResult, error) {
 	if err := validateGitRef(ref); err != nil {
-		return nil, fmt.Errorf("invalid git reference: %w", err)
+		return nil, fmt.Errorf("git_ops: invalid git reference: %w", err)
 	}
 
-	output, err := runGitCommand(repoPath, "diff", ref)
+	output, err := runGitCommand(ctx, repoPath, "diff", ref)
 	if err != nil {
-		return nil, fmt.Errorf("git diff failed: %w", err)
+		return nil, fmt.Errorf("git_ops: git diff failed: %w", err)
 	}
 
 	if output == "" {
-		return map[string]interface{}{
-			"ref":     ref,
-			"diff":    "",
-			"changes": false,
+		return &gitDiffResult{
+			Ref:     ref,
+			Diff:    "",
+			Changes: false,
 		}, nil
 	}
 
@@ -434,10 +527,10 @@ func gitDiff(repoPath string, ref string) (map[string]interface{}, error) {
 		}
 	}
 
-	return map[string]interface{}{
-		"ref":     ref,
-		"diff":    output,
-		"changes": true,
-		"files":   files,
+	return &gitDiffResult{
+		Ref:     ref,
+		Diff:    output,
+		Changes: true,
+		Files:   files,
 	}, nil
 }

@@ -15,6 +15,7 @@ package gateway
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -27,7 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
 
@@ -35,14 +36,14 @@ import (
 type DBController struct {
 	cfg       *config.Config
 	logger    *slog.Logger
-	db        *GatewayDBService
+	db        *CanonicalDBService
 	auth      *AuthService
 	pubsub    *PubSubBroker
 	userSvc   *UserService
-	responder *responder.Responder
+	responder *response.Writer
 }
 
-func newDBController(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, auth *AuthService, pubsub *PubSubBroker, userSvc *UserService, responder *responder.Responder) *DBController {
+func newDBController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, pubsub *PubSubBroker, userSvc *UserService, responder *response.Writer) *DBController {
 	return &DBController{
 		cfg:       cfg,
 		logger:    logger,
@@ -155,7 +156,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := c.db.DocSet(collection, id, json.RawMessage(body)); err != nil {
-			if strings.Contains(err.Error(), "locked") {
+			if errors.Is(err, constants.ErrDatabaseLocked) {
 				c.responder.Error(w, http.StatusServiceUnavailable, "database is locked")
 			} else {
 				c.responder.Error(w, http.StatusInternalServerError, err.Error())
@@ -180,11 +181,11 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 		}
 		doc, err := c.db.DocUpdate(collection, id, json.RawMessage(body))
 		if err != nil {
-			if strings.Contains(err.Error(), "not found") {
+			if errors.Is(err, constants.ErrNotFound) {
 				c.responder.Error(w, http.StatusNotFound, err.Error())
-			} else if strings.Contains(err.Error(), "constraint") {
+			} else if errors.Is(err, constants.ErrConstraintViolation) {
 				c.responder.Error(w, http.StatusConflict, "database constraint violation")
-			} else if strings.Contains(err.Error(), "locked") {
+			} else if errors.Is(err, constants.ErrDatabaseLocked) {
 				c.responder.Error(w, http.StatusServiceUnavailable, "database is locked")
 			} else {
 				c.responder.Error(w, http.StatusInternalServerError, err.Error())
@@ -273,7 +274,7 @@ func (c *DBController) handleAuditReceipts(w http.ResponseWriter, r *http.Reques
 
 	txID := r.URL.Query().Get("tx_id")
 	if txID != "" {
-		receipt, err := c.db.AuditVault.GetActionReceipt(txID)
+		receipt, err := c.db.AuditStore.GetActionReceipt(txID)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -303,7 +304,7 @@ func (c *DBController) handleAuditReceipts(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	receipts, err := c.db.AuditVault.ListActionReceipts(operatorSessionID, limit, offset)
+	receipts, err := c.db.AuditStore.ListActionReceipts(operatorSessionID, limit, offset)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -340,7 +341,7 @@ func (c *DBController) handleAuditReceiptsExport(w http.ResponseWriter, r *http.
 		}
 	}
 
-	receipts, err := c.db.AuditVault.ListActionReceiptsSince(since, limit)
+	receipts, err := c.db.AuditStore.ListActionReceiptsSince(since, limit)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -414,7 +415,15 @@ func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http
 			c.responder.Error(w, http.StatusNotFound, "signer not found")
 			return
 		}
-		doc, _ := c.db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), id)
+		doc, err := c.db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), id)
+		if err != nil {
+			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if doc == nil {
+			c.responder.Error(w, http.StatusNotFound, "signer not found")
+			return
+		}
 		c.responder.JSON(w, http.StatusOK, doc.ForWire())
 
 	case http.MethodDelete:
@@ -489,8 +498,8 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		value, found := c.db.KVGet(key)
-		if !found {
+		value, ok := c.db.KVGet(key)
+		if !ok {
 			c.responder.Error(w, http.StatusNotFound, "key not found")
 			return
 		}
@@ -638,9 +647,15 @@ func blobNamespaceAllowed(namespace string) bool {
 // extractCallerIdentity extracts the caller's identity from the request context.
 // Returns user_id, app_id, operator_session_id, cli_session_id.
 func (c *DBController) extractCallerIdentity(r *http.Request) (string, string, string, string) {
-	userID, _ := r.Context().Value(userIDKey).(string)
-	appID, _ := r.Context().Value(appIDKey).(string)
-	operatorSessionID := c.auth.ExtractOperatorSessionID(r)
+	userID, ok := r.Context().Value(userIDKey).(string)
+	if !ok {
+		userID = ""
+	}
+	appID, ok := r.Context().Value(appIDKey).(string)
+	if !ok {
+		appID = ""
+	}
+	operatorSessionID := c.auth.extractOperatorSessionIDFromMTLS(r)
 	cliSessionID := r.Header.Get(constants.HeaderCLISessionID)
 	return userID, appID, operatorSessionID, cliSessionID
 }

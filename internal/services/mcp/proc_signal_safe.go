@@ -36,20 +36,20 @@ func (t *ProcSignalSafeTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *ProcSignalSafeTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"pid": map[string]interface{}{
-				"type":        "integer",
-				"description": "Process ID to signal",
+func (t *ProcSignalSafeTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"pid": {
+				Type:        "integer",
+				Description: "Process ID to signal",
 			},
-			"signal": map[string]interface{}{
-				"type":        "string",
-				"description": "Signal name (SIGTERM, SIGKILL, SIGINT)",
+			"signal": {
+				Type:        "string",
+				Description: "Signal name (SIGTERM, SIGKILL, SIGINT)",
 			},
 		},
-		"required": []string{"pid", "signal"},
+		Required: []string{"pid", "signal"},
 	}
 }
 

@@ -13,7 +13,7 @@ test/scenario/
   scenario.go    // Scenario struct + loader
   runner.go      // fires a fixture at the REAL admission path
   report.go      // pretty trace (the theater)
-  scenario_test.go // table-driven test with TestMain
+  scenario_test.go // table-driven test
 ```
 
 ## Running the Tests
@@ -132,7 +132,7 @@ The framework uses real SQLite databases (no mocks) to verify receipt persistenc
 
 - **Setup**: `SetupTestDB()` initializes an in-memory SQLite database with the gateway schema
 - **Teardown**: `TeardownTestDB()` closes the database connection after all tests complete
-- **Lifecycle**: Database is created once in `TestMain()` and shared across all scenario tests
+- **Lifecycle**: Database is created per test and cleaned up automatically via t.Cleanup
 
 ### Receipt Verification
 

@@ -17,6 +17,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os/user"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,12 +32,12 @@ import (
 // UserService handles user management in the Operator Gateway.
 // This replaces client's UserService as the authoritative user source.
 type UserService struct {
-	db     *GatewayDBService
+	db     *CanonicalDBService
 	logger *slog.Logger
 }
 
 // NewUserService creates a new UserService.
-func NewUserService(db *GatewayDBService, logger *slog.Logger) *UserService {
+func NewUserService(db *CanonicalDBService, logger *slog.Logger) *UserService {
 	return &UserService{
 		db:     db,
 		logger: logger,
@@ -44,7 +47,7 @@ func NewUserService(db *GatewayDBService, logger *slog.Logger) *UserService {
 // CreateUser creates a new active user with a generated ID.
 // Zero-PII: No email or name is stored - only the user ID and passkey credentials.
 func (s *UserService) CreateUser() (*models.User, error) {
-	return s.createUser(false)
+	return s.createUser(false, nil)
 }
 
 // CreateBootstrapUser creates the ephemeral local-owner identity used by
@@ -52,10 +55,45 @@ func (s *UserService) CreateUser() (*models.User, error) {
 // the CSR-based registration path can identify and retire it the first time
 // a real identity is provisioned.
 func (s *UserService) CreateBootstrapUser() (*models.User, error) {
-	return s.createUser(true)
+	return s.CreateBootstrapUserWithOSUser(nil)
 }
 
-func (s *UserService) createUser(isBootstrap bool) (*models.User, error) {
+// CreateBootstrapUserWithOSUser creates a bootstrap user with the provided OS user information.
+// If localOSUser is nil, it falls back to the gateway's local OS user (for backward compatibility).
+func (s *UserService) CreateBootstrapUserWithOSUser(localOSUser *models.LocalOSUser) (*models.User, error) {
+	return s.createUser(true, localOSUser)
+}
+
+func getLocalOSUser() *models.LocalOSUser {
+	currentUser, err := user.Current()
+	if err != nil {
+		return nil
+	}
+
+	var domain, username string
+	parts := strings.SplitN(currentUser.Username, "\\", 2)
+	if len(parts) == 2 {
+		domain = parts[0]
+		username = parts[1]
+	} else {
+		username = currentUser.Username
+	}
+
+	var sid string
+	if runtime.GOOS == "windows" {
+		sid = currentUser.Uid
+	}
+
+	return &models.LocalOSUser{
+		Domain:   domain,
+		Username: username,
+		UID:      currentUser.Uid,
+		GID:      currentUser.Gid,
+		SID:      sid,
+	}
+}
+
+func (s *UserService) createUser(isBootstrap bool, localOSUser *models.LocalOSUser) (*models.User, error) {
 	s.logger.Info("[USER-SERVICE] Creating new user", "is_bootstrap", isBootstrap)
 
 	if isBootstrap {
@@ -70,6 +108,15 @@ func (s *UserService) createUser(isBootstrap bool) (*models.User, error) {
 
 	userID := uuid.New().String()
 
+	// Use provided OS user info, or fall back to gateway's local OS user
+	if localOSUser == nil {
+		localOSUser = getLocalOSUser()
+	}
+
+	// Generate WebAuthnUserID for v4 compliance (Windows Hello requires a GUID, not SID)
+	// This is a stable 16-byte GUID used for WebAuthn operations
+	webAuthnUserID := uuid.New().String()
+
 	// Zero-PII: Only user ID and passkey credentials are stored
 	user := &models.User{
 		ID:                 userID,
@@ -77,6 +124,8 @@ func (s *UserService) createUser(isBootstrap bool) (*models.User, error) {
 		Provider:           string(constants.AuthProviderPasskey),
 		Status:             constants.UserStatusActive,
 		IsBootstrap:        isBootstrap,
+		LocalOSUser:        localOSUser,
+		WebAuthnUserID:     webAuthnUserID,
 	}
 
 	data, err := json.Marshal(user)
@@ -90,6 +139,33 @@ func (s *UserService) createUser(isBootstrap bool) (*models.User, error) {
 
 	s.logger.Info("[USER-SERVICE] User created", "user_id", userID, "is_bootstrap", isBootstrap)
 	return user, nil
+}
+
+// ensureWebAuthnUserID ensures the user has a WebAuthnUserID for v4 compliance.
+// If the user doesn't have one, it generates and persists a new GUID.
+// This handles migration of existing users to the new v4 format.
+func (s *UserService) ensureWebAuthnUserID(user *models.User) error {
+	if user.WebAuthnUserID != "" {
+		return nil // Already has WebAuthnUserID
+	}
+
+	s.logger.Info("[USER-SERVICE] Migrating user to WebAuthn v4 format", "user_id", user.ID)
+
+	// Generate a new GUID for WebAuthnUserID
+	user.WebAuthnUserID = uuid.New().String()
+
+	// Persist the updated user
+	data, err := json.Marshal(user)
+	if err != nil {
+		return fmt.Errorf("failed to marshal user for migration: %w", err)
+	}
+
+	if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), user.ID, data); err != nil {
+		return fmt.Errorf("failed to migrate user to WebAuthn v4 format: %w", err)
+	}
+
+	s.logger.Info("[USER-SERVICE] User migrated to WebAuthn v4 format", "user_id", user.ID, "webauthn_user_id", user.WebAuthnUserID)
+	return nil
 }
 
 // Disable transitions a user to UserStatusDisabled and appends an audit row.
@@ -115,17 +191,15 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 			Actor:      actorUserID,
 			Target:     userID,
 			OperatorID: actorOperatorID,
-			Details: map[string]interface{}{
-				"reason":  reason,
-				"noop":    true,
-				"comment": "user was already disabled",
+			Details: &models.AdminAuditDetails{
+				Reason:  reason,
+				Noop:    true,
+				Comment: "user was already disabled",
 			},
 		})
 	}
 
-	if _, err := s.UpdateUser(userID, map[string]interface{}{
-		"status": marshaler.Status(constants.UserStatusDisabled),
-	}); err != nil {
+	if err := s.updateUserStatus(userID, constants.UserStatusDisabled); err != nil {
 		return fmt.Errorf("failed to disable user %s: %w", userID, err)
 	}
 
@@ -134,8 +208,8 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 		Actor:      actorUserID,
 		Target:     userID,
 		OperatorID: actorOperatorID,
-		Details: map[string]interface{}{
-			"reason": reason,
+		Details: &models.AdminAuditDetails{
+			Reason: reason,
 		},
 	}); err != nil {
 		// Audit write failed AFTER state change. Best we can do is log loudly
@@ -193,40 +267,47 @@ func (s *UserService) GetByID(userID string) (*models.User, error) {
 		return nil, nil
 	}
 
-	return s.docToUser(doc)
+	user, err := s.docToUser(doc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Auto-migrate existing users to WebAuthn v4 format
+	// This ensures users created before the v4 update get a WebAuthnUserID
+	if user != nil {
+		if err := s.ensureWebAuthnUserID(user); err != nil {
+			// Log migration error but don't fail the request
+			// The user can still authenticate with the fallback ID
+			s.logger.Warn("[USER-SERVICE] Failed to migrate user to WebAuthn v4 format", "user_id", userID, "error", err)
+		}
+	}
+
+	return user, nil
 }
 
-// GetOrCreateBySub retrieves a user by subject (JWT sub claim) or creates one if it doesn't exist.
-// This is used for JIT user provisioning from external IdP authentication.
-func (s *UserService) GetOrCreateBySub(sub string) (*models.User, error) {
+// GetBySub retrieves a user by subject (JWT sub claim).
+func (s *UserService) GetBySub(sub string) (*models.User, error) {
 	if sub == "" {
 		return nil, fmt.Errorf("sub is required")
 	}
+	return s.GetByID(sub)
+}
 
-	// First, try to find an existing user with this sub as the ID
-	user, err := s.GetByID(sub)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query user by sub: %w", err)
-	}
-
-	if user != nil {
-		s.logger.Debug("[USER-SERVICE] User found by sub", "sub", sub, "user_id", user.ID)
-		return user, nil
-	}
-
-	// User doesn't exist, check for an active invitation
-	invitation, err := s.FindActiveInvitationBySub(sub)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query invitations: %w", err)
+// CreateUserFromInvitation creates a new user from an invitation for JIT provisioning.
+func (s *UserService) CreateUserFromInvitation(sub string, invitation *models.Invitation) (*models.User, error) {
+	if sub == "" {
+		return nil, fmt.Errorf("sub is required")
 	}
 	if invitation == nil {
-		s.logger.Warn("[USER-SERVICE] JIT provisioning rejected: no active invitation found", "sub", sub)
-		return nil, fmt.Errorf("no active invitation found for sub: %s", sub)
+		return nil, fmt.Errorf("invitation is required")
 	}
 
 	s.logger.Info("[USER-SERVICE] JIT provisioning new user from JWT via invitation", "sub", sub, "org", invitation.OrganizationID)
 
-	user = &models.User{
+	// Generate WebAuthnUserID for v4 compliance (Windows Hello requires a GUID, not SID)
+	webAuthnUserID := uuid.New().String()
+
+	user := &models.User{
 		ID:                 sub,
 		PasskeyCredentials: []models.PasskeyCredential{},
 		Provider:           string(constants.AuthProviderJWT),
@@ -234,6 +315,8 @@ func (s *UserService) GetOrCreateBySub(sub string) (*models.User, error) {
 		OrganizationID:     invitation.OrganizationID,
 		Roles:              invitation.Roles,
 		IsBootstrap:        false,
+		LocalOSUser:        getLocalOSUser(),
+		WebAuthnUserID:     webAuthnUserID,
 	}
 
 	data, err := json.Marshal(user)
@@ -252,33 +335,46 @@ func (s *UserService) GetOrCreateBySub(sub string) (*models.User, error) {
 
 	s.logger.Info("[USER-SERVICE] JIT user created", "user_id", sub, "provider", constants.AuthProviderJWT)
 	return user, nil
-
 }
 
-// UpdateUser updates a user with the provided field changes.
-func (s *UserService) UpdateUser(userID string, updates map[string]interface{}) (*models.User, error) {
-	existing, err := s.GetByID(userID)
-	if err != nil {
-		return nil, err
+// updateUserStatus updates a user's status field.
+func (s *UserService) updateUserStatus(userID string, status constants.UserStatus) error {
+	updates := map[string]interface{}{
+		"status":     marshaler.Status(status),
+		"updated_at": time.Now().UTC().UnixMilli(),
 	}
-	if existing == nil {
-		return nil, fmt.Errorf("user not found: %s", userID)
-	}
-
-	// Add updated_at timestamp
-	updates["updated_at"] = time.Now().UTC().UnixMilli()
 
 	updateBytes, err := json.Marshal(updates)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal updates: %w", err)
+		return fmt.Errorf("failed to marshal status update: %w", err)
 	}
 
 	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, updateBytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update user: %w", err)
+		return fmt.Errorf("failed to update user status: %w", err)
 	}
 
-	return s.GetByID(userID)
+	return nil
+}
+
+// UpdatePasskeyCredentials updates a user's passkey credentials.
+func (s *UserService) UpdatePasskeyCredentials(userID string, credentials []models.PasskeyCredential) error {
+	updates := map[string]interface{}{
+		"passkey_credentials": credentials,
+		"updated_at":          time.Now().UTC().UnixMilli(),
+	}
+
+	updateBytes, err := json.Marshal(updates)
+	if err != nil {
+		return fmt.Errorf("failed to marshal credentials update: %w", err)
+	}
+
+	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, updateBytes)
+	if err != nil {
+		return fmt.Errorf("failed to update user credentials: %w", err)
+	}
+
+	return nil
 }
 
 // HasAnyUsers checks whether any users exist in the system.
@@ -321,21 +417,21 @@ func (s *UserService) docToUser(doc *models.Document) (*models.User, error) {
 
 // PersonaService handles persona management for role-based access control.
 type PersonaService struct {
-	db     *GatewayDBService
+	db     *CanonicalDBService
 	logger *slog.Logger
 }
 
 // NewPersonaService creates a new PersonaService.
-func NewPersonaService(db *GatewayDBService, logger *slog.Logger) *PersonaService {
+func NewPersonaService(db *CanonicalDBService, logger *slog.Logger) *PersonaService {
 	return &PersonaService{
 		db:     db,
 		logger: logger,
 	}
 }
 
-// GetOrCreateDefaultPersonas ensures default personas exist in the database.
-func (s *PersonaService) GetOrCreateDefaultPersonas() error {
-	defaultPersonas := []models.Persona{
+// DefaultPersonaDefinitions returns the list of default personas.
+func DefaultPersonaDefinitions() []models.Persona {
+	return []models.Persona{
 		{
 			ID:          string(constants.UserRoleAdmin),
 			Name:        string(constants.UserRoleAdmin),
@@ -367,32 +463,24 @@ func (s *PersonaService) GetOrCreateDefaultPersonas() error {
 			Roles:       []string{},
 		},
 	}
+}
 
-	for _, persona := range defaultPersonas {
-		existing, err := s.GetByID(persona.ID)
-		if err != nil {
-			return fmt.Errorf("failed to check existing persona %s: %w", persona.ID, err)
-		}
-		if existing != nil {
-			continue
-		}
+// CreatePersona creates a new persona.
+func (s *PersonaService) CreatePersona(persona *models.Persona) error {
+	now := time.Now().UTC()
+	persona.CreatedAt = now
+	persona.UpdatedAt = now
 
-		now := time.Now().UTC()
-		persona.CreatedAt = now
-		persona.UpdatedAt = now
-
-		data, err := json.Marshal(persona)
-		if err != nil {
-			return fmt.Errorf("failed to marshal persona %s: %w", persona.ID, err)
-		}
-
-		if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionPersonas), persona.ID, data); err != nil {
-			return fmt.Errorf("failed to create persona %s: %w", persona.ID, err)
-		}
-
-		s.logger.Info("[PERSONA-SERVICE] Default persona created", "persona_id", persona.ID, "name", persona.Name)
+	data, err := json.Marshal(persona)
+	if err != nil {
+		return fmt.Errorf("failed to marshal persona %s: %w", persona.ID, err)
 	}
 
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionPersonas), persona.ID, data); err != nil {
+		return fmt.Errorf("failed to create persona %s: %w", persona.ID, err)
+	}
+
+	s.logger.Info("[PERSONA-SERVICE] Persona created", "persona_id", persona.ID, "name", persona.Name)
 	return nil
 }
 
@@ -506,7 +594,7 @@ func (s *UserService) FindActiveInvitationBySub(sub string) (*models.Invitation,
 	}
 	invitation.ID = docs[0].ID
 
-	if !invitation.IsValid() {
+	if invitation.IsValid() != nil {
 		return nil, nil // Expired
 	}
 
@@ -515,23 +603,52 @@ func (s *UserService) FindActiveInvitationBySub(sub string) (*models.Invitation,
 
 // ConsumeInvitation marks an invitation as consumed.
 func (s *UserService) ConsumeInvitation(id string) error {
-	updates := map[string]interface{}{
-		"is_consumed": true,
-		"consumed_at": time.Now().UTC().UnixMilli(),
+	invitation, err := s.GetInvitationByID(id)
+	if err != nil {
+		return fmt.Errorf("failed to load invitation: %w", err)
+	}
+	if invitation == nil {
+		return fmt.Errorf("invitation not found: %s", id)
 	}
 
-	updateBytes, err := json.Marshal(updates)
+	invitation.IsConsumed = true
+	invitation.ConsumedAt = time.Now().UTC()
+
+	data, err := json.Marshal(invitation)
 	if err != nil {
-		return fmt.Errorf("failed to marshal updates: %w", err)
+		return fmt.Errorf("failed to marshal invitation: %w", err)
 	}
 
-	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionInvitations), id, updateBytes)
-	if err != nil {
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionInvitations), id, data); err != nil {
 		return fmt.Errorf("failed to update invitation: %w", err)
 	}
 
 	s.logger.Info("[USER-SERVICE] Invitation consumed", "invitation_id", id)
 	return nil
+}
+
+// GetInvitationByID retrieves an invitation by ID.
+func (s *UserService) GetInvitationByID(id string) (*models.Invitation, error) {
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionInvitations), id)
+	if err != nil {
+		return nil, err
+	}
+	if doc == nil {
+		return nil, nil
+	}
+
+	var invitation models.Invitation
+	docData, err := json.Marshal(doc.ForWire())
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal doc data: %w", err)
+	}
+
+	if err := json.Unmarshal(docData, &invitation); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal invitation: %w", err)
+	}
+	invitation.ID = doc.ID
+
+	return &invitation, nil
 }
 
 // CreateInvitation creates a new invitation for a user to join an organization.

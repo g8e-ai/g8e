@@ -20,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/google/uuid"
 )
 
 // OperatorRegistrationRequest is the inbound body for /api/pki/device-enroll (CSR-based enrollment).
@@ -32,6 +33,40 @@ type OperatorRegistrationRequest struct {
 	Arch              string `json:"arch"`
 	Username          string `json:"username"`
 	IPAddress         string `json:"ip_address,omitempty"`
+}
+
+// BootstrapRequest is the inbound body for /api/v1/auth/bootstrap.
+type BootstrapRequest struct {
+	CSR               string       `json:"csr_pem"`
+	CLICSR            string       `json:"cli_csr_pem,omitempty"`
+	SystemFingerprint string       `json:"system_fingerprint"`
+	LocalOSUser       *LocalOSUser `json:"local_os_user,omitempty"`
+}
+
+// CLIEnrollRequest is the inbound body for /api/v1/auth/cli/enroll.
+type CLIEnrollRequest struct {
+	CLICSR            string       `json:"cli_csr_pem"`
+	SystemFingerprint string       `json:"system_fingerprint"`
+	LocalOSUser       *LocalOSUser `json:"local_os_user,omitempty"`
+}
+
+// DeviceEnrollRequest is the inbound body for /api/v1/auth/device/enroll.
+type DeviceEnrollRequest struct {
+	CSR               string `json:"csr_pem"`
+	CLICSR            string `json:"cli_csr_pem,omitempty"`
+	SystemFingerprint string `json:"system_fingerprint"`
+	Hostname          string `json:"hostname"`
+}
+
+// PasskeyChallengeRequest is the inbound body for passkey authentication challenge endpoints.
+type PasskeyChallengeRequest struct {
+	UserID string `json:"user_id"`
+}
+
+// PasskeyRegisterChallengeRequest is the inbound body for passkey registration challenge endpoints.
+type PasskeyRegisterChallengeRequest struct {
+	UserID   string `json:"user_id"`
+	UserName string `json:"user_name"`
 }
 
 // OperatorRegistrationResponse is the response for /api/pki/device-enroll (CSR-based enrollment).
@@ -218,15 +253,34 @@ type Authenticator struct {
 
 // WebAuthnUser implements webauthn.User interface.
 func (u *User) WebAuthnID() []byte {
+	// For WebAuthn v4 compliance (2026), use a dedicated GUID instead of Windows SID
+	// Windows Hello v4 requires a stable 16-byte GUID, not a variable-length SID string
+	if u.WebAuthnUserID != "" {
+		// Parse the GUID string and return as bytes (16 bytes)
+		guidBytes, err := uuid.Parse(u.WebAuthnUserID)
+		if err == nil {
+			return guidBytes[:]
+		}
+		// If GUID parsing fails, fall back to ID
+	}
+	// Fallback to internal user ID for backward compatibility or when WebAuthnUserID is not set
 	return []byte(u.ID)
 }
 
 func (u *User) WebAuthnName() string {
+	// For Windows Hello, use the OS username as the WebAuthn identifier
+	if u.LocalOSUser != nil && u.LocalOSUser.Username != "" {
+		return u.LocalOSUser.Username
+	}
 	// Zero-PII: Use user ID as the WebAuthn identifier instead of email
 	return u.ID
 }
 
 func (u *User) WebAuthnDisplayName() string {
+	// For Windows Hello, use the OS username as the display name
+	if u.LocalOSUser != nil && u.LocalOSUser.Username != "" {
+		return u.LocalOSUser.Username
+	}
 	// Zero-PII: Use user ID as the display name instead of name
 	return u.ID
 }
@@ -268,6 +322,24 @@ type WebSession struct {
 	LoginMethod       string `json:"login_method,omitempty"`        // "passkey", "windows_cert_store", "p12_import", etc.
 }
 
+// OperatorSession represents an authenticated Operator session.
+// Operator sessions authenticate the host agent via mTLS URI SAN and are used
+// by g8e-compatible agentic ensembles to look up sessions by ID.
+// Authority: protocol/constants/collections.json (operator_sessions)
+type OperatorSession struct {
+	ID                string `json:"id"`
+	SessionType       string `json:"session_type"`
+	UserID            string `json:"user_id"`
+	OrganizationID    string `json:"organization_id"`
+	OperatorID        string `json:"operator_id"`
+	IsActive          bool   `json:"is_active"`
+	CreatedAt         string `json:"created_at"`
+	AbsoluteExpiresAt string `json:"absolute_expires_at"`
+	IdleExpiresAt     string `json:"idle_expires_at"`
+	LastActivity      string `json:"last_activity"`
+	LoginMethod       string `json:"login_method"`
+}
+
 // CLISession represents an authenticated CLI/BYO session.
 // Strictly disjoint from operator_session_id.
 type CLISession struct {
@@ -284,6 +356,15 @@ type CLISession struct {
 	SessionType       string    `json:"session_type"`
 	IsActive          bool      `json:"is_active"`
 	LoginMethod       string    `json:"login_method"`
+}
+
+// LocalOSUser represents local OS user account information.
+type LocalOSUser struct {
+	Domain   string `json:"domain,omitempty"`
+	Username string `json:"username,omitempty"`
+	UID      string `json:"uid,omitempty"`
+	GID      string `json:"gid,omitempty"`
+	SID      string `json:"sid,omitempty"`
 }
 
 // User represents a platform user with passkey credentials.
@@ -308,6 +389,9 @@ type User struct {
 
 	Status      constants.UserStatus `json:"status,omitempty"`
 	IsBootstrap bool                 `json:"is_bootstrap,omitempty"`
+
+	LocalOSUser    *LocalOSUser `json:"local_os_user,omitempty"`
+	WebAuthnUserID string       `json:"webauthn_user_id,omitempty"` // GUID for WebAuthn v4 compliance (Windows Hello)
 }
 
 // IsActive reports whether the user is permitted to authenticate. Treats the
@@ -324,13 +408,20 @@ func (u *User) IsActive() bool {
 // New admin-side state changes (retire, disable, role mutation, etc.) MUST
 // append a row here so the lifecycle is auditable from the protocol Gateway.
 type AdminAuditEntry struct {
-	ID         string                 `json:"id"`
-	At         time.Time              `json:"at"`
-	Action     string                 `json:"action"`
-	Actor      string                 `json:"actor,omitempty"`
-	Target     string                 `json:"target,omitempty"`
-	OperatorID string                 `json:"operator_id,omitempty"`
-	Details    map[string]interface{} `json:"details,omitempty"`
+	ID         string             `json:"id"`
+	At         time.Time          `json:"at"`
+	Action     string             `json:"action"`
+	Actor      string             `json:"actor,omitempty"`
+	Target     string             `json:"target,omitempty"`
+	OperatorID string             `json:"operator_id,omitempty"`
+	Details    *AdminAuditDetails `json:"details,omitempty"`
+}
+
+// AdminAuditDetails represents the typed details field for AdminAuditEntry.
+type AdminAuditDetails struct {
+	Reason  string `json:"reason,omitempty"`
+	Noop    bool   `json:"noop,omitempty"`
+	Comment string `json:"comment,omitempty"`
 }
 
 // Admin audit action constants. Keep these stable - downstream tooling and

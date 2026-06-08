@@ -132,7 +132,7 @@ func BuildUniversalResultEnvelope(
 		OperatorId:        senderID,
 		OperatorSessionId: cfg.OperatorSessionId,
 		EventType:         string(eventType),
-		ActionType:        constants.MapEventTypeToResultActionType(eventType),
+		ActionType:        string(constants.MapEventTypeToResultActionType(eventType)),
 		Payload:           payloadBytes,
 		IntentData:        intentDataStruct,
 		CaseId:            caseID,

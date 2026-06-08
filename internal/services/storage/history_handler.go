@@ -20,19 +20,19 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
 
 type HistoryHandler struct {
-	auditVault *AuditVaultService
-	ledger     *LedgerService
+	auditStore *SQLAuditStore
+	ledger     *GitLedgerService
 	logger     *slog.Logger
 }
 
-func NewHistoryHandler(auditVault *AuditVaultService, ledger *LedgerService, logger *slog.Logger) *HistoryHandler {
+func NewHistoryHandler(auditStore *SQLAuditStore, ledger *GitLedgerService, logger *slog.Logger) *HistoryHandler {
 	return &HistoryHandler{
-		auditVault: auditVault,
+		auditStore: auditStore,
 		ledger:     ledger,
 		logger:     logger,
 	}
@@ -60,12 +60,12 @@ func (hh *HistoryHandler) HandleFetchHistory(requestJSON []byte) (*operatorv1.Fe
 		"limit", limit,
 		"offset", offset)
 
-	session, err := hh.auditVault.GetSession(request.OperatorSessionId)
+	session, err := hh.auditStore.GetOperatorSession(request.OperatorSessionId)
 	if err != nil {
 		return hh.fetchHistoryError(fmt.Errorf("failed to get session: %w", err).Error()), nil
 	}
 
-	events, err := hh.auditVault.GetEvents(request.OperatorSessionId, limit, offset)
+	events, err := hh.auditStore.GetEvents(request.OperatorSessionId, limit, offset)
 	if err != nil {
 		return hh.fetchHistoryError(fmt.Errorf("failed to get events: %w", err).Error()), nil
 	}
@@ -109,7 +109,7 @@ func (hh *HistoryHandler) HandleFetchHistory(requestJSON []byte) (*operatorv1.Fe
 		}
 
 		if event.Type == constants.Event.Operator.FileEdit.Completed {
-			mutations, err := hh.auditVault.GetFileMutations(event.ID)
+			mutations, err := hh.auditStore.GetFileMutations(event.ID)
 			if err != nil {
 				hh.logger.Warn("Failed to get file mutations", "event_id", event.ID, string(constants.ConnectionStateError), err)
 			} else {
@@ -213,7 +213,7 @@ func (hh *HistoryHandler) GetFileAtCommit(filePath, commitHash, operatorSessionI
 }
 
 func (hh *HistoryHandler) IsEnabled() bool {
-	return hh != nil && hh.auditVault != nil && hh.auditVault.IsEnabled()
+	return hh != nil && hh.auditStore != nil && hh.auditStore.IsEnabled()
 }
 
 func (hh *HistoryHandler) fetchHistoryError(message string) *operatorv1.FetchHistoryResult {

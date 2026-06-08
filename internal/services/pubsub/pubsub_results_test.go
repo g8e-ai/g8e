@@ -16,6 +16,7 @@ package pubsub
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -49,7 +50,7 @@ func TestNewPubSubResultsService(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 		assert.NotNil(t, svc)
 	})
@@ -61,7 +62,7 @@ func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		heartbeat := &pb.HeartbeatResult{
@@ -86,7 +87,7 @@ func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.CommandResult{
@@ -118,7 +119,7 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.FsListResult{
@@ -147,7 +148,7 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.FsListResult{
@@ -175,16 +176,17 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 func TestPubSubResultsService_PublishFsGrepResult(t *testing.T) {
 	t.Run("successful fs grep publish", func(t *testing.T) {
 		t.Parallel()
+		tmpDir := t.TempDir()
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.FsGrepResult{
 			ExecutionId: "req-123",
 			Status:      pb.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
-			Matches:     []*pb.FsGrepMatch{{Path: "/tmp/test.txt", LineNumber: 1, Content: "match"}},
+			Matches:     []*pb.FsGrepMatch{{Path: filepath.Join(tmpDir, "test.txt"), LineNumber: 1, Content: "match"}},
 		}
 
 		originalMsg := &PubSubCommandMessage{
@@ -207,7 +209,7 @@ func TestPubSubResultsService_PublishFsGrepResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.FsGrepResult{
@@ -238,7 +240,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.CommandResult{
@@ -282,7 +284,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.CommandResult{
@@ -312,7 +314,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.CommandResult{
@@ -341,16 +343,17 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 	t.Run("successful publish", func(t *testing.T) {
 		t.Parallel()
+		tmpDir := t.TempDir()
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.FileEditResult{
 			ExecutionId: "req-123",
 			Operation:   "write",
-			FilePath:    "/tmp/test.txt",
+			FilePath:    filepath.Join(tmpDir, "test.txt"),
 			Status:      pb.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 		}
 
@@ -371,16 +374,17 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 
 	t.Run("publishes failed status on error", func(t *testing.T) {
 		t.Parallel()
+		tmpDir := t.TempDir()
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		svc, err := NewPubSubResultsService(cfg, logger, db)
 		require.NoError(t, err)
 
 		result := &pb.FileEditResult{
 			ExecutionId:  "req-123",
 			Operation:    "write",
-			FilePath:     "/tmp/test.txt",
+			FilePath:     filepath.Join(tmpDir, "test.txt"),
 			Status:       pb.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			ErrorMessage: "permission denied",
 		}

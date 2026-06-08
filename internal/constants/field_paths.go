@@ -27,8 +27,9 @@ const FieldPathCases = "cases"
 
 // GetFieldPaths returns the field path registry for all collections.
 // This is the canonical in-memory representation of protocol/constants/field_paths.json.
+// Returns a deep copy to prevent mutation of the canonical data.
 func GetFieldPaths() map[string]FieldPathConfig {
-	return map[string]FieldPathConfig{
+	canonical := map[string]FieldPathConfig{
 		FieldPathInvestigations: {
 			AllowedPaths: []string{
 				"suspect_ip_addresses",
@@ -95,6 +96,16 @@ func GetFieldPaths() map[string]FieldPathConfig {
 			},
 		},
 	}
+
+	// Return a deep copy to prevent mutation
+	result := make(map[string]FieldPathConfig, len(canonical))
+	for k, v := range canonical {
+		result[k] = FieldPathConfig{
+			AllowedPaths:   append([]string(nil), v.AllowedPaths...),
+			ForbiddenPaths: append([]string(nil), v.ForbiddenPaths...),
+		}
+	}
+	return result
 }
 
 // FieldPathConfig defines allowed and forbidden paths for a collection

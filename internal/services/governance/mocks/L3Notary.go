@@ -3,6 +3,8 @@
 package mocks
 
 import (
+	"context"
+
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 
 	mock "github.com/stretchr/testify/mock"
@@ -13,9 +15,9 @@ type L3Notary struct {
 	mock.Mock
 }
 
-// VerifyL3Proof provides a mock function with given fields: userID, transactionHash, cliSessionID, proof
-func (_m *L3Notary) VerifyL3Proof(userID string, transactionHash string, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
-	ret := _m.Called(userID, transactionHash, cliSessionID, proof)
+// VerifyL3Proof provides a mock function with given fields: ctx, userID, transactionHash, cliSessionID, proof
+func (_m *L3Notary) VerifyL3Proof(ctx context.Context, userID string, transactionHash string, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+	ret := _m.Called(ctx, userID, transactionHash, cliSessionID, proof)
 
 	if len(ret) == 0 {
 		panic("no return value specified for VerifyL3Proof")
@@ -23,17 +25,17 @@ func (_m *L3Notary) VerifyL3Proof(userID string, transactionHash string, cliSess
 
 	var r0 bool
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string, string, string, *commonv1.L3Proof) (bool, error)); ok {
-		return rf(userID, transactionHash, cliSessionID, proof)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, *commonv1.L3Proof) (bool, error)); ok {
+		return rf(ctx, userID, transactionHash, cliSessionID, proof)
 	}
-	if rf, ok := ret.Get(0).(func(string, string, string, *commonv1.L3Proof) bool); ok {
-		r0 = rf(userID, transactionHash, cliSessionID, proof)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, *commonv1.L3Proof) bool); ok {
+		r0 = rf(ctx, userID, transactionHash, cliSessionID, proof)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
 
-	if rf, ok := ret.Get(1).(func(string, string, string, *commonv1.L3Proof) error); ok {
-		r1 = rf(userID, transactionHash, cliSessionID, proof)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, string, *commonv1.L3Proof) error); ok {
+		r1 = rf(ctx, userID, transactionHash, cliSessionID, proof)
 	} else {
 		r1 = ret.Error(1)
 	}

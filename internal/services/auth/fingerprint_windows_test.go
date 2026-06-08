@@ -33,7 +33,7 @@ func TestGetWindowsMachineID(t *testing.T) {
 		machineID, err := getWindowsMachineID(logger)
 		require.NoError(t, err)
 		require.NotEmpty(t, machineID)
-		
+
 		// MachineGuid should be a UUID without braces or dashes
 		// After cleaning, it should be 32 hex characters
 		require.Len(t, machineID, 32, "MachineID should be 32 hex characters after cleaning")
@@ -43,7 +43,7 @@ func TestGetWindowsMachineID(t *testing.T) {
 		t.Parallel()
 		machineID, err := getWindowsMachineID(logger)
 		require.NoError(t, err)
-		
+
 		require.False(t, strings.Contains(machineID, "{"), "MachineID should not contain braces")
 		require.False(t, strings.Contains(machineID, "}"), "MachineID should not contain braces")
 		require.False(t, strings.Contains(machineID, "-"), "MachineID should not contain dashes")

@@ -39,13 +39,13 @@ func (t *ProcMetricTopTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *ProcMetricTopTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"limit": map[string]interface{}{
-				"type":        "integer",
-				"description": "Maximum number of processes to return (default 10)",
+func (t *ProcMetricTopTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"limit": {
+				Type:        "integer",
+				Description: "Maximum number of processes to return (default 10)",
 			},
 		},
 	}
@@ -53,11 +53,9 @@ func (t *ProcMetricTopTool) InputSchema() map[string]interface{} {
 
 // Execute implements the tool logic.
 func (t *ProcMetricTopTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		Limit int `json:"limit,omitempty"`
-	}
+	var req ProcMetricTopRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("proc_metric_top: invalid arguments: %w", err)
 	}
 
 	limit := req.Limit
@@ -68,10 +66,10 @@ func (t *ProcMetricTopTool) Execute(ctx context.Context, args json.RawMessage) (
 	procDir := "/proc"
 	entries, err := os.ReadDir(procDir)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to read /proc: %w", err)
+		return CallToolResult{}, fmt.Errorf("proc_metric_top: failed to read /proc: %w", err)
 	}
 
-	var processes []map[string]interface{}
+	var processes []ProcessInfo
 
 	for _, entry := range entries {
 		if ctx.Err() != nil {
@@ -103,20 +101,29 @@ func (t *ProcMetricTopTool) Execute(ctx context.Context, args json.RawMessage) (
 			name = name[1 : len(name)-1]
 		}
 
-		utime, _ := strconv.ParseFloat(statFields[13], 64)
-		stime, _ := strconv.ParseFloat(statFields[14], 64)
+		utime, err := strconv.ParseFloat(statFields[13], 64)
+		if err != nil {
+			continue
+		}
+		stime, err := strconv.ParseFloat(statFields[14], 64)
+		if err != nil {
+			continue
+		}
 		totalTime := utime + stime
 
-		rss, _ := strconv.ParseInt(statFields[23], 10, 64)
+		rss, err := strconv.ParseInt(statFields[23], 10, 64)
+		if err != nil {
+			continue
+		}
 		memoryMB := float64(rss) * 4096 / (1024 * 1024)
 
-		processes = append(processes, map[string]interface{}{
-			"pid":         pid,
-			"name":        name,
-			"cpu_percent": totalTime,
-			"memory_mb":   memoryMB,
-			"user":        string(constants.SystemHealthUnknown),
-			"command":     name,
+		processes = append(processes, ProcessInfo{
+			PID:        pid,
+			Name:       name,
+			CPUPercent: totalTime,
+			MemoryMB:   memoryMB,
+			User:       string(constants.SystemHealthUnknown),
+			Command:    name,
 		})
 	}
 
@@ -124,12 +131,12 @@ func (t *ProcMetricTopTool) Execute(ctx context.Context, args json.RawMessage) (
 		processes = processes[:limit]
 	}
 
-	result := map[string]interface{}{
-		"processes": processes,
+	result := ProcMetricTopResult{
+		Processes: processes,
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("proc_metric_top: failed to marshal result: %w", err)
 	}
 
 	return CallToolResult{

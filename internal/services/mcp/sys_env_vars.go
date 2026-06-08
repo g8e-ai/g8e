@@ -35,17 +35,17 @@ func (t *SysEnvVarsTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *SysEnvVarsTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"pattern": map[string]interface{}{
-				"type":        "string",
-				"description": "Optional pattern to filter variable names (e.g., 'G8E_*' for g8e-specific vars)",
+func (t *SysEnvVarsTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"pattern": {
+				Type:        "string",
+				Description: "Optional pattern to filter variable names (e.g., 'G8E_*' for g8e-specific vars)",
 			},
-			"redact_secrets": map[string]interface{}{
-				"type":        "boolean",
-				"description": "Whether to redact sensitive values (default true)",
+			"redact_secrets": {
+				Type:        "boolean",
+				Description: "Whether to redact sensitive values (default true)",
 			},
 		},
 	}

@@ -149,7 +149,10 @@ func canonicalizeValue(v interface{}) string {
 		return ""
 	default:
 		// Fallback to JSON for unknown types
-		bytes, _ := json.Marshal(v)
+		bytes, err := json.Marshal(v)
+		if err != nil {
+			return ""
+		}
 		return string(bytes)
 	}
 }

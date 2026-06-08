@@ -53,19 +53,45 @@ func TestLibsecretBackend_StoreRetrieveDelete(t *testing.T) {
 		testKey[i] = byte(i)
 	}
 
-	err = backend.StoreMasterKey(testKey)
-	require.NoError(t, err)
+	tests := []struct {
+		name string
+		fn   func(t *testing.T)
+	}{
+		{
+			name: "store",
+			fn: func(t *testing.T) {
+				err := backend.StoreMasterKey(testKey)
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "retrieve",
+			fn: func(t *testing.T) {
+				retrievedKey, err := backend.RetrieveMasterKey()
+				assert.NoError(t, err)
+				assert.Equal(t, testKey, retrievedKey)
+			},
+		},
+		{
+			name: "delete",
+			fn: func(t *testing.T) {
+				err := backend.DeleteMasterKey()
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "retrieve after delete",
+			fn: func(t *testing.T) {
+				_, err := backend.RetrieveMasterKey()
+				assert.Error(t, err)
+				assert.Equal(t, ErrKeyNotFound, err)
+			},
+		},
+	}
 
-	retrievedKey, err := backend.RetrieveMasterKey()
-	require.NoError(t, err)
-	assert.Equal(t, testKey, retrievedKey)
-
-	err = backend.DeleteMasterKey()
-	require.NoError(t, err)
-
-	_, err = backend.RetrieveMasterKey()
-	assert.Error(t, err)
-	assert.Equal(t, ErrKeyNotFound, err)
+	for _, tt := range tests {
+		t.Run(tt.name, tt.fn)
+	}
 }
 
 func TestLibsecretBackend_RetrieveNotFound(t *testing.T) {
@@ -78,6 +104,7 @@ func TestLibsecretBackend_RetrieveNotFound(t *testing.T) {
 	backend, err := newLibsecretBackend()
 	require.NoError(t, err)
 
+	// Ensure key doesn't exist
 	err = backend.DeleteMasterKey()
 	require.NoError(t, err)
 
@@ -130,19 +157,45 @@ func TestFileBackend_StoreRetrieveDelete(t *testing.T) {
 		testKey[i] = byte(i)
 	}
 
-	err = backend.StoreMasterKey(testKey)
-	require.NoError(t, err)
+	tests := []struct {
+		name string
+		fn   func(t *testing.T)
+	}{
+		{
+			name: "store",
+			fn: func(t *testing.T) {
+				err := backend.StoreMasterKey(testKey)
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "retrieve",
+			fn: func(t *testing.T) {
+				retrievedKey, err := backend.RetrieveMasterKey()
+				assert.NoError(t, err)
+				assert.Equal(t, testKey, retrievedKey)
+			},
+		},
+		{
+			name: "delete",
+			fn: func(t *testing.T) {
+				err := backend.DeleteMasterKey()
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "retrieve after delete",
+			fn: func(t *testing.T) {
+				_, err := backend.RetrieveMasterKey()
+				assert.Error(t, err)
+				assert.Equal(t, ErrKeyNotFound, err)
+			},
+		},
+	}
 
-	retrievedKey, err := backend.RetrieveMasterKey()
-	require.NoError(t, err)
-	assert.Equal(t, testKey, retrievedKey)
-
-	err = backend.DeleteMasterKey()
-	require.NoError(t, err)
-
-	_, err = backend.RetrieveMasterKey()
-	assert.Error(t, err)
-	assert.Equal(t, ErrKeyNotFound, err)
+	for _, tt := range tests {
+		t.Run(tt.name, tt.fn)
+	}
 }
 
 func TestFileBackend_RetrieveNotFound(t *testing.T) {
@@ -164,11 +217,29 @@ func TestFileBackend_DeleteIdempotent(t *testing.T) {
 	backend, err := newFileBackend(secretsDir)
 	require.NoError(t, err)
 
-	err = backend.DeleteMasterKey()
-	require.NoError(t, err)
+	tests := []struct {
+		name string
+		fn   func(t *testing.T)
+	}{
+		{
+			name: "first delete",
+			fn: func(t *testing.T) {
+				err := backend.DeleteMasterKey()
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "second delete",
+			fn: func(t *testing.T) {
+				err := backend.DeleteMasterKey()
+				assert.NoError(t, err)
+			},
+		},
+	}
 
-	err = backend.DeleteMasterKey()
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, tt.fn)
+	}
 }
 
 func TestFileBackend_WithRealKeystore(t *testing.T) {

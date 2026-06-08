@@ -20,16 +20,18 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -98,11 +100,11 @@ type CommandServiceConfig struct {
 	FileEdit          *execution.FileEditService
 	PubSubClient      PubSubClient
 	ResultsService    ResultsPublisher
-	LocalStore        *storage.LocalStoreService
-	AuditVault        *storage.AuditVaultService
-	Ledger            *storage.LedgerService
+	ExecutionVault    interfaces.ExecutionVault
+	AuditStore        *storage.SQLAuditStore
+	Ledger            *storage.GitLedgerService
 	HistoryHandler    *storage.HistoryHandler
-	Sovereignty       *sovereignty.SovereigntyService
+	Scrubbing         *scrubbing.ScrubbingService
 	L3Notary          governance.L3Notary
 	ReplayStore       governance.ReplayStore
 	StateRootProvider governance.StateRootProvider
@@ -126,7 +128,9 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	client := c.PubSubClient
 	if client == nil && c.Config.PubSubURL != "" {
 		var err error
-		client, err = NewOperatorPubSubClient(c.Config.PubSubURL, c.Config.TLSServerName, c.Logger)
+		// Pass nil for tlsConfig - this CLI command uses the legacy global state
+		// TODO: Migrate CLI commands to DI-based TLS config
+		client, err = NewOperatorPubSubClient(c.Config.PubSubURL, c.Config.TLSServerName, c.Logger, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Operator pub/sub client: %w", err)
 		}
@@ -151,27 +155,25 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 	rs.commands = NewCommandService(c.Config, c.Logger, c.Execution)
 	rs.commands.results = c.ResultsService
-	rs.commands.sovereignty = c.Sovereignty
-	rs.commands.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Sovereignty, c.LocalStore)
-	rs.commands.auditVault = c.AuditVault
-	rs.commands.localStore = c.LocalStore
+	rs.commands.scrubbing = c.Scrubbing
+	rs.commands.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Scrubbing, c.ExecutionVault)
+	rs.commands.auditStore = c.AuditStore
 	rs.commands.ledger = c.Ledger
 	rs.commands.historyHandler = c.HistoryHandler
 
 	rs.fileOps = NewFileOpsService(c.Config, c.Logger, c.FileEdit, client)
 	rs.fileOps.results = c.ResultsService
-	rs.fileOps.sovereignty = c.Sovereignty
-	rs.fileOps.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Sovereignty, c.LocalStore)
-	rs.fileOps.auditVault = c.AuditVault
+	rs.fileOps.scrubbing = c.Scrubbing
+	rs.fileOps.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Scrubbing, c.ExecutionVault)
+	rs.fileOps.auditStore = c.AuditStore
 	rs.fileOps.ledger = c.Ledger
 
 	rs.ports = NewPortService(c.Config, c.Logger, client)
 
-	rs.audit = NewAuditService(c.Config, c.Logger)
-	rs.audit.auditVault = c.AuditVault
+	rs.audit = NewAuditService(c.Config, c.Logger, c.AuditStore)
 
 	rs.history = NewHistoryService(c.Config, c.Logger, client)
-	rs.history.localStore = c.LocalStore
+	rs.history.executionVault = c.ExecutionVault
 	rs.history.historyHandler = c.HistoryHandler
 
 	rs.mcpGateway = c.MCPGateway
@@ -218,19 +220,19 @@ func (rs *PubSubCommandService) initializeGovernance(c CommandServiceConfig, ser
 		c.ConsensusSigningKey,
 	)
 
-	// Initialize L5Actuator with trusted nodes and audit vault
-	// SovereigntyService handles data scrubbing/rehydration at the execution boundary
+	// Initialize L5Actuator with trusted nodes and audit store
+	// ScrubbingService handles data scrubbing/rehydration at the execution boundary
 	rs.actuator = &governance.L5Actuator{
 		Logger:            c.Logger,
 		SignerStore:       rs.signerStore,
 		Execution:         c.Execution,
-		AuditVault:        c.AuditVault,
-		AuditStore:        c.TransactionAudit,
+		SQLAuditStore:     c.AuditStore,
+		ConsoleAuditStore: c.TransactionAudit,
 		L3Notary:          c.L3Notary,
 		StateRootProvider: c.StateRootProvider,
 		Ctx:               serviceCtx,
 		ExecutionHandler:  rs, // PubSubCommandService implements ExecutionHandler
-		Sovereignty:       c.Sovereignty,
+		Scrubbing:         c.Scrubbing,
 		SigningKey:        c.ActuatorSigningKey,
 		KeyID:             c.ActuatorKeyID,
 	}
@@ -271,9 +273,16 @@ func (rs *PubSubCommandService) initializeGovernance(c CommandServiceConfig, ser
 		rs.mcpGateway.SetA2ADependencies(c.Config.Gateway.A2ADownstreamURL)
 	}
 
+	var signerStoreType, l4wardenType string
+	if rs.signerStore != nil {
+		signerStoreType = reflect.TypeOf(rs.signerStore).Elem().Name()
+	}
+	if rs.l4warden != nil {
+		l4wardenType = reflect.TypeOf(rs.l4warden).Elem().Name()
+	}
 	c.Logger.Info("governance services initialized",
-		"signer_store_configured", rs.signerStore != nil,
-		"transaction_verifier_enabled", rs.l4warden != nil)
+		"signer_store", signerStoreType,
+		"transaction_verifier", l4wardenType)
 	if c.Config.OperatorID != "" {
 		c.Logger.Info("Consensus node identity", "node_id", c.Config.OperatorID)
 	}
@@ -295,11 +304,13 @@ func (rs *PubSubCommandService) buildHandlers() {
 		constants.Event.Operator.RestoreFile.Requested:      rs.history.HandleRestoreFileRequest,
 		constants.Event.Operator.ShutdownRequested:          func(ctx context.Context, msg *PubSubCommandMessage) { rs.handleShutdownRequest(msg) },
 		constants.Event.Operator.Eval.AnswerRequested:       rs.handleEvalAnswerRequest,
-		constants.Event.Operator.Audit.UserMsg:              rs.audit.HandleUserMsgRequest,
-		constants.Event.Operator.Audit.AIMsg:                rs.audit.HandleAIMsgRequest,
-		constants.Event.Operator.Audit.DirectCmd:            rs.audit.HandleDirectCmdRequest,
-		constants.Event.Operator.Audit.DirectCmdResult:      rs.audit.HandleDirectCmdResultRequest,
-		constants.Event.Operator.FetchFileDiff.Requested:    rs.history.HandleFetchFileDiffRequest,
+		constants.Event.Operator.Audit.UserMsg:              func(ctx context.Context, msg *PubSubCommandMessage) { _ = rs.audit.HandleUserMsgRequest(ctx, msg) },
+		constants.Event.Operator.Audit.AIMsg:                func(ctx context.Context, msg *PubSubCommandMessage) { _ = rs.audit.HandleAIMsgRequest(ctx, msg) },
+		constants.Event.Operator.Audit.DirectCmd:            func(ctx context.Context, msg *PubSubCommandMessage) { _ = rs.audit.HandleDirectCmdRequest(ctx, msg) },
+		constants.Event.Operator.Audit.DirectCmdResult: func(ctx context.Context, msg *PubSubCommandMessage) {
+			_ = rs.audit.HandleDirectCmdResultRequest(ctx, msg)
+		},
+		constants.Event.Operator.FetchFileDiff.Requested: rs.history.HandleFetchFileDiffRequest,
 		constants.Event.Operator.Mcp.CallRequested: func(ctx context.Context, msg *PubSubCommandMessage) {
 			if _, err := rs.handleMcpCallRequestSync(ctx, msg); err != nil {
 				rs.logger.Error("MCP call request handler failed", "error", err)
@@ -348,7 +359,7 @@ func (rs *PubSubCommandService) Start(ctx context.Context) error {
 		}()
 	} else {
 		rs.logger.Info("Command service starting in Gateway mode (no pub/sub subscription)",
-			"mode", string(constants.GatewayModeMode))
+			"mode", string(constants.GatewayModeGateway))
 	}
 
 	rs.heartbeat.StartSchedulerUnlocked()
@@ -588,7 +599,7 @@ func (rs *PubSubCommandService) handleGovernanceEnvelope(env *govpkg.GovernanceE
 			rs.logger.Error("Transaction verification failed - command rejected",
 				string(constants.ConnectionStateError), err,
 				"message_id", env.Id)
-			// Log blocked transaction to audit vault
+			// Log blocked transaction to audit store
 			rs.logBlockedTransaction(env, err)
 			return
 		}
@@ -788,13 +799,13 @@ func (rs *PubSubCommandService) handleA2aCallRequestSync(ctx context.Context, ms
 func (rs *PubSubCommandService) handleAppInvestigationCreatedSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	rs.logger.Info("App investigation creation request received", "investigation_id", msg.ID)
 
-	if rs.actuator == nil || rs.actuator.AuditStore == nil {
-		return "", errors.New("actuator or AuditStore not configured")
+	if rs.actuator == nil || rs.actuator.ConsoleAuditStore == nil {
+		return "", errors.New("actuator or ConsoleAuditStore not configured")
 	}
 
 	// DocSet expects collection, id, and data.
 	// For APP_INVESTIGATION_CREATED, the ID is the investigation ID from the envelope.
-	if err := rs.actuator.AuditStore.DocSet(string(constants.CollectionInvestigations), msg.ID, msg.Payload); err != nil {
+	if err := rs.actuator.ConsoleAuditStore.DocSet(string(constants.CollectionInvestigations), msg.ID, msg.Payload); err != nil {
 		rs.logger.Error("Failed to create investigation document", string(constants.ConnectionStateError), err, "investigation_id", msg.ID)
 		return "", fmt.Errorf("failed to create investigation document: %w", err)
 	}
@@ -868,7 +879,7 @@ func (rs *PubSubCommandService) SendAutomaticHeartbeat() {
 // logBlockedTransaction records a blocked/rejected transaction using the ActionReceiptRecord schema.
 // This ensures consistency with accepted/failed Actuator receipts - all transaction outcomes use the same canonical schema.
 func (rs *PubSubCommandService) logBlockedTransaction(env *govpkg.GovernanceEnvelope, rejectionReason error) {
-	if rs.audit == nil || rs.audit.auditVault == nil {
+	if rs.audit == nil || rs.audit.auditStore == nil {
 		return
 	}
 
@@ -890,9 +901,9 @@ func (rs *PubSubCommandService) logBlockedTransaction(env *govpkg.GovernanceEnve
 		Timestamp:         time.Now().UTC(),
 	}
 
-	// Log to audit vault using canonical RecordActionReceipt for unified query experience
-	if err := rs.audit.auditVault.RecordActionReceipt(&record); err != nil {
-		rs.logger.Error("Failed to record blocked transaction in audit vault", string(constants.ConnectionStateError), err, "message_id", env.Id)
+	// Log to audit store using canonical RecordActionReceipt for unified query experience
+	if err := rs.audit.auditStore.RecordActionReceipt(&record); err != nil {
+		rs.logger.Error("Failed to record blocked transaction in audit store", string(constants.ConnectionStateError), err, "message_id", env.Id)
 	}
 }
 func (m *PubSubCommandMessage) GetPayload() []byte {

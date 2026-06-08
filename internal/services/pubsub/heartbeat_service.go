@@ -86,8 +86,8 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 			MemoryMB:     system.GetMemoryMB(),
 		},
 		NetworkInfo: models.HeartbeatNetworkInfo{
-			PublicIP:           system.GetPublicIP(""),
-			InternalIP:         system.GetLocalIP(""),
+			HTTPPort:           hs.config.Gateway.HTTPPort,
+			HTTPSPort:          hs.config.Gateway.HTTPSPort,
 			Interfaces:         system.GetNetworkInterfaces(),
 			ConnectivityStatus: system.GetConnectivityStatus(),
 		},
@@ -115,9 +115,9 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 		MemoryDetails: system.GetMemoryDetails(),
 		Environment:   system.GetEnvironmentDetails(hs.config.Lang, hs.config.Term, hs.config.TZ),
 		CapabilityFlags: models.HeartbeatCapabilityFlags{
-			LocalStorageEnabled: hs.config.LocalStoreEnabled,
-			GitAvailable:        hs.config.GitAvailable,
-			LedgerMirrorEnabled: hs.config.GitAvailable && !hs.config.NoGit,
+			ExecutionVaultEnabled: hs.config.ExecutionVaultEnabled,
+			GitAvailable:          hs.config.GitAvailable,
+			LedgerMirrorEnabled:   hs.config.GitAvailable && !hs.config.NoGit,
 		},
 		FingerprintDetails: &models.HeartbeatFingerprintDetails{
 			OS:           constants.Platform(runtime.GOOS),
@@ -140,8 +140,8 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 		"disk_percent", heartbeat.PerformanceMetrics.DiskPercent,
 		"network_latency", heartbeat.PerformanceMetrics.NetworkLatency,
 		"uptime_seconds", heartbeat.UptimeInfo.UptimeSeconds,
-		"public_ip", heartbeat.NetworkInfo.PublicIP,
-		"internal_ip", heartbeat.NetworkInfo.InternalIP)
+		"http_port", heartbeat.NetworkInfo.HTTPPort,
+		"https_port", heartbeat.NetworkInfo.HTTPSPort)
 
 	return heartbeat
 }
@@ -168,8 +168,8 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 			MemoryMb:     int32(h.SystemIdentity.MemoryMB), //nolint:gosec // realistically < 1TB (1,000,000 MB)
 		},
 		NetworkInfo: &operatorv1.NetworkInfo{
-			PublicIp:   h.NetworkInfo.PublicIP,
-			InternalIp: h.NetworkInfo.InternalIP,
+			PublicIp:   "",
+			InternalIp: "",
 			Interfaces: h.NetworkInfo.Interfaces,
 		},
 		VersionInfo: &operatorv1.VersionInfo{
@@ -226,7 +226,7 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 			InitSystem:       h.Environment.InitSystem,
 		},
 		CapabilityFlags: &operatorv1.CapabilityFlags{
-			LocalStorageEnabled: h.CapabilityFlags.LocalStorageEnabled,
+			LocalStorageEnabled: h.CapabilityFlags.ExecutionVaultEnabled,
 			GitAvailable:        h.CapabilityFlags.GitAvailable,
 			LedgerMirrorEnabled: h.CapabilityFlags.LedgerMirrorEnabled,
 		},
@@ -297,7 +297,7 @@ func (hs *HeartbeatService) SendAutomatic() {
 		}
 	} else {
 		if hs.config.Gateway.Enabled {
-			hs.logger.Debug("[HEARTBEAT] Results publisher not set, skipping automatic heartbeat in listen mode")
+			hs.logger.Debug("[HEARTBEAT] Results publisher not set, skipping automatic heartbeat in gateway mode")
 		} else {
 			hs.logger.Warn("[HEARTBEAT] Results publisher not set, cannot send automatic heartbeat")
 		}
