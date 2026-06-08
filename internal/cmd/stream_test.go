@@ -242,7 +242,7 @@ Host equalhost
 
 func TestParseSSHConfig_MissingFile(t *testing.T) {
 	blocks, err := ssh.ParseConfig("/nonexistent/.ssh/config")
-	assert.Error(t, err)
+	assert.NoError(t, err)
 	assert.Empty(t, blocks)
 }
 
@@ -396,8 +396,9 @@ Host myhost
 }
 
 func TestResolveHost_DefaultPort(t *testing.T) {
-	_, err := ssh.ResolveHost("somehost", "/nonexistent", "", "", "")
-	assert.Error(t, err)
+	r, err := ssh.ResolveHost("somehost", "/nonexistent", "", "", "")
+	assert.NoError(t, err)
+	assert.Equal(t, "22", r.Port)
 }
 
 // ---------------------------------------------------------------------------
@@ -510,8 +511,9 @@ Host myhost
 }
 
 func TestResolveHost_NoSSHConfig_DefaultsApplied(t *testing.T) {
-	_, err := ssh.ResolveHost("bare-host", "/nonexistent/ssh/config", "fallback-user", "", "")
-	assert.Error(t, err)
+	r, err := ssh.ResolveHost("bare-host", "/nonexistent/ssh/config", "fallback-user", "", "")
+	assert.NoError(t, err)
+	assert.Equal(t, "fallback-user", r.User)
 }
 
 func TestResolveHost_HostnameOverriddenFromConfig(t *testing.T) {

@@ -258,7 +258,7 @@ func mergeMCPConfig(existingConfig map[string]interface{}, mcpConfig string) err
 }
 
 func discoverTools() ([]string, error) {
-	var tools []string
+	tools := []string{}
 
 	for toolName, paths := range defaultToolPaths {
 		for _, path := range paths {

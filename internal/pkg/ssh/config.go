@@ -57,6 +57,9 @@ func ParseConfig(path string) (map[string]*ConfigBlock, error) {
 	// path is validated by caller (validateSSHConfigPath) to satisfy CodeQL uncontrolled-data-in-path-expression rule.
 	f, err := os.Open(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return blocks, nil
+		}
 		return blocks, fmt.Errorf("ssh: open config file %s: %w", path, err)
 	}
 	defer f.Close()

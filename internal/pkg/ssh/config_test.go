@@ -88,7 +88,7 @@ Host equalhost
 
 	t.Run("missing file", func(t *testing.T) {
 		blocks, err := ParseConfig("/nonexistent/.ssh/config")
-		assert.Error(t, err)
+		assert.NoError(t, err)
 		assert.Empty(t, blocks)
 	})
 
@@ -366,7 +366,7 @@ Host jump
 
 	t.Run("missing SSH config file", func(t *testing.T) {
 		_, err := ResolveHost("myserver", "/nonexistent/config", "defaultuser", "", "")
-		assert.Error(t, err)
+		assert.NoError(t, err)
 	})
 
 	t.Run("port 22 from config is ignored", func(t *testing.T) {
