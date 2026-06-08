@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"time"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/auditor/client"
+	clientpkg "github.com/g8e-ai/g8e/internal/emulator/client"
 )
 
-// Personas — the real-world tools Phantom pretends to be. This is the ONLY
+// Personas — the real-world tools Emulator pretends to be. This is the ONLY
 // fiction in the system; the Gateway and Operator are real throughout.
 var (
 	claudeDesktop  = clientpkg.Persona{ID: "claude-desktop", UserAgent: "Claude-Desktop/1.x (MCP)"}

@@ -26,11 +26,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/auditor/client"
-	"github.com/g8e-ai/g8e/internal/auditor/config"
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	cliconfig "github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/emulator/client"
+	"github.com/g8e-ai/g8e/internal/emulator/config"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/encoding/protojson"

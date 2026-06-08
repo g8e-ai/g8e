@@ -14,7 +14,7 @@ Available Commands:
   agent       Wrap agentic coding tools with g8e zero-trust gateway
   approve     Approve a suspended L3 transaction with CLI signature
   auth        Authentication and cli/web/operator session management
-  auditor     Universal agent emulator for a real g8e Gateway/Operator
+  emulator    Universal agent emulator for a real g8e Gateway/Operator
   chaos       Generate realistic governance events against the local g8e audit stack
   claude      Execute Claude Code proxied through g8e gateway
   data        Administer the local platform over mTLS
@@ -505,12 +505,12 @@ Flags:
   -h, --help   help for approve
 ```
 
-## auditor
+## emulator
 ```
-Universal agent emulator for a real g8e Gateway/g8e Operator. auditor impersonates arbitrary AI tools and agents against a REAL g8e Gateway + g8e Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the g8e Operator's signed receipts.
+Universal agent emulator for a real g8e Gateway/g8e Operator. emulator impersonates arbitrary AI tools and agents against a REAL g8e Gateway + g8e Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the g8e Operator's signed receipts.
 
 Usage:
-  g8e auditor [command]
+  g8e emulator [command]
 
 Available Commands:
   audit       Audit signed receipts from the g8e Operator
@@ -518,28 +518,28 @@ Available Commands:
   run         Run scenarios against a real g8e Gateway/g8e Operator
 
 Flags:
-  -h, --help   help for auditor
+  -h, --help   help for emulator
 
-Use "g8e auditor [command] --help" for more information about a command.
+Use "g8e emulator [command] --help" for more information about a command.
 ```
 
-### auditor list
+### emulator list
 ```
 List available scenarios
 
 Usage:
-  g8e auditor list [flags]
+  g8e emulator list [flags]
 
 Flags:
   -h, --help   help for list
 ```
 
-### auditor run
+### emulator run
 ```
 Run scenarios against a real Gateway/Operator
 
 Usage:
-  g8e auditor run [flags] [scenario ...]
+  g8e emulator run [flags] [scenario ...]
 
 Flags:
       --api-key string           Operator API key for MCP/A2A surface
@@ -559,12 +559,12 @@ Flags:
       --verbose                  echo each request/response
 ```
 
-### auditor audit
+### emulator audit
 ```
 Audit signed receipts from the Operator
 
 Usage:
-  g8e auditor audit [flags]
+  g8e emulator audit [flags]
 
 Flags:
       --api-key string           Operator API key

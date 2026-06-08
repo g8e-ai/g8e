@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/auditor/client"
-	"github.com/g8e-ai/g8e/internal/auditor/scenarios"
+	clientpkg "github.com/g8e-ai/g8e/internal/emulator/client"
+	"github.com/g8e-ai/g8e/internal/emulator/scenarios"
 )
 
 type Report struct {
@@ -51,7 +51,7 @@ func markdown(rep Report) string {
 	var b strings.Builder
 	receiptIndex := indexReceipts(rep.Receipts)
 
-	fmt.Fprintf(&b, "# Phantom run report\n\n")
+	fmt.Fprintf(&b, "# Emulator run report\n\n")
 	fmt.Fprintf(&b, "- Generated: %s\n", rep.GeneratedAt.Format(time.RFC3339))
 	fmt.Fprintf(&b, "- Gateway: `%s`\n", rep.Gateway)
 	fmt.Fprintf(&b, "- Operator session: `%s`\n", orNone(rep.OperatorSessionID))

@@ -31,7 +31,7 @@ type Receipt struct {
 
 // GetReceipt retrieves a single receipt by transaction ID.
 func (c *Client) GetReceipt(ctx context.Context, transactionID string, persona ...Persona) (*Receipt, []byte, error) {
-	p := Persona{ID: "phantom-auditor"}
+	p := Persona{ID: "emulator-auditor"}
 	if len(persona) > 0 {
 		p = persona[0]
 	}
@@ -61,7 +61,7 @@ func (c *Client) AuditReceipts(ctx context.Context, operatorSessionID string) ([
 	if operatorSessionID != "" {
 		u += "?" + url.Values{"operator_session_id": {operatorSessionID}}.Encode()
 	}
-	_, body, err := c.do(ctx, Persona{ID: "phantom-auditor"}, http.MethodGet, u, nil)
+	_, body, err := c.do(ctx, Persona{ID: "emulator-auditor"}, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, body, err
 	}
@@ -75,7 +75,7 @@ func (c *Client) ExportReceipts(ctx context.Context, operatorSessionID string) (
 	if operatorSessionID != "" {
 		u += "?" + url.Values{"operator_session_id": {operatorSessionID}}.Encode()
 	}
-	_, body, err := c.do(ctx, Persona{ID: "phantom-auditor"}, http.MethodGet, u, nil)
+	_, body, err := c.do(ctx, Persona{ID: "emulator-auditor"}, http.MethodGet, u, nil)
 	return body, err
 }
 
@@ -111,7 +111,7 @@ func (c *Client) DiscoverOperatorSession(ctx context.Context) string {
 		url += "?user_id=" + userID
 	}
 
-	_, body, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodGet, url, nil)
+	_, body, err := c.do(ctx, Persona{ID: "emulator"}, http.MethodGet, url, nil)
 	if err != nil || !json.Valid(body) {
 		return ""
 	}

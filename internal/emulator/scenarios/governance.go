@@ -7,7 +7,7 @@ import (
 	"context"
 	"errors"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/auditor/client"
+	clientpkg "github.com/g8e-ai/g8e/internal/emulator/client"
 )
 
 // GovKit carries the mock cryptographic actors the governance scenarios need.

@@ -259,7 +259,7 @@ CLI command and configuration tests:
 - `auth/windows_crypto_test.go` - Windows crypto tests
 - `cmd/agent_test.go` - Agent command tests
 - `cmd/approve_test.go` - Approve command tests
-- `cmd/auditor_test.go` - Auditor command tests
+- `cmd/auditor_test.go` - Emulator command tests
 - `cmd/auth_test.go` - Auth command tests
 - `cmd/chaos_test.go` - Chaos command tests
 - `cmd/cmd_test.go` - General command tests

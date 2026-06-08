@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0.
 
-// Package client is Phantom's thin, faithful client for a real g8e Gateway.
+// Package client is Emulator's thin, faithful client for a real g8e Gateway.
 // It speaks the actual wire surfaces (health/state-root, MCP & A2A JSON-RPC,
 // the governance envelope admission API, the OOB approve flow, and audit
 // receipts) and records every exchange so the run can be audited in detail.
@@ -19,12 +19,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/auditor/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/emulator/config"
 )
 
-// Persona is the identity Phantom wears for a given exchange. This is the ONLY
-// thing Phantom fakes: it pretends to be whatever AI tool/agent we point at the
+// Persona is the identity Emulator wears for a given exchange. This is the ONLY
+// thing Emulator fakes: it pretends to be whatever AI tool/agent we point at the
 // Gateway. The Gateway and Operator are real and treat it like any BYO client.
 type Persona struct {
 	// ID is a stable handle, e.g. "claude-desktop", "cursor", "langchain-agent".
@@ -187,7 +187,7 @@ func (c *Client) StateRootFromMTLS(ctx context.Context) (string, error) {
 }
 
 func (c *Client) stateRoot(ctx context.Context, baseURL string) (string, error) {
-	_, body, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodGet, baseURL+constants.APIPaths.Health, nil)
+	_, body, err := c.do(ctx, Persona{ID: "emulator"}, http.MethodGet, baseURL+constants.APIPaths.Health, nil)
 	if err != nil {
 		return "", err
 	}
@@ -203,7 +203,7 @@ func (c *Client) stateRoot(ctx context.Context, baseURL string) (string, error) 
 }
 
 // RegisterSigner registers an Ed25519 public key as a trusted L2/principal
-// signer so consensus/notary postures will accept Phantom's proofs.
+// signer so consensus/notary postures will accept Emulator's proofs.
 // Best-effort: the exact request shape lives in handleTrustedSigners; the call
 // is recorded and non-fatal so the doctrine-posture demos still run if it 404s.
 func (c *Client) RegisterSigner(ctx context.Context, keyID, pubHex, role string) error {
@@ -213,7 +213,7 @@ func (c *Client) RegisterSigner(ctx context.Context, keyID, pubHex, role string)
 		"algorithm":  "ed25519",
 		"role":       role, // "consensus" | "principal"
 	})
-	status, _, err := c.do(ctx, Persona{ID: "phantom"}, http.MethodPost,
+	status, _, err := c.do(ctx, Persona{ID: "emulator"}, http.MethodPost,
 		c.cfg.MTLSBaseURL+"/api/governance/signers", payload)
 	if err != nil {
 		return err

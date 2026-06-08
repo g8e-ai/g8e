@@ -17,22 +17,22 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/auditor/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/emulator/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAuditorCmd(t *testing.T) {
 	t.Run("auditor command has correct use and description", func(t *testing.T) {
-		cmd := auditorCmd()
-		assert.Equal(t, "auditor", cmd.Use)
+		cmd := emulatorCmd()
+		assert.Equal(t, "emulator", cmd.Use)
 		assert.Contains(t, cmd.Short, "Universal agent emulator")
 		assert.Contains(t, cmd.Long, "impersonates arbitrary AI tools")
 	})
 
 	t.Run("auditor has expected subcommands", func(t *testing.T) {
-		cmd := auditorCmd()
+		cmd := emulatorCmd()
 		require.NotNil(t, cmd)
 
 		expectedSubcommands := []string{"list", "run", "audit"}
@@ -45,14 +45,14 @@ func TestAuditorCmd(t *testing.T) {
 					break
 				}
 			}
-			assert.True(t, found, "auditor command should have %s subcommand", subcmd)
+			assert.True(t, found, "emulator command should have %s subcommand", subcmd)
 		}
 	})
 }
 
 func TestAuditorListCmd(t *testing.T) {
 	t.Run("auditor list command has correct use", func(t *testing.T) {
-		cmd := auditorListCmd()
+		cmd := emulatorListCmd()
 		assert.Equal(t, "list", cmd.Use)
 		assert.Contains(t, cmd.Short, "List available scenarios")
 	})
@@ -60,13 +60,13 @@ func TestAuditorListCmd(t *testing.T) {
 
 func TestAuditorRunCmd(t *testing.T) {
 	t.Run("auditor run command has correct use", func(t *testing.T) {
-		cmd := auditorRunCmd()
+		cmd := emulatorRunCmd()
 		assert.Contains(t, cmd.Use, "run")
 		assert.Contains(t, cmd.Short, "Run scenarios")
 	})
 
 	t.Run("auditor run has required flags", func(t *testing.T) {
-		cmd := auditorRunCmd()
+		cmd := emulatorRunCmd()
 		require.NotNil(t, cmd)
 
 		flags := []string{"config", "mtls-url", "public-url", "cert", "key", "ca", "api-key", "operator-session", "insecure", "out", "l3-mode", "ensemble", "verbose", "phase"}
@@ -78,7 +78,7 @@ func TestAuditorRunCmd(t *testing.T) {
 	})
 
 	t.Run("auditor run ensemble flag has default value", func(t *testing.T) {
-		cmd := auditorRunCmd()
+		cmd := emulatorRunCmd()
 		require.NotNil(t, cmd)
 
 		flag := cmd.Flags().Lookup("ensemble")
@@ -87,7 +87,7 @@ func TestAuditorRunCmd(t *testing.T) {
 	})
 
 	t.Run("auditor run phase flag has default value", func(t *testing.T) {
-		cmd := auditorRunCmd()
+		cmd := emulatorRunCmd()
 		require.NotNil(t, cmd)
 
 		flag := cmd.Flags().Lookup("phase")
@@ -98,13 +98,13 @@ func TestAuditorRunCmd(t *testing.T) {
 
 func TestAuditorAuditCmd(t *testing.T) {
 	t.Run("auditor audit command has correct use", func(t *testing.T) {
-		cmd := auditorAuditCmd()
+		cmd := emulatorAuditCmd()
 		assert.Contains(t, cmd.Use, "audit")
 		assert.Contains(t, cmd.Short, "Audit signed receipts")
 	})
 
 	t.Run("auditor audit has required flags", func(t *testing.T) {
-		cmd := auditorAuditCmd()
+		cmd := emulatorAuditCmd()
 		require.NotNil(t, cmd)
 
 		flags := []string{"config", "mtls-url", "public-url", "cert", "key", "ca", "api-key", "operator-session", "insecure", "out"}
@@ -118,100 +118,100 @@ func TestAuditorAuditCmd(t *testing.T) {
 
 func TestApplyAuditorFlags(t *testing.T) {
 	t.Run("applyAuditorFlags sets MTLS URL", func(t *testing.T) {
-		auditorMTLSURL = "https://example.com:" + strconv.Itoa(constants.Ports.OperatorHttp)
+		emulatorMTLSURL = "https://example.com:" + strconv.Itoa(constants.Ports.OperatorHttp)
 		cfg := config.Default()
-		applyAuditorFlags(&cfg)
+		applyEmulatorFlags(&cfg)
 		assert.Equal(t, "https://example.com:"+strconv.Itoa(constants.Ports.OperatorHttp), cfg.MTLSBaseURL)
-		auditorMTLSURL = ""
+		emulatorMTLSURL = ""
 	})
 
 	t.Run("applyAuditorFlags sets public URL", func(t *testing.T) {
-		auditorPublicURL = "https://example.com:" + strconv.Itoa(constants.Ports.OperatorHttps)
+		emulatorPublicURL = "https://example.com:" + strconv.Itoa(constants.Ports.OperatorHttps)
 		cfg := config.Default()
-		applyAuditorFlags(&cfg)
+		applyEmulatorFlags(&cfg)
 		assert.Equal(t, "https://example.com:"+strconv.Itoa(constants.Ports.OperatorHttps), cfg.PublicBaseURL)
-		auditorPublicURL = ""
+		emulatorPublicURL = ""
 	})
 
 	t.Run("applyAuditorFlags sets cert", func(t *testing.T) {
-		auditorCert = "/path/to/cert.pem"
+		emulatorCert = "/path/to/cert.pem"
 		cfg := config.Default()
-		applyAuditorFlags(&cfg)
+		applyEmulatorFlags(&cfg)
 		assert.Equal(t, "/path/to/cert.pem", cfg.Auth.ClientCert)
-		auditorCert = ""
+		emulatorCert = ""
 	})
 
 	t.Run("applyAuditorFlags sets key", func(t *testing.T) {
-		auditorKey = "/path/to/key.pem"
+		emulatorKey = "/path/to/key.pem"
 		cfg := config.Default()
-		applyAuditorFlags(&cfg)
+		applyEmulatorFlags(&cfg)
 		assert.Equal(t, "/path/to/key.pem", cfg.Auth.ClientKey)
-		auditorKey = ""
+		emulatorKey = ""
 	})
 
 	t.Run("applyAuditorFlags sets CA bundle", func(t *testing.T) {
-		auditorCA = "/path/to/ca.pem"
+		emulatorCA = "/path/to/ca.pem"
 		cfg := config.Default()
-		applyAuditorFlags(&cfg)
+		applyEmulatorFlags(&cfg)
 		assert.Equal(t, "/path/to/ca.pem", cfg.Auth.CABundle)
-		auditorCA = ""
+		emulatorCA = ""
 	})
 
 	t.Run("applyAuditorFlags sets API key", func(t *testing.T) {
-		auditorAPIKey = "test-api-key"
+		emulatorAPIKey = "test-api-key"
 		cfg := config.Default()
-		applyAuditorFlags(&cfg)
+		applyEmulatorFlags(&cfg)
 		assert.Equal(t, "test-api-key", cfg.Auth.APIKey)
-		auditorAPIKey = ""
+		emulatorAPIKey = ""
 	})
 
 	t.Run("applyAuditorFlags sets insecure flag", func(t *testing.T) {
-		auditorInsecure = true
+		emulatorInsecure = true
 		cfg := config.Default()
-		applyAuditorFlags(&cfg)
+		applyEmulatorFlags(&cfg)
 		assert.True(t, cfg.Auth.Insecure)
-		auditorInsecure = false
+		emulatorInsecure = false
 	})
 
 	t.Run("applyAuditorFlags sets operator session ID", func(t *testing.T) {
-		auditorSessionID = "session-123"
+		emulatorSessionID = "session-123"
 		cfg := config.Default()
-		applyAuditorFlags(&cfg)
+		applyEmulatorFlags(&cfg)
 		assert.Equal(t, "session-123", cfg.OperatorSessionID)
-		auditorSessionID = ""
+		emulatorSessionID = ""
 	})
 
 	t.Run("applyAuditorFlags sets out directory", func(t *testing.T) {
 		testOutDir := t.TempDir()
-		auditorOutDir = testOutDir
+		emulatorOutDir = testOutDir
 		cfg := config.Default()
-		applyAuditorFlags(&cfg)
+		applyEmulatorFlags(&cfg)
 		assert.Equal(t, testOutDir, cfg.OutDir)
-		auditorOutDir = ""
+		emulatorOutDir = ""
 	})
 
 	t.Run("applyAuditorFlags sets L3 mode", func(t *testing.T) {
-		auditorL3Mode = "mock"
+		emulatorL3Mode = "mock"
 		cfg := config.Default()
-		applyAuditorFlags(&cfg)
+		applyEmulatorFlags(&cfg)
 		assert.Equal(t, "mock", cfg.L3Mode)
-		auditorL3Mode = ""
+		emulatorL3Mode = ""
 	})
 
 	t.Run("applyAuditorFlags sets ensemble size", func(t *testing.T) {
-		auditorEnsemble = 5
+		emulatorEnsemble = 5
 		cfg := config.Default()
-		applyAuditorFlags(&cfg)
+		applyEmulatorFlags(&cfg)
 		assert.Equal(t, 5, cfg.EnsembleSize)
-		auditorEnsemble = 0
+		emulatorEnsemble = 0
 	})
 
 	t.Run("applyAuditorFlags sets verbose flag", func(t *testing.T) {
-		auditorVerbose = true
+		emulatorVerbose = true
 		cfg := config.Default()
-		applyAuditorFlags(&cfg)
+		applyEmulatorFlags(&cfg)
 		assert.True(t, cfg.Verbose)
-		auditorVerbose = false
+		emulatorVerbose = false
 	})
 }
 

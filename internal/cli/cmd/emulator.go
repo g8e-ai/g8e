@@ -23,47 +23,47 @@ import (
 
 	"github.com/spf13/cobra"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/auditor/client"
-	"github.com/g8e-ai/g8e/internal/auditor/config"
-	"github.com/g8e-ai/g8e/internal/auditor/scenarios"
 	"github.com/g8e-ai/g8e/internal/constants"
+	clientpkg "github.com/g8e-ai/g8e/internal/emulator/client"
+	"github.com/g8e-ai/g8e/internal/emulator/config"
+	"github.com/g8e-ai/g8e/internal/emulator/scenarios"
 )
 
 var (
-	auditorConfigPath string
-	auditorMTLSURL    string
-	auditorPublicURL  string
-	auditorCert       string
-	auditorKey        string
-	auditorCA         string
-	auditorAPIKey     string
-	auditorInsecure   bool
-	auditorSessionID  string
-	auditorOutDir     string
-	auditorL3Mode     string
-	auditorEnsemble   int
-	auditorVerbose    bool
-	auditorPhase      string
+	emulatorConfigPath string
+	emulatorMTLSURL    string
+	emulatorPublicURL  string
+	emulatorCert       string
+	emulatorKey        string
+	emulatorCA         string
+	emulatorAPIKey     string
+	emulatorInsecure   bool
+	emulatorSessionID  string
+	emulatorOutDir     string
+	emulatorL3Mode     string
+	emulatorEnsemble   int
+	emulatorVerbose    bool
+	emulatorPhase      string
 )
 
-func auditorCmd() *cobra.Command {
+func emulatorCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "auditor",
+		Use:   "emulator",
 		Short: "Universal agent emulator for a real g8e Gateway/Operator",
-		Long: `auditor impersonates arbitrary AI tools and agents against a REAL g8e
+		Long: `emulator impersonates arbitrary AI tools and agents against a REAL g8e
 Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A
 protobuf, and official governance envelopes with mock consensus + principal
 signing), then audits every result against the Operator's signed receipts.`,
 	}
 
-	cmd.AddCommand(auditorListCmd())
-	cmd.AddCommand(auditorRunCmd())
-	cmd.AddCommand(auditorAuditCmd())
+	cmd.AddCommand(emulatorListCmd())
+	cmd.AddCommand(emulatorRunCmd())
+	cmd.AddCommand(emulatorAuditCmd())
 
 	return cmd
 }
 
-func auditorListCmd() *cobra.Command {
+func emulatorListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List available scenarios",
@@ -76,59 +76,59 @@ func auditorListCmd() *cobra.Command {
 	}
 }
 
-func auditorRunCmd() *cobra.Command {
+func emulatorRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run [flags] [scenario ...]",
 		Short: "Run scenarios against a real Gateway/Operator",
-		Run:   runAuditorRun,
+		Run:   runEmulatorRun,
 	}
 
-	cmd.Flags().StringVar(&auditorConfigPath, "config", "", "JSON config overlay")
-	cmd.Flags().StringVar(&auditorMTLSURL, "mtls-url", "", "Gateway mTLS surface")
-	cmd.Flags().StringVar(&auditorPublicURL, "public-url", "", "Gateway public surface for OOB approve")
-	cmd.Flags().StringVar(&auditorCert, "cert", "", "client cert PEM")
-	cmd.Flags().StringVar(&auditorKey, "key", "", "client key PEM")
-	cmd.Flags().StringVar(&auditorCA, "ca", "", "gateway CA bundle PEM")
-	cmd.Flags().StringVar(&auditorAPIKey, "api-key", "", "operator API key for MCP/A2A surface")
-	cmd.Flags().StringVar(&auditorSessionID, "operator-session", "", "scope audit to a specific Operator session")
-	cmd.Flags().BoolVar(&auditorInsecure, "insecure", false, "skip TLS verify (local dev only)")
-	cmd.Flags().StringVar(&auditorOutDir, "out", "", "report output dir")
-	cmd.Flags().StringVar(&auditorL3Mode, "l3-mode", "", "mock|suspend")
-	cmd.Flags().IntVar(&auditorEnsemble, "ensemble", 3, "mock consensus voters")
-	cmd.Flags().BoolVar(&auditorVerbose, "verbose", false, "echo each request/response")
-	cmd.Flags().StringVar(&auditorPhase, "phase", "all", "doctrine|notary|all")
+	cmd.Flags().StringVar(&emulatorConfigPath, "config", "", "JSON config overlay")
+	cmd.Flags().StringVar(&emulatorMTLSURL, "mtls-url", "", "Gateway mTLS surface")
+	cmd.Flags().StringVar(&emulatorPublicURL, "public-url", "", "Gateway public surface for OOB approve")
+	cmd.Flags().StringVar(&emulatorCert, "cert", "", "client cert PEM")
+	cmd.Flags().StringVar(&emulatorKey, "key", "", "client key PEM")
+	cmd.Flags().StringVar(&emulatorCA, "ca", "", "gateway CA bundle PEM")
+	cmd.Flags().StringVar(&emulatorAPIKey, "api-key", "", "operator API key for MCP/A2A surface")
+	cmd.Flags().StringVar(&emulatorSessionID, "operator-session", "", "scope audit to a specific Operator session")
+	cmd.Flags().BoolVar(&emulatorInsecure, "insecure", false, "skip TLS verify (local dev only)")
+	cmd.Flags().StringVar(&emulatorOutDir, "out", "", "report output dir")
+	cmd.Flags().StringVar(&emulatorL3Mode, "l3-mode", "", "mock|suspend")
+	cmd.Flags().IntVar(&emulatorEnsemble, "ensemble", 3, "mock consensus voters")
+	cmd.Flags().BoolVar(&emulatorVerbose, "verbose", false, "echo each request/response")
+	cmd.Flags().StringVar(&emulatorPhase, "phase", "all", "doctrine|notary|all")
 
 	return cmd
 }
 
-func auditorAuditCmd() *cobra.Command {
+func emulatorAuditCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "audit [flags]",
 		Short: "Audit signed receipts from the Operator",
-		Run:   runAuditorAudit,
+		Run:   runEmulatorAudit,
 	}
 
-	cmd.Flags().StringVar(&auditorConfigPath, "config", "", "JSON config overlay")
-	cmd.Flags().StringVar(&auditorMTLSURL, "mtls-url", "", "Gateway mTLS surface")
-	cmd.Flags().StringVar(&auditorPublicURL, "public-url", "", "Gateway public surface")
-	cmd.Flags().StringVar(&auditorCert, "cert", "", "client cert PEM")
-	cmd.Flags().StringVar(&auditorKey, "key", "", "client key PEM")
-	cmd.Flags().StringVar(&auditorCA, "ca", "", "gateway CA bundle PEM")
-	cmd.Flags().StringVar(&auditorAPIKey, "api-key", "", "operator API key")
-	cmd.Flags().StringVar(&auditorSessionID, "operator-session", "", "operator session id")
-	cmd.Flags().BoolVar(&auditorInsecure, "insecure", false, "skip TLS verify")
-	cmd.Flags().StringVar(&auditorOutDir, "out", "", "report output dir")
+	cmd.Flags().StringVar(&emulatorConfigPath, "config", "", "JSON config overlay")
+	cmd.Flags().StringVar(&emulatorMTLSURL, "mtls-url", "", "Gateway mTLS surface")
+	cmd.Flags().StringVar(&emulatorPublicURL, "public-url", "", "Gateway public surface")
+	cmd.Flags().StringVar(&emulatorCert, "cert", "", "client cert PEM")
+	cmd.Flags().StringVar(&emulatorKey, "key", "", "client key PEM")
+	cmd.Flags().StringVar(&emulatorCA, "ca", "", "gateway CA bundle PEM")
+	cmd.Flags().StringVar(&emulatorAPIKey, "api-key", "", "operator API key")
+	cmd.Flags().StringVar(&emulatorSessionID, "operator-session", "", "operator session id")
+	cmd.Flags().BoolVar(&emulatorInsecure, "insecure", false, "skip TLS verify")
+	cmd.Flags().StringVar(&emulatorOutDir, "out", "", "report output dir")
 
 	return cmd
 }
 
-func runAuditorRun(cmd *cobra.Command, args []string) {
+func runEmulatorRun(cmd *cobra.Command, args []string) {
 	cfg := config.Default()
-	applyAuditorFlags(&cfg)
+	applyEmulatorFlags(&cfg)
 
-	if auditorConfigPath != "" {
-		if err := cfg.LoadFile(auditorConfigPath); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: config %s: %v\n", auditorConfigPath, err)
+	if emulatorConfigPath != "" {
+		if err := cfg.LoadFile(emulatorConfigPath); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: config %s: %v\n", emulatorConfigPath, err)
 		}
 	}
 
@@ -142,7 +142,7 @@ func runAuditorRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	selected := selectAuditorScenarios(auditorPhase, names)
+	selected := selectEmulatorScenarios(emulatorPhase, names)
 	if len(selected) == 0 {
 		fmt.Fprintln(os.Stderr, "no scenarios selected")
 		os.Exit(1)
@@ -169,18 +169,18 @@ func runAuditorRun(cmd *cobra.Command, args []string) {
 		_ = os.WriteFile(filepath.Join(cfg.OutDir, "receipts-export.json"), export, 0o644)
 	}
 
-	// report and summary printing would go here if we had internal/auditor/report
+	// report and summary printing would go here if we had internal/emulator/report
 	// but for now we just print summary to satisfy the compiler and user
-	printAuditorSummary(results, "", "")
+	printEmulatorSummary(results, "", "")
 }
 
-func runAuditorAudit(cmd *cobra.Command, args []string) {
+func runEmulatorAudit(cmd *cobra.Command, args []string) {
 	cfg := config.Default()
-	applyAuditorFlags(&cfg)
+	applyEmulatorFlags(&cfg)
 
-	if auditorConfigPath != "" {
-		if err := cfg.LoadFile(auditorConfigPath); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: config %s: %v\n", auditorConfigPath, err)
+	if emulatorConfigPath != "" {
+		if err := cfg.LoadFile(emulatorConfigPath); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: config %s: %v\n", emulatorConfigPath, err)
 		}
 	}
 
@@ -210,46 +210,46 @@ func runAuditorAudit(cmd *cobra.Command, args []string) {
 	}
 }
 
-func applyAuditorFlags(cfg *config.Config) {
-	if auditorMTLSURL != "" {
-		cfg.MTLSBaseURL = auditorMTLSURL
+func applyEmulatorFlags(cfg *config.Config) {
+	if emulatorMTLSURL != "" {
+		cfg.MTLSBaseURL = emulatorMTLSURL
 	}
-	if auditorPublicURL != "" {
-		cfg.PublicBaseURL = auditorPublicURL
+	if emulatorPublicURL != "" {
+		cfg.PublicBaseURL = emulatorPublicURL
 	}
-	if auditorCert != "" {
-		cfg.Auth.ClientCert = auditorCert
+	if emulatorCert != "" {
+		cfg.Auth.ClientCert = emulatorCert
 	}
-	if auditorKey != "" {
-		cfg.Auth.ClientKey = auditorKey
+	if emulatorKey != "" {
+		cfg.Auth.ClientKey = emulatorKey
 	}
-	if auditorCA != "" {
-		cfg.Auth.CABundle = auditorCA
+	if emulatorCA != "" {
+		cfg.Auth.CABundle = emulatorCA
 	}
-	if auditorAPIKey != "" {
-		cfg.Auth.APIKey = auditorAPIKey
+	if emulatorAPIKey != "" {
+		cfg.Auth.APIKey = emulatorAPIKey
 	}
-	if auditorInsecure {
-		cfg.Auth.Insecure = auditorInsecure
+	if emulatorInsecure {
+		cfg.Auth.Insecure = emulatorInsecure
 	}
-	if auditorSessionID != "" {
-		cfg.OperatorSessionID = auditorSessionID
+	if emulatorSessionID != "" {
+		cfg.OperatorSessionID = emulatorSessionID
 	}
-	if auditorOutDir != "" {
-		cfg.OutDir = auditorOutDir
+	if emulatorOutDir != "" {
+		cfg.OutDir = emulatorOutDir
 	}
-	if auditorL3Mode != "" {
-		cfg.L3Mode = auditorL3Mode
+	if emulatorL3Mode != "" {
+		cfg.L3Mode = emulatorL3Mode
 	}
-	if auditorEnsemble != 0 {
-		cfg.EnsembleSize = auditorEnsemble
+	if emulatorEnsemble != 0 {
+		cfg.EnsembleSize = emulatorEnsemble
 	}
-	if auditorVerbose {
-		cfg.Verbose = auditorVerbose
+	if emulatorVerbose {
+		cfg.Verbose = emulatorVerbose
 	}
 }
 
-func selectAuditorScenarios(phase string, names []string) []scenarios.Scenario {
+func selectEmulatorScenarios(phase string, names []string) []scenarios.Scenario {
 	all := scenarios.Registry()
 	if len(names) > 0 {
 		var out []scenarios.Scenario
@@ -319,7 +319,7 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 	return nil
 }
 
-func printAuditorSummary(results []scenarios.Result, jsonPath, mdPath string) {
+func printEmulatorSummary(results []scenarios.Result, jsonPath, mdPath string) {
 	fmt.Println("\n── summary ──")
 	ok := 0
 	for _, r := range results {

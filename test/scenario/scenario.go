@@ -17,7 +17,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/auditor/client"
+	"github.com/g8e-ai/g8e/internal/emulator/client"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
