@@ -411,7 +411,6 @@ func TestHistoryHandler_FetchFileHistoryDefaultLimit(t *testing.T) {
 	assert.True(t, response.Success)
 }
 
-
 // TestHistoryHandler_RestoreFile verifies that the HistoryHandler can restore
 // a file to a previous version using the Git ledger service.
 func TestHistoryHandler_RestoreFile(t *testing.T) {
@@ -492,7 +491,6 @@ func TestHistoryHandler_RestoreFileValidationErrors(t *testing.T) {
 		})
 	}
 }
-
 
 // TestHistoryHandler_RestoreFileInvalidCommit verifies fail-closed behavior
 // when attempting to restore a file with an invalid commit hash.

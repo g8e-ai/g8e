@@ -143,7 +143,7 @@ func TestSuspendedTransactionStore_EnvelopePersistence(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test: Retrieve and verify envelope persistence
-	retrievedTx, found, err := suspendedStore.GetSuspendedTransaction(context.Background(), "test-tx-123")
+	retrievedTx, found, _ := suspendedStore.GetSuspendedTransaction(context.Background(), "test-tx-123")
 	require.True(t, found)
 	require.NotEmpty(t, retrievedTx.Envelope)
 

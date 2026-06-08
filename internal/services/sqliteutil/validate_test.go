@@ -14,59 +14,59 @@
 package sqliteutil
 
 import (
-"testing"
+	"testing"
 
-"github.com/stretchr/testify/assert"
-"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidateIdentifier(t *testing.T) {
-valid := []string{
-"column",
-"column_name",
-"_private",
-"CamelCase",
-"UPPER",
-"a",
-"_",
-"abc123",
-"field_1",
-}
+	valid := []string{
+		"column",
+		"column_name",
+		"_private",
+		"CamelCase",
+		"UPPER",
+		"a",
+		"_",
+		"abc123",
+		"field_1",
+	}
 
-for _, name := range valid {
-t.Run("valid/"+name, func(t *testing.T) {
-err := ValidateIdentifier(name)
-require.NoError(t, err)
-})
-}
+	for _, name := range valid {
+		t.Run("valid/"+name, func(t *testing.T) {
+			err := ValidateIdentifier(name)
+			require.NoError(t, err)
+		})
+	}
 
-invalid := []struct {
-name  string
-input string
-}{
-{"empty", ""},
-{"leading digit", "1column"},
-{"hyphen", "col-name"},
-{"space", "col name"},
-{"dot", "table.column"},
-{"semicolon", "col;DROP TABLE"},
-{"single quote", "col'"},
-{"double quote", `col"`},
-{"parenthesis", "col("},
-{"asterisk", "col*"},
-{"equals", "col=val"},
-{"newline", "col\n"},
-}
+	invalid := []struct {
+		name  string
+		input string
+	}{
+		{"empty", ""},
+		{"leading digit", "1column"},
+		{"hyphen", "col-name"},
+		{"space", "col name"},
+		{"dot", "table.column"},
+		{"semicolon", "col;DROP TABLE"},
+		{"single quote", "col'"},
+		{"double quote", `col"`},
+		{"parenthesis", "col("},
+		{"asterisk", "col*"},
+		{"equals", "col=val"},
+		{"newline", "col\n"},
+	}
 
-for _, tc := range invalid {
-t.Run("invalid/"+tc.name, func(t *testing.T) {
-err := ValidateIdentifier(tc.input)
-require.Error(t, err)
-if tc.input == "" {
-assert.Equal(t, "validate: empty identifier", err.Error())
-} else {
-assert.Contains(t, err.Error(), "validate: invalid identifier")
-}
-})
-}
+	for _, tc := range invalid {
+		t.Run("invalid/"+tc.name, func(t *testing.T) {
+			err := ValidateIdentifier(tc.input)
+			require.Error(t, err)
+			if tc.input == "" {
+				assert.Equal(t, "validate: empty identifier", err.Error())
+			} else {
+				assert.Contains(t, err.Error(), "validate: invalid identifier")
+			}
+		})
+	}
 }

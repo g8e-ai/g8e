@@ -314,7 +314,7 @@ func TestTokenStoreService_KVDelete(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify it's gone
-	retrieved, err = ts.KVGet(context.Background(), key)
+	_, err = ts.KVGet(context.Background(), key)
 	assert.Error(t, err)
 }
 

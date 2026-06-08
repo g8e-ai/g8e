@@ -24,10 +24,10 @@ import (
 func TestCompress(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name     string
-		input    []byte
-		wantErr  bool
-		wantNil  bool
+		name    string
+		input   []byte
+		wantErr bool
+		wantNil bool
 	}{
 		{
 			name:    "round trip",
@@ -52,8 +52,8 @@ func TestCompress(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "binary data",
-			input:   func() []byte {
+			name: "binary data",
+			input: func() []byte {
 				data := make([]byte, 256)
 				for i := range data {
 					data[i] = byte(i)
@@ -127,9 +127,9 @@ func TestDecompress(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name:    "invalid gzip data",
-			input:   []byte("this is not gzip data"),
-			wantErr: true,
+			name:            "invalid gzip data",
+			input:           []byte("this is not gzip data"),
+			wantErr:         true,
 			wantErrContains: "decompress: gzip reader init",
 		},
 		{
@@ -140,7 +140,7 @@ func TestDecompress(t *testing.T) {
 				require.NoError(t, err)
 				return compressed[:len(compressed)/2]
 			}(),
-			wantErr: true,
+			wantErr:         true,
 			wantErrContains: "decompress",
 		},
 	}
@@ -172,11 +172,11 @@ func TestDecompress(t *testing.T) {
 func TestHashBytes(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name      string
-		input     []byte
-		wantHash  string
-		wantLen   int
-		checkHex  bool
+		name     string
+		input    []byte
+		wantHash string
+		wantLen  int
+		checkHex bool
 	}{
 		{
 			name:     "deterministic",

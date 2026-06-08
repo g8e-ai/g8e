@@ -192,7 +192,6 @@ func TestNetworkIdentity_FormatForDisplay(t *testing.T) {
 	assert.Contains(t, display, "gateway.local")
 }
 
-
 func TestUnique(t *testing.T) {
 	t.Parallel()
 	input := []string{"a", "b", "a", "c", "b", "d"}
@@ -291,7 +290,6 @@ func TestDetector_DetectSSHKnownHosts_FileNotFound(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, sshHosts)
 }
-
 
 func TestNetworkIdentity_FormatForDisplay_EmptyFields(t *testing.T) {
 	t.Parallel()

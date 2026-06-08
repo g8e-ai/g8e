@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/spf13/cobra"
@@ -46,29 +45,6 @@ func vaultCmd() *cobra.Command {
 	)
 
 	return cmd
-}
-
-func resolveVaultDir(cfg *config.Config, vaultDir string) string {
-	if vaultDir == "" {
-		vaultDir = constants.Paths.Infra.VaultDir
-	}
-	if !filepath.IsAbs(vaultDir) {
-		vaultDir = filepath.Join(cfg.ProjectRoot, vaultDir)
-	}
-	return vaultDir
-}
-
-func resolveKeyPath(cfg *config.Config, vaultDir, keyPath string) string {
-	if keyPath == "" {
-		keyPath = cfg.Paths.Infra.VaultKeyPath
-		if keyPath == "" {
-			keyPath = filepath.Join(vaultDir, "key")
-		}
-	}
-	if !filepath.IsAbs(keyPath) {
-		keyPath = filepath.Join(cfg.ProjectRoot, keyPath)
-	}
-	return keyPath
 }
 
 func readKeyFile(keyPath string) ([]byte, error) {

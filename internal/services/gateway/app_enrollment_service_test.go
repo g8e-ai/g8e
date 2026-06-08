@@ -282,4 +282,3 @@ func TestIsValidAppName(t *testing.T) {
 		})
 	}
 }
-

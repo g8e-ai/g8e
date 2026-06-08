@@ -42,25 +42,25 @@ const (
 
 // RegistrationService handles Gateway-native device enrollment via CSR-based authentication.
 type RegistrationService struct {
-	db         *CanonicalDBService
-	pki        *PKIAuthority
-	logger     *slog.Logger
-	userSvc             *UserService
-	cliSessionSvc       *CLISessionService
-	operatorSessionSvc  *OperatorSessionService
-	cfg                 *config.GatewayConfig
+	db                 *CanonicalDBService
+	pki                *PKIAuthority
+	logger             *slog.Logger
+	userSvc            *UserService
+	cliSessionSvc      *CLISessionService
+	operatorSessionSvc *OperatorSessionService
+	cfg                *config.GatewayConfig
 }
 
 // NewRegistrationService creates a new RegistrationService.
 func NewRegistrationService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, cfg *config.GatewayConfig) *RegistrationService {
 	return &RegistrationService{
-		db:         db,
-		pki:        pki,
-		logger:     logger,
-		userSvc:             userSvc,
-		cliSessionSvc:       cliSessionSvc,
-		operatorSessionSvc:  operatorSessionSvc,
-		cfg:                 cfg,
+		db:                 db,
+		pki:                pki,
+		logger:             logger,
+		userSvc:            userSvc,
+		cliSessionSvc:      cliSessionSvc,
+		operatorSessionSvc: operatorSessionSvc,
+		cfg:                cfg,
 	}
 }
 
@@ -258,14 +258,14 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 
 	// Update Operator document
 	type operatorClaimUpdate struct {
-		Status              string    `json:"status"`
-		OperatorSessionID   string    `json:"operator_session_id"`
-		SystemFingerprint    string    `json:"system_fingerprint"`
-		Claimed             bool      `json:"claimed"`
-		ClaimedAt           time.Time `json:"claimed_at"`
-		OperatorCert        string    `json:"operator_cert,omitempty"`
-		OperatorCertChain   string    `json:"operator_cert_chain,omitempty"`
-		OperatorCertSerial  string    `json:"operator_cert_serial,omitempty"`
+		Status             string    `json:"status"`
+		OperatorSessionID  string    `json:"operator_session_id"`
+		SystemFingerprint  string    `json:"system_fingerprint"`
+		Claimed            bool      `json:"claimed"`
+		ClaimedAt          time.Time `json:"claimed_at"`
+		OperatorCert       string    `json:"operator_cert,omitempty"`
+		OperatorCertChain  string    `json:"operator_cert_chain,omitempty"`
+		OperatorCertSerial string    `json:"operator_cert_serial,omitempty"`
 	}
 	update := operatorClaimUpdate{
 		Status:            string(constants.OperatorStatusActive),

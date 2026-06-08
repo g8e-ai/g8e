@@ -93,14 +93,14 @@ func TestDBControllerHandleDB(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rrGet.Code)
 
 		type testDocWithRole struct {
-		Name string `json:"name"`
-		Role string `json:"role"`
-	}
-	var doc testDocWithRole
-	err := json.Unmarshal(rrGet.Body.Bytes(), &doc)
-	require.NoError(t, err)
-	assert.Equal(t, "alice", doc.Name)
-	assert.Equal(t, "admin", doc.Role)
+			Name string `json:"name"`
+			Role string `json:"role"`
+		}
+		var doc testDocWithRole
+		err := json.Unmarshal(rrGet.Body.Bytes(), &doc)
+		require.NoError(t, err)
+		assert.Equal(t, "alice", doc.Name)
+		assert.Equal(t, "admin", doc.Role)
 	})
 
 	t.Run("DELETE", func(t *testing.T) {
@@ -129,12 +129,12 @@ func TestDBControllerHandleDB(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rrQuery.Code)
 
 		type queryResult struct {
-		Val int `json:"val"`
-	}
-	var results []queryResult
-	err := json.Unmarshal(rrQuery.Body.Bytes(), &results)
-	require.NoError(t, err)
-	assert.Len(t, results, 1)
+			Val int `json:"val"`
+		}
+		var results []queryResult
+		err := json.Unmarshal(rrQuery.Body.Bytes(), &results)
+		require.NoError(t, err)
+		assert.Len(t, results, 1)
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {

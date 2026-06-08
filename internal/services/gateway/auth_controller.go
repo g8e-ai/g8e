@@ -1499,10 +1499,9 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 	// CLI certificate generation (if provided)
 	var cliCertPEM, cliCertChainPEM string
 	var cliCertFingerprint, cliCertSerial string
-	var cliSessionID string
 
 	// Always create a CLI session ID for CLI-only bootstrap (user_id binding is required)
-	cliSessionID = uuid.NewString()
+	cliSessionID := uuid.NewString()
 
 	if req.CLICSRPEM != "" {
 		cliCertPEM, cliCertChainPEM, err = c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "")

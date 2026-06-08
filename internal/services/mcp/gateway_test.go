@@ -167,7 +167,7 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 	proc := &fakeEnvelopeProcessor{err: governance.ErrL3ProofMissing}
 	store := &fakeSuspendedStore{}
 
-	g := newTestGatewayService(t, 
+	g := newTestGatewayService(t,
 		withEnvProc(proc),
 		withSuspendedStore(store),
 	)
@@ -204,7 +204,7 @@ func TestGatewayService_ResumeWithL3Proof(t *testing.T) {
 	txHash := "hash-1"
 	envelope := `{"id":"tx-1","transaction_hash":"hash-1","action_type":"MCP_CALL","payload":"e30="}`
 
-	g := newTestGatewayService(t, 
+	g := newTestGatewayService(t,
 		withEnvProc(proc),
 		withSuspendedStore(store),
 	)
@@ -304,7 +304,7 @@ func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
 
 	t.Run("circuit breaker open", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, 
+		g := newTestGatewayService(t,
 			withDownstreamURL("http://localhost:9999"),
 			withCircuitBreaker(3, 1*time.Minute),
 		)
@@ -328,7 +328,7 @@ func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
 
 	t.Run("invalid JSON-RPC", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, )
+		g := newTestGatewayService(t)
 
 		reqBody := `invalid json`
 		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call/sse", strings.NewReader(reqBody))
@@ -361,7 +361,7 @@ func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
 
 	t.Run("missing tool name", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, )
+		g := newTestGatewayService(t)
 
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"arguments":{}}}`
 		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call/sse", strings.NewReader(reqBody))
@@ -398,7 +398,7 @@ func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
 func TestGatewayService_EnvelopeGatewaySigned(t *testing.T) {
 	t.Parallel()
 	// Test that MCP gateway sets GatewaySigned=true in envelope
-	g := newTestGatewayService(t, )
+	g := newTestGatewayService(t)
 
 	opts := processGatewayOptions{
 		actionType:     constants.ActionTypeMcpCall,
@@ -477,7 +477,7 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 
 	t.Run("native tools when no downstream", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, )
+		g := newTestGatewayService(t)
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader("{}"))
 		w := httptest.NewRecorder()
@@ -548,7 +548,7 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 
 	t.Run("circuit breaker open", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, 
+		g := newTestGatewayService(t,
 			withDownstreamURL("http://localhost:9999"),
 			withCircuitBreaker(3, 1*time.Minute),
 		)
@@ -689,7 +689,7 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 
 	t.Run("method not allowed", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, )
+		g := newTestGatewayService(t)
 
 		req := httptest.NewRequest(http.MethodDelete, "/mcp/tools/list", nil)
 		w := httptest.NewRecorder()
@@ -705,7 +705,7 @@ func TestGatewayService_HandleResourcesList(t *testing.T) {
 
 	t.Run("empty list when no downstream", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, )
+		g := newTestGatewayService(t)
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/resources/list", strings.NewReader("{}"))
 		w := httptest.NewRecorder()
@@ -771,7 +771,7 @@ func TestGatewayService_HandleResourcesList(t *testing.T) {
 
 	t.Run("circuit breaker open", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, 
+		g := newTestGatewayService(t,
 			withDownstreamURL("http://localhost:9999"),
 			withCircuitBreaker(3, 1*time.Minute),
 		)
@@ -869,7 +869,7 @@ func TestGatewayService_HandlePromptsList(t *testing.T) {
 
 	t.Run("empty list when no downstream", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, )
+		g := newTestGatewayService(t)
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/prompts/list", strings.NewReader("{}"))
 		w := httptest.NewRecorder()
@@ -911,7 +911,7 @@ func TestGatewayService_HandlePromptsList(t *testing.T) {
 
 	t.Run("circuit breaker open", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, 
+		g := newTestGatewayService(t,
 			withDownstreamURL("http://localhost:9999"),
 			withCircuitBreaker(3, 1*time.Minute),
 		)
@@ -954,7 +954,7 @@ func TestGatewayService_HandlePromptsList(t *testing.T) {
 
 	t.Run("method not allowed", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, )
+		g := newTestGatewayService(t)
 
 		req := httptest.NewRequest(http.MethodDelete, "/mcp/prompts/list", nil)
 		w := httptest.NewRecorder()
@@ -967,7 +967,7 @@ func TestGatewayService_HandlePromptsList(t *testing.T) {
 
 func TestGatewayService_IsNativeTool(t *testing.T) {
 	t.Parallel()
-	g := newTestGatewayService(t, )
+	g := newTestGatewayService(t)
 
 	t.Run("native tool recognized", func(t *testing.T) {
 		t.Parallel()
@@ -985,7 +985,7 @@ func TestGatewayService_IsNativeTool(t *testing.T) {
 
 func TestGatewayService_ScanForForbiddenPatterns(t *testing.T) {
 	t.Parallel()
-	g := newTestGatewayService(t, )
+	g := newTestGatewayService(t)
 
 	t.Run("detects sudo with context", func(t *testing.T) {
 		t.Parallel()
@@ -1043,7 +1043,7 @@ func TestGatewayService_ScanForForbiddenPatterns(t *testing.T) {
 
 func TestGatewayService_MapGatewayError(t *testing.T) {
 	t.Parallel()
-	g := newTestGatewayService(t, )
+	g := newTestGatewayService(t)
 
 	t.Run("maps governance errors", func(t *testing.T) {
 		t.Parallel()
@@ -1355,7 +1355,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("method not allowed", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, )
+		g := newTestGatewayService(t)
 
 		req := httptest.NewRequest(http.MethodGet, "/mcp/test", nil)
 		w := httptest.NewRecorder()
@@ -1415,7 +1415,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("invalid JSON", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, )
+		g := newTestGatewayService(t)
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`invalid json`))
 		w := httptest.NewRecorder()
@@ -1435,7 +1435,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("invalid JSON-RPC version", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, )
+		g := newTestGatewayService(t)
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"1.0","id":1,"method":"test/method"}`))
 		w := httptest.NewRecorder()
@@ -1455,7 +1455,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("missing method", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, )
+		g := newTestGatewayService(t)
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1}`))
 		w := httptest.NewRecorder()
@@ -1475,7 +1475,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("method mismatch", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, )
+		g := newTestGatewayService(t)
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"wrong/method"}`))
 		w := httptest.NewRecorder()
@@ -1495,7 +1495,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("handler error", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, )
+		g := newTestGatewayService(t)
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"test/method"}`))
 		w := httptest.NewRecorder()
@@ -1515,7 +1515,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 	t.Run("successful request", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, )
+		g := newTestGatewayService(t)
 
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"test/method"}`))
 		w := httptest.NewRecorder()
@@ -1536,7 +1536,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 
 func TestGatewayService_DependencySetters(t *testing.T) {
 	t.Parallel()
-	g := newTestGatewayService(t, )
+	g := newTestGatewayService(t)
 
 	t.Run("SetDependencies", func(t *testing.T) {
 		t.Parallel()
@@ -1586,7 +1586,7 @@ func TestGatewayService_DependencySetters(t *testing.T) {
 
 func TestGatewayService_RunMaintenance(t *testing.T) {
 	t.Parallel()
-	g := newTestGatewayService(t, )
+	g := newTestGatewayService(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -1803,7 +1803,7 @@ func TestGatewayService_HandleA2aCall(t *testing.T) {
 
 	t.Run("missing skill_name", func(t *testing.T) {
 		t.Parallel()
-		g := newTestGatewayService(t, )
+		g := newTestGatewayService(t)
 
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"payload":{}}}`
 		req := httptest.NewRequest(http.MethodPost, "/mcp/a2a/call", strings.NewReader(reqBody))

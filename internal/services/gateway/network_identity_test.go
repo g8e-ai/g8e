@@ -32,13 +32,13 @@ func TestResolveGatewayCertificateIdentity(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		certMode       string
-		identityFile   string
-		setupFile      func(t *testing.T, dir string) string
-		wantErr        bool
-		errContains    string
-		checkResult    func(t *testing.T, extraIPs []net.IP, extraDNSNames []string)
+		name         string
+		certMode     string
+		identityFile string
+		setupFile    func(t *testing.T, dir string) string
+		wantErr      bool
+		errContains  string
+		checkResult  func(t *testing.T, extraIPs []net.IP, extraDNSNames []string)
 	}{
 		{
 			name:     "loads identity from file",

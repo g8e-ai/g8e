@@ -448,11 +448,11 @@ func TestTLSServerName(t *testing.T) {
 
 func TestBuildPubSubURL(t *testing.T) {
 	tests := []struct {
-		name         string
-		endpoint     string
+		name          string
+		endpoint      string
 		tlsServerName string
-		httpPort     int
-		want         string
+		httpPort      int
+		want          string
 	}{
 		{"hostname with no tlsServerName", "localhost", "", 0, "wss://localhost:8443"},
 		{"hostname with tlsServerName", "localhost", "g8e.local", 0, "wss://g8e.local:8443"},

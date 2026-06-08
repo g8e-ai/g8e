@@ -49,20 +49,20 @@ type GatewayModeService struct {
 	cfg    *config.Config
 	logger *slog.Logger
 
-	db           *CanonicalDBService
-	pubsub       *PubSubBroker
-	auth         *AuthService
-	pki          *PKIAuthority
-	reg          *RegistrationService
-	passkey      *PasskeyService
-	userSvc             *UserService
-	cliSessionSvc       *CLISessionService
-	operatorSessionSvc  *OperatorSessionService
-	webSessionSvc       *WebSessionService
-	mcpGateway          *mcp.GatewayService
-	responder    *response.Writer
-	server       *http.Server
-	publicServer *http.Server
+	db                 *CanonicalDBService
+	pubsub             *PubSubBroker
+	auth               *AuthService
+	pki                *PKIAuthority
+	reg                *RegistrationService
+	passkey            *PasskeyService
+	userSvc            *UserService
+	cliSessionSvc      *CLISessionService
+	operatorSessionSvc *OperatorSessionService
+	webSessionSvc      *WebSessionService
+	mcpGateway         *mcp.GatewayService
+	responder          *response.Writer
+	server             *http.Server
+	publicServer       *http.Server
 
 	handler *HTTPHandler
 
@@ -151,21 +151,21 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 	}
 
 	ls := &GatewayModeService{
-		cfg:        cfg,
-		logger:     logger,
-		db:         db,
-		pubsub:     pubsub,
-		auth:       auth,
-		pki:        pki,
-		reg:        reg,
-		passkey:    passkey,
-		userSvc:             userSvc,
-		cliSessionSvc:       cliSessionSvc,
-		operatorSessionSvc:  operatorSessionSvc,
-		webSessionSvc:       webSessionSvc,
-		extraIPs:            extraIPs,
-		mcpGateway: mcpGateway,
-		responder: res,
+		cfg:                cfg,
+		logger:             logger,
+		db:                 db,
+		pubsub:             pubsub,
+		auth:               auth,
+		pki:                pki,
+		reg:                reg,
+		passkey:            passkey,
+		userSvc:            userSvc,
+		cliSessionSvc:      cliSessionSvc,
+		operatorSessionSvc: operatorSessionSvc,
+		webSessionSvc:      webSessionSvc,
+		extraIPs:           extraIPs,
+		mcpGateway:         mcpGateway,
+		responder:          res,
 	}
 
 	if err := ls.initHandlersAndServers(); err != nil {
@@ -296,21 +296,21 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 	}
 
 	ls := &GatewayModeService{
-		cfg:        cfg,
-		logger:     logger,
-		db:         db,
-		pubsub:     pubsub,
-		auth:       auth,
-		pki:        pki,
-		reg:        reg,
-		passkey:    passkey,
-		userSvc:             userSvc,
-		cliSessionSvc:       cliSessionSvc,
-		operatorSessionSvc:  operatorSessionSvc,
-		webSessionSvc:       webSessionSvc,
-		extraIPs:            nil, // Test configuration does not use extra IPs
-		mcpGateway: mcpGateway,
-		responder: res,
+		cfg:                cfg,
+		logger:             logger,
+		db:                 db,
+		pubsub:             pubsub,
+		auth:               auth,
+		pki:                pki,
+		reg:                reg,
+		passkey:            passkey,
+		userSvc:            userSvc,
+		cliSessionSvc:      cliSessionSvc,
+		operatorSessionSvc: operatorSessionSvc,
+		webSessionSvc:      webSessionSvc,
+		extraIPs:           nil, // Test configuration does not use extra IPs
+		mcpGateway:         mcpGateway,
+		responder:          res,
 	}
 
 	if err := ls.initHandlersAndServers(); err != nil {
@@ -341,23 +341,23 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 	publicBaseURL := fmt.Sprintf("https://localhost:%d", cfg.Gateway.HTTPSPort)
 	ls.mcpGateway.SetPublicBaseURL(publicBaseURL)
 	handler, err := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:               cfg,
-		Logger:            logger,
-		DB:                db,
-		Pubsub:            pubsub,
-		Auth:              auth,
-		PKI:               pki,
-		CLISessionSvc:     cliSessionSvc,
+		Cfg:                cfg,
+		Logger:             logger,
+		DB:                 db,
+		Pubsub:             pubsub,
+		Auth:               auth,
+		PKI:                pki,
+		CLISessionSvc:      cliSessionSvc,
 		OperatorSessionSvc: operatorSessionSvc,
-		WebSessionSvc:     webSessionSvc,
-		Reg:               reg,
-		Passkey:           passkey,
-		UserSvc:           userSvc,
-		Responder:         ls.responder,
-		MCPGateway:        ls.mcpGateway,
-		AppEnrollment:     appEnrollment,
-		IsReady:           ls.IsReady,
-		IsGovernanceReady: ls.IsGovernanceReady,
+		WebSessionSvc:      webSessionSvc,
+		Reg:                reg,
+		Passkey:            passkey,
+		UserSvc:            userSvc,
+		Responder:          ls.responder,
+		MCPGateway:         ls.mcpGateway,
+		AppEnrollment:      appEnrollment,
+		IsReady:            ls.IsReady,
+		IsGovernanceReady:  ls.IsGovernanceReady,
 	})
 	if err != nil {
 		return fmt.Errorf("gateway: failed to create HTTP handler: %w", err)

@@ -48,27 +48,27 @@ func testUnitCmd() *cobra.Command {
 		Long:  `Run unit tests without any build tags. These tests use mocks/stubs and have no external dependencies (no files, network, or DB).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 1 (Unit) tests...")
-			
+
 			// Build the test command based on the Makefile test-unit target
 			// TEST_RACE: -race on non-Windows, empty on Windows
 			// TEST_COUNT: -count=1
 			// TEST_SHORT_TIMEOUT: 60s
 			// TEST_PKGS: all packages excluding cmd/, test/, internal/testutil/, mocks/, proto/
-			
+
 			testRace := ""
 			if runtime.GOOS != "windows" {
 				testRace = "-race"
 			}
-			
+
 			testCmd := exec.Command("go", "test", testRace, "-count=1", "-timeout", "60s",
 				"./internal/...", "./pkg/...")
 			testCmd.Stdout = os.Stdout
 			testCmd.Stderr = os.Stderr
-			
+
 			if err := testCmd.Run(); err != nil {
 				return fmt.Errorf("unit tests failed: %w", err)
 			}
-			
+
 			fmt.Println("Unit tests completed successfully.")
 			return nil
 		},
@@ -84,20 +84,20 @@ func testIntegrationCmd() *cobra.Command {
 		Long:  `Run in-memory integration tests with the 'integration' build tag. These tests use SQLite in-memory databases, local PKI generation, and local pubsub.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 2 (In-Memory Integration) tests...")
-			
+
 			testRace := ""
 			if runtime.GOOS != "windows" {
 				testRace = "-race"
 			}
-			
+
 			testCmd := exec.Command("go", "test", "-tags=integration", testRace, "-count=1", "-timeout", "180s", "./...")
 			testCmd.Stdout = os.Stdout
 			testCmd.Stderr = os.Stderr
-			
+
 			if err := testCmd.Run(); err != nil {
 				return fmt.Errorf("integration tests failed: %w", err)
 			}
-			
+
 			fmt.Println("Integration tests completed successfully.")
 			return nil
 		},
@@ -115,20 +115,20 @@ func testE2ECmd() *cobra.Command {
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
 			fmt.Println("Note: This requires the gateway to be running and authenticated.")
 			fmt.Println("Run './g8e gw start' and './g8e gw cli auth login' first.")
-			
+
 			testRace := ""
 			if runtime.GOOS != "windows" {
 				testRace = "-race"
 			}
-			
+
 			testCmd := exec.Command("go", "test", "-tags=e2e", testRace, "-count=1", "-timeout", "180s", "./test/...")
 			testCmd.Stdout = os.Stdout
 			testCmd.Stderr = os.Stderr
-			
+
 			if err := testCmd.Run(); err != nil {
 				return fmt.Errorf("e2e tests failed: %w", err)
 			}
-			
+
 			fmt.Println("E2E tests completed successfully.")
 			return nil
 		},
@@ -146,20 +146,20 @@ func testScenarioCmd() *cobra.Command {
 			fmt.Println("Running Tier 3 (Scenario) tests...")
 			fmt.Println("Note: This requires the gateway to be running and authenticated.")
 			fmt.Println("Run './g8e gw start' and './g8e gw cli auth login' first.")
-			
+
 			testRace := ""
 			if runtime.GOOS != "windows" {
 				testRace = "-race"
 			}
-			
+
 			testCmd := exec.Command("go", "test", "-tags=e2e", testRace, "-count=1", "-timeout", "180s", "./test/scenario/...")
 			testCmd.Stdout = os.Stdout
 			testCmd.Stderr = os.Stderr
-			
+
 			if err := testCmd.Run(); err != nil {
 				return fmt.Errorf("scenario tests failed: %w", err)
 			}
-			
+
 			fmt.Println("Scenario tests completed successfully.")
 			return nil
 		},

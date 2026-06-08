@@ -769,7 +769,7 @@ func main() {
 		// After enrollment, set the certificate paths
 		privateKey = filepath.Join(launchDir, ".g8e/pki/operator.key")
 		clientCert = filepath.Join(launchDir, ".g8e/pki/operator.crt")
-		
+
 		// Keep using the original endpoint (localhost or provided IP) for Gateway connections
 		logger.Info("Automatic enrollment completed, using enrolled certificates")
 	}
@@ -823,21 +823,21 @@ func main() {
 	cfg, err := config.Load(config.LoadOptions{
 		OperatorEndpoint: operatorEndpoint,
 
-		HTTPPort:            0, // Will default to constants.Ports.OperatorHttps (8443)
-		CloudMode:           cloudMode,
-		CloudProvider:       cloudProvider,
+		HTTPPort:              0, // Will default to constants.Ports.OperatorHttps (8443)
+		CloudMode:             cloudMode,
+		CloudProvider:         cloudProvider,
 		ExecutionVaultEnabled: executionVault,
-		NoGit:               noGit,
-		LogLevel:            logLevel,
-		WorkDir:             effectiveWorkDir,
-		PKIDir:              settings.PKIDir,
-		SecretsDir:          settings.SecretsDir,
-		HeartbeatInterval:   heartbeatInterval,
-		Shell:               os.Getenv("SHELL"),
-		Lang:                os.Getenv("LANG"),
-		Term:                os.Getenv("TERM"),
-		TZ:                  os.Getenv("TZ"),
-		Posture:             "", // Will default to PostureNotary in Load() since L3Notary is nil
+		NoGit:                 noGit,
+		LogLevel:              logLevel,
+		WorkDir:               effectiveWorkDir,
+		PKIDir:                settings.PKIDir,
+		SecretsDir:            settings.SecretsDir,
+		HeartbeatInterval:     heartbeatInterval,
+		Shell:                 os.Getenv("SHELL"),
+		Lang:                  os.Getenv("LANG"),
+		Term:                  os.Getenv("TERM"),
+		TZ:                    os.Getenv("TZ"),
+		Posture:               "", // Will default to PostureNotary in Load() since L3Notary is nil
 	})
 	if err != nil {
 		logger.Error("Failed to load configuration", string(constants.ConnectionStateError), err)
@@ -1039,7 +1039,10 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	}
 
 	// Initialize paths relative to current working directory
-	constants.InitPaths()
+	if err := constants.InitPaths(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize paths: %v\n", err)
+		os.Exit(constants.ExitConfigError)
+	}
 
 	// Apply defaults for empty directory flags (constants are now absolute)
 	if dataDir == "" {

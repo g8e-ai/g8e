@@ -402,12 +402,12 @@ func TestExecutionVault_StoreFileDiff_UpdateExisting(t *testing.T) {
 	ev, _ := setupTestExecutionVault(t)
 
 	record1 := &models.FileDiffRecord{
-		ID:           "diff-update",
-		TimestampUTC: time.Now().UTC(),
-		FilePath:     "/test/file",
-		Operation:    "write",
+		ID:             "diff-update",
+		TimestampUTC:   time.Now().UTC(),
+		FilePath:       "/test/file",
+		Operation:      "write",
 		DiffCompressed: []byte("old diff"),
-		DiffSize:     8,
+		DiffSize:       8,
 	}
 
 	err := ev.StoreFileDiff(context.Background(), record1)
@@ -415,12 +415,12 @@ func TestExecutionVault_StoreFileDiff_UpdateExisting(t *testing.T) {
 	ev.Wait()
 
 	record2 := &models.FileDiffRecord{
-		ID:           "diff-update",
-		TimestampUTC: time.Now().UTC(),
-		FilePath:     "/test/file",
-		Operation:    "write",
+		ID:             "diff-update",
+		TimestampUTC:   time.Now().UTC(),
+		FilePath:       "/test/file",
+		Operation:      "write",
 		DiffCompressed: []byte("new diff"),
-		DiffSize:     8,
+		DiffSize:       8,
 	}
 
 	err = ev.StoreFileDiff(context.Background(), record2)

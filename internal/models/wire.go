@@ -28,8 +28,8 @@ type RuntimeConfig struct {
 	CloudMode             bool   `json:"cloud_mode"`
 	CloudProvider         string `json:"cloud_provider,omitempty"`
 	ExecutionVaultEnabled bool   `json:"local_storage_enabled"`
-	NoGit               bool   `json:"no_git"`
-	LogLevel            string `json:"log_level"`
+	NoGit                 bool   `json:"no_git"`
+	LogLevel              string `json:"log_level"`
 
 	HTTPPort int `json:"http_port"`
 }

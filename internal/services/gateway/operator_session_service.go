@@ -45,7 +45,7 @@ func NewOperatorSessionService(db *CanonicalDBService, logger *slog.Logger) *Ope
 func (s *OperatorSessionService) PersistOperatorSession(operatorSessionID, userID, orgID, operatorID, loginMethod string) error {
 	sessionExpiry := time.Now().UTC().Add(1 * time.Hour)
 	now := time.Now().UTC()
-	
+
 	operatorSessionDoc := models.OperatorSession{
 		ID:                operatorSessionID,
 		SessionType:       string(constants.SessionTypeOperator),
@@ -59,7 +59,7 @@ func (s *OperatorSessionService) PersistOperatorSession(operatorSessionID, userI
 		LastActivity:      now.Format(time.RFC3339),
 		LoginMethod:       loginMethod,
 	}
-	
+
 	operatorSessionBytes, err := json.Marshal(operatorSessionDoc)
 	if err != nil {
 		return fmt.Errorf("failed to marshal Operator session document: %w", err)

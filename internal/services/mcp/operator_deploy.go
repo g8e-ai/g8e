@@ -321,7 +321,10 @@ func (t *OperatorDeployTool) transferBinaryViaSCP(client *sshlib.Client, localPa
 		defer w.Close()
 
 		fmt.Fprintln(w, "C0755", len(data), filepath.Base(remotePath))
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			// Error will be caught by session.Run() below
+			return
+		}
 		fmt.Fprintln(w)
 	}()
 

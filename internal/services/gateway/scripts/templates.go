@@ -39,7 +39,7 @@ type TemplateData struct {
 var (
 	linuxTemplate   *template.Template
 	windowsTemplate *template.Template
-	initOnce       sync.Once
+	initOnce        sync.Once
 )
 
 // Init parses and validates the embedded scripts at startup.
@@ -69,7 +69,7 @@ func Init(logger *slog.Logger) error {
 // RenderLinuxDeployScript renders the Linux deploy script with the given data.
 func RenderLinuxDeployScript(data TemplateData) (string, error) {
 	if linuxTemplate == nil {
-		return "", errors.New("Linux template not initialized - call Init() first")
+		return "", errors.New("linux template not initialized - call Init() first")
 	}
 
 	var buf strings.Builder
@@ -83,7 +83,7 @@ func RenderLinuxDeployScript(data TemplateData) (string, error) {
 // RenderWindowsDeployScript renders the Windows deploy script with the given data.
 func RenderWindowsDeployScript(data TemplateData) (string, error) {
 	if windowsTemplate == nil {
-		return "", errors.New("Windows template not initialized - call Init() first")
+		return "", errors.New("windows template not initialized - call Init() first")
 	}
 
 	var buf strings.Builder

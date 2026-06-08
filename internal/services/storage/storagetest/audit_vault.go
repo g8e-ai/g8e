@@ -1137,19 +1137,6 @@ func (avs *TestSQLAuditStore) GetFileMutations(eventID int64) ([]*storage.FileMu
 	return mutations, nil
 }
 
-// gitGetCurrentHash gets the current HEAD commit hash using native go-git
-func (avs *TestSQLAuditStore) gitGetCurrentHash() (string, error) {
-	repo, err := git.PlainOpen(avs.ledgerPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to open git repo: %w", err)
-	}
-	ref, err := repo.Head()
-	if err != nil {
-		return "", fmt.Errorf("failed to get HEAD ref: %w", err)
-	}
-	return ref.Hash().String(), nil
-}
-
 // GetLedgerGitDir returns the ledger path for use by LedgerMirrorService
 func (avs *TestSQLAuditStore) GetLedgerGitDir() string {
 	return avs.ledgerPath

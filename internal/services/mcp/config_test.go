@@ -181,85 +181,85 @@ func TestServerConfigDefaults(t *testing.T) {
 
 func TestNewGatewayConfigValidation(t *testing.T) {
 	tests := []struct {
-		name          string
-		gatewayURL    string
-		clientCert    string
-		clientKey     string
-		caCert        string
+		name           string
+		gatewayURL     string
+		clientCert     string
+		clientKey      string
+		caCert         string
 		verifyHostname string
-		wantErr       bool
+		wantErr        bool
 	}{
 		{
-			name:          "valid config",
-			gatewayURL:    "https://g8e.local:8443/mcp",
-			clientCert:    "/path/to/client.crt",
-			clientKey:     "/path/to/client.key",
-			caCert:        "/path/to/ca.crt",
+			name:           "valid config",
+			gatewayURL:     "https://g8e.local:8443/mcp",
+			clientCert:     "/path/to/client.crt",
+			clientKey:      "/path/to/client.key",
+			caCert:         "/path/to/ca.crt",
 			verifyHostname: "g8e.local",
-			wantErr:       false,
+			wantErr:        false,
 		},
 		{
-			name:          "empty gateway URL",
-			gatewayURL:    "",
-			clientCert:    "/path/to/client.crt",
-			clientKey:     "/path/to/client.key",
-			caCert:        "/path/to/ca.crt",
+			name:           "empty gateway URL",
+			gatewayURL:     "",
+			clientCert:     "/path/to/client.crt",
+			clientKey:      "/path/to/client.key",
+			caCert:         "/path/to/ca.crt",
 			verifyHostname: "g8e.local",
-			wantErr:       true,
+			wantErr:        true,
 		},
 		{
-			name:          "invalid URL scheme",
-			gatewayURL:    "http://g8e.local:8443/mcp",
-			clientCert:    "/path/to/client.crt",
-			clientKey:     "/path/to/client.key",
-			caCert:        "/path/to/ca.crt",
+			name:           "invalid URL scheme",
+			gatewayURL:     "http://g8e.local:8443/mcp",
+			clientCert:     "/path/to/client.crt",
+			clientKey:      "/path/to/client.key",
+			caCert:         "/path/to/ca.crt",
 			verifyHostname: "g8e.local",
-			wantErr:       true,
+			wantErr:        true,
 		},
 		{
-			name:          "empty client cert",
-			gatewayURL:    "https://g8e.local:8443/mcp",
-			clientCert:    "",
-			clientKey:     "/path/to/client.key",
-			caCert:        "/path/to/ca.crt",
+			name:           "empty client cert",
+			gatewayURL:     "https://g8e.local:8443/mcp",
+			clientCert:     "",
+			clientKey:      "/path/to/client.key",
+			caCert:         "/path/to/ca.crt",
 			verifyHostname: "g8e.local",
-			wantErr:       true,
+			wantErr:        true,
 		},
 		{
-			name:          "whitespace only client cert",
-			gatewayURL:    "https://g8e.local:8443/mcp",
-			clientCert:    "   ",
-			clientKey:     "/path/to/client.key",
-			caCert:        "/path/to/ca.crt",
+			name:           "whitespace only client cert",
+			gatewayURL:     "https://g8e.local:8443/mcp",
+			clientCert:     "   ",
+			clientKey:      "/path/to/client.key",
+			caCert:         "/path/to/ca.crt",
 			verifyHostname: "g8e.local",
-			wantErr:       true,
+			wantErr:        true,
 		},
 		{
-			name:          "empty client key",
-			gatewayURL:    "https://g8e.local:8443/mcp",
-			clientCert:    "/path/to/client.crt",
-			clientKey:     "",
-			caCert:        "/path/to/ca.crt",
+			name:           "empty client key",
+			gatewayURL:     "https://g8e.local:8443/mcp",
+			clientCert:     "/path/to/client.crt",
+			clientKey:      "",
+			caCert:         "/path/to/ca.crt",
 			verifyHostname: "g8e.local",
-			wantErr:       true,
+			wantErr:        true,
 		},
 		{
-			name:          "empty CA cert",
-			gatewayURL:    "https://g8e.local:8443/mcp",
-			clientCert:    "/path/to/client.crt",
-			clientKey:     "/path/to/client.key",
-			caCert:        "",
+			name:           "empty CA cert",
+			gatewayURL:     "https://g8e.local:8443/mcp",
+			clientCert:     "/path/to/client.crt",
+			clientKey:      "/path/to/client.key",
+			caCert:         "",
 			verifyHostname: "g8e.local",
-			wantErr:       true,
+			wantErr:        true,
 		},
 		{
-			name:          "empty verify hostname",
-			gatewayURL:    "https://g8e.local:8443/mcp",
-			clientCert:    "/path/to/client.crt",
-			clientKey:     "/path/to/client.key",
-			caCert:        "/path/to/ca.crt",
+			name:           "empty verify hostname",
+			gatewayURL:     "https://g8e.local:8443/mcp",
+			clientCert:     "/path/to/client.crt",
+			clientKey:      "/path/to/client.key",
+			caCert:         "/path/to/ca.crt",
 			verifyHostname: "",
-			wantErr:       true,
+			wantErr:        true,
 		},
 	}
 

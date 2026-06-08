@@ -14,39 +14,39 @@
 package gateway
 
 import (
-"testing"
-"time"
+	"testing"
+	"time"
 
-"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewJWKSProvider(t *testing.T) {
 
-t.Run("Creates provider with valid URL", func(t *testing.T) {
-provider := NewJWKSProvider("https://example.com/.well-known/jwks.json")
+	t.Run("Creates provider with valid URL", func(t *testing.T) {
+		provider := NewJWKSProvider("https://example.com/.well-known/jwks.json")
 
-assert.NotNil(t, provider)
-assert.Equal(t, "https://example.com/.well-known/jwks.json", provider.url)
-assert.NotNil(t, provider.httpClient)
-assert.NotNil(t, provider.keys)
-assert.NotNil(t, provider.lastFetch)
-})
+		assert.NotNil(t, provider)
+		assert.Equal(t, "https://example.com/.well-known/jwks.json", provider.url)
+		assert.NotNil(t, provider.httpClient)
+		assert.NotNil(t, provider.keys)
+		assert.NotNil(t, provider.lastFetch)
+	})
 
-t.Run("HTTP client has timeout configured", func(t *testing.T) {
-provider := NewJWKSProvider("https://example.com/.well-known/jwks.json")
+	t.Run("HTTP client has timeout configured", func(t *testing.T) {
+		provider := NewJWKSProvider("https://example.com/.well-known/jwks.json")
 
-assert.Equal(t, 10*time.Second, provider.httpClient.Timeout)
-})
+		assert.Equal(t, 10*time.Second, provider.httpClient.Timeout)
+	})
 
-t.Run("Keys map is initialized empty", func(t *testing.T) {
-provider := NewJWKSProvider("https://example.com/.well-known/jwks.json")
+	t.Run("Keys map is initialized empty", func(t *testing.T) {
+		provider := NewJWKSProvider("https://example.com/.well-known/jwks.json")
 
-assert.Empty(t, provider.keys)
-})
+		assert.Empty(t, provider.keys)
+	})
 
-t.Run("LastFetch is zero time initially", func(t *testing.T) {
-provider := NewJWKSProvider("https://example.com/.well-known/jwks.json")
+	t.Run("LastFetch is zero time initially", func(t *testing.T) {
+		provider := NewJWKSProvider("https://example.com/.well-known/jwks.json")
 
-assert.True(t, provider.lastFetch.IsZero())
-})
+		assert.True(t, provider.lastFetch.IsZero())
+	})
 }

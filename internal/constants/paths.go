@@ -197,4 +197,3 @@ const (
 	PkiFileOperatorBundle  = "operator-bundle.pem"
 	PkiFileTrustDomainJSON = "trust-domain.json"
 )
-

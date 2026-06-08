@@ -208,4 +208,3 @@ func WebSocketDialerWithTLSConfigAndServerName(tlsConfig *certs.TLSConfig, serve
 		HandshakeTimeout: DefaultTLSTimeout,
 	}, nil
 }
-

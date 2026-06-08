@@ -55,10 +55,10 @@ type PubSubClient interface {
 var pubSubWriteTimeout = 5 * time.Second
 
 type OperatorPubSubClient struct {
-	baseURL    string // e.g. "wss://localhost"
-	logger     *slog.Logger
-	tlsConfig  *tls.Config // embedded CA trust; nil falls back to system CAs (plain ws://)
-	serverName string      // TLS SNI override when endpoint is a raw IP
+	baseURL        string // e.g. "wss://localhost"
+	logger         *slog.Logger
+	tlsConfig      *tls.Config      // embedded CA trust; nil falls back to system CAs (plain ws://)
+	serverName     string           // TLS SNI override when endpoint is a raw IP
 	certsTLSConfig *certs.TLSConfig // DI-based TLS config
 
 	mu     sync.Mutex
@@ -100,11 +100,11 @@ func NewOperatorPubSubClient(baseURL, serverName string, logger *slog.Logger, ce
 	}
 
 	return &OperatorPubSubClient{
-		baseURL:         baseURL,
-		logger:          logger,
-		tlsConfig:       tlsCfg,
-		serverName:      serverName,
-		certsTLSConfig:  certsTLSConfig,
+		baseURL:        baseURL,
+		logger:         logger,
+		tlsConfig:      tlsCfg,
+		serverName:     serverName,
+		certsTLSConfig: certsTLSConfig,
 	}, nil
 }
 

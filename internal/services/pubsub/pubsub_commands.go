@@ -304,11 +304,13 @@ func (rs *PubSubCommandService) buildHandlers() {
 		constants.Event.Operator.RestoreFile.Requested:      rs.history.HandleRestoreFileRequest,
 		constants.Event.Operator.ShutdownRequested:          func(ctx context.Context, msg *PubSubCommandMessage) { rs.handleShutdownRequest(msg) },
 		constants.Event.Operator.Eval.AnswerRequested:       rs.handleEvalAnswerRequest,
-		constants.Event.Operator.Audit.UserMsg:              func(ctx context.Context, msg *PubSubCommandMessage) { rs.audit.HandleUserMsgRequest(ctx, msg) },
-		constants.Event.Operator.Audit.AIMsg:                func(ctx context.Context, msg *PubSubCommandMessage) { rs.audit.HandleAIMsgRequest(ctx, msg) },
-		constants.Event.Operator.Audit.DirectCmd:            func(ctx context.Context, msg *PubSubCommandMessage) { rs.audit.HandleDirectCmdRequest(ctx, msg) },
-		constants.Event.Operator.Audit.DirectCmdResult:      func(ctx context.Context, msg *PubSubCommandMessage) { rs.audit.HandleDirectCmdResultRequest(ctx, msg) },
-		constants.Event.Operator.FetchFileDiff.Requested:    rs.history.HandleFetchFileDiffRequest,
+		constants.Event.Operator.Audit.UserMsg:              func(ctx context.Context, msg *PubSubCommandMessage) { _ = rs.audit.HandleUserMsgRequest(ctx, msg) },
+		constants.Event.Operator.Audit.AIMsg:                func(ctx context.Context, msg *PubSubCommandMessage) { _ = rs.audit.HandleAIMsgRequest(ctx, msg) },
+		constants.Event.Operator.Audit.DirectCmd:            func(ctx context.Context, msg *PubSubCommandMessage) { _ = rs.audit.HandleDirectCmdRequest(ctx, msg) },
+		constants.Event.Operator.Audit.DirectCmdResult: func(ctx context.Context, msg *PubSubCommandMessage) {
+			_ = rs.audit.HandleDirectCmdResultRequest(ctx, msg)
+		},
+		constants.Event.Operator.FetchFileDiff.Requested: rs.history.HandleFetchFileDiffRequest,
 		constants.Event.Operator.Mcp.CallRequested: func(ctx context.Context, msg *PubSubCommandMessage) {
 			if _, err := rs.handleMcpCallRequestSync(ctx, msg); err != nil {
 				rs.logger.Error("MCP call request handler failed", "error", err)

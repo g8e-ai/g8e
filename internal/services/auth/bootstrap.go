@@ -62,7 +62,7 @@ const (
 	bootstrapMaxAttempts = 5
 	bootstrapBaseDelay   = 1 * time.Second
 	bootstrapMaxDelay    = 30 * time.Second
-	maxResponseBytes    = 1 << 20
+	maxResponseBytes     = 1 << 20
 )
 
 // BootstrapService handles configuration bootstrap from Auth Services via HTTP
@@ -88,9 +88,11 @@ func NewBootstrapService(cfg *config.Config, logger *slog.Logger, tlsConfig *cer
 		}
 	} else {
 		// Legacy path: use global state (will be removed after migration)
+		// nolint:staticcheck // SA1019: deprecated - legacy fallback path
 		if cfg.TLSServerName != "" {
 			client, err = httpclient.NewWithServerName(cfg.TLSServerName)
 		} else {
+			// nolint:staticcheck // SA1019: deprecated - legacy fallback path
 			client, err = httpclient.New()
 		}
 	}

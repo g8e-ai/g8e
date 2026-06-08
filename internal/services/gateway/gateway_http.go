@@ -190,30 +190,6 @@ func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func (h *HTTPHandler) corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin != "" {
-			// Security: validate origin is localhost for CLI bootstrap
-			// This prevents CSRF attacks while allowing local browser-based registration
-			if !isLoopbackOrigin(origin) {
-				h.logger.Warn("CORS request rejected: non-local Origin", "origin", origin, "path", r.URL.Path)
-				h.responder.Error(w, http.StatusForbidden, "origin not allowed")
-				return
-			}
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		}
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
 // corsMiddlewareForCLIPasskey is a more permissive CORS middleware that allows
 // local network IPs to support port forwarding scenarios for CLI passkey bootstrap.
 func (h *HTTPHandler) corsMiddlewareForCLIPasskey(next http.Handler) http.Handler {
@@ -485,27 +461,6 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	return h.pathTraversalGuard(h.rateLimitMiddleware(mux))
 }
 
-func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
-	mux := http.NewServeMux()
-
-	// Health check - available on bootstrap port for initialization monitoring
-	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
-
-	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
-	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handleLocalBootstrap)
-	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)
-	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
-	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
-	mux.HandleFunc(constants.APIPaths.BootstrapCALinux, h.pkiController.handleTrustScriptLinux)
-	mux.HandleFunc(constants.APIPaths.BootstrapCAWindows, h.pkiController.handleTrustScriptWindows)
-	mux.HandleFunc("/.well-known/g8e/pki/trust-windows", h.pkiController.handleTrustScriptWindowsAlias)
-	mux.HandleFunc("/.well-known/g8e/bin/", h.pkiController.handleNodeBinaryDownload)
-	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)
-	mux.HandleFunc(constants.APIPaths.DeployScriptWindows, h.pkiController.handleDeployScriptWindows)
-
-	return h.pathTraversalGuard(h.auth.Middleware(mux))
-}
-
 func (h *HTTPHandler) buildMCPHttpRouter() http.Handler {
 	mux := http.NewServeMux()
 
@@ -575,7 +530,7 @@ func isLocalNetworkOrigin(origin string) bool {
 		return false
 	}
 	host := u.Hostname()
-	
+
 	// Allow loopback addresses
 	if host == "localhost" {
 		return true

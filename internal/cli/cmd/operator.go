@@ -506,7 +506,7 @@ func operatorStreamCmd() *cobra.Command {
 
 				if _, err := stdin.Write(binaryData); err != nil {
 					cmd.Printf("Failed to write binary to %s: %v\n", host, err)
-					sshCmd.Process.Kill()
+					_ = sshCmd.Process.Kill()
 					continue
 				}
 

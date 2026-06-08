@@ -16,6 +16,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 )
@@ -187,17 +188,17 @@ func isValidToolName(name string) bool {
 // validateInputSchema performs basic validation of a tool's input schema.
 func validateInputSchema(schema *InputSchema) error {
 	if schema == nil {
-		return fmt.Errorf(ErrSchemaNil)
+		return errors.New(ErrSchemaNil)
 	}
 
 	// Check for required "type" field
 	if schema.Type == "" {
-		return fmt.Errorf(ErrSchemaMissingType)
+		return errors.New(ErrSchemaMissingType)
 	}
 
 	// Check that type is "object"
 	if schema.Type != "object" {
-		return fmt.Errorf(ErrSchemaInvalidType)
+		return errors.New(ErrSchemaInvalidType)
 	}
 
 	return nil

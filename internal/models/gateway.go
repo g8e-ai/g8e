@@ -290,7 +290,7 @@ type WebSessionResponse struct {
 
 // PasskeyRegisterChallengeResponse is the typed response for POST /api/auth/passkeys/register/challenge.
 type PasskeyRegisterChallengeResponse struct {
-	Success bool                  `json:"success"`
+	Success bool                         `json:"success"`
 	Options *protocol.CredentialCreation `json:"options,omitempty"`
 }
 
@@ -305,8 +305,8 @@ type PasskeyAuthVerifyResponse struct {
 
 // WebSessionInfo contains web session details.
 type WebSessionInfo struct {
-	ID                 string `json:"id"`
-	ExpiresAtUnixMs    int64  `json:"expires_at_unix_ms"`
+	ID              string `json:"id"`
+	ExpiresAtUnixMs int64  `json:"expires_at_unix_ms"`
 }
 
 // UserCreateResponse is the typed response for POST /api/users.
@@ -332,18 +332,18 @@ type SuspendedTxResponse struct {
 
 // BootstrapResponse is the typed response for POST /api/auth/bootstrap.
 type BootstrapResponse struct {
-	Success            bool          `json:"success"`
-	User               *User         `json:"user,omitempty"`
-	UserID             string        `json:"user_id,omitempty"`
-	WebSession         *WebSessionInfo `json:"web_session,omitempty"`
-	OperatorCert       string        `json:"operator_cert,omitempty"`
-	OperatorCertChain  string        `json:"operator_cert_chain,omitempty"`
-	OperatorSessionID  string        `json:"operator_session_id,omitempty"`
-	OperatorID         string        `json:"operator_id,omitempty"`
-	CLISessionID       string        `json:"cli_session_id,omitempty"`
-	CLICert            string        `json:"cli_cert,omitempty"`
-	CLICertChain       string        `json:"cli_cert_chain,omitempty"`
-	HubTrustBundle     string        `json:"hub_trust_bundle,omitempty"`
+	Success           bool            `json:"success"`
+	User              *User           `json:"user,omitempty"`
+	UserID            string          `json:"user_id,omitempty"`
+	WebSession        *WebSessionInfo `json:"web_session,omitempty"`
+	OperatorCert      string          `json:"operator_cert,omitempty"`
+	OperatorCertChain string          `json:"operator_cert_chain,omitempty"`
+	OperatorSessionID string          `json:"operator_session_id,omitempty"`
+	OperatorID        string          `json:"operator_id,omitempty"`
+	CLISessionID      string          `json:"cli_session_id,omitempty"`
+	CLICert           string          `json:"cli_cert,omitempty"`
+	CLICertChain      string          `json:"cli_cert_chain,omitempty"`
+	HubTrustBundle    string          `json:"hub_trust_bundle,omitempty"`
 }
 
 // CLIEnrollmentResponse is the typed response for POST /api/auth/cli/enroll.
@@ -358,17 +358,17 @@ type CLIEnrollmentResponse struct {
 
 // DeviceEnrollmentResponse is the typed response for POST /api/auth/device/enroll.
 type DeviceEnrollmentResponse struct {
-	Success            bool   `json:"success"`
-	User               *User  `json:"user,omitempty"`
-	OperatorCert       string `json:"operator_cert"`
-	OperatorCertChain  string `json:"operator_cert_chain"`
-	HubTrustBundle     string `json:"hub_trust_bundle"`
-	OperatorSessionID  string `json:"operator_session_id"`
-	OperatorID         string `json:"operator_id"`
-	CLISessionID       string `json:"cli_session_id"`
-	CLICert            string `json:"cli_cert"`
-	CLICertChain       string `json:"cli_cert_chain"`
-	UserID             string `json:"user_id"`
+	Success           bool   `json:"success"`
+	User              *User  `json:"user,omitempty"`
+	OperatorCert      string `json:"operator_cert"`
+	OperatorCertChain string `json:"operator_cert_chain"`
+	HubTrustBundle    string `json:"hub_trust_bundle"`
+	OperatorSessionID string `json:"operator_session_id"`
+	OperatorID        string `json:"operator_id"`
+	CLISessionID      string `json:"cli_session_id"`
+	CLICert           string `json:"cli_cert"`
+	CLICertChain      string `json:"cli_cert_chain"`
+	UserID            string `json:"user_id"`
 }
 
 // PKIFingerprintResponse is the typed response for GET /.well-known/g8e/pki/fingerprint.
@@ -378,42 +378,42 @@ type PKIFingerprintResponse struct {
 
 // PKICSRSignResponse is the typed response for POST /.well-known/g8e/pki/csr/sign.
 type PKICSRSignResponse struct {
-	CertificatePEM       string `json:"certificate_pem"`
+	CertificatePEM      string `json:"certificate_pem"`
 	CertificateChainPEM string `json:"certificate_chain_pem"`
 }
 
 // PlatformSettings represents the typed settings within platform_settings.
 // Authority: protocol/models/platform_settings.json
 type PlatformSettings struct {
-	ActuatorKeyID              string `json:"actuator_key_id"`
-	OperatorSessionID          string `json:"operator_session_id,omitempty"`
-	LLMCommandGenEnabled       bool   `json:"llm_command_gen_enabled,omitempty"`
-	LLMCommandGenVerifier      bool   `json:"llm_command_gen_verifier,omitempty"`
-	LLMCommandGenPasses        int    `json:"llm_command_gen_passes,omitempty"`
-	GoogleSearchEnabled        bool   `json:"google_search_enabled,omitempty"`
-	GoogleSearchAPIKey         string `json:"google_search_api_key,omitempty"`
-	GoogleSearchEngineID       string `json:"google_search_engine_id,omitempty"`
-	VertexSearchEnabled        bool   `json:"vertex_search_enabled,omitempty"`
-	VertexSearchProjectID      string `json:"vertex_search_project_id,omitempty"`
+	ActuatorKeyID             string `json:"actuator_key_id"`
+	OperatorSessionID         string `json:"operator_session_id,omitempty"`
+	LLMCommandGenEnabled      bool   `json:"llm_command_gen_enabled,omitempty"`
+	LLMCommandGenVerifier     bool   `json:"llm_command_gen_verifier,omitempty"`
+	LLMCommandGenPasses       int    `json:"llm_command_gen_passes,omitempty"`
+	GoogleSearchEnabled       bool   `json:"google_search_enabled,omitempty"`
+	GoogleSearchAPIKey        string `json:"google_search_api_key,omitempty"`
+	GoogleSearchEngineID      string `json:"google_search_engine_id,omitempty"`
+	VertexSearchEnabled       bool   `json:"vertex_search_enabled,omitempty"`
+	VertexSearchProjectID     string `json:"vertex_search_project_id,omitempty"`
 	VertexSearchEngineID      string `json:"vertex_search_engine_id,omitempty"`
 	VertexSearchLocation      string `json:"vertex_search_location,omitempty"`
 	VertexSearchAPIKey        string `json:"vertex_search_api_key,omitempty"`
-	EnableCommandWhitelisting  bool   `json:"enable_command_whitelisting,omitempty"`
+	EnableCommandWhitelisting bool   `json:"enable_command_whitelisting,omitempty"`
 	EnableCommandBlacklisting bool   `json:"enable_command_blacklisting,omitempty"`
-	PasskeyRPName              string `json:"passkey_rp_name,omitempty"`
-	PasskeyRPID                string `json:"passkey_rp_id,omitempty"`
-	PasskeyOrigin              string `json:"passkey_origin,omitempty"`
-	AppURL                     string `json:"app_url,omitempty"`
-	AllowedOrigins             string `json:"allowed_origins,omitempty"`
-	SupervisorPort             int    `json:"supervisor_port,omitempty"`
+	PasskeyRPName             string `json:"passkey_rp_name,omitempty"`
+	PasskeyRPID               string `json:"passkey_rp_id,omitempty"`
+	PasskeyOrigin             string `json:"passkey_origin,omitempty"`
+	AppURL                    string `json:"app_url,omitempty"`
+	AllowedOrigins            string `json:"allowed_origins,omitempty"`
+	SupervisorPort            int    `json:"supervisor_port,omitempty"`
 }
 
 // SettingsDocument represents the platform_settings document structure.
 // Authority: protocol/models/platform_settings.json
 type SettingsDocument struct {
 	Settings  *PlatformSettings `json:"settings"`
-	CreatedAt time.Time          `json:"created_at"`
-	UpdatedAt time.Time          `json:"updated_at"`
+	CreatedAt time.Time         `json:"created_at"`
+	UpdatedAt time.Time         `json:"updated_at"`
 }
 
 // UserSettingsDocument represents the user_settings document structure.

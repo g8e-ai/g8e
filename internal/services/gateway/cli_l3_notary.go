@@ -36,9 +36,9 @@ import (
 // CLI sessions authenticate via mTLS certificates with SPIFFE URI SANs, and this
 // notary leverages that transport-layer authentication as the L3 proof.
 type CLIL3Notary struct {
-	db         *CanonicalDBService
-	pki        *PKIAuthority
-	logger     *slog.Logger
+	db            *CanonicalDBService
+	pki           *PKIAuthority
+	logger        *slog.Logger
 	userSvc       *UserService
 	cliSessionSvc *CLISessionService
 }
@@ -46,9 +46,9 @@ type CLIL3Notary struct {
 // NewCLIL3Notary creates a new CLI L3 notary.
 func NewCLIL3Notary(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, cliSessionSvc *CLISessionService) *CLIL3Notary {
 	return &CLIL3Notary{
-		db:         db,
-		pki:        pki,
-		logger:     logger,
+		db:            db,
+		pki:           pki,
+		logger:        logger,
 		userSvc:       userSvc,
 		cliSessionSvc: cliSessionSvc,
 	}

@@ -318,13 +318,14 @@ func stripJSONComments(data string) string {
 		}
 
 		if inString {
-			if ch == '\\' {
+			switch ch {
+			case '\\':
 				escapeNext = true
 				result = append(result, ch)
-			} else if ch == '"' {
+			case '"':
 				inString = false
 				result = append(result, ch)
-			} else {
+			default:
 				result = append(result, ch)
 			}
 			continue

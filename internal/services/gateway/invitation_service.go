@@ -101,8 +101,8 @@ func (s *InvitationService) FindActiveInvitationBySub(sub string) (*models.Invit
 // ConsumeInvitation marks an invitation as consumed.
 func (s *InvitationService) ConsumeInvitation(id string) error {
 	updates := struct {
-		IsConsumed bool   `json:"is_consumed"`
-		ConsumedAt int64  `json:"consumed_at"`
+		IsConsumed bool  `json:"is_consumed"`
+		ConsumedAt int64 `json:"consumed_at"`
 	}{
 		IsConsumed: true,
 		ConsumedAt: time.Now().UTC().UnixMilli(),

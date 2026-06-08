@@ -72,7 +72,6 @@ func generateTestCA() []byte {
 	})
 }
 
-
 func assertEmbeddedCATransport(t *testing.T, transport *http.Transport) {
 	t.Helper()
 	require.NotNil(t, transport.TLSClientConfig)

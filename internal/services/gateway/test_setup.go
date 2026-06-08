@@ -36,24 +36,24 @@ var (
 
 // TestInfrastructure holds common test setup components shared across gateway tests.
 type TestInfrastructure struct {
-	Cfg         *config.Config
-	Logger      *slog.Logger
-	DB          *CanonicalDBService
-	Pubsub      *PubSubBroker
-	SecretMgr   *SecretManager
-	PKI         *PKIAuthority
-	UserSvc     *UserService
-	PersonaSvc  *PersonaService
-	Responder   *response.Writer
-	Auth              *AuthService
-	CLISessionSvc     *CLISessionService
+	Cfg                *config.Config
+	Logger             *slog.Logger
+	DB                 *CanonicalDBService
+	Pubsub             *PubSubBroker
+	SecretMgr          *SecretManager
+	PKI                *PKIAuthority
+	UserSvc            *UserService
+	PersonaSvc         *PersonaService
+	Responder          *response.Writer
+	Auth               *AuthService
+	CLISessionSvc      *CLISessionService
 	OperatorSessionSvc *OperatorSessionService
-	WebSessionSvc     *WebSessionService
-	Reg               *RegistrationService
-	Passkey     *PasskeyService
-	DBDir       string
-	PKIDir      string
-	SecretsDir  string
+	WebSessionSvc      *WebSessionService
+	Reg                *RegistrationService
+	Passkey            *PasskeyService
+	DBDir              string
+	PKIDir             string
+	SecretsDir         string
 }
 
 // tempDir creates a temporary directory in the current working directory.
@@ -150,24 +150,24 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
 	return &TestInfrastructure{
-		Cfg:         cfg,
-		Logger:      logger,
-		DB:          db,
-		Pubsub:      pubsub,
-		SecretMgr:   sm,
-		PKI:         pki,
-		UserSvc:     userSvc,
-		PersonaSvc:  personaSvc,
-		Responder:   resp,
-		Auth:              auth,
-		CLISessionSvc:     cliSessionSvc,
+		Cfg:                cfg,
+		Logger:             logger,
+		DB:                 db,
+		Pubsub:             pubsub,
+		SecretMgr:          sm,
+		PKI:                pki,
+		UserSvc:            userSvc,
+		PersonaSvc:         personaSvc,
+		Responder:          resp,
+		Auth:               auth,
+		CLISessionSvc:      cliSessionSvc,
 		OperatorSessionSvc: operatorSessionSvc,
-		WebSessionSvc:     webSessionSvc,
-		Reg:               reg,
-		Passkey:     passkey,
-		DBDir:       dbDir,
-		PKIDir:      pkiDir,
-		SecretsDir:  secretsDir,
+		WebSessionSvc:      webSessionSvc,
+		Reg:                reg,
+		Passkey:            passkey,
+		DBDir:              dbDir,
+		PKIDir:             pkiDir,
+		SecretsDir:         secretsDir,
 	}
 }
 

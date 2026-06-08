@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	jwksHTTPTimeout       = 10 * time.Second
-	jwksCacheDuration     = 15 * time.Minute
-	jwksKeyTypeRSA        = "RSA"
-	jwksKeyUseSignature   = "sig"
+	jwksHTTPTimeout     = 10 * time.Second
+	jwksCacheDuration   = 15 * time.Minute
+	jwksKeyTypeRSA      = "RSA"
+	jwksKeyUseSignature = "sig"
 )
 
 type JWKS struct {

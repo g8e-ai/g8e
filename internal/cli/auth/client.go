@@ -647,7 +647,7 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 
 		assertion, err := AuthenticateWithWindowsHello(challengeData.Options.Response.RelyingPartyID, clientDataBytes)
 		if err != nil {
-			return fmt.Errorf("Windows Hello authentication failed: %w", err)
+			return fmt.Errorf("windows Hello authentication failed: %w", err)
 		}
 
 		// 3. Verify Authentication
@@ -836,7 +836,7 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 		clientDataBytes,
 	)
 	if err != nil {
-		return fmt.Errorf("Windows Hello registration failed: %w", err)
+		return fmt.Errorf("windows Hello registration failed: %w", err)
 	}
 
 	fmt.Printf("→ Windows Hello registration successful, verifying with gateway...\n")

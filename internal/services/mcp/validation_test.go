@@ -784,4 +784,3 @@ func TestValidateProcNetPath(t *testing.T) {
 		})
 	}
 }
-
