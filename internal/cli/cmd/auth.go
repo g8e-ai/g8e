@@ -302,7 +302,7 @@ func enrollWindowsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "enroll-windows",
 		Short: "Enroll via Windows Certificate Store (Windows only)",
-		Long:  `Generate an ECDSA P-384 keypair in the Windows Certificate Store, submit a CSR to the Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert. Use --tpm for TPM-backed keys via Windows Hello for Business.`,
+		Long:  `Generate an ECDSA P-256 keypair in the Windows Certificate Store, submit a CSR to the Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert. Use --tpm for TPM-backed keys via Windows Hello for Business.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
@@ -319,7 +319,7 @@ func enrollWindowsCmd() *cobra.Command {
 				return fmt.Errorf("failed to check bootstrap status: %w", err)
 			}
 
-			cmd.Println("Generating ECDSA P-384 keypair in Windows Certificate Store...")
+			cmd.Println("Generating ECDSA P-256 keypair in Windows Certificate Store...")
 			hostname, _ := os.Hostname()
 			csr, privKey, err := auth.GenerateWindowsCSR(fmt.Sprintf("g8e-windows-%s", hostname), useTPM)
 			if err != nil {

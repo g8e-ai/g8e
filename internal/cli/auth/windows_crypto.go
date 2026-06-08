@@ -24,6 +24,9 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 )
 
 // Windows CNG API constants
@@ -64,9 +67,9 @@ func GenerateWindowsCSR(commonName string, useTPM bool) (string, *ecdsa.PrivateK
 // generateSoftwareBackedCSR generates a CSR with a software-backed key in Windows cert store.
 func generateSoftwareBackedCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 	// For software-backed keys, we use standard Go crypto but import to Windows cert store
-	privKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate ECDSA P-384 key: %w", err)
+		return "", nil, fmt.Errorf("failed to generate ECDSA P-256 key: %w", err)
 	}
 
 	template := x509.CertificateRequest{
@@ -74,7 +77,7 @@ func generateSoftwareBackedCSR(commonName string) (string, *ecdsa.PrivateKey, er
 			CommonName:   commonName,
 			Organization: []string{"g8e"},
 		},
-		SignatureAlgorithm: x509.ECDSAWithSHA384,
+		SignatureAlgorithm: x509.ECDSAWithSHA256,
 	}
 
 	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
@@ -96,9 +99,9 @@ func generateTPMBackedCSR(commonName string) (string, *ecdsa.PrivateKey, error) 
 	// Windows Hello for Business requires CNG API calls
 	// For now, fall back to software key with TPM annotation
 	// Full implementation requires syscall access to CNG APIs
-	privKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate ECDSA P-384 key: %w", err)
+		return "", nil, fmt.Errorf("failed to generate ECDSA P-256 key: %w", err)
 	}
 
 	template := x509.CertificateRequest{
@@ -106,7 +109,7 @@ func generateTPMBackedCSR(commonName string) (string, *ecdsa.PrivateKey, error) 
 			CommonName:   commonName,
 			Organization: []string{"g8e"},
 		},
-		SignatureAlgorithm: x509.ECDSAWithSHA384,
+		SignatureAlgorithm: x509.ECDSAWithSHA256,
 	}
 
 	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
@@ -124,22 +127,46 @@ func generateTPMBackedCSR(commonName string) (string, *ecdsa.PrivateKey, error) 
 
 // ImportCertificateToWindowsStore imports a signed certificate into the Windows Personal store.
 func ImportCertificateToWindowsStore(certPEM string) error {
-	// Parse the certificate
-	block, _ := pem.Decode([]byte(certPEM))
-	if block == nil {
-		return fmt.Errorf("failed to parse certificate PEM")
-	}
-
-	cert, err := x509.ParseCertificate(block.Bytes)
+	// Create a temporary file for the certificate
+	tmpDir, err := os.MkdirTemp("", "g8e-cert-import-*")
 	if err != nil {
-		return fmt.Errorf("failed to parse certificate: %w", err)
+		return fmt.Errorf("failed to create temp directory: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	certFile := filepath.Join(tmpDir, "certificate.pem")
+	if err := os.WriteFile(certFile, []byte(certPEM), 0600); err != nil {
+		return fmt.Errorf("failed to write certificate to temp file: %w", err)
 	}
 
-	// Import to Windows cert store via Windows CryptoAPI
-	// This requires syscall access to Crypt32.dll
-	// For now, return success - full implementation requires Windows API bindings
-	_ = cert
-	return fmt.Errorf("Windows cert store import requires Windows API bindings (not yet implemented)")
+	// Use PowerShell with .NET X509Store to import the certificate
+	// This is more reliable than the Cert: drive which may not be available
+	psScript := fmt.Sprintf(`
+		$certPath = "%s"
+		$store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My", "CurrentUser")
+		$store.Open("ReadWrite")
+		
+		# Remove existing g8e certificates
+		$certs = $store.Certificates
+		foreach ($cert in $certs) {
+			if ($cert.Subject -like "*g8e*") {
+				$store.Remove($cert)
+			}
+		}
+		
+		# Import new certificate
+		$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($certPath)
+		$store.Add($cert)
+		$store.Close()
+	`, certFile)
+
+	psCmd := exec.Command("powershell", "-Command", psScript)
+	output, err := psCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to import certificate via PowerShell: %w, output: %s", err, string(output))
+	}
+
+	return nil
 }
 
 // SignWithWindowsHello signs a transaction hash using Windows Hello (TPM-backed key).

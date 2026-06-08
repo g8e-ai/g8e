@@ -395,6 +395,11 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	if passkeyRpID == "" {
 		passkeyRpID = "localhost"
 	}
+	// Normalize 127.0.0.1 to localhost for passkey RP ID
+	// WebAuthn requires RP ID to be a valid domain, not an IP address
+	if passkeyRpID == "127.0.0.1" {
+		passkeyRpID = "localhost"
+	}
 	passkeyRpName := opts.PasskeyRpName
 	if passkeyRpName == "" {
 		passkeyRpName = "g8e"
@@ -491,12 +496,12 @@ func Load(opts LoadOptions) (*Config, error) {
 	// Build config from explicit options
 	cfg := &Config{
 		// From options
-		CloudMode:         opts.CloudMode,
-		CloudProvider:     opts.CloudProvider,
+		CloudMode:             opts.CloudMode,
+		CloudProvider:         opts.CloudProvider,
 		ExecutionVaultEnabled: opts.ExecutionVaultEnabled,
-		WorkDir:           workDir,
-		PKIDir:            opts.PKIDir,
-		SecretsDir:        opts.SecretsDir,
+		WorkDir:               workDir,
+		PKIDir:                opts.PKIDir,
+		SecretsDir:            opts.SecretsDir,
 
 		// Derived values - ports default to values from paths.json
 		Endpoint:  opts.OperatorEndpoint,

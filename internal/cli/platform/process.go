@@ -199,6 +199,12 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int,
 	effectiveVaultKeyPath := vaultKeyPath
 	effectivePasskeyRpID := passkeyRpID
 	effectivePasskeyRpName := passkeyRpName
+
+	// Normalize 127.0.0.1 to localhost for passkey RP ID
+	// WebAuthn requires RP ID to be a valid domain, not an IP address
+	if effectivePasskeyRpID == "127.0.0.1" {
+		effectivePasskeyRpID = "localhost"
+	}
 	effectiveRateLimitRPS := rateLimitRPS
 	effectiveRateLimitBurst := rateLimitBurst
 	effectiveLogLevel := logLevel

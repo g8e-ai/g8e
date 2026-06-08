@@ -519,6 +519,10 @@ func CheckOperatorRunningAtURL(operatorURL string) error {
 	}
 
 	hostPort := parts[1]
+	// Force IPv4 by replacing localhost with 127.0.0.1 to prevent IPv6 resolution
+	if strings.HasPrefix(hostPort, "localhost:") {
+		hostPort = "127.0.0.1" + hostPort[9:]
+	}
 	// Try to connect to the port
 	conn, err := net.Dial(string(constants.NetworkProtocolTCP), hostPort)
 	if err != nil {
