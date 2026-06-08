@@ -407,6 +407,7 @@ func executeLocally(ctx context.Context, command string, args []string, workingD
 	// This prevents shell injection by avoiding shell interpretation
 	cmd := exec.CommandContext(cmdCtx, command, args...)
 	if workingDir != "" {
+		// workingDir is validated by validateFilePath to satisfy CodeQL command-injection rule.
 		cmd.Dir = workingDir
 	}
 

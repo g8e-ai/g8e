@@ -230,7 +230,7 @@ func (s *GitLedgerService) getGitRelativePath(filePath string) string {
 
 // copyToLedger copies a file from the host to the ledger, encrypting it if the vault is unlocked.
 // It uses streaming for unencrypted files to prevent OOM.
-func (s *GitLedgerService) copyToLedger(srcPath, dstPath string) error {
+func (s *GitLedgerService) copyToLedger(srcPath, dstPath string) (err error) {
 	dstDir := filepath.Dir(dstPath)
 	if err := os.MkdirAll(dstDir, 0755); err != nil {
 		return fmt.Errorf("ledger: failed to create mirror directory: %w", err)
@@ -271,13 +271,21 @@ func (s *GitLedgerService) copyToLedger(srcPath, dstPath string) error {
 	if err != nil {
 		return fmt.Errorf("ledger: failed to open source file: %w", err)
 	}
-	defer srcFile.Close()
+	defer func() {
+		if cerr := srcFile.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("ledger: failed to close source file: %w", cerr)
+		}
+	}()
 
 	dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("ledger: failed to create destination file: %w", err)
 	}
-	defer dstFile.Close()
+	defer func() {
+		if cerr := dstFile.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("ledger: failed to close destination file: %w", cerr)
+		}
+	}()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
 		return fmt.Errorf("ledger: failed to stream copy to ledger: %w", err)

@@ -81,6 +81,8 @@ func (t *SysContainerStatusTool) Execute(ctx context.Context, args json.RawMessa
 }
 
 func getContainerStatus(containerName string) (map[string]interface{}, error) {
+	// containerName is passed as a separate argument to exec.Command to satisfy CodeQL command-injection rule.
+	// This prevents shell injection by avoiding shell interpretation.
 	cmd := exec.Command("podman", "inspect", containerName)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
