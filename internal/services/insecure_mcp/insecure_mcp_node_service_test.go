@@ -373,7 +373,6 @@ func TestSystemWhich_EmptyBins(t *testing.T) {
 // system.run
 // ────────────────────────────────────────────────────────────────
 
-
 func TestSystemRun_NonZeroExit(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
@@ -592,7 +591,8 @@ func TestRunCommand_Timeout(t *testing.T) {
 	defer cancel()
 	sleepCmd := "sleep 10"
 	if runtime.GOOS == "windows" {
-		sleepCmd = "timeout /t 10"
+		// Use ping instead of timeout for more reliable timeout behavior
+		sleepCmd = "ping 127.0.0.1 -n 11"
 	}
 	_, timedOut := runCommand(ctx, systemRunParams{Command: getShellCommand(sleepCmd)})
 	if !timedOut {

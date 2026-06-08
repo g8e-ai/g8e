@@ -191,6 +191,11 @@ func validateInputSchema(schema *InputSchema) error {
 	}
 
 	// Check for required "type" field
+	if schema.Type == "" {
+		return fmt.Errorf(ErrSchemaMissingType)
+	}
+
+	// Check that type is "object"
 	if schema.Type != "object" {
 		return fmt.Errorf(ErrSchemaInvalidType)
 	}

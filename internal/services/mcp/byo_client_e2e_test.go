@@ -73,7 +73,6 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 
 	// Setup: Gateway service with signing key
 	_, privKey, _ := ed25519.GenerateKey(nil)
-	tmpDir := t.TempDir()
 
 	g := &GatewayService{
 		logger:            slog.Default(),
@@ -87,18 +86,18 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 	}
 
 	// Step 1: BYO client sends standard JSON-RPC MCP request
-	clientRequest := fmt.Sprintf(`{
+	clientRequest := `{
 		"jsonrpc": "2.0",
 		"id": 1,
 		"method": "tools/call",
 		"params": {
 			"name": "file_edit",
 			"arguments": {
-				"path": "%s/test.txt",
+				"path": "./test.txt",
 				"content": "Hello, World!"
 			}
 		}
-	}`, tmpDir)
+	}`
 
 	req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/call", strings.NewReader(clientRequest))
 	req.Header.Set("Content-Type", "application/json")
@@ -193,18 +192,18 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 	require.False(t, found, "Transaction should be deleted after successful execution")
 
 	// Step 7: Simulate client retry after approval (should now succeed)
-	retryRequest := fmt.Sprintf(`{
+	retryRequest := `{
 		"jsonrpc": "2.0",
 		"id": 2,
 		"method": "tools/call",
 		"params": {
 			"name": "file_edit",
 			"arguments": {
-				"path": "%s/test.txt",
+				"path": "./test.txt",
 				"content": "Hello, World!"
 			}
 		}
-	}`, tmpDir)
+	}`
 
 	// For the retry, we'll use a processor that succeeds immediately
 	successProcessor := &fakeEnvelopeProcessor{

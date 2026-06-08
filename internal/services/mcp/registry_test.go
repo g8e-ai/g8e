@@ -460,7 +460,7 @@ func TestValidateInputSchema(t *testing.T) {
 		expectedErr string
 	}{
 		{nil, ErrSchemaNil},
-		{&InputSchema{Type: ""}, ErrSchemaInvalidType},
+		{&InputSchema{Type: ""}, ErrSchemaMissingType},
 		{&InputSchema{Type: "array"}, ErrSchemaInvalidType},
 	}
 

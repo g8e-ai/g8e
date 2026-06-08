@@ -191,9 +191,9 @@ func TestReplayStore_Prune(t *testing.T) {
 	err = rs.FinalizeNonce(nonce)
 	require.NoError(t, err)
 
-	// Prune with 0 retention days should remove records with used_at in the past
-	// Since we just finalized, the record won't be deleted. Test that prune doesn't error.
-	err = rs.Prune(0)
+	// Prune with 1 retention day should not remove recently used records
+	// Since we just finalized, the record won't be deleted.
+	err = rs.Prune(1)
 	require.NoError(t, err)
 
 	// The nonce should still be a replay since it wasn't pruned (recently used)

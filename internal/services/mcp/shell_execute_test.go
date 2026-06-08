@@ -95,13 +95,17 @@ func TestShellExecuteTool_Execute_WithWorkingDir(t *testing.T) {
 
 	pwdCmd := "pwd"
 	if runtime.GOOS == "windows" {
-		pwdCmd = "cd"
+		pwdCmd = "cmd.exe"
 	}
 
 	req := ShellExecuteRequest{
 		Command:    pwdCmd,
 		WorkingDir: tmpDir,
 	}
+	if runtime.GOOS == "windows" {
+		req.Args = []string{"/c", "cd"}
+	}
+
 	reqJSON, err := json.Marshal(req)
 	require.NoError(t, err)
 
@@ -382,37 +386,42 @@ func TestShellExecuteTool_Execute_DefaultHostname(t *testing.T) {
 }
 
 func TestValidateForSSHExecution_BlocksShellMetacharacters(t *testing.T) {
+	tmpDir := "/tmp"
+	if runtime.GOOS == "windows" {
+		tmpDir = "C:\\tmp"
+	}
+
 	metacharacterTests := []struct {
 		command     string
 		args        []string
 		workingDir  string
 		expectError bool
 	}{
-		{"echo", []string{"test$(whoami)"}, "", true},     // $ in args
-		{"echo", []string{"test`whoami`"}, "", true},      // backtick in args
-		{"echo", []string{"test; rm -rf /"}, "", true},    // semicolon in args
-		{"echo", []string{"test& rm -rf /"}, "", true},    // ampersand in args
-		{"echo", []string{"test| rm -rf /"}, "", true},    // pipe in args
-		{"echo", []string{"test> /dev/null"}, "", true},   // redirect in args
-		{"echo", []string{"test< /etc/passwd"}, "", true}, // redirect in args
-		{"echo", []string{"test\nrm -rf /"}, "", true},    // newline in args
-		{"echo", []string{"test\r"}, "", true},            // carriage return in args
-		{"echo", []string{"test\\n"}, "", true},           // backslash in args
-		{"echo$(whoami)", []string{}, "", true},           // $ in command
-		{"echo`whoami`", []string{}, "", true},            // backtick in command
-		{"echo; rm", []string{}, "", true},                // semicolon in command
-		{"echo", []string{"test"}, "/tmp/test\n", true},   // newline in working dir
-		{"echo", []string{"test"}, "/tmp/test;", true},    // semicolon in working dir
-		{"echo", []string{"test"}, "/tmp/test$", true},    // $ in working dir
-		{"echo", []string{"test"}, "/tmp/test`", true},    // backtick in working dir
-		{"echo", []string{"test"}, "/tmp/test\\", true},   // backslash in working dir
-		{"echo", []string{"test"}, "/tmp/test|", true},    // pipe in working dir
-		{"echo", []string{"test"}, "/tmp/test>", true},    // redirect in working dir
-		{"echo", []string{"test"}, "/tmp/test<", true},    // redirect in working dir
-		{"echo", []string{"test"}, "/tmp/test&", true},    // ampersand in working dir
-		{"echo", []string{"test"}, "/tmp/test\r", true},   // carriage return in working dir
-		{"echo", []string{"test"}, "", false},             // safe: no metacharacters
-		{"cat", []string{"/etc/hostname"}, "", false},     // safe: normal command
+		{"echo", []string{"test$(whoami)"}, "", true},                             // $ in args
+		{"echo", []string{"test`whoami`"}, "", true},                              // backtick in args
+		{"echo", []string{"test; rm -rf /"}, "", true},                            // semicolon in args
+		{"echo", []string{"test& rm -rf /"}, "", true},                            // ampersand in args
+		{"echo", []string{"test| rm -rf /"}, "", true},                            // pipe in args
+		{"echo", []string{"test> /dev/null"}, "", true},                           // redirect in args
+		{"echo", []string{"test< /etc/passwd"}, "", true},                         // redirect in args
+		{"echo", []string{"test\nrm -rf /"}, "", true},                            // newline in args
+		{"echo", []string{"test\r"}, "", true},                                    // carriage return in args
+		{"echo", []string{"test\\n"}, "", true},                                   // backslash in args
+		{"echo$(whoami)", []string{}, "", true},                                   // $ in command
+		{"echo`whoami`", []string{}, "", true},                                    // backtick in command
+		{"echo; rm", []string{}, "", true},                                        // semicolon in command
+		{"echo", []string{"test"}, tmpDir + "/test\n", true},                      // newline in working dir
+		{"echo", []string{"test"}, tmpDir + "/test;", true},                       // semicolon in working dir
+		{"echo", []string{"test"}, tmpDir + "/test$", true},                       // $ in working dir
+		{"echo", []string{"test"}, tmpDir + "/test`", true},                       // backtick in working dir
+		{"echo", []string{"test"}, tmpDir + "/test\\", runtime.GOOS != "windows"}, // backslash in working dir (safe on Windows)
+		{"echo", []string{"test"}, tmpDir + "/test|", true},                       // pipe in working dir
+		{"echo", []string{"test"}, tmpDir + "/test>", true},                       // redirect in working dir
+		{"echo", []string{"test"}, tmpDir + "/test<", true},                       // redirect in working dir
+		{"echo", []string{"test"}, tmpDir + "/test&", true},                       // ampersand in working dir
+		{"echo", []string{"test"}, tmpDir + "/test\r", true},                      // carriage return in working dir
+		{"echo", []string{"test"}, "", false},                                     // safe: no metacharacters
+		{"cat", []string{"/etc/hostname"}, "", false},                             // safe: normal command
 	}
 
 	for _, tc := range metacharacterTests {

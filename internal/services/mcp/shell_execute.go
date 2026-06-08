@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -349,6 +350,10 @@ func validateForSSHExecution(command string, args []string, workingDir string) e
 	// Check working directory for shell metacharacters
 	if workingDir != "" {
 		for _, meta := range shellMetacharacters {
+			// On Windows, backslash is a legitimate path separator
+			if meta == "\\" && runtime.GOOS == "windows" {
+				continue
+			}
 			if strings.Contains(workingDir, meta) {
 				return fmt.Errorf("working directory contains shell metacharacter '%s' which is not allowed for SSH execution", meta)
 			}

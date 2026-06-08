@@ -209,6 +209,10 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 
 	wg.Wait()
 
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
 	if firstErr != nil {
 		return nil, firstErr
 	}

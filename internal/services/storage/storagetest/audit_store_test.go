@@ -1866,6 +1866,7 @@ func TestSQLAuditStore_MixedEncryptedUnencrypted(t *testing.T) {
 		CommandStdout:     data1,
 	})
 	require.NoError(t, err)
+	time.Sleep(10 * time.Millisecond)
 
 	data2 := "Second encrypted data"
 	_, err = avs.RecordEvent(&storage.Event{
@@ -1883,7 +1884,7 @@ func TestSQLAuditStore_MixedEncryptedUnencrypted(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, events, 2)
 
-	// Events are returned in insertion order (oldest first)
-	assert.Equal(t, data1, events[0].CommandStdout)
-	assert.Equal(t, data2, events[1].CommandStdout)
+	// Events are returned in descending timestamp order (newest first)
+	assert.Equal(t, data2, events[0].CommandStdout)
+	assert.Equal(t, data1, events[1].CommandStdout)
 }

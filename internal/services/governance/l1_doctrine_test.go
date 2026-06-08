@@ -1275,7 +1275,7 @@ func TestL1Doctrine_AnalyzeMCPArguments_RecursiveAnalysis(t *testing.T) {
 	}{
 		{
 			name:        "malicious command in nested object",
-			arguments:   fmt.Sprintf(`{"config": {"path": "%s", "command": "rm -rf /"}}`, tmpDir),
+			arguments:   fmt.Sprintf(`{"config": {"path": %q, "command": "rm -rf /"}}`, tmpDir),
 			expectBlock: true,
 			expectPath:  "config.command",
 		},

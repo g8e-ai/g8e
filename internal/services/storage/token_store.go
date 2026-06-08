@@ -232,7 +232,7 @@ func (ts *TokenStoreService) KVScanPrefix(ctx context.Context, prefix string) (m
 // KVDelete deletes a key-value pair.
 func (ts *TokenStoreService) KVDelete(key string) error {
 	if ts == nil || ts.db == nil {
-		return nil
+		return fmt.Errorf("token store is disabled")
 	}
 	ts.wg.Add(1)
 	defer ts.wg.Done()
