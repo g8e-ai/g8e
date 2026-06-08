@@ -52,7 +52,8 @@ func TestPubSubAvailable(t *testing.T, baseURL string) {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		t.Fatalf("testutil: pub/sub not available at %s: %v", baseURL, err)
+		t.Logf("testutil: pub/sub not available at %s: %v", baseURL, err)
+		t.Skip("skipping integration test; pub/sub stack not available")
 	}
 	ws.Close()
 }

@@ -128,7 +128,8 @@ type AttestationResponse struct {
 }
 
 // VerifyRegistration verifies a registration response.
-func (s *PasskeyService) VerifyRegistration(userID string, r *http.Request) (*models.PasskeyCredential, error) {
+// It accepts the raw JSON of the WebAuthn response.
+func (s *PasskeyService) VerifyRegistration(userID string, responseJSON []byte) (*models.PasskeyCredential, error) {
 	user, err := s.getUser(userID)
 	if err != nil {
 		return nil, err
@@ -141,6 +142,10 @@ func (s *PasskeyService) VerifyRegistration(userID string, r *http.Request) (*mo
 	if err != nil {
 		return nil, err
 	}
+
+	// Reconstruct request with the response body
+	r, _ := http.NewRequest(http.MethodPost, "/", bytes.NewReader(responseJSON))
+	r.Header.Set("Content-Type", "application/json")
 
 	credential, err := s.webauthn.FinishRegistration(user, *session, r)
 	if err != nil {
@@ -238,7 +243,8 @@ type AssertionResponse struct {
 }
 
 // VerifyAuthentication verifies an authentication assertion.
-func (s *PasskeyService) VerifyAuthentication(userID string, r *http.Request) (*models.PasskeyCredential, error) {
+// It accepts the raw JSON of the WebAuthn response.
+func (s *PasskeyService) VerifyAuthentication(userID string, responseJSON []byte) (*models.PasskeyCredential, error) {
 	user, err := s.getUser(userID)
 	if err != nil {
 		return nil, err
@@ -251,6 +257,10 @@ func (s *PasskeyService) VerifyAuthentication(userID string, r *http.Request) (*
 	if err != nil {
 		return nil, err
 	}
+
+	// Reconstruct request with the response body
+	r, _ := http.NewRequest(http.MethodPost, "/", bytes.NewReader(responseJSON))
+	r.Header.Set("Content-Type", "application/json")
 
 	credential, err := s.webauthn.FinishLogin(user, *session, r)
 	if err != nil {

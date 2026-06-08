@@ -42,7 +42,7 @@ func AuthenticateWithWindowsHello(rpID string, challenge []byte) (*WebAuthnAsser
 }
 
 // RegisterWithWindowsHello is a stub for non-Windows platforms.
-func RegisterWithWindowsHello(rpID, rpName, userID, userName string, challenge []byte) (*WebAuthnAttestationResponse, error) {
+func RegisterWithWindowsHello(rpID, rpName string, userIDBytes []byte, userName string, challenge []byte) (*WebAuthnAttestationResponse, error) {
 	return nil, fmt.Errorf("windows Hello registration is only available on Windows")
 }
 

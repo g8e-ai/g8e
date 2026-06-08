@@ -102,24 +102,58 @@ const (
 
 // HTTP header value constants.
 const (
-	HeaderValueNoSniff    = "nosniff"
-	HeaderValueDeny       = "DENY"
-	HeaderValueKeepAlive  = "keep-alive"
-	HeaderValueNoCache    = "no-cache"
-	HeaderValueTextEvent  = "text/event-stream"
+	HeaderValueNoSniff         = "nosniff"
+	HeaderValueDeny            = "DENY"
+	HeaderValueKeepAlive       = "keep-alive"
+	HeaderValueNoCache         = "no-cache"
+	HeaderValueTextEvent       = "text/event-stream"
 	HeaderValueApplicationJSON = "application/json"
-	HeaderValueXHTML      = "application/xhtml+xml"
-	HeaderValueXML        = "application/xml"
-	HeaderValueOctetStream = "application/octet-stream"
-	HeaderValuePEM        = "application/x-pem-file"
-	HeaderValueCRL        = "application/pkix-crl"
-	HeaderValueShell      = "application/x-sh"
-	HeaderValuePowerShell = "application/x-powershell"
+	HeaderValueXHTML           = "application/xhtml+xml"
+	HeaderValueXML             = "application/xml"
+	HeaderValueOctetStream     = "application/octet-stream"
+	HeaderValuePEM             = "application/x-pem-file"
+	HeaderValueCRL             = "application/pkix-crl"
+	HeaderValueShell           = "application/x-sh"
+	HeaderValuePowerShell      = "application/x-powershell"
 )
 
 // ContextKey is a custom type for context keys to avoid collisions with other packages.
 // Use these keys to store and retrieve values from context.Context values.
 type ContextKey string
+
+// AuthErrorReason is a typed string for authentication error reasons.
+type AuthErrorReason string
+
+const (
+	// AuthErrorReasonTTLExceeded indicates the session exceeded its time-to-live.
+	AuthErrorReasonTTLExceeded AuthErrorReason = "ttl_exceeded"
+	// AuthErrorReasonRetiredByRealLogin indicates the identity was retired by a real login.
+	AuthErrorReasonRetiredByRealLogin AuthErrorReason = "retired_by_real_login"
+	// AuthErrorReasonIdentityDisabled indicates the identity is disabled.
+	AuthErrorReasonIdentityDisabled AuthErrorReason = "identity_disabled"
+	// AuthErrorReasonInvalidSession indicates the session is invalid.
+	AuthErrorReasonInvalidSession AuthErrorReason = "invalid_session"
+	// AuthErrorReasonSessionExpired indicates the session has expired.
+	AuthErrorReasonSessionExpired AuthErrorReason = "session_expired"
+	// AuthErrorReasonCertificateRevoked indicates the certificate is revoked.
+	AuthErrorReasonCertificateRevoked AuthErrorReason = "certificate_revoked"
+	// AuthErrorReasonIdentityMismatch indicates the mTLS identity does not match.
+	AuthErrorReasonIdentityMismatch AuthErrorReason = "identity_mismatch"
+	// AuthErrorReasonAppPolicyNotFound indicates the app policy was not found.
+	AuthErrorReasonAppPolicyNotFound AuthErrorReason = "app_policy_not_found"
+	// AuthErrorReasonRateLimitExceeded indicates the rate limit was exceeded.
+	AuthErrorReasonRateLimitExceeded AuthErrorReason = "rate_limit_exceeded"
+	// AuthErrorReasonPayloadTooLarge indicates the payload exceeds the maximum allowed size.
+	AuthErrorReasonPayloadTooLarge AuthErrorReason = "payload_too_large"
+	// AuthErrorReasonCollectionNotAllowed indicates the collection is not in the allowed list.
+	AuthErrorReasonCollectionNotAllowed AuthErrorReason = "collection_not_allowed"
+	// AuthErrorReasonJWTInvalid indicates the JWT token is invalid.
+	AuthErrorReasonJWTInvalid AuthErrorReason = "jwt_invalid"
+	// AuthErrorReasonJWTMissingSubject indicates the JWT is missing the subject claim.
+	AuthErrorReasonJWTMissingSubject AuthErrorReason = "jwt_missing_subject"
+	// AuthErrorReasonNoInvitation indicates no active invitation was found for JIT provisioning.
+	AuthErrorReasonNoInvitation AuthErrorReason = "no_invitation"
+)
 
 const (
 	// ContextKeyUserID stores the authenticated user ID in context.

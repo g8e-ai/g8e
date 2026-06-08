@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"os/user"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -35,21 +36,24 @@ import (
 // PasskeyBootstrapServer handles the localhost HTTP server for passkey registration
 // during CLI bootstrap. It serves a simple HTML page that performs WebAuthn registration.
 type PasskeyBootstrapServer struct {
-	server     *http.Server
-	gatewayURL string
-	userID     string
-	userName   string
-	done       chan struct{}
-	success    bool
+	server       *http.Server
+	gatewayURL   string
+	userID       string
+	userName     string
+	cliSessionID string
+	done         chan struct{}
+	success      bool
+	errMessage   string
 }
 
 // NewPasskeyBootstrapServer creates a new localhost server for passkey registration
-func NewPasskeyBootstrapServer(gatewayURL, userID, userName string) *PasskeyBootstrapServer {
+func NewPasskeyBootstrapServer(gatewayURL, userID, userName, cliSessionID string) *PasskeyBootstrapServer {
 	return &PasskeyBootstrapServer{
-		gatewayURL: gatewayURL,
-		userID:     userID,
-		userName:   userName,
-		done:       make(chan struct{}),
+		gatewayURL:   gatewayURL,
+		userID:       userID,
+		userName:     userName,
+		cliSessionID: cliSessionID,
+		done:         make(chan struct{}),
 	}
 }
 
@@ -69,8 +73,8 @@ func (s *PasskeyBootstrapServer) Start() (string, error) {
 
 	s.server = &http.Server{
 		Handler:      mux,
-		ReadTimeout:  5 * time.Minute,
-		WriteTimeout: 5 * time.Minute,
+		ReadTimeout:  1 * time.Minute,
+		WriteTimeout: 1 * time.Minute,
 	}
 
 	go func() {
@@ -89,13 +93,14 @@ func (s *PasskeyBootstrapServer) Stop() {
 	_ = s.server.Shutdown(ctx)
 }
 
-// Wait waits for the registration to complete or timeout
-func (s *PasskeyBootstrapServer) Wait(timeout time.Duration) bool {
+// Wait waits for the registration to complete or timeout.
+// It returns (success, timedOut).
+func (s *PasskeyBootstrapServer) Wait(timeout time.Duration) (bool, bool) {
 	select {
 	case <-s.done:
-		return s.success
+		return s.success, false
 	case <-time.After(timeout):
-		return false
+		return false, true
 	}
 }
 
@@ -175,19 +180,21 @@ func (s *PasskeyBootstrapServer) handleIndex(w http.ResponseWriter, r *http.Requ
             const userID = "` + html.EscapeString(s.userID) + `";
             const userName = "` + html.EscapeString(s.userName) + `";
             const gatewayURL = "` + html.EscapeString(s.gatewayURL) + `";
+            const cliSessionID = "` + html.EscapeString(s.cliSessionID) + `";
             
             try {
                 statusDiv.style.display = 'block';
                 statusDiv.className = 'status loading';
                 statusDiv.textContent = 'Requesting registration challenge...';
 
-                // 1. Get Registration Challenge
-                const challengeResp = await fetch(gatewayURL + "/api/v1/auth/passkeys/cli-register/challenge", {
+                // 1. Get Registration Challenge (use browser CLI bootstrap endpoint - public, no auth required)
+                const challengeResp = await fetch(gatewayURL + "/api/v1/auth/passkeys/cli-browser-register/challenge", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         user_id: userID,
-                        user_name: userName
+                        user_name: userName,
+                        cli_session_id: cliSessionID
                     })
                 });
                 
@@ -217,12 +224,13 @@ func (s *PasskeyBootstrapServer) handleIndex(w http.ResponseWriter, r *http.Requ
 
                 statusDiv.textContent = 'Verifying registration...';
 
-                // 3. Verify Registration
-                const verifyResp = await fetch(gatewayURL + "/api/v1/auth/passkeys/cli-register/verify", {
+                // 3. Verify Registration (use browser CLI bootstrap endpoint - public, no auth required)
+                const verifyResp = await fetch(gatewayURL + "/api/v1/auth/passkeys/cli-browser-register/verify", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         user_id: userID,
+                        cli_session_id: cliSessionID,
                         attestation_response: {
                             id: credential.id,
                             rawId: bufferToBase64url(credential.rawId),
@@ -256,7 +264,8 @@ func (s *PasskeyBootstrapServer) handleIndex(w http.ResponseWriter, r *http.Requ
                 statusDiv.textContent = 'Error: ' + err.message;
                 
                 // Notify server that registration failed
-                await fetch("/register?status=error", { method: "POST" });
+                const errorMsg = encodeURIComponent(err.message);
+                await fetch("/register?status=error&error=" + errorMsg, { method: "POST" });
             }
         }
     </script>
@@ -270,12 +279,38 @@ func (s *PasskeyBootstrapServer) handleIndex(w http.ResponseWriter, r *http.Requ
 
 // handleRegister handles the registration completion callback
 func (s *PasskeyBootstrapServer) handleRegister(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Passkey bootstrap: Received registration callback")
+
+	// Security: only allow requests from the same origin (localhost server)
+	// This prevents CSRF attacks on the registration callback
+	origin := r.Header.Get("Origin")
+	if origin != "" {
+		// Validate origin matches the server's address
+		if !strings.HasPrefix(origin, "http://localhost:") {
+			log.Printf("Passkey bootstrap: Rejected non-localhost origin: %s", origin)
+			http.Error(w, "origin not allowed", http.StatusForbidden)
+			return
+		}
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+	}
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	if r.Method != http.MethodPost {
+		log.Printf("Passkey bootstrap: Invalid method %s", r.Method)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	status := r.URL.Query().Get("status")
+	s.errMessage = r.URL.Query().Get("error")
+	log.Printf("Passkey bootstrap: Registration status: %s, error: %s", status, s.errMessage)
 	s.success = (status == "success")
 	close(s.done)
 
@@ -296,7 +331,7 @@ func openBrowser(url string) error {
 }
 
 // RegisterPasskeyViaLocalhost starts a localhost server and guides the user through passkey registration
-func RegisterPasskeyViaLocalhost(cfg *config.Config, userID string) error {
+func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string) error {
 	gatewayURL := cfg.OperatorDiscoveryURL()
 
 	// Get current username for passkey registration
@@ -306,7 +341,7 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID string) error {
 	}
 	userName := currentUser.Username
 
-	server := NewPasskeyBootstrapServer(gatewayURL, userID, userName)
+	server := NewPasskeyBootstrapServer(gatewayURL, userID, userName, cliSessionID)
 
 	url, err := server.Start()
 	if err != nil {
@@ -339,12 +374,16 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID string) error {
 	fmt.Printf("═══════════════════════════════════════════════════════════════\n")
 	fmt.Printf("\n")
 
-	// Wait for registration to complete (5 minute timeout)
-	if !server.Wait(5 * time.Minute) {
+	// Wait for registration to complete (5 minute timeout for local registration to allow for slow user interaction)
+	success, timedOut := server.Wait(5 * time.Minute)
+	if timedOut {
 		return fmt.Errorf("passkey registration timed out")
 	}
 
-	if !server.success {
+	if !success {
+		if server.errMessage != "" {
+			return fmt.Errorf("passkey registration failed: %s", server.errMessage)
+		}
 		return fmt.Errorf("passkey registration failed")
 	}
 

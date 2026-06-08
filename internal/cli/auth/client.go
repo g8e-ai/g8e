@@ -540,6 +540,7 @@ func LoadCredentials(cfg *config.Config) (*Credentials, error) {
 
 // PerformNativeWindowsAuth attempts to authenticate using Windows Hello without a browser.
 func PerformNativeWindowsAuth(cfg *config.Config) error {
+	fmt.Printf("→ Starting native Windows Hello authentication...\n")
 	creds, err := LoadCredentials(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to load credentials: %w", err)
@@ -551,13 +552,17 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 		return fmt.Errorf("no CLI session ID found in credentials; run 'g8e auth login' to enroll first")
 	}
 
+	fmt.Printf("→ Loaded credentials - User ID: %s, CLI Session ID: %s\n", creds.UserID, creds.CLISessionID)
+
 	// Load CLI certificate for mTLS authentication
+	fmt.Printf("→ Loading CLI certificate from: %s\n", cfg.CLICertFile())
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
 		return fmt.Errorf("failed to load CLI certificate: %w", err)
 	}
 
 	// Load trust bundle for TLS verification
+	fmt.Printf("→ Loading trust bundle from: %s\n", cfg.TrustBundleFile())
 	caPEM, err := os.ReadFile(cfg.TrustBundleFile())
 	if err != nil {
 		return fmt.Errorf("failed to read trust bundle from %s: %w", cfg.TrustBundleFile(), err)
@@ -582,9 +587,11 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 	client := &http.Client{Transport: transport}
 
 	gatewayURL := cfg.OperatorPublicURL()
+	fmt.Printf("→ Gateway URL: %s\n", gatewayURL)
 
 	// 1. Get Authentication Challenge
 	challengeURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli/authenticate/challenge", gatewayURL)
+	fmt.Printf("→ Requesting authentication challenge from: %s\n", challengeURL)
 	reqBody, err := json.Marshal(models.PasskeyChallengeRequest{UserID: creds.UserID})
 	if err != nil {
 		return fmt.Errorf("failed to marshal challenge request: %w", err)
@@ -597,12 +604,14 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 	// Add CLI session ID header for auth middleware
 	req.Header.Set("X-G8E-CLI-Session-ID", creds.CLISessionID)
 
+	fmt.Printf("→ Sending authentication challenge request...\n")
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to get challenge: %w", err)
 	}
 	defer resp.Body.Close()
 
+	fmt.Printf("→ Challenge response status: %d\n", resp.StatusCode)
 	if resp.StatusCode == http.StatusOK {
 		var challengeData models.PasskeyChallengeResponse
 		if err := json.NewDecoder(resp.Body).Decode(&challengeData); err != nil {
@@ -612,14 +621,10 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 		if !challengeData.Success {
 			if challengeData.NeedsSetup {
 				fmt.Printf("No passkey registered for user %s. Starting registration...\n", creds.UserID)
-				if runtime.GOOS == "windows" {
-					if err := RegisterPasskeyWithWindowsHello(cfg, creds.UserID, creds.CLISessionID); err != nil {
-						return fmt.Errorf("passkey registration failed: %w", err)
-					}
-				} else {
-					if err := RegisterPasskeyViaLocalhost(cfg, creds.UserID); err != nil {
-						return fmt.Errorf("passkey registration failed: %w", err)
-					}
+				// Use browser-based registration on all platforms (including Windows)
+				// The browser's WebAuthn API properly handles Windows Hello integration
+				if err := RegisterPasskeyViaLocalhost(cfg, creds.UserID, creds.CLISessionID); err != nil {
+					return fmt.Errorf("passkey registration failed: %w", err)
 				}
 
 				// Re-attempt authentication after registration
@@ -629,7 +634,18 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 		}
 
 		// 2. Trigger Windows Hello
-		assertion, err := AuthenticateWithWindowsHello(challengeData.Options.Response.RelyingPartyID, []byte(challengeData.Options.Response.Challenge))
+		origin := fmt.Sprintf("https://%s", challengeData.Options.Response.RelyingPartyID)
+		clientDataJSON := map[string]interface{}{
+			"challenge": challengeData.Options.Response.Challenge,
+			"origin":    origin,
+			"type":      "webauthn.get",
+		}
+		clientDataBytes, err := json.Marshal(clientDataJSON)
+		if err != nil {
+			return fmt.Errorf("failed to marshal clientDataJSON: %w", err)
+		}
+
+		assertion, err := AuthenticateWithWindowsHello(challengeData.Options.Response.RelyingPartyID, clientDataBytes)
 		if err != nil {
 			return fmt.Errorf("Windows Hello authentication failed: %w", err)
 		}
@@ -641,7 +657,7 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 			"assertion_response": map[string]interface{}{
 				"id":                assertion.Id,
 				"rawId":             base64.RawURLEncoding.EncodeToString(assertion.RawId),
-				"clientDataJSON":    base64.RawURLEncoding.EncodeToString([]byte(challengeData.Options.Response.Challenge)), // Simplified: gateway expects the challenge or clientDataJSON
+				"clientDataJSON":    base64.RawURLEncoding.EncodeToString(clientDataBytes),
 				"authenticatorData": base64.RawURLEncoding.EncodeToString(assertion.AuthenticatorData),
 				"signature":         base64.RawURLEncoding.EncodeToString(assertion.Signature),
 				"userHandle":        base64.RawURLEncoding.EncodeToString(assertion.UserHandle),
@@ -684,28 +700,34 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 	}
 
 	body, _ := io.ReadAll(resp.Body)
+	fmt.Printf("→ Challenge request failed - Response body: %s\n", string(body))
 	return fmt.Errorf("challenge request failed (%d): %s", resp.StatusCode, string(body))
 }
 
 // RegisterPasskeyWithWindowsHello performs native passkey registration using Windows Hello APIs.
 func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID string) error {
 	gatewayURL := cfg.OperatorPublicURL()
+	fmt.Printf("→ Starting Windows Hello passkey registration for user %s\n", userID)
+	fmt.Printf("→ Gateway URL: %s\n", gatewayURL)
+	fmt.Printf("→ CLI Session ID: %s\n", cliSessionID)
 
-	// Fetch user information from gateway to get stored OS user information
-	userMeURL := fmt.Sprintf("%s/api/v1/users/me", gatewayURL)
-	userMeReq, err := http.NewRequest("GET", userMeURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create user me request: %w", err)
+	// Get local OS user information directly
+	localOSUser := getLocalOSUser()
+	if localOSUser == nil || localOSUser.Username == "" {
+		return fmt.Errorf("failed to get local OS user information")
 	}
-	userMeReq.Header.Set("X-G8E-CLI-Session-ID", cliSessionID)
+	userName := localOSUser.Username
+	fmt.Printf("→ OS username: %s\n", userName)
 
-	// Use mTLS client for user me request
+	// Load CLI certificate for mTLS authentication
+	fmt.Printf("→ Loading CLI certificate from: %s\n", cfg.CLICertFile())
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
 		return fmt.Errorf("failed to load CLI cert: %w", err)
 	}
 
 	// Load trust bundle for TLS verification
+	fmt.Printf("→ Loading trust bundle from: %s\n", cfg.TrustBundleFile())
 	caPEM, err := os.ReadFile(cfg.TrustBundleFile())
 	if err != nil {
 		return fmt.Errorf("failed to read trust bundle from %s: %w", cfg.TrustBundleFile(), err)
@@ -723,39 +745,9 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	}
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: tlsConfig}}
 
-	userMeResp, err := client.Do(userMeReq)
-	if err != nil {
-		return fmt.Errorf("failed to fetch user information: %w", err)
-	}
-	defer userMeResp.Body.Close()
-
-	if userMeResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(userMeResp.Body)
-		return fmt.Errorf("failed to get user information (%d): %s", userMeResp.StatusCode, string(body))
-	}
-
-	var userMeData struct {
-		Success bool         `json:"success"`
-		User    *models.User `json:"user"`
-	}
-	if err := json.NewDecoder(userMeResp.Body).Decode(&userMeData); err != nil {
-		return fmt.Errorf("failed to decode user information: %w", err)
-	}
-
-	if !userMeData.Success || userMeData.User == nil {
-		return fmt.Errorf("failed to get user information from gateway")
-	}
-
-	// Use stored OS user username
-	userName := ""
-	if userMeData.User.LocalOSUser != nil && userMeData.User.LocalOSUser.Username != "" {
-		userName = userMeData.User.LocalOSUser.Username
-	} else {
-		return fmt.Errorf("OS user information not found in user record - this should have been set during enrollment")
-	}
-
 	// 1. Get Registration Challenge
 	challengeURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli-register/challenge", gatewayURL)
+	fmt.Printf("→ Requesting registration challenge from: %s\n", challengeURL)
 	reqBody, err := json.Marshal(models.PasskeyRegisterChallengeRequest{
 		UserID:   userID,
 		UserName: userName,
@@ -771,14 +763,17 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	req.Header.Set("X-G8E-CLI-Session-ID", cliSessionID)
 
 	// Reuse the existing mTLS client for registration challenge
+	fmt.Printf("→ Sending registration challenge request...\n")
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to get registration challenge: %w", err)
 	}
 	defer resp.Body.Close()
 
+	fmt.Printf("→ Challenge response status: %d\n", resp.StatusCode)
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		fmt.Printf("→ Challenge response body: %s\n", string(body))
 		return fmt.Errorf("failed to get registration challenge (%d): %s", resp.StatusCode, string(body))
 	}
 
@@ -804,16 +799,47 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	}
 
 	// 2. Trigger Windows Hello Registration
+	fmt.Printf("→ Triggering Windows Hello registration prompt...\n")
+	fmt.Printf("→ Relying Party ID: %s\n", challengeData.Options.PublicKey.RelyingParty.ID)
+	fmt.Printf("→ Relying Party Name: %s\n", challengeData.Options.PublicKey.RelyingParty.Name)
+	// The gateway provides a base64url-encoded user ID
+	// Windows Hello API expects raw bytes for the user ID, so we need to decode it
+	// Windows Hello requires user ID to be 1-64 bytes per WEBAUTHN_MAX_USER_ID_LENGTH
+	userIDBase64 := challengeData.Options.PublicKey.User.ID
+	userIDBytes, err := base64.RawURLEncoding.DecodeString(userIDBase64)
+	if err != nil {
+		return fmt.Errorf("failed to decode user ID: %w", err)
+	}
+	if len(userIDBytes) > 64 {
+		return fmt.Errorf("user ID too long for Windows Hello: %d bytes (max 64)", len(userIDBytes))
+	}
+	fmt.Printf("→ Windows Hello user ID (decoded): %x (%d bytes)\n", userIDBytes, len(userIDBytes))
+
+	// Construct proper clientDataJSON for Windows Hello API
+	// WebAuthn requires clientDataJSON to contain: challenge, origin, type
+	origin := fmt.Sprintf("https://%s", challengeData.Options.PublicKey.RelyingParty.ID)
+	clientDataJSON := map[string]interface{}{
+		"challenge": challengeData.Options.PublicKey.Challenge,
+		"origin":    origin,
+		"type":      "webauthn.create",
+	}
+	clientDataBytes, err := json.Marshal(clientDataJSON)
+	if err != nil {
+		return fmt.Errorf("failed to marshal clientDataJSON: %w", err)
+	}
+
 	attestation, err := RegisterWithWindowsHello(
 		challengeData.Options.PublicKey.RelyingParty.ID,
 		challengeData.Options.PublicKey.RelyingParty.Name,
-		challengeData.Options.PublicKey.User.ID,
+		userIDBytes,
 		challengeData.Options.PublicKey.User.Name,
-		[]byte(challengeData.Options.PublicKey.Challenge),
+		clientDataBytes,
 	)
 	if err != nil {
 		return fmt.Errorf("Windows Hello registration failed: %w", err)
 	}
+
+	fmt.Printf("→ Windows Hello registration successful, verifying with gateway...\n")
 
 	// 3. Verify Registration
 	verifyURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli-register/verify", gatewayURL)
@@ -822,7 +848,7 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 		"attestation_response": map[string]interface{}{
 			"id":                attestation.Id,
 			"rawId":             base64.RawURLEncoding.EncodeToString(attestation.RawId),
-			"clientDataJSON":    base64.RawURLEncoding.EncodeToString([]byte(challengeData.Options.PublicKey.Challenge)),
+			"clientDataJSON":    base64.RawURLEncoding.EncodeToString(clientDataBytes),
 			"attestationObject": base64.RawURLEncoding.EncodeToString(attestation.AttestationObject),
 		},
 	}

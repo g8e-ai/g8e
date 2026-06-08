@@ -192,9 +192,20 @@ func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
 
 func (h *HTTPHandler) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			// Security: validate origin is localhost for CLI bootstrap
+			// This prevents CSRF attacks while allowing local browser-based registration
+			if !isLoopbackOrigin(origin) {
+				h.logger.Warn("CORS request rejected: non-local Origin", "origin", origin, "path", r.URL.Path)
+				h.responder.Error(w, http.StatusForbidden, "origin not allowed")
+				return
+			}
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -377,11 +388,16 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterVerify, h.authController.handleCLIPasskeyRegisterVerify)
 	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, h.authController.handleCLIPasskeyAuthenticateChallenge)
 	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify, h.authController.handleCLIPasskeyAuthenticateVerify)
+	// Browser-based CLI bootstrap endpoints (create web session after registration)
+	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/challenge", h.authController.handleCLIBrowserPasskeyRegisterChallenge)
+	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/verify", h.authController.handleCLIBrowserPasskeyRegisterVerify)
 	corsCLIPasskeyMux := h.corsMiddleware(cliPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, corsCLIPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterVerify, corsCLIPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, corsCLIPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify, corsCLIPasskeyMux)
+	mux.Handle("/api/v1/auth/passkeys/cli-browser-register/challenge", corsCLIPasskeyMux)
+	mux.Handle("/api/v1/auth/passkeys/cli-browser-register/verify", corsCLIPasskeyMux)
 
 	// Browser-facing data routes (require web session cookie)
 	authedMux := http.NewServeMux()
@@ -427,11 +443,16 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterVerify, h.authController.handleCLIPasskeyRegisterVerify)
 	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, h.authController.handleCLIPasskeyAuthenticateChallenge)
 	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify, h.authController.handleCLIPasskeyAuthenticateVerify)
+	// Browser-based CLI bootstrap endpoints (create web session after registration)
+	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/challenge", h.authController.handleCLIBrowserPasskeyRegisterChallenge)
+	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/verify", h.authController.handleCLIBrowserPasskeyRegisterVerify)
 	corsCLIPasskeyMux := h.corsMiddleware(cliPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, corsCLIPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterVerify, corsCLIPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, corsCLIPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify, corsCLIPasskeyMux)
+	mux.Handle("/api/v1/auth/passkeys/cli-browser-register/challenge", corsCLIPasskeyMux)
+	mux.Handle("/api/v1/auth/passkeys/cli-browser-register/verify", corsCLIPasskeyMux)
 
 	// Wrap with rate limiting
 	return h.pathTraversalGuard(h.rateLimitMiddleware(mux))
@@ -1102,7 +1123,13 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	origin := r.Header.Get("Origin")
+	if origin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+	} else {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+	}
 	w.Header().Set("X-Accel-Buffering", "no") // For Nginx
 
 	flusher, ok := w.(http.Flusher)

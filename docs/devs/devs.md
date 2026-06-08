@@ -112,6 +112,8 @@ The platform is built via the Makefile. Run `make help` for available targets.
 
 **Error handling:** Always check errors; wrap with context using `fmt.Errorf("component: action: %w", err)`
 
+**Typed errors:** Define typed error constants for error reasons instead of hand-trolled strings. When adding error types, check for any hand-trolled strings that should be properly typed errors (e.g., error reason strings, status codes, rejection reasons). Define these as typed constants in `internal/constants/` and use them consistently across the codebase.
+
 **No panics** in production paths; return errors instead
 
 **Concurrency:** Use `context.Context` for cancellation; manage goroutines with `sync.WaitGroup` or channels

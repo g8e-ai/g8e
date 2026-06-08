@@ -186,6 +186,7 @@ func setupA2AGatewayTest(t *testing.T, testName string, downstreamHandler http.H
 	require.Eventually(t, func() bool { return ls.IsReady() }, 10*time.Second, 100*time.Millisecond)
 
 	cleanup := func() {
+		_ = ls.Stop(context.Background())
 		cancel()
 		downstreamServer.Close()
 	}

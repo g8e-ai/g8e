@@ -20,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/google/uuid"
 )
 
 // OperatorRegistrationRequest is the inbound body for /api/pki/device-enroll (CSR-based enrollment).
@@ -252,15 +253,34 @@ type Authenticator struct {
 
 // WebAuthnUser implements webauthn.User interface.
 func (u *User) WebAuthnID() []byte {
+	// For WebAuthn v4 compliance (2026), use a dedicated GUID instead of Windows SID
+	// Windows Hello v4 requires a stable 16-byte GUID, not a variable-length SID string
+	if u.WebAuthnUserID != "" {
+		// Parse the GUID string and return as bytes (16 bytes)
+		guidBytes, err := uuid.Parse(u.WebAuthnUserID)
+		if err == nil {
+			return guidBytes[:]
+		}
+		// If GUID parsing fails, fall back to ID
+	}
+	// Fallback to internal user ID for backward compatibility or when WebAuthnUserID is not set
 	return []byte(u.ID)
 }
 
 func (u *User) WebAuthnName() string {
+	// For Windows Hello, use the OS username as the WebAuthn identifier
+	if u.LocalOSUser != nil && u.LocalOSUser.Username != "" {
+		return u.LocalOSUser.Username
+	}
 	// Zero-PII: Use user ID as the WebAuthn identifier instead of email
 	return u.ID
 }
 
 func (u *User) WebAuthnDisplayName() string {
+	// For Windows Hello, use the OS username as the display name
+	if u.LocalOSUser != nil && u.LocalOSUser.Username != "" {
+		return u.LocalOSUser.Username
+	}
 	// Zero-PII: Use user ID as the display name instead of name
 	return u.ID
 }
@@ -370,7 +390,8 @@ type User struct {
 	Status      constants.UserStatus `json:"status,omitempty"`
 	IsBootstrap bool                 `json:"is_bootstrap,omitempty"`
 
-	LocalOSUser *LocalOSUser `json:"local_os_user,omitempty"`
+	LocalOSUser    *LocalOSUser `json:"local_os_user,omitempty"`
+	WebAuthnUserID string       `json:"webauthn_user_id,omitempty"` // GUID for WebAuthn v4 compliance (Windows Hello)
 }
 
 // IsActive reports whether the user is permitted to authenticate. Treats the

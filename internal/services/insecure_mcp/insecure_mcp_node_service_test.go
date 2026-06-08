@@ -587,16 +587,17 @@ func TestRunCommand_NonZeroExit(t *testing.T) {
 
 func TestRunCommand_Timeout(t *testing.T) {
 	t.Parallel()
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	sleepCmd := "sleep 10"
 	if runtime.GOOS == "windows" {
-		// Use ping instead of timeout for more reliable timeout behavior
-		sleepCmd = "ping 127.0.0.1 -n 11"
+		// powershell's Start-Sleep is more reliable than ping for sleeping
+		sleepCmd = "powershell -Command Start-Sleep -s 10"
 	}
-	_, timedOut := runCommand(ctx, systemRunParams{Command: getShellCommand(sleepCmd)})
+	result, timedOut := runCommand(ctx, systemRunParams{Command: getShellCommand(sleepCmd)})
 	if !timedOut {
-		t.Error("expected timedOut=true")
+		t.Errorf("expected timedOut=true, got false. ExitCode: %v, Stdout: %q, Stderr: %q",
+			result.exitCode, result.stdout, result.stderr)
 	}
 }
 

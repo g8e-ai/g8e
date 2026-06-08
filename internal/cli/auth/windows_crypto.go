@@ -32,31 +32,35 @@ import (
 	"unsafe"
 )
 
-// Windows CNG API constants
+// Windows WebAuthn API constants - Using API Version 4 (stable, modern version)
 const (
-	PROV_RSA_FULL               = 1
-	AT_KEYEXCHANGE              = 1
-	AT_SIGNATURE                = 2
-	CRYPT_MACHINE_KEYSET        = 0x00000020
-	CRYPT_USER_KEYSET           = 0x00000000
-	CRYPT_EXPORTABLE            = 0x00000001
-	CRYPT_USER_PROTECTED        = 0x00000002
-	CRYPT_ARCHIVABLE            = 0x00004000
-	CRYPT_SILENT                = 0x00000040
-	MS_ENHANCED_PROV            = "Microsoft Enhanced Cryptographic Provider v1.0"
-	MS_PLATFORM_CRYPTO_PROVIDER = "Microsoft Platform Crypto Provider"
-
-	// WebAuthn constants
-	WEBAUTHN_API_VERSION_1                             = 1
-	WEBAUTHN_API_VERSION_2                             = 2
-	WEBAUTHN_API_VERSION_3                             = 3
-	WEBAUTHN_API_VERSION_4                             = 4
-	WEBAUTHN_HASH_ALG_SHA_256                          = "SHA-256"
-	WEBAUTHN_AUTHENTICATOR_ATTACHMENT_CROSS_PLATFORM   = 1
-	WEBAUTHN_AUTHENTICATOR_ATTACHMENT_PLATFORM         = 2
-	WEBAUTHN_USER_VERIFICATION_REQUIREMENT_REQUIRED    = 1
-	WEBAUTHN_USER_VERIFICATION_REQUIREMENT_PREFERRED   = 2
-	WEBAUTHN_USER_VERIFICATION_REQUIREMENT_DISCOURAGED = 3
+	WEBAUTHN_API_VERSION_1                                         = 1
+	WEBAUTHN_API_VERSION_2                                         = 2
+	WEBAUTHN_API_VERSION_3                                         = 3
+	WEBAUTHN_API_VERSION_4                                         = 4
+	WEBAUTHN_API_VERSION_5                                         = 5
+	WEBAUTHN_API_VERSION_6                                         = 6
+	WEBAUTHN_API_VERSION_7                                         = 7
+	WEBAUTHN_API_VERSION_8                                         = 8
+	WEBAUTHN_API_VERSION_9                                         = 9
+	WEBAUTHN_API_CURRENT_VERSION                                   = WEBAUTHN_API_VERSION_9
+	WEBAUTHN_RP_ENTITY_INFORMATION_CURRENT_VERSION                 = 1
+	WEBAUTHN_USER_ENTITY_INFORMATION_CURRENT_VERSION               = 1
+	WEBAUTHN_CLIENT_DATA_CURRENT_VERSION                           = 1
+	WEBAUTHN_COSE_CREDENTIAL_PARAMETER_CURRENT_VERSION             = 1
+	WEBAUTHN_CREDENTIAL_CURRENT_VERSION                            = 1
+	WEBAUTHN_AUTHENTICATOR_MAKE_CREDENTIAL_OPTIONS_CURRENT_VERSION = 5
+	WEBAUTHN_AUTHENTICATOR_GET_ASSERTION_OPTIONS_CURRENT_VERSION   = 6
+	WEBAUTHN_CREDENTIAL_ATTESTATION_CURRENT_VERSION                = 4
+	WEBAUTHN_ASSERTION_CURRENT_VERSION                             = 3
+	WEBAUTHN_AUTHENTICATOR_ATTACHMENT_PLATFORM                     = 1
+	WEBAUTHN_AUTHENTICATOR_ATTACHMENT_CROSS_PLATFORM               = 2
+	WEBAUTHN_USER_VERIFICATION_REQUIRED                            = 3
+	WEBAUTHN_USER_VERIFICATION_PREFERRED                           = 2
+	WEBAUTHN_USER_VERIFICATION_DISCOURAGED                         = 1
+	WEBAUTHN_RESIDENT_KEY_DISCOURAGED                              = 0
+	WEBAUTHN_RESIDENT_KEY_REQUIRED                                 = 1
+	WEBAUTHN_ATTESTATION_CONVEYANCE_PREFERENCE_NONE                = 0
 )
 
 var (
@@ -88,14 +92,30 @@ type webauthnCredentials struct {
 	Credentials **webauthnCredential
 }
 
+type webauthnExtensions struct {
+	Count      uint32
+	Extensions uintptr // PWEBAUTHN_EXTENSION
+}
+
 type webauthnAuthenticatorGetAssertionOptions struct {
 	StructVersion               uint32
 	TimeoutMilliseconds         uint32
 	AllowCredentials            webauthnCredentials
-	Extensions                  uintptr // PWEBAUTHN_EXTENSIONS
+	Extensions                  webauthnExtensions
 	AuthenticatorAttachment     uint32
 	UserVerificationRequirement uint32
-	// Add more if needed based on version
+	Flags                       uint32
+	// Version 2 fields
+	U2fAppId     *uint16 // PCWSTR
+	U2fAppIdUsed *int32  // BOOL*
+	// Version 3 fields
+	CancellationId uintptr // GUID*
+	// Version 4 fields
+	AllowCredentialList uintptr // PWEBAUTHN_CREDENTIAL_LIST
+	// Version 5 fields
+	CredLargeBlobOperation uint32
+	CredLargeBlobSize      uint32
+	CredLargeBlob          *byte
 }
 
 type webauthnAssertion struct {
@@ -141,12 +161,20 @@ type webauthnAuthenticatorMakeCredentialOptions struct {
 	StructVersion                   uint32
 	TimeoutMilliseconds             uint32
 	CredentialList                  webauthnCredentials
-	Extensions                      uintptr // PWEBAUTHN_EXTENSIONS
+	Extensions                      webauthnExtensions
 	AuthenticatorAttachment         uint32
-	ResidentKeyRequirement          uint32
+	ResidentKeyRequirement          int32 // BOOL
 	UserVerificationRequirement     uint32
 	AttestationConveyancePreference uint32
 	Flags                           uint32
+	// Version 2 fields
+	CancellationId uintptr // GUID*
+	// Version 3 fields
+	ExcludeCredentialList uintptr // PWEBAUTHN_CREDENTIAL_LIST
+	// Version 4 fields
+	EnterpriseAttestation uint32
+	LargeBlobSupport      uint32
+	PreferResidentKey     int32 // BOOL
 }
 
 type webauthnCredentialAttestation struct {
@@ -160,17 +188,6 @@ type webauthnCredentialAttestation struct {
 	AttestationObject     *byte
 	CredentialIdSize      uint32
 	CredentialId          *byte
-}
-
-// Windows CryptoAPI structures
-type CRYPT_KEY_PROV_INFO struct {
-	pwszContainerName *uint16
-	pwszProvName      *uint16
-	dwProvType        uint32
-	dwFlags           uint32
-	cProvParam        uint32
-	rgProvParam       uintptr
-	rgdwProvParam     *uint32
 }
 
 // GenerateWindowsCSR generates a CSR using Windows CNG APIs.
@@ -376,36 +393,42 @@ type WebAuthnAttestationResponse struct {
 }
 
 // RegisterWithWindowsHello performs native WebAuthn/FIDO2 registration using webauthn.dll.
-func RegisterWithWindowsHello(rpID, rpName, userID, userName string, challenge []byte) (*WebAuthnAttestationResponse, error) {
+// Updated to use WEBAUTHN_API_VERSION_4 for better compatibility with modern Windows versions.
+func RegisterWithWindowsHello(rpID, rpName string, userIDBytes []byte, userName string, challenge []byte) (*WebAuthnAttestationResponse, error) {
 	// 1. Check if webauthn.dll is available
 	if err := modWebAuthN.Load(); err != nil {
 		return nil, fmt.Errorf("webauthn.dll not found: %w", err)
 	}
 
-	// 2. Prepare RP info
+	// 2. Get API version to ensure compatibility
+	apiVersion, _, _ := procWebAuthNGetApiVersionNumber.Call()
+	if apiVersion < WEBAUTHN_API_VERSION_4 {
+		return nil, fmt.Errorf("Windows Hello API version %d is too old, minimum required is 4", apiVersion)
+	}
+
+	// 3. Prepare RP info
 	rpIDPtr, _ := syscall.UTF16PtrFromString(rpID)
 	rpNamePtr, _ := syscall.UTF16PtrFromString(rpName)
 	rpInfo := webauthnRpEntityInformation{
-		StructVersion: WEBAUTHN_API_VERSION_1,
+		StructVersion: WEBAUTHN_RP_ENTITY_INFORMATION_CURRENT_VERSION,
 		Id:            rpIDPtr,
 		Name:          rpNamePtr,
 	}
 
-	// 3. Prepare User info
+	// 4. Prepare User info
 	userNamePtr, _ := syscall.UTF16PtrFromString(userName)
-	userIDBytes := []byte(userID)
 	userInfo := webauthnUserEntityInformation{
-		StructVersion: WEBAUTHN_API_VERSION_1,
+		StructVersion: WEBAUTHN_USER_ENTITY_INFORMATION_CURRENT_VERSION,
 		IdSize:        uint32(len(userIDBytes)),
 		Id:            &userIDBytes[0],
 		Name:          userNamePtr,
 		DisplayName:   userNamePtr,
 	}
 
-	// 4. Prepare Credential Parameters (ES256)
+	// 5. Prepare Credential Parameters (ES256)
 	pubKeyCredType, _ := syscall.UTF16PtrFromString("public-key")
 	credParam := webauthnCoseCredentialParameter{
-		StructVersion:  WEBAUTHN_API_VERSION_1,
+		StructVersion:  WEBAUTHN_COSE_CREDENTIAL_PARAMETER_CURRENT_VERSION,
 		CredentialType: pubKeyCredType,
 		Alg:            -7, // ES256
 	}
@@ -414,23 +437,28 @@ func RegisterWithWindowsHello(rpID, rpName, userID, userName string, challenge [
 		Parameters: &credParam,
 	}
 
-	// 5. Prepare Client Data
+	// 6. Prepare Client Data
+	// Windows Hello expects the full clientDataJSON as a UTF-8 string
+	// The challenge parameter should already be the JSON-encoded clientDataJSON
+	hashAlgId, _ := syscall.UTF16PtrFromString("SHA-256")
 	clientData := webauthnClientData{
-		StructVersion:  WEBAUTHN_API_VERSION_1,
+		StructVersion:  WEBAUTHN_CLIENT_DATA_CURRENT_VERSION,
 		ClientDataSize: uint32(len(challenge)),
 		ClientData:     &challenge[0],
-		HashAlgId:      nil,
+		HashAlgId:      hashAlgId,
 	}
 
-	// 6. Prepare Options
+	// 7. Prepare Options with API version 4
 	options := webauthnAuthenticatorMakeCredentialOptions{
-		StructVersion:               WEBAUTHN_API_VERSION_1,
-		TimeoutMilliseconds:         60000,
-		AuthenticatorAttachment:     WEBAUTHN_AUTHENTICATOR_ATTACHMENT_PLATFORM,
-		UserVerificationRequirement: WEBAUTHN_USER_VERIFICATION_REQUIREMENT_REQUIRED,
+		StructVersion:                   WEBAUTHN_AUTHENTICATOR_MAKE_CREDENTIAL_OPTIONS_CURRENT_VERSION,
+		TimeoutMilliseconds:             60000,
+		AuthenticatorAttachment:         WEBAUTHN_AUTHENTICATOR_ATTACHMENT_PLATFORM,
+		UserVerificationRequirement:     WEBAUTHN_USER_VERIFICATION_REQUIRED,
+		ResidentKeyRequirement:          WEBAUTHN_RESIDENT_KEY_DISCOURAGED,
+		AttestationConveyancePreference: WEBAUTHN_ATTESTATION_CONVEYANCE_PREFERENCE_NONE,
 	}
 
-	// 7. Call WebAuthNAuthenticatorMakeCredential
+	// 8. Call WebAuthNAuthenticatorMakeCredential
 	var pAttestation *webauthnCredentialAttestation
 	ret, _, _ := procWebAuthNAuthenticatorMakeCredential.Call(
 		0,
@@ -447,7 +475,7 @@ func RegisterWithWindowsHello(rpID, rpName, userID, userName string, challenge [
 	}
 	defer procWebAuthNFreeCredentialAttestation.Call(uintptr(unsafe.Pointer(pAttestation)))
 
-	// 8. Extract result
+	// 9. Extract result
 	response := &WebAuthnAttestationResponse{
 		RawId:             make([]byte, pAttestation.CredentialIdSize),
 		AuthenticatorData: make([]byte, pAttestation.AuthenticatorDataSize),
@@ -463,40 +491,43 @@ func RegisterWithWindowsHello(rpID, rpName, userID, userName string, challenge [
 }
 
 // AuthenticateWithWindowsHello performs native WebAuthn/FIDO2 authentication using webauthn.dll.
+// Updated to use WEBAUTHN_API_VERSION_4 for better compatibility with modern Windows versions.
 func AuthenticateWithWindowsHello(rpID string, challenge []byte) (*WebAuthnAssertionResponse, error) {
 	// 1. Check if webauthn.dll is available
 	if err := modWebAuthN.Load(); err != nil {
 		return nil, fmt.Errorf("webauthn.dll not found: %w", err)
 	}
 
-	// 2. Prepare RP ID
+	// 2. Get API version to ensure compatibility
+	apiVersion, _, _ := procWebAuthNGetApiVersionNumber.Call()
+	if apiVersion < WEBAUTHN_API_VERSION_4 {
+		return nil, fmt.Errorf("Windows Hello API version %d is too old, minimum required is 4", apiVersion)
+	}
+
+	// 3. Prepare RP ID
 	rpIDPtr, err := syscall.UTF16PtrFromString(rpID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid RP ID: %w", err)
 	}
 
-	// 3. Prepare Client Data
-	// In a real WebAuthn flow, clientDataJSON is complex.
-	// Windows Hello API often expects the raw challenge if used in certain ways,
-	// but for standard WebAuthn it expects the hash or the full JSON.
-	// For g8e, we'll follow what the browser does: it signs the clientDataJSON which contains the challenge.
-	// However, the Windows API can also take raw data.
+	// 4. Prepare Client Data
+	hashAlgId, _ := syscall.UTF16PtrFromString("SHA-256")
 	clientData := webauthnClientData{
-		StructVersion:  WEBAUTHN_API_VERSION_1,
+		StructVersion:  WEBAUTHN_CLIENT_DATA_CURRENT_VERSION,
 		ClientDataSize: uint32(len(challenge)),
 		ClientData:     &challenge[0],
-		HashAlgId:      nil, // Defaults to SHA-256 if nil
+		HashAlgId:      hashAlgId,
 	}
 
-	// 4. Prepare Options
+	// 5. Prepare Options with API version 4
 	options := webauthnAuthenticatorGetAssertionOptions{
-		StructVersion:               WEBAUTHN_API_VERSION_1,
-		TimeoutMilliseconds:         60000, // 60 seconds
+		StructVersion:               WEBAUTHN_AUTHENTICATOR_GET_ASSERTION_OPTIONS_CURRENT_VERSION,
+		TimeoutMilliseconds:         60000,
 		AuthenticatorAttachment:     WEBAUTHN_AUTHENTICATOR_ATTACHMENT_PLATFORM,
-		UserVerificationRequirement: WEBAUTHN_USER_VERIFICATION_REQUIREMENT_REQUIRED,
+		UserVerificationRequirement: WEBAUTHN_USER_VERIFICATION_REQUIRED,
 	}
 
-	// 5. Call WebAuthNAuthenticatorGetAssertion
+	// 6. Call WebAuthNAuthenticatorGetAssertion
 	var pAssertion *webauthnAssertion
 	ret, _, _ := procWebAuthNAuthenticatorGetAssertion.Call(
 		0, // hWnd (NULL for no parent window)
@@ -512,7 +543,7 @@ func AuthenticateWithWindowsHello(rpID string, challenge []byte) (*WebAuthnAsser
 	}
 	defer procWebAuthNFreeAssertion.Call(uintptr(unsafe.Pointer(pAssertion)))
 
-	// 6. Extract result
+	// 7. Extract result
 	response := &WebAuthnAssertionResponse{
 		RawId:             make([]byte, pAssertion.CredentialIdSize),
 		AuthenticatorData: make([]byte, pAssertion.AuthenticatorDataSize),

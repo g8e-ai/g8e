@@ -883,7 +883,8 @@ func TestAuthService_CliCertBoundToOperator_SessionMismatch(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("cli_sessions", cliSessionID, cliBytes))
 
-	bound := auth.cliCertBoundToOperator(nil, cliSessionID, userID, operatorSessionID)
+	bound, err := auth.cliCertBoundToOperator(nil, cliSessionID, userID, operatorSessionID)
+	require.NoError(t, err)
 	assert.False(t, bound)
 }
 
@@ -913,7 +914,8 @@ func TestAuthService_CliCertBoundToOperator_SessionExpired(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.DocSet("cli_sessions", cliSessionID, cliBytes))
 
-	bound := auth.cliCertBoundToOperator(nil, cliSessionID, userID, operatorSessionID)
+	bound, err := auth.cliCertBoundToOperator(nil, cliSessionID, userID, operatorSessionID)
+	require.NoError(t, err)
 	assert.False(t, bound)
 }
 

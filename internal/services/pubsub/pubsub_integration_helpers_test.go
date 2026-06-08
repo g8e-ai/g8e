@@ -27,7 +27,7 @@ import (
 // Fatally fails the test if Operator is not available.
 func NewTestPubSubClient(t *testing.T) *OperatorPubSubClient {
 	t.Helper()
-	testutil.TestPubSubAvailable(t)
+	testutil.TestPubSubAvailable(t, "")
 	logger := testutil.NewTestLogger()
 	trustStore := certs.NewTrustStore(certs.GetRawCA())
 	clientIdentity := certs.NewClientIdentity(tls.Certificate{})

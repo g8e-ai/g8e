@@ -577,23 +577,29 @@ func TestCLICertBoundToOperator(t *testing.T) {
 
 	t.Run("CLI cert bound to Operator session is accepted", func(t *testing.T) {
 		t.Parallel()
-		assert.True(t, h.auth.cliCertBoundToOperator(
+		bound, err := h.auth.cliCertBoundToOperator(
 			[]*url.URL{cliURI}, cliSessionID, userID, operatorSessionID,
-		))
+		)
+		require.NoError(t, err)
+		assert.True(t, bound)
 	})
 
 	t.Run("CLI cert bound to a different Operator session is rejected", func(t *testing.T) {
 		t.Parallel()
-		assert.False(t, h.auth.cliCertBoundToOperator(
+		bound, err := h.auth.cliCertBoundToOperator(
 			[]*url.URL{cliURI}, cliSessionID, userID, otherOpSessionID,
-		))
+		)
+		require.NoError(t, err)
+		assert.False(t, bound)
 	})
 
 	t.Run("operator URI is not accepted via the CLI path", func(t *testing.T) {
 		t.Parallel()
-		assert.False(t, h.auth.cliCertBoundToOperator(
+		bound, err := h.auth.cliCertBoundToOperator(
 			[]*url.URL{opURI}, cliSessionID, userID, operatorSessionID,
-		))
+		)
+		require.NoError(t, err)
+		assert.False(t, bound)
 	})
 
 	t.Run("expired CLI session is rejected", func(t *testing.T) {
@@ -608,12 +614,13 @@ func TestCLICertBoundToOperator(t *testing.T) {
 		require.NoError(t, h.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), "cli-expired", eb))
 		expiredURI, err := wid.CLISPIFFEURL(userID, "cli-expired")
 		require.NoError(t, err)
-		assert.False(t, h.auth.cliCertBoundToOperator(
+		bound, err := h.auth.cliCertBoundToOperator(
 			[]*url.URL{expiredURI}, "cli-expired", userID, operatorSessionID,
-		))
+		)
+		require.NoError(t, err)
+		assert.False(t, bound)
 	})
 }
-
 
 func TestHTTPHandler_buildRouter(t *testing.T) {
 	t.Parallel()

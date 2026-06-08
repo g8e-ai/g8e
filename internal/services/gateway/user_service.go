@@ -113,6 +113,10 @@ func (s *UserService) createUser(isBootstrap bool, localOSUser *models.LocalOSUs
 		localOSUser = getLocalOSUser()
 	}
 
+	// Generate WebAuthnUserID for v4 compliance (Windows Hello requires a GUID, not SID)
+	// This is a stable 16-byte GUID used for WebAuthn operations
+	webAuthnUserID := uuid.New().String()
+
 	// Zero-PII: Only user ID and passkey credentials are stored
 	user := &models.User{
 		ID:                 userID,
@@ -121,6 +125,7 @@ func (s *UserService) createUser(isBootstrap bool, localOSUser *models.LocalOSUs
 		Status:             constants.UserStatusActive,
 		IsBootstrap:        isBootstrap,
 		LocalOSUser:        localOSUser,
+		WebAuthnUserID:     webAuthnUserID,
 	}
 
 	data, err := json.Marshal(user)
@@ -134,6 +139,33 @@ func (s *UserService) createUser(isBootstrap bool, localOSUser *models.LocalOSUs
 
 	s.logger.Info("[USER-SERVICE] User created", "user_id", userID, "is_bootstrap", isBootstrap)
 	return user, nil
+}
+
+// ensureWebAuthnUserID ensures the user has a WebAuthnUserID for v4 compliance.
+// If the user doesn't have one, it generates and persists a new GUID.
+// This handles migration of existing users to the new v4 format.
+func (s *UserService) ensureWebAuthnUserID(user *models.User) error {
+	if user.WebAuthnUserID != "" {
+		return nil // Already has WebAuthnUserID
+	}
+
+	s.logger.Info("[USER-SERVICE] Migrating user to WebAuthn v4 format", "user_id", user.ID)
+
+	// Generate a new GUID for WebAuthnUserID
+	user.WebAuthnUserID = uuid.New().String()
+
+	// Persist the updated user
+	data, err := json.Marshal(user)
+	if err != nil {
+		return fmt.Errorf("failed to marshal user for migration: %w", err)
+	}
+
+	if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), user.ID, data); err != nil {
+		return fmt.Errorf("failed to migrate user to WebAuthn v4 format: %w", err)
+	}
+
+	s.logger.Info("[USER-SERVICE] User migrated to WebAuthn v4 format", "user_id", user.ID, "webauthn_user_id", user.WebAuthnUserID)
+	return nil
 }
 
 // Disable transitions a user to UserStatusDisabled and appends an audit row.
@@ -235,7 +267,22 @@ func (s *UserService) GetByID(userID string) (*models.User, error) {
 		return nil, nil
 	}
 
-	return s.docToUser(doc)
+	user, err := s.docToUser(doc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Auto-migrate existing users to WebAuthn v4 format
+	// This ensures users created before the v4 update get a WebAuthnUserID
+	if user != nil {
+		if err := s.ensureWebAuthnUserID(user); err != nil {
+			// Log migration error but don't fail the request
+			// The user can still authenticate with the fallback ID
+			s.logger.Warn("[USER-SERVICE] Failed to migrate user to WebAuthn v4 format", "user_id", userID, "error", err)
+		}
+	}
+
+	return user, nil
 }
 
 // GetBySub retrieves a user by subject (JWT sub claim).
@@ -257,6 +304,9 @@ func (s *UserService) CreateUserFromInvitation(sub string, invitation *models.In
 
 	s.logger.Info("[USER-SERVICE] JIT provisioning new user from JWT via invitation", "sub", sub, "org", invitation.OrganizationID)
 
+	// Generate WebAuthnUserID for v4 compliance (Windows Hello requires a GUID, not SID)
+	webAuthnUserID := uuid.New().String()
+
 	user := &models.User{
 		ID:                 sub,
 		PasskeyCredentials: []models.PasskeyCredential{},
@@ -266,6 +316,7 @@ func (s *UserService) CreateUserFromInvitation(sub string, invitation *models.In
 		Roles:              invitation.Roles,
 		IsBootstrap:        false,
 		LocalOSUser:        getLocalOSUser(),
+		WebAuthnUserID:     webAuthnUserID,
 	}
 
 	data, err := json.Marshal(user)

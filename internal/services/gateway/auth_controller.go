@@ -134,7 +134,7 @@ func (c *AuthController) handleAuthPasskeysRegisterChallenge(w http.ResponseWrit
 
 	options, err := c.passkey.GenerateRegistrationChallenge(req.UserID, req.UserName)
 	if err != nil {
-		c.logger.Warn("Passkey register challenge failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
+		c.logger.Warn("Passkey register challenge failed", "error", err, "userID", req.UserID)
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -199,9 +199,19 @@ func (c *AuthController) handleAuthPasskeysRegisterVerify(w http.ResponseWriter,
 		}
 	}
 
-	cred, err := c.passkey.VerifyRegistration(req.UserID, r)
+	responseJSON, err := json.Marshal(req.AttestationResponse)
 	if err != nil {
-		c.logger.Warn("Passkey register verify failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
+		c.logger.Warn("Failed to marshal attestation response", "error", err, "userID", req.UserID)
+		c.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
+			Success: false,
+			Error:   "failed to marshal attestation response",
+		})
+		return
+	}
+
+	cred, err := c.passkey.VerifyRegistration(req.UserID, responseJSON)
+	if err != nil {
+		c.logger.Warn("Passkey register verify failed", "error", err, "userID", req.UserID)
 		c.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
 			Success: false,
 			Error:   err.Error(),
@@ -251,7 +261,7 @@ func (c *AuthController) handleAuthPasskeysAuthenticateChallenge(w http.Response
 
 	options, err := c.passkey.GenerateAuthenticationChallenge(userID)
 	if err != nil {
-		c.logger.Warn("Passkey auth challenge failed", string(constants.ConnectionStateError), err, "userID", userID)
+		c.logger.Warn("Passkey auth challenge failed", "error", err, "userID", userID)
 		c.responder.JSON(w, http.StatusOK, models.PasskeyChallengeResponse{
 			Success:    false,
 			Error:      err.Error(),
@@ -301,9 +311,19 @@ func (c *AuthController) handleAuthPasskeysAuthenticateVerify(w http.ResponseWri
 		return
 	}
 
-	cred, err := c.passkey.VerifyAuthentication(userID, r)
+	responseJSON, err := json.Marshal(req.AssertionResponse)
 	if err != nil {
-		c.logger.Warn("Passkey auth verify failed", string(constants.ConnectionStateError), err, "userID", userID)
+		c.logger.Warn("Failed to marshal assertion response", "error", err, "userID", userID)
+		c.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
+			Success: false,
+			Error:   "failed to marshal assertion response",
+		})
+		return
+	}
+
+	cred, err := c.passkey.VerifyAuthentication(userID, responseJSON)
+	if err != nil {
+		c.logger.Warn("Passkey auth verify failed", "error", err, "userID", userID)
 		c.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
 			Success: false,
 			Error:   err.Error(),
@@ -313,7 +333,7 @@ func (c *AuthController) handleAuthPasskeysAuthenticateVerify(w http.ResponseWri
 
 	webSession, err := c.webSessionSvc.CreateWebSession(userID)
 	if err != nil {
-		c.logger.Error("Failed to create web session after auth", string(constants.ConnectionStateError), err, "userID", userID)
+		c.logger.Error("Failed to create web session after auth", "error", err, "userID", userID)
 		c.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
 			Success: false,
 			Error:   "authentication succeeded but session creation failed",
@@ -346,7 +366,7 @@ func (c *AuthController) handleAuthPasskeys(w http.ResponseWriter, r *http.Reque
 
 	creds, err := c.passkey.ListCredentials(userID)
 	if err != nil {
-		c.logger.Error("Failed to list credentials", string(constants.ConnectionStateError), err, "userID", userID)
+		c.logger.Error("Failed to list credentials", "error", err, "userID", userID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to list credentials")
 		return
 	}
@@ -377,7 +397,7 @@ func (c *AuthController) handleAuthPasskeysRevoke(w http.ResponseWriter, r *http
 
 	found, remaining, err := c.passkey.RevokeCredential(userID, path)
 	if err != nil {
-		c.logger.Error("Failed to revoke credential", string(constants.ConnectionStateError), err, "userID", userID)
+		c.logger.Error("Failed to revoke credential", "error", err, "userID", userID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to revoke credential")
 		return
 	}
@@ -413,7 +433,7 @@ func (c *AuthController) handleUsers(w http.ResponseWriter, r *http.Request) {
 	// Users are created with only a generated ID and passkey credentials
 	user, err := c.userSvc.CreateUser()
 	if err != nil {
-		c.logger.Warn("Failed to create user", string(constants.ConnectionStateError), err)
+		c.logger.Warn("Failed to create user", "error", err)
 		c.responder.Error(w, http.StatusConflict, err.Error())
 		return
 	}
@@ -591,7 +611,8 @@ func (c *AuthController) handleCLIApproval(w http.ResponseWriter, r *http.Reques
 
 	// Persist the approval with signature before resuming
 	if err := c.db.ApproveSuspendedTransaction(r.Context(), txHash, userID, req.CliSignature, req.MtlsCertFingerprint); err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("auth controller: failed to approve transaction: %w", err).Error())
+		c.logger.Error("Failed to approve transaction", "error", err, "txHash", txHash, "userID", userID)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to approve transaction")
 		return
 	}
 
@@ -820,7 +841,8 @@ func (c *AuthController) handleListSuspendedTransactions(w http.ResponseWriter, 
 	// Get suspended transactions from the gateway DB service
 	transactions, err := c.db.ListSuspendedTransactions(r.Context(), queryUserID)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("auth controller: failed to list suspended transactions: %w", err).Error())
+		c.logger.Error("Failed to list suspended transactions", "error", err, "userID", queryUserID)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to list suspended transactions")
 		return
 	}
 
@@ -867,7 +889,14 @@ func (c *AuthController) handlePublicAuthLoginVerify(w http.ResponseWriter, r *h
 		return
 	}
 
-	_, err = c.passkey.VerifyAuthentication(req.UserID, r)
+	responseJSON, err := json.Marshal(req.AssertionResponse)
+	if err != nil {
+		c.logger.Warn("Failed to marshal assertion response", "error", err, "userID", req.UserID)
+		c.responder.Error(w, http.StatusBadRequest, "failed to marshal assertion response")
+		return
+	}
+
+	_, err = c.passkey.VerifyAuthentication(req.UserID, responseJSON)
 	if err != nil {
 		c.responder.Error(w, http.StatusUnauthorized, err.Error())
 		return
@@ -901,7 +930,9 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 	cookie, err := r.Cookie("g8e_session")
 	if err == nil {
 		// Best effort delete web session from DB
-		_, _ = c.db.DocDelete(marshaler.CollectionName(constants.CollectionWebSessions), cookie.Value)
+		if _, err := c.db.DocDelete(marshaler.CollectionName(constants.CollectionWebSessions), cookie.Value); err != nil {
+			c.logger.Warn("Failed to delete web session during logout", "error", err, "sessionID", cookie.Value)
+		}
 	}
 
 	// Clear cookie
@@ -972,7 +1003,7 @@ func (c *AuthController) handleCLIPasskeyRegisterChallenge(w http.ResponseWriter
 
 	options, err := c.passkey.GenerateRegistrationChallenge(req.UserID, req.UserName)
 	if err != nil {
-		c.logger.Warn("CLI passkey register challenge failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
+		c.logger.Warn("CLI passkey register challenge failed", "error", err, "userID", req.UserID)
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -1032,15 +1063,179 @@ func (c *AuthController) handleCLIPasskeyRegisterVerify(w http.ResponseWriter, r
 		return
 	}
 
-	cred, err := c.passkey.VerifyRegistration(req.UserID, r)
+	responseJSON, err := json.Marshal(req.AttestationResponse)
 	if err != nil {
-		c.logger.Warn("CLI passkey register verify failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
+		c.logger.Warn("Failed to marshal attestation response", "error", err, "userID", req.UserID)
+		c.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
+			Success: false,
+			Error:   "failed to marshal attestation response",
+		})
+		return
+	}
+
+	cred, err := c.passkey.VerifyRegistration(req.UserID, responseJSON)
+	if err != nil {
+		c.logger.Warn("CLI passkey register verify failed", "error", err, "userID", req.UserID)
 		c.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
 			Success: false,
 			Error:   err.Error(),
 		})
 		return
 	}
+
+	c.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
+		Success:    true,
+		Credential: cred,
+	})
+}
+
+// handleCLIBrowserPasskeyRegisterChallenge handles passkey registration challenges for browser-based CLI bootstrap.
+// This is a public endpoint (no auth) for the initial bootstrap where no credentials exist yet.
+// It creates a web session and binds it to the CLI session ID after successful registration.
+func (c *AuthController) handleCLIBrowserPasskeyRegisterChallenge(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	var req struct {
+		UserID       string `json:"user_id"`
+		UserName     string `json:"user_name"`
+		CLISessionID string `json:"cli_session_id"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if req.UserID == "" {
+		c.responder.Error(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	// Enforce first-credential-only for CLI bootstrap
+	user, err := c.userSvc.GetByID(req.UserID)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, "failed to fetch user")
+		return
+	}
+	if user == nil {
+		c.responder.Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	if len(user.PasskeyCredentials) > 0 {
+		c.responder.Error(w, http.StatusForbidden, "first-credential registration only; user already has credentials")
+		return
+	}
+
+	options, err := c.passkey.GenerateRegistrationChallenge(req.UserID, req.UserName)
+	if err != nil {
+		c.logger.Warn("CLI browser passkey register challenge failed", "error", err, "userID", req.UserID)
+		c.responder.JSON(w, http.StatusOK, models.PasskeyRegisterChallengeResponse{
+			Success: false,
+		})
+		return
+	}
+
+	c.responder.JSON(w, http.StatusOK, models.PasskeyRegisterChallengeResponse{
+		Success: true,
+		Options: options,
+	})
+}
+
+// handleCLIBrowserPasskeyRegisterVerify handles passkey registration verification for browser-based CLI bootstrap.
+// This is a public endpoint (no auth) for the initial bootstrap where no credentials exist yet.
+// It creates a web session and binds it to the CLI session ID after successful registration.
+func (c *AuthController) handleCLIBrowserPasskeyRegisterVerify(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	var req struct {
+		UserID              string               `json:"user_id"`
+		CLISessionID        string               `json:"cli_session_id"`
+		AttestationResponse *AttestationResponse `json:"attestation_response"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if req.UserID == "" {
+		c.responder.Error(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	// Enforce first-credential-only for CLI bootstrap
+	user, err := c.userSvc.GetByID(req.UserID)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, "failed to fetch user")
+		return
+	}
+	if user == nil {
+		c.responder.Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	if len(user.PasskeyCredentials) > 0 {
+		c.responder.Error(w, http.StatusForbidden, "first-credential registration only; user already has credentials")
+		return
+	}
+
+	responseJSON, err := json.Marshal(req.AttestationResponse)
+	if err != nil {
+		c.logger.Warn("Failed to marshal attestation response", "error", err, "userID", req.UserID)
+		c.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
+			Success: false,
+			Error:   "failed to marshal attestation response",
+		})
+		return
+	}
+
+	cred, err := c.passkey.VerifyRegistration(req.UserID, responseJSON)
+	if err != nil {
+		c.logger.Warn("CLI browser passkey register verify failed", "error", err, "userID", req.UserID)
+		c.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// Create web session and bind it to CLI session
+	webSession, err := c.webSessionSvc.CreateWebSession(req.UserID)
+	if err != nil {
+		c.logger.Error("Failed to create web session after browser registration", "error", err, "userID", req.UserID)
+		c.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
+			Success: false,
+			Error:   fmt.Sprintf("registration succeeded but web session creation failed: %v", err),
+		})
+		return
+	}
+
+	// Set web session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "g8e_session",
+		Value:    webSession.ID,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
 
 	c.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
 		Success:    true,
@@ -1077,7 +1272,7 @@ func (c *AuthController) handleCLIPasskeyAuthenticateChallenge(w http.ResponseWr
 
 	options, err := c.passkey.GenerateAuthenticationChallenge(req.UserID)
 	if err != nil {
-		c.logger.Warn("CLI passkey auth challenge failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
+		c.logger.Warn("CLI passkey auth challenge failed", "error", err, "userID", req.UserID)
 		c.responder.JSON(w, http.StatusOK, models.PasskeyChallengeResponse{
 			Success:    false,
 			Error:      err.Error(),
@@ -1120,9 +1315,19 @@ func (c *AuthController) handleCLIPasskeyAuthenticateVerify(w http.ResponseWrite
 		return
 	}
 
-	cred, err := c.passkey.VerifyAuthentication(req.UserID, r)
+	responseJSON, err := json.Marshal(req.AssertionResponse)
 	if err != nil {
-		c.logger.Warn("CLI passkey auth verify failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
+		c.logger.Warn("Failed to marshal assertion response", "error", err, "userID", req.UserID)
+		c.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
+			Success: false,
+			Error:   "failed to marshal assertion response",
+		})
+		return
+	}
+
+	cred, err := c.passkey.VerifyAuthentication(req.UserID, responseJSON)
+	if err != nil {
+		c.logger.Warn("CLI passkey auth verify failed", "error", err, "userID", req.UserID)
 		c.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
 			Success: false,
 			Error:   err.Error(),
@@ -1184,7 +1389,7 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 	// Check for existing bootstrap user (plan §4.2, §9.1 rotation carve-out)
 	bootstrapUser, err := c.userSvc.FindBootstrapUser()
 	if err != nil {
-		c.logger.Error("Failed to check for existing bootstrap user", string(constants.ConnectionStateError), err)
+		c.logger.Error("Failed to check for existing bootstrap user", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "bootstrap check failed")
 		return
 	}
@@ -1211,7 +1416,7 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 		// only run on a genuinely empty system.
 		hasUsers, err := c.userSvc.HasAnyUsers()
 		if err != nil {
-			c.logger.Error("Failed to check for existing users during bootstrap", string(constants.ConnectionStateError), err)
+			c.logger.Error("Failed to check for existing users during bootstrap", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "bootstrap check failed")
 			return
 		}
@@ -1225,7 +1430,7 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 		// Zero-PII: Bootstrap user created with only generated ID and OS user info
 		user, err = c.userSvc.CreateBootstrapUserWithOSUser(req.LocalOSUser)
 		if err != nil {
-			c.logger.Error("Failed to create bootstrap user", string(constants.ConnectionStateError), err)
+			c.logger.Error("Failed to create bootstrap user", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to create user")
 			return
 		}
@@ -1265,7 +1470,7 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 		// Sign the CSR
 		certPEM, chainPEM, err := c.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, orgID, operatorID, user.ID, operatorSessionID, "")
 		if err != nil {
-			c.logger.Error("Failed to sign bootstrap CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
+			c.logger.Error("Failed to sign bootstrap CSR", "error", err, "user_id", user.ID)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to sign CSR")
 			return
 		}
@@ -1275,12 +1480,12 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 		// Persist Operator document
 		opBytes, err := json.Marshal(operator)
 		if err != nil {
-			c.logger.Error("Failed to marshal Operator document", string(constants.ConnectionStateError), err)
+			c.logger.Error("Failed to marshal Operator document", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 			return
 		}
 		if err := c.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
-			c.logger.Error("Failed to persist Operator document", string(constants.ConnectionStateError), err)
+			c.logger.Error("Failed to persist Operator document", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 			return
 		}
@@ -1302,7 +1507,7 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 	if req.CLICSRPEM != "" {
 		cliCertPEM, cliCertChainPEM, err = c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "")
 		if err != nil {
-			c.logger.Error("Failed to sign bootstrap CLI CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
+			c.logger.Error("Failed to sign bootstrap CLI CSR", "error", err, "user_id", user.ID)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to sign CLI CSR")
 			return
 		}
@@ -1314,7 +1519,7 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 		// Fetch trust bundle
 		hubBundle, err := c.pki.GatewayTrustBundle()
 		if err != nil {
-			c.logger.Warn("Failed to fetch hub trust bundle", string(constants.ConnectionStateError), err)
+			c.logger.Warn("Failed to fetch hub trust bundle", "error", err)
 			// Non-fatal - continue without bundle
 		}
 
@@ -1335,7 +1540,7 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 		string(constants.HeartbeatTypeBootstrap),
 	)
 	if err != nil {
-		c.logger.Error("Failed to persist CLI session during bootstrap", string(constants.ConnectionStateError), err)
+		c.logger.Error("Failed to persist CLI session during bootstrap", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to persist CLI session")
 		return
 	}
@@ -1352,7 +1557,7 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 			string(constants.HeartbeatTypeBootstrap),
 		)
 		if err != nil {
-			c.logger.Error("Failed to persist operator session during bootstrap", string(constants.ConnectionStateError), err)
+			c.logger.Error("Failed to persist operator session during bootstrap", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to persist operator session")
 			return
 		}
@@ -1411,7 +1616,7 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 	// This endpoint only works when the system is already bootstrapped
 	bootstrapUser, err := c.userSvc.FindBootstrapUser()
 	if err != nil {
-		c.logger.Error("Failed to check for existing bootstrap user", string(constants.ConnectionStateError), err)
+		c.logger.Error("Failed to check for existing bootstrap user", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "bootstrap check failed")
 		return
 	}
@@ -1431,12 +1636,12 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 		bootstrapUser.LocalOSUser = req.LocalOSUser
 		userData, err := json.Marshal(bootstrapUser)
 		if err != nil {
-			c.logger.Error("Failed to marshal bootstrap user for OS user update", string(constants.ConnectionStateError), err)
+			c.logger.Error("Failed to marshal bootstrap user for OS user update", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to update user")
 			return
 		}
 		if err := c.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), bootstrapUser.ID, userData); err != nil {
-			c.logger.Error("Failed to update bootstrap user with OS user info", string(constants.ConnectionStateError), err)
+			c.logger.Error("Failed to update bootstrap user with OS user info", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to update user")
 			return
 		}
@@ -1447,7 +1652,7 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 	cliSessionID := uuid.NewString()
 	cliCertPEM, cliCertChainPEM, err := c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", bootstrapUser.ID, cliSessionID, "")
 	if err != nil {
-		c.logger.Error("Failed to sign CLI enrollment CSR", string(constants.ConnectionStateError), err, "user_id", bootstrapUser.ID)
+		c.logger.Error("Failed to sign CLI enrollment CSR", "error", err, "user_id", bootstrapUser.ID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to sign CLI CSR")
 		return
 	}
@@ -1467,7 +1672,7 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 		string(constants.HeartbeatTypeBootstrap),
 	)
 	if err != nil {
-		c.logger.Error("Failed to persist CLI session during enrollment", string(constants.ConnectionStateError), err)
+		c.logger.Error("Failed to persist CLI session during enrollment", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to persist session")
 		return
 	}
@@ -1475,7 +1680,7 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 	// Fetch trust bundle
 	hubBundle, err := c.pki.GatewayTrustBundle()
 	if err != nil {
-		c.logger.Warn("Failed to fetch hub trust bundle", string(constants.ConnectionStateError), err)
+		c.logger.Warn("Failed to fetch hub trust bundle", "error", err)
 		// Non-fatal - continue without bundle
 	}
 
@@ -1530,7 +1735,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 	// Check for existing bootstrap user (plan §4.2, §9.1 rotation carve-out)
 	bootstrapUser, err := c.userSvc.FindBootstrapUser()
 	if err != nil {
-		c.logger.Error("Failed to check for existing bootstrap user", string(constants.ConnectionStateError), err)
+		c.logger.Error("Failed to check for existing bootstrap user", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "bootstrap check failed")
 		return
 	}
@@ -1549,7 +1754,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 		// No bootstrap user exists - create one
 		hasUsers, err := c.userSvc.HasAnyUsers()
 		if err != nil {
-			c.logger.Error("Failed to check for existing users during device enrollment", string(constants.ConnectionStateError), err)
+			c.logger.Error("Failed to check for existing users during device enrollment", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "bootstrap check failed")
 			return
 		}
@@ -1561,7 +1766,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 
 		user, err = c.userSvc.CreateBootstrapUser()
 		if err != nil {
-			c.logger.Error("Failed to create bootstrap user for device enrollment", string(constants.ConnectionStateError), err)
+			c.logger.Error("Failed to create bootstrap user for device enrollment", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to create user")
 			return
 		}
@@ -1593,7 +1798,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 	// Sign the CSR
 	certPEM, chainPEM, err := c.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, orgID, operatorID, user.ID, operatorSessionID, "")
 	if err != nil {
-		c.logger.Error("Failed to sign device enrollment CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
+		c.logger.Error("Failed to sign device enrollment CSR", "error", err, "user_id", user.ID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to sign CSR")
 		return
 	}
@@ -1609,7 +1814,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 
 	cliCertPEM, cliCertChainPEM, err := c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "")
 	if err != nil {
-		c.logger.Error("Failed to sign device enrollment CLI CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
+		c.logger.Error("Failed to sign device enrollment CLI CSR", "error", err, "user_id", user.ID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to sign CLI CSR")
 		return
 	}
@@ -1621,12 +1826,12 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 	// Persist Operator document
 	opBytes, err := json.Marshal(operator)
 	if err != nil {
-		c.logger.Error("Failed to marshal Operator document", string(constants.ConnectionStateError), err)
+		c.logger.Error("Failed to marshal Operator document", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 		return
 	}
 	if err := c.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
-		c.logger.Error("Failed to persist Operator document", string(constants.ConnectionStateError), err)
+		c.logger.Error("Failed to persist Operator document", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 		return
 	}
@@ -1634,7 +1839,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 	// Fetch trust bundle
 	hubBundle, err := c.pki.GatewayTrustBundle()
 	if err != nil {
-		c.logger.Warn("Failed to fetch hub trust bundle", string(constants.ConnectionStateError), err)
+		c.logger.Warn("Failed to fetch hub trust bundle", "error", err)
 		// Non-fatal - continue without bundle
 	}
 
@@ -1649,7 +1854,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 		string(constants.HeartbeatTypeBootstrap),
 	)
 	if err != nil {
-		c.logger.Error("Failed to persist CLI session during device enrollment", string(constants.ConnectionStateError), err)
+		c.logger.Error("Failed to persist CLI session during device enrollment", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to persist CLI session")
 		return
 	}
@@ -1662,7 +1867,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 		string(constants.HeartbeatTypeBootstrap),
 	)
 	if err != nil {
-		c.logger.Error("Failed to persist operator session during device enrollment", string(constants.ConnectionStateError), err)
+		c.logger.Error("Failed to persist operator session during device enrollment", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to persist operator session")
 		return
 	}
@@ -1693,7 +1898,7 @@ func (c *AuthController) handleBootstrapStatus(w http.ResponseWriter, r *http.Re
 
 	hasUsers, err := c.userSvc.HasAnyUsers()
 	if err != nil {
-		c.logger.Error("Failed to check for existing users", string(constants.ConnectionStateError), err)
+		c.logger.Error("Failed to check for existing users", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "status check failed")
 		return
 	}
