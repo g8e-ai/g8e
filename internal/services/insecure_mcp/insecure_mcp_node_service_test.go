@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -30,6 +31,13 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 )
+
+func getShellCommand(cmd string) []string {
+	if runtime.GOOS == "windows" {
+		return []string{"cmd.exe", "/c", cmd}
+	}
+	return []string{"/bin/sh", "-c", cmd}
+}
 
 // ────────────────────────────────────────────────────────────────
 // Mock Gateway
@@ -302,7 +310,11 @@ func TestHandshake_WithToken(t *testing.T) {
 func TestSystemWhich_FindsExistingNodeBinary(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
-	mg.queueInvoke("wh-1", "test-node", "system.which", `{"bins":["sh","nonexistent_xyz_abc"]}`)
+	binName := "sh"
+	if runtime.GOOS == "windows" {
+		binName = "cmd.exe"
+	}
+	mg.queueInvoke("wh-1", "test-node", "system.which", fmt.Sprintf(`{"bins":["%s","nonexistent_xyz_abc"]}`, binName))
 	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -323,8 +335,8 @@ func TestSystemWhich_FindsExistingNodeBinary(t *testing.T) {
 	}
 	var payload systemWhichResult
 	json.Unmarshal([]byte(*r.PayloadJSON), &payload)
-	if _, ok := payload.Bins["sh"]; !ok {
-		t.Error("expected sh to be found")
+	if _, ok := payload.Bins[binName]; !ok {
+		t.Errorf("expected %s to be found", binName)
 	}
 	if _, ok := payload.Bins["nonexistent_xyz_abc"]; ok {
 		t.Error("nonexistent_xyz_abc should not be found")
@@ -365,7 +377,9 @@ func TestSystemWhich_EmptyBins(t *testing.T) {
 func TestSystemRun_NonZeroExit(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
-	mg.queueInvoke("sr-2", "test-node", "command", `{"command":["/bin/sh","-c","exit 42"]}`)
+	cmd := getShellCommand("exit 42")
+	cmdJSON, _ := json.Marshal(cmd)
+	mg.queueInvoke("sr-2", "test-node", "command", fmt.Sprintf(`{"command":%s}`, string(cmdJSON)))
 	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -394,7 +408,9 @@ func TestSystemRun_NonZeroExit(t *testing.T) {
 func TestSystemRun_StderrCaptured(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
-	mg.queueInvoke("sr-3", "test-node", "command", `{"command":["/bin/sh","-c","echo err_msg >&2"]}`)
+	cmd := getShellCommand("echo err_msg >&2")
+	cmdJSON, _ := json.Marshal(cmd)
+	mg.queueInvoke("sr-3", "test-node", "command", fmt.Sprintf(`{"command":%s}`, string(cmdJSON)))
 	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -421,7 +437,13 @@ func TestSystemRun_WithCwd(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	mg := newMockGateway(t)
-	mg.queueInvoke("sr-5", "test-node", "command", fmt.Sprintf(`{"command":["/bin/sh","-c","pwd"],"cwd":"%s"}`, tmpDir))
+	pwdCmd := "pwd"
+	if runtime.GOOS == "windows" {
+		pwdCmd = "cd"
+	}
+	cmd := getShellCommand(pwdCmd)
+	cmdJSON, _ := json.Marshal(cmd)
+	mg.queueInvoke("sr-5", "test-node", "command", fmt.Sprintf(`{"command":%s,"cwd":%q}`, string(cmdJSON), tmpDir))
 	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -447,7 +469,13 @@ func TestSystemRun_WithCwd(t *testing.T) {
 func TestSystemRun_WithEnvVar(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
-	mg.queueInvoke("sr-6", "test-node", "command", `{"command":["/bin/sh","-c","echo $MY_OCT_VAR"],"env":{"MY_OCT_VAR":"from_test"}}`)
+	echoCmd := "echo $MY_OCT_VAR"
+	if runtime.GOOS == "windows" {
+		echoCmd = "echo %MY_OCT_VAR%"
+	}
+	cmd := getShellCommand(echoCmd)
+	cmdJSON, _ := json.Marshal(cmd)
+	mg.queueInvoke("sr-6", "test-node", "command", fmt.Sprintf(`{"command":%s,"env":{"MY_OCT_VAR":"from_test"}}`, string(cmdJSON)))
 	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -536,7 +564,7 @@ func TestRunCommand_Success(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	result, timedOut := runCommand(ctx, systemRunParams{
-		Command: []string{"/bin/sh", "-c", "echo unit_test_output"},
+		Command: getShellCommand("echo unit_test_output"),
 	})
 	if timedOut {
 		t.Error("unexpected timeout")
@@ -552,7 +580,7 @@ func TestRunCommand_Success(t *testing.T) {
 func TestRunCommand_NonZeroExit(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	result, _ := runCommand(ctx, systemRunParams{Command: []string{"/bin/sh", "-c", "exit 7"}})
+	result, _ := runCommand(ctx, systemRunParams{Command: getShellCommand("exit 7")})
 	if result.exitCode == nil || *result.exitCode != 7 {
 		t.Errorf("expected exit 7, got %v", result.exitCode)
 	}
@@ -562,7 +590,11 @@ func TestRunCommand_Timeout(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	_, timedOut := runCommand(ctx, systemRunParams{Command: []string{"/bin/sh", "-c", "sleep 10"}})
+	sleepCmd := "sleep 10"
+	if runtime.GOOS == "windows" {
+		sleepCmd = "timeout /t 10"
+	}
+	_, timedOut := runCommand(ctx, systemRunParams{Command: getShellCommand(sleepCmd)})
 	if !timedOut {
 		t.Error("expected timedOut=true")
 	}
@@ -572,8 +604,12 @@ func TestRunCommand_Cwd(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	ctx := context.Background()
+	pwdCmd := "pwd"
+	if runtime.GOOS == "windows" {
+		pwdCmd = "cd"
+	}
 	result, _ := runCommand(ctx, systemRunParams{
-		Command: []string{"/bin/sh", "-c", "pwd"},
+		Command: getShellCommand(pwdCmd),
 		Cwd:     tmpDir,
 	})
 	if !strings.Contains(result.stdout, tmpDir) {
@@ -584,8 +620,12 @@ func TestRunCommand_Cwd(t *testing.T) {
 func TestRunCommand_EnvOverride(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
+	echoCmd := "echo $OC_TEST_ENV"
+	if runtime.GOOS == "windows" {
+		echoCmd = "echo %OC_TEST_ENV%"
+	}
 	result, _ := runCommand(ctx, systemRunParams{
-		Command: []string{"/bin/sh", "-c", "echo $OC_TEST_ENV"},
+		Command: getShellCommand(echoCmd),
 		Env:     map[string]string{"OC_TEST_ENV": "injected_value"},
 	})
 	if !strings.Contains(result.stdout, "injected_value") {

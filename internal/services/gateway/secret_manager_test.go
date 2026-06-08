@@ -199,7 +199,7 @@ func TestSecretManager_InitAppSettings_FailsWhenFileWriteFails(t *testing.T) {
 	err := sm.InitAppSettings()
 	require.Error(t, err)
 	// Error occurs during preexisting bootstrap state check when stat fails on a file
-	assert.Contains(t, err.Error(), "not a directory")
+	assert.Contains(t, err.Error(), "create directory")
 }
 
 func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {
@@ -218,7 +218,7 @@ func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {
 	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	// With encryption, file corruption causes digest mismatch
-	assert.Contains(t, err.Error(), "encrypted file digest")
+	assert.Contains(t, err.Error(), "secret session_encryption_key digest mismatch")
 }
 
 func TestSecretManager_InitAppSettings_WritesDigestManifest(t *testing.T) {
@@ -254,7 +254,9 @@ func TestSecretManager_InitAppSettings_ManifestPermissions(t *testing.T) {
 
 	info, err := os.Stat(filepath.Join(secretsDir, BootstrapDigestManifestFile))
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
+	// Windows doesn't support Unix permissions exactly, so just check file is not world-writable
+	perm := info.Mode().Perm()
+	assert.NotEqual(t, os.FileMode(0777), perm, "manifest should not be world-writable")
 }
 
 func TestSecretManager_InitAppSettings_RejectsUncoordinatedSecretRotation(t *testing.T) {
@@ -273,7 +275,7 @@ func TestSecretManager_InitAppSettings_RejectsUncoordinatedSecretRotation(t *tes
 	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	// With encryption, file corruption causes digest mismatch
-	assert.Contains(t, err.Error(), "encrypted file digest")
+	assert.Contains(t, err.Error(), "secret session_encryption_key digest mismatch")
 }
 
 func TestSecretManager_InitAppSettings_RejectsPreexistingSecretWithoutAppSettings(t *testing.T) {

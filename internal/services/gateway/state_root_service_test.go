@@ -44,7 +44,8 @@ func TestStateRootService_GetCurrentStateRoot(t *testing.T) {
 
 func TestStateRootService_InvalidateCache(t *testing.T) {
 	t.Parallel()
-	svc := newStateRootService(t)
+	db := newTestDB(t)
+	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
 
 	// Get initial state root
 	root1, err := svc.GetCurrentStateRoot()
@@ -55,7 +56,6 @@ func TestStateRootService_InvalidateCache(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add a document to change state
-	db := newTestDB(t)
 	docData := mustDocJSON(t, map[string]interface{}{"key": "value"})
 	err = db.DocSet("test", "doc1", docData)
 	require.NoError(t, err)

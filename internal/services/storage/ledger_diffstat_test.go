@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,11 +33,17 @@ func setupTestLedgerForDiffStat(t *testing.T) (*GitLedgerService, string) {
 	tempDir := t.TempDir()
 	ledgerDir := filepath.Join(tempDir, "ledger")
 
-	// Create vault using the shared helper
+	// Create vault but do NOT unlock it (encryption disabled)
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	vaultDir := filepath.Join(tempDir, "vault")
-	testVault := createTestVault(t, vaultDir, privKey)
+	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	vHeader, _, err := vault.NewVaultHeader(privKey)
+	require.NoError(t, err)
+	require.NoError(t, vHeader.Save(vaultDir))
+	testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: testutil.NewTestLogger()})
+	require.NoError(t, err)
+	t.Cleanup(func() { testVault.Close() })
 
 	logger := testutil.NewTestLogger()
 

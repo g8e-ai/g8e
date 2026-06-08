@@ -282,7 +282,7 @@ func TestL5ActuatorExecuteMissingSigningKey(t *testing.T) {
 	// Execute - should fail immediately
 	receipt, err := actuator.Execute(context.Background(), vt, nil)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "L5Actuator signing key missing")
+	require.Contains(t, err.Error(), "L5Actuator: signing key missing")
 	require.Nil(t, receipt)
 }
 
@@ -308,7 +308,7 @@ func TestL5ActuatorExecuteMissingExecutionHandler(t *testing.T) {
 	// Execute - should fail immediately
 	receipt, err := actuator.Execute(context.Background(), vt, nil)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "L5Actuator ExecutionHandler not set")
+	require.Contains(t, err.Error(), "L5Actuator: ExecutionHandler not set")
 	require.Nil(t, receipt)
 }
 

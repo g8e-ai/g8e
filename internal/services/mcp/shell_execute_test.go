@@ -16,6 +16,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -95,8 +96,13 @@ func TestShellExecuteTool_Execute_WithWorkingDir(t *testing.T) {
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 
+	pwdCmd := "pwd"
+	if runtime.GOOS == "windows" {
+		pwdCmd = "cd"
+	}
+
 	req := ShellExecuteRequest{
-		Command:    "pwd",
+		Command:    pwdCmd,
 		WorkingDir: tmpDir,
 	}
 	reqJSON, err := json.Marshal(req)
@@ -110,7 +116,10 @@ func TestShellExecuteTool_Execute_WithWorkingDir(t *testing.T) {
 	err = json.Unmarshal([]byte(result.Content[0].Text), &shellResult)
 	require.NoError(t, err)
 	require.Equal(t, 0, shellResult.ExitCode)
-	require.Contains(t, shellResult.Stdout, tmpDir)
+	// On Windows, the output might have a trailing \r\n or different capitalization
+	normalizedStdout := strings.TrimSpace(strings.ToLower(shellResult.Stdout))
+	normalizedTmpDir := strings.TrimSpace(strings.ToLower(tmpDir))
+	require.Contains(t, normalizedStdout, normalizedTmpDir)
 }
 
 func TestShellExecuteTool_Execute_WithTimeout(t *testing.T) {

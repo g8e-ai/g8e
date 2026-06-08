@@ -16,6 +16,7 @@ package system
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -58,6 +59,9 @@ func TestIsExecutable_Directory(t *testing.T) {
 }
 
 func TestIsExecutable_NotExecutable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not have Unix-style execution bits")
+	}
 	t.Parallel()
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "file")

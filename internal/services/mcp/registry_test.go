@@ -115,7 +115,7 @@ func TestToolRegistry_RegisterDuplicate(t *testing.T) {
 		t.Fatal("Expected error when registering duplicate tool, got nil")
 	}
 
-	expectedError := "tool 'duplicate_tool' is already registered"
+	expectedError := "registry: tool 'duplicate_tool' is already registered"
 	if err.Error() != expectedError {
 		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
 	}
@@ -129,7 +129,7 @@ func TestToolRegistry_RegisterNil(t *testing.T) {
 		t.Fatal("Expected error when registering nil tool, got nil")
 	}
 
-	expectedError := "cannot register nil tool"
+	expectedError := "registry: cannot register nil tool"
 	if err.Error() != expectedError {
 		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
 	}
@@ -151,7 +151,7 @@ func TestToolRegistry_RegisterEmptyName(t *testing.T) {
 		t.Fatal("Expected error when registering tool with empty name, got nil")
 	}
 
-	expectedError := "tool name cannot be empty"
+	expectedError := "registry: tool name cannot be empty"
 	if err.Error() != expectedError {
 		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
 	}
@@ -168,27 +168,27 @@ func TestToolRegistry_RegisterInvalidName(t *testing.T) {
 		{
 			name:        "uppercase letters",
 			toolName:    "InvalidTool",
-			expectedErr: "invalid tool name 'InvalidTool'",
+			expectedErr: "registry: invalid tool name 'InvalidTool'",
 		},
 		{
 			name:        "hyphens",
 			toolName:    "invalid-tool",
-			expectedErr: "invalid tool name 'invalid-tool'",
+			expectedErr: "registry: invalid tool name 'invalid-tool'",
 		},
 		{
 			name:        "spaces",
 			toolName:    "invalid tool",
-			expectedErr: "invalid tool name 'invalid tool'",
+			expectedErr: "registry: invalid tool name 'invalid tool'",
 		},
 		{
 			name:        "starts with digit",
 			toolName:    "1invalid",
-			expectedErr: "invalid tool name '1invalid'",
+			expectedErr: "registry: invalid tool name '1invalid'",
 		},
 		{
 			name:        "starts with underscore",
 			toolName:    "_invalid",
-			expectedErr: "invalid tool name '_invalid'",
+			expectedErr: "registry: invalid tool name '_invalid'",
 		},
 	}
 
@@ -251,27 +251,27 @@ func TestToolRegistry_RegisterInvalidSchema(t *testing.T) {
 		{
 			name:        "nil schema",
 			schema:      nil,
-			expectedErr: "invalid input schema for tool 'test_tool': schema cannot be nil",
+			expectedErr: "registry: invalid input schema for tool 'test_tool': registry: schema cannot be nil",
 		},
 		{
 			name:        "missing type",
 			schema:      map[string]interface{}{},
-			expectedErr: "invalid input schema for tool 'test_tool': schema missing required 'type' field",
+			expectedErr: "registry: invalid input schema for tool 'test_tool': registry: schema missing required 'type' field",
 		},
 		{
 			name:        "invalid type",
 			schema:      map[string]interface{}{"type": "array"},
-			expectedErr: "invalid input schema for tool 'test_tool': schema 'type' must be 'object', got string",
+			expectedErr: "registry: invalid input schema for tool 'test_tool': registry: schema 'type' must be 'object', got string",
 		},
 		{
 			name:        "invalid properties type",
 			schema:      map[string]interface{}{"type": "object", "properties": "invalid"},
-			expectedErr: "invalid input schema for tool 'test_tool': schema 'properties' must be an object, got string",
+			expectedErr: "registry: invalid input schema for tool 'test_tool': registry: schema 'properties' must be an object, got string",
 		},
 		{
 			name:        "invalid required type",
 			schema:      map[string]interface{}{"type": "object", "required": "invalid"},
-			expectedErr: "invalid input schema for tool 'test_tool': schema 'required' must be an array, got string",
+			expectedErr: "registry: invalid input schema for tool 'test_tool': registry: schema 'required' must be an array, got string",
 		},
 	}
 

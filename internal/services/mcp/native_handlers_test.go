@@ -1777,6 +1777,10 @@ func TestHandleProcTree(t *testing.T) {
 }
 
 func TestHandleK8sInspect(t *testing.T) {
+	if _, err := exec.LookPath("kubectl"); err != nil {
+		t.Skip("kubectl not found in PATH, skipping k8s_inspect tests")
+	}
+
 	handler, err := NewNativeToolHandler()
 	require.NoError(t, err)
 

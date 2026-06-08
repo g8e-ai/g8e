@@ -63,9 +63,9 @@ t.Run("invalid/"+tc.name, func(t *testing.T) {
 err := ValidateIdentifier(tc.input)
 require.Error(t, err)
 if tc.input == "" {
-assert.Equal(t, "empty identifier", err.Error())
+assert.Equal(t, "validate: empty identifier", err.Error())
 } else {
-assert.Contains(t, err.Error(), "invalid identifier")
+assert.Contains(t, err.Error(), "validate: invalid identifier")
 }
 })
 }

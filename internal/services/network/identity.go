@@ -218,7 +218,7 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 
 // detectIPs detects all IP addresses on all network interfaces.
 func (d *Detector) detectIPs() ([]string, error) {
-	var ips []string
+	ips := make([]string, 0)
 
 	interfaces, err := net.Interfaces()
 	if err != nil {
@@ -258,7 +258,7 @@ func (d *Detector) detectIPs() ([]string, error) {
 
 // detectHostnames detects hostnames from /etc/hostname and hostname command.
 func (d *Detector) detectHostnames() ([]string, error) {
-	var hostnames []string
+	hostnames := make([]string, 0)
 
 	// Try /etc/hostname first
 	if hostname, err := os.ReadFile("/etc/hostname"); err == nil {
@@ -297,7 +297,7 @@ func getHostsFilePath() string {
 
 // detectEtcHosts parses the hosts file for aliases pointing to this machine's IPs.
 func (d *Detector) detectEtcHosts() ([]HostAlias, error) {
-	var aliases []HostAlias
+	aliases := make([]HostAlias, 0)
 
 	// Get local IPs first
 	localIPs, err := d.detectIPs()
@@ -415,7 +415,7 @@ func (d *Detector) detectMDNS(ctx context.Context) ([]string, error) {
 
 // detectDNSPTRs performs reverse DNS lookups on detected IPs.
 func (d *Detector) detectDNSPTRs(ctx context.Context, ips []string) ([]DNSPTRRecord, error) {
-	var ptrs []DNSPTRRecord
+	ptrs := make([]DNSPTRRecord, 0)
 
 	for _, ip := range ips {
 		// Skip localhost and link-local

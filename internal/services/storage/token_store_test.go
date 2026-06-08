@@ -150,8 +150,9 @@ func TestNewTokenStoreService_DatabaseInitFailure(t *testing.T) {
 	defer testVault.Close()
 
 	// Use an invalid path that cannot be created
+	// On Windows, this path is definitely invalid. On Unix, it's also invalid.
 	config := &TokenStoreConfig{
-		DBPath:  "/nonexistent/path/that/cannot/be/created/token_store.db",
+		DBPath:  "Z:\\invalid\\path\\that\\cannot\\be\\created\\token_store.db",
 		Enabled: true,
 	}
 

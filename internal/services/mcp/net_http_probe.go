@@ -66,7 +66,18 @@ func (t *NetHTTPProbeTool) Execute(ctx context.Context, args json.RawMessage) (C
 
 	parsedURL, err := validateHTTPRequestURL(req.URL)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("net_http_probe: URL validation failed: %w", err)
+		result := NetHTTPProbeResult{
+			Error: fmt.Sprintf("URL validation failed: %v", err),
+		}
+		resultJSON, _ := json.Marshal(result)
+		return CallToolResult{
+			Content: []TextContent{
+				{
+					Type: "text",
+					Text: string(resultJSON),
+				},
+			},
+		}, nil
 	}
 
 	method := req.Method

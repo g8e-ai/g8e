@@ -159,7 +159,7 @@ func TestPKIController_HandlePKIHubBundle(t *testing.T) {
 				var resp map[string]string
 				err := json.Unmarshal(rr.Body.Bytes(), &resp)
 				require.NoError(t, err)
-				assert.Contains(t, resp["error"], "failed to read hub bundle")
+				assert.Contains(t, resp["error"], "pki: read trust bundle")
 			},
 		},
 	}
@@ -206,7 +206,7 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 				c.pki = &PKIAuthority{}
 			},
 			expectedStatus: http.StatusInternalServerError,
-			expectedBody:   `{"error":"failed to read root CA"}`,
+			expectedBody:   `{"error":"pki: read root CA"}`,
 		},
 		{
 			name:   "Failure - Invalid PEM format",
@@ -218,7 +218,7 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 				require.NoError(t, err, "failed to write invalid PEM data")
 			},
 			expectedStatus: http.StatusInternalServerError,
-			expectedBody:   `{"error":"invalid root CA PEM"}`,
+			expectedBody:   `{"error":"pki: invalid root CA PEM"}`,
 		},
 	}
 
@@ -273,7 +273,7 @@ func TestPKIController_HandlePKISignCSR(t *testing.T) {
 			method:         http.MethodPost,
 			body:           []byte("invalid json"),
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"invalid JSON"}`,
+			expectedBody:   `{"error":"pki: unmarshal CSR sign request"}`,
 		},
 		{
 			name:   "Failure - PKI signing error",
@@ -331,14 +331,14 @@ func TestPKIController_HandlePKICertificatesRevoke(t *testing.T) {
 			method:         http.MethodPost,
 			body:           []byte("invalid json"),
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"invalid JSON"}`,
+			expectedBody:   `{"error":"pki: unmarshal revoke request"}`,
 		},
 		{
 			name:           "Failure - Missing serial",
 			method:         http.MethodPost,
 			body:           mustMarshalJSON(t, map[string]string{"reason": testRevocationReason}),
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"serial required"}`,
+			expectedBody:   `{"error":"pki: serial required"}`,
 		},
 		{
 			name:   "Failure - PKI revocation error",
