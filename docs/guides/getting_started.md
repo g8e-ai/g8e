@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-06-02
-Version: v1.0.8
+Last Updated: 2026-06-08
+Version: v1.0.10
 
 ---
 
@@ -66,57 +66,50 @@ The g8e Operator distrusts all upstream inputs. It validates every envelope inde
 
 The platform is a single g8e Node. No runtime, no interpreter, no sidecar.
 
-### Quick launch (pre-built binaries)
-
-**Quick launch (Linux/macOS)**
-
-```bash
-curl -fsSL https://g8e.ai/deploy.sh -o deploy.sh && chmod +x deploy.sh && ./deploy.sh
-```
-
-**Quick launch (Windows)**
-
-```powershell
-iwr https://g8e.ai/deploy.ps1 -UseBasicParsing | iex
-```
-
-**Deploy operators to remote hosts via SSH**
-
-```bash
-# Using your existing SSH config, deploy Operators across your fleet
-./g8e Operator deploy --hosts host1,host2,host3
-
-# Tool calls accept a list of hosts for simultaneous fan-out execution
-```
-
-**Deploy operators via gateway-served scripts**
-
-After starting the gateway, copy/paste these commands on remote hosts. The deploy scripts are embedded in the gateway binary and served over HTTP:
-
-```bash
-# Linux/macOS (run on the remote host)
-curl -fsSL http://<gateway-ip>:8080/deploy.sh | bash
-```
-
-```powershell
-# Windows (run in PowerShell on the remote host)
-iwr http://<gateway-ip>:8080/deploy.ps1 -UseBasicParsing | iex
-```
-
 ### Build from source
 
-### 1. Build g8e
+#### 1. Clone and build
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces the `g8e` g8e Node. It is self-contained and manages both g8e Gateway (PDP) and g8e Operator (PEP) roles.
+This produces the `g8e` binary. It is self-contained and manages both g8e Gateway (PDP) and g8e Operator (PEP) roles.
 
 **Build Options:**
 - `make build`: Standard build (~35-38MB per platform)
 - `make build-compressed`: Compressed build (~15-17MB for Linux/Windows AMD64/ARM64, ~35-38MB for macOS and Windows ARM64)
+
+#### 2. Or use the auto-detecting setup command
+
+```bash
+./g8e setup
+```
+
+This command auto-detects your OS and runs the appropriate setup script to validate dependencies and build the binary.
+
+#### 3. Or use the setup scripts directly
+
+```bash
+# Linux
+./scripts/linux-setup.sh
+
+# macOS
+./scripts/macos-setup.sh
+
+# Windows
+pwsh -ExecutionPolicy Bypass -File scripts/windows-setup.ps1
+```
+
+### Deploy operators to remote hosts via SSH
+
+```bash
+# Using your existing SSH config, deploy Operators across your fleet
+./g8e operator deploy --hosts host1,host2,host3
+
+# Tool calls accept a list of hosts for simultaneous fan-out execution
+```
 
 ### 2. Initialize Vault
 

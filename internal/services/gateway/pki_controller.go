@@ -463,7 +463,39 @@ func (c *PKIController) handleDeployScriptWindows(w http.ResponseWriter, r *http
 		return
 	}
 
-	gatewayHost := c.extractGatewayHost(r.Host)
+	// Log what we're getting
+	c.logger.Info("Deploy script request", "r.Host", r.Host, "RemoteAddr", r.RemoteAddr)
+
+	// Try to get the host from the Host header or X-Forwarded-Host
+	gatewayHost := r.Header.Get("X-Forwarded-Host")
+	if gatewayHost == "" {
+		gatewayHost = r.Host
+	}
+
+	// Remove port if present
+	if h, _, err := net.SplitHostPort(gatewayHost); err == nil {
+		gatewayHost = h
+	}
+
+	// If we still have localhost or empty, try to use the server's own IP address
+	// but only if it's not a loopback request.
+	if gatewayHost == "" || gatewayHost == "localhost" || gatewayHost == "127.0.0.1" || gatewayHost == "::1" {
+		// If it's a loopback request, we might still want to use the actual IP if possible
+		// so other nodes can use the same script.
+		if ip, _, err := net.SplitHostPort(r.Context().Value(http.LocalAddrContextKey).(net.Addr).String()); err == nil {
+			if ip != "" && ip != "127.0.0.1" && ip != "::1" && ip != "0.0.0.0" {
+				gatewayHost = ip
+			}
+		}
+	}
+
+	// Final fallback to constants if we really can't find anything
+	if gatewayHost == "" {
+		gatewayHost = constants.DefaultEndpoint
+	}
+
+	c.logger.Info("Using gateway host for script", "gatewayHost", gatewayHost)
+
 	data := scripts.TemplateData{
 		GatewayHost: gatewayHost,
 		GatewayPort: strconv.Itoa(constants.Ports.OperatorHttp),

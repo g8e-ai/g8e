@@ -69,6 +69,20 @@ func setupCmd() *cobra.Command {
 	return cmd
 }
 
+// platformSetupCmd is a top-level command for platform setup (building, dependencies, etc.)
+func platformSetupCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "setup",
+		Short: "Run platform setup (validate dependencies, build binary)",
+		Long:  `Auto-detect OS and run the appropriate setup script to validate dependencies and build the g8e binary.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runPlatformSetup()
+		},
+	}
+
+	return cmd
+}
+
 func setupDiscoverCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "discover",
@@ -357,4 +371,67 @@ func expandPath(path string) string {
 		}
 	}
 	return path
+}
+
+func runPlatformSetup() error {
+	fmt.Println("Running platform setup...")
+
+	// Get the directory where the g8e binary is located
+	execPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	// Get the directory containing the binary
+	binDir := filepath.Dir(execPath)
+	// If we're in a build directory, go up to the repo root
+	if filepath.Base(binDir) == "bin" {
+		binDir = filepath.Dir(binDir)
+	}
+
+	// Determine the appropriate setup script based on OS
+	var scriptName string
+	var scriptArgs []string
+
+	switch runtime.GOOS {
+	case "windows":
+		scriptName = "windows-setup.ps1"
+		scriptArgs = []string{"-ExecutionPolicy", "Bypass", "-File", filepath.Join(binDir, "scripts", scriptName)}
+	case "darwin":
+		scriptName = "macos-setup.sh"
+		scriptArgs = []string{filepath.Join(binDir, "scripts", scriptName)}
+	default: // linux and others
+		scriptName = "linux-setup.sh"
+		scriptArgs = []string{filepath.Join(binDir, "scripts", scriptName)}
+	}
+
+	scriptPath := filepath.Join(binDir, "scripts", scriptName)
+
+	// Check if the script exists
+	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
+		return fmt.Errorf("setup script not found: %s\nEnsure you're running from the g8e repository root", scriptPath)
+	}
+
+	fmt.Printf("Detected OS: %s\n", runtime.GOOS)
+	fmt.Printf("Running setup script: %s\n", scriptPath)
+
+	var setupCmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		setupCmd = exec.Command("pwsh", scriptArgs...)
+	} else {
+		setupCmd = exec.Command("bash", scriptArgs...)
+	}
+
+	// Set up stdin/stdout/stderr
+	setupCmd.Stdin = os.Stdin
+	setupCmd.Stdout = os.Stdout
+	setupCmd.Stderr = os.Stderr
+
+	// Run the setup script
+	if err := setupCmd.Run(); err != nil {
+		return fmt.Errorf("setup script failed: %w", err)
+	}
+
+	fmt.Println("\nPlatform setup completed successfully!")
+	return nil
 }

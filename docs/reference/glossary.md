@@ -106,8 +106,9 @@ The second layer of g8e governance (Consensus). A multi-agent consensus system w
 ## L3 Notary (L3Notary)
 
 The third layer of g8e governance (Authorization), focusing on human oversight. Every state-changing mutation requires explicit human authorization. This is implemented via:
-- **WebAuthn (Passkey)**: FIDO2-compliant cryptographic proof for web-based clients.
-- **mTLS Signature**: A cryptographic signature over the transaction hash using the CLI/operator private key (mTLS certificate fingerprint binding).
+- **WebAuthn (Passkey)**: FIDO2-compliant cryptographic proof for web sessions only.
+- **mTLS Signature**: A cryptographic signature over the transaction hash using the CLI private key (mTLS certificate fingerprint binding) for CLI sessions.
+- **Operator mTLS**: mTLS certificate fingerprint validation for operator sessions (passkey auth is not available for operators).
 - **CLI Approval**: In outbound mode, mutations requiring L3 are suspended and must be approved via CLI command with cryptographic signature verification.
 The L4 Warden verifies these proofs before allowing execution to proceed. L3 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
 

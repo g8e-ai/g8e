@@ -202,8 +202,9 @@ Defined in `internal/services/governance/l2_consensus.go`. Verifies multi-agent 
 
 ### L3 Notary (Human Authorization)
 Defined in `internal/services/governance/l3_notary.go`. Enforces human-in-the-loop authorization using a cryptographic proof of human intent:
-- **BYO Clients**: Use WebAuthn or Passkey proofs (FIDO2).
+- **Web Sessions**: Use WebAuthn or Passkey proofs (FIDO2).
 - **CLI Sessions**: Use mTLS certificate fingerprints or Ed25519 signatures bound to the session.
+- **Operator Sessions**: Use mTLS certificate fingerprints only (passkey auth is not available for operators).
 
 ### L4 Warden (Pre-Dispatch Gating)
 Defined in `internal/services/governance/l4_warden.go`. Enforces final pre-execution verification gates:

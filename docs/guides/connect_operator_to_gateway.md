@@ -39,13 +39,13 @@ The gateway embeds deploy scripts and serves them over HTTP on port 8080. After 
 **Linux/macOS:**
 
 ```bash
-curl -fsSL http://<gateway-ip>:8080/deploy.sh | bash
+curl -fsSL http://<gateway-ip>:8080/g8e-operator.sh | bash
 ```
 
 **Windows:**
 
 ```powershell
-iwr http://<gateway-ip>:8080/deploy.ps1 -UseBasicParsing | iex
+iwr http://<gateway-ip>:8080/g8e-operator.ps1 -UseBasicParsing | iex
 ```
 
 #### 2. CSR-Based Enrollment

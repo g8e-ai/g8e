@@ -54,7 +54,7 @@ Every transaction or mutation payload wrapped in a `GovernanceEnvelope` undergoe
 
 1. **L1 Doctrine**: Technical Bedrock (Hard Gates) performs threat analysis, command blacklist checks, and pattern matching, defined in `internal/services/governance/l1_doctrine.go`.
 2. **L2 Consensus**: Multi-agent consensus signature verification validates the cryptographic signatures on the transaction using Ed25519, defined in `internal/services/governance/l2_consensus.go`.
-3. **L3 Notary**: Human-in-the-loop authorization verifies approvals via WebAuthn passkeys or cryptographically signed CLI proofs, defined in `internal/services/governance/l3_notary.go`.
+3. **L3 Notary**: Human-in-the-loop authorization verifies approvals via WebAuthn passkeys (for web sessions) or cryptographically signed CLI proofs (for CLI sessions), defined in `internal/services/governance/l3_notary.go`.
 4. **L4 Warden**: Pre-dispatch verification gates validate replay prevention, expiration, transaction nonces, and the state Merkle root, defined in `internal/services/governance/l4_warden.go`.
 5. **L5 Actuator**: Isolated boundary tool dispatch executes the validated operation via Model Context Protocol (MCP) or Agent2Agent (A2A), producing a cryptographically signed transaction receipt, defined in `internal/services/governance/l5_actuator.go`.
 

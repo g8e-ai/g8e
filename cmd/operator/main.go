@@ -505,6 +505,7 @@ func main() {
 		"claude":   true,
 		"vault":    true,
 		"test":     true,
+		"setup":    true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
@@ -567,24 +568,24 @@ func main() {
 	var verifyVault bool
 	var resetVault bool
 	flag.StringVar(&privateKey, "k", "", "Private key")
-	flag.StringVar(&clientCert, "cert", "", "Client certificate (for mTLS)")
-	flag.StringVar(&endpointURL, "e", "", "Endpoint (hostname or IP)")
-	flag.BoolVar(&cloudMode, "c", true, "Cloud mode")
-	flag.StringVar(&cloudProvider, "p", "", "Cloud provider")
-	flag.BoolVar(&executionVault, "s", true, "Enable execution vault (stores execution data in current directory)")
-	flag.StringVar(&logLevel, "l", "info", "Log level")
-	flag.BoolVar(&noGit, "G", false, "Disable git (ledger)")
-	flag.BoolVar(&showVersion, "v", false, "Version")
 	flag.StringVar(&privateKey, "key", "", "Private key")
+	flag.StringVar(&clientCert, "cert", "", "Client certificate (for mTLS)")
 	flag.StringVar(&clientCert, "client-cert", "", "Client certificate (for mTLS)")
+	flag.StringVar(&endpointURL, "e", "", "Endpoint (hostname or IP)")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
 	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: "+constants.Paths.Infra.CaCertPath+" or fetch from /.well-known/g8e/pki/ca-bundle)")
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory Operator was launched from)")
+	flag.BoolVar(&cloudMode, "c", true, "Cloud mode")
 	flag.BoolVar(&cloudMode, string(constants.OperatorTypeCloud), true, "Cloud mode")
+	flag.StringVar(&cloudProvider, "p", "", "Cloud provider")
 	flag.StringVar(&cloudProvider, "provider", "", "Cloud provider")
+	flag.BoolVar(&executionVault, "s", true, "Enable execution vault (stores execution data in current directory)")
 	flag.BoolVar(&executionVault, "execution-vault", true, "Enable execution vault (stores execution data in current directory)")
+	flag.StringVar(&logLevel, "l", "info", "Log level")
 	flag.StringVar(&logLevel, "log", "info", "Log level")
+	flag.BoolVar(&noGit, "G", false, "Disable git (ledger)")
 	flag.BoolVar(&noGit, "no-git", false, "Disable git (ledger)")
+	flag.BoolVar(&showVersion, "v", false, "Version")
 	flag.BoolVar(&showVersion, "version", false, "Version")
 
 	flag.BoolVar(&doctrineMode, "doctrine", false, "Gateway mode: L1 enforced, L2/L3 audited (default)")

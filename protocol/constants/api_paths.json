@@ -81,8 +81,8 @@
   "well_known_pki_fingerprint": "/.well-known/g8e/pki/fingerprint",
   "bootstrap_ca_linux": "/bootstrap-ca",
   "bootstrap_ca_windows": "/bootstrap-ca.ps1",
-  "deploy_script_linux": "/deploy.sh",
-  "deploy_script_windows": "/deploy.ps1",
+  "deploy_script_linux": "/g8e-operator.sh",
+  "deploy_script_windows": "/g8e-operator.ps1",
   "health": "/api/v1/health",
   "landing": "/"
 }

@@ -141,7 +141,7 @@ func RunStream(args []string) {
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[stream] binary not found at %s\n", binPath)
-		fmt.Fprintf(os.Stderr, "  Run: ./g8e Operator build\n")
+		fmt.Fprintf(os.Stderr, "  Run: ./g8e operator build\n")
 		os.Exit(constants.ExitGeneralError)
 	}
 

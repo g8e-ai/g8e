@@ -69,7 +69,7 @@ L2 provides multi-agent cryptographic verification of intent.
 - **Posture-Aware Enforcement**: Enforces signature requirements based on the configured `GovernancePosture`.
 
 ### Layer 3: Notary (L3Notary)
-*Implementation: `internal/services/governance/l3_notary.go:31-35`*
+*Implementation: `internal/services/governance/l3_notary.go:30-36`*
 
 L3 ensures explicit human authorization for mutations.
 - **Suspension**: The g8e Gateway (g8eg) suspends transactions requiring L3 approval, storing them in the `suspended_transactions` pool.
@@ -77,7 +77,7 @@ L3 ensures explicit human authorization for mutations.
 - **L3Proof**: A successful approval generates an `L3Proof` containing the cryptographic signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
 
 ### Layer 4: Warden (L4Warden)
-*Implementation: `internal/services/governance/l4_warden.go:307-320`*
+*Implementation: `internal/services/governance/l4_warden.go:309-323`*
 
 The Warden is the final fail-closed gate before execution. It verifies:
 1. **Structural Integrity**: Structural integrity, payload decoding, and L1Doctrine compliance.
@@ -87,11 +87,11 @@ The Warden is the final fail-closed gate before execution. It verifies:
 5. **Posture Enforcement**: Enforces L2 and L3 requirements based on the configured `GovernancePosture` (Doctrine, Consensus, or Notary).
 
 ### Layer 5: Actuator (L5Actuator)
-*Implementation: `internal/services/governance/l5_actuator.go:52-70`*
+*Implementation: `internal/services/governance/l5_actuator.go:50-69`*
 
 The Actuator represents the execution boundary and final audit commitment.
 - **Egress Dispatch**: Dispatches the verified payload to downstream executors (Shell, MCP, A2A).
-- **Sensitive Data Rehydration**: Rehydrates scrubbed placeholders (such as `{{UEI_1}}`) with original sensitive data just before execution.
+- **Sensitive Data Rehydration**: Rehydrates scrubbed placeholders (such as `{{UEI_1}}`) with original sensitive data just before execution via `RehydratePayload`.
 - **Action Receipts**: Issues a signed `ActionReceipt` providing immutable proof of the outcome.
 - **Commitment**: Records the transaction in the `SQLAuditStore` and chains it to the ledger.
 

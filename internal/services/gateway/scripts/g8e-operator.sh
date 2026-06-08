@@ -2,7 +2,7 @@
 # g8e Auto-Detect Deploy Script
 # Detects OS and architecture automatically and deploys the appropriate g8e binary.
 # This script is embedded in the g8e gateway binary and served at:
-#   http://<gateway-ip>:8080/deploy.sh
+#   http://<gateway-ip>:8080/g8e-operator.sh
 # Run on remote hosts to download and deploy the g8e binary.
 
 set -e
@@ -34,7 +34,7 @@ case "$OS" in
   *)
     echo -e "${RED}Unsupported OS: $OS${NC}"
     echo "This deploy script supports Linux and macOS. For Windows, use PowerShell:"
-    echo "iwr http://${GATEWAY_HOST}:${GATEWAY_PORT}/deploy.ps1 -UseBasicParsing | iex"
+    echo "iwr http://${GATEWAY_HOST}:${GATEWAY_PORT}/g8e-operator.ps1 -UseBasicParsing | iex"
     exit 1
     ;;
 esac
@@ -68,6 +68,10 @@ DOWNLOAD_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}/.well-known/g8e/bin/${BINAR
 echo -e "${YELLOW}Detected: $OS $ARCH${NC}"
 echo -e "${YELLOW}Downloading from: $DOWNLOAD_URL${NC}"
 
+# Remove existing binary to ensure overwrite
+echo -e "${YELLOW}Removing existing g8e binary...${NC}"
+rm -f g8e
+
 # Download binary
 if command -v curl &> /dev/null; then
   curl -fsSL "$DOWNLOAD_URL" -o g8e
@@ -83,21 +87,5 @@ chmod +x g8e
 
 echo -e "${GREEN}g8e deployed successfully!${NC}"
 
-# Run PKI enrollment
-echo -e "${YELLOW}Enrolling with Gateway at ${GATEWAY_HOST}...${NC}"
-ENROLLMENT_OUTPUT=$(./g8e gw security pki enroll --endpoint "${GATEWAY_HOST}")
-echo "$ENROLLMENT_OUTPUT"
-
-# Extract operator session ID from enrollment output
-OPERATOR_SESSION_ID=$(echo "$ENROLLMENT_OUTPUT" | grep "Operator Session ID:" | awk '{print $4}')
-
-if [ -z "$OPERATOR_SESSION_ID" ]; then
-  echo -e "${RED}Failed to extract operator session ID from enrollment output${NC}"
-  exit 1
-fi
-
-echo -e "${GREEN}Enrollment complete!${NC}"
-echo ""
 echo "Starting g8e Operator to connect to Gateway at ${GATEWAY_HOST}..."
-export G8E_OPERATOR_SESSION_ID="$OPERATOR_SESSION_ID"
-./g8e -e "${GATEWAY_HOST}" -k ".g8e/pki/operator.key" --cert ".g8e/pki/operator.crt"
+./g8e -e "${GATEWAY_HOST}"

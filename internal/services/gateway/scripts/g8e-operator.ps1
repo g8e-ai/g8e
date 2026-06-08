@@ -1,7 +1,7 @@
 # g8e Auto-Detect Deploy Script for Windows
 # Detects architecture automatically and deploys the appropriate g8e binary.
 # This script is embedded in the g8e gateway binary and served at:
-#   http://<gateway-ip>:8080/deploy.ps1
+#   http://<gateway-ip>:8080/g8e-operator.ps1
 # Run on remote hosts to download and deploy the g8e binary.
 
 $ErrorActionPreference = "Stop"
@@ -37,6 +37,10 @@ $BinaryUrl = "http://${GatewayHost}:${GatewayPort}/.well-known/g8e/bin/${BinaryN
 Write-Host "Detected: Windows $arch" -ForegroundColor Yellow
 Write-Host "Downloading from: $BinaryUrl" -ForegroundColor Yellow
 
+# Remove existing binary to ensure overwrite
+Write-Host "Removing existing g8e.exe binary..." -ForegroundColor Yellow
+Remove-Item -Force "g8e.exe" -ErrorAction SilentlyContinue
+
 # Download binary
 try {
     Invoke-WebRequest -Uri $BinaryUrl -OutFile "g8e.exe" -UseBasicParsing
@@ -47,30 +51,6 @@ try {
 
 Write-Host "g8e deployed successfully!" -ForegroundColor Green
 
-# Run PKI enrollment
-Write-Host "Enrolling with Gateway at ${GatewayHost}..." -ForegroundColor Yellow
-try {
-    $EnrollmentOutput = & .\g8e.exe security pki enroll --endpoint "${GatewayHost}" 2>&1
-    Write-Host $EnrollmentOutput
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Enrollment failed with exit code ${LASTEXITCODE}" -ForegroundColor Red
-        exit 1
-    }
-} catch {
-    Write-Host "Enrollment failed with exception: $_" -ForegroundColor Red
-    exit 1
-}
-
-# Extract operator session ID from enrollment output
-$OperatorSessionId = ($EnrollmentOutput | Select-String "Operator Session ID:").ToString().Split() | Select-Object -Last 1
-
-if ([string]::IsNullOrEmpty($OperatorSessionId)) {
-    Write-Host "Failed to extract operator session ID from enrollment output" -ForegroundColor Red
-    exit 1
-}
-
-Write-Host "Enrollment complete!" -ForegroundColor Green
-Write-Host ""
 Write-Host "Starting g8e Operator to connect to Gateway at ${GatewayHost}..." -ForegroundColor Yellow
-$env:G8E_OPERATOR_SESSION_ID = $OperatorSessionId
-& .\g8e.exe -e "${GatewayHost}" -k ".g8e\pki\operator.key" --cert ".g8e\pki\operator.crt"
+Write-Host "DEBUG: GatewayHost = ${GatewayHost}" -ForegroundColor Yellow
+& .\g8e.exe -e $GatewayHost

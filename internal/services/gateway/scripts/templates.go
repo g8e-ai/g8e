@@ -23,10 +23,10 @@ import (
 	"text/template"
 )
 
-//go:embed deploy.sh
+//go:embed g8e-operator.sh
 var deployScriptLinux string
 
-//go:embed deploy.ps1
+//go:embed g8e-operator.ps1
 var deployScriptWindows string
 
 // TemplateData holds the data for script template rendering.
