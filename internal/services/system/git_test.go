@@ -16,6 +16,7 @@ package system
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -47,24 +48,31 @@ func TestValidateGitNodeBinary_Empty(t *testing.T) {
 
 func TestIsExecutable_NotExist(t *testing.T) {
 	t.Parallel()
-	assert.False(t, isExecutable(filepath.Join(t.TempDir(), "nonexistent")))
+	tmpDir := t.TempDir()
+	assert.False(t, isExecutable(filepath.Join(tmpDir, "nonexistent")))
 }
 
 func TestIsExecutable_Directory(t *testing.T) {
 	t.Parallel()
-	assert.False(t, isExecutable(t.TempDir()))
+	tmpDir := t.TempDir()
+	assert.False(t, isExecutable(tmpDir))
 }
 
 func TestIsExecutable_NotExecutable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not have Unix-style execution bits")
+	}
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "file")
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "file")
 	require.NoError(t, os.WriteFile(path, []byte("data"), 0644))
 	assert.False(t, isExecutable(path))
 }
 
 func TestIsExecutable_Executable(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "bin")
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "bin")
 	require.NoError(t, os.WriteFile(path, []byte("data"), 0755))
 	assert.True(t, isExecutable(path))
 }

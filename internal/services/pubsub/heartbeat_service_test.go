@@ -146,11 +146,14 @@ func TestHeartbeatService_Build(t *testing.T) {
 	t.Run("includes network info", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
+		cfg.Gateway.HTTPPort = 8080
+		cfg.Gateway.HTTPSPort = 8443
 		logger := testutil.NewTestLogger()
 		svc := NewHeartbeatService(cfg, logger, nil)
 
 		heartbeat := svc.Build(models.HeartbeatTypeRequested)
-		assert.NotEmpty(t, heartbeat.NetworkInfo.InternalIP)
+		assert.NotZero(t, heartbeat.NetworkInfo.HTTPPort)
+		assert.NotZero(t, heartbeat.NetworkInfo.HTTPSPort)
 		assert.NotEmpty(t, heartbeat.NetworkInfo.Interfaces)
 		assert.NotEmpty(t, heartbeat.NetworkInfo.ConnectivityStatus)
 	})
@@ -200,7 +203,7 @@ func TestHeartbeatService_Build(t *testing.T) {
 		svc := NewHeartbeatService(cfg, logger, nil)
 
 		heartbeat := svc.Build(models.HeartbeatTypeRequested)
-		assert.Equal(t, cfg.LocalStoreEnabled, heartbeat.CapabilityFlags.LocalStorageEnabled)
+		assert.Equal(t, cfg.ExecutionVaultEnabled, heartbeat.CapabilityFlags.ExecutionVaultEnabled)
 		assert.Equal(t, cfg.GitAvailable, heartbeat.CapabilityFlags.GitAvailable)
 		assert.Equal(t, cfg.GitAvailable && !cfg.NoGit, heartbeat.CapabilityFlags.LedgerMirrorEnabled)
 	})
@@ -282,8 +285,8 @@ func TestHeartbeatService_buildProtoHeartbeat(t *testing.T) {
 		protoHeartbeat := svc.buildProtoHeartbeat(heartbeat)
 
 		require.NotNil(t, protoHeartbeat.NetworkInfo)
-		assert.Equal(t, heartbeat.NetworkInfo.PublicIP, protoHeartbeat.NetworkInfo.PublicIp)
-		assert.Equal(t, heartbeat.NetworkInfo.InternalIP, protoHeartbeat.NetworkInfo.InternalIp)
+		assert.Equal(t, "", protoHeartbeat.NetworkInfo.PublicIp)
+		assert.Equal(t, "", protoHeartbeat.NetworkInfo.InternalIp)
 		assert.Equal(t, heartbeat.NetworkInfo.Interfaces, protoHeartbeat.NetworkInfo.Interfaces)
 		assert.Len(t, protoHeartbeat.NetworkInfo.ConnectivityStatus, len(heartbeat.NetworkInfo.ConnectivityStatus))
 	})
@@ -318,7 +321,7 @@ func TestHeartbeatService_buildProtoHeartbeat(t *testing.T) {
 		protoHeartbeat := svc.buildProtoHeartbeat(heartbeat)
 
 		require.NotNil(t, protoHeartbeat.CapabilityFlags)
-		assert.Equal(t, heartbeat.CapabilityFlags.LocalStorageEnabled, protoHeartbeat.CapabilityFlags.LocalStorageEnabled)
+		assert.Equal(t, heartbeat.CapabilityFlags.ExecutionVaultEnabled, protoHeartbeat.CapabilityFlags.LocalStorageEnabled)
 		assert.Equal(t, heartbeat.CapabilityFlags.GitAvailable, protoHeartbeat.CapabilityFlags.GitAvailable)
 		assert.Equal(t, heartbeat.CapabilityFlags.LedgerMirrorEnabled, protoHeartbeat.CapabilityFlags.LedgerMirrorEnabled)
 	})

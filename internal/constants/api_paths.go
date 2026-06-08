@@ -73,21 +73,27 @@ var APIPaths = struct {
 	Users   string `json:"users"`
 	UsersMe string `json:"users_me"`
 	// Auth routes
-	AuthLoginVerify                   string `json:"auth_login_verify"`
-	AuthLogout                        string `json:"auth_logout"`
-	AuthBootstrap                     string `json:"auth_bootstrap"`
-	AuthBootstrapStatus               string `json:"auth_bootstrap_status"`
-	AuthPasskeysRegisterChallenge     string `json:"auth_passkeys_register_challenge"`
-	AuthPasskeysRegisterVerify        string `json:"auth_passkeys_register_verify"`
-	AuthPasskeysAuthenticateChallenge string `json:"auth_passkeys_authenticate_challenge"`
-	AuthPasskeysAuthenticateVerify    string `json:"auth_passkeys_authenticate_verify"`
-	AuthPasskeys                      string `json:"auth_passkeys"`
-	AuthPasskeysByID                  string `json:"auth_passkeys_by_id"`
-	AuthPasskeysJITRegisterChallenge  string `json:"auth_passkeys_jit_register_challenge"`
-	AuthPasskeysJITRegisterVerify     string `json:"auth_passkeys_jit_register_verify"`
-	AuthPasskeysJITPrefix             string `json:"auth_passkeys_jit_prefix"`
-	AuthPasskeysPrefix                string `json:"auth_passkeys_prefix"`
-	AuthSessionsMe                    string `json:"auth_sessions_me"`
+	AuthLoginVerify                      string `json:"auth_login_verify"`
+	AuthLogout                           string `json:"auth_logout"`
+	AuthBootstrap                        string `json:"auth_bootstrap"`
+	AuthBootstrapStatus                  string `json:"auth_bootstrap_status"`
+	AuthCLIEnroll                        string `json:"auth_cli_enroll"`
+	AuthDeviceEnroll                     string `json:"auth_device_enroll"`
+	AuthPasskeysRegisterChallenge        string `json:"auth_passkeys_register_challenge"`
+	AuthPasskeysRegisterVerify           string `json:"auth_passkeys_register_verify"`
+	AuthPasskeysAuthenticateChallenge    string `json:"auth_passkeys_authenticate_challenge"`
+	AuthPasskeysAuthenticateVerify       string `json:"auth_passkeys_authenticate_verify"`
+	AuthPasskeys                         string `json:"auth_passkeys"`
+	AuthPasskeysByID                     string `json:"auth_passkeys_by_id"`
+	AuthPasskeysJITRegisterChallenge     string `json:"auth_passkeys_jit_register_challenge"`
+	AuthPasskeysJITRegisterVerify        string `json:"auth_passkeys_jit_register_verify"`
+	AuthPasskeysJITPrefix                string `json:"auth_passkeys_jit_prefix"`
+	AuthPasskeysPrefix                   string `json:"auth_passkeys_prefix"`
+	AuthPasskeysCLIRegisterChallenge     string `json:"auth_passkeys_cli_register_challenge"`
+	AuthPasskeysCLIRegisterVerify        string `json:"auth_passkeys_cli_register_verify"`
+	AuthPasskeysCLIAuthenticateChallenge string `json:"auth_passkeys_cli_authenticate_challenge"`
+	AuthPasskeysCLIAuthenticateVerify    string `json:"auth_passkeys_cli_authenticate_verify"`
+	AuthSessionsMe                       string `json:"auth_sessions_me"`
 	// Approval routes
 	Approvals         string `json:"approvals"`
 	ApprovalsByID     string `json:"approvals_by_id"`
@@ -101,9 +107,13 @@ var APIPaths = struct {
 	// Well-known routes
 	WellKnownPKICABundle    string `json:"well_known_pki_ca_bundle"`
 	WellKnownPKIFingerprint string `json:"well_known_pki_fingerprint"`
+	WellKnownBinPrefix      string `json:"well_known_bin_prefix"`
 	// Bootstrap scripts
 	BootstrapCALinux   string `json:"bootstrap_ca_linux"`
 	BootstrapCAWindows string `json:"bootstrap_ca_windows"`
+	// Deploy scripts
+	DeployScriptLinux   string `json:"deploy_script_linux"`
+	DeployScriptWindows string `json:"deploy_script_windows"`
 	// Health
 	Health string `json:"health"`
 	// Landing
@@ -172,21 +182,27 @@ var APIPaths = struct {
 	Users:   "/api/v1/users",
 	UsersMe: "/api/v1/users/me",
 	// Auth routes
-	AuthLoginVerify:                   "/api/v1/auth/login/verify",
-	AuthLogout:                        "/api/v1/auth/logout",
-	AuthBootstrap:                     "/api/v1/auth/bootstrap",
-	AuthBootstrapStatus:               "/api/v1/auth/bootstrap/status",
-	AuthPasskeysRegisterChallenge:     "/api/v1/auth/passkeys/register/challenge",
-	AuthPasskeysRegisterVerify:        "/api/v1/auth/passkeys/register/verify",
-	AuthPasskeysAuthenticateChallenge: "/api/v1/auth/passkeys/authenticate/challenge",
-	AuthPasskeysAuthenticateVerify:    "/api/v1/auth/passkeys/authenticate/verify",
-	AuthPasskeys:                      "/api/v1/auth/passkeys",
-	AuthPasskeysByID:                  "/api/v1/auth/passkeys/",
-	AuthPasskeysJITRegisterChallenge:  "/api/v1/auth/passkeys/jit-register/challenge",
-	AuthPasskeysJITRegisterVerify:     "/api/v1/auth/passkeys/jit-register/verify",
-	AuthPasskeysJITPrefix:             "/api/v1/auth/passkeys/jit-",
-	AuthPasskeysPrefix:                "/api/v1/auth/passkeys/",
-	AuthSessionsMe:                    "/api/v1/auth/sessions/me",
+	AuthLoginVerify:                      "/api/v1/auth/login/verify",
+	AuthLogout:                           "/api/v1/auth/logout",
+	AuthBootstrap:                        "/api/v1/auth/bootstrap",
+	AuthBootstrapStatus:                  "/api/v1/auth/bootstrap/status",
+	AuthCLIEnroll:                        "/api/v1/auth/cli/enroll",
+	AuthDeviceEnroll:                     "/api/v1/auth/device/enroll",
+	AuthPasskeysRegisterChallenge:        "/api/v1/auth/passkeys/register/challenge",
+	AuthPasskeysRegisterVerify:           "/api/v1/auth/passkeys/register/verify",
+	AuthPasskeysAuthenticateChallenge:    "/api/v1/auth/passkeys/authenticate/challenge",
+	AuthPasskeysAuthenticateVerify:       "/api/v1/auth/passkeys/authenticate/verify",
+	AuthPasskeys:                         "/api/v1/auth/passkeys",
+	AuthPasskeysByID:                     "/api/v1/auth/passkeys/",
+	AuthPasskeysJITRegisterChallenge:     "/api/v1/auth/passkeys/jit-register/challenge",
+	AuthPasskeysJITRegisterVerify:        "/api/v1/auth/passkeys/jit-register/verify",
+	AuthPasskeysJITPrefix:                "/api/v1/auth/passkeys/jit-",
+	AuthPasskeysPrefix:                   "/api/v1/auth/passkeys/",
+	AuthPasskeysCLIRegisterChallenge:     "/api/v1/auth/passkeys/cli-register/challenge",
+	AuthPasskeysCLIRegisterVerify:        "/api/v1/auth/passkeys/cli-register/verify",
+	AuthPasskeysCLIAuthenticateChallenge: "/api/v1/auth/passkeys/cli/authenticate/challenge",
+	AuthPasskeysCLIAuthenticateVerify:    "/api/v1/auth/passkeys/cli/authenticate/verify",
+	AuthSessionsMe:                       "/api/v1/auth/sessions/me",
 	// Approval routes
 	Approvals:         "/api/v1/approvals",
 	ApprovalsByID:     "/api/v1/approvals/",
@@ -200,15 +216,15 @@ var APIPaths = struct {
 	// Well-known routes
 	WellKnownPKICABundle:    "/.well-known/g8e/pki/ca-bundle",
 	WellKnownPKIFingerprint: "/.well-known/g8e/pki/fingerprint",
+	WellKnownBinPrefix:      "/.well-known/g8e/bin/",
 	// Bootstrap scripts
 	BootstrapCALinux:   "/bootstrap-ca",
 	BootstrapCAWindows: "/bootstrap-ca.ps1",
+	// Deploy scripts
+	DeployScriptLinux:   "/g8e-operator.sh",
+	DeployScriptWindows: "/g8e-operator.ps1",
 	// Health
 	Health: "/api/v1/health",
 	// Landing
 	Landing: "/",
 }
-
-// APIPathsGenerated is a mirror of APIPaths for compatibility.
-// This is kept as a separate variable to avoid circular dependencies during build.
-var APIPathsGenerated = APIPaths

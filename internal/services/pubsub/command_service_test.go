@@ -73,7 +73,7 @@ func TestPayloadToExecutionRequest(t *testing.T) {
 
 		_, err := payloadToExecutionRequest(msg)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to decode")
+		assert.Contains(t, err.Error(), "decode command payload")
 	})
 
 	t.Run("rejects missing command", func(t *testing.T) {
@@ -192,7 +192,7 @@ func TestCommandService_Setters(t *testing.T) {
 		assert.NotNil(t, svc.results)
 	})
 
-	t.Run("SetLocalStoreService", func(t *testing.T) {
+	t.Run("SetAuditStore", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -200,19 +200,7 @@ func TestCommandService_Setters(t *testing.T) {
 		svc := NewCommandService(cfg, logger, execSvc)
 
 		// Use nil for test - just verify method can be called
-		svc.SetLocalStoreService(nil)
-		// Verify method can be called without panic
-	})
-
-	t.Run("SetAuditVaultService", func(t *testing.T) {
-		t.Parallel()
-		cfg := testutil.NewTestConfig(t)
-		logger := testutil.NewTestLogger()
-		execSvc := execution.NewExecutionService(cfg, logger)
-		svc := NewCommandService(cfg, logger, execSvc)
-
-		// Use nil for test - just verify method can be called
-		svc.SetAuditVaultService(nil)
+		svc.SetAuditStore(nil)
 		// Verify method can be called without panic
 	})
 
@@ -240,7 +228,7 @@ func TestCommandService_Setters(t *testing.T) {
 		// Verify method can be called without panic
 	})
 
-	t.Run("SetSovereignty", func(t *testing.T) {
+	t.Run("SetScrubbing", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -248,7 +236,7 @@ func TestCommandService_Setters(t *testing.T) {
 		svc := NewCommandService(cfg, logger, execSvc)
 
 		// Use nil for test - just verify method can be called
-		svc.SetSovereignty(nil)
+		svc.SetScrubbing(nil)
 		// Verify method can be called without panic
 	})
 }

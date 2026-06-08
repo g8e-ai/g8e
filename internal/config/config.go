@@ -50,8 +50,8 @@ type LoadOptions struct {
 	// Outbound mode requires L3 (human) authorization before sending mutations
 	Posture GatewayPosture
 
-	// Local storage
-	LocalStorageEnabled bool
+	// Execution vault
+	ExecutionVaultEnabled bool
 
 	// Git / Ledger
 	NoGit bool // --no-git flag: disables ledger (git-backed file versioning)
@@ -81,23 +81,24 @@ type LoadOptions struct {
 // backbone for the entire g8e platform, replacing external databases.
 // No outbound authentication is required - the Operator simply starts and listens.
 type GatewayConfig struct {
-	Enabled          bool
-	Posture          GatewayPosture // Governance enforcement posture (doctrine, consensus, notary)
-	HTTPPort         int            // TLS/HTTPS port for internal agent/client traffic (default: from paths.json)
-	BootstrapPort    int            // Plain-TLS port for bootstrap routes (/.well-known/, /api/pki/device-enroll for CSR enrollment) (default: from paths.json)
-	PublicPort       int            // Plain-TLS port for browser-based auth and setup (default: from paths.json)
-	MCPHttpPort      int            // Plain-HTTP port for MCP HTTP calls (default: from paths.json)
-	DataDir          string         // Root directory for SQLite database (default: .g8e/data in working directory)
-	PKIDir           string         // Directory for TLS certificates (default: .g8e/pki)
-	SecretsDir       string         // Directory for platform secrets (default: .g8e/secrets)
-	PasskeyRpID      string         // RP ID for passkey operations (default: localhost)
-	PasskeyRpName    string         // RP Name for passkey operations (default: g8e)
-	MCPDownstreamURL string         // URL of the downstream MCP server to proxy discovery and execution to
-	A2ADownstreamURL string         // URL of the downstream A2A server to proxy execution to
-	JWKSURL          string         // URL to fetch JWKS for JWT validation
-	JWTRoleClaim     string         // The claim in JWT that contains roles (default: "roles")
-	JWTIssuer        string         // Expected issuer claim in JWT (optional, for multi-audience IdP deployments)
-	JWTAudience      string         // Expected audience claim in JWT (optional, for multi-audience IdP deployments)
+	Enabled            bool
+	Posture            GatewayPosture // Governance enforcement posture (doctrine, consensus, notary)
+	HTTPPort           int            // Plain HTTP port for bootstrap and MCP (default: constants.Ports.OperatorHttp)
+	HTTPSPort          int            // HTTPS port for mTLS API (default: constants.Ports.OperatorHttps)
+	DataDir            string         // Root directory for SQLite database (default: .g8e/data in working directory)
+	PKIDir             string         // Directory for TLS certificates (default: .g8e/pki)
+	SecretsDir         string         // Directory for platform secrets (default: .g8e/secrets)
+	VaultDir           string         // Directory for encryption vault (default: .g8e/vault)
+	VaultKeyPath       string         // Path to vault key file (default: .g8e/vault/key)
+	VaultRequireUnlock bool           // Require vault to be unlocked before starting (default: true)
+	PasskeyRpID        string         // RP ID for passkey operations (default: localhost)
+	PasskeyRpName      string         // RP Name for passkey operations (default: g8e)
+	MCPDownstreamURL   string         // URL of the downstream MCP server to proxy discovery and execution to
+	A2ADownstreamURL   string         // URL of the downstream A2A server to proxy execution to
+	JWKSURL            string         // URL to fetch JWKS for JWT validation
+	JWTRoleClaim       string         // The claim in JWT that contains roles (default: "roles")
+	JWTIssuer          string         // Expected issuer claim in JWT (optional, for multi-audience IdP deployments)
+	JWTAudience        string         // Expected audience claim in JWT (optional, for multi-audience IdP deployments)
 
 	// Federation
 	FederationSeedURL string // Optional seed gateway URL for federation (empty = standalone mode)
@@ -210,11 +211,15 @@ type Config struct {
 	PKIDir     string
 	SecretsDir string
 
-	// Local storage configuration. All paths are relative to WorkDir - the directory the Operator was launched from.
-	LocalStoreEnabled       bool
-	LocalStoreDBPath        string
-	LocalStoreMaxSizeMB     int64
-	LocalStoreRetentionDays int
+	// Vault configuration for encryption at rest
+	VaultDir           string // Directory for encryption vault (default: .g8e/vault)
+	VaultKeyPath       string // Path to vault key file (default: .g8e/vault/key)
+	VaultRequireUnlock bool   // Require vault to be unlocked before starting (default: true)
+
+	// Execution vault configuration. All paths are relative to WorkDir - the directory the Operator was launched from.
+	ExecutionVaultEnabled       bool
+	ExecutionVaultMaxSizeMB     int64
+	ExecutionVaultRetentionDays int
 
 	// Git / Ledger
 	NoGit        bool   // User explicitly disabled git via --no-git
@@ -235,32 +240,20 @@ type Config struct {
 	Gateway GatewayConfig
 }
 
-// FindProjectRoot locates the g8e project root by searching for the VERSION file.
+// FindProjectRoot returns the current working directory.
 func FindProjectRoot() string {
-	curr, err := os.Getwd()
+	cwd, err := os.Getwd()
 	if err != nil {
-		return ""
+		return "."
 	}
-	for {
-		if _, err := os.Stat(filepath.Join(curr, "VERSION")); err == nil {
-			return curr
-		}
-		parent := filepath.Dir(curr)
-		if parent == curr {
-			break
-		}
-		curr = parent
-	}
-	return ""
+	return cwd
 }
 
 // GatewayOptions contains configuration values for LoadGateway.
 type GatewayOptions struct {
 	Posture          GatewayPosture
 	HTTPPort         int
-	BootstrapPort    int
-	PublicPort       int
-	MCPHttpPort      int
+	HTTPSPort        int
 	DataDir          string
 	PKIDir           string
 	SecretsDir       string
@@ -284,36 +277,28 @@ type GatewayOptions struct {
 	AllowTestPortZero bool
 }
 
-// ResolveGatewayPorts finds four available ports incrementally, starting from the
+// ResolveGatewayPorts finds two available ports incrementally, starting from the
 // requested ports. This allows multiple operators to run on the same host.
-func ResolveGatewayPorts(httpPort, bootstrapPort, publicPort, mcpHttpPort int) (int, int, int, int) {
+func ResolveGatewayPorts(httpPort, httpsPort int) (int, int) {
 	if httpPort <= 0 {
 		httpPort = constants.Ports.OperatorHttps
 	}
-	if bootstrapPort <= 0 {
-		bootstrapPort = constants.Ports.OperatorBootstrapHttps
-	}
-	if publicPort <= 0 {
-		publicPort = constants.Ports.OperatorPublicHttps
-	}
-	if mcpHttpPort <= 0 {
-		mcpHttpPort = constants.Ports.OperatorMcpHttp
+	if httpsPort <= 0 {
+		httpsPort = constants.Ports.OperatorHttps
 	}
 
 	// Try up to 100 offsets
 	for offset := 0; offset < 100; offset++ {
 		h := httpPort + offset
-		b := bootstrapPort + offset
-		p := publicPort + offset
-		m := mcpHttpPort + offset
+		s := httpsPort + offset
 
-		if isPortAvailable(h) && isPortAvailable(b) && isPortAvailable(p) && isPortAvailable(m) {
-			return h, b, p, m
+		if isPortAvailable(h) && isPortAvailable(s) {
+			return h, s
 		}
 	}
 
 	// Fallback to original if we can't find a free block (let it fail during bind)
-	return httpPort, bootstrapPort, publicPort, mcpHttpPort
+	return httpPort, httpsPort
 }
 
 func isPortAvailable(port int) bool {
@@ -332,53 +317,49 @@ func isPortAvailable(port int) bool {
 // - Port uniqueness checks (ignoring zero-valued ports)
 //
 // Returns validated and resolved ports, or an error if validation fails.
-func validateAndResolveGatewayPorts(httpPort, bootstrapPort, publicPort, mcpHttpPort int, allowTestPortZero bool) (int, int, int, int, error) {
+func validateAndResolveGatewayPorts(httpPort, httpsPort int, allowTestPortZero bool) (int, int, error) {
 	// Reject port 0 in production
 	// This check must happen before default assignment to validate actual input
 	if !allowTestPortZero {
-		if httpPort == 0 && bootstrapPort == 0 && publicPort == 0 && mcpHttpPort == 0 {
+		if httpPort == 0 && httpsPort == 0 {
 			// All zero means "use defaults and resolve"
 		} else {
 			if httpPort == 0 {
-				return 0, 0, 0, 0, fmt.Errorf("httpPort cannot be 0 in production")
+				return 0, 0, fmt.Errorf("httpPort cannot be 0 in production")
 			}
-			if bootstrapPort == 0 {
-				return 0, 0, 0, 0, fmt.Errorf("bootstrapPort cannot be 0 in production")
-			}
-			if publicPort == 0 {
-				return 0, 0, 0, 0, fmt.Errorf("publicPort cannot be 0 in production")
+			if httpsPort == 0 {
+				return 0, 0, fmt.Errorf("httpsPort cannot be 0 in production")
 			}
 		}
 	}
 
 	// Resolve available ports if they are not 0 (dynamic test ports)
 	if !allowTestPortZero {
-		httpPort, bootstrapPort, publicPort, mcpHttpPort = ResolveGatewayPorts(httpPort, bootstrapPort, publicPort, mcpHttpPort)
+		httpPort, httpsPort = ResolveGatewayPorts(httpPort, httpsPort)
 	}
 
 	// Validate that all ports are unique to prevent conflicts.
 	// Zero-valued ports are ignored so test/default configurations can leave
 	// optional ports unset without tripping false conflicts.
-	if httpPort > 0 && mcpHttpPort > 0 && httpPort == mcpHttpPort {
-		return 0, 0, 0, 0, fmt.Errorf("httpPort (%d) and mcpHttpPort (%d) must be different", httpPort, mcpHttpPort)
-	}
-	if bootstrapPort > 0 && mcpHttpPort > 0 && bootstrapPort == mcpHttpPort {
-		return 0, 0, 0, 0, fmt.Errorf("bootstrapPort (%d) and mcpHttpPort (%d) must be different", bootstrapPort, mcpHttpPort)
-	}
-	if publicPort > 0 && mcpHttpPort > 0 && publicPort == mcpHttpPort {
-		return 0, 0, 0, 0, fmt.Errorf("publicPort (%d) and mcpHttpPort (%d) must be different", publicPort, mcpHttpPort)
+	if httpPort > 0 && httpsPort > 0 && httpPort == httpsPort {
+		return 0, 0, fmt.Errorf("httpPort (%d) and httpsPort (%d) must be different", httpPort, httpsPort)
 	}
 
-	return httpPort, bootstrapPort, publicPort, mcpHttpPort, nil
+	return httpPort, httpsPort, nil
 }
 
 // LoadGateway creates configuration for gateway mode.
 // Gateway mode skips all operator-mode validation - no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
 func LoadGateway(opts GatewayOptions) (*Config, error) {
-	// Resolve paths based on project root before using them
+	// Initialize paths relative to current working directory
 	projectRoot := FindProjectRoot()
-	constants.ResolvePaths(projectRoot)
+	if projectRoot == "" {
+		projectRoot = "."
+	}
+	if err := constants.InitPathsWithBase(projectRoot); err != nil {
+		return nil, fmt.Errorf("config: failed to initialize paths: %w", err)
+	}
 
 	// Resolve paths using canonical constants
 	dataDir := opts.DataDir
@@ -397,12 +378,13 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 		secretsDir = constants.Paths.Infra.SecretsDir
 	}
 
+	vaultDir := constants.Paths.Infra.VaultDir
+	vaultKeyPath := filepath.Join(vaultDir, "key")
+
 	// Validate and resolve gateway ports
-	httpPort, bootstrapPort, publicPort, mcpHttpPort, err := validateAndResolveGatewayPorts(
+	httpPort, httpsPort, err := validateAndResolveGatewayPorts(
 		opts.HTTPPort,
-		opts.BootstrapPort,
-		opts.PublicPort,
-		opts.MCPHttpPort,
+		opts.HTTPSPort,
 		opts.AllowTestPortZero,
 	)
 	if err != nil {
@@ -411,6 +393,11 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 
 	passkeyRpID := opts.PasskeyRpID
 	if passkeyRpID == "" {
+		passkeyRpID = "localhost"
+	}
+	// Normalize 127.0.0.1 to localhost for passkey RP ID
+	// WebAuthn requires RP ID to be a valid domain, not an IP address
+	if passkeyRpID == "127.0.0.1" {
 		passkeyRpID = "localhost"
 	}
 	passkeyRpName := opts.PasskeyRpName
@@ -433,25 +420,28 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 
 	return &Config{
 		ComponentName: constants.ComponentNameG8EOGateway,
+		PKIDir:        pkiDir,
+		SecretsDir:    secretsDir,
 		Gateway: GatewayConfig{
 			Enabled: true,
 			Posture: posture,
 
-			HTTPPort:         httpPort,
-			BootstrapPort:    bootstrapPort,
-			PublicPort:       publicPort,
-			MCPHttpPort:      mcpHttpPort,
-			DataDir:          dataDir,
-			PKIDir:           pkiDir,
-			SecretsDir:       secretsDir,
-			PasskeyRpID:      passkeyRpID,
-			PasskeyRpName:    passkeyRpName,
-			MCPDownstreamURL: mcpDownstreamURL,
-			A2ADownstreamURL: a2aDownstreamURL,
-			JWKSURL:          jwksURL,
-			JWTRoleClaim:     jwtRoleClaim,
-			JWTIssuer:        jwtIssuer,
-			JWTAudience:      jwtAudience,
+			HTTPPort:           httpPort,
+			HTTPSPort:          httpsPort,
+			DataDir:            dataDir,
+			PKIDir:             pkiDir,
+			SecretsDir:         secretsDir,
+			VaultDir:           vaultDir,
+			VaultKeyPath:       vaultKeyPath,
+			VaultRequireUnlock: false,
+			PasskeyRpID:        passkeyRpID,
+			PasskeyRpName:      passkeyRpName,
+			MCPDownstreamURL:   mcpDownstreamURL,
+			A2ADownstreamURL:   a2aDownstreamURL,
+			JWKSURL:            jwksURL,
+			JWTRoleClaim:       jwtRoleClaim,
+			JWTIssuer:          jwtIssuer,
+			JWTAudience:        jwtAudience,
 
 			// HTTP server limits with fail-closed defaults
 			MaxPayloadBytes:   512 * 1024, // 512KB
@@ -478,21 +468,19 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 
 // Load creates configuration from explicit options passed by main
 func Load(opts LoadOptions) (*Config, error) {
-	// Resolve paths based on project root before using them
+	// Initialize paths relative to project root
 	projectRoot := FindProjectRoot()
-	constants.ResolvePaths(projectRoot)
+	if projectRoot == "" {
+		projectRoot = "."
+	}
+	if err := constants.InitPathsWithBase(projectRoot); err != nil {
+		return nil, fmt.Errorf("config: failed to initialize paths: %w", err)
+	}
 
 	// Resolve working directory - default to project root when not specified
 	workDir := opts.WorkDir
 	if workDir == "" {
 		workDir = projectRoot
-		if workDir == "" {
-			var err error
-			workDir, err = os.Getwd()
-			if err != nil {
-				return nil, fmt.Errorf("failed to determine working directory: %w", err)
-			}
-		}
 	} else {
 		var err error
 		workDir, err = filepath.Abs(workDir)
@@ -506,22 +494,23 @@ func Load(opts LoadOptions) (*Config, error) {
 	}
 
 	// Build config from explicit options
+	tlsServerName := tlsServerName(opts.OperatorEndpoint)
 	cfg := &Config{
 		// From options
-		CloudMode:         opts.CloudMode,
-		CloudProvider:     opts.CloudProvider,
-		LocalStoreEnabled: opts.LocalStorageEnabled,
-		WorkDir:           workDir,
-		PKIDir:            opts.PKIDir,
-		SecretsDir:        opts.SecretsDir,
+		CloudMode:             opts.CloudMode,
+		CloudProvider:         opts.CloudProvider,
+		ExecutionVaultEnabled: opts.ExecutionVaultEnabled,
+		WorkDir:               workDir,
+		PKIDir:                opts.PKIDir,
+		SecretsDir:            opts.SecretsDir,
 
 		// Derived values - ports default to values from paths.json
 		Endpoint:  opts.OperatorEndpoint,
-		PubSubURL: buildPubSubURL(opts.OperatorEndpoint, opts.HTTPPort),
+		PubSubURL: buildPubSubURL(opts.OperatorEndpoint, tlsServerName, opts.HTTPPort),
 
 		HTTPPort:      httpPortOrDefault(opts.HTTPPort),
 		LogLevel:      opts.LogLevel,
-		TLSServerName: tlsServerName(opts.OperatorEndpoint),
+		TLSServerName: tlsServerName,
 		ProjectID:     "g8e",
 
 		// Fixed defaults
@@ -530,10 +519,9 @@ func Load(opts LoadOptions) (*Config, error) {
 		MaxMemoryMB:        2048,
 		HeartbeatInterval:  heartbeatIntervalOrDefault(opts.HeartbeatInterval),
 
-		// Local storage - all paths anchored to WorkDir
-		LocalStoreDBPath:        filepath.Join(workDir, ".g8e", "local_state.db"),
-		LocalStoreMaxSizeMB:     1024,
-		LocalStoreRetentionDays: 30,
+		// Execution vault defaults
+		ExecutionVaultMaxSizeMB:     1024,
+		ExecutionVaultRetentionDays: 30,
 
 		// Git / Ledger
 		NoGit: opts.NoGit,
@@ -561,6 +549,24 @@ func Load(opts LoadOptions) (*Config, error) {
 		cfg.SecretsDir = constants.Paths.Infra.SecretsDir
 	}
 
+	// Default VaultDir to .g8e/vault if not explicitly set
+	if cfg.VaultDir == "" {
+		cfg.VaultDir = constants.Paths.Infra.VaultDir
+	}
+
+	// Default VaultKeyPath to .g8e/vault/key if not explicitly set
+	if cfg.VaultKeyPath == "" {
+		cfg.VaultKeyPath = filepath.Join(cfg.VaultDir, "key")
+	}
+
+	// Default VaultRequireUnlock to false (matches CLI flag default)
+	// Gateway can start with vault locked; vault key is optional
+	cfg.VaultRequireUnlock = false
+
+	// Read operator session ID from environment variable (in-memory only, never persisted)
+	// This is set by the deploy script after enrollment to track the operator's session
+	cfg.OperatorSessionId = os.Getenv("G8E_OPERATOR_SESSION_ID")
+
 	return cfg, nil
 }
 
@@ -573,9 +579,14 @@ func heartbeatIntervalOrDefault(d time.Duration) time.Duration {
 }
 
 // buildPubSubURL creates a WebSocket URL, omitting port 443 if it is the effective port.
-func buildPubSubURL(endpoint string, httpPort int) string {
+// Uses tlsServerName for the hostname when provided (for IP-to-g8e.local mapping).
+func buildPubSubURL(endpoint string, tlsServerName string, httpPort int) string {
 	port := httpPortOrDefault(httpPort)
-	return fmt.Sprintf("wss://%s:%d", endpoint, port)
+	hostname := endpoint
+	if tlsServerName != "" {
+		hostname = tlsServerName
+	}
+	return fmt.Sprintf("wss://%s:%d", hostname, port)
 }
 
 // httpPortOrDefault returns p if non-zero, otherwise the default from paths.json.
@@ -587,12 +598,13 @@ func httpPortOrDefault(p int) int {
 }
 
 // tlsServerName returns the TLS ServerName override to use when endpoint is a
-// raw IP address. The embedded CA cert is issued to "localhost",
-// so TLS verification must use that hostname regardless of what IP is dialed.
+// raw IP address. When connecting to a Gateway via IP, we use the internal
+// Gateway hostname (g8e.local) for TLS verification since the Gateway's
+// certificate is issued to this name.
 // Returns an empty string when endpoint is already a hostname (no override needed).
 func tlsServerName(endpoint string) string {
 	if net.ParseIP(endpoint) != nil {
-		return constants.DefaultEndpoint
+		return constants.GatewayInternalHostname
 	}
 	return ""
 }

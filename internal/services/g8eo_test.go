@@ -30,7 +30,7 @@ func TestNewG8eoService_InitialState(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	before := time.Now().UTC()
-	service, err := NewG8eoService(cfg, logger)
+	service, err := NewG8eoService(cfg, logger, nil)
 	after := time.Now().UTC()
 
 	require.NoError(t, err)
@@ -52,8 +52,10 @@ func TestNewG8eoService_InitialState(t *testing.T) {
 	assert.Nil(t, service.pubSubCommands)
 	assert.Nil(t, service.pubSubResults)
 	assert.Nil(t, service.pubSubClient)
-	assert.Nil(t, service.localStore)
-	assert.Nil(t, service.auditVault)
+	assert.Nil(t, service.executionVault)
+	assert.Nil(t, service.tokenStore)
+	assert.Nil(t, service.suspendedTxStore)
+	assert.Nil(t, service.auditStore)
 	assert.Nil(t, service.ledger)
 	assert.Nil(t, service.historyHandler)
 }
@@ -64,7 +66,7 @@ func TestNewG8eoService_PreservesConfig(t *testing.T) {
 	cfg.MaxConcurrentTasks = 42
 	logger := testutil.NewTestLogger()
 
-	service, err := NewG8eoService(cfg, logger)
+	service, err := NewG8eoService(cfg, logger, nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, 42, service.config.MaxConcurrentTasks)
@@ -78,10 +80,10 @@ func TestNewG8eoService_IndependentInstances(t *testing.T) {
 	cfg2 := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	svc1, err := NewG8eoService(cfg1, logger)
+	svc1, err := NewG8eoService(cfg1, logger, nil)
 	require.NoError(t, err)
 
-	svc2, err := NewG8eoService(cfg2, logger)
+	svc2, err := NewG8eoService(cfg2, logger, nil)
 	require.NoError(t, err)
 
 	assert.NotEqual(t, svc1.config.OperatorID, svc2.config.OperatorID)
@@ -93,7 +95,7 @@ func TestG8eoService_Start_AlreadyRunning(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	service, err := NewG8eoService(cfg, logger)
+	service, err := NewG8eoService(cfg, logger, nil)
 	require.NoError(t, err)
 
 	service.mu.Lock()
@@ -110,7 +112,7 @@ func TestG8eoService_Stop(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	service, err := NewG8eoService(cfg, logger)
+	service, err := NewG8eoService(cfg, logger, nil)
 	require.NoError(t, err)
 
 	// Manually set running to true to test Stop()
@@ -132,7 +134,7 @@ func TestG8eoService_ConcurrentStateAccess(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	service, err := NewG8eoService(cfg, logger)
+	service, err := NewG8eoService(cfg, logger, nil)
 	require.NoError(t, err)
 
 	done := make(chan struct{}, 20)

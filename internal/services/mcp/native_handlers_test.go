@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,7 +28,8 @@ import (
 )
 
 func TestNativeToolHandler_HandleTool(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("unknown tool", func(t *testing.T) {
 		_, err := handler.HandleTool(context.Background(), "unknown_tool", json.RawMessage(`{}`))
@@ -48,10 +50,10 @@ func TestNativeToolHandler_HandleTool(t *testing.T) {
 		}
 	})
 
-	t.Run("all 27 tools registered", func(t *testing.T) {
+	t.Run("all 29 tools registered", func(t *testing.T) {
 		tools := handler.ListTools()
-		if len(tools) != 27 {
-			t.Errorf("expected 27 registered tools, got %d", len(tools))
+		if len(tools) != 29 {
+			t.Errorf("expected 29 registered tools, got %d", len(tools))
 		}
 
 		expectedTools := []string{
@@ -82,6 +84,8 @@ func TestNativeToolHandler_HandleTool(t *testing.T) {
 			"cloud_metadata",
 			"k8s_inspect",
 			"shell_execute",
+			"net_ssh_known_hosts",
+			"operator_deploy",
 		}
 
 		toolNames := make(map[string]bool)
@@ -98,7 +102,8 @@ func TestNativeToolHandler_HandleTool(t *testing.T) {
 }
 
 func TestHandleDBDiscoverTopology(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid database", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -159,7 +164,8 @@ func TestHandleDBDiscoverTopology(t *testing.T) {
 }
 
 func TestHandleDBQueryValidate(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("indexed SELECT query accepted", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -266,7 +272,8 @@ func TestHandleDBQueryValidate(t *testing.T) {
 }
 
 func TestHandleDBIsolatedRead(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid SELECT query", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -331,7 +338,8 @@ func TestHandleDBIsolatedRead(t *testing.T) {
 }
 
 func TestHandleDBIndexTriage(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid database", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -368,7 +376,8 @@ func TestHandleDBIndexTriage(t *testing.T) {
 }
 
 func TestHandleLogStreamFilter(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid log file", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -413,7 +422,12 @@ func TestHandleLogStreamFilter(t *testing.T) {
 }
 
 func TestHandleSysOOMDetect(t *testing.T) {
-	handler := NewNativeToolHandler()
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows - /var/log/dmesg not available")
+	}
+
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("default log path", func(t *testing.T) {
 		req := SysOOMDetectRequest{}
@@ -436,7 +450,8 @@ func TestHandleSysOOMDetect(t *testing.T) {
 }
 
 func TestHandleConfigDiffMask(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid config diff", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -509,7 +524,12 @@ func TestHandleConfigDiffMask(t *testing.T) {
 }
 
 func TestHandleProcMetricTop(t *testing.T) {
-	handler := NewNativeToolHandler()
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows - /proc not available")
+	}
+
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
 		req := ProcMetricTopRequest{Limit: 5}
@@ -532,7 +552,8 @@ func TestHandleProcMetricTop(t *testing.T) {
 }
 
 func TestHandleFSDiskProfile(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid path", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -570,7 +591,8 @@ func TestHandleFSDiskProfile(t *testing.T) {
 }
 
 func TestHandleProcSignalSafe(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("protected PID rejected", func(t *testing.T) {
 		req := ProcSignalSafeRequest{
@@ -690,7 +712,12 @@ func TestHandleProcSignalSafe(t *testing.T) {
 }
 
 func TestHandleNetSocketAudit(t *testing.T) {
-	handler := NewNativeToolHandler()
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows - /proc not available")
+	}
+
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
 		req := NetSocketAuditRequest{Protocol: "tcp"}
@@ -733,7 +760,8 @@ func TestHandleNetSocketAudit(t *testing.T) {
 }
 
 func TestHandleNetEndpointPing(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("invalid host", func(t *testing.T) {
 		req := NetEndpointPingRequest{
@@ -843,7 +871,8 @@ func TestHandleNetEndpointPing(t *testing.T) {
 }
 
 func TestHandleNetHTTPProbe(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("invalid URL", func(t *testing.T) {
 		req := NetHTTPProbeRequest{
@@ -1032,11 +1061,12 @@ func TestHandleNetHTTPProbe(t *testing.T) {
 }
 
 func TestNativeTools(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 	nativeTools := handler.ListTools()
 
-	if len(nativeTools) != 27 {
-		t.Errorf("expected 27 native tools, got %d", len(nativeTools))
+	if len(nativeTools) != 29 {
+		t.Errorf("expected 29 native tools, got %d", len(nativeTools))
 	}
 
 	expectedTools := []string{
@@ -1067,6 +1097,8 @@ func TestNativeTools(t *testing.T) {
 		"cloud_metadata",
 		"k8s_inspect",
 		"shell_execute",
+		"net_ssh_known_hosts",
+		"operator_deploy",
 	}
 
 	toolNames := make(map[string]bool)
@@ -1237,7 +1269,8 @@ func TestParseSocketAddr(t *testing.T) {
 		t.Parallel()
 		// 127.0.0.1:8080 in hex (little-endian)
 		// IP: 0100007F (127.0.0.1), Port: 1F90 (8080)
-		ip, port := parseSocketAddr("0100007F1F90")
+		ip, port, err := parseSocketAddr("0100007F1F90")
+		require.NoError(t, err)
 		require.Equal(t, "127.0.0.1", ip)
 		require.Equal(t, 8080, port)
 	})
@@ -1246,14 +1279,16 @@ func TestParseSocketAddr(t *testing.T) {
 		t.Parallel()
 		// 0.0.0.0:443 in hex
 		// IP: 00000000 (0.0.0.0), Port: 01BB (443)
-		ip, port := parseSocketAddr("0000000001BB")
+		ip, port, err := parseSocketAddr("0000000001BB")
+		require.NoError(t, err)
 		require.Equal(t, "0.0.0.0", ip)
 		require.Equal(t, 443, port)
 	})
 
 	t.Run("invalid short address", func(t *testing.T) {
 		t.Parallel()
-		ip, port := parseSocketAddr("1234")
+		ip, port, err := parseSocketAddr("1234")
+		require.NoError(t, err)
 		require.Equal(t, "0.0.0.0", ip)
 		require.Equal(t, 0, port)
 	})
@@ -1261,14 +1296,16 @@ func TestParseSocketAddr(t *testing.T) {
 	t.Run("invalid IP length", func(t *testing.T) {
 		t.Parallel()
 		// IP part not 8 bytes
-		ip, port := parseSocketAddr("12345601BB")
+		ip, port, err := parseSocketAddr("12345601BB")
+		require.NoError(t, err)
 		require.Equal(t, "unknown", ip)
 		require.Equal(t, 443, port)
 	})
 }
 
 func TestHandleGitOps(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("git status on test repo", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -1418,7 +1455,8 @@ func TestHandleGitOps(t *testing.T) {
 }
 
 func TestHandleCloudMetadata(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("detect provider", func(t *testing.T) {
 		req := map[string]interface{}{
@@ -1463,102 +1501,9 @@ func TestHandleCloudMetadata(t *testing.T) {
 	})
 }
 
-func TestHandleK8sInspect(t *testing.T) {
-	handler := NewNativeToolHandler()
-
-	t.Run("kubectl not available", func(t *testing.T) {
-		if kubectlAvailable() {
-			t.Skip("kubectl is available, skipping unavailable test")
-		}
-
-		req := map[string]interface{}{
-			"operation": "pods",
-		}
-		reqJSON, _ := json.Marshal(req)
-
-		_, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
-		if err == nil {
-			t.Error("expected error when kubectl not available")
-		}
-	})
-
-	t.Run("cluster info", func(t *testing.T) {
-		if !kubectlAvailable() {
-			t.Skip("kubectl not available, skipping test")
-		}
-
-		req := map[string]interface{}{
-			"operation": "cluster_info",
-		}
-		reqJSON, _ := json.Marshal(req)
-
-		result, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
-		if err != nil {
-			t.Fatalf("HandleTool failed: %v", err)
-		}
-
-		var info map[string]interface{}
-		if err := json.Unmarshal([]byte(result.Content[0].Text), &info); err != nil {
-			t.Fatalf("failed to unmarshal result: %v", err)
-		}
-
-		if _, hasError := info["error"]; hasError {
-			t.Skip("kubectl not configured with cluster access, skipping test")
-		}
-
-		if _, ok := info["version"]; !ok {
-			t.Error("expected version in result")
-		}
-	})
-
-	t.Run("list namespaces", func(t *testing.T) {
-		if !kubectlAvailable() {
-			t.Skip("kubectl not available, skipping test")
-		}
-
-		req := map[string]interface{}{
-			"operation": "namespace",
-		}
-		reqJSON, _ := json.Marshal(req)
-
-		result, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
-		if err != nil {
-			t.Fatalf("HandleTool failed: %v", err)
-		}
-
-		var ns map[string]interface{}
-		if err := json.Unmarshal([]byte(result.Content[0].Text), &ns); err != nil {
-			t.Fatalf("failed to unmarshal result: %v", err)
-		}
-
-		if _, hasError := ns["error"]; hasError {
-			t.Skip("kubectl not configured with cluster access, skipping test")
-		}
-
-		if _, ok := ns["namespaces"]; !ok {
-			t.Error("expected namespaces in result")
-		}
-	})
-
-	t.Run("missing name for pod logs", func(t *testing.T) {
-		if !kubectlAvailable() {
-			t.Skip("kubectl not available, skipping test")
-		}
-
-		req := map[string]interface{}{
-			"operation": "pod_logs",
-		}
-		reqJSON, _ := json.Marshal(req)
-
-		_, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
-		if err == nil {
-			t.Error("expected error for missing pod name")
-		}
-	})
-}
-
 func TestHandleSysInfo(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
 		req := map[string]interface{}{}
@@ -1581,7 +1526,8 @@ func TestHandleSysInfo(t *testing.T) {
 }
 
 func TestHandleNetDNSResolve(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid hostname", func(t *testing.T) {
 		req := map[string]interface{}{
@@ -1594,12 +1540,12 @@ func TestHandleNetDNSResolve(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		var resolve map[string]interface{}
+		var resolve NetDNSResolveResult
 		if err := json.Unmarshal([]byte(result.Content[0].Text), &resolve); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if _, ok := resolve["records"]; !ok {
+		if resolve.Records == nil {
 			t.Error("expected records in result")
 		}
 	})
@@ -1616,7 +1562,8 @@ func TestHandleNetDNSResolve(t *testing.T) {
 }
 
 func TestHandleTLSCertInspect(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("missing cert path", func(t *testing.T) {
 		req := map[string]interface{}{}
@@ -1630,7 +1577,8 @@ func TestHandleTLSCertInspect(t *testing.T) {
 }
 
 func TestHandleSysEnvVars(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
 		req := map[string]interface{}{
@@ -1656,7 +1604,8 @@ func TestHandleSysEnvVars(t *testing.T) {
 }
 
 func TestHandleFSFileChecksum(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid file", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -1698,7 +1647,8 @@ func TestHandleFSFileChecksum(t *testing.T) {
 }
 
 func TestHandleSysServiceStatus(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("missing service name", func(t *testing.T) {
 		req := map[string]interface{}{}
@@ -1712,7 +1662,8 @@ func TestHandleSysServiceStatus(t *testing.T) {
 }
 
 func TestHandleSysContainerStatus(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("missing container name", func(t *testing.T) {
 		req := map[string]interface{}{}
@@ -1726,7 +1677,8 @@ func TestHandleSysContainerStatus(t *testing.T) {
 }
 
 func TestHandleFSDiskUsage(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid path", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -1772,7 +1724,8 @@ func TestHandleFSDiskUsage(t *testing.T) {
 }
 
 func TestHandleSysTimeClock(t *testing.T) {
-	handler := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
 		req := map[string]interface{}{}
@@ -1795,7 +1748,12 @@ func TestHandleSysTimeClock(t *testing.T) {
 }
 
 func TestHandleProcTree(t *testing.T) {
-	handler := NewNativeToolHandler()
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows - /proc not available")
+	}
+
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
 		req := map[string]interface{}{
@@ -1834,6 +1792,150 @@ func TestHandleProcTree(t *testing.T) {
 
 		if _, ok := tree["root_pid"]; !ok {
 			t.Error("expected root_pid in result")
+		}
+	})
+}
+
+func TestHandleK8sInspect(t *testing.T) {
+	if _, err := exec.LookPath("kubectl"); err != nil {
+		t.Skip("kubectl not found in PATH, skipping k8s_inspect tests")
+	}
+
+	handler, err := NewNativeToolHandler()
+	require.NoError(t, err)
+
+	t.Run("kubectl not available", func(t *testing.T) {
+		if _, err := exec.LookPath("kubectl"); err == nil {
+			t.Skip("kubectl is available, skipping unavailable test")
+		}
+
+		req := K8sInspectRequest{Operation: "pods"}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
+		if err == nil {
+			t.Error("expected error when kubectl not available")
+		}
+	})
+
+	t.Run("invalid namespace format", func(t *testing.T) {
+		req := K8sInspectRequest{
+			Operation: "pods",
+			Namespace: "Invalid_Namespace",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var inspectResult K8sInspectResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &inspectResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if inspectResult.Error == "" {
+			t.Error("expected error for invalid namespace format")
+		}
+	})
+
+	t.Run("invalid resource name format", func(t *testing.T) {
+		req := K8sInspectRequest{
+			Operation: "pod_logs",
+			Name:      "Invalid_Pod_Name",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var inspectResult K8sInspectResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &inspectResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if inspectResult.Error == "" {
+			t.Error("expected error for invalid resource name format")
+		}
+	})
+
+	t.Run("pod_logs missing name", func(t *testing.T) {
+		req := K8sInspectRequest{
+			Operation: "pod_logs",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
+		if err == nil {
+			t.Error("expected error for missing pod name")
+		}
+	})
+
+	t.Run("pod_describe missing name", func(t *testing.T) {
+		req := K8sInspectRequest{
+			Operation: "pod_describe",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
+		if err == nil {
+			t.Error("expected error for missing pod name")
+		}
+	})
+
+	t.Run("unsupported operation", func(t *testing.T) {
+		req := K8sInspectRequest{
+			Operation: "invalid_operation",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		_, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
+		if err == nil {
+			t.Error("expected error for unsupported operation")
+		}
+	})
+
+	t.Run("default operation is pods", func(t *testing.T) {
+		req := K8sInspectRequest{}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(context.Background(), "k8s_inspect", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var inspectResult K8sInspectResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &inspectResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if inspectResult.Operation != "pods" {
+			t.Errorf("expected default operation to be pods, got %s", inspectResult.Operation)
+		}
+	})
+
+	t.Run("context cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		req := K8sInspectRequest{Operation: "pods"}
+		reqJSON, _ := json.Marshal(req)
+
+		result, err := handler.HandleTool(ctx, "k8s_inspect", reqJSON)
+		if err != nil {
+			t.Fatalf("HandleTool failed: %v", err)
+		}
+
+		var inspectResult K8sInspectResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &inspectResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if inspectResult.Error == "" {
+			t.Error("expected error due to context cancellation")
 		}
 	})
 }

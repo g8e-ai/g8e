@@ -29,10 +29,10 @@ func Compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	w := gzip.NewWriter(&buf)
 	if _, err := w.Write(data); err != nil {
-		return nil, fmt.Errorf("gzip write failed: %w", err)
+		return nil, fmt.Errorf("compress: gzip write: %w", err)
 	}
 	if err := w.Close(); err != nil {
-		return nil, fmt.Errorf("gzip close failed: %w", err)
+		return nil, fmt.Errorf("compress: gzip close: %w", err)
 	}
 	return buf.Bytes(), nil
 }
@@ -43,13 +43,13 @@ func Decompress(data []byte) ([]byte, error) {
 	}
 	reader, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
-		return nil, fmt.Errorf("gzip reader init failed: %w", err)
+		return nil, fmt.Errorf("decompress: gzip reader init: %w", err)
 	}
 	defer reader.Close()
 
 	decompressed, err := io.ReadAll(reader)
 	if err != nil {
-		return nil, fmt.Errorf("gzip read failed: %w", err)
+		return nil, fmt.Errorf("decompress: gzip read: %w", err)
 	}
 	return decompressed, nil
 }

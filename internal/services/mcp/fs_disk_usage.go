@@ -38,13 +38,13 @@ func (t *FSDiskUsageTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *FSDiskUsageTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to check disk usage for (default all mounted filesystems)",
+func (t *FSDiskUsageTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"path": {
+				Type:        "string",
+				Description: "Path to check disk usage for (default all mounted filesystems)",
 			},
 		},
 	}
@@ -52,14 +52,12 @@ func (t *FSDiskUsageTool) InputSchema() map[string]interface{} {
 
 // Execute implements the tool logic.
 func (t *FSDiskUsageTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		Path string `json:"path,omitempty"`
-	}
+	var req FSDiskUsageRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("fs_disk_usage: unmarshal arguments: %w", err)
 	}
 
-	var result map[string]interface{}
+	var result FSDiskUsageResult
 	var err error
 
 	if req.Path != "" {
@@ -69,12 +67,12 @@ func (t *FSDiskUsageTool) Execute(ctx context.Context, args json.RawMessage) (Ca
 	}
 
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to get disk usage: %w", err)
+		return CallToolResult{}, fmt.Errorf("fs_disk_usage: get disk usage: %w", err)
 	}
 
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("fs_disk_usage: marshal result: %w", err)
 	}
 
 	return CallToolResult{
@@ -87,10 +85,10 @@ func (t *FSDiskUsageTool) Execute(ctx context.Context, args json.RawMessage) (Ca
 	}, nil
 }
 
-func getDiskUsageForPath(path string) (map[string]interface{}, error) {
+func getDiskUsageForPath(path string) (FSDiskUsageResult, error) {
 	var stat syscall.Statfs_t
 	if err := syscall.Statfs(path, &stat); err != nil {
-		return nil, err
+		return FSDiskUsageResult{}, fmt.Errorf("fs_disk_usage: statfs: %w", err)
 	}
 
 	total := stat.Blocks * uint64(stat.Bsize)
@@ -99,43 +97,46 @@ func getDiskUsageForPath(path string) (map[string]interface{}, error) {
 	used := total - free
 	usedPercent := float64(used) / float64(total) * 100
 
-	return map[string]interface{}{
-		"path": path,
-		"filesystem": map[string]interface{}{
-			"total_bytes":     total,
-			"used_bytes":      used,
-			"free_bytes":      free,
-			"available_bytes": available,
-			"used_percent":    usedPercent,
+	return FSDiskUsageResult{
+		Path: path,
+		Filesystem: &FilesystemInfo{
+			Path:           path,
+			TotalBytes:     total,
+			UsedBytes:      used,
+			FreeBytes:      free,
+			AvailableBytes: available,
+			UsedPercent:    usedPercent,
 		},
 	}, nil
 }
 
-func getAllDiskUsage() (map[string]interface{}, error) {
+func getAllDiskUsage() (FSDiskUsageResult, error) {
 	mounts, err := parseMounts()
 	if err != nil {
-		return nil, err
+		return FSDiskUsageResult{}, fmt.Errorf("fs_disk_usage: parse mounts: %w", err)
 	}
 
-	var filesystems []map[string]interface{}
+	var filesystems []FilesystemInfo
 	for _, mount := range mounts {
-		usage, err := getDiskUsageForPath(mount)
+		result, err := getDiskUsageForPath(mount)
 		if err != nil {
 			continue
 		}
-		filesystems = append(filesystems, usage)
+		if result.Filesystem != nil {
+			filesystems = append(filesystems, *result.Filesystem)
+		}
 	}
 
-	return map[string]interface{}{
-		"filesystems": filesystems,
-		"count":       len(filesystems),
+	return FSDiskUsageResult{
+		Filesystems: filesystems,
+		Count:       len(filesystems),
 	}, nil
 }
 
 func parseMounts() ([]string, error) {
 	data, err := os.ReadFile("/proc/mounts")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fs_disk_usage: read /proc/mounts: %w", err)
 	}
 
 	lines := strings.Split(string(data), "\n")

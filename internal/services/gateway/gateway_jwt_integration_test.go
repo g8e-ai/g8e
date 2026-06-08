@@ -1,3 +1,5 @@
+//go:build integration
+
 package gateway
 
 import (
@@ -13,11 +15,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -98,10 +101,10 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	pkiDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -113,7 +116,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	backend, err := keystore.NewTestBackend()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnsurePermissions())
@@ -125,50 +128,67 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	}
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
-	err = pki.EnsurePKI(nil)
+	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	require.NoError(t, personaSvc.GetOrCreateDefaultPersonas())
+	// Initialize default personas
+	for _, persona := range DefaultPersonaDefinitions() {
+		existing, err := personaSvc.GetByID(persona.ID)
+		require.NoError(t, err)
+		if existing == nil {
+			require.NoError(t, personaSvc.CreatePersona(&persona))
+		}
+	}
 
 	// Create an invitation for JIT provisioning
 	_, err = userSvc.CreateInvitation("tenant-abc", "user-1234", "bootstrap", []string{"admin"}, 24*time.Hour)
 	require.NoError(t, err)
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 	// Apply JWT configuration to AuthService's provider
 
-	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	operatorSessionSvc := NewOperatorSessionService(db, logger)
+	webSessionSvc := NewWebSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
-	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
+	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       resp,
 		SuspendedStore:  db,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
 	})
+	if err != nil {
+		t.Fatalf("failed to create MCP gateway: %v", err)
+	}
 
 	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
 
-	h := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:               cfg,
-		Logger:            logger,
-		DB:                db,
-		Pubsub:            pubsub,
-		Auth:              auth,
-		PKI:               pki,
-		SessionSvc:        sessionSvc,
-		Reg:               reg,
-		Passkey:           passkey,
-		UserSvc:           userSvc,
-		Responder:         resp,
-		MCPGateway:        mcpGateway,
-		IsReady:           func() bool { return true },
-		IsGovernanceReady: func() bool { return true },
+	h, err := newHTTPHandler(HTTPHandlerDependencies{
+		Cfg:                cfg,
+		Logger:             logger,
+		DB:                 db,
+		Pubsub:             pubsub,
+		Auth:               auth,
+		PKI:                pki,
+		CLISessionSvc:      cliSessionSvc,
+		OperatorSessionSvc: operatorSessionSvc,
+		WebSessionSvc:      webSessionSvc,
+		Reg:                reg,
+		Passkey:            passkey,
+		UserSvc:            userSvc,
+		Responder:          resp,
+		MCPGateway:         mcpGateway,
+		IsReady:            func() bool { return true },
+		IsGovernanceReady:  func() bool { return true },
 	})
+	if err != nil {
+		t.Fatalf("failed to create HTTP handler: %v", err)
+	}
 
 	cfg.Gateway.RateLimitRPS = 1000
 	cfg.Gateway.RateLimitBurst = 1000
@@ -237,10 +257,10 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	pkiDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -252,7 +272,7 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 
 	backend, err := keystore.NewTestBackend()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnsurePermissions())
@@ -264,49 +284,66 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 	}
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
-	err = pki.EnsurePKI(nil)
+	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	require.NoError(t, personaSvc.GetOrCreateDefaultPersonas())
+	// Initialize default personas
+	for _, persona := range DefaultPersonaDefinitions() {
+		existing, err := personaSvc.GetByID(persona.ID)
+		require.NoError(t, err)
+		if existing == nil {
+			require.NoError(t, personaSvc.CreatePersona(&persona))
+		}
+	}
 
 	// Create an invitation for JIT provisioning
 	_, err = userSvc.CreateInvitation("tenant-abc", "jit-user-001", "bootstrap", []string{"admin"}, 24*time.Hour)
 	require.NoError(t, err)
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
-	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	operatorSessionSvc := NewOperatorSessionService(db, logger)
+	webSessionSvc := NewWebSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
-	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
+	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       resp,
 		SuspendedStore:  db,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
 	})
+	if err != nil {
+		t.Fatalf("failed to create MCP gateway: %v", err)
+	}
 
 	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
 
-	h := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:               cfg,
-		Logger:            logger,
-		DB:                db,
-		Pubsub:            pubsub,
-		Auth:              auth,
-		PKI:               pki,
-		SessionSvc:        sessionSvc,
-		Reg:               reg,
-		Passkey:           passkey,
-		UserSvc:           userSvc,
-		Responder:         resp,
-		MCPGateway:        mcpGateway,
-		IsReady:           func() bool { return true },
-		IsGovernanceReady: func() bool { return true },
+	h, err := newHTTPHandler(HTTPHandlerDependencies{
+		Cfg:                cfg,
+		Logger:             logger,
+		DB:                 db,
+		Pubsub:             pubsub,
+		Auth:               auth,
+		PKI:                pki,
+		CLISessionSvc:      cliSessionSvc,
+		OperatorSessionSvc: operatorSessionSvc,
+		WebSessionSvc:      webSessionSvc,
+		Reg:                reg,
+		Passkey:            passkey,
+		UserSvc:            userSvc,
+		Responder:          resp,
+		MCPGateway:         mcpGateway,
+		IsReady:            func() bool { return true },
+		IsGovernanceReady:  func() bool { return true },
 	})
+	if err != nil {
+		t.Fatalf("failed to create HTTP handler: %v", err)
+	}
 
 	cfg.Gateway.RateLimitRPS = 1000
 	cfg.Gateway.RateLimitBurst = 1000
@@ -390,10 +427,10 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	pkiDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -405,7 +442,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 
 	backend, err := keystore.NewTestBackend()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnsurePermissions())
@@ -417,49 +454,66 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	}
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
-	err = pki.EnsurePKI(nil)
+	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	require.NoError(t, personaSvc.GetOrCreateDefaultPersonas())
+	// Initialize default personas
+	for _, persona := range DefaultPersonaDefinitions() {
+		existing, err := personaSvc.GetByID(persona.ID)
+		require.NoError(t, err)
+		if existing == nil {
+			require.NoError(t, personaSvc.CreatePersona(&persona))
+		}
+	}
 
 	// Create an invitation for JIT provisioning
 	_, err = userSvc.CreateInvitation("tenant-abc", "stepup-user-001", "bootstrap", []string{"admin"}, 24*time.Hour)
 	require.NoError(t, err)
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
-	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	operatorSessionSvc := NewOperatorSessionService(db, logger)
+	webSessionSvc := NewWebSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
-	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
+	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       resp,
 		SuspendedStore:  db,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
 	})
+	if err != nil {
+		t.Fatalf("failed to create MCP gateway: %v", err)
+	}
 
 	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
 
-	h := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:               cfg,
-		Logger:            logger,
-		DB:                db,
-		Pubsub:            pubsub,
-		Auth:              auth,
-		PKI:               pki,
-		SessionSvc:        sessionSvc,
-		Reg:               reg,
-		Passkey:           passkey,
-		UserSvc:           userSvc,
-		Responder:         resp,
-		MCPGateway:        mcpGateway,
-		IsReady:           func() bool { return true },
-		IsGovernanceReady: func() bool { return true },
+	h, err := newHTTPHandler(HTTPHandlerDependencies{
+		Cfg:                cfg,
+		Logger:             logger,
+		DB:                 db,
+		Pubsub:             pubsub,
+		Auth:               auth,
+		PKI:                pki,
+		CLISessionSvc:      cliSessionSvc,
+		OperatorSessionSvc: operatorSessionSvc,
+		WebSessionSvc:      webSessionSvc,
+		Reg:                reg,
+		Passkey:            passkey,
+		UserSvc:            userSvc,
+		Responder:          resp,
+		MCPGateway:         mcpGateway,
+		IsReady:            func() bool { return true },
+		IsGovernanceReady:  func() bool { return true },
 	})
+	if err != nil {
+		t.Fatalf("failed to create HTTP handler: %v", err)
+	}
 
 	cfg.Gateway.RateLimitRPS = 1000
 	cfg.Gateway.RateLimitBurst = 1000
@@ -478,12 +532,20 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	token := generateSignedJWT(t, privKey, claims)
 
 	// Add a mock passkey credential directly to the user to simulate first credential already registered
-	user, err := userSvc.GetOrCreateBySub("stepup-user-001")
+	user, err := userSvc.GetBySub("stepup-user-001")
 	require.NoError(t, err)
+	if user == nil {
+		// Create user if doesn't exist
+		invitation, err := userSvc.FindActiveInvitationBySub("stepup-user-001")
+		require.NoError(t, err)
+		require.NotNil(t, invitation)
+		user, err = userSvc.CreateUserFromInvitation("stepup-user-001", invitation)
+		require.NoError(t, err)
+	}
 	require.NotNil(t, user)
 
 	// Manually add a credential to simulate having already registered one
-	user.PasskeyCredentials = []models.PasskeyCredential{
+	credentials := []models.PasskeyCredential{
 		{
 			ID:              []byte("mock-credential-id"),
 			PublicKey:       []byte("mock-public-key"),
@@ -495,9 +557,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 			},
 		},
 	}
-	_, err = userSvc.UpdateUser(user.ID, map[string]interface{}{
-		"passkey_credentials": user.PasskeyCredentials,
-	})
+	err = userSvc.UpdatePasskeyCredentials(user.ID, credentials)
 	require.NoError(t, err)
 
 	t.Run("After one credential exists, JWT-only path is rejected and step-up required", func(t *testing.T) {
@@ -531,10 +591,10 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	pkiDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -543,7 +603,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 
 	backend, err := keystore.NewTestBackend()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnsurePermissions())
@@ -552,14 +612,21 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	require.NoError(t, err)
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
-	err = pki.EnsurePKI(nil)
+	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	require.NoError(t, personaSvc.GetOrCreateDefaultPersonas())
+	// Initialize default personas
+	for _, persona := range DefaultPersonaDefinitions() {
+		existing, err := personaSvc.GetByID(persona.ID)
+		require.NoError(t, err)
+		if existing == nil {
+			require.NoError(t, personaSvc.CreatePersona(&persona))
+		}
+	}
 
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
 
 	t.Run("Token with wrong aud is rejected", func(t *testing.T) {
@@ -572,7 +639,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		}
 		token := generateSignedJWT(t, privKey, claims)
 
-		_, err := ParseAndVerifyJWT(token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
+		_, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "audience mismatch")
 	})
@@ -587,7 +654,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		}
 		token := generateSignedJWT(t, privKey, claims)
 
-		_, err := ParseAndVerifyJWT(token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
+		_, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "issuer mismatch")
 	})
@@ -603,7 +670,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		}
 		token := generateSignedJWT(t, privKey, claims)
 
-		_, err := ParseAndVerifyJWT(token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
+		_, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "not yet valid")
 	})
@@ -619,7 +686,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		}
 		token := generateSignedJWT(t, privKey, claims)
 
-		jwt, err := ParseAndVerifyJWT(token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
+		jwt, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
 		assert.NoError(t, err)
 		assert.Equal(t, "user-123", jwt.Claims.Sub)
 		assert.Equal(t, "https://test-idp.example.com", jwt.Claims.Iss)
@@ -636,7 +703,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		}
 		token := generateSignedJWT(t, privKey, claims)
 
-		jwt, err := ParseAndVerifyJWT(token, authNoValidation.jwks, authNoValidation.jwtRole, authNoValidation.jwtIssuer, authNoValidation.jwtAudience)
+		jwt, err := ParseAndVerifyJWT(context.Background(), token, authNoValidation.jwks, authNoValidation.jwtRole, authNoValidation.jwtIssuer, authNoValidation.jwtAudience)
 		assert.NoError(t, err)
 		assert.Equal(t, "user-123", jwt.Claims.Sub)
 	})

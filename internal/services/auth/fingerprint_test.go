@@ -165,7 +165,7 @@ func TestFingerprintIncludesHostname(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
-	t.Run("fingerprint incorporates hostname for Docker container differentiation", func(t *testing.T) {
+	t.Run("fingerprint incorporates hostname for container differentiation", func(t *testing.T) {
 		t.Parallel()
 		fp, err := GenerateSystemFingerprint(logger)
 		require.NoError(t, err)
@@ -287,7 +287,7 @@ func TestGetMachineID_UnsupportedOS(t *testing.T) {
 	// Since we can't easily mock runtime.GOOS, we rely on the fact that
 	// the test will run on a supported OS and this is a documentation
 	// of the expected behavior
-	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" && runtime.GOOS != "freebsd" {
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" && runtime.GOOS != "freebsd" && runtime.GOOS != "windows" {
 		_, err := getMachineID(testutil.NewTestLogger())
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "unsupported operating system")

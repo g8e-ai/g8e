@@ -71,7 +71,7 @@ func TestPubSubBackPressureDropsOldestAndLogs(t *testing.T) {
 	assert.Contains(t, logs, "back-pressure", "drop-oldest event must be logged")
 	assert.Contains(t, logs, "dropped_total=1", "log must include running drop counter")
 	assert.Contains(t, logs, "buffer_capacity=1", "log must include buffer capacity")
-	assert.True(t, strings.Contains(logs, "level=WARN"), "drop-oldest must be logged at WARN level")
+	assert.True(t, strings.Contains(logs, "level=WARN"), "pubsub: trySend: drop-oldest must be logged at WARN level")
 }
 
 // TestPubSubBackPressureKeepsSubscriptions verifies that under sustained
@@ -115,45 +115,65 @@ func TestPubSubSessionHandler_handleAction(t *testing.T) {
 		sub:    sub,
 	}
 
-	t.Run("subscribe action adds subscriber to channel", func(t *testing.T) {
-		t.Parallel()
-		msg := &pubsubv1.PubSubMessage{
-			Action:  "subscribe",
-			Channel: "results:test-operator:cli-session-123",
-		}
-		handler.handleAction(msg)
+	tests := []struct {
+		name     string
+		msg      *pubsubv1.PubSubMessage
+		preSetup func()
+		validate func(t *testing.T)
+	}{
+		{
+			name: "subscribe action adds subscriber to channel",
+			msg: &pubsubv1.PubSubMessage{
+				Action:  "subscribe",
+				Channel: "results:test-operator:cli-session-123",
+			},
+			preSetup: func() {},
+			validate: func(t *testing.T) {
+				broker.mu.RLock()
+				_, exists := broker.subscribers["results:test-operator:cli-session-123"]
+				broker.mu.RUnlock()
+				assert.True(t, exists, "Subscriber should be added to channel")
+			},
+		},
+		{
+			name: "unsubscribe action removes subscriber from channel",
+			msg: &pubsubv1.PubSubMessage{
+				Action:  "unsubscribe",
+				Channel: "results:test-operator:cli-session-456",
+			},
+			preSetup: func() {
+				broker.subscribe("results:test-operator:cli-session-456", sub)
+			},
+			validate: func(t *testing.T) {
+				broker.mu.RLock()
+				_, exists := broker.subscribers["results:test-operator:cli-session-456"]
+				broker.mu.RUnlock()
+				assert.False(t, exists, "Subscriber should be removed from channel")
+			},
+		},
+		{
+			name: "publish action publishes data to channel",
+			msg: &pubsubv1.PubSubMessage{
+				Action:  "publish",
+				Channel: "results:test-operator:cli-session-789",
+				Data:    []byte(`"test-data"`),
+			},
+			preSetup: func() {},
+			validate: func(t *testing.T) {
+				// Publish should not panic
+			},
+		},
+	}
 
-		broker.mu.RLock()
-		_, exists := broker.subscribers["results:test-operator:cli-session-123"]
-		broker.mu.RUnlock()
-		assert.True(t, exists, "Subscriber should be added to channel")
-	})
-
-	t.Run("unsubscribe action removes subscriber from channel", func(t *testing.T) {
-		t.Parallel()
-		broker.subscribe("results:test-operator:cli-session-456", sub)
-		msg := &pubsubv1.PubSubMessage{
-			Action:  "unsubscribe",
-			Channel: "results:test-operator:cli-session-456",
-		}
-		handler.handleAction(msg)
-
-		broker.mu.RLock()
-		_, exists := broker.subscribers["results:test-operator:cli-session-456"]
-		broker.mu.RUnlock()
-		assert.False(t, exists, "Subscriber should be removed from channel")
-	})
-
-	t.Run("publish action publishes data to channel", func(t *testing.T) {
-		t.Parallel()
-		msg := &pubsubv1.PubSubMessage{
-			Action:  "publish",
-			Channel: "results:test-operator:cli-session-789",
-			Data:    []byte(`"test-data"`),
-		}
-		handler.handleAction(msg)
-		// Publish should not panic
-	})
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			tt.preSetup()
+			handler.handleAction(tt.msg)
+			tt.validate(t)
+		})
+	}
 }
 
 func TestPubSubSessionHandler_cleanup(t *testing.T) {
@@ -269,8 +289,7 @@ func TestRegisterHandler(t *testing.T) {
 	// Publish to the channel
 	broker.Publish("test-channel", []byte("test-data"))
 
-	// Give handler time to process (though in this test we're just checking registration)
-	// The handler is called synchronously in Publish
+	// Handler is called synchronously in Publish, no additional synchronization needed
 	assert.True(t, called, "handler should have been called")
 	assert.Equal(t, "test-channel", receivedChannel)
 	assert.Equal(t, []byte("test-data"), receivedData)
@@ -305,16 +324,33 @@ func TestSubscribe(t *testing.T) {
 func TestIsDone(t *testing.T) {
 	t.Parallel()
 
-	t.Run("Not done initially", func(t *testing.T) {
-		t.Parallel()
-		sub := &wsSubscriber{done: make(chan struct{})}
-		assert.False(t, sub.isDone())
-	})
+	tests := []struct {
+		name     string
+		setup    func() *wsSubscriber
+		expected bool
+	}{
+		{
+			name:     "Not done initially",
+			setup:    func() *wsSubscriber { return &wsSubscriber{done: make(chan struct{})} },
+			expected: false,
+		},
+		{
+			name: "Done after close",
+			setup: func() *wsSubscriber {
+				sub := &wsSubscriber{done: make(chan struct{})}
+				close(sub.done)
+				return sub
+			},
+			expected: true,
+		},
+	}
 
-	t.Run("Done after close", func(t *testing.T) {
-		t.Parallel()
-		sub := &wsSubscriber{done: make(chan struct{})}
-		close(sub.done)
-		assert.True(t, sub.isDone())
-	})
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			sub := tt.setup()
+			assert.Equal(t, tt.expected, sub.isDone())
+		})
+	}
 }

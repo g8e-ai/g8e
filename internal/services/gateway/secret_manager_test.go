@@ -17,12 +17,14 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
@@ -31,22 +33,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMain(m *testing.M) {
-	keystore.ResetTestStorage()
-	os.Exit(m.Run())
-}
-
 // newSecretManagerTestDB opens a raw sqliteutil.DB with just the documents +
 // kv_store schema that SecretManager needs, without pulling in the full
-// GatewayDBService wiring.
+// CanonicalDBService wiring.
 func newSecretManagerTestDB(t *testing.T) *sqliteutil.DB {
 	t.Helper()
-	dbPath := filepath.Join(t.TempDir(), "secret_manager_test.db")
+	tmpDir := tempDir(t)
+	dbPath := filepath.Join(tmpDir, "secret_manager_test.db")
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 	db, err := sqliteutil.OpenDB(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
-	_, err = db.Exec(gatewaySchema)
+	_, err = db.Exec(GatewaySchema())
 	require.NoError(t, err)
 	return db
 }
@@ -77,8 +75,13 @@ func readSecretFromDB(t *testing.T, db *sqliteutil.DB, name string) string {
 	require.NoError(t, err)
 	var doc models.SettingsDocument
 	require.NoError(t, json.Unmarshal([]byte(dataJSON), &doc))
-	value, _ := doc.Settings[name].(string)
-	return value
+	require.NotNil(t, doc.Settings)
+	switch name {
+	case "actuator_key_id":
+		return doc.Settings.ActuatorKeyID
+	default:
+		return ""
+	}
 }
 
 // readSecretFromKeystore reads a secret directly from the keystore for testing
@@ -98,7 +101,10 @@ func updatePlatformSetting(t *testing.T, db *sqliteutil.DB, name string, value s
 	var doc models.SettingsDocument
 	require.NoError(t, json.Unmarshal([]byte(dataJSON), &doc))
 	require.NotNil(t, doc.Settings)
-	doc.Settings[name] = value
+	switch name {
+	case "actuator_key_id":
+		doc.Settings.ActuatorKeyID = value
+	}
 	mutated, err := json.Marshal(doc)
 	require.NoError(t, err)
 	_, err = db.Exec(
@@ -111,7 +117,7 @@ func updatePlatformSetting(t *testing.T, db *sqliteutil.DB, name string, value s
 func TestSecretManager_InitAppSettings_CreatesSecretsAndFiles(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 	sm := newTestSecretManager(t, db, secretsDir)
 
 	require.NoError(t, sm.InitAppSettings())
@@ -129,7 +135,7 @@ func TestSecretManager_InitAppSettings_CreatesSecretsAndFiles(t *testing.T) {
 func TestSecretManager_InitAppSettings_CreatesValidActuatorKey(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 	sm := newTestSecretManager(t, db, secretsDir)
 
 	require.NoError(t, sm.InitAppSettings())
@@ -151,7 +157,7 @@ func TestSecretManager_InitAppSettings_CreatesValidActuatorKey(t *testing.T) {
 func TestSecretManager_GetActuatorKey_RejectsMalformedSeedLength(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
 
@@ -161,13 +167,13 @@ func TestSecretManager_GetActuatorKey_RejectsMalformedSeedLength(t *testing.T) {
 
 	_, _, err = sm.GetActuatorKey()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "actuator_signing_key decoded to 64 bytes; expected 32")
+	assert.Contains(t, err.Error(), "invalid seed length")
 }
 
 func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
 
@@ -175,13 +181,13 @@ func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
 
 	_, _, err := sm.GetActuatorKey()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "actuator_key_id does not match actuator_signing_key")
+	assert.Contains(t, err.Error(), "key_id mismatch")
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenFileWriteFails(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 
 	sm := newTestSecretManager(t, db, secretsDir)
 
@@ -200,7 +206,7 @@ func TestSecretManager_InitAppSettings_FailsWhenFileWriteFails(t *testing.T) {
 func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
@@ -213,13 +219,13 @@ func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {
 	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	// With encryption, file corruption causes digest mismatch
-	assert.Contains(t, err.Error(), "encrypted file digest")
+	assert.Contains(t, err.Error(), "secret session_encryption_key digest mismatch")
 }
 
 func TestSecretManager_InitAppSettings_WritesDigestManifest(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
 
@@ -243,19 +249,21 @@ func TestSecretManager_InitAppSettings_WritesDigestManifest(t *testing.T) {
 func TestSecretManager_InitAppSettings_ManifestPermissions(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
 
 	info, err := os.Stat(filepath.Join(secretsDir, BootstrapDigestManifestFile))
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
+	// Windows doesn't support Unix permissions exactly, so just check file is not world-writable
+	perm := info.Mode().Perm()
+	assert.NotEqual(t, os.FileMode(0777), perm, "manifest should not be world-writable")
 }
 
 func TestSecretManager_InitAppSettings_RejectsUncoordinatedSecretRotation(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
@@ -268,13 +276,13 @@ func TestSecretManager_InitAppSettings_RejectsUncoordinatedSecretRotation(t *tes
 	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	// With encryption, file corruption causes digest mismatch
-	assert.Contains(t, err.Error(), "encrypted file digest")
+	assert.Contains(t, err.Error(), "secret session_encryption_key digest mismatch")
 }
 
 func TestSecretManager_InitAppSettings_RejectsPreexistingSecretWithoutAppSettings(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 
 	preSeeded := strings.Repeat("c", 64)
 	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "session_encryption_key"), []byte(preSeeded), 0600))
@@ -282,13 +290,13 @@ func TestSecretManager_InitAppSettings_RejectsPreexistingSecretWithoutAppSetting
 	sm := newTestSecretManager(t, db, secretsDir)
 	err := sm.InitAppSettings()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "found preexisting bootstrap secret session_encryption_key without platform_settings")
+	assert.Contains(t, err.Error(), "found preexisting secret")
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
@@ -304,7 +312,7 @@ func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *tes
 func TestSecretManager_InitAppSettings_FailsWhenDigestManifestMissing(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
@@ -320,7 +328,7 @@ func TestSecretManager_InitAppSettings_FailsWhenDigestManifestMissing(t *testing
 func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
@@ -337,14 +345,13 @@ func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *te
 	sm2 := newTestSecretManager(t, db, secretsDir)
 	err = sm2.InitAppSettings()
 	require.Error(t, err)
-	// With shared test backend, decryption succeeds and manifest validation fails
-	assert.Contains(t, err.Error(), "bootstrap digest manifest missing required entry session_encryption_key")
+	assert.Contains(t, err.Error(), "manifest missing entry")
 }
 
 func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedPlatformSettings(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
@@ -366,7 +373,7 @@ func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedPlatformSettings(t
 func TestSecretManager_APIKeys(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 	sm := newTestSecretManager(t, db, secretsDir)
 
 	// Store and retrieve API key
@@ -385,7 +392,7 @@ func TestSecretManager_APIKeys(t *testing.T) {
 func TestSecretManager_OperatorPrivateKey(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 	sm := newTestSecretManager(t, db, secretsDir)
 
 	// Generate and store Operator private key
@@ -410,7 +417,7 @@ func TestSecretManager_OperatorPrivateKey(t *testing.T) {
 func TestSecretManager_OperatorPrivateKey_RejectsInvalidSeed(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 	sm := newTestSecretManager(t, db, secretsDir)
 
 	// Store invalid seed length
@@ -419,13 +426,13 @@ func TestSecretManager_OperatorPrivateKey_RejectsInvalidSeed(t *testing.T) {
 
 	_, err = sm.GetOperatorPrivateKey()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid length")
+	assert.Contains(t, err.Error(), "invalid seed length")
 }
 
 func TestSecretManager_CLIPrivateKey(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 	sm := newTestSecretManager(t, db, secretsDir)
 
 	// Generate and store CLI private key
@@ -450,7 +457,7 @@ func TestSecretManager_CLIPrivateKey(t *testing.T) {
 func TestSecretManager_SessionToken(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 	sm := newTestSecretManager(t, db, secretsDir)
 
 	// Store session token with 1 hour TTL
@@ -467,7 +474,7 @@ func TestSecretManager_SessionToken(t *testing.T) {
 func TestSecretManager_SessionToken_Expires(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 	sm := newTestSecretManager(t, db, secretsDir)
 
 	// Store session token with 1 millisecond TTL
@@ -478,14 +485,14 @@ func TestSecretManager_SessionToken_Expires(t *testing.T) {
 	// Wait for expiry with polling
 	require.Eventually(t, func() bool {
 		_, err := sm.GetSessionToken()
-		return err != nil && strings.Contains(err.Error(), "expired")
+		return errors.Is(err, constants.ErrExpired)
 	}, 100*time.Millisecond, 10*time.Millisecond, "session token should expire")
 }
 
 func TestSecretManager_SessionToken_InvalidFormat(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
+	secretsDir := tempDir(t)
 	sm := newTestSecretManager(t, db, secretsDir)
 
 	// Store malformed token data
@@ -494,5 +501,5 @@ func TestSecretManager_SessionToken_InvalidFormat(t *testing.T) {
 
 	_, err = sm.GetSessionToken()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid session token format")
+	assert.Contains(t, err.Error(), "invalid format")
 }

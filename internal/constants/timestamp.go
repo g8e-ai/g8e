@@ -11,8 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package constants provides timestamp-related constants.
+//
+// Single source of truth: protocol/constants/timestamp.json
+// This file is manually maintained to match the JSON SSOT.
 package constants
 
-const (
-	TimestampFormatRFC3339 = "2006-01-02T15:04:05Z07:00"
-)
+// FormatRFC3339 is the canonical timestamp format string for RFC3339 with timezone offset.
+// Used throughout the platform for consistent timestamp representation.
+//
+// Source: protocol/constants/timestamp.json
+const FormatRFC3339 = "2006-01-02T15:04:05Z07:00"

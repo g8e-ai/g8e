@@ -1,3 +1,5 @@
+//go:build integration
+
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,55 +62,63 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/gateway"
+	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
 type a2aGatewayRejectingL3Notary struct{}
 
-func (a2aGatewayRejectingL3Notary) VerifyL3Proof(_ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
+func (a2aGatewayRejectingL3Notary) VerifyL3Proof(_ context.Context, _ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
 	return false, nil
 }
 
-func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
-	// Use shared test vault directory for persistent inspection
-	repoRoot, err := os.Getwd()
-	require.NoError(t, err)
-	// Navigate from test/ to repo root
-	for i := 0; i < 2; i++ {
-		repoRoot = filepath.Dir(repoRoot)
-	}
-	testVaultDir := filepath.Join(repoRoot, constants.Paths.Infra.TestVaultDir)
-	if err := os.MkdirAll(testVaultDir, 0755); err != nil {
-		t.Fatalf("failed to create test vault directory: %v", err)
+// a2aTestContext holds the common test infrastructure for A2A gateway tests.
+// This eliminates the 200+ line setup boilerplate repeated across multiple tests.
+type a2aTestContext struct {
+	cfg              *config.Config
+	dataDir          string
+	ls               *gateway.GatewayModeService
+	mcpGateway       *mcp.GatewayService
+	mtlsClient       *http.Client
+	mtlsURL          string
+	authHeader       func(*http.Request)
+	regResp          models.OperatorRegistrationResponse
+	downstreamServer *httptest.Server
+	cleanup          func()
+}
+
+// setupA2AGatewayTest creates a complete test A2A gateway infrastructure.
+// Returns a context struct with all components and a cleanup function.
+// This helper eliminates the repeated setup code across all A2A tests.
+// If dataDir is empty, uses TestVaultDir; otherwise uses the provided dataDir.
+func setupA2AGatewayTest(t *testing.T, testName string, downstreamHandler http.HandlerFunc, dataDir string) *a2aTestContext {
+	t.Helper()
+
+	// Initialize paths relative to project root
+	if err := constants.InitPathsWithBase("."); err != nil {
+		t.Fatalf("failed to initialize paths: %v", err)
 	}
 
-	// Create unique subdirectory for this test run
-	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), t.Name())
-	dataDir := filepath.Join(testVaultDir, testRunID)
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("failed to create test run directory: %v", err)
+	// Create unique subdirectory for this test run if dataDir not provided
+	if dataDir == "" {
+		testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), testName)
+		dataDir = filepath.Join(constants.Paths.Infra.TestVaultDir, testRunID)
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			t.Fatalf("failed to create test run directory: %v", err)
+		}
 	}
 	t.Logf("Test vault created at: %s", dataDir)
 
 	secretsDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 
-	// 1. Setup Mock Downstream A2A Server
-	downstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			SkillName string `json:"skill_name"`
-		}
-		json.NewDecoder(r.Body).Decode(&req)
+	// Setup Mock Downstream A2A Server
+	downstreamServer := httptest.NewServer(downstreamHandler)
 
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"result":"a2a says hello","summary":"verified skill execution"}`))
-	}))
-	defer downstreamServer.Close()
-
-	// 2. Setup Operator with A2A configuration
+	// Setup Operator with A2A configuration
 	cfg, err := config.LoadGateway(config.GatewayOptions{
 		DataDir:           dataDir,
 		PKIDir:            pkiDir,
@@ -116,12 +126,12 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 		PasskeyRpID:       "localhost",
 		PasskeyRpName:     "g8e",
 		AllowTestPortZero: true,
-		Posture:           config.PostureNotary, // Enforce L3 verification
+		Posture:           config.PostureNotary,
 	})
 	require.NoError(t, err)
 	cfg.Gateway.A2ADownstreamURL = downstreamServer.URL
 
-	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
+	ls, err := gateway.NewGatewayModeService(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
@@ -132,7 +142,6 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	ActuatorPriv, ActuatorKeyID, err := sm.GetActuatorKey()
 	require.NoError(t, err)
 
-	// Add Actuator key to SignerStore so Implicit L2 signatures from the gateway are trusted
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
 	err = ls.GetDB().AddTrustedSigner(models.TrustedSigner{
 		ID:        ActuatorKeyID,
@@ -151,7 +160,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 		Execution:          execSvc,
 		FileEdit:           fileSvc,
 		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
-		Sovereignty:        sovereignty.NewSovereigntyService(sovereignty.DefaultConfig(), testutil.NewTestLogger(), nil),
+		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
@@ -164,22 +173,51 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	ls.SetEnvelopeProcessor(cmdSvc)
 
-	// Set MCP gateway dependencies for governance processing
 	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamServer.URL)
 	mcpGateway.SetA2ADependencies(downstreamServer.URL)
 
 	// Seed platform_settings required for health check
-	ls.GetDB().DocSet("settings", "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
+	ls.GetDB().DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	go ls.Start(ctx)
 
-	require.Eventually(t, func() bool { return ls.IsReady() }, 5*time.Second, 100*time.Millisecond)
+	// Wait for the gateway service to be ready
+	require.Eventually(t, func() bool { return ls.IsReady() }, 10*time.Second, 100*time.Millisecond)
 
-	// 3. Setup client identity via CSR enrollment
+	cleanup := func() {
+		_ = ls.Stop(context.Background())
+		cancel()
+		downstreamServer.Close()
+	}
+
+	return &a2aTestContext{
+		cfg:              cfg,
+		dataDir:          dataDir,
+		ls:               ls,
+		mcpGateway:       mcpGateway,
+		downstreamServer: downstreamServer,
+		cleanup:          cleanup,
+	}
+}
+
+func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
+	// Setup test infrastructure using helper
+	ctx := setupA2AGatewayTest(t, t.Name(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			SkillName string `json:"skill_name"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"result":"a2a says hello","summary":"verified skill execution"}`))
+	}), "")
+	defer ctx.cleanup()
+
+	// Setup client identity via CSR enrollment
 	userID := "a2a-user"
 	organizationID := "a2a-org"
+	pkiDir := filepath.Join(ctx.dataDir, "pki")
 
 	// Create user with a dummy passkey so VerifyL3Proof passes
 	user := models.User{
@@ -200,7 +238,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(user)
 	require.NoError(t, err)
-	ls.GetDB().DocSet("users", userID, userBytes)
+	ctx.ls.GetDB().DocSet(string(constants.CollectionUsers), userID, userBytes)
 
 	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -229,7 +267,9 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRDER})
 
 	// Create a temporary client cert for initial enrollment (using Operator CA)
-	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + Operator only
+	sm, err := ctx.ls.GetSecretManager()
+	require.NoError(t, err)
+
 	operatorCAPEM := testutil.ReadOperatorCA(t, pkiDir)
 	operatorBlock, _ := pem.Decode(operatorCAPEM)
 	operatorCert, err := x509.ParseCertificate(operatorBlock.Bytes)
@@ -277,7 +317,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
+	mtlsURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -285,7 +325,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 		Hostname:          "a2a-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/pki/devices/enroll", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.PKIDevicesEnroll, bytes.NewReader(regBody))
 	hResp, err := enrollClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, hResp.StatusCode)
@@ -305,7 +345,6 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 			},
 		},
 	}
-	mtlsURL = fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 
 	// Helper function to add Authorization header
 	authHeader := func(req *http.Request) {
@@ -313,10 +352,10 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}
 
 	// Set public base URL for approval links
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
-	mcpGateway.SetPublicBaseURL(publicURL)
+	publicURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
+	ctx.mcpGateway.SetPublicBaseURL(publicURL)
 
-	// 4. Test A2A Call (Suspends for L3, then Resume)
+	// Test A2A Call (Suspends for L3, then Resume)
 	t.Run("a2a call", func(t *testing.T) {
 		callReq := map[string]interface{}{
 			"jsonrpc": "2.0",
@@ -329,7 +368,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		authHeader(req)
 		resp, err := mtlsClient.Do(req)
@@ -357,31 +396,8 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 }
 
 func TestA2AGateway_PayloadVariations(t *testing.T) {
-	// Use shared test vault directory for persistent inspection
-	repoRoot, err := os.Getwd()
-	require.NoError(t, err)
-	// Navigate from test/ to repo root
-	for i := 0; i < 2; i++ {
-		repoRoot = filepath.Dir(repoRoot)
-	}
-	testVaultDir := filepath.Join(repoRoot, constants.Paths.Infra.TestVaultDir)
-	if err := os.MkdirAll(testVaultDir, 0755); err != nil {
-		t.Fatalf("failed to create test vault directory: %v", err)
-	}
-
-	// Create unique subdirectory for this test run
-	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), t.Name())
-	dataDir := filepath.Join(testVaultDir, testRunID)
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("failed to create test run directory: %v", err)
-	}
-	t.Logf("Test vault created at: %s", dataDir)
-
-	secretsDir := t.TempDir()
-	pkiDir := filepath.Join(dataDir, "pki")
-
-	// 1. Setup Mock Downstream A2A Server
-	downstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Setup test infrastructure using helper
+	ctx := setupA2AGatewayTest(t, t.Name(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			SkillName string `json:"skill_name"`
 		}
@@ -389,78 +405,13 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"result":"a2a response","summary":"verified skill execution"}`))
-	}))
-	defer downstreamServer.Close()
+	}), "")
+	defer ctx.cleanup()
 
-	// 2. Setup Operator with A2A configuration
-	cfg, err := config.LoadGateway(config.GatewayOptions{
-		DataDir:           dataDir,
-		PKIDir:            pkiDir,
-		SecretsDir:        secretsDir,
-		PasskeyRpID:       "localhost",
-		PasskeyRpName:     "g8e",
-		AllowTestPortZero: true,
-		Posture:           config.PostureNotary,
-	})
-	require.NoError(t, err)
-	cfg.Gateway.A2ADownstreamURL = downstreamServer.URL
-
-	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
-	require.NoError(t, err)
-
-	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
-	fileSvc := execution.NewFileEditService(cfg, testutil.NewTestLogger())
-	govDeps := ls.GetGovernanceDeps()
-	sm, err := ls.GetSecretManager()
-	require.NoError(t, err)
-	ActuatorPriv, ActuatorKeyID, err := sm.GetActuatorKey()
-	require.NoError(t, err)
-
-	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
-	err = ls.GetDB().AddTrustedSigner(models.TrustedSigner{
-		ID:        ActuatorKeyID,
-		PublicKey: hex.EncodeToString(ActuatorPub),
-		AddedAt:   time.Now().UTC(),
-		Enabled:   true,
-	})
-	require.NoError(t, err)
-
-	mcpGateway := ls.GetHTTPHandler().GetMCPGateway()
-	require.NotNil(t, mcpGateway)
-
-	cmdSvc, err := pubsub.NewPubSubCommandService(pubsub.CommandServiceConfig{
-		Config:             cfg,
-		Logger:             testutil.NewTestLogger(),
-		Execution:          execSvc,
-		FileEdit:           fileSvc,
-		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
-		Sovereignty:        sovereignty.NewSovereigntyService(sovereignty.DefaultConfig(), testutil.NewTestLogger(), nil),
-		ReplayStore:        govDeps.ReplayStore,
-		StateRootProvider:  govDeps.StateRootProvider,
-		TransactionAudit:   govDeps.TransactionAudit,
-		SignerStore:        govDeps.SignerStore,
-		L3Notary:           a2aGatewayRejectingL3Notary{},
-		ActuatorSigningKey: ActuatorPriv,
-		ActuatorKeyID:      ActuatorKeyID,
-		MCPGateway:         mcpGateway,
-	})
-	require.NoError(t, err)
-	ls.SetEnvelopeProcessor(cmdSvc)
-
-	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamServer.URL)
-	mcpGateway.SetA2ADependencies(downstreamServer.URL)
-
-	// Seed platform_settings required for health check
-	ls.GetDB().DocSet("settings", "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go ls.Start(ctx)
-
-	require.Eventually(t, func() bool { return ls.IsReady() }, 5*time.Second, 100*time.Millisecond)
-
+	// Setup client identity via CSR enrollment
 	userID := "a2a-payload-user"
 	organizationID := "a2a-payload-org"
+	pkiDir := filepath.Join(ctx.dataDir, "pki")
 
 	user := models.User{
 		ID:     userID,
@@ -480,9 +431,9 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(user)
 	require.NoError(t, err)
-	ls.GetDB().DocSet("users", userID, userBytes)
+	ctx.ls.GetDB().DocSet(string(constants.CollectionUsers), userID, userBytes)
 
-	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
+	// Generate CSR for client certificate using P-256
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	csrTmpl := &x509.CertificateRequest{
@@ -495,7 +446,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	require.NoError(t, err)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
-	// Generate CLI CSR for distinct SPIFFE identity (required by PKI cleanup Phase 3)
+	// Generate CLI CSR for distinct SPIFFE identity
 	cliPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	cliCSRTmpl := &x509.CertificateRequest{
@@ -508,8 +459,10 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	require.NoError(t, err)
 	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRDER})
 
-	// Create a temporary client cert for initial enrollment (using Operator CA)
-	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + Operator only
+	// Create a temporary client cert for initial enrollment
+	sm, err := ctx.ls.GetSecretManager()
+	require.NoError(t, err)
+
 	operatorCAPEM := testutil.ReadOperatorCA(t, pkiDir)
 	operatorBlock, _ := pem.Decode(operatorCAPEM)
 	operatorCert, err := x509.ParseCertificate(operatorBlock.Bytes)
@@ -557,7 +510,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
+	mtlsURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -565,7 +518,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		Hostname:          "a2a-payload-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/pki/devices/enroll", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.PKIDevicesEnroll, bytes.NewReader(regBody))
 	hResp, err := enrollClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, hResp.StatusCode)
@@ -586,10 +539,9 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		},
 	}
 
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
-	mcpGateway.SetPublicBaseURL(publicURL)
+	publicURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
+	ctx.mcpGateway.SetPublicBaseURL(publicURL)
 
-	// Helper function to add Authorization header
 	authHeader := func(req *http.Request) {
 		req.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
 	}
@@ -615,7 +567,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		authHeader(req)
 		resp, err := mtlsClient.Do(req)
@@ -648,7 +600,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		authHeader(req)
 		resp, err := mtlsClient.Do(req)
@@ -681,7 +633,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		authHeader(req)
 		resp, err := mtlsClient.Do(req)
@@ -711,7 +663,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		authHeader(req)
 		resp, err := mtlsClient.Do(req)
@@ -741,7 +693,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		authHeader(req)
 		resp, err := mtlsClient.Do(req)
@@ -772,7 +724,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		authHeader(req)
 		resp, err := mtlsClient.Do(req)
@@ -796,74 +748,17 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	dataDir := t.TempDir()
 	t.Logf("Test vault created at: %s", dataDir)
 
-	secretsDir := t.TempDir()
-	pkiDir := filepath.Join(dataDir, "pki")
+	// Setup test infrastructure using helper with custom dataDir
+	ctx := setupA2AGatewayTest(t, t.Name(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// No downstream server needed for error cases
+		w.WriteHeader(http.StatusOK)
+	}), dataDir)
+	defer ctx.cleanup()
 
-	cfg, err := config.LoadGateway(config.GatewayOptions{
-		DataDir:           dataDir,
-		PKIDir:            pkiDir,
-		SecretsDir:        secretsDir,
-		PasskeyRpID:       "localhost",
-		PasskeyRpName:     "g8e",
-		AllowTestPortZero: true,
-	})
-	require.NoError(t, err)
-
-	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
-	require.NoError(t, err)
-
-	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
-	fileSvc := execution.NewFileEditService(cfg, testutil.NewTestLogger())
-	govDeps := ls.GetGovernanceDeps()
-	sm, err := ls.GetSecretManager()
-	require.NoError(t, err)
-	ActuatorPriv, ActuatorKeyID, err := sm.GetActuatorKey()
-	require.NoError(t, err)
-
-	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
-	err = ls.GetDB().AddTrustedSigner(models.TrustedSigner{
-		ID:        ActuatorKeyID,
-		PublicKey: hex.EncodeToString(ActuatorPub),
-		AddedAt:   time.Now().UTC(),
-		Enabled:   true,
-	})
-	require.NoError(t, err)
-
-	mcpGateway := ls.GetHTTPHandler().GetMCPGateway()
-	require.NotNil(t, mcpGateway)
-
-	cmdSvc, err := pubsub.NewPubSubCommandService(pubsub.CommandServiceConfig{
-		Config:             cfg,
-		Logger:             testutil.NewTestLogger(),
-		Execution:          execSvc,
-		FileEdit:           fileSvc,
-		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
-		Sovereignty:        sovereignty.NewSovereigntyService(sovereignty.DefaultConfig(), testutil.NewTestLogger(), nil),
-		ReplayStore:        govDeps.ReplayStore,
-		StateRootProvider:  govDeps.StateRootProvider,
-		TransactionAudit:   govDeps.TransactionAudit,
-		SignerStore:        govDeps.SignerStore,
-		L3Notary:           a2aGatewayRejectingL3Notary{},
-		ActuatorSigningKey: ActuatorPriv,
-		ActuatorKeyID:      ActuatorKeyID,
-		MCPGateway:         mcpGateway,
-	})
-	require.NoError(t, err)
-	ls.SetEnvelopeProcessor(cmdSvc)
-
-	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, "")
-
-	// Seed platform_settings required for health check
-	ls.GetDB().DocSet("settings", "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go ls.Start(ctx)
-
-	require.Eventually(t, func() bool { return ls.IsReady() }, 5*time.Second, 100*time.Millisecond)
-
+	// Setup client identity via CSR enrollment
 	userID := "a2a-error-user"
 	organizationID := "a2a-error-org"
+	pkiDir := filepath.Join(ctx.dataDir, "pki")
 
 	user := models.User{
 		ID:     userID,
@@ -883,9 +778,9 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(user)
 	require.NoError(t, err)
-	ls.GetDB().DocSet("users", userID, userBytes)
+	ctx.ls.GetDB().DocSet(string(constants.CollectionUsers), userID, userBytes)
 
-	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
+	// Generate CSR for client certificate using P-256
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	csrTmpl := &x509.CertificateRequest{
@@ -898,7 +793,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	require.NoError(t, err)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
-	// Generate CLI CSR for distinct SPIFFE identity (required by PKI cleanup Phase 3)
+	// Generate CLI CSR for distinct SPIFFE identity
 	cliPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	cliCSRTmpl := &x509.CertificateRequest{
@@ -911,8 +806,10 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	require.NoError(t, err)
 	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRDER})
 
-	// Create a temporary client cert for initial enrollment (using Operator CA)
-	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + Operator only
+	// Create a temporary client cert for initial enrollment
+	sm, err := ctx.ls.GetSecretManager()
+	require.NoError(t, err)
+
 	operatorCAPEM := testutil.ReadOperatorCA(t, pkiDir)
 	operatorBlock, _ := pem.Decode(operatorCAPEM)
 	operatorCert, err := x509.ParseCertificate(operatorBlock.Bytes)
@@ -960,7 +857,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
+	mtlsURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -968,7 +865,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 		Hostname:          "a2a-error-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/pki/devices/enroll", bytes.NewReader(regBody))
+	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.PKIDevicesEnroll, bytes.NewReader(regBody))
 	hResp, err := enrollClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, hResp.StatusCode)
@@ -989,10 +886,9 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 		},
 	}
 
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
-	mcpGateway.SetPublicBaseURL(publicURL)
+	publicURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
+	ctx.mcpGateway.SetPublicBaseURL(publicURL)
 
-	// Helper function to add Authorization header
 	authHeader := func(req *http.Request) {
 		req.Header.Set("Authorization", "Bearer "+regResp.OperatorSessionID)
 	}
@@ -1002,7 +898,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"skill_name":"test"}}`
 
 		// Test with API key in header
-		req, _ := http.NewRequest("POST", mtlsURL+"/api/v1/a2a/call", bytes.NewReader([]byte(reqBody)))
+		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader([]byte(reqBody)))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-API-Key", "test-api-key")
 

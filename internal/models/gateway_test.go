@@ -147,14 +147,14 @@ func TestPubSubPublishRequest(t *testing.T) {
 func TestHealthResponse(t *testing.T) {
 	t.Run("creates valid health response", func(t *testing.T) {
 		resp := &HealthResponse{
-			Status:          constants.GatewayModeMode,
-			Mode:            constants.GatewayModeMode,
+			Status:          constants.GatewayModeGateway,
+			Mode:            constants.GatewayModeGateway,
 			Version:         "v1.0.3",
 			GovernanceReady: true,
 			StateMerkleRoot: "root123",
 		}
 
-		assert.Equal(t, constants.GatewayModeMode, resp.Status)
+		assert.Equal(t, constants.GatewayModeGateway, resp.Status)
 		assert.True(t, resp.GovernanceReady)
 		assert.Equal(t, "root123", resp.StateMerkleRoot)
 	})
@@ -531,14 +531,14 @@ func TestSettingsDocument(t *testing.T) {
 	t.Run("creates valid settings document", func(t *testing.T) {
 		now := time.Now().UTC()
 		doc := &SettingsDocument{
-			Settings: map[string]interface{}{
-				"key": "value",
+			Settings: &PlatformSettings{
+				ActuatorKeyID: "value",
 			},
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
 
-		assert.Equal(t, "value", doc.Settings["key"])
+		assert.Equal(t, "value", doc.Settings.ActuatorKeyID)
 	})
 }
 

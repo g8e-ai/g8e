@@ -35,30 +35,27 @@ func (t *NetDNSResolveTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *NetDNSResolveTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"hostname": map[string]interface{}{
-				"type":        "string",
-				"description": "Hostname to resolve",
+func (t *NetDNSResolveTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"hostname": {
+				Type:        "string",
+				Description: "Hostname to resolve",
 			},
-			"record_type": map[string]interface{}{
-				"type":        "string",
-				"description": "DNS record type (A, AAAA, MX, TXT, CNAME, NS)",
-				"enum":        []string{"A", "AAAA", "MX", "TXT", "CNAME", "NS"},
+			"record_type": {
+				Type:        "string",
+				Description: "DNS record type (A, AAAA, MX, TXT, CNAME, NS)",
+				Enum:        []string{"A", "AAAA", "MX", "TXT", "CNAME", "NS"},
 			},
 		},
-		"required": []string{"hostname"},
+		Required: []string{"hostname"},
 	}
 }
 
 // Execute implements the tool logic.
 func (t *NetDNSResolveTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		Hostname   string `json:"hostname"`
-		RecordType string `json:"record_type,omitempty"`
-	}
+	var req NetDNSResolveRequest
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
 	}
@@ -85,7 +82,7 @@ func (t *NetDNSResolveTool) Execute(ctx context.Context, args json.RawMessage) (
 		}
 	}
 
-	var result map[string]interface{}
+	var result NetDNSResolveResult
 	var err error
 
 	switch recordType {
@@ -106,10 +103,10 @@ func (t *NetDNSResolveTool) Execute(ctx context.Context, args json.RawMessage) (
 	}
 
 	if err != nil {
-		result = map[string]interface{}{
-			"hostname":    req.Hostname,
-			"record_type": recordType,
-			"error":       err.Error(),
+		result = NetDNSResolveResult{
+			Hostname:   req.Hostname,
+			RecordType: recordType,
+			Error:      err.Error(),
 		}
 	}
 
@@ -128,10 +125,10 @@ func (t *NetDNSResolveTool) Execute(ctx context.Context, args json.RawMessage) (
 	}, nil
 }
 
-func resolveA(resolver *net.Resolver, ctx context.Context, hostname string) (map[string]interface{}, error) {
+func resolveA(resolver *net.Resolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
 	ips, err := resolver.LookupIPAddr(ctx, hostname)
 	if err != nil {
-		return nil, err
+		return NetDNSResolveResult{}, err
 	}
 
 	var ipv4Addrs []string
@@ -141,18 +138,18 @@ func resolveA(resolver *net.Resolver, ctx context.Context, hostname string) (map
 		}
 	}
 
-	return map[string]interface{}{
-		"hostname":    hostname,
-		"record_type": "A",
-		"records":     ipv4Addrs,
-		"count":       len(ipv4Addrs),
+	return NetDNSResolveResult{
+		Hostname:   hostname,
+		RecordType: "A",
+		Records:    ipv4Addrs,
+		Count:      len(ipv4Addrs),
 	}, nil
 }
 
-func resolveAAAA(resolver *net.Resolver, ctx context.Context, hostname string) (map[string]interface{}, error) {
+func resolveAAAA(resolver *net.Resolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
 	ips, err := resolver.LookupIPAddr(ctx, hostname)
 	if err != nil {
-		return nil, err
+		return NetDNSResolveResult{}, err
 	}
 
 	var ipv6Addrs []string
@@ -162,68 +159,68 @@ func resolveAAAA(resolver *net.Resolver, ctx context.Context, hostname string) (
 		}
 	}
 
-	return map[string]interface{}{
-		"hostname":    hostname,
-		"record_type": "AAAA",
-		"records":     ipv6Addrs,
-		"count":       len(ipv6Addrs),
+	return NetDNSResolveResult{
+		Hostname:   hostname,
+		RecordType: "AAAA",
+		Records:    ipv6Addrs,
+		Count:      len(ipv6Addrs),
 	}, nil
 }
 
-func resolveMX(resolver *net.Resolver, ctx context.Context, hostname string) (map[string]interface{}, error) {
+func resolveMX(resolver *net.Resolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
 	records, err := resolver.LookupMX(ctx, hostname)
 	if err != nil {
-		return nil, err
+		return NetDNSResolveResult{}, err
 	}
 
-	var mxRecords []map[string]interface{}
+	var mxRecords []DNSMXRecord
 	for _, mx := range records {
-		mxRecords = append(mxRecords, map[string]interface{}{
-			"host": mx.Host,
-			"pref": mx.Pref,
+		mxRecords = append(mxRecords, DNSMXRecord{
+			Host: mx.Host,
+			Pref: mx.Pref,
 		})
 	}
 
-	return map[string]interface{}{
-		"hostname":    hostname,
-		"record_type": "MX",
-		"records":     mxRecords,
-		"count":       len(mxRecords),
+	return NetDNSResolveResult{
+		Hostname:   hostname,
+		RecordType: "MX",
+		Records:    mxRecords,
+		Count:      len(mxRecords),
 	}, nil
 }
 
-func resolveTXT(resolver *net.Resolver, ctx context.Context, hostname string) (map[string]interface{}, error) {
+func resolveTXT(resolver *net.Resolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
 	records, err := resolver.LookupTXT(ctx, hostname)
 	if err != nil {
-		return nil, err
+		return NetDNSResolveResult{}, err
 	}
 
-	return map[string]interface{}{
-		"hostname":    hostname,
-		"record_type": "TXT",
-		"records":     records,
-		"count":       len(records),
+	return NetDNSResolveResult{
+		Hostname:   hostname,
+		RecordType: "TXT",
+		Records:    records,
+		Count:      len(records),
 	}, nil
 }
 
-func resolveCNAME(resolver *net.Resolver, ctx context.Context, hostname string) (map[string]interface{}, error) {
+func resolveCNAME(resolver *net.Resolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
 	cname, err := resolver.LookupCNAME(ctx, hostname)
 	if err != nil {
-		return nil, err
+		return NetDNSResolveResult{}, err
 	}
 
-	return map[string]interface{}{
-		"hostname":    hostname,
-		"record_type": "CNAME",
-		"records":     []string{cname},
-		"count":       1,
+	return NetDNSResolveResult{
+		Hostname:   hostname,
+		RecordType: "CNAME",
+		Records:    []string{cname},
+		Count:      1,
 	}, nil
 }
 
-func resolveNS(resolver *net.Resolver, ctx context.Context, hostname string) (map[string]interface{}, error) {
+func resolveNS(resolver *net.Resolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
 	records, err := resolver.LookupNS(ctx, hostname)
 	if err != nil {
-		return nil, err
+		return NetDNSResolveResult{}, err
 	}
 
 	var nsRecords []string
@@ -231,10 +228,10 @@ func resolveNS(resolver *net.Resolver, ctx context.Context, hostname string) (ma
 		nsRecords = append(nsRecords, ns.Host)
 	}
 
-	return map[string]interface{}{
-		"hostname":    hostname,
-		"record_type": "NS",
-		"records":     nsRecords,
-		"count":       len(nsRecords),
+	return NetDNSResolveResult{
+		Hostname:   hostname,
+		RecordType: "NS",
+		Records:    nsRecords,
+		Count:      len(nsRecords),
 	}, nil
 }

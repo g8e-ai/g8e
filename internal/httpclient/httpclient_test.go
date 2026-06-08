@@ -23,7 +23,6 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -35,31 +34,42 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-func TestMain(m *testing.M) {
-	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+func init() {
+	certs.SetCA(generateTestCA())
+}
+
+func generateTestCA() []byte {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		panic(err)
 	}
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
 		panic(err)
 	}
-	tmpl := &x509.Certificate{
-		SerialNumber:          serial,
-		Subject:               pkix.Name{CommonName: "g8e Test CA"},
-		NotBefore:             time.Now().Add(-time.Minute),
-		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour),
+
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName: "httpclient-test-ca",
+		},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		IsCA:                  true,
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
-		IsCA:                  true,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+
+	certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
 	if err != nil {
 		panic(err)
 	}
-	certs.SetCA(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
-	os.Exit(m.Run())
+
+	return pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certBytes,
+	})
 }
 
 func assertEmbeddedCATransport(t *testing.T, transport *http.Transport) {

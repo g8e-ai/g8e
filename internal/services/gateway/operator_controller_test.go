@@ -14,18 +14,22 @@
 package gateway
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/g8e-ai/g8e/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -37,7 +41,7 @@ func TestNewOperatorController(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(nil, nil))
 	reg := &RegistrationService{}
 	auth := &AuthService{}
-	resp := &responder.Responder{}
+	resp := &response.Writer{}
 
 	controller := newOperatorController(cfg, logger, reg, auth, resp)
 
@@ -56,18 +60,18 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	res := responder.New(logger)
+	res := response.NewWriter(logger)
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 	reg := &RegistrationService{}
 	cfg := &config.Config{Gateway: config.GatewayConfig{MaxPayloadBytes: 1024}}
 	controller := newOperatorController(cfg, logger, reg, auth, res)
 
 	// Create a valid Operator session
-	sessionID := "test-session-123"
+	operatorSessionID := "test-session-123"
 	opDoc := map[string]interface{}{
 		"id":                  "op-123",
-		"operator_session_id": sessionID,
-		"status":              marshaler.OperatorStatus(constants.OperatorStatusActive),
+		"operator_session_id": operatorSessionID,
+		"status":              marshaler.Status(constants.OperatorStatusActive),
 		"user_id":             "user-123",
 		"organization_id":     "org-123",
 	}
@@ -77,7 +81,18 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/reauth", strings.NewReader("{invalid json"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(constants.HeaderAuthorization, "Bearer "+sessionID)
+	req.Header.Set(constants.HeaderAuthorization, "Bearer "+operatorSessionID)
+
+	wid := protocol.NewWorkloadIdentity()
+	opURI, err := wid.OperatorSPIFFEURL("org-123", "op-123", operatorSessionID)
+	require.NoError(t, err)
+
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{
+			{URIs: []*url.URL{opURI}},
+		},
+	}
+
 	w := httptest.NewRecorder()
 
 	controller.handleReauth(w, req)

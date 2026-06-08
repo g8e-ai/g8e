@@ -36,33 +36,33 @@ func (t *SysTimeClockTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *SysTimeClockTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type":       "object",
-		"properties": map[string]interface{}{},
+func (t *SysTimeClockTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type:       "object",
+		Properties: make(map[string]*PropertySchema),
 	}
 }
 
 // Execute implements the tool logic.
 func (t *SysTimeClockTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 	now := time.Now()
-	ntpStatus := getNTPStatus()
+	_, offset := now.Zone()
 
-	result := map[string]interface{}{
-		"system_time": map[string]interface{}{
-			"utc":       now.UTC().Format(time.RFC3339),
-			"local":     now.Format(time.RFC3339),
-			"unix":      now.Unix(),
-			"unix_nano": now.UnixNano(),
-			"timezone":  now.Location().String(),
-			"offset":    now.Format("-07:00"),
+	result := SysTimeClockResult{
+		SystemTime: SystemTimeInfo{
+			UTC:      now.UTC().Format(time.RFC3339),
+			Local:    now.Format(time.RFC3339),
+			Unix:     now.Unix(),
+			UnixNano: now.UnixNano(),
+			Timezone: now.Location().String(),
+			Offset:   formatOffset(offset),
 		},
-		"ntp": ntpStatus,
+		NTP: getNTPStatus(),
 	}
 
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("sys_time_clock: failed to marshal result: %w", err)
 	}
 
 	return CallToolResult{
@@ -75,10 +75,22 @@ func (t *SysTimeClockTool) Execute(ctx context.Context, args json.RawMessage) (C
 	}, nil
 }
 
-func getNTPStatus() map[string]interface{} {
-	ntpData := map[string]interface{}{
-		"synced": false,
-		"status": "unknown",
+// formatOffset converts seconds offset to ±HH:MM format.
+func formatOffset(offset int) string {
+	sign := "+"
+	if offset < 0 {
+		sign = "-"
+		offset = -offset
+	}
+	hours := offset / 3600
+	minutes := (offset % 3600) / 60
+	return fmt.Sprintf("%s%02d:%02d", sign, hours, minutes)
+}
+
+func getNTPStatus() NTPStatus {
+	ntpData := NTPStatus{
+		Synced: false,
+		Status: "unknown",
 	}
 
 	if _, err := exec.LookPath("timedatectl"); err == nil {
@@ -104,10 +116,10 @@ func getNTPStatus() map[string]interface{} {
 	return ntpData
 }
 
-func parseTimedatectlOutput(output string) map[string]interface{} {
-	result := map[string]interface{}{
-		"synced": false,
-		"status": "unknown",
+func parseTimedatectlOutput(output string) NTPStatus {
+	result := NTPStatus{
+		Synced: false,
+		Status: "unknown",
 	}
 
 	lines := strings.Split(output, "\n")
@@ -115,53 +127,68 @@ func parseTimedatectlOutput(output string) map[string]interface{} {
 		line = strings.TrimSpace(line)
 		if strings.Contains(line, "System clock synchronized:") {
 			if strings.Contains(line, "yes") {
-				result["synced"] = true
-				result["status"] = "synchronized"
+				result.Synced = true
+				result.Status = "synchronized"
 			} else {
-				result["synced"] = false
-				result["status"] = "not synchronized"
+				result.Synced = false
+				result.Status = "not synchronized"
 			}
 		}
 		if strings.Contains(line, "NTP service:") {
-			result["ntp_service"] = strings.TrimSpace(strings.Split(line, ":")[1])
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				result.NTPService = strings.TrimSpace(parts[1])
+			}
 		}
 		if strings.Contains(line, "NTP synchronized:") {
-			result["ntp_synchronized"] = strings.TrimSpace(strings.Split(line, ":")[1])
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				result.NTPSynchronized = strings.TrimSpace(parts[1])
+			}
 		}
 	}
 
 	return result
 }
 
-func parseChronycOutput(output string) map[string]interface{} {
-	result := map[string]interface{}{
-		"synced": false,
-		"status": "unknown",
+func parseChronycOutput(output string) NTPStatus {
+	result := NTPStatus{
+		Synced: false,
+		Status: "unknown",
 	}
 
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "Reference ID") {
-			result["reference_id"] = strings.TrimSpace(strings.Split(line, ":")[1])
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				result.ReferenceID = strings.TrimSpace(parts[1])
+			}
 		}
 		if strings.HasPrefix(line, "Stratum") {
-			result["stratum"] = strings.TrimSpace(strings.Split(line, ":")[1])
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				result.Stratum = strings.TrimSpace(parts[1])
+			}
 		}
 		if strings.HasPrefix(line, "System time") {
-			result["system_time_offset"] = strings.TrimSpace(strings.Split(line, ":")[1])
-			result["synced"] = true
-			result["status"] = "synchronized"
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				result.SystemTimeOffset = strings.TrimSpace(parts[1])
+				result.Synced = true
+				result.Status = "synchronized"
+			}
 		}
 	}
 
 	return result
 }
 
-func parseNtpqOutput(output string) map[string]interface{} {
-	result := map[string]interface{}{
-		"synced": false,
-		"status": "unknown",
+func parseNtpqOutput(output string) NTPStatus {
+	result := NTPStatus{
+		Synced: false,
+		Status: "unknown",
 	}
 
 	lines := strings.Split(output, "\n")
@@ -169,29 +196,19 @@ func parseNtpqOutput(output string) map[string]interface{} {
 		for _, line := range lines[2:] {
 			fields := strings.Fields(line)
 			if len(fields) >= 9 {
-				remote := fields[0]
-				refid := fields[1]
-				st := fields[2]
-				when := fields[3]
-				poll := fields[4]
-				reach := fields[5]
-				delay := fields[6]
-				offset := fields[7]
-				jitter := fields[8]
-
 				if fields[0] == "*" {
-					result["synced"] = true
-					result["status"] = "synchronized"
-					result["selected_peer"] = map[string]interface{}{
-						"remote":  remote,
-						"refid":   refid,
-						"stratum": st,
-						"when":    when,
-						"poll":    poll,
-						"reach":   reach,
-						"delay":   delay,
-						"offset":  offset,
-						"jitter":  jitter,
+					result.Synced = true
+					result.Status = "synchronized"
+					result.SelectedPeer = &NTPSelectedPeer{
+						Remote:  fields[0],
+						RefID:   fields[1],
+						Stratum: fields[2],
+						When:    fields[3],
+						Poll:    fields[4],
+						Reach:   fields[5],
+						Delay:   fields[6],
+						Offset:  fields[7],
+						Jitter:  fields[8],
 					}
 				}
 			}

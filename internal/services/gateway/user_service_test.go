@@ -16,21 +16,24 @@ package gateway
 import (
 	"encoding/json"
 	"fmt"
+	"os/user"
+	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 func TestNewUserService(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -45,18 +48,26 @@ func TestUserService_CreateUser(t *testing.T) {
 	t.Run("Success - creates regular user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+		dbDir := tempDir(t)
+		secretsDir := tempDir(t)
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
 		userSvc := NewUserService(db, logger)
-		user, err := userSvc.CreateUser()
+		newUser, err := userSvc.CreateUser()
 		require.NoError(t, err)
-		require.NotNil(t, user)
-		require.False(t, user.IsBootstrap)
-		require.Equal(t, constants.UserStatusActive, user.Status)
+		require.NotNil(t, newUser)
+		require.False(t, newUser.IsBootstrap)
+		require.Equal(t, constants.UserStatusActive, newUser.Status)
+
+		// Verify local OS user info is stored
+		currentUser, err := user.Current()
+		if err == nil {
+			require.NotNil(t, newUser.LocalOSUser)
+			require.Equal(t, currentUser.Uid, newUser.LocalOSUser.UID)
+			require.Equal(t, currentUser.Gid, newUser.LocalOSUser.GID)
+		}
 	})
 }
 
@@ -64,9 +75,9 @@ func TestUserService_CreateBootstrapUser(t *testing.T) {
 	t.Run("Success - creates bootstrap user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+		dbDir := tempDir(t)
+		secretsDir := tempDir(t)
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -81,9 +92,9 @@ func TestUserService_CreateBootstrapUser(t *testing.T) {
 	t.Run("Success - second bootstrap user fails", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+		dbDir := tempDir(t)
+		secretsDir := tempDir(t)
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -103,9 +114,9 @@ func TestUserService_Disable(t *testing.T) {
 	t.Run("Success - disables user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+		dbDir := tempDir(t)
+		secretsDir := tempDir(t)
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -136,7 +147,8 @@ func TestUserService_Disable(t *testing.T) {
 		var auditEntry models.AdminAuditEntry
 		err = json.Unmarshal(mustMarshal(t, results[0].ForWire()), &auditEntry)
 		require.NoError(t, err)
-		require.Equal(t, "test_reason", auditEntry.Details["reason"])
+		require.NotNil(t, auditEntry.Details)
+		require.Equal(t, "test_reason", auditEntry.Details.Reason)
 		require.Equal(t, "actor_user_id", auditEntry.Actor)
 		require.Equal(t, "operator_id", auditEntry.OperatorID)
 	})
@@ -144,11 +156,15 @@ func TestUserService_Disable(t *testing.T) {
 	t.Run("Error - user not found", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		db, _ := OpenGatewayDBService(t.TempDir(), t.TempDir(), logger, true)
+		dataDir := tempDir(t)
+		secretsDir := tempDir(t)
+		vaultDir := tempDir(t)
+		db, err := OpenCanonicalDBService(dataDir, secretsDir, vaultDir, logger, true, "", false)
+		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)
 
-		err := userSvc.Disable("non-existent-id", "test_reason", "actor_user_id", "operator_id")
+		err = userSvc.Disable("non-existent-id", "test_reason", "actor_user_id", "operator_id")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "user not found")
 	})
@@ -165,7 +181,8 @@ func TestUserService_FindBootstrapUser(t *testing.T) {
 	t.Run("Success - finds bootstrap user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		db, _ := OpenGatewayDBService(t.TempDir(), t.TempDir(), logger, true)
+		db, err := OpenCanonicalDBService(tempDir(t), tempDir(t), tempDir(t), logger, true, "", false)
+		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)
 
@@ -184,12 +201,13 @@ func TestUserService_FindBootstrapUser(t *testing.T) {
 	t.Run("Success - returns nil when no bootstrap user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		db, _ := OpenGatewayDBService(t.TempDir(), t.TempDir(), logger, true)
+		db, err := OpenCanonicalDBService(tempDir(t), tempDir(t), tempDir(t), logger, true, "", false)
+		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)
 
 		// Create a non-bootstrap user
-		_, err := userSvc.CreateUser()
+		_, err = userSvc.CreateUser()
 		require.NoError(t, err)
 
 		// Find bootstrap user should return nil
@@ -238,9 +256,9 @@ func TestUserService_HasAnyUsers(t *testing.T) {
 	t.Run("False when no users exist", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+		dbDir := tempDir(t)
+		secretsDir := tempDir(t)
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -253,9 +271,9 @@ func TestUserService_HasAnyUsers(t *testing.T) {
 	t.Run("True when user exists", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+		dbDir := tempDir(t)
+		secretsDir := tempDir(t)
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 

@@ -36,46 +36,40 @@ func (t *NetHTTPProbeTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *NetHTTPProbeTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"url": map[string]interface{}{
-				"type":        "string",
-				"description": "URL to probe",
+func (t *NetHTTPProbeTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"url": {
+				Type:        "string",
+				Description: "URL to probe",
 			},
-			"method": map[string]interface{}{
-				"type":        "string",
-				"description": "HTTP method (default HEAD)",
+			"method": {
+				Type:        "string",
+				Description: "HTTP method (default HEAD)",
 			},
 		},
-		"required": []string{"url"},
+		Required: []string{"url"},
 	}
 }
 
 // Execute implements the tool logic.
 func (t *NetHTTPProbeTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		URL    string `json:"url"`
-		Method string `json:"method,omitempty"`
-	}
+	var req NetHTTPProbeRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("net_http_probe: invalid arguments: %w", err)
 	}
 
 	if req.URL == "" {
-		return CallToolResult{}, fmt.Errorf("url required")
+		return CallToolResult{}, fmt.Errorf("net_http_probe: url required")
 	}
 
 	parsedURL, err := validateHTTPRequestURL(req.URL)
 	if err != nil {
-		result := map[string]interface{}{
-			"error": fmt.Sprintf("URL validation failed: %v", err),
+		result := NetHTTPProbeResult{
+			Error: fmt.Sprintf("URL validation failed: %v", err),
 		}
-		resultJSON, err := json.Marshal(result)
-		if err != nil {
-			return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
-		}
+		resultJSON, _ := json.Marshal(result)
 		return CallToolResult{
 			Content: []TextContent{
 				{
@@ -83,7 +77,6 @@ func (t *NetHTTPProbeTool) Execute(ctx context.Context, args json.RawMessage) (C
 					Text: string(resultJSON),
 				},
 			},
-			IsError: true,
 		}, nil
 	}
 
@@ -95,7 +88,7 @@ func (t *NetHTTPProbeTool) Execute(ctx context.Context, args json.RawMessage) (C
 	start := time.Now()
 	httpReq, err := http.NewRequestWithContext(ctx, method, parsedURL.String(), nil)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to create request: %w", err)
+		return CallToolResult{}, fmt.Errorf("net_http_probe: failed to create request: %w", err)
 	}
 
 	timeout := defaultHTTPTimeout
@@ -121,18 +114,18 @@ func (t *NetHTTPProbeTool) Execute(ctx context.Context, args json.RawMessage) (C
 		},
 	}
 	client := &http.Client{Timeout: timeout, Transport: transport}
-	// URL is validated by validateHTTPRequestURL to satisfy CodeQL uncontrolled-data-in-network-request rule.
+	// parsedURL is validated by validateHTTPRequestURL to satisfy CodeQL uncontrolled-data-in-network-request rule.
 	resp, err := client.Do(httpReq)
 	latency := time.Since(start).Seconds() * 1000
 
 	if err != nil {
-		result := map[string]interface{}{
-			"error":      err.Error(),
-			"latency_ms": latency,
+		result := NetHTTPProbeResult{
+			Error:     err.Error(),
+			LatencyMs: latency,
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {
-			return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+			return CallToolResult{}, fmt.Errorf("net_http_probe: failed to marshal result: %w", err)
 		}
 		return CallToolResult{
 			Content: []TextContent{
@@ -152,14 +145,14 @@ func (t *NetHTTPProbeTool) Execute(ctx context.Context, args json.RawMessage) (C
 		}
 	}
 
-	result := map[string]interface{}{
-		"status_code": resp.StatusCode,
-		"headers":     headers,
-		"latency_ms":  latency,
+	result := NetHTTPProbeResult{
+		StatusCode: resp.StatusCode,
+		Headers:    headers,
+		LatencyMs:  latency,
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("net_http_probe: failed to marshal result: %w", err)
 	}
 
 	return CallToolResult{

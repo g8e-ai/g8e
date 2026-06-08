@@ -16,6 +16,8 @@ package execution
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -138,7 +140,13 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.Contains(t, result.Stdout, workDir)
+		// On Windows, bash might return a Posix-style path (e.g. /c/Users/...)
+		// while t.TempDir() returns a Windows path (e.g. C:\Users\...)
+		// Normalize both to forward slashes for comparison
+		actualStdout := filepath.ToSlash(strings.TrimSpace(result.Stdout))
+		// On Windows with Git Bash, paths might be mapped (e.g. C:/Users/... to /c/Users/... or /tmp/...)
+		// Check if the base name of the temp directory is present in the output
+		assert.Contains(t, actualStdout, filepath.Base(workDir))
 	})
 
 	t.Run("command with environment variables", func(t *testing.T) {

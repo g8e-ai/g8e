@@ -32,12 +32,12 @@ func NowTimestamp() string {
 
 func ParseTimestamp(s string) (time.Time, error) {
 	if s == "" {
-		return time.Time{}, fmt.Errorf("empty timestamp string")
+		return time.Time{}, fmt.Errorf("timestamp: parse: empty string")
 	}
 
 	t, err := time.Parse(TimestampFormat, s)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("unrecognized timestamp format: %q (expected %s)", s, TimestampFormat)
+		return time.Time{}, fmt.Errorf("timestamp: parse: unrecognized format %q (expected %s)", s, TimestampFormat)
 	}
 
 	return t.UTC(), nil

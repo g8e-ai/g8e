@@ -114,32 +114,32 @@ func MapActionTypeToEventType(actionType ActionType) EventType {
 }
 
 // MapEventTypeToResultActionType maps protobuf event types to UAP result action types.
-func MapEventTypeToResultActionType(eventType EventType) string {
+func MapEventTypeToResultActionType(eventType EventType) ActionType {
 	switch eventType {
 	case Event.Operator.Heartbeat:
-		return string(ActionTypeHeartbeat) + "_RESULT"
+		return ActionType(string(ActionTypeHeartbeat) + "_RESULT")
 	case Event.Operator.Command.Completed,
 		Event.Operator.Command.Failed:
-		return string(ActionTypeExecuteBash) + "_RESULT"
+		return ActionType(string(ActionTypeExecuteBash) + "_RESULT")
 	case Event.Operator.Command.Cancelled:
-		return string(ActionTypeExecuteBash) + "_CANCELLED"
+		return ActionType(string(ActionTypeExecuteBash) + "_CANCELLED")
 	case Event.Operator.Command.StatusUpdated.Queued,
 		Event.Operator.Command.StatusUpdated.Running,
 		Event.Operator.Command.StatusUpdated.Completed,
 		Event.Operator.Command.StatusUpdated.Failed,
 		Event.Operator.Command.StatusUpdated.Cancelled:
-		return "EXECUTE_STATUS_UPDATE"
+		return ActionType("EXECUTE_STATUS_UPDATE")
 	case Event.Operator.FileEdit.Completed,
 		Event.Operator.FileEdit.Failed:
-		return string(ActionTypeFileEdit) + "_RESULT"
+		return ActionType(string(ActionTypeFileEdit) + "_RESULT")
 	case Event.Operator.FsList.Completed,
 		Event.Operator.FsList.Failed:
-		return string(ActionTypeFsList) + "_RESULT"
+		return ActionType(string(ActionTypeFsList) + "_RESULT")
 	case Event.Operator.FsGrep.Completed,
 		Event.Operator.FsGrep.Failed:
-		return string(ActionTypeFsGrep) + "_RESULT"
+		return ActionType(string(ActionTypeFsGrep) + "_RESULT")
 	default:
-		return string(eventType) + "_RESULT"
+		return ActionType(string(eventType) + "_RESULT")
 	}
 }
 

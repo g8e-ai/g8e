@@ -28,13 +28,12 @@ In an air-gapped deployment, the g8e Gateway operates as the central Policy Deci
 
 ### Port Configuration and Communication Surfaces
 
-The gateway exposes three logical communication surfaces. Canonical ports are defined in `internal/constants/ports.go` and `protocol/constants/ports.json`.
+The gateway exposes two logical communication surfaces. Canonical ports are defined in `internal/constants/ports.go` and `protocol/constants/ports.json`.
 
 | Surface | Port (default) | Authentication | Purpose |
 | :--- | :--- | :--- | :--- |
-| **Bootstrap** | `8441` (TLS) | None | Serves local trust bundles and handles Certificate Signing Request (CSR) enrollment. |
-| **Public Surface** | `8443` (TLS) | `web_session_id` | Browser management interface, WebAuthn passkey registration, and PKI discovery. |
-| **mTLS API & Pub/Sub** | `8440` (TLS) | mTLS + URI SAN | Receives `GovernanceEnvelope` mutation payloads, handles `/db` persistence, and runs `/ws/pubsub` streaming. |
+| **HTTP (Bootstrap + MCP)** | `8080` (plain HTTP) | None | Serves local trust bundles, handles Certificate Signing Request (CSR) enrollment, and plain HTTP MCP for development/testing. |
+| **HTTPS (mTLS API + Public)** | `8443` (mTLS) | mTLS + URI SAN | Receives `GovernanceEnvelope` mutation payloads, handles `/db` persistence, runs `/ws/pubsub` streaming, and provides browser management interface. |
 
 Surfaces with conflicting TLS client-authentication requirements do not share a network port. Sharing ports forces the use of `tls.VerifyClientCertIfGiven`, which degrades the mTLS execution boundary. The initialization sequence validates port isolation and fails if configurations overlap.
 
@@ -55,7 +54,7 @@ Every transaction or mutation payload wrapped in a `GovernanceEnvelope` undergoe
 
 1. **L1 Doctrine**: Technical Bedrock (Hard Gates) performs threat analysis, command blacklist checks, and pattern matching, defined in `internal/services/governance/l1_doctrine.go`.
 2. **L2 Consensus**: Multi-agent consensus signature verification validates the cryptographic signatures on the transaction using Ed25519, defined in `internal/services/governance/l2_consensus.go`.
-3. **L3 Notary**: Human-in-the-loop authorization verifies approvals via WebAuthn passkeys or cryptographically signed CLI proofs, defined in `internal/services/governance/l3_notary.go`.
+3. **L3 Notary**: Human-in-the-loop authorization verifies approvals via WebAuthn passkeys (for web sessions) or cryptographically signed CLI proofs (for CLI sessions), defined in `internal/services/governance/l3_notary.go`.
 4. **L4 Warden**: Pre-dispatch verification gates validate replay prevention, expiration, transaction nonces, and the state Merkle root, defined in `internal/services/governance/l4_warden.go`.
 5. **L5 Actuator**: Isolated boundary tool dispatch executes the validated operation via Model Context Protocol (MCP) or Agent2Agent (A2A), producing a cryptographically signed transaction receipt, defined in `internal/services/governance/l5_actuator.go`.
 

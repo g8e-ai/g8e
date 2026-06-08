@@ -69,3 +69,10 @@ const (
 	PlatformConsoleLogEntryReceived      = "g8e.v1.platform.console.log.entry.received"
 	PlatformConsoleLogConnectedConfirmed = "g8e.v1.platform.console.log.connected.confirmed"
 )
+
+// Platform binary names.
+const (
+	BinaryNameWindows = "g8e-windows-amd64.exe"
+	BinaryNameLinux   = "g8e-linux-amd64"
+	BinaryNameDarwin  = "g8e-darwin-amd64"
+)

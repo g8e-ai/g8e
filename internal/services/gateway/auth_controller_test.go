@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -29,7 +30,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -40,10 +41,10 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	pkiDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -52,36 +53,41 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 
 	backend, err := keystore.NewTestBackend()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnsurePermissions())
 	sm := &SecretManager{
 		db:         db.db,
-		secretsDir: t.TempDir(),
+		secretsDir: tempDir(t),
 		logger:     logger,
 		keystore:   ks,
 	}
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
-	err = pki.EnsurePKI(nil)
+	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "", "", "")
-	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	operatorSessionSvc := NewOperatorSessionService(db, logger)
+	webSessionSvc := NewWebSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
-	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
+	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       resp,
 		SuspendedStore:  db,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
 	})
+	if err != nil {
+		t.Fatalf("failed to create MCP gateway: %v", err)
+	}
 
-	authController := newAuthController(cfg, logger, db, auth, passkey, userSvc, reg, pki, sessionSvc, mcpGateway, resp)
+	authController := newAuthController(cfg, logger, db, auth, passkey, userSvc, reg, pki, webSessionSvc, cliSessionSvc, operatorSessionSvc, mcpGateway, resp)
 	return authController, cfg
 }
 
@@ -97,16 +103,17 @@ func TestHandleBootstrap(t *testing.T) {
 			"cli_csr_pem":        cliCsr,
 			"system_fingerprint": "test-fp",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", bytes.NewReader(b))
 		req.RemoteAddr = "127.0.0.1:12345"
 		rr := httptest.NewRecorder()
 
-		c.handlePublicAuthBootstrap(rr, req)
+		c.handleLocalBootstrap(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 		var resp map[string]interface{}
-		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.True(t, resp["success"].(bool))
 		assert.NotEmpty(t, resp["operator_cert"])
@@ -129,12 +136,13 @@ func TestHandleBootstrap(t *testing.T) {
 			"cli_csr_pem":        cliCsr,
 			"system_fingerprint": "test-fp",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", bytes.NewReader(b))
 		req.RemoteAddr = "192.168.1.1:12345"
 		rr := httptest.NewRecorder()
 
-		c.handlePublicAuthBootstrap(rr, req)
+		c.handleLocalBootstrap(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
 		assert.JSONEq(t, `{"error":"CSR auto-issue only available over loopback"}`, rr.Body.String())
@@ -155,12 +163,13 @@ func TestHandleBootstrap(t *testing.T) {
 			"cli_csr_pem":        cliCsr,
 			"system_fingerprint": "rotated-fp",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", bytes.NewReader(b))
 		req.RemoteAddr = "127.0.0.1:12345"
 		rr := httptest.NewRecorder()
 
-		c.handlePublicAuthBootstrap(rr, req)
+		c.handleLocalBootstrap(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 		var resp map[string]interface{}
@@ -184,12 +193,13 @@ func TestHandleBootstrap(t *testing.T) {
 			"cli_csr_pem":        cliCsr,
 			"system_fingerprint": "fail-fp",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", bytes.NewReader(b))
 		req.RemoteAddr = "127.0.0.1:12345"
 		rr := httptest.NewRecorder()
 
-		c.handlePublicAuthBootstrap(rr, req)
+		c.handleLocalBootstrap(rr, req)
 
 		assert.Equal(t, http.StatusConflict, rr.Code)
 		assert.JSONEq(t, `{"error":"bootstrap user is disabled, cannot rotate"}`, rr.Body.String())
@@ -203,11 +213,12 @@ func TestHandleBootstrap(t *testing.T) {
 		body := map[string]string{
 			"name": "Superadmin",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", bytes.NewReader(b))
 		rr := httptest.NewRecorder()
 
-		c.handlePublicAuthBootstrap(rr, req)
+		c.handleLocalBootstrap(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
 		assert.JSONEq(t, `{"error":"bootstrap only available for initial setup"}`, rr.Body.String())
@@ -258,7 +269,8 @@ func TestHandleAuthPasskeysRegisterChallenge(t *testing.T) {
 			"user_id":   user.ID,
 			"user_name": "test-user",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/challenge", bytes.NewReader(b))
 		rr := httptest.NewRecorder()
 
@@ -300,7 +312,8 @@ func TestHandleAuthPasskeysRegisterChallenge(t *testing.T) {
 		body := map[string]string{
 			"user_name": "test-user",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/challenge", bytes.NewReader(b))
 		rr := httptest.NewRecorder()
 
@@ -320,7 +333,8 @@ func TestHandleAuthPasskeysRegisterChallenge(t *testing.T) {
 			"user_id":   user.ID,
 			"user_name": "test-user",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/jit-register/challenge", bytes.NewReader(b))
 		rr := httptest.NewRecorder()
 
@@ -337,14 +351,16 @@ func TestHandleAuthPasskeysRegisterChallenge(t *testing.T) {
 
 		// Add a fake credential to simulate existing credentials
 		user.PasskeyCredentials = []models.PasskeyCredential{{ID: []byte("existing-cred")}}
-		updatedUser, _ := json.Marshal(user)
+		updatedUser, err := json.Marshal(user)
+		require.NoError(t, err)
 		c.db.DocSet("users", user.ID, updatedUser)
 
 		body := map[string]string{
 			"user_id":   user.ID,
 			"user_name": "test-user",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/jit-register/challenge", bytes.NewReader(b))
 		rr := httptest.NewRecorder()
 
@@ -364,7 +380,8 @@ func TestHandleAuthPasskeysRegisterChallenge(t *testing.T) {
 			"user_id":   "",
 			"user_name": "test-user",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/challenge", bytes.NewReader(b))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
@@ -384,7 +401,8 @@ func TestHandleAuthPasskeysRegisterChallenge(t *testing.T) {
 			"user_id":   "other-user-id",
 			"user_name": "test-user",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/challenge", bytes.NewReader(b))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
@@ -423,7 +441,8 @@ func TestHandleAuthPasskeysRegisterVerify(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		body := map[string]string{}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/verify", bytes.NewReader(b))
 		rr := httptest.NewRecorder()
 
@@ -441,13 +460,15 @@ func TestHandleAuthPasskeysRegisterVerify(t *testing.T) {
 
 		// Add a fake credential to simulate existing credentials
 		user.PasskeyCredentials = []models.PasskeyCredential{{ID: []byte("existing-cred")}}
-		updatedUser, _ := json.Marshal(user)
+		updatedUser, err := json.Marshal(user)
+		require.NoError(t, err)
 		c.db.DocSet("users", user.ID, updatedUser)
 
 		body := map[string]string{
 			"user_id": user.ID,
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/jit-register/verify", bytes.NewReader(b))
 		rr := httptest.NewRecorder()
 
@@ -485,7 +506,8 @@ func TestHandleAuthPasskeysAuthenticateChallenge(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		body := map[string]string{}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/challenge", bytes.NewReader(b))
 		rr := httptest.NewRecorder()
 
@@ -504,7 +526,8 @@ func TestHandleAuthPasskeysAuthenticateChallenge(t *testing.T) {
 		body := map[string]string{
 			"user_id": user.ID,
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/challenge", bytes.NewReader(b))
 		rr := httptest.NewRecorder()
 
@@ -515,7 +538,7 @@ func TestHandleAuthPasskeysAuthenticateChallenge(t *testing.T) {
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.False(t, resp["success"].(bool))
-		assert.Contains(t, resp["error"].(string), "Found no credentials")
+		assert.Contains(t, resp["error"].(string), "no passkeys registered")
 	})
 
 	t.Run("Success - session context user_id", func(t *testing.T) {
@@ -527,7 +550,8 @@ func TestHandleAuthPasskeysAuthenticateChallenge(t *testing.T) {
 		body := map[string]string{
 			"user_id": "",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/challenge", bytes.NewReader(b))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
@@ -546,7 +570,8 @@ func TestHandleAuthPasskeysAuthenticateChallenge(t *testing.T) {
 		body := map[string]string{
 			"user_id": "other-user-id",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/challenge", bytes.NewReader(b))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
@@ -585,7 +610,8 @@ func TestHandleAuthPasskeysAuthenticateVerify(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		body := map[string]string{}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/verify", bytes.NewReader(b))
 		rr := httptest.NewRecorder()
 
@@ -604,7 +630,8 @@ func TestHandleAuthPasskeysAuthenticateVerify(t *testing.T) {
 		body := map[string]string{
 			"user_id": "",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/verify", bytes.NewReader(b))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
@@ -624,7 +651,8 @@ func TestHandleAuthPasskeysAuthenticateVerify(t *testing.T) {
 		body := map[string]string{
 			"user_id": "other-user-id",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/verify", bytes.NewReader(b))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
@@ -823,7 +851,7 @@ func TestHandleApprovalChallenge(t *testing.T) {
 			ToolArguments:   []byte("{}"),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.db.StoreSuspendedTransaction(suspendedTx)
+		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/"+txHash+"/challenge", nil)
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user2.ID))
@@ -882,7 +910,7 @@ func TestHandleApprovalVerify(t *testing.T) {
 			ToolArguments:   []byte("{}"),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.db.StoreSuspendedTransaction(suspendedTx)
+		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash+"/verify", strings.NewReader("{invalid}"))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
@@ -905,7 +933,8 @@ func TestHandleCLIApproval(t *testing.T) {
 			"cli_signature":         "sig123",
 			"mtls_cert_fingerprint": "fp123",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/nonexistent", bytes.NewReader(b))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
@@ -930,12 +959,13 @@ func TestHandleCLIApproval(t *testing.T) {
 			ToolArguments:   []byte("{}"),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.db.StoreSuspendedTransaction(suspendedTx)
+		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		body := map[string]string{
 			"mtls_cert_fingerprint": "fp123",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash, bytes.NewReader(b))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
@@ -960,12 +990,13 @@ func TestHandleCLIApproval(t *testing.T) {
 			ToolArguments:   []byte("{}"),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.db.StoreSuspendedTransaction(suspendedTx)
+		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		body := map[string]string{
 			"cli_signature": "sig123",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash, bytes.NewReader(b))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
 		rr := httptest.NewRecorder()
@@ -974,6 +1005,150 @@ func TestHandleCLIApproval(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "mtls_cert_fingerprint required")
+	})
+}
+
+func TestHandleCLIEnrollment(t *testing.T) {
+	t.Run("Success - CLI enrollment over loopback after bootstrap", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		require.NoError(t, err)
+		require.NotNil(t, bootstrapUser)
+
+		cliCSR := testutil.GenerateTestCSRP256(t, "test-cli")
+		body := map[string]string{
+			"cli_csr_pem":        cliCSR,
+			"system_fingerprint": "test-fp",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
+		req.RemoteAddr = "127.0.0.1:12345"
+		rr := httptest.NewRecorder()
+
+		c.handleCLIEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusCreated, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.NotEmpty(t, resp["cli_cert"])
+		assert.NotEmpty(t, resp["cli_cert_chain"])
+		assert.NotEmpty(t, resp["cli_session_id"])
+		assert.NotEmpty(t, resp["user_id"])
+		assert.NotEmpty(t, resp["hub_trust_bundle"])
+		// Verify operator_session_id is NOT returned (CLI-only enrollment)
+		_, hasOperatorSessionID := resp["operator_session_id"]
+		assert.False(t, hasOperatorSessionID, "operator_session_id should not be returned for CLI-only enrollment")
+	})
+
+	t.Run("Failure - Non-loopback request rejected", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		require.NoError(t, err)
+		require.NotNil(t, bootstrapUser)
+
+		cliCSR := testutil.GenerateTestCSRP256(t, "test-cli")
+		body := map[string]string{
+			"cli_csr_pem":        cliCSR,
+			"system_fingerprint": "test-fp",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
+		req.RemoteAddr = "192.168.1.1:12345"
+		rr := httptest.NewRecorder()
+
+		c.handleCLIEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "CLI enrollment only available over loopback")
+	})
+
+	t.Run("Failure - Rejected when not bootstrapped", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+
+		cliCSR := testutil.GenerateTestCSRP256(t, "test-cli")
+		body := map[string]string{
+			"cli_csr_pem":        cliCSR,
+			"system_fingerprint": "test-fp",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
+		req.RemoteAddr = "127.0.0.1:12345"
+		rr := httptest.NewRecorder()
+
+		c.handleCLIEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "CLI enrollment only available after bootstrap")
+	})
+
+	t.Run("Failure - Rejected when bootstrap user disabled", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		require.NoError(t, err)
+		c.userSvc.Disable(bootstrapUser.ID, "retired", "actor", "op")
+
+		cliCSR := testutil.GenerateTestCSRP256(t, "test-cli")
+		body := map[string]string{
+			"cli_csr_pem":        cliCSR,
+			"system_fingerprint": "test-fp",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
+		req.RemoteAddr = "127.0.0.1:12345"
+		rr := httptest.NewRecorder()
+
+		c.handleCLIEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusConflict, rr.Code)
+		assert.Contains(t, rr.Body.String(), "bootstrap user is disabled")
+	})
+
+	t.Run("Failure - Missing cli_csr_pem", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		require.NoError(t, err)
+		require.NotNil(t, bootstrapUser)
+
+		body := map[string]string{
+			"system_fingerprint": "test-fp",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
+		req.RemoteAddr = "127.0.0.1:12345"
+		rr := httptest.NewRecorder()
+
+		c.handleCLIEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "cli_csr_pem is required")
+	})
+
+	t.Run("Failure - Method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		require.NoError(t, err)
+		require.NotNil(t, bootstrapUser)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/cli/enroll", nil)
+		req.RemoteAddr = "127.0.0.1:12345"
+		rr := httptest.NewRecorder()
+
+		c.handleCLIEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 	})
 }
 
@@ -1027,7 +1202,7 @@ func TestHandleApprovalPage(t *testing.T) {
 			ToolArguments:   []byte(`{"arg":"value"}`),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.db.StoreSuspendedTransaction(suspendedTx)
+		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/approve/"+txHash, nil)
 		rr := httptest.NewRecorder()
@@ -1253,7 +1428,8 @@ func TestHandleUsers(t *testing.T) {
 		body := map[string]string{
 			"name": "Test User",
 		}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(b))
 		rr := httptest.NewRecorder()
 
@@ -1261,7 +1437,7 @@ func TestHandleUsers(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 		var resp map[string]interface{}
-		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.True(t, resp["success"].(bool))
 		assert.NotEmpty(t, resp["user_id"])
@@ -1296,7 +1472,8 @@ func TestHandlePublicAuthLoginVerify(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		body := map[string]string{}
-		b, _ := json.Marshal(body)
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login/verify", bytes.NewReader(b))
 		rr := httptest.NewRecorder()
 

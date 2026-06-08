@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	clierrors "github.com/g8e-ai/g8e/internal/cli/errors"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // defaultPathsJSON contains embedded default path configuration. This is the sole source of truth
@@ -76,23 +77,19 @@ type PathsConfig struct {
 		ProtocolModelsDir    string `json:"protocol_models_dir"`
 		SecretsDir           string `json:"secrets_dir"`
 		SSHConfigPath        string `json:"ssh_config_path"`
+		VaultDir             string `json:"vault_dir"`
+		VaultKeyPath         string `json:"vault_key_path"`
 	} `json:"infra"`
-	Ports struct {
-		InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-		OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-		OperatorHTTPS          int `json:"operator_https"`
-		OperatorMcpHttp        int `json:"operator_mcp_http"`
-		OperatorPublicHTTPS    int `json:"operator_public_https"`
-	} `json:"ports"`
 }
 
 type Config struct {
-	ProjectRoot    string
-	RuntimeDir     string
-	PKIDir         string
-	SecretsDir     string
-	CredentialsDir string
-	Paths          *PathsConfig
+	ProjectRoot      string
+	RuntimeDir       string
+	PKIDir           string
+	SecretsDir       string
+	CredentialsDir   string
+	Paths            *PathsConfig
+	TestPortOverride int // Test-only field to override default port
 }
 
 func Load(projectRoot string) (*Config, error) {
@@ -104,10 +101,15 @@ func Load(projectRoot string) (*Config, error) {
 		}
 	}
 
-	runtimeDir := filepath.Join(projectRoot, DefaultRuntimeDir)
-	pkiDir := filepath.Join(projectRoot, DefaultPKIDir)
-	secretsDir := filepath.Join(projectRoot, DefaultSecretsDir)
+	// Initialize paths relative to projectRoot
+	if err := constants.InitPathsWithBase(projectRoot); err != nil {
+		return nil, fmt.Errorf("cli config: failed to initialize paths: %w", err)
+	}
 
+	// Use centralized path constants
+	runtimeDir := constants.Paths.Infra.RuntimeDir
+	pkiDir := constants.Paths.Infra.PkiDir
+	secretsDir := constants.Paths.Infra.SecretsDir
 	credentialsDir := filepath.Join(projectRoot, DefaultCredentialsDir)
 
 	// Always use embedded default paths configuration
@@ -251,34 +253,32 @@ func (c *Config) OperatorKeyFile() string {
 	return filepath.Join(c.CredentialsDir, "operator.key")
 }
 
+func (c *Config) TrustBundleFile() string {
+	return filepath.Join(c.CredentialsDir, "g8eg-ca-bundle.pem")
+}
+
 func (c *Config) OperatorHTTPSPort() int {
-	return c.Paths.Ports.OperatorHTTPS
-}
-
-func (c *Config) OperatorBootstrapHTTPSPort() int {
-	return c.Paths.Ports.OperatorBootstrapHTTPS
-}
-
-func (c *Config) OperatorPublicHTTPSPort() int {
-	return c.Paths.Ports.OperatorPublicHTTPS
-}
-
-func (c *Config) OperatorMcpHttpPort() int {
-	return c.Paths.Ports.OperatorMcpHttp
+	return constants.Ports.OperatorHttps
 }
 
 func (c *Config) OperatorHTTPURL() string {
-	return fmt.Sprintf("https://localhost:%d", c.OperatorPublicHTTPSPort())
+	if c.TestPortOverride != 0 {
+		return fmt.Sprintf("https://localhost:%d", c.TestPortOverride)
+	}
+	return fmt.Sprintf("https://localhost:%d", c.OperatorHTTPSPort())
 }
 
-// OperatorPublicURL returns the Public TLS port (8443) for CSR-based enrollment
+// OperatorPublicURL returns the HTTPS port (constants.Ports.OperatorHttps) for mTLS API and public surface
 func (c *Config) OperatorPublicURL() string {
-	return fmt.Sprintf("https://localhost:%d", c.Paths.Ports.OperatorPublicHTTPS)
+	return fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 }
 
-// OperatorDiscoveryURL returns the bootstrap port (8441) for CA download over plain HTTP
+// OperatorDiscoveryURL returns the HTTP port (constants.Ports.OperatorHttp) for CA download and bootstrap routes
 func (c *Config) OperatorDiscoveryURL() string {
-	return fmt.Sprintf("http://localhost:%d", c.Paths.Ports.OperatorBootstrapHTTPS)
+	if c.TestPortOverride != 0 {
+		return fmt.Sprintf("http://localhost:%d", c.TestPortOverride)
+	}
+	return fmt.Sprintf("http://localhost:%d", constants.Ports.OperatorHttp)
 }
 
 // OperatorBootstrapURL is deprecated; use OperatorPublicURL for CSR-based enrollment

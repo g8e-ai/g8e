@@ -37,24 +37,22 @@ func (t *DBIndexTriageTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *DBIndexTriageTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"database_path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to the SQLite database file",
+func (t *DBIndexTriageTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"database_path": {
+				Type:        "string",
+				Description: "Path to the SQLite database file",
 			},
 		},
-		"required": []string{"database_path"},
+		Required: []string{"database_path"},
 	}
 }
 
 // Execute implements the tool logic.
 func (t *DBIndexTriageTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		DatabasePath string `json:"database_path"`
-	}
+	var req DBIndexTriageRequest
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
 	}
@@ -70,7 +68,7 @@ func (t *DBIndexTriageTool) Execute(ctx context.Context, args json.RawMessage) (
 	}
 	defer db.Close()
 
-	var indexes []map[string]interface{}
+	var indexes []IndexInfo
 
 	indexList, err := db.Query("SELECT name, tbl_name, sql FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%'")
 	if err != nil {
@@ -79,24 +77,28 @@ func (t *DBIndexTriageTool) Execute(ctx context.Context, args json.RawMessage) (
 	defer indexList.Close()
 
 	for indexList.Next() {
+		if ctx.Err() != nil {
+			return CallToolResult{}, ctx.Err()
+		}
+
 		var name, table, sql string
 		if err := indexList.Scan(&name, &table, &sql); err != nil {
-			continue
+			return CallToolResult{}, fmt.Errorf("failed to scan index: %w", err)
 		}
 
 		unique := strings.Contains(strings.ToUpper(sql), "UNIQUE")
 
-		indexes = append(indexes, map[string]interface{}{
-			"name":   name,
-			"table":  table,
-			"unique": unique,
-			"used":   true,
+		indexes = append(indexes, IndexInfo{
+			Name:   name,
+			Table:  table,
+			Unique: unique,
+			Used:   true,
 		})
 	}
 
-	result := map[string]interface{}{
-		"indexes":       indexes,
-		"fragmentation": 0.0,
+	result := DBIndexTriageResult{
+		Indexes:       indexes,
+		Fragmentation: 0.0,
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {

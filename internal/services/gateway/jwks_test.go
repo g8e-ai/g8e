@@ -21,10 +21,8 @@ import (
 )
 
 func TestNewJWKSProvider(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Creates provider with valid URL", func(t *testing.T) {
-		t.Parallel()
 		provider := NewJWKSProvider("https://example.com/.well-known/jwks.json")
 
 		assert.NotNil(t, provider)
@@ -35,21 +33,18 @@ func TestNewJWKSProvider(t *testing.T) {
 	})
 
 	t.Run("HTTP client has timeout configured", func(t *testing.T) {
-		t.Parallel()
 		provider := NewJWKSProvider("https://example.com/.well-known/jwks.json")
 
 		assert.Equal(t, 10*time.Second, provider.httpClient.Timeout)
 	})
 
 	t.Run("Keys map is initialized empty", func(t *testing.T) {
-		t.Parallel()
 		provider := NewJWKSProvider("https://example.com/.well-known/jwks.json")
 
 		assert.Empty(t, provider.keys)
 	})
 
 	t.Run("LastFetch is zero time initially", func(t *testing.T) {
-		t.Parallel()
 		provider := NewJWKSProvider("https://example.com/.well-known/jwks.json")
 
 		assert.True(t, provider.lastFetch.IsZero())

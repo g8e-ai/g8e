@@ -1,6 +1,77 @@
 {
   "agents": {
-    "AgentNameDash": "dash",
-    "AgentNameSage": "sage"
+    "AgentNameDash": {
+      "_go_const": "AgentNameDash",
+      "_python_const": "DASH",
+      "value": "dash"
+    },
+    "AgentNameSage": {
+      "_go_const": "AgentNameSage",
+      "_python_const": "SAGE",
+      "value": "sage"
+    }
+  },
+  "triage_complexity": {
+    "simple": {
+      "_go_const": "TriageComplexitySimple",
+      "_python_const": "SIMPLE",
+      "value": "simple"
+    },
+    "complex": {
+      "_go_const": "TriageComplexityComplex",
+      "_python_const": "COMPLEX",
+      "value": "complex"
+    }
+  },
+  "triage_confidence": {
+    "high": {
+      "_go_const": "TriageConfidenceHigh",
+      "_python_const": "HIGH",
+      "value": "high"
+    },
+    "low": {
+      "_go_const": "TriageConfidenceLow",
+      "_python_const": "LOW",
+      "value": "low"
+    }
+  },
+  "triage_intent": {
+    "information": {
+      "_go_const": "TriageIntentInformation",
+      "_python_const": "INFORMATION",
+      "value": "information"
+    },
+    "action": {
+      "_go_const": "TriageIntentAction",
+      "_python_const": "ACTION",
+      "value": "action"
+    },
+    "unknown": {
+      "_go_const": "TriageIntentUnknown",
+      "_python_const": "UNKNOWN",
+      "value": "unknown"
+    }
+  },
+  "triage_posture": {
+    "normal": {
+      "_go_const": "TriagePostureNormal",
+      "_python_const": "NORMAL",
+      "value": "normal"
+    },
+    "escalated": {
+      "_go_const": "TriagePostureEscalated",
+      "_python_const": "ESCALATED",
+      "value": "escalated"
+    },
+    "adversarial": {
+      "_go_const": "TriagePostureAdversarial",
+      "_python_const": "ADVERSARIAL",
+      "value": "adversarial"
+    },
+    "confused": {
+      "_go_const": "TriagePostureConfused",
+      "_python_const": "CONFUSED",
+      "value": "confused"
+    }
   }
 }

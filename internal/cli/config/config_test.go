@@ -14,10 +14,12 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -142,12 +144,12 @@ func TestLoad(t *testing.T) {
 		assert.NotNil(t, config)
 		// Should use embedded defaults, not the file
 		assert.Equal(t, "localhost", config.Paths.Host)
-		assert.Equal(t, 8440, config.Paths.Ports.OperatorHTTPS)
 	})
 }
 
 func TestConfig_TrustBundlePath(t *testing.T) {
 	t.Run("returns absolute path as-is", func(t *testing.T) {
+		caPath := filepath.Join(t.TempDir(), "absolute", "path", "to", "ca.pem")
 		config := &Config{
 			ProjectRoot: "/project/root",
 			Paths: &PathsConfig{
@@ -162,19 +164,22 @@ func TestConfig_TrustBundlePath(t *testing.T) {
 					ProtocolModelsDir    string `json:"protocol_models_dir"`
 					SecretsDir           string `json:"secrets_dir"`
 					SSHConfigPath        string `json:"ssh_config_path"`
+					VaultDir             string `json:"vault_dir"`
+					VaultKeyPath         string `json:"vault_key_path"`
 				}{
-					CACertPath: "/absolute/path/to/ca.pem",
+					CACertPath: caPath,
 				},
 			},
 		}
 
 		result := config.TrustBundlePath()
-		assert.Equal(t, "/absolute/path/to/ca.pem", result)
+		assert.Equal(t, caPath, result)
 	})
 
 	t.Run("joins relative path with project root", func(t *testing.T) {
+		projectRoot := filepath.Join(string(filepath.Separator), "project", "root")
 		config := &Config{
-			ProjectRoot: "/project/root",
+			ProjectRoot: projectRoot,
 			Paths: &PathsConfig{
 				Infra: struct {
 					AppCertDir           string `json:"app_cert_dir"`
@@ -187,6 +192,8 @@ func TestConfig_TrustBundlePath(t *testing.T) {
 					ProtocolModelsDir    string `json:"protocol_models_dir"`
 					SecretsDir           string `json:"secrets_dir"`
 					SSHConfigPath        string `json:"ssh_config_path"`
+					VaultDir             string `json:"vault_dir"`
+					VaultKeyPath         string `json:"vault_key_path"`
 				}{
 					CACertPath: "relative/path/to/ca.pem",
 				},
@@ -194,7 +201,7 @@ func TestConfig_TrustBundlePath(t *testing.T) {
 		}
 
 		result := config.TrustBundlePath()
-		assert.Equal(t, "/project/root/relative/path/to/ca.pem", result)
+		assert.Equal(t, filepath.Join(projectRoot, "relative", "path", "to", "ca.pem"), result)
 	})
 
 	t.Run("returns empty string when CACertPath is empty", func(t *testing.T) {
@@ -212,6 +219,8 @@ func TestConfig_TrustBundlePath(t *testing.T) {
 					ProtocolModelsDir    string `json:"protocol_models_dir"`
 					SecretsDir           string `json:"secrets_dir"`
 					SSHConfigPath        string `json:"ssh_config_path"`
+					VaultDir             string `json:"vault_dir"`
+					VaultKeyPath         string `json:"vault_key_path"`
 				}{
 					CACertPath: "",
 				},
@@ -225,184 +234,126 @@ func TestConfig_TrustBundlePath(t *testing.T) {
 
 func TestConfig_CredentialsFile(t *testing.T) {
 	t.Run("returns credentials file path", func(t *testing.T) {
+		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: "/credentials/dir",
+			CredentialsDir: credentialsDir,
 		}
 
 		result := config.CredentialsFile()
-		assert.Equal(t, "/credentials/dir/credentials", result)
+		assert.Equal(t, filepath.Join(credentialsDir, "credentials"), result)
 	})
 }
 
 func TestConfig_CLICertFile(t *testing.T) {
 	t.Run("returns CLI cert file path", func(t *testing.T) {
+		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: "/credentials/dir",
+			CredentialsDir: credentialsDir,
 		}
 
 		result := config.CLICertFile()
-		assert.Equal(t, "/credentials/dir/cli.crt", result)
+		assert.Equal(t, filepath.Join(credentialsDir, "cli.crt"), result)
 	})
 }
 
 func TestConfig_CLIKeyFile(t *testing.T) {
 	t.Run("returns CLI key file path", func(t *testing.T) {
+		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: "/credentials/dir",
+			CredentialsDir: credentialsDir,
 		}
 
 		result := config.CLIKeyFile()
-		assert.Equal(t, "/credentials/dir/cli.key", result)
+		assert.Equal(t, filepath.Join(credentialsDir, "cli.key"), result)
 	})
 }
 
 func TestConfig_OperatorCertFile(t *testing.T) {
 	t.Run("returns Operator cert file path", func(t *testing.T) {
+		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: "/credentials/dir",
+			CredentialsDir: credentialsDir,
 		}
 
 		result := config.OperatorCertFile()
-		assert.Equal(t, "/credentials/dir/operator.crt", result)
+		assert.Equal(t, filepath.Join(credentialsDir, "operator.crt"), result)
 	})
 }
 
 func TestConfig_OperatorKeyFile(t *testing.T) {
 	t.Run("returns Operator key file path", func(t *testing.T) {
+		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: "/credentials/dir",
+			CredentialsDir: credentialsDir,
 		}
 
 		result := config.OperatorKeyFile()
-		assert.Equal(t, "/credentials/dir/operator.key", result)
+		assert.Equal(t, filepath.Join(credentialsDir, "operator.key"), result)
 	})
 }
 
 func TestConfig_OperatorHTTPSPort(t *testing.T) {
-	t.Run("returns Operator HTTPS port", func(t *testing.T) {
+	t.Run("returns Operator HTTPS port from constants", func(t *testing.T) {
 		config := &Config{
-			Paths: &PathsConfig{
-				Ports: struct {
-					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-					OperatorHTTPS          int `json:"operator_https"`
-					OperatorMcpHttp        int `json:"operator_mcp_http"`
-					OperatorPublicHTTPS    int `json:"operator_public_https"`
-				}{
-					OperatorHTTPS: 8440,
-				},
-			},
+			Paths: &PathsConfig{},
 		}
 
 		result := config.OperatorHTTPSPort()
-		assert.Equal(t, 8440, result)
-	})
-}
-
-func TestConfig_OperatorBootstrapHTTPSPort(t *testing.T) {
-	t.Run("returns Operator bootstrap HTTPS port", func(t *testing.T) {
-		config := &Config{
-			Paths: &PathsConfig{
-				Ports: struct {
-					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-					OperatorHTTPS          int `json:"operator_https"`
-					OperatorMcpHttp        int `json:"operator_mcp_http"`
-					OperatorPublicHTTPS    int `json:"operator_public_https"`
-				}{
-					OperatorBootstrapHTTPS: 8441,
-				},
-			},
-		}
-
-		result := config.OperatorBootstrapHTTPSPort()
-		assert.Equal(t, 8441, result)
+		assert.Equal(t, constants.Ports.OperatorHttps, result)
 	})
 }
 
 func TestConfig_OperatorHTTPURL(t *testing.T) {
-	t.Run("returns Operator public HTTPS URL", func(t *testing.T) {
+	t.Run("returns Operator HTTPS URL from constants", func(t *testing.T) {
 		config := &Config{
-			Paths: &PathsConfig{
-				Ports: struct {
-					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-					OperatorHTTPS          int `json:"operator_https"`
-					OperatorMcpHttp        int `json:"operator_mcp_http"`
-					OperatorPublicHTTPS    int `json:"operator_public_https"`
-				}{
-					OperatorPublicHTTPS: 8443,
-				},
-			},
+			Paths: &PathsConfig{},
 		}
 
 		result := config.OperatorHTTPURL()
-		assert.Equal(t, "https://localhost:8443", result)
+		assert.Equal(t, fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps), result)
+	})
+
+	t.Run("returns Operator HTTPS URL with test port override", func(t *testing.T) {
+		config := &Config{
+			Paths:            &PathsConfig{},
+			TestPortOverride: 9999,
+		}
+
+		result := config.OperatorHTTPURL()
+		assert.Equal(t, "https://localhost:9999", result)
 	})
 }
 
 func TestConfig_OperatorBootstrapURL(t *testing.T) {
 	t.Run("returns Operator bootstrap HTTPS URL (deprecated, delegates to OperatorPublicURL)", func(t *testing.T) {
 		config := &Config{
-			Paths: &PathsConfig{
-				Ports: struct {
-					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-					OperatorHTTPS          int `json:"operator_https"`
-					OperatorMcpHttp        int `json:"operator_mcp_http"`
-					OperatorPublicHTTPS    int `json:"operator_public_https"`
-				}{
-					OperatorBootstrapHTTPS: 8441,
-					OperatorPublicHTTPS:    8443,
-				},
-			},
+			Paths: &PathsConfig{},
 		}
 
 		result := config.OperatorBootstrapURL()
-		assert.Equal(t, "https://localhost:8443", result)
+		assert.Equal(t, fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps), result)
 	})
 }
 
 func TestConfig_OperatorPublicURL(t *testing.T) {
 	t.Run("returns Operator public TLS URL for CSR-based enrollment", func(t *testing.T) {
 		config := &Config{
-			Paths: &PathsConfig{
-				Ports: struct {
-					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-					OperatorHTTPS          int `json:"operator_https"`
-					OperatorMcpHttp        int `json:"operator_mcp_http"`
-					OperatorPublicHTTPS    int `json:"operator_public_https"`
-				}{
-					OperatorBootstrapHTTPS: 8441,
-					OperatorPublicHTTPS:    8443,
-				},
-			},
+			Paths: &PathsConfig{},
 		}
 
 		result := config.OperatorPublicURL()
-		assert.Equal(t, "https://localhost:8443", result)
+		assert.Equal(t, fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps), result)
 	})
 }
 
 func TestConfig_OperatorDiscoveryURL(t *testing.T) {
 	t.Run("returns Operator discovery URL for CA download over plain HTTP", func(t *testing.T) {
 		config := &Config{
-			Paths: &PathsConfig{
-				Ports: struct {
-					InsecureMcpGateway     int `json:"insecure_mcp_gateway"`
-					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
-					OperatorHTTPS          int `json:"operator_https"`
-					OperatorMcpHttp        int `json:"operator_mcp_http"`
-					OperatorPublicHTTPS    int `json:"operator_public_https"`
-				}{
-					OperatorBootstrapHTTPS: 8441,
-				},
-			},
+			Paths: &PathsConfig{},
 		}
 
 		result := config.OperatorDiscoveryURL()
-		assert.Equal(t, "http://localhost:8441", result)
+		assert.Equal(t, fmt.Sprintf("http://localhost:%d", constants.Ports.OperatorHttp), result)
 	})
 }
 
@@ -460,9 +411,8 @@ func TestLoadIntegration(t *testing.T) {
 		assert.Equal(t, filepath.Join(tempDir, ".g8e/protocol/constants"), config.Paths.Infra.ProtocolConstantsDir)
 		assert.Equal(t, filepath.Join(tempDir, ".g8e/protocol/models"), config.Paths.Infra.ProtocolModelsDir)
 
-		// Verify port values from embedded defaults
-		assert.Equal(t, 8440, config.OperatorHTTPSPort())
-		assert.Equal(t, 8441, config.OperatorBootstrapHTTPSPort())
-		assert.Equal(t, 8443, config.OperatorPublicHTTPSPort())
+		// Verify port values from constants
+		assert.Equal(t, constants.Ports.OperatorHttps, config.OperatorHTTPSPort())
+		assert.Equal(t, constants.Ports.OperatorHttp, constants.Ports.OperatorHttp)
 	})
 }

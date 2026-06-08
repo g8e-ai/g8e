@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
@@ -9,6 +10,13 @@ import (
 	"net/http"
 	"sync"
 	"time"
+)
+
+const (
+	jwksHTTPTimeout     = 10 * time.Second
+	jwksCacheDuration   = 15 * time.Minute
+	jwksKeyTypeRSA      = "RSA"
+	jwksKeyUseSignature = "sig"
 )
 
 type JWKS struct {
@@ -35,36 +43,36 @@ func NewJWKSProvider(url string) *JWKSProvider {
 	return &JWKSProvider{
 		url: url,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: jwksHTTPTimeout,
 		},
 		keys: make(map[string]*rsa.PublicKey),
 	}
 }
 
-func (p *JWKSProvider) fetchKeys() error {
-	req, err := http.NewRequest(http.MethodGet, p.url, nil)
+func (p *JWKSProvider) fetchKeys(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.url, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("jwks: create request: %w", err)
 	}
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("jwks: fetch keys: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code fetching JWKS: %d", resp.StatusCode)
+		return fmt.Errorf("jwks: unexpected status code: %d", resp.StatusCode)
 	}
 
 	var jwks JWKS
 	if err := json.NewDecoder(resp.Body).Decode(&jwks); err != nil {
-		return err
+		return fmt.Errorf("jwks: decode response: %w", err)
 	}
 
 	newKeys := make(map[string]*rsa.PublicKey)
 	for _, key := range jwks.Keys {
-		if key.Kty != "RSA" || key.Use != "sig" {
+		if key.Kty != jwksKeyTypeRSA || key.Use != jwksKeyUseSignature {
 			continue
 		}
 
@@ -98,23 +106,18 @@ func (p *JWKSProvider) fetchKeys() error {
 	return nil
 }
 
-func (p *JWKSProvider) GetKey(kid string) (*rsa.PublicKey, error) {
+func (p *JWKSProvider) GetKey(ctx context.Context, kid string) (*rsa.PublicKey, error) {
 	p.mu.RLock()
 	key, ok := p.keys[kid]
 	lastFetch := p.lastFetch
 	p.mu.RUnlock()
 
-	if ok && time.Since(lastFetch) < 15*time.Minute {
+	if ok && time.Since(lastFetch) < jwksCacheDuration {
 		return key, nil
 	}
 
-	// Fetch keys if missing or cache expired
-	if err := p.fetchKeys(); err != nil {
-		// If fetch fails but we have an old key, return it
-		if ok {
-			return key, nil
-		}
-		return nil, fmt.Errorf("failed to fetch JWKS: %w", err)
+	if err := p.fetchKeys(ctx); err != nil {
+		return nil, fmt.Errorf("jwks: fetch keys: %w", err)
 	}
 
 	p.mu.RLock()
@@ -122,7 +125,7 @@ func (p *JWKSProvider) GetKey(kid string) (*rsa.PublicKey, error) {
 	p.mu.RUnlock()
 
 	if !ok {
-		return nil, fmt.Errorf("key %s not found in JWKS", kid)
+		return nil, fmt.Errorf("jwks: key not found: %s", kid)
 	}
 
 	return key, nil

@@ -73,7 +73,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 	// Validate and resolve path (security check)
 	absPath, err := security.ValidatePath(path, s.workDir)
 	if err != nil {
-		return s.failResult(result, "validation_error", fmt.Sprintf("invalid path: %v", err))
+		return s.failResult(result, "validation_error", fmt.Errorf("invalid path: %w", err).Error())
 	}
 
 	result.Path = absPath
@@ -81,7 +81,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 	// Compile regex
 	re, err := regexp.Compile(req.Pattern)
 	if err != nil {
-		return s.failResult(result, "invalid_pattern", fmt.Sprintf("invalid regex pattern: %v", err))
+		return s.failResult(result, "invalid_pattern", fmt.Errorf("invalid regex pattern: %w", err).Error())
 	}
 
 	// Prepare includes filters
@@ -110,6 +110,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 
 	err = filepath.WalkDir(absPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
+			s.logger.Debug("Skipping inaccessible path during walk", "path", path, "error", err)
 			return nil // Skip files we can't access
 		}
 
@@ -125,6 +126,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 			// Resolve symlink target
 			target, err := filepath.EvalSymlinks(path)
 			if err != nil {
+				s.logger.Debug("Skipping symlink that cannot be resolved", "symlink", path, "error", err)
 				// Skip symlinks we can't resolve
 				return nil
 			}
@@ -132,6 +134,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 			// Check if resolved target is within the base directory
 			rel, err := filepath.Rel(absPath, target)
 			if err != nil {
+				s.logger.Debug("Skipping symlink with unresolvable relative path", "symlink", path, "target", target, "error", err)
 				// Skip symlinks we can't resolve relative path
 				return nil
 			}
@@ -172,6 +175,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 		// Search in file
 		fileMatches, err := s.searchInFile(path, re, maxMatches-len(matches))
 		if err != nil {
+			s.logger.Debug("Skipping file that cannot be read", "path", path, "error", err)
 			return nil // Skip files we can't read
 		}
 
@@ -186,7 +190,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 	})
 
 	if err != nil && err != io.EOF {
-		return s.failResult(result, "grep_error", fmt.Sprintf("failed to perform grep: %v", err))
+		return s.failResult(result, "grep_error", fmt.Errorf("failed to perform grep: %w", err).Error())
 	}
 
 	result.Matches = matches
@@ -210,7 +214,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 func (s *FsGrepService) searchInFile(path string, re *regexp.Regexp, limit int) ([]models.FsGrepMatch, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("searchInFile: failed to open file %s: %w", path, err)
 	}
 	defer file.Close()
 

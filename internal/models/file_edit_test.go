@@ -14,6 +14,7 @@
 package models
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -47,12 +48,13 @@ func TestFileEditRequest(t *testing.T) {
 		content := "test content"
 		taskID := "task-123"
 
+		tmpDir := t.TempDir()
 		req := &FileEditRequest{
 			ExecutionID:     "req-123",
 			CaseID:          "case-456",
 			TaskID:          &taskID,
 			Operation:       constants.FileOperationWrite,
-			FilePath:        "/tmp/test.txt",
+			FilePath:        filepath.Join(tmpDir, "test.txt"),
 			Content:         &content,
 			RequestedBy:     "user@example.com",
 			Justification:   "testing",
@@ -62,7 +64,7 @@ func TestFileEditRequest(t *testing.T) {
 
 		assert.Equal(t, "req-123", req.ExecutionID)
 		assert.Equal(t, constants.FileOperationWrite, req.Operation)
-		assert.Equal(t, "/tmp/test.txt", req.FilePath)
+		assert.Equal(t, filepath.Join(tmpDir, "test.txt"), req.FilePath)
 		assert.Equal(t, "test content", *req.Content)
 		assert.True(t, req.CreateBackup)
 		assert.True(t, req.CreateIfMissing)
@@ -72,11 +74,12 @@ func TestFileEditRequest(t *testing.T) {
 		oldContent := "old"
 		newContent := "new"
 
+		tmpDir := t.TempDir()
 		req := &FileEditRequest{
 			ExecutionID: "req-123",
 			CaseID:      "case-456",
 			Operation:   constants.FileOperationReplace,
-			FilePath:    "/tmp/test.txt",
+			FilePath:    filepath.Join(tmpDir, "test.txt"),
 			OldContent:  &oldContent,
 			NewContent:  &newContent,
 		}
@@ -90,11 +93,12 @@ func TestFileEditRequest(t *testing.T) {
 		insertContent := "inserted text"
 		insertPos := 10
 
+		tmpDir := t.TempDir()
 		req := &FileEditRequest{
 			ExecutionID:    "req-123",
 			CaseID:         "case-456",
 			Operation:      constants.FileOperationInsert,
-			FilePath:       "/tmp/test.txt",
+			FilePath:       filepath.Join(tmpDir, "test.txt"),
 			InsertContent:  &insertContent,
 			InsertPosition: &insertPos,
 		}
@@ -108,11 +112,12 @@ func TestFileEditRequest(t *testing.T) {
 		startLine := 5
 		endLine := 10
 
+		tmpDir := t.TempDir()
 		req := &FileEditRequest{
 			ExecutionID: "req-123",
 			CaseID:      "case-456",
 			Operation:   constants.FileOperationDelete,
-			FilePath:    "/tmp/test.txt",
+			FilePath:    filepath.Join(tmpDir, "test.txt"),
 			StartLine:   &startLine,
 			EndLine:     &endLine,
 		}
@@ -125,8 +130,9 @@ func TestFileEditRequest(t *testing.T) {
 
 func TestFileEditResult(t *testing.T) {
 	t.Run("creates successful result", func(t *testing.T) {
+		tmpDir := t.TempDir()
 		taskID := "task-123"
-		backupPath := "/tmp/test.txt.bak"
+		backupPath := filepath.Join(tmpDir, "test.txt.bak")
 		bytesWritten := int64(100)
 		linesChanged := 10
 
@@ -135,7 +141,7 @@ func TestFileEditResult(t *testing.T) {
 			CaseID:       "case-456",
 			TaskID:       &taskID,
 			Operation:    constants.FileOperationWrite,
-			FilePath:     "/tmp/test.txt",
+			FilePath:     filepath.Join(tmpDir, "test.txt"),
 			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 			BackupPath:   &backupPath,
 			BytesWritten: &bytesWritten,
@@ -144,7 +150,7 @@ func TestFileEditResult(t *testing.T) {
 
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Equal(t, constants.FileOperationWrite, result.Operation)
-		assert.Equal(t, "/tmp/test.txt.bak", *result.BackupPath)
+		assert.Equal(t, filepath.Join(tmpDir, "test.txt.bak"), *result.BackupPath)
 		assert.Equal(t, int64(100), *result.BytesWritten)
 		assert.Equal(t, 10, *result.LinesChanged)
 	})
@@ -153,11 +159,12 @@ func TestFileEditResult(t *testing.T) {
 		errorMsg := "file not found"
 		errorType := "not_found"
 
+		tmpDir := t.TempDir()
 		result := &FileEditResult{
 			ExecutionID:  "req-123",
 			CaseID:       "case-456",
 			Operation:    constants.FileOperationWrite,
-			FilePath:     "/tmp/nonexistent.txt",
+			FilePath:     filepath.Join(tmpDir, "nonexistent.txt"),
 			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			ErrorMessage: &errorMsg,
 			ErrorType:    &errorType,

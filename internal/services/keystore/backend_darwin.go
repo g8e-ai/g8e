@@ -18,6 +18,7 @@ package keystore
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -29,7 +30,7 @@ type keychainBackend struct{}
 func newKeychainBackend() (Backend, error) {
 	// Check if security command is available
 	if _, err := exec.LookPath("security"); err != nil {
-		return nil, fmt.Errorf("security command not found: %w", err)
+		return nil, fmt.Errorf("keychain: security command not found: %w", err)
 	}
 	return &keychainBackend{}, nil
 }
@@ -51,16 +52,20 @@ func (b *keychainBackend) RetrieveMasterKey() ([]byte, error) {
 	cmd := exec.Command("security", args...)
 	output, err := cmd.Output()
 	if err != nil {
-		if strings.Contains(string(err.(*exec.ExitError).Stderr), "could not be found") {
-			return nil, ErrKeyNotFound
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			// macOS security command returns exit code 44 when item not found
+			if exitErr.ExitCode() == 44 {
+				return nil, ErrKeyNotFound
+			}
 		}
-		return nil, fmt.Errorf("security find-generic-password: %w", err)
+		return nil, fmt.Errorf("keychain: retrieve master key: %w", err)
 	}
 
 	// Keychain returns base64-encoded value
 	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(output)))
 	if err != nil {
-		return nil, fmt.Errorf("decode base64 key: %w", err)
+		return nil, fmt.Errorf("keychain: decode base64 key: %w", err)
 	}
 
 	if len(key) == 0 {
@@ -84,7 +89,7 @@ func (b *keychainBackend) StoreMasterKey(key []byte) error {
 
 	cmd := exec.Command("security", args...)
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("security add-generic-password: %w", err)
+		return fmt.Errorf("keychain: store master key: %w", err)
 	}
 
 	return nil
@@ -104,11 +109,14 @@ func (b *keychainBackend) DeleteMasterKey() error {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		// Don't error if key doesn't exist (already deleted)
-		if strings.Contains(stderr.String(), "could not be found") {
-			return nil
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			// macOS security command returns exit code 44 when item not found
+			if exitErr.ExitCode() == 44 {
+				return nil
+			}
 		}
-		return fmt.Errorf("security delete-generic-password: %w", err)
+		return fmt.Errorf("keychain: delete master key: %w", err)
 	}
 
 	return nil

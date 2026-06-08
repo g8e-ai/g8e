@@ -146,7 +146,7 @@ If protocol changes are included in this release, update the protocol version:
 
 **Python Protocol:**
 - Update `protocol/python/pyproject.toml` version (line 20: `version = "X.Y.Z"`)
-- The package name is `g8e-protocol` (not `g8e_protocol`)
+- The package name is `g8e` (not `g8e_protocol`)
 
 **Note:** Protocol packages are released via GitHub tags with the format `protocol/vX.Y.Z`. These can be released independently of platform releases.
 

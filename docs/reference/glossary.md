@@ -106,8 +106,9 @@ The second layer of g8e governance (Consensus). A multi-agent consensus system w
 ## L3 Notary (L3Notary)
 
 The third layer of g8e governance (Authorization), focusing on human oversight. Every state-changing mutation requires explicit human authorization. This is implemented via:
-- **WebAuthn (Passkey)**: FIDO2-compliant cryptographic proof for web-based clients.
-- **mTLS Signature**: A cryptographic signature over the transaction hash using the CLI/operator private key (mTLS certificate fingerprint binding).
+- **WebAuthn (Passkey)**: FIDO2-compliant cryptographic proof for web sessions only.
+- **mTLS Signature**: A cryptographic signature over the transaction hash using the CLI private key (mTLS certificate fingerprint binding) for CLI sessions.
+- **Operator mTLS**: mTLS certificate fingerprint validation for operator sessions (passkey auth is not available for operators).
 - **CLI Approval**: In outbound mode, mutations requiring L3 are suspended and must be approved via CLI command with cryptographic signature verification.
 The L4 Warden verifies these proofs before allowing execution to proceed. L3 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
 
@@ -191,11 +192,11 @@ The mechanism by which L2 Consensus agents earn or lose standing based on the qu
 
 ## Scrubbed Vault
 
-The local SQLite database on the g8e Operator managed by the **Sovereignty Boundary Plane**. It stores command outputs where sensitive data (credentials, PII, network identifiers) has been replaced with safe placeholders like `{{UEI_N}}`. This ensures that raw sensitive data never leaves the sovereign host.
+The local SQLite database on the g8e Operator managed by the **Sovereign Execution Boundary**. It stores command outputs where sensitive data (credentials, PII, network identifiers) has been replaced with safe placeholders like `{{UEI_N}}`. This ensures that raw sensitive data never leaves the sovereign host.
 
 ---
 
-## Sovereignty Boundary Plane
+## Sovereign Execution Boundary
 
 The data sovereignty and scrubbing system running within the g8e Operator (PEP), implemented as the `SovereigntyService`. It provides:
 - **Egress Scrubbing**: Removes sensitive data (PII, credentials) from command output before transmission to the cloud.

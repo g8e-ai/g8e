@@ -14,7 +14,7 @@
 
 """Example usage of g8e-protocol constants."""
 
-from g8e_protocol.constants import (
+from g8e.constants import (
     EVENTS,
     STATUS,
     COLLECTIONS,

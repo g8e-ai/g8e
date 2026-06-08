@@ -16,6 +16,7 @@ package platform
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,7 +34,11 @@ func TestNetworkIdentityArgs_WritesFileWith0600Permissions(t *testing.T) {
 	identityFile := filepath.Join(pm.runtimeDir, "network-identity.json")
 	info, err := os.Stat(identityFile)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
+	// Verify file permissions on Unix systems
+	// Windows uses ACLs and doesn't support Unix-style permissions
+	if runtime.GOOS != "windows" {
+		assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
+	}
 }
 
 func TestNetworkIdentityArgs_NoDataReturnsNil(t *testing.T) {

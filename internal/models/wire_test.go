@@ -53,17 +53,17 @@ func TestFsGrepMatch(t *testing.T) {
 func TestRuntimeConfig(t *testing.T) {
 	t.Run("creates valid runtime config", func(t *testing.T) {
 		config := &RuntimeConfig{
-			CloudMode:           true,
-			CloudProvider:       "aws",
-			LocalStorageEnabled: true,
-			NoGit:               false,
-			LogLevel:            "info",
-			HTTPPort:            constants.Ports.OperatorHttps,
+			CloudMode:             true,
+			CloudProvider:         "aws",
+			ExecutionVaultEnabled: true,
+			NoGit:                 false,
+			LogLevel:              "info",
+			HTTPPort:              constants.Ports.OperatorHttps,
 		}
 
 		assert.True(t, config.CloudMode)
 		assert.Equal(t, "aws", config.CloudProvider)
-		assert.True(t, config.LocalStorageEnabled)
+		assert.True(t, config.ExecutionVaultEnabled)
 		assert.False(t, config.NoGit)
 		assert.Equal(t, "info", config.LogLevel)
 		assert.Equal(t, constants.Ports.OperatorHttps, config.HTTPPort)
@@ -71,11 +71,11 @@ func TestRuntimeConfig(t *testing.T) {
 
 	t.Run("creates config for local mode", func(t *testing.T) {
 		config := &RuntimeConfig{
-			CloudMode:           false,
-			LocalStorageEnabled: true,
-			NoGit:               false,
-			LogLevel:            "debug",
-			HTTPPort:            constants.Ports.OperatorHttps,
+			CloudMode:             false,
+			ExecutionVaultEnabled: true,
+			NoGit:                 false,
+			LogLevel:              "debug",
+			HTTPPort:              constants.Ports.OperatorHttps,
 		}
 
 		assert.False(t, config.CloudMode)

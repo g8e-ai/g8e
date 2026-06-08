@@ -59,7 +59,8 @@ func TestNewPubSubCommandService(t *testing.T) {
 func TestNewPubSubCommandService_StartsWithoutTrustedSignersButRejectsL2(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
-	cfg.PKIDir = filepath.Join(t.TempDir(), "pki")
+	tmpDir := t.TempDir()
+	cfg.PKIDir = filepath.Join(tmpDir, "pki")
 	cfg.Gateway.Posture = config.PostureConsensus // Set Consensus posture to enforce L2
 	svc, err := NewPubSubCommandService(CommandServiceConfig{
 		Config:            cfg,
@@ -261,13 +262,13 @@ func TestPubSubCommandService_handleAppInvestigationCreatedSync(t *testing.T) {
 		}
 		_, err := f.Svc.handleAppInvestigationCreatedSync(context.Background(), msg)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "actuator or AuditStore not configured")
+		assert.Contains(t, err.Error(), "actuator or ConsoleAuditStore not configured")
 	})
 
-	t.Run("rejects when AuditStore not configured", func(t *testing.T) {
+	t.Run("rejects when ConsoleAuditStore not configured", func(t *testing.T) {
 		f := newPubsubFixture(t)
 		f.Svc.SetActuator(&governance.L5Actuator{})
-		f.Svc.Actuator().AuditStore = nil
+		f.Svc.Actuator().ConsoleAuditStore = nil
 		msg := &PubSubCommandMessage{
 			EventType: constants.EventAppInvestigationCreated,
 			ID:        "msg-1",
@@ -275,7 +276,7 @@ func TestPubSubCommandService_handleAppInvestigationCreatedSync(t *testing.T) {
 		}
 		_, err := f.Svc.handleAppInvestigationCreatedSync(context.Background(), msg)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "actuator or AuditStore not configured")
+		assert.Contains(t, err.Error(), "actuator or ConsoleAuditStore not configured")
 	})
 }
 

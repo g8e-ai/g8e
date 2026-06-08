@@ -1,7 +1,7 @@
 {
   "intents": {
-    "APIgatewayDiscovery": {
-      "_go_const": "IntentAPIgatewayDiscovery",
+    "ApigatewayDiscovery": {
+      "_go_const": "IntentApigatewayDiscovery",
       "value": "apigateway_discovery"
     },
     "AcmDiscovery": {

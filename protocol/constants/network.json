@@ -1,0 +1,8 @@
+{
+  "network": {
+    "DefaultEndpoint": {
+      "_go_const": "DefaultEndpoint",
+      "value": "localhost"
+    }
+  }
+}

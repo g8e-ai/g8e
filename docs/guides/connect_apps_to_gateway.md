@@ -73,7 +73,7 @@ The g8e Gateway exposes four logical protocol surfaces. Each surface serves a sp
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
 | **Public Port** | 8443 (TLS) | Web session | Browser login, WebAuthn challenge, PKI discovery, OOB approval UI |
-| **mTLS API + Pub/Sub** | 8440 (TLS) | mTLS + URI SAN | Governance envelopes, MCP/A2A APIs, document store, WebSocket pub/sub |
+| **mTLS API + Pub/Sub** | 8080 (TLS) | mTLS + URI SAN | Governance envelopes, MCP/A2A APIs, document store, WebSocket pub/sub |
 
 ### Port Multiplexing
 
@@ -154,7 +154,7 @@ All native tools include input validation to prevent SQL injection, SSRF attacks
 #### MCP Tool Invocation
 
 ```bash
-curl -X POST https://localhost:8440/api/v1/mcp/tools/call \
+curl -X POST https://localhost:8080/api/v1/mcp/tools/call \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -207,7 +207,7 @@ A2A is an HTTP/JSON protocol for agent skill invocation. The Gateway wraps A2A s
 #### A2A Skill Invocation
 
 ```bash
-curl -X POST https://localhost:8440/api/v1/a2a/call \
+curl -X POST https://localhost:8080/api/v1/a2a/call \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -233,7 +233,7 @@ For maximum control, applications can submit canonical JSON `GovernanceEnvelope`
 #### Envelope Submission
 
 ```bash
-curl -X POST https://localhost:8440/api/v1/governance/envelopes \
+curl -X POST https://localhost:8080/api/v1/governance/envelopes \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -251,7 +251,7 @@ The Gateway provides real-time pub/sub via WebSocket for streaming events and co
 #### WebSocket Connection
 
 ```bash
-wscat -c wss://localhost:8440/api/v1/pubsub/stream \
+wscat -c wss://localhost:8080/api/v1/pubsub/stream \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key
 ```
@@ -280,31 +280,31 @@ The Gateway provides a JSON document store with CRUD operations and query suppor
 
 ```bash
 # Get document
-curl https://localhost:8440/api/v1/data/cases/case-123 \
+curl https://localhost:8080/api/v1/data/cases/case-123 \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key
 
 # Set document
-curl -X PUT https://localhost:8440/api/v1/data/cases/case-123 \
+curl -X PUT https://localhost:8080/api/v1/data/cases/case-123 \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
   -d '{"status": "open", "priority": "high"}'
 
 # Update document (merge)
-curl -X PATCH https://localhost:8440/api/v1/data/cases/case-123 \
+curl -X PATCH https://localhost:8080/api/v1/data/cases/case-123 \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
   -d '{"priority": "critical"}'
 
 # Delete document
-curl -X DELETE https://localhost:8440/api/v1/data/cases/case-123 \
+curl -X DELETE https://localhost:8080/api/v1/data/cases/case-123 \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key
 
 # Query documents
-curl -X POST https://localhost:8440/api/v1/data/cases/_query \
+curl -X POST https://localhost:8080/api/v1/data/cases/_query \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -385,7 +385,7 @@ Generate an invitation for external IdP authentication:
 3. **Gateway validates**: Gateway checks JWT signature and verifies invitation exists for the `sub`
 4. **User provisioning**: If invitation exists, user is provisioned and bound to owner's organization
 5. **Invitation consumption**: Invitation is consumed after successful provisioning
-6. **Session issuance**: Gateway issues short-lived mTLS certificate (1-day TTL) and session (1-hour TTL)
+6. **Session issuance**: Gateway issues short-lived mTLS certificate (1-day TTL) and cli/web/operator session (1-hour TTL)
 7. **Session renewal**: Client must re-authenticate before expiry
 
 ---
@@ -397,7 +397,7 @@ Generate an invitation for external IdP authentication:
 Enroll a device using CSR-based enrollment with mTLS authentication. The user_id is extracted from the client certificate's SPIFFE URI SAN:
 
 ```bash
-curl -X POST https://localhost:8440/api/v1/pki/devices/enroll \
+curl -X POST https://localhost:8080/api/v1/pki/devices/enroll \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -418,7 +418,7 @@ curl -X POST https://localhost:8440/api/v1/pki/devices/enroll \
 Submit a CSR for low-level certificate issuance (for advanced use cases):
 
 ```bash
-curl -X POST https://localhost:8440/api/v1/pki/csr/sign \
+curl -X POST https://localhost:8080/api/v1/pki/csr/sign \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -470,7 +470,7 @@ curl -X POST https://localhost:8443/api/v1/approvals/{tx_hash} \
 ### Query Audit Receipts
 
 ```bash
-curl https://localhost:8440/api/v1/audit/receipts?operator_session_id=op-session-abc \
+curl https://localhost:8080/api/v1/audit/receipts?operator_session_id=op-session-abc \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key
 ```
@@ -478,7 +478,7 @@ curl https://localhost:8440/api/v1/audit/receipts?operator_session_id=op-session
 ### Export Audit Receipts
 
 ```bash
-curl https://localhost:8440/api/v1/audit/receipts/export?operator_session_id=op-session-abc \
+curl https://localhost:8080/api/v1/audit/receipts/export?operator_session_id=op-session-abc \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -o audit-export.json
@@ -556,7 +556,7 @@ Re-run login if certificate is missing or expired:
 Check Gateway is listening on the mTLS port:
 
 ```bash
-curl -k https://localhost:8440/api/v1/health
+curl -k https://localhost:8080/api/v1/health
 ```
 
 ### Circuit Breaker Active

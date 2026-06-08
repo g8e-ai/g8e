@@ -13,6 +13,11 @@
     "_description": "Platform-wide configuration document. Stored flat under a 'settings' key.",
 
     "settings": {
+      "actuator_key_id": {
+        "type": "string",
+        "required": true,
+        "description": "ED25519 public key identifier for the Actuator signing key. Computed as hex-encoded public key."
+      },
       "operator_session_id": {
         "type": "string",
         "required": false,

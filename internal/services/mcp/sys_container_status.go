@@ -20,7 +20,7 @@ import (
 	"os/exec"
 )
 
-// SysContainerStatusTool checks Docker/podman container health.
+// SysContainerStatusTool checks container health status (podman).
 type SysContainerStatusTool struct{}
 
 // Name returns the tool identifier.
@@ -30,25 +30,20 @@ func (t *SysContainerStatusTool) Name() string {
 
 // Description returns a human-readable description.
 func (t *SysContainerStatusTool) Description() string {
-	return "Checks Docker/podman container health status."
+	return "Checks container health status (podman)."
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *SysContainerStatusTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"container_name": map[string]interface{}{
-				"type":        "string",
-				"description": "Name or ID of the container",
-			},
-			"runtime": map[string]interface{}{
-				"type":        "string",
-				"description": "Container runtime (docker or podman, auto-detect if empty)",
-				"enum":        []string{"docker", "podman"},
+func (t *SysContainerStatusTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"container_name": {
+				Type:        "string",
+				Description: "Name or ID of the container to check",
 			},
 		},
-		"required": []string{"container_name"},
+		Required: []string{"container_name"},
 	}
 }
 
@@ -56,7 +51,6 @@ func (t *SysContainerStatusTool) InputSchema() map[string]interface{} {
 func (t *SysContainerStatusTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 	var req struct {
 		ContainerName string `json:"container_name"`
-		Runtime       string `json:"runtime,omitempty"`
 	}
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
@@ -66,20 +60,7 @@ func (t *SysContainerStatusTool) Execute(ctx context.Context, args json.RawMessa
 		return CallToolResult{}, fmt.Errorf("container_name required")
 	}
 
-	if err := validateContainerName(req.ContainerName); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid container name: %w", err)
-	}
-
-	if err := validateContainerRuntime(req.Runtime); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid container runtime: %w", err)
-	}
-
-	runtime := req.Runtime
-	if runtime == "" {
-		runtime = detectContainerRuntime()
-	}
-
-	result, err := getContainerStatus(req.ContainerName, runtime)
+	result, err := getContainerStatus(req.ContainerName)
 	if err != nil {
 		return CallToolResult{}, fmt.Errorf("failed to get container status: %w", err)
 	}
@@ -99,28 +80,14 @@ func (t *SysContainerStatusTool) Execute(ctx context.Context, args json.RawMessa
 	}, nil
 }
 
-func detectContainerRuntime() string {
-	if _, err := exec.LookPath("docker"); err == nil {
-		return "docker"
-	}
-	if _, err := exec.LookPath("podman"); err == nil {
-		return "podman"
-	}
-	return "docker"
-}
-
-func getContainerStatus(containerName, runtime string) (map[string]interface{}, error) {
-	format := "{{json .}}"
-	if runtime != "docker" {
-		format = "json"
-	}
-	cmd := exec.Command(runtime, "inspect", "--format", format, containerName)
-
+func getContainerStatus(containerName string) (map[string]interface{}, error) {
+	// containerName is passed as a separate argument to exec.Command to satisfy CodeQL command-injection rule.
+	// This prevents shell injection by avoiding shell interpretation.
+	cmd := exec.Command("podman", "inspect", containerName)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return map[string]interface{}{
 			"container_name": containerName,
-			"runtime":        runtime,
 			"error":          string(output),
 		}, nil
 	}
@@ -129,7 +96,6 @@ func getContainerStatus(containerName, runtime string) (map[string]interface{}, 
 	if err := json.Unmarshal(output, &inspectData); err != nil {
 		return map[string]interface{}{
 			"container_name": containerName,
-			"runtime":        runtime,
 			"error":          fmt.Sprintf("failed to parse inspect output: %v", err),
 		}, nil
 	}
@@ -137,41 +103,67 @@ func getContainerStatus(containerName, runtime string) (map[string]interface{}, 
 	if len(inspectData) == 0 {
 		return map[string]interface{}{
 			"container_name": containerName,
-			"runtime":        runtime,
 			"error":          "container not found",
 		}, nil
 	}
 
 	container := inspectData[0]
-	state, _ := container["State"].(map[string]interface{})
+	state := getNestedMap(container, "State")
 
 	result := map[string]interface{}{
 		"container_name": containerName,
-		"runtime":        runtime,
-		"status":         getNested(state, "Status"),
-		"running":        getNested(state, "Running") == true,
-		"paused":         getNested(state, "Paused") == true,
-		"restarting":     getNested(state, "Restarting") == true,
-		"health":         getNested(state, "Health", "Status"),
-		"started_at":     getNested(state, "StartedAt"),
-		"image":          getNested(container, "Config", "Image"),
+		"status":         getString(state, "Status"),
+		"running":        getBool(state, "Running"),
+		"paused":         getBool(state, "Paused"),
+		"restarting":     getBool(state, "Restarting"),
+		"pid":            getInt(state, "Pid"),
+		"started_at":     getString(state, "StartedAt"),
+		"finished_at":    getString(state, "FinishedAt"),
+		"exit_code":      getInt(state, "ExitCode"),
+		"image":          getString(container, "Image"),
+		"created":        getString(container, "Created"),
 	}
 
 	return result, nil
 }
 
-func getNested(m map[string]interface{}, keys ...string) interface{} {
-	current := m
-	for _, key := range keys {
-		if val, ok := current[key]; ok {
-			if next, ok := val.(map[string]interface{}); ok {
-				current = next
-			} else {
-				return val
-			}
-		} else {
-			return nil
+func getNestedMap(m map[string]interface{}, key string) map[string]interface{} {
+	if val, ok := m[key]; ok {
+		if nested, ok := val.(map[string]interface{}); ok {
+			return nested
 		}
 	}
-	return current
+	return make(map[string]interface{})
+}
+
+func getString(m map[string]interface{}, key string) string {
+	if val, ok := m[key]; ok {
+		if str, ok := val.(string); ok {
+			return str
+		}
+	}
+	return "unknown"
+}
+
+func getBool(m map[string]interface{}, key string) bool {
+	if val, ok := m[key]; ok {
+		if b, ok := val.(bool); ok {
+			return b
+		}
+	}
+	return false
+}
+
+func getInt(m map[string]interface{}, key string) int64 {
+	if val, ok := m[key]; ok {
+		switch v := val.(type) {
+		case float64:
+			return int64(v)
+		case int:
+			return int64(v)
+		case int64:
+			return v
+		}
+	}
+	return 0
 }

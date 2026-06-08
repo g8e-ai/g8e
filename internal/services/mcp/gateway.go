@@ -11,6 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package mcp provides Model Context Protocol (MCP) and Agent-to-Agent (A2A) services.
+//
+// This package contains GatewayService, which is a shared service used in both gateway mode
+// and outbound mode for MCP/A2A protocol translation and downstream dispatch. The service is
+// truly polymorphic - the same implementation is used in both modes.
+//
+// For more information on service modes, see docs/architecture/service_modes.md.
 package mcp
 
 import (
@@ -30,7 +37,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -48,14 +55,20 @@ type StateRootProvider interface {
 
 // SuspendedTransactionStore defines the interface for persistent storage of suspended transactions.
 type SuspendedTransactionStore interface {
-	StoreSuspendedTransaction(tx *models.SuspendedTransaction) error
-	GetSuspendedTransaction(txHash string) (*models.SuspendedTransaction, bool)
-	DeleteSuspendedTransaction(txHash string) error
+	StoreSuspendedTransaction(ctx context.Context, tx *models.SuspendedTransaction) error
+	GetSuspendedTransaction(ctx context.Context, txHash string) (*models.SuspendedTransaction, bool, error)
+	DeleteSuspendedTransaction(ctx context.Context, txHash string) error
 }
 
+// GatewayService handles MCP/A2A protocol translation and downstream dispatch.
+// This service is shared across both gateway mode and outbound mode - the same
+// implementation is used in both contexts (truly polymorphic).
+//
+// In gateway mode, it is created by GatewayModeService as field mcpGateway.
+// In outbound mode, it is used by PubSubCommandService as field mcpGateway.
 type GatewayService struct {
 	logger            *slog.Logger
-	responder         *responder.Responder
+	responder         *response.Writer
 	envProc           governance.EnvelopeProcessor
 	stateRootProvider StateRootProvider
 	signingKey        ed25519.PrivateKey
@@ -96,16 +109,21 @@ type AuditLogger interface {
 // Dependencies groups all dependencies for NewGatewayService to reduce constructor bloat.
 type Dependencies struct {
 	Logger          *slog.Logger
-	Responder       *responder.Responder
+	Responder       *response.Writer
 	SuspendedStore  SuspendedTransactionStore
 	MaxPayloadBytes int64
 }
 
-func NewGatewayService(deps Dependencies) *GatewayService {
+func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 	fieldPathRegistry, err := NewFieldPathRegistry(deps.Logger)
 	if err != nil {
 		deps.Logger.Error("Failed to initialize field path registry", "error", err)
 		// Continue without field path registry - read_field will be disabled
+	}
+
+	nativeToolHandler, err := NewNativeToolHandler()
+	if err != nil {
+		return nil, fmt.Errorf("initialize native tool handler: %w", err)
 	}
 
 	g := &GatewayService{
@@ -113,16 +131,16 @@ func NewGatewayService(deps Dependencies) *GatewayService {
 		responder:         deps.Responder,
 		suspendedStore:    deps.SuspendedStore,
 		fieldPathRegistry: fieldPathRegistry,
-		nativeToolHandler: NewNativeToolHandler(),
+		nativeToolHandler: nativeToolHandler,
 		maxFailures:       5,
 		cooldownDuration:  1 * time.Minute,
 		maxPayloadBytes:   deps.MaxPayloadBytes,
 	}
-	return g
+	return g, nil
 }
 
 // RunMaintenance periodically prunes expired suspended transactions.
-// Although the underlying store may perform its own cleanup (e.g., GatewayDBService
+// Although the underlying store may perform its own cleanup (e.g., CanonicalDBService
 // does this via RunMaintenance), the GatewayService provides this routine to
 // ensure memory and state consistency regardless of the store implementation.
 func (g *GatewayService) RunMaintenance(ctx context.Context) {
@@ -134,7 +152,7 @@ func (g *GatewayService) RunMaintenance(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// If the store is the GatewayDBService, it already prunes.
+			// If the store is the CanonicalDBService, it already prunes.
 			// If it's another implementation, we might need an explicit cleanup call.
 			// For now, we rely on the store's internal expiration logic during GET,
 			// but we can add an explicit DELETE call here if the interface is expanded.
@@ -246,7 +264,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
+				InputSchema: nt.InputSchema().ToMap(),
 			})
 		}
 		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -265,7 +283,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
+				InputSchema: nt.InputSchema().ToMap(),
 			})
 		}
 		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -311,7 +329,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
+				InputSchema: nt.InputSchema().ToMap(),
 			})
 		}
 		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -335,7 +353,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
+				InputSchema: nt.InputSchema().ToMap(),
 			})
 		}
 		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -358,7 +376,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
+				InputSchema: nt.InputSchema().ToMap(),
 			})
 		}
 		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -380,7 +398,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 				tools = append(tools, Tool{
 					Name:        nt.Name(),
 					Description: nt.Description(),
-					InputSchema: nt.InputSchema(),
+					InputSchema: nt.InputSchema().ToMap(),
 				})
 			}
 			g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -397,7 +415,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 				tools = append(tools, Tool{
 					Name:        nt.Name(),
 					Description: nt.Description(),
-					InputSchema: nt.InputSchema(),
+					InputSchema: nt.InputSchema().ToMap(),
 				})
 			}
 			g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -423,7 +441,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			downstreamResult.Tools = append(downstreamResult.Tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
+				InputSchema: nt.InputSchema().ToMap(),
 			})
 		}
 	}
@@ -628,7 +646,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 			operatorID := r.Header.Get(constants.HeaderOperatorID)
 			certFingerprint := extractCertFingerprint(r)
 
-			g.StoreSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
+			g.StoreSuspendedTransaction(ctx, hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
 
 			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 			return CallToolResult{
@@ -738,22 +756,25 @@ func (g *GatewayService) scanForForbiddenPatterns(value interface{}) error {
 
 	valueStr := fmt.Sprintf("%v", value)
 
-	// Forbidden patterns from L1 hard gates
-	forbiddenPatterns := []string{
-		"sudo",
-		"su ",
-		"rm -rf /",
-		"://",
-		"password",
-		"api_key",
-		"secret",
-		"token",
-		"private_key",
+	// Forbidden patterns from L1 hard gates with context describing the threat category
+	forbiddenPatterns := []struct {
+		pattern string
+		context string
+	}{
+		{"sudo", "privilege escalation"},
+		{"su ", "privilege escalation"},
+		{"rm -rf /", "destructive file operation"},
+		{"://", "external URL (potential exfiltration)"},
+		{"password", "credential leak"},
+		{"api_key", "credential leak"},
+		{"secret", "credential leak"},
+		{"token", "credential leak"},
+		{"private_key", "credential leak"},
 	}
 
-	for _, pattern := range forbiddenPatterns {
-		if strings.Contains(strings.ToLower(valueStr), pattern) {
-			return fmt.Errorf("forbidden pattern detected: %s", pattern)
+	for _, fp := range forbiddenPatterns {
+		if strings.Contains(strings.ToLower(valueStr), fp.pattern) {
+			return fmt.Errorf("L1 hard gate: forbidden pattern detected (%s): %s", fp.context, fp.pattern)
 		}
 	}
 
@@ -1041,7 +1062,7 @@ func (g *GatewayService) HandleToolsCallSSE(w http.ResponseWriter, r *http.Reque
 			operatorID := r.Header.Get(constants.HeaderOperatorID)
 			certFingerprint := extractCertFingerprint(r)
 
-			g.StoreSuspendedTransaction(hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
+			g.StoreSuspendedTransaction(r.Context(), hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
 
 			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 			g.responder.RPCResponse(w, req.ID, CallToolResult{
@@ -1218,7 +1239,7 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 			operatorID := r.Header.Get(constants.HeaderOperatorID)
 			certFingerprint := extractCertFingerprint(r)
 
-			g.StoreSuspendedTransaction(hash, envelopeBytes, req.SkillName, req.PayloadJSON, userID, operatorID, certFingerprint)
+			g.StoreSuspendedTransaction(ctx, hash, envelopeBytes, req.SkillName, req.PayloadJSON, userID, operatorID, certFingerprint)
 
 			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 			return A2ASuspensionResponse{
@@ -1251,37 +1272,37 @@ func (g *GatewayService) mapGatewayError(err error) (int, string) {
 		errors.Is(err, governance.ErrTransactionIDMissing),
 		errors.Is(err, governance.ErrPayloadMissing),
 		errors.Is(err, governance.ErrUnknownActionType):
-		return responder.ErrCodeInvalidEnvelope, msg
+		return constants.ErrCodeInvalidEnvelope, msg
 
 	case errors.Is(err, governance.ErrPayloadDecodeFailed):
-		return responder.ErrCodePayloadDecodeFailed, msg
+		return constants.ErrCodePayloadDecodeFailed, msg
 
 	case errors.Is(err, governance.ErrTransactionHashMissing),
 		errors.Is(err, governance.ErrTransactionHashMismatch):
-		return responder.ErrCodeHashMismatch, msg
+		return constants.ErrCodeHashMismatch, msg
 
 	case errors.Is(err, governance.ErrTransactionExpired):
-		return responder.ErrCodeExpired, msg
+		return constants.ErrCodeExpired, msg
 
 	case errors.Is(err, governance.ErrTransactionReplay):
-		return responder.ErrCodeReplay, msg
+		return constants.ErrCodeReplay, msg
 
 	case errors.Is(err, governance.ErrStateRootMissing),
 		errors.Is(err, governance.ErrStateRootRequired),
 		errors.Is(err, governance.ErrStateRootMismatch):
-		return responder.ErrCodeStateMismatch, msg
+		return constants.ErrCodeStateMismatch, msg
 
 	case errors.Is(err, governance.ErrL1ValidationFailed):
-		return responder.ErrCodeL1ValidationFailed, msg
+		return constants.ErrCodeL1ValidationFailed, msg
 
 	case errors.Is(err, governance.ErrL2SignatureMissing),
 		errors.Is(err, governance.ErrL2SignatureInvalid),
 		errors.Is(err, governance.ErrL2KeyNotConfigured):
-		return responder.ErrCodeL2SignatureInvalid, msg
+		return constants.ErrCodeL2SignatureInvalid, msg
 
 	case errors.Is(err, governance.ErrL3ProofInvalid),
 		errors.Is(err, governance.ErrL3NotaryNotConfigured):
-		return responder.ErrCodeL3ProofInvalid, msg
+		return constants.ErrCodeL3ProofInvalid, msg
 	}
 
 	// Map other Gateway errors back to JSON-RPC error
@@ -1300,7 +1321,7 @@ func extractCertFingerprint(r *http.Request) string {
 }
 
 // StoreSuspendedTransaction stores a transaction awaiting L3 approval.
-func (g *GatewayService) StoreSuspendedTransaction(txHash string, envelope []byte, toolName string, toolArgs json.RawMessage, userID, operatorID string, certFingerprint string) {
+func (g *GatewayService) StoreSuspendedTransaction(ctx context.Context, txHash string, envelope []byte, toolName string, toolArgs json.RawMessage, userID, operatorID string, certFingerprint string) {
 	if g.suspendedStore == nil {
 		return
 	}
@@ -1315,25 +1336,25 @@ func (g *GatewayService) StoreSuspendedTransaction(txHash string, envelope []byt
 		OperatorID:              operatorID,
 		ExpectedCertFingerprint: certFingerprint,
 	}
-	if err := g.suspendedStore.StoreSuspendedTransaction(tx); err != nil {
+	if err := g.suspendedStore.StoreSuspendedTransaction(ctx, tx); err != nil {
 		g.logger.Error("Failed to store suspended transaction", "tx_hash", txHash, "error", err)
 	}
 }
 
 // GetSuspendedTransaction retrieves a suspended transaction by hash.
-func (g *GatewayService) GetSuspendedTransaction(txHash string) (*models.SuspendedTransaction, bool) {
+func (g *GatewayService) GetSuspendedTransaction(ctx context.Context, txHash string) (*models.SuspendedTransaction, bool, error) {
 	if g.suspendedStore == nil {
-		return nil, false
+		return nil, false, nil
 	}
-	return g.suspendedStore.GetSuspendedTransaction(txHash)
+	return g.suspendedStore.GetSuspendedTransaction(ctx, txHash)
 }
 
 // DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.
-func (g *GatewayService) DeleteSuspendedTransaction(txHash string) {
+func (g *GatewayService) DeleteSuspendedTransaction(ctx context.Context, txHash string) {
 	if g.suspendedStore == nil {
 		return
 	}
-	if err := g.suspendedStore.DeleteSuspendedTransaction(txHash); err != nil {
+	if err := g.suspendedStore.DeleteSuspendedTransaction(ctx, txHash); err != nil {
 		g.logger.Error("Failed to delete suspended transaction", "tx_hash", txHash, "error", err)
 	}
 }
@@ -1357,7 +1378,10 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 		return nil, fmt.Errorf("user_id required")
 	}
 
-	tx, ok := g.GetSuspendedTransaction(txHash)
+	tx, ok, err := g.GetSuspendedTransaction(ctx, txHash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get suspended transaction: %w", err)
+	}
 	if !ok {
 		return nil, fmt.Errorf("suspended transaction %s not found or expired", txHash)
 	}
@@ -1388,7 +1412,7 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 	}
 
 	// Successful execution - remove from the suspension list.
-	g.DeleteSuspendedTransaction(txHash)
+	g.DeleteSuspendedTransaction(ctx, txHash)
 	return receipt, nil
 }
 
@@ -1404,7 +1428,7 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	}
 
 	// Construct MCP tools/call request
-	mcpReq := &responder.JSONRPCRequest{
+	mcpReq := &response.JSONRPCRequest{
 		JSONRPC: "2.0",
 		Method:  "tools/call",
 		Params:  toolArgs,

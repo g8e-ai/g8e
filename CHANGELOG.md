@@ -7,6 +7,233 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.10] - 2026-06-08
+
+### Overview
+
+v1.0.10 is a major release that hardens the platform's security posture, simplifies operational complexity, and significantly expands cross-platform support. The release introduces mandatory encryption at rest via a vault subsystem, consolidates gateway networking from four ports to two, adds comprehensive Windows Hello / passkey authentication, delivers a full suite of operator remote-management commands, and completes native Windows compatibility. Under the hood, the storage layer has been fundamentally refactored for clarity and fail-closed behavior, and the gateway architecture has been decomposed into dedicated controllers and services.
+
+### Breaking Changes
+
+* **Mandatory encryption at rest** — Encryption is now required for all storage services. Previously, vault parameters were optional and production deployments could run without encryption, storing sensitive data unencrypted. This is a critical security fix.
+  * `NewSQLAuditStore` now requires `EncryptionVault` in config and returns an error if nil.
+  * `NewExecutionVaultService` now requires a vault parameter and returns an error if nil.
+  * `NewTokenStoreService` now requires a vault parameter and returns an error if nil.
+  * Production initialization in `g8eo.go` and `gateway_db.go` now initializes and unlocks the vault before creating storage services.
+  * All nil-checks removed from encryption paths; fail-closed behavior is enforced.
+
+* **Port consolidation** — Gateway port configuration reduced from 4 ports to 2 ports:
+  * Removed: `--bootstrap-listen-port` (8441) and `--mcp-http-port` (8442).
+  * New: `--http-port` (8080) for bootstrap and MCP routes.
+  * New: `--https-port` (8443) for mTLS API and public surface.
+
+* **Audit vault refactor** — The monolithic `AuditVaultService` has been split into three cleanly separated concerns:
+  * `SQLAuditStore` (`audit_store.go`) — pure SQL audit data storage.
+  * `GitLedgerService` (`ledger.go`) — pure git-backed file versioning.
+  * `HistoryHandler` (`history_handler.go`) — composes both for history queries.
+  * `AuditVaultService` deleted from production code.
+
+* **Dead scrubbing code removed** — Removed unused `TextScrubber` interface and `SetScrubber()` method.
+
+* **Auditor renamed to emulator** — The CLI command was renamed from `./g8e auditor` to `./g8e emulator` for clarity.
+
+### Migration Guide
+
+**For existing deployments:**
+
+1. **Initialize the vault:**
+   ```bash
+   ./g8e vault init
+   ```
+
+2. **Generate or import a vault key:**
+   ```bash
+   # Generate new key
+   ./g8e vault key generate
+
+   # Or import existing key
+   ./g8e vault key import <path-to-key>
+   ```
+
+3. **Unlock the vault before starting services:**
+   ```bash
+   ./g8e vault unlock
+   ./g8e gw start
+   ```
+
+4. **Review port configuration:**
+   - If you previously customized `--bootstrap-listen-port` or `--mcp-http-port`, update your scripts to use `--http-port` (8080) instead.
+   - Verify firewall rules allow traffic on the consolidated ports.
+
+**For new deployments:**
+- Vault initialization is now part of the standard setup flow.
+- Follow the updated `docs/guides/build_operator.md` for complete setup instructions.
+
+### Added
+
+* **Vault CLI commands** — Complete vault management CLI:
+  * `./g8e vault init` — Initialize vault.
+  * `./g8e vault unlock` — Unlock vault with key.
+  * `./g8e vault key generate` — Generate new vault key.
+  * `./g8e vault key import` — Import existing vault key.
+  * `./g8e vault key export` — Export vault key.
+  * `./g8e vault re-key` — Re-key vault with new key.
+  * `./g8e vault status` — Check vault status.
+  * `./g8e vault reset` — Destructive vault reset.
+
+* **Passkey authentication** — WebAuthn / Windows Hello passkey support for operator bootstrap:
+  * `internal/cli/auth/passkey_bootstrap.go` — platform-agnostic passkey bootstrap flow.
+  * `internal/services/gateway/passkey_service.go` — gateway-side passkey verification and session creation.
+  * `internal/services/gateway/auth_controller.go` — dedicated controller for authentication endpoints.
+
+* **Operator remote management commands** — New CLI commands for managing remote operators:
+  * `./g8e operator cp` — Copy files to/from a remote operator.
+  * `./g8e operator scp` — Secure copy with recursive support.
+  * `./g8e operator ssh` — Open an SSH session to a remote operator.
+  * `./g8e operator stream` — Stream logs or events from a remote operator.
+  * `./g8e operator deploy` — Deploy the gateway to a remote host via SSH (new `operator_deploy` MCP tool and PowerShell/Bash deploy scripts).
+
+* **Agent integration commands** — New `./g8e agent` command group for AI agent IDE integration:
+  * `./g8e agent` — Launch the agent gateway with stdio transport.
+  * Platform-specific browser helpers for automatic IDE launch (`internal/cli/platform/browser.go`).
+  * Dedicated support for Claude Code and compatible agent environments.
+
+* **Setup wizard** — New `./g8e setup` command provides an interactive, guided setup flow for first-time users, covering vault initialization, key generation, and gateway configuration.
+
+* **Multi-Transport Configuration Command** — `./g8e mcp show` updated to output a matrix of different configurations side-by-side: `g8e.local` (mTLS), direct IP address (without DNS required), plain HTTP (for localhost access), and stdio transport.
+
+* **Simplified Stdio MCP Config** — Simplified stdio transport configuration format output via standard JSON structure (`command`, `args`, `disabled`) compatible with standard IDE-assisted clients (Cursor, Windsurf).
+
+* **Cross-Platform Setup Scripts** — New cross-platform environment bootstrapper and dependency validation scripts added under `scripts/linux-setup.sh`, `scripts/macos-setup.sh`, and `scripts/windows-setup.ps1` to easily verify Go, Buf, and Protoc compilers.
+
+* **Consolidated CLI & Client Errors** — New error packages `internal/cli/errors/errors.go` and `internal/constants/errors.go` standardized error definitions (e.g. `ErrNotAuthenticated`, `ErrTrustBundleStale`).
+
+* **MCP governance command** — `./g8e mcp gov` exposes governance capabilities through the MCP interface, allowing agents to inspect and interact with the governance ledger.
+
+* **Gateway health endpoint** — `/api/v1/health` added to the HTTP router for load-balancer and orchestrator health checks.
+
+* **Docker gateway support** — Production-ready `Dockerfile` and `docker-compose.yml` for running the gateway in containerized environments, with dedicated documentation in `docs/guides/docker_gateway.md`.
+
+* **Windows disk usage tool** — `fs_disk_usage` now works natively on Windows via PowerShell fallback.
+
+* **SSH known-hosts helper** — `internal/services/mcp/net_ssh_known_hosts.go` for managing and validating SSH host keys during operator remote operations.
+
+* **Vault configuration** — Added vault settings to both Operator and Gateway modes:
+  * `VaultDir` — Vault data directory path.
+  * `VaultKeyPath` — Path to vault private key.
+  * Environment variables: `G8E_VAULT_DIR`, `G8E_VAULT_KEY`.
+  * CLI flags: `--vault-dir`, `--vault-key`, `--vault-require-unlock`.
+
+* **Token store service** — New `internal/services/storage/token_store.go` with encrypted KV storage and comprehensive test coverage (`token_store_test.go`).
+
+* **Execution vault service** — New `internal/services/storage/execution_vault.go` providing encrypted storage for command stdout/stderr and file diffs.
+
+* **Suspended transaction store** — New `internal/services/storage/suspended_transaction_store.go` for durable, encrypted suspended-transaction storage.
+
+* **Gateway session services** — Decomposed monolithic session handling into dedicated services:
+  * `cli_session_service.go`
+  * `web_session_service.go`
+  * `operator_session_service.go`
+
+* **Gateway state-root service** — New `internal/services/gateway/state_root_service.go` with incremental state tracking and test coverage.
+
+* **Gateway replay store** — New `internal/services/gateway/replay_store_service.go` for deterministic replay of governance events.
+
+* **Comprehensive encryption documentation** — New `docs/architecture/encryption.md` with complete encryption architecture overview.
+
+* **Network architecture documentation** — New `docs/architecture/network.md` documenting the 2-port gateway networking model.
+
+* **Service modes documentation** — New `docs/architecture/service_modes.md` explaining Operator vs Gateway service modes.
+
+* **Reference JSON schema** — New `docs/reference/schema.json` (4,000+ lines) providing a machine-readable schema for protocol constants and models.
+
+### Changed
+
+* **Gateway networking** — Consolidated from 4 ports to 2 ports. Bootstrap and MCP routes now share the HTTP port (8080); mTLS API and public surface share the HTTPS port (8443).
+
+* **Storage layer refactor** — Major refactor of the storage subsystem:
+  * `TokenStoreService.KVScanPrefix` now decrypts values (previously returned encrypted ciphertext).
+  * Removed dead `TextScrubber` dependency from `ExecutionVaultService`.
+  * Chaos test infrastructure moved to `internal/test/chaos/`.
+
+* **Gateway architecture** — Decomposed gateway HTTP handling into dedicated controllers:
+  * `AuthController` — authentication, enrollment, and session management.
+  * `PKIController` — certificate lifecycle and revocation.
+  * `DBController` — database operations and streaming.
+  * `RegistrationService` — operator registration and binding.
+  * `DocumentStoreService` — structured document storage.
+  * `AppPolicyStoreService` — application policy management.
+  * `SignerStoreService` — signing key storage.
+
+* **Auth client** — `internal/cli/auth/client.go` expanded with passkey flows, Windows crypto integration, and improved error definitions.
+
+* **Thread-safe Deploy Script Templates** — Parser for deployment scripts (`internal/services/mcp/operator_deploy.go`) utilizes `sync.Once` to guarantee thread-safe script compilation under concurrent execution conditions.
+
+* **Windows compatibility** — Extensive Windows-specific improvements:
+  * `internal/cli/auth/windows_crypto.go` significantly expanded for Windows Hello integration.
+  * `internal/cli/platform/process_windows.go` improved for gateway process lifecycle.
+  * `internal/services/system/system_utils_windows.go` updated for path and identity handling.
+  * One-line enrollment flow for Windows operators.
+
+* **CLI test command** — `./g8e test` command removed in favor of Makefile-based test execution (`make test`).
+
+* **Build system** — Makefile improved with OS-aware builds, compressed binary support, and Windows build fixes.
+
+* **Documentation refactor** — Major documentation reorganization:
+  * `docs/architecture/g8e.md` renamed to `docs/architecture/protocol.md`.
+  * `docs/devs/AGENTS.md` removed; content merged into CLI and architecture docs.
+  * `docs/devs/codemap.md` significantly updated.
+  * All port references updated across guides and architecture docs.
+  * `docs/reference/compliance-alignment.md` updated to reflect mandatory encryption.
+
+* **Test infrastructure** — Consolidated and renamed test utilities for clarity:
+  * `internal/testutil/crypto.go` → `test_crypto.go`
+  * `internal/testutil/helpers.go` → `test_infrastructure.go`
+  * `internal/testutil/proto_helpers.go` → `test_proto.go`
+  * `internal/testutil/pubsub.go` → `test_pubsub.go`
+  * `internal/testutil/governance_mocks.go` → `test_governance_mocks.go`
+
+* **Protocol Python package** — Simplified Python protocol package; removed redundant model files in favor of a streamlined structure.
+
+### Fixed
+
+* **Windows gateway startup** — Fixed remaining Windows gateway startup issues with PowerShell command syntax and process management.
+* **Operator enrollment** — Fixed operator enrollment flow to properly handle trust-bundle download before certificate enrollment, eliminating race conditions.
+* **PID tracking** — Fixed gateway PID tracking in `internal/cli/platform/process.go` to correctly detect running gateway processes across platforms.
+* **Gateway stop** — Fixed `./g8e gw stop` to reliably terminate the gateway process on both Unix and Windows.
+* **HTTP port default** — Fixed critical bug where HTTP port default was incorrectly set to `OperatorHttps` (8443) instead of `OperatorHttp` (8080).
+* **MCP test errors** — Fixed multiple MCP test failures and improved test coverage for native handlers and gateway integration.
+* **A2A gateway tests** — Fixed A2A gateway integration tests for compatibility with the 2-port model.
+* **Unit test parallelism** — Cleaned up test parallelism issues to prevent race conditions across the suite.
+* **Linting issues** — Fixed various linting issues across 467 changed files.
+* **Code quality** — Extensive code quality cleanup across the entire codebase, including standardized error definitions in `internal/constants/errors.go`.
+* **Stale file handles in ledger streaming** — Git ledger file-copying operations (`copyToLedger` in `ledger.go`) now leverage deferred, error-aware close hooks on files to avoid potential file descriptor leaks on errors.
+* **Graceful SSH known-hosts parsing** — Skip missing or non-existent configuration or host files gracefully instead of returning blocking errors, preventing startup failures in clean environments.
+
+### Security
+
+* **Critical security fix — mandatory encryption** — Encryption is now mandatory for all storage services. Previous versions could run without encryption, storing sensitive data (command stdout/stderr, file diffs, content) unencrypted at rest.
+* **Fail-closed behavior** — Storage services now fail to initialize if the vault is not provided or cannot be unlocked. Encryption operations fail if the vault is locked.
+* **Passkey authentication** — WebAuthn / Windows Hello passkeys provide phishing-resistant authentication for operator bootstrap, replacing weaker password-based flows.
+* **Input validation** — Enhanced input validation framework with additional validators for shell commands, cloud metadata, and Kubernetes operations.
+* **mTLS boundary preserved** — mTLS surfaces still use `RequireAndVerifyClientCert` at the TLS layer; port consolidation does not weaken the security boundary.
+* **Port collision prevention** — Gateway fails startup if incompatible surfaces are assigned to the same port.
+* **PKI trust bundle handling** — Enhanced trust bundle download and validation to prevent man-in-the-middle attacks during enrollment.
+
+* **CodeQL & Static Analysis Compliance** — Closed potential security risks identified by CodeQL. Re-engineered core execution pathways (`executeLocally`, `getContainerStatus`, `operator_deploy` remote commands) to avoid shell-interpreter injection hazards by explicitly separating binaries from arguments. Reinforced validation frameworks to verify path constructs (`validateFilePath`, `validateProcNetPath`) and URLs (`validateHTTPRequestURL`) against user-controlled manipulation.
+
+### Removed
+
+* **Docker container support** — Removed all Docker-related CLI commands, container status tools, and container runtime detection. The platform is now fully host-native. Note: Docker support for running the gateway itself (via Dockerfile and docker-compose.yml) remains available.
+* **4-port gateway configuration** — Removed `--bootstrap-listen-port` and `--mcp-http-port` flags and their associated constants.
+* **`./g8e test` command** — Use `make test` for test execution.
+* **`TextScrubber` interface** — Removed dead `TextScrubber` interface and `SetScrubber()` method.
+* **`internal/services/sqliteutil/migration.go`** — Removed unused migration infrastructure (directory removed).
+* **Legacy local store** — Removed old `local_store.go` and `local_store_test.go` in favor of the refactored implementation.
+* **Redundant Python protocol modules** — Removed redundant `__init__.py`, `constants.py`, and model files from `protocol/python/g8e_protocol/` in favor of a streamlined package structure.
+
+---
+
 ## [1.0.9] - 2026-06-04
 
 ### Overview
@@ -22,6 +249,10 @@ v1.0.9 is a focused bug fix release addressing critical Windows startup issues a
 *   **Go Version** - Bumped Go to version 1.26.4 for latest security patches and improvements.
 *   **GitHub Workflows** - Updated GitHub Actions workflows for improved Windows compatibility and build reliability.
 *   **Documentation** - Updated getting started guide with Windows-specific quick start instructions.
+
+### Removed
+
+*   **Docker Infrastructure** - Removed all Docker-related infrastructure including Docker CLI commands, Docker port constants, container status tools, and container runtime detection. The platform is now fully host-native with no container or virtualization dependencies.
 
 ### Fixed
 
@@ -206,7 +437,7 @@ v1.0.4 introduces MCP stdio transport for local agent integration, adds a comple
 
 * **PKI trust bundle handling** - Enhanced trust bundle download and validation to prevent man-in-the-middle attacks during enrollment. Trust bundles are now verified before use.
 * **Certificate enrollment hardening** - Certificate enrollment flow now strictly validates certificate chains and SANs before accepting new certificates.
-* **mTLS boundary enforcement** - Improved mTLS boundary enforcement across gateway services with stricter certificate validation and session management.
+* **mTLS boundary enforcement** - Improved mTLS boundary enforcement across gateway services with stricter certificate validation and cli/web/operator session management.
 
 ---
 
@@ -344,7 +575,7 @@ gates with no optional application-layer coupling in the critical path.
   fixture-driven runner, golden file assertions, receipt verification tests, concurrency tests, and
   fuzz tests. Covers L1/L2/L3 gate passes/failures, forged signatures, stale state roots, tampered
   receipts, and Mode X truth table scenarios. Fixture generation tooling included.
-* **Sovereignty Boundary Plane** (`internal/services/sovereignty/`) - New first-class package
+* **Sovereign Execution Boundary** (`internal/services/sovereignty/`) - New first-class package
   implementing data scrubbing, rehydration, and Sentinel encryption for the egress boundary.
 * **App enrollment service** (`internal/services/gateway/app_enrollment_service.go`) - Operator-owned
   enrollment for non-native app mTLS integration.
@@ -392,8 +623,8 @@ gates with no optional application-layer coupling in the critical path.
 
 ### Security
 
-* **Sentinel encryption** - Sovereignty Boundary Plane encrypts sensitive fields before audit publishing; decrypts at authorized egress.
-* **Fail-closed Audit Vault** - `AuditVaultService` now strictly rejects missing/malformed session IDs and unknown sessions prior to any audit writes, preventing invalid event relationships.
+* **Sentinel encryption** - Sovereign Execution Boundary encrypts sensitive fields before audit publishing; decrypts at authorized egress.
+* **Fail-closed Audit Store** - `SQLAuditStore` now strictly rejects missing/malformed session IDs and unknown sessions prior to any audit writes, preventing invalid event relationships.
 * **Bulk revocation with rate limiting** - Rapid revocation of compromised credentials at fleet scale without unbounded load.
 * **mTLS for non-native apps** - App enrollment service extends mTLS enforcement to heterogeneous clients.
 * **SPIFFE URI SAN hardening** - Fragile SPIFFE parsing that accepted malformed URIs on valid inputs fixed.

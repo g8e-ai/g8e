@@ -665,13 +665,14 @@ func TestNativeToolsIntegration_NegativeControls(t *testing.T) {
 
 	t.Run("missing_required_parameters", func(t *testing.T) {
 		// Test that tools reject missing required parameters
+		tmpDir := t.TempDir()
 		tests := []struct {
 			toolName string
 			args     json.RawMessage
 		}{
 			{"db_discover_topology", json.RawMessage(`{}`)},
-			{"db_query_validate", json.RawMessage(`{"database_path": "/tmp/test.db"}`)},
-			{"db_isolated_read", json.RawMessage(`{"database_path": "/tmp/test.db"}`)},
+			{"db_query_validate", json.RawMessage(fmt.Sprintf(`{"database_path": "%s/test.db"}`, tmpDir))},
+			{"db_isolated_read", json.RawMessage(fmt.Sprintf(`{"database_path": "%s/test.db"}`, tmpDir))},
 			{"fs_disk_profile", json.RawMessage(`{}`)},
 			{"net_endpoint_ping", json.RawMessage(`{"host": "localhost"}`)},
 		}

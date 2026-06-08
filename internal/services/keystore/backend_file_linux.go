@@ -63,6 +63,11 @@ func (b *fileBackend) RetrieveMasterKey() ([]byte, error) {
 }
 
 func (b *fileBackend) StoreMasterKey(key []byte) error {
+	// Validate key length (AES-256 requires 32 bytes)
+	if len(key) != 32 {
+		return fmt.Errorf("invalid master key length %d, expected 32", len(key))
+	}
+
 	// Encode as base64 for safe storage
 	encoded := base64.StdEncoding.EncodeToString(key)
 	path := filepath.Join(b.secretsDir, ".master_key")

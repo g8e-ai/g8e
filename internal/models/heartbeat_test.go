@@ -14,6 +14,7 @@
 package models
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -56,15 +57,16 @@ func TestHeartbeatNetworkInterface(t *testing.T) {
 func TestHeartbeatNetworkInfo(t *testing.T) {
 	t.Run("creates valid network info", func(t *testing.T) {
 		info := &HeartbeatNetworkInfo{
-			PublicIP:   "1.2.3.4",
-			InternalIP: "192.168.1.1",
+			HTTPPort:   8080,
+			HTTPSPort:  8443,
 			Interfaces: []string{"eth0", "wlan0"},
 			ConnectivityStatus: []HeartbeatNetworkInterface{
 				{Name: "eth0", IP: "192.168.1.1", MTU: 1500},
 			},
 		}
 
-		assert.Equal(t, "1.2.3.4", info.PublicIP)
+		assert.Equal(t, 8080, info.HTTPPort)
+		assert.Equal(t, 8443, info.HTTPSPort)
 		assert.Len(t, info.Interfaces, 2)
 	})
 }
@@ -72,14 +74,36 @@ func TestHeartbeatNetworkInfo(t *testing.T) {
 func TestHeartbeatCapabilityFlags(t *testing.T) {
 	t.Run("creates valid capability flags", func(t *testing.T) {
 		flags := &HeartbeatCapabilityFlags{
-			LocalStorageEnabled: true,
-			GitAvailable:        true,
-			LedgerMirrorEnabled: false,
+			ExecutionVaultEnabled: true,
+			GitAvailable:          true,
+			LedgerMirrorEnabled:   false,
 		}
 
-		assert.True(t, flags.LocalStorageEnabled)
+		assert.True(t, flags.ExecutionVaultEnabled)
 		assert.True(t, flags.GitAvailable)
 		assert.False(t, flags.LedgerMirrorEnabled)
+	})
+
+	t.Run("marshals with correct JSON tags", func(t *testing.T) {
+		flags := &HeartbeatCapabilityFlags{
+			ExecutionVaultEnabled: true,
+			GitAvailable:          true,
+			LedgerMirrorEnabled:   false,
+		}
+
+		data, err := json.Marshal(flags)
+		assert.NoError(t, err)
+
+		var raw map[string]interface{}
+		err = json.Unmarshal(data, &raw)
+		assert.NoError(t, err)
+
+		assert.Contains(t, raw, "execution_vault_enabled")
+		assert.Contains(t, raw, "git_available")
+		assert.Contains(t, raw, "ledger_enabled")
+		assert.True(t, raw["execution_vault_enabled"].(bool))
+		assert.True(t, raw["git_available"].(bool))
+		assert.False(t, raw["ledger_enabled"].(bool))
 	})
 }
 
@@ -192,14 +216,14 @@ func TestHeartbeatEnvironment(t *testing.T) {
 			Timezone:         "UTC",
 			Term:             "xterm-256color",
 			IsContainer:      true,
-			ContainerRuntime: "docker",
+			ContainerRuntime: "none",
 			ContainerSignals: []string{"SIGTERM", "SIGINT"},
 			InitSystem:       "systemd",
 		}
 
 		assert.Equal(t, "/home/user", env.PWD)
 		assert.True(t, env.IsContainer)
-		assert.Equal(t, "docker", env.ContainerRuntime)
+		assert.Equal(t, "none", env.ContainerRuntime)
 	})
 }
 
@@ -234,8 +258,8 @@ func TestHeartbeat(t *testing.T) {
 				OS:       constants.PlatformLinux,
 			},
 			NetworkInfo: HeartbeatNetworkInfo{
-				PublicIP:   "1.2.3.4",
-				InternalIP: "192.168.1.1",
+				HTTPPort:  8080,
+				HTTPSPort: 8443,
 			},
 			VersionInfo: HeartbeatVersionInfo{
 				OperatorVersion: "v1.0.3",
@@ -264,7 +288,7 @@ func TestHeartbeat(t *testing.T) {
 				PWD: "/home/user",
 			},
 			CapabilityFlags: HeartbeatCapabilityFlags{
-				LocalStorageEnabled: true,
+				ExecutionVaultEnabled: true,
 			},
 			FingerprintDetails: &HeartbeatFingerprintDetails{
 				OS:           constants.PlatformLinux,

@@ -16,65 +16,38 @@ The platform uses an internal Public Key Infrastructure (PKI) to issue and manag
 
 ### Workload Identity (SPIFFE)
 
-Each system component receives a SPIFFE ID, embedded as a Uniform Resource Identifier (URI) in the Subject Alternative Name (SAN) of its mTLS certificate. The generation logic is defined in `protocol/workload_identity.go`.
-
-| Workload Type | SPIFFE ID Format | Reference |
-| :--- | :--- | :--- |
-| **g8e Operator** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` | `protocol/workload_identity.go:37-39` |
-| **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` | `protocol/workload_identity.go:48-50` |
-| **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` | `protocol/workload_identity.go:59-61` |
-| **g8e Gateway** | `spiffe://g8e.local/hub/operator-listen` | `protocol/workload_identity.go:70-72` |
-| **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` | `protocol/workload_identity.go:139-141` |
+Each system component receives a SPIFFE ID, embedded as a Uniform Resource Identifier (URI) in the Subject Alternative Name (SAN) of its mTLS certificate. See [Network Architecture](./network.md) for the complete SPIFFE ID format reference and implementation details.
 
 ### mTLS Enforcement
 
-The g8e Gateway enforces TLS 1.3 for all L7 communication.
-- **Strict mTLS**: The gateway requires and verifies client certificates using `tls.RequireAndVerifyClientCert`.
-- **Revocation**: Certificates are checked against a database-backed revoked certificates store. Revocation is enforced at the g8e Gateway.
-- **Identity Binding**: Middleware verifies that the SPIFFE ID in the client certificate matches the specific session identifier (such as `operator_session_id` or `cli_session_id`) inside the `GovernanceEnvelope`.
+The g8e Gateway enforces TLS 1.3 for all L7 communication with strict mTLS requirements. See [Network Architecture](./network.md) for detailed mTLS enforcement policies, revocation mechanisms, and identity binding procedures.
 
 ### PKI Hierarchy & Trust Domain
 
-The platform uses a four-tier PKI hierarchy issued by the g8e Gateway:
+The platform uses a four-tier PKI hierarchy issued by the g8e Gateway. See [Network Architecture](./network.md) for the complete PKI hierarchy, intermediate CA split rationale, curve policy, and revocation details.
 
-| Tier | Certificate | Purpose | Validity |
-| :--- | :--- | :--- | :--- |
-| **Root CA** | `g8e Root CA` | Trust anchor for the entire platform | 3650 days |
-| **Hub Intermediate CA** | `g8e Hub Intermediate CA` | Signs the gateway serving certificate | 3650 days |
-| **Operator Intermediate CA** | `g8e Operator Intermediate CA` | Signs all leaf certificates (operator, CLI, app) | 3650 days |
-| **Peer Intermediate CA** | `g8e Gateway Peer Intermediate CA` | Signs certificates for gateway-to-gateway peering | 3650 days |
-| **Serving Certificate** | operator-gateway | Gateway TLS identity for inbound connections | 90 days |
-| **Leaf Certificates** | operator, CLI, app | End-entity identities for services and clients | 7 days |
-| **Peer Certificates** | gateway-peer | Identity for federated gateway communication | 90 days |
+### Enrollment & Bootstrap
 
-**Intermediate Split Rationale**: The hub and Operator intermediate CAs are kept separate to enforce a clean blast-radius boundary. The hub intermediate signs only the gateway's serving identity, while the Operator intermediate signs delegated workload leaves. This separation allows the operator-issuing key to be rotated or revoked without touching the gateway's serving trust, and vice versa.
-
-**Curve Policy**: All certificates (root, intermediates, serving, and leaves) use ECDSA P-256 for maximum interoperability with SPIFFE/SPIRE and TLS 1.3 stacks.
-
-**Revocation**: Certificate revocation is enforced via a database-backed denylist checked per-request in the mTLS middleware. A standard X.509 CRL signed by the Operator intermediate CA is served at `/.well-known/g8e/pki/crl` for external consumption.
-
-### Enrollment & Bootstrap (CSR-based)
-
-Clients enroll in the platform using a Certificate Signing Request (CSR) bootstrap flow:
-1. **CA Discovery**: Clients fetch the platform root CA bundle from the endpoint `/.well-known/g8e/pki/ca-bundle`.
-2. **CSR Submission**: Clients generate a local ECDSA P-256 key pair and submit a CSR to `/api/v1/pki/csr/sign`.
-3. **Registration**: The g8e Gateway validates the CSR and binds the certificate to a user identity via invitation-based Just-In-Time (JIT) provisioning.
-4. **Session Issuance**: Upon successful enrollment, the g8e Gateway issues a specific `operator_session_id` or `cli_session_id`.
-
-### Windows Certificate Store Enrollment
-
-Windows users can enroll via the Windows Certificate Store for managed browser authentication:
-1. **CLI Enrollment**: Run `./g8e auth enroll-windows [--tpm]` to generate an ECDSA P-256 keypair.
-2. **CSR Signing**: The CLI submits a CSR to the g8e Gateway and receives a signed certificate with SPIFFE URI SAN.
-3. **Certificate Import**: The signed certificate is imported to `Cert:\CurrentUser\My` in the Windows Certificate Store (experimental).
-4. **Browser Authentication**: Chrome and Edge automatically present certificates from the Windows Personal store when the g8e Gateway issues a TLS CertificateRequest.
-5. **Session Binding**: The g8e Gateway extracts the SPIFFE URI SAN from the client certificate and creates a `web_session_id` bound to the user identity.
-
-**TPM-Backed Keys**: The `--tpm` flag utilizes the Microsoft Platform Crypto Provider KSP to generate keys in hardware. Currently, the implementation uses a software-backed key with TPM annotation as the full CNG API integration is pending.
+Clients enroll in the platform using a Certificate Signing Request (CSR) bootstrap flow. See [Network Architecture](./network.md) for detailed enrollment procedures, including CSR-based enrollment and Windows Certificate Store enrollment with TPM-backed keys.
 
 ---
 
-## 2. 5-Layer Verification Sequence (Interlock)
+## 2. Network Security Foundation
+
+The authentication architecture is built on a zero-trust networking model where all communication is authenticated via mutual TLS (mTLS) with verified SPIFFE workload identities. For detailed information on:
+
+- PKI hierarchy and certificate management
+- Workload identity (SPIFFE) formats
+- mTLS enforcement and revocation
+- Certificate enrollment and bootstrap flows
+- Port topology and communication patterns
+- g8e.local internal translation layer
+
+See [Network Architecture](./network.md).
+
+---
+
+## 3. 5-Layer Verification Sequence (Interlock)
 
 The platform implements a deterministic 5-layer governance sequence. Every mutation must pass through all active layers before execution. The structural schema is defined as `GovernanceEnvelope` in `protocol/proto/g8e/common/v1/common.proto:79-115`.
 
@@ -96,7 +69,7 @@ L2 provides multi-agent cryptographic verification of intent.
 - **Posture-Aware Enforcement**: Enforces signature requirements based on the configured `GovernancePosture`.
 
 ### Layer 3: Notary (L3Notary)
-*Implementation: `internal/services/governance/l3_notary.go:31-35`*
+*Implementation: `internal/services/governance/l3_notary.go:30-36`*
 
 L3 ensures explicit human authorization for mutations.
 - **Suspension**: The g8e Gateway (g8eg) suspends transactions requiring L3 approval, storing them in the `suspended_transactions` pool.
@@ -104,7 +77,7 @@ L3 ensures explicit human authorization for mutations.
 - **L3Proof**: A successful approval generates an `L3Proof` containing the cryptographic signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
 
 ### Layer 4: Warden (L4Warden)
-*Implementation: `internal/services/governance/l4_warden.go:307-320`*
+*Implementation: `internal/services/governance/l4_warden.go:309-323`*
 
 The Warden is the final fail-closed gate before execution. It verifies:
 1. **Structural Integrity**: Structural integrity, payload decoding, and L1Doctrine compliance.
@@ -114,17 +87,17 @@ The Warden is the final fail-closed gate before execution. It verifies:
 5. **Posture Enforcement**: Enforces L2 and L3 requirements based on the configured `GovernancePosture` (Doctrine, Consensus, or Notary).
 
 ### Layer 5: Actuator (L5Actuator)
-*Implementation: `internal/services/governance/l5_actuator.go:52-70`*
+*Implementation: `internal/services/governance/l5_actuator.go:50-69`*
 
 The Actuator represents the execution boundary and final audit commitment.
 - **Egress Dispatch**: Dispatches the verified payload to downstream executors (Shell, MCP, A2A).
-- **Sovereignty Rehydration**: Rehydrates scrubbed placeholders (such as `{{UEI_1}}`) with original sensitive data just before execution.
+- **Sensitive Data Rehydration**: Rehydrates scrubbed placeholders (such as `{{UEI_1}}`) with original sensitive data just before execution via `RehydratePayload`.
 - **Action Receipts**: Issues a signed `ActionReceipt` providing immutable proof of the outcome.
-- **Commitment**: Records the transaction in the `AuditVaultService` and chains it to the ledger.
+- **Commitment**: Records the transaction in the `SQLAuditStore` and chains it to the ledger.
 
 ---
 
-## 3. Governance Postures
+## 4. Governance Postures
 
 Postures define which layers of the bedrock are enforced as fail-closed gates.
 
@@ -136,9 +109,46 @@ Postures define which layers of the bedrock are enforced as fail-closed gates.
 
 ---
 
-## 4. Sovereignty Boundary Plane
+## 5. Sovereign Execution Boundary
 
-Handling sensitive data without leaking it to upstream models is managed by the Sovereignty Boundary Plane:
+Handling sensitive data without leaking it to upstream models is managed by the Sovereign Execution Boundary:
 - **Scrubbing**: Private data is replaced with opaque tokens (Uniform Element Identifiers, such as `{{UEI_1}}`) before sending to external LLMs.
 - **Deterministic Rehydration**: The L5 Actuator performs local rehydration of tokens just before execution via `RehydrateText`.
 - **Data Sovereignty**: Raw secrets never leave the sovereign host environment.
+
+---
+
+## 6. Encryption at Rest
+
+The platform enforces mandatory encryption for all sensitive data at rest. See [Encryption Architecture](./encryption.md) for complete details.
+
+### Vault-Based Encryption
+
+All storage services require an unlocked vault at initialization:
+- **LocalStoreService**: Encrypts command stdout/stderr, file diffs, and content
+- **SQLAuditStore**: Encrypts audit records, governance envelopes, audit trail, and compliance records
+- **ExecutionVaultService**: Encrypts execution results and command outputs
+- **TokenStoreService**: Encrypts authentication tokens and session data
+
+### Encryption Guarantees
+
+- **Fail-closed**: Services fail to initialize without a vault
+- **AES-256-GCM**: All data encrypted with NIST-approved algorithm
+- **Key rotation**: Support for re-keying without data loss
+- **Zero-knowledge**: Vault keys never written to disk in plaintext
+
+### Vault Management
+
+Vault operations are managed via CLI commands:
+- `./g8e vault init`: Initialize new vault
+- `./g8e vault unlock`: Unlock vault with key
+- `./g8e vault rekey`: Rotate vault keys
+- `./g8e vault status`: Check vault status
+- `./g8e vault reset`: Destroy vault (destructive)
+
+### Configuration
+
+Vault paths can be configured via:
+- CLI flags: `--vault-dir`, `--vault-key`
+- Environment variables: `G8E_VAULT_DIR`, `G8E_VAULT_KEY`
+- Configuration file: `paths_default.json`

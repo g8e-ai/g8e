@@ -56,7 +56,7 @@ The gateway handles certain tools locally without downstream proxy:
   - `sys_env_vars`: Reads environment variables for configuration debugging
   - `fs_file_checksum`: Computes SHA256/MD5 checksums for file integrity verification
   - `sys_service_status`: Checks systemd service status (operator, gateway, etc.)
-  - `sys_container_status`: Checks Docker/podman container health status
+  - `sys_container_status`: Checks container health status (podman)
   - `fs_disk_usage`: Provides df-style free space reporting for mounted filesystems
   - `sys_time_clock`: Provides NTP sync status and system time verification
   - `proc_tree`: Provides parent-child process relationships and process tree
@@ -154,7 +154,7 @@ This command outputs a JSON configuration with the correct gateway URL and certi
 
 #### Plain HTTP Endpoint (Development/Testing)
 
-For development and testing scenarios, the gateway also provides a plain HTTP endpoint (port 8442) that does not require mTLS credentials. This endpoint has rate limiting and may have different security policies.
+For development and testing scenarios, the gateway also provides a plain HTTP endpoint (port 8080) that does not require mTLS credentials. This endpoint has rate limiting and may have different security policies.
 
 Run the CLI command to generate the configuration:
 
@@ -168,24 +168,37 @@ This outputs a JSON configuration with the correct gateway URL.
 
 #### Claude Code Custom Connector Registration
 
-The g8e Gateway provides a unified MCP Streamable HTTP endpoint at `/mcp` that is compatible with Claude Code custom connectors. This endpoint implements the standard MCP JSON-RPC 2.0 protocol with method dispatch, ID echoing, and notification handling.
+The g8e Gateway provides a unified MCP Streamable HTTP endpoint at `/mcp` that is compatible with Claude Code custom connectors. This endpoint implements the standard MCP JSON-RPC 2.0 protocol with method dispatch, ID echoing, notification handling, and SSE support.
 
-To register the g8e Gateway as a custom connector in Claude Code:
+**HTTP Transport (Recommended for Gateway Mode)**
+
+To register the g8e Gateway as a custom connector in Claude Code using HTTP transport:
 
 ```bash
-claude mcp add --transport http g8e http://localhost:8442/mcp
+claude mcp add --transport http g8e http://localhost:8080/mcp
 ```
 
-Replace `8442` with your configured `--mcp-http-port` if different from the default.
+Replace `8080` with your configured `--http-port` if different from the default.
 
 The unified `/mcp` endpoint supports:
 - **Initialize handshake**: Protocol version negotiation and capability exchange
 - **Method dispatch**: All MCP methods (tools/list, tools/call, resources/list, prompts/list, etc.)
 - **ID echoing**: Preserves client request IDs for request-response correlation
 - **Notification handling**: Accepts notifications (e.g., `notifications/initialized`) with 202 Accepted
+- **SSE support**: GET requests for server-sent events streaming
 - **Origin validation**: DNS-rebinding protection via Origin header validation (rejects non-loopback origins)
 
-**Note**: The `/mcp` endpoint is available on all three gateway surfaces (mTLS port 8440, public TLS port 8443, and plain HTTP port 8442). For Claude Code, use the plain HTTP port (8442) for development or the public TLS port (8443) with JWT authentication for production.
+**Note**: The `/mcp` endpoint is available on both gateway surfaces (mTLS port 8443 and plain HTTP port 8080). For Claude Code, use the plain HTTP port (8080) for development or the public TLS port (8443) with JWT authentication for production.
+
+**Stdio Transport (Recommended for Local Development)**
+
+For local development without running the gateway, g8e can run as a stdio MCP server exposing all native tools:
+
+```bash
+claude mcp add g8e-stdio g8e mcp
+```
+
+This runs g8e in stdio mode with no additional flags required. All 27 native tools are available including system diagnostics, database operations, network tools, and shell execution with governance safety features.
 
 ### MCP Client Connection
 
@@ -353,10 +366,8 @@ Default ports (configurable via flags or paths.json):
 
 | Port | Purpose | Auth |
 |---|---|---|
-| `8440` | Operator mTLS API | mTLS (RequireAndVerifyClientCert) |
-| `8443` | Public HTTPS (browser/BYO bootstrap) | TLS (optional client cert) |
-| `8441` | Bootstrap enrollment | TLS (no client cert) |
-| `8442` | Plain HTTP MCP | No TLS (development only) |
+| `8080` | HTTP (bootstrap + MCP) | Plain HTTP (no TLS) |
+| `8443` | HTTPS (mTLS API + public) | mTLS (RequireAndVerifyClientCert) |
 
 ### Configuration
 
@@ -365,10 +376,8 @@ The g8e platform uses **ZERO environment variables** for production configuratio
 - `--data-dir <dir>`: Data directory for SQLite database (default: `.g8e/data` in working directory)
 - `--pki-dir <dir>`: Directory for TLS certificates (default: `.g8e/pki`)
 - `--secrets-dir <dir>`: Directory for platform secrets (default: `.g8e/secrets`)
-- `--http-listen-port <port>`: mTLS API port (default: 8440)
-- `--public-listen-port <port>`: Public HTTPS port (default: 8443)
-- `--bootstrap-port <port>`: Bootstrap enrollment port (default: 8441)
-- `--mcp-http-port <port>`: Plain HTTP MCP port (default: 8442)
+- `--http-port <port>`: HTTP port for bootstrap and MCP routes (default: 8080)
+- `--https-port <port>`: HTTPS port for mTLS API and public surface (default: 8443)
 
 ### Circuit Breaker
 
@@ -476,6 +485,6 @@ The template file at `docs/protocols/mcp/tool_template.go` provides a complete s
 
 ## Related Documentation
 
-- [**g8e Protocol**](../../architecture/g8e.md) - The wire contract and governance hierarchy
+- [**g8e Protocol**](../../architecture/protocol.md) - The wire contract and governance hierarchy
 - [**g8e Operator (g8eo)**](../../architecture/operator.md) - Operator architecture and gateway mode
 - [**A2A Protocol**](../a2a/a2a.md) - A2A protocol specification and integration

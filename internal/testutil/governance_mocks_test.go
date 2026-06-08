@@ -14,6 +14,7 @@
 package testutil
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -137,7 +138,7 @@ func TestMockL3Notary(t *testing.T) {
 	notary := &MockL3Notary{}
 
 	// MockL3Notary always approves
-	approved, err := notary.VerifyL3Proof("user-123", "tx-hash-456", "session-789", nil)
+	approved, err := notary.VerifyL3Proof(context.Background(), "user-123", "tx-hash-456", "session-789", nil)
 	require.NoError(t, err)
 	require.True(t, approved, "MockL3Notary should always approve")
 }
@@ -145,13 +146,13 @@ func TestMockL3Notary(t *testing.T) {
 func TestConfigurableMockL3Notary(t *testing.T) {
 	// Test pass behavior
 	passNotary := NewConfigurableMockL3Notary(true)
-	approved, err := passNotary.VerifyL3Proof("user-123", "tx-hash-456", "session-789", nil)
+	approved, err := passNotary.VerifyL3Proof(context.Background(), "user-123", "tx-hash-456", "session-789", nil)
 	require.NoError(t, err)
 	require.True(t, approved, "Configurable notary with ShouldPass=true should approve")
 
 	// Test fail behavior
 	failNotary := NewConfigurableMockL3Notary(false)
-	approved, err = failNotary.VerifyL3Proof("user-123", "tx-hash-456", "session-789", nil)
+	approved, err = failNotary.VerifyL3Proof(context.Background(), "user-123", "tx-hash-456", "session-789", nil)
 	require.NoError(t, err)
 	require.False(t, approved, "Configurable notary with ShouldPass=false should reject")
 }
@@ -161,7 +162,7 @@ func TestSlowMockL3Notary(t *testing.T) {
 	notary := NewSlowMockL3Notary(delay)
 
 	start := time.Now()
-	approved, err := notary.VerifyL3Proof("user-123", "tx-hash-456", "session-789", nil)
+	approved, err := notary.VerifyL3Proof(context.Background(), "user-123", "tx-hash-456", "session-789", nil)
 	elapsed := time.Since(start)
 
 	require.NoError(t, err)

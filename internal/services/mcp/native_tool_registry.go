@@ -47,6 +47,8 @@ func RegisterNativeTools(registry *ToolRegistry) error {
 		&CloudMetadataTool{},
 		&K8sInspectTool{},
 		&ShellExecuteTool{},
+		&NetSSHKnownHostsTool{},
+		&OperatorDeployTool{},
 	}
 
 	for _, tool := range tools {

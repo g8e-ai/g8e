@@ -20,12 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMain(m *testing.M) {
-	ResetTestStorage()
-}
-
 func TestNewTestBackend(t *testing.T) {
-	t.Parallel()
 	backend, err := NewTestBackend()
 	require.NoError(t, err)
 	require.NotNil(t, backend)
@@ -33,7 +28,6 @@ func TestNewTestBackend(t *testing.T) {
 }
 
 func TestTestBackend_RetrieveMasterKey_NotFound(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	backend, err := NewTestBackend()
 	require.NoError(t, err)
@@ -45,7 +39,6 @@ func TestTestBackend_RetrieveMasterKey_NotFound(t *testing.T) {
 }
 
 func TestTestBackend_StoreAndRetrieveMasterKey(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	backend, err := NewTestBackend()
 	require.NoError(t, err)
@@ -60,7 +53,6 @@ func TestTestBackend_StoreAndRetrieveMasterKey(t *testing.T) {
 }
 
 func TestTestBackend_RetrieveMasterKey_ReturnsCopy(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	backend, err := NewTestBackend()
 	require.NoError(t, err)
@@ -81,7 +73,6 @@ func TestTestBackend_RetrieveMasterKey_ReturnsCopy(t *testing.T) {
 }
 
 func TestTestBackend_DeleteMasterKey(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	backend, err := NewTestBackend()
 	require.NoError(t, err)
@@ -100,7 +91,6 @@ func TestTestBackend_DeleteMasterKey(t *testing.T) {
 }
 
 func TestTestBackend_DeleteMasterKey_NotFound(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	backend, err := NewTestBackend()
 	require.NoError(t, err)
@@ -110,7 +100,6 @@ func TestTestBackend_DeleteMasterKey_NotFound(t *testing.T) {
 }
 
 func TestTestBackend_OverwriteMasterKey(t *testing.T) {
-	t.Parallel()
 	ResetTestStorage()
 	backend, err := NewTestBackend()
 	require.NoError(t, err)
@@ -129,7 +118,6 @@ func TestTestBackend_OverwriteMasterKey(t *testing.T) {
 }
 
 func TestResetTestStorage(t *testing.T) {
-	t.Parallel()
 	backend, err := NewTestBackend()
 	require.NoError(t, err)
 

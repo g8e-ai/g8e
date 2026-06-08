@@ -13,7 +13,7 @@ pip install g8e-protocol
 ### Constants
 
 ```python
-from g8e_protocol.constants import EVENTS, STATUS, COLLECTIONS, ComponentName
+from g8e.constants import EVENTS, STATUS, COLLECTIONS, ComponentName
 
 # Access protocol constants
 print(EVENTS["command"]["requested"])
@@ -24,7 +24,7 @@ print(ComponentName.G8EO)
 ### Models
 
 ```python
-from g8e_protocol.models import RequestContext, BoundOperator
+from g8e.models import RequestContext, BoundOperator
 
 context = RequestContext(
     web_session_id="web-123",
@@ -39,7 +39,7 @@ context = RequestContext(
 ### Headers
 
 ```python
-from g8e_protocol.constants import (
+from g8e.constants import (
     HTTP_AUTHORIZATION_HEADER,
     WEB_SESSION_ID_HEADER,
     CLI_SESSION_ID_HEADER,

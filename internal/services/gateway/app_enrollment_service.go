@@ -16,6 +16,7 @@ package gateway
 import (
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -28,13 +29,13 @@ import (
 // Enrollment is identity-only by default: apps receive mTLS certificates but no L2 consensus power.
 // L2 signers must be explicitly registered by an admin via POST /api/admin/app-policies/{app_id}/signer.
 type AppEnrollmentService struct {
-	db     *GatewayDBService
+	db     *CanonicalDBService
 	pki    *PKIAuthority
 	logger *slog.Logger
 }
 
 // NewAppEnrollmentService creates a new AppEnrollmentService.
-func NewAppEnrollmentService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger) *AppEnrollmentService {
+func NewAppEnrollmentService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logger) *AppEnrollmentService {
 	return &AppEnrollmentService{
 		db:     db,
 		pki:    pki,
@@ -133,7 +134,7 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 	}
 	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
 	if err != nil {
-		return &AppEnrollResponse{Success: false, Error: "failed to parse issued certificate"}, nil
+		return &AppEnrollResponse{Success: false, Error: fmt.Sprintf("failed to parse issued certificate: %v", err)}, nil
 	}
 
 	s.logger.Info("[APP_ENROLLMENT] External app enrolled (identity only)",
@@ -156,7 +157,12 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 // generateAppID generates a SPIFFE ID for the app.
 func (s *AppEnrollmentService) generateAppID(appName string) string {
 	wid := protocol.NewWorkloadIdentity()
-	appURL, _ := wid.AppSPIFFEURL(appName)
+	appURL, err := wid.AppSPIFFEURL(appName)
+	if err != nil {
+		s.logger.Error("Failed to generate App SPIFFE URL", "app_name", appName, "error", err)
+		// Fallback to a simple ID format if SPIFFE URL generation fails
+		return fmt.Sprintf("spiffe://g8e.ai/app/%s", appName)
+	}
 	return appURL.String()
 }
 

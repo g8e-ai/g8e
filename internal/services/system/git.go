@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime"
 )
 
 const GitEmbedded = "embedded"
@@ -39,7 +40,13 @@ func isExecutable(path string) bool {
 	if err != nil {
 		return false
 	}
-	return !info.IsDir() && info.Mode()&0111 != 0
+	if info.IsDir() {
+		return false
+	}
+	if runtime.GOOS == "windows" {
+		return true // On Windows, if it exists and is not a dir, we consider it executable for these purposes
+	}
+	return info.Mode()&0111 != 0
 }
 
 func truncateHash(hash string) string {

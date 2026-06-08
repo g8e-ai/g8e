@@ -36,26 +36,26 @@ func (t *K8sInspectTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *K8sInspectTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"operation": map[string]interface{}{
-				"type":        "string",
-				"description": "Kubernetes operation to perform",
-				"enum":        []string{"pods", "nodes", "services", "deployments", "namespace", "cluster_info", "pod_logs", "pod_describe"},
+func (t *K8sInspectTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"operation": {
+				Type:        "string",
+				Description: "Kubernetes operation to perform",
+				Enum:        []string{"pods", "nodes", "services", "deployments", "namespace", "cluster_info", "pod_logs", "pod_describe"},
 			},
-			"namespace": map[string]interface{}{
-				"type":        "string",
-				"description": "Kubernetes namespace (defaults to current or default)",
+			"namespace": {
+				Type:        "string",
+				Description: "Kubernetes namespace (defaults to current or default)",
 			},
-			"name": map[string]interface{}{
-				"type":        "string",
-				"description": "Resource name for describe or logs operations",
+			"name": {
+				Type:        "string",
+				Description: "Resource name for describe or logs operations",
 			},
-			"limit": map[string]interface{}{
-				"type":        "integer",
-				"description": "Limit for list operations (default: 50)",
+			"limit": {
+				Type:        "integer",
+				Description: "Limit for list operations (default: 50)",
 			},
 		},
 	}
@@ -63,14 +63,9 @@ func (t *K8sInspectTool) InputSchema() map[string]interface{} {
 
 // Execute implements the tool logic.
 func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		Operation string `json:"operation"`
-		Namespace string `json:"namespace,omitempty"`
-		Name      string `json:"name,omitempty"`
-		Limit     int    `json:"limit,omitempty"`
-	}
+	var req K8sInspectRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("k8s_inspect: unmarshal arguments: %w", err)
 	}
 
 	if req.Operation == "" {
@@ -78,15 +73,15 @@ func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 	}
 
 	if !kubectlAvailable() {
-		return CallToolResult{}, fmt.Errorf("kubectl not found in PATH")
+		return CallToolResult{}, fmt.Errorf("k8s_inspect: kubectl not found in PATH")
 	}
 
 	if req.Namespace != "" {
 		if err := validateK8sNamespace(req.Namespace); err != nil {
-			result := map[string]interface{}{
-				"operation": req.Operation,
-				"namespace": req.Namespace,
-				"error":     err.Error(),
+			result := K8sInspectResult{
+				Operation: req.Operation,
+				Namespace: req.Namespace,
+				Error:     err.Error(),
 			}
 			resultJSON, _ := json.Marshal(result)
 			return CallToolResult{
@@ -102,7 +97,7 @@ func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 
 	namespace := req.Namespace
 	if namespace == "" {
-		namespace = getCurrentNamespace()
+		namespace = getCurrentNamespace(ctx)
 	}
 
 	limit := req.Limit
@@ -110,32 +105,31 @@ func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 		limit = 50
 	}
 
-	var result map[string]interface{}
+	var result K8sInspectResult
 	var err error
 
 	switch req.Operation {
 	case "pods":
-		result, err = k8sListPods(namespace, limit)
+		result, err = k8sListPods(ctx, namespace, limit)
 	case "nodes":
-		result, err = k8sListNodes(limit)
+		result, err = k8sListNodes(ctx, limit)
 	case "services":
-		result, err = k8sListServices(namespace, limit)
+		result, err = k8sListServices(ctx, namespace, limit)
 	case "deployments":
-		result, err = k8sListDeployments(namespace, limit)
+		result, err = k8sListDeployments(ctx, namespace, limit)
 	case "namespace":
-		result, err = k8sListNamespaces()
+		result, err = k8sListNamespaces(ctx)
 	case "cluster_info":
-		result, err = k8sClusterInfo()
+		result, err = k8sClusterInfo(ctx)
 	case "pod_logs":
 		if req.Name == "" {
-			return CallToolResult{}, fmt.Errorf("name required for pod_logs operation")
+			return CallToolResult{}, fmt.Errorf("k8s_inspect: name required for pod_logs operation")
 		}
 		if err := validateK8sResourceName(req.Name); err != nil {
-			result := map[string]interface{}{
-				"operation": req.Operation,
-				"namespace": namespace,
-				"name":      req.Name,
-				"error":     err.Error(),
+			result := K8sInspectResult{
+				Operation: req.Operation,
+				Namespace: namespace,
+				Error:     err.Error(),
 			}
 			resultJSON, _ := json.Marshal(result)
 			return CallToolResult{
@@ -147,17 +141,16 @@ func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 				},
 			}, nil
 		}
-		result, err = k8sPodLogs(namespace, req.Name)
+		result, err = k8sPodLogs(ctx, namespace, req.Name)
 	case "pod_describe":
 		if req.Name == "" {
-			return CallToolResult{}, fmt.Errorf("name required for pod_describe operation")
+			return CallToolResult{}, fmt.Errorf("k8s_inspect: name required for pod_describe operation")
 		}
 		if err := validateK8sResourceName(req.Name); err != nil {
-			result := map[string]interface{}{
-				"operation": req.Operation,
-				"namespace": namespace,
-				"name":      req.Name,
-				"error":     err.Error(),
+			result := K8sInspectResult{
+				Operation: req.Operation,
+				Namespace: namespace,
+				Error:     err.Error(),
 			}
 			resultJSON, _ := json.Marshal(result)
 			return CallToolResult{
@@ -169,22 +162,22 @@ func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 				},
 			}, nil
 		}
-		result, err = k8sPodDescribe(namespace, req.Name)
+		result, err = k8sPodDescribe(ctx, namespace, req.Name)
 	default:
-		return CallToolResult{}, fmt.Errorf("unsupported operation: %s", req.Operation)
+		return CallToolResult{}, fmt.Errorf("k8s_inspect: unsupported operation: %s", req.Operation)
 	}
 
 	if err != nil {
-		result = map[string]interface{}{
-			"operation": req.Operation,
-			"namespace": namespace,
-			"error":     err.Error(),
+		result = K8sInspectResult{
+			Operation: req.Operation,
+			Namespace: namespace,
+			Error:     err.Error(),
 		}
 	}
 
 	resultJSON, marshalErr := json.Marshal(result)
 	if marshalErr != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", marshalErr)
+		return CallToolResult{}, fmt.Errorf("k8s_inspect: marshal result: %w", marshalErr)
 	}
 
 	return CallToolResult{
@@ -202,17 +195,21 @@ func kubectlAvailable() bool {
 	return err == nil
 }
 
-func runKubectlCommand(args ...string) (string, error) {
-	cmd := exec.Command("kubectl", args...)
+func runKubectlCommand(ctx context.Context, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "kubectl", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return string(output), err
+		return string(output), fmt.Errorf("kubectl command failed: %w", err)
 	}
 	return strings.TrimSpace(string(output)), nil
 }
 
-func getCurrentNamespace() string {
-	if ns, err := runKubectlCommand("config", "view", "--minify", "-o", "jsonpath='{..context.namespace}'"); err == nil {
+func getCurrentNamespace(ctx context.Context) string {
+	if ctx.Err() != nil {
+		return "default"
+	}
+	ns, err := runKubectlCommand(ctx, "config", "view", "--minify", "-o", "jsonpath='{..context.namespace}'")
+	if err == nil {
 		ns = strings.Trim(ns, "'")
 		if ns != "" {
 			return ns
@@ -221,11 +218,11 @@ func getCurrentNamespace() string {
 	return "default"
 }
 
-func k8sListPods(namespace string, limit int) (map[string]interface{}, error) {
+func k8sListPods(ctx context.Context, namespace string, limit int) (K8sInspectResult, error) {
 	args := []string{"get", "pods", "-n", namespace, "-o", "json", "--limit", strconv.Itoa(limit)}
-	output, err := runKubectlCommand(args...)
+	output, err := runKubectlCommand(ctx, args...)
 	if err != nil {
-		return nil, fmt.Errorf("kubectl get pods failed: %w", err)
+		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: get pods: %w", err)
 	}
 
 	var podList struct {
@@ -240,30 +237,31 @@ func k8sListPods(namespace string, limit int) (map[string]interface{}, error) {
 		} `json:"items"`
 	}
 	if err := json.Unmarshal([]byte(output), &podList); err != nil {
-		return nil, fmt.Errorf("failed to parse kubectl output: %w", err)
+		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: parse pods output: %w", err)
 	}
 
-	var pods []map[string]interface{}
+	var pods []K8sPodInfo
 	for _, pod := range podList.Items {
-		pods = append(pods, map[string]interface{}{
-			"name":      pod.Metadata.Name,
-			"namespace": pod.Metadata.Namespace,
-			"status":    pod.Status.Phase,
+		pods = append(pods, K8sPodInfo{
+			Name:      pod.Metadata.Name,
+			Namespace: pod.Metadata.Namespace,
+			Status:    pod.Status.Phase,
 		})
 	}
 
-	return map[string]interface{}{
-		"namespace": namespace,
-		"pods":      pods,
-		"count":     len(pods),
+	return K8sInspectResult{
+		Operation: "pods",
+		Namespace: namespace,
+		Pods:      pods,
+		Count:     len(pods),
 	}, nil
 }
 
-func k8sListNodes(limit int) (map[string]interface{}, error) {
+func k8sListNodes(ctx context.Context, limit int) (K8sInspectResult, error) {
 	args := []string{"get", "nodes", "-o", "json", "--limit", strconv.Itoa(limit)}
-	output, err := runKubectlCommand(args...)
+	output, err := runKubectlCommand(ctx, args...)
 	if err != nil {
-		return nil, fmt.Errorf("kubectl get nodes failed: %w", err)
+		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: get nodes: %w", err)
 	}
 
 	var nodeList struct {
@@ -280,10 +278,10 @@ func k8sListNodes(limit int) (map[string]interface{}, error) {
 		} `json:"items"`
 	}
 	if err := json.Unmarshal([]byte(output), &nodeList); err != nil {
-		return nil, fmt.Errorf("failed to parse kubectl output: %w", err)
+		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: parse nodes output: %w", err)
 	}
 
-	var nodes []map[string]interface{}
+	var nodes []K8sNodeInfo
 	for _, node := range nodeList.Items {
 		ready := false
 		for _, cond := range node.Status.Conditions {
@@ -292,23 +290,24 @@ func k8sListNodes(limit int) (map[string]interface{}, error) {
 				break
 			}
 		}
-		nodes = append(nodes, map[string]interface{}{
-			"name":  node.Metadata.Name,
-			"ready": ready,
+		nodes = append(nodes, K8sNodeInfo{
+			Name:  node.Metadata.Name,
+			Ready: ready,
 		})
 	}
 
-	return map[string]interface{}{
-		"nodes": nodes,
-		"count": len(nodes),
+	return K8sInspectResult{
+		Operation: "nodes",
+		Nodes:     nodes,
+		Count:     len(nodes),
 	}, nil
 }
 
-func k8sListServices(namespace string, limit int) (map[string]interface{}, error) {
+func k8sListServices(ctx context.Context, namespace string, limit int) (K8sInspectResult, error) {
 	args := []string{"get", "services", "-n", namespace, "-o", "json", "--limit", strconv.Itoa(limit)}
-	output, err := runKubectlCommand(args...)
+	output, err := runKubectlCommand(ctx, args...)
 	if err != nil {
-		return nil, fmt.Errorf("kubectl get services failed: %w", err)
+		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: get services: %w", err)
 	}
 
 	var svcList struct {
@@ -323,30 +322,31 @@ func k8sListServices(namespace string, limit int) (map[string]interface{}, error
 		} `json:"items"`
 	}
 	if err := json.Unmarshal([]byte(output), &svcList); err != nil {
-		return nil, fmt.Errorf("failed to parse kubectl output: %w", err)
+		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: parse services output: %w", err)
 	}
 
-	var services []map[string]interface{}
+	var services []K8sServiceInfo
 	for _, svc := range svcList.Items {
-		services = append(services, map[string]interface{}{
-			"name":      svc.Metadata.Name,
-			"namespace": svc.Metadata.Namespace,
-			"type":      svc.Spec.Type,
+		services = append(services, K8sServiceInfo{
+			Name:      svc.Metadata.Name,
+			Namespace: svc.Metadata.Namespace,
+			Type:      svc.Spec.Type,
 		})
 	}
 
-	return map[string]interface{}{
-		"namespace": namespace,
-		"services":  services,
-		"count":     len(services),
+	return K8sInspectResult{
+		Operation: "services",
+		Namespace: namespace,
+		Services:  services,
+		Count:     len(services),
 	}, nil
 }
 
-func k8sListDeployments(namespace string, limit int) (map[string]interface{}, error) {
+func k8sListDeployments(ctx context.Context, namespace string, limit int) (K8sInspectResult, error) {
 	args := []string{"get", "deployments", "-n", namespace, "-o", "json", "--limit", strconv.Itoa(limit)}
-	output, err := runKubectlCommand(args...)
+	output, err := runKubectlCommand(ctx, args...)
 	if err != nil {
-		return nil, fmt.Errorf("kubectl get deployments failed: %w", err)
+		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: get deployments: %w", err)
 	}
 
 	var deployList struct {
@@ -366,36 +366,37 @@ func k8sListDeployments(namespace string, limit int) (map[string]interface{}, er
 		} `json:"items"`
 	}
 	if err := json.Unmarshal([]byte(output), &deployList); err != nil {
-		return nil, fmt.Errorf("failed to parse kubectl output: %w", err)
+		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: parse deployments output: %w", err)
 	}
 
-	var deployments []map[string]interface{}
+	var deployments []K8sDeploymentInfo
 	for _, deploy := range deployList.Items {
 		desiredReplicas := 0
 		if deploy.Spec.Replicas != nil {
 			desiredReplicas = *deploy.Spec.Replicas
 		}
-		deployments = append(deployments, map[string]interface{}{
-			"name":               deploy.Metadata.Name,
-			"namespace":          deploy.Metadata.Namespace,
-			"desired_replicas":   desiredReplicas,
-			"available_replicas": deploy.Status.AvailableReplicas,
-			"updated_replicas":   deploy.Status.UpdatedReplicas,
-			"ready":              deploy.Status.AvailableReplicas == desiredReplicas,
+		deployments = append(deployments, K8sDeploymentInfo{
+			Name:              deploy.Metadata.Name,
+			Namespace:         deploy.Metadata.Namespace,
+			DesiredReplicas:   desiredReplicas,
+			AvailableReplicas: deploy.Status.AvailableReplicas,
+			UpdatedReplicas:   deploy.Status.UpdatedReplicas,
+			Ready:             deploy.Status.AvailableReplicas == desiredReplicas,
 		})
 	}
 
-	return map[string]interface{}{
-		"namespace":   namespace,
-		"deployments": deployments,
-		"count":       len(deployments),
+	return K8sInspectResult{
+		Operation:   "deployments",
+		Namespace:   namespace,
+		Deployments: deployments,
+		Count:       len(deployments),
 	}, nil
 }
 
-func k8sListNamespaces() (map[string]interface{}, error) {
-	output, err := runKubectlCommand("get", "namespaces", "-o", "json")
+func k8sListNamespaces(ctx context.Context) (K8sInspectResult, error) {
+	output, err := runKubectlCommand(ctx, "get", "namespaces", "-o", "json")
 	if err != nil {
-		return nil, fmt.Errorf("kubectl get namespaces failed: %w", err)
+		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: get namespaces: %w", err)
 	}
 
 	var nsList struct {
@@ -409,27 +410,28 @@ func k8sListNamespaces() (map[string]interface{}, error) {
 		} `json:"items"`
 	}
 	if err := json.Unmarshal([]byte(output), &nsList); err != nil {
-		return nil, fmt.Errorf("failed to parse kubectl output: %w", err)
+		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: parse namespaces output: %w", err)
 	}
 
-	var namespaces []map[string]interface{}
+	var namespaces []K8sNamespaceInfo
 	for _, ns := range nsList.Items {
-		namespaces = append(namespaces, map[string]interface{}{
-			"name":   ns.Metadata.Name,
-			"status": ns.Status.Phase,
+		namespaces = append(namespaces, K8sNamespaceInfo{
+			Name:   ns.Metadata.Name,
+			Status: ns.Status.Phase,
 		})
 	}
 
-	return map[string]interface{}{
-		"namespaces": namespaces,
-		"count":      len(namespaces),
+	return K8sInspectResult{
+		Operation:  "namespace",
+		Namespaces: namespaces,
+		Count:      len(namespaces),
 	}, nil
 }
 
-func k8sClusterInfo() (map[string]interface{}, error) {
-	version, err := runKubectlCommand("version", "--short", "-o", "json")
+func k8sClusterInfo(ctx context.Context) (K8sInspectResult, error) {
+	version, err := runKubectlCommand(ctx, "version", "--short", "-o", "json")
 	if err != nil {
-		return nil, fmt.Errorf("kubectl version failed: %w", err)
+		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: get version: %w", err)
 	}
 
 	var versionInfo struct {
@@ -438,58 +440,75 @@ func k8sClusterInfo() (map[string]interface{}, error) {
 		} `json:"serverVersion"`
 	}
 	if err := json.Unmarshal([]byte(version), &versionInfo); err != nil {
-		return nil, fmt.Errorf("failed to parse version output: %w", err)
+		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: parse version output: %w", err)
 	}
 
-	context, err := runKubectlCommand("config", "current-context")
-	if err != nil {
-		context = "unknown"
+	contextName := "unknown"
+	if ctx.Err() == nil {
+		contextName, err = runKubectlCommand(ctx, "config", "current-context")
+		if err != nil {
+			contextName = "unknown"
+		}
 	}
 
-	cluster, err := runKubectlCommand("config", "view", "--minify", "-o", "jsonpath='{.cluster}'")
-	if err != nil {
-		cluster = "unknown"
+	clusterName := "unknown"
+	if ctx.Err() == nil {
+		clusterName, err = runKubectlCommand(ctx, "config", "view", "--minify", "-o", "jsonpath='{.cluster}'")
+		if err != nil {
+			clusterName = "unknown"
+		}
+		clusterName = strings.Trim(clusterName, "'")
 	}
-	cluster = strings.Trim(cluster, "'")
 
-	return map[string]interface{}{
-		"version": versionInfo.ServerVersion.GitVersion,
-		"context": context,
-		"cluster": cluster,
+	return K8sInspectResult{
+		Operation: "cluster_info",
+		ClusterInfo: &K8sClusterInfo{
+			Version: versionInfo.ServerVersion.GitVersion,
+			Context: contextName,
+			Cluster: clusterName,
+		},
 	}, nil
 }
 
-func k8sPodLogs(namespace string, name string) (map[string]interface{}, error) {
+func k8sPodLogs(ctx context.Context, namespace string, name string) (K8sInspectResult, error) {
 	args := []string{"logs", "-n", namespace, name}
-	output, err := runKubectlCommand(args...)
+	output, err := runKubectlCommand(ctx, args...)
 	if err != nil {
-		return nil, fmt.Errorf("kubectl logs failed: %w", err)
+		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: get pod logs: %w", err)
 	}
 
 	lines := strings.Split(output, "\n")
+	truncated := false
 	if len(lines) > 100 {
 		lines = lines[len(lines)-100:]
 		output = strings.Join(lines, "\n")
+		truncated = true
 	}
 
-	return map[string]interface{}{
-		"namespace": namespace,
-		"pod":       name,
-		"logs":      output,
-		"truncated": len(lines) == 100,
+	return K8sInspectResult{
+		Operation: "pod_logs",
+		PodLogs: &K8sPodLogs{
+			Namespace: namespace,
+			Pod:       name,
+			Logs:      output,
+			Truncated: truncated,
+		},
 	}, nil
 }
 
-func k8sPodDescribe(namespace string, name string) (map[string]interface{}, error) {
+func k8sPodDescribe(ctx context.Context, namespace string, name string) (K8sInspectResult, error) {
 	args := []string{"describe", "pod", "-n", namespace, name}
-	output, err := runKubectlCommand(args...)
+	output, err := runKubectlCommand(ctx, args...)
 	if err != nil {
-		return nil, fmt.Errorf("kubectl describe pod failed: %w", err)
+		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: describe pod: %w", err)
 	}
 
-	return map[string]interface{}{
-		"namespace": namespace,
-		"pod":       name,
-		"describe":  output,
+	return K8sInspectResult{
+		Operation: "pod_describe",
+		PodDescribe: &K8sPodDescribe{
+			Namespace: namespace,
+			Pod:       name,
+			Describe:  output,
+		},
 	}, nil
 }

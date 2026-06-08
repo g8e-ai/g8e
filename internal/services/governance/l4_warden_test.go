@@ -20,6 +20,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -57,16 +58,17 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 
 func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 	t.Helper()
+	tmpDir := t.TempDir()
 	var msg proto.Message
 	switch actionType {
 	case constants.ActionTypeExecuteBash:
 		msg = &operatorv1.CommandRequested{Command: "uptime", ExecutionId: "exec-1", Justification: "test"}
 	case constants.ActionTypeFileEdit:
-		msg = &operatorv1.FileEditRequested{FilePath: "/tmp/test", Content: "test", ExecutionId: "exec-1"}
+		msg = &operatorv1.FileEditRequested{FilePath: filepath.Join(tmpDir, "test"), Content: "test", ExecutionId: "exec-1"}
 	case constants.ActionTypeFsList:
 		msg = &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
 	case constants.ActionTypeFsRead:
-		msg = &operatorv1.FsReadRequested{Path: "/tmp/test", ExecutionId: "exec-1"}
+		msg = &operatorv1.FsReadRequested{Path: filepath.Join(tmpDir, "test"), ExecutionId: "exec-1"}
 	case constants.ActionTypeFsGrep:
 		msg = &operatorv1.FsGrepRequested{Path: ".", Pattern: "test", ExecutionId: "exec-1"}
 	case constants.ActionTypePortCheck:
@@ -76,11 +78,11 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 	case constants.ActionTypeFetchHistory:
 		msg = &operatorv1.FetchHistoryRequested{ExecutionId: "exec-1"}
 	case constants.ActionTypeFetchFileHistory:
-		msg = &operatorv1.FetchFileHistoryRequested{FilePath: "/tmp/test", ExecutionId: "exec-1"}
+		msg = &operatorv1.FetchFileHistoryRequested{FilePath: filepath.Join(tmpDir, "test"), ExecutionId: "exec-1"}
 	case constants.ActionTypeRestoreFile:
-		msg = &operatorv1.RestoreFileRequested{FilePath: "/tmp/test", ExecutionId: "exec-1"}
+		msg = &operatorv1.RestoreFileRequested{FilePath: filepath.Join(tmpDir, "test"), ExecutionId: "exec-1"}
 	case constants.ActionTypeFetchFileDiff:
-		msg = &operatorv1.FetchFileDiffRequested{FilePath: "/tmp/test", ExecutionId: "exec-1"}
+		msg = &operatorv1.FetchFileDiffRequested{FilePath: filepath.Join(tmpDir, "test"), ExecutionId: "exec-1"}
 	case constants.ActionTypeShutdown:
 		msg = &operatorv1.ShutdownRequested{Reason: "test"}
 	case constants.ActionTypeHeartbeat:

@@ -42,16 +42,16 @@ type HeartbeatNetworkInterface struct {
 }
 
 type HeartbeatNetworkInfo struct {
-	PublicIP           string                      `json:"public_ip"`
-	InternalIP         string                      `json:"internal_ip"`
+	HTTPPort           int                         `json:"http_port"`
+	HTTPSPort          int                         `json:"https_port"`
 	Interfaces         []string                    `json:"interfaces"`
 	ConnectivityStatus []HeartbeatNetworkInterface `json:"connectivity_status"`
 }
 
 type HeartbeatCapabilityFlags struct {
-	LocalStorageEnabled bool `json:"local_storage_enabled"`
-	GitAvailable        bool `json:"git_available"`
-	LedgerMirrorEnabled bool `json:"ledger_enabled"`
+	ExecutionVaultEnabled bool `json:"execution_vault_enabled"`
+	GitAvailable          bool `json:"git_available"`
+	LedgerMirrorEnabled   bool `json:"ledger_enabled"`
 }
 
 type HeartbeatVersionInfo struct {

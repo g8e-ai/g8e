@@ -14,14 +14,14 @@
 package constants
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 )
 
-var pathsMutex sync.Mutex
-
 // Paths defines canonical G8E filesystem paths.
+// All paths are relative to the current working directory by default.
+// The binary is fully self-contained and can run from any directory.
 var Paths = struct {
 	Infra struct {
 		DbPath               string
@@ -36,6 +36,7 @@ var Paths = struct {
 		SshConfigPath        string
 		RuntimeDir           string
 		DataDir              string
+		VaultDir             string
 		TestVaultDir         string
 		LocalStateDBPath     string
 		AuditVaultDBPath     string
@@ -54,6 +55,7 @@ var Paths = struct {
 		SshConfigPath        string
 		RuntimeDir           string
 		DataDir              string
+		VaultDir             string
 		TestVaultDir         string
 		LocalStateDBPath     string
 		AuditVaultDBPath     string
@@ -70,10 +72,47 @@ var Paths = struct {
 		SshConfigPath:        ".g8e/ssh_config",
 		RuntimeDir:           ".g8e",
 		DataDir:              ".g8e/data",
+		VaultDir:             ".g8e/vault",
 		TestVaultDir:         ".g8e/test-vault",
 		LocalStateDBPath:     ".g8e/local_state.db",
 		AuditVaultDBPath:     ".g8e/audit_vault.db",
 	},
+}
+
+// InitPaths initializes paths relative to the current working directory.
+// This should be called once at program startup.
+// All paths are resolved relative to cwd, making the binary fully self-contained.
+func InitPaths() error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("constants: failed to get working directory: %w", err)
+	}
+	return InitPathsWithBase(cwd)
+}
+
+// InitPathsWithBase initializes paths relative to the specified base directory.
+// This allows tests and specific use cases to override the default cwd behavior.
+func InitPathsWithBase(baseDir string) error {
+	// Resolve all paths relative to baseDir
+	Paths.Infra.RuntimeDir = filepath.Join(baseDir, ".g8e")
+	Paths.Infra.DataDir = filepath.Join(baseDir, ".g8e/data")
+	Paths.Infra.PkiDir = filepath.Join(baseDir, ".g8e/pki")
+	Paths.Infra.SecretsDir = filepath.Join(baseDir, ".g8e/secrets")
+	Paths.Infra.ProtocolDir = filepath.Join(baseDir, ".g8e/protocol")
+	Paths.Infra.VaultDir = filepath.Join(baseDir, ".g8e/vault")
+
+	// Update derived paths
+	Paths.Infra.ProtocolConstantsDir = filepath.Join(Paths.Infra.ProtocolDir, "constants")
+	Paths.Infra.ProtocolModelsDir = filepath.Join(Paths.Infra.ProtocolDir, "models")
+	Paths.Infra.DbPath = filepath.Join(Paths.Infra.DataDir, "g8e.db")
+	Paths.Infra.LocalStateDBPath = filepath.Join(Paths.Infra.RuntimeDir, "local_state.db")
+	Paths.Infra.AuditVaultDBPath = filepath.Join(Paths.Infra.DataDir, "audit_vault.db")
+	Paths.Infra.CaCertPath = filepath.Join(Paths.Infra.PkiDir, "trust/g8eg-ca-bundle.pem")
+	Paths.Infra.AppCertDir = filepath.Join(Paths.Infra.PkiDir, "issued/apps")
+	Paths.Infra.DocsDir = filepath.Join(baseDir, ".g8e/docs")
+	Paths.Infra.SshConfigPath = filepath.Join(baseDir, ".g8e/ssh_config")
+	Paths.Infra.TestVaultDir = filepath.Join(baseDir, ".g8e/test-vault")
+	return nil
 }
 
 // System path constants for critical system directories and files
@@ -140,62 +179,21 @@ const (
 	PathLibraryPreferencesSystemConfigurationPreferencesPlist = "/Library/Preferences/SystemConfiguration/preferences.plist"
 )
 
-// CA certificate path constants
+// PKI filesystem constants for subdirectories and filenames.
 const (
-	CACertDir              = ".g8e/pki/trust"
-	CACertBundlePath       = ".g8e/pki/trust/g8eg-ca-bundle.pem"
-	CACertLegacyBundlePath = ".g8e/pki/ca-bundle.pem"
+	PkiSubdirRoot        = "root"
+	PkiSubdirAuthorities = "authorities"
+	PkiSubdirIssued      = "issued"
+	PkiSubdirTrust       = "trust"
+	PkiSubdirRevocation  = "revocation"
+	PkiSubdirBinaries    = "binaries"
+
+	PkiFileRootCA          = "root_ca.crt"
+	PkiFileHubCA           = "hub_ca.crt"
+	PkiFileOperatorCA      = "operator_ca.crt"
+	PkiFileGatewayPeerCA   = "gateway_peer_ca.crt"
+	PkiFileGatewayBundle   = "g8eg-ca-bundle.pem"
+	PkiFileRootBundle      = "root.pem"
+	PkiFileOperatorBundle  = "operator-bundle.pem"
+	PkiFileTrustDomainJSON = "trust-domain.json"
 )
-
-// ResolvePaths resolves filesystem paths relative to project root.
-// Must be called once at initialization before using any path constants.
-// No environment variables are used - all paths are computed from project root.
-func ResolvePaths(projectRoot string) {
-	pathsMutex.Lock()
-	defer pathsMutex.Unlock()
-
-	// All paths are relative to project root
-	Paths.Infra.RuntimeDir = filepath.Join(projectRoot, ".g8e")
-	Paths.Infra.DataDir = filepath.Join(projectRoot, ".g8e/data")
-	Paths.Infra.PkiDir = filepath.Join(projectRoot, ".g8e/pki")
-	Paths.Infra.SecretsDir = filepath.Join(projectRoot, ".g8e/secrets")
-	Paths.Infra.ProtocolDir = filepath.Join(projectRoot, "protocol")
-
-	// Update derived paths
-	Paths.Infra.ProtocolConstantsDir = filepath.Join(Paths.Infra.ProtocolDir, "constants")
-	Paths.Infra.ProtocolModelsDir = filepath.Join(Paths.Infra.ProtocolDir, "models")
-	Paths.Infra.DbPath = filepath.Join(Paths.Infra.DataDir, "g8e.db")
-	Paths.Infra.LocalStateDBPath = filepath.Join(Paths.Infra.RuntimeDir, "local_state.db")
-	Paths.Infra.AuditVaultDBPath = filepath.Join(Paths.Infra.DataDir, "audit_vault.db")
-	Paths.Infra.CaCertPath = filepath.Join(Paths.Infra.PkiDir, "trust/g8eg-ca-bundle.pem")
-	Paths.Infra.AppCertDir = filepath.Join(Paths.Infra.PkiDir, "issued/apps")
-}
-
-// ResolveProjectRoot returns the project root directory.
-// This mirrors the logic in internal/services/system/path.go
-// but is duplicated here to avoid circular dependencies.
-func ResolveProjectRoot() string {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "." // Fallback to current working directory
-	}
-
-	// Try to find the root by looking for protocol or .git
-	current := cwd
-	for {
-		_, protocolErr := os.Stat(filepath.Join(current, "protocol"))
-		_, gitErr := os.Stat(filepath.Join(current, ".git"))
-
-		if protocolErr == nil || gitErr == nil {
-			return current
-		}
-
-		parent := filepath.Dir(current)
-		if parent == current {
-			break
-		}
-		current = parent
-	}
-
-	return cwd
-}

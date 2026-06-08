@@ -48,7 +48,7 @@ func TestGenerateWindowsCSRWithTPM(t *testing.T) {
 
 func TestSignWithWindowsHello(t *testing.T) {
 	txHash := []byte("test-transaction-hash")
-	sig, err := SignWithWindowsHello(txHash)
+	sig, err := AuthenticateWithWindowsHello("test-rp-id", txHash)
 	if err == nil {
 		t.Fatal("SignWithWindowsHello should fail (not yet implemented)")
 	}

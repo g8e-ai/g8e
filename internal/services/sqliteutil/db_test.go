@@ -166,7 +166,7 @@ func TestRunIncrementalVacuum_WrapsError(t *testing.T) {
 
 	err = db.RunIncrementalVacuum(100)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "incremental vacuum failed")
+	assert.Contains(t, err.Error(), "incremental vacuum")
 }
 
 func TestGetPath(t *testing.T) {
@@ -266,7 +266,7 @@ func TestHealthCheck_ClosedDB(t *testing.T) {
 	ctx := context.Background()
 	err = db.HealthCheck(ctx)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "database health check failed")
+	assert.Contains(t, err.Error(), "health check")
 }
 
 func TestHealthCheck_CancelledContext(t *testing.T) {

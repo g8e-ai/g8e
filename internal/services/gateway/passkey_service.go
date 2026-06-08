@@ -15,6 +15,7 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/google/uuid"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
@@ -41,7 +41,7 @@ const (
 // PasskeyService handles L3 proof brokerage for passkey/WebAuthn operations.
 // This moves the L3 authorization from client into g8eo as the sovereign authority.
 type PasskeyService struct {
-	db       *GatewayDBService
+	db       *CanonicalDBService
 	logger   *slog.Logger
 	rpID     string
 	rpName   string
@@ -55,16 +55,25 @@ type PasskeyConfig struct {
 }
 
 // NewPasskeyService creates a new PasskeyService with the given configuration.
-func NewPasskeyService(db *GatewayDBService, logger *slog.Logger, cfg *PasskeyConfig) (*PasskeyService, error) {
+func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *PasskeyConfig) (*PasskeyService, error) {
 	rpName := cfg.RpName
 	if rpName == "" {
 		rpName = "g8e"
 	}
 
+	// For localhost and 127.0.0.1, include both as valid origins
+	// since WebAuthn treats them as different origins
+	rpOrigins := []string{cfg.RpID}
+	if cfg.RpID == "localhost" || cfg.RpID == "127.0.0.1" {
+		rpOrigins = append(rpOrigins, "http://127.0.0.1", "http://localhost")
+	} else {
+		rpOrigins = []string{"https://" + cfg.RpID}
+	}
+
 	w, err := webauthn.New(&webauthn.Config{
 		RPID:          cfg.RpID,
 		RPDisplayName: rpName,
-		RPOrigins:     []string{cfg.RpID},
+		RPOrigins:     rpOrigins,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize webauthn: %w", err)
@@ -119,7 +128,8 @@ type AttestationResponse struct {
 }
 
 // VerifyRegistration verifies a registration response.
-func (s *PasskeyService) VerifyRegistration(userID string, r *http.Request) (*models.PasskeyCredential, error) {
+// It accepts the raw JSON of the WebAuthn response.
+func (s *PasskeyService) VerifyRegistration(userID string, responseJSON []byte) (*models.PasskeyCredential, error) {
 	user, err := s.getUser(userID)
 	if err != nil {
 		return nil, err
@@ -132,6 +142,10 @@ func (s *PasskeyService) VerifyRegistration(userID string, r *http.Request) (*mo
 	if err != nil {
 		return nil, err
 	}
+
+	// Reconstruct request with the response body
+	r, _ := http.NewRequest(http.MethodPost, "/", bytes.NewReader(responseJSON))
+	r.Header.Set("Content-Type", "application/json")
 
 	credential, err := s.webauthn.FinishRegistration(user, *session, r)
 	if err != nil {
@@ -166,6 +180,10 @@ func (s *PasskeyService) GenerateAuthenticationChallenge(userID string) (*protoc
 	}
 	if user == nil {
 		return nil, fmt.Errorf("user not found")
+	}
+
+	if len(user.PasskeyCredentials) == 0 {
+		return nil, constants.ErrNoPasskeysRegistered
 	}
 
 	options, session, err := s.webauthn.BeginLogin(user)
@@ -225,7 +243,8 @@ type AssertionResponse struct {
 }
 
 // VerifyAuthentication verifies an authentication assertion.
-func (s *PasskeyService) VerifyAuthentication(userID string, r *http.Request) (*models.PasskeyCredential, error) {
+// It accepts the raw JSON of the WebAuthn response.
+func (s *PasskeyService) VerifyAuthentication(userID string, responseJSON []byte) (*models.PasskeyCredential, error) {
 	user, err := s.getUser(userID)
 	if err != nil {
 		return nil, err
@@ -238,6 +257,10 @@ func (s *PasskeyService) VerifyAuthentication(userID string, r *http.Request) (*
 	if err != nil {
 		return nil, err
 	}
+
+	// Reconstruct request with the response body
+	r, _ := http.NewRequest(http.MethodPost, "/", bytes.NewReader(responseJSON))
+	r.Header.Set("Content-Type", "application/json")
 
 	credential, err := s.webauthn.FinishLogin(user, *session, r)
 	if err != nil {
@@ -311,36 +334,11 @@ func (s *PasskeyService) RevokeCredential(userID, credentialID string) (found bo
 	return true, len(newCreds), nil
 }
 
-// CreateWebSession creates a web session after successful authentication.
-func (s *PasskeyService) CreateWebSession(userID string) (*models.WebSession, error) {
-	webSessionID := uuid.New().String()
-	now := time.Now()
-
-	webSession := &models.WebSession{
-		ID:              webSessionID,
-		UserID:          userID,
-		CreatedAtUnixMs: now.UnixMilli(),
-		ExpiresAtUnixMs: now.Add(webSessionTTL).UnixMilli(),
-	}
-
-	data, err := json.Marshal(webSession)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal web session: %w", err)
-	}
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, data); err != nil {
-		s.logger.Error("Failed to create web session", string(constants.ConnectionStateError), err, "userID", userID)
-		return nil, fmt.Errorf("failed to create web session: %w", err)
-	}
-
-	s.logger.Info("Web session created", "userID", userID, "webSessionID", webSessionID[:8])
-	return webSession, nil
-}
-
 // VerifyL3Proof verifies a WebAuthn assertion against a registered passkey.
 // The challenge is the transaction_hash.
 // The cliSessionID parameter is ignored for web sessions (WebAuthn) but is required
 // for interface compatibility with CLI mTLS-based L3 verification.
-func (s *PasskeyService) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+func (s *PasskeyService) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	if userID == "" {
 		return false, fmt.Errorf("user_id is required for L3 WebAuthn verification")
 	}

@@ -38,7 +38,7 @@ func TestNewBootstrapService(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	svc, err := NewBootstrapService(cfg, logger)
+	svc, err := NewBootstrapService(cfg, logger, nil)
 
 	require.NoError(t, err)
 	assert.NotNil(t, svc)
@@ -50,7 +50,7 @@ func TestNewBootstrapService_TLSPinning(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	svc, err := NewBootstrapService(cfg, logger)
+	svc, err := NewBootstrapService(cfg, logger, nil)
 	require.NoError(t, err)
 
 	transport, ok := svc.httpClient.Transport.(*http.Transport)
@@ -66,7 +66,7 @@ func TestNewBootstrapService_HasTimeout(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	svc, err := NewBootstrapService(cfg, logger)
+	svc, err := NewBootstrapService(cfg, logger, nil)
 	require.NoError(t, err)
 
 	assert.NotZero(t, svc.httpClient.Timeout)
@@ -88,7 +88,7 @@ func newTestBootstrapService(t *testing.T, server *httptest.Server) *BootstrapSe
 	cfg.Endpoint = host
 	cfg.HTTPPort = port
 	logger := testutil.NewTestLogger()
-	svc, err := NewBootstrapService(cfg, logger)
+	svc, err := NewBootstrapService(cfg, logger, nil)
 	require.NoError(t, err)
 	svc.httpClient = server.Client()
 	return svc
@@ -255,13 +255,13 @@ func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
 	cfg.HTTPPort = port
 	cfg.CloudMode = true
 	cfg.CloudProvider = "aws"
-	cfg.LocalStoreEnabled = true
+	cfg.ExecutionVaultEnabled = true
 	cfg.NoGit = false
 	cfg.LogLevel = "debug"
 
 	logger := testutil.NewTestLogger()
 
-	svc, err := NewBootstrapService(cfg, logger)
+	svc, err := NewBootstrapService(cfg, logger, nil)
 	require.NoError(t, err)
 	svc.httpClient = server.Client()
 
@@ -271,7 +271,7 @@ func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
 	require.NotNil(t, capturedBody.RuntimeConfig)
 	assert.True(t, capturedBody.RuntimeConfig.CloudMode)
 	assert.Equal(t, "aws", capturedBody.RuntimeConfig.CloudProvider)
-	assert.True(t, capturedBody.RuntimeConfig.LocalStorageEnabled)
+	assert.True(t, capturedBody.RuntimeConfig.ExecutionVaultEnabled)
 	assert.False(t, capturedBody.RuntimeConfig.NoGit)
 	assert.Equal(t, "debug", capturedBody.RuntimeConfig.LogLevel)
 
@@ -282,7 +282,7 @@ func TestApplyBootstrapConfig_AppliesAllFields(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	svc, err := NewBootstrapService(cfg, logger)
+	svc, err := NewBootstrapService(cfg, logger, nil)
 	require.NoError(t, err)
 
 	bootCfg := &BootstrapConfig{
@@ -311,7 +311,7 @@ func TestApplyBootstrapConfig_ZeroValuesNotOverridden(t *testing.T) {
 	originalInterval := cfg.HeartbeatInterval
 	logger := testutil.NewTestLogger()
 
-	svc, err := NewBootstrapService(cfg, logger)
+	svc, err := NewBootstrapService(cfg, logger, nil)
 	require.NoError(t, err)
 
 	bootCfg := &BootstrapConfig{
@@ -341,7 +341,7 @@ func TestApplyBootstrapConfig_InvalidCertIsFatal(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	svc, err := NewBootstrapService(cfg, logger)
+	svc, err := NewBootstrapService(cfg, logger, nil)
 	require.NoError(t, err)
 
 	bootCfg := &BootstrapConfig{
@@ -477,7 +477,8 @@ func TestSystemInfoTools(t *testing.T) {
 		t.Parallel()
 		osName := system.GetOSName()
 		assert.NotEmpty(t, osName)
-		assert.Contains(t, []string{"linux", "darwin"}, osName)
+		// Accept all standard Go OS names (linux, darwin, windows, etc.)
+		assert.Contains(t, []string{"linux", "darwin", "windows", "freebsd", "openbsd", "netbsd"}, osName)
 	})
 
 	t.Run("system.GetArchitecture", func(t *testing.T) {
@@ -552,7 +553,7 @@ func TestSetHTTPClient(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
-	svc, err := NewBootstrapService(cfg, logger)
+	svc, err := NewBootstrapService(cfg, logger, nil)
 	require.NoError(t, err)
 
 	customClient := &http.Client{Timeout: 30 * time.Second}
@@ -565,7 +566,7 @@ func TestRebuildTransportWithOperatorCert(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
-	svc, err := NewBootstrapService(cfg, logger)
+	svc, err := NewBootstrapService(cfg, logger, nil)
 	require.NoError(t, err)
 
 	t.Run("invalid cert/key pair", func(t *testing.T) {

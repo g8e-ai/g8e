@@ -14,36 +14,70 @@
 package gateway
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	tempDirCounters = make(map[string]int)
+	tempDirMu       sync.Mutex
+)
+
 // TestInfrastructure holds common test setup components shared across gateway tests.
 type TestInfrastructure struct {
-	Cfg         *config.Config
-	Logger      *slog.Logger
-	DB          *GatewayDBService
-	Pubsub      *PubSubBroker
-	SecretMgr   *SecretManager
-	PKI         *PKIAuthority
-	UserSvc     *UserService
-	PersonaSvc  *PersonaService
-	Responder   *responder.Responder
-	Auth        *AuthService
-	SessionSvc  *SessionService
-	Reg         *RegistrationService
-	Passkey     *PasskeyService
-	DBDir       string
-	PKIDir      string
-	SecretsDir  string
-	KeystoreDir string
+	Cfg                *config.Config
+	Logger             *slog.Logger
+	DB                 *CanonicalDBService
+	Pubsub             *PubSubBroker
+	SecretMgr          *SecretManager
+	PKI                *PKIAuthority
+	UserSvc            *UserService
+	PersonaSvc         *PersonaService
+	Responder          *response.Writer
+	Auth               *AuthService
+	CLISessionSvc      *CLISessionService
+	OperatorSessionSvc *OperatorSessionService
+	WebSessionSvc      *WebSessionService
+	Reg                *RegistrationService
+	Passkey            *PasskeyService
+	DBDir              string
+	PKIDir             string
+	SecretsDir         string
+}
+
+// tempDir creates a temporary directory in the current working directory.
+// This avoids Windows %TEMP% permission issues and temp dir cleanup problems.
+func tempDir(tb testing.TB) string {
+	tb.Helper()
+	// Sanitize test name for use as directory name
+	safeName := strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' {
+			return r
+		}
+		return '_'
+	}, tb.Name())
+
+	tempDirMu.Lock()
+	tempDirCounters[safeName]++
+	count := tempDirCounters[safeName]
+	tempDirMu.Unlock()
+
+	dir := filepath.Join(".", "test-temp", fmt.Sprintf("%s_%d", safeName, count))
+	err := os.MkdirAll(dir, 0755)
+	require.NoError(tb, err, "failed to create temp dir in cwd")
+	tb.Cleanup(func() { os.RemoveAll(dir) })
+	return dir
 }
 
 // setupTestInfrastructure creates common test infrastructure for gateway tests.
@@ -53,67 +87,87 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-
+	dbDir := tempDir(t)
+	pkiDir := tempDir(t)
+	secretsDir := tempDir(t)
+	// Ensure directories are clean to avoid stale state from previous test runs
+	os.RemoveAll(dbDir)
+	require.NoError(t, os.MkdirAll(dbDir, 0755))
 	os.RemoveAll(secretsDir)
 	require.NoError(t, os.MkdirAll(secretsDir, 0755))
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	pubsub := NewPubSubBroker(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
+	var sm *SecretManager
 	if resetKeystoreStorage {
 		keystore.ResetTestStorage()
-	}
-
-	keystoreDir := t.TempDir()
-	backend, err := keystore.NewTestBackend()
-	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(keystoreDir, logger, backend)
-	require.NoError(t, err)
-	require.NoError(t, ks.Initialize())
-	require.NoError(t, ks.EnsurePermissions())
-	sm := &SecretManager{
-		db:         db.db,
-		secretsDir: t.TempDir(),
-		logger:     logger,
-		keystore:   ks,
+		backend, err := keystore.NewTestBackend()
+		require.NoError(t, err)
+		ks, err := keystore.NewWithBackend(secretsDir, logger, backend)
+		require.NoError(t, err)
+		require.NoError(t, ks.Initialize())
+		require.NoError(t, ks.EnsurePermissions())
+		sm = &SecretManager{
+			db:         db.db,
+			secretsDir: secretsDir,
+			logger:     logger,
+			keystore:   ks,
+		}
+	} else {
+		// Reuse the keystore from DB initialization - create a new SecretManager instance
+		// that points to the same secretsDir and uses the shared test backend
+		backend, err := keystore.NewTestBackend()
+		require.NoError(t, err)
+		ks, err := keystore.NewWithBackend(secretsDir, logger, backend)
+		require.NoError(t, err)
+		// Initialize will retrieve the existing master key from shared test storage
+		require.NoError(t, ks.Initialize())
+		require.NoError(t, ks.EnsurePermissions())
+		sm = &SecretManager{
+			db:         db.db,
+			secretsDir: secretsDir,
+			logger:     logger,
+			keystore:   ks,
+		}
 	}
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
-	err = pki.EnsurePKI(nil)
+	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "", "", "")
-	sessionSvc := NewSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc, &cfg.Gateway)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	operatorSessionSvc := NewOperatorSessionService(db, logger)
+	webSessionSvc := NewWebSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
 	return &TestInfrastructure{
-		Cfg:         cfg,
-		Logger:      logger,
-		DB:          db,
-		Pubsub:      pubsub,
-		SecretMgr:   sm,
-		PKI:         pki,
-		UserSvc:     userSvc,
-		PersonaSvc:  personaSvc,
-		Responder:   resp,
-		Auth:        auth,
-		SessionSvc:  sessionSvc,
-		Reg:         reg,
-		Passkey:     passkey,
-		DBDir:       dbDir,
-		PKIDir:      pkiDir,
-		SecretsDir:  secretsDir,
-		KeystoreDir: keystoreDir,
+		Cfg:                cfg,
+		Logger:             logger,
+		DB:                 db,
+		Pubsub:             pubsub,
+		SecretMgr:          sm,
+		PKI:                pki,
+		UserSvc:            userSvc,
+		PersonaSvc:         personaSvc,
+		Responder:          resp,
+		Auth:               auth,
+		CLISessionSvc:      cliSessionSvc,
+		OperatorSessionSvc: operatorSessionSvc,
+		WebSessionSvc:      webSessionSvc,
+		Reg:                reg,
+		Passkey:            passkey,
+		DBDir:              dbDir,
+		PKIDir:             pkiDir,
+		SecretsDir:         secretsDir,
 	}
 }
 

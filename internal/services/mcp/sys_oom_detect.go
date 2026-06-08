@@ -26,6 +26,19 @@ import (
 	"github.com/g8e-ai/g8e/internal/security"
 )
 
+// oomEvent represents a single OOM killer event extracted from logs.
+type oomEvent struct {
+	Timestamp string `json:"timestamp"`
+	PID       int    `json:"pid,omitempty"`
+	Process   string `json:"process,omitempty"`
+	MemoryMB  int    `json:"memory_mb,omitempty"`
+}
+
+// oomDetectResult represents the structured output of the OOM detection tool.
+type oomDetectResult struct {
+	Events []oomEvent `json:"events"`
+}
+
 // SysOOMDetectTool scans system logs for OOM killer events.
 type SysOOMDetectTool struct{}
 
@@ -40,13 +53,13 @@ func (t *SysOOMDetectTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *SysOOMDetectTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"log_path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to the log file (default /var/log/dmesg)",
+func (t *SysOOMDetectTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"log_path": {
+				Type:        "string",
+				Description: "Path to the log file (default /var/log/dmesg)",
 			},
 		},
 	}
@@ -83,7 +96,7 @@ func (t *SysOOMDetectTool) Execute(ctx context.Context, args json.RawMessage) (C
 	}
 	defer file.Close()
 
-	var events []map[string]interface{}
+	var events []oomEvent
 	oomRegex := regexp.MustCompile(`(?i)oom-killer|killed process`)
 	pidRegex := regexp.MustCompile(`pid\s*=\s*(\d+)`)
 	processRegex := regexp.MustCompile(`process\s+(\S+)`)
@@ -97,21 +110,21 @@ func (t *SysOOMDetectTool) Execute(ctx context.Context, args json.RawMessage) (C
 
 		line := scanner.Text()
 		if oomRegex.MatchString(line) {
-			event := map[string]interface{}{
-				"timestamp": time.Now().Format(time.RFC3339),
+			event := oomEvent{
+				Timestamp: time.Now().Format(time.RFC3339),
 			}
 
 			if matches := pidRegex.FindStringSubmatch(line); len(matches) > 1 {
 				if pid, err := strconv.Atoi(matches[1]); err == nil {
-					event["pid"] = pid
+					event.PID = pid
 				}
 			}
 			if matches := processRegex.FindStringSubmatch(line); len(matches) > 1 {
-				event["process"] = matches[1]
+				event.Process = matches[1]
 			}
 			if matches := memoryRegex.FindStringSubmatch(line); len(matches) > 1 {
 				if memoryMB, err := strconv.Atoi(matches[1]); err == nil {
-					event["memory_mb"] = memoryMB
+					event.MemoryMB = memoryMB
 				}
 			}
 
@@ -123,8 +136,8 @@ func (t *SysOOMDetectTool) Execute(ctx context.Context, args json.RawMessage) (C
 		return CallToolResult{}, fmt.Errorf("error reading log file: %w", err)
 	}
 
-	result := map[string]interface{}{
-		"events": events,
+	result := oomDetectResult{
+		Events: events,
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {

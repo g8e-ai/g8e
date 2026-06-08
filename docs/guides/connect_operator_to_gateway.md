@@ -30,9 +30,25 @@ This starts the g8e Gateway in doctrine mode (L1 enforced, L2/L3 audited). The g
 
 ### Remote Deployment
 
-For distributed infrastructure, deploy the g8e Operator on remote hosts:
+For distributed infrastructure, deploy the g8e Operator on remote hosts.
 
-#### 1. CSR-Based Enrollment
+#### 1. Copy/Paste Deploy Scripts (Gateway-Served)
+
+The gateway embeds deploy scripts and serves them over HTTP on port 8080. After starting the gateway on the host machine, run these commands on remote hosts to download and deploy the g8e binary:
+
+**Linux/macOS:**
+
+```bash
+curl -fsSL http://<gateway-ip>:8080/g8e-operator.sh | bash
+```
+
+**Windows:**
+
+```powershell
+iwr http://<gateway-ip>:8080/g8e-operator.ps1 -UseBasicParsing | iex
+```
+
+#### 2. CSR-Based Enrollment
 
 On the remote host, generate a CSR and enroll with the g8e Gateway:
 
@@ -40,13 +56,13 @@ On the remote host, generate a CSR and enroll with the g8e Gateway:
 ./g8e security pki enroll -e <gateway-ip>
 ```
 
-The endpoint is the g8e Gateway IP address. The bootstrap port (8441) is appended automatically. This command generates g8e Operator and CLI CSRs, submits them to the g8e Gateway, and saves the signed certificates to the PKI directory.
+The endpoint is the g8e Gateway IP address. The HTTP port (8080) is appended automatically. This command generates g8e Operator and CLI CSRs, submits them to the g8e Gateway, and saves the signed certificates to the PKI directory.
 
-#### 2. Copy g8e Node and Certificates
+#### 3. Copy g8e Node and Certificates
 
 Copy the `g8e` g8e Node and the issued certificates to the remote host.
 
-#### 3. Start the g8e Gateway
+#### 4. Start the g8e Gateway
 
 On the remote host, start the g8e Gateway with the enrolled certificates:
 
@@ -56,7 +72,7 @@ On the remote host, start the g8e Gateway with the enrolled certificates:
 
 The g8e Gateway will:
 - Load the mTLS certificates from the PKI directory
-- Establish the control plane on port 8440 (mTLS) and bootstrap port 8441
+- Establish the control plane on port 8443 (HTTPS) and bootstrap on port 8080 (HTTP)
 - Initialize the local in-process Pub/Sub broker
 - Initialize the SQLite-backed audit vault with Git ledger
 - Execute mutations through the L1/L2/L3/L4/L5 verification pipeline
@@ -104,7 +120,7 @@ AI clients can connect to the Gateway's MCP endpoint using mTLS:
 
 ```bash
 # For mTLS-based MCP
-curl -X POST https://localhost:8440/api/v1/mcp/tools/call \
+curl -X POST https://localhost:8080/api/v1/mcp/tools/call \
   --cert .g8e/credentials/cli.crt \
   --key .g8e/credentials/cli.key \
   -H "Content-Type: application/json" \
@@ -124,7 +140,7 @@ curl -X POST http://localhost:8080/api/v1/mcp/tools/call \
 For direct envelope submission to the Gateway:
 
 ```bash
-curl -X POST https://localhost:8440/api/v1/governance/envelopes \
+curl -X POST https://localhost:8080/api/v1/governance/envelopes \
   --cert .g8e/credentials/cli.crt \
   --key .g8e/credentials/cli.key \
   -H "Content-Type: application/json" \

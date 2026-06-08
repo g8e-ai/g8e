@@ -76,14 +76,14 @@ func TestParseTimestamp_EmptyString(t *testing.T) {
 	t.Parallel()
 	_, err := ParseTimestamp("")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "empty timestamp string")
+	assert.Contains(t, err.Error(), "timestamp: parse: empty string")
 }
 
 func TestParseTimestamp_UnrecognizedFormat(t *testing.T) {
 	t.Parallel()
 	_, err := ParseTimestamp("not-a-timestamp")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unrecognized timestamp format")
+	assert.Contains(t, err.Error(), "timestamp: parse: unrecognized format")
 }
 
 func TestFormatParseRoundTrip(t *testing.T) {

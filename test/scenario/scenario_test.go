@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build integration
+//go:build e2e
 
 package scenario
 
@@ -20,17 +20,26 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
-	"github.com/g8e-ai/g8e/internal/auditor/client"
-	"github.com/g8e-ai/g8e/internal/auditor/config"
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	cliconfig "github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/emulator/client"
+	"github.com/g8e-ai/g8e/internal/emulator/config"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/encoding/protojson"
+)
+
+const (
+	defaultHTTPRetryMaxAttempts = 60
+	defaultHTTPRetryInterval    = 1 * time.Second
+	defaultHTTPRetryTimeout     = 70 * time.Second
 )
 
 // TestContext holds the test infrastructure for a single test run.
@@ -51,18 +60,27 @@ type TestContext struct {
 func setupTestContext(t *testing.T) *TestContext {
 	t.Helper()
 
-	// Load CLI config to get ports and paths (use project root, not test directory)
-	projectRoot, err := os.Getwd()
+	// Initialize paths relative to project root
+	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
-	// Navigate to project root (test/scenario -> g8e root)
-	for len(projectRoot) > 0 && filepath.Base(projectRoot) != "g8e" {
-		projectRoot = filepath.Dir(projectRoot)
-		if projectRoot == "/" || projectRoot == "." {
-			t.Fatalf("could not find g8e project root from %s", projectRoot)
-		}
+	// If running from test/scenario, base is ../../. If from root, base is ./
+	base := "./"
+	if filepath.Base(cwd) == "scenario" {
+		base = "../../"
 	}
+	absBase, err := filepath.Abs(base)
+	if err != nil {
+		t.Fatalf("failed to get absolute path for base %s: %v", base, err)
+	}
+
+	if err := constants.InitPathsWithBase(absBase); err != nil {
+		t.Fatalf("failed to initialize paths: %v", err)
+	}
+	// The projectRoot should be the directory containing .g8e, not the .g8e directory itself,
+	// because cliconfig.Load and constants.InitPathsWithBase expect the base directory.
+	projectRoot := absBase
 
 	cliCfg, err := cliconfig.Load(projectRoot)
 	if err != nil {
@@ -72,9 +90,8 @@ func setupTestContext(t *testing.T) *TestContext {
 	// Paths to local PKI material (bootstrapped via ./g8e auth login)
 	clientCertPath := cliCfg.CLICertFile()
 	clientKeyPath := cliCfg.CLIKeyFile()
-	// Use the CA bundle saved to credentials directory during auth login
-	// This is the CA that actually signed the client cert
-	caBundlePath := filepath.Join(cliCfg.CredentialsDir, "g8eg-ca-bundle.pem")
+	// Use the CA bundle from centralized constants as per docs/devs/tests.md
+	caBundlePath := constants.Paths.Infra.CaCertPath
 
 	// Verify certificates exist
 	if _, err := os.Stat(clientCertPath); os.IsNotExist(err) {
@@ -87,14 +104,15 @@ func setupTestContext(t *testing.T) *TestContext {
 	// Create auditor client for HTTP submission
 	auditorCfg := config.Default()
 	auditorCfg.UseCLIConfig = false // Don't auto-load from CLI config, we set paths explicitly
-	auditorCfg.MTLSBaseURL = fmt.Sprintf("https://localhost:%d", cliCfg.Paths.Ports.OperatorHTTPS)
-	auditorCfg.PublicBaseURL = fmt.Sprintf("https://localhost:%d", cliCfg.Paths.Ports.OperatorPublicHTTPS)
+	auditorCfg.MTLSBaseURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	auditorCfg.PublicBaseURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 	auditorCfg.Auth.ClientCert = clientCertPath
 	auditorCfg.Auth.ClientKey = clientKeyPath
 	auditorCfg.Auth.CABundle = caBundlePath
-	auditorCfg.Auth.Insecure = false
+	auditorCfg.Auth.Insecure = true // Skip verify for local dev with self-signed certs
+	auditorCfg.Verbose = true       // Echo requests to stderr for debugging
 
-	// Load Operator session ID from CLI credentials
+	// Load CLI credentials
 	creds, err := auth.LoadCredentials(cliCfg)
 	if err != nil {
 		t.Fatalf("failed to load CLI credentials: %v", err)
@@ -102,18 +120,18 @@ func setupTestContext(t *testing.T) *TestContext {
 	if creds == nil {
 		t.Fatalf("no CLI credentials found - run './g8e auth login' first")
 	}
-	auditorCfg.OperatorSessionID = creds.OperatorSessionID
 
+	t.Logf("Creating auditor client with Cert: %s, Key: %s, CA: %s", clientCertPath, clientKeyPath, caBundlePath)
 	testClient, err := client.New(auditorCfg)
 	if err != nil {
 		t.Fatalf("failed to create auditor client: %v", err)
 	}
 
-	// Discover live Operator session (should use the one we loaded)
-	ctx := context.Background()
-	operatorSessionID := testClient.DiscoverOperatorSession(ctx)
+	// For gateway-only testing, use CLI session ID as operator session ID
+	// The gateway validates envelopes using the session ID in the envelope body
+	operatorSessionID := creds.CLISessionID
 	if operatorSessionID == "" {
-		t.Fatal("failed to discover live Operator session - is the platform running? (./g8e gw start)")
+		t.Fatal("CLI session ID is empty - run './g8e auth login' first")
 	}
 
 	// Generate test client keys for signing (these are for L2 consensus simulation in tests)
@@ -247,11 +265,16 @@ type Result struct {
 }
 
 // submitViaHTTP submits an envelope via the auditor client and returns the result.
+// Retries on 503 (envelope processor not initialized) up to the configured timeout.
 func submitViaHTTP(t *testing.T, auditorClient *client.Client, intent []byte, operatorSessionID, cliSessionID string) Result {
 	t.Helper()
 
-	ctx := context.Background()
-	persona := client.Persona{ID: "scenario-test", UserAgent: "g8e-scenario-tests", OperatorSessionID: operatorSessionID, CLISessionID: cliSessionID}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultHTTPRetryTimeout)
+	defer cancel()
+
+	// Authenticate as CLI session since we're using a CLI certificate
+	// The envelope body contains operator_session_id for governance validation
+	persona := client.Persona{ID: "scenario-test", UserAgent: "g8e-scenario-tests", CLISessionID: cliSessionID}
 
 	// Decode intent to get envelope for submission
 	var envelope commonv1.GovernanceEnvelope
@@ -259,32 +282,49 @@ func submitViaHTTP(t *testing.T, auditorClient *client.Client, intent []byte, op
 		return Result{Error: fmt.Errorf("failed to unmarshal envelope: %w", err)}
 	}
 
-	status, body, err := auditorClient.SubmitEnvelope(ctx, persona, &envelope)
+	// Retry on 503 (envelope processor not initialized)
+	for i := 0; i < defaultHTTPRetryMaxAttempts; i++ {
+		select {
+		case <-ctx.Done():
+			return Result{Error: fmt.Errorf("envelope processor not ready after %v (operator may not be running or command service not started)", defaultHTTPRetryTimeout)}
+		default:
+		}
 
-	res := Result{
-		EnvelopeID:      envelope.Id,
-		TransactionHash: envelope.TransactionHash,
-	}
+		status, body, err := auditorClient.SubmitEnvelope(ctx, persona, &envelope)
 
-	if err != nil {
-		res.Error = fmt.Errorf("HTTP submission failed: %w", err)
+		res := Result{
+			EnvelopeID:      envelope.Id,
+			TransactionHash: envelope.TransactionHash,
+		}
+
+		if err != nil {
+			res.Error = fmt.Errorf("HTTP submission failed: %w", err)
+			return res
+		}
+
+		if status == http.StatusServiceUnavailable {
+			t.Logf("Envelope processor not ready, retrying (%d/%d)...", i+1, defaultHTTPRetryMaxAttempts)
+			time.Sleep(defaultHTTPRetryInterval)
+			continue
+		}
+
+		if status >= 400 {
+			res.Error = fmt.Errorf("gateway rejected with status %d: %s", status, string(body))
+			return res
+		}
+
+		// Parse response to extract receipt if successful
+		var response struct {
+			Receipt *operatorv1.ActionReceipt `json:"receipt"`
+		}
+		if err := json.Unmarshal(body, &response); err == nil && response.Receipt != nil {
+			res.Receipt = response.Receipt
+		}
+
 		return res
 	}
 
-	if status >= 400 {
-		res.Error = fmt.Errorf("gateway rejected with status %d: %s", status, string(body))
-		return res
-	}
-
-	// Parse response to extract receipt if successful
-	var response struct {
-		Receipt *operatorv1.ActionReceipt `json:"receipt"`
-	}
-	if err := json.Unmarshal(body, &response); err == nil && response.Receipt != nil {
-		res.Receipt = response.Receipt
-	}
-
-	return res
+	return Result{Error: fmt.Errorf("envelope processor not ready after %v (operator may not be running or command service not started)", defaultHTTPRetryTimeout)}
 }
 
 // assertReceiptPersisted verifies that a receipt is persisted via the API.

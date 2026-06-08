@@ -16,6 +16,7 @@ package gateway
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -25,7 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -36,9 +37,9 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -83,7 +84,8 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	assert.NotNil(t, cliDoc)
 
 	var loadedCLISession models.CLISession
-	b, _ := json.Marshal(cliDoc.Data)
+	b, err := json.Marshal(cliDoc.Data)
+	require.NoError(t, err)
 	err = json.Unmarshal(b, &loadedCLISession)
 	require.NoError(t, err)
 	assert.Equal(t, userID, loadedCLISession.UserID)
@@ -101,9 +103,9 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -131,16 +133,16 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 }
 
 // setupAuthService creates a test AuthService with minimal dependencies.
-func setupAuthService(t *testing.T) (*AuthService, *GatewayDBService) {
+func setupAuthService(t *testing.T) (*AuthService, *CanonicalDBService) {
 	t.Helper()
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	dbDir := tempDir(t)
+	secretsDir := tempDir(t)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	responderSvc := responder.New(logger)
+	responderSvc := response.NewWriter(logger)
 	personaSvc := NewPersonaService(db, logger)
 	auth := NewAuthService(db, nil, logger, nil, personaSvc, responderSvc, secretsDir, nil, "", "", "")
 	return auth, db

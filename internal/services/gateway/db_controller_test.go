@@ -25,13 +25,13 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/responder"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestDBController(t *testing.T) (*DBController, *GatewayDBService) {
+func setupTestDBController(t *testing.T) (*DBController, *CanonicalDBService) {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
 
@@ -71,10 +71,13 @@ func TestDBControllerHandleDB(t *testing.T) {
 		dbController.handleDataDB(rrGet, reqGet)
 		assert.Equal(t, http.StatusOK, rrGet.Code)
 
-		var doc map[string]interface{}
+		type testDoc struct {
+			Name string `json:"name"`
+		}
+		var doc testDoc
 		err := json.Unmarshal(rrGet.Body.Bytes(), &doc)
 		require.NoError(t, err)
-		assert.Equal(t, "alice", doc["name"])
+		assert.Equal(t, "alice", doc.Name)
 	})
 
 	t.Run("PATCH", func(t *testing.T) {
@@ -89,11 +92,15 @@ func TestDBControllerHandleDB(t *testing.T) {
 		dbController.handleDataDB(rrGet, reqGet)
 		assert.Equal(t, http.StatusOK, rrGet.Code)
 
-		var doc map[string]interface{}
+		type testDocWithRole struct {
+			Name string `json:"name"`
+			Role string `json:"role"`
+		}
+		var doc testDocWithRole
 		err := json.Unmarshal(rrGet.Body.Bytes(), &doc)
 		require.NoError(t, err)
-		assert.Equal(t, "alice", doc["name"])
-		assert.Equal(t, "admin", doc["role"])
+		assert.Equal(t, "alice", doc.Name)
+		assert.Equal(t, "admin", doc.Role)
 	})
 
 	t.Run("DELETE", func(t *testing.T) {
@@ -115,13 +122,16 @@ func TestDBControllerHandleDB(t *testing.T) {
 		query := models.DocQueryRequest{
 			Limit: 1,
 		}
-		body, _ := json.Marshal(query)
+		body := mustMarshalJSON(t, query)
 		reqQuery := httptest.NewRequest(http.MethodPost, "/api/v1/data/items/_query", bytes.NewReader(body))
 		rrQuery := httptest.NewRecorder()
 		dbController.handleDataDB(rrQuery, reqQuery)
 		assert.Equal(t, http.StatusOK, rrQuery.Code)
 
-		var results []map[string]interface{}
+		type queryResult struct {
+			Val int `json:"val"`
+		}
+		var results []queryResult
 		err := json.Unmarshal(rrQuery.Body.Bytes(), &results)
 		require.NoError(t, err)
 		assert.Len(t, results, 1)
@@ -534,7 +544,7 @@ func TestDBControllerHandlePubSubPublish(t *testing.T) {
 			Channel: constants.ResultsChannel("op-1", "session-1"),
 			Data:    mustDocJSON(t, map[string]string{"foo": "bar"}),
 		}
-		body, _ := json.Marshal(pubReq)
+		body := mustMarshalJSON(t, pubReq)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/pubsub/publish", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
 		dbController.handlePubSubPublish(rr, req)
@@ -560,12 +570,12 @@ func TestDBControllerHandlePubSubPublish(t *testing.T) {
 
 	t.Run("Reject mutation channels", func(t *testing.T) {
 		t.Parallel()
-		for _, channel := range []string{constants.CmdChannel("op-1", "session-1"), "auditor:op-1:session-1"} {
+		for _, channel := range []string{constants.CmdChannel("op-1", "session-1"), "auditor:op-1:sessions-1"} {
 			pubReq := models.PubSubPublishRequest{
 				Channel: channel,
 				Data:    mustDocJSON(t, map[string]string{"foo": "bar"}),
 			}
-			body, _ := json.Marshal(pubReq)
+			body := mustMarshalJSON(t, pubReq)
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/pubsub/publish", bytes.NewReader(body))
 			rr := httptest.NewRecorder()
 			dbController.handlePubSubPublish(rr, req)
@@ -580,7 +590,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 	userSvc := NewUserService(db, testutil.NewTestLogger())
 	logger := testutil.NewTestLogger()
 	cfg := testutil.NewTestConfig(t)
-	resp := responder.New(logger)
+	resp := response.NewWriter(logger)
 	adminController := newAdminController(cfg, logger, db, userSvc, resp)
 
 	bootstrapUser, err := userSvc.CreateBootstrapUser()
@@ -603,13 +613,13 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			CreatedAt:          time.Now().UTC(),
 			UpdatedAt:          time.Now().UTC(),
 		}
-		policyBytes, _ := json.Marshal(policy)
+		policyBytes := mustMarshalJSON(t, policy)
 		err := db.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.DocDelete("app_policies", appID) })
 
 		reqBody := map[string]string{"app_id": appID}
-		bodyBytes, _ := json.Marshal(reqBody)
+		bodyBytes := mustMarshalJSON(t, reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/apps/revoke", bytes.NewReader(bodyBytes))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, regularUser.ID))
 
@@ -630,13 +640,13 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			CreatedAt:          time.Now().UTC(),
 			UpdatedAt:          time.Now().UTC(),
 		}
-		policyBytes, _ := json.Marshal(policy)
+		policyBytes := mustMarshalJSON(t, policy)
 		err := db.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.DocDelete("app_policies", appID) })
 
 		reqBody := map[string]string{"app_id": appID}
-		bodyBytes, _ := json.Marshal(reqBody)
+		bodyBytes := mustMarshalJSON(t, reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/apps/revoke", bytes.NewReader(bodyBytes))
 
 		rr := httptest.NewRecorder()
@@ -648,7 +658,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 
 	t.Run("reject app revocation with missing app_id", func(t *testing.T) {
 		reqBody := map[string]string{}
-		bodyBytes, _ := json.Marshal(reqBody)
+		bodyBytes := mustMarshalJSON(t, reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/apps/revoke", bytes.NewReader(bodyBytes))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
 
@@ -669,7 +679,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			CreatedAt:          time.Now().UTC(),
 			UpdatedAt:          time.Now().UTC(),
 		}
-		policyBytes, _ := json.Marshal(policy)
+		policyBytes := mustMarshalJSON(t, policy)
 		err := db.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
 
@@ -678,7 +688,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 		require.NotNil(t, policyDoc)
 
 		reqBody := map[string]string{"app_id": appID}
-		bodyBytes, _ := json.Marshal(reqBody)
+		bodyBytes := mustMarshalJSON(t, reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/apps/revoke", bytes.NewReader(bodyBytes))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
 
@@ -702,7 +712,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			CreatedAt:          time.Now().UTC(),
 			UpdatedAt:          time.Now().UTC(),
 		}
-		policyBytes, _ := json.Marshal(policy)
+		policyBytes := mustMarshalJSON(t, policy)
 		err := db.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
 
@@ -712,7 +722,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			AddedAt:   time.Now().UTC(),
 			Enabled:   true,
 		}
-		signerBytes, _ := json.Marshal(signer)
+		signerBytes := mustMarshalJSON(t, signer)
 		err = db.DocSet("trusted_signers", appID, signerBytes)
 		require.NoError(t, err)
 
@@ -725,7 +735,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 		require.NotNil(t, signerDoc)
 
 		reqBody := map[string]string{"app_id": appID}
-		bodyBytes, _ := json.Marshal(reqBody)
+		bodyBytes := mustMarshalJSON(t, reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/apps/revoke", bytes.NewReader(bodyBytes))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
 
@@ -753,7 +763,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			CreatedAt:          time.Now().UTC(),
 			UpdatedAt:          time.Now().UTC(),
 		}
-		policyBytes, _ := json.Marshal(policy)
+		policyBytes := mustMarshalJSON(t, policy)
 		err := db.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
 
@@ -763,12 +773,12 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			AddedAt:   time.Now().UTC(),
 			Enabled:   true,
 		}
-		signerBytes, _ := json.Marshal(signer)
+		signerBytes := mustMarshalJSON(t, signer)
 		err = db.DocSet("trusted_signers", appID, signerBytes)
 		require.NoError(t, err)
 
 		reqBody := map[string]string{"app_id": appID}
-		bodyBytes, _ := json.Marshal(reqBody)
+		bodyBytes := mustMarshalJSON(t, reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/apps/revoke", bytes.NewReader(bodyBytes))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
 
@@ -1040,7 +1050,7 @@ func TestDBControllerHandleGovernanceSigners(t *testing.T) {
 			AddedAt:   time.Now().UTC(),
 			Enabled:   true,
 		}
-		body, _ := json.Marshal(signer)
+		body := mustMarshalJSON(t, signer)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/governance/signers", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
 		dbController.handleGovernanceSigners(rr, req)
@@ -1053,7 +1063,7 @@ func TestDBControllerHandleGovernanceSigners(t *testing.T) {
 		signer := models.TrustedSigner{
 			PublicKey: strings.Repeat("a", 64),
 		}
-		body, _ := json.Marshal(signer)
+		body := mustMarshalJSON(t, signer)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/governance/signers", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
 		dbController.handleGovernanceSigners(rr, req)
@@ -1066,7 +1076,7 @@ func TestDBControllerHandleGovernanceSigners(t *testing.T) {
 		signer := models.TrustedSigner{
 			ID: "test-signer-2",
 		}
-		body, _ := json.Marshal(signer)
+		body := mustMarshalJSON(t, signer)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/governance/signers", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
 		dbController.handleGovernanceSigners(rr, req)
@@ -1111,7 +1121,7 @@ func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
 			AddedAt:   time.Now().UTC(),
 			Enabled:   true,
 		}
-		signerBytes, _ := json.Marshal(signer)
+		signerBytes := mustMarshalJSON(t, signer)
 		err := db.DocSet("trusted_signers", "test-signer-get", signerBytes)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.DocDelete("trusted_signers", "test-signer-get") })
@@ -1132,7 +1142,7 @@ func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
 			AddedAt:   time.Now().UTC(),
 			Enabled:   true,
 		}
-		signerBytes, _ := json.Marshal(signer)
+		signerBytes := mustMarshalJSON(t, signer)
 		err := db.DocSet("trusted_signers", "test-signer-delete", signerBytes)
 		require.NoError(t, err)
 

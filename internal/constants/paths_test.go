@@ -28,31 +28,13 @@ func TestProtocolDir_Resolution(t *testing.T) {
 	t.Skip("G8E_PROJECT_ROOT env var removed")
 }
 
-func TestResolveProjectRoot(t *testing.T) {
-	t.Run("with G8E_PROJECT_ROOT set", func(t *testing.T) {
-		// G8E_PROJECT_ROOT env var was removed - project root is now resolved
-		// solely by walking up from current working directory.
-		t.Skip("G8E_PROJECT_ROOT env var removed")
-	})
-
-	t.Run("resolves to absolute path", func(t *testing.T) {
-		// G8E_PROJECT_ROOT env var was removed - this test is no longer relevant.
-		t.Skip("G8E_PROJECT_ROOT env var removed")
-	})
-
-	t.Run("walks up to find protocol marker", func(t *testing.T) {
+func TestInitPaths(t *testing.T) {
+	t.Run("initializes paths relative to cwd", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		protocolDir := filepath.Join(tmpDir, "protocol")
-		if err := os.Mkdir(protocolDir, 0755); err != nil {
-			t.Fatalf("Failed to create protocol dir: %v", err)
-		}
-
-		subDir := filepath.Join(tmpDir, "internal", "services")
+		subDir := filepath.Join(tmpDir, "subdir")
 		if err := os.MkdirAll(subDir, 0755); err != nil {
-			t.Fatalf("Failed to create subdirs: %v", err)
+			t.Fatalf("Failed to create subdir: %v", err)
 		}
-
-		// No env var to unset - walking is the only method
 
 		originalWd, _ := os.Getwd()
 		defer os.Chdir(originalWd)
@@ -61,52 +43,14 @@ func TestResolveProjectRoot(t *testing.T) {
 			t.Fatalf("Failed to chdir: %v", err)
 		}
 
-		result := ResolveProjectRoot()
-		assert.Equal(t, tmpDir, result)
-	})
-
-	t.Run("walks up to find .git marker", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		gitDir := filepath.Join(tmpDir, ".git")
-		if err := os.Mkdir(gitDir, 0755); err != nil {
-			t.Fatalf("Failed to create .git dir: %v", err)
+		if err := InitPaths(); err != nil {
+			t.Fatalf("InitPaths failed: %v", err)
 		}
 
-		subDir := filepath.Join(tmpDir, "deep", "nested")
-		if err := os.MkdirAll(subDir, 0755); err != nil {
-			t.Fatalf("Failed to create subdirs: %v", err)
-		}
-
-		// No env var to unset - walking is the only method
-
-		originalWd, _ := os.Getwd()
-		defer os.Chdir(originalWd)
-
-		if err := os.Chdir(subDir); err != nil {
-			t.Fatalf("Failed to chdir: %v", err)
-		}
-
-		result := ResolveProjectRoot()
-		assert.Equal(t, tmpDir, result)
-	})
-
-	t.Run("returns CWD when no markers found", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		subDir := filepath.Join(tmpDir, "some", "path")
-		if err := os.MkdirAll(subDir, 0755); err != nil {
-			t.Fatalf("Failed to create subdirs: %v", err)
-		}
-
-		// No env var to unset - walking is the only method
-
-		originalWd, _ := os.Getwd()
-		defer os.Chdir(originalWd)
-
-		if err := os.Chdir(subDir); err != nil {
-			t.Fatalf("Failed to chdir: %v", err)
-		}
-
-		result := ResolveProjectRoot()
-		assert.Equal(t, subDir, result)
+		// All paths should be relative to the current working directory (subDir)
+		assert.Contains(t, Paths.Infra.RuntimeDir, subDir)
+		assert.Contains(t, Paths.Infra.DataDir, subDir)
+		assert.Contains(t, Paths.Infra.PkiDir, subDir)
+		assert.Contains(t, Paths.Infra.SecretsDir, subDir)
 	})
 }

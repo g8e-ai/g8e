@@ -58,13 +58,12 @@ The CLI manages the g8e Gateway (g8eg) and g8e Operator (g8eo).`,
 			authCmd(),
 			approveCmd(),
 			dataCmd(),
-			testCmd(),
 			securityCmd(),
 		)
 
 		assert.Equal(t, "g8e", rootCmd.Use)
 		assert.Contains(t, rootCmd.Short, "g8e Platform Manager")
-		assert.Len(t, rootCmd.Commands(), 6)
+		assert.Len(t, rootCmd.Commands(), 5)
 	})
 
 	t.Run("root command has all expected subcommands", func(t *testing.T) {
@@ -83,11 +82,10 @@ The CLI manages the g8e Gateway (g8eg) and g8e Operator (g8eo).`,
 			authCmd(),
 			approveCmd(),
 			dataCmd(),
-			testCmd(),
 			securityCmd(),
 		)
 
-		expectedCommands := []string{"gw", "auth", "approve", "data", "test", "security"}
+		expectedCommands := []string{"gw", "auth", "approve", "data", "security"}
 		for _, expected := range expectedCommands {
 			found := false
 			for _, cmd := range rootCmd.Commands() {
@@ -130,7 +128,6 @@ The CLI manages the g8e Gateway (g8eg) and g8e Operator (g8eo).`,
 			authCmd(),
 			approveCmd(),
 			dataCmd(),
-			testCmd(),
 			securityCmd(),
 		)
 
@@ -147,7 +144,6 @@ The CLI manages the g8e Gateway (g8eg) and g8e Operator (g8eo).`,
 		assert.Contains(t, output, "auth")
 		assert.Contains(t, output, "approve")
 		assert.Contains(t, output, "data")
-		assert.Contains(t, output, "test")
 		assert.Contains(t, output, "security")
 	})
 }

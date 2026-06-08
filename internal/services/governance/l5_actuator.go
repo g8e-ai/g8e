@@ -18,7 +18,6 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -28,7 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -53,13 +52,13 @@ type L5Actuator struct {
 	Logger            *slog.Logger
 	SignerStore       SignerStore
 	Execution         *execution.ExecutionService
-	AuditVault        *storage.AuditVaultService
-	AuditStore        TransactionAuditStore
+	SQLAuditStore     *storage.SQLAuditStore
+	ConsoleAuditStore TransactionAuditStore
 	L3Notary          L3Notary
 	StateRootProvider StateRootProvider
 	Ctx               context.Context
 	ExecutionHandler  ExecutionHandler
-	Sovereignty       *sovereignty.SovereigntyService
+	Scrubbing         *scrubbing.ScrubbingService
 	Posture           GovernancePosture
 
 	// L5Actuator's own signing identity for ActionReceipts
@@ -79,10 +78,10 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	defer w.wg.Done()
 
 	if w.ExecutionHandler == nil {
-		return nil, errors.New("L5Actuator ExecutionHandler not set")
+		return nil, fmt.Errorf("L5Actuator: ExecutionHandler not set")
 	}
 	if len(w.SigningKey) == 0 {
-		return nil, errors.New("L5Actuator signing key missing - cannot execute mutations")
+		return nil, fmt.Errorf("L5Actuator: signing key missing - cannot execute mutations")
 	}
 
 	stateBefore := ""
@@ -156,15 +155,15 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		return nil, fmt.Errorf("failed to log initial action receipt: %w", err)
 	}
 
-	// 3.5. Rehydrate payload if Sovereignty is available
-	if w.Sovereignty != nil && cmdMsg != nil {
+	// 3.5. Rehydrate payload if Scrubbing is available
+	if w.Scrubbing != nil && cmdMsg != nil {
 		if rehydratable, ok := cmdMsg.(interface {
 			GetPayload() []byte
 			SetPayload([]byte)
 		}); ok {
 			p := rehydratable.GetPayload()
 			if len(p) > 0 {
-				rehydrated, rehydrateErr := w.Sovereignty.RehydratePayload(p)
+				rehydrated, rehydrateErr := w.Scrubbing.RehydratePayload(p)
 				if rehydrateErr == nil {
 					rehydratable.SetPayload(rehydrated)
 				} else {
@@ -221,25 +220,42 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	return receipt, err
 }
 
+// canonicalReceipt is the typed representation for ActionReceipt canonicalization.
+// This ensures strict typing and deterministic JSON marshaling for signing/verification.
+type canonicalReceipt struct {
+	TransactionID    string `json:"transaction_id"`
+	TransactionHash  string `json:"transaction_hash"`
+	Status           int32  `json:"status"`
+	ResultSummary    string `json:"result_summary"`
+	StateRootBefore  string `json:"state_root_before"`
+	StateRootAfter   string `json:"state_root_after"`
+	ExecutedAtUnixMs int64  `json:"executed_at_unix_ms"`
+	SignerKeyID      string `json:"signer_key_id"`
+	GatewaySigned    bool   `json:"gateway_signed"`
+	L2Status         int32  `json:"l2_status"`
+	L3Status         int32  `json:"l3_status"`
+}
+
 // CanonicalizeActionReceipt produces a deterministic byte representation for signing/verification.
 // This function must be used by both signing and verification to ensure consistency.
 // Field order: transaction_id, transaction_hash, status, result_summary, state_root_before,
 // state_root_after, executed_at_unix_ms, signer_key_id, gateway_signed, l2_status, l3_status.
 // All fields are included in the canonical form.
 func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
-	payload, err := json.Marshal(map[string]interface{}{
-		"transaction_id":      r.TransactionId,
-		"transaction_hash":    r.TransactionHash,
-		"status":              int32(r.Status),
-		"result_summary":      r.ResultSummary,
-		"state_root_before":   r.StateRootBefore,
-		"state_root_after":    r.StateRootAfter,
-		"executed_at_unix_ms": r.ExecutedAtUnixMs,
-		"signer_key_id":       r.SignerKeyId,
-		"gateway_signed":      r.GatewaySigned,
-		"l2_status":           int32(r.L2Status),
-		"l3_status":           int32(r.L3Status),
-	})
+	canonical := canonicalReceipt{
+		TransactionID:    r.TransactionId,
+		TransactionHash:  r.TransactionHash,
+		Status:           int32(r.Status),
+		ResultSummary:    r.ResultSummary,
+		StateRootBefore:  r.StateRootBefore,
+		StateRootAfter:   r.StateRootAfter,
+		ExecutedAtUnixMs: r.ExecutedAtUnixMs,
+		SignerKeyID:      r.SignerKeyId,
+		GatewaySigned:    r.GatewaySigned,
+		L2Status:         int32(r.L2Status),
+		L3Status:         int32(r.L3Status),
+	}
+	payload, err := json.Marshal(canonical)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal receipt for canonicalization: %w", err)
 	}
@@ -248,7 +264,7 @@ func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 
 func (w *L5Actuator) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 	if len(w.SigningKey) == 0 {
-		return "", errors.New("signing key missing")
+		return "", fmt.Errorf("L5Actuator: signing key missing")
 	}
 
 	// Use canonical serialization for signing - shared with verification
@@ -261,11 +277,11 @@ func (w *L5Actuator) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 	return hex.EncodeToString(sig), nil
 }
 
-// LogReceipt records the signed action receipt in the audit vault and console_audit.
+// LogReceipt records the signed action receipt in the audit store and console_audit.
 func (w *L5Actuator) LogReceipt(env *governance.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
 	docErr := w.logReceiptDocument(env, r)
 
-	if w.AuditVault == nil {
+	if w.SQLAuditStore == nil {
 		return docErr
 	}
 
@@ -289,12 +305,12 @@ func (w *L5Actuator) LogReceipt(env *governance.GovernanceEnvelope, r *operatorv
 		Timestamp:         time.Now().UTC(),
 	}
 
-	if err := w.AuditVault.RecordActionReceipt(&record); err != nil {
+	if err := w.SQLAuditStore.RecordActionReceipt(&record); err != nil {
 		if w.Logger != nil {
-			w.Logger.Error("Failed to record ActionReceipt in audit vault", string(constants.ConnectionStateError), err)
+			w.Logger.Error("Failed to record ActionReceipt in audit store", string(constants.ConnectionStateError), err)
 		}
 		if docErr != nil {
-			return fmt.Errorf("audit vault error: %v, doc store error: %v", err, docErr)
+			return fmt.Errorf("audit store error: %v, doc store error: %v", err, docErr)
 		}
 		return err
 	}
@@ -303,7 +319,7 @@ func (w *L5Actuator) LogReceipt(env *governance.GovernanceEnvelope, r *operatorv
 }
 
 func (w *L5Actuator) logReceiptDocument(env *governance.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
-	if w.AuditStore == nil || env == nil {
+	if w.ConsoleAuditStore == nil || env == nil {
 		return nil
 	}
 
@@ -335,7 +351,7 @@ func (w *L5Actuator) logReceiptDocument(env *governance.GovernanceEnvelope, r *o
 		return err
 	}
 
-	if err := w.AuditStore.DocSet(marshaler.CollectionName(constants.CollectionConsoleAudit), r.TransactionId, body); err != nil {
+	if err := w.ConsoleAuditStore.DocSet(marshaler.CollectionName(constants.CollectionConsoleAudit), r.TransactionId, body); err != nil {
 		if w.Logger != nil {
 			w.Logger.Error("Failed to record action receipt document", string(constants.ConnectionStateError), err, "message_id", r.TransactionId)
 		}

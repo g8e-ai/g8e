@@ -252,7 +252,7 @@ const (
 type GatewayMode string
 
 const (
-	GatewayModeMode     GatewayMode = "gateway"
+	GatewayModeGateway  GatewayMode = "gateway"
 	GatewayModeStatusOK GatewayMode = "ok"
 )
 

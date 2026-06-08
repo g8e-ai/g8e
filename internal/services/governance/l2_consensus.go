@@ -42,28 +42,45 @@ func NewL2Consensus(nodeID string, d *L1Doctrine, pk ed25519.PrivateKey) *L2Cons
 }
 
 // EvaluatePayload represents the L2Consensus's core loop.
-func (t *L2Consensus) EvaluatePayload(env *governance.GovernanceEnvelope) error {
-	// 1. Verify Sender Hash
-	expectedHash, err := governance.GenerateMessageID(env)
-	if err != nil {
-		return fmt.Errorf("failed to generate message ID: %w", err)
-	}
-	if env.Id != expectedHash {
-		return errors.New("FATAL: payload hash mismatch. dropping request")
+func (l *L2Consensus) EvaluatePayload(env *governance.GovernanceEnvelope) error {
+	if err := l.verifyPayloadHash(env); err != nil {
+		return err
 	}
 
-	// 2. Run Deterministic SRE Rules (e.g., MITRE checks)
-	// For proto-first, we use IntentData or Payload
+	cmdData, intent, err := l.extractCommandData(env)
+	if err != nil {
+		return err
+	}
+
+	isSafe := l.evaluateSafety(env.TargetResource, cmdData, intent)
+
+	return l.appendVote(env, isSafe)
+}
+
+// verifyPayloadHash verifies the sender hash matches the expected hash.
+func (l *L2Consensus) verifyPayloadHash(env *governance.GovernanceEnvelope) error {
+	expectedHash, err := governance.GenerateMessageID(env)
+	if err != nil {
+		return fmt.Errorf("l2consensus: verify payload hash: %w", err)
+	}
+	if env.Id != expectedHash {
+		return errors.New("l2consensus: verify payload hash: payload hash mismatch")
+	}
+	return nil
+}
+
+// extractCommandData extracts command data and intent from the envelope.
+func (l *L2Consensus) extractCommandData(env *governance.GovernanceEnvelope) (string, constants.CloudIntent, error) {
 	var cmdData string
 	var intent constants.CloudIntent
+
 	if env.IntentData != nil && len(env.IntentData.Fields) > 0 {
 		jsonBytes, err := env.IntentData.MarshalJSON()
 		if err != nil {
-			return fmt.Errorf("failed to marshal intent data: %w", err)
+			return "", "", fmt.Errorf("l2consensus: extract command data: %w", err)
 		}
 		cmdData = string(jsonBytes)
 
-		// If this is an intent request, extract and validate the specific intent
 		actionType := constants.ActionType(env.ActionType)
 		if actionType == constants.ActionTypeGrantIntent || actionType == constants.ActionTypeRevokeIntent {
 			if v, ok := env.IntentData.Fields[string(constants.ApprovalTypeIntent)]; ok {
@@ -74,17 +91,24 @@ func (t *L2Consensus) EvaluatePayload(env *governance.GovernanceEnvelope) error 
 		cmdData = string(env.Payload)
 	}
 
-	isSafe := t.RunMITREChecks(env.TargetResource, cmdData)
+	return cmdData, intent, nil
+}
 
-	// Doctrine (L1) Intent Validation: ensure the requested intent is in the allowlist
-	if intent != "" && t.Doctrine != nil {
-		if !t.Doctrine.ValidateIntent(intent) {
+// evaluateSafety runs MITRE checks and doctrine intent validation.
+func (l *L2Consensus) evaluateSafety(resource string, cmdData string, intent constants.CloudIntent) bool {
+	isSafe := l.RunMITREChecks(resource, cmdData)
+
+	if intent != "" && l.Doctrine != nil {
+		if !l.Doctrine.ValidateIntent(intent) {
 			isSafe = false
 		}
 	}
 
-	// 3. Append Vote (Consensus (L2))
-	// Note: We are using GovernanceMetadata instead of ConsensusState
+	return isSafe
+}
+
+// appendVote appends the consensus vote to the envelope.
+func (l *L2Consensus) appendVote(env *governance.GovernanceEnvelope, isSafe bool) error {
 	if env.Governance == nil {
 		env.Governance = &commonv1.GovernanceMetadata{
 			L1: &commonv1.L1Metadata{},
@@ -93,10 +117,10 @@ func (t *L2Consensus) EvaluatePayload(env *governance.GovernanceEnvelope) error 
 		}
 	}
 
-	env.Governance.L2.AgentIds = append(env.Governance.L2.AgentIds, t.NodeID)
-	sig, err := t.SignDecision(env.Id, isSafe)
+	env.Governance.L2.AgentIds = append(env.Governance.L2.AgentIds, l.NodeID)
+	sig, err := l.SignDecision(env.Id, isSafe)
 	if err != nil {
-		return fmt.Errorf("failed to sign decision: %w", err)
+		return fmt.Errorf("l2consensus: append vote: %w", err)
 	}
 	env.Governance.L2.ConsensusSignature = sig
 
@@ -109,11 +133,11 @@ func (t *L2Consensus) EvaluatePayload(env *governance.GovernanceEnvelope) error 
 }
 
 // RunMITREChecks leverages L1Doctrine to identify malicious activity patterns.
-func (t *L2Consensus) RunMITREChecks(resource string, data string) bool {
-	if t.Doctrine == nil {
+func (l *L2Consensus) RunMITREChecks(resource string, data string) bool {
+	if l.Doctrine == nil {
 		return false // Fail-closed: if Doctrine is missing, the payload is NOT safe.
 	}
-	signals := t.Doctrine.AnalyzeCommand(data)
+	signals := l.Doctrine.AnalyzeCommand(data)
 	// If any signal recommends blocking, the payload is not safe
 	for _, sig := range signals {
 		if sig.BlockRecommended {
@@ -124,12 +148,12 @@ func (t *L2Consensus) RunMITREChecks(resource string, data string) bool {
 }
 
 // SignDecision creates a cryptographic signature of the decision.
-func (t *L2Consensus) SignDecision(messageID string, isSafe bool) (string, error) {
-	if t.PrivateKey == nil {
-		return "", errors.New("L2Consensus private key missing - cannot sign governance votes")
+func (l *L2Consensus) SignDecision(messageID string, isSafe bool) (string, error) {
+	if l.PrivateKey == nil {
+		return "", fmt.Errorf("l2consensus: sign decision: private key missing")
 	}
 	// Sign the message ID and the decision
 	payload := fmt.Sprintf("%s|%v", messageID, isSafe)
-	sig := ed25519.Sign(t.PrivateKey, []byte(payload))
+	sig := ed25519.Sign(l.PrivateKey, []byte(payload))
 	return hex.EncodeToString(sig), nil
 }

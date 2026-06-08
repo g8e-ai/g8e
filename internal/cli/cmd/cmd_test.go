@@ -40,7 +40,6 @@ func TestCommandRegistration(t *testing.T) {
 			"gw",
 			"auth",
 			"data",
-			"test",
 			"security",
 		}
 
@@ -60,10 +59,6 @@ func TestCommandRegistration(t *testing.T) {
 					cmd := dataCmd()
 					assert.NotNil(t, cmd)
 					assert.Equal(t, "data", cmd.Use)
-				case "test":
-					cmd := testCmd()
-					assert.NotNil(t, cmd)
-					assert.Equal(t, "test", cmd.Use)
 				case "security":
 					cmd := securityCmd()
 					assert.NotNil(t, cmd)
@@ -149,26 +144,6 @@ func TestDataCommandSubcommands(t *testing.T) {
 	})
 }
 
-func TestTestCommandSubcommands(t *testing.T) {
-	t.Run("test command has expected subcommands", func(t *testing.T) {
-		cmd := testCmd()
-		require.NotNil(t, cmd)
-
-		expectedSubcommands := []string{"unit", "integration", "chaos", "scenario", "review"}
-
-		for _, subcmd := range expectedSubcommands {
-			found := false
-			for _, c := range cmd.Commands() {
-				if c.Name() == subcmd {
-					found = true
-					break
-				}
-			}
-			assert.True(t, found, "test command should have %s subcommand", subcmd)
-		}
-	})
-}
-
 func TestSecurityCommandSubcommands(t *testing.T) {
 	t.Run("security command has expected subcommands", func(t *testing.T) {
 		cmd := securityCmd()
@@ -198,7 +173,6 @@ func TestCommandHelpText(t *testing.T) {
 			{"gw", gatewayCmd()},
 			{"auth", authCmd()},
 			{"data", dataCmd()},
-			{"test", testCmd()},
 			{"security", securityCmd()},
 		}
 
@@ -236,21 +210,6 @@ func TestCommandFlagValidation(t *testing.T) {
 		assert.NotNil(t, forceFlag, "gateway clean should have --force flag")
 		assert.NotNil(t, yFlag, "gateway clean should have -y flag")
 		assert.NotNil(t, yesFlag, "gateway clean should have --yes flag")
-	})
-
-	t.Run("test g8eo has test flags", func(t *testing.T) {
-		cmd := testG8eoCmd()
-		require.NotNil(t, cmd)
-
-		raceFlag := cmd.Flags().Lookup("race")
-		verboseFlag := cmd.Flags().Lookup("v")
-		runFlag := cmd.Flags().Lookup("run")
-		coverageFlag := cmd.Flags().Lookup("coverage")
-
-		assert.NotNil(t, raceFlag, "test g8eo should have --race flag")
-		assert.NotNil(t, verboseFlag, "test g8eo should have -v flag")
-		assert.NotNil(t, runFlag, "test g8eo should have --run flag")
-		assert.NotNil(t, coverageFlag, "test g8eo should have --coverage flag")
 	})
 
 	t.Run("security validate has directory flags", func(t *testing.T) {

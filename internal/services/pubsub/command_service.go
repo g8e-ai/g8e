@@ -19,15 +19,16 @@ import (
 	"log/slog"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
-	"github.com/g8e-ai/g8e/internal/services/sovereignty"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-	"google.golang.org/protobuf/proto"
 )
 
 // StatusUpdateInterval is the interval between periodic status updates during long-running commands.
@@ -39,11 +40,10 @@ type CommandService struct {
 	logger         *slog.Logger
 	execution      *execution.ExecutionService
 	results        ResultsPublisher
-	sovereignty    *sovereignty.SovereigntyService
+	scrubbing      *scrubbing.ScrubbingService
 	vaultWriter    *VaultWriter
-	auditVault     *storage.AuditVaultService
-	localStore     *storage.LocalStoreService
-	ledger         *storage.LedgerService
+	auditStore     *storage.SQLAuditStore
+	ledger         *storage.GitLedgerService
 	historyHandler *storage.HistoryHandler
 }
 
@@ -61,21 +61,13 @@ func (cs *CommandService) SetResultsPublisher(results ResultsPublisher) {
 	cs.results = results
 }
 
-// SetLocalStoreService sets the local store for the CommandService.
-func (cs *CommandService) SetLocalStoreService(ls *storage.LocalStoreService) {
-	cs.localStore = ls
-	if cs.vaultWriter != nil {
-		cs.vaultWriter.localStore = ls
-	}
-}
-
-// SetAuditVaultService sets the audit vault for the CommandService.
-func (cs *CommandService) SetAuditVaultService(av *storage.AuditVaultService) {
-	cs.auditVault = av
+// SetAuditStore sets the audit store for the CommandService.
+func (cs *CommandService) SetAuditStore(as *storage.SQLAuditStore) {
+	cs.auditStore = as
 }
 
 // SetLedgerService sets the ledger service for the CommandService.
-func (cs *CommandService) SetLedgerService(l *storage.LedgerService) {
+func (cs *CommandService) SetLedgerService(l *storage.GitLedgerService) {
 	cs.ledger = l
 }
 
@@ -84,9 +76,9 @@ func (cs *CommandService) SetHistoryHandler(h *storage.HistoryHandler) {
 	cs.historyHandler = h
 }
 
-// SetSovereignty sets the sovereignty service for the CommandService.
-func (cs *CommandService) SetSovereignty(s *sovereignty.SovereigntyService) {
-	cs.sovereignty = s
+// SetScrubbing sets the scrubbing service for the CommandService.
+func (cs *CommandService) SetScrubbing(s *scrubbing.ScrubbingService) {
+	cs.scrubbing = s
 }
 
 // HandleExecutionRequest processes an inbound command execution request.
@@ -186,7 +178,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 		if result.TaskID != nil {
 			taskID = *result.TaskID
 		}
-		cs.vaultWriter.WriteExecution(executionWriteParams{
+		cs.vaultWriter.WriteExecution(ctx, executionWriteParams{
 			id:              result.ExecutionID,
 			command:         cs.execution.BuildCommandString(result.Command, result.Args),
 			exitCode:        result.ReturnCode,
@@ -202,16 +194,16 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 		})
 	}
 
-	if cs.sovereignty != nil && cs.sovereignty.IsEnabled() {
-		cs.logger.Info("SovereigntyService scrubbing execution output",
+	if cs.scrubbing != nil && cs.scrubbing.IsEnabled() {
+		cs.logger.Info("ScrubbingService scrubbing execution output",
 			"execution_id", result.ExecutionID,
 			"raw_stdout_size", rawStdoutSize,
 			"raw_stderr_size", rawStderrSize)
-		result.Stdout = cs.sovereignty.ScrubText(result.Stdout)
-		result.Stderr = cs.sovereignty.ScrubText(result.Stderr)
+		result.Stdout = cs.scrubbing.ScrubText(result.Stdout)
+		result.Stderr = cs.scrubbing.ScrubText(result.Stderr)
 	}
 
-	if cs.auditVault != nil && cs.auditVault.IsEnabled() {
+	if cs.auditStore != nil && cs.auditStore.IsEnabled() {
 		event := &storage.Event{
 			OperatorSessionID:   cs.config.OperatorSessionId,
 			Timestamp:           time.Now().UTC(),
@@ -224,10 +216,10 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 			ExecutionDurationMs: int64(result.DurationSeconds * 1000),
 		}
 
-		if _, err := cs.auditVault.RecordEvent(event); err != nil {
-			cs.logger.Warn("Failed to record command event in audit vault", string(constants.ConnectionStateError), err)
+		if _, err := cs.auditStore.RecordEvent(event); err != nil {
+			cs.logger.Warn("Failed to record command event in audit store", string(constants.ConnectionStateError), err)
 		} else {
-			cs.logger.Info("Scrubbed command event recorded in audit vault (LFAA)",
+			cs.logger.Info("Scrubbed command event recorded in audit store (LFAA)",
 				"execution_id", result.ExecutionID,
 				"operator_session_id", cs.config.OperatorSessionId)
 		}
@@ -380,10 +372,10 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg *PubSubCo
 func payloadToExecutionRequest(msg *PubSubCommandMessage) (*models.ExecutionRequestPayload, error) {
 	var protoCmd operatorv1.CommandRequested
 	if err := proto.Unmarshal(msg.Payload, &protoCmd); err != nil {
-		return nil, fmt.Errorf("failed to decode command payload as protobuf CommandRequested: %w", err)
+		return nil, fmt.Errorf("pubsub: decode command payload: %w", err)
 	}
 	if protoCmd.Command == "" {
-		return nil, fmt.Errorf("missing command in protobuf CommandRequested")
+		return nil, fmt.Errorf("pubsub: missing command in protobuf CommandRequested")
 	}
 
 	executionID := executionIDFromMessage(msg)

@@ -16,8 +16,8 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/g8e-ai/g8e/internal/chaos"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/test/chaos"
 )
 
 var (

@@ -37,20 +37,20 @@ func (t *DBQueryValidateTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation.
-func (t *DBQueryValidateTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"database_path": map[string]interface{}{
-				"type":        "string",
-				"description": "Path to the SQLite database file",
+func (t *DBQueryValidateTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"database_path": {
+				Type:        "string",
+				Description: "Path to the SQLite database file",
 			},
-			"query": map[string]interface{}{
-				"type":        "string",
-				"description": "SQL query to validate (SELECT only)",
+			"query": {
+				Type:        "string",
+				Description: "SQL query to validate (SELECT only)",
 			},
 		},
-		"required": []string{"database_path", "query"},
+		Required: []string{"database_path", "query"},
 	}
 }
 

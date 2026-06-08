@@ -164,3 +164,19 @@ func (w *WorkloadIdentity) ExtractGatewayID(spiffeID string) (string, bool) {
 	}
 	return parts[4], true
 }
+
+// ExtractOperatorSessionID extracts the operator session ID from a SPIFFE ID.
+// Returns the session ID and true if the SPIFFE ID is a valid Operator identity.
+// Format: spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
+func (w *WorkloadIdentity) ExtractOperatorSessionID(spiffeID string) (string, bool) {
+	prefix := fmt.Sprintf("spiffe://%s/operator/", TrustDomain)
+	if !strings.HasPrefix(spiffeID, prefix) {
+		return "", false
+	}
+	// Format: spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
+	parts := strings.Split(spiffeID, "/")
+	if len(parts) < 7 {
+		return "", false
+	}
+	return parts[6], true
+}

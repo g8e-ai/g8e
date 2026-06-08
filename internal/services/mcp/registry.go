@@ -16,9 +16,59 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 )
+
+const (
+	ErrSchemaNil               = "registry: schema cannot be nil"
+	ErrSchemaMissingType       = "registry: schema missing required 'type' field"
+	ErrSchemaInvalidType       = "registry: schema 'type' must be 'object'"
+	ErrSchemaInvalidProperties = "registry: schema 'properties' must be an object"
+	ErrSchemaInvalidRequired   = "registry: schema 'required' must be an array"
+)
+
+// PropertySchema represents a JSON Schema property definition.
+type PropertySchema struct {
+	Type        string   `json:"type"`
+	Description string   `json:"description,omitempty"`
+	Enum        []string `json:"enum,omitempty"`
+}
+
+// InputSchema represents a JSON Schema for tool input validation.
+type InputSchema struct {
+	Type       string                     `json:"type"`
+	Properties map[string]*PropertySchema `json:"properties"`
+	Required   []string                   `json:"required"`
+}
+
+// ToMap converts InputSchema to map[string]interface{} for JSON serialization.
+func (s *InputSchema) ToMap() map[string]interface{} {
+	if s == nil {
+		return nil
+	}
+	result := map[string]interface{}{
+		"type": s.Type,
+	}
+	if s.Properties != nil {
+		props := make(map[string]interface{})
+		for k, v := range s.Properties {
+			props[k] = map[string]interface{}{
+				"type":        v.Type,
+				"description": v.Description,
+			}
+			if v.Enum != nil {
+				props[k].(map[string]interface{})["enum"] = v.Enum
+			}
+		}
+		result["properties"] = props
+	}
+	if s.Required != nil {
+		result["required"] = s.Required
+	}
+	return result
+}
 
 // NativeTool defines the interface that all native tools must implement.
 type NativeTool interface {
@@ -29,7 +79,7 @@ type NativeTool interface {
 	Description() string
 
 	// InputSchema returns the JSON Schema for validating tool input arguments.
-	InputSchema() map[string]interface{}
+	InputSchema() *InputSchema
 
 	// Execute runs the tool with the provided arguments and returns the result.
 	Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error)
@@ -52,22 +102,22 @@ func NewToolRegistry() *ToolRegistry {
 // Returns an error if a tool with the same name is already registered.
 func (r *ToolRegistry) Register(tool NativeTool) error {
 	if tool == nil {
-		return fmt.Errorf("cannot register nil tool")
+		return fmt.Errorf("registry: cannot register nil tool")
 	}
 
 	name := tool.Name()
 	if name == "" {
-		return fmt.Errorf("tool name cannot be empty")
+		return fmt.Errorf("registry: tool name cannot be empty")
 	}
 
 	// Validate tool name format (must be valid identifier)
 	if !isValidToolName(name) {
-		return fmt.Errorf("invalid tool name '%s': must contain only lowercase letters, digits, and underscores", name)
+		return fmt.Errorf("registry: invalid tool name '%s': must contain only lowercase letters, digits, and underscores", name)
 	}
 
 	// Validate input schema
 	if err := validateInputSchema(tool.InputSchema()); err != nil {
-		return fmt.Errorf("invalid input schema for tool '%s': %w", name, err)
+		return fmt.Errorf("registry: invalid input schema for tool '%s': %w", name, err)
 	}
 
 	r.mu.Lock()
@@ -75,7 +125,7 @@ func (r *ToolRegistry) Register(tool NativeTool) error {
 
 	// Check for duplicate tool name
 	if _, exists := r.tools[name]; exists {
-		return fmt.Errorf("tool '%s' is already registered", name)
+		return fmt.Errorf("registry: tool '%s' is already registered", name)
 	}
 
 	r.tools[name] = tool
@@ -136,37 +186,19 @@ func isValidToolName(name string) bool {
 }
 
 // validateInputSchema performs basic validation of a tool's input schema.
-func validateInputSchema(schema map[string]interface{}) error {
+func validateInputSchema(schema *InputSchema) error {
 	if schema == nil {
-		return fmt.Errorf("schema cannot be nil")
+		return errors.New(ErrSchemaNil)
 	}
 
 	// Check for required "type" field
-	typ, ok := schema["type"]
-	if !ok {
-		return fmt.Errorf("schema missing required 'type' field")
+	if schema.Type == "" {
+		return errors.New(ErrSchemaMissingType)
 	}
 
-	typeStr, ok := typ.(string)
-	if !ok || typeStr != "object" {
-		return fmt.Errorf("schema 'type' must be 'object', got %T", typ)
-	}
-
-	// If "properties" exists, validate it's a map
-	if props, ok := schema["properties"]; ok {
-		if _, ok := props.(map[string]interface{}); !ok {
-			return fmt.Errorf("schema 'properties' must be an object, got %T", props)
-		}
-	}
-
-	// If "required" exists, validate it's an array ([]interface{} or []string)
-	if required, ok := schema["required"]; ok {
-		switch required.(type) {
-		case []interface{}, []string:
-			// valid
-		default:
-			return fmt.Errorf("schema 'required' must be an array, got %T", required)
-		}
+	// Check that type is "object"
+	if schema.Type != "object" {
+		return errors.New(ErrSchemaInvalidType)
 	}
 
 	return nil

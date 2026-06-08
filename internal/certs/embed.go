@@ -192,7 +192,7 @@ func SetClientCertificate(cert tls.Certificate) {
 func GetClientCertificate() (tls.Certificate, bool) {
 	clientCertMu.RLock()
 	defer clientCertMu.RUnlock()
-	return clientCert, clientCert.PrivateKey != nil
+	return clientCert, len(clientCert.Certificate) > 0
 }
 
 // GetTLSConfig returns a TLS configuration that trusts the hub CA.

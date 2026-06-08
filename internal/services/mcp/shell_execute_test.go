@@ -16,6 +16,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -37,34 +38,31 @@ func TestShellExecuteTool_InputSchema(t *testing.T) {
 	tool := &ShellExecuteTool{}
 	schema := tool.InputSchema()
 
-	require.Equal(t, "object", schema["type"])
-	props, ok := schema["properties"].(map[string]interface{})
-	require.True(t, ok)
+	require.Equal(t, "object", schema.Type)
+	require.NotNil(t, schema.Properties)
 
 	// Check required fields
-	required, ok := schema["required"].([]string)
-	require.True(t, ok)
-	require.Contains(t, required, "command")
+	require.Contains(t, schema.Required, "command")
 
 	// Check command property
-	cmdProp, ok := props["command"].(map[string]interface{})
+	cmdProp, ok := schema.Properties["command"]
 	require.True(t, ok)
-	require.Equal(t, "string", cmdProp["type"])
+	require.Equal(t, "string", cmdProp.Type)
 
 	// Check optional properties
-	_, ok = props["args"]
+	_, ok = schema.Properties["args"]
 	require.True(t, ok)
-	_, ok = props["timeout"]
+	_, ok = schema.Properties["timeout"]
 	require.True(t, ok)
-	_, ok = props["working_dir"]
+	_, ok = schema.Properties["working_dir"]
 	require.True(t, ok)
-	_, ok = props["hostnames"]
+	_, ok = schema.Properties["hostnames"]
 	require.True(t, ok)
 
 	// Check hostnames property structure
-	hostnamesProp, ok := props["hostnames"].(map[string]interface{})
+	hostnamesProp, ok := schema.Properties["hostnames"]
 	require.True(t, ok)
-	require.Equal(t, "array", hostnamesProp["type"])
+	require.Equal(t, "array", hostnamesProp.Type)
 }
 
 func TestShellExecuteTool_Execute_SimpleCommand(t *testing.T) {
@@ -93,11 +91,21 @@ func TestShellExecuteTool_Execute_SimpleCommand(t *testing.T) {
 func TestShellExecuteTool_Execute_WithWorkingDir(t *testing.T) {
 	tool := &ShellExecuteTool{}
 	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	pwdCmd := "pwd"
+	if runtime.GOOS == "windows" {
+		pwdCmd = "cmd.exe"
+	}
 
 	req := ShellExecuteRequest{
-		Command:    "pwd",
-		WorkingDir: "/tmp",
+		Command:    pwdCmd,
+		WorkingDir: tmpDir,
 	}
+	if runtime.GOOS == "windows" {
+		req.Args = []string{"/c", "cd"}
+	}
+
 	reqJSON, err := json.Marshal(req)
 	require.NoError(t, err)
 
@@ -109,7 +117,10 @@ func TestShellExecuteTool_Execute_WithWorkingDir(t *testing.T) {
 	err = json.Unmarshal([]byte(result.Content[0].Text), &shellResult)
 	require.NoError(t, err)
 	require.Equal(t, 0, shellResult.ExitCode)
-	require.Contains(t, shellResult.Stdout, "/tmp")
+	// On Windows, the output might have a trailing \r\n or different capitalization
+	normalizedStdout := strings.TrimSpace(strings.ToLower(shellResult.Stdout))
+	normalizedTmpDir := strings.TrimSpace(strings.ToLower(tmpDir))
+	require.Contains(t, normalizedStdout, normalizedTmpDir)
 }
 
 func TestShellExecuteTool_Execute_WithTimeout(t *testing.T) {
@@ -174,7 +185,7 @@ func TestShellExecuteTool_Execute_InvalidJSON(t *testing.T) {
 
 	_, err := tool.Execute(ctx, invalidJSON)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid arguments")
+	require.Contains(t, err.Error(), "unmarshal arguments")
 }
 
 func TestShellExecuteTool_Execute_NonexistentCommand(t *testing.T) {
@@ -375,38 +386,42 @@ func TestShellExecuteTool_Execute_DefaultHostname(t *testing.T) {
 }
 
 func TestValidateForSSHExecution_BlocksShellMetacharacters(t *testing.T) {
+	tmpDir := "/tmp"
+	if runtime.GOOS == "windows" {
+		tmpDir = "C:\\tmp"
+	}
+
 	metacharacterTests := []struct {
 		command     string
 		args        []string
 		workingDir  string
 		expectError bool
 	}{
-		{"echo", []string{"test$(whoami)"}, "", true},     // $ in args
-		{"echo", []string{"test`whoami`"}, "", true},      // backtick in args
-		{"echo", []string{"test; rm -rf /"}, "", true},    // semicolon in args
-		{"echo", []string{"test& rm -rf /"}, "", true},    // ampersand in args
-		{"echo", []string{"test| rm -rf /"}, "", true},    // pipe in args
-		{"echo", []string{"test> /dev/null"}, "", true},   // redirect in args
-		{"echo", []string{"test< /etc/passwd"}, "", true}, // redirect in args
-		{"echo", []string{"test\nrm -rf /"}, "", true},    // newline in args
-		{"echo", []string{"test\r"}, "", true},            // carriage return in args
-		{"echo", []string{"test\\n"}, "", true},           // backslash in args
-		{"echo$(whoami)", []string{}, "", true},           // $ in command
-		{"echo`whoami`", []string{}, "", true},            // backtick in command
-		{"echo; rm", []string{}, "", true},                // semicolon in command
-		{"echo", []string{"test"}, "/tmp/test\n", true},   // newline in working dir
-		{"echo", []string{"test"}, "/tmp/test;", true},    // semicolon in working dir
-		{"echo", []string{"test"}, "/tmp/test$", true},    // $ in working dir
-		{"echo", []string{"test"}, "/tmp/test`", true},    // backtick in working dir
-		{"echo", []string{"test"}, "/tmp/test\\", true},   // backslash in working dir
-		{"echo", []string{"test"}, "/tmp/test|", true},    // pipe in working dir
-		{"echo", []string{"test"}, "/tmp/test>", true},    // redirect in working dir
-		{"echo", []string{"test"}, "/tmp/test<", true},    // redirect in working dir
-		{"echo", []string{"test"}, "/tmp/test&", true},    // ampersand in working dir
-		{"echo", []string{"test"}, "/tmp/test\r", true},   // carriage return in working dir
-		{"echo", []string{"test"}, "", false},             // safe: no metacharacters
-		{"ls", []string{"-la"}, "/tmp", false},            // safe: normal command
-		{"cat", []string{"/etc/hostname"}, "", false},     // safe: normal command
+		{"echo", []string{"test$(whoami)"}, "", true},                             // $ in args
+		{"echo", []string{"test`whoami`"}, "", true},                              // backtick in args
+		{"echo", []string{"test; rm -rf /"}, "", true},                            // semicolon in args
+		{"echo", []string{"test& rm -rf /"}, "", true},                            // ampersand in args
+		{"echo", []string{"test| rm -rf /"}, "", true},                            // pipe in args
+		{"echo", []string{"test> /dev/null"}, "", true},                           // redirect in args
+		{"echo", []string{"test< /etc/passwd"}, "", true},                         // redirect in args
+		{"echo", []string{"test\nrm -rf /"}, "", true},                            // newline in args
+		{"echo", []string{"test\r"}, "", true},                                    // carriage return in args
+		{"echo", []string{"test\\n"}, "", true},                                   // backslash in args
+		{"echo$(whoami)", []string{}, "", true},                                   // $ in command
+		{"echo`whoami`", []string{}, "", true},                                    // backtick in command
+		{"echo; rm", []string{}, "", true},                                        // semicolon in command
+		{"echo", []string{"test"}, tmpDir + "/test\n", true},                      // newline in working dir
+		{"echo", []string{"test"}, tmpDir + "/test;", true},                       // semicolon in working dir
+		{"echo", []string{"test"}, tmpDir + "/test$", true},                       // $ in working dir
+		{"echo", []string{"test"}, tmpDir + "/test`", true},                       // backtick in working dir
+		{"echo", []string{"test"}, tmpDir + "/test\\", runtime.GOOS != "windows"}, // backslash in working dir (safe on Windows)
+		{"echo", []string{"test"}, tmpDir + "/test|", true},                       // pipe in working dir
+		{"echo", []string{"test"}, tmpDir + "/test>", true},                       // redirect in working dir
+		{"echo", []string{"test"}, tmpDir + "/test<", true},                       // redirect in working dir
+		{"echo", []string{"test"}, tmpDir + "/test&", true},                       // ampersand in working dir
+		{"echo", []string{"test"}, tmpDir + "/test\r", true},                      // carriage return in working dir
+		{"echo", []string{"test"}, "", false},                                     // safe: no metacharacters
+		{"cat", []string{"/etc/hostname"}, "", false},                             // safe: normal command
 	}
 
 	for _, tc := range metacharacterTests {
@@ -435,6 +450,7 @@ func TestValidateForSSHExecution_StillBlocksDenylist(t *testing.T) {
 }
 
 func TestValidateForSSHExecution_AllowsSafeCommands(t *testing.T) {
+	tmpDir := t.TempDir()
 	safeCommands := []struct {
 		command    string
 		args       []string
@@ -446,8 +462,16 @@ func TestValidateForSSHExecution_AllowsSafeCommands(t *testing.T) {
 		{"grep", []string{"pattern", "file.txt"}, ""},
 		{"find", []string{".", "-name", "*.go"}, ""},
 		{"date", nil, ""},
-		{"pwd", nil, "/tmp"},
-		{"ls", []string{}, "/var/log"},
+		{"pwd", nil, tmpDir},
+	}
+
+	// Skip Linux-specific paths on Windows
+	if runtime.GOOS != "windows" {
+		safeCommands = append(safeCommands, struct {
+			command    string
+			args       []string
+			workingDir string
+		}{"ls", []string{}, "/var/log"})
 	}
 
 	for _, tc := range safeCommands {
@@ -459,6 +483,7 @@ func TestValidateForSSHExecution_AllowsSafeCommands(t *testing.T) {
 }
 
 func TestValidateCommandSafety_WorkingDirValidation(t *testing.T) {
+	tmpDir := t.TempDir()
 	workingDirTests := []struct {
 		name        string
 		command     string
@@ -467,14 +492,48 @@ func TestValidateCommandSafety_WorkingDirValidation(t *testing.T) {
 		expectError bool
 		errorMsg    string
 	}{
-		{"valid absolute dir", "ls", []string{}, "/tmp", false, ""},
-		{"valid absolute dir with args", "pwd", nil, "/var/log", false, ""},
-		{"path traversal", "ls", []string{}, "/tmp/../etc", true, "path traversal"},
+		{"valid absolute dir", "ls", []string{}, tmpDir, false, ""},
+		{"path traversal", "ls", []string{}, tmpDir + "/../etc", true, "path traversal"},
 		{"relative path", "ls", []string{}, "tmp", true, "absolute path"},
-		{"nonexistent dir", "ls", []string{}, "/nonexistent_dir_12345", true, "does not exist"},
-		{"file instead of dir", "ls", []string{}, "/etc/passwd", true, "not a directory"},
 		{"empty working dir", "ls", []string{}, "", false, ""},
-		{"complex valid path", "ls", []string{}, "/var/log/apt", false, ""},
+	}
+
+	// Add Linux-specific tests only on non-Windows platforms
+	if runtime.GOOS != "windows" {
+		workingDirTests = append(workingDirTests,
+			struct {
+				name        string
+				command     string
+				args        []string
+				workingDir  string
+				expectError bool
+				errorMsg    string
+			}{"valid absolute dir with args", "pwd", nil, "/var/log", false, ""},
+			struct {
+				name        string
+				command     string
+				args        []string
+				workingDir  string
+				expectError bool
+				errorMsg    string
+			}{"nonexistent dir", "ls", []string{}, "/nonexistent_dir_12345", true, "does not exist"},
+			struct {
+				name        string
+				command     string
+				args        []string
+				workingDir  string
+				expectError bool
+				errorMsg    string
+			}{"file instead of dir", "ls", []string{}, "/etc/passwd", true, "not a directory"},
+			struct {
+				name        string
+				command     string
+				args        []string
+				workingDir  string
+				expectError bool
+				errorMsg    string
+			}{"complex valid path", "ls", []string{}, "/var/log/apt", false, ""},
+		)
 	}
 
 	for _, tc := range workingDirTests {

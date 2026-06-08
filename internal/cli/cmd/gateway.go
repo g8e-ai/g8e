@@ -19,16 +19,23 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
+	"runtime"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
+	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/network"
 	"github.com/spf13/cobra"
 )
+
+func getBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return "./g8e.exe"
+	}
+	return "./g8e"
+}
 
 func gatewayCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -47,8 +54,10 @@ func gatewayCmd() *cobra.Command {
 		gatewaySettingsCmd(),
 		gatewayResetCmd(),
 		gatewayCleanCmd(),
-		gatewayMCPConfigCmd(),
-		gatewayMCPHttpConfigCmd(),
+		cliCmd(),
+		dataCmd(),
+		securityCmd(),
+		setupCmd(),
 	)
 
 	return cmd
@@ -57,23 +66,36 @@ func gatewayCmd() *cobra.Command {
 func gatewayStartCmd() *cobra.Command {
 	var posture string
 	var httpPort int
-	var bootstrapPort int
-	var publicPort int
-	var mcpHttpPort int
+	var httpsPort int
 	var dataDir string
 	var pkiDir string
 	var secretsDir string
+	var vaultDir string
+	var vaultKeyPath string
+	var vaultRequireUnlock bool
 	var passkeyRpID string
 	var passkeyRpName string
 	var rateLimitRPS float64
 	var rateLimitBurst int
 	var logLevel string
 	var certIdentityMode string
+	var follow bool
 
 	cmd := &cobra.Command{
 		Use:   string(constants.ThinkingActionTypeStart),
 		Short: "Start the g8e Gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Environment variables override CLI flags
+			if vaultDir == "" {
+				vaultDir = os.Getenv("G8E_VAULT_DIR")
+			}
+			if vaultKeyPath == "" {
+				vaultKeyPath = os.Getenv("G8E_VAULT_KEY")
+			}
+			if !vaultRequireUnlock {
+				vaultRequireUnlock = os.Getenv("G8E_VAULT_REQUIRE_UNLOCK") == "true"
+			}
+
 			cfg, err := config.Load("")
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
@@ -124,12 +146,13 @@ func gatewayStartCmd() *cobra.Command {
 			if err := pm.StartOperator(
 				posture,
 				httpPort,
-				bootstrapPort,
-				publicPort,
-				mcpHttpPort,
+				httpsPort,
 				dataDir,
 				pkiDir,
 				secretsDir,
+				vaultDir,
+				vaultKeyPath,
+				vaultRequireUnlock,
 				passkeyRpID,
 				passkeyRpName,
 				rateLimitRPS,
@@ -147,70 +170,85 @@ func gatewayStartCmd() *cobra.Command {
 			}
 
 			externalIP := config.GetExternalInterfaceIP()
-			runtimeDir := constants.Paths.Infra.RuntimeDir
-			ledgerDir := filepath.Join(runtimeDir, "data", "ledger")
 
+			cmd.Printf("[g8e] Gateway started (PID: %d)\n\n", pid)
+
+			// Automatically bootstrap CLI auth on first start
+			cmd.Println("[g8e] Bootstrapping CLI authentication...")
+			if err := auth.BootstrapCLIWithoutPasskey(cfg); err != nil {
+				cmd.Printf("[g8e] Warning: Failed to bootstrap CLI auth automatically: %v\n", err)
+				cmd.Println()
+				cmd.Println("╔════════════════════════════════════════════════════════════════════════════╗")
+				cmd.Println("║  IMPORTANT: The gateway is now running. Before it can be used, you must    ║")
+				cmd.Println("║  authenticate to bootstrap your credentials and allow remote operators to  ║")
+				cmd.Println("║  connect.                                                                  ║")
+				cmd.Println("╚════════════════════════════════════════════════════════════════════════════╝")
+				cmd.Println()
+				cmd.Println("Bootstrap Authentication:")
+				cmd.Printf("  %s gw cli auth login\n\n", getBinaryName())
+			} else {
+				cmd.Println("[g8e] CLI authentication bootstrapped successfully!")
+				cmd.Println()
+			}
+			cmd.Println("Deploy/Stream Operators from this machine to Remote Hosts:")
+			cmd.Printf("  %s operator deploy --hosts <host1,host2>\n", getBinaryName())
+			cmd.Printf("  %s operator stream --hosts <host1,host2>\n", getBinaryName())
 			cmd.Println()
-			cmd.Println(" ┌── System Integrity & Posture ────────────────────────────────────────────────┐")
-			cmd.Printf(" │ ✔ Core Gateway (g8eg)       : RUNNING (PID: %d)\n", pid)
-			cmd.Println(" │ ✔ Governance Posture        : DOCTRINE (L1 Enforced | L2/L3 Audited)")
-			cmd.Println(" │ ✔ Cryptographic Boundary    : SECURED (Fail-Closed Execution Platform)")
-			cmd.Printf(" │ ✔ Immutable Audit Ledger    : INITIALIZED (%s)\n", ledgerDir)
-			cmd.Println(" │ ✔ PKI Trust Anchor          : SHA256:a1b2c3d4... [Local-First]")
-			cmd.Println(" └──────────────────────────────────────────────────────────────────────────────┘")
-			cmd.Println()
-			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			cmd.Println(" 1. SECURE GATEWAY ENDPOINTS & CRYPTOGRAPHIC REALITY")
-			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			cmd.Printf("  Control Plane (mTLS/WSS)                     : https://localhost:%d\n", cfg.Paths.Ports.OperatorPublicHTTPS)
-			cmd.Printf("  Operator Bootstrap (CSR Enrollment)          : https://%s:%d\n", externalIP, cfg.Paths.Ports.OperatorPublicHTTPS)
-			cmd.Println()
-			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			cmd.Println(" 2. ZERO-TRUST BOOTSTRAP: PROVISION LOCAL PKI")
-			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			cmd.Println("  To bind agents and satellites to this sovereign boundary, you must install")
-			cmd.Println("  the Root CA to establish mutual TLS (mTLS):")
-			cmd.Println()
-			cmd.Println("  macOS / Linux (Terminal) :")
-			cmd.Printf("      curl -fsSL http://%s:%d/bootstrap-ca | sudo sh\n", externalIP, cfg.Paths.Ports.OperatorBootstrapHTTPS)
-			cmd.Println()
-			cmd.Println("  Windows (PowerShell - Admin) :")
-			cmd.Printf("      iex (irm http://%s:%d/bootstrap-ca.ps1)\n", externalIP, cfg.Paths.Ports.OperatorBootstrapHTTPS)
-			cmd.Println()
-			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			cmd.Println(" 3. CLIENT AUTHENTICATION (REQUIRED FOR CLI ACCESS)")
-			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			cmd.Println("  The Gateway is now running as a zero-trust boundary.")
-			cmd.Println("  To authenticate your local CLI and obtain mTLS credentials:")
-			cmd.Println()
-			cmd.Println("      ./g8e auth login")
-			cmd.Println()
-			cmd.Println("  Other actions:")
-			cmd.Println("  [Bind Satellite]    : ./g8e security pki enroll")
-			cmd.Println("  [View Live Ledger]  : ./g8e gateway logs --follow")
-			cmd.Println("  [MCP Client Config] : ./g8e gw mcp-config")
-			cmd.Println()
-			cmd.Println("────────────────────────────────────────────────────────────────────────────────")
-			cmd.Println("[g8e] Gateway service started. Run './g8e auth login' to authenticate your CLI.")
+			cmd.Println("Copy/Paste Deploy Scripts (run on remote hosts):")
+			cmd.Printf("  Linux/macOS:   curl -fsSL http://%s:%d/g8e-operator.sh | bash\n", externalIP, constants.Ports.OperatorHttp)
+			cmd.Printf("  Windows:       iwr http://%s:%d/g8e-operator.ps1 -UseBasicParsing | iex\n\n", externalIP, constants.Ports.OperatorHttp)
+			cmd.Println("PKI Enrollment for Operators already on Remote Hosts:")
+			cmd.Printf("  %s gw security pki enroll -e %s\n\n", getBinaryName(), externalIP)
+			cmd.Println("Manage:")
+			cmd.Printf("  %s gw restart\n", getBinaryName())
+			cmd.Printf("  %s gw settings\n", getBinaryName())
+			cmd.Printf("  %s gw reset\n", getBinaryName())
+			cmd.Printf("  %s gw clean\n\n", getBinaryName())
+			cmd.Println("Monitor:")
+			cmd.Printf("  %s gw status\n", getBinaryName())
+			cmd.Printf("  %s gw logs -f\n", getBinaryName())
+			cmd.Printf("  %s gw data operators\n", getBinaryName())
+			cmd.Printf("  %s gw data users\n", getBinaryName())
+			cmd.Printf("  %s gw data audit list --operator-session-id <session-id>\n\n", getBinaryName())
+			cmd.Println("MCP (Operator commands):")
+			cmd.Printf("  %s mcp show    Print MCP client configuration for connecting to the gateway\n", getBinaryName())
+			cmd.Printf("  %s mcp stdio   Run Operator as MCP stdio server with native tools only (no Gateway)\n", getBinaryName())
+			cmd.Printf("  %s mcp gov     Run Operator as MCP stdio proxy to Gateway (with governance)\n", getBinaryName())
+
+			if runtime.GOOS == "windows" {
+				cmd.Println()
+				cmd.Println("Windows (Passkey Authentication):")
+				cmd.Printf("  %s auth enroll-windows  Enroll via Windows Certificate Store\n", getBinaryName())
+			}
+
+			if follow {
+				// The gateway is already in its own session (Setsid), so Ctrl+C here won't affect it
+				logPath := pm.GetLogPath()
+				if err := platform.TailLog(logPath, true); err != nil {
+					return fmt.Errorf("failed to follow logs: %w", err)
+				}
+			}
 
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&posture, "posture", "doctrine", "Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)")
-	cmd.Flags().IntVar(&httpPort, "http-port", 0, "HTTPS port for mTLS API (default: from paths.json)")
-	cmd.Flags().IntVar(&bootstrapPort, "bootstrap-port", 0, "Bootstrap TLS port for CSR enrollment (default: from paths.json)")
-	cmd.Flags().IntVar(&publicPort, "public-port", 0, "Public browser/BYO bootstrap port (default: from paths.json)")
-	cmd.Flags().IntVar(&mcpHttpPort, "mcp-http-port", 0, "Plain HTTP port for MCP calls (default: from paths.json)")
+	cmd.Flags().IntVar(&httpPort, "http-port", 0, "HTTP port for bootstrap and MCP (default: from constants.Ports.OperatorHttp)")
+	cmd.Flags().IntVar(&httpsPort, "https-port", 0, "HTTPS port for mTLS API (default: from constants.Ports.OperatorHttps)")
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
 	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "Directory for TLS certificates (default: .g8e/pki)")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
+	cmd.Flags().StringVar(&vaultDir, "vault-dir", "", "Directory for vault data (default: .g8e/vault)")
+	cmd.Flags().StringVar(&vaultKeyPath, "vault-key", "", "Path to vault private key (default: .g8e/secrets/vault.key)")
+	cmd.Flags().BoolVar(&vaultRequireUnlock, "vault-require-unlock", false, "Require vault to be unlocked at startup (fail if vault cannot be unlocked)")
 	cmd.Flags().StringVar(&passkeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
 	cmd.Flags().StringVar(&passkeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
 	cmd.Flags().Float64Var(&rateLimitRPS, "rate-limit-rps", 0, "Gateway requests per second limit (set to 0 to disable)")
 	cmd.Flags().IntVar(&rateLimitBurst, "rate-limit-burst", 0, "Gateway rate limit burst size")
 	cmd.Flags().StringVar(&logLevel, "log", "info", "Log level: info, error, debug")
 	cmd.Flags().StringVar(&certIdentityMode, "cert-mode", "", "Certificate mode: full (all hostnames/IPs), localhost (only localhost)")
+	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow log output after starting (like tail -f)")
 
 	return cmd
 }
@@ -261,6 +299,24 @@ func gatewayStatusCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
+			cmd.Println("g8e Gateway Status")
+			cmd.Println("========================")
+
+			// Try HTTP check first (works for Docker/foreground/background modes)
+			client, err := api.NewClient(cfg)
+			if err == nil {
+				_, err = client.Get("/api/v1/health")
+				if err == nil {
+					cmd.Println("State: RUNNING (HTTP check)")
+					cmd.Printf("\nEndpoints:\n")
+					cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
+					cmd.Printf("  Public API:         https://localhost:%d (Public browser/BYO bootstrap)\n", constants.Ports.OperatorHttps)
+					cmd.Printf("  MCP HTTP:           http://localhost:%d (Plain HTTP for MCP calls)\n", constants.Ports.OperatorHttp)
+					return nil
+				}
+			}
+
+			// Fallback to ProcessManager check (for background/host mode)
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 			if err != nil {
 				return fmt.Errorf("failed to create process manager: %w", err)
@@ -271,14 +327,12 @@ func gatewayStatusCmd() *cobra.Command {
 				return fmt.Errorf("failed to check Operator status: %w", err)
 			}
 
-			cmd.Println("g8e Gateway Status")
-			cmd.Println("========================")
 			if running {
 				cmd.Printf("State: RUNNING (PID: %d)\n", pid)
 				cmd.Printf("\nEndpoints:\n")
-				cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), cfg.OperatorBootstrapHTTPSPort())
-				cmd.Printf("  Public API:         https://localhost:%d (Public browser/BYO bootstrap)\n", cfg.Paths.Ports.OperatorPublicHTTPS)
-				cmd.Printf("  MCP HTTP:           http://localhost:%d (Plain HTTP for MCP calls)\n", cfg.OperatorMcpHttpPort())
+				cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
+				cmd.Printf("  Public API:         https://localhost:%d (Public browser/BYO bootstrap)\n", constants.Ports.OperatorHttps)
+				cmd.Printf("  MCP HTTP:           http://localhost:%d (Plain HTTP for MCP calls)\n", constants.Ports.OperatorHttp)
 			} else {
 				cmd.Println("State: STOPPED")
 			}
@@ -286,6 +340,7 @@ func gatewayStatusCmd() *cobra.Command {
 			return nil
 		},
 	}
+
 	return cmd
 }
 
@@ -320,12 +375,13 @@ func gatewayRestartCmd() *cobra.Command {
 			if err := pm.StartOperator(
 				"doctrine",
 				cfg.OperatorHTTPSPort(),
-				0,
-				cfg.Paths.Ports.OperatorPublicHTTPS,
-				0,
+				constants.Ports.OperatorHttps,
 				"",
 				"",
 				"",
+				"",
+				"",
+				false,
 				"",
 				"",
 				0,
@@ -339,7 +395,7 @@ func gatewayRestartCmd() *cobra.Command {
 
 			cmd.Println("g8e Gateway restarted successfully")
 			cmd.Printf("Governance mode: doctrine (L1 enforced, L2/L3 audited)\n")
-			cmd.Printf("\nNext step: Run './g8e auth login' to authenticate\n")
+			cmd.Printf("\nNext step: Run '%s gw cli auth login' to authenticate\n", getBinaryName())
 			return nil
 		},
 	}
@@ -486,7 +542,7 @@ func gatewayCleanCmd() *cobra.Command {
 				cmd.Println("  4. All trust routes and credentials will be permanently destroyed")
 				cmd.Println()
 				cmd.Println("IMPORTANT: Your CLI credentials will become invalid after this operation.")
-				cmd.Println("You will need to run './g8e auth login' again after restarting the gateway.")
+				cmd.Println("You will need to run './g8e gw cli auth login' again after restarting the gateway.")
 				cmd.Print("\nContinue? [y/N]: ")
 				var response string
 				_, _ = fmt.Scanln(&response)
@@ -513,66 +569,6 @@ func gatewayCleanCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&force, "force", false, "Skip confirmation prompt")
 	cmd.Flags().BoolVar(&force, "y", false, "Skip confirmation prompt (shorthand)")
 	cmd.Flags().BoolVar(&force, "yes", false, "Skip confirmation prompt (shorthand)")
-
-	return cmd
-}
-
-func gatewayMCPConfigCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "mcp-config",
-		Short: "Print MCP client configuration for the Gateway",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			// Use the canonical g8e.local internal hostname with unified /mcp endpoint
-			gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", cfg.OperatorPublicHTTPSPort())
-
-			// Get actual resolved cert paths (absolute paths)
-			actualCertPath := cfg.CLICertFile()
-			actualKeyPath := cfg.CLIKeyFile()
-			actualCAPath := cfg.TrustBundlePath()
-
-			// Normalize to forward slashes for JSON (cross-platform compatibility)
-			actualCertPath = filepath.ToSlash(actualCertPath)
-			actualKeyPath = filepath.ToSlash(actualKeyPath)
-			actualCAPath = filepath.ToSlash(actualCAPath)
-
-			mcpConfig := mcp.NewGatewayConfig(gatewayURL, actualCertPath, actualKeyPath, actualCAPath)
-
-			configJSON, err := json.MarshalIndent(mcpConfig, "", "  ")
-			if err != nil {
-				return fmt.Errorf("failed to marshal MCP config: %w", err)
-			}
-
-			cmd.Println(string(configJSON))
-			return nil
-		},
-	}
-
-	return cmd
-}
-
-func gatewayMCPHttpConfigCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "mcp-config-http",
-		Short: "Print MCP client configuration for the Gateway plain HTTP endpoint",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			staticConfig := `{
-  "mcpServers": {
-    "g8e-gateway": {
-      "disabled": true,
-      "serverUrl": "http://127.0.0.1:8442/mcp",
-      "note": "Must use explicit 127.0.0.1 for HTTP (localhost may resolve to IPv6 ::1)"
-    }
-  }
-}`
-			cmd.Println(staticConfig)
-			return nil
-		},
-	}
 
 	return cmd
 }

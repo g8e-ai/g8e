@@ -28,14 +28,14 @@ func New(secretsDir string, logger *slog.Logger) (*Keystore, error) {
 	if err != nil {
 		backend, err = newFileBackend(secretsDir)
 		if err != nil {
-			return nil, fmt.Errorf("initialize file backend: %w", err)
+			return nil, fmt.Errorf("keystore: initialize file backend: %w", err)
 		}
 		// Log fallback only once per backend type to avoid duplicate warnings
 		logger.Info("[Keystore] Using file-based storage (libsecret unavailable)", "backend", backend.Name())
 	}
 
 	if err := os.MkdirAll(secretsDir, 0700); err != nil {
-		return nil, fmt.Errorf("create secrets directory: %w", err)
+		return nil, fmt.Errorf("keystore: create secrets directory: %w", err)
 	}
 
 	return &Keystore{

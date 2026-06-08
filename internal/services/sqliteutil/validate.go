@@ -24,10 +24,10 @@ var validIdentifierRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 func ValidateIdentifier(name string) error {
 	if name == "" {
-		return fmt.Errorf("empty identifier")
+		return fmt.Errorf("validate: empty identifier")
 	}
 	if !validIdentifierRe.MatchString(name) {
-		return fmt.Errorf("invalid identifier %q: must match [a-zA-Z_][a-zA-Z0-9_]*", name)
+		return fmt.Errorf("validate: invalid identifier %q: must match [a-zA-Z_][a-zA-Z0-9_]*", name)
 	}
 	return nil
 }

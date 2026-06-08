@@ -13,6 +13,9 @@
 
 package constants
 
+// KV key and session type constants.
+// Canonical values defined in protocol/constants/kv_keys.json (the source of truth).
+
 const (
 	KVCachePrefix = "g8e"
 )
@@ -20,9 +23,9 @@ const (
 const (
 	KVKeyCacheDoc                     = "g8e:cache:doc:{collection}:{id}"
 	KVKeyCacheQuery                   = "g8e:cache:query:{collection}:{hash}"
-	KVKeySessionWeb                   = "g8e:session:{session.type}:{session.id}"
-	KVKeySessionOperatorBind          = "g8e:session:operator:{operator.session.id}:bind"
-	KVKeySessionWebBind               = "g8e:session:web:{web.session.id}:bind"
+	KVKeySessionWeb                   = "g8e:sessions:{session.type}:{session.id}"
+	KVKeySessionOperatorBind          = "g8e:sessions:operator:{operator.session.id}:bind"
+	KVKeySessionWebBind               = "g8e:sessions:web:{web.session.id}:bind"
 	KVKeyOperatorFirstDeployed        = "g8e:operator:{operator.id}:first.deployed"
 	KVKeyOperatorTrackedStatus        = "g8e:operator:{operator.id}:tracked.status"
 	KVKeyUserOperators                = "g8e:user:{user.id}:operators"
