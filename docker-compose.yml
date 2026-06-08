@@ -12,85 +12,35 @@
 # limitations under the License.
 
 services:
-  g8e-gateway:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: g8e-gateway:latest
-    container_name: g8e-gateway
-    
-    # Volume mounts for runtime data and configuration
-    volumes:
-      # Mount protocol constants for doctrine mode
-      - ./protocol/constants:/protocol/constants:ro
-      # Mount .g8e directory for runtime state (certificates, database, etc.)
-      - g8e-data:/root/.g8e
-    
-    # Port mappings - can be customized via environment or override
-    ports:
-      - "${HTTP_PORT:-8080}:8080"
-      - "${HTTPS_PORT:-8443}:8443"
-    
-    # Environment variables for runtime configuration
-    environment:
-      - G8E_HTTP_PORT=${HTTP_PORT:-8080}
-      - G8E_HTTPS_PORT=${HTTPS_PORT:-8443}
-
-    # Restart policy
-    restart: unless-stopped
-
-    # Health check - use HTTP endpoint instead of gw status (which doesn't detect foreground processes)
-    # Temporarily disabled to debug startup issues
-    # healthcheck:
-    #   test: ["CMD", "/g8e", "gw", "status", "--http"]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 3
-    #   start_period: 5s
-    
-    # Resource limits (adjust as needed)
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 256M
-    
-    # Network configuration
-    networks:
-      g8e-net:
-        ipv4_address: 172.20.0.10
-
   g8e-operator:
     build:
       context: .
       dockerfile: Dockerfile
-    image: g8e-gateway:latest
+    image: g8e-operator:latest
     container_name: g8e-operator
+
+    # Set working directory so .g8e resolves correctly
+    working_dir: /root
 
     # Volume mounts for runtime data and configuration
     volumes:
       # Mount .g8e directory for runtime state (certificates, database, etc.)
-      - g8e-data:/root/.g8e
+      - g8e-operator-data:/root/.g8e
 
-    # Connect to the custom network
-    networks:
-      g8e-net:
-        ipv4_address: 172.20.0.11
-    
+    # Use host network to connect to local gateway
+    network_mode: host
+
     # Environment variables for runtime configuration
     environment:
-      - G8E_GATEWAY_ENDPOINT=${GATEWAY_ENDPOINT:-172.20.0.10}
-    
-    # Run operator connecting to gateway (operator session auth)
-    # ENTRYPOINT is already /g8e, so just pass args
-    command: ["-e", "${GATEWAY_ENDPOINT:-172.20.0.10}"]
+      - G8E_GATEWAY_ENDPOINT=${GATEWAY_ENDPOINT:-localhost}
 
-    # Restart policy
+    # Run operator connecting to local gateway
+    # Since using network_mode: host, localhost refers to the host machine
+    command: ["-e", "${GATEWAY_ENDPOINT:-localhost}"]
+
+    # Restart policy - don't auto-restart to prevent enrollment loops
     restart: "no"
-    
+
     # Resource limits
     deploy:
       resources:
@@ -100,19 +50,7 @@ services:
         reservations:
           cpus: '0.5'
           memory: 256M
-    
-    # Hosts entries for local DNS resolution
-    extra_hosts:
-      - "g8e-gateway=172.20.0.10"
-
-networks:
-  g8e-net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-          gateway: 172.20.0.1
 
 volumes:
-  g8e-data:
+  g8e-operator-data:
     driver: local

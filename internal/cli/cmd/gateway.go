@@ -22,6 +22,7 @@ import (
 	"runtime"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
+	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -167,14 +168,24 @@ func gatewayStartCmd() *cobra.Command {
 			externalIP := config.GetExternalInterfaceIP()
 
 			cmd.Printf("[g8e] Gateway started (PID: %d)\n\n", pid)
-			cmd.Println("╔════════════════════════════════════════════════════════════════════════════╗")
-			cmd.Println("║  IMPORTANT: The gateway is now running. Before it can be used, you must    ║")
-			cmd.Println("║  authenticate to bootstrap your credentials and allow remote operators to  ║")
-			cmd.Println("║  connect.                                                                  ║")
-			cmd.Println("╚════════════════════════════════════════════════════════════════════════════╝")
-			cmd.Println()
-			cmd.Println("Bootstrap Authentication:")
-			cmd.Printf("  %s auth login\n\n", getBinaryName())
+
+			// Automatically bootstrap CLI auth on first start
+			cmd.Println("[g8e] Bootstrapping CLI authentication...")
+			if err := auth.BootstrapCLIWithoutPasskey(cfg); err != nil {
+				cmd.Printf("[g8e] Warning: Failed to bootstrap CLI auth automatically: %v\n", err)
+				cmd.Println()
+				cmd.Println("╔════════════════════════════════════════════════════════════════════════════╗")
+				cmd.Println("║  IMPORTANT: The gateway is now running. Before it can be used, you must    ║")
+				cmd.Println("║  authenticate to bootstrap your credentials and allow remote operators to  ║")
+				cmd.Println("║  connect.                                                                  ║")
+				cmd.Println("╚════════════════════════════════════════════════════════════════════════════╝")
+				cmd.Println()
+				cmd.Println("Bootstrap Authentication:")
+				cmd.Printf("  %s auth login\n\n", getBinaryName())
+			} else {
+				cmd.Println("[g8e] CLI authentication bootstrapped successfully!")
+				cmd.Println()
+			}
 			cmd.Println("Deploy/Stream Operators from this machine to Remote Hosts:")
 			cmd.Printf("  %s operator deploy --hosts <host1,host2>\n", getBinaryName())
 			cmd.Printf("  %s operator stream --hosts <host1,host2>\n", getBinaryName())

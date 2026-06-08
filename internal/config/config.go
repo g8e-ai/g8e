@@ -592,12 +592,13 @@ func httpPortOrDefault(p int) int {
 }
 
 // tlsServerName returns the TLS ServerName override to use when endpoint is a
-// raw IP address. The embedded CA cert is issued to "localhost",
-// so TLS verification must use that hostname regardless of what IP is dialed.
+// raw IP address. When connecting to a Gateway via IP, we use the internal
+// Gateway hostname (g8.local) for TLS verification since the Gateway's
+// certificate is issued to this name.
 // Returns an empty string when endpoint is already a hostname (no override needed).
 func tlsServerName(endpoint string) string {
 	if net.ParseIP(endpoint) != nil {
-		return constants.DefaultEndpoint
+		return constants.GatewayInternalHostname
 	}
 	return ""
 }

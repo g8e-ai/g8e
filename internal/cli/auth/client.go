@@ -897,6 +897,79 @@ func DeleteCredentials(cfg *config.Config) error {
 	return nil
 }
 
+// BootstrapCLIWithoutPasskey performs CLI enrollment without requiring passkey registration.
+// This is used for automatic bootstrap during gateway start to provide a seamless first-time experience.
+func BootstrapCLIWithoutPasskey(cfg *config.Config) error {
+	// Check if platform is already bootstrapped
+	bootstrapped, err := CheckBootstrapStatus(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to check bootstrap status: %w", err)
+	}
+
+	// Check if local credentials already exist
+	hasLocalCreds := true
+	if _, err := os.Stat(cfg.CredentialsFile()); os.IsNotExist(err) {
+		hasLocalCreds = false
+	}
+	if _, err := os.Stat(cfg.CLICertFile()); os.IsNotExist(err) {
+		hasLocalCreds = false
+	}
+
+	// If platform is already bootstrapped and has local credentials, nothing to do
+	if bootstrapped && hasLocalCreds {
+		return nil
+	}
+
+	// Generate keys and CSRs
+	hostname, _ := os.Hostname()
+	cliCSR, cliKey, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
+	if err != nil {
+		return fmt.Errorf("failed to generate CLI CSR: %w", err)
+	}
+
+	var regResp *RegistrationResponse
+	if !bootstrapped {
+		// First-time bootstrap
+		regResp, err = Bootstrap(cfg, "", cliCSR, "")
+		if err != nil {
+			return fmt.Errorf("failed to bootstrap: %w", err)
+		}
+	} else {
+		// Platform bootstrapped but CLI credentials missing
+		regResp, err = CLIEnroll(cfg, cliCSR)
+		if err != nil {
+			return fmt.Errorf("failed to enroll CLI: %w", err)
+		}
+	}
+
+	if regResp.CLISessionID == "" || regResp.CLICert == "" {
+		return fmt.Errorf("unexpected response (missing required fields)")
+	}
+
+	if err := SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
+		return fmt.Errorf("failed to save CLI credentials: %w", err)
+	}
+
+	if regResp.HubTrustBundle != "" {
+		if err := os.WriteFile(cfg.TrustBundleFile(), []byte(regResp.HubTrustBundle), 0644); err != nil {
+			return fmt.Errorf("failed to save hub trust bundle: %w", err)
+		}
+	}
+
+	creds := &Credentials{
+		OperatorSessionID: regResp.OperatorSessionID,
+		UserID:            regResp.UserID,
+		OperatorID:        regResp.OperatorID,
+		CLISessionID:      regResp.CLISessionID,
+	}
+
+	if err := SaveCredentials(cfg, creds); err != nil {
+		return fmt.Errorf("failed to save credentials: %w", err)
+	}
+
+	return nil
+}
+
 func SaveCertAndKey(certPEM, chainPEM string, key *ecdsa.PrivateKey, certFile, keyFile string) error {
 	if err := os.MkdirAll(filepath.Dir(certFile), 0700); err != nil {
 		return fmt.Errorf("failed to create cert directory: %w", err)

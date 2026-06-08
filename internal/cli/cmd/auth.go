@@ -26,6 +26,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func cliCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "cli",
+		Short: "CLI authentication and session management",
+		Long:  `Manage CLI authentication and sessions via CSR-based enrollment.`,
+	}
+
+	cmd.AddCommand(
+		authCmd(),
+	)
+
+	return cmd
+}
+
 func authCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth",

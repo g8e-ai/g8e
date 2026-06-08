@@ -23,3 +23,8 @@ package constants
 //
 // Source: protocol/constants/network.json
 const DefaultEndpoint = "localhost"
+
+// GatewayInternalHostname is the internal hostname used for Gateway TLS connections.
+// When an Operator connects to a Gateway via IP address, it uses this hostname
+// for TLS ServerName verification since the Gateway's certificate is issued to this name.
+const GatewayInternalHostname = "g8.local"

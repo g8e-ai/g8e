@@ -44,6 +44,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services"
+	"github.com/g8e-ai/g8e/internal/services/auth"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	gateway "github.com/g8e-ai/g8e/internal/services/gateway"
 	insecure_mcp "github.com/g8e-ai/g8e/internal/services/insecure_mcp"
@@ -119,6 +120,171 @@ func generateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 	})
 
 	return string(csrPEM), privKey, nil
+}
+
+// performAutomaticEnrollment handles automatic enrollment with a Gateway when -e flag is provided.
+// It fetches the trust bundle, generates a CSR, enrolls with the Gateway, and saves certificates.
+func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) error {
+	// Create PKI directory
+	pkiDir := filepath.Join(workDir, ".g8e", "pki")
+	trustDir := filepath.Join(pkiDir, "trust")
+	if err := os.MkdirAll(trustDir, 0700); err != nil {
+		return fmt.Errorf("failed to create PKI directory: %w", err)
+	}
+
+	// Check if operator certificate and key already exist
+	operatorKeyPath := filepath.Join(pkiDir, "operator.key")
+	operatorCertPath := filepath.Join(pkiDir, "operator.crt")
+	if _, err := os.Stat(operatorKeyPath); err == nil {
+		if _, err := os.Stat(operatorCertPath); err == nil {
+			logger.Info("Operator certificates already exist, skipping enrollment")
+			return nil
+		}
+	}
+
+	// Fetch trust bundle from Gateway HTTP endpoint
+	trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/ca-bundle", gatewayIP, constants.Ports.OperatorHttp)
+	logger.Info("Fetching trust bundle from Gateway", "url", trustURL)
+	trustBundle, err := certs.FetchTrustBundle(context.Background(), trustURL, "")
+	if err != nil {
+		return fmt.Errorf("failed to fetch trust bundle: %w", err)
+	}
+
+	// Save trust bundle
+	trustBundlePath := filepath.Join(trustDir, "g8eg-ca-bundle.pem")
+	if err := os.WriteFile(trustBundlePath, trustBundle, 0644); err != nil {
+		return fmt.Errorf("failed to save trust bundle: %w", err)
+	}
+	logger.Info("Trust bundle saved", "path", trustBundlePath)
+
+	// Generate system fingerprint for enrollment
+	systemFp, err := auth.GenerateSystemFingerprint(logger)
+	if err != nil {
+		return fmt.Errorf("failed to generate system fingerprint: %w", err)
+	}
+
+	// Generate CSR for enrollment
+	hostname, err := os.Hostname()
+	if err != nil {
+		return fmt.Errorf("failed to get hostname: %w", err)
+	}
+	opCSR, opKey, err := generateCSR(hostname)
+	if err != nil {
+		return fmt.Errorf("failed to generate Operator CSR: %w", err)
+	}
+
+	// Generate CLI CSR (required by device enrollment endpoint even for operator-only deployment)
+	cliCSR, _, err := generateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
+	if err != nil {
+		return fmt.Errorf("failed to generate CLI CSR: %w", err)
+	}
+
+	// Enroll with Gateway
+	gatewayEndpoint := fmt.Sprintf("%s:%d", gatewayIP, constants.Ports.OperatorHttp)
+	logger.Info("Enrolling with Gateway", "endpoint", gatewayEndpoint)
+
+	// Use the HTTP device enrollment endpoint (not PKI mTLS endpoint)
+	enrollURL := fmt.Sprintf("http://%s/api/v1/auth/device/enroll", gatewayEndpoint)
+	reqBody := struct {
+		CSRPEM            string `json:"csr_pem"`
+		CLICSRPEM         string `json:"cli_csr_pem"`
+		SystemFingerprint string `json:"system_fingerprint"`
+		Hostname          string `json:"hostname"`
+	}{
+		CSRPEM:            opCSR,
+		CLICSRPEM:         cliCSR,
+		SystemFingerprint: systemFp.Fingerprint,
+		Hostname:          hostname,
+	}
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal enrollment request: %w", err)
+	}
+
+	httpReq, err := http.NewRequest("POST", enrollURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create enrollment request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to send enrollment request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read enrollment response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("enrollment failed with HTTP %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var enrollResp struct {
+		OperatorCert      string `json:"operator_cert"`
+		OperatorCertChain string `json:"operator_cert_chain,omitempty"`
+		HubTrustBundle    string `json:"hub_trust_bundle,omitempty"`
+		OperatorID        string `json:"operator_id"`
+		OperatorSessionID string `json:"operator_session_id"`
+		Error             string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(respBody, &enrollResp); err != nil {
+		return fmt.Errorf("failed to parse enrollment response: %w", err)
+	}
+
+	if enrollResp.Error != "" {
+		return fmt.Errorf("enrollment failed: %s", enrollResp.Error)
+	}
+
+	if enrollResp.OperatorCert == "" {
+		return fmt.Errorf("enrollment response missing operator certificate")
+	}
+
+	// Save operator private key
+	keyBytes, err := x509.MarshalECPrivateKey(opKey)
+	if err != nil {
+		return fmt.Errorf("failed to marshal private key: %w", err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: keyBytes,
+	})
+	keyPath := filepath.Join(pkiDir, "operator.key")
+	logger.Info("Saving operator private key", "path", keyPath)
+	if err := os.WriteFile(keyPath, keyPEM, 0600); err != nil {
+		return fmt.Errorf("failed to save private key: %w", err)
+	}
+	logger.Info("Operator private key saved successfully")
+
+	// Save operator certificate
+	certPath := filepath.Join(pkiDir, "operator.crt")
+	certContent := enrollResp.OperatorCert
+	if enrollResp.OperatorCertChain != "" {
+		certContent += "\n" + enrollResp.OperatorCertChain
+	}
+	logger.Info("Saving operator certificate", "path", certPath)
+	if err := os.WriteFile(certPath, []byte(certContent), 0600); err != nil {
+		return fmt.Errorf("failed to save operator certificate: %w", err)
+	}
+	logger.Info("Operator certificate saved successfully")
+
+	// Update trust bundle if Gateway returned a new one
+	if enrollResp.HubTrustBundle != "" {
+		if err := os.WriteFile(trustBundlePath, []byte(enrollResp.HubTrustBundle), 0644); err != nil {
+			return fmt.Errorf("failed to save updated trust bundle: %w", err)
+		}
+		logger.Info("Updated trust bundle from Gateway")
+	}
+
+	logger.Info("Enrollment successful", "operator_id", enrollResp.OperatorID, "operator_session_id", enrollResp.OperatorSessionID)
+
+	// Set environment variable for operator session ID
+	os.Setenv("G8E_OPERATOR_SESSION_ID", enrollResp.OperatorSessionID)
+
+	return nil
 }
 
 // renewOperatorCertificate performs automatic re-enrollment for the Operator certificate.
@@ -634,9 +800,6 @@ func main() {
 	}
 	logger.Info("Trust bundle loaded")
 
-	// Create DI-based TLS config from trust store and client identity
-	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
-
 	// Resolve default client certificate paths if not explicitly provided
 	// Priority: 1. Explicit flags, 2. Project-local .g8e/pki/operator.*, 3. Project-local .g8e/pki/client.*
 	if privateKey == "" {
@@ -671,10 +834,29 @@ func main() {
 		}
 	}
 
+	// If certificates don't exist and endpoint is provided, perform automatic enrollment
+	if (privateKey == "" || clientCert == "") && endpointURL != "" {
+		logger.Info("No local certificates found, performing automatic enrollment with Gateway", "endpoint", endpointURL)
+		if err := performAutomaticEnrollment(endpointURL, launchDir, logger); err != nil {
+			logger.Error("Automatic enrollment failed", string(constants.ConnectionStateError), err)
+			fmt.Fprintf(os.Stderr, "Automatic enrollment failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "  Ensure the Gateway is running and accessible at %s\n", endpointURL)
+			os.Exit(constants.ExitConfigError)
+		}
+
+		// After enrollment, set the certificate paths
+		privateKey = filepath.Join(launchDir, ".g8e/pki/operator.key")
+		clientCert = filepath.Join(launchDir, ".g8e/pki/operator.crt")
+		
+		// Keep using the original endpoint (localhost or provided IP) for Gateway connections
+		logger.Info("Automatic enrollment completed, using enrolled certificates")
+	}
+
 	if privateKey == "" {
 		fmt.Fprintf(os.Stderr, "Private key is required (-k or --key). Expected locations:\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/operator.key (project directory)\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/client.key (project directory)\n")
+		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform automatic enrollment\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -682,8 +864,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Client certificate is required (--cert or --client-cert). Expected locations:\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/operator.crt (project directory)\n")
 		fmt.Fprintf(os.Stderr, "  - .g8e/pki/client.crt (project directory)\n")
+		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform automatic enrollment\n")
 		os.Exit(constants.ExitConfigError)
 	}
+
+	// Create DI-based TLS config from trust store and client identity
+	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
 
 	// Load client certificate for mTLS
 	certPEM, err := os.ReadFile(clientCert)

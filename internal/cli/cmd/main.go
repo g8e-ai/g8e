@@ -33,7 +33,7 @@ The CLI manages the g8e Gateway (g8eg) and g8e Operator (g8eo).`,
 
 	rootCmd.AddCommand(
 		gatewayCmd(),
-		authCmd(),
+		cliCmd(),
 		approveCmd(),
 		dataCmd(),
 		securityCmd(),
