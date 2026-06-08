@@ -321,12 +321,30 @@ Host testhost
 	})
 
 	t.Run("default username when none provided", func(t *testing.T) {
+		// Mock home directory to avoid trying to read ~/.ssh/config in environments where it doesn't exist (e.g. CI)
+		dir := t.TempDir()
+		t.Setenv("HOME", dir)
+		t.Setenv("USERPROFILE", dir) // For Windows compatibility
+
+		// Create empty .ssh/config to satisfy ResolveHost
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".ssh"), 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".ssh", "config"), []byte(""), 0600))
+
 		r, err := ResolveHost("myserver", "", "defaultuser", "", "")
 		require.NoError(t, err)
 		assert.Equal(t, "defaultuser", r.User)
 	})
 
 	t.Run("default port when none provided", func(t *testing.T) {
+		// Mock home directory to avoid trying to read ~/.ssh/config in environments where it doesn't exist (e.g. CI)
+		dir := t.TempDir()
+		t.Setenv("HOME", dir)
+		t.Setenv("USERPROFILE", dir) // For Windows compatibility
+
+		// Create empty .ssh/config to satisfy ResolveHost
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".ssh"), 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".ssh", "config"), []byte(""), 0600))
+
 		r, err := ResolveHost("myserver", "", "", "", "")
 		require.NoError(t, err)
 		assert.Equal(t, "22", r.Port)
