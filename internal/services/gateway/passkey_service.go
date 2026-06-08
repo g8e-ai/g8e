@@ -177,6 +177,10 @@ func (s *PasskeyService) GenerateAuthenticationChallenge(userID string) (*protoc
 		return nil, fmt.Errorf("user not found")
 	}
 
+	if len(user.PasskeyCredentials) == 0 {
+		return nil, constants.ErrNoPasskeysRegistered
+	}
+
 	options, session, err := s.webauthn.BeginLogin(user)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin login: %w", err)

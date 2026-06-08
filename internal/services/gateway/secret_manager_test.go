@@ -17,12 +17,14 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
@@ -30,7 +32,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
 
 // newSecretManagerTestDB opens a raw sqliteutil.DB with just the documents +
 // kv_store schema that SecretManager needs, without pulling in the full
@@ -484,7 +485,7 @@ func TestSecretManager_SessionToken_Expires(t *testing.T) {
 	// Wait for expiry with polling
 	require.Eventually(t, func() bool {
 		_, err := sm.GetSessionToken()
-		return err != nil && strings.Contains(err.Error(), "expired")
+		return errors.Is(err, constants.ErrExpired)
 	}, 100*time.Millisecond, 10*time.Millisecond, "session token should expire")
 }
 

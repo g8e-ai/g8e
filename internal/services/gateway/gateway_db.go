@@ -205,7 +205,7 @@ func (s *CanonicalDBService) initTestSchema(secretsDir string) error {
 	}
 	// Migration: Add producer_id column to sse_events table if it doesn't exist
 	_, err = s.db.ExecWithRetry("ALTER TABLE sse_events ADD COLUMN producer_id TEXT")
-	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+	if err != nil && !errors.Is(err, constants.ErrDuplicateColumn) && !sqliteutil.IsDuplicateColumnError(err) {
 		s.logger.Warn("Failed to add producer_id column to sse_events (may already exist)", "error", err)
 	}
 	backend, err := keystore.NewTestBackend()
@@ -444,7 +444,7 @@ func (s *CanonicalDBService) ReserveNonce(nonce string, expiresAt time.Time) (bo
 	_, err = s.db.ExecWithRetry("INSERT INTO nonces (nonce, expires_at, status) VALUES (?, ?, 'reserved')", nonce, expStr)
 	if err != nil {
 		// Concurrent insert might fail with constraint violation - that's a replay
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if errors.Is(err, constants.ErrDatabaseReplay) || sqliteutil.IsUniqueConstraintError(err) {
 			return true, nil
 		}
 		return false, err
@@ -503,7 +503,7 @@ func (s *CanonicalDBService) initSchema(secretsDir string) error {
 
 	// Migration: Add producer_id column to sse_events table if it doesn't exist
 	_, err = s.db.ExecWithRetry("ALTER TABLE sse_events ADD COLUMN producer_id TEXT")
-	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+	if err != nil && !errors.Is(err, constants.ErrDuplicateColumn) && !sqliteutil.IsDuplicateColumnError(err) {
 		s.logger.Warn("Failed to add producer_id column to sse_events (may already exist)", "error", err)
 	}
 
@@ -613,7 +613,7 @@ func (s *CanonicalDBService) migrateStateVersion() error {
 
 	// Table exists but is empty, initialize it
 	_, err = s.db.ExecWithRetry("INSERT INTO state_version (id, version) VALUES (1, 0)")
-	if err != nil && !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+	if err != nil && !errors.Is(err, constants.ErrAlreadyExists) && !sqliteutil.IsUniqueConstraintError(err) {
 		s.logger.Warn("Failed to initialize state_version", "error", err)
 	}
 	return nil
@@ -720,8 +720,8 @@ func (s *CanonicalDBService) DocCreate(collection, id string, data json.RawMessa
 		 VALUES (?, ?, ?, ?, ?)`,
 		collection, id, string(dataJSON), nowStr, nowStr,
 	)
-	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
-		return fmt.Errorf("document already exists")
+	if err != nil && sqliteutil.IsUniqueConstraintError(err) {
+		return constants.ErrAlreadyExists
 	}
 	return err
 }
@@ -786,7 +786,7 @@ func (s *CanonicalDBService) DocUpdate(collection, id string, fields json.RawMes
 		collection, id,
 	).Scan(&existingJSON, &createdAtStr, &updatedAtStr)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("document not found: %s/%s", collection, id)
+		return nil, fmt.Errorf("%w: %s/%s", constants.ErrNotFound, collection, id)
 	}
 	if err != nil {
 		return nil, err

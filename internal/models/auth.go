@@ -34,6 +34,38 @@ type OperatorRegistrationRequest struct {
 	IPAddress         string `json:"ip_address,omitempty"`
 }
 
+// BootstrapRequest is the inbound body for /api/v1/auth/bootstrap.
+type BootstrapRequest struct {
+	CSR               string `json:"csr_pem"`
+	CLICSR            string `json:"cli_csr_pem,omitempty"`
+	SystemFingerprint string `json:"system_fingerprint"`
+}
+
+// CLIEnrollRequest is the inbound body for /api/v1/auth/cli/enroll.
+type CLIEnrollRequest struct {
+	CLICSR            string `json:"cli_csr_pem"`
+	SystemFingerprint string `json:"system_fingerprint"`
+}
+
+// DeviceEnrollRequest is the inbound body for /api/v1/auth/device/enroll.
+type DeviceEnrollRequest struct {
+	CSR               string `json:"csr_pem"`
+	CLICSR            string `json:"cli_csr_pem,omitempty"`
+	SystemFingerprint string `json:"system_fingerprint"`
+	Hostname          string `json:"hostname"`
+}
+
+// PasskeyChallengeRequest is the inbound body for passkey authentication challenge endpoints.
+type PasskeyChallengeRequest struct {
+	UserID string `json:"user_id"`
+}
+
+// PasskeyRegisterChallengeRequest is the inbound body for passkey registration challenge endpoints.
+type PasskeyRegisterChallengeRequest struct {
+	UserID   string `json:"user_id"`
+	UserName string `json:"user_name"`
+}
+
 // OperatorRegistrationResponse is the response for /api/pki/device-enroll (CSR-based enrollment).
 //
 // OperatorSessionID and CLISessionID are strictly disjoint session types:
@@ -273,17 +305,17 @@ type WebSession struct {
 // by g8e-compatible agentic ensembles to look up sessions by ID.
 // Authority: protocol/constants/collections.json (operator_sessions)
 type OperatorSession struct {
-	ID                string    `json:"id"`
-	SessionType       string    `json:"session_type"`
-	UserID            string    `json:"user_id"`
-	OrganizationID    string    `json:"organization_id"`
-	OperatorID        string    `json:"operator_id"`
-	IsActive          bool      `json:"is_active"`
-	CreatedAt         string    `json:"created_at"`
-	AbsoluteExpiresAt string    `json:"absolute_expires_at"`
-	IdleExpiresAt     string    `json:"idle_expires_at"`
-	LastActivity      string    `json:"last_activity"`
-	LoginMethod       string    `json:"login_method"`
+	ID                string `json:"id"`
+	SessionType       string `json:"session_type"`
+	UserID            string `json:"user_id"`
+	OrganizationID    string `json:"organization_id"`
+	OperatorID        string `json:"operator_id"`
+	IsActive          bool   `json:"is_active"`
+	CreatedAt         string `json:"created_at"`
+	AbsoluteExpiresAt string `json:"absolute_expires_at"`
+	IdleExpiresAt     string `json:"idle_expires_at"`
+	LastActivity      string `json:"last_activity"`
+	LoginMethod       string `json:"login_method"`
 }
 
 // CLISession represents an authenticated CLI/BYO session.
@@ -302,6 +334,15 @@ type CLISession struct {
 	SessionType       string    `json:"session_type"`
 	IsActive          bool      `json:"is_active"`
 	LoginMethod       string    `json:"login_method"`
+}
+
+// LocalOSUser represents local OS user account information.
+type LocalOSUser struct {
+	Domain   string `json:"domain,omitempty"`
+	Username string `json:"username,omitempty"`
+	UID      string `json:"uid,omitempty"`
+	GID      string `json:"gid,omitempty"`
+	SID      string `json:"sid,omitempty"`
 }
 
 // User represents a platform user with passkey credentials.
@@ -326,6 +367,8 @@ type User struct {
 
 	Status      constants.UserStatus `json:"status,omitempty"`
 	IsBootstrap bool                 `json:"is_bootstrap,omitempty"`
+
+	LocalOSUser *LocalOSUser `json:"local_os_user,omitempty"`
 }
 
 // IsActive reports whether the user is permitted to authenticate. Treats the
@@ -342,12 +385,12 @@ func (u *User) IsActive() bool {
 // New admin-side state changes (retire, disable, role mutation, etc.) MUST
 // append a row here so the lifecycle is auditable from the protocol Gateway.
 type AdminAuditEntry struct {
-	ID         string                 `json:"id"`
-	At         time.Time              `json:"at"`
-	Action     string                 `json:"action"`
-	Actor      string                 `json:"actor,omitempty"`
-	Target     string                 `json:"target,omitempty"`
-	OperatorID string                 `json:"operator_id,omitempty"`
+	ID         string             `json:"id"`
+	At         time.Time          `json:"at"`
+	Action     string             `json:"action"`
+	Actor      string             `json:"actor,omitempty"`
+	Target     string             `json:"target,omitempty"`
+	OperatorID string             `json:"operator_id,omitempty"`
 	Details    *AdminAuditDetails `json:"details,omitempty"`
 }
 

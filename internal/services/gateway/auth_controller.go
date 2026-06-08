@@ -15,6 +15,7 @@ package gateway
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -36,36 +37,36 @@ import (
 
 // AuthController handles authentication, passkey, and approval endpoints.
 type AuthController struct {
-	cfg               *config.Config
-	logger            *slog.Logger
-	db                *CanonicalDBService
-	auth              *AuthService
-	passkey           *PasskeyService
-	userSvc           *UserService
-	reg               *RegistrationService
-	pki               *PKIAuthority
-	webSessionSvc     *WebSessionService
-	cliSessionSvc     *CLISessionService
+	cfg                *config.Config
+	logger             *slog.Logger
+	db                 *CanonicalDBService
+	auth               *AuthService
+	passkey            *PasskeyService
+	userSvc            *UserService
+	reg                *RegistrationService
+	pki                *PKIAuthority
+	webSessionSvc      *WebSessionService
+	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
-	mcp               *mcp.GatewayService
-	responder         *response.Writer
+	mcp                *mcp.GatewayService
+	responder          *response.Writer
 }
 
 func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, mcp *mcp.GatewayService, responder *response.Writer) *AuthController {
 	return &AuthController{
-		cfg:               cfg,
-		logger:            logger,
-		db:                db,
-		auth:              auth,
-		passkey:           passkey,
-		userSvc:           userSvc,
-		reg:               reg,
-		pki:               pki,
-		webSessionSvc:     webSessionSvc,
-		cliSessionSvc:     cliSessionSvc,
+		cfg:                cfg,
+		logger:             logger,
+		db:                 db,
+		auth:               auth,
+		passkey:            passkey,
+		userSvc:            userSvc,
+		reg:                reg,
+		pki:                pki,
+		webSessionSvc:      webSessionSvc,
+		cliSessionSvc:      cliSessionSvc,
 		operatorSessionSvc: operatorSessionSvc,
-		mcp:               mcp,
-		responder:         responder,
+		mcp:                mcp,
+		responder:          responder,
 	}
 }
 
@@ -254,7 +255,7 @@ func (c *AuthController) handleAuthPasskeysAuthenticateChallenge(w http.Response
 		c.responder.JSON(w, http.StatusOK, models.PasskeyChallengeResponse{
 			Success:    false,
 			Error:      err.Error(),
-			NeedsSetup: err.Error() == "no passkeys registered",
+			NeedsSetup: errors.Is(err, constants.ErrNoPasskeysRegistered),
 		})
 		return
 	}
@@ -949,7 +950,7 @@ func (c *AuthController) handleCLIPasskeyRegisterChallenge(w http.ResponseWriter
 		return
 	}
 
-	// Enforce first-credential-only for CLI bootstrap
+	// Enforce first-credential-only for CLI bootstrap, unless authenticated via mTLS
 	user, err := c.userSvc.GetByID(req.UserID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to fetch user")
@@ -959,7 +960,12 @@ func (c *AuthController) handleCLIPasskeyRegisterChallenge(w http.ResponseWriter
 		c.responder.Error(w, http.StatusNotFound, "user not found")
 		return
 	}
-	if len(user.PasskeyCredentials) > 0 {
+
+	// Check if already authenticated via mTLS
+	authenticatedUserID, _ := r.Context().Value(userIDKey).(string)
+	isEnrolled := authenticatedUserID == req.UserID
+
+	if len(user.PasskeyCredentials) > 0 && !isEnrolled {
 		c.responder.Error(w, http.StatusForbidden, "first-credential registration only; user already has credentials")
 		return
 	}
@@ -1006,7 +1012,7 @@ func (c *AuthController) handleCLIPasskeyRegisterVerify(w http.ResponseWriter, r
 		return
 	}
 
-	// Enforce first-credential-only for CLI bootstrap
+	// Enforce first-credential-only for CLI bootstrap, unless authenticated via mTLS
 	user, err := c.userSvc.GetByID(req.UserID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to fetch user")
@@ -1016,7 +1022,12 @@ func (c *AuthController) handleCLIPasskeyRegisterVerify(w http.ResponseWriter, r
 		c.responder.Error(w, http.StatusNotFound, "user not found")
 		return
 	}
-	if len(user.PasskeyCredentials) > 0 {
+
+	// Check if already authenticated via mTLS
+	authenticatedUserID, _ := r.Context().Value(userIDKey).(string)
+	isEnrolled := authenticatedUserID == req.UserID
+
+	if len(user.PasskeyCredentials) > 0 && !isEnrolled {
 		c.responder.Error(w, http.StatusForbidden, "first-credential registration only; user already has credentials")
 		return
 	}
@@ -1033,6 +1044,96 @@ func (c *AuthController) handleCLIPasskeyRegisterVerify(w http.ResponseWriter, r
 
 	c.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
 		Success:    true,
+		Credential: cred,
+	})
+}
+
+// handleCLIPasskeyAuthenticateChallenge handles passkey authentication challenges for CLI.
+// This endpoint requires mTLS authentication via CLI certificate with X-G8E-CLI-Session-ID header.
+func (c *AuthController) handleCLIPasskeyAuthenticateChallenge(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	var req struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if req.UserID == "" {
+		c.responder.Error(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	options, err := c.passkey.GenerateAuthenticationChallenge(req.UserID)
+	if err != nil {
+		c.logger.Warn("CLI passkey auth challenge failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
+		c.responder.JSON(w, http.StatusOK, models.PasskeyChallengeResponse{
+			Success:    false,
+			Error:      err.Error(),
+			NeedsSetup: errors.Is(err, constants.ErrNoPasskeysRegistered),
+		})
+		return
+	}
+
+	c.responder.JSON(w, http.StatusOK, models.PasskeyChallengeResponse{
+		Success: true,
+		Options: options,
+	})
+}
+
+// handleCLIPasskeyAuthenticateVerify handles passkey authentication verification for CLI.
+// This endpoint requires mTLS authentication via CLI certificate with X-G8E-CLI-Session-ID header.
+func (c *AuthController) handleCLIPasskeyAuthenticateVerify(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	var req struct {
+		UserID            string             `json:"user_id"`
+		AssertionResponse *AssertionResponse `json:"assertion_response"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if req.UserID == "" {
+		c.responder.Error(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	cred, err := c.passkey.VerifyAuthentication(req.UserID, r)
+	if err != nil {
+		c.logger.Warn("CLI passkey auth verify failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
+		c.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// CLI authentication doesn't need web session - just return success
+	c.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
+		Success:    true,
+		UserID:     req.UserID,
 		Credential: cred,
 	})
 }
@@ -1128,32 +1229,10 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	// Create web session for local bootstrap
-	webSession, err := c.webSessionSvc.CreateWebSession(user.ID)
-	if err != nil {
-		c.logger.Error("Failed to create web session for bootstrap user", string(constants.ConnectionStateError), err, "user_id", user.ID)
-		c.responder.Error(w, http.StatusInternalServerError, "user created but web session failed")
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "g8e_session",
-		Value:    webSession.ID,
-		Path:     "/",
-		Expires:  time.Unix(webSession.ExpiresAtUnixMs/1000, 0),
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
 	response := models.BootstrapResponse{
-		Success:    true,
-		User:       user,
-		UserID:     user.ID,
-		WebSession: &models.WebSessionInfo{
-			ID:              webSession.ID,
-			ExpiresAtUnixMs: webSession.ExpiresAtUnixMs,
-		},
+		Success: true,
+		User:    user,
+		UserID:  user.ID,
 	}
 
 	// If CSR is requested and loopback, sign and return cert (plan §4.2)
@@ -1214,10 +1293,10 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 	var cliCertPEM, cliCertChainPEM string
 	var cliCertFingerprint, cliCertSerial string
 	var cliSessionID string
-	
+
 	// Always create a CLI session ID for CLI-only bootstrap (user_id binding is required)
 	cliSessionID = uuid.NewString()
-	
+
 	if req.CLICSRPEM != "" {
 		cliCertPEM, cliCertChainPEM, err = c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "")
 		if err != nil {

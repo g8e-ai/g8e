@@ -17,6 +17,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -616,7 +617,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 				// Non-Unix system or wait status unavailable - treat as completed with exit code
 				result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 			}
-		} else if strings.Contains(err.Error(), "signal: killed") {
+		} else if errors.Is(err, constants.ErrProcessKilled) {
 			// Process was killed (by us on timeout/cancel, or externally)
 			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 			result.ErrorMessage = system.StringPtr("Command was terminated")

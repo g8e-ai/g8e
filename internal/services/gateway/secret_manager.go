@@ -624,7 +624,7 @@ func (m *SecretManager) GetSessionToken() (string, error) {
 	}
 
 	if time.Now().UTC().After(expiresAt) {
-		return "", fmt.Errorf("secret_manager: get session token: token expired at %s", expiresAtStr)
+		return "", fmt.Errorf("%w: token expired at %s", constants.ErrExpired, expiresAtStr)
 	}
 
 	return token, nil

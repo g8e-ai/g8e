@@ -65,6 +65,8 @@
   "auth_passkeys_jit_register_challenge": "/api/v1/auth/passkeys/jit-register/challenge",
   "auth_passkeys_jit_register_verify": "/api/v1/auth/passkeys/jit-register/verify",
   "auth_passkeys_jit_prefix": "/api/v1/auth/passkeys/jit-",
+  "auth_passkeys_cli_authenticate_challenge": "/api/v1/auth/passkeys/cli/authenticate/challenge",
+  "auth_passkeys_cli_authenticate_verify": "/api/v1/auth/passkeys/cli/authenticate/verify",
   "auth_passkeys_prefix": "/api/v1/auth/passkeys/",
   "auth_sessions_me": "/api/v1/auth/sessions/me",
   "approvals": "/api/v1/approvals",

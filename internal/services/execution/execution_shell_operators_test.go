@@ -15,11 +15,11 @@ package execution
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -389,9 +389,8 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 		result, err := svc.ExecuteCommand(ctx, req)
 		assert.Error(t, err)
 		assert.Nil(t, result)
-		// Handle both American and British spelling of cancel(l)ed
-		errStr := strings.ToLower(err.Error())
-		assert.True(t, strings.Contains(errStr, "cancel"), "error should mention cancellation, got: %v", err.Error())
+		// Check for context cancellation error
+		assert.True(t, errors.Is(err, context.Canceled), "error should be context.Canceled, got: %v", err.Error())
 
 		wg.Wait()
 	})

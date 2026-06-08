@@ -204,7 +204,6 @@ func gatewayStartCmd() *cobra.Command {
 				cmd.Println()
 				cmd.Println("Windows (Passkey Authentication):")
 				cmd.Printf("  %s auth enroll-windows  Enroll via Windows Certificate Store\n", getBinaryName())
-				cmd.Printf("  %s auth serve-https     Start HTTPS server with passkey auth UI\n", getBinaryName())
 			}
 
 			if follow {

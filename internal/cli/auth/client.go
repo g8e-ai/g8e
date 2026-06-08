@@ -22,20 +22,25 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
+	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 )
 
 type RegistrationRequest struct {
@@ -88,6 +93,7 @@ func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 			CommonName:   commonName,
 			Organization: []string{"g8e"},
 		},
+		DNSNames: []string{"localhost", "g8e.local"},
 	}
 
 	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
@@ -195,10 +201,10 @@ func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint str
 		return nil, fmt.Errorf("failed to get hostname: %w", err)
 	}
 
-	req := map[string]string{
-		"csr_pem":            operatorCSR,
-		"cli_csr_pem":        cliCSR,
-		"system_fingerprint": fmt.Sprintf("g8e-cli-%s", hostname),
+	req := models.BootstrapRequest{
+		CSR:               operatorCSR,
+		CLICSR:            cliCSR,
+		SystemFingerprint: fmt.Sprintf("g8e-cli-%s", hostname),
 	}
 
 	body, err := json.Marshal(req)
@@ -256,9 +262,9 @@ func CLIEnroll(cfg *config.Config, cliCSR string) (*RegistrationResponse, error)
 		return nil, fmt.Errorf("failed to get hostname: %w", err)
 	}
 
-	req := map[string]string{
-		"cli_csr_pem":        cliCSR,
-		"system_fingerprint": fmt.Sprintf("g8e-cli-%s", hostname),
+	req := models.CLIEnrollRequest{
+		CLICSR:            cliCSR,
+		SystemFingerprint: fmt.Sprintf("g8e-cli-%s", hostname),
 	}
 
 	body, err := json.Marshal(req)
@@ -372,10 +378,10 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 
 	client := &http.Client{Transport: transport}
 
-	req := map[string]string{
-		"csr_pem":            operatorCSR,
-		"cli_csr_pem":        cliCSR,
-		"system_fingerprint": fmt.Sprintf("g8e-cli-%s", hostname),
+	req := models.BootstrapRequest{
+		CSR:               operatorCSR,
+		CLICSR:            cliCSR,
+		SystemFingerprint: fmt.Sprintf("g8e-cli-%s", hostname),
 	}
 
 	body, err := json.Marshal(req)
@@ -393,6 +399,10 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 
 	resp, err := client.Do(httpReq)
 	if err != nil {
+		// Check if this is a TLS certificate verification error (stale trust bundle)
+		if isCertificateVerificationError(err) {
+			return nil, fmt.Errorf("%w: %w", constants.ErrTrustBundleStale, err)
+		}
 		return nil, fmt.Errorf("failed to re-enroll: %w", err)
 	}
 	defer resp.Body.Close()
@@ -417,6 +427,36 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 	}
 
 	return &regResp, nil
+}
+
+// isCertificateVerificationError checks if an error is a TLS certificate verification error
+// without using string matching on error messages.
+func isCertificateVerificationError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check for x509 certificate errors by unwrapping the error chain
+	for {
+		// Check for common x509 error types
+		switch err.(type) {
+		case x509.UnknownAuthorityError:
+			return true
+		case x509.HostnameError:
+			return true
+		case x509.CertificateInvalidError:
+			return true
+		}
+
+		// Unwrap to check wrapped errors
+		if unwrapped := errors.Unwrap(err); unwrapped != nil {
+			err = unwrapped
+			continue
+		}
+		break
+	}
+
+	return false
 }
 
 func SaveCredentials(cfg *config.Config, creds *Credentials) error {
@@ -453,6 +493,289 @@ func LoadCredentials(cfg *config.Config) (*Credentials, error) {
 	}
 
 	return &creds, nil
+}
+
+// PerformNativeWindowsAuth attempts to authenticate using Windows Hello without a browser.
+func PerformNativeWindowsAuth(cfg *config.Config) error {
+	creds, err := LoadCredentials(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to load credentials: %w", err)
+	}
+	if creds == nil || creds.UserID == "" {
+		return fmt.Errorf("no user ID found in credentials; run 'g8e auth login' to enroll first")
+	}
+	if creds.CLISessionID == "" {
+		return fmt.Errorf("no CLI session ID found in credentials; run 'g8e auth login' to enroll first")
+	}
+
+	// Load CLI certificate for mTLS authentication
+	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
+	if err != nil {
+		return fmt.Errorf("failed to load CLI certificate: %w", err)
+	}
+
+	// Load trust bundle for TLS verification
+	caPEM, err := os.ReadFile(cfg.TrustBundleFile())
+	if err != nil {
+		return fmt.Errorf("failed to read trust bundle from %s: %w", cfg.TrustBundleFile(), err)
+	}
+
+	caPool := x509.NewCertPool()
+	if !caPool.AppendCertsFromPEM(caPEM) {
+		return fmt.Errorf("failed to parse CA certificates from trust bundle")
+	}
+
+	// Create HTTP client with mTLS (client certificate + trust bundle)
+	tlsConfig := &tls.Config{
+		RootCAs:      caPool,
+		Certificates: []tls.Certificate{cliCert},
+		MinVersion:   tls.VersionTLS13,
+	}
+
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+
+	client := &http.Client{Transport: transport}
+
+	gatewayURL := cfg.OperatorPublicURL()
+
+	// 1. Get Authentication Challenge
+	challengeURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli/authenticate/challenge", gatewayURL)
+	reqBody, err := json.Marshal(models.PasskeyChallengeRequest{UserID: creds.UserID})
+	if err != nil {
+		return fmt.Errorf("failed to marshal challenge request: %w", err)
+	}
+	req, err := http.NewRequest("POST", challengeURL, bytes.NewReader(reqBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	// Add CLI session ID header for auth middleware
+	req.Header.Set("X-G8E-CLI-Session-ID", creds.CLISessionID)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to get challenge: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		var challengeData models.PasskeyChallengeResponse
+		if err := json.NewDecoder(resp.Body).Decode(&challengeData); err != nil {
+			return fmt.Errorf("failed to decode challenge: %w", err)
+		}
+
+		if !challengeData.Success {
+			if challengeData.NeedsSetup {
+				fmt.Printf("No passkey registered for user %s. Starting registration...\n", creds.UserID)
+				if runtime.GOOS == "windows" {
+					if err := RegisterPasskeyWithWindowsHello(cfg, creds.UserID, creds.CLISessionID); err != nil {
+						return fmt.Errorf("passkey registration failed: %w", err)
+					}
+				} else {
+					if err := RegisterPasskeyViaLocalhost(cfg, creds.UserID); err != nil {
+						return fmt.Errorf("passkey registration failed: %w", err)
+					}
+				}
+
+				// Re-attempt authentication after registration
+				return PerformNativeWindowsAuth(cfg)
+			}
+			return fmt.Errorf("gateway returned failure for challenge request: %s", challengeData.Error)
+		}
+
+		// 2. Trigger Windows Hello
+		assertion, err := AuthenticateWithWindowsHello(challengeData.Options.Response.RelyingPartyID, []byte(challengeData.Options.Response.Challenge))
+		if err != nil {
+			return fmt.Errorf("Windows Hello authentication failed: %w", err)
+		}
+
+		// 3. Verify Authentication
+		verifyURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli/authenticate/verify", gatewayURL)
+		verifyReq := map[string]interface{}{
+			"user_id": creds.UserID,
+			"assertion_response": map[string]interface{}{
+				"id":                assertion.Id,
+				"rawId":             base64.RawURLEncoding.EncodeToString(assertion.RawId),
+				"clientDataJSON":    base64.RawURLEncoding.EncodeToString([]byte(challengeData.Options.Response.Challenge)), // Simplified: gateway expects the challenge or clientDataJSON
+				"authenticatorData": base64.RawURLEncoding.EncodeToString(assertion.AuthenticatorData),
+				"signature":         base64.RawURLEncoding.EncodeToString(assertion.Signature),
+				"userHandle":        base64.RawURLEncoding.EncodeToString(assertion.UserHandle),
+			},
+		}
+
+		verifyBody, _ := json.Marshal(verifyReq)
+		verifyReqHTTP, err := http.NewRequest("POST", verifyURL, bytes.NewReader(verifyBody))
+		if err != nil {
+			return fmt.Errorf("failed to create verify request: %w", err)
+		}
+		verifyReqHTTP.Header.Set("Content-Type", "application/json")
+		// Add CLI session ID header for auth middleware
+		verifyReqHTTP.Header.Set("X-G8E-CLI-Session-ID", creds.CLISessionID)
+
+		verifyResp, err := client.Do(verifyReqHTTP)
+		if err != nil {
+			return fmt.Errorf("failed to verify assertion: %w", err)
+		}
+		defer verifyResp.Body.Close()
+
+		if verifyResp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(verifyResp.Body)
+			return fmt.Errorf("verification failed (%d): %s", verifyResp.StatusCode, string(body))
+		}
+
+		var verifyResult struct {
+			Success bool   `json:"success"`
+			Error   string `json:"error"`
+		}
+		if err := json.NewDecoder(verifyResp.Body).Decode(&verifyResult); err != nil {
+			return fmt.Errorf("failed to decode verification result: %w", err)
+		}
+
+		if !verifyResult.Success {
+			return fmt.Errorf("authentication failed: %s", verifyResult.Error)
+		}
+
+		return nil
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	return fmt.Errorf("challenge request failed (%d): %s", resp.StatusCode, string(body))
+}
+
+// RegisterPasskeyWithWindowsHello performs native passkey registration using Windows Hello APIs.
+func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID string) error {
+	gatewayURL := cfg.OperatorPublicURL()
+
+	// Get current Windows username for Windows Hello registration
+	currentUser, err := user.Current()
+	if err != nil {
+		return fmt.Errorf("failed to get current user: %w", err)
+	}
+	userName := currentUser.Username
+
+	// 1. Get Registration Challenge
+	challengeURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli-register/challenge", gatewayURL)
+	reqBody, err := json.Marshal(models.PasskeyRegisterChallengeRequest{
+		UserID:   userID,
+		UserName: userName,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal challenge request: %w", err)
+	}
+	req, err := http.NewRequest("POST", challengeURL, bytes.NewReader(reqBody))
+	if err != nil {
+		return fmt.Errorf("failed to create challenge request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-G8E-CLI-Session-ID", cliSessionID)
+
+	// Use mTLS client for registration too since the user has an operator cert
+	if _, err := LoadCredentials(cfg); err != nil {
+		return fmt.Errorf("failed to load credentials: %w", err)
+	}
+
+	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
+	if err != nil {
+		return fmt.Errorf("failed to load CLI cert: %w", err)
+	}
+
+	// Load trust bundle for TLS verification
+	caPEM, err := os.ReadFile(cfg.TrustBundleFile())
+	if err != nil {
+		return fmt.Errorf("failed to read trust bundle from %s: %w", cfg.TrustBundleFile(), err)
+	}
+
+	caPool := x509.NewCertPool()
+	if !caPool.AppendCertsFromPEM(caPEM) {
+		return fmt.Errorf("failed to parse CA certificates from trust bundle")
+	}
+
+	tlsConfig := &tls.Config{
+		RootCAs:      caPool,
+		Certificates: []tls.Certificate{cliCert},
+		MinVersion:   tls.VersionTLS13,
+	}
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: tlsConfig}}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to get registration challenge: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to get registration challenge (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var challengeData struct {
+		Success bool `json:"success"`
+		Options struct {
+			PublicKey struct {
+				Challenge    string `json:"challenge"`
+				RelyingParty struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"rp"`
+				User struct {
+					ID          string `json:"id"`
+					Name        string `json:"name"`
+					DisplayName string `json:"displayName"`
+				} `json:"user"`
+			} `json:"publicKey"`
+		} `json:"options"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&challengeData); err != nil {
+		return fmt.Errorf("failed to decode registration challenge: %w", err)
+	}
+
+	// 2. Trigger Windows Hello Registration
+	attestation, err := RegisterWithWindowsHello(
+		challengeData.Options.PublicKey.RelyingParty.ID,
+		challengeData.Options.PublicKey.RelyingParty.Name,
+		challengeData.Options.PublicKey.User.ID,
+		challengeData.Options.PublicKey.User.Name,
+		[]byte(challengeData.Options.PublicKey.Challenge),
+	)
+	if err != nil {
+		return fmt.Errorf("Windows Hello registration failed: %w", err)
+	}
+
+	// 3. Verify Registration
+	verifyURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli-register/verify", gatewayURL)
+	verifyReq := map[string]interface{}{
+		"user_id": userID,
+		"attestation_response": map[string]interface{}{
+			"id":                attestation.Id,
+			"rawId":             base64.RawURLEncoding.EncodeToString(attestation.RawId),
+			"clientDataJSON":    base64.RawURLEncoding.EncodeToString([]byte(challengeData.Options.PublicKey.Challenge)),
+			"attestationObject": base64.RawURLEncoding.EncodeToString(attestation.AttestationObject),
+		},
+	}
+
+	verifyBody, _ := json.Marshal(verifyReq)
+	verifyReqHTTP, err := http.NewRequest("POST", verifyURL, bytes.NewReader(verifyBody))
+	if err != nil {
+		return fmt.Errorf("failed to create verify request: %w", err)
+	}
+	verifyReqHTTP.Header.Set("Content-Type", "application/json")
+	verifyReqHTTP.Header.Set("X-G8E-CLI-Session-ID", cliSessionID)
+
+	verifyResp, err := client.Do(verifyReqHTTP)
+	if err != nil {
+		return fmt.Errorf("failed to verify registration: %w", err)
+	}
+	defer verifyResp.Body.Close()
+
+	if verifyResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(verifyResp.Body)
+		return fmt.Errorf("registration verification failed (%d): %s", verifyResp.StatusCode, string(body))
+	}
+
+	fmt.Println("✓ Passkey registered successfully via Windows Hello!")
+	return nil
 }
 
 func DeleteCredentials(cfg *config.Config) error {
@@ -649,8 +972,7 @@ func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint str
 	}
 
 	if regResp.HubTrustBundle != "" {
-		hubBundlePath := filepath.Join(cfg.CredentialsDir, "g8eg-ca-bundle.pem")
-		if err := os.WriteFile(hubBundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
+		if err := os.WriteFile(cfg.TrustBundleFile(), []byte(regResp.HubTrustBundle), 0644); err != nil {
 			return fmt.Errorf("failed to save renewed hub trust bundle: %w", err)
 		}
 	}
@@ -677,11 +999,11 @@ func EnrollWithGateway(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR 
 		return nil, fmt.Errorf("failed to get hostname: %w", err)
 	}
 
-	req := map[string]string{
-		"csr_pem":            operatorCSR,
-		"cli_csr_pem":        cliCSR,
-		"system_fingerprint": fmt.Sprintf("g8e-operator-%s", hostname),
-		"hostname":           hostname,
+	req := models.DeviceEnrollRequest{
+		CSR:               operatorCSR,
+		CLICSR:            cliCSR,
+		SystemFingerprint: fmt.Sprintf("g8e-operator-%s", hostname),
+		Hostname:          hostname,
 	}
 
 	body, err := json.Marshal(req)

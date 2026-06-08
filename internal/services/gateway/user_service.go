@@ -17,6 +17,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os/user"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,6 +58,35 @@ func (s *UserService) CreateBootstrapUser() (*models.User, error) {
 	return s.createUser(true)
 }
 
+func getLocalOSUser() *models.LocalOSUser {
+	currentUser, err := user.Current()
+	if err != nil {
+		return nil
+	}
+
+	var domain, username string
+	parts := strings.SplitN(currentUser.Username, "\\", 2)
+	if len(parts) == 2 {
+		domain = parts[0]
+		username = parts[1]
+	} else {
+		username = currentUser.Username
+	}
+
+	var sid string
+	if runtime.GOOS == "windows" {
+		sid = currentUser.Uid
+	}
+
+	return &models.LocalOSUser{
+		Domain:   domain,
+		Username: username,
+		UID:      currentUser.Uid,
+		GID:      currentUser.Gid,
+		SID:      sid,
+	}
+}
+
 func (s *UserService) createUser(isBootstrap bool) (*models.User, error) {
 	s.logger.Info("[USER-SERVICE] Creating new user", "is_bootstrap", isBootstrap)
 
@@ -77,6 +109,7 @@ func (s *UserService) createUser(isBootstrap bool) (*models.User, error) {
 		Provider:           string(constants.AuthProviderPasskey),
 		Status:             constants.UserStatusActive,
 		IsBootstrap:        isBootstrap,
+		LocalOSUser:        getLocalOSUser(),
 	}
 
 	data, err := json.Marshal(user)
@@ -221,6 +254,7 @@ func (s *UserService) CreateUserFromInvitation(sub string, invitation *models.In
 		OrganizationID:     invitation.OrganizationID,
 		Roles:              invitation.Roles,
 		IsBootstrap:        false,
+		LocalOSUser:        getLocalOSUser(),
 	}
 
 	data, err := json.Marshal(user)
@@ -244,7 +278,7 @@ func (s *UserService) CreateUserFromInvitation(sub string, invitation *models.In
 // updateUserStatus updates a user's status field.
 func (s *UserService) updateUserStatus(userID string, status constants.UserStatus) error {
 	updates := map[string]interface{}{
-		"status": marshaler.Status(status),
+		"status":     marshaler.Status(status),
 		"updated_at": time.Now().UTC().UnixMilli(),
 	}
 
@@ -265,7 +299,7 @@ func (s *UserService) updateUserStatus(userID string, status constants.UserStatu
 func (s *UserService) UpdatePasskeyCredentials(userID string, credentials []models.PasskeyCredential) error {
 	updates := map[string]interface{}{
 		"passkey_credentials": credentials,
-		"updated_at": time.Now().UTC().UnixMilli(),
+		"updated_at":          time.Now().UTC().UnixMilli(),
 	}
 
 	updateBytes, err := json.Marshal(updates)
@@ -387,7 +421,6 @@ func (s *PersonaService) CreatePersona(persona *models.Persona) error {
 	s.logger.Info("[PERSONA-SERVICE] Persona created", "persona_id", persona.ID, "name", persona.Name)
 	return nil
 }
-
 
 // GetByID retrieves a persona by ID.
 func (s *PersonaService) GetByID(id string) (*models.Persona, error) {

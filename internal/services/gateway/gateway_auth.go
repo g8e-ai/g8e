@@ -379,7 +379,9 @@ func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request,
 			}
 		}
 
-		next.ServeHTTP(w, r)
+		// Stamp context with user_id
+		ctx := context.WithValue(r.Context(), userIDKey, op.UserID)
+		next.ServeHTTP(w, r.WithContext(ctx))
 		return true
 	}
 
@@ -455,10 +457,13 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			s.responder.Error(w, http.StatusForbidden, "mTLS identity mismatch")
 			return true
 		}
+		// Stamp context with user_id
+		ctx := context.WithValue(r.Context(), userIDKey, cliSession.UserID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+		return true
 	}
 
-	next.ServeHTTP(w, r)
-	return true
+	return false
 }
 
 // handleAppAuth handles authentication for system and external apps via URI SAN.

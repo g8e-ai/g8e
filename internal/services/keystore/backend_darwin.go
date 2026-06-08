@@ -53,8 +53,11 @@ func (b *keychainBackend) RetrieveMasterKey() ([]byte, error) {
 	output, err := cmd.Output()
 	if err != nil {
 		var exitErr *exec.ExitError
-		if strings.Contains(err.Error(), "could not be found") || (errors.As(err, &exitErr) && strings.Contains(string(exitErr.Stderr), "could not be found")) {
-			return nil, ErrKeyNotFound
+		if errors.As(err, &exitErr) {
+			// macOS security command returns exit code 44 when item not found
+			if exitErr.ExitCode() == 44 {
+				return nil, ErrKeyNotFound
+			}
 		}
 		return nil, fmt.Errorf("keychain: retrieve master key: %w", err)
 	}
@@ -106,9 +109,12 @@ func (b *keychainBackend) DeleteMasterKey() error {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		// Don't error if key doesn't exist (already deleted)
-		if strings.Contains(stderr.String(), "could not be found") {
-			return nil
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			// macOS security command returns exit code 44 when item not found
+			if exitErr.ExitCode() == 44 {
+				return nil
+			}
 		}
 		return fmt.Errorf("keychain: delete master key: %w", err)
 	}

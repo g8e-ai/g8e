@@ -36,7 +36,34 @@ func SignWithWindowsHello(transactionHash []byte) ([]byte, error) {
 	return nil, fmt.Errorf("windows Hello signing is only available on Windows")
 }
 
-// SignWithWindowsHelloUsingCert is a stub for non-Windows platforms.
-func SignWithWindowsHelloUsingCert(transactionHash []byte, certThumbprint string) ([]byte, error) {
-	return nil, fmt.Errorf("windows Hello signing is only available on Windows")
+// AuthenticateWithWindowsHello is a stub for non-Windows platforms.
+func AuthenticateWithWindowsHello(rpID string, challenge []byte) (*WebAuthnAssertionResponse, error) {
+	return nil, fmt.Errorf("windows Hello authentication is only available on Windows")
+}
+
+// RegisterWithWindowsHello is a stub for non-Windows platforms.
+func RegisterWithWindowsHello(rpID, rpName, userID, userName string, challenge []byte) (*WebAuthnAttestationResponse, error) {
+	return nil, fmt.Errorf("windows Hello registration is only available on Windows")
+}
+
+// WebAuthnAttestationResponse is a stub for non-Windows platforms.
+type WebAuthnAttestationResponse struct {
+	Id                string
+	RawId             []byte
+	AuthenticatorData []byte
+	AttestationObject []byte
+}
+
+// WebAuthnAssertionResponse is a stub for non-Windows platforms.
+type WebAuthnAssertionResponse struct {
+	Id                string
+	RawId             []byte
+	AuthenticatorData []byte
+	Signature         []byte
+	UserHandle        []byte
+}
+
+// TrustRootCAInWindowsStore is a stub for non-Windows platforms.
+func TrustRootCAInWindowsStore(caBundlePEM string) error {
+	return fmt.Errorf("windows cert store trust is only available on Windows")
 }

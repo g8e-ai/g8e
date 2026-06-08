@@ -15,6 +15,7 @@ package gateway
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -155,7 +156,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := c.db.DocSet(collection, id, json.RawMessage(body)); err != nil {
-			if strings.Contains(err.Error(), "locked") {
+			if errors.Is(err, constants.ErrDatabaseLocked) {
 				c.responder.Error(w, http.StatusServiceUnavailable, "database is locked")
 			} else {
 				c.responder.Error(w, http.StatusInternalServerError, err.Error())
@@ -180,11 +181,11 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 		}
 		doc, err := c.db.DocUpdate(collection, id, json.RawMessage(body))
 		if err != nil {
-			if strings.Contains(err.Error(), "not found") {
+			if errors.Is(err, constants.ErrNotFound) {
 				c.responder.Error(w, http.StatusNotFound, err.Error())
-			} else if strings.Contains(err.Error(), "constraint") {
+			} else if errors.Is(err, constants.ErrConstraintViolation) {
 				c.responder.Error(w, http.StatusConflict, "database constraint violation")
-			} else if strings.Contains(err.Error(), "locked") {
+			} else if errors.Is(err, constants.ErrDatabaseLocked) {
 				c.responder.Error(w, http.StatusServiceUnavailable, "database is locked")
 			} else {
 				c.responder.Error(w, http.StatusInternalServerError, err.Error())

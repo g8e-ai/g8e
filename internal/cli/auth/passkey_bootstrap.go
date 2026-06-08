@@ -24,10 +24,12 @@ import (
 	"net"
 	"net/http"
 	"os/exec"
+	"os/user"
 	"runtime"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/models"
 )
 
 // PasskeyBootstrapServer handles the localhost HTTP server for passkey registration
@@ -171,6 +173,7 @@ func (s *PasskeyBootstrapServer) handleIndex(w http.ResponseWriter, r *http.Requ
         async function registerPasskey() {
             const statusDiv = document.getElementById('status');
             const userID = "` + html.EscapeString(s.userID) + `";
+            const userName = "` + html.EscapeString(s.userName) + `";
             const gatewayURL = "` + html.EscapeString(s.gatewayURL) + `";
             
             try {
@@ -184,7 +187,7 @@ func (s *PasskeyBootstrapServer) handleIndex(w http.ResponseWriter, r *http.Requ
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         user_id: userID,
-                        user_name: "g8e-cli-user"
+                        user_name: userName
                     })
                 });
                 
@@ -296,7 +299,14 @@ func openBrowser(url string) error {
 func RegisterPasskeyViaLocalhost(cfg *config.Config, userID string) error {
 	gatewayURL := cfg.OperatorDiscoveryURL()
 
-	server := NewPasskeyBootstrapServer(gatewayURL, userID, "g8e-cli-user")
+	// Get current username for passkey registration
+	currentUser, err := user.Current()
+	if err != nil {
+		return fmt.Errorf("failed to get current user: %w", err)
+	}
+	userName := currentUser.Username
+
+	server := NewPasskeyBootstrapServer(gatewayURL, userID, userName)
 
 	url, err := server.Start()
 	if err != nil {
@@ -389,11 +399,18 @@ type PasskeyAttestationResponse struct {
 // RegisterPasskeyDirectly performs passkey registration directly via API calls
 // This is an alternative to the localhost server for automated testing
 func RegisterPasskeyDirectly(cfg *config.Config, userID string) error {
+	// Get current username for passkey registration
+	currentUser, err := user.Current()
+	if err != nil {
+		return fmt.Errorf("failed to get current user: %w", err)
+	}
+	userName := currentUser.Username
+
 	// Get challenge
 	challengeURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli-register/challenge", cfg.OperatorDiscoveryURL())
-	challengeReq := map[string]string{
-		"user_id":   userID,
-		"user_name": "g8e-cli-user",
+	challengeReq := models.PasskeyRegisterChallengeRequest{
+		UserID:   userID,
+		UserName: userName,
 	}
 	challengeBody, err := json.Marshal(challengeReq)
 	if err != nil {

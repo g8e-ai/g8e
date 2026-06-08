@@ -16,6 +16,7 @@ package gateway
 import (
 	"encoding/json"
 	"fmt"
+	"os/user"
 	"path/filepath"
 	"testing"
 
@@ -54,11 +55,19 @@ func TestUserService_CreateUser(t *testing.T) {
 		t.Cleanup(func() { db.Close() })
 
 		userSvc := NewUserService(db, logger)
-		user, err := userSvc.CreateUser()
+		newUser, err := userSvc.CreateUser()
 		require.NoError(t, err)
-		require.NotNil(t, user)
-		require.False(t, user.IsBootstrap)
-		require.Equal(t, constants.UserStatusActive, user.Status)
+		require.NotNil(t, newUser)
+		require.False(t, newUser.IsBootstrap)
+		require.Equal(t, constants.UserStatusActive, newUser.Status)
+
+		// Verify local OS user info is stored
+		currentUser, err := user.Current()
+		if err == nil {
+			require.NotNil(t, newUser.LocalOSUser)
+			require.Equal(t, currentUser.Uid, newUser.LocalOSUser.UID)
+			require.Equal(t, currentUser.Gid, newUser.LocalOSUser.GID)
+		}
 	})
 }
 

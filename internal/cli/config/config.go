@@ -253,6 +253,10 @@ func (c *Config) OperatorKeyFile() string {
 	return filepath.Join(c.CredentialsDir, "operator.key")
 }
 
+func (c *Config) TrustBundleFile() string {
+	return filepath.Join(c.CredentialsDir, "g8eg-ca-bundle.pem")
+}
+
 func (c *Config) OperatorHTTPSPort() int {
 	return constants.Ports.OperatorHttps
 }

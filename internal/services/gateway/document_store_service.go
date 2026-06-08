@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
@@ -84,13 +85,10 @@ func (s *DocumentStoreService) DocCreate(collection, id string, data json.RawMes
 		 VALUES (?, ?, ?, ?, ?)`,
 		collection, id, string(dataJSON), nowStr, nowStr,
 	)
-	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			return fmt.Errorf("DocumentStoreService: document already exists")
-		}
-		return err
+	if err != nil && sqliteutil.IsUniqueConstraintError(err) {
+		return constants.ErrAlreadyExists
 	}
-	return nil
+	return err
 }
 
 // DocSet creates or replaces a document. data must be valid JSON.
