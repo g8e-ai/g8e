@@ -61,10 +61,19 @@ func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *Passkey
 		rpName = "g8e"
 	}
 
+	// For localhost, include both localhost and 127.0.0.1 as valid origins
+	// since WebAuthn treats them as different origins
+	rpOrigins := []string{cfg.RpID}
+	if cfg.RpID == "localhost" {
+		rpOrigins = append(rpOrigins, "http://127.0.0.1", "http://localhost")
+	} else {
+		rpOrigins = []string{"https://" + cfg.RpID}
+	}
+
 	w, err := webauthn.New(&webauthn.Config{
 		RPID:          cfg.RpID,
 		RPDisplayName: rpName,
-		RPOrigins:     []string{cfg.RpID},
+		RPOrigins:     rpOrigins,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize webauthn: %w", err)

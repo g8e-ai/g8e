@@ -166,5 +166,13 @@ func (pm *ProcessManager) stopProcess(pid int, name string) error {
 		return fmt.Errorf("failed to force kill process: %w", err)
 	}
 
+	// Wait for process to actually exit and release file handles
+	for i := 0; i < 20; i++ {
+		if !pm.isProcessRunning(pid) {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	return nil
 }

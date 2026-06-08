@@ -416,6 +416,15 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)
 	mux.HandleFunc(constants.APIPaths.DeployScriptWindows, h.pkiController.handleDeployScriptWindows)
 
+	// CLI passkey bootstrap: allow first-credential registration for CLI bootstrap flow
+	// This is a public endpoint (no auth) for the initial bootstrap where no credentials exist yet
+	cliPasskeyMux := http.NewServeMux()
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, h.authController.handleCLIPasskeyRegisterChallenge)
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterVerify, h.authController.handleCLIPasskeyRegisterVerify)
+	corsCLIPasskeyMux := h.corsMiddleware(cliPasskeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, corsCLIPasskeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterVerify, corsCLIPasskeyMux)
+
 	// Wrap with rate limiting
 	return h.pathTraversalGuard(h.rateLimitMiddleware(mux))
 }

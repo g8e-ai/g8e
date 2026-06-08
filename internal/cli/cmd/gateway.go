@@ -19,13 +19,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/network"
 	"github.com/spf13/cobra"
 )
@@ -47,7 +45,6 @@ func gatewayCmd() *cobra.Command {
 		gatewaySettingsCmd(),
 		gatewayResetCmd(),
 		gatewayCleanCmd(),
-		gatewayMCPCmd(),
 	)
 
 	return cmd
@@ -528,154 +525,4 @@ func gatewayCleanCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&force, "yes", false, "Skip confirmation prompt (shorthand)")
 
 	return cmd
-}
-
-func gatewayMCPCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "mcp",
-		Short: "Manage MCP client configuration for the Gateway",
-		Long:  `Generate MCP client configuration for connecting to the g8e Gateway from local coding tools.`,
-	}
-
-	cmd.AddCommand(
-		gatewayMCPShowCmd(),
-	)
-
-	return cmd
-}
-
-func gatewayMCPShowCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "show",
-		Short: "Print MCP client configuration for the Gateway",
-		Long:  `Print MCP client configuration for connecting to the g8e Gateway from local coding tools.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cmd.Println("╔══════════════════════════════════════════════════════════════════════════════╗")
-			cmd.Println("║                        g8e Gateway MCP Configurations                        ║")
-			cmd.Println("║  Use these configs to connect your coding tools (Cursor, Windsurf, etc.)     ║")
-			cmd.Println("║  to the g8e Gateway for agent orchestration and tool execution.              ║")
-			cmd.Println("╚══════════════════════════════════════════════════════════════════════════════╝")
-			cmd.Println()
-
-			cmd.Println("┌─ g8e.local (mTLS) ─────────────────────────────────────────────────────────────")
-			cmd.Println("│ Use: Production environments with DNS configured")
-			cmd.Println("│ Apps: Cursor, Windsurf, VS Code MCP clients")
-			cmd.Println("│ Requires: DNS or /etc/hosts entry for g8e.local resolution")
-			cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
-			if err := printMCPConfigLocal(cmd); err != nil {
-				return err
-			}
-			cmd.Println()
-
-			cmd.Println("┌─ IP Address (mTLS) ───────────────────────────────────────────────────────────")
-			cmd.Println("│ Use: Environments without DNS or for direct IP access")
-			cmd.Println("│ Apps: Cursor, Windsurf, VS Code MCP clients")
-			cmd.Println("│ Requires: No DNS setup, uses external interface IP")
-			cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
-			if err := printMCPConfigIP(cmd); err != nil {
-				return err
-			}
-			cmd.Println()
-
-			cmd.Println("┌─ Plain HTTP ────────────────────────────────────────────────────────────────")
-			cmd.Println("│ Use: Local development only (localhost access)")
-			cmd.Println("│ Apps: Local MCP clients, testing")
-			cmd.Println("│ Requires: No mTLS, uses 127.0.0.1 explicitly")
-			cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
-			if err := printMCPConfigHTTP(cmd); err != nil {
-				return err
-			}
-
-			return nil
-		},
-	}
-
-	return cmd
-}
-
-func printMCPConfigLocal(cmd *cobra.Command) error {
-	cfg, err := config.Load("")
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	externalIP := config.GetExternalInterfaceIP()
-	cmd.Printf("# Add this entry to /etc/hosts to enable g8e.local resolution:\n")
-	cmd.Printf("%s g8e.local\n", externalIP)
-	cmd.Println()
-
-	// Use the canonical g8e.local internal hostname with unified /mcp endpoint
-	gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps)
-
-	// Get actual resolved cert paths (absolute paths)
-	actualCertPath := cfg.CLICertFile()
-	actualKeyPath := cfg.CLIKeyFile()
-	actualCAPath := cfg.TrustBundlePath()
-
-	// Normalize to forward slashes for JSON (cross-platform compatibility)
-	actualCertPath = filepath.ToSlash(actualCertPath)
-	actualKeyPath = filepath.ToSlash(actualKeyPath)
-	actualCAPath = filepath.ToSlash(actualCAPath)
-
-	mcpConfig, err := mcp.NewGatewayConfig(gatewayURL, actualCertPath, actualKeyPath, actualCAPath)
-	if err != nil {
-		return fmt.Errorf("failed to create MCP config: %w", err)
-	}
-
-	configJSON, err := json.MarshalIndent(mcpConfig, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal MCP config: %w", err)
-	}
-
-	cmd.Println(string(configJSON))
-	return nil
-}
-
-func printMCPConfigIP(cmd *cobra.Command) error {
-	cfg, err := config.Load("")
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	// Use the external IP address instead of g8e.local
-	externalIP := config.GetExternalInterfaceIP()
-	gatewayURL := fmt.Sprintf("https://%s:%d/mcp", externalIP, constants.Ports.OperatorHttps)
-
-	// Get actual resolved cert paths (absolute paths)
-	actualCertPath := cfg.CLICertFile()
-	actualKeyPath := cfg.CLIKeyFile()
-	actualCAPath := cfg.TrustBundlePath()
-
-	// Normalize to forward slashes for JSON (cross-platform compatibility)
-	actualCertPath = filepath.ToSlash(actualCertPath)
-	actualKeyPath = filepath.ToSlash(actualKeyPath)
-	actualCAPath = filepath.ToSlash(actualCAPath)
-
-	// Use IP address as hostname for verification
-	mcpConfig, err := mcp.NewGatewayConfigWithHostname(gatewayURL, actualCertPath, actualKeyPath, actualCAPath, externalIP)
-	if err != nil {
-		return fmt.Errorf("failed to create MCP config: %w", err)
-	}
-
-	configJSON, err := json.MarshalIndent(mcpConfig, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal MCP config: %w", err)
-	}
-
-	cmd.Println(string(configJSON))
-	return nil
-}
-
-func printMCPConfigHTTP(cmd *cobra.Command) error {
-	staticConfig := fmt.Sprintf(`{
-  "mcpServers": {
-    "g8e-gateway": {
-      "disabled": true,
-      "serverUrl": "http://127.0.0.1:%d/mcp",
-      "note": "Must use explicit 127.0.0.1 for HTTP (localhost may resolve to IPv6 ::1)"
-    }
-  }
-}`, constants.Ports.OperatorHttp)
-	cmd.Println(staticConfig)
-	return nil
 }
