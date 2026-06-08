@@ -89,6 +89,8 @@ var APIPaths = struct {
 	AuthPasskeysJITRegisterVerify     string `json:"auth_passkeys_jit_register_verify"`
 	AuthPasskeysJITPrefix             string `json:"auth_passkeys_jit_prefix"`
 	AuthPasskeysPrefix                string `json:"auth_passkeys_prefix"`
+	AuthPasskeysCLIRegisterChallenge  string `json:"auth_passkeys_cli_register_challenge"`
+	AuthPasskeysCLIRegisterVerify     string `json:"auth_passkeys_cli_register_verify"`
 	AuthSessionsMe                    string `json:"auth_sessions_me"`
 	// Approval routes
 	Approvals         string `json:"approvals"`
@@ -194,6 +196,8 @@ var APIPaths = struct {
 	AuthPasskeysJITRegisterVerify:     "/api/v1/auth/passkeys/jit-register/verify",
 	AuthPasskeysJITPrefix:             "/api/v1/auth/passkeys/jit-",
 	AuthPasskeysPrefix:                "/api/v1/auth/passkeys/",
+	AuthPasskeysCLIRegisterChallenge:  "/api/v1/auth/passkeys/cli-register/challenge",
+	AuthPasskeysCLIRegisterVerify:     "/api/v1/auth/passkeys/cli-register/verify",
 	AuthSessionsMe:                    "/api/v1/auth/sessions/me",
 	// Approval routes
 	Approvals:         "/api/v1/approvals",

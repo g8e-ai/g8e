@@ -917,6 +917,126 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 	c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }
 
+// CLI Passkey Bootstrap Handlers
+// =============================================================================
+
+// handleCLIPasskeyRegisterChallenge handles passkey registration challenges for CLI bootstrap.
+// This is a public endpoint (no auth) for the initial bootstrap where no credentials exist yet.
+// It enforces first-credential-only to prevent credential stuffing attacks.
+func (c *AuthController) handleCLIPasskeyRegisterChallenge(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	var req struct {
+		UserID   string `json:"user_id"`
+		UserName string `json:"user_name"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if req.UserID == "" {
+		c.responder.Error(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	// Enforce first-credential-only for CLI bootstrap
+	user, err := c.userSvc.GetByID(req.UserID)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, "failed to fetch user")
+		return
+	}
+	if user == nil {
+		c.responder.Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if len(user.PasskeyCredentials) > 0 {
+		c.responder.Error(w, http.StatusForbidden, "first-credential registration only; user already has credentials")
+		return
+	}
+
+	options, err := c.passkey.GenerateRegistrationChallenge(req.UserID, req.UserName)
+	if err != nil {
+		c.logger.Warn("CLI passkey register challenge failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
+		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	c.responder.JSON(w, http.StatusOK, models.PasskeyRegisterChallengeResponse{
+		Success: true,
+		Options: options,
+	})
+}
+
+// handleCLIPasskeyRegisterVerify handles passkey registration verification for CLI bootstrap.
+// This is a public endpoint (no auth) for the initial bootstrap where no credentials exist yet.
+// It enforces first-credential-only to prevent credential stuffing attacks.
+func (c *AuthController) handleCLIPasskeyRegisterVerify(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	var req struct {
+		UserID              string               `json:"user_id"`
+		AttestationResponse *AttestationResponse `json:"attestation_response"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if req.UserID == "" {
+		c.responder.Error(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	// Enforce first-credential-only for CLI bootstrap
+	user, err := c.userSvc.GetByID(req.UserID)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, "failed to fetch user")
+		return
+	}
+	if user == nil {
+		c.responder.Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if len(user.PasskeyCredentials) > 0 {
+		c.responder.Error(w, http.StatusForbidden, "first-credential registration only; user already has credentials")
+		return
+	}
+
+	cred, err := c.passkey.VerifyRegistration(req.UserID, r)
+	if err != nil {
+		c.logger.Warn("CLI passkey register verify failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
+		c.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	c.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
+		Success:    true,
+		Credential: cred,
+	})
+}
+
 func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")

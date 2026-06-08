@@ -357,6 +357,14 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 		mux.Handle(constants.APIPaths.AuthPasskeysJITRegisterVerify, h.auth.JWTAuthMiddleware(jwtPasskeyMux))
 	}
 
+	// CLI passkey bootstrap: allow first-credential registration for CLI bootstrap flow
+	// This is a public endpoint (no auth) for the initial bootstrap where no credentials exist yet
+	cliPasskeyMux := http.NewServeMux()
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, h.authController.handleCLIPasskeyRegisterChallenge)
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterVerify, h.authController.handleCLIPasskeyRegisterVerify)
+	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, cliPasskeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterVerify, cliPasskeyMux)
+
 	// Browser-facing data routes (require web session cookie)
 	authedMux := http.NewServeMux()
 	authedMux.HandleFunc(constants.APIPaths.UsersMe, h.authController.handleUserMe)
