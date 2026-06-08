@@ -172,6 +172,40 @@ func NewStdioConfig(g8eBinaryPath string) (*Config, error) {
 	}, nil
 }
 
+// SimpleStdioServerConfig represents a simplified MCP server configuration for stdio transport.
+// This format is compatible with Cursor/Windsurf MCP clients.
+type SimpleStdioServerConfig struct {
+	Command  string   `json:"command"`
+	Args     []string `json:"args"`
+	Disabled bool     `json:"disabled"`
+}
+
+// SimpleConfig represents a simplified MCP client configuration structure.
+type SimpleConfig struct {
+	MCPServers map[string]SimpleStdioServerConfig `json:"mcpServers"`
+}
+
+// NewStdioConfigSimple creates a simplified stdio transport MCP configuration for local native tools.
+// This format is compatible with Cursor/Windsurf MCP clients.
+func NewStdioConfigSimple(g8eBinaryPath string) (*SimpleConfig, error) {
+	if g8eBinaryPath == "" {
+		return nil, fmt.Errorf("g8e binary path cannot be empty")
+	}
+	if strings.TrimSpace(g8eBinaryPath) == "" {
+		return nil, fmt.Errorf("g8e binary path cannot be whitespace only")
+	}
+
+	return &SimpleConfig{
+		MCPServers: map[string]SimpleStdioServerConfig{
+			"g8e-native": {
+				Command:  g8eBinaryPath,
+				Args:     []string{"mcp", "stdio"},
+				Disabled: false,
+			},
+		},
+	}, nil
+}
+
 // validateCertPath validates that a certificate path is non-empty.
 func validateCertPath(path, certType string) error {
 	if path == "" {

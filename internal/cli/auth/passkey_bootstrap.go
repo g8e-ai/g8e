@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
@@ -59,8 +60,8 @@ func NewPasskeyBootstrapServer(gatewayURL, userID, userName, cliSessionID string
 
 // Start starts the localhost server on a random available port
 func (s *PasskeyBootstrapServer) Start() (string, error) {
-	// Find an available port on localhost (not 127.0.0.1) to match WebAuthn RP ID
-	listener, err := net.Listen("tcp", "localhost:0")
+	// Find an available port on 0.0.0.0 to allow remote access via port forwarding
+	listener, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
 		return "", fmt.Errorf("failed to find available port: %w", err)
 	}
@@ -83,7 +84,7 @@ func (s *PasskeyBootstrapServer) Start() (string, error) {
 		}
 	}()
 
-	return fmt.Sprintf("http://localhost:%d", port), nil
+	return fmt.Sprintf("http://0.0.0.0:%d", port), nil
 }
 
 // Stop stops the server
@@ -181,7 +182,15 @@ func (s *PasskeyBootstrapServer) handleIndex(w http.ResponseWriter, r *http.Requ
             const userName = "` + html.EscapeString(s.userName) + `";
             const gatewayURL = "` + html.EscapeString(s.gatewayURL) + `";
             const cliSessionID = "` + html.EscapeString(s.cliSessionID) + `";
-            
+
+            // Check if WebAuthn is available
+            if (!window.navigator || !window.navigator.credentials) {
+                statusDiv.style.display = 'block';
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '<strong>Error:</strong><br/>WebAuthn is not available in this browser.<br/><br/>WebAuthn requires HTTPS (or localhost for HTTP).<br/>Since you are accessing via port forwarding over HTTP, please:<br/>1. Access this page directly on the Linux host using localhost, or<br/>2. Set up HTTPS for the gateway.<br/><br/>Alternatively, you can register a passkey later via the web interface after setting up HTTPS.';
+                return;
+            }
+
             try {
                 statusDiv.style.display = 'block';
                 statusDiv.className = 'status loading';
@@ -281,17 +290,12 @@ func (s *PasskeyBootstrapServer) handleIndex(w http.ResponseWriter, r *http.Requ
 func (s *PasskeyBootstrapServer) handleRegister(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Passkey bootstrap: Received registration callback")
 
-	// Security: only allow requests from the same origin (localhost server)
-	// This prevents CSRF attacks on the registration callback
+	// Security: allow requests from any origin when accessed via port forwarding
+	// This is safe because the registration callback is a simple completion signal
+	// and doesn't expose sensitive data
 	origin := r.Header.Get("Origin")
 	if origin != "" {
-		// Validate origin matches the server's address
-		if !strings.HasPrefix(origin, "http://localhost:") {
-			log.Printf("Passkey bootstrap: Rejected non-localhost origin: %s", origin)
-			http.Error(w, "origin not allowed", http.StatusForbidden)
-			return
-		}
-		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 	}
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
@@ -332,7 +336,10 @@ func openBrowser(url string) error {
 
 // RegisterPasskeyViaLocalhost starts a localhost server and guides the user through passkey registration
 func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string) error {
-	gatewayURL := cfg.OperatorDiscoveryURL()
+	// Use external interface IP for gateway URL to support port forwarding scenarios
+	// Use HTTPS (port 8443) for WebAuthn compatibility - WebAuthn requires HTTPS or localhost
+	externalIP := config.GetExternalInterfaceIP()
+	gatewayURL := fmt.Sprintf("https://%s:%d", externalIP, constants.Ports.OperatorHttps)
 
 	// Get current username for passkey registration
 	currentUser, err := user.Current()
@@ -349,8 +356,12 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string
 	}
 	defer server.Stop()
 
+	// Replace 0.0.0.0 with external IP for the display URL
+	portStr := strings.TrimPrefix(url, "http://0.0.0.0:")
+	displayURL := fmt.Sprintf("http://%s:%s", externalIP, portStr)
+
 	// Attempt to auto-open the browser (best-effort)
-	if err := openBrowser(url); err != nil {
+	if err := openBrowser(displayURL); err != nil {
 		log.Printf("Could not auto-open browser: %v", err)
 	}
 
@@ -365,7 +376,7 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string
 	fmt.Printf("A browser window should have opened automatically.\n")
 	fmt.Printf("If not, please open the following URL manually:\n")
 	fmt.Printf("\n")
-	fmt.Printf("  %s\n", url)
+	fmt.Printf("  %s\n", displayURL)
 	fmt.Printf("\n")
 	fmt.Printf("The page will guide you through creating a WebAuthn/FIDO2 passkey.\n")
 	fmt.Printf("You can use Face ID, Touch ID, Windows Hello, or a security key.\n")

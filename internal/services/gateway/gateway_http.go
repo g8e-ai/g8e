@@ -214,6 +214,32 @@ func (h *HTTPHandler) corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// corsMiddlewareForCLIPasskey is a more permissive CORS middleware that allows
+// local network IPs to support port forwarding scenarios for CLI passkey bootstrap.
+func (h *HTTPHandler) corsMiddlewareForCLIPasskey(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			// Security: validate origin is loopback or local network IP for CLI bootstrap
+			// This allows port forwarding scenarios while still preventing external CSRF attacks
+			if !isLocalNetworkOrigin(origin) {
+				h.logger.Warn("CORS request rejected: non-local network Origin", "origin", origin, "path", r.URL.Path)
+				h.responder.Error(w, http.StatusForbidden, "origin not allowed")
+				return
+			}
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		}
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (h *HTTPHandler) buildRouter() http.Handler {
 	mux := http.NewServeMux()
 
@@ -391,7 +417,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// Browser-based CLI bootstrap endpoints (create web session after registration)
 	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/challenge", h.authController.handleCLIBrowserPasskeyRegisterChallenge)
 	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/verify", h.authController.handleCLIBrowserPasskeyRegisterVerify)
-	corsCLIPasskeyMux := h.corsMiddleware(cliPasskeyMux)
+	corsCLIPasskeyMux := h.corsMiddlewareForCLIPasskey(cliPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, corsCLIPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterVerify, corsCLIPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, corsCLIPasskeyMux)
@@ -446,7 +472,7 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	// Browser-based CLI bootstrap endpoints (create web session after registration)
 	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/challenge", h.authController.handleCLIBrowserPasskeyRegisterChallenge)
 	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/verify", h.authController.handleCLIBrowserPasskeyRegisterVerify)
-	corsCLIPasskeyMux := h.corsMiddleware(cliPasskeyMux)
+	corsCLIPasskeyMux := h.corsMiddlewareForCLIPasskey(cliPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, corsCLIPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterVerify, corsCLIPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, corsCLIPasskeyMux)
@@ -535,6 +561,51 @@ func isLoopbackOrigin(origin string) bool {
 	}
 	if ip := net.ParseIP(host); ip != nil {
 		return ip.IsLoopback()
+	}
+	return false
+}
+
+// isLocalNetworkOrigin reports whether an Origin header value refers to a
+// loopback host or a local network IP (same subnet as the gateway).
+// This is used for CLI passkey bootstrap to support port forwarding scenarios.
+func isLocalNetworkOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	
+	// Allow loopback addresses
+	if host == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() {
+			return true
+		}
+		// Allow private network IPs (RFC 1918)
+		if isPrivateIP(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// isPrivateIP reports whether an IP address is in a private network range.
+func isPrivateIP(ip net.IP) bool {
+	if ip4 := ip.To4(); ip4 != nil {
+		// 10.0.0.0/8
+		if ip4[0] == 10 {
+			return true
+		}
+		// 172.16.0.0/12
+		if ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31 {
+			return true
+		}
+		// 192.168.0.0/16
+		if ip4[0] == 192 && ip4[1] == 168 {
+			return true
+		}
 	}
 	return false
 }

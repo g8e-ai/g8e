@@ -475,11 +475,17 @@ func (d *Detector) detectSSHKnownHosts() ([]string, error) {
 		}
 	}
 
-	var lastErr error
 	for _, path := range knownHostsPaths {
+		// Check if file exists before attempting to open
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			// File doesn't exist, skip it silently (this is normal)
+			continue
+		}
+
 		file, err := os.Open(path)
 		if err != nil {
-			lastErr = err
+			// Real error (e.g., permission denied), log and continue
+			d.logger.Debug("detectSSHKnownHosts: failed to open known_hosts file", "path", path, "error", err)
 			continue
 		}
 
@@ -513,17 +519,13 @@ func (d *Detector) detectSSHKnownHosts() ([]string, error) {
 		}
 		if err := scanner.Err(); err != nil {
 			file.Close()
-			lastErr = fmt.Errorf("detectSSHKnownHosts: scan %s: %w", path, err)
+			d.logger.Debug("detectSSHKnownHosts: error scanning known_hosts file", "path", path, "error", err)
 			continue
 		}
 		file.Close()
 	}
 
-	// If no files were successfully processed, return the last error
-	if len(hostnames) == 0 && lastErr != nil {
-		return nil, fmt.Errorf("detectSSHKnownHosts: no valid known_hosts files: %w", lastErr)
-	}
-
+	// Return empty slice if no hostnames found (not an error - files may not exist)
 	return hostnames, nil
 }
 

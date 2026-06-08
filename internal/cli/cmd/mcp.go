@@ -634,9 +634,14 @@ func printMCPConfigHTTP(cmd *cobra.Command) error {
 }
 
 func printMCPConfigStdio(cmd *cobra.Command) error {
-	// Use "g8e" as the binary name, assuming it's in PATH
-	// User can edit the config to use full path if needed
-	mcpConfig, err := mcp.NewStdioConfig("g8e")
+	// Get the full path to the current binary
+	binaryPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get binary path: %w", err)
+	}
+
+	// Use the new simple config format
+	mcpConfig, err := mcp.NewStdioConfigSimple(binaryPath)
 	if err != nil {
 		return fmt.Errorf("failed to create MCP stdio config: %w", err)
 	}

@@ -308,16 +308,9 @@ func TestOperatorStatus(t *testing.T) {
 	if running {
 		t.Error("expected running=false for non-existent process")
 	}
-	// On Unix, the PID file is read and returned even if process is not running
-	// On Windows, the PID file is deleted if isG8eProcess check fails
-	if runtime.GOOS != "windows" {
-		if pid != 999999 {
-			t.Errorf("expected pid=999999, got %d", pid)
-		}
-	} else {
-		if pid != 0 {
-			t.Errorf("expected pid=0 on Windows after stale PID cleanup, got %d", pid)
-		}
+	// The PID file is deleted when the process is not running (stale PID cleanup)
+	if pid != 0 {
+		t.Errorf("expected pid=0 after stale PID cleanup, got %d", pid)
 	}
 
 	// Test with PID file for current process

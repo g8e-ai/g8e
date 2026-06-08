@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"text/template"
 )
 
@@ -38,25 +39,31 @@ type TemplateData struct {
 var (
 	linuxTemplate   *template.Template
 	windowsTemplate *template.Template
+	initOnce       sync.Once
 )
 
 // Init parses and validates the embedded scripts at startup.
 // Call this during application initialization to fail fast if templates are invalid.
+// It is safe to call this function from multiple goroutines.
 func Init(logger *slog.Logger) error {
-	var err error
+	var initErr error
+	initOnce.Do(func() {
+		var err error
+		linuxTemplate, err = template.New("deploy_linux").Parse(deployScriptLinux)
+		if err != nil {
+			initErr = fmt.Errorf("failed to parse Linux deploy script template: %w", err)
+			return
+		}
 
-	linuxTemplate, err = template.New("deploy_linux").Parse(deployScriptLinux)
-	if err != nil {
-		return fmt.Errorf("failed to parse Linux deploy script template: %w", err)
-	}
+		windowsTemplate, err = template.New("deploy_windows").Parse(deployScriptWindows)
+		if err != nil {
+			initErr = fmt.Errorf("failed to parse Windows deploy script template: %w", err)
+			return
+		}
 
-	windowsTemplate, err = template.New("deploy_windows").Parse(deployScriptWindows)
-	if err != nil {
-		return fmt.Errorf("failed to parse Windows deploy script template: %w", err)
-	}
-
-	logger.Info("Script templates initialized successfully")
-	return nil
+		logger.Info("Script templates initialized successfully")
+	})
+	return initErr
 }
 
 // RenderLinuxDeployScript renders the Linux deploy script with the given data.

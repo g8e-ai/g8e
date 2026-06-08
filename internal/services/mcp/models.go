@@ -602,3 +602,57 @@ type K8sPodDescribe struct {
 	Pod       string `json:"pod"`
 	Describe  string `json:"describe"`
 }
+
+// NetSSHKnownHostsRequest is the params for the "net_ssh_known_hosts" tool.
+type NetSSHKnownHostsRequest struct {
+	SSHConfigPath string `json:"ssh_config_path,omitempty"`
+	KnownHostsPath string `json:"known_hosts_path,omitempty"`
+}
+
+// NetSSHKnownHostsResult is the result for the "net_ssh_known_hosts" tool.
+type NetSSHKnownHostsResult struct {
+	ConfigHosts    []SSHConfigHost    `json:"config_hosts"`
+	KnownHosts     []SSHKnownHost     `json:"known_hosts"`
+	OS             string             `json:"os"`
+	ConfigPath     string             `json:"config_path"`
+	KnownHostsPath string             `json:"known_hosts_path"`
+}
+
+// SSHConfigHost represents a host from SSH config.
+type SSHConfigHost struct {
+	Pattern       string   `json:"pattern"`
+	Hostname      string   `json:"hostname"`
+	User          string   `json:"user"`
+	Port          string   `json:"port"`
+	IdentityFiles []string `json:"identity_files"`
+	ProxyCommand  string   `json:"proxy_command"`
+}
+
+// SSHKnownHost represents a host from known_hosts file.
+type SSHKnownHost struct {
+	HostPattern string `json:"host_pattern"`
+	KeyType     string `json:"key_type"`
+	KeyHash     string `json:"key_hash"`
+}
+
+// OperatorDeployRequest is the params for the "operator_deploy" tool.
+type OperatorDeployRequest struct {
+	Hostnames      []string `json:"hostnames"`
+	OperatorBinary string   `json:"operator_binary,omitempty"`
+	OperatorArgs   []string `json:"operator_args,omitempty"`
+	Timeout        int      `json:"timeout,omitempty"`
+}
+
+// OperatorDeployResult is the result for the "operator_deploy" tool.
+type OperatorDeployResult struct {
+	Deployments []OperatorDeploymentResult `json:"deployments"`
+}
+
+// OperatorDeploymentResult represents the deployment result for a single host.
+type OperatorDeploymentResult struct {
+	Hostname  string `json:"hostname"`
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	Error     string `json:"error,omitempty"`
+	Output    string `json:"output,omitempty"`
+}
