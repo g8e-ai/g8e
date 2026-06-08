@@ -11,16 +11,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package mcp
+//go:build integration || e2e
+
+package tests
 
 import (
+	"fmt"
 	"testing"
+
+	"github.com/g8e-ai/g8e/internal/services/mcp"
 )
 
 func TestRegisterNativeTools(t *testing.T) {
-	registry := NewToolRegistry()
+	registry := mcp.NewToolRegistry()
 
-	err := RegisterNativeTools(registry)
+	err := mcp.RegisterNativeTools(registry)
 	if err != nil {
 		t.Fatalf("RegisterNativeTools failed: %v", err)
 	}
@@ -54,6 +59,8 @@ func TestRegisterNativeTools(t *testing.T) {
 		"cloud_metadata",
 		"k8s_inspect",
 		"shell_execute",
+		"net_ssh_known_hosts",
+		"operator_deploy",
 	}
 
 	for _, toolName := range expectedTools {
@@ -83,16 +90,16 @@ func TestRegisterNativeTools(t *testing.T) {
 }
 
 func TestRegisterNativeTools_DuplicateRegistration(t *testing.T) {
-	registry := NewToolRegistry()
+	registry := mcp.NewToolRegistry()
 
 	// First registration should succeed
-	err := RegisterNativeTools(registry)
+	err := mcp.RegisterNativeTools(registry)
 	if err != nil {
 		t.Fatalf("First RegisterNativeTools failed: %v", err)
 	}
 
 	// Second registration should fail due to duplicates
-	err = RegisterNativeTools(registry)
+	err = mcp.RegisterNativeTools(registry)
 	if err == nil {
 		t.Fatal("Expected error when registering tools twice, got nil")
 	}
@@ -110,13 +117,13 @@ func TestRegisterNativeTools_NilRegistry(t *testing.T) {
 			t.Fatal("Expected panic when registering to nil registry, but did not panic")
 		}
 	}()
-	RegisterNativeTools(nil)
+	mcp.RegisterNativeTools(nil)
 }
 
 func TestRegisterNativeTools_ToolNameConsistency(t *testing.T) {
-	registry := NewToolRegistry()
+	registry := mcp.NewToolRegistry()
 
-	err := RegisterNativeTools(registry)
+	err := mcp.RegisterNativeTools(registry)
 	if err != nil {
 		t.Fatalf("RegisterNativeTools failed: %v", err)
 	}
@@ -132,9 +139,9 @@ func TestRegisterNativeTools_ToolNameConsistency(t *testing.T) {
 }
 
 func TestRegisterNativeTools_SchemaValidity(t *testing.T) {
-	registry := NewToolRegistry()
+	registry := mcp.NewToolRegistry()
 
-	err := RegisterNativeTools(registry)
+	err := mcp.RegisterNativeTools(registry)
 	if err != nil {
 		t.Fatalf("RegisterNativeTools failed: %v", err)
 	}
@@ -151,13 +158,13 @@ func TestRegisterNativeTools_SchemaValidity(t *testing.T) {
 }
 
 func TestRegisterNativeTools_PartialRegistration(t *testing.T) {
-	registry := NewToolRegistry()
+	registry := mcp.NewToolRegistry()
 
 	// Manually register one tool first
 	manualTool := &mockTool{
 		name:        "db_discover_topology",
 		description: "Manually registered",
-		schema:      &InputSchema{Type: "object"},
+		schema:      &mcp.InputSchema{Type: "object"},
 	}
 	err := registry.Register(manualTool)
 	if err != nil {
@@ -165,7 +172,7 @@ func TestRegisterNativeTools_PartialRegistration(t *testing.T) {
 	}
 
 	// Attempting to register all native tools should fail due to duplicate
-	err = RegisterNativeTools(registry)
+	err = mcp.RegisterNativeTools(registry)
 	if err == nil {
 		t.Fatal("Expected error when some tools already registered, got nil")
 	}
@@ -189,4 +196,38 @@ func containsSubstringHelper(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// Helper types for testing
+type mockTool struct {
+	name        string
+	description string
+	schema      *mcp.InputSchema
+}
+
+func (m *mockTool) Name() string        { return m.name }
+func (m *mockTool) Description() string { return m.description }
+func (m *mockTool) InputSchema() *mcp.InputSchema {
+	return m.schema
+}
+
+func isValidToolName(name string) bool {
+	// Simple validation: tool names should be lowercase with underscores
+	for _, r := range name {
+		if !((r >= 'a' && r <= 'z') || r == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+func validateInputSchema(schema *mcp.InputSchema) error {
+	// Basic validation: schema should not be nil and should have a type
+	if schema == nil {
+		return fmt.Errorf("schema is nil")
+	}
+	if schema.Type == "" {
+		return fmt.Errorf("schema type is empty")
+	}
+	return nil
 }
