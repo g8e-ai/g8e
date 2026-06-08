@@ -174,7 +174,12 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		return nil, fmt.Errorf("bootstrap: failed to marshal auth request: %w", err)
 	}
 
-	authURL := fmt.Sprintf("https://%s:%d/api/v1/operators/reauth", bs.config.Endpoint, bs.config.HTTPPort)
+	// Use g8e.local for the hostname when endpoint is an IP address to match TLS ServerName
+	hostname := bs.config.Endpoint
+	if bs.config.TLSServerName != "" {
+		hostname = bs.config.TLSServerName
+	}
+	authURL := fmt.Sprintf("https://%s:%d/api/v1/operators/reauth", hostname, bs.config.HTTPPort)
 
 	var lastErr error
 	delay := bootstrapBaseDelay

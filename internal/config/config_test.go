@@ -445,3 +445,26 @@ func TestTLSServerName(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildPubSubURL(t *testing.T) {
+	tests := []struct {
+		name         string
+		endpoint     string
+		tlsServerName string
+		httpPort     int
+		want         string
+	}{
+		{"hostname with no tlsServerName", "localhost", "", 0, "wss://localhost:8443"},
+		{"hostname with tlsServerName", "localhost", "g8e.local", 0, "wss://g8e.local:8443"},
+		{"IP with tlsServerName", "192.168.1.1", "g8e.local", 0, "wss://g8e.local:8443"},
+		{"IP with no tlsServerName", "192.168.1.1", "", 0, "wss://192.168.1.1:8443"},
+		{"custom port", "localhost", "", 9000, "wss://localhost:9000"},
+		{"custom port with tlsServerName", "192.168.1.1", "g8e.local", 9000, "wss://g8e.local:9000"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, buildPubSubURL(tt.endpoint, tt.tlsServerName, tt.httpPort))
+		})
+	}
+}

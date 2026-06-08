@@ -494,6 +494,7 @@ func Load(opts LoadOptions) (*Config, error) {
 	}
 
 	// Build config from explicit options
+	tlsServerName := tlsServerName(opts.OperatorEndpoint)
 	cfg := &Config{
 		// From options
 		CloudMode:             opts.CloudMode,
@@ -505,11 +506,11 @@ func Load(opts LoadOptions) (*Config, error) {
 
 		// Derived values - ports default to values from paths.json
 		Endpoint:  opts.OperatorEndpoint,
-		PubSubURL: buildPubSubURL(opts.OperatorEndpoint, opts.HTTPPort),
+		PubSubURL: buildPubSubURL(opts.OperatorEndpoint, tlsServerName, opts.HTTPPort),
 
 		HTTPPort:      httpPortOrDefault(opts.HTTPPort),
 		LogLevel:      opts.LogLevel,
-		TLSServerName: tlsServerName(opts.OperatorEndpoint),
+		TLSServerName: tlsServerName,
 		ProjectID:     "g8e",
 
 		// Fixed defaults
@@ -578,9 +579,14 @@ func heartbeatIntervalOrDefault(d time.Duration) time.Duration {
 }
 
 // buildPubSubURL creates a WebSocket URL, omitting port 443 if it is the effective port.
-func buildPubSubURL(endpoint string, httpPort int) string {
+// Uses tlsServerName for the hostname when provided (for IP-to-g8e.local mapping).
+func buildPubSubURL(endpoint string, tlsServerName string, httpPort int) string {
 	port := httpPortOrDefault(httpPort)
-	return fmt.Sprintf("wss://%s:%d", endpoint, port)
+	hostname := endpoint
+	if tlsServerName != "" {
+		hostname = tlsServerName
+	}
+	return fmt.Sprintf("wss://%s:%d", hostname, port)
 }
 
 // httpPortOrDefault returns p if non-zero, otherwise the default from paths.json.

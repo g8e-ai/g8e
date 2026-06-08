@@ -536,8 +536,6 @@ func main() {
 
 	var noGit bool
 
-	var httpPort int
-
 	var doctrineMode bool
 	var consensusMode bool
 	var notaryMode bool
@@ -825,7 +823,7 @@ func main() {
 	cfg, err := config.Load(config.LoadOptions{
 		OperatorEndpoint: operatorEndpoint,
 
-		HTTPPort:            httpPort,
+		HTTPPort:            0, // Will default to constants.Ports.OperatorHttps (8443)
 		CloudMode:           cloudMode,
 		CloudProvider:       cloudProvider,
 		ExecutionVaultEnabled: executionVault,
