@@ -36,6 +36,7 @@ func authCmd() *cobra.Command {
 		loginCmd(),
 		logoutCmd(),
 		enrollWindowsCmd(),
+		serveHTTPSCmd(),
 	)
 
 	return cmd
@@ -391,6 +392,24 @@ func enrollWindowsCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&useTPM, "tpm", false, "Use TPM-backed key via Windows Hello for Business")
+
+	return cmd
+}
+
+func serveHTTPSCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "serve-https",
+		Short: "Start HTTPS server with passkey authentication landing page",
+		Long:  `Start a simple HTTPS server on localhost with a landing page for passkey authentication. Uses the operator certificate from './g8e auth enroll-windows'.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			return auth.ServeHTTPS(cfg, "")
+		},
+	}
 
 	return cmd
 }

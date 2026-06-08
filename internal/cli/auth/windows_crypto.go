@@ -24,6 +24,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -78,6 +79,8 @@ func generateSoftwareBackedCSR(commonName string) (string, *ecdsa.PrivateKey, er
 			Organization: []string{"g8e"},
 		},
 		SignatureAlgorithm: x509.ECDSAWithSHA256,
+		DNSNames:           []string{"localhost"},
+		IPAddresses:        []net.IP{net.ParseIP("127.0.0.1")},
 	}
 
 	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
@@ -110,6 +113,8 @@ func generateTPMBackedCSR(commonName string) (string, *ecdsa.PrivateKey, error) 
 			Organization: []string{"g8e"},
 		},
 		SignatureAlgorithm: x509.ECDSAWithSHA256,
+		DNSNames:           []string{"localhost"},
+		IPAddresses:        []net.IP{net.ParseIP("127.0.0.1")},
 	}
 
 	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)

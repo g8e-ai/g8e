@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -191,6 +192,13 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Printf("  ./g8e mcp show    Print MCP client configuration for connecting to the gateway\n")
 			cmd.Printf("  ./g8e mcp stdio   Run Operator as MCP stdio server with native tools only (no Gateway)\n")
 			cmd.Printf("  ./g8e mcp gov     Run Operator as MCP stdio proxy to Gateway (with governance)\n")
+
+			if runtime.GOOS == "windows" {
+				cmd.Println()
+				cmd.Println("Windows (Passkey Authentication):")
+				cmd.Printf("  ./g8e auth enroll-windows  Enroll via Windows Certificate Store\n")
+				cmd.Printf("  ./g8e auth serve-https     Start HTTPS server with passkey auth UI\n")
+			}
 
 			if follow {
 				// The gateway is already in its own session (Setsid), so Ctrl+C here won't affect it
