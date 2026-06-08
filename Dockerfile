@@ -68,11 +68,12 @@ COPY --from=builder /build/protocol/constants /protocol/constants
 # Expose default ports (can be overridden at runtime)
 EXPOSE 8080 8443
 
-# Health check
+# Health check - use HTTP endpoint instead of gw status (which doesn't detect foreground processes)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD ["/g8e", "gw", "status"]
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/v1/health || exit 1
 
 # Set entrypoint with default doctrine mode and customizable ports
 # Users can override HTTP_PORT and HTTPS_PORT via environment variables
+# Run operator directly in foreground (not gw start which daemonizes)
 ENTRYPOINT ["/g8e"]
-CMD ["--doctrine", "gw", "start", "--http-port", "8080", "--https-port", "8443"]
+CMD ["--doctrine", "--working-dir", "/root/.g8e", "--data-dir", "/root/.g8e/data", "--pki-dir", "/root/.g8e/pki", "--secrets-dir", "/root/.g8e/secrets", "--http-port", "8080", "--https-port", "8443", "--log", "info"]
