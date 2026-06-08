@@ -90,10 +90,10 @@ func runAgentWrapper(toolName string, toolArgs []string) error {
 
 	creds, err := auth.LoadCredentials(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to load credentials: %w (run './g8e auth login' to authenticate)", err)
+		return fmt.Errorf("failed to load credentials: %w (run './g8e gw cli auth login' to authenticate)", err)
 	}
 	if creds == nil {
-		return fmt.Errorf("CLI not authenticated (no credentials found at %s). Run: ./g8e auth login", cfg.CredentialsFile())
+		return fmt.Errorf("CLI not authenticated (no credentials found at %s). Run: ./g8e gw cli auth login", cfg.CredentialsFile())
 	}
 
 	toolBinary, err := detectToolBinary(toolName, defaultToolPaths)

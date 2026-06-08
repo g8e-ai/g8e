@@ -493,23 +493,18 @@ func main() {
 		return
 	}
 
-	// Check for CLI subcommands (gw, gateway, apps, auth, data, evals, security, setup, vars, test, vault)
+	// Check for CLI subcommands
 	cliSubcommands := map[string]bool{
 		"gw":       true,
 		"gateway":  true,
-		"apps":     true,
-		"auth":     true,
-		"data":     true,
-		"evals":    true,
-		"security": true,
-		"setup":    true,
-		"vars":     true,
-		"test":     true,
-		"auditor":  true,
+		"emulator": true,
 		"chaos":    true,
 		"mcp":      true,
 		"operator": true,
+		"agent":    true,
+		"claude":   true,
 		"vault":    true,
+		"test":     true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
@@ -622,84 +617,12 @@ func main() {
 	flag.StringVar(&insecureNodeID, "insecure-node-id", "", "Node ID to advertise (default: hostname)")
 	flag.StringVar(&insecureDisplayName, "insecure-name", "", "Display name shown in MCP gateway UI (default: node ID)")
 
-	// Customize usage
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: g8e [options]\n")
-		fmt.Fprintf(os.Stderr, "   or: g8e <command> [command-options]\n\n")
-		fmt.Fprintf(os.Stderr, "Platform Commands:\n")
-		fmt.Fprintf(os.Stderr, "  gw          Gateway lifecycle (start, stop, status, logs)\n")
-		fmt.Fprintf(os.Stderr, "  auth        Authentication (login, logout)\n")
-		fmt.Fprintf(os.Stderr, "  approve     Approve suspended L3 transactions\n")
-		fmt.Fprintf(os.Stderr, "  data        Data operations (export, import, query)\n")
-		fmt.Fprintf(os.Stderr, "  test        Run platform tests\n")
-		fmt.Fprintf(os.Stderr, "  security    Security operations (pki, certificates)\n")
-		fmt.Fprintf(os.Stderr, "  auditor     Governance auditor (list, run, audit, self-test)\n")
-		fmt.Fprintf(os.Stderr, "  chaos       Chaos testing (generate governance events)\n")
-		fmt.Fprintf(os.Stderr, "  mcp         MCP protocol operations\n\n")
-		fmt.Fprintf(os.Stderr, "Options:\n")
-		fmt.Fprintf(os.Stderr, "  -k, --key <key>         Private key\n")
-		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address or hostname of the operator\n")
-		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: %s or fetch from /.well-known/g8e/pki/ca-bundle)\n", constants.Paths.Infra.CaCertPath)
-		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory Operator was launched from)\n")
-		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")
-		fmt.Fprintf(os.Stderr, "  -c, --cloud             Cloud Operator mode (for AWS/cloud CLI)\n")
-		fmt.Fprintf(os.Stderr, "  -p, --provider <name>   Cloud provider: aws, gcp, azure\n")
-		fmt.Fprintf(os.Stderr, "  -s, --local-storage     Store audit data locally instead of cloud (default: on)\n")
-		fmt.Fprintf(os.Stderr, "                          When enabled, data is stored in ./%s/ relative to launch directory\n", constants.Paths.Infra.RuntimeDir)
-		fmt.Fprintf(os.Stderr, "  -l, --log <level>       Log level: info, error, debug (default: info)\n")
-		fmt.Fprintf(os.Stderr, "  -G, --no-git            Disable ledger (git-backed file versioning)\n")
-		fmt.Fprintf(os.Stderr, "      --heartbeat-interval <dur> Heartbeat interval (e.g. 60s, 2m); overrides the 30s default\n")
-		fmt.Fprintf(os.Stderr, "  -v, --version           Show version\n")
-		fmt.Fprintf(os.Stderr, "\nGateway Mode (platform persistence + pub/sub broker):\n")
-		fmt.Fprintf(os.Stderr, "  --doctrine                Gateway mode: L1 enforced, L2/L3 audited (default)\n")
-		fmt.Fprintf(os.Stderr, "  --consensus               Gateway mode: L1/L2 enforced, L3 audited\n")
-		fmt.Fprintf(os.Stderr, "  --notary                  Gateway mode: L1/L2/L3 strictly enforced\n")
-		fmt.Fprintf(os.Stderr, "  --http-port <port>        HTTP port for bootstrap and MCP routes (default: %d)\n", constants.Ports.OperatorHttp)
-		fmt.Fprintf(os.Stderr, "  --https-port <port>       HTTPS port for mTLS API and public surface (default: %d)\n", constants.Ports.OperatorHttps)
-		fmt.Fprintf(os.Stderr, "  --data-dir <dir>            Data directory for SQLite (default: %s in working directory)\n", constants.Paths.Infra.DataDir)
-		fmt.Fprintf(os.Stderr, "  --pki-dir <dir>             Directory for TLS certificates (default: %s)\n", constants.Paths.Infra.PkiDir)
-		fmt.Fprintf(os.Stderr, "  --secrets-dir <dir>         Directory for platform secrets (default: %s)\n", constants.Paths.Infra.SecretsDir)
-		fmt.Fprintf(os.Stderr, "  --vault-dir <dir>           Directory for vault data (default: .g8e/vault)\n")
-		fmt.Fprintf(os.Stderr, "  --vault-key <path>          Path to vault private key (default: .g8e/secrets/vault.key)\n")
-		fmt.Fprintf(os.Stderr, "  --vault-require-unlock     Require vault to be unlocked at startup (fail if vault cannot be unlocked)\n")
-		fmt.Fprintf(os.Stderr, "  --passkey-rp-id <id>        RP ID for passkey operations (default: localhost)\n")
-		fmt.Fprintf(os.Stderr, "  --passkey-rp-name <name>    RP Name for passkey operations (default: g8e)\n")
-		fmt.Fprintf(os.Stderr, "  --rate-limit-rps <rps>      Requests per second limit (default: 5.0, set to 0 to disable)\n")
-		fmt.Fprintf(os.Stderr, "  --rate-limit-burst <burst>  Rate limit burst size (default: 10)\n")
-		fmt.Fprintf(os.Stderr, "  --cert-mode <mode>         Certificate mode: full (all hostnames/IPs), localhost (only localhost)\n")
-		fmt.Fprintf(os.Stderr, "  --network-identity-file <path> Path to JSON file containing pre-detected network identity\n")
-		fmt.Fprintf(os.Stderr, "\nVault Management:\n")
-		fmt.Fprintf(os.Stderr, "  --rekey-vault           Re-encrypt vault with new API key\n")
-		fmt.Fprintf(os.Stderr, "  --old-key <key>         Old API key (required for --rekey-vault)\n")
-		fmt.Fprintf(os.Stderr, "  --verify-vault          Verify vault integrity\n")
-		fmt.Fprintf(os.Stderr, "  --reset-vault           Reset vault (DESTROYS ALL DATA)\n")
-		fmt.Fprintf(os.Stderr, "\nInsecure MCP Node Host Mode:\n")
-		fmt.Fprintf(os.Stderr, "  --insecure              Connect to MCP gateway without governance (DANGEROUS - bypasses all L1/L2/L3 verification)\n")
-		fmt.Fprintf(os.Stderr, "  --insecure-url <url>    MCP Gateway WebSocket URL (e.g. ws://"+constants.DefaultEndpoint+":18789)\n")
-		fmt.Fprintf(os.Stderr, "  --insecure-token <tok>  Auth token\n")
-		fmt.Fprintf(os.Stderr, "  --insecure-node-id <id> Node ID advertised to the Gateway (default: hostname)\n")
-		fmt.Fprintf(os.Stderr, "  --insecure-name <name>  Display name shown in MCP gateway UI (default: node ID)\n")
-		fmt.Fprintf(os.Stderr, "\nExample Scenarios:\n")
-		fmt.Fprintf(os.Stderr, "  # Initialize Gateway in Doctrine Mode\n")
-		fmt.Fprintf(os.Stderr, "  ./g8e gw start\n\n")
-		fmt.Fprintf(os.Stderr, "  # Authenticate and bootstrap PKI\n")
-		fmt.Fprintf(os.Stderr, "  ./g8e auth login\n\n")
-		fmt.Fprintf(os.Stderr, "  # Deploy an Operator on a remote host\n")
-		fmt.Fprintf(os.Stderr, "  ./g8e security pki enroll --endpoint <gateway-ip>\n\n")
-		fmt.Fprintf(os.Stderr, "  # Verify platform status\n")
-		fmt.Fprintf(os.Stderr, "  ./g8e gw status\n\n")
-		fmt.Fprintf(os.Stderr, "  # Query audit trail\n")
-		fmt.Fprintf(os.Stderr, "  ./g8e data query --collection audit_vault\n\n")
-		fmt.Fprintf(os.Stderr, "  # Start Gateway in Notary Mode (L1/L2/L3 enforced)\n")
-		fmt.Fprintf(os.Stderr, "  ./g8e gw start --posture notary\n")
-	}
-
 	flag.Parse()
 
 	// Show help if no arguments provided
 	if len(os.Args) == 1 {
-		flag.Usage()
-		os.Exit(0)
+		clicmd.Execute()
+		return
 	}
 
 	if showVersion {

@@ -114,7 +114,7 @@ func runSetup() error {
 		fmt.Printf("  - %s\n", tool)
 	}
 
-	fmt.Println("\nTo configure a tool, run: ./g8e setup configure <tool-name>")
+	fmt.Println("\nTo configure a tool, run: ./g8e gw setup configure <tool-name>")
 	return nil
 }
 

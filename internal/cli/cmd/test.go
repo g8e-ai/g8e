@@ -25,8 +25,8 @@ import (
 func testCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test",
-		Short: "Run test suites (unit, integration, e2e, scenario)",
-		Long:  `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway.`,
+		Short: "Run test suites (unit, integration, e2e, scenario, emulator, chaos)",
+		Long:  `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway. Emulator runs scenarios against a real Gateway/Operator. Chaos generates governance events for testing.`,
 	}
 
 	cmd.AddCommand(
@@ -34,6 +34,8 @@ func testCmd() *cobra.Command {
 		testIntegrationCmd(),
 		testE2ECmd(),
 		testScenarioCmd(),
+		emulatorCmd(),
+		chaosCmd(),
 	)
 
 	return cmd
@@ -112,7 +114,7 @@ func testE2ECmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
 			fmt.Println("Note: This requires the gateway to be running and authenticated.")
-			fmt.Println("Run './g8e gw start' and './g8e auth login' first.")
+			fmt.Println("Run './g8e gw start' and './g8e gw cli auth login' first.")
 			
 			testRace := ""
 			if runtime.GOOS != "windows" {
@@ -143,7 +145,7 @@ func testScenarioCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 3 (Scenario) tests...")
 			fmt.Println("Note: This requires the gateway to be running and authenticated.")
-			fmt.Println("Run './g8e gw start' and './g8e auth login' first.")
+			fmt.Println("Run './g8e gw start' and './g8e gw cli auth login' first.")
 			
 			testRace := ""
 			if runtime.GOOS != "windows" {

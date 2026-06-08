@@ -51,6 +51,7 @@ func authCmd() *cobra.Command {
 		loginCmd(),
 		logoutCmd(),
 		enrollWindowsCmd(),
+		approveCmd(),
 	)
 
 	return cmd
@@ -337,7 +338,7 @@ func performStandardLogin(cmd *cobra.Command, cfg *config.Config) error {
 		if err != nil {
 			// Check if this is a TLS verification error (stale trust bundle after gateway PKI regeneration)
 			if errors.Is(err, constants.ErrTrustBundleStale) {
-				return fmt.Errorf("mTLS re-enrollment failed: trust bundle is stale (gateway PKI was regenerated). To recover, run: ./g8e auth logout && ./g8e auth login. Original error: %w", err)
+				return fmt.Errorf("mTLS re-enrollment failed: trust bundle is stale (gateway PKI was regenerated). To recover, run: ./g8e gw cli auth logout && ./g8e gw cli auth login. Original error: %w", err)
 			}
 			return err
 		}
@@ -421,7 +422,7 @@ func enrollWindowsCmd() *cobra.Command {
 		Short: "Enroll via Windows Certificate Store (Windows only - advanced)",
 		Long: `Generate an ECDSA P-256 keypair in the Windows Certificate Store, submit a CSR to the Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert. Use --tpm for TPM-backed keys via Windows Hello for Business.
 
-NOTE: This is now handled automatically by './g8e auth login' on Windows. This command is for advanced use cases or manual re-enrollment.`,
+NOTE: This is now handled automatically by './g8e gw cli auth login' on Windows. This command is for advanced use cases or manual re-enrollment.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {

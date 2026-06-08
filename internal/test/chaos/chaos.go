@@ -885,20 +885,20 @@ func printDemoQueries(dbPath string) {
 	fmt.Printf("./g8e test summary\n\n")
 
 	fmt.Printf("# 2. View Chaos Test Summary (requires Operator running and mTLS auth)\n")
-	fmt.Printf("./g8e data store --collection chaos_events\n\n")
+	fmt.Printf("./g8e gw data store --collection chaos_events\n\n")
 
 	fmt.Printf("# 3. View General Audit Event Summary (from local audit vault)\n")
-	fmt.Printf("./g8e data audit summary\n")
-	fmt.Printf("./g8e data audit summary --operator-session-id <session-id>\n\n")
+	fmt.Printf("./g8e gw data audit summary\n")
+	fmt.Printf("./g8e gw data audit summary --operator-session-id <session-id>\n\n")
 
 	fmt.Printf("# 4. View Audit Events via Operator API (requires Operator running and mTLS auth)\n")
-	fmt.Printf("./g8e data audit list --operator-session-id chaos-session-001 --limit 10\n\n")
+	fmt.Printf("./g8e gw data audit list --operator-session-id chaos-session-001 --limit 10\n\n")
 
 	fmt.Printf("# 5. View all users\n")
-	fmt.Printf("./g8e data users\n\n")
+	fmt.Printf("./g8e gw data users\n\n")
 
 	fmt.Printf("# 6. View operators\n")
-	fmt.Printf("./g8e data operators\n\n")
+	fmt.Printf("./g8e gw data operators\n\n")
 
 	fmt.Printf("# 7. Direct SQLite access for offline analysis\n")
 	fmt.Printf("# sqlite3 '%s'\n", dbPath)

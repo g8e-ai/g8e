@@ -315,7 +315,7 @@ func operatorDeployCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deploy",
 		Short: "Deploy the operator binary to remote hosts and start it",
-		Long:  `Deploy the g8e operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires './g8e auth login' first.`,
+		Long:  `Deploy the g8e operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires './g8e gw cli auth login' first.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
@@ -324,7 +324,7 @@ func operatorDeployCmd() *cobra.Command {
 
 			creds, err := auth.LoadCredentials(cfg)
 			if err != nil || creds == nil {
-				return fmt.Errorf("not authenticated. Please run './g8e auth login' first")
+				return fmt.Errorf("not authenticated. Please run './g8e gw cli auth login' first")
 			}
 
 			if hosts == "" {
@@ -441,7 +441,7 @@ func operatorStreamCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stream",
 		Short: "Stream and execute the operator on remote hosts via SSH",
-		Long:  `Stream the g8e operator binary via SSH and execute it directly on remote hosts without copying. This is useful for quick deployments or air-gapped scenarios. Requires './g8e auth login' first.`,
+		Long:  `Stream the g8e operator binary via SSH and execute it directly on remote hosts without copying. This is useful for quick deployments or air-gapped scenarios. Requires './g8e gw cli auth login' first.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
@@ -450,7 +450,7 @@ func operatorStreamCmd() *cobra.Command {
 
 			creds, err := auth.LoadCredentials(cfg)
 			if err != nil || creds == nil {
-				return fmt.Errorf("not authenticated. Please run './g8e auth login' first")
+				return fmt.Errorf("not authenticated. Please run './g8e gw cli auth login' first")
 			}
 
 			if hosts == "" {

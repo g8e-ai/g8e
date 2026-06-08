@@ -14,8 +14,6 @@ Available Commands:
   agent       Wrap agentic coding tools with g8e zero-trust gateway
   approve     Approve a suspended L3 transaction with CLI signature
   auth        Authentication and cli/web/operator session management
-  emulator    Universal agent emulator for a real g8e Gateway/Operator
-  chaos       Generate realistic governance events against the local g8e audit stack
   claude      Execute Claude Code proxied through g8e gateway
   data        Administer the local platform over mTLS
   gw          Manage the g8e Gateway lifecycle
@@ -358,11 +356,12 @@ Usage:
   g8e test [command]
 
 Available Commands:
+  chaos       Generate realistic governance events against the local g8e audit stack
   ci          Run full CI test suite (mirrors GitHub Actions exactly)
+  emulator    Universal agent emulator for a real g8e Gateway/Operator
+  e2e         Run Tier 3 (Live Platform E2E) tests
   integration Run integration tests
-  review      Review integration test vault results
   scenario    Run scenario integration tests
-  summary     Show summary of all integration test results
   unit        Run unit tests
 
 Flags:
@@ -424,15 +423,98 @@ Flags:
   -v, --verbose      Verbose output
 ```
 
-### test summary
+### test emulator
 ```
-Show summary of all integration test results
+Universal agent emulator for a real g8e Gateway/g8e Operator. emulator impersonates arbitrary AI tools and agents against a REAL g8e Gateway + g8e Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the g8e Operator's signed receipts.
 
 Usage:
-  g8e test summary [flags]
+  g8e test emulator [command]
+
+Available Commands:
+  audit       Audit signed receipts from the g8e Operator
+  list        List available scenarios
+  run         Run scenarios against a real g8e Gateway/g8e Operator
 
 Flags:
-  -h, --help   help for summary
+  -h, --help   help for emulator
+
+Use "g8e test emulator [command] --help" for more information about a command.
+```
+
+#### test emulator list
+```
+List available scenarios
+
+Usage:
+  g8e test emulator list [flags]
+
+Flags:
+  -h, --help   help for list
+```
+
+#### test emulator run
+```
+Run scenarios against a real Gateway/Operator
+
+Usage:
+  g8e test emulator run [flags] [scenario ...]
+
+Flags:
+      --api-key string           Operator API key for MCP/A2A surface
+      --ca string                gateway CA bundle PEM
+      --cert string              client cert PEM
+      --config string            JSON config overlay
+      --ensemble int             mock consensus voters (default 3)
+      --insecure                 skip TLS verify (local dev only)
+      --key string               client key PEM
+      --l3-mode string           mock|suspend
+      --mtls-url string          Gateway mTLS surface
+      --out string               report output dir
+      --operator-session string   scope audit to a specific Operator session
+      --phase string             doctrine|notary|all (default "all")
+      --public-url string        Gateway public surface for OOB approve
+  -h, --help                     help for run
+      --verbose                  echo each request/response
+```
+
+#### test emulator audit
+```
+Audit signed receipts from the Operator
+
+Usage:
+  g8e test emulator audit [flags]
+
+Flags:
+      --api-key string           Operator API key
+      --ca string                gateway CA bundle PEM
+      --cert string              client cert PEM
+      --config string            JSON config overlay
+      --insecure                 skip TLS verify
+      --key string               client key PEM
+      --mtls-url string          Gateway mTLS surface
+      --out string               report output dir
+      --operator-session string   Operator session id
+      --public-url string        Gateway public surface
+  -h, --help                     help for audit
+```
+
+### test chaos
+```
+Generate realistic governance events against the local g8e audit stack. chaos generates a realistic distribution of governance events against the local g8e audit stack. It bypasses network/TLS by driving the TransactionVerifier + Actuator stack directly in-process, which is the same path exercised by the live g8e Operator when payloads arrive over pub/sub.
+
+Distribution:
+  70%  Good Actor  – valid sig, safe intent (FS_LIST)       → EXECUTED
+  20%  Prompt Inj  – valid sig, L1 forbidden cmd (sudo/rm)  → REJECTED (L1)
+  10%  MitM        – corrupted transaction hash              → REJECTED (hash mismatch)
+
+Usage:
+  g8e test chaos [flags]
+
+Flags:
+      --count int      number of payloads to fire (default 100)
+      --data-dir string audit vault data dir (default: <project-root>/.g8e/test-vault/<timestamp>)
+  -h, --help            help for chaos
+      --pki-dir string  PKI dir for trusted_signers (default: <cwd>/.g8e/pki)
 ```
 
 ## security
@@ -505,99 +587,6 @@ Flags:
   -h, --help   help for approve
 ```
 
-## emulator
-```
-Universal agent emulator for a real g8e Gateway/g8e Operator. emulator impersonates arbitrary AI tools and agents against a REAL g8e Gateway + g8e Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the g8e Operator's signed receipts.
-
-Usage:
-  g8e emulator [command]
-
-Available Commands:
-  audit       Audit signed receipts from the g8e Operator
-  list        List available scenarios
-  run         Run scenarios against a real g8e Gateway/g8e Operator
-
-Flags:
-  -h, --help   help for emulator
-
-Use "g8e emulator [command] --help" for more information about a command.
-```
-
-### emulator list
-```
-List available scenarios
-
-Usage:
-  g8e emulator list [flags]
-
-Flags:
-  -h, --help   help for list
-```
-
-### emulator run
-```
-Run scenarios against a real Gateway/Operator
-
-Usage:
-  g8e emulator run [flags] [scenario ...]
-
-Flags:
-      --api-key string           Operator API key for MCP/A2A surface
-      --ca string                gateway CA bundle PEM
-      --cert string              client cert PEM
-      --config string            JSON config overlay
-      --ensemble int             mock consensus voters (default 3)
-      --insecure                 skip TLS verify (local dev only)
-      --key string               client key PEM
-      --l3-mode string           mock|suspend
-      --mtls-url string          Gateway mTLS surface
-      --out string               report output dir
-      --operator-session string   scope audit to a specific Operator session
-      --phase string             doctrine|notary|all (default "all")
-      --public-url string        Gateway public surface for OOB approve
-  -h, --help                     help for run
-      --verbose                  echo each request/response
-```
-
-### emulator audit
-```
-Audit signed receipts from the Operator
-
-Usage:
-  g8e emulator audit [flags]
-
-Flags:
-      --api-key string           Operator API key
-      --ca string                gateway CA bundle PEM
-      --cert string              client cert PEM
-      --config string            JSON config overlay
-      --insecure                 skip TLS verify
-      --key string               client key PEM
-      --mtls-url string          Gateway mTLS surface
-      --out string               report output dir
-      --operator-session string   Operator session id
-      --public-url string        Gateway public surface
-  -h, --help                     help for audit
-```
-
-## chaos
-```
-Generate realistic governance events against the local g8e audit stack. chaos generates a realistic distribution of governance events against the local g8e audit stack. It bypasses network/TLS by driving the TransactionVerifier + Actuator stack directly in-process, which is the same path exercised by the live g8e Operator when payloads arrive over pub/sub.
-
-Distribution:
-  70%  Good Actor  – valid sig, safe intent (FS_LIST)       → EXECUTED
-  20%  Prompt Inj  – valid sig, L1 forbidden cmd (sudo/rm)  → REJECTED (L1)
-  10%  MitM        – corrupted transaction hash              → REJECTED (hash mismatch)
-
-Usage:
-  g8e chaos [flags]
-
-Flags:
-      --count int      number of payloads to fire (default 100)
-      --data-dir string audit vault data dir (default: <project-root>/.g8e/test-vault/<timestamp>)
-  -h, --help            help for chaos
-      --pki-dir string  PKI dir for trusted_signers (default: <cwd>/.g8e/pki)
-```
 
 ## agent
 ```

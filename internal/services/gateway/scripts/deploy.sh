@@ -85,7 +85,7 @@ echo -e "${GREEN}g8e deployed successfully!${NC}"
 
 # Run PKI enrollment
 echo -e "${YELLOW}Enrolling with Gateway at ${GATEWAY_HOST}...${NC}"
-ENROLLMENT_OUTPUT=$(./g8e security pki enroll --endpoint "${GATEWAY_HOST}")
+ENROLLMENT_OUTPUT=$(./g8e gw security pki enroll --endpoint "${GATEWAY_HOST}")
 echo "$ENROLLMENT_OUTPUT"
 
 # Extract operator session ID from enrollment output
