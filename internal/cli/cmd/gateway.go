@@ -290,8 +290,6 @@ func gatewayStopCmd() *cobra.Command {
 }
 
 func gatewayStatusCmd() *cobra.Command {
-	var useHTTP bool
-
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Check Gateway health and status",
@@ -304,28 +302,21 @@ func gatewayStatusCmd() *cobra.Command {
 			cmd.Println("g8e Gateway Status")
 			cmd.Println("========================")
 
-			// If --http flag is set, check via HTTP endpoint (works for Docker/foreground mode)
-			if useHTTP {
-				client, err := api.NewClient(cfg)
-				if err != nil {
-					return fmt.Errorf("failed to create API client: %w", err)
-				}
-
+			// Try HTTP check first (works for Docker/foreground/background modes)
+			client, err := api.NewClient(cfg)
+			if err == nil {
 				_, err = client.Get("/api/v1/health")
-				if err != nil {
-					cmd.Printf("State: STOPPED (HTTP check failed: %v)\n", err)
+				if err == nil {
+					cmd.Println("State: RUNNING (HTTP check)")
+					cmd.Printf("\nEndpoints:\n")
+					cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
+					cmd.Printf("  Public API:         https://localhost:%d (Public browser/BYO bootstrap)\n", constants.Ports.OperatorHttps)
+					cmd.Printf("  MCP HTTP:           http://localhost:%d (Plain HTTP for MCP calls)\n", constants.Ports.OperatorHttp)
 					return nil
 				}
-
-				cmd.Println("State: RUNNING (HTTP check)")
-				cmd.Printf("\nEndpoints:\n")
-				cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
-				cmd.Printf("  Public API:         https://localhost:%d (Public browser/BYO bootstrap)\n", constants.Ports.OperatorHttps)
-				cmd.Printf("  MCP HTTP:           http://localhost:%d (Plain HTTP for MCP calls)\n", constants.Ports.OperatorHttp)
-				return nil
 			}
 
-			// Default: check via ProcessManager (for background/host mode)
+			// Fallback to ProcessManager check (for background/host mode)
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 			if err != nil {
 				return fmt.Errorf("failed to create process manager: %w", err)
@@ -344,14 +335,12 @@ func gatewayStatusCmd() *cobra.Command {
 				cmd.Printf("  MCP HTTP:           http://localhost:%d (Plain HTTP for MCP calls)\n", constants.Ports.OperatorHttp)
 			} else {
 				cmd.Println("State: STOPPED")
-				cmd.Println("\nTip: Use --http flag to check via HTTP endpoint (for Docker/foreground mode)")
 			}
 
 			return nil
 		},
 	}
 
-	cmd.Flags().BoolVar(&useHTTP, "http", false, "Check status via HTTP endpoint (useful for Docker/foreground mode)")
 	return cmd
 }
 
