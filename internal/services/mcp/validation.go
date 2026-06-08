@@ -224,3 +224,93 @@ func validateFilePath(path string) error {
 
 	return nil
 }
+
+func validateSSHConfigPath(path string) error {
+	if path == "" {
+		// Empty path is allowed - will use default
+		return nil
+	}
+
+	return validateFilePath(path)
+}
+
+func validateKnownHostsPath(path string) error {
+	if path == "" {
+		// Empty path is allowed - will use default
+		return nil
+	}
+
+	return validateFilePath(path)
+}
+
+func validateHostname(hostname string) error {
+	if hostname == "" {
+		return fmt.Errorf("mcp: validate hostname: hostname cannot be empty")
+	}
+
+	cleanHostname := strings.TrimSpace(hostname)
+	if cleanHostname != hostname {
+		return fmt.Errorf("mcp: validate hostname: hostname must not contain leading/trailing whitespace")
+	}
+
+	if strings.ContainsAny(hostname, "\x00") {
+		return fmt.Errorf("mcp: validate hostname: hostname must not contain null bytes")
+	}
+
+	// Prevent shell injection
+	dangerousChars := []string{";", "&", "|", "$", "`", "(", ")", "<", ">", "\n", "\r"}
+	for _, char := range dangerousChars {
+		if strings.Contains(hostname, char) {
+			return fmt.Errorf("mcp: validate hostname: hostname contains dangerous character: %q", char)
+		}
+	}
+
+	return nil
+}
+
+func validateHostnames(hostnames []string) error {
+	if len(hostnames) == 0 {
+		return fmt.Errorf("mcp: validate hostnames: hostnames list cannot be empty")
+	}
+
+	for _, hostname := range hostnames {
+		if err := validateHostname(hostname); err != nil {
+			return fmt.Errorf("mcp: validate hostnames: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func validateOperatorBinaryPath(path string) error {
+	if path == "" {
+		// Empty path is allowed - will use current executable
+		return nil
+	}
+
+	return validateFilePath(path)
+}
+
+func validateOperatorArgs(args []string) error {
+	// Args are optional, empty list is allowed
+	if args == nil {
+		return nil
+	}
+
+	// Validate each argument for shell injection
+	for _, arg := range args {
+		if strings.ContainsAny(arg, "\x00") {
+			return fmt.Errorf("mcp: validate operator args: argument must not contain null bytes")
+		}
+
+		// Prevent shell injection
+		dangerousChars := []string{"$", "`", "\\", ";", "&", "|", "(", ")", "<", ">", "\n", "\r"}
+		for _, char := range dangerousChars {
+			if strings.Contains(arg, char) {
+				return fmt.Errorf("mcp: validate operator args: argument contains dangerous character: %q", char)
+			}
+		}
+	}
+
+	return nil
+}

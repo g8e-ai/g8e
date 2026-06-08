@@ -11,8 +11,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-version: '3.8'
-
 services:
   g8e-gateway:
     build:
@@ -46,7 +44,7 @@ services:
     
     # Health check
     healthcheck:
-      test: ["/g8e", "gw", "status"]
+      test: ["CMD", "/g8e", "gw", "status"]
       interval: 30s
       timeout: 10s
       retries: 3
