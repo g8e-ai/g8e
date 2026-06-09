@@ -247,13 +247,13 @@ func (pcm *PeerConnectionManager) enrollPeerCert() error {
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
-	if err := os.WriteFile(peerCertPath, []byte(certPEM), 0600); err != nil {
+	if err := writePEMFile(peerCertPath, "CERTIFICATE", []byte(certPEM), 0600); err != nil {
 		return fmt.Errorf("gateway: write peer certificate: %w", err)
 	}
-	if err := os.WriteFile(peerKeyPath, keyPEM, 0600); err != nil {
+	if err := writePEMFile(peerKeyPath, "EC PRIVATE KEY", keyPEM, 0600); err != nil {
 		return fmt.Errorf("gateway: write peer key: %w", err)
 	}
-	if err := os.WriteFile(peerChainPath, []byte(chainPEM), 0600); err != nil {
+	if err := writePEMFile(peerChainPath, "", []byte(chainPEM), 0600); err != nil {
 		return fmt.Errorf("gateway: write peer chain: %w", err)
 	}
 

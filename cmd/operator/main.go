@@ -1096,12 +1096,18 @@ func logCertBundle(logger *slog.Logger, label string, pemData []byte) {
 
 // configureLogger returns a slog logger configured with operator-friendly formatting
 func configureLogger(level string) (*slog.Logger, error) {
+	return configureLoggerWithOutput(level, os.Stdout)
+}
+
+// configureLoggerWithOutput returns a slog logger configured with operator-friendly formatting
+// that writes to the specified output writer
+func configureLoggerWithOutput(level string, output io.Writer) (*slog.Logger, error) {
 	parsedLevel, err := parseLogLevel(level)
 	if err != nil {
 		return nil, err
 	}
 
-	handler := newOperatorHandler(os.Stdout, parsedLevel)
+	handler := newOperatorHandler(output, parsedLevel)
 	logger := slog.New(handler)
 
 	return logger, nil
@@ -1192,15 +1198,31 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 // persistence (operator) and pub/sub broker. In this mode, the Operator also
 // runs an in-process command service to act as the sovereign execution Gateway.
 func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, dataDir, pkiDir, secretsDir, vaultDir, vaultKeyPath string, vaultRequireUnlock bool, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode, networkIdentityFile string) {
-	logger, err := configureLogger(logLevel)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
-		os.Exit(constants.ExitConfigError)
-	}
-
 	// Initialize paths relative to current working directory
 	if err := constants.InitPaths(); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize paths: %v\n", err)
+		os.Exit(constants.ExitConfigError)
+	}
+
+	// Create log directory and file
+	runtimeDir := constants.Paths.Infra.RuntimeDir
+	logDir := filepath.Join(runtimeDir, "logs")
+	if err := os.MkdirAll(logDir, 0700); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create log directory: %v\n", err)
+		os.Exit(constants.ExitConfigError)
+	}
+
+	logFile := filepath.Join(logDir, "operator.log")
+	logHandle, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
+		os.Exit(constants.ExitConfigError)
+	}
+	defer logHandle.Close()
+
+	logger, err := configureLoggerWithOutput(logLevel, logHandle)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
 		os.Exit(constants.ExitConfigError)
 	}
 
