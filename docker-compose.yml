@@ -15,8 +15,7 @@ services:
   g8e-operator:
     build:
       context: .
-      dockerfile: Dockerfile
-    image: g8e-operator:latest
+      dockerfile: Dockerfile.operator
     container_name: g8e-operator
 
     # Set working directory so .g8e resolves correctly

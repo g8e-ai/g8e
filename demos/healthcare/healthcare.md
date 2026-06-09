@@ -267,6 +267,7 @@ Expected healthy sequence (takes ~60s on first pull):
 4. `healthcare-operator` → healthy (healthcare-operator cert written)
 5. `healthcare-pa-api`, `healthcare-exemption-rules`, `healthcare-pa-worker` → running
 6. `healthcare-compliance-ui` → running
+7. `healthcare-metabase-setup` → runs once, configures Metabase, exits 0
 
 Check healthcare-gateway and healthcare-operator logs to confirm enrollment completed:
 
@@ -363,7 +364,18 @@ docker compose logs healthcare-observability
 
 ### Compliance Dashboard (Metabase) — `http://localhost:3001`
 
-On first launch Metabase runs a setup wizard (~2 min). After setup, connect to the pre-configured database and build two queries for DCBS/OHA compliance:
+The dashboard is auto-configured on startup. No manual setup wizard is required.
+
+**Login credentials:**
+- Username: `admin@g8e.local`
+- Password: `Metabase1!`
+
+The `metabase-setup` service automatically pre-loads the two required DCBS/OHA compliance queries after Metabase starts. These queries are available in the **Questions** section:
+
+- **DCBS March 1 Filing - Denial Rates by Request Type** — Percent of standard vs expedited requests denied
+- **OHA March 31 Filing - Median Decision Time** — Median time elapsed for decisions and SLA breaches
+
+If the setup service fails to create the queries (e.g., due to timing), you can manually create them using the SQL below:
 
 **Report 1 — Denial rates by request type (March 1 filing)**
 ```sql
@@ -430,6 +442,7 @@ docker compose logs -f healthcare-pa-worker
 demos/healthcare/
 ├── compose.yml                          # Full environment definition
 ├── healthcare.md                        # This file
+├── setup_metabase.py                    # One-shot Metabase configuration (run by metabase-setup service)
 ├── config/
 │   ├── gateway.yml                      # g8e gateway config reference (not used in compose.yml)
 │   └── operator.yml                     # g8e operator config reference (not used in compose.yml)
@@ -480,6 +493,22 @@ If the DB is healthy but Metabase is stuck, restart it:
 ```bash
 docker compose restart healthcare-compliance-ui
 ```
+
+### Compliance queries not auto-loaded
+
+The `metabase-setup` service runs once to pre-load queries. Check its logs:
+
+```bash
+docker compose logs healthcare-metabase-setup
+```
+
+If the service exited non-zero, re-run the setup script against the live Metabase:
+
+```bash
+docker compose run --rm metabase-setup sh -c "pip install requests -q && python /app/setup_metabase.py"
+```
+
+Or create the queries manually through the Metabase UI using the SQL provided in the documentation.
 
 ### RabbitMQ management UI unreachable
 

@@ -32,6 +32,7 @@ volumes:
   operator_state:
   pa_db_data:
   rabbitmq_data:
+  metabase_data:
 
 services:
   gateway:
@@ -174,6 +175,7 @@ services:
       - POSTGRES_DB=oregon_pa_metrics
     volumes:
       - pa_db_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5433:5432"
     healthcheck:
@@ -194,17 +196,39 @@ services:
       net_secure:
         ipv4_address: 10.23.0.80
     environment:
-      - MB_DB_TYPE=postgres
-      - MB_DB_DBNAME=oregon_pa_metrics
-      - MB_DB_PORT=5432
-      - MB_DB_USER=compliance_admin
-      - MB_DB_PASS=secure_hipaa_password
-      - MB_DB_HOST=reporting-db
+      - MB_SITE_URL=http://localhost:3001
+      - MB_ENCRYPTION_SECRET_KEY=super-secret-key-for-demo-only-change-in-production
+    volumes:
+      - metabase_data:/metabase-data
     depends_on:
       reporting-db:
         condition: service_healthy
     ports:
       - "3001:3000"
+
+  # One-shot service: configures Metabase admin account, database connection, and pre-loads
+  # the two mandatory DCBS/OHA compliance queries. Exits after setup; never restarts.
+  metabase-setup:
+    image: python:3.11-slim
+    container_name: healthcare-metabase-setup
+    restart: "no"
+    networks:
+      net_perimeter:
+    environment:
+      - METABASE_URL=http://compliance-dashboard:3000
+      - MB_ADMIN_EMAIL=admin@g8e.local
+      - MB_ADMIN_PASSWORD=Metabase1!
+      - DB_HOST=reporting-db
+      - DB_USER=compliance_admin
+      - DB_PASS=secure_hipaa_password
+    volumes:
+      - ./setup_metabase.py:/app/setup_metabase.py:ro
+    depends_on:
+      compliance-dashboard:
+        condition: service_started
+      reporting-db:
+        condition: service_healthy
+    command: ["sh", "-c", "pip install requests -q && python /app/setup_metabase.py"]
 
   # Authorized AI agent simulating a payer system submitting PA requests via FHIR through the g8e gateway.
   agent-runtime:

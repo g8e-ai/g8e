@@ -129,7 +129,32 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Run 'g8e demos status %s' to check service status.\n", org)
 	fmt.Printf("Run 'g8e demos stop %s' to stop the environment.\n", org)
 
+	// Print endpoint information
+	printDemoEndpoints(org)
+
 	return nil
+}
+
+func printDemoEndpoints(org string) {
+	fmt.Println("\nAvailable endpoints:")
+	switch org {
+	case "healthcare":
+		fmt.Println("  Gateway HTTP:  http://localhost:8081")
+		fmt.Println("  Gateway HTTPS: https://localhost:8444")
+		fmt.Println("  RabbitMQ UI:   http://localhost:15673")
+		fmt.Println("  PostgreSQL:    localhost:5433")
+		fmt.Println("  Metabase:      http://localhost:3001")
+	case "gov":
+		fmt.Println("  Gateway HTTP:  http://localhost:8080")
+		fmt.Println("  Gateway HTTPS: https://localhost:8443")
+		fmt.Println("  Demo UI:       http://localhost:3000")
+	case "finance":
+		fmt.Println("  Gateway HTTP:  http://localhost:8082")
+		fmt.Println("  Gateway HTTPS: https://localhost:8445")
+		fmt.Println("  Demo UI:       http://localhost:3002")
+	default:
+		fmt.Printf("  No endpoint information available for '%s'\n", org)
+	}
 }
 
 func demosStopCmd() *cobra.Command {
