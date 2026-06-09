@@ -386,7 +386,7 @@ func MustGenerateGovernanceMessageID(t *testing.T, actionType string, targetReso
 	}
 	id, err := governance.GenerateMessageID(env)
 	if err != nil {
-		t.Fatalf("failed to generate UAP MessageID: %v", err)
+		t.Fatalf("failed to generate GovernanceEnvelope MessageID: %v", err)
 	}
 	return id
 }
