@@ -22,6 +22,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -1883,6 +1885,19 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 		CLICert:           cliCertPEM,
 		CLICertChain:      cliCertChainPEM,
 		UserID:            user.ID,
+	}
+
+	// Include Actuator public key so the operator can populate its trusted_signers directory.
+	actuatorJSONPath := filepath.Join(c.cfg.PKIDir, "Actuator_pub.json")
+	if data, err := os.ReadFile(actuatorJSONPath); err == nil {
+		var ap struct {
+			KeyID     string `json:"key_id"`
+			PublicKey string `json:"public_key"`
+		}
+		if json.Unmarshal(data, &ap) == nil {
+			response.ActuatorKeyID = ap.KeyID
+			response.ActuatorPubKey = ap.PublicKey
+		}
 	}
 
 	c.logger.Info("[DEVICE_ENROLLMENT] Device enrolled successfully", "user_id", user.ID, "operator_id", operatorID, "hostname", req.Hostname)

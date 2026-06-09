@@ -20,6 +20,7 @@ import (
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -30,6 +31,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -132,15 +134,12 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 		return fmt.Errorf("failed to create PKI directory: %w", err)
 	}
 
-	// Check if operator certificate and key already exist
+	// Remove any stale certs so enrollment always issues fresh ones tied to
+	// the current gateway PKI (e.g. after gateway restart/regen).
 	operatorKeyPath := filepath.Join(pkiDir, "operator.key")
 	operatorCertPath := filepath.Join(pkiDir, "operator.crt")
-	if _, err := os.Stat(operatorKeyPath); err == nil {
-		if _, err := os.Stat(operatorCertPath); err == nil {
-			logger.Info("Operator certificates already exist, skipping enrollment")
-			return nil
-		}
-	}
+	_ = os.Remove(operatorKeyPath)
+	_ = os.Remove(operatorCertPath)
 
 	// Fetch trust bundle from Gateway HTTP endpoint
 	trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/ca-bundle", gatewayIP, constants.Ports.OperatorHttp)
@@ -229,6 +228,8 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 		HubTrustBundle    string `json:"hub_trust_bundle,omitempty"`
 		OperatorID        string `json:"operator_id"`
 		OperatorSessionID string `json:"operator_session_id"`
+		ActuatorKeyID     string `json:"actuator_key_id,omitempty"`
+		ActuatorPubKey    string `json:"actuator_pub_key,omitempty"`
 		Error             string `json:"error,omitempty"`
 	}
 	if err := json.Unmarshal(respBody, &enrollResp); err != nil {
@@ -277,6 +278,19 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 			return fmt.Errorf("failed to save updated trust bundle: %w", err)
 		}
 		logger.Info("Updated trust bundle from Gateway")
+	}
+
+	// Save Actuator public key to trusted_signers so the operator can verify L2 signatures.
+	if enrollResp.ActuatorKeyID != "" && enrollResp.ActuatorPubKey != "" {
+		trustedSignersDir := filepath.Join(pkiDir, "trusted_signers")
+		if err := os.MkdirAll(trustedSignersDir, 0700); err != nil {
+			return fmt.Errorf("failed to create trusted_signers directory: %w", err)
+		}
+		signerPath := filepath.Join(trustedSignersDir, enrollResp.ActuatorKeyID+".pub")
+		if err := os.WriteFile(signerPath, []byte(enrollResp.ActuatorPubKey), 0600); err != nil {
+			return fmt.Errorf("failed to save actuator public key: %w", err)
+		}
+		logger.Info("Actuator public key saved", "path", signerPath)
 	}
 
 	logger.Info("Enrollment successful", "operator_id", enrollResp.OperatorID, "operator_session_id", enrollResp.OperatorSessionID)
@@ -713,6 +727,7 @@ func main() {
 				fmt.Fprintf(os.Stderr, "  Ensure the platform is running: ./g8e gw start\n")
 				os.Exit(constants.ExitConfigError)
 			}
+			logCertBundle(logger, "fetched-trust-bundle", pemData)
 			trustStore.SetCA(pemData)
 		} else {
 			logger.Error("No trust bundle available and no endpoint specified")
@@ -756,9 +771,10 @@ func main() {
 		}
 	}
 
-	// If certificates don't exist and endpoint is provided, perform automatic enrollment
-	if (privateKey == "" || clientCert == "") && endpointURL != "" {
-		logger.Info("No local certificates found, performing automatic enrollment with Gateway", "endpoint", endpointURL)
+	// When -e is given, always re-enroll so we get certs from the current gateway PKI.
+	// Without -e, fall back to existing certs only if both are present.
+	if endpointURL != "" {
+		logger.Info("Performing automatic enrollment with Gateway", "endpoint", endpointURL)
 		if err := performAutomaticEnrollment(endpointURL, launchDir, logger); err != nil {
 			logger.Error("Automatic enrollment failed", string(constants.ConnectionStateError), err)
 			fmt.Fprintf(os.Stderr, "Automatic enrollment failed: %v\n", err)
@@ -769,6 +785,13 @@ func main() {
 		// After enrollment, set the certificate paths
 		privateKey = filepath.Join(launchDir, ".g8e/pki/operator.key")
 		clientCert = filepath.Join(launchDir, ".g8e/pki/operator.crt")
+
+		// Reload trust bundle after enrollment (enrollment may have updated it)
+		trustBundlePath := filepath.Join(launchDir, ".g8e/pki/trust/g8eg-ca-bundle.pem")
+		if pemData, err := os.ReadFile(trustBundlePath); err == nil {
+			trustStore.SetCA(pemData)
+			logger.Info("Trust bundle reloaded after enrollment", "path", trustBundlePath)
+		}
 
 		// Keep using the original endpoint (localhost or provided IP) for Gateway connections
 		logger.Info("Automatic enrollment completed, using enrolled certificates")
@@ -813,6 +836,15 @@ func main() {
 	}
 
 	clientIdentity.SetCertificate(cert)
+	logCertBundle(logger, "client-cert", certPEM)
+	logger.Info("[TLS-DEBUG] client cert loaded",
+		"cert_file", clientCert,
+		"key_file", privateKey,
+	)
+
+	// Probe the gateway's TLS cert chain before the real connection.
+	logger.Info("[TLS-DEBUG] probing gateway TLS cert chain", "endpoint", operatorEndpoint, "tls_server_name", constants.GatewayInternalHostname)
+	probeGatewayTLS(logger, operatorEndpoint, trustStore)
 
 	// Resolve the effective working directory: flag overrides launch dir.
 	effectiveWorkDir := launchDir
@@ -823,7 +855,8 @@ func main() {
 	cfg, err := config.Load(config.LoadOptions{
 		OperatorEndpoint: operatorEndpoint,
 
-		HTTPPort:              0, // Will default to constants.Ports.OperatorHttps (8443)
+		HTTPPort:              0, // Will default to constants.Ports.OperatorHttp (8080)
+		HTTPSPort:             0, // Will default to constants.Ports.OperatorHttps (8443)
 		CloudMode:             cloudMode,
 		CloudProvider:         cloudProvider,
 		ExecutionVaultEnabled: executionVault,
@@ -899,6 +932,93 @@ func printVersion() {
 	fmt.Printf("g8e\n  Version:   %s\n  Build ID:  %s\n  Build Time: %s\n  Platform:  %s\n", version, buildID, buildTime, platform)
 }
 
+// probeGatewayTLS dials the gateway HTTPS port with certificate verification disabled
+// solely to capture and log the raw certificate chain the gateway presents.
+// This is debug-only; it does NOT establish an authenticated connection.
+func probeGatewayTLS(logger *slog.Logger, endpoint string, trustStore *certs.TrustStore) {
+	httpsPort := constants.Ports.OperatorHttps
+	addr := fmt.Sprintf("%s:%d", endpoint, httpsPort)
+	logger.Info("[TLS-DEBUG] dialing gateway (InsecureSkipVerify=true to capture chain)", "addr", addr)
+
+	tlsCfg := &tls.Config{
+		InsecureSkipVerify: true, //nolint:gosec // intentional: debug-only cert chain capture
+		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+			logger.Info("[TLS-DEBUG] gateway presented cert chain", "chain_len", len(rawCerts))
+			for i, derBytes := range rawCerts {
+				cert, err := x509.ParseCertificate(derBytes)
+				if err != nil {
+					logger.Warn("[TLS-DEBUG] failed to parse chain cert", "idx", i, "error", err)
+					continue
+				}
+				fp := sha256.Sum256(derBytes)
+				logger.Info("[TLS-DEBUG] gateway chain cert",
+					"idx", i,
+					"subject", cert.Subject.String(),
+					"issuer", cert.Issuer.String(),
+					"serial", cert.SerialNumber.String(),
+					"not_before", cert.NotBefore.Format(time.RFC3339),
+					"not_after", cert.NotAfter.Format(time.RFC3339),
+					"is_ca", cert.IsCA,
+					"key_algo", cert.PublicKeyAlgorithm.String(),
+					"sig_algo", cert.SignatureAlgorithm.String(),
+					"sha256", hex.EncodeToString(fp[:]),
+				)
+			}
+			// Now try to verify the chain against our trust store and log the result.
+			if len(rawCerts) == 0 {
+				return nil
+			}
+			rootCAs, err := trustStore.GetRootCAs()
+			if err != nil {
+				logger.Warn("[TLS-DEBUG] trust store unavailable for chain verification", "error", err)
+				return nil
+			}
+			leaf, _ := x509.ParseCertificate(rawCerts[0])
+			if leaf == nil {
+				return nil
+			}
+			// Build intermediate pool from remaining certs in the chain.
+			intermediates := x509.NewCertPool()
+			for _, der := range rawCerts[1:] {
+				if c, err := x509.ParseCertificate(der); err == nil {
+					intermediates.AddCert(c)
+				}
+			}
+			opts := x509.VerifyOptions{
+				Roots:         rootCAs,
+				Intermediates: intermediates,
+				CurrentTime:   time.Now(),
+			}
+			if net.ParseIP(endpoint) != nil {
+				opts.DNSName = constants.GatewayInternalHostname
+			} else {
+				opts.DNSName = endpoint
+			}
+			chains, verifyErr := leaf.Verify(opts)
+			if verifyErr != nil {
+				logger.Error("[TLS-DEBUG] manual chain verification FAILED", "error", verifyErr)
+			} else {
+				logger.Info("[TLS-DEBUG] manual chain verification OK", "chain_count", len(chains))
+			}
+			return nil
+		},
+	}
+	if net.ParseIP(endpoint) != nil {
+		tlsCfg.ServerName = constants.GatewayInternalHostname
+	}
+
+	conn, err := tls.Dial("tcp", addr, tlsCfg)
+	if err != nil {
+		// The handshake will still run VerifyPeerCertificate before returning
+		// an error, so the certs will have been logged.  Only log if we got
+		// no cert data at all (e.g. connection refused).
+		logger.Warn("[TLS-DEBUG] probe dial error (certs may still have been logged above)", "error", err)
+		return
+	}
+	conn.Close()
+	logger.Info("[TLS-DEBUG] probe dial completed cleanly")
+}
+
 // loadTrustBundle attempts to read a trust bundle from:
 // 1. Explicit path provided via --trust-bundle
 // 2. Working directory PKI path ("+constants.Paths.Infra.CaCertPath+")
@@ -921,17 +1041,57 @@ func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string, trust
 		if err != nil {
 			continue
 		}
-		logger.Info("Loading trust bundle from local path", "path", path)
+		logger.Info("Loading trust bundle from local path", "path", path, "bytes", len(pemData))
 		pool := x509.NewCertPool()
 		if !pool.AppendCertsFromPEM(pemData) {
 			logger.Warn("CA file exists but contains invalid certificate", "path", path)
 			continue
 		}
+		logCertBundle(logger, "trust-bundle", pemData)
 		trustStore.SetCA(pemData)
 		logger.Info("CA certificate loaded from local file")
 		return true
 	}
 	return false
+}
+
+// logCertBundle parses every PEM certificate in pemData and logs its details.
+func logCertBundle(logger *slog.Logger, label string, pemData []byte) {
+	rest := pemData
+	idx := 0
+	for {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		if block.Type != "CERTIFICATE" {
+			logger.Info("[TLS-DEBUG] non-cert PEM block in bundle", "label", label, "type", block.Type)
+			continue
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			logger.Warn("[TLS-DEBUG] failed to parse cert in bundle", "label", label, "idx", idx, "error", err)
+			idx++
+			continue
+		}
+		fp := sha256.Sum256(block.Bytes)
+		logger.Info("[TLS-DEBUG] bundle cert",
+			"label", label,
+			"idx", idx,
+			"subject", cert.Subject.String(),
+			"issuer", cert.Issuer.String(),
+			"serial", cert.SerialNumber.String(),
+			"not_before", cert.NotBefore.Format(time.RFC3339),
+			"not_after", cert.NotAfter.Format(time.RFC3339),
+			"is_ca", cert.IsCA,
+			"key_algo", cert.PublicKeyAlgorithm.String(),
+			"sig_algo", cert.SignatureAlgorithm.String(),
+			"sha256", hex.EncodeToString(fp[:]),
+		)
+		idx++
+	}
+	logger.Info("[TLS-DEBUG] bundle parsed", "label", label, "cert_count", idx)
 }
 
 // configureLogger returns a slog logger configured with operator-friendly formatting

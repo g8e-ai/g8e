@@ -30,16 +30,15 @@ services:
     # Use host network to connect to local gateway
     network_mode: host
 
-    # Environment variables for runtime configuration
-    environment:
-      - G8E_GATEWAY_ENDPOINT=${GATEWAY_ENDPOINT:-localhost}
-
-    # Run operator connecting to local gateway
-    # Since using network_mode: host, localhost refers to the host machine
-    command: ["-e", "${GATEWAY_ENDPOINT:-localhost}"]
+    # Run operator connecting to gateway at 192.168.1.62
+    # Uses -e flag to specify gateway endpoint
+    command: ["-e", "192.168.1.62"]
 
     # Restart policy - don't auto-restart to prevent enrollment loops
     restart: "no"
+
+    # Note: Gateway should be running on host machine at localhost:8080
+    # The operator uses host network to connect to it
 
     # Resource limits
     deploy:

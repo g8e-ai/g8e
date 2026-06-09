@@ -72,8 +72,7 @@ EXPOSE 8080 8443
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/v1/health || exit 1
 
-# Set entrypoint with default doctrine mode and customizable ports
-# Users can override HTTP_PORT and HTTPS_PORT via environment variables
-# Run operator directly in foreground (not gw start which daemonizes)
+# Set entrypoint
+# The same binary can run in gateway mode (doctrine) or operator mode (standard)
+# Mode is selected via command-line flags in docker-compose.yml
 ENTRYPOINT ["/g8e"]
-CMD ["--doctrine", "--working-dir", "/root/.g8e", "--data-dir", "/root/.g8e/data", "--pki-dir", "/root/.g8e/pki", "--secrets-dir", "/root/.g8e/secrets", "--http-port", "8080", "--https-port", "8443", "--log", "info"]

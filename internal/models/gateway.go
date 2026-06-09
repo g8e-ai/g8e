@@ -369,6 +369,8 @@ type DeviceEnrollmentResponse struct {
 	CLICert           string `json:"cli_cert"`
 	CLICertChain      string `json:"cli_cert_chain"`
 	UserID            string `json:"user_id"`
+	ActuatorKeyID     string `json:"actuator_key_id,omitempty"`
+	ActuatorPubKey    string `json:"actuator_pub_key,omitempty"`
 }
 
 // PKIFingerprintResponse is the typed response for GET /.well-known/g8e/pki/fingerprint.

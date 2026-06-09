@@ -39,6 +39,10 @@ type PubSubBroker struct {
 	handlersMu    sync.RWMutex
 	handlers      map[string]map[int64]func(string, []byte)
 	nextHandlerID int64
+
+	// onHeartbeat is called for every publish to a heartbeat: channel.
+	onHeartbeatMu sync.RWMutex
+	onHeartbeat   func(channel string, data []byte)
 }
 
 // wsSubscriber represents a single WebSocket connection.
@@ -100,6 +104,14 @@ func NewPubSubBroker(logger *slog.Logger) *PubSubBroker {
 	}
 }
 
+// SetHeartbeatHandler registers a callback invoked for every publish to a
+// heartbeat:<op_id>:<session_id> channel. Replaces any prior handler.
+func (b *PubSubBroker) SetHeartbeatHandler(fn func(channel string, data []byte)) {
+	b.onHeartbeatMu.Lock()
+	b.onHeartbeat = fn
+	b.onHeartbeatMu.Unlock()
+}
+
 var wsUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
@@ -151,6 +163,16 @@ func (b *PubSubBroker) Publish(channel string, data []byte) int {
 		}
 	}
 	b.handlersMu.RUnlock()
+
+	// Dispatch heartbeat publishes to the dedicated heartbeat handler.
+	if strings.HasPrefix(channel, "heartbeat:") {
+		b.onHeartbeatMu.RLock()
+		fn := b.onHeartbeat
+		b.onHeartbeatMu.RUnlock()
+		if fn != nil {
+			fn(channel, data)
+		}
+	}
 
 	return count
 }

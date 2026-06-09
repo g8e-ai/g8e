@@ -364,6 +364,11 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 	}
 	ls.handler = handler
 
+	// Register in-process handler so the broker delivers heartbeats to the DB.
+	pubsub.SetHeartbeatHandler(func(channel string, data []byte) {
+		ls.handleHeartbeatPublish(channel, data)
+	})
+
 	// Build a map of ports to identify port assignments.
 	// HTTP port uses plain HTTP for bootstrap and MCP routes.
 	// HTTPS port uses mTLS for all other surfaces.
@@ -409,7 +414,7 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 	// HTTPS server: mTLS for all routes (API, public, enrollment)
 	ls.publicServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Gateway.HTTPSPort),
-		Handler:           ls.handler.buildPublicRouter(),
+		Handler:           ls.handler,
 		TLSConfig:         tlsConfig,
 		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
 		ReadTimeout:       cfg.Gateway.ReadTimeout,
@@ -710,4 +715,43 @@ func (ls *GatewayModeService) renewServiceCertWithIdentity(ctx context.Context) 
 	extraIPs := netIdentity.GetAllIPs()
 	extraDNSNames := netIdentity.GetAllDNSNames()
 	return ls.pki.RenewServiceCertWithNames(extraIPs, extraDNSNames)
+}
+
+// handleHeartbeatPublish processes a heartbeat published to the pub/sub broker,
+// updating the operator document's latest_heartbeat_snapshot in the DB.
+func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte) {
+	// The payload is a JSON-encoded GovernanceEnvelope.
+	var env struct {
+		OperatorID string          `json:"operator_id"`
+		IntentData json.RawMessage `json:"intent_data"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		ls.logger.Warn("heartbeat: failed to decode envelope", "channel", channel, "error", err)
+		return
+	}
+	if env.OperatorID == "" {
+		ls.logger.Warn("heartbeat: envelope missing operator_id", "channel", channel)
+		return
+	}
+
+	snapshot := env.IntentData
+	if len(snapshot) == 0 {
+		snapshot = data
+	}
+
+	update, err := json.Marshal(map[string]interface{}{
+		"latest_heartbeat_snapshot": json.RawMessage(snapshot),
+		"updated_at":                time.Now().UTC(),
+	})
+	if err != nil {
+		ls.logger.Warn("heartbeat: failed to build update", "operator_id", env.OperatorID, "error", err)
+		return
+	}
+
+	if _, err := ls.db.DocUpdate("operators", env.OperatorID, update); err != nil {
+		ls.logger.Warn("heartbeat: failed to update operator document", "operator_id", env.OperatorID, "error", err)
+		return
+	}
+
+	ls.logger.Debug("heartbeat: operator snapshot updated", "operator_id", env.OperatorID, "channel", channel)
 }

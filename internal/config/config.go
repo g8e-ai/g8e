@@ -39,7 +39,8 @@ const (
 type LoadOptions struct {
 	// Required
 	OperatorEndpoint string
-	HTTPPort         int // HTTP port to dial on Operator for auth proxy (default: from paths.json)
+	HTTPPort         int  // HTTP port to dial on Operator for bootstrap and trust bundle fetch (default: from paths.json)
+	HTTPSPort        int  // HTTPS port to dial on Operator for auth proxy (default: from paths.json)
 
 	// Cloud Operator mode
 	CloudMode     bool
@@ -190,8 +191,9 @@ type Config struct {
 	TLSServerName string
 
 	// Operator connection ports (operator dials these on the remote host)
-	PubSubURL string // WebSocket base URL for Operator pub/sub (e.g., wss://192.168.1.10:443) - no path; client appends /ws/pubsub
-	HTTPPort  int    // HTTPS port for auth/bootstrap requests via Operator proxy (default: from paths.json)
+	PubSubURL  string // WebSocket base URL for Operator pub/sub (e.g., wss://192.168.1.10:443) - no path; client appends /ws/pubsub
+	HTTPPort   int    // HTTP port for bootstrap and trust bundle fetch (default: from paths.json)
+	HTTPSPort  int    // HTTPS port for auth/bootstrap requests via Operator proxy (default: from paths.json)
 
 	// Logging
 	LogLevel string // Active log level (info, debug, error)
@@ -506,9 +508,10 @@ func Load(opts LoadOptions) (*Config, error) {
 
 		// Derived values - ports default to values from paths.json
 		Endpoint:  opts.OperatorEndpoint,
-		PubSubURL: buildPubSubURL(opts.OperatorEndpoint, tlsServerName, opts.HTTPPort),
+		PubSubURL: buildPubSubURL(opts.OperatorEndpoint, tlsServerName, opts.HTTPSPort),
 
 		HTTPPort:      httpPortOrDefault(opts.HTTPPort),
+		HTTPSPort:     httpsPortOrDefault(opts.HTTPSPort),
 		LogLevel:      opts.LogLevel,
 		TLSServerName: tlsServerName,
 		ProjectID:     "g8e",
@@ -578,10 +581,10 @@ func heartbeatIntervalOrDefault(d time.Duration) time.Duration {
 	return 30 * time.Second
 }
 
-// buildPubSubURL creates a WebSocket URL, omitting port 443 if it is the effective port.
+// buildPubSubURL creates a WebSocket URL using the HTTPS port (WSS runs over TLS).
 // Uses tlsServerName for the hostname when provided (for IP-to-g8e.local mapping).
-func buildPubSubURL(endpoint string, tlsServerName string, httpPort int) string {
-	port := httpPortOrDefault(httpPort)
+func buildPubSubURL(endpoint string, tlsServerName string, httpsPort int) string {
+	port := httpsPortOrDefault(httpsPort)
 	hostname := endpoint
 	if tlsServerName != "" {
 		hostname = tlsServerName
@@ -591,6 +594,14 @@ func buildPubSubURL(endpoint string, tlsServerName string, httpPort int) string 
 
 // httpPortOrDefault returns p if non-zero, otherwise the default from paths.json.
 func httpPortOrDefault(p int) int {
+	if p > 0 {
+		return p
+	}
+	return constants.Ports.OperatorHttp
+}
+
+// httpsPortOrDefault returns p if non-zero, otherwise the default from paths.json.
+func httpsPortOrDefault(p int) int {
 	if p > 0 {
 		return p
 	}
