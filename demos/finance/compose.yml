@@ -1,0 +1,130 @@
+name: finance-demo
+
+networks:
+  net_untrusted:
+    driver: bridge
+  net_perimeter:
+    driver: bridge
+  net_internal:
+    driver: bridge
+  net_secure:
+    driver: bridge
+  net_mgmt:
+    driver: bridge
+
+volumes:
+  gateway_state:
+  operator_state:
+  target_state:
+
+services:
+  gateway:
+    image: g8e-gateway:latest
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: finance-gateway
+    networks:
+      net_perimeter:
+      net_internal:
+    volumes:
+      - gateway_state:/root/.g8e
+      - ../../g8e:/usr/local/bin/g8e:ro
+      - ./config/gateway.yml:/etc/g8e/gateway.yml:ro
+      - ./doctrine:/etc/g8e/doctrine:ro
+    ports:
+      - "8082:8080"
+      - "8445:8443"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["/usr/local/bin/g8e", "gw", "start", "--config", "/etc/g8e/gateway.yml"]
+
+  operator:
+    image: g8e-operator:latest
+    build:
+      context: ../..
+      dockerfile: Dockerfile.operator
+    container_name: finance-operator
+    networks:
+      net_internal:
+      net_secure:
+    volumes:
+      - operator_state:/root/.g8e
+      - ../../g8e:/usr/local/bin/g8e:ro
+      - ./config/operator.yml:/etc/g8e/operator.yml:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/g8e", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["/usr/local/bin/g8e", "operator", "start", "--config", "/etc/g8e/operator.yml"]
+
+  target-system:
+    image: alpine:latest
+    container_name: finance-target
+    networks:
+      net_secure:
+    volumes:
+      - target_state:/var/target
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      operator:
+        condition: service_healthy
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+
+  agent-runtime:
+    image: alpine:latest
+    container_name: finance-agent
+    networks:
+      net_internal:
+    depends_on:
+      gateway:
+        condition: service_healthy
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+
+  llm-backend:
+    image: alpine:latest
+    container_name: finance-llm
+    networks:
+      net_internal:
+    depends_on:
+      gateway:
+        condition: service_healthy
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+
+  demo-ui:
+    image: nginx:alpine
+    container_name: finance-demo-ui
+    networks:
+      net_perimeter:
+    depends_on:
+      gateway:
+        condition: service_healthy
+    ports:
+      - "3002:80"
+    command: ["nginx", "-g", "daemon off;"]
+
+  bad-actor:
+    image: alpine:latest
+    container_name: finance-bad-actor
+    networks:
+      net_untrusted:
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+
+  observability:
+    image: alpine:latest
+    container_name: finance-observability
+    networks:
+      net_mgmt:
+    volumes:
+      - gateway_state:/data/gateway:ro
+      - operator_state:/data/operator:ro
+    command: ["sh", "-c", "tail -f /data/gateway/logs/*.log /data/operator/logs/*.log"]

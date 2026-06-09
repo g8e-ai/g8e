@@ -1,0 +1,96 @@
+{
+  "source": "gov_cui_cmmc",
+  "version": "1.0.0",
+  "last_updated": "2026-06-09",
+  "license": "Proprietary",
+  "doctrines": [
+    {
+      "id": "cui_classification_marking",
+      "name": "CUI Classification Marking Detection",
+      "category": "data_classification",
+      "severity": "high",
+      "pattern": "(?i)(CUI|CONTROLLED UNCLASSIFIED INFORMATION|FOUO|FOR OFFICIAL USE ONLY)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "cmmc_level2_requirement",
+      "name": "CMMC Level 2 Access Control",
+      "category": "access_control",
+      "severity": "critical",
+      "pattern": "(?i)(multi.factor.authentication|mfa|privileged.access|access.control)",
+      "mitre_attack": "T1078.004",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "cui_exfil_attempt",
+      "name": "CUI Data Exfiltration Attempt",
+      "category": "data_exfiltration",
+      "severity": "critical",
+      "pattern": "(?i)(exfil|exfiltrate|data.transfer|external.upload).*cui",
+      "mitre_attack": "T1567.001",
+      "mitre_tactic": "Exfiltration",
+      "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "classified_document_access",
+      "name": "Unauthorized Classified Document Access",
+      "category": "access_control",
+      "severity": "critical",
+      "pattern": "(?i)(classified|secret|top.secret|sensitive).*(document|file|record)",
+      "mitre_attack": "T1083",
+      "mitre_tactic": "Discovery",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "cmmc_encryption_requirement",
+      "name": "CMMC Encryption Requirement Violation",
+      "category": "encryption",
+      "severity": "high",
+      "pattern": "(?i)(plaintext|unencrypted|clear.text).*(cui|sensitive|classified)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "cui_storage_violation",
+      "name": "CUI Storage Location Violation",
+      "category": "data_storage",
+      "severity": "high",
+      "pattern": "(?i)(unauthorized.storage|external.storage|personal.device).*(cui|classified)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "cmmc_audit_logging",
+      "name": "CMMC Audit Logging Bypass",
+      "category": "audit",
+      "severity": "high",
+      "pattern": "(?i)(disable.log|bypass.audit|no.logging|silent.execution)",
+      "mitre_attack": "T1562.006",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.80,
+      "enabled": true
+    },
+    {
+      "id": "cui_cross_domain_transfer",
+      "name": "Unauthorized Cross-Domain CUI Transfer",
+      "category": "data_transfer",
+      "severity": "critical",
+      "pattern": "(?i)(cross.domain|domain.boundary|security.domain).*(transfer|copy|move)",
+      "mitre_attack": "T1567.001",
+      "mitre_tactic": "Exfiltration",
+      "confidence": 0.90,
+      "enabled": true
+    }
+  ]
+}

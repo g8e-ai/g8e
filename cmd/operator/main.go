@@ -632,8 +632,23 @@ func main() {
 
 	flag.Parse()
 
-	// Show help if no arguments provided
-	if len(os.Args) == 1 {
+	// Check if this is a CLI command (known subcommands)
+	cliCommands := map[string]bool{
+		"gw":       true,
+		"gateway":  true,
+		"mcp":      true,
+		"operator": true,
+		"vault":    true,
+		"test":     true,
+		"setup":    true,
+		"demos":    true,
+		"help":     true,
+		"--help":   true,
+		"-h":       true,
+	}
+
+	// Show help if no arguments provided, or if first arg is a CLI command
+	if len(os.Args) == 1 || (len(os.Args) > 1 && cliCommands[os.Args[1]]) {
 		clicmd.Execute()
 		return
 	}

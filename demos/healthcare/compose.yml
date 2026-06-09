@@ -1,0 +1,246 @@
+name: healthcare-demo
+
+networks:
+  net_untrusted:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.20.0.0/24
+  net_perimeter:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.21.0.0/24
+  net_internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.22.0.0/24
+  net_secure:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.23.0.0/24
+  net_mgmt:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.24.0.0/24
+
+volumes:
+  gateway_state:
+  operator_state:
+  pa_db_data:
+  rabbitmq_data:
+
+services:
+  gateway:
+    image: alpine:latest
+    container_name: healthcare-gateway
+    networks:
+      net_perimeter:
+        ipv4_address: 10.21.0.10
+      net_internal:
+        ipv4_address: 10.22.0.10
+    volumes:
+      - gateway_state:/root/.g8e
+      - ../../g8e:/usr/local/bin/g8e:ro
+      - ./doctrine:/etc/g8e/doctrine:ro
+    ports:
+      - "8081:8080"
+      - "8444:8443"
+    working_dir: /root
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["/usr/local/bin/g8e", "--consensus", "--http-port", "8080", "--https-port", "8443", "--data-dir", "/root/.g8e/data", "--pki-dir", "/root/.g8e/pki", "--secrets-dir", "/root/.g8e/secrets", "--vault-dir", "/root/.g8e/vault", "--log", "debug", "--passkey-rp-id", "localhost", "--passkey-rp-name", "g8e-healthcare", "--cert-mode", "localhost"]
+
+  operator:
+    image: alpine:latest
+    container_name: healthcare-operator
+    networks:
+      net_internal:
+        ipv4_address: 10.22.0.20
+      net_secure:
+        ipv4_address: 10.23.0.20
+    extra_hosts:
+      - "g8e.local:10.22.0.10"
+    volumes:
+      - operator_state:/root/.g8e
+      - ../../g8e:/usr/local/bin/g8e:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["/usr/local/bin/g8e", "-e", "10.22.0.10", "--log", "debug"]
+
+  # HB 3134 (2027 API Mandate): FHIR R4-compliant PA submission endpoint replacing fax-based workflows.
+  # Bridges net_internal so the g8e gateway can enforce PHI doctrine on inbound requests.
+  pa-submission-service:
+    image: python:3.11-slim
+    container_name: healthcare-pa-api
+    networks:
+      net_internal:
+        ipv4_address: 10.22.0.30
+      net_secure:
+        ipv4_address: 10.23.0.30
+    environment:
+      - QUEUE_HOST=message-broker
+      - DB_HOST=reporting-db
+      - FHIR_VERSION=R4
+    volumes:
+      - ./target-data:/var/g8e/target:ro
+      - ./pa_api_server.py:/app/pa_api_server.py:ro
+    depends_on:
+      operator:
+        condition: service_healthy
+      message-broker:
+        condition: service_healthy
+    command: ["python", "/app/pa_api_server.py"]
+
+  # HB 3134 (Provider Exemptions / Gold Carding): auto-approves requests from providers whose
+  # historic approval rate meets or exceeds EXEMPTION_THRESHOLD_PERCENTAGE.
+  provider-exemption-rules:
+    image: node:20-alpine
+    container_name: healthcare-exemption-rules
+    networks:
+      net_secure:
+        ipv4_address: 10.23.0.40
+    environment:
+      - DB_HOST=reporting-db
+      - EXEMPTION_THRESHOLD_PERCENTAGE=90
+    depends_on:
+      reporting-db:
+        condition: service_healthy
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+
+  # 2026 CCO Medicaid Rule: tracks days-elapsed per request; alerts reviewers at day 5 to
+  # prevent breach of the 7-day maximum turnaround SLA.
+  pa-processing-worker:
+    image: python:3.11-slim
+    container_name: healthcare-pa-worker
+    networks:
+      net_secure:
+        ipv4_address: 10.23.0.50
+    environment:
+      - SLA_TIMEOUT_DAYS=7
+      - SLA_ALERT_THRESHOLD_DAYS=5
+      - QUEUE_HOST=message-broker
+      - DB_HOST=reporting-db
+    depends_on:
+      message-broker:
+        condition: service_healthy
+      reporting-db:
+        condition: service_healthy
+    command: ["python", "-c", "import time; [time.sleep(3600) for _ in iter(int, 1)]"]
+
+  # Async queue for PA requests; navigate to localhost:15673 to watch request throughput.
+  message-broker:
+    image: rabbitmq:3-management
+    container_name: healthcare-message-broker
+    networks:
+      net_secure:
+        ipv4_address: 10.23.0.60
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "15673:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Stores compliance metrics for mandatory DCBS/OHA annual reporting (March 1 & 31 deadlines).
+  reporting-db:
+    image: postgres:15
+    container_name: healthcare-reporting-db
+    networks:
+      net_secure:
+        ipv4_address: 10.23.0.70
+    environment:
+      - POSTGRES_USER=compliance_admin
+      - POSTGRES_PASSWORD=secure_hipaa_password
+      - POSTGRES_DB=oregon_pa_metrics
+    volumes:
+      - pa_db_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U compliance_admin -d oregon_pa_metrics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # DCBS/OHA Reporting: Metabase dashboards for % denials (standard vs expedited) and median
+  # decision time. Navigate to localhost:3001 to build required state compliance reports.
+  compliance-dashboard:
+    image: metabase/metabase:latest
+    container_name: healthcare-compliance-ui
+    networks:
+      net_perimeter:
+        ipv4_address: 10.21.0.20
+      net_secure:
+        ipv4_address: 10.23.0.80
+    environment:
+      - MB_DB_TYPE=postgres
+      - MB_DB_DBNAME=oregon_pa_metrics
+      - MB_DB_PORT=5432
+      - MB_DB_USER=compliance_admin
+      - MB_DB_PASS=secure_hipaa_password
+      - MB_DB_HOST=reporting-db
+    depends_on:
+      reporting-db:
+        condition: service_healthy
+    ports:
+      - "3001:3000"
+
+  # Authorized AI agent simulating a payer system submitting PA requests via FHIR through the g8e gateway.
+  agent-runtime:
+    image: alpine:latest
+    container_name: healthcare-agent
+    networks:
+      net_internal:
+    depends_on:
+      gateway:
+        condition: service_healthy
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+
+  llm-backend:
+    image: alpine:latest
+    container_name: healthcare-llm
+    networks:
+      net_internal:
+    depends_on:
+      gateway:
+        condition: service_healthy
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+
+  # Simulates an unauthorized party attempting to exfiltrate PHI or bypass the PA workflow.
+  bad-actor:
+    image: alpine:latest
+    container_name: healthcare-bad-actor
+    networks:
+      net_untrusted:
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+
+  observability:
+    image: alpine:latest
+    container_name: healthcare-observability
+    networks:
+      net_mgmt:
+    volumes:
+      - gateway_state:/data/gateway:ro
+      - operator_state:/data/operator:ro
+    command: ["sh", "-c", "until [ -f /data/gateway/logs/operator.log ]; do sleep 2; done; tail -f /data/gateway/logs/operator.log"]
