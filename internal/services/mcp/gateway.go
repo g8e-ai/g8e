@@ -121,7 +121,7 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 		// Continue without field path registry - read_field will be disabled
 	}
 
-	nativeToolHandler, err := NewNativeToolHandler()
+	nativeToolHandler, err := NewNativeToolHandler(deps.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("initialize native tool handler: %w", err)
 	}

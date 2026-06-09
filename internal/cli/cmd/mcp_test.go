@@ -242,7 +242,7 @@ func TestHandleToolsList(t *testing.T) {
 	t.Run("tools/list response contains native tools", func(t *testing.T) {
 		var buf bytes.Buffer
 		encoder := json.NewEncoder(&buf)
-		nativeToolHandler, err := mcp.NewNativeToolHandler()
+		nativeToolHandler, err := mcp.NewNativeToolHandler(nil)
 		require.NoError(t, err)
 		handleToolsList(encoder, 1, nativeToolHandler)
 
@@ -278,7 +278,7 @@ func TestHandleToolsCall(t *testing.T) {
 	t.Run("tools/call executes native tool", func(t *testing.T) {
 		var buf bytes.Buffer
 		encoder := json.NewEncoder(&buf)
-		nativeToolHandler, err := mcp.NewNativeToolHandler()
+		nativeToolHandler, err := mcp.NewNativeToolHandler(nil)
 		require.NoError(t, err)
 		handleToolsCall(encoder, 1, json.RawMessage(`{"name":"sys_info","arguments":{}}`), nativeToolHandler)
 

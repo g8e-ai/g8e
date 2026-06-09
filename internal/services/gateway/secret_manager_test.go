@@ -309,7 +309,7 @@ func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *tes
 	assert.Contains(t, err.Error(), "read encrypted secret file")
 }
 
-func TestSecretManager_InitAppSettings_FailsWhenDigestManifestMissing(t *testing.T) {
+func TestSecretManager_InitAppSettings_RecreatesWhenDigestManifestMissing(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := tempDir(t)
@@ -319,10 +319,11 @@ func TestSecretManager_InitAppSettings_FailsWhenDigestManifestMissing(t *testing
 	require.NoError(t, os.Remove(filepath.Join(secretsDir, BootstrapDigestManifestFile)))
 
 	sm2 := newTestSecretManager(t, db, secretsDir)
-	err := sm2.InitAppSettings()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "bootstrap digest manifest")
-	assert.Contains(t, err.Error(), "is required")
+	// Should recreate secrets instead of failing
+	require.NoError(t, sm2.InitAppSettings())
+	// Verify manifest was recreated
+	_, err := os.Stat(filepath.Join(secretsDir, BootstrapDigestManifestFile))
+	require.NoError(t, err)
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *testing.T) {
