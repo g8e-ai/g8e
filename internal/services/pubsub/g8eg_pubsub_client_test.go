@@ -75,13 +75,13 @@ func TestPubSubWSURL(t *testing.T) {
 	t.Run("returns correct URL for ws://", func(t *testing.T) {
 		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
 		require.NoError(t, err)
-		assert.Equal(t, fmt.Sprintf("ws://localhost:%d/ws/pubsub", constants.Ports.OperatorHttp), client.pubSubWSURL())
+		assert.Equal(t, fmt.Sprintf("ws://localhost:%d/api/v1/pubsub/stream", constants.Ports.OperatorHttp), client.pubSubWSURL())
 	})
 
 	t.Run("returns correct URL for wss://", func(t *testing.T) {
 		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
 		require.NoError(t, err)
-		assert.Equal(t, fmt.Sprintf("wss://localhost:%d/ws/pubsub", constants.Ports.OperatorHttp), client.pubSubWSURL())
+		assert.Equal(t, fmt.Sprintf("wss://localhost:%d/api/v1/pubsub/stream", constants.Ports.OperatorHttp), client.pubSubWSURL())
 	})
 }
 

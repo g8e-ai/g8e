@@ -495,6 +495,11 @@ func (ls *GatewayModeService) IsReady() bool {
 }
 
 func (ls *GatewayModeService) IsGovernanceReady() bool {
+	// In doctrine posture, L2 is audited not enforced — governance is ready
+	// as soon as the service is running, without requiring registered L2 signers.
+	if ls.cfg.Gateway.Posture == config.PostureDoctrine || ls.cfg.Gateway.Posture == "" {
+		return true
+	}
 	ready, err := ls.db.HasTrustedSigners()
 	if err != nil {
 		ls.logger.Error("Failed to check if governance is ready", string(constants.ConnectionStateError), err)

@@ -113,12 +113,13 @@ func (pki *PKIAuthority) InitializePKIWithNames(extraIPs []net.IP, extraDNSNames
 
 	// Create directory structure
 	dirs := []string{
-		constants.Paths.Infra.PkiRootDir,
-		constants.Paths.Infra.PkiAuthoritiesDir,
-		constants.Paths.Infra.PkiIssuedHubDir,
-		constants.Paths.Infra.PkiIssuedGatewayPeerDir,
-		constants.Paths.Infra.PkiTrustDir,
-		constants.Paths.Infra.PkiRevocationDir,
+		filepath.Join(pki.pkiDir, "root"),
+		filepath.Join(pki.pkiDir, "authorities"),
+		filepath.Join(pki.pkiDir, "issued"),
+		filepath.Join(pki.pkiDir, "issued", "hub"),
+		filepath.Join(pki.pkiDir, "issued", "gateway-peer"),
+		filepath.Join(pki.pkiDir, "trust"),
+		filepath.Join(pki.pkiDir, "revocation"),
 	}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -181,7 +182,7 @@ func (pki *PKIAuthority) TLSConfig() *tls.Config {
 
 // TrustBundlePath returns the path to the gateway trust bundle.
 func (pki *PKIAuthority) TrustBundlePath() string {
-	return constants.Paths.Infra.CaCertPath
+	return filepath.Join(pki.pkiDir, "trust/g8eg-ca-bundle.pem")
 }
 
 // PKIDir returns the path to the pki directory.
@@ -192,7 +193,7 @@ func (pki *PKIAuthority) PKIDir() string {
 // ─── PKI hierarchy management ─────────────────────────────────────────────
 
 func (pki *PKIAuthority) ensureRootCA() error {
-	rootCertPath := constants.Paths.Infra.RootCAPath
+	rootCertPath := filepath.Join(pki.pkiDir, "root/root_ca.crt")
 
 	if fileExists(rootCertPath) {
 		if err := pki.loadCACertificate(rootCertPath, &pki.rootCert); err != nil {
@@ -212,7 +213,7 @@ func (pki *PKIAuthority) ensureRootCA() error {
 
 func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	// Hub Intermediate CA
-	hubCertPath := constants.Paths.Infra.HubCAPath
+	hubCertPath := filepath.Join(pki.pkiDir, "authorities/hub_ca.crt")
 	if fileExists(hubCertPath) {
 		if err := pki.loadCACertificate(hubCertPath, &pki.hubCert); err != nil {
 			return fmt.Errorf("pki: load existing hub CA: %w", err)
@@ -238,7 +239,7 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	}
 
 	// Operator Intermediate CA
-	operatorCertPath := constants.Paths.Infra.OperatorCAPath
+	operatorCertPath := filepath.Join(pki.pkiDir, "authorities/operator_ca.crt")
 	if fileExists(operatorCertPath) {
 		if err := pki.loadCACertificate(operatorCertPath, &pki.operatorCert); err != nil {
 			return fmt.Errorf("pki: load existing operator CA: %w", err)
@@ -264,7 +265,7 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	}
 
 	// Gateway Peer Intermediate CA
-	gatewayPeerCertPath := constants.Paths.Infra.GatewayPeerCAPath
+	gatewayPeerCertPath := filepath.Join(pki.pkiDir, "authorities/gateway_peer_ca.crt")
 	if fileExists(gatewayPeerCertPath) {
 		if err := pki.loadCACertificate(gatewayPeerCertPath, &pki.gatewayPeerCert); err != nil {
 			return fmt.Errorf("pki: load existing gateway peer CA: %w", err)
@@ -292,8 +293,8 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	return nil
 }
 func (pki *PKIAuthority) ensureServiceCertWithNames(extraIPs []net.IP, extraDNSNames []string) error {
-	serviceCertPath := constants.Paths.Infra.ServiceCertPath
-	chainPath := constants.Paths.Infra.GatewayChainPath
+	serviceCertPath := filepath.Join(pki.pkiDir, "issued/hub/operator-gateway.crt")
+	chainPath := filepath.Join(pki.pkiDir, "issued/hub/operator-gateway.chain.pem")
 
 	needService := !fileExists(serviceCertPath) || !fileExists(chainPath)
 	if !needService {
@@ -366,20 +367,20 @@ func (pki *PKIAuthority) ensureServiceCertWithNames(extraIPs []net.IP, extraDNSN
 
 func (pki *PKIAuthority) generateTrustBundles() error {
 	// Gateway bundle (root + hub intermediate + Operator intermediate + gateway peer intermediate)
-	gatewayBundlePath := constants.Paths.Infra.CaCertPath
-	rootPEM, err := os.ReadFile(constants.Paths.Infra.RootCAPath)
+	gatewayBundlePath := filepath.Join(pki.pkiDir, "trust/g8eg-ca-bundle.pem")
+	rootPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "root/root_ca.crt"))
 	if err != nil {
 		return fmt.Errorf("pki: read root CA: %w", err)
 	}
-	hubPEM, err := os.ReadFile(constants.Paths.Infra.HubCAPath)
+	hubPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities/hub_ca.crt"))
 	if err != nil {
 		return fmt.Errorf("pki: read hub CA: %w", err)
 	}
-	operatorPEM, err := os.ReadFile(constants.Paths.Infra.OperatorCAPath)
+	operatorPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities/operator_ca.crt"))
 	if err != nil {
 		return fmt.Errorf("pki: read operator CA: %w", err)
 	}
-	gatewayPeerPEM, err := os.ReadFile(constants.Paths.Infra.GatewayPeerCAPath)
+	gatewayPeerPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities/gateway_peer_ca.crt"))
 	if err != nil {
 		return fmt.Errorf("pki: read gateway peer CA: %w", err)
 	}
@@ -392,6 +393,21 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 		return fmt.Errorf("pki: write gateway bundle: %w", err)
 	}
 
+	// Operator bundle (root + Operator intermediate)
+	operatorBundlePath := filepath.Join(pki.pkiDir, "trust/operator-bundle.pem")
+	operatorBundle := make([]byte, 0, len(rootPEM)+len(operatorPEM))
+	operatorBundle = append(operatorBundle, rootPEM...)
+	operatorBundle = append(operatorBundle, operatorPEM...)
+	if err := writePEMFile(operatorBundlePath, "", operatorBundle, 0644); err != nil {
+		return fmt.Errorf("pki: write operator bundle: %w", err)
+	}
+
+	// Root CA mirror (for operator clients)
+	rootBundlePath := filepath.Join(pki.pkiDir, "trust/root.pem")
+	if err := writePEMFile(rootBundlePath, "", rootPEM, 0644); err != nil {
+		return fmt.Errorf("pki: write root bundle: %w", err)
+	}
+
 	// Trust domain metadata
 	trustDomainData := map[string]string{
 		"trust_domain": protocol.TrustDomain,
@@ -400,7 +416,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	if err != nil {
 		return fmt.Errorf("pki: marshal trust domain data: %w", err)
 	}
-	if err := writePEMFile(constants.Paths.Infra.TrustDomainJSONPath, "TRUST DOMAIN", trustDomainJSON, 0600); err != nil {
+	if err := writePEMFile(filepath.Join(pki.pkiDir, "trust/trust-domain.json"), "TRUST DOMAIN", trustDomainJSON, 0600); err != nil {
 		return fmt.Errorf("pki: write trust-domain.json: %w", err)
 	}
 
@@ -411,7 +427,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 func (pki *PKIAuthority) GatewayTrustBundle() ([]byte, error) {
 	pki.mu.RLock()
 	defer pki.mu.RUnlock()
-	bundlePath := constants.Paths.Infra.CaCertPath
+	bundlePath := filepath.Join(pki.pkiDir, "trust/g8eg-ca-bundle.pem")
 	if pki.logger != nil {
 		pki.logger.Debug("GatewayTrustBundle reading", "path", bundlePath, "pki_dir", pki.pkiDir)
 	}
@@ -654,20 +670,20 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 	certPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}))
 
 	// Build chain based on CA type
-	rootPEM, err := os.ReadFile(constants.Paths.Infra.RootCAPath)
+	rootPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "root/root_ca.crt"))
 	if err != nil {
 		return "", "", fmt.Errorf("pki: read root CA for chain: %w", err)
 	}
 	if leafType == "gateway-peer" {
 		// Gateway peer chain: leaf + gateway peer intermediate + root
-		caPEM, err := os.ReadFile(constants.Paths.Infra.GatewayPeerCAPath)
+		caPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities/gateway_peer_ca.crt"))
 		if err != nil {
 			return "", "", fmt.Errorf("pki: read gateway peer CA for chain: %w", err)
 		}
 		chainPEM = certPEM + string(caPEM) + string(rootPEM)
 	} else {
 		// Operator/cli/app chain: leaf + Operator intermediate + root
-		caPEM, err := os.ReadFile(constants.Paths.Infra.OperatorCAPath)
+		caPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities/operator_ca.crt"))
 		if err != nil {
 			return "", "", fmt.Errorf("pki: read operator CA for chain: %w", err)
 		}
@@ -857,7 +873,7 @@ func (pki *PKIAuthority) generateIntermediateCA(certPath string, parentCert *x50
 	return nil
 }
 func (pki *PKIAuthority) generateServiceCertWithNames(extraIPs []net.IP, extraDNSNames []string) error {
-	serviceCertPath := constants.Paths.Infra.ServiceCertPath
+	serviceCertPath := filepath.Join(pki.pkiDir, "issued/hub/operator-gateway.crt")
 
 	if pki.hubCert == nil || pki.hubKey == nil {
 		return fmt.Errorf("pki: hub CA not loaded - call InitializePKI first")
@@ -912,17 +928,17 @@ func (pki *PKIAuthority) generateServiceCertWithNames(extraIPs []net.IP, extraDN
 
 	// Write chain PEM (leaf + hub intermediate + root)
 	chainPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	hubPEM, err := os.ReadFile(constants.Paths.Infra.HubCAPath)
+	hubPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities/hub_ca.crt"))
 	if err != nil {
 		return fmt.Errorf("pki: read hub CA for chain: %w", err)
 	}
-	rootPEM, err := os.ReadFile(constants.Paths.Infra.RootCAPath)
+	rootPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "root/root_ca.crt"))
 	if err != nil {
 		return fmt.Errorf("pki: read root CA for chain: %w", err)
 	}
 	chainPEM = append(chainPEM, hubPEM...)
 	chainPEM = append(chainPEM, rootPEM...)
-	chainPath := constants.Paths.Infra.GatewayChainPath
+	chainPath := filepath.Join(pki.pkiDir, "issued/hub/operator-gateway.chain.pem")
 	// Write chain PEM directly without re-encoding (chainPEM is already concatenated PEM blocks)
 	if err := writePEMFile(chainPath, "", chainPEM, 0600); err != nil {
 		return fmt.Errorf("pki: write chain: %w", err)
