@@ -52,6 +52,26 @@ The Makefile provides several build targets:
 - `make build-darwin-compressed` — Builds g8e Node for Darwin with UPX compression.
 - `make clean` — Removes compiled g8e Nodes and test artifacts.
 
+### Build in Docker (no local Go required)
+
+If Go 1.26+ is not installed locally, the binary can be compiled inside Docker. Requires Docker 24.0+.
+
+```bash
+make build-docker
+```
+
+This builds a `g8e-builder` image from the `builder` stage of the Dockerfile and runs the Go compiler inside it. The output binary is placed in `bin/g8e-linux-amd64`.
+
+Additional Docker build targets:
+
+- `make build-docker` — Linux amd64 only.
+- `make build-linux-docker` — Linux: amd64, arm64, 386.
+- `make build-darwin-docker` — macOS: amd64, arm64.
+- `make build-windows-docker` — Windows: amd64, arm64.
+- `make build-all-docker` — All platforms.
+
+All Docker build outputs are placed in `bin/` with a `.sha256` checksum file alongside each binary.
+
 ### Cross-Compilation
 
 To build for different target platforms:

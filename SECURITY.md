@@ -53,7 +53,7 @@ We will not pursue legal action against researchers acting in good faith under t
 - **g8e Operator (PEP)** — execution boundary (L5 Actuator), signed `ActionReceipt` issuance, mTLS tunnel, `SQLAuditStore`, Sovereign Execution Boundary (scrubbing, rehydration)
 - **g8e Protocol** — Protobuf schemas (`common.proto`, `operator.proto`), canonical JSON (protojson) serialization, envelope integrity
 - **Authentication** — WebAuthn/FIDO2 L3 Notary flow, Ed25519 signature verification (L2 Consensus, L4 Warden, L5 Actuator), replay protection (Nonce)
-- **CLI and bootstrap** — `g8e login`, mTLS credential and PKI handling
+- **CLI and bootstrap** — `g8e auth login`, mTLS credential and PKI handling
 
 ### Out of Scope
 
