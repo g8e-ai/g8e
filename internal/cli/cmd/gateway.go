@@ -56,7 +56,6 @@ func gatewayCmd() *cobra.Command {
 		gatewayCleanCmd(),
 		dataCmd(),
 		securityCmd(),
-		setupCmd(),
 	)
 
 	return cmd
