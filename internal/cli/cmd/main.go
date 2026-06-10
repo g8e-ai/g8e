@@ -38,6 +38,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 		vaultCmd(),
 		testCmd(),
 		platformSetupCmd(),
+		demosCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {

@@ -833,7 +833,7 @@ func (rs *PubSubCommandService) handleShutdownRequest(msg *PubSubCommandMessage)
 	if reason == "" {
 		reason = "No reason provided"
 	}
-	rs.logger.Info("Shutting down Operator (UAP)", "reason", reason)
+	rs.logger.Info("Shutting down Operator", "reason", reason)
 	rs.ShutdownChan <- reason
 }
 

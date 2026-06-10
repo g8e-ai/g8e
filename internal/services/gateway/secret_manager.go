@@ -19,6 +19,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -144,6 +145,37 @@ func (m *SecretManager) cleanupStaleAppSettings() error {
 	return nil
 }
 
+func (m *SecretManager) recreateAppSettings() error {
+	m.logger.Info("[SecretManager] Recreating app settings due to corrupted state")
+
+	// Delete existing platform_settings document from database
+	_, err := m.db.ExecWithRetry(
+		"DELETE FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
+	)
+	if err != nil {
+		return fmt.Errorf("secret_manager: recreate app settings: delete platform_settings: %w", err)
+	}
+
+	// Delete existing secret files
+	for _, name := range requiredBootstrapSecrets {
+		filePath := filepath.Join(m.secretsDir, name)
+		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+			m.logger.Warn("[SecretManager] Failed to delete secret file during recreation",
+				"path", filePath, string(constants.ConnectionStateError), err)
+		}
+	}
+
+	// Delete bootstrap digest manifest if it exists
+	manifestPath := filepath.Join(m.secretsDir, BootstrapDigestManifestFile)
+	if err := os.Remove(manifestPath); err != nil && !os.IsNotExist(err) {
+		m.logger.Warn("[SecretManager] Failed to delete digest manifest during recreation",
+			"path", manifestPath, string(constants.ConnectionStateError), err)
+	}
+
+	// Recreate from scratch
+	return m.createAppSettings(time.Now().UTC())
+}
+
 func (m *SecretManager) createAppSettings(now time.Time) error {
 	if err := m.rejectPreexistingBootstrapState(); err != nil {
 		return fmt.Errorf("secret_manager: create app settings: reject preexisting state: %w", err)
@@ -234,6 +266,13 @@ func (m *SecretManager) validateAppSettings() error {
 
 	manifest, err := m.readDigestManifest()
 	if err != nil {
+		// If bootstrap digest manifest is missing, treat this as corrupted state
+		// and recreate secrets (e.g., when .g8e directory was wiped but DB persists)
+		if errors.Is(err, os.ErrNotExist) {
+			m.logger.Warn("[SecretManager] Bootstrap digest manifest missing, recreating secrets",
+				"path", filepath.Join(m.secretsDir, BootstrapDigestManifestFile))
+			return m.recreateAppSettings()
+		}
 		return fmt.Errorf("secret_manager: validate app settings: read digest manifest: %w", err)
 	}
 

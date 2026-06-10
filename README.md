@@ -2,85 +2,75 @@
 
 # g8e
 
-## Sovereign MCP Gateway & Remote Execution in one ~20MB binary
+## Governance Architecture for Autonomous Agents in Trustless Environments
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/g8e-ai/g8e)](https://goreportcard.com/report/github.com/g8e-ai/g8e) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v1010--core-platform) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](docs/protocols/mcp/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](docs/architecture/protocol.md)
 
 </div>
 
-**g8e** is a sovereign gateway and execution agent delivered in a single ~20MB binary. It provides a cryptographically bound admission boundary for AI agents, ensuring every action is verified directly on the host using the **g8e protocol**.
+**g8e** is a provider-agnostic and domain-agnostic protocol, gateway, and client delivered in a single ~20MB binary. It cryptographically binds JSON payloads to local state with immutable audit trails and protocol-level policy controls. The platform implements Byzantine consensus where the user, AI, and operator sovereignly manage their respective roles under a verify-then-execute trust model.
 
-[Quickstart](#quickstart) · [Architecture](docs/architecture/gateway.md) · [Protocol](docs/architecture/protocol.md) · [Docs](docs/)
+### Platform Invariants
+
+* **Cryptographic Binding**: Binds JSON payloads to local host state with immutable audit trails.
+* **Structural Consensus**: Structural consensus provided by a third-party agentic system.
+* **Human Authorization**: WebAuthn and FIDO2 signing for authoritative human sign-off.
+* **Just-in-Time Security**: Narrowly defined JIT scope with mTLS enforcement across all communication.
+* **Data Sovereignty**: All data remains local; the platform saves no identifying information.
+* **Provider Agnostic**: Supports switching AI providers without context loss through cryptographically provable chain sections.
+* **Zero-Dependency Operators**: Remote operators are pre-compiled binaries with no dependencies, running on Linux, macOS, and Windows.
+* **Outbound-Only Connectivity**: Operators connect to the gateway via outbound-only mTLS tunnels; no inbound ports or root privileges are required.
+* **Multi-Host Orchestration**: All native tools support multi-host execution, enabling AI agents to run MCP tools across remote fleets without client installation or increased host-level security risk.
+
+[Position Paper](docs/core/position_paper.md) · [MCP Protocol](docs/protocols/mcp/mcp.md) · [A2A Protocol](docs/protocols/a2a/a2a.md) · [Architecture](docs/architecture/gateway.md) · [Compliance](docs/reference/compliance-alignment.md) · [Quickstart](#quickstart)
 
 </div>
 
 ## The Problem: Capability vs. Authority
 
-Standard protocols establish **capability** (an agent *can* act) but ignore **authority** (whether an action is *safe* to run on a specific host). Traditional solutions like token dashboards or single-model reflection fail because they lack state-awareness and structural independence.
-
----
-
-## The g8e Differentiators
-
-g8e enforces a strict invariant: **A state-changing action reaches the host only as a typed, signed, state-bound transaction via the g8e protocol.**
-
-* **Universal Binary (~20MB):** A single statically compiled artifact that serves as both a **Universal Gateway** and **Execution Agent**. No install, no dependencies, no runtime required.
-* **Sovereign Gateway:** Starts as a local gateway cryptographically bound to the current host's state. Use it immediately as a local **MCP Server**.
-* **Remote Fleet Execution:** Native tools launch the binary as an **Operator** on remote hosts via SSH. Operators connect **outbound-only** back to the Gateway—no inbound ports required.
-* **LFAA (Log File Audit Availability):** Maintains a high-fidelity audit trail left at the site of execution, ensuring forensics stay where the action happened.
-* **Hardware-Bound Governance:** Permissions are minted just-in-time, scoped to a single action, and anchored to host-local hardware state.
-
----
+Standard protocols establish **capability** (an agent *can* act) but ignore **authority** (whether an action is *safe* to run on a specific host). Traditional solutions like token dashboards or single-model reflection fail because they lack state-awareness, structural independence, and hardware-backed verification.
 
 ## QuickStart
 
-The platform is a single g8e Node. No runtime, no interpreter, no sidecar.
+g8e is a single-binary platform. No runtime, no interpreter, no sidecar.
 
-**Build and start the gateway**
+### 1. Install & Start Gateway
+
+Use the auto-detecting setup command or OS-specific scripts:
 
 ```bash
+# Auto-detect and setup
+./g8e setup
+
+# OR manual build
 make build
 ./g8e gw start
 ```
 
-**Or use the auto-detecting setup command**
+**Platform Setup Scripts:**
+* **Linux**: `./scripts/linux-setup.sh`
+* **macOS**: `./scripts/macos-setup.sh`
+* **Windows**: `pwsh -ExecutionPolicy Bypass -File scripts/windows-setup.ps1`
+
+### 2. Deploy Operators
+
+Deploy to remote hosts via SSH. Operators dial *back* to your gateway; no inbound firewall changes required.
 
 ```bash
-./g8e setup
-```
-
-**Or use the setup scripts directly (Linux/macOS/Windows)**
-
-```bash
-# Linux
-./scripts/linux-setup.sh
-
-# macOS
-./scripts/macos-setup.sh
-
-# Windows
-pwsh -ExecutionPolicy Bypass -File scripts/windows-setup.ps1
-```
-
-**Deploy operators to remote hosts via SSH**
-
-```bash
-# Using your existing SSH config, deploy Operators across your fleet
+# Deploy to your fleet using existing SSH config
 ./g8e operator deploy --hosts host1,host2,host3
-
-# Tool calls accept a list of hosts for simultaneous fan-out execution
 ```
 
-*See the [full QuickStart](docs/guides/getting_started.md) for mTLS, Operator enrollment, and client configuration.*
+*See the [full QuickStart](docs/guides/getting_started.md) for mTLS configuration and enrollment.*
 
 ---
 
 ## Architecture: One Binary, Two Roles
 
-g8e folds protocol translation, governance, and execution into a single artifact.
+g8e folds protocol translation, governance, and execution into a single statically-linked artifact (~20MB) with no external dependencies.
 
-* **g8e Gateway:** Acts as the **Policy Decision Point**. Admits signed envelopes, manages PKI, and provides a central audit view without exposing raw host data. Use it locally as a **Sovereign MCP Server**.
-* **g8e Operator:** Acts as the **Policy Execution Point**. Deployed via SSH, it listens on *no inbound ports*, dialing out to the Gateway to pull work. It executes the governance gauntlet and maintains the **LFAA** audit trail locally.
+*   **g8e Gateway**: The **Policy Decision Point**. It admits signed envelopes, manages PKI, and provides a central audit view. Use it locally as a **Sovereign MCP Server** to bridge AI tools to local state.
+*   **g8e Operator**: The **Policy Execution Point**. Deployed via SSH to remote fleets, it listens on *no inbound ports*, dialing out to the Gateway via mTLS. It maintains **LFAA (Log File Audit Availability)**—ensuring a high-fidelity audit trail remains at the site of execution.
 
 ### The Host-Local Gauntlet (L1-L5)
 
@@ -128,7 +118,7 @@ g8e is not an agent. It is the mandatory, open-source substrate agents must run 
 
 ---
 
-## Status: v1.0.10 — Consolidation Release
+## Status: v1.0.11 - Multi-Industry Demo Suite Release
 
 **Operational today:**
 

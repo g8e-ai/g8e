@@ -50,7 +50,7 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, 30*time.Second, cfg.HeartbeatInterval)
 	assert.Equal(t, int64(1024), cfg.ExecutionVaultMaxSizeMB)
 	assert.Equal(t, 30, cfg.ExecutionVaultRetentionDays)
-	assert.Equal(t, constants.Ports.OperatorHttps, cfg.HTTPPort)
+	assert.Equal(t, constants.Ports.OperatorHttp, cfg.HTTPPort)
 
 	// WorkDir defaults to the project root when --working-dir is not supplied
 	assert.Equal(t, wantWorkDir, cfg.WorkDir)
@@ -408,10 +408,10 @@ func TestHTTPPortOrDefault(t *testing.T) {
 		input int
 		want  int
 	}{
-		{0, constants.Ports.OperatorHttps},
-		{-1, constants.Ports.OperatorHttps},
+		{0, constants.Ports.OperatorHttp},
+		{-1, constants.Ports.OperatorHttp},
 		{1, 1},
-		{constants.Ports.OperatorHttps, constants.Ports.OperatorHttps},
+		{constants.Ports.OperatorHttp, constants.Ports.OperatorHttp},
 		{constants.Ports.OperatorHttps, constants.Ports.OperatorHttps},
 	}
 

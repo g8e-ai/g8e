@@ -223,7 +223,7 @@ func (m *mockTool) Execute(ctx context.Context, args json.RawMessage) (mcp.CallT
 func isValidToolName(name string) bool {
 	// Simple validation: tool names should be lowercase alphanumeric with underscores
 	for _, r := range name {
-		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_') {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' {
 			return false
 		}
 	}

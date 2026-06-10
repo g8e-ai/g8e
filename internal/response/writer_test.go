@@ -29,6 +29,7 @@ func TestNewWriter(t *testing.T) {
 	w := NewWriter(logger)
 	if w == nil {
 		t.Fatal("NewWriter() returned nil")
+		return
 	}
 	if w.logger != logger {
 		t.Error("NewWriter() did not set logger")

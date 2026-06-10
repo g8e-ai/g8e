@@ -107,11 +107,13 @@ Default ports are sourced from `internal/constants/ports.go:17`:
 |---|---|---|---|
 | **HTTP (Bootstrap Only)** | `8080` (plain HTTP) | No TLS | Bootstrap enrollment (`/bootstrap`, `/enroll`) and CA bundle discovery (`/.well-known/g8e/pki/*`). |
 | **HTTPS (mTLS API + Public + MCP)** | `8443` (mTLS) | mTLS + URI SAN or JWT | `/api/v1/governance/envelopes`, `/api/v1/db/*`, `/api/v1/kv/*`, `/api/v1/blob/*`, `/api/v1/pubsub/publish`, `/ws/v1/pubsub`, MCP endpoints (`/mcp/*`), and public mTLS surface for external app enrollment. |
+| **Insecure MCP Gateway** | `18789` (WebSocket) | Optional token | External MCP gateway for insecure mode (no governance). Used by `InsecureMcpNodeService` to connect to third-party MCP gateways without g8e infrastructure. |
 
 ### Port Constraints
 
 - **HTTP Surface** (`8080`): Serves plain HTTP for bootstrap enrollment and PKI discovery only. Does NOT serve MCP routes. Intended for initial provisioning only.
 - **HTTPS Surface** (`8443`): Requires `tls.RequireAndVerifyClientCert`. This is the primary execution boundary for mTLS API, public surface, and MCP endpoints. MCP routes are protected by `auth.Middleware` (mTLS) when JWKS is not configured, or `JWTAuthMiddleware` when JWKS is configured for external IdP auth.
+- **Insecure MCP Gateway** (`18789`): This is a client-side port for the `InsecureMcpNodeService` to connect to external MCP gateways. It is NOT a server port exposed by the g8e Gateway. The service connects outbound to third-party MCP gateways (ws:// or wss://) in insecure mode without governance verification.
 - **Collision Prevention**: The gateway fails startup if incompatible surfaces are assigned to the same port.
 
 ---
@@ -253,7 +255,7 @@ The gateway detects the machine's network identity (IPs, hostnames, and aliases)
 | Gateway pub/sub | `internal/services/gateway/gateway_pubsub.go` |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | Governance envelope verification | `internal/services/gateway/governance_envelope.go` |
-| Federation plan | `.local.dev/docs/plans/gateway-federation-option-a-plan.md` |
+| Insecure MCP node service | `internal/services/insecure_mcp/insecure_mcp_node_service.go` |
 
 ---
 

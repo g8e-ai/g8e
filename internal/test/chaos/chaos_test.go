@@ -175,6 +175,7 @@ func TestSignedEnvelope(t *testing.T) {
 			if !tt.wantErr {
 				if env == nil {
 					t.Fatal("envelope is nil")
+					return
 				}
 				if env.Id == "" {
 					t.Error("envelope Id is empty")
@@ -210,6 +211,7 @@ func TestBuildGoodActorEnvelope(t *testing.T) {
 
 	if env == nil {
 		t.Fatal("envelope is nil")
+		return
 	}
 
 	if env.ActionType != "FS_LIST" {
@@ -238,6 +240,7 @@ func TestBuildPromptInjEnvelope(t *testing.T) {
 
 	if env == nil {
 		t.Fatal("envelope is nil")
+		return
 	}
 
 	if env.ActionType != "EXECUTE_BASH" {
@@ -266,6 +269,7 @@ func TestBuildFileMutationEnvelope(t *testing.T) {
 
 	if env == nil {
 		t.Fatal("envelope is nil")
+		return
 	}
 
 	if env.ActionType != "FILE_EDIT" {
@@ -294,6 +298,7 @@ func TestBuildMitMEnvelope(t *testing.T) {
 
 	if env == nil {
 		t.Fatal("envelope is nil")
+		return
 	}
 
 	if env.TransactionHash != chaosTestCorruptedHash {
@@ -1466,6 +1471,7 @@ func TestSignedEnvelopePayloadEdgeCases(t *testing.T) {
 		}
 		if env == nil {
 			t.Fatal("envelope is nil")
+			return
 		}
 		if env.Nonce == "" {
 			t.Error("Nonce should not be empty even with empty payload")
@@ -1526,15 +1532,19 @@ func TestBuildEnvelopeErrors(t *testing.T) {
 		}
 		if env == nil {
 			t.Fatal("envelope is nil")
+			return
 		}
 		if env.Governance == nil {
 			t.Fatal("Governance is nil")
+			return
 		}
 		if env.Governance.L3 == nil {
 			t.Error("L3 should be present for file mutation")
+			return
 		}
 		if env.Governance.L3.Proof == nil {
 			t.Error("L3 Proof should be present")
+			return
 		}
 		if env.Governance.L3.Proof.Signature != "chaos-human-proof" {
 			t.Errorf("L3 Proof Signature = %s, want chaos-human-proof", env.Governance.L3.Proof.Signature)

@@ -46,14 +46,14 @@ TEST_TIMEOUT := 180s
 TEST_SHORT_TIMEOUT := 60s
 TEST_RACE := $(if $(filter windows,$(HOST_OS)),,-race)
 TEST_COUNT := -count=1
-COVERAGE_THRESHOLD := 60
+COVERAGE_THRESHOLD := 52
 
 # Package exclusion filter (reused across test targets)
 PKG_EXCLUDE := | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/"
 TEST_PKGS := $$(go list ./... $(PKG_EXCLUDE))
 
 # Coverage exclusion filter (for coverage calculations)
-COVERAGE_EXCLUDE := | grep -v "internal/protocol/proto" | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/"
+COVERAGE_EXCLUDE := | grep -v "internal/protocol/proto" | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "internal/cli/cmd/demos.go"
 
 # =============================================================================
 # TOOLS

@@ -61,7 +61,7 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	// Extract host and port from httptest server URL
 	u := server.URL[8:] // strip https://
 	cfg.Endpoint = "127.0.0.1"
-	fmt.Sscanf(u, "127.0.0.1:%d", &cfg.HTTPPort)
+	fmt.Sscanf(u, "127.0.0.1:%d", &cfg.HTTPSPort)
 	cfg.PubSubURL = "ws://127.0.0.1:0" // dummy
 	cfg.NoGit = true
 

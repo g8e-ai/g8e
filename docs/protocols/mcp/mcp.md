@@ -4,7 +4,7 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-06-01
+Last Updated: 2026-06-10
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -36,7 +36,7 @@ The gateway translates MCP tool invocations into governance envelopes:
 The gateway handles certain tools locally without downstream proxy:
 
 - **read_field**: JIT field resolution from governed collections with L1 field path validation, L3 session validation, and audit vault logging. Requires `collection`, `document_id`, `field_path`, and `operator_session_id` parameters.
-- **Native tools**: The Operator includes 27 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
+- **Native tools**: The Operator includes 29 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
   - `db_discover_topology`: Automatically scans database schemas, tables, and column data types, returning a highly compressed JSON map
   - `db_query_validate`: Validates SQL queries using EXPLAIN QUERY PLAN to detect full table scans and performance issues
   - `db_isolated_read`: Executes SELECT statements in read-only mode against a SQLite database
@@ -64,6 +64,8 @@ The gateway handles certain tools locally without downstream proxy:
   - `cloud_metadata`: Detects cloud provider (AWS, Azure, GCP) and retrieves instance metadata including region, instance type, and availability zone
   - `k8s_inspect`: Provides Kubernetes cluster inspection including pods, nodes, services, and deployment status
   - `shell_execute`: Executes shell commands with denylist enforcement for dangerous operations and timeout limits. Supports multi-host execution via SSH with optional `hostnames` parameter (defaults to localhost)
+  - `net_ssh_known_hosts`: Lists known hosts from SSH config and known_hosts files based on OS type
+  - `operator_deploy`: Deploys the g8e operator to a list of remote hosts via SSH
 
 ---
 
@@ -426,13 +428,12 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 | Envelope construction | `internal/services/mcp/gateway.go` (processGatewayTransaction) |
 | Transaction verification | `internal/services/governance/l4_warden.go` |
 | Envelope processor | `internal/services/governance/processor.go` |
-| Pub/Sub command service | `internal/services/pubsub/pubsub_commands.go` |
-| Session management | `internal/services/gateway/session_service.go` |
+| Pub/Sub command service | `internal/services/pubsub/command_service.go` |
 | CLI L3 verification | `internal/services/gateway/cli_l3_notary.go` |
 | Composite L3 verifier | `internal/services/gateway/composite_l3_verifier.go` |
 | Passkey L3 brokerage | `internal/services/gateway/passkey_service.go` |
 | Error mapping | `internal/services/mcp/gateway.go` (mapGatewayError) |
-| Suspended transaction store | `internal/services/gateway/gateway_db_service.go` |
+| Suspended transaction store | `internal/services/gateway/gateway_db.go` |
 | Gateway database schema | `internal/services/gateway/db/schema.sql` |
 | API path constants | `internal/constants/api_paths.go` |
 | Port constants | `internal/constants/ports.go` |

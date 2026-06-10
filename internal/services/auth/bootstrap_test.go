@@ -86,7 +86,7 @@ func newTestBootstrapService(t *testing.T, server *httptest.Server) *BootstrapSe
 
 	cfg := testutil.NewTestConfig(t)
 	cfg.Endpoint = host
-	cfg.HTTPPort = port
+	cfg.HTTPSPort = port
 	logger := testutil.NewTestLogger()
 	svc, err := NewBootstrapService(cfg, logger, nil)
 	require.NoError(t, err)
@@ -252,7 +252,7 @@ func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
 
 	cfg := testutil.NewTestConfig(t)
 	cfg.Endpoint = host
-	cfg.HTTPPort = port
+	cfg.HTTPSPort = port
 	cfg.CloudMode = true
 	cfg.CloudProvider = "aws"
 	cfg.ExecutionVaultEnabled = true

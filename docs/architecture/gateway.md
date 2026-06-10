@@ -282,8 +282,8 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 
 | Concern | File |
 |---|---|
-| Gateway mode entry | `cmd/operator/main.go:916` (`runGatewayMode`) |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
+| Gateway mode entry | `internal/services/gateway/gateway_service.go:543` (`GatewayModeService.Start`) |
 | Coordination Store | `internal/services/gateway/gateway_db.go` |
 | Pub/Sub broker | `internal/services/gateway/gateway_pubsub.go` |
 | L1 Doctrine | `internal/services/governance/l1_doctrine.go` |

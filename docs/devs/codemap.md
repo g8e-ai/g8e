@@ -24,20 +24,14 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   ├── governance.L4Warden
 │   │   ├── governance.ReplayStore (storage.SQLReplayStore)
 │   │   ├── governance.StateRootProvider (gateway.CanonicalDBService) [SHARED]
-│   │   ├── governance.SignerStore
+│   │   ├── governance.SignerStore (governance.FilesystemSignerStore)
 │   │   ├── governance.AppPolicyStore (gateway.CanonicalDBService) [SHARED]
-│   │   └── governance.L3Notary
-│   │       └── gateway.CompositeL3Verifier
-│   │           ├── gateway.PasskeyService
-│   │           └── gateway.CLIL3Notary
-│   │               ├── gateway.CanonicalDBService [SHARED]
-│   │               ├── gateway.PKIAuthority
-│   │               ├── gateway.UserService
-│   │               └── gateway.CLISessionService
+│   │   └── governance.L3Notary (governance.outboundL3Notary implementation)
+│   │       └── storage.SuspendedTransactionService
 │   ├── governance.L5Actuator
 │   │   ├── execution.ExecutionService
 │   │   ├── storage.SQLAuditStore
-│   │   ├── storage.AuditStore (auditStoreTransactionStore wrapper)
+│   │   ├── governance.TransactionAuditStore (auditStoreTransactionStore wrapper)
 │   │   ├── scrubbing.ScrubbingService
 │   │   ├── governance.StateRootProvider
 │   │   └── governance.SignerStore
@@ -45,27 +39,32 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │       ├── response.Writer
 │       └── gateway.CanonicalDBService (as SuspendedTransactionStore) [SHARED]
 ├── pubsub.PubSubResultsService
-│   └── storage.LocalStoreService
-├── storage.LocalStoreService
+├── storage.ExecutionVaultService
 │   ├── sqliteutil.DB
-│   └── vault.Vault
+│   └── vault.Vault (shared with CanonicalDBService)
+├── storage.TokenStoreService
+│   ├── sqliteutil.DB
+│   └── vault.Vault (shared with CanonicalDBService)
+├── storage.SuspendedTransactionService
+│   └── sqliteutil.DB
 ├── storage.SQLAuditStore
 │   ├── sqliteutil.DB
-│   └── vault.Vault
+│   └── vault.Vault (shared with CanonicalDBService)
 ├── storage.GitLedgerService
-│   └── vault.Vault
+│   └── vault.Vault (shared with CanonicalDBService)
 ├── storage.HistoryHandler
 │   ├── storage.SQLAuditStore
 │   └── storage.GitLedgerService
 ├── governance.ReplayStore (storage.SQLReplayStore)
-│   └── storage.LocalStoreService (shared DB)
+│   └── sqliteutil.DB
 └── scrubbing.ScrubbingService
-    └── storage.LocalStoreService (as TokenStore)
+    └── storage.TokenStoreService
 
 GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ├── gateway.CanonicalDBService [SHARED]
 │   ├── sqliteutil.DB
 │   ├── storage.SQLAuditStore
+│   ├── vault.Vault
 │   └── keystore (embedded in schema)
 ├── gateway.PubSubBroker
 ├── gateway.AuthService
@@ -77,6 +76,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ├── gateway.PKIAuthority
 │   ├── gateway.CanonicalDBService [SHARED]
 │   └── gateway.SecretManager
+├── gateway.SecretManager
+│   ├── sqliteutil.DB
+│   └── keystore.Keystore
 ├── gateway.RegistrationService
 │   ├── gateway.CanonicalDBService [SHARED]
 │   ├── gateway.PKIAuthority
@@ -87,6 +89,8 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.UserService
 │   └── gateway.CanonicalDBService [SHARED]
+├── gateway.PersonaService
+│   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.CLISessionService
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.OperatorSessionService
@@ -96,6 +100,20 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ├── gateway.AppEnrollmentService
 │   ├── gateway.CanonicalDBService [SHARED]
 │   └── gateway.PKIAuthority
+├── gateway.HTTPHandler
+│   ├── gateway.CanonicalDBService [SHARED]
+│   ├── gateway.PubSubBroker
+│   ├── gateway.AuthService
+│   ├── gateway.PKIAuthority
+│   ├── gateway.CLISessionService
+│   ├── gateway.OperatorSessionService
+│   ├── gateway.WebSessionService
+│   ├── gateway.RegistrationService
+│   ├── gateway.PasskeyService
+│   ├── gateway.UserService
+│   ├── gateway.AppEnrollmentService
+│   ├── mcp.GatewayService [SHARED]
+│   └── response.Writer
 ├── mcp.GatewayService [SHARED]
 │   ├── response.Writer
 │   └── gateway.CanonicalDBService (as SuspendedTransactionStore) [SHARED]
@@ -109,29 +127,37 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **Shared services**: `mcp.GatewayService` (used in both modes for MCP/A2A protocol handling), `CanonicalDBService` (used in both modes for state root calculation - full service in gateway mode, state root calculation only in outbound mode)
 
 ### Data Handling Convergence
-- **`gateway.CanonicalDBService`** is the canonical SQLite root for gateway mode; it also embeds `storage.SQLAuditStore`. In outbound mode, it is used only for state root calculation.
-- **`storage.LocalStoreService`** is the consolidated execution vault for outbound mode.
+- **`gateway.CanonicalDBService`** is the canonical SQLite root for gateway mode; it embeds `storage.SQLAuditStore` and `vault.Vault`. In outbound mode, it is used only for state root calculation and provides the shared vault instance.
+- **`storage.ExecutionVaultService`** is the execution log and file diff storage for outbound mode.
+- **`storage.TokenStoreService`** is the Sentinel token persistence store for outbound mode.
+- **`storage.SuspendedTransactionService`** is the L3 approval workflow store for outbound mode.
 - **`storage.SQLAuditStore`** is shared by both modes and provides the SQL-based audit storage foundation.
+- **`vault.Vault`** is shared across all storage services in outbound mode (reused from CanonicalDBService).
 
 ### Dependency Flow
-- `scrubbing.ScrubbingService` depends on `storage.LocalStoreService` (as `TokenStore`).
-- `storage.LocalStoreService` has no dependency on `scrubbing.ScrubbingService` (circular dependency removed).
+- `scrubbing.ScrubbingService` depends on `storage.TokenStoreService` (as `TokenStore`).
+- `storage.TokenStoreService` has no dependency on `scrubbing.ScrubbingService` (circular dependency removed).
+- All outbound storage services (ExecutionVaultService, TokenStoreService, SQLAuditStore, GitLedgerService) share the same `vault.Vault` instance from CanonicalDBService.
 
 ### Governance Stack (L1-L5)
 - **L1**: `governance.L1Doctrine` (technical bedrock validation)
 - **L2**: `governance.L2Consensus` (signing + quorum)
-- **L3**: `governance.L3Notary` / `gateway.CompositeL3Verifier` (WebAuthn + mTLS CLI)
+- **L3**: `governance.L3Notary` (gateway mode uses `gateway.CompositeL3Verifier` for WebAuthn + mTLS CLI; outbound mode uses `governance.outboundL3Notary` for CLI-based approval via suspended transactions)
 - **L4**: `governance.L4Warden` (transaction verifier / fail-closed gate)
 - **L5**: `governance.L5Actuator` (execution boundary, receipt signing)
 
 ### Shared Interface Implementations
 - `gateway.CanonicalDBService` implements: `governance.ReplayStore`, `governance.StateRootProvider`, `governance.TransactionAuditStore`, `governance.SignerStore`, `governance.AppPolicyStore`, `governance.SuspendedTransactionStore`.
-- `storage.LocalStoreService` implements: `interfaces.TokenStore`, `governance.SuspendedTransactionStore`.
+- `storage.TokenStoreService` implements: `interfaces.TokenStore`.
+- `storage.SuspendedTransactionService` implements: `governance.SuspendedTransactionStore`.
+- `governance.FilesystemSignerStore` implements: `governance.SignerStore` (used in outbound mode).
+- `governance.outboundL3Notary` implements: `governance.L3Notary` (used in outbound mode).
 
 ### Transport & Protocol Layer
 - `pubsub.PubSubCommandService` is the dispatcher for outbound mode (WebSocket pub/sub).
-- `mcp.GatewayService` handles MCP/A2A protocol translation and downstream dispatch.
+- `mcp.GatewayService` handles MCP/A2A protocol translation and downstream dispatch (shared between modes).
 - `gateway.HTTPHandler` builds the HTTP/WebSocket surface for gateway mode.
+- `gateway.PubSubBroker` is the in-process pub/sub broker for gateway mode.
 
 ## Critical Data Flows
 
@@ -139,8 +165,8 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 |------|------|
 | Command execution results | `ExecutionService` → `CommandService` → `PubSubResultsService` → Pub/Sub channel |
 | Audit events | `CommandService` / `FileOpsService` → `SQLAuditStore` → SQLite |
-| File mutations | `FileEditService` → `LedgerService` → git commit |
-| Suspended transactions | `L4Warden` → `LocalStoreService` (outbound) or `CanonicalDBService` (gateway) |
+| File mutations | `FileEditService` → `GitLedgerService` → git commit |
+| Suspended transactions | `L4Warden` → `SuspendedTransactionService` (outbound) or `CanonicalDBService` (gateway) |
 | Action receipts | `L5Actuator` → `SQLAuditStore` (receipts table) + signed return |
 
 ## Test Infrastructure (Not Production)

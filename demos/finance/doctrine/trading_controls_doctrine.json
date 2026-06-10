@@ -1,0 +1,96 @@
+{
+  "source": "finance_trading_controls",
+  "version": "1.0.0",
+  "last_updated": "2026-06-09",
+  "license": "Proprietary",
+  "doctrines": [
+    {
+      "id": "transaction_limit_exceeded",
+      "name": "Transaction Limit Exceeded",
+      "category": "trading_limits",
+      "severity": "critical",
+      "pattern": "(?i)(amount|value|quantity).*(exceeds|greater|over).*(limit|threshold|cap)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "dual_control_bypass",
+      "name": "Dual Control Authorization Bypass",
+      "category": "authorization",
+      "severity": "critical",
+      "pattern": "(?i)(skip.dual.control|single.approval|override.requirement|bypass.authorization)",
+      "mitre_attack": "T1568.002",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "unauthorized_trade_execution",
+      "name": "Unauthorized Trade Execution",
+      "category": "access_control",
+      "severity": "critical",
+      "pattern": "(?i)(unauthorized|unapproved|invalid).*(trade|execution|order)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "market_manipulation",
+      "name": "Market Manipulation Pattern",
+      "category": "trading_behavior",
+      "severity": "critical",
+      "pattern": "(?i)(spoofing|layering|wash.trade|pump.and.dump|front.running)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "insider_trading",
+      "name": "Insider Trading Detection",
+      "category": "compliance",
+      "severity": "critical",
+      "pattern": "(?i)(insider|material.non.public|mnpi).*(trade|transaction|position)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "position_limit_violation",
+      "name": "Position Limit Violation",
+      "category": "risk_management",
+      "severity": "high",
+      "pattern": "(?i)(position|exposure).*(limit|cap|threshold).*(exceed|over|violate)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "settlement_risk",
+      "name": "Settlement Risk Violation",
+      "category": "settlement",
+      "severity": "high",
+      "pattern": "(?i)(settlement|clearing).*(risk|failure|delay|default)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.80,
+      "enabled": true
+    },
+    {
+      "id": "audit_trail_bypass",
+      "name": "Audit Trail Bypass",
+      "category": "audit",
+      "severity": "critical",
+      "pattern": "(?i)(disable.log|bypass.audit|no.logging|silent.execution).*(trade|transaction)",
+      "mitre_attack": "T1562.006",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.90,
+      "enabled": true
+    }
+  ]
+}

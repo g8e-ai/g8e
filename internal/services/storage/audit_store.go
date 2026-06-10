@@ -550,6 +550,14 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 	ass.muWrites.Add(1)
 	defer ass.muWrites.Done()
 
+	// Gateway mode never pre-populates sessions; auto-create a row so the FK is satisfied.
+	if record.OperatorSessionID != "" {
+		_, _ = ass.db.ExecWithRetry(
+			`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, 'operator', ?, ?)`,
+			record.OperatorSessionID, record.OperatorSessionID, record.OperatorID,
+		)
+	}
+
 	query := `
 	INSERT INTO receipts (
 		transaction_id, transaction_hash, operator_id, operator_session_id,

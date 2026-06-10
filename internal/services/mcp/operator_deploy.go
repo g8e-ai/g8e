@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -25,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/sftp"
 	sshlib "golang.org/x/crypto/ssh"
 
 	"github.com/g8e-ai/g8e/internal/pkg/ssh"
@@ -270,7 +272,7 @@ func (t *OperatorDeployTool) deployViaSSH(ctx context.Context, hostname, operato
 		remotePath := "/tmp/g8e-operator"
 		if err := t.transferBinaryViaSCP(client, operatorBinary, remotePath); err != nil {
 			result.Error = fmt.Sprintf("transfer binary: %v", err)
-			result.Message = "Failed to transfer operator binary"
+			result.Message = fmt.Sprintf("Failed to transfer operator binary: %v", err)
 			return result
 		}
 		operatorBinary = remotePath
@@ -299,39 +301,37 @@ func (t *OperatorDeployTool) deployViaSSH(ctx context.Context, hostname, operato
 	return result
 }
 
-// transferBinaryViaSCP transfers a binary file to the remote host via SCP.
+// transferBinaryViaSCP transfers a binary file to the remote host via SFTP.
 func (t *OperatorDeployTool) transferBinaryViaSCP(client *sshlib.Client, localPath, remotePath string) error {
-	// Read local file.
-	// localPath is validated by validateOperatorBinaryPath to satisfy CodeQL uncontrolled-data-in-path-expression rule.
-	data, err := os.ReadFile(localPath)
+	// Create SFTP client
+	sftpClient, err := sftp.NewClient(client)
 	if err != nil {
-		return fmt.Errorf("read local file: %w", err)
+		return fmt.Errorf("create SFTP client: %w", err)
+	}
+	defer sftpClient.Close()
+
+	// Open local file
+	srcFile, err := os.Open(filepath.Clean(localPath))
+	if err != nil {
+		return fmt.Errorf("open local file: %w", err)
+	}
+	defer srcFile.Close()
+
+	// Create remote file
+	dstFile, err := sftpClient.Create(remotePath)
+	if err != nil {
+		return fmt.Errorf("create remote file: %w", err)
+	}
+	defer dstFile.Close()
+
+	// Copy file contents
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return fmt.Errorf("copy file contents: %w", err)
 	}
 
-	// Create SCP session
-	session, err := client.NewSession()
-	if err != nil {
-		return fmt.Errorf("create SCP session: %w", err)
-	}
-	defer session.Close()
-
-	// Go to SCP mode
-	go func() {
-		w, _ := session.StdinPipe()
-		defer w.Close()
-
-		fmt.Fprintln(w, "C0755", len(data), filepath.Base(remotePath))
-		if _, err := w.Write(data); err != nil {
-			// Error will be caught by session.Run() below
-			return
-		}
-		fmt.Fprintln(w)
-	}()
-
-	// Execute SCP command
-	err = session.Run(fmt.Sprintf("scp -t %s", filepath.Dir(remotePath)))
-	if err != nil {
-		return fmt.Errorf("SCP transfer failed: %w", err)
+	// Make the file executable
+	if err := sftpClient.Chmod(remotePath, 0755); err != nil {
+		return fmt.Errorf("chmod file: %w", err)
 	}
 
 	return nil

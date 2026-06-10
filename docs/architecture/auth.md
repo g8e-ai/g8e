@@ -52,7 +52,7 @@ See [Network Architecture](./network.md).
 The platform implements a deterministic 5-layer governance sequence. Every mutation must pass through all active layers before execution. The structural schema is defined as `GovernanceEnvelope` in `protocol/proto/g8e/common/v1/common.proto:79-115`.
 
 ### Layer 1: Technical Bedrock (L1Doctrine)
-*Implementation: `internal/services/governance/l1_doctrine.go:29-44`*
+*Implementation: `internal/services/governance/l1_doctrine.go:50`*
 
 L1 is the foundational layer that executes deterministic security rules.
 - **Forbidden Patterns**: Uses Protobuf field options (`forbidden_patterns`) to reject strings matching dangerous patterns.
@@ -61,7 +61,7 @@ L1 is the foundational layer that executes deterministic security rules.
 - **Hard Gates**: Rejects transactions immediately upon violation; cannot be bypassed by L2 or L3.
 
 ### Layer 2: Consensus (L2Consensus)
-*Implementation: `internal/services/governance/l2_consensus.go:27-42`*
+*Implementation: `internal/services/governance/l2_consensus.go:45`*
 
 L2 provides multi-agent cryptographic verification of intent.
 - **Ed25519 Signatures**: Verifies Ed25519 signatures over the `transaction_hash|decision` format.
@@ -69,7 +69,7 @@ L2 provides multi-agent cryptographic verification of intent.
 - **Posture-Aware Enforcement**: Enforces signature requirements based on the configured `GovernancePosture`.
 
 ### Layer 3: Notary (L3Notary)
-*Implementation: `internal/services/governance/l3_notary.go:30-36`*
+*Implementation: `internal/services/governance/l3_notary.go:32`*
 
 L3 ensures explicit human authorization for mutations.
 - **Suspension**: The g8e Gateway (g8eg) suspends transactions requiring L3 approval, storing them in the `suspended_transactions` pool.
@@ -77,17 +77,17 @@ L3 ensures explicit human authorization for mutations.
 - **L3Proof**: A successful approval generates an `L3Proof` containing the cryptographic signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
 
 ### Layer 4: Warden (L4Warden)
-*Implementation: `internal/services/governance/l4_warden.go:309-323`*
+*Implementation: `internal/services/governance/l4_warden.go:372`*
 
 The Warden is the final fail-closed gate before execution. It verifies:
-1. **Structural Integrity**: Structural integrity, payload decoding, and L1Doctrine compliance.
-2. **Hash Verification**: Matches the `id` and `transaction_hash` fields against the recomputed SHA-256 hash.
-3. **State Root Consistency**: Ensures the `state_merkle_root` matches the current platform state.
-4. **Replay Protection**: Verifies the `nonce` using the `ReplayStore` with early reservation.
-5. **Posture Enforcement**: Enforces L2 and L3 requirements based on the configured `GovernancePosture` (Doctrine, Consensus, or Notary).
+1. **In-Flight Tracking**: Prevents concurrent processing of transactions with the same nonce.
+2. **Nonce Reservation**: Early durable replay protection via `ReplayStore.ReserveNonce`.
+3. **Stateless Validation**: Structural integrity, payload decoding, L1Doctrine compliance, and hash verification.
+4. **Stateful Validation**: State root consistency check via `StateRootProvider`.
+5. **Posture Validation**: L2 and L3 enforcement based on the configured `GovernancePosture` (Doctrine, Consensus, or Notary).
 
 ### Layer 5: Actuator (L5Actuator)
-*Implementation: `internal/services/governance/l5_actuator.go:50-69`*
+*Implementation: `internal/services/governance/l5_actuator.go:76`*
 
 The Actuator represents the execution boundary and final audit commitment.
 - **Egress Dispatch**: Dispatches the verified payload to downstream executors (Shell, MCP, A2A).
@@ -113,7 +113,7 @@ Postures define which layers of the bedrock are enforced as fail-closed gates.
 
 Handling sensitive data without leaking it to upstream models is managed by the Sovereign Execution Boundary:
 - **Scrubbing**: Private data is replaced with opaque tokens (Uniform Element Identifiers, such as `{{UEI_1}}`) before sending to external LLMs.
-- **Deterministic Rehydration**: The L5 Actuator performs local rehydration of tokens just before execution via `RehydrateText`.
+- **Deterministic Rehydration**: The L5 Actuator performs local rehydration of tokens just before execution via `RehydratePayload`.
 - **Data Sovereignty**: Raw secrets never leave the sovereign host environment.
 
 ---
@@ -125,7 +125,6 @@ The platform enforces mandatory encryption for all sensitive data at rest. See [
 ### Vault-Based Encryption
 
 All storage services require an unlocked vault at initialization:
-- **LocalStoreService**: Encrypts command stdout/stderr, file diffs, and content
 - **SQLAuditStore**: Encrypts audit records, governance envelopes, audit trail, and compliance records
 - **ExecutionVaultService**: Encrypts execution results and command outputs
 - **TokenStoreService**: Encrypts authentication tokens and session data

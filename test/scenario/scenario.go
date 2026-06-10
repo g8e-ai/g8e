@@ -53,6 +53,7 @@ func AssertPersistedReceipt(t *testing.T, client *client.Client, receipt *operat
 	if expectedVerdict == VerdictAccept {
 		if receipt == nil {
 			t.Fatal("expected receipt for accepted transaction, got nil")
+			return
 		}
 		persisted, _, err := client.GetReceipt(ctx, receipt.TransactionId)
 		if err != nil {
@@ -60,6 +61,7 @@ func AssertPersistedReceipt(t *testing.T, client *client.Client, receipt *operat
 		}
 		if persisted == nil {
 			t.Fatalf("receipt not persisted for accepted transaction %s", receipt.TransactionId)
+			return
 		}
 		if persisted.TransactionID != receipt.TransactionId {
 			t.Fatalf("receipt transaction_id mismatch: persisted=%s, expected=%s", persisted.TransactionID, receipt.TransactionId)

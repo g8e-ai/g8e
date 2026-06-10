@@ -5,10 +5,10 @@ parent: Architecture
 
 # Air-Gap Architecture
 
-Last Updated: 2026-06-01
-Version: v1.0.3
+Last Updated: 2026-06-10
+Version: v1.0.11
 
-The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and local Go dependencies.
+The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and local Go dependencies. The platform supports both binary deployment and containerized deployment via Docker.
 
 ---
 
@@ -18,7 +18,7 @@ In an air-gapped configuration, the platform restricts all outbound communicatio
 
 - **No Telemetry**: The platform disables all outbound telemetry, usage statistics, and error reporting.
 - **Local Assets**: All user interface assets, fonts, icons, and libraries are served locally by platform services.
-- **Local Persistence**: All platform state, including session records, configuration settings, and cryptographic keys, resides in local SQLite databases managed by the g8e Gateway. Database paths are defined in `internal/constants/paths.go`, including the main database at `.g8e/data/g8e.db`, local state at `.g8e/local_state.db`, and audit vault at `.g8e/audit_vault.db`.
+- **Local Persistence**: All platform state, including session records, configuration settings, and cryptographic keys, resides in local SQLite databases managed by the g8e Gateway. Database paths are defined in `internal/constants/paths.go`, including the main database at `.g8e/data/g8e.db`, local state at `.g8e/local_state.db`, and audit vault at `.g8e/data/audit_vault.db`.
 
 ---
 
@@ -39,10 +39,11 @@ Surfaces with conflicting TLS client-authentication requirements do not share a 
 
 ### Core Functional Capabilities
 
-- **State Persistence**: All system state is stored locally within SQLite databases as defined in `internal/constants/paths.go`, including the main database (`.g8e/data/g8e.db`), local state (`.g8e/local_state.db`), and audit vault (`.g8e/audit_vault.db`).
+- **State Persistence**: All system state is stored locally within SQLite databases as defined in `internal/constants/paths.go`, including the main database (`.g8e/data/g8e.db`), local state (`.g8e/local_state.db`), and audit vault (`.g8e/data/audit_vault.db`).
 - **Local Public Key Infrastructure (PKI)**: The gateway generates a local Certificate Authority (CA) using ECDSA P-384 keys to issue and rotate TLS certificates for local services.
 - **Secret Storage**: An internal encrypted vault stores local credentials and access tokens, removing any requirement for external key managers.
 - **Event Brokerage**: A local websocket pub/sub server manages communication between the gateway and connected clients.
+- **WebAuthn Passkey Bootstrap**: The gateway supports WebAuthn passkey-based authentication for secure local enrollment without external identity providers.
 
 ---
 
@@ -76,6 +77,7 @@ To ensure a self-contained installation, the build process packages all required
 - **Go Dependencies**: The core platform compiles into a single g8e Node, resolving dependencies defined in `go.mod`.
 - **Protocol Generation**: Protobuf compilation is performed offline using local tools without relying on the remote Buf Schema Registry (BSR). Configuration details are defined in `buf.gen.yaml` and `Makefile`.
 - **Build-Time Tooling**: Protobuf stub generation requires `buf`, `protoc-gen-go`, and `protoc-gen-go-grpc` during the build phase. These binaries are not required on the target runtime host.
+- **Cross-Platform Setup Scripts**: The platform provides platform-specific setup scripts for automated installation and validation: `scripts/linux-setup.sh`, `scripts/macos-setup.sh`, and `scripts/windows-setup.ps1`.
 
 ---
 
@@ -96,6 +98,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 2. **Package Runtime Configurations**: Archive the build artifacts and the protocol schemas:
    - The compiled `bin/g8e` g8e Node.
    - The protocol configuration files under the `protocol/` directory.
+3. **Optional Container Build**: For containerized deployments, build the operator image using `Dockerfile.operator` and configure services via `docker-compose.yml`.
 
 ### 2. Implementation on the Air-Gapped Target Host
 
@@ -108,6 +111,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
    ```bash
    ./g8e auth login
    ```
+4. **Optional Remote Management**: Use operator remote management CLI commands (cp, scp, ssh, stream, deploy) to manage remote hosts within the air-gapped environment.
 
 ---
 
@@ -117,4 +121,5 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 2. **Mutual Cryptographic Trust**: All traffic between the g8e Gateway, connected clients, and the g8e Operator is encrypted and authenticated using mutual TLS (mTLS) issued by the local Certificate Authority.
 3. **Local Sovereignty**: All audit logs, transactions, and state records remain strictly on the host filesystem inside the local `.g8e` directory, as defined in `internal/constants/paths.go`.
 4. **Fail-Closed Design**: If any component requires a missing or unavailable external resource, it terminates immediately with a clear error instead of attempting unencrypted or insecure fallbacks.
+5. **Mandatory Encryption at Rest**: All sensitive data stored in SQLite databases is encrypted using platform-managed encryption keys.
 

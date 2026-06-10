@@ -113,7 +113,7 @@ func MapActionTypeToEventType(actionType ActionType) EventType {
 	}
 }
 
-// MapEventTypeToResultActionType maps protobuf event types to UAP result action types.
+// MapEventTypeToResultActionType maps protobuf event types to GovernanceEnvelope result action types.
 func MapEventTypeToResultActionType(eventType EventType) ActionType {
 	switch eventType {
 	case Event.Operator.Heartbeat:

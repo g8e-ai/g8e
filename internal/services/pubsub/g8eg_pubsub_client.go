@@ -264,9 +264,9 @@ func (c *OperatorPubSubClient) waitForSubscribedACK(ctx context.Context, ws *web
 	}
 }
 
-// pubSubWSURL returns the full WebSocket URL for /ws/pubsub.
+// pubSubWSURL returns the full WebSocket URL for the pub/sub stream.
 func (c *OperatorPubSubClient) pubSubWSURL() string {
-	return c.baseURL + "/ws/pubsub"
+	return c.baseURL + constants.APIPaths.PubSubStream
 }
 
 // connectPubWs opens a new persistent publish WebSocket connection.

@@ -93,6 +93,8 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	// Ensure directories are clean to avoid stale state from previous test runs
 	os.RemoveAll(dbDir)
 	require.NoError(t, os.MkdirAll(dbDir, 0755))
+	os.RemoveAll(pkiDir)
+	require.NoError(t, os.MkdirAll(pkiDir, 0755))
 	os.RemoveAll(secretsDir)
 	require.NoError(t, os.MkdirAll(secretsDir, 0755))
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)

@@ -181,7 +181,12 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 	if bs.config.TLSServerName != "" {
 		hostname = bs.config.TLSServerName
 	}
-	authURL := fmt.Sprintf("https://%s:%d/api/v1/operators/reauth", hostname, bs.config.HTTPPort)
+	// Use the HTTPS port for the authentication URL
+	httpsPort := bs.config.HTTPSPort
+	if httpsPort == 0 {
+		httpsPort = constants.Ports.OperatorHttps
+	}
+	authURL := fmt.Sprintf("https://%s:%d/api/v1/operators/reauth", hostname, httpsPort)
 
 	var lastErr error
 	delay := bootstrapBaseDelay

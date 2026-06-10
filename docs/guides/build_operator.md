@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Operator
 
-Last Updated: 2026-06-01
-Version: v1.0.5
+Last Updated: 2026-06-10
+Version: v1.0.11
 
 ---
 
@@ -14,7 +14,7 @@ Version: v1.0.5
 
 A g8e-compatible g8e Operator implements the host-side Policy Execution Point (PEP) of the platform. It receives transactions, enforces the 5-layer verification sequence, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
-The reference implementation is a single Go codebase that compiles into the g8e Node. The same g8e Node serves both g8e Gateway (PDP) and g8e Operator (PEP) roles, selected via command-line flags. Custom Operator implementations must implement the same protocol contracts and invariants.
+The reference implementation is a single Go codebase that compiles into the g8e binary. The same binary serves both g8e Gateway (PDP) and g8e Operator (PEP) roles, selected via command-line flags. Custom Operator implementations must implement the same protocol contracts and invariants.
 
 ---
 
@@ -22,34 +22,35 @@ The reference implementation is a single Go codebase that compiles into the g8e 
 
 ### Prerequisites
 
-- **Go 1.26+** — Required for building the reference operator.
+- **Go 1.26.4+** — Required for building the reference operator.
 
 ### Build from Source
 
-Clone the repository and build the g8e Node:
+Clone the repository and build the g8e binary:
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces the `g8e` g8e Node in the repository root. The g8e Node is statically linked and requires no runtime dependencies.
+This produces the `g8e` binary in the repository root. The binary is statically linked and requires no runtime dependencies.
 
-**Self-Contained Deployment**: The compiled g8e Node is fully self-sovereign and requires no source tree, configuration files, or specific directory structure. It can be copied to any directory and run from there. All paths are resolved relative to the current working directory unless explicitly overridden by flags. Path configuration is embedded directly in the g8e Node via go:embed and is the sole source of truth.
+**Self-Contained Deployment**: The compiled g8e binary is fully self-sovereign and requires no source tree, configuration files, or specific directory structure. It can be copied to any directory and run from there. All paths are resolved relative to the current working directory unless explicitly overridden by flags. Path configuration is embedded directly in the binary via go:embed and is the sole source of truth.
 
 ### Build Targets
 
 The Makefile provides several build targets:
 
-- `make build` — Builds the g8e Node for all platforms (linux, windows, darwin).
-- `make build-linux` — Builds the g8e Node for Linux (amd64, arm64, 386).
-- `make build-windows` — Builds the g8e Node for Windows (amd64, arm64).
-- `make build-darwin` — Builds the g8e Node for Darwin (amd64, arm64).
-- `make build-compressed` — Builds the g8e Node for all platforms with UPX compression.
-- `make build-linux-compressed` — Builds the g8e Node for Linux with UPX compression.
-- `make build-windows-compressed` — Builds the g8e Node for Windows with UPX compression.
-- `make build-darwin-compressed` — Builds the g8e Node for Darwin with UPX compression.
-- `make clean` — Removes compiled g8e Nodes and test artifacts.
+- `make build` — Builds the g8e binary for the current platform.
+- `make build-all` — Builds the g8e binary for all platforms (linux, windows, darwin).
+- `make build-linux` — Builds the g8e binary for Linux (amd64, arm64, 386).
+- `make build-windows` — Builds the g8e binary for Windows (amd64, arm64).
+- `make build-darwin` — Builds the g8e binary for Darwin (amd64, arm64).
+- `make build-compressed` — Builds the g8e binary for all platforms with UPX compression.
+- `make build-linux-compressed` — Builds the g8e binary for Linux with UPX compression.
+- `make build-windows-compressed` — Builds the g8e binary for Windows with UPX compression.
+- `make build-darwin-compressed` — Builds the g8e binary for Darwin with UPX compression.
+- `make clean` — Removes compiled binaries and test artifacts.
 
 ### Cross-Compilation
 
@@ -63,26 +64,20 @@ GOOS=windows GOARCH=amd64 make build
 
 ### Windows Build
 
-On Windows, use the provided PowerShell build script:
-
-```powershell
-.\build.ps1
-```
-
 For cross-compilation from Linux/macOS to Windows:
 
 ```bash
 GOOS=windows GOARCH=amd64 make build
-# Output: g8e (rename to g8e.exe on Windows)
+# Output: bin/g8e-windows-amd64.exe
 ```
 
-The Makefile also includes a dedicated Windows build target:
+The Makefile includes a dedicated Windows build target:
 
 ```bash
 make build-windows
 ```
 
-This builds for both amd64 and arm64 architectures.
+This builds for both amd64 and arm64 architectures. On Windows hosts, use the same Makefile targets with a Windows-compatible make implementation (such as MinGW make or WSL).
 
 ---
 
@@ -206,7 +201,7 @@ Refer to `protocol/proto/g8e/` for the canonical schema definitions.
 A custom Operator implementation must pass the platform test suite to claim g8e compatibility:
 
 ```bash
-./g8e test unit
+make test-unit
 ```
 
 This runs unit tests covering:
@@ -224,13 +219,13 @@ This runs unit tests covering:
 For integration tests:
 
 ```bash
-./g8e test integration
+make test-integration
 ```
 
 For the full CI pipeline:
 
 ```bash
-./g8e test ci
+make ci
 ```
 
 ---
@@ -245,7 +240,7 @@ The g8e Operator requires a vault for encryption at rest. The vault must be init
 ./g8e vault init
 ```
 
-This creates a new vault in `.g8e/vault` and generates a private key in `.g8e/secrets/vault.key`.
+This creates a new vault in `.g8e/vault` and generates a private key in `.g8e/vault/key`.
 
 ### Unlock Vault
 
@@ -260,7 +255,7 @@ The vault is automatically unlocked when starting the Gateway or Operator. To ma
 The vault can be configured via CLI flags or environment variables:
 
 - `--vault-dir <dir>`: Directory for vault data (default: `.g8e/vault`)
-- `--vault-key <path>`: Path to vault private key (default: `.g8e/secrets/vault.key`)
+- `--vault-key <path>`: Path to vault private key (default: `.g8e/vault/key`)
 - `--vault-require-unlock`: Require vault to be unlocked at startup (fail if vault cannot be unlocked)
 
 Environment variables:
@@ -273,10 +268,13 @@ Environment variables:
 Additional vault management commands:
 
 - `./g8e vault status`: Check vault status
-- `./g8e vault re-key`: Re-encrypt vault with new private key
+- `./g8e vault rekey`: Re-encrypt vault with new private key
 - `./g8e vault reset`: Reset vault (DESTROYS ALL DATA)
-- `./g8e vault export-key`: Export vault private key
-- `./g8e vault import-key`: Import vault private key
+- `./g8e vault export`: Export vault private key
+- `./g8e vault import`: Import vault private key
+- `./g8e vault key generate`: Generate new vault key
+- `./g8e vault key import`: Import existing vault key
+- `./g8e vault key export`: Export vault key
 
 For detailed vault architecture and security guarantees, see [Encryption Architecture](../architecture/encryption.md).
 

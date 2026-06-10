@@ -143,6 +143,18 @@ func gatewayStartCmd() *cobra.Command {
 			}
 
 			cmd.Println("[g8e] Starting g8e Gateway service...")
+			var postureDesc string
+			switch posture {
+			case "doctrine":
+				postureDesc = "doctrine (L1 enforced, L2/L3 audited)"
+			case "consensus":
+				postureDesc = "consensus (L1/L2 enforced, L3 audited)"
+			case "notary":
+				postureDesc = "notary (L1/L2/L3 strictly enforced)"
+			default:
+				postureDesc = posture
+			}
+			cmd.Printf("[g8e] Gateway posture: %s\n", postureDesc)
 			if err := pm.StartOperator(
 				posture,
 				httpPort,

@@ -88,11 +88,13 @@ target/
 *.manifest
 *.spec
 
-# --- g8e Specific Binaries ---
-buf
+# --- reports  ---
+reports/
+reports/*
 
 # Binaries
 g8e
+buf
 operator
 
 # --- Build-time artifacts ---

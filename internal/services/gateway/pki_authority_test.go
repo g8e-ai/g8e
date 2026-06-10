@@ -85,6 +85,10 @@ func setupTestPKI(t *testing.T) *testPKIContext {
 	logger := testutil.NewTestLogger()
 	secretsDir := tempDir(t)
 
+	// Clean pkiDir to avoid stale certificates from previous test runs
+	os.RemoveAll(pkiDir)
+	require.NoError(t, os.MkdirAll(pkiDir, 0755))
+
 	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, "vault"), logger, true, "", false)
 	require.NoError(t, err, "failed to open test database")
 	t.Cleanup(func() { db.Close() })

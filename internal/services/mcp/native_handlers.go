@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"strings"
@@ -54,18 +55,20 @@ const (
 // NativeToolHandler executes native tools compiled into the Node binary.
 type NativeToolHandler struct {
 	registry *ToolRegistry
+	logger   *slog.Logger
 }
 
 // NewNativeToolHandler creates a new native tool handler with all native tools
 // explicitly registered. This avoids init()-based auto-registration and
 // mutable global state.
-func NewNativeToolHandler() (*NativeToolHandler, error) {
+func NewNativeToolHandler(logger *slog.Logger) (*NativeToolHandler, error) {
 	registry := NewToolRegistry()
 	if err := RegisterNativeTools(registry); err != nil {
 		return nil, fmt.Errorf("native tool registration failed: %w", err)
 	}
 	return &NativeToolHandler{
 		registry: registry,
+		logger:   logger,
 	}, nil
 }
 
@@ -78,11 +81,25 @@ func NewNativeToolHandlerWithRegistry(registry *ToolRegistry) *NativeToolHandler
 
 // HandleTool executes a native tool by name and returns the result.
 func (h *NativeToolHandler) HandleTool(ctx context.Context, toolName string, arguments json.RawMessage) (CallToolResult, error) {
+	if h.logger != nil {
+		h.logger.Info("Executing native tool", "tool", toolName)
+	}
 	tool, ok := h.registry.Get(toolName)
 	if !ok {
+		if h.logger != nil {
+			h.logger.Error("Unknown native tool requested", "tool", toolName)
+		}
 		return CallToolResult{}, fmt.Errorf("unknown native tool: %s", toolName)
 	}
-	return tool.Execute(ctx, arguments)
+	result, err := tool.Execute(ctx, arguments)
+	if h.logger != nil {
+		if err != nil {
+			h.logger.Error("Native tool execution failed", "tool", toolName, "error", err)
+		} else {
+			h.logger.Info("Native tool execution completed", "tool", toolName)
+		}
+	}
+	return result, err
 }
 
 // ListTools returns all registered native tools.

@@ -884,23 +884,22 @@ func printDemoQueries(dbPath string) {
 	fmt.Printf("# 1. View Chaos Test Summary (from test vault)\n")
 	fmt.Printf("./g8e test summary\n\n")
 
-	fmt.Printf("# 2. View Chaos Test Summary (requires Operator running and mTLS auth)\n")
-	fmt.Printf("./g8e gw data store --collection chaos_events\n\n")
+	fmt.Printf("# 2. Direct SQLite access for offline analysis\n")
+	fmt.Printf("# sqlite3 '%s'\n", dbPath)
+	fmt.Printf("#   SELECT category, outcome, COUNT(*) FROM chaos_events GROUP BY category, outcome;\n")
+	fmt.Printf("#   SELECT * FROM chaos_events ORDER BY timestamp DESC LIMIT 10;\n")
+	fmt.Printf("#   SELECT category, outcome, COUNT(*) FROM chaos_events WHERE operator_session_id = 'chaos-session-001' GROUP BY category, outcome;\n\n")
 
-	fmt.Printf("# 3. View General Audit Event Summary (from local audit vault)\n")
+	fmt.Printf("# 3. View General Audit Event Summary (from local audit vault, requires Gateway running)\n")
 	fmt.Printf("./g8e gw data audit summary\n")
 	fmt.Printf("./g8e gw data audit summary --operator-session-id <session-id>\n\n")
 
-	fmt.Printf("# 4. View Audit Events via Operator API (requires Operator running and mTLS auth)\n")
+	fmt.Printf("# 4. View Audit Events via Operator API (requires Gateway running and mTLS auth)\n")
 	fmt.Printf("./g8e gw data audit list --operator-session-id chaos-session-001 --limit 10\n\n")
 
-	fmt.Printf("# 5. View all users\n")
+	fmt.Printf("# 5. View all users (requires Gateway running)\n")
 	fmt.Printf("./g8e gw data users\n\n")
 
-	fmt.Printf("# 6. View operators\n")
+	fmt.Printf("# 6. View operators (requires Gateway running)\n")
 	fmt.Printf("./g8e gw data operators\n\n")
-
-	fmt.Printf("# 7. Direct SQLite access for offline analysis\n")
-	fmt.Printf("# sqlite3 '%s'\n", dbPath)
-	fmt.Printf("#   SELECT category, outcome, COUNT(*) FROM chaos_events GROUP BY category, outcome;\n\n")
 }
