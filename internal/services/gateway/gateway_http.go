@@ -37,6 +37,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/protocol"
+	httpSwagger "github.com/swaggo/http-swagger"
 	"golang.org/x/time/rate"
 )
 
@@ -320,6 +321,12 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 
 	// Health endpoint
 	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
+
+	// Swagger UI documentation
+	mux.Handle("/swagger/*", httpSwagger.WrapHandler(httpSwagger.URL("/swagger/doc.json"), httpSwagger.DocExpansion("none")))
+	mux.HandleFunc("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "docs/swagger.json")
+	})
 
 	// Bootstrap routes (CA discovery, trust scripts) - now on public HTTPS
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)

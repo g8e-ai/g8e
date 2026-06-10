@@ -521,6 +521,7 @@ func main() {
 		"test":     true,
 		"setup":    true,
 		"auth":     true,
+		"audit":    true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
@@ -644,6 +645,7 @@ func main() {
 		"setup":    true,
 		"demos":    true,
 		"auth":     true,
+		"audit":    true,
 		"help":     true,
 		"--help":   true,
 		"-h":       true,
@@ -685,7 +687,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  vault          Vault operations (encrypt, decrypt, rekey)\n")
 		fmt.Fprintf(os.Stderr, "  test           Run tests\n")
 		fmt.Fprintf(os.Stderr, "  setup          Configure AI IDE integrations\n")
-		fmt.Fprintf(os.Stderr, "  demos          Run demo applications\n\n")
+		fmt.Fprintf(os.Stderr, "  demos          Run demo applications\n")
+		fmt.Fprintf(os.Stderr, "  audit          Run audit reports for compliance\n\n")
 		fmt.Fprintf(os.Stderr, "Operator Mode Flags:\n")
 		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>    Gateway endpoint (for operator mode)\n")
 		fmt.Fprintf(os.Stderr, "  -k, --key <path>        Private key path\n")

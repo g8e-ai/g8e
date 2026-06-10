@@ -1,0 +1,22 @@
+basePath: /api/v1
+host: localhost:8443
+info:
+  contact:
+    email: support@g8e.ai
+    name: g8e Team
+    url: https://github.com/g8e-ai/g8e
+  description: API documentation for the g8e Gateway public endpoints
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: https://github.com/g8e-ai/g8e
+  title: g8e Gateway API
+  version: "1.0"
+paths: {}
+securityDefinitions:
+  BearerAuth:
+    description: Bearer token authentication (JWT or mTLS certificate)
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
