@@ -33,11 +33,11 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 
 	rootCmd.AddCommand(
 		gatewayCmd(),
+		authCmd(),
 		mcpCmd(),
 		operatorCmd(),
 		vaultCmd(),
 		testCmd(),
-		platformSetupCmd(),
 		demosCmd(),
 	)
 

@@ -178,10 +178,10 @@ func EnsureAuthLogin(t *testing.T, repoRoot string) {
 		}
 	}
 
-	// Run './g8e gw cli auth login' with explicit endpoint
-	loginCmd := exec.Command(g8ePath, "gw", "cli", "auth", "login")
+	// Run './g8e auth login' with explicit endpoint
+	loginCmd := exec.Command(g8ePath, "auth", "login")
 	loginCmd.Dir = repoRoot
 	if output, err := loginCmd.CombinedOutput(); err != nil {
-		require.NoError(t, err, "failed to run './g8e gw cli auth login': %s", string(output))
+		require.NoError(t, err, "failed to run './g8e auth login': %s", string(output))
 	}
 }

@@ -58,7 +58,7 @@ The gateway provides CLI commands to deploy and manage operators on remote hosts
 ./g8e operator deploy --hosts <host1,host2> --background
 ```
 
-This command copies the operator binary to remote hosts via SSH and optionally starts it in the background. Requires `./g8e gw cli auth login` first.
+This command copies the operator binary to remote hosts via SSH and optionally starts it in the background. Requires `./g8e auth login` first.
 
 **Stream operator binary to remote hosts:**
 
@@ -219,7 +219,7 @@ Stop:
 When the mTLS certificate expires, re-authenticate using:
 
 ```bash
-./g8e gw cli auth login
+./g8e auth login
 ```
 
 This command automatically checks certificate expiry and performs auto-renewal if needed. For remote device enrollment, use CSR-based enrollment:
@@ -233,10 +233,10 @@ This command automatically checks certificate expiry and performs auto-renewal i
 On Windows, enroll via the Windows Certificate Store:
 
 ```bash
-./g8e gw cli auth enroll-windows
+./g8e auth enroll-windows
 ```
 
-Note: This is now handled automatically by `./g8e gw cli auth login` on Windows. This command is for advanced use cases or manual re-enrollment.
+Note: This is now handled automatically by `./g8e auth login` on Windows. This command is for advanced use cases or manual re-enrollment.
 
 ---
 
@@ -247,7 +247,7 @@ For custom g8e-compatible implementations, the Gateway follows the same operatio
 1. **Enroll with Gateway**: Use CSR-based enrollment to obtain mTLS certificates via `./g8e gw security pki enroll`.
 2. **Configure Runtime**: Set up the data directory, PKI directory, and secrets directory.
 3. **Start Gateway**: Launch the Gateway with `./g8e gw start`.
-4. **Authenticate CLI**: Run `./g8e gw cli auth login` to obtain client credentials.
+4. **Authenticate CLI**: Run `./g8e auth login` to obtain client credentials.
 5. **Verify Connection**: Confirm the Gateway is running via `./g8e gw status`.
 6. **Monitor Health**: Implement health checks for the Gateway process and audit vault.
 
@@ -307,13 +307,13 @@ ls -la .g8e/credentials/
 Re-enroll if certificates are missing or expired:
 
 ```bash
-./g8e gw cli auth login
+./g8e auth login
 ```
 
 If the trust bundle is stale after Gateway PKI regeneration:
 
 ```bash
-./g8e gw cli auth logout && ./g8e gw cli auth login
+./g8e auth logout && ./g8e auth login
 ```
 
 ### Audit Vault Errors
@@ -354,7 +354,7 @@ ls -la .g8e/credentials/
 Re-authenticate if credentials are missing or invalid:
 
 ```bash
-./g8e gw cli auth login
+./g8e auth login
 ```
 
 ---

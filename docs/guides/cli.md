@@ -11,6 +11,7 @@ Usage:
   g8e [command]
 
 Available Commands:
+  auth        Authentication and session management
   gateway     Manage the g8e Gateway lifecycle (alias: gw)
   mcp         MCP protocol operations (stdio transport)
   operator    Manage Operator instances
@@ -44,7 +45,6 @@ Available Commands:
   settings        Manage Gateway settings
   reset           Reset Gateway data and secrets (preserves CA)
   clean           Destructively remove all Gateway state
-  cli             CLI authentication and session management
   data            Administer the local platform over mTLS
   security        Security validation checks
   setup           Auto-discover and configure agentic coding tools for g8e integration
@@ -174,28 +174,12 @@ Flags:
       --yes     Skip confirmation prompt (shorthand)
 ```
 
-### gateway cli
+## auth
 ```
-CLI authentication and session management
+Authentication and session management
 
 Usage:
-  g8e gateway cli [command]
-
-Available Commands:
-  auth           Authentication and cli/web/operator session management
-
-Flags:
-  -h, --help   help for cli
-
-Use "g8e gateway cli [command] --help" for more information about a command.
-```
-
-#### gateway cli auth
-```
-Authentication and cli/web/operator session management
-
-Usage:
-  g8e gateway cli auth [command]
+  g8e auth [command]
 
 Available Commands:
   login           Authenticate CLI with the running Gateway
@@ -206,51 +190,51 @@ Available Commands:
 Flags:
   -h, --help   help for auth
 
-Use "g8e gateway cli auth [command] --help" for more information about a command.
+Use "g8e auth [command] --help" for more information about a command.
 ```
 
-##### gateway cli auth login
+### auth login
 ```
 Authenticate CLI with the running Gateway. Generates client keypairs, submits CSRs to the Gateway's CA, and saves signed mTLS credentials. The Gateway must already be running. On Windows, this automatically enrolls via Windows Certificate Store for passkey authentication.
 
 Usage:
-  g8e gateway cli auth login [flags]
+  g8e auth login [flags]
 
 Flags:
   -h, --help   help for login
 ```
 
-##### gateway cli auth logout
+### auth logout
 ```
 Clear local Operator session and credentials
 
 Usage:
-  g8e gateway cli auth logout [flags]
+  g8e auth logout [flags]
 
 Flags:
   -h, --help   help for logout
 ```
 
-##### gateway cli auth enroll-windows
+### auth enroll-windows
 ```
 Enroll via Windows Certificate Store (Windows only - advanced). Generate an ECDSA P-256 keypair in the Windows Certificate Store, submit a CSR to the Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert.
 
-NOTE: This is now handled automatically by 'g8e gateway cli auth login' on Windows. This command is for advanced use cases or manual re-enrollment.
+NOTE: This is now handled automatically by 'g8e auth login' on Windows. This command is for advanced use cases or manual re-enrollment.
 
 Usage:
-  g8e gateway cli auth enroll-windows [flags]
+  g8e auth enroll-windows [flags]
 
 Flags:
       --tpm   Use TPM-backed key via Windows Hello for Business
   -h, --help   help for enroll-windows
 ```
 
-##### gateway cli auth approve
+### auth approve
 ```
 Approve a suspended L3 transaction with CLI signature. Approve a suspended transaction by signing the transaction hash with the CLI private key and submitting the cryptographic proof to the Gateway.
 
 Usage:
-  g8e gateway cli auth approve <transaction_hash> [flags]
+  g8e auth approve <transaction_hash> [flags]
 
 Flags:
   -h, --help   help for approve
@@ -685,7 +669,7 @@ Flags:
 
 ### operator deploy
 ```
-Deploy the operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires 'g8e gateway cli auth login' first.
+Deploy the operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires 'g8e auth login' first.
 
 Usage:
   g8e operator deploy [flags]
@@ -700,7 +684,7 @@ Flags:
 
 ### operator stream
 ```
-Stream the operator binary via SSH and execute it directly on remote hosts without copying. This is useful for quick deployments or air-gapped scenarios. Requires 'g8e gateway cli auth login' first.
+Stream the operator binary via SSH and execute it directly on remote hosts without copying. This is useful for quick deployments or air-gapped scenarios. Requires 'g8e auth login' first.
 
 Usage:
   g8e operator stream [flags]
@@ -1034,7 +1018,7 @@ Flags:
 
 2. Authenticate your CLI:
    ```bash
-   ./g8e gateway cli auth login
+   ./g8e auth login
    ```
 
 3. Run Claude Code with g8e governance:

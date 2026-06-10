@@ -520,6 +520,7 @@ func main() {
 		"vault":    true,
 		"test":     true,
 		"setup":    true,
+		"auth":     true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
@@ -642,6 +643,7 @@ func main() {
 		"test":     true,
 		"setup":    true,
 		"demos":    true,
+		"auth":     true,
 		"help":     true,
 		"--help":   true,
 		"-h":       true,
@@ -650,20 +652,6 @@ func main() {
 	// Show help if no arguments provided, or if first arg is a CLI command
 	if len(os.Args) == 1 || (len(os.Args) > 1 && cliCommands[os.Args[1]]) {
 		clicmd.Execute()
-		return
-	}
-
-	if showVersion {
-		printVersion()
-		os.Exit(constants.ExitSuccess)
-	}
-
-	if rekeyVault || verifyVault || resetVault {
-		vaultWorkDir := launchDir
-		if workingDir != "" {
-			vaultWorkDir = workingDir
-		}
-		handleVaultCommand(rekeyVault, verifyVault, resetVault, privateKey, oldPrivateKeyStr, logLevel, vaultWorkDir)
 		return
 	}
 
@@ -681,6 +669,48 @@ func main() {
 	if notaryMode {
 		postureCount++
 		posture = config.PostureNotary
+	}
+
+	// If we have arguments after flag parsing but they weren't recognized as CLI commands,
+	// and we're not in operator mode (no -e, no posture flags), show usage help
+	if len(os.Args) > 1 && !cliCommands[os.Args[1]] && endpointURL == "" && postureCount == 0 && !insecureMode {
+		fmt.Fprintf(os.Stderr, "Error: unrecognized command or flag '%s'\n\n", os.Args[1])
+		fmt.Fprintf(os.Stderr, "Usage:\n")
+		fmt.Fprintf(os.Stderr, "  ./g8e [command] [flags]\n\n")
+		fmt.Fprintf(os.Stderr, "Available Commands:\n")
+		fmt.Fprintf(os.Stderr, "  gw, gateway    Gateway management (start, stop, status, logs)\n")
+		fmt.Fprintf(os.Stderr, "  auth           Authentication (login, logout)\n")
+		fmt.Fprintf(os.Stderr, "  mcp            MCP configuration and proxy\n")
+		fmt.Fprintf(os.Stderr, "  operator       Operator management (list, deploy, stream)\n")
+		fmt.Fprintf(os.Stderr, "  vault          Vault operations (encrypt, decrypt, rekey)\n")
+		fmt.Fprintf(os.Stderr, "  test           Run tests\n")
+		fmt.Fprintf(os.Stderr, "  setup          Configure AI IDE integrations\n")
+		fmt.Fprintf(os.Stderr, "  demos          Run demo applications\n\n")
+		fmt.Fprintf(os.Stderr, "Operator Mode Flags:\n")
+		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>    Gateway endpoint (for operator mode)\n")
+		fmt.Fprintf(os.Stderr, "  -k, --key <path>        Private key path\n")
+		fmt.Fprintf(os.Stderr, "  --cert <path>           Client certificate path\n")
+		fmt.Fprintf(os.Stderr, "  --trust-bundle <path>   Trust bundle path\n\n")
+		fmt.Fprintf(os.Stderr, "Gateway Mode Flags:\n")
+		fmt.Fprintf(os.Stderr, "  --doctrine               Gateway mode: L1 enforced, L2/L3 audited\n")
+		fmt.Fprintf(os.Stderr, "  --consensus             Gateway mode: L1/L2 enforced, L3 audited\n")
+		fmt.Fprintf(os.Stderr, "  --notary                Gateway mode: L1/L2/L3 strictly enforced\n\n")
+		fmt.Fprintf(os.Stderr, "Run './g8e --help' for more information\n")
+		os.Exit(constants.ExitConfigError)
+	}
+
+	if showVersion {
+		printVersion()
+		os.Exit(constants.ExitSuccess)
+	}
+
+	if rekeyVault || verifyVault || resetVault {
+		vaultWorkDir := launchDir
+		if workingDir != "" {
+			vaultWorkDir = workingDir
+		}
+		handleVaultCommand(rekeyVault, verifyVault, resetVault, privateKey, oldPrivateKeyStr, logLevel, vaultWorkDir)
+		return
 	}
 
 	if postureCount > 1 {

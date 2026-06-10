@@ -119,10 +119,10 @@ func setupTestContext(t *testing.T) *TestContext {
 	if info, statErr := os.Stat(credsPath); statErr == nil {
 		if time.Since(info.ModTime()) >= 45*time.Minute {
 			g8ePath := filepath.Join(projectRoot, "g8e")
-			loginCmd := exec.Command(g8ePath, "gw", "cli", "auth", "login")
+			loginCmd := exec.Command(g8ePath, "auth", "login")
 			loginCmd.Dir = projectRoot
 			if out, loginErr := loginCmd.CombinedOutput(); loginErr != nil {
-				t.Logf("warning: gw cli auth login failed: %v: %s", loginErr, string(out))
+				t.Logf("warning: auth login failed: %v: %s", loginErr, string(out))
 			}
 		}
 	}
