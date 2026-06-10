@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-06-08
-Version: v1.0.10
+Last Updated: 2026-06-10
+Version: v1.0.11
 
 ---
 

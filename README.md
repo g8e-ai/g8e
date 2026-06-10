@@ -128,7 +128,7 @@ g8e is not an agent. It is the mandatory, open-source substrate agents must run 
 
 ---
 
-## Status: v1.0.10 — Consolidation Release
+## Status: v1.0.11 — Multi-Industry Demo Suite Release
 
 **Operational today:**
 
