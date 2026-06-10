@@ -4,7 +4,7 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-06-01
+Last Updated: 2026-06-10
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -97,9 +97,9 @@ The g8e Operator is fully isolated from Identity Providers (IdP). The g8e Gatewa
 
 ### Local-First Audit Architecture (LFAA)
 The host is the authoritative source of truth for all mutations.
-- **TestSQLAuditStore **: An append-only SQLite log of every event and signed `ActionReceipt`. It is fail-closed: events missing a valid `operator_session_id` are rejected as defined in `../../internal/services/storage/audit_vault.go`.
+- **SQLAuditStore**: An append-only SQLite log of every event and signed `ActionReceipt`. It is fail-closed: events missing a valid `operator_session_id` are rejected as defined in `../../internal/services/storage/audit_store.go`. All sensitive content fields (content_text, command_stdout, command_stderr) are encrypted at rest using the vault subsystem (mandatory since v1.0.10).
 - **Scrubbed vs. Raw Logs**: Sensitive data scrubbing separates logs into a **Scrubbed Vault** (safe for AI reading) and a **Raw Vault** (unscrubbed forensic record for human security audits).
-- **Git-Backed Ledger**: Implements a two-phase commit (`state_root_before` / `state_root_after`) for file mutations using native `go-git`. Files are mirrored and can be restored to any prior state using `../../internal/services/storage/ledger.go`.
+- **Git-Backed Ledger**: Implements a two-phase commit (`state_root_before` / `state_root_after`) for file mutations using native `go-git`. Files are mirrored and can be restored to any prior state using `../../internal/services/storage/ledger.go`. The ledger also encrypts mirrored files at rest when the vault is unlocked (mandatory since v1.0.10).
 
 ---
 
@@ -116,13 +116,14 @@ The host is the authoritative source of truth for all mutations.
 The reference implementation (`g8eo`) currently supports:
 
 - **Universal Protocol Translation**: Functional MCP and A2A gateway mapping standard tool calls to signed `GovernanceEnvelope` mutations.
-- **Fail-Closed 5-Layer Verification**: L1 (Doctrine), L2 (Consensus), and L4 (Warden) gates are fully enforced on every transaction.
+- **Fail-Closed 5-Layer Verification**: L1 (Doctrine), L2 (Consensus), L3 (Notary), L4 (Warden), and L5 (Actuator) gates are fully enforced on every transaction.
 - **Outbound-Only mTLS Connectivity**: Dial-out reverse tunnels with zero inbound port requirements. See [Network Architecture](./network.md) for detailed communication patterns and port topology.
-- **Local-First Audit Vault**: Git-backed ledger and fail-closed SQLite audit vault enforcing session existence for all writes.
+- **Local-First Audit Vault**: Git-backed ledger and fail-closed SQLite audit vault enforcing session existence for all writes. Mandatory encryption at rest for all storage services (since v1.0.10).
 - **Deterministic Hash Binding**: SHA-256 transaction hash integrity enforced across all wire formats.
 - **Sovereign Execution Boundary**: Automated scrubbing and rehydration of sensitive data during the execution lifecycle.
 - **Host-Unique Signing**: Cryptographic Action Receipts signed by host-specific keys.
-- **Zero-DependencyNode Node Binary**: Statically compiled Go binary for air-gapped and high-security deployments.
+- **Zero-Dependency Node Binary**: Statically compiled Go binary for air-gapped and high-security deployments.
+- **Expanded Native Tool Catalog**: 26 native tools compiled into the binary for memory-safe, boundary-enforced execution across database triage, log digestion, process governance, network validation, system introspection, and cloud metadata operations.
 
 ---
 
@@ -204,10 +205,14 @@ Each entry includes:
 ### 7. Explore Native Tools
 
 The Operator compiles native tool playbooks for common operational tasks:
-- **Database Triage**: Schema discovery, query validation, isolated reads
+- **Database Triage**: Schema discovery, query validation, isolated reads, index triage
 - **Log Digestion**: Stream filtering, OOM detection, config diffing
-- **Process Governance**: Resource profiling, safe signal handling
-- **Network Validation**: Socket auditing, endpoint probing, HTTP health checks
+- **Process Governance**: Resource profiling, safe signal handling, process tree inspection
+- **Network Validation**: Socket auditing, endpoint probing, HTTP health checks, DNS resolution, TLS certificate inspection, SSH known hosts management
+- **System Introspection**: System information, environment variables, time/clock, service status, container status, disk usage
+- **File Operations**: File checksumming, disk profiling
+- **Cloud & Orchestration**: Cloud metadata, Kubernetes inspection, Git operations, operator deployment
+- **Shell Execution**: Safe shell command execution
 
 See [Native Tool Execution](#native-tool-execution) for the complete tool catalog.
 
@@ -223,7 +228,7 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 | Technical Bedrock (`L1Doctrine`) | `../../internal/services/governance/l1_doctrine.go` |
 | Consensus (`L2Consensus`) | `../../internal/services/governance/l2_consensus.go` |
 | Notary (`L3Notary`) | `../../internal/services/governance/l3_notary.go` |
-| Local Audit Vault | `../../internal/services/storage/audit_vault.go` |
+| Local Audit Vault | `../../internal/services/storage/audit_store.go` |
 | Native Git Ledger | `../../internal/services/storage/ledger.go` |
 | Native Tools | `../../internal/services/mcp/native_tools.go` |
 | Native Tool Handlers | `../../internal/services/mcp/native_handlers.go` |

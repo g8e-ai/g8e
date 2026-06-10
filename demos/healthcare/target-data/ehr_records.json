@@ -1,0 +1,89 @@
+{
+  "patients": [
+    {
+      "id": "PAT-001",
+      "name": "REDACTED",
+      "dob": "1985-03-15",
+      "ssn": "***-**-****",
+      "diagnosis": "Type 2 Diabetes Mellitus",
+      "treatment": "Metformin 500mg twice daily",
+      "prescriptions": [
+        {
+          "medication": "Metformin",
+          "dosage": "500mg",
+          "frequency": "twice daily",
+          "prescribed": "2026-01-10"
+        }
+      ],
+      "last_visit": "2026-05-20",
+      "physician": "Dr. Smith",
+      "department": "Endocrinology"
+    },
+    {
+      "id": "PAT-002",
+      "name": "REDACTED",
+      "dob": "1972-08-22",
+      "ssn": "***-**-****",
+      "diagnosis": "Hypertension Stage 2",
+      "treatment": "Lisinopril 20mg daily",
+      "prescriptions": [
+        {
+          "medication": "Lisinopril",
+          "dosage": "20mg",
+          "frequency": "daily",
+          "prescribed": "2026-02-15"
+        }
+      ],
+      "last_visit": "2026-05-18",
+      "physician": "Dr. Johnson",
+      "department": "Cardiology"
+    },
+    {
+      "id": "PAT-003",
+      "name": "REDACTED",
+      "dob": "1990-11-05",
+      "ssn": "***-**-****",
+      "diagnosis": "Asthma",
+      "treatment": "Albuterol inhaler as needed",
+      "prescriptions": [
+        {
+          "medication": "Albuterol",
+          "dosage": "90mcg",
+          "frequency": "as needed",
+          "prescribed": "2026-03-01"
+        }
+      ],
+      "last_visit": "2026-05-25",
+      "physician": "Dr. Williams",
+      "department": "Pulmonology"
+    }
+  ],
+  "protected_health_info_requests": [
+    {
+      "id": "PA-001",
+      "patient_id": "PAT-001",
+      "request_type": "disclosure",
+      "purpose": "continuity of care",
+      "requested_by": "Specialist Clinic",
+      "approval_status": "PENDING",
+      "requested_date": "2026-06-01",
+      "consent_obtained": false
+    },
+    {
+      "id": "PA-002",
+      "patient_id": "PAT-002",
+      "request_type": "disclosure",
+      "purpose": "research study",
+      "requested_by": "University Medical Center",
+      "approval_status": "PENDING",
+      "requested_date": "2026-06-05",
+      "consent_obtained": false
+    }
+  ],
+  "metadata": {
+    "org": "healthcare",
+    "compliance_standard": "HIPAA",
+    "last_audit": "2026-05-15",
+    "audit_status": "COMPLIANT"
+  }
+}

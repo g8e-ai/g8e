@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -111,6 +112,20 @@ func setupTestContext(t *testing.T) *TestContext {
 	auditorCfg.Auth.CABundle = caBundlePath
 	auditorCfg.Auth.Insecure = true // Skip verify for local dev with self-signed certs
 	auditorCfg.Verbose = true       // Echo requests to stderr for debugging
+
+	// Refresh CLI session if credentials are stale (CLI sessions expire after 1 hour).
+	// This mirrors the EnsureAuthLogin logic in test/integration_helper.go.
+	credsPath := filepath.Join(projectRoot, ".g8e", "credentials")
+	if info, statErr := os.Stat(credsPath); statErr == nil {
+		if time.Since(info.ModTime()) >= 45*time.Minute {
+			g8ePath := filepath.Join(projectRoot, "g8e")
+			loginCmd := exec.Command(g8ePath, "gw", "cli", "auth", "login")
+			loginCmd.Dir = projectRoot
+			if out, loginErr := loginCmd.CombinedOutput(); loginErr != nil {
+				t.Logf("warning: gw cli auth login failed: %v: %s", loginErr, string(out))
+			}
+		}
+	}
 
 	// Load CLI credentials
 	creds, err := auth.LoadCredentials(cliCfg)

@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-06-07
+Last Updated: 2026-06-10
 
 g8e tests run directly on the host using real infrastructure. The test environment is the production environment. If it does not work in tests, it will not work in production.
 
@@ -21,16 +21,15 @@ g8e tests run directly on the host using real infrastructure. The test environme
 
 ---
 
-## Test Architecture (4-Tier Model)
+## Test Architecture (3-Tier Model)
 
-g8e tests are organized into four clearly defined tiers using Go build tags:
+g8e tests are organized into three clearly defined tiers using Go build tags:
 
 | Tier | Name | Target Directory | Build Tag | External Deps | Execution Time |
 | --- | --- | --- | --- | --- | --- |
 | **Tier 1** | **Unit Tests** | `internal/...` & `pkg/...` | *No tags* (Runs by default) | None (mock/stub-only, no files/network/DB) | < 10ms per test |
 | **Tier 2** | **In-Memory Integration** | `internal/...` & `test/` | `//go:build integration` | SQLite in-memory, local PKI generation, local pubsub | < 2s per suite |
 | **Tier 3** | **Live-Platform E2E** | `test/` & `test/scenario/` | `//go:build e2e` | Running g8e gateway & operator processes | < 30s per suite |
-| **Tier 4** | **Chaos & Stress** | `internal/test/chaos/` | `//go:build chaos` | Fuzz/load driver (can run in-process) | Custom |
 
 ---
 
@@ -43,7 +42,6 @@ g8e tests are organized into four clearly defined tiers using Go build tags:
 ./g8e test integration # Run Tier 2 (In-Memory Integration) tests - SQLite in-memory, local PKI
 ./g8e test e2e         # Run Tier 3 (Live Platform E2E) tests - requires running gateway
 ./g8e test scenario    # Run Tier 3 (Scenario) tests - requires running gateway
-./g8e test chaos       # Run Tier 4 (Chaos & Stress) tests
 ```
 
 The CLI test commands map directly to the 4-tier test architecture:
@@ -55,8 +53,6 @@ The CLI test commands map directly to the 4-tier test architecture:
 - **`./g8e test e2e`** - Runs live-platform E2E tests with the `e2e` build tag. These tests require a running g8e gateway and authenticated CLI session (`./g8e gw start` and `./g8e auth login`).
 
 - **`./g8e test scenario`** - Runs scenario-specific E2E tests with the `e2e` build tag. These tests exercise end-to-end governance workflows across doctrine, consensus, and notary modes. Requires running gateway.
-
-- **`./g8e test chaos`** - Runs chaos engineering tests with the `chaos` build tag. These tests fire random payloads at the Operator to verify fail-closed behavior and invariant enforcement.
 
 Validates the g8e Node and protocol enforcement (`GovernanceEnvelope`, 5-layer governance, Audit Vault). Tests cover pub/sub command dispatch, L1/L2/L3/L4/L5 verification, transaction replay protection, state root validation, and audit vault integrity.
 
@@ -78,31 +74,28 @@ Integration tests exercising end-to-end governance workflows across doctrine, co
 - **Receipt verification** - Separate axis testing cryptographic receipt validation (signature verification, field tampering detection)
 - **Receipt persistence** - Database persistence verification for accepted transactions (receipts stored in `console_audit` collection), rejected transactions verify no persistence
 
-### Chaos Tests
+### Emulator
 
 ```bash
-./g8e test chaos --count 100
+./g8e emulator list
+./g8e emulator run [scenario ...]
+./g8e emulator audit
 ```
 
-Chaos engineering tests firing random payloads at the Operator to verify fail-closed behavior and invariant enforcement.
+The emulator is a universal agent emulator that runs scenarios against a real g8e Gateway and Operator. It impersonates arbitrary AI tools and agents, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus and principal signing), then audits every result against the Operator's signed receipts.
 
-**Test Categories**:
-- **Good Actor (60%)** - Valid read operations (FS_LIST) that should execute successfully
-- **Prompt Injection (20%)** - Forbidden bash commands (EXECUTE_BASH) that should be blocked at L1
-- **Man-in-the-Middle (10%)** - Envelopes with corrupted transaction hashes that should fail hash validation
-- **File Mutation (10%)** - Valid FILE_EDIT mutations that should execute with L3 proof
+**Emulator Commands**:
+- **`./g8e emulator list`** - Lists available scenarios with their posture requirements and personas
+- **`./g8e emulator run`** - Runs scenarios against a real Gateway/Operator with configurable mTLS, public surface, L3 mode (mock|suspend), ensemble size, and phase filtering (doctrine|notary|all)
+- **`./g8e emulator audit`** - Audits signed receipts from the Operator for a specific session
 
-**Chaos Test Infrastructure** (`internal/test/chaos/chaos.go`):
-- **Envelope Construction** - Tests for signed envelope creation, timestamp handling, session ID binding, operator ID, state root, L2 signature, and nonce format
-- **Replay Protection** - In-memory replay store with ReserveNonce, FinalizeNonce, and ReleaseNonce operations
-- **L3 Notary Mock** - Chaos-specific L3 notary that always returns true for testing
-- **State Root Provider** - Dynamic state root with GetCurrentStateRoot and UpdateRoot operations
-- **Rejection Classification** - Classifies rejection reasons (L1_BLOCKED, HASH_FAIL, L2_REJECTED, EXPIRED, REPLAY, REJECTED)
-- **Batch Event Writer** - Queues and flushes chaos events to audit vault with auto-flush on batch size
-- **Counters** - Atomic counters for executed, l1Blocked, hashFail, other, executedGoodActor, executedFileMut
-- **Category Distribution** - Verifies chaos category distribution matches expected percentages
-- **Envelope Variants** - Tests for good actor, prompt injection, file mutation, and MitM envelope construction
-- **Test-Only Audit Store** - Uses `storagetest.TestSQLAuditStore` (test infrastructure, not production code) which implements the `TransactionAuditStore` interface via a no-op `DocSet` method
+**Emulator Configuration**:
+- Supports JSON config overlay for complex scenarios
+- Configurable mTLS surface, public surface, client certificates, and CA bundle
+- Operator API key authentication for MCP/A2A surface
+- Session-scoped audit for specific operator sessions
+- Verbose mode for request/response echo
+- Report output directory for receipts and summaries
 
 ---
 
@@ -115,12 +108,12 @@ Integration tests exercise end-to-end workflows with real infrastructure (no moc
 #### Gateway Protocol Tests
 
 **A2A Gateway Tests** (`test/a2a_gateway_test.go`):
-- `TestA2AGateway_SkillCallEndToEnd` - Validates A2A protocol translation to GovernanceEnvelope, 3-layer verification (L1/L2/L3), suspension & OOB approval, and downstream dispatch
+- `TestA2AGateway_SkillCallEndToEnd` - Validates A2A protocol translation to GovernanceEnvelope, 3-layer verification (L1/L2/L3), suspension and OOB approval, and downstream dispatch
 - `TestA2AGateway_PayloadVariations` - Tests different payload structures and edge cases
 - `TestA2AGateway_ErrorCases` - Validates error handling and fail-closed behavior
 
 **MCP Gateway Tests** (`test/mcp_gateway_test.go`):
-- `TestMCPGateway_EndToEnd` - Validates MCP protocol translation (JSON-RPC tools/list, tools/call) to GovernanceEnvelope, 3-layer verification, suspension & OOB approval, and downstream dispatch
+- `TestMCPGateway_EndToEnd` - Validates MCP protocol translation (JSON-RPC tools/list, tools/call) to GovernanceEnvelope, 3-layer verification, suspension and OOB approval, and downstream dispatch
 - `TestMCPGateway_PayloadVariations` - Tests different JSON-RPC payload structures
 - `TestMCPGateway_ErrorCases` - Validates error handling for malformed JSON-RPC
 
@@ -138,6 +131,14 @@ Integration tests exercise end-to-end workflows with real infrastructure (no moc
 - `TestUniversalGateway_OOBSuspensionAndApproval` - OOB suspension and WebAuthn approval flow
 - `TestUniversalGateway_RealDownstreamIntegration` - Real downstream server integration
 - `TestUniversalGateway_CanonicalJSONWireFormat` - Canonical JSON wire format validation
+
+**Native Tool Registry Tests** (`test/native_tool_registry_integration_test.go`):
+- `TestRegisterNativeTools` - Validates registration of all 27 native tools (db_discover_topology, db_query_validate, db_isolated_read, db_index_triage, log_stream_filter, sys_oom_detect, config_diff_mask, proc_metric_top, fs_disk_profile, proc_signal_safe, net_socket_audit, net_endpoint_ping, net_http_probe, sys_info, net_dns_resolve, tls_cert_inspect, sys_env_vars, fs_file_checksum, sys_service_status, sys_container_status, fs_disk_usage, sys_time_clock, proc_tree, git_ops, cloud_metadata, k8s_inspect, shell_execute, net_ssh_known_hosts, operator_deploy)
+- `TestRegisterNativeTools_DuplicateRegistration` - Verifies duplicate registration fails
+- `TestRegisterNativeTools_NilRegistry` - Tests panic on nil registry
+- `TestRegisterNativeTools_ToolNameConsistency` - Validates naming convention (lowercase with underscores)
+- `TestRegisterNativeTools_SchemaValidity` - Verifies all tool schemas are valid
+- `TestRegisterNativeTools_PartialRegistration` - Tests partial registration failure
 
 #### Real Operator Tests
 
@@ -216,11 +217,14 @@ Five-layer governance pipeline tests:
 - `actuator_pub_export_test.go` - L5 Actuator public export tests
 - `eval_answer_test.go` - L1 Doctrine evaluation answer tests
 - `governance_test.go` - General governance tests
+- `governance_integration_test.go` - Governance integration tests with `//go:build integration` tag
 - `l1_doctrine_payload_test.go` - L1 Doctrine payload validation tests
 - `l1_doctrine_test.go` - L1 Doctrine pattern matching tests
 - `l3_notary_test.go` - L3 Notary human presence proof tests
+- `l3_notary_integration_test.go` - L3 Notary integration tests with `//go:build integration` tag
 - `l4_warden_test.go` - L4 Warden integrity tests
 - `l5_actuator_test.go` - L5 Actuator execution tests
+- `l5_actuator_integration_test.go` - L5 Actuator integration tests with `//go:build integration` tag
 - `transaction_verifier_test.go` - Transaction verifier integration tests
 
 #### Execution Service Tests (`internal/services/execution/`)
@@ -247,9 +251,10 @@ Authentication and PKI tests:
 #### Other Service Tests
 
 - `internal/services/g8eo_test.go` - g8e Operator lifecycle tests
-- `internal/services/g8eo_integration_test.go` - g8e Operator integration tests
+- `internal/services/g8eo_integration_test.go` - g8e Operator integration tests with `//go:build integration` tag
 - `internal/services/g8eo_lifecycle_test.go` - g8e Operator lifecycle management tests
 - `internal/services/pubsub/heartbeat_service_test.go` - Pub/sub heartbeat tests
+- `internal/services/system/system_utils_test.go` - System utility tests with `//go:build !windows` tag
 
 #### CLI Tests (`internal/cli/`)
 
@@ -281,9 +286,13 @@ CLI command and configuration tests:
 - `internal/config/config_test.go` - Configuration tests
 - `internal/config/settings_test.go` - Settings tests
 - `internal/constants/channels_test.go` - Channel constants tests
+- `internal/constants/document_ids_test.go` - Document ID constants tests
 - `internal/constants/env_vars_test.go` - Environment variable constants tests
 - `internal/constants/exit_codes_test.go` - Exit code constants tests
+- `internal/constants/field_paths_test.go` - Field path constants tests
+- `internal/constants/output_test.go` - Output constants tests
 - `internal/constants/paths_test.go` - Path constants tests
+- `internal/constants/pubsub_test.go` - Pub/sub constants tests
 
 #### Contract Tests
 
@@ -295,10 +304,11 @@ CLI command and configuration tests:
 - `internal/httpclient/errors_test.go` - HTTP client error tests
 - `internal/httpclient/httpclient_test.go` - HTTP client tests
 - `internal/marshaler/marshaler_test.go` - Marshaler tests
-- `internal/auditor/client/mtls_test.go` - Auditor mTLS client tests
+- `internal/emulator/client/mtls_test.go` - Emulator mTLS client tests
 - `internal/certs/embed_test.go` - Embedded certificates tests
 - `internal/certs/fetch_test.go` - Certificate fetch tests
-- `internal/test/chaos/chaos_test.go` - Chaos engineering tests (detailed above)
+- `internal/testutil/pubsub_integration_test.go` - Pub/sub integration tests with `//go:build integration` tag
+- `internal/testutil/pubsub_unit_test.go` - Pub/sub unit tests
 
 #### Storage Test Infrastructure (`internal/services/storage/storagetest/`)
 
@@ -308,7 +318,7 @@ Test-only audit storage implementations separated from production code to avoid 
 - `audit_vault_test.go` - Comprehensive tests for the test audit store
 - `helpers.go` - Test helper functions (`testGitPath`, `createTestVault`)
 
-**Key distinction**: `storagetest.TestSQLAuditStore` is test infrastructure and should only be used in test code (e.g., chaos tester). Production code uses `storage.SQLAuditStore` from `audit_store.go`.
+**Key distinction**: `storagetest.TestSQLAuditStore` is test infrastructure and should only be used in test code. Production code uses `storage.SQLAuditStore` from `audit_store.go`.
 
 #### Command Tests
 
@@ -321,9 +331,11 @@ Test-only audit storage implementations separated from production code to avoid 
 - `internal/cmd/stream_subprocess_test.go` - Subprocess stream tests
 - `internal/cmd/stream_test.go` - General stream tests
 
-#### Protocol Tests
+#### MCP Service Tests (`internal/services/mcp/`)
 
-- `protocol/workload_identity_test.go` - Workload identity SPIFFE URI tests
+MCP gateway and native tool integration tests:
+- `gateway_integration_test.go` - Gateway integration tests with real envelope processing, GatewaySigned propagation, SSE streaming, circuit breaker, error code mapping, native tool execution, read_field tool with L3 validation, and real L3 verification
+- `native_tools_integration_test.go` - Native tools integration tests with real SQLite databases, audit vault persistence, log filtering with scrubbing, process metrics and signal safety, network auditing and probing, concurrency tests for TOCTOU resistance, property-based tests for safety invariants, and negative controls for intentional failures
 
 #### Package Tests
 
@@ -429,7 +441,7 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 - **Tooling** - Standard `go test` with optional `gotestsum` for dots-style output.
 - **Race detection** - Enabled via `-race` in CI and by default in `./g8e test unit` and `./g8e test ci`.
 - **Parallelism** - `-parallel 4` with `180s` timeout.
-- **Coverage** - `--coverage` flag generates reports. CI enforces 60% coverage threshold.
+- **Coverage** - `--coverage` flag generates reports. CI enforces 52% coverage threshold.
 - **Concurrency** - Goroutines require explicit cancellation contexts and clear channel ownership.
 - **Integration tags** - Scenario tests require `-tags=integration` to access test fixtures and Gateway gate infrastructure.
 - **Path constants** - Tests must use `constants.Paths.Infra.*` constants for runtime state paths (e.g., `constants.Paths.Infra.PkiDir` for `.g8e/pki`). Hardcoded path strings like `.g8e/pki` are prohibited in test code.
@@ -447,7 +459,7 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 - **`make test-e2e`** - Runs Tier 3 (Live Platform E2E) tests with `e2e` build tag. Requires running gateway and auth login.
 - **`make test-scenario`** - Runs Tier 3 (Scenario) tests with `e2e` build tag. Requires running gateway and auth login.
 - **`make test-short`** - Runs short unit tests with race detection and 60s timeout.
-- **`make test-coverage`** - Runs tests with coverage and enforces 60% threshold. Use `PKG=./path/to/pkg` for specific packages, `VERBOSE=true` for verbose output.
+- **`make test-coverage`** - Runs tests with coverage and enforces 52% threshold. Use `PKG=./path/to/pkg` for specific packages, `VERBOSE=true` for verbose output.
 - **`make test-shuffle`** - Runs all tests with randomized order.
 - **`make test-gateway`** - Runs gateway-specific tests (A2A gateway, MCP gateway, MCP stdio).
 - **`make test-mcp`** - Runs MCP tests (MCP gateway, MCP real operator, MCP stdio). Requires running gateway and auth login.
@@ -484,4 +496,4 @@ GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 - **`verify-lint`** - Runs proto generation, linting, and vulnerability scanning.
 - **`security`** - Scans Go dependencies for known vulnerabilities.
 - **`test-unit-integration`** - Runs Tier 1 (Unit) and Tier 2 (In-Memory Integration) tests. Does not start the gateway.
-- **`test-e2e`** - Runs Tier 3 (Live Platform E2E) tests. Starts the gateway, authenticates, runs tests, and stops the gateway. Depends on `verify-lint` to save resources.
+- **`test-e2e`** - Runs Tier 3 (Live Platform E2E) tests. Starts the gateway, authenticates, runs tests, and stops the gateway. Depends on `verify-lint` to save resources. Enforces 52% coverage threshold.

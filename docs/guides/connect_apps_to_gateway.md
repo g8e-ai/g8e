@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-06-02
-Version: v1.0.8
+Last Updated: 2026-06-10
+Version: v1.0.11
 
 ---
 
@@ -68,7 +68,7 @@ Enforces L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2). This is the most
 
 ### g8e Gateway Ports
 
-The g8e Gateway exposes four logical protocol surfaces. Each surface serves a specific purpose with distinct authentication requirements.
+The g8e Gateway exposes two consolidated protocol surfaces. Each surface serves a specific purpose with distinct authentication requirements.
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
@@ -116,26 +116,57 @@ The Gateway provides a unified MCP endpoint architecture with a comprehensive in
 The Gateway includes a registry of native tools that execute locally with full governance enforcement. These tools are categorized by domain:
 
 **Database Tools**
-- `db_discover_topology` - Scans database schemas, tables, and column data types
-- `db_index_triage` - Queries fragmentation statistics and indexes
-- `db_isolated_read` - Executes SELECT statements in read-only mode with SQL validation
-- `db_query_validate` - Validates SQL queries using EXPLAIN QUERY PLAN
+- `db_discover_topology` - Automatically scans database schemas, tables, and column data types
+- `db_index_triage` - Queries database fragmentation statistics and index information
+- `db_isolated_read` - Executes SELECT statements in read-only mode against a SQLite database
+- `db_query_validate` - Validates SQL queries using EXPLAIN QUERY PLAN to detect full table scans and performance issues
 
 **Filesystem Tools**
 - `fs_disk_profile` - Recursively calculates directory sizes and disk usage
-- `log_stream_filter` - Reads log files and applies regex filtering with automatic secret scrubbing
+- `fs_disk_usage` - Provides df-style free space reporting for mounted filesystems
+- `fs_file_checksum` - Computes SHA256 checksums for file integrity verification
+- `log_stream_filter` - Reads log files and applies regex filtering with sensitive data scrubbing
 
 **Network Tools**
-- `net_endpoint_ping` - Performs TCP handshake or ICMP ping to verify connectivity
-- `net_http_probe` - Performs lightweight HTTP requests to probe web endpoints with SSRF protection
-- `net_socket_audit` - Inspects active network sockets with protocol validation
+- `net_endpoint_ping` - Performs TCP handshake to verify network endpoint connectivity and measure latency
+- `net_http_probe` - Performs lightweight HTTP requests to probe web endpoints
+- `net_socket_audit` - Inspects active network sockets (TCP/UDP) from /proc/net
+- `net_dns_resolve` - Performs DNS resolution (dig/nslookup equivalent) for network debugging
+- `net_ssh_known_hosts` - Lists known hosts from SSH config and known_hosts files based on OS type
 
 **Process Tools**
-- `proc_metric_top` - Parses /proc to extract top resource-consuming processes
+- `proc_metric_top` - Parses /proc to extract top resource-consuming processes by CPU and memory
 - `proc_signal_safe` - Sends signals to processes with denylist enforcement for protected PIDs
+- `proc_tree` - Provides parent-child process relationships and process tree
 
 **System Tools**
-- `sys_oom_detect` - Scans system logs for OOM killer events
+- `sys_oom_detect` - Scans system logs for OOM (Out of Memory) killer events
+- `sys_info` - Provides system information including hostname, OS version, kernel, uptime, and load average
+- `sys_env_vars` - Reads environment variables for configuration debugging
+- `sys_service_status` - Checks systemd service status (operator, gateway, etc.)
+- `sys_container_status` - Checks container health status (podman)
+- `sys_time_clock` - Provides NTP sync status and system time verification
+
+**Configuration Tools**
+- `config_diff_mask` - Compares configuration files with automatic secret masking for sensitive values
+
+**Security Tools**
+- `tls_cert_inspect` - Parses TLS certificates, verifies chains, and checks expiration (critical for PKI debugging)
+
+**Cloud Tools**
+- `cloud_metadata` - Detects cloud provider (AWS, Azure, GCP) and retrieves instance metadata including region, instance type, and availability zone
+
+**Git Tools**
+- `git_ops` - Provides git repository operations including status, log, branch info, and remote management for GitHub/GitLab workflows
+
+**Kubernetes Tools**
+- `k8s_inspect` - Provides Kubernetes cluster inspection including pods, nodes, services, and deployment status
+
+**Shell Tools**
+- `shell_execute` - Executes shell commands with denylist enforcement for dangerous operations and timeout limits
+
+**Operator Tools**
+- `operator_deploy` - Deploys the g8e operator to a list of remote hosts via SSH
 
 All native tools include input validation to prevent SQL injection, SSRF attacks, path traversal, and other security vulnerabilities.
 
@@ -162,7 +193,7 @@ curl -X POST https://localhost:8080/api/v1/mcp/tools/call \
     "jsonrpc": "2.0",
     "method": "tools/call",
     "params": {
-      "name": "shell.execute",
+      "name": "shell_execute",
       "arguments": {
         "command": "ls -la"
       }

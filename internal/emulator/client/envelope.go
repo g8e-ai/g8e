@@ -27,7 +27,7 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
-// Canonical UAP action types. SCREAMING_SNAKE per protocol/constants. Pinned
+// Canonical GovernanceEnvelope action types. SCREAMING_SNAKE per protocol/constants. Pinned
 // here so Emulator has no internal/ import; verify against MapEventTypeToActionType.
 const (
 	ActionMcpCall   = "MCP_CALL"

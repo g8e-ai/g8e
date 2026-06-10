@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-06-01
-Version: v1.0.5
+Last Updated: 2026-06-10
+Version: v1.0.11
 
 ---
 
@@ -59,7 +59,7 @@ Application-internal state remains the exclusive responsibility of the applicati
 
 ### Canonical JSON Wire Format
 
-All client-facing interactions must use canonical JSON (protojson) as the wire format.Node Node Binary protobuf is reserved for internal storage.
+All client-facing interactions must use canonical JSON (protojson) as the wire format. Binary protobuf is reserved for internal storage.
 
 The envelope `id` must match the deterministic transaction_hash computed from its content. The signature basis is always the deterministic transaction hash, regardless of wire encoding.
 
@@ -68,16 +68,29 @@ The envelope `id` must match the deterministic transaction_hash computed from it
 A valid GovernanceEnvelope must include:
 
 - **id**: Deterministic transaction hash (SHA256 of canonical fields).
+- **timestamp**: Creation timestamp.
+- **expires_at**: Timestamp for expiry enforcement.
+- **source_component**: Component identifier (e.g., COMPONENT_CLIENT).
+- **operator_id**: Target operator identifier.
+- **operator_session_id**: Operator session identifier.
+- **web_session_id**: Web session identifier.
+- **cli_session_id**: CLI session identifier.
 - **event_type**: Typed event identifier (e.g., `g8e.v1.operator.command.requested`).
 - **payload**: Raw protobuf payload bytes.
 - **intent_data**: Structured JSON view of the intent.
 - **action_type**: UAP-compatible action type (e.g., `EXECUTE_BASH`).
 - **target_resource**: UAP-compatible target resource.
-- **nonce**: Unique value for replay defense.
-- **expires_at**: Timestamp for expiry enforcement.
 - **state_merkle_root**: Current state root from the Gateway.
+- **nonce**: Unique value for replay defense.
 - **transaction_hash**: Deterministic hash computed from envelope fields.
+- **protocol_version**: UAP-compatible protocol version (e.g., "1.0").
 - **governance**: Governance metadata containing L1, L2, and L3 proofs.
+- **case_id**: Optional case identifier.
+- **investigation_id**: Optional investigation identifier.
+- **task_id**: Optional task identifier.
+- **system_fingerprint**: Optional system fingerprint.
+- **tenant_id**: Optional tenant identifier.
+- **binding_persona**: Optional binding persona.
 
 ### Typed Payloads
 
@@ -154,6 +167,13 @@ Construct the GovernanceEnvelope:
 ```json
 {
   "id": "<transaction_hash>",
+  "timestamp": "<current_timestamp>",
+  "expires_at": "<expiry_timestamp>",
+  "source_component": "COMPONENT_CLIENT",
+  "operator_id": "<operator_id>",
+  "operator_session_id": "<operator_session_id>",
+  "web_session_id": "<web_session_id>",
+  "cli_session_id": "<cli_session_id>",
   "event_type": "g8e.v1.operator.command.requested",
   "payload": "<base64_encoded_protobuf_bytes>",
   "intent_data": {
@@ -163,12 +183,19 @@ Construct the GovernanceEnvelope:
   },
   "action_type": "EXECUTE_BASH",
   "target_resource": "/tmp",
-  "nonce": "<unique_nonce>",
-  "expires_at": "<expiry_timestamp>",
   "state_merkle_root": "<state_root>",
+  "nonce": "<unique_nonce>",
   "transaction_hash": "<transaction_hash>",
-  "timestamp": "<current_timestamp>",
-  "source_component": "COMPONENT_CLIENT"
+  "protocol_version": "1.0",
+  "governance": {
+    "l1": {
+      "validated": true,
+      "violations": []
+    },
+    "l2": {},
+    "l3": {},
+    "gateway_signed": false
+  }
 }
 ```
 
@@ -211,25 +238,35 @@ Add the L2Consensus signatures to the envelope:
 ```json
 {
   "id": "<transaction_hash>",
-  "payload_type": "ShellExecuteRequested",
-  "payload": {
+  "timestamp": "<current_timestamp>",
+  "expires_at": "<expiry_timestamp>",
+  "source_component": "COMPONENT_CLIENT",
+  "event_type": "g8e.v1.operator.command.requested",
+  "payload": "<base64_encoded_protobuf_bytes>",
+  "intent_data": {
     "command": "ls -la",
     "working_directory": "/tmp",
     "environment": {}
   },
-  "nonce": "<unique_nonce>",
-  "expires_at": "<expiry_timestamp>",
+  "action_type": "EXECUTE_BASH",
+  "target_resource": "/tmp",
   "state_merkle_root": "<state_root>",
-  "signatures": [
-    {
-      "signer_id": "<agent_1_id>",
-      "signature": "<signature_1>"
+  "nonce": "<unique_nonce>",
+  "transaction_hash": "<transaction_hash>",
+  "protocol_version": "1.0",
+  "governance": {
+    "l1": {
+      "validated": true,
+      "violations": []
     },
-    {
-      "signer_id": "<agent_2_id>",
-      "signature": "<signature_2>"
-    }
-  ]
+    "l2": {
+      "consensus_signature": "<signature>",
+      "agent_ids": ["<agent_1_id>", "<agent_2_id>"],
+      "key_id": "<key_id>"
+    },
+    "l3": {},
+    "gateway_signed": false
+  }
 }
 ```
 

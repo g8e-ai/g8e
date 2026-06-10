@@ -31,7 +31,9 @@ Practical Coverage:
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
@@ -41,7 +43,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -125,11 +126,16 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 		return ls.IsReady()
 	}, 5*time.Second, 100*time.Millisecond)
 
-	// Since we used port 0, we need to know what ports were assigned.
-	// We'll add getters for the servers in GatewayService.
-	publicURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
-	mtlsURL := fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
-	wssURL := fmt.Sprintf("wss://localhost:%d/ws/pubsub", constants.Ports.OperatorHttps)
+	// Get the actual bound ports from the in-process gateway (port 0 = OS-assigned).
+	// HTTP port: plain-HTTP bootstrap (CA bundle discovery, enrollment, health).
+	// HTTPS port: mTLS-protected API (governance envelopes, pubsub stream).
+	httpPort := ls.GetHTTPPort()
+	httpsPort := ls.GetHTTPSPort()
+	require.NotZero(t, httpPort, "gateway HTTP port not bound")
+	require.NotZero(t, httpsPort, "gateway HTTPS port not bound")
+	discoveryURL := fmt.Sprintf("http://localhost:%d", httpPort)
+	mtlsURL := fmt.Sprintf("https://localhost:%d", httpsPort)
+	wssURL := fmt.Sprintf("wss://localhost:%d%s", httpsPort, constants.APIPaths.PubSubStream)
 
 	// 1. Discover Operator trust metadata
 	// Hub bundle (Root + Hub CA) is available on public port via HTTPS for initial discovery
@@ -146,14 +152,9 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, bootstrapRootPool.AppendCertsFromPEM(initialBundle))
 
-	secureDiscoveryClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs: bootstrapRootPool,
-			},
-		},
-	}
-	resp, err := secureDiscoveryClient.Get(publicURL + "/.well-known/g8e/pki/ca-bundle")
+	// CA bundle is served on the plain HTTP port (no mTLS required for initial trust bootstrap).
+	discoveryClient := &http.Client{}
+	resp, err := discoveryClient.Get(discoveryURL + constants.APIPaths.WellKnownPKICABundle)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -164,92 +165,46 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	rootPool := x509.NewCertPool()
 	require.True(t, rootPool.AppendCertsFromPEM(hubBundlePEM))
 
-	// 2. Create enrollment token for enrollment (test setup via DB)
-	// In production, enrollment tokens are created via admin API by authorized users.
-	// For test setup, we inject the token directly into the DB.
-	userID := "byo-user-test-"
-	orgID := "byo-org-test-"
+	// 2. Enroll the BYO client via plain-HTTP device enrollment.
+	// The HTTP bootstrap port accepts initial enrollment without any prior credentials.
 
-	// Generate CSR for client certificate
-	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	// Generate operator key and CSR
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
-	csrTmpl := &x509.CertificateRequest{
-		Subject: pkix.Name{
-			CommonName:   userID,
-			Organization: []string{orgID},
-		},
-	}
+	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "byo-operator"}}
 	csrDER, err := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
 	require.NoError(t, err)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
-	// Create a temporary client cert for initial enrollment (using hub CA)
-	hubCAPEM := testutil.ReadHubCA(t, pkiDir)
-	hubBlock, _ := pem.Decode(hubCAPEM)
-	hubCert, err := x509.ParseCertificate(hubBlock.Bytes)
+	// Generate CLI key and CSR (mandatory for device enrollment)
+	cliPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
-	hubKeyDER, err := sm.GetCAPrivateKey("hub")
+	cliCSRTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "byo-cli"}}
+	cliCSRDER, err := x509.CreateCertificateRequest(rand.Reader, cliCSRTmpl, cliPriv)
 	require.NoError(t, err)
-	hubKey, err := x509.ParseECPrivateKey(hubKeyDER)
-	require.NoError(t, err)
+	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRDER})
 
-	tempCertTemplate := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		Subject:               csrTmpl.Subject,
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(24 * time.Hour),
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-	}
-	tempCertDER, err := x509.CreateCertificate(rand.Reader, tempCertTemplate, hubCert, priv.Public(), hubKey)
-	require.NoError(t, err)
-	tempCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tempCertDER})
-
-	// Create mTLS client with temporary cert
-	privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
-	require.NoError(t, err)
-	tempCert, err := tls.X509KeyPair(tempCertPEM, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
-	require.NoError(t, err)
-
-	enrollClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs:      rootPool,
-				Certificates: []tls.Certificate{tempCert},
-			},
-		},
-	}
-
-	// Enroll via CSR endpoint
-	mtlsURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
+		CLICSR:            string(cliCSRPEM),
 		SystemFingerprint: "byo-fingerprint",
 		Hostname:          "byo-host",
 	}
 	regBody, _ := json.Marshal(regReq)
-	req, err := http.NewRequest(http.MethodPost, mtlsURL+"/api/pki/device-enroll", bytes.NewReader(regBody))
+	enrollResp, err := http.Post(discoveryURL+constants.APIPaths.AuthDeviceEnroll, "application/json", bytes.NewReader(regBody))
 	require.NoError(t, err)
-
-	resp, err = enrollClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	defer enrollResp.Body.Close()
+	require.Equal(t, http.StatusCreated, enrollResp.StatusCode)
 
 	var regResp models.OperatorRegistrationResponse
-	err = json.NewDecoder(resp.Body).Decode(&regResp)
-	require.NoError(t, err)
+	require.NoError(t, json.NewDecoder(enrollResp.Body).Decode(&regResp))
 	require.True(t, regResp.Success)
 
-	// Configure mTLS client
-	cert, err := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: priv}))
-	if err != nil {
-		// Try ED25519 private key encoding if standard fails
-		privBytes, _ := x509.MarshalPKCS8PrivateKey(priv)
-		cert, err = tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
-		require.NoError(t, err)
-	}
+	// Configure mTLS client using the enrolled operator cert
+	privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
+	require.NoError(t, err)
+	cert, err := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
+	require.NoError(t, err)
 
 	mtlsClient := &http.Client{
 		Transport: &http.Transport{

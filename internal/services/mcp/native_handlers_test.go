@@ -28,7 +28,7 @@ import (
 )
 
 func TestNativeToolHandler_HandleTool(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("unknown tool", func(t *testing.T) {
@@ -102,7 +102,7 @@ func TestNativeToolHandler_HandleTool(t *testing.T) {
 }
 
 func TestHandleDBDiscoverTopology(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("valid database", func(t *testing.T) {
@@ -164,7 +164,7 @@ func TestHandleDBDiscoverTopology(t *testing.T) {
 }
 
 func TestHandleDBQueryValidate(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("indexed SELECT query accepted", func(t *testing.T) {
@@ -272,7 +272,7 @@ func TestHandleDBQueryValidate(t *testing.T) {
 }
 
 func TestHandleDBIsolatedRead(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("valid SELECT query", func(t *testing.T) {
@@ -338,7 +338,7 @@ func TestHandleDBIsolatedRead(t *testing.T) {
 }
 
 func TestHandleDBIndexTriage(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("valid database", func(t *testing.T) {
@@ -376,7 +376,7 @@ func TestHandleDBIndexTriage(t *testing.T) {
 }
 
 func TestHandleLogStreamFilter(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("valid log file", func(t *testing.T) {
@@ -426,7 +426,7 @@ func TestHandleSysOOMDetect(t *testing.T) {
 		t.Skip("skipping on Windows - /var/log/dmesg not available")
 	}
 
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("default log path", func(t *testing.T) {
@@ -450,7 +450,7 @@ func TestHandleSysOOMDetect(t *testing.T) {
 }
 
 func TestHandleConfigDiffMask(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("valid config diff", func(t *testing.T) {
@@ -528,7 +528,7 @@ func TestHandleProcMetricTop(t *testing.T) {
 		t.Skip("skipping on Windows - /proc not available")
 	}
 
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
@@ -552,7 +552,7 @@ func TestHandleProcMetricTop(t *testing.T) {
 }
 
 func TestHandleFSDiskProfile(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("valid path", func(t *testing.T) {
@@ -591,7 +591,7 @@ func TestHandleFSDiskProfile(t *testing.T) {
 }
 
 func TestHandleProcSignalSafe(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("protected PID rejected", func(t *testing.T) {
@@ -716,7 +716,7 @@ func TestHandleNetSocketAudit(t *testing.T) {
 		t.Skip("skipping on Windows - /proc not available")
 	}
 
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
@@ -760,7 +760,7 @@ func TestHandleNetSocketAudit(t *testing.T) {
 }
 
 func TestHandleNetEndpointPing(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("invalid host", func(t *testing.T) {
@@ -871,7 +871,7 @@ func TestHandleNetEndpointPing(t *testing.T) {
 }
 
 func TestHandleNetHTTPProbe(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("invalid URL", func(t *testing.T) {
@@ -1061,7 +1061,7 @@ func TestHandleNetHTTPProbe(t *testing.T) {
 }
 
 func TestNativeTools(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 	nativeTools := handler.ListTools()
 
@@ -1304,7 +1304,7 @@ func TestParseSocketAddr(t *testing.T) {
 }
 
 func TestHandleGitOps(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("git status on test repo", func(t *testing.T) {
@@ -1455,7 +1455,7 @@ func TestHandleGitOps(t *testing.T) {
 }
 
 func TestHandleCloudMetadata(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("detect provider", func(t *testing.T) {
@@ -1502,7 +1502,7 @@ func TestHandleCloudMetadata(t *testing.T) {
 }
 
 func TestHandleSysInfo(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
@@ -1526,7 +1526,7 @@ func TestHandleSysInfo(t *testing.T) {
 }
 
 func TestHandleNetDNSResolve(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("valid hostname", func(t *testing.T) {
@@ -1562,7 +1562,7 @@ func TestHandleNetDNSResolve(t *testing.T) {
 }
 
 func TestHandleTLSCertInspect(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("missing cert path", func(t *testing.T) {
@@ -1577,7 +1577,7 @@ func TestHandleTLSCertInspect(t *testing.T) {
 }
 
 func TestHandleSysEnvVars(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
@@ -1604,7 +1604,7 @@ func TestHandleSysEnvVars(t *testing.T) {
 }
 
 func TestHandleFSFileChecksum(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("valid file", func(t *testing.T) {
@@ -1647,7 +1647,7 @@ func TestHandleFSFileChecksum(t *testing.T) {
 }
 
 func TestHandleSysServiceStatus(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("missing service name", func(t *testing.T) {
@@ -1662,7 +1662,7 @@ func TestHandleSysServiceStatus(t *testing.T) {
 }
 
 func TestHandleSysContainerStatus(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("missing container name", func(t *testing.T) {
@@ -1677,7 +1677,7 @@ func TestHandleSysContainerStatus(t *testing.T) {
 }
 
 func TestHandleFSDiskUsage(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("valid path", func(t *testing.T) {
@@ -1724,7 +1724,7 @@ func TestHandleFSDiskUsage(t *testing.T) {
 }
 
 func TestHandleSysTimeClock(t *testing.T) {
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
@@ -1752,7 +1752,7 @@ func TestHandleProcTree(t *testing.T) {
 		t.Skip("skipping on Windows - /proc not available")
 	}
 
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
@@ -1801,7 +1801,7 @@ func TestHandleK8sInspect(t *testing.T) {
 		t.Skip("kubectl not found in PATH, skipping k8s_inspect tests")
 	}
 
-	handler, err := NewNativeToolHandler()
+	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("kubectl not available", func(t *testing.T) {

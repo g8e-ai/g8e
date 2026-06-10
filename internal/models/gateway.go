@@ -348,12 +348,14 @@ type BootstrapResponse struct {
 
 // CLIEnrollmentResponse is the typed response for POST /api/auth/cli/enroll.
 type CLIEnrollmentResponse struct {
-	Success        bool   `json:"success"`
-	CLISessionID   string `json:"cli_session_id"`
-	CLICert        string `json:"cli_cert"`
-	CLICertChain   string `json:"cli_cert_chain"`
-	HubTrustBundle string `json:"hub_trust_bundle"`
-	UserID         string `json:"user_id"`
+	Success           bool   `json:"success"`
+	CLISessionID      string `json:"cli_session_id"`
+	CLICert           string `json:"cli_cert"`
+	CLICertChain      string `json:"cli_cert_chain"`
+	HubTrustBundle    string `json:"hub_trust_bundle"`
+	UserID            string `json:"user_id"`
+	OperatorSessionID string `json:"operator_session_id,omitempty"`
+	OperatorID        string `json:"operator_id,omitempty"`
 }
 
 // DeviceEnrollmentResponse is the typed response for POST /api/auth/device/enroll.
@@ -369,6 +371,8 @@ type DeviceEnrollmentResponse struct {
 	CLICert           string `json:"cli_cert"`
 	CLICertChain      string `json:"cli_cert_chain"`
 	UserID            string `json:"user_id"`
+	ActuatorKeyID     string `json:"actuator_key_id,omitempty"`
+	ActuatorPubKey    string `json:"actuator_pub_key,omitempty"`
 }
 
 // PKIFingerprintResponse is the typed response for GET /.well-known/g8e/pki/fingerprint.

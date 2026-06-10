@@ -334,7 +334,7 @@ func TestCircuitBreakerIntegration(t *testing.T) {
 		cooldownDuration:  100 * time.Millisecond,
 		downstreamURL:     "http://localhost:9999", // Invalid URL that will fail
 	}
-	nativeToolHandler, err := NewNativeToolHandler()
+	nativeToolHandler, err := NewNativeToolHandler(nil)
 	if err != nil {
 		t.Fatalf("failed to create native tool handler: %v", err)
 	}
@@ -879,7 +879,7 @@ type realL3EnvelopeProcessor struct {
 func (p *realL3EnvelopeProcessor) ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error) {
 	p.called = true
 
-	// Unmarshal as UAP envelope
+	// Unmarshal as GovernanceEnvelope
 	envelope := &govpkg.GovernanceEnvelope{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, envelope); err != nil {
 		p.lastError = err

@@ -1,0 +1,141 @@
+{
+  "pa_queue": [
+    {
+      "id": "PA-2026-0041",
+      "fhir_resource_type": "ClaimResponse",
+      "fhir_version": "R4",
+      "patient_id": "PAT-001",
+      "provider": {
+        "npi": "1234567890",
+        "name": "Dr. Sarah Chen",
+        "specialty": "Cardiology",
+        "historic_approval_rate": 0.94,
+        "gold_card_eligible": true
+      },
+      "procedure": {
+        "code": "93306",
+        "description": "Transthoracic echocardiography",
+        "cpt_category": "diagnostic_imaging"
+      },
+      "submitted_date": "2026-06-03",
+      "sla_deadline": "2026-06-10",
+      "days_elapsed": 6,
+      "status": "PENDING_REVIEW",
+      "request_type": "standard",
+      "exemption_check": {
+        "evaluated": true,
+        "auto_approved": false,
+        "reason": "gold_card_pending_verification"
+      }
+    },
+    {
+      "id": "PA-2026-0042",
+      "fhir_resource_type": "ClaimResponse",
+      "fhir_version": "R4",
+      "patient_id": "PAT-002",
+      "provider": {
+        "npi": "0987654321",
+        "name": "Dr. Marcus Webb",
+        "specialty": "Pulmonology",
+        "historic_approval_rate": 0.71,
+        "gold_card_eligible": false
+      },
+      "procedure": {
+        "code": "94010",
+        "description": "Spirometry",
+        "cpt_category": "pulmonary_function"
+      },
+      "submitted_date": "2026-06-07",
+      "sla_deadline": "2026-06-14",
+      "days_elapsed": 2,
+      "status": "IN_REVIEW",
+      "request_type": "standard",
+      "exemption_check": {
+        "evaluated": true,
+        "auto_approved": false,
+        "reason": "below_exemption_threshold"
+      }
+    },
+    {
+      "id": "PA-2026-0043",
+      "fhir_resource_type": "ClaimResponse",
+      "fhir_version": "R4",
+      "patient_id": "PAT-003",
+      "provider": {
+        "npi": "1122334455",
+        "name": "Dr. Priya Nair",
+        "specialty": "Oncology",
+        "historic_approval_rate": 0.96,
+        "gold_card_eligible": true
+      },
+      "procedure": {
+        "code": "77067",
+        "description": "Screening mammography, bilateral",
+        "cpt_category": "diagnostic_imaging"
+      },
+      "submitted_date": "2026-06-09",
+      "sla_deadline": "2026-06-09",
+      "days_elapsed": 0,
+      "status": "AUTO_APPROVED",
+      "request_type": "expedited",
+      "exemption_check": {
+        "evaluated": true,
+        "auto_approved": true,
+        "reason": "gold_card_threshold_met"
+      }
+    },
+    {
+      "id": "PA-2026-0044",
+      "fhir_resource_type": "ClaimResponse",
+      "fhir_version": "R4",
+      "patient_id": "PAT-001",
+      "provider": {
+        "npi": "5566778899",
+        "name": "Dr. James O'Brien",
+        "specialty": "Orthopedics",
+        "historic_approval_rate": 0.58,
+        "gold_card_eligible": false
+      },
+      "procedure": {
+        "code": "27447",
+        "description": "Total knee arthroplasty",
+        "cpt_category": "surgical"
+      },
+      "submitted_date": "2026-05-30",
+      "sla_deadline": "2026-06-06",
+      "days_elapsed": 10,
+      "status": "SLA_BREACHED",
+      "request_type": "standard",
+      "exemption_check": {
+        "evaluated": true,
+        "auto_approved": false,
+        "reason": "below_exemption_threshold"
+      },
+      "sla_alert": {
+        "triggered": true,
+        "alert_date": "2026-06-04",
+        "breach_date": "2026-06-06",
+        "reportable_to_oha": true
+      }
+    }
+  ],
+  "compliance_summary": {
+    "reporting_period": "2026-Q2",
+    "total_requests": 4,
+    "auto_approved_gold_card": 1,
+    "pending_review": 1,
+    "in_review": 1,
+    "sla_breached": 1,
+    "standard_denial_rate": 0.0,
+    "expedited_denial_rate": 0.0,
+    "median_decision_days": 2.5,
+    "reportable_to_dcbs": true,
+    "next_report_deadline": "2027-03-01"
+  },
+  "metadata": {
+    "org": "healthcare",
+    "compliance_standard": "Oregon HB 3134 / 2026 CCO Medicaid Rule",
+    "fhir_version": "R4",
+    "generated": "2026-06-09"
+  }
+}

@@ -4,7 +4,7 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-05-31
+Last Updated: 2026-06-10
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -16,7 +16,7 @@ The g8e Protocol is the foundational wire contract for all mutations in the g8e 
 
 ### Core Design Principles
 
-- **Canonical JSON Wire Format**: All client-facing surfaces (HTTP, WSS pub/sub, receipts, audit exports) carry the `GovernanceEnvelope` as canonical JSON (protojson).Node Node Binary protobuf is strictly reserved for internal storage.
+- **Canonical JSON Wire Format**: All client-facing surfaces (HTTP, WSS pub/sub, receipts, audit exports) carry the `GovernanceEnvelope` as canonical JSON (protojson). Node binary protobuf is strictly reserved for internal storage.
 - **g8e.local Canonical Alias**: The platform uses `g8e.local` as the stable internal hostname. The gateway translates this alias to installation-specific peer identity and endpoint data (see [Network Architecture](./network.md)).
 - **Hash-Based Signing**: A deterministic `transaction_hash` is computed from normalized envelope fields. The verifier enforces `id == transaction_hash == SHA256(canonical_fields)`.
 - **Fail-Closed Verification**: Any malformed envelope, expired transaction, reused nonce, stale state root, or missing proof is rejected immediately before execution.

@@ -120,7 +120,7 @@ func runMCPStdio(cmd *cobra.Command, args []string) error {
 	logger.Info("g8e MCP stdio server starting")
 
 	// Initialize native tool handler
-	nativeToolHandler, err := mcp.NewNativeToolHandler()
+	nativeToolHandler, err := mcp.NewNativeToolHandler(logger)
 	if err != nil {
 		return fmt.Errorf("initialize native tool handler: %w", err)
 	}

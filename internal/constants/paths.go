@@ -24,58 +24,97 @@ import (
 // The binary is fully self-contained and can run from any directory.
 var Paths = struct {
 	Infra struct {
-		DbPath               string
-		PkiDir               string
-		SecretsDir           string
-		CaCertPath           string
-		AppCertDir           string
-		DocsDir              string
-		ProtocolDir          string
-		ProtocolConstantsDir string
-		ProtocolModelsDir    string
-		SshConfigPath        string
-		RuntimeDir           string
-		DataDir              string
-		VaultDir             string
-		TestVaultDir         string
-		LocalStateDBPath     string
-		AuditVaultDBPath     string
+		DbPath                  string
+		PkiDir                  string
+		SecretsDir              string
+		CaCertPath              string
+		AppCertDir              string
+		DocsDir                 string
+		ProtocolDir             string
+		ProtocolConstantsDir    string
+		ProtocolModelsDir       string
+		SshConfigPath           string
+		RuntimeDir              string
+		DataDir                 string
+		VaultDir                string
+		TestVaultDir            string
+		LocalStateDBPath        string
+		AuditVaultDBPath        string
+		RootCAPath              string
+		HubCAPath               string
+		OperatorCAPath          string
+		GatewayPeerCAPath       string
+		GatewayChainPath        string
+		TrustDomainJSONPath     string
+		ServiceCertPath         string
+		PkiRootDir              string
+		PkiAuthoritiesDir       string
+		PkiIssuedHubDir         string
+		PkiIssuedGatewayPeerDir string
+		PkiTrustDir             string
+		PkiRevocationDir        string
 	}
 }{
 	Infra: struct {
-		DbPath               string
-		PkiDir               string
-		SecretsDir           string
-		CaCertPath           string
-		AppCertDir           string
-		DocsDir              string
-		ProtocolDir          string
-		ProtocolConstantsDir string
-		ProtocolModelsDir    string
-		SshConfigPath        string
-		RuntimeDir           string
-		DataDir              string
-		VaultDir             string
-		TestVaultDir         string
-		LocalStateDBPath     string
-		AuditVaultDBPath     string
+		DbPath                  string
+		PkiDir                  string
+		SecretsDir              string
+		CaCertPath              string
+		AppCertDir              string
+		DocsDir                 string
+		ProtocolDir             string
+		ProtocolConstantsDir    string
+		ProtocolModelsDir       string
+		SshConfigPath           string
+		RuntimeDir              string
+		DataDir                 string
+		VaultDir                string
+		TestVaultDir            string
+		LocalStateDBPath        string
+		AuditVaultDBPath        string
+		RootCAPath              string
+		HubCAPath               string
+		OperatorCAPath          string
+		GatewayPeerCAPath       string
+		GatewayChainPath        string
+		TrustDomainJSONPath     string
+		ServiceCertPath         string
+		PkiRootDir              string
+		PkiAuthoritiesDir       string
+		PkiIssuedHubDir         string
+		PkiIssuedGatewayPeerDir string
+		PkiTrustDir             string
+		PkiRevocationDir        string
 	}{
-		DbPath:               ".g8e/data/g8e.db",
-		PkiDir:               ".g8e/pki",
-		SecretsDir:           ".g8e/secrets",
-		CaCertPath:           ".g8e/pki/trust/g8eg-ca-bundle.pem",
-		AppCertDir:           ".g8e/pki/issued/apps",
-		DocsDir:              ".g8e/docs",
-		ProtocolDir:          ".g8e/protocol",
-		ProtocolConstantsDir: ".g8e/protocol/constants",
-		ProtocolModelsDir:    ".g8e/protocol/models",
-		SshConfigPath:        ".g8e/ssh_config",
-		RuntimeDir:           ".g8e",
-		DataDir:              ".g8e/data",
-		VaultDir:             ".g8e/vault",
-		TestVaultDir:         ".g8e/test-vault",
-		LocalStateDBPath:     ".g8e/local_state.db",
-		AuditVaultDBPath:     ".g8e/audit_vault.db",
+		DbPath:                  ".g8e/data/g8e.db",
+		PkiDir:                  ".g8e/pki",
+		SecretsDir:              ".g8e/secrets",
+		CaCertPath:              ".g8e/pki/trust/g8eg-ca-bundle.pem",
+		AppCertDir:              ".g8e/pki/issued/apps",
+		DocsDir:                 ".g8e/docs",
+		ProtocolDir:             ".g8e/protocol",
+		ProtocolConstantsDir:    ".g8e/protocol/constants",
+		ProtocolModelsDir:       ".g8e/protocol/models",
+		SshConfigPath:           ".g8e/ssh_config",
+		RuntimeDir:              ".g8e",
+		DataDir:                 ".g8e/data",
+		VaultDir:                ".g8e/vault",
+		TestVaultDir:            ".g8e/test-vault",
+		LocalStateDBPath:        ".g8e/local_state.db",
+		AuditVaultDBPath:        ".g8e/audit_vault.db",
+		RootCAPath:              ".g8e/pki/root/root_ca.crt",
+		HubCAPath:               ".g8e/pki/authorities/hub_ca.crt",
+		OperatorCAPath:          ".g8e/pki/authorities/operator_ca.crt",
+		GatewayPeerCAPath:       ".g8e/pki/authorities/gateway_peer_ca.crt",
+		GatewayChainPath:        ".g8e/pki/issued/hub/operator-gateway.chain.pem",
+		TrustDomainJSONPath:     ".g8e/pki/trust/trust-domain.json",
+		ServiceCertPath:         ".g8e/pki/issued/hub/operator-gateway.crt",
+		PkiRootDir:              ".g8e/pki/root",
+		PkiAuthoritiesDir:       ".g8e/pki/authorities",
+		PkiIssuedHubDir:         ".g8e/pki/issued/hub",
+		PkiIssuedGatewayPeerDir: ".g8e/pki/issued/gateway-peer",
+		PkiTrustDir:             ".g8e/pki/trust",
+		PkiRevocationDir:        ".g8e/pki/revocation",
 	},
 }
 
@@ -112,6 +151,19 @@ func InitPathsWithBase(baseDir string) error {
 	Paths.Infra.DocsDir = filepath.Join(baseDir, ".g8e/docs")
 	Paths.Infra.SshConfigPath = filepath.Join(baseDir, ".g8e/ssh_config")
 	Paths.Infra.TestVaultDir = filepath.Join(baseDir, ".g8e/test-vault")
+	Paths.Infra.RootCAPath = filepath.Join(Paths.Infra.PkiDir, "root/root_ca.crt")
+	Paths.Infra.HubCAPath = filepath.Join(Paths.Infra.PkiDir, "authorities/hub_ca.crt")
+	Paths.Infra.OperatorCAPath = filepath.Join(Paths.Infra.PkiDir, "authorities/operator_ca.crt")
+	Paths.Infra.GatewayPeerCAPath = filepath.Join(Paths.Infra.PkiDir, "authorities/gateway_peer_ca.crt")
+	Paths.Infra.GatewayChainPath = filepath.Join(Paths.Infra.PkiDir, "issued/hub/operator-gateway.chain.pem")
+	Paths.Infra.TrustDomainJSONPath = filepath.Join(Paths.Infra.PkiDir, "trust/trust-domain.json")
+	Paths.Infra.ServiceCertPath = filepath.Join(Paths.Infra.PkiDir, "issued/hub/operator-gateway.crt")
+	Paths.Infra.PkiRootDir = filepath.Join(Paths.Infra.PkiDir, "root")
+	Paths.Infra.PkiAuthoritiesDir = filepath.Join(Paths.Infra.PkiDir, "authorities")
+	Paths.Infra.PkiIssuedHubDir = filepath.Join(Paths.Infra.PkiDir, "issued/hub")
+	Paths.Infra.PkiIssuedGatewayPeerDir = filepath.Join(Paths.Infra.PkiDir, "issued/gateway-peer")
+	Paths.Infra.PkiTrustDir = filepath.Join(Paths.Infra.PkiDir, "trust")
+	Paths.Infra.PkiRevocationDir = filepath.Join(Paths.Infra.PkiDir, "revocation")
 	return nil
 }
 

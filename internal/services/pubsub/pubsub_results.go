@@ -191,16 +191,16 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 		return fmt.Errorf("failed to publish Universal status update: %w", err)
 	}
 
-	rr.logger.Info("Execution status update transmitted (UAP)", "event_type", eventType, "execution_id", executionID)
+	rr.logger.Info("Execution status update transmitted", "event_type", eventType, "execution_id", executionID)
 	return nil
 }
 
 // PublishHeartbeat publishes heartbeat to dedicated Operator pub/sub heartbeat channel.
 // It wraps the heartbeat in a GovernanceEnvelope for consistency with other results.
 func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error {
-	rr.logger.Info("[HEARTBEAT] Publishing heartbeat to Operator pub/sub (UAP)")
+	rr.logger.Info("[HEARTBEAT] Publishing heartbeat to Operator pub/sub")
 
-	// Build the UAP envelope
+	// Build the GovernanceEnvelope
 	operatorSessionID := rr.config.OperatorSessionId
 
 	env, err := BuildUniversalResultEnvelope(rr.config, "HEARTBEAT_RESULT", heartbeat, "", rr.config.OperatorID, "", "", nil, "", "")

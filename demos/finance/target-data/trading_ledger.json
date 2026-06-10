@@ -1,0 +1,87 @@
+{
+  "positions": [
+    {
+      "id": "POS-001",
+      "symbol": "AAPL",
+      "quantity": 1000,
+      "avg_cost": 150.25,
+      "current_price": 175.50,
+      "market_value": 175500.00,
+      "unrealized_pnl": 25250.00,
+      "account": "TRADING-001",
+      "strategy": "ALGORITHMIC"
+    },
+    {
+      "id": "POS-002",
+      "symbol": "MSFT",
+      "quantity": 500,
+      "avg_cost": 320.75,
+      "current_price": 345.20,
+      "market_value": 172600.00,
+      "unrealized_pnl": 12225.00,
+      "account": "TRADING-001",
+      "strategy": "ALGORITHMIC"
+    },
+    {
+      "id": "POS-003",
+      "symbol": "GOOGL",
+      "quantity": 200,
+      "avg_cost": 135.50,
+      "current_price": 142.30,
+      "market_value": 28460.00,
+      "unrealized_pnl": 1360.00,
+      "account": "TRADING-002",
+      "strategy": "MOMENTUM"
+    }
+  ],
+  "transactions": [
+    {
+      "id": "TXN-001",
+      "symbol": "AAPL",
+      "side": "BUY",
+      "quantity": 1000,
+      "price": 150.25,
+      "total_value": 150250.00,
+      "timestamp": "2026-06-01T10:30:00Z",
+      "status": "EXECUTED",
+      "approval_required": true,
+      "approved_by": "TRADER_A"
+    },
+    {
+      "id": "TXN-002",
+      "symbol": "MSFT",
+      "side": "BUY",
+      "quantity": 500,
+      "price": 320.75,
+      "total_value": 160375.00,
+      "timestamp": "2026-06-02T14:15:00Z",
+      "status": "EXECUTED",
+      "approval_required": true,
+      "approved_by": "TRADER_B"
+    },
+    {
+      "id": "TXN-003",
+      "symbol": "GOOGL",
+      "side": "BUY",
+      "quantity": 200,
+      "price": 135.50,
+      "total_value": 27100.00,
+      "timestamp": "2026-06-03T09:45:00Z",
+      "status": "EXECUTED",
+      "approval_required": true,
+      "approved_by": "TRADER_A"
+    }
+  ],
+  "risk_limits": {
+    "max_position_value": 500000.00,
+    "max_daily_loss": 100000.00,
+    "max_single_trade": 200000.00,
+    "dual_control_threshold": 50000.00
+  },
+  "metadata": {
+    "org": "finance",
+    "compliance_standard": "SEC FINRA",
+    "last_audit": "2026-05-20",
+    "audit_status": "COMPLIANT"
+  }
+}

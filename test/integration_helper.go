@@ -143,17 +143,45 @@ func EnsureAuthLogin(t *testing.T, repoRoot string) {
 	g8ePath := filepath.Join(repoRoot, "g8e")
 	if _, err := os.Stat(g8ePath); os.IsNotExist(err) {
 		// Build the binary
-		buildCmd := exec.Command("go", "build", "-o", g8ePath, "./cmd/g8e")
+		buildCmd := exec.Command("go", "build", "-o", g8ePath, "./cmd/operator")
 		buildCmd.Dir = repoRoot
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			require.NoError(t, err, "failed to build g8e binary: %s", string(output))
 		}
 	}
 
-	// Run './g8e auth login'
-	loginCmd := exec.Command(g8ePath, "auth", "login")
+	// Check if gateway is already running by examining status output
+	// (gw status always exits 0, so we must parse output rather than checking err)
+	checkCmd := exec.Command(g8ePath, "gw", "status")
+	checkCmd.Dir = repoRoot
+	checkOutput, _ := checkCmd.CombinedOutput()
+	if strings.Contains(string(checkOutput), "STOPPED") {
+		// Gateway not running, start it
+		t.Logf("Gateway not running, starting it...")
+		startCmd := exec.Command(g8ePath, "gw", "start")
+		startCmd.Dir = repoRoot
+		if output, err := startCmd.CombinedOutput(); err != nil {
+			require.NoError(t, err, "failed to start gateway: %s", string(output))
+		}
+		// Wait for gateway to be ready
+		time.Sleep(3 * time.Second)
+	}
+
+	// Skip re-enrollment if credentials are fresh (< 45 min old).
+	// CLI sessions last 1 hour; re-enrolling concurrently from parallel tests
+	// causes rate-limit failures and unnecessary churn.
+	credsPath := filepath.Join(repoRoot, ".g8e", "credentials")
+	if info, err := os.Stat(credsPath); err == nil {
+		if time.Since(info.ModTime()) < 45*time.Minute {
+			t.Logf("Credentials are fresh (%v old), skipping re-enrollment", time.Since(info.ModTime()).Round(time.Second))
+			return
+		}
+	}
+
+	// Run './g8e gw cli auth login' with explicit endpoint
+	loginCmd := exec.Command(g8ePath, "gw", "cli", "auth", "login")
 	loginCmd.Dir = repoRoot
 	if output, err := loginCmd.CombinedOutput(); err != nil {
-		require.NoError(t, err, "failed to run './g8e auth login': %s", string(output))
+		require.NoError(t, err, "failed to run './g8e gw cli auth login': %s", string(output))
 	}
 }

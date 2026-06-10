@@ -752,9 +752,10 @@ func (h *HTTPHandler) handleBootstrapHealth(w http.ResponseWriter, r *http.Reque
 	}
 
 	h.responder.JSON(w, http.StatusOK, models.HealthResponse{
-		Status:  constants.GatewayModeStatusOK,
-		Mode:    constants.GatewayModeGateway,
-		Version: h.cfg.Version,
+		Status:          constants.GatewayModeStatusOK,
+		Mode:            constants.GatewayModeGateway,
+		Version:         h.cfg.Version,
+		GovernanceReady: h.isGovernanceReady != nil && h.isGovernanceReady(),
 	})
 }
 

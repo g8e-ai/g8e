@@ -41,7 +41,7 @@ func TestA2ARealOperator_Smoke(t *testing.T) {
 	EnsureGatewayReady(t, cliCfg)
 
 	// Test basic connectivity to Operator via HTTPS
-	healthURL := fmt.Sprintf("https://localhost:%d/health", constants.Ports.OperatorHttps)
+	healthURL := fmt.Sprintf("https://localhost:%d%s", constants.Ports.OperatorHttps, constants.APIPaths.Health)
 
 	resp, err := client.Get(healthURL)
 	require.NoError(t, err)

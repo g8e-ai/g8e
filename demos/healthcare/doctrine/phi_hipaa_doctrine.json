@@ -1,0 +1,129 @@
+{
+  "source": "healthcare_phi_hipaa",
+  "version": "1.0.0",
+  "last_updated": "2026-06-09",
+  "license": "Proprietary",
+  "doctrines": [
+    {
+      "id": "phi_detection",
+      "name": "PHI Data Detection",
+      "category": "data_classification",
+      "severity": "critical",
+      "pattern": "(?i)(patient.name|medical.record|diagnosis|treatment|prescription|ssn|social.security)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "phi_exfil_attempt",
+      "name": "PHI Data Exfiltration Attempt",
+      "category": "data_exfiltration",
+      "severity": "critical",
+      "pattern": "(?i)(exfil|exfiltrate|export|download).*(phi|patient|medical)",
+      "mitre_attack": "T1567.001",
+      "mitre_tactic": "Exfiltration",
+      "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "hipaa_minimum_necessary",
+      "name": "HIPAA Minimum Necessary Violation",
+      "category": "access_control",
+      "severity": "high",
+      "pattern": "(?i)(unauthorized.access|excessive.access|full.dump).*(patient|medical.record)",
+      "mitre_attack": "T1083",
+      "mitre_tactic": "Discovery",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "phi_encryption_violation",
+      "name": "PHI Encryption Violation",
+      "category": "encryption",
+      "severity": "critical",
+      "pattern": "(?i)(plaintext|unencrypted|clear.text).*(phi|patient|medical)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "pa_approval_bypass",
+      "name": "Protected Health Information Approval Bypass",
+      "category": "authorization",
+      "severity": "critical",
+      "pattern": "(?i)(skip.approval|bypass.authorization|override.consent).*(phi|patient)",
+      "mitre_attack": "T1568.002",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "hipaa_audit_logging",
+      "name": "HIPAA Audit Logging Bypass",
+      "category": "audit",
+      "severity": "high",
+      "pattern": "(?i)(disable.log|bypass.audit|no.logging).*(phi|patient.access)",
+      "mitre_attack": "T1562.006",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.80,
+      "enabled": true
+    },
+    {
+      "id": "phi_cross_boundary_transfer",
+      "name": "Unauthorized PHI Cross-Boundary Transfer",
+      "category": "data_transfer",
+      "severity": "critical",
+      "pattern": "(?i)(cross.org|external.transfer|third.party).*(phi|patient.data)",
+      "mitre_attack": "T1567.001",
+      "mitre_tactic": "Exfiltration",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "de_identification_failure",
+      "name": "PHI De-identification Failure",
+      "category": "data_privacy",
+      "severity": "high",
+      "pattern": "(?i)(raw.phi|unmasked|identifiable).*(data|record)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "pa_gold_card_bypass",
+      "name": "PA Gold Card Exemption Bypass",
+      "category": "authorization",
+      "severity": "high",
+      "pattern": "(?i)(force.exempt|override.gold.card|bypass.exemption|skip.threshold).*(provider|approval)",
+      "mitre_attack": "T1548",
+      "mitre_tactic": "Privilege Escalation",
+      "confidence": 0.88,
+      "enabled": true
+    },
+    {
+      "id": "pa_sla_manipulation",
+      "name": "PA SLA Timestamp Manipulation",
+      "category": "data_integrity",
+      "severity": "high",
+      "pattern": "(?i)(backdate|manipulate.timestamp|reset.timer|extend.deadline).*(sla|turnaround|prior.auth)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Impact",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "fhir_resource_tampering",
+      "name": "Unauthorized FHIR Resource Modification",
+      "category": "data_integrity",
+      "severity": "critical",
+      "pattern": "(?i)(tamper|forge|inject).*(fhir|claimresponse|priorauth|coverageeligibility)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Impact",
+      "confidence": 0.92,
+      "enabled": true
+    }
+  ]
+}

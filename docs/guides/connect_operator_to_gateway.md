@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-06-01
-Version: v1.0.5
+Last Updated: 2026-06-10
+Version: v1.0.11
 
 ---
 
@@ -26,7 +26,7 @@ For development or single-host deployments, start the g8e Gateway locally:
 ./g8e gw start
 ```
 
-This starts the g8e Gateway in doctrine mode (L1 enforced, L2/L3 audited). The g8e Gateway performs network identity detection at startup and prompts for certificate identity mode (full hostnames/IPs or localhost only).
+This starts the g8e Gateway in doctrine mode (L1 enforced, L2/L3 audited). The g8e Gateway performs network identity detection at startup and defaults to full certificate identity mode (all hostnames/IPs).
 
 ### Remote Deployment
 
@@ -48,19 +48,47 @@ curl -fsSL http://<gateway-ip>:8080/g8e-operator.sh | bash
 iwr http://<gateway-ip>:8080/g8e-operator.ps1 -UseBasicParsing | iex
 ```
 
-#### 2. CSR-Based Enrollment
+#### 2. Operator Remote Management CLI Commands
+
+The gateway provides CLI commands to deploy and manage operators on remote hosts via SSH:
+
+**Deploy operator binary to remote hosts:**
+
+```bash
+./g8e operator deploy --hosts <host1,host2> --background
+```
+
+This command copies the operator binary to remote hosts via SSH and optionally starts it in the background. Requires `./g8e gw cli auth login` first.
+
+**Stream operator binary to remote hosts:**
+
+```bash
+./g8e operator stream --hosts <host1,host2>
+```
+
+This command streams the operator binary via SSH and executes it directly on remote hosts without copying. Useful for quick deployments or air-gapped scenarios.
+
+**Copy operator binary locally:**
+
+```bash
+./g8e operator cp <target-path>
+```
+
+**Copy operator binary to remote host via scp:**
+
+```bash
+./g8e operator scp <user@host:path>
+```
+
+#### 3. CSR-Based Enrollment
 
 On the remote host, generate a CSR and enroll with the g8e Gateway:
 
 ```bash
-./g8e security pki enroll -e <gateway-ip>
+./g8e gw security pki enroll -e <gateway-ip>
 ```
 
 The endpoint is the g8e Gateway IP address. The HTTP port (8080) is appended automatically. This command generates g8e Operator and CLI CSRs, submits them to the g8e Gateway, and saves the signed certificates to the PKI directory.
-
-#### 3. Copy g8e Node and Certificates
-
-Copy the `g8e` g8e Node and the issued certificates to the remote host.
 
 #### 4. Start the g8e Gateway
 
@@ -107,7 +135,7 @@ Check status:
 
 This reports:
 - Gateway process status and PID
-- Gateway endpoint URLs (control plane, bootstrap, public API, MCP HTTP)
+- Gateway endpoint URLs (Operator Bootstrap on HTTPS, Public API on HTTPS, MCP HTTP)
 - Gateway running state (RUNNING or STOPPED)
 
 ---
@@ -116,18 +144,19 @@ This reports:
 
 ### MCP Tool Calls
 
-AI clients can connect to the Gateway's MCP endpoint using mTLS:
+AI clients can connect to the Gateway's MCP endpoint:
+
+**For mTLS-based MCP:**
 
 ```bash
-# For mTLS-based MCP
-curl -X POST https://localhost:8080/api/v1/mcp/tools/call \
+curl -X POST https://localhost:8443/api/v1/mcp/tools/call \
   --cert .g8e/credentials/cli.crt \
   --key .g8e/credentials/cli.key \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shell.execute","arguments":{"command":"ls -la"}}}'
 ```
 
-For plain HTTP MCP (non-mTLS):
+**For plain HTTP MCP (non-mTLS):**
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/mcp/tools/call \
@@ -135,12 +164,20 @@ curl -X POST http://localhost:8080/api/v1/mcp/tools/call \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shell.execute","arguments":{"command":"ls -la"}}}'
 ```
 
+**View MCP client configuration matrix:**
+
+```bash
+./g8e mcp show
+```
+
+This displays configurations side-by-side for different transport modes (stdio, HTTP, HTTPS).
+
 ### Direct Envelope Submission
 
 For direct envelope submission to the Gateway:
 
 ```bash
-curl -X POST https://localhost:8080/api/v1/governance/envelopes \
+curl -X POST https://localhost:8443/api/v1/governance/envelopes \
   --cert .g8e/credentials/cli.crt \
   --key .g8e/credentials/cli.key \
   -H "Content-Type: application/json" \
@@ -182,14 +219,24 @@ Stop:
 When the mTLS certificate expires, re-authenticate using:
 
 ```bash
-./g8e auth login
+./g8e gw cli auth login
 ```
 
 This command automatically checks certificate expiry and performs auto-renewal if needed. For remote device enrollment, use CSR-based enrollment:
 
 ```bash
-./g8e security pki enroll -e <gateway-ip>
+./g8e gw security pki enroll -e <gateway-ip>
 ```
+
+**Windows Passkey Enrollment:**
+
+On Windows, enroll via the Windows Certificate Store:
+
+```bash
+./g8e gw cli auth enroll-windows
+```
+
+Note: This is now handled automatically by `./g8e gw cli auth login` on Windows. This command is for advanced use cases or manual re-enrollment.
 
 ---
 
@@ -197,10 +244,10 @@ This command automatically checks certificate expiry and performs auto-renewal i
 
 For custom g8e-compatible implementations, the Gateway follows the same operational pattern:
 
-1. **Enroll with Gateway**: Use CSR-based enrollment to obtain mTLS certificates via `./g8e security pki enroll`.
+1. **Enroll with Gateway**: Use CSR-based enrollment to obtain mTLS certificates via `./g8e gw security pki enroll`.
 2. **Configure Runtime**: Set up the data directory, PKI directory, and secrets directory.
 3. **Start Gateway**: Launch the Gateway with `./g8e gw start`.
-4. **Authenticate CLI**: Run `./g8e auth login` to obtain client credentials.
+4. **Authenticate CLI**: Run `./g8e gw cli auth login` to obtain client credentials.
 5. **Verify Connection**: Confirm the Gateway is running via `./g8e gw status`.
 6. **Monitor Health**: Implement health checks for the Gateway process and audit vault.
 
@@ -209,6 +256,7 @@ For custom g8e-compatible implementations, the Gateway follows the same operatio
 Custom operators should support configuration via:
 - CLI flags for runtime parameters (gateway URL, paths)
 - Configuration files for complex deployments
+- Environment variables for vault settings (G8E_VAULT_DIR, G8E_VAULT_KEY, G8E_VAULT_REQUIRE_UNLOCK)
 
 ### High Availability
 
@@ -259,13 +307,13 @@ ls -la .g8e/credentials/
 Re-enroll if certificates are missing or expired:
 
 ```bash
-./g8e auth login
+./g8e gw cli auth login
 ```
 
 If the trust bundle is stale after Gateway PKI regeneration:
 
 ```bash
-./g8e auth logout && ./g8e auth login
+./g8e gw cli auth logout && ./g8e gw cli auth login
 ```
 
 ### Audit Vault Errors
@@ -286,7 +334,7 @@ Check Gateway logs for audit vault write errors:
 Verify write permissions on the data directory:
 
 ```bash
-./g8e security validate
+./g8e gw security validate
 ```
 
 ### Authentication Failures
@@ -306,7 +354,7 @@ ls -la .g8e/credentials/
 Re-authenticate if credentials are missing or invalid:
 
 ```bash
-./g8e auth login
+./g8e gw cli auth login
 ```
 
 ---

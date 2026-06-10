@@ -14,12 +14,17 @@
 package cmd
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"strings"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
+	_ "modernc.org/sqlite"
 )
 
 func testCmd() *cobra.Command {
@@ -36,6 +41,7 @@ func testCmd() *cobra.Command {
 		testScenarioCmd(),
 		emulatorCmd(),
 		chaosCmd(),
+		testSummaryCmd(),
 	)
 
 	return cmd
@@ -161,6 +167,106 @@ func testScenarioCmd() *cobra.Command {
 			}
 
 			fmt.Println("Scenario tests completed successfully.")
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+func testSummaryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "summary",
+		Short: "View chaos test summary from test vault",
+		Long:  `View aggregated chaos test results from the test vault database. This queries the chaos_events table across all test runs in the test vault directory.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Initialize paths to get test vault directory
+			if err := constants.InitPaths(); err != nil {
+				return fmt.Errorf("failed to initialize paths: %w", err)
+			}
+
+			testVaultDir := constants.Paths.Infra.TestVaultDir
+			if _, err := os.Stat(testVaultDir); os.IsNotExist(err) {
+				cmd.Printf("Test vault directory not found at %s\n", testVaultDir)
+				cmd.Println("Run './g8e test chaos' first to generate test data.")
+				return nil
+			}
+
+			// Find all test run directories
+			entries, err := os.ReadDir(testVaultDir)
+			if err != nil {
+				return fmt.Errorf("failed to read test vault directory: %w", err)
+			}
+
+			var testRuns []string
+			for _, entry := range entries {
+				if entry.IsDir() && strings.HasSuffix(entry.Name(), "chaos-test") {
+					testRuns = append(testRuns, filepath.Join(testVaultDir, entry.Name()))
+				}
+			}
+
+			if len(testRuns) == 0 {
+				cmd.Println("No chaos test runs found in test vault.")
+				cmd.Println("Run './g8e test chaos' first to generate test data.")
+				return nil
+			}
+
+			// Sort test runs by name (timestamp)
+			// For simplicity, we'll just use the most recent one
+			latestRun := testRuns[len(testRuns)-1]
+			dbPath := filepath.Join(latestRun, "g8e.db")
+
+			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+				return fmt.Errorf("chaos test database not found at %s", dbPath)
+			}
+
+			// Query chaos_events table
+			query := "SELECT category, outcome, COUNT(*) FROM chaos_events GROUP BY category, outcome"
+			db, err := sql.Open("sqlite", dbPath)
+			if err != nil {
+				return fmt.Errorf("failed to open database: %w", err)
+			}
+			defer db.Close()
+
+			rows, err := db.Query(query)
+			if err != nil {
+				return fmt.Errorf("failed to query chaos events: %w", err)
+			}
+			defer rows.Close()
+
+			type Result struct {
+				Category string
+				Outcome  string
+				Count    int
+			}
+
+			var results []Result
+			total := 0
+			for rows.Next() {
+				var category, outcome string
+				var count int
+				if err := rows.Scan(&category, &outcome, &count); err != nil {
+					return fmt.Errorf("failed to scan row: %w", err)
+				}
+				results = append(results, Result{Category: category, Outcome: outcome, Count: count})
+				total += count
+			}
+
+			if total == 0 {
+				cmd.Println("No chaos events found in database.")
+				return nil
+			}
+
+			cmd.Printf("Chaos Test Summary (from: %s)\n", latestRun)
+			cmd.Println(strings.Repeat("=", 110))
+			cmd.Printf("%-23s | %-16s | %6s\n", "Category", "Outcome", "Count")
+			cmd.Println(strings.Repeat("-", 110))
+			for _, r := range results {
+				cmd.Printf("%-23s | %-16s | %6d\n", r.Category, r.Outcome, r.Count)
+			}
+			cmd.Println(strings.Repeat("=", 110))
+			cmd.Printf("%-23s | %-16s | %6d\n", "TOTAL", "", total)
+
 			return nil
 		},
 	}
