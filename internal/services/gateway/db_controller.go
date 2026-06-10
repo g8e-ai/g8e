@@ -711,6 +711,12 @@ func (c *DBController) verifyBlobOwnership(r *http.Request, namespace string) er
 	return fmt.Errorf("unauthorized: unknown identity type")
 }
 
+//	@Summary		Get blob
+//	@Description	Retrieves a blob from the data store
+//	@Tags			data
+//	@Produce		application/octet-stream
+//	@Success		200	{file}	file
+//	@Router			/api/v1/data/blobs/{namespace}/{id} [get]
 func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.DataBlobsPrefix)
 	if path == "" {

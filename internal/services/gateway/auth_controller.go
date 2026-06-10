@@ -957,6 +957,13 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 // handleCLIPasskeyRegisterChallenge handles passkey registration challenges for CLI bootstrap.
 // This is a public endpoint (no auth) for the initial bootstrap where no credentials exist yet.
 // It enforces first-credential-only to prevent credential stuffing attacks.
+//	@Summary		Passkey CLI register challenge
+//	@Description	Initiates passkey registration for CLI bootstrap
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/api/v1/auth/passkeys/cli-register/challenge [post]
 func (c *AuthController) handleCLIPasskeyRegisterChallenge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1019,6 +1026,13 @@ func (c *AuthController) handleCLIPasskeyRegisterChallenge(w http.ResponseWriter
 // handleCLIPasskeyRegisterVerify handles passkey registration verification for CLI bootstrap.
 // This is a public endpoint (no auth) for the initial bootstrap where no credentials exist yet.
 // It enforces first-credential-only to prevent credential stuffing attacks.
+//	@Summary		Passkey CLI register verify
+//	@Description	Verifies passkey registration for CLI bootstrap
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/api/v1/auth/passkeys/cli-register/verify [post]
 func (c *AuthController) handleCLIPasskeyRegisterVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1247,6 +1261,13 @@ func (c *AuthController) handleCLIBrowserPasskeyRegisterVerify(w http.ResponseWr
 
 // handleCLIPasskeyAuthenticateChallenge handles passkey authentication challenges for CLI.
 // This endpoint requires mTLS authentication via CLI certificate with X-G8E-CLI-Session-ID header.
+//	@Summary		Passkey CLI authenticate challenge
+//	@Description	Initiates passkey authentication for CLI bootstrap
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/api/v1/auth/passkeys/cli/authenticate/challenge [post]
 func (c *AuthController) handleCLIPasskeyAuthenticateChallenge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1291,6 +1312,13 @@ func (c *AuthController) handleCLIPasskeyAuthenticateChallenge(w http.ResponseWr
 
 // handleCLIPasskeyAuthenticateVerify handles passkey authentication verification for CLI.
 // This endpoint requires mTLS authentication via CLI certificate with X-G8E-CLI-Session-ID header.
+//	@Summary		Passkey CLI authenticate verify
+//	@Description	Verifies passkey authentication for CLI bootstrap
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/api/v1/auth/passkeys/cli/authenticate/verify [post]
 func (c *AuthController) handleCLIPasskeyAuthenticateVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1345,6 +1373,13 @@ func (c *AuthController) handleCLIPasskeyAuthenticateVerify(w http.ResponseWrite
 	})
 }
 
+//	@Summary		Bootstrap auth
+//	@Description	Initiates local bootstrap authentication flow
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/api/v1/auth/bootstrap [post]
 func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1575,6 +1610,13 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 // handleCLIEnrollment issues a CLI certificate for an already-bootstrapped system.
 // This endpoint is strictly for CLI credential recovery when local credentials are
 // missing; it does NOT create or rotate operator state. Loopback-only for defense.
+//	@Summary		CLI enrollment
+//	@Description	Enrolls a CLI client with the gateway
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/api/v1/auth/cli/enroll [post]
 func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1745,6 +1787,13 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+//	@Summary		Device enrollment
+//	@Description	Enrolls a device with the gateway
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/api/v1/auth/device/enroll [post]
 func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1953,6 +2002,13 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 	c.responder.JSON(w, http.StatusCreated, response)
 }
 
+//	@Summary		Bootstrap status
+//	@Description	Returns the current bootstrap status
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/api/v1/auth/bootstrap/status [get]
 func (c *AuthController) handleBootstrapStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")

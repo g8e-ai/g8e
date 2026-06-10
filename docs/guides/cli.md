@@ -19,6 +19,7 @@ Available Commands:
   test        Run test suites (unit, integration, e2e, scenario, emulator, chaos)
   setup       Run platform setup (validate dependencies, build binary)
   demos       Manage g8e demo environments
+  swagger     Manage Swagger/OpenAPI documentation
   help        Help about any command
 
 Flags:
@@ -1049,3 +1050,72 @@ For tools that don't support the agent wrapper, use the MCP config commands:
 ./g8e mcp show    # Print all MCP client configurations
 ./g8e mcp gov     # Run as MCP stdio proxy to Gateway
 ```
+
+## swagger
+```
+Manage Swagger/OpenAPI documentation for the g8e Gateway API. Commands for generating, serving, and validating Swagger/OpenAPI documentation.
+
+Usage:
+  g8e swagger [command]
+
+Available Commands:
+  init        Generate Swagger documentation from code annotations
+  serve       Serve Swagger UI for API documentation
+  validate    Validate Swagger/OpenAPI specification
+
+Flags:
+  -h, --help   help for swagger
+
+Use "g8e swagger [command] --help" for more information about a command.
+```
+
+### swagger init
+```
+Generate Swagger/OpenAPI documentation by scanning Go code for Swagger annotations. Uses swaggo/swag to parse annotations and generate docs. The command will automatically use the installed `swag` binary, or fall back to running it via `go run` if not available.
+
+Usage:
+  g8e swagger init [flags]
+
+Flags:
+      --dir string      Directory to search for Swagger annotations (default: internal/services/gateway)
+      --output string   Output directory for generated docs (default: internal/services/gateway/docs)
+  -h, --help            help for init
+```
+
+The generated documentation includes:
+- `swagger.json` - OpenAPI 2.0 specification in JSON format
+- `swagger.yaml` - OpenAPI 2.0 specification in YAML format
+- `docs.go` - Go file with embedded documentation for the gateway
+
+### swagger serve
+```
+Start a local HTTP server to serve the Swagger UI for viewing and testing the API documentation. This command provides instructions for serving the Swagger UI either through the running gateway or via external tools.
+
+Usage:
+  g8e swagger serve [flags]
+
+Flags:
+      --host string   Host to bind to (default: localhost)
+      --port int      Port to serve Swagger UI on (default: 8081)
+  -h, --help          help for serve
+```
+
+The Swagger UI is also available directly from the running gateway at:
+- `https://localhost:8443/swagger/index.html`
+
+### swagger validate
+```
+Validate the generated Swagger/OpenAPI specification for errors and compliance. This command checks the swagger.json file for correctness using available validation tools.
+
+Usage:
+  g8e swagger validate [flags]
+
+Flags:
+      --file string   Path to Swagger spec file (default: internal/services/gateway/docs/swagger.json)
+  -h, --help          help for validate
+```
+
+If no validation tool is installed, the command will suggest installing one of:
+- `npm install -g @apidevtools/swagger-cli`
+- `go install github.com/go-swagger/go-swagger/cmd/swagger@latest`
+

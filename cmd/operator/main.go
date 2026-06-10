@@ -13,6 +13,26 @@
 
 package main
 
+//	@title			g8e Gateway API
+//	@version		1.0
+//	@description	API documentation for the g8e Gateway public endpoints
+//	@termsOfService	https://github.com/g8e-ai/g8e
+
+//	@contact.name	g8e Team
+//	@contact.url	https://github.com/g8e-ai/g8e
+//	@contact.email	support@g8e.ai
+
+//	@license.name	Apache 2.0
+//	@license.url	http://www.apache.org/licenses/LICENSE-2.0.html
+
+//	@host		localhost:8443
+//	@BasePath	/api/v1
+
+//	@securityDefinitions.apikey	BearerAuth
+//	@in							header
+//	@name						Authorization
+//	@description				Bearer token authentication (JWT or mTLS certificate)
+
 import (
 	"bytes"
 	"context"
@@ -522,6 +542,7 @@ func main() {
 		"setup":    true,
 		"auth":     true,
 		"audit":    true,
+		"swagger":  true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
@@ -646,6 +667,7 @@ func main() {
 		"demos":    true,
 		"auth":     true,
 		"audit":    true,
+		"swagger":  true,
 		"help":     true,
 		"--help":   true,
 		"-h":       true,
@@ -688,7 +710,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  test           Run tests\n")
 		fmt.Fprintf(os.Stderr, "  setup          Configure AI IDE integrations\n")
 		fmt.Fprintf(os.Stderr, "  demos          Run demo applications\n")
-		fmt.Fprintf(os.Stderr, "  audit          Run audit reports for compliance\n\n")
+		fmt.Fprintf(os.Stderr, "  audit          Run audit reports for compliance\n")
+		fmt.Fprintf(os.Stderr, "  swagger        Manage Swagger/OpenAPI documentation\n\n")
 		fmt.Fprintf(os.Stderr, "Operator Mode Flags:\n")
 		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>    Gateway endpoint (for operator mode)\n")
 		fmt.Fprintf(os.Stderr, "  -k, --key <path>        Private key path\n")

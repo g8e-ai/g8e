@@ -126,6 +126,7 @@ help:
 	@echo "  lint          Run all linting and quality checks"
 	@echo "  vulncheck     Run Operator vulnerability check"
 	@echo "  validate-doctrines Validate doctrine JSON schema"
+	@echo "  swagger-generate Generate Swagger/OpenAPI documentation from code annotations"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean         Remove all build artifacts and runtime state"
@@ -507,7 +508,7 @@ test-native:
 # LINT & QUALITY
 # =============================================================================
 .PHONY: lint
-lint: lint-no-embedded-newlines vulncheck validate-doctrines
+lint: lint-no-embedded-newlines vulncheck validate-doctrines swagger-generate
 	@golangci-lint run --build-tags=integration
 	@echo "All linting and quality checks complete."
 
@@ -531,6 +532,19 @@ validate-doctrines:
 		fi \
 	done
 	@echo "All doctrine files are valid JSON."
+
+.PHONY: swagger-generate
+swagger-generate:
+	@echo "Generating Swagger/OpenAPI documentation..."
+	@if command -v swag &> /dev/null || [ -f "$$(go env GOPATH)/bin/swag" ]; then \
+		SWAG_CMD=$$(command -v swag 2>/dev/null || echo "$$(go env GOPATH)/bin/swag"); \
+		$$SWAG_CMD init --dir cmd/operator,internal/services/gateway --output internal/services/gateway/docs --parseDependency --parseInternal; \
+	else \
+		echo "swag not found, installing via go install..."; \
+		go install github.com/swaggo/swag/cmd/swag@latest; \
+		$$(go env GOPATH)/bin/swag init --dir cmd/operator,internal/services/gateway --output internal/services/gateway/docs --parseDependency --parseInternal; \
+	fi
+	@echo "Swagger documentation generated successfully."
 
 
 # =============================================================================
@@ -584,7 +598,7 @@ ci: ci-platform
 	@echo "CI complete."
 
 .PHONY: ci-platform
-ci-platform: _ci-verify-proto _ci-lint _ci-vulncheck _ci-test
+ci-platform: _ci-verify-proto _ci-swagger _ci-lint _ci-vulncheck _ci-test
 	@echo "Platform CI complete."
 
 .PHONY: _ci-verify-proto
@@ -600,6 +614,18 @@ _ci-verify-proto:
 		exit 1; \
 	fi
 	@$(MAKE) validate-doctrines
+
+.PHONY: _ci-swagger
+_ci-swagger:
+	@echo "=== swagger ==="
+	@$(MAKE) swagger-generate
+	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*internal/services/gateway/docs/" || true); \
+	if [ -n "$$CHANGES" ]; then \
+		echo "Error: Generated swagger files are out of sync with code annotations"; \
+		echo "$$CHANGES"; \
+		git diff -- $$(git status --porcelain | grep -E "^\s*M" | awk '{print $$2}'); \
+		exit 1; \
+	fi
 
 .PHONY: _ci-lint
 _ci-lint:

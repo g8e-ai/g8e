@@ -247,6 +247,13 @@ func (g *GatewayService) recordSuccess() {
 	g.circuitOpen = false
 }
 
+//	@Summary		List MCP tools
+//	@Description	Returns the list of available MCP tools
+//	@Tags			mcp
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]interface{}
+//	@Router			/api/v1/mcp/tools/list [get]
 func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -449,6 +456,13 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 	g.responder.RPCResponse(w, 1, downstreamResult)
 }
 
+//	@Summary		List MCP resources
+//	@Description	Returns the list of available MCP resources
+//	@Tags			mcp
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]interface{}
+//	@Router			/api/v1/mcp/resources/list [get]
 func (g *GatewayService) HandleResourcesList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -580,6 +594,13 @@ func (g *GatewayService) handleMCPRequest(w http.ResponseWriter, r *http.Request
 	}
 }
 
+//	@Summary		Call MCP tool
+//	@Description	Calls an MCP tool with the provided arguments
+//	@Tags			mcp
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]interface{}
+//	@Router			/api/v1/mcp/tools/call [post]
 func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request) {
 	g.handleMCPRequest(w, r, "tools/call", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 		return g.callTool(ctx, r, params)
@@ -781,6 +802,13 @@ func (g *GatewayService) scanForForbiddenPatterns(value interface{}) error {
 	return nil
 }
 
+//	@Summary		Read MCP resource
+//	@Description	Reads a specific MCP resource
+//	@Tags			mcp
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]interface{}
+//	@Router			/api/v1/mcp/resources/read [post]
 func (g *GatewayService) HandleResourcesRead(w http.ResponseWriter, r *http.Request) {
 	g.handleMCPRequest(w, r, "resources/read", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 		return g.readResource(ctx, params)
@@ -836,6 +864,13 @@ func (g *GatewayService) readResource(ctx context.Context, params json.RawMessag
 	return mcpRes, nil
 }
 
+//	@Summary		List MCP prompts
+//	@Description	Returns the list of available MCP prompts
+//	@Tags			mcp
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]interface{}
+//	@Router			/api/v1/mcp/prompts/list [get]
 func (g *GatewayService) HandlePromptsList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -900,6 +935,13 @@ func (g *GatewayService) HandlePromptsList(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+//	@Summary		Get MCP prompt
+//	@Description	Returns a specific MCP prompt template
+//	@Tags			mcp
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]interface{}
+//	@Router			/api/v1/mcp/prompts/get [post]
 func (g *GatewayService) HandlePromptsGet(w http.ResponseWriter, r *http.Request) {
 	g.handleMCPRequest(w, r, "prompts/get", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 		return g.getPrompt(ctx, params)
@@ -959,6 +1001,13 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 	return mcpRes, nil
 }
 
+//	@Summary		Call MCP tool (SSE)
+//	@Description	Calls an MCP tool with SSE streaming response
+//	@Tags			mcp
+//	@Accept			json
+//	@Produce		text/event-stream
+//	@Success		200	{string}	string
+//	@Router			/api/v1/mcp/tools/call/sse [post]
 func (g *GatewayService) HandleToolsCallSSE(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -1186,6 +1235,13 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 	return hash, envelopeBytes, nil
 }
 
+//	@Summary		A2A call
+//	@Description	Calls an A2A agent endpoint
+//	@Tags			a2a
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]interface{}
+//	@Router			/api/v1/a2a/call [post]
 func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 	g.handleMCPRequest(w, r, "a2a/call", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 		return g.a2aCall(ctx, r, params)

@@ -63,6 +63,13 @@ func (c *PKIController) readBody(r *http.Request) ([]byte, error) {
 	return io.ReadAll(r.Body)
 }
 
+//	@Summary		Get CA bundle
+//	@Description	Returns the platform's root CA certificate bundle for trust establishment
+//	@Tags			pki
+//	@Accept			json
+//	@Produce		application/x-pem-file
+//	@Success		200	{string}	string
+//	@Router			/.well-known/g8e/pki/ca-bundle [get]
 func (c *PKIController) handlePKICABundle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -86,6 +93,13 @@ func (c *PKIController) handlePKICABundle(w http.ResponseWriter, r *http.Request
 	_, _ = w.Write(pemData)
 }
 
+//	@Summary		Get PKI fingerprint
+//	@Description	Returns the platform's PKI fingerprint for verification
+//	@Tags			pki
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/.well-known/g8e/pki/fingerprint [get]
 func (c *PKIController) handlePKIFingerprint(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -118,6 +132,13 @@ func (c *PKIController) handlePKIFingerprint(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+//	@Summary		Sign CSR
+//	@Description	Signs a certificate signing request (internal mTLS endpoint)
+//	@Tags			pki
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	models.PKICSRSignResponse
+//	@Router			/api/v1/pki/csr/sign [post]
 func (c *PKIController) handlePKICSRSign(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -155,6 +176,13 @@ func (c *PKIController) handlePKICSRSign(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+//	@Summary		Revoke certificate
+//	@Description	Revokes a certificate by serial number (internal mTLS endpoint)
+//	@Tags			pki
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	models.StatusResponse
+//	@Router			/api/v1/pki/certificates/revoke [post]
 func (c *PKIController) handlePKICertificatesRevoke(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -189,6 +217,13 @@ func (c *PKIController) handlePKICertificatesRevoke(w http.ResponseWriter, r *ht
 	c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }
 
+//	@Summary		Get CRL
+//	@Description	Returns the certificate revocation list
+//	@Tags			pki
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/.well-known/g8e/pki/crl [get]
 func (c *PKIController) handlePKIRevocationBundle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -208,6 +243,13 @@ func (c *PKIController) handlePKIRevocationBundle(w http.ResponseWriter, r *http
 	_, _ = w.Write(crlDER)
 }
 
+//	@Summary		PKI device enrollment
+//	@Description	Enrolls a device via PKI endpoint
+//	@Tags			pki
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/api/v1/pki/devices/enroll [post]
 func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -258,6 +300,12 @@ func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Re
 	c.responder.JSON(w, http.StatusCreated, resp)
 }
 
+//	@Summary		Bootstrap CA Linux script
+//	@Description	Returns the Linux CA trust bootstrap script
+//	@Tags			bootstrap
+//	@Produce		text/plain
+//	@Success		200	{string}	string
+//	@Router			/bootstrap-ca [get]
 func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -296,6 +344,12 @@ echo "[g8e] You can now use: ./g8e auth login"
 	_, _ = w.Write([]byte(script))
 }
 
+//	@Summary		Bootstrap CA Windows script
+//	@Description	Returns the Windows CA trust bootstrap script
+//	@Tags			bootstrap
+//	@Produce		text/plain
+//	@Success		200	{string}	string
+//	@Router			/bootstrap-ca.ps1 [get]
 func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -376,10 +430,22 @@ Write-Host "[g8e] The Operator will run in this terminal. Press Ctrl+C to stop."
 	_, _ = w.Write([]byte(script))
 }
 
+//	@Summary		Bootstrap CA Windows script (alias)
+//	@Description	Returns the Windows CA trust bootstrap script (alias endpoint)
+//	@Tags			bootstrap
+//	@Produce		text/plain
+//	@Success		200	{string}	string
+//	@Router			/.well-known/g8e/pki/trust-windows [get]
 func (c *PKIController) handleTrustScriptWindowsAlias(w http.ResponseWriter, r *http.Request) {
 	c.handleTrustScriptWindows(w, r)
 }
 
+//	@Summary		Download node binary
+//	@Description	Downloads the g8e node binary for the current platform (internal endpoint)
+//	@Tags			bootstrap
+//	@Produce		application/octet-stream
+//	@Success		200	{file}	file
+//	@Router			/.well-known/g8e/bin/{filename} [get]
 func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -431,6 +497,12 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 	http.ServeFile(w, r, binaryPath)
 }
 
+//	@Summary		Deploy script Linux
+//	@Description	Returns the Linux operator deployment script
+//	@Tags			deploy
+//	@Produce		text/plain
+//	@Success		200	{string}	string
+//	@Router			/g8e-operator.sh [get]
 func (c *PKIController) handleDeployScriptLinux(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -457,6 +529,12 @@ func (c *PKIController) handleDeployScriptLinux(w http.ResponseWriter, r *http.R
 	_, _ = w.Write([]byte(script))
 }
 
+//	@Summary		Deploy script Windows
+//	@Description	Returns the Windows operator deployment script
+//	@Tags			deploy
+//	@Produce		text/plain
+//	@Success		200	{string}	string
+//	@Router			/g8e-operator.ps1 [get]
 func (c *PKIController) handleDeployScriptWindows(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")

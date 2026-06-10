@@ -37,6 +37,7 @@ jobs:
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
           go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@v1.5.1
           go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install github.com/swaggo/swag/cmd/swag@latest
 
       - name: Install protoc
         run: |
@@ -51,6 +52,11 @@ jobs:
           make proto
           git diff --exit-code
           make validate-doctrines
+
+      - name: Generate & Validate Swagger Docs
+        run: |
+          make swagger-generate
+          git diff --exit-code internal/services/gateway/docs/
 
       - name: Lint
         uses: golangci/golangci-lint-action@v9
