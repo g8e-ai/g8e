@@ -941,8 +941,7 @@ Usage:
 Available Commands:
   stdio       Run MCP stdio server with native tools only
   gov         Proxy stdio MCP requests to the gateway HTTP endpoint
-  show        Print MCP client configuration for the Gateway
-  agent       Wrap agentic coding tools with g8e zero-trust gateway
+  agent       Agent integration commands for popular AI coding tools
 
 Flags:
   -h, --help   help for mcp
@@ -972,40 +971,41 @@ Flags:
   -h, --help   help for gov
 ```
 
-### mcp show
-```
-Print MCP client configuration for the Gateway. Displays configurations side-by-side for g8e.local (mTLS), IP Address (mTLS), Plain HTTP, and Stdio Transport.
-
-Usage:
-  g8e mcp show [flags]
-
-Flags:
-  -h, --help   help for show
-```
-
 ### mcp agent
 ```
-Wrap agentic coding tools with g8e zero-trust gateway. Wrap agentic coding tools (Claude Code, Cursor, VS Code, Cline) with g8e governance.
+Agent integration commands for popular AI coding tools. Configure and integrate g8e with popular AI agent binaries (Claude, Cursor, Windsurf, etc.) for seamless MCP tool access.
 
 Usage:
-  g8e mcp agent [tool-name] -- [tool-args]
+  g8e mcp agent [command]
 
 Available Commands:
-  claude      Execute Claude Code proxied through g8e gateway
+  list        List supported agent binaries
+  show        Print MCP client configuration for the Gateway
 
 Flags:
   -h, --help   help for agent
 ```
 
-#### mcp agent claude
+#### mcp agent list
 ```
-Execute Claude Code proxied through g8e gateway. Execute Claude Code with all tool calls proxied through the g8e zero-trust gateway. Automatically configures MCP integration and handles L3 approvals.
+List all popular AI agent binaries that g8e supports for MCP integration.
 
 Usage:
-  g8e mcp agent claude -- [claude-args]
+  g8e mcp agent list [flags]
 
 Flags:
-  -h, --help   help for claude
+  -h, --help   help for list
+```
+
+#### mcp agent show
+```
+Print MCP client configuration for the Gateway. Displays configurations side-by-side for g8e.local (mTLS), IP Address (mTLS), Plain HTTP, and Stdio Transport.
+
+Usage:
+  g8e mcp agent show <agent> [flags]
+
+Flags:
+  -h, --help   help for show
 ```
 
 ## Agent Integration
@@ -1022,17 +1022,35 @@ Flags:
    ./g8e auth login
    ```
 
-3. Run Claude Code with g8e governance:
+3. List supported agent binaries:
    ```bash
-   ./g8e mcp agent claude -- --help
+   ./g8e mcp agent list
    ```
 
-### Supported Tools
+4. Show MCP configuration for your agent:
+   ```bash
+   ./g8e mcp agent show claude
+   ./g8e mcp agent show cursor
+   ./g8e mcp agent show windsurf
+   ```
 
-- Claude Code: `./g8e mcp agent claude`
-- Cursor: `./g8e mcp agent cursor`
-- VS Code: `./g8e mcp agent code`
-- Cline: `./g8e mcp agent cline`
+5. Copy the generated JSON configuration to your agent's MCP settings file.
+
+### Supported Agent Binaries
+
+- **claude** - Anthropic Claude Desktop / Claude Code
+- **cursor** - Cursor AI IDE
+- **windsurf** - Windsurf AI IDE
+- **vscode** - Visual Studio Code with MCP extension
+- **continue** - Continue.dev AI coding assistant
+- **aider** - Aider AI pair programmer
+- **codeium** - Codeium AI assistant
+- **tabby** - Tabby AI autocomplete
+- **generic** - Generic MCP-compatible agent
+
+### Configuration Example
+
+For Claude Desktop, the configuration command displays all available connection options including g8e.local (mTLS), IP Address (mTLS), Plain HTTP, and Stdio Transport. Choose the appropriate configuration based on your environment.
 
 ### L3 Approval Flow
 
@@ -1044,11 +1062,11 @@ When a tool requires L3 approval, g8e will:
 
 ### Manual MCP Configuration
 
-For tools that don't support the agent wrapper, use the MCP config commands:
+For tools that don't support the agent wrapper, use the agent show command:
 
 ```bash
-./g8e mcp show    # Print all MCP client configurations
-./g8e mcp gov     # Run as MCP stdio proxy to Gateway
+./g8e mcp agent show claude    # Show all MCP client configurations for Claude
+./g8e mcp gov                 # Run as MCP stdio proxy to Gateway
 ```
 
 ## swagger

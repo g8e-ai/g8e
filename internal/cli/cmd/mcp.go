@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -52,7 +53,6 @@ func mcpCmd() *cobra.Command {
 	cmd.AddCommand(
 		mcpStdioCmd(),
 		mcpStdioProxyCmd(),
-		mcpShowCmd(),
 		agentCmd(),
 	)
 
@@ -290,12 +290,29 @@ func runMCPStdioProxy(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	running, _, err := checkGatewayStatus(cfg)
-	if err != nil {
-		return err
-	}
-	if !running {
-		return fmt.Errorf("gateway is not running. Start it with: ./g8e gw start")
+	// Check if gateway is running via HTTP
+	apiClient, err := api.NewClient(cfg)
+	if err == nil {
+		_, err = apiClient.Get("/api/v1/health")
+		if err == nil {
+			// Gateway is running
+		} else {
+			return fmt.Errorf("gateway is not running. Start it with: ./g8e gw start")
+		}
+	} else {
+		// Fallback to ProcessManager check
+		pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+		if err != nil {
+			return fmt.Errorf("failed to create process manager: %w", err)
+		}
+
+		running, _, err := pm.OperatorStatus()
+		if err != nil {
+			return fmt.Errorf("failed to check Operator status: %w", err)
+		}
+		if !running {
+			return fmt.Errorf("gateway is not running. Start it with: ./g8e gw start")
+		}
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
@@ -489,65 +506,6 @@ func extractApprovalURL(resp JSONRPCResponse) string {
 	return extractURLFromText(string(resultBytes))
 }
 
-func mcpShowCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "show",
-		Short: "Print MCP client configuration for the Gateway",
-		Long:  `Print MCP client configuration for connecting to the g8e Gateway from local coding tools.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cmd.Println("╔══════════════════════════════════════════════════════════════════════════════╗")
-			cmd.Println("║                        g8e Gateway MCP Configurations                        ║")
-			cmd.Println("║  Use these configs to connect your coding tools (Cursor, Windsurf, etc.)     ║")
-			cmd.Println("║  to the g8e Gateway for agent orchestration and tool execution.              ║")
-			cmd.Println("╚══════════════════════════════════════════════════════════════════════════════╝")
-			cmd.Println()
-
-			cmd.Println("┌─ g8e.local (mTLS) ─────────────────────────────────────────────────────────────")
-			cmd.Println("│ Use: Production environments with DNS configured")
-			cmd.Println("│ Apps: Cursor, Windsurf, VS Code MCP clients")
-			cmd.Println("│ Requires: DNS or /etc/hosts entry for g8e.local resolution")
-			cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
-			if err := printMCPConfigLocal(cmd); err != nil {
-				return err
-			}
-			cmd.Println()
-
-			cmd.Println("┌─ IP Address (mTLS) ───────────────────────────────────────────────────────────")
-			cmd.Println("│ Use: Environments without DNS or for direct IP access")
-			cmd.Println("│ Apps: Cursor, Windsurf, VS Code MCP clients")
-			cmd.Println("│ Requires: No DNS setup, uses external interface IP")
-			cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
-			if err := printMCPConfigIP(cmd); err != nil {
-				return err
-			}
-			cmd.Println()
-
-			cmd.Println("┌─ Plain HTTP ────────────────────────────────────────────────────────────────")
-			cmd.Println("│ Use: Local development only (localhost access)")
-			cmd.Println("│ Apps: Local MCP clients, testing")
-			cmd.Println("│ Requires: No mTLS, uses 127.0.0.1 explicitly")
-			cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
-			if err := printMCPConfigHTTP(cmd); err != nil {
-				return err
-			}
-			cmd.Println()
-
-			cmd.Println("┌─ Stdio Transport ────────────────────────────────────────────────────────────")
-			cmd.Println("│ Use: Direct native tool access without gateway")
-			cmd.Println("│ Apps: Cursor, Windsurf, VS Code MCP clients")
-			cmd.Println("│ Requires: g8e binary in PATH or full path in config")
-			cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
-			if err := printMCPConfigStdio(cmd); err != nil {
-				return err
-			}
-
-			return nil
-		},
-	}
-
-	return cmd
-}
-
 func printMCPConfigLocal(cmd *cobra.Command) error {
 	cfg, err := config.Load("")
 	if err != nil {
@@ -654,6 +612,139 @@ func printMCPConfigStdio(cmd *cobra.Command) error {
 
 	cmd.Println(string(configJSON))
 	return nil
+}
+
+func agentCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "agent",
+		Short: "Agent integration commands for popular AI coding tools",
+		Long:  `Configure and integrate g8e with popular AI agent binaries (Claude, Cursor, Windsurf, etc.) for seamless MCP tool access.`,
+	}
+
+	cmd.AddCommand(
+		agentListCmd(),
+		agentShowCmd(),
+	)
+
+	return cmd
+}
+
+func agentListCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List supported agent binaries",
+		Long:  `List all popular AI agent binaries that g8e supports for MCP integration.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			cmd.Println("Supported Agent Binaries:")
+			cmd.Println()
+			for _, agent := range getSupportedAgents() {
+				cmd.Printf("  %-13s - %s\n", agent.ID, agent.Description)
+			}
+			cmd.Println()
+			cmd.Println("Use 'g8e mcp agent show <agent>' to show configuration for a specific agent.")
+		},
+	}
+
+	return cmd
+}
+
+func agentShowCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "show <agent>",
+		Short: "Print MCP client configuration for the Gateway",
+		Long:  `Print MCP client configuration for connecting to the g8e Gateway from local coding tools. Displays configurations side-by-side for g8e.local (mTLS), IP Address (mTLS), Plain HTTP, and Stdio Transport.`,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			agent := args[0]
+			return printAgentShow(cmd, agent)
+		},
+	}
+
+	return cmd
+}
+
+func printAgentShow(cmd *cobra.Command, agentID string) error {
+	// Validate agent exists
+	var description string
+	found := false
+	for _, a := range getSupportedAgents() {
+		if strings.EqualFold(a.ID, agentID) {
+			description = a.Description
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("unknown agent: %s. Use 'g8e mcp agent list' to see supported agents", agentID)
+	}
+
+	cmd.Printf("╔══════════════════════════════════════════════════════════════════════════════╗")
+	cmd.Printf("║                        g8e Gateway MCP Configurations                        ║")
+	cmd.Printf("║  Use these configs to connect %s to the g8e Gateway              ║", description)
+	cmd.Printf("║  for agent orchestration and tool execution.                              ║")
+	cmd.Printf("╚══════════════════════════════════════════════════════════════════════════════╝")
+	cmd.Println()
+
+	cmd.Println("┌─ g8e.local (mTLS) ─────────────────────────────────────────────────────────────")
+	cmd.Println("│ Use: Production environments with DNS configured")
+	cmd.Println("│ Apps: Cursor, Windsurf, VS Code MCP clients")
+	cmd.Println("│ Requires: DNS or /etc/hosts entry for g8e.local resolution")
+	cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
+	if err := printMCPConfigLocal(cmd); err != nil {
+		return err
+	}
+	cmd.Println()
+
+	cmd.Println("┌─ IP Address (mTLS) ───────────────────────────────────────────────────────────")
+	cmd.Println("│ Use: Environments without DNS or for direct IP access")
+	cmd.Println("│ Apps: Cursor, Windsurf, VS Code MCP clients")
+	cmd.Println("│ Requires: No DNS setup, uses external interface IP")
+	cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
+	if err := printMCPConfigIP(cmd); err != nil {
+		return err
+	}
+	cmd.Println()
+
+	cmd.Println("┌─ Plain HTTP ────────────────────────────────────────────────────────────────")
+	cmd.Println("│ Use: Local development only (localhost access)")
+	cmd.Println("│ Apps: Local MCP clients, testing")
+	cmd.Println("│ Requires: No mTLS, uses 127.0.0.1 explicitly")
+	cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
+	if err := printMCPConfigHTTP(cmd); err != nil {
+		return err
+	}
+	cmd.Println()
+
+	cmd.Println("┌─ Stdio Transport ────────────────────────────────────────────────────────────")
+	cmd.Println("│ Use: Direct native tool access without gateway")
+	cmd.Println("│ Apps: Cursor, Windsurf, VS Code MCP clients")
+	cmd.Println("│ Requires: g8e binary in PATH or full path in config")
+	cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
+	if err := printMCPConfigStdio(cmd); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type agentInfo struct {
+	ID          string
+	Description string
+}
+
+func getSupportedAgents() []agentInfo {
+	return []agentInfo{
+		{"claude", "Anthropic Claude Desktop / Claude Code"},
+		{"cursor", "Cursor AI IDE"},
+		{"windsurf", "Windsurf AI IDE"},
+		{"vscode", "Visual Studio Code with MCP extension"},
+		{"continue", "Continue.dev AI coding assistant"},
+		{"aider", "Aider AI pair programmer"},
+		{"codeium", "Codeium AI assistant"},
+		{"tabby", "Tabby AI autocomplete"},
+		{"generic", "Generic MCP-compatible agent"},
+	}
 }
 
 func extractURLFromText(text string) string {

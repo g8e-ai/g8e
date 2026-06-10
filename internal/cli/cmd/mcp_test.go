@@ -96,6 +96,178 @@ func TestMapMethodToPath(t *testing.T) {
 	})
 }
 
+func TestAgentCmd(t *testing.T) {
+	t.Run("agent command has correct use and description", func(t *testing.T) {
+		cmd := agentCmd()
+		assert.Equal(t, "agent", cmd.Use)
+		assert.Contains(t, cmd.Short, "Agent integration")
+		assert.Contains(t, cmd.Long, "popular AI agent binaries")
+	})
+
+	t.Run("agent list command works", func(t *testing.T) {
+		cmd := agentListCmd()
+		assert.Equal(t, "list", cmd.Use)
+		assert.Contains(t, cmd.Short, "List supported")
+
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetArgs([]string{})
+		err := cmd.Execute()
+		assert.NoError(t, err)
+		output := buf.String()
+		assert.Contains(t, output, "claude")
+		assert.Contains(t, output, "cursor")
+		assert.Contains(t, output, "windsurf")
+		assert.Contains(t, output, "vscode")
+		assert.Contains(t, output, "continue")
+		assert.Contains(t, output, "aider")
+		assert.Contains(t, output, "codeium")
+		assert.Contains(t, output, "tabby")
+		assert.Contains(t, output, "generic")
+	})
+
+	t.Run("agent show command requires exactly one argument", func(t *testing.T) {
+		cmd := agentShowCmd()
+		assert.Equal(t, "show <agent>", cmd.Use)
+		assert.Contains(t, cmd.Short, "Print MCP client configuration")
+	})
+
+	t.Run("agent show generates gateway configs for claude", func(t *testing.T) {
+		cmd := agentShowCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"claude"})
+		err := cmd.Execute()
+		assert.NoError(t, err)
+		output := buf.String()
+		assert.Contains(t, output, "g8e Gateway MCP Configurations")
+		assert.Contains(t, output, "g8e.local")
+		assert.Contains(t, output, "IP Address")
+		assert.Contains(t, output, "Plain HTTP")
+		assert.Contains(t, output, "Stdio Transport")
+	})
+
+	t.Run("agent show generates gateway configs for cursor", func(t *testing.T) {
+		cmd := agentShowCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"cursor"})
+		err := cmd.Execute()
+		assert.NoError(t, err)
+		output := buf.String()
+		assert.Contains(t, output, "g8e Gateway MCP Configurations")
+	})
+
+	t.Run("agent show generates gateway configs for windsurf", func(t *testing.T) {
+		cmd := agentShowCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"windsurf"})
+		err := cmd.Execute()
+		assert.NoError(t, err)
+		output := buf.String()
+		assert.Contains(t, output, "g8e Gateway MCP Configurations")
+	})
+
+	t.Run("agent show generates gateway configs for vscode", func(t *testing.T) {
+		cmd := agentShowCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"vscode"})
+		err := cmd.Execute()
+		assert.NoError(t, err)
+		output := buf.String()
+		assert.Contains(t, output, "g8e Gateway MCP Configurations")
+	})
+
+	t.Run("agent show generates gateway configs for continue", func(t *testing.T) {
+		cmd := agentShowCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"continue"})
+		err := cmd.Execute()
+		assert.NoError(t, err)
+		output := buf.String()
+		assert.Contains(t, output, "g8e Gateway MCP Configurations")
+	})
+
+	t.Run("agent show generates gateway configs for aider", func(t *testing.T) {
+		cmd := agentShowCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"aider"})
+		err := cmd.Execute()
+		assert.NoError(t, err)
+		output := buf.String()
+		assert.Contains(t, output, "g8e Gateway MCP Configurations")
+	})
+
+	t.Run("agent show generates gateway configs for codeium", func(t *testing.T) {
+		cmd := agentShowCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"codeium"})
+		err := cmd.Execute()
+		assert.NoError(t, err)
+		output := buf.String()
+		assert.Contains(t, output, "g8e Gateway MCP Configurations")
+	})
+
+	t.Run("agent show generates gateway configs for tabby", func(t *testing.T) {
+		cmd := agentShowCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"tabby"})
+		err := cmd.Execute()
+		assert.NoError(t, err)
+		output := buf.String()
+		assert.Contains(t, output, "g8e Gateway MCP Configurations")
+	})
+
+	t.Run("agent show generates gateway configs for generic", func(t *testing.T) {
+		cmd := agentShowCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"generic"})
+		err := cmd.Execute()
+		assert.NoError(t, err)
+		output := buf.String()
+		assert.Contains(t, output, "g8e Gateway MCP Configurations")
+	})
+
+	t.Run("agent show returns error for unknown agent", func(t *testing.T) {
+		cmd := agentShowCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"unknown-agent"})
+		err := cmd.Execute()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unknown agent")
+	})
+
+	t.Run("agent show is case-insensitive", func(t *testing.T) {
+		cmd := agentShowCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"CLAUDE"})
+		err := cmd.Execute()
+		assert.NoError(t, err)
+		output := buf.String()
+		assert.Contains(t, output, "g8e Gateway MCP Configurations")
+	})
+}
+
 func TestMcpCmd(t *testing.T) {
 	t.Run("mcp command has correct use and description", func(t *testing.T) {
 		cmd := mcpCmd()
