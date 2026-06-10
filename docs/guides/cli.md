@@ -1000,23 +1000,29 @@ Flags:
 
 #### mcp agent run
 ```
-Wrap any MCP server in g8e governance as a stdio reverse proxy.
+Launch an AI agent or wrap an MCP server with g8e governance.
 
-All AI tool calls are intercepted and screened through L1 doctrine (MITRE ATT&CK
-threat detection, forbidden pattern scanning) before being forwarded to the
-downstream. Blocked calls are returned as MCP errors with violation details.
+LAUNCH AN AGENT (one command does everything):
 
-Specify the downstream MCP server as either an HTTP URL or a subprocess command:
+  g8e mcp agent run claude       Start Claude with g8e as its governed MCP provider.
+                                  Uses 'mcp gov' if the gateway is running (L1-L5),
+                                  or 'mcp stdio' otherwise (L1 native tools).
+                                  All MCP tool calls are routed exclusively through
+                                  g8e — no other MCP servers are reachable.
 
-  g8e mcp agent run --url http://localhost:3000
+  Extra args are forwarded to the agent:
+    g8e mcp agent run claude -p "fix the failing tests"
+
+WRAP AN EXTERNAL MCP SERVER (governance reverse proxy):
+
   g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /home/user
-  g8e mcp agent run -- python3 my_mcp_server.py
+  g8e mcp agent run --url http://localhost:3000
 
-For full L1-L5 governance (L2 consensus, L3 human approval), start the g8e gateway
-and configure your AI agent to use 'g8e mcp gov' instead.
+  Intercepts all tools/call requests, screens them through L1 doctrine
+  (MITRE ATT&CK threat detection), and blocks violations before forwarding.
 
 Usage:
-  g8e mcp agent run [--url <url>] [-- <command> [args...]] [flags]
+  g8e mcp agent run [<agent>] [--url <url>] [-- <command> [args...]] [flags]
 
 Flags:
   -h, --help         help for run

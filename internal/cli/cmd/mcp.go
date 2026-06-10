@@ -761,20 +761,28 @@ func agentRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run [--url <url>] [-- <command> [args...]]",
 		Short: "Govern any MCP server via g8e reverse proxy",
-		Long: `Wrap any MCP server in g8e governance as a stdio reverse proxy.
+		Long: `Launch an AI agent or wrap an MCP server with g8e governance.
 
-All AI tool calls are intercepted and screened through L1 doctrine (MITRE ATT&CK
-threat detection, forbidden pattern scanning) before being forwarded to the
-downstream. Blocked calls are returned as MCP errors with violation details.
+LAUNCH AN AGENT (one command does everything):
 
-Specify the downstream MCP server as either an HTTP URL or a subprocess command:
+  g8e mcp agent run claude       Start Claude with g8e as its governed MCP provider.
+                                  Uses 'mcp gov' if the gateway is running (L1-L5),
+                                  or 'mcp stdio' otherwise (L1 native tools).
+                                  All MCP tool calls are routed exclusively through
+                                  g8e — no other MCP servers are reachable.
 
-  g8e mcp agent run --url http://localhost:3000
+  Extra args are forwarded to the agent:
+    g8e mcp agent run claude -p "fix the failing tests"
+
+WRAP AN EXTERNAL MCP SERVER (governance reverse proxy):
+
   g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /home/user
-  g8e mcp agent run -- python3 my_mcp_server.py
+  g8e mcp agent run --url http://localhost:3000
 
-For full L1-L5 governance (L2 consensus, L3 human approval), start the g8e gateway
-and configure your AI agent to use 'g8e mcp gov' instead.`,
+  Intercepts all tools/call requests, screens them through L1 doctrine
+  (MITRE ATT&CK threat detection), and blocks violations before forwarding.`,
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runMCPAgentRun(args, downstreamURL)
 		},
@@ -874,12 +882,119 @@ func (d *subprocessMCPProxy) forward(req JSONRPCRequest) (JSONRPCResponse, error
 	return resp, nil
 }
 
-func runMCPAgentRun(args []string, downstreamURL string) error {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-
-	if downstreamURL == "" && len(args) == 0 {
-		return fmt.Errorf("specify --url <url> or a command after --\n\nExamples:\n  g8e mcp agent run --url http://localhost:3000\n  g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /")
+// gatewayAvailable returns true if the local g8e gateway is reachable.
+func gatewayAvailable() bool {
+	cfg, err := config.Load("")
+	if err != nil {
+		return false
 	}
+	client, err := createMCPClient(cfg)
+	if err != nil {
+		return false
+	}
+	client.Timeout = 2 * time.Second
+	gatewayURL := fmt.Sprintf("https://g8e.local:%d/api/v1/health", constants.Ports.OperatorHttps)
+	resp, err := client.Get(gatewayURL)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
+}
+
+// launchAgentWithGovernance launches a supported AI agent with g8e configured as its
+// sole MCP provider. All MCP tool calls from the agent pass through g8e governance.
+//
+// If the g8e gateway is running, uses 'mcp gov' for full L1-L5 governance.
+// Otherwise falls back to 'mcp stdio' for L1 inline governance with native tools.
+func launchAgentWithGovernance(agentID string, extraArgs []string) error {
+	binaryPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve g8e binary path: %w", err)
+	}
+
+	mcpArgs := []string{"mcp", "stdio"}
+	modeLabel := "stdio (L1 native tools)"
+	if gatewayAvailable() {
+		mcpArgs = []string{"mcp", "gov"}
+		modeLabel = "gov (L1-L5 full governance via gateway)"
+	}
+
+	configJSON, err := json.Marshal(map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"g8e": map[string]interface{}{
+				"command": binaryPath,
+				"args":    mcpArgs,
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("build MCP config: %w", err)
+	}
+
+	tmpFile, err := os.CreateTemp("", "g8e-mcp-*.json")
+	if err != nil {
+		return fmt.Errorf("create temp MCP config: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	if _, err := tmpFile.Write(configJSON); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("write MCP config: %w", err)
+	}
+	tmpFile.Close()
+
+	agentBin, err := exec.LookPath(agentID)
+	if err != nil {
+		return fmt.Errorf("%q not found in PATH — is it installed?", agentID)
+	}
+
+	launchArgs, err := agentLaunchArgs(agentID, tmpFile.Name())
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(os.Stderr, "[g8e] Launching %s with governance mode: %s\n", agentID, modeLabel)
+
+	agentCmd := exec.Command(agentBin, append(launchArgs, extraArgs...)...) //nolint:gosec
+	agentCmd.Stdin = os.Stdin
+	agentCmd.Stdout = os.Stdout
+	agentCmd.Stderr = os.Stderr
+	setSysProcAttr(agentCmd)
+
+	return agentCmd.Run()
+}
+
+// agentLaunchArgs returns the argv to pass to the agent binary for a governed session.
+func agentLaunchArgs(agentID, mcpConfigPath string) ([]string, error) {
+	switch strings.ToLower(agentID) {
+	case "claude":
+		// --mcp-config   loads servers from the JSON file
+		// --strict-mcp-config  ignores all other configured MCP servers so every
+		//                      MCP call is routed exclusively through g8e governance
+		return []string{"--mcp-config", mcpConfigPath, "--strict-mcp-config"}, nil
+	default:
+		return nil, fmt.Errorf("auto-launch not yet supported for %q\n\nTo configure manually:\n  g8e mcp agent show %s", agentID, agentID)
+	}
+}
+
+func runMCPAgentRun(args []string, downstreamURL string) error {
+	if downstreamURL == "" && len(args) == 0 {
+		return fmt.Errorf("specify an agent name or MCP server\n\nLaunch an agent with governance:\n  g8e mcp agent run claude\n\nWrap an MCP server subprocess:\n  g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /\n\nWrap an HTTP MCP server:\n  g8e mcp agent run --url http://localhost:3000")
+	}
+
+	// Named agent (e.g. 'claude', 'cursor') → launch it with g8e as its governed MCP provider.
+	// Any args after the agent name are forwarded to the agent binary unchanged.
+	if downstreamURL == "" && len(args) > 0 {
+		firstArg := strings.ToLower(args[0])
+		for _, a := range getSupportedAgents() {
+			if strings.ToLower(a.ID) == firstArg {
+				return launchAgentWithGovernance(a.ID, args[1:])
+			}
+		}
+	}
+
+	// MCP server (--url or -- command) → run as governance reverse proxy.
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 	var ds mcpDownstreamProxy
 	if downstreamURL != "" {
