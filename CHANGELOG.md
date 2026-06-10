@@ -131,7 +131,7 @@ v1.0.10 is a major release that hardens the platform's security posture, simplif
 
 * **Multi-Transport Configuration Command** — `./g8e mcp show` updated to output a matrix of different configurations side-by-side: `g8e.local` (mTLS), direct IP address (without DNS required), plain HTTP (for localhost access), and stdio transport.
 
-* **Simplified Stdio MCP Config** — Simplified stdio transport configuration format output via standard JSON structure (`command`, `args`, `disabled`) compatible with standard IDE-assisted clients (Cursor, Windsurf).
+* **Simplified Stdio MCP Config** — Simplified stdio transport configuration format output via standard JSON structure (`command`, `args`, `disabled`) compatible with standard IDE-assisted clients (Cursor, Devin).
 
 * **Cross-Platform Setup Scripts** — New cross-platform environment bootstrapper and dependency validation scripts added under `scripts/linux-setup.sh`, `scripts/macos-setup.sh`, and `scripts/windows-setup.ps1` to easily verify Go, Buf, and Protoc compilers.
 

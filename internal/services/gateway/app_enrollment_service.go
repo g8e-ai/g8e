@@ -15,6 +15,7 @@ package gateway
 
 import (
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"log/slog"
@@ -22,6 +23,9 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/marshaler"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/protocol"
 )
 
@@ -117,6 +121,27 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 	if err != nil {
 		s.logger.Error("Failed to sign app CSR", "app_id", appID, "error", err)
 		return &AppEnrollResponse{Success: false, Error: "failed to sign certificate"}, nil
+	}
+
+	// Persist default AppPolicy for the enrolled app
+	// This is required for handleAppAuth to accept the app certificate
+	policy := models.AppPolicy{
+		AppID:              appID,   // full SPIFFE ID string
+		AllowedCollections: nil,    // not used for /mcp
+		RateLimitRPS:       0,      // 0 = unlimited (enforceAppPolicy skips when 0)
+		MaxPayloadBytes:    0,      // 0 = no extra cap (gateway maxPayloadBytes still applies)
+		RequireL3Approval:  false,  // agent runs must not block on WebAuthn
+		CreatedAt:          time.Now().UTC(),
+		UpdatedAt:          time.Now().UTC(),
+	}
+	data, err := json.Marshal(policy)
+	if err != nil {
+		s.logger.Error("Failed to marshal app policy", "app_id", appID, "error", err)
+		return &AppEnrollResponse{Success: false, Error: "failed to marshal app policy"}, nil
+	}
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, data); err != nil {
+		s.logger.Error("Failed to persist app policy", "app_id", appID, "error", err)
+		return &AppEnrollResponse{Success: false, Error: "failed to persist app policy"}, nil
 	}
 
 	// Fetch trust bundle

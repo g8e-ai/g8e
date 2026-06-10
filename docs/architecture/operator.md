@@ -167,7 +167,7 @@ export G8E_CA_CERT_PATH=.g8e/pki/ca.crt
 
 **Protocol Integration:**
 - **All Clients**: Use the universal HTTP endpoint with mTLS authentication
-- **IDE Integration (Cursor, Windsurf, Claude Code)**: Configure MCP client with HTTP transport
+- **IDE Integration (Cursor, Devin, Claude Code, Codex)**: Configure MCP client with HTTP transport
 - **Custom BYO Clients**: Use HTTP MCP or A2A protocol endpoints
 
 ### 4. Test with a Simple Mutation

@@ -467,6 +467,15 @@ func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
 
 	var eventID int64
 	err := ass.db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+		// Auto-create session row for app sessions to avoid FK race conditions
+		// This mirrors the behavior in RecordActionReceipt
+		if event.OperatorSessionID != "" {
+			_, _ = tx.Exec(
+				`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, 'app', ?, ?)`,
+				event.OperatorSessionID, event.OperatorSessionID, event.OperatorSessionID,
+			)
+		}
+
 		if err := ass.requireExistingSessionTx(tx, event); err != nil {
 			return err
 		}

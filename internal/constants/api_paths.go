@@ -61,6 +61,7 @@ var APIPaths = struct {
 	// PKI routes
 	PKICSRSign            string `json:"pki_csr_sign"`
 	PKIDevicesEnroll      string `json:"pki_devices_enroll"`
+	PKIAppsEnroll         string `json:"pki_apps_enroll"`
 	PKICertificatesRevoke string `json:"pki_certificates_revoke"`
 	PKIRevocationBundle   string `json:"pki_revocation_bundle"`
 	PKICRL                string `json:"pki_crl"`
@@ -170,6 +171,7 @@ var APIPaths = struct {
 	// PKI routes
 	PKICSRSign:            "/api/v1/pki/csr/sign",
 	PKIDevicesEnroll:      "/api/v1/pki/devices/enroll",
+	PKIAppsEnroll:         "/api/v1/pki/apps/enroll",
 	PKICertificatesRevoke: "/api/v1/pki/certificates/revoke",
 	PKIRevocationBundle:   "/api/v1/pki/revocation-bundle",
 	PKICRL:                "/.well-known/g8e/pki/crl",

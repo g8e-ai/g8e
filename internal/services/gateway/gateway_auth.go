@@ -512,7 +512,7 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 					return true
 				}
 
-				ctx := context.WithValue(r.Context(), appIDKey, appID)
+				ctx := context.WithValue(r.Context(), constants.ContextKeyAppID, appID)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return true
 			}

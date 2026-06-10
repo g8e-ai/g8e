@@ -117,7 +117,7 @@ func TestAgentCmd(t *testing.T) {
 		output := buf.String()
 		assert.Contains(t, output, "claude")
 		assert.Contains(t, output, "cursor")
-		assert.Contains(t, output, "windsurf")
+		assert.Contains(t, output, "devin")
 		assert.Contains(t, output, "vscode")
 		assert.Contains(t, output, "continue")
 		assert.Contains(t, output, "aider")
@@ -159,12 +159,12 @@ func TestAgentCmd(t *testing.T) {
 		assert.Contains(t, output, "g8e Gateway MCP Configurations")
 	})
 
-	t.Run("agent show generates gateway configs for windsurf", func(t *testing.T) {
+	t.Run("agent show generates gateway configs for devin", func(t *testing.T) {
 		cmd := agentShowCmd()
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
-		cmd.SetArgs([]string{"windsurf"})
+		cmd.SetArgs([]string{"devin"})
 		err := cmd.Execute()
 		assert.NoError(t, err)
 		output := buf.String()

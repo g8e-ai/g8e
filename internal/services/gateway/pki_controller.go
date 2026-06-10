@@ -300,6 +300,50 @@ func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Re
 	c.responder.JSON(w, http.StatusCreated, resp)
 }
 
+//	@Summary		PKI app enrollment
+//	@Description	Enrolls an external app via PKI endpoint (identity-only enrollment)
+//	@Tags			pki
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	AppEnrollResponse
+//	@Router			/api/v1/pki/apps/enroll [post]
+func (c *PKIController) handlePKIAppsEnroll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	if c.appEnrollment == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, "pki: app enrollment service not available")
+		return
+	}
+
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: read request body: %w", err).Error())
+		return
+	}
+
+	var req AppEnrollRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: unmarshal app enrollment request: %w", err).Error())
+		return
+	}
+
+	resp, err := c.appEnrollment.EnrollApp(req)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: enroll app: %w", err).Error())
+		return
+	}
+
+	if !resp.Success {
+		c.responder.Error(w, http.StatusBadRequest, resp.Error)
+		return
+	}
+
+	c.responder.JSON(w, http.StatusCreated, resp)
+}
+
 //	@Summary		Bootstrap CA Linux script
 //	@Description	Returns the Linux CA trust bootstrap script
 //	@Tags			bootstrap

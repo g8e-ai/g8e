@@ -751,6 +751,21 @@ func (rs *PubSubCommandService) handleMcpCallRequestSync(ctx context.Context, ms
 	if len(summary) > 4096 {
 		summary = summary[:4096]
 	}
+
+	if rs.audit != nil && rs.audit.auditStore != nil && rs.audit.auditStore.IsEnabled() {
+		event := &storage.Event{
+			OperatorSessionID: msg.OperatorSessionID, // Use envelope identity (app ID for agent runs)
+			Timestamp:         time.Now().UTC(),
+			Type:              constants.Event.Operator.Audit.McpCall,
+			ContentText:       mcpReq.ToolName,
+			CommandRaw:        string(args),
+			CommandStdout:     summary,
+		}
+		if _, err := rs.audit.auditStore.RecordEvent(event); err != nil {
+			rs.logger.Warn("Failed to record MCP call event in audit store", string(constants.ConnectionStateError), err)
+		}
+	}
+
 	return summary, nil
 }
 

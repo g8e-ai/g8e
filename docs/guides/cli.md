@@ -962,7 +962,7 @@ Flags:
 
 ### mcp agent
 ```
-Agent integration commands for popular AI coding tools. Configure and integrate g8e with popular AI agent binaries (Claude, Cursor, Windsurf, etc.) for seamless MCP tool access.
+Agent integration commands for popular AI coding tools. Configure and integrate g8e with popular AI agent binaries (Claude, Cursor, Devin, etc.) for seamless MCP tool access.
 
 Usage:
   g8e mcp agent [command]
@@ -998,6 +998,8 @@ LAUNCH AN AGENT (one command does everything):
                                   (gateway must be running).
                                   All MCP tool calls are routed exclusively through
                                   g8e — no other MCP servers are reachable.
+                                  Agent is automatically enrolled as an app identity
+                                  for audit trail purposes.
 
   Extra args are forwarded to the agent:
     g8e mcp agent run claude -p "fix the failing tests"
@@ -1009,6 +1011,19 @@ WRAP AN EXTERNAL MCP SERVER (governance reverse proxy):
 
   Intercepts all tools/call requests, screens them through L1 doctrine
   (MITRE ATT&CK threat detection), and blocks violations before forwarding.
+
+AUDIT TRAIL:
+  When launching an agent with 'g8e mcp agent run', the agent is automatically
+  enrolled as an external app identity (SPIFFE ID: spiffe://g8e.local/app/<agent-name>).
+  All MCP tool calls are recorded in the audit vault with this app identity,
+  enabling per-agent audit trails separate from human operator activity.
+
+  Query audit events for a specific agent:
+    g8e gateway data audit list --operator-session-id spiffe://g8e.local/app/claude
+    g8e gateway data audit summary --operator-session-id spiffe://g8e.local/app/claude
+
+  View all audit events:
+    g8e gateway data audit summary
 
 Usage:
   g8e mcp agent run [<agent>] [--url <url>] [-- <command> [args...]] [flags]
@@ -1052,7 +1067,7 @@ Flags:
    ```bash
    ./g8e mcp agent show claude
    ./g8e mcp agent show cursor
-   ./g8e mcp agent show windsurf
+   ./g8e mcp agent show devin
    ```
 
 5. Copy the generated JSON configuration to your agent's MCP settings file.
@@ -1060,8 +1075,9 @@ Flags:
 ### Supported Agent Binaries
 
 - **claude** - Anthropic Claude Desktop / Claude Code
+- **codex** - OpenAI Codex AI coding assistant
 - **cursor** - Cursor AI IDE
-- **windsurf** - Windsurf AI IDE
+- **devin** - Devin AI IDE (formerly Windsurf)
 - **vscode** - Visual Studio Code with MCP extension
 - **continue** - Continue.dev AI coding assistant
 - **aider** - Aider AI pair programmer

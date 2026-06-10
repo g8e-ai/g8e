@@ -224,7 +224,7 @@ Defined in `internal/services/governance/l5_actuator.go`. Performs isolated boun
 
 ## Out-of-Band (OOB) Suspension & WebAuthn Approval Flow
 
-When a standard AI client (such as Claude or Cursor) requests a mutation, it typically cannot generate an L3 Notary human signature.
+When a standard AI client (such as Claude, Codex, or Cursor) requests a mutation, it typically cannot generate an L3 Notary human signature.
 
 1.  **Suspension**: The gateway detects missing L3 Notary proof and suspends the transaction in the SQLite `suspended_transactions` store.
 2.  **Challenge**: The gateway returns an OOB WebAuthn challenge URL to the AI client.
@@ -321,7 +321,7 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 
 ## Agent Integration
 
-The g8e Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, Cursor, VS Code, Cline) through the agent wrapper and gov components.
+The g8e Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, Codex, Cursor, VS Code, Cline) through the agent wrapper and gov components.
 
 ### Agent Wrapper
 

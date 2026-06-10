@@ -651,7 +651,7 @@ func (c *DBController) extractCallerIdentity(r *http.Request) (string, string, s
 	if !ok {
 		userID = ""
 	}
-	appID, ok := r.Context().Value(appIDKey).(string)
+	appID, ok := r.Context().Value(constants.ContextKeyAppID).(string)
 	if !ok {
 		appID = ""
 	}

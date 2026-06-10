@@ -1201,6 +1201,11 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 	if persona, ok := ctx.Value(constants.ContextKeyBindingPersona).(string); ok {
 		env.BindingPersona = persona
 	}
+	// Inject app identity as operator_id and operator_session_id for audit trail attribution
+	if appID, ok := ctx.Value(constants.ContextKeyAppID).(string); ok && appID != "" {
+		env.OperatorId = appID
+		env.OperatorSessionId = appID
+	}
 
 	hash, err = govpkg.GenerateMessageID(env)
 	if err != nil {
