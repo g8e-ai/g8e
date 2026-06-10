@@ -39,8 +39,8 @@ const (
 type LoadOptions struct {
 	// Required
 	OperatorEndpoint string
-	HTTPPort         int  // HTTP port to dial on Operator for bootstrap and trust bundle fetch (default: from paths.json)
-	HTTPSPort        int  // HTTPS port to dial on Operator for auth proxy (default: from paths.json)
+	HTTPPort         int // HTTP port to dial on Operator for bootstrap and trust bundle fetch (default: from paths.json)
+	HTTPSPort        int // HTTPS port to dial on Operator for auth proxy (default: from paths.json)
 
 	// Cloud Operator mode
 	CloudMode     bool
@@ -191,9 +191,9 @@ type Config struct {
 	TLSServerName string
 
 	// Operator connection ports (operator dials these on the remote host)
-	PubSubURL  string // WebSocket base URL for Operator pub/sub (e.g., wss://192.168.1.10:443) - no path; client appends /ws/pubsub
-	HTTPPort   int    // HTTP port for bootstrap and trust bundle fetch (default: from paths.json)
-	HTTPSPort  int    // HTTPS port for auth/bootstrap requests via Operator proxy (default: from paths.json)
+	PubSubURL string // WebSocket base URL for Operator pub/sub (e.g., wss://192.168.1.10:443) - no path; client appends /ws/pubsub
+	HTTPPort  int    // HTTP port for bootstrap and trust bundle fetch (default: from paths.json)
+	HTTPSPort int    // HTTPS port for auth/bootstrap requests via Operator proxy (default: from paths.json)
 
 	// Logging
 	LogLevel string // Active log level (info, debug, error)

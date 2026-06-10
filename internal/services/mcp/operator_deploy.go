@@ -26,8 +26,8 @@ import (
 	"strings"
 	"time"
 
-	sshlib "golang.org/x/crypto/ssh"
 	"github.com/pkg/sftp"
+	sshlib "golang.org/x/crypto/ssh"
 
 	"github.com/g8e-ai/g8e/internal/pkg/ssh"
 )

@@ -741,11 +741,11 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 
 	snapshot := env.IntentData
 	if len(snapshot) == 0 {
-		snapshot = data
+		snapshot = json.RawMessage(data)
 	}
 
 	update, err := json.Marshal(map[string]interface{}{
-		"latest_heartbeat_snapshot": json.RawMessage(snapshot),
+		"latest_heartbeat_snapshot": snapshot,
 		"updated_at":                time.Now().UTC(),
 	})
 	if err != nil {

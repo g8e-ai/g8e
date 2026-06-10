@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.11] - 2026-06-10
+
+### Overview
+
+v1.0.11 introduces a comprehensive multi-industry demo suite (Finance, Government, Healthcare) with dedicated CLI commands for orchestrated industry-specific scenarios. It significantly hardens the gateway and operator bootstrap processes, resolves certificate generation race conditions, and introduces a dedicated secret manager for secure internal credential handling. This release also includes a major expansion of end-to-end testing coverage and numerous fixes for logging and cross-process communication.
+
+### Added
+
+* **Multi-Industry Demo Suite** — New industry-specific demo scenarios for Healthcare (HIPAA/PHI), Finance (Trading Controls), and Government (CUI/CMMC), including Docker Compose orchestration and mock data generators.
+* **Demo CLI Commands** — New `./g8e demos` command group for listing, starting, and managing demo environments.
+* **Gateway Secret Manager** — Dedicated service for secure internal credential and secret handling within the gateway.
+* **Enhanced E2E Tests** — Significant expansion of end-to-end testing infrastructure and coverage across gateway and operator services.
+* **Gateway PubSub Capabilities** — Expanded internal pubsub functionality for better service orchestration.
+
+### Changed
+
+* **Operator Bootstrap Hardening** — Redesigned operator bootstrap sequence to be more resilient to environment wipes and certificate expiration.
+* **Certificate Generation** — Refactored gateway certificate authority logic to eliminate race conditions during concurrent service startup.
+* **Config Handling** — Improved configuration validation and default path resolution for better cross-platform reliability.
+
+### Fixed
+
+* **Bootstrap Failures** — Fixed critical failures when re-bootstrapping an operator after a `.g8e` directory wipe.
+* **Logging Duplication** — Resolved issues where log entries were being duplicated across different output streams.
+* **PEM Generation** — Fixed gateway PEM generation bugs that could lead to invalid certificate chains in certain network configurations.
+* **MCP Test Stability** — Improved stability and reliability of MCP-related unit and integration tests.
+
+---
+
 ## [1.0.10] - 2026-06-08
 
 ### Overview

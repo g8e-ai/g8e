@@ -167,6 +167,17 @@ func EnsureAuthLogin(t *testing.T, repoRoot string) {
 		time.Sleep(3 * time.Second)
 	}
 
+	// Skip re-enrollment if credentials are fresh (< 45 min old).
+	// CLI sessions last 1 hour; re-enrolling concurrently from parallel tests
+	// causes rate-limit failures and unnecessary churn.
+	credsPath := filepath.Join(repoRoot, ".g8e", "credentials")
+	if info, err := os.Stat(credsPath); err == nil {
+		if time.Since(info.ModTime()) < 45*time.Minute {
+			t.Logf("Credentials are fresh (%v old), skipping re-enrollment", time.Since(info.ModTime()).Round(time.Second))
+			return
+		}
+	}
+
 	// Run './g8e gw cli auth login' with explicit endpoint
 	loginCmd := exec.Command(g8ePath, "gw", "cli", "auth", "login")
 	loginCmd.Dir = repoRoot
