@@ -627,11 +627,6 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 		return g.handleReadField(ctx, callParams.Arguments)
 	}
 
-	// Handle native tools within Operator's execution boundary
-	if g.isNativeTool(callParams.Name) && g.nativeToolHandler != nil {
-		return g.nativeToolHandler.HandleTool(ctx, callParams.Name, callParams.Arguments)
-	}
-
 	argumentsJSON := "{}"
 	if len(callParams.Arguments) > 0 {
 		var probe interface{}
@@ -1474,7 +1469,28 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 
 // DispatchToDownstream forwards a verified MCP tool call to the downstream MCP server.
 // This implements the Actuator Egress phase for MCP protocol translation.
+// Native tools are executed locally so every call — native or downstream — passes through
+// the full L1-L5 governance pipeline and produces a signed receipt.
 func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName string, toolArgs json.RawMessage) (string, error) {
+	if g.isNativeTool(toolName) && g.nativeToolHandler != nil {
+		result, err := g.nativeToolHandler.HandleTool(ctx, toolName, toolArgs)
+		if err != nil {
+			return "", fmt.Errorf("native tool execution failed: %w", err)
+		}
+		var sb strings.Builder
+		for _, c := range result.Content {
+			if c.Type == "text" {
+				sb.WriteString(c.Text)
+				sb.WriteString("\n")
+			}
+		}
+		summary := strings.TrimRight(sb.String(), "\n")
+		if summary == "" {
+			summary = "completed"
+		}
+		return summary, nil
+	}
+
 	if g.downstreamURL == "" {
 		return "", fmt.Errorf("no downstream MCP server configured")
 	}

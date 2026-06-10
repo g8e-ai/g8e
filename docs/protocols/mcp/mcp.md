@@ -142,13 +142,12 @@ This ensures compatibility with JSON-based ecosystems while maintaining typed sc
 
 ### Stdio Transport Modes
 
-g8e provides three stdio MCP transport modes. Choose based on your deployment requirements:
+g8e provides two stdio MCP transport modes. Choose based on your deployment requirements:
 
 | Command | Governance | Gateway required | Downstream |
 |---|---|---|---|
-| `g8e mcp stdio` | None | No | g8e native tools only |
+| `g8e mcp stdio` | L1-L5 full stack | Yes (running) | g8e gateway with full governance |
 | `g8e mcp agent run` | L1 inline (MITRE ATT&CK) | No | Any MCP server (subprocess or HTTP) |
-| `g8e mcp gov` | L1-L5 full stack | Yes (running) | g8e gateway + configured downstream |
 
 ### MCP Client Configuration
 
@@ -224,7 +223,7 @@ claude mcp add g8e-fs -- g8e mcp agent run -- npx -y @modelcontextprotocol/serve
 claude mcp add g8e-proxy g8e mcp agent run --url http://localhost:3000
 ```
 
-The downstream's `tools/list` is passed through unmodified so the AI sees the real tool's capabilities. Use this mode when you want L1 hard-gate protection around a third-party MCP server without deploying the full g8e stack. For L2-L5 governance (consensus signing, WebAuthn approval), use `g8e mcp gov` with the gateway running.
+The downstream's `tools/list` is passed through unmodified so the AI sees the real tool's capabilities. Use this mode when you want L1 hard-gate protection around a third-party MCP server without deploying the full g8e stack. For L2-L5 governance (consensus signing, WebAuthn approval), use `g8e mcp stdio` with the gateway running.
 
 ### MCP Client Connection
 

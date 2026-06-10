@@ -230,7 +230,7 @@ The gateway provides a high-performance WebSocket fan-out via `/ws/v1/pubsub`. M
 
 The platform provides zero-config ingress for agentic CLI coding tools through:
 - **Agent Wrapper**: Detects tool binaries, verifies gateway status, and injects G8E_* environment variables with MCP configuration
-- **Stdio Proxy**: Bridges stdio MCP transport to the gateway HTTP endpoint with mTLS, handling L3 approval polling and browser opening
+- **Stdio Proxy**: Bridges stdio MCP transport to the gateway mTLS HTTPS endpoint, handling L3 approval polling and browser opening
 
 ---
 

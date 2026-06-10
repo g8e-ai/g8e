@@ -342,7 +342,7 @@ The wrapper automatically configures MCP integration by setting:
 
 ### Stdio Proxy
 
-The stdio proxy (`internal/cli/cmd/mcp.go`) bridges stdio MCP transport to the gateway HTTP endpoint:
+The stdio proxy (`internal/cli/cmd/mcp.go`) bridges stdio MCP transport to the gateway mTLS HTTPS endpoint:
 - Accepts JSON-RPC 2.0 requests over stdin/stdout
 - Proxies requests to the gateway HTTPS endpoint with mTLS
 - Detects L3 approval responses and polls for completion

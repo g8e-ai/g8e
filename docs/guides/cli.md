@@ -951,24 +951,13 @@ Use "g8e mcp [command] --help" for more information about a command.
 
 ### mcp stdio
 ```
-Run MCP stdio server with native tools only. Run g8e as an MCP server using stdio transport for local agent integration. Exposes all native tools without requiring gateway mode.
+Proxy stdio MCP requests to gateway with full L1-L5 governance. Run as an MCP stdio server that proxies all requests to the running gateway's HTTP endpoint. All MCP calls are converted to GovernanceEnvelopes and pass through L1-L5 governance layers. This is the only supported stdio mode - all tool execution is fully governed and audited.
 
 Usage:
   g8e mcp stdio [flags]
 
 Flags:
   -h, --help   help for stdio
-```
-
-### mcp gov
-```
-Proxy stdio MCP requests to the gateway HTTP endpoint. Run as an MCP stdio server that proxies all requests to the running gateway's HTTP endpoint. This enables tools that only support stdio transport to use the full gateway governance layer.
-
-Usage:
-  g8e mcp gov [flags]
-
-Flags:
-  -h, --help   help for gov
 ```
 
 ### mcp agent
@@ -1005,8 +994,8 @@ Launch an AI agent or wrap an MCP server with g8e governance.
 LAUNCH AN AGENT (one command does everything):
 
   g8e mcp agent run claude       Start Claude with g8e as its governed MCP provider.
-                                  Uses 'mcp gov' if the gateway is running (L1-L5),
-                                  or 'mcp stdio' otherwise (L1 native tools).
+                                  Uses 'mcp stdio' with full L1-L5 governance
+                                  (gateway must be running).
                                   All MCP tool calls are routed exclusively through
                                   g8e — no other MCP servers are reachable.
 
@@ -1106,7 +1095,7 @@ To wrap any external MCP server in g8e's L1 doctrine without running the full ga
 
 Register the proxy as the MCP server in your agent config. The downstream tool's full `tools/list` and all pass-through methods are preserved — only `tools/call` is intercepted for governance.
 
-For full L1-L5 governance (L2 consensus, L3 human approval via WebAuthn), start the gateway and use `g8e mcp gov` instead.
+For full L1-L5 governance (L2 consensus, L3 human approval via WebAuthn), start the gateway and use `g8e mcp stdio`.
 
 ### Manual MCP Configuration
 
@@ -1114,7 +1103,7 @@ For tools that don't support the agent wrapper, use the agent show command:
 
 ```bash
 ./g8e mcp agent show claude    # Show all MCP client configurations for Claude
-./g8e mcp gov                 # Run as MCP stdio proxy to Gateway
+./g8e mcp stdio               # Run as MCP stdio proxy to Gateway with full governance
 ```
 
 ## swagger

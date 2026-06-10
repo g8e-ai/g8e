@@ -222,8 +222,7 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Printf("  %s gw data audit list --operator-session-id <session-id>\n\n", getBinaryName())
 			cmd.Println("MCP (Operator commands):")
 			cmd.Printf("  %s mcp show    Print MCP client configuration for connecting to the gateway\n", getBinaryName())
-			cmd.Printf("  %s mcp stdio   Run Operator as MCP stdio server with native tools only (no Gateway)\n", getBinaryName())
-			cmd.Printf("  %s mcp gov     Run Operator as MCP stdio proxy to Gateway (with governance)\n", getBinaryName())
+			cmd.Printf("  %s mcp stdio   Run Operator as MCP stdio server with full L1-L5 governance\n", getBinaryName())
 
 			if runtime.GOOS == "windows" {
 				cmd.Println()

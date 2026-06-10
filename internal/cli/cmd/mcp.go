@@ -15,6 +15,7 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -31,7 +32,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
@@ -41,18 +41,31 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// G8E environment variables injected by 'agent run' and consumed by 'mcp gov'.
+// Using explicit strings rather than constants so the env-var contract is visible here.
 const (
+	envG8ECLISessionID      = "G8E_CLI_SESSION_ID"
+	envG8EUserID            = "G8E_USER_ID"
+	envG8EOperatorID        = "G8E_OPERATOR_ID"
+	envG8EOperatorSessionID = "G8E_OPERATOR_SESSION_ID"
+	envG8EClientCert        = "G8E_CLIENT_CERT"
+	envG8EClientKey         = "G8E_CLIENT_KEY"
+	envG8ECABundle          = "G8E_CA_BUNDLE"
+	envG8EGatewayURL        = "G8E_GATEWAY_URL"
+)
+
+var (
 	l3ApprovalMaxIterations = 30
 	l3ApprovalPollInterval  = 10 * time.Second
 	l3ApprovalTotalTimeout  = 5 * time.Minute
 )
 
-// mcpCmd implements the MCP stdio transport mode
+// mcpCmd is the parent command for MCP stdio operations.
 func mcpCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mcp",
-		Short: "MCP protocol operations (stdio transport)",
-		Long:  `Run g8e as an MCP server using stdio transport for local agent integration. Exposes all native tools without requiring gateway mode.`,
+		Short: "MCP protocol operations (stdio transport with full governance)",
+		Long:  `Run g8e as an MCP server using stdio transport for local agent integration. All MCP calls are proxied through the gateway with full L1-L5 governance enforcement.`,
 	}
 
 	cmd.AddCommand(
@@ -64,20 +77,7 @@ func mcpCmd() *cobra.Command {
 	return cmd
 }
 
-func mcpStdioCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "stdio",
-		Short: "Run MCP stdio server with native tools only",
-		Long:  `Run g8e as an MCP server using stdio transport for local agent integration. Exposes all native tools without requiring gateway mode.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMCPStdio(cmd, args)
-		},
-	}
-
-	return cmd
-}
-
-// JSONRPCRequest represents a JSON-RPC 2.0 request
+// JSONRPCRequest represents a JSON-RPC 2.0 request.
 type JSONRPCRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      interface{}     `json:"id"`
@@ -85,7 +85,7 @@ type JSONRPCRequest struct {
 	Params  json.RawMessage `json:"params,omitempty"`
 }
 
-// JSONRPCResponse represents a JSON-RPC 2.0 response
+// JSONRPCResponse represents a JSON-RPC 2.0 response.
 type JSONRPCResponse struct {
 	JSONRPC string      `json:"jsonrpc"`
 	ID      interface{} `json:"id"`
@@ -93,38 +93,48 @@ type JSONRPCResponse struct {
 	Error   *RPCError   `json:"error,omitempty"`
 }
 
-// RPCError represents a JSON-RPC error
+// RPCError represents a JSON-RPC error object.
 type RPCError struct {
 	Code    int         `json:"code"`
 	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
 }
 
-// ToolsListResult represents the result of tools/list
+// ToolsListResult is the result payload for tools/list.
 type ToolsListResult struct {
 	Tools []Tool `json:"tools"`
 }
 
-// Tool represents an MCP tool
+// Tool represents a single MCP tool descriptor.
 type Tool struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
 	InputSchema map[string]interface{} `json:"inputSchema"`
 }
 
-// CallToolRequest is the params for the "tools/call" method
+// CallToolRequest is the params object for tools/call.
 type CallToolRequest struct {
 	Name      string          `json:"name"`
 	Arguments json.RawMessage `json:"arguments,omitempty"`
 }
 
-// runMCPStdio implements the MCP stdio transport
-func runMCPStdio(cmd *cobra.Command, args []string) error {
+// ─── stdio: native tools, no gateway required ───────────────────────────────
+
+func mcpStdioCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "stdio",
+		Short: "Run MCP stdio server with native tools only (no gateway required)",
+		Long:  `Serve all native g8e tools over the MCP stdio transport without requiring a running gateway. Suitable for local use or when the agent only needs native diagnostic tools.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runMCPStdio(cmd, args)
+		},
+	}
+}
+
+func runMCPStdio(_ *cobra.Command, _ []string) error {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	logger.Info("g8e MCP stdio server starting (native tools mode)")
 
-	logger.Info("g8e MCP stdio server starting")
-
-	// Initialize native tool handler
 	nativeToolHandler, err := mcp.NewNativeToolHandler(logger)
 	if err != nil {
 		return fmt.Errorf("initialize native tool handler: %w", err)
@@ -146,19 +156,24 @@ func runMCPStdio(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
+		// MCP notifications (no id) must not receive a response.
+		if req.ID == nil && req.Method != "" {
+			logger.Debug("Dropping MCP notification", "method", req.Method)
+			continue
+		}
+
 		logger.Info("Received MCP request", "method", req.Method, "id", req.ID)
 
 		switch req.Method {
+		case "initialize":
+			handleInitialize(encoder, req.ID)
 		case "tools/list":
 			handleToolsList(encoder, req.ID, nativeToolHandler)
 		case "tools/call":
 			handleToolsCall(encoder, req.ID, req.Params, nativeToolHandler)
-		case "initialize":
-			handleInitialize(encoder, req.ID)
 		case "ping":
 			sendSuccess(encoder, req.ID, struct{}{})
 		default:
-			logger.Warn("Unknown MCP method", "method", req.Method)
 			sendError(encoder, req.ID, -32601, fmt.Sprintf("method not found: %s", req.Method))
 		}
 	}
@@ -170,62 +185,6 @@ func runMCPStdio(cmd *cobra.Command, args []string) error {
 
 	logger.Info("g8e MCP stdio server shutting down")
 	return nil
-}
-
-func handleToolsList(encoder *json.Encoder, id interface{}, nativeToolHandler *mcp.NativeToolHandler) {
-	nativeTools := nativeToolHandler.ListTools()
-	tools := make([]Tool, 0, len(nativeTools))
-	for _, nt := range nativeTools {
-		tools = append(tools, Tool{
-			Name:        nt.Name(),
-			Description: nt.Description(),
-			InputSchema: nt.InputSchema().ToMap(),
-		})
-	}
-
-	result := ToolsListResult{
-		Tools: tools,
-	}
-
-	response := JSONRPCResponse{
-		JSONRPC: "2.0",
-		ID:      id,
-		Result:  result,
-	}
-
-	if err := encoder.Encode(response); err != nil {
-		slog.Error("Failed to encode tools/list response", "error", err)
-	}
-}
-
-func handleToolsCall(encoder *json.Encoder, id interface{}, params json.RawMessage, nativeToolHandler *mcp.NativeToolHandler) {
-	var callParams CallToolRequest
-	if err := json.Unmarshal(params, &callParams); err != nil {
-		sendError(encoder, id, -32600, fmt.Sprintf("invalid tools/call params: %v", err))
-		return
-	}
-
-	if callParams.Name == "" {
-		sendError(encoder, id, -32600, "tool name required")
-		return
-	}
-
-	// Execute native tool
-	result, err := nativeToolHandler.HandleTool(context.Background(), callParams.Name, callParams.Arguments)
-	if err != nil {
-		sendError(encoder, id, -32603, fmt.Sprintf("tool execution failed: %v", err))
-		return
-	}
-
-	response := JSONRPCResponse{
-		JSONRPC: "2.0",
-		ID:      id,
-		Result:  result,
-	}
-
-	if err := encoder.Encode(response); err != nil {
-		slog.Error("Failed to encode tools/call response", "error", err)
-	}
 }
 
 func handleInitialize(encoder *json.Encoder, id interface{}) {
@@ -243,9 +202,53 @@ func handleInitialize(encoder *json.Encoder, id interface{}) {
 			},
 		},
 	}
-
 	if err := encoder.Encode(response); err != nil {
 		slog.Error("Failed to encode initialize response", "error", err)
+	}
+}
+
+func handleToolsList(encoder *json.Encoder, id interface{}, nativeToolHandler *mcp.NativeToolHandler) {
+	nativeTools := nativeToolHandler.ListTools()
+	tools := make([]Tool, 0, len(nativeTools))
+	for _, nt := range nativeTools {
+		tools = append(tools, Tool{
+			Name:        nt.Name(),
+			Description: nt.Description(),
+			InputSchema: nt.InputSchema().ToMap(),
+		})
+	}
+	response := JSONRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result:  ToolsListResult{Tools: tools},
+	}
+	if err := encoder.Encode(response); err != nil {
+		slog.Error("Failed to encode tools/list response", "error", err)
+	}
+}
+
+func handleToolsCall(encoder *json.Encoder, id interface{}, params json.RawMessage, nativeToolHandler *mcp.NativeToolHandler) {
+	var callParams CallToolRequest
+	if err := json.Unmarshal(params, &callParams); err != nil {
+		sendError(encoder, id, -32600, fmt.Sprintf("invalid tools/call params: %v", err))
+		return
+	}
+	if callParams.Name == "" {
+		sendError(encoder, id, -32600, "tool name required")
+		return
+	}
+	result, err := nativeToolHandler.HandleTool(context.Background(), callParams.Name, callParams.Arguments)
+	if err != nil {
+		sendError(encoder, id, -32603, fmt.Sprintf("tool execution failed: %v", err))
+		return
+	}
+	response := JSONRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result:  result,
+	}
+	if err := encoder.Encode(response); err != nil {
+		slog.Error("Failed to encode tools/call response", "error", err)
 	}
 }
 
@@ -253,12 +256,8 @@ func sendError(encoder *json.Encoder, id interface{}, code int, message string) 
 	response := JSONRPCResponse{
 		JSONRPC: "2.0",
 		ID:      id,
-		Error: &RPCError{
-			Code:    code,
-			Message: message,
-		},
+		Error:   &RPCError{Code: code, Message: message},
 	}
-
 	if err := encoder.Encode(response); err != nil {
 		slog.Error("Failed to encode error response", "error", err)
 	}
@@ -270,65 +269,131 @@ func sendSuccess(encoder *json.Encoder, id interface{}, result interface{}) {
 		ID:      id,
 		Result:  result,
 	}
-
 	if err := encoder.Encode(response); err != nil {
 		slog.Error("Failed to encode success response", "error", err)
 	}
 }
 
+// ─── gov: governed proxy, full mTLS + CLI session to gateway ────────────────
+
+// cliProxySession holds the in-memory CLI session established at startup. All
+// gateway requests are driven through this single authenticated session for the
+// lifetime of the process.
+type cliProxySession struct {
+	client            *http.Client
+	gatewayURL        string
+	cliSessionID      string
+	userID            string
+	operatorID        string
+	operatorSessionID string
+}
+
+// buildProxySession constructs a cliProxySession. It first reads session
+// identity from G8E_* environment variables injected by 'mcp agent run'.
+// When those are absent it loads credentials from disk, bootstrapping CLI
+// enrollment from the gateway if needed (idempotent).
+func buildProxySession(cfg *config.Config) (*cliProxySession, error) {
+	certFile := envOr(envG8EClientCert, cfg.CLICertFile())
+	keyFile := envOr(envG8EClientKey, cfg.CLIKeyFile())
+	caFile := envOr(envG8ECABundle, cfg.TrustBundlePath())
+	gatewayURL := envOr(envG8EGatewayURL,
+		fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps))
+
+	cliSessionID := os.Getenv(envG8ECLISessionID)
+	userID := os.Getenv(envG8EUserID)
+	operatorID := os.Getenv(envG8EOperatorID)
+	operatorSessionID := os.Getenv(envG8EOperatorSessionID)
+
+	// Fall back to stored credentials when env vars are not present.
+	if cliSessionID == "" || userID == "" {
+		if err := auth.BootstrapCLIWithoutPasskey(cfg); err != nil {
+			return nil, fmt.Errorf("CLI auth failed: %w", err)
+		}
+		creds, err := auth.LoadCredentials(cfg)
+		if err != nil || creds == nil {
+			return nil, fmt.Errorf("no CLI credentials available after bootstrap")
+		}
+		cliSessionID = creds.CLISessionID
+		userID = creds.UserID
+		operatorID = creds.OperatorID
+		operatorSessionID = creds.OperatorSessionID
+	}
+
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load client certificate: %w", err)
+	}
+	caBundleBytes, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CA bundle: %w", err)
+	}
+	caPool := x509.NewCertPool()
+	caPool.AppendCertsFromPEM(caBundleBytes)
+
+	tlsCfg := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      caPool,
+		MinVersion:   tls.VersionTLS13,
+		ServerName:   "g8e.local",
+	}
+
+	return &cliProxySession{
+		client: &http.Client{
+			Transport: &http.Transport{TLSClientConfig: tlsCfg},
+			Timeout:   30 * time.Second,
+		},
+		gatewayURL:        gatewayURL,
+		cliSessionID:      cliSessionID,
+		userID:            userID,
+		operatorID:        operatorID,
+		operatorSessionID: operatorSessionID,
+	}, nil
+}
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 func mcpStdioProxyCmd() *cobra.Command {
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "gov",
-		Short: "Proxy stdio MCP requests to the gateway HTTP endpoint",
-		Long:  `Run as an MCP stdio server that proxies all requests to the running gateway's HTTP endpoint. This enables tools that only support stdio transport to use the full gateway governance layer.`,
+		Short: "Proxy stdio MCP requests to the gateway with full L1-L5 governance",
+		Long: `Run as an MCP stdio server that proxies all requests to the running gateway over
+mTLS with a bound CLI session. Every tool call passes through the L1-L5 governance
+pipeline. HTTP is never used for proxy traffic — it is reserved for CA bundle
+discovery and health checks only.
+
+This command is launched automatically by 'g8e mcp agent run'. When invoked
+directly the CLI session is loaded from disk (bootstrapping enrollment if needed).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runMCPStdioProxy(cmd, args)
 		},
 	}
-
-	return cmd
 }
 
-func runMCPStdioProxy(cmd *cobra.Command, args []string) error {
+func runMCPStdioProxy(_ *cobra.Command, _ []string) error {
 	cfg, err := config.Load("")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Check if gateway is running via HTTP
-	apiClient, err := api.NewClient(cfg)
-	if err == nil {
-		_, err = apiClient.Get("/api/v1/health")
-		if err == nil {
-			// Gateway is running
-		} else {
-			return fmt.Errorf("gateway is not running. Start it with: ./g8e gw start")
-		}
-	} else {
-		// Fallback to ProcessManager check
-		pm, err := platform.NewProcessManager(cfg.ProjectRoot)
-		if err != nil {
-			return fmt.Errorf("failed to create process manager: %w", err)
-		}
-
-		running, _, err := pm.OperatorStatus()
-		if err != nil {
-			return fmt.Errorf("failed to check Operator status: %w", err)
-		}
-		if !running {
-			return fmt.Errorf("gateway is not running. Start it with: ./g8e gw start")
-		}
-	}
-
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	logger.Info("g8e MCP stdio proxy starting")
 
-	client, err := createMCPClient(cfg)
+	// Build the in-memory session once. All proxy calls for this process
+	// lifetime use this session — no disk reads per request.
+	session, err := buildProxySession(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to create MCP client: %w", err)
+		return fmt.Errorf("failed to establish CLI session: %w", err)
 	}
 
-	gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps)
+	logger.Info("g8e MCP governance proxy starting",
+		"cli_session_id", session.cliSessionID,
+		"user_id", session.userID,
+		"gateway_url", session.gatewayURL,
+	)
 
 	scanner := bufio.NewScanner(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)
@@ -346,9 +411,23 @@ func runMCPStdioProxy(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		logger.Info("Received MCP request", "method", req.Method, "id", req.ID)
+		// MCP notifications are fire-and-forget. They must not receive a
+		// response — drop them silently.
+		if req.ID == nil && req.Method != "" {
+			logger.Debug("Dropping MCP notification", "method", req.Method)
+			continue
+		}
 
-		resp, err := proxyToGatewayWithRetry(client, gatewayURL, req, logger)
+		// The initialize handshake is answered locally so the agent gets an
+		// immediate response without a gateway round-trip.
+		if req.Method == "initialize" {
+			handleInitialize(encoder, req.ID)
+			continue
+		}
+
+		logger.Info("Proxying MCP request", "method", req.Method, "id", req.ID)
+
+		resp, err := proxySessionToGatewayWithRetry(session, req, logger)
 		if err != nil {
 			logger.Error("Failed to proxy to gateway", "error", err)
 			sendError(encoder, req.ID, -32603, fmt.Sprintf("gateway proxy error: %v", err))
@@ -365,10 +444,94 @@ func runMCPStdioProxy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	logger.Info("g8e MCP stdio proxy shutting down")
+	logger.Info("g8e MCP governance proxy shutting down")
 	return nil
 }
 
+// proxySessionToGateway posts a JSON-RPC request to the gateway over mTLS,
+// attaching the bound CLI session headers on every call.
+func proxySessionToGateway(session *cliProxySession, req JSONRPCRequest) (JSONRPCResponse, error) {
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return JSONRPCResponse{}, err
+	}
+
+	httpReq, err := http.NewRequest(http.MethodPost, session.gatewayURL, bytes.NewReader(reqBody))
+	if err != nil {
+		return JSONRPCResponse{}, err
+	}
+	httpReq.Header.Set(constants.HeaderContentType, "application/json")
+	httpReq.Header.Set(constants.HeaderCLISessionID, session.cliSessionID)
+	httpReq.Header.Set(constants.HeaderUserID, session.userID)
+	httpReq.Header.Set(constants.HeaderOperatorID, session.operatorID)
+	httpReq.Header.Set(constants.HeaderOperatorSessionID, session.operatorSessionID)
+
+	httpResp, err := session.client.Do(httpReq)
+	if err != nil {
+		return JSONRPCResponse{}, err
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(httpResp.Body)
+		return JSONRPCResponse{}, fmt.Errorf("gateway returned HTTP %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	var resp JSONRPCResponse
+	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
+		return JSONRPCResponse{}, err
+	}
+	return resp, nil
+}
+
+func proxySessionToGatewayWithRetry(session *cliProxySession, req JSONRPCRequest, logger *slog.Logger) (JSONRPCResponse, error) {
+	resp, err := proxySessionToGateway(session, req)
+	if err != nil {
+		return resp, err
+	}
+
+	if !isL3ApprovalResponse(resp) {
+		return resp, nil
+	}
+
+	approvalURL := extractApprovalURL(resp)
+	if logger != nil {
+		logger.Info("L3 approval required, waiting for user to authorize...", "url", approvalURL)
+	}
+
+	if err := platform.OpenBrowser(approvalURL); err != nil {
+		if logger != nil {
+			logger.Warn("Failed to auto-open browser", "error", err)
+		}
+		fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
+	}
+
+	for i := 0; i < l3ApprovalMaxIterations; i++ {
+		time.Sleep(l3ApprovalPollInterval)
+
+		retryResp, err := proxySessionToGateway(session, req)
+		if err != nil {
+			continue
+		}
+		if !isL3ApprovalResponse(retryResp) {
+			if logger != nil {
+				logger.Info("L3 approval completed, proceeding with execution")
+			}
+			return retryResp, nil
+		}
+	}
+
+	if logger != nil {
+		logger.Warn("L3 approval timeout, returning original response")
+	}
+	return resp, nil
+}
+
+// ─── createMCPClient: kept for tests and external callers ───────────────────
+
+// createMCPClient builds a plain mTLS HTTP client from config paths.
+// Most callers should use buildProxySession instead, which also loads the
+// CLI session identity required for gateway authentication.
 func createMCPClient(cfg *config.Config) (*http.Client, error) {
 	cert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
@@ -386,20 +549,19 @@ func createMCPClient(cfg *config.Config) (*http.Client, error) {
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      caCertPool,
-		MinVersion:   tls.VersionTLS12,
+		MinVersion:   tls.VersionTLS13,
 		ServerName:   "g8e.local",
 	}
 
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-
 	return &http.Client{
-		Transport: transport,
+		Transport: &http.Transport{TLSClientConfig: tlsConfig},
 		Timeout:   30 * time.Second,
 	}, nil
 }
 
+// proxyToGateway is a low-level helper used by the L1-only governance proxy
+// and test code. It does not attach CLI session headers; use
+// proxySessionToGateway when a bound session is available.
 func proxyToGateway(client *http.Client, gatewayURL string, req JSONRPCRequest) (JSONRPCResponse, error) {
 	reqBody, err := json.Marshal(req)
 	if err != nil {
@@ -412,11 +574,15 @@ func proxyToGateway(client *http.Client, gatewayURL string, req JSONRPCRequest) 
 	}
 	defer httpResp.Body.Close()
 
+	if httpResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(httpResp.Body)
+		return JSONRPCResponse{}, fmt.Errorf("gateway returned HTTP %d: %s", httpResp.StatusCode, string(body))
+	}
+
 	var resp JSONRPCResponse
 	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
 		return JSONRPCResponse{}, err
 	}
-
 	return resp, nil
 }
 
@@ -426,32 +592,39 @@ func proxyToGatewayWithRetry(client *http.Client, gatewayURL string, req JSONRPC
 		return resp, err
 	}
 
-	if isL3ApprovalResponse(resp) {
-		approvalURL := extractApprovalURL(resp)
-		logger.Info("L3 approval required, waiting for user to authorize...", "url", approvalURL)
-
-		if err := platform.OpenBrowser(approvalURL); err != nil {
-			logger.Warn("Failed to auto-open browser", "error", err)
-			fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
-		}
-
-		for i := 0; i < l3ApprovalMaxIterations; i++ {
-			time.Sleep(l3ApprovalPollInterval)
-
-			retryResp, err := proxyToGateway(client, gatewayURL, req)
-			if err != nil {
-				continue
-			}
-
-			if !isL3ApprovalResponse(retryResp) {
-				logger.Info("L3 approval completed, proceeding with execution")
-				return retryResp, nil
-			}
-		}
-
-		logger.Warn("L3 approval timeout, returning original response")
+	if !isL3ApprovalResponse(resp) {
+		return resp, nil
 	}
 
+	approvalURL := extractApprovalURL(resp)
+	if logger != nil {
+		logger.Info("L3 approval required, waiting for user to authorize...", "url", approvalURL)
+	}
+
+	if err := platform.OpenBrowser(approvalURL); err != nil {
+		if logger != nil {
+			logger.Warn("Failed to auto-open browser", "error", err)
+		}
+		fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
+	}
+
+	for i := 0; i < l3ApprovalMaxIterations; i++ {
+		time.Sleep(l3ApprovalPollInterval)
+		retryResp, err := proxyToGateway(client, gatewayURL, req)
+		if err != nil {
+			continue
+		}
+		if !isL3ApprovalResponse(retryResp) {
+			if logger != nil {
+				logger.Info("L3 approval completed, proceeding with execution")
+			}
+			return retryResp, nil
+		}
+	}
+
+	if logger != nil {
+		logger.Warn("L3 approval timeout, returning original response")
+	}
 	return resp, nil
 }
 
@@ -459,12 +632,10 @@ func isL3ApprovalResponse(resp JSONRPCResponse) bool {
 	if resp.Result == nil {
 		return false
 	}
-
 	resultBytes, err := json.Marshal(resp.Result)
 	if err != nil {
 		return false
 	}
-
 	resultStr := string(resultBytes)
 	return strings.Contains(resultStr, "Execution paused") &&
 		strings.Contains(resultStr, "approve/")
@@ -475,7 +646,6 @@ func extractApprovalURL(resp JSONRPCResponse) string {
 		return ""
 	}
 
-	// First try to extract approval_url from structured JSON response
 	resultMap, ok := resp.Result.(map[string]interface{})
 	if ok {
 		if approvalURL, exists := resultMap["approval_url"]; exists {
@@ -483,8 +653,6 @@ func extractApprovalURL(resp JSONRPCResponse) string {
 				return urlStr
 			}
 		}
-
-		// Check if content array exists and extract URL from text content
 		if content, exists := resultMap["content"]; exists {
 			if contentArray, ok := content.([]interface{}); ok {
 				for _, item := range contentArray {
@@ -502,14 +670,14 @@ func extractApprovalURL(resp JSONRPCResponse) string {
 		}
 	}
 
-	// Fallback: marshal and use regex extraction
 	resultBytes, err := json.Marshal(resp.Result)
 	if err != nil {
 		return ""
 	}
-
 	return extractURLFromText(string(resultBytes))
 }
+
+// ─── agent show config printers ─────────────────────────────────────────────
 
 func printMCPConfigLocal(cmd *cobra.Command) error {
 	cfg, err := config.Load("")
@@ -521,18 +689,11 @@ func printMCPConfigLocal(cmd *cobra.Command) error {
 	cmd.Printf("# Add this entry to /etc/hosts to enable g8e.local resolution:\n")
 	cmd.Printf("%s g8e.local\n\n", externalIP)
 
-	// Use the canonical g8e.local internal hostname with unified /mcp endpoint
 	gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps)
 
-	// Get actual resolved cert paths (absolute paths)
-	actualCertPath := cfg.CLICertFile()
-	actualKeyPath := cfg.CLIKeyFile()
-	actualCAPath := cfg.TrustBundlePath()
-
-	// Normalize to forward slashes for JSON (cross-platform compatibility)
-	actualCertPath = filepath.ToSlash(actualCertPath)
-	actualKeyPath = filepath.ToSlash(actualKeyPath)
-	actualCAPath = filepath.ToSlash(actualCAPath)
+	actualCertPath := filepath.ToSlash(cfg.CLICertFile())
+	actualKeyPath := filepath.ToSlash(cfg.CLIKeyFile())
+	actualCAPath := filepath.ToSlash(cfg.TrustBundlePath())
 
 	mcpConfig, err := mcp.NewGatewayConfig(gatewayURL, actualCertPath, actualKeyPath, actualCAPath)
 	if err != nil {
@@ -554,21 +715,13 @@ func printMCPConfigIP(cmd *cobra.Command) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Use the external IP address instead of g8e.local
 	externalIP := config.GetExternalInterfaceIP()
 	gatewayURL := fmt.Sprintf("https://%s:%d/mcp", externalIP, constants.Ports.OperatorHttps)
 
-	// Get actual resolved cert paths (absolute paths)
-	actualCertPath := cfg.CLICertFile()
-	actualKeyPath := cfg.CLIKeyFile()
-	actualCAPath := cfg.TrustBundlePath()
+	actualCertPath := filepath.ToSlash(cfg.CLICertFile())
+	actualKeyPath := filepath.ToSlash(cfg.CLIKeyFile())
+	actualCAPath := filepath.ToSlash(cfg.TrustBundlePath())
 
-	// Normalize to forward slashes for JSON (cross-platform compatibility)
-	actualCertPath = filepath.ToSlash(actualCertPath)
-	actualKeyPath = filepath.ToSlash(actualKeyPath)
-	actualCAPath = filepath.ToSlash(actualCAPath)
-
-	// Use IP address as hostname for verification
 	mcpConfig, err := mcp.NewGatewayConfigWithHostname(gatewayURL, actualCertPath, actualKeyPath, actualCAPath, externalIP)
 	if err != nil {
 		return fmt.Errorf("failed to create MCP config: %w", err)
@@ -583,28 +736,12 @@ func printMCPConfigIP(cmd *cobra.Command) error {
 	return nil
 }
 
-func printMCPConfigHTTP(cmd *cobra.Command) error {
-	staticConfig := fmt.Sprintf(`{
-  "mcpServers": {
-    "g8e-gateway": {
-      "disabled": true,
-      "serverUrl": "http://127.0.0.1:%d/mcp",
-      "note": "Must use explicit 127.0.0.1 for HTTP (localhost may resolve to IPv6 ::1)"
-    }
-  }
-}`, constants.Ports.OperatorHttp)
-	cmd.Println(staticConfig)
-	return nil
-}
-
 func printMCPConfigStdio(cmd *cobra.Command) error {
-	// Get the full path to the current binary
 	binaryPath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to get binary path: %w", err)
 	}
 
-	// Use the new simple config format
 	mcpConfig, err := mcp.NewStdioConfigSimple(binaryPath)
 	if err != nil {
 		return fmt.Errorf("failed to create MCP stdio config: %w", err)
@@ -618,6 +755,8 @@ func printMCPConfigStdio(cmd *cobra.Command) error {
 	cmd.Println(string(configJSON))
 	return nil
 }
+
+// ─── agent subcommands ───────────────────────────────────────────────────────
 
 func agentCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -636,7 +775,7 @@ func agentCmd() *cobra.Command {
 }
 
 func agentListCmd() *cobra.Command {
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "list",
 		Short: "List supported agent binaries",
 		Long:  `List all popular AI agent binaries that g8e supports for MCP integration.`,
@@ -650,27 +789,21 @@ func agentListCmd() *cobra.Command {
 			cmd.Println("Use 'g8e mcp agent show <agent>' to show configuration for a specific agent.")
 		},
 	}
-
-	return cmd
 }
 
 func agentShowCmd() *cobra.Command {
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "show <agent>",
 		Short: "Print MCP client configuration for the Gateway",
-		Long:  `Print MCP client configuration for connecting to the g8e Gateway from local coding tools. Displays configurations side-by-side for g8e.local (mTLS), IP Address (mTLS), Plain HTTP, and Stdio Transport.`,
+		Long:  `Print MCP client configuration for connecting to the g8e Gateway from local coding tools. Displays configurations for g8e.local (mTLS), IP Address (mTLS), and Stdio Transport.`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			agent := args[0]
-			return printAgentShow(cmd, agent)
+			return printAgentShow(cmd, args[0])
 		},
 	}
-
-	return cmd
 }
 
 func printAgentShow(cmd *cobra.Command, agentID string) error {
-	// Validate agent exists
 	var description string
 	found := false
 	for _, a := range getSupportedAgents() {
@@ -680,7 +813,6 @@ func printAgentShow(cmd *cobra.Command, agentID string) error {
 			break
 		}
 	}
-
 	if !found {
 		return fmt.Errorf("unknown agent: %s. Use 'g8e mcp agent list' to see supported agents", agentID)
 	}
@@ -690,9 +822,7 @@ func printAgentShow(cmd *cobra.Command, agentID string) error {
 	cmd.Printf("║  Use these configs to connect %s \n", description)
 	cmd.Println("║  to the g8e Gateway for agent orchestration and tool execution.")
 	cmd.Println("╚═════════════════════════════════════════════════════════════════════════")
-
 	cmd.Println()
-
 
 	cmd.Println("┌─ g8e.local (mTLS) ─────────────────────────────────────────────────────────────")
 	cmd.Println("│ Use: Production environments with DNS configured")
@@ -714,19 +844,9 @@ func printAgentShow(cmd *cobra.Command, agentID string) error {
 	}
 	cmd.Println()
 
-	cmd.Println("┌─ Plain HTTP ────────────────────────────────────────────────────────────────")
-	cmd.Println("│ Use: Local development only (localhost access)")
-	cmd.Println("│ Apps: Local MCP clients, testing")
-	cmd.Println("│ Requires: No mTLS, uses 127.0.0.1 explicitly")
-	cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
-	if err := printMCPConfigHTTP(cmd); err != nil {
-		return err
-	}
-	cmd.Println()
-
 	cmd.Println("┌─ Stdio Transport ────────────────────────────────────────────────────────────")
 	cmd.Println("│ Use: Direct native tool access without gateway")
-	cmd.Println("│ Apps: Cursor, Windsurf, VS Code MCP clients")
+	cmd.Println("│ Apps: Claude Code, Cursor, Windsurf, VS Code MCP clients")
 	cmd.Println("│ Requires: g8e binary in PATH or full path in config")
 	cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
 	if err := printMCPConfigStdio(cmd); err != nil {
@@ -755,7 +875,8 @@ func getSupportedAgents() []agentInfo {
 	}
 }
 
-// agentRunCmd implements 'g8e mcp agent run' - a governance reverse proxy for any MCP server.
+// ─── agent run ──────────────────────────────────────────────────────────────
+
 func agentRunCmd() *cobra.Command {
 	var downstreamURL string
 
@@ -767,10 +888,10 @@ func agentRunCmd() *cobra.Command {
 LAUNCH AN AGENT (one command does everything):
 
   g8e mcp agent run claude       Start the g8e gateway (if not already running),
-                                  then launch Claude with g8e as its sole MCP
-                                  provider. All tool calls pass through full
-                                  L1-L5 governance — no other MCP servers are
-                                  reachable.
+                                  perform CLI auth, then launch Claude with native
+                                  tools disabled so ALL I/O must go through g8e MCP
+                                  — every action is audited at L1-L5. No other MCP
+                                  servers are reachable.
 
   Extra args are forwarded to the agent:
     g8e mcp agent run claude -- -p "fix the failing tests"
@@ -789,7 +910,7 @@ WRAP AN EXTERNAL MCP SERVER (governance reverse proxy):
 		},
 	}
 
-	cmd.Flags().StringVar(&downstreamURL, "url", "", "URL of the downstream HTTP MCP server")
+	cmd.Flags().StringVar(&downstreamURL, "url", "", "URL of the downstream MCP server")
 	return cmd
 }
 
@@ -883,8 +1004,10 @@ func (d *subprocessMCPProxy) forward(req JSONRPCRequest) (JSONRPCResponse, error
 	return resp, nil
 }
 
-// ensureGatewayRunning starts the g8e gateway if it is not already running and
-// waits until it is healthy. After this returns without error, mcp gov can be used.
+// ensureGatewayRunning starts the gateway if it is not already running and
+// waits until it is healthy, then ensures CLI mTLS credentials exist.
+// HTTP is only used here to poll the bootstrap health endpoint before mTLS
+// certs have been issued — all subsequent traffic uses mTLS.
 func ensureGatewayRunning() error {
 	cfg, err := config.Load("")
 	if err != nil {
@@ -900,49 +1023,52 @@ func ensureGatewayRunning() error {
 	if err != nil {
 		return fmt.Errorf("check gateway status: %w", err)
 	}
+
 	if running {
 		fmt.Fprintf(os.Stderr, "[g8e] Gateway already running (PID %d)\n", pid)
-		return nil
-	}
+	} else {
+		fmt.Fprintf(os.Stderr, "[g8e] Starting gateway...\n")
+		if err := pm.StartOperator(
+			"doctrine",
+			0, 0,
+			"", "", "", "", "",
+			false,
+			"", "",
+			0, 0,
+			"info",
+			"localhost",
+			nil,
+		); err != nil {
+			return fmt.Errorf("start gateway: %w", err)
+		}
 
-	fmt.Fprintf(os.Stderr, "[g8e] Starting gateway...\n")
-	if err := pm.StartOperator(
-		"doctrine",
-		0, 0,
-		"", "", "", "", "",
-		false,
-		"", "",
-		0, 0,
-		"info",
-		"localhost",
-		nil,
-	); err != nil {
-		return fmt.Errorf("start gateway: %w", err)
-	}
-
-	// Poll plain HTTP until the gateway accepts connections.
-	// mTLS certs may not exist yet, so we cannot use createMCPClient here.
-	healthURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/health", constants.Ports.OperatorHttp)
-	plainClient := &http.Client{Timeout: 2 * time.Second}
-	const (
-		maxAttempts  = 30
-		pollInterval = 500 * time.Millisecond
-	)
-	for i := 0; i < maxAttempts; i++ {
-		resp, err := plainClient.Get(healthURL) //nolint:gosec,noctx
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				break
+		// Poll plain HTTP health until the gateway is ready.
+		// mTLS certs do not exist yet at this stage, so HTTP is the only
+		// option. HTTP is only ever used here for this bootstrap health check.
+		healthURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/health", constants.Ports.OperatorHttp)
+		plainClient := &http.Client{Timeout: 2 * time.Second}
+		const (
+			maxAttempts  = 30
+			pollInterval = 500 * time.Millisecond
+		)
+		for i := 0; i < maxAttempts; i++ {
+			resp, err := plainClient.Get(healthURL) //nolint:gosec,noctx
+			if err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					break
+				}
 			}
+			if i == maxAttempts-1 {
+				return fmt.Errorf("gateway did not become healthy after %v",
+					time.Duration(maxAttempts)*pollInterval)
+			}
+			time.Sleep(pollInterval)
 		}
-		if i == maxAttempts-1 {
-			return fmt.Errorf("gateway did not become healthy after %v", time.Duration(maxAttempts)*pollInterval)
-		}
-		time.Sleep(pollInterval)
 	}
 
-	// Bootstrap CLI mTLS credentials (idempotent — no-op if already done).
+	// Ensure CLI mTLS credentials exist regardless of whether the gateway
+	// was just started or was already running (idempotent).
 	if err := auth.BootstrapCLIWithoutPasskey(cfg); err != nil {
 		return fmt.Errorf("bootstrap CLI auth: %w", err)
 	}
@@ -951,12 +1077,24 @@ func ensureGatewayRunning() error {
 	return nil
 }
 
-// launchAgentWithGovernance starts the g8e gateway if needed, then launches a
-// supported AI agent with g8e configured as its sole MCP provider. All MCP tool
-// calls are routed exclusively through g8e for full L1-L5 governance.
+// launchAgentWithGovernance starts the gateway if needed, performs CLI auth,
+// then launches the requested agent with 'g8e mcp gov' as its sole MCP server.
+// The authenticated CLI session is propagated to the gov subprocess via G8E_*
+// environment variables so it never needs to re-read credentials from disk.
 func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	if err := ensureGatewayRunning(); err != nil {
 		return fmt.Errorf("ensure gateway: %w", err)
+	}
+
+	cfg, err := config.Load("")
+	if err != nil {
+		return fmt.Errorf("load config after gateway start: %w", err)
+	}
+
+	// Load the credentials established by ensureGatewayRunning.
+	creds, err := auth.LoadCredentials(cfg)
+	if err != nil || creds == nil {
+		return fmt.Errorf("load CLI credentials: %w", err)
 	}
 
 	binaryPath, err := os.Executable()
@@ -1005,17 +1143,43 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	agentCmd.Stderr = os.Stderr
 	setSysProcAttr(agentCmd)
 
+	// Propagate the authenticated CLI session to the 'g8e mcp gov' subprocess
+	// that the agent will spawn. The subprocess reads these env vars at startup
+	// and stores the session in memory — no disk reads per request.
+	gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps)
+	agentCmd.Env = append(os.Environ(),
+		envG8ECLISessionID+"="+creds.CLISessionID,
+		envG8EUserID+"="+creds.UserID,
+		envG8EOperatorID+"="+creds.OperatorID,
+		envG8EOperatorSessionID+"="+creds.OperatorSessionID,
+		envG8EClientCert+"="+cfg.CLICertFile(),
+		envG8EClientKey+"="+cfg.CLIKeyFile(),
+		envG8ECABundle+"="+cfg.TrustBundlePath(),
+		envG8EGatewayURL+"="+gatewayURL,
+	)
+
 	return agentCmd.Run()
+}
+
+// nativeToolsToDisable are Claude Code built-in tools that bypass MCP governance.
+// Disabling them forces all I/O through g8e's MCP tools so every action is audited.
+var nativeToolsToDisable = []string{
+	"Bash", "Read", "Write", "Edit", "WebSearch", "WebFetch",
 }
 
 // agentLaunchArgs returns the argv to pass to the agent binary for a governed session.
 func agentLaunchArgs(agentID, mcpConfigPath string) ([]string, error) {
 	switch strings.ToLower(agentID) {
 	case "claude":
-		// --mcp-config   loads servers from the JSON file
-		// --strict-mcp-config  ignores all other configured MCP servers so every
-		//                      MCP call is routed exclusively through g8e governance
-		return []string{"--mcp-config", mcpConfigPath, "--strict-mcp-config"}, nil
+		// --mcp-config          load g8e as the only MCP server
+		// --strict-mcp-config   ignore all other configured MCP servers
+		// --disallowed-tools    disable native tools so every I/O action must
+		//                       go through g8e MCP tools and is therefore audited
+		return []string{
+			"--mcp-config", mcpConfigPath,
+			"--strict-mcp-config",
+			"--disallowed-tools", strings.Join(nativeToolsToDisable, ","),
+		}, nil
 	default:
 		return nil, fmt.Errorf("auto-launch not yet supported for %q\n\nTo configure manually:\n  g8e mcp agent show %s", agentID, agentID)
 	}
@@ -1026,8 +1190,7 @@ func runMCPAgentRun(args []string, downstreamURL string) error {
 		return fmt.Errorf("specify an agent name or MCP server\n\nLaunch an agent with governance:\n  g8e mcp agent run claude\n\nWrap an MCP server subprocess:\n  g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /\n\nWrap an HTTP MCP server:\n  g8e mcp agent run --url http://localhost:3000")
 	}
 
-	// Named agent (e.g. 'claude', 'cursor') → launch it with g8e as its governed MCP provider.
-	// Any args after the agent name are forwarded to the agent binary unchanged.
+	// Named agent → launch it with g8e as its governed MCP provider.
 	if downstreamURL == "" && len(args) > 0 {
 		firstArg := strings.ToLower(args[0])
 		for _, a := range getSupportedAgents() {
@@ -1037,7 +1200,7 @@ func runMCPAgentRun(args []string, downstreamURL string) error {
 		}
 	}
 
-	// MCP server (--url or -- command) → run as governance reverse proxy.
+	// MCP server (--url or -- command) → run as L1 governance reverse proxy.
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 	var ds mcpDownstreamProxy
@@ -1078,6 +1241,11 @@ func runMCPAgentRun(args []string, downstreamURL string) error {
 			continue
 		}
 
+		// Drop notifications.
+		if req.ID == nil && req.Method != "" {
+			continue
+		}
+
 		logger.Info("g8e intercepted", "method", req.Method, "id", req.ID)
 
 		if req.Method == "tools/call" {
@@ -1100,7 +1268,8 @@ func runMCPAgentRun(args []string, downstreamURL string) error {
 			var violations []string
 			for _, sig := range signals {
 				if sig.BlockRecommended {
-					violations = append(violations, fmt.Sprintf("%s [%s, MITRE: %s]", sig.Indicator, sig.Category, sig.MitreAttack))
+					violations = append(violations, fmt.Sprintf("%s [%s, MITRE: %s]",
+						sig.Indicator, sig.Category, sig.MitreAttack))
 				}
 			}
 
@@ -1110,7 +1279,8 @@ func runMCPAgentRun(args []string, downstreamURL string) error {
 					IsError: true,
 					Content: []mcp.TextContent{{
 						Type: "text",
-						Text: fmt.Sprintf("g8e governance blocked tool call %q:\n- %s", callParams.Name, strings.Join(violations, "\n- ")),
+						Text: fmt.Sprintf("g8e governance blocked tool call %q:\n- %s",
+							callParams.Name, strings.Join(violations, "\n- ")),
 					}},
 				})
 				continue
@@ -1137,19 +1307,13 @@ func runMCPAgentRun(args []string, downstreamURL string) error {
 }
 
 func extractURLFromText(text string) string {
-	// Use regex to extract HTTPS URLs that contain the approval path
 	urlPattern := regexp.MustCompile(`https://[^\s"']+` + regexp.QuoteMeta(constants.APIPaths.ApprovePagePrefix) + `[^\s"']*`)
-	matches := urlPattern.FindStringSubmatch(text)
-	if len(matches) > 0 {
+	if matches := urlPattern.FindStringSubmatch(text); len(matches) > 0 {
 		return matches[0]
 	}
-
-	// Fallback to any HTTPS URL if approval path not found
 	genericURLPattern := regexp.MustCompile(`https://[^\s"']+`)
-	matches = genericURLPattern.FindStringSubmatch(text)
-	if len(matches) > 0 {
+	if matches := genericURLPattern.FindStringSubmatch(text); len(matches) > 0 {
 		return matches[0]
 	}
-
 	return ""
 }
