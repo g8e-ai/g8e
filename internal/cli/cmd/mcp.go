@@ -20,18 +20,22 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/spf13/cobra"
 )
@@ -624,6 +628,7 @@ func agentCmd() *cobra.Command {
 	cmd.AddCommand(
 		agentListCmd(),
 		agentShowCmd(),
+		agentRunCmd(),
 	)
 
 	return cmd
@@ -679,12 +684,14 @@ func printAgentShow(cmd *cobra.Command, agentID string) error {
 		return fmt.Errorf("unknown agent: %s. Use 'g8e mcp agent list' to see supported agents", agentID)
 	}
 
-	cmd.Printf("╔══════════════════════════════════════════════════════════════════════════════╗")
-	cmd.Printf("║                        g8e Gateway MCP Configurations                        ║")
-	cmd.Printf("║  Use these configs to connect %s to the g8e Gateway              ║", description)
-	cmd.Printf("║  for agent orchestration and tool execution.                              ║")
-	cmd.Printf("╚══════════════════════════════════════════════════════════════════════════════╝")
+	cmd.Println("╔═════════════════════════════════════════════════════════════════════════")
+	cmd.Println("║           g8e Gateway MCP Configurations")
+	cmd.Printf("║  Use these configs to connect %s \n", description)
+	cmd.Println("║  to the g8e Gateway for agent orchestration and tool execution.")
+	cmd.Println("╚═════════════════════════════════════════════════════════════════════════")
+
 	cmd.Println()
+
 
 	cmd.Println("┌─ g8e.local (mTLS) ─────────────────────────────────────────────────────────────")
 	cmd.Println("│ Use: Production environments with DNS configured")
@@ -745,6 +752,229 @@ func getSupportedAgents() []agentInfo {
 		{"tabby", "Tabby AI autocomplete"},
 		{"generic", "Generic MCP-compatible agent"},
 	}
+}
+
+// agentRunCmd implements 'g8e mcp agent run' - a governance reverse proxy for any MCP server.
+func agentRunCmd() *cobra.Command {
+	var downstreamURL string
+
+	cmd := &cobra.Command{
+		Use:   "run [--url <url>] [-- <command> [args...]]",
+		Short: "Govern any MCP server via g8e reverse proxy",
+		Long: `Wrap any MCP server in g8e governance as a stdio reverse proxy.
+
+All AI tool calls are intercepted and screened through L1 doctrine (MITRE ATT&CK
+threat detection, forbidden pattern scanning) before being forwarded to the
+downstream. Blocked calls are returned as MCP errors with violation details.
+
+Specify the downstream MCP server as either an HTTP URL or a subprocess command:
+
+  g8e mcp agent run --url http://localhost:3000
+  g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /home/user
+  g8e mcp agent run -- python3 my_mcp_server.py
+
+For full L1-L5 governance (L2 consensus, L3 human approval), start the g8e gateway
+and configure your AI agent to use 'g8e mcp gov' instead.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runMCPAgentRun(args, downstreamURL)
+		},
+	}
+
+	cmd.Flags().StringVar(&downstreamURL, "url", "", "URL of the downstream HTTP MCP server")
+	return cmd
+}
+
+// mcpDownstreamProxy abstracts the downstream MCP server (HTTP or subprocess).
+type mcpDownstreamProxy interface {
+	forward(req JSONRPCRequest) (JSONRPCResponse, error)
+	stop()
+}
+
+// httpMCPProxy forwards MCP requests to an HTTP downstream server.
+type httpMCPProxy struct {
+	url    string
+	client *http.Client
+}
+
+func (d *httpMCPProxy) forward(req JSONRPCRequest) (JSONRPCResponse, error) {
+	return proxyToGateway(d.client, d.url, req)
+}
+
+func (d *httpMCPProxy) stop() {}
+
+// subprocessMCPProxy manages an MCP subprocess connected via stdio.
+type subprocessMCPProxy struct {
+	command string
+	args    []string
+	logger  *slog.Logger
+	cmd     *exec.Cmd
+	stdin   io.WriteCloser
+	scanner *bufio.Scanner
+	mu      sync.Mutex
+}
+
+func (d *subprocessMCPProxy) start() error {
+	d.cmd = exec.Command(d.command, d.args...) //nolint:gosec
+	setSysProcAttr(d.cmd)
+
+	stdin, err := d.cmd.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("stdin pipe: %w", err)
+	}
+	d.stdin = stdin
+
+	stdout, err := d.cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("stdout pipe: %w", err)
+	}
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+	d.scanner = scanner
+	d.cmd.Stderr = os.Stderr
+
+	if err := d.cmd.Start(); err != nil {
+		return fmt.Errorf("start subprocess: %w", err)
+	}
+	d.logger.Info("Downstream MCP subprocess started", "command", d.command, "pid", d.cmd.Process.Pid)
+	return nil
+}
+
+func (d *subprocessMCPProxy) stop() {
+	if d.stdin != nil {
+		_ = d.stdin.Close()
+	}
+	if d.cmd != nil && d.cmd.Process != nil {
+		_ = d.cmd.Process.Kill()
+		_ = d.cmd.Wait()
+	}
+}
+
+func (d *subprocessMCPProxy) forward(req JSONRPCRequest) (JSONRPCResponse, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	reqBytes, err := json.Marshal(req)
+	if err != nil {
+		return JSONRPCResponse{}, fmt.Errorf("marshal request: %w", err)
+	}
+	if _, err := fmt.Fprintf(d.stdin, "%s\n", reqBytes); err != nil {
+		return JSONRPCResponse{}, fmt.Errorf("write to subprocess: %w", err)
+	}
+
+	if !d.scanner.Scan() {
+		if err := d.scanner.Err(); err != nil {
+			return JSONRPCResponse{}, fmt.Errorf("read from subprocess: %w", err)
+		}
+		return JSONRPCResponse{}, fmt.Errorf("subprocess closed")
+	}
+	var resp JSONRPCResponse
+	if err := json.Unmarshal(d.scanner.Bytes(), &resp); err != nil {
+		return JSONRPCResponse{}, fmt.Errorf("decode subprocess response: %w", err)
+	}
+	return resp, nil
+}
+
+func runMCPAgentRun(args []string, downstreamURL string) error {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
+	if downstreamURL == "" && len(args) == 0 {
+		return fmt.Errorf("specify --url <url> or a command after --\n\nExamples:\n  g8e mcp agent run --url http://localhost:3000\n  g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /")
+	}
+
+	var ds mcpDownstreamProxy
+	if downstreamURL != "" {
+		ds = &httpMCPProxy{
+			url:    downstreamURL,
+			client: &http.Client{Timeout: 30 * time.Second},
+		}
+	} else {
+		proc := &subprocessMCPProxy{
+			command: args[0],
+			args:    args[1:],
+			logger:  logger,
+		}
+		if err := proc.start(); err != nil {
+			return fmt.Errorf("start downstream MCP server: %w", err)
+		}
+		ds = proc
+	}
+	defer ds.stop()
+
+	l1 := governance.NewL1Doctrine()
+	logger.Info("g8e MCP governance proxy started")
+
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+	encoder := json.NewEncoder(os.Stdout)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+
+		var req JSONRPCRequest
+		if err := json.Unmarshal([]byte(line), &req); err != nil {
+			sendError(encoder, nil, -32700, "parse error")
+			continue
+		}
+
+		logger.Info("g8e intercepted", "method", req.Method, "id", req.ID)
+
+		if req.Method == "tools/call" {
+			var callParams CallToolRequest
+			if err := json.Unmarshal(req.Params, &callParams); err != nil {
+				sendError(encoder, req.ID, -32600, "invalid tools/call params")
+				continue
+			}
+
+			argsJSON := "{}"
+			if len(callParams.Arguments) > 0 {
+				argsJSON = string(callParams.Arguments)
+			}
+
+			signals, err := l1.AnalyzeMCPArguments(argsJSON)
+			if err != nil {
+				logger.Warn("L1 analysis error", "tool", callParams.Name, "error", err)
+			}
+
+			var violations []string
+			for _, sig := range signals {
+				if sig.BlockRecommended {
+					violations = append(violations, fmt.Sprintf("%s [%s, MITRE: %s]", sig.Indicator, sig.Category, sig.MitreAttack))
+				}
+			}
+
+			if len(violations) > 0 {
+				logger.Warn("g8e L1 BLOCKED", "tool", callParams.Name, "violations", violations)
+				sendSuccess(encoder, req.ID, mcp.CallToolResult{
+					IsError: true,
+					Content: []mcp.TextContent{{
+						Type: "text",
+						Text: fmt.Sprintf("g8e governance blocked tool call %q:\n- %s", callParams.Name, strings.Join(violations, "\n- ")),
+					}},
+				})
+				continue
+			}
+
+			logger.Info("g8e L1 approved", "tool", callParams.Name)
+		}
+
+		resp, err := ds.forward(req)
+		if err != nil {
+			if req.Method == "initialize" {
+				handleInitialize(encoder, req.ID)
+				continue
+			}
+			sendError(encoder, req.ID, -32603, fmt.Sprintf("downstream error: %v", err))
+			continue
+		}
+		if err := encoder.Encode(resp); err != nil {
+			logger.Error("Failed to encode response", "error", err)
+		}
+	}
+
+	return scanner.Err()
 }
 
 func extractURLFromText(text string) string {

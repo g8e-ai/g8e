@@ -980,6 +980,7 @@ Usage:
 
 Available Commands:
   list        List supported agent binaries
+  run         Govern any MCP server via g8e reverse proxy
   show        Print MCP client configuration for the Gateway
 
 Flags:
@@ -995,6 +996,31 @@ Usage:
 
 Flags:
   -h, --help   help for list
+```
+
+#### mcp agent run
+```
+Wrap any MCP server in g8e governance as a stdio reverse proxy.
+
+All AI tool calls are intercepted and screened through L1 doctrine (MITRE ATT&CK
+threat detection, forbidden pattern scanning) before being forwarded to the
+downstream. Blocked calls are returned as MCP errors with violation details.
+
+Specify the downstream MCP server as either an HTTP URL or a subprocess command:
+
+  g8e mcp agent run --url http://localhost:3000
+  g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /home/user
+  g8e mcp agent run -- python3 my_mcp_server.py
+
+For full L1-L5 governance (L2 consensus, L3 human approval), start the g8e gateway
+and configure your AI agent to use 'g8e mcp gov' instead.
+
+Usage:
+  g8e mcp agent run [--url <url>] [-- <command> [args...]] [flags]
+
+Flags:
+  -h, --help         help for run
+      --url string   URL of the downstream HTTP MCP server
 ```
 
 #### mcp agent show
@@ -1059,6 +1085,22 @@ When a tool requires L3 approval, g8e will:
 2. Wait for you to authorize via WebAuthn
 3. Retry the tool call automatically
 4. Return the result to the tool
+
+### Governance Proxy for Third-Party MCP Servers
+
+To wrap any external MCP server in g8e's L1 doctrine without running the full gateway, use `agent run`. It intercepts all tool calls and screens them through MITRE ATT&CK threat detection before forwarding.
+
+```bash
+# Wrap a filesystem MCP server subprocess
+./g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /home/user
+
+# Wrap an HTTP MCP server
+./g8e mcp agent run --url http://localhost:3000
+```
+
+Register the proxy as the MCP server in your agent config. The downstream tool's full `tools/list` and all pass-through methods are preserved — only `tools/call` is intercepted for governance.
+
+For full L1-L5 governance (L2 consensus, L3 human approval via WebAuthn), start the gateway and use `g8e mcp gov` instead.
 
 ### Manual MCP Configuration
 

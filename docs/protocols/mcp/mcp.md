@@ -140,6 +140,16 @@ This ensures compatibility with JSON-based ecosystems while maintaining typed sc
 
 ## Client Integration
 
+### Stdio Transport Modes
+
+g8e provides three stdio MCP transport modes. Choose based on your deployment requirements:
+
+| Command | Governance | Gateway required | Downstream |
+|---|---|---|---|
+| `g8e mcp stdio` | None | No | g8e native tools only |
+| `g8e mcp agent run` | L1 inline (MITRE ATT&CK) | No | Any MCP server (subprocess or HTTP) |
+| `g8e mcp gov` | L1-L5 full stack | Yes (running) | g8e gateway + configured downstream |
+
 ### MCP Client Configuration
 
 The g8e Gateway provides two MCP endpoints for client connections:
@@ -200,7 +210,21 @@ For local development without running the gateway, g8e can run as a stdio MCP se
 claude mcp add g8e-stdio g8e mcp
 ```
 
-This runs g8e in stdio mode with no additional flags required. All 27 native tools are available including system diagnostics, database operations, network tools, and shell execution with governance safety features.
+This runs g8e in stdio mode with no additional flags required. All 29 native tools are available including system diagnostics, database operations, network tools, and shell execution with governance safety features.
+
+**Governance Proxy for Third-Party MCP Servers**
+
+`g8e mcp agent run` wraps any external MCP server in L1 doctrine as a stdio reverse proxy — no gateway required. Every `tools/call` the AI makes is screened through the MITRE ATT&CK threat detection engine before being forwarded to the real server. Blocked calls return an MCP error with the violation category and MITRE ID; all other methods pass through unchanged.
+
+```bash
+# Wrap a subprocess MCP server (stdio)
+claude mcp add g8e-fs -- g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /home/user
+
+# Wrap an HTTP MCP server
+claude mcp add g8e-proxy g8e mcp agent run --url http://localhost:3000
+```
+
+The downstream's `tools/list` is passed through unmodified so the AI sees the real tool's capabilities. Use this mode when you want L1 hard-gate protection around a third-party MCP server without deploying the full g8e stack. For L2-L5 governance (consensus signing, WebAuthn approval), use `g8e mcp gov` with the gateway running.
 
 ### MCP Client Connection
 
@@ -413,6 +437,7 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 
 | Concern | File |
 |---|---|
+| Governance proxy (agent run) | `internal/cli/cmd/mcp.go` (runMCPAgentRun) |
 | Gateway entry | `cmd/operator/main.go` (runGatewayMode) |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | HTTP routing | `internal/services/gateway/gateway_http.go` |
