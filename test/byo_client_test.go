@@ -31,7 +31,9 @@ Practical Coverage:
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
@@ -167,7 +169,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	// The HTTP bootstrap port accepts initial enrollment without any prior credentials.
 
 	// Generate operator key and CSR
-	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "byo-operator"}}
 	csrDER, err := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
@@ -175,7 +177,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
 	// Generate CLI key and CSR (mandatory for device enrollment)
-	_, cliPriv, err := ed25519.GenerateKey(rand.Reader)
+	cliPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	cliCSRTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "byo-cli"}}
 	cliCSRDER, err := x509.CreateCertificateRequest(rand.Reader, cliCSRTmpl, cliPriv)

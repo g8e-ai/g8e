@@ -1,24 +1,24 @@
 # CLI Reference
 
-This reference documents the g8e CLI commands for managing the g8e Gateway and g8e Operator.
+This reference documents the g8e CLI commands for managing the g8e Gateway, g8e Operator, and platform setup.
 
 ## g8e Root Help
 ```
 g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway and g8e Operator.
+The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 
 Usage:
   g8e [command]
 
 Available Commands:
-  approve     Approve a suspended L3 transaction with CLI signature
-  auth        Authentication and cli/web/operator session management
-  data        Administer the local platform over mTLS
-  gw          Manage the g8e Gateway lifecycle
-  help        Help about any command
+  gateway     Manage the g8e Gateway lifecycle (alias: gw)
   mcp         MCP protocol operations (stdio transport)
-  security    Security validation checks
-  test        Run test suites
+  operator    Manage Operator instances
+  vault       Manage the encryption vault
+  test        Run test suites (unit, integration, e2e, scenario, emulator, chaos)
+  setup       Run platform setup (validate dependencies, build binary)
+  demos       Manage g8e demo environments
+  help        Help about any command
 
 Flags:
   -h, --help   help for g8e
@@ -27,47 +27,48 @@ Use "g8e [command] --help" for more information about a command.
 ```
 
 
-## gw
+## gateway (gw)
 ```
 Gateway lifecycle commands for starting, stopping, and checking the status of the g8e Gateway.
 
 Usage:
+  g8e gateway [command]
   g8e gw [command]
 
-Aliases:
-  gateway
-
 Available Commands:
-  clean           Destructively remove all Gateway state
-  logs            View Gateway logs
-  mcp-config      Print MCP client configuration for the Gateway
-  mcp-config-http Print MCP client configuration for the Gateway plain HTTP endpoint
-  reset           Reset Gateway data and secrets (preserves CA)
-  restart         Restart the g8e Gateway
-  settings        Manage Gateway settings
   start           Start the g8e Gateway
-  status          Check Gateway health and status
   stop            Stop the g8e Gateway
+  status          Check Gateway health and status
+  restart         Restart the g8e Gateway
+  logs            View Gateway logs
+  settings        Manage Gateway settings
+  reset           Reset Gateway data and secrets (preserves CA)
+  clean           Destructively remove all Gateway state
+  cli             CLI authentication and session management
+  data            Administer the local platform over mTLS
+  security        Security validation checks
+  setup           Auto-discover and configure agentic coding tools for g8e integration
 
 Flags:
-  -h, --help   help for gw
+  -h, --help   help for gateway
 
-Use "g8e gw [command] --help" for more information about a command.
+Use "g8e gateway [command] --help" for more information about a command.
 ```
 
-### gw start
+### gateway start
 ```
-Start the sovereign g8e Gateway (PDP). Bootstraps the stateless gateway with PKI, persistence, and pub/sub. The gateway must be running before any client can authenticate.
+Start the g8e Gateway. Bootstraps the stateless gateway with PKI, persistence, and pub/sub. The gateway must be running before any client can authenticate.
 
 Usage:
+  g8e gateway start [flags]
   g8e gw start [flags]
 
 Flags:
       --cert-mode string         Certificate mode: full (all hostnames/IPs), localhost (only localhost)
       --data-dir string          Data directory for SQLite database (default: .g8e/data in working directory)
   -h, --help                     help for start
-      --http-port int            Plain HTTP port for bootstrap and MCP routes (default: 8080)
-      --https-port int           HTTPS port for mTLS API and public surface (default: 8443)
+      --http-port int            HTTP port for bootstrap and MCP (default: from constants.Ports.OperatorHttp)
+      --https-port int           HTTPS port for mTLS API (default: from constants.Ports.OperatorHttps)
       --log string               Log level: info, error, debug (default "info")
       --passkey-rp-id string     RP ID for passkey operations (default: localhost)
       --passkey-rp-name string   RP Name for passkey operations (default: g8e)
@@ -76,48 +77,56 @@ Flags:
       --rate-limit-burst int     Gateway rate limit burst size
       --rate-limit-rps float     Gateway requests per second limit (set to 0 to disable)
       --secrets-dir string       Directory for platform secrets (default: .g8e/secrets)
+      --vault-dir string         Directory for vault data (default: .g8e/vault)
+      --vault-key string         Path to vault private key (default: .g8e/secrets/vault.key)
+      --vault-require-unlock    Require vault to be unlocked at startup (fail if vault cannot be unlocked)
+  -f, --follow                 Follow log output after starting (like tail -f)
 ```
 
-When `--cert-mode full` is selected, the CLI detects network identity once, writes it to a temporary JSON file in the runtime directory, and passes that file to the Gateway subprocess via `--network-identity-file`. `--cert-mode localhost` continues to use loopback-only identities, including IPv6 localhost when available.
+When `--cert-mode full` is selected, the CLI detects network identity once, writes it to a temporary JSON file in the runtime directory, and passes that file to the Gateway subprocess. `--cert-mode localhost` continues to use loopback-only identities, including IPv6 localhost when available.
 
-### gw stop
+### gateway stop
 ```
 Stop the g8e Gateway
 
 Usage:
+  g8e gateway stop [flags]
   g8e gw stop [flags]
 
 Flags:
   -h, --help   help for stop
 ```
 
-### gw status
+### gateway status
 ```
 Check Gateway health and status
 
 Usage:
+  g8e gateway status [flags]
   g8e gw status [flags]
 
 Flags:
   -h, --help   help for status
 ```
 
-### gw restart
+### gateway restart
 ```
 Restart the g8e Gateway
 
 Usage:
+  g8e gateway restart [flags]
   g8e gw restart [flags]
 
 Flags:
   -h, --help   help for restart
 ```
 
-### gw logs
+### gateway logs
 ```
 View Gateway logs
 
 Usage:
+  g8e gateway logs [flags]
   g8e gw logs [flags]
 
 Flags:
@@ -125,23 +134,24 @@ Flags:
   -h, --help     help for logs
 ```
 
-### gw settings
+### gateway settings
 ```
 Manage Gateway settings
 
 Usage:
+  g8e gateway settings [flags]
   g8e gw settings [flags]
 
 Flags:
   -h, --help   help for settings
 ```
 
-### gw reset
+### gateway reset
 ```
 Reset Gateway data and secrets (preserves CA)
 
 Usage:
-  g8e gw reset [flags]
+  g8e gateway reset [flags]
 
 Flags:
       --force   Skip confirmation prompt
@@ -150,12 +160,12 @@ Flags:
       --yes     Skip confirmation prompt (shorthand)
 ```
 
-### gw clean
+### gateway clean
 ```
 Destructively remove all Gateway state
 
 Usage:
-  g8e gw clean [flags]
+  g8e gateway clean [flags]
 
 Flags:
       --force   Skip confirmation prompt
@@ -164,139 +174,147 @@ Flags:
       --yes     Skip confirmation prompt (shorthand)
 ```
 
-### gw mcp-config
+### gateway cli
 ```
-Print MCP client configuration for the Gateway. This command outputs a JSON configuration for MCP clients using the unified /mcp endpoint with the g8e.local internal hostname.
+CLI authentication and session management
 
 Usage:
-  g8e gw mcp-config [flags]
-
-Flags:
-  -h, --help   help for mcp-config
-```
-
-### gw mcp-config-http
-```
-Print MCP client configuration for the Gateway plain HTTP endpoint. This command outputs a static JSON configuration for the plain HTTP MCP endpoint using explicit 127.0.0.1 (localhost may resolve to IPv6 ::1).
-
-Usage:
-  g8e gw mcp-config-http [flags]
-
-Flags:
-  -h, --help   help for mcp-config-http
-```
-
-## auth
-```
-Manage mTLS enrollment and g8e Operator sessions.
-
-Usage:
-  g8e auth [command]
+  g8e gateway cli [command]
 
 Available Commands:
-  login           Authenticate and save g8e Operator session
-  logout          Clear local g8e Operator session and credentials
-  enroll-windows  Enroll via Windows Certificate Store (Windows only)
+  auth           Authentication and cli/web/operator session management
+
+Flags:
+  -h, --help   help for cli
+
+Use "g8e gateway cli [command] --help" for more information about a command.
+```
+
+#### gateway cli auth
+```
+Authentication and cli/web/operator session management
+
+Usage:
+  g8e gateway cli auth [command]
+
+Available Commands:
+  login           Authenticate CLI with the running Gateway
+  logout          Clear local Operator session and credentials
+  enroll-windows  Enroll via Windows Certificate Store (Windows only - advanced)
+  approve         Approve a suspended L3 transaction with CLI signature
 
 Flags:
   -h, --help   help for auth
 
-Use "g8e auth [command] --help" for more information about a command.
+Use "g8e gateway cli auth [command] --help" for more information about a command.
 ```
 
-### auth login
+##### gateway cli auth login
 ```
-Authenticate the CLI to the running g8e Gateway via CSR-based enrollment. Bootstraps the PKI hierarchy, generates client keypairs, submits CSRs to the g8e Gateway's CA, and saves signed mTLS credentials. Required before any CLI or Operator can connect to the g8e Gateway.
+Authenticate CLI with the running Gateway. Generates client keypairs, submits CSRs to the Gateway's CA, and saves signed mTLS credentials. The Gateway must already be running. On Windows, this automatically enrolls via Windows Certificate Store for passkey authentication.
 
 Usage:
-  g8e auth login [flags]
+  g8e gateway cli auth login [flags]
 
 Flags:
   -h, --help   help for login
 ```
 
-### auth logout
+##### gateway cli auth logout
 ```
 Clear local Operator session and credentials
 
 Usage:
-  g8e auth logout [flags]
+  g8e gateway cli auth logout [flags]
 
 Flags:
   -h, --help   help for logout
 ```
 
-### auth enroll-windows
+##### gateway cli auth enroll-windows
 ```
-Enroll via Windows Certificate Store (Windows only). Generate an ECDSA P-384 keypair in the Windows Certificate Store, submit a CSR to the g8e Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert.
+Enroll via Windows Certificate Store (Windows only - advanced). Generate an ECDSA P-256 keypair in the Windows Certificate Store, submit a CSR to the Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert.
+
+NOTE: This is now handled automatically by 'g8e gateway cli auth login' on Windows. This command is for advanced use cases or manual re-enrollment.
 
 Usage:
-  g8e auth enroll-windows [flags]
+  g8e gateway cli auth enroll-windows [flags]
 
 Flags:
       --tpm   Use TPM-backed key via Windows Hello for Business
   -h, --help   help for enroll-windows
 ```
 
-## data
+##### gateway cli auth approve
 ```
-Data management commands for users, g8e Operators, and settings.
+Approve a suspended L3 transaction with CLI signature. Approve a suspended transaction by signing the transaction hash with the CLI private key and submitting the cryptographic proof to the Gateway.
 
 Usage:
-  g8e data [command]
+  g8e gateway cli auth approve <transaction_hash> [flags]
+
+Flags:
+  -h, --help   help for approve
+```
+
+### gateway data
+```
+Data management commands for users, operators, settings, and audit.
+
+Usage:
+  g8e gateway data [command]
 
 Available Commands:
-  audit        Query audit vault
-  operators    Manage g8e Operator instances
+  users        Manage user accounts
+  operators    Manage Operator instances
   settings     Manage Gateway settings
   store        Manage document storage
-  users        Manage user accounts
+  audit        Query audit vault
 
 Flags:
   -h, --help   help for data
 
-Use "g8e data [command] --help" for more information about a command.
+Use "g8e gateway data [command] --help" for more information about a command.
 ```
 
-### data users
+#### gateway data users
 ```
 Manage user accounts
 
 Usage:
-  g8e data users [flags]
+  g8e gateway data users [flags]
 
 Flags:
   -h, --help   help for users
 ```
 
-### data operators
+#### gateway data operators
 ```
-Manage g8e Operator instances
+Manage Operator instances
 
 Usage:
-  g8e data operators [flags]
+  g8e gateway data operators [flags]
 
 Flags:
   -h, --help   help for operators
 ```
 
-### data settings
+#### gateway data settings
 ```
-Manage g8e Gateway settings
+Manage Gateway settings
 
 Usage:
-  g8e data settings [flags]
+  g8e gateway data settings [flags]
 
 Flags:
   -h, --help   help for settings
 ```
 
-### data store
+#### gateway data store
 ```
 Manage document storage
 
 Usage:
-  g8e data store [flags]
+  g8e gateway data store [flags]
 
 Flags:
       --collection string    Collection name
@@ -304,63 +322,160 @@ Flags:
   -h, --help                 help for store
 ```
 
-### data audit
+#### gateway data audit
 ```
-Query g8e audit vault
+Query audit vault
 
 Usage:
-  g8e data audit [command]
+  g8e gateway data audit [command]
 
 Available Commands:
   list        List audit events for a session
-  summary     Show chaos test summary from audit vault
+  summary     Show audit event summary by type
 
 Flags:
   -h, --help   help for audit
 
-Use "g8e data audit [command] --help" for more information about a command.
+Use "g8e gateway data audit [command] --help" for more information about a command.
 ```
 
-#### data audit list
+##### gateway data audit list
 ```
 List audit events for a session
 
 Usage:
-  g8e data audit list [flags]
+  g8e gateway data audit list [flags]
 
 Flags:
   -h, --help                         help for list
       --limit int                    Limit number of events (default 100)
-      --operator-session-id string   g8e Operator session ID
+      --operator-session-id string   Operator session ID
 ```
 
-#### data audit summary
+##### gateway data audit summary
 ```
-Show chaos test summary from g8e audit vault
+Show audit event summary by type
 
 Usage:
-  g8e data audit summary [flags]
+  g8e gateway data audit summary [flags]
 
 Flags:
-  -h, --help   help for summary
+  -h, --help                         help for summary
+      --operator-session-id string   Filter by Operator session ID
+```
+
+### gateway security
+```
+Security validation checks
+
+Usage:
+  g8e gateway security [command]
+
+Available Commands:
+  validate    Run security validation checks
+  pki         PKI management
+
+Flags:
+  -h, --help   help for security
+
+Use "g8e gateway security [command] --help" for more information about a command.
+```
+
+#### gateway security validate
+```
+Run security validation checks
+
+Usage:
+  g8e gateway security validate [flags]
+
+Flags:
+  -h, --help                 help for validate
+      --pki-dir string       PKI directory (default: .g8e/pki)
+      --secrets-dir string   Secrets directory (default: .g8e/secrets)
+```
+
+#### gateway security pki
+```
+PKI management
+
+Usage:
+  g8e gateway security pki [command]
+
+Available Commands:
+  enroll      Enroll an operator with the Gateway via CSR
+
+Flags:
+  -h, --help   help for pki
+
+Use "g8e gateway security pki [command] --help" for more information about a command.
+```
+
+##### gateway security pki enroll
+```
+Enroll an operator with the Gateway via CSR. Generate a CSR and enroll with the Gateway to obtain Operator mTLS certificates.
+
+Usage:
+  g8e gateway security pki enroll [flags]
+
+Flags:
+  -e, --endpoint string     Gateway IP address (e.g., 192.168.1.62)
+  -h, --help                help for enroll
+      --output-dir string   Output directory for certificates (default: project root)
+```
+
+### gateway setup
+```
+Auto-discover and configure agentic coding tools for g8e integration
+
+Usage:
+  g8e gateway setup [command]
+
+Available Commands:
+  discover    Discover installed agentic coding tools
+  configure   Configure a specific tool for g8e integration
+
+Flags:
+  -h, --help   help for setup
+
+Use "g8e gateway setup [command] --help" for more information about a command.
+```
+
+#### gateway setup discover
+```
+Discover installed agentic coding tools
+
+Usage:
+  g8e gateway setup discover [flags]
+
+Flags:
+  -h, --help   help for discover
+```
+
+#### gateway setup configure
+```
+Configure a specific tool for g8e integration
+
+Usage:
+  g8e gateway setup configure [tool-name] [flags]
+
+Flags:
+  -h, --help   help for configure
 ```
 
 ## test
 ```
-Run test suites. Use 'test ci' to mirror GitHub Actions CI exactly.
+Run test suites (unit, integration, e2e, scenario, emulator, chaos)
 
 Usage:
-  g8e test [flags]
   g8e test [command]
 
 Available Commands:
-  chaos       Generate realistic governance events against the local g8e audit stack
-  ci          Run full CI test suite (mirrors GitHub Actions exactly)
-  emulator    Universal agent emulator for a real g8e Gateway/Operator
+  unit        Run Tier 1 (Unit) tests
+  integration Run Tier 2 (In-Memory Integration) tests
   e2e         Run Tier 3 (Live Platform E2E) tests
-  integration Run integration tests
-  scenario    Run scenario integration tests
-  unit        Run unit tests
+  scenario    Run Tier 3 (Scenario) tests
+  emulator    Universal agent emulator for a real g8e Gateway/Operator
+  chaos       Generate realistic governance events against the local g8e audit stack
 
 Flags:
   -h, --help   help for test
@@ -370,68 +485,61 @@ Use "g8e test [command] --help" for more information about a command.
 
 ### test unit
 ```
-Run unit tests
+Run Tier 1 (Unit) tests. These tests use mocks/stubs and have no external dependencies (no files, network, or DB).
 
 Usage:
   g8e test unit [flags]
 
 Flags:
-      --coverage     Generate coverage report
-  -h, --help         help for unit
-      --race         Enable race detector (default true)
-      --run string   Run specific test (regex)
-      --v            Verbose output
+  -h, --help   help for unit
 ```
 
 ### test integration
 ```
-Run integration tests
+Run Tier 2 (In-Memory Integration) tests. These tests use SQLite in-memory databases, local PKI generation, and local pubsub.
 
 Usage:
   g8e test integration [flags]
 
 Flags:
-  -h, --help         help for integration
-      --run string   Run specific scenario (e.g., forge_signature)
+  -h, --help   help for integration
 ```
 
 
-### test ci
+### test e2e
 ```
-Run the full CI pipeline locally: proto generation, linting, vulncheck, and platform tests with platform start/stop and coverage enforcement.
+Run Tier 3 (Live Platform E2E) tests. These tests require a running g8e gateway and authenticated CLI session.
 
 Usage:
-  g8e test ci [flags]
+  g8e test e2e [flags]
 
 Flags:
-  -h, --help   help for ci
+  -h, --help   help for e2e
 ```
 
 
 ### test scenario
 ```
-Run scenario integration tests
+Run Tier 3 (Scenario) tests. These tests require a running g8e gateway and authenticated CLI session.
 
 Usage:
   g8e test scenario [flags]
 
 Flags:
-  -h, --help         help for scenario
-      --run string   Run specific scenario (e.g., forge_signature)
-  -v, --verbose      Verbose output
+  -h, --help   help for scenario
 ```
 
 ### test emulator
 ```
-Universal agent emulator for a real g8e Gateway/g8e Operator. emulator impersonates arbitrary AI tools and agents against a REAL g8e Gateway + g8e Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the g8e Operator's signed receipts.
+Universal agent emulator for a real g8e Gateway/Operator. Impersonates arbitrary AI tools and agents against a REAL g8e Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the Operator's signed receipts.
 
 Usage:
   g8e test emulator [command]
 
 Available Commands:
-  audit       Audit signed receipts from the g8e Operator
   list        List available scenarios
-  run         Run scenarios against a real g8e Gateway/g8e Operator
+  run         Run scenarios against a real Gateway/Operator
+  audit       Audit signed receipts from the Operator
 
 Flags:
   -h, --help   help for emulator
@@ -458,21 +566,21 @@ Usage:
   g8e test emulator run [flags] [scenario ...]
 
 Flags:
-      --api-key string           Operator API key for MCP/A2A surface
-      --ca string                gateway CA bundle PEM
-      --cert string              client cert PEM
       --config string            JSON config overlay
-      --ensemble int             mock consensus voters (default 3)
-      --insecure                 skip TLS verify (local dev only)
-      --key string               client key PEM
-      --l3-mode string           mock|suspend
       --mtls-url string          Gateway mTLS surface
-      --out string               report output dir
-      --operator-session string   scope audit to a specific Operator session
-      --phase string             doctrine|notary|all (default "all")
       --public-url string        Gateway public surface for OOB approve
-  -h, --help                     help for run
+      --cert string              client cert PEM
+      --key string               client key PEM
+      --ca string                gateway CA bundle PEM
+      --api-key string           operator API key for MCP/A2A surface
+      --operator-session string   scope audit to a specific Operator session
+      --insecure                 skip TLS verify (local dev only)
+      --out string               report output dir
+      --l3-mode string           mock|suspend
+      --ensemble int             mock consensus voters (default 3)
       --verbose                  echo each request/response
+      --phase string             doctrine|notary|all (default "all")
+  -h, --help                     help for run
 ```
 
 #### test emulator audit
@@ -483,22 +591,22 @@ Usage:
   g8e test emulator audit [flags]
 
 Flags:
-      --api-key string           Operator API key
-      --ca string                gateway CA bundle PEM
-      --cert string              client cert PEM
       --config string            JSON config overlay
-      --insecure                 skip TLS verify
-      --key string               client key PEM
       --mtls-url string          Gateway mTLS surface
-      --out string               report output dir
-      --operator-session string   Operator session id
       --public-url string        Gateway public surface
+      --cert string              client cert PEM
+      --key string               client key PEM
+      --ca string                gateway CA bundle PEM
+      --api-key string           operator API key
+      --operator-session string   operator session id
+      --insecure                 skip TLS verify
+      --out string               report output dir
   -h, --help                     help for audit
 ```
 
 ### test chaos
 ```
-Generate realistic governance events against the local g8e audit stack. chaos generates a realistic distribution of governance events against the local g8e audit stack. It bypasses network/TLS by driving the TransactionVerifier + Actuator stack directly in-process, which is the same path exercised by the live g8e Operator when payloads arrive over pub/sub.
+Generate realistic governance events against the local g8e audit stack. Bypasses network/TLS by driving the TransactionVerifier + Actuator stack directly in-process, which is the same path exercised by the live Operator when payloads arrive over pub/sub.
 
 Distribution:
   70%  Good Actor  – valid sig, safe intent (FS_LIST)       → EXECUTED
@@ -515,76 +623,328 @@ Flags:
       --pki-dir string  PKI dir for trusted_signers (default: <cwd>/.g8e/pki)
 ```
 
-## security
+## operator
 ```
-Run security validation and PKI verification checks.
+Manage Operator instances
 
 Usage:
-  g8e security [command]
+  g8e operator [command]
 
 Available Commands:
-  pki         PKI management
-  validate    Run security validation checks
+  list        List all Operator instances
+  cp          Copy the operator binary to a target location
+  scp         Copy the operator binary to a remote host using scp
+  deploy      Deploy the operator binary to remote hosts and start it
+  stream      Stream and execute the operator on remote hosts via SSH
 
 Flags:
-  -h, --help   help for security
+  -h, --help   help for operator
 
-Use "g8e security [command] --help" for more information about a command.
+Use "g8e operator [command] --help" for more information about a command.
 ```
 
-### security validate
+### operator list
 ```
-Run security validation checks
+List all Operator instances currently connected to the Gateway.
 
 Usage:
-  g8e security validate [flags]
+  g8e operator list [flags]
 
 Flags:
-  -h, --help                 help for validate
-      --pki-dir string       PKI directory (default: .g8e/pki)
-      --secrets-dir string   Secrets directory (default: .g8e/secrets)
+  -h, --help   help for list
 ```
 
-### security pki
+### operator cp
 ```
-PKI management
+Copy the operator binary to a target location. If a directory is provided, the binary will be copied with its default name. If a filename is provided, the binary will be copied with that name.
 
 Usage:
-  g8e security pki [command]
+  g8e operator cp <target> [flags]
+
+Flags:
+  -h, --help   help for cp
+```
+
+### operator scp
+```
+Copy the operator binary to a remote host using scp. Supports common scp flags. If the target path is a directory, the binary will be copied with its default name. Use --prompt to interactively configure scp options.
+
+Usage:
+  g8e operator scp <user@host:path> [flags]
+
+Flags:
+  -P, --port int              Port to connect to on the remote host
+  -i, --identity string       Selects the file from which the identity (private key) for public key authentication is read
+  -r, --recursive             Recursive copy (not applicable for single file, but included for compatibility)
+  -p, --preserve              Preserves modification times, access times, and modes from the source file
+  -v, --verbose               Verbose mode
+  -C, --compression           Enable compression
+      --prompt                 Prompt for scp options interactively
+  -h, --help                  help for scp
+```
+
+### operator deploy
+```
+Deploy the operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires 'g8e gateway cli auth login' first.
+
+Usage:
+  g8e operator deploy [flags]
+
+Flags:
+      --hosts string            Comma-separated list of hosts to deploy to (required)
+  -P, --port int              SSH port to connect to on remote hosts
+  -i, --identity string       SSH identity file (private key)
+      --background              Start operator in background after deployment
+  -h, --help                  help for deploy
+```
+
+### operator stream
+```
+Stream the operator binary via SSH and execute it directly on remote hosts without copying. This is useful for quick deployments or air-gapped scenarios. Requires 'g8e gateway cli auth login' first.
+
+Usage:
+  g8e operator stream [flags]
+
+Flags:
+      --hosts string            Comma-separated list of hosts to stream to (required)
+  -P, --port int              SSH port to connect to on remote hosts
+  -i, --identity string       SSH identity file (private key)
+  -h, --help                  help for stream
+```
+
+## vault
+```
+Manage the encryption vault
+
+Usage:
+  g8e vault [command]
 
 Available Commands:
-  enroll      Enroll a device with the Gateway via CSR
+  init        Initialize a new encryption vault
+  unlock      Unlock the encryption vault
+  rekey       Re-key the vault with a new private key
+  status      Show vault status
+  reset       Destroy the vault and all encrypted data
+  export      Export the vault key
+  import      Import a vault key
 
 Flags:
-  -h, --help   help for pki
+  -h, --help   help for vault
 
-Use "g8e security pki [command] --help" for more information about a command.
+Use "g8e vault [command] --help" for more information about a command.
 ```
 
-#### security pki enroll
+### vault init
 ```
-Enroll a device with the Gateway via CSR. Generate a CSR and enroll with the Gateway to obtain mTLS certificates.
+Initialize a new encryption vault. Generate a new encryption vault with a random key. The key is saved to the specified key path.
 
 Usage:
-  g8e security pki enroll [flags]
+  g8e vault init [flags]
 
 Flags:
-  -e, --endpoint string     Gateway IP address (e.g., 192.168.1.62)
-  -h, --help                help for enroll
-      --output-dir string   Output directory for certificates (default: project root)
+      --vault-dir string   Vault directory (default: .g8e/vault)
+      --key-path string    Path to save the vault key
+  -h, --help                help for init
 ```
 
-## approve
+### vault unlock
 ```
-Approve a suspended L3 transaction with CLI signature. Approve a suspended transaction by signing the transaction hash with the CLI private key and submitting the cryptographic proof to the g8e Gateway.
+Unlock an existing vault using the private key.
 
 Usage:
-  g8e approve <transaction_hash> [flags]
+  g8e vault unlock [flags]
 
 Flags:
-  -h, --help   help for approve
+      --vault-dir string   Vault directory (default: .g8e/vault)
+      --key-path string    Path to the vault key
+  -h, --help                help for unlock
 ```
 
+### vault rekey
+```
+Re-encrypt the vault's DEK with a new private key. Both old and new keys are required.
+
+Usage:
+  g8e vault rekey [flags]
+
+Flags:
+      --vault-dir string       Vault directory (default: .g8e/vault)
+      --key-path string        Path to the current vault key
+      --new-key-path string    Path to save the new vault key (default: <key-path>.new)
+  -h, --help                    help for rekey
+```
+
+### vault status
+```
+Display whether the vault is initialized and unlocked.
+
+Usage:
+  g8e vault status [flags]
+
+Flags:
+      --vault-dir string   Vault directory (default: .g8e/vault)
+  -h, --help                help for status
+```
+
+### vault reset
+```
+Reset the vault completely. This is a destructive operation that makes all encrypted data unrecoverable.
+
+Usage:
+  g8e vault reset [flags]
+
+Flags:
+      --vault-dir string   Vault directory (default: .g8e/vault)
+      --confirm            Skip interactive confirmation (dangerous)
+  -h, --help                help for reset
+```
+
+### vault export
+```
+Export the vault private key in hex format. Use with extreme caution.
+
+Usage:
+  g8e vault export [flags]
+
+Flags:
+      --key-path string    Path to the vault key
+  -h, --help                help for export
+```
+
+### vault import
+```
+Import a vault private key from hex string or stdin.
+
+Usage:
+  g8e vault import [flags]
+
+Flags:
+      --key-path string    Path to save the vault key
+      --key-hex string     Vault key as hex string (if not provided, reads from stdin)
+  -h, --help                help for import
+```
+
+
+## setup
+```
+Run platform setup (validate dependencies, build binary). Auto-detect OS and run the appropriate setup script to validate dependencies and build the g8e binary.
+
+Usage:
+  g8e setup [flags]
+
+Flags:
+  -h, --help   help for setup
+```
+
+## demos
+```
+Manage Docker Compose demo environments for org-specific g8e deployments. Each org environment is hermetically sealed with no shared state, volumes, or cross-org dependencies.
+
+Usage:
+  g8e demos [command]
+
+Available Commands:
+  list        List available demo environments
+  start       Start a demo environment
+  stop        Stop a demo environment
+  status      Show status of a demo environment
+  clean       Remove containers, volumes, and networks for a demo environment
+  reset       Clean and restart a demo environment
+  run         Run demo scenarios
+
+Flags:
+  -h, --help   help for demos
+
+Use "g8e demos [command] --help" for more information about a command.
+```
+
+### demos list
+```
+List available demo environments
+
+Usage:
+  g8e demos list [flags]
+
+Flags:
+  -h, --help   help for list
+```
+
+### demos start
+```
+Start a demo environment
+
+Usage:
+  g8e demos start <org> [flags]
+
+Flags:
+  -h, --help   help for start
+```
+
+### demos stop
+```
+Stop a demo environment
+
+Usage:
+  g8e demos stop <org> [flags]
+
+Flags:
+  -h, --help   help for stop
+```
+
+### demos status
+```
+Show status of a demo environment
+
+Usage:
+  g8e demos status <org> [flags]
+
+Flags:
+  -h, --help   help for status
+```
+
+### demos clean
+```
+Remove containers, volumes, and networks for a demo environment
+
+Usage:
+  g8e demos clean <org> [flags]
+
+Flags:
+  -h, --help   help for clean
+```
+
+### demos reset
+```
+Clean and restart a demo environment
+
+Usage:
+  g8e demos reset <org> [flags]
+
+Flags:
+  -h, --help   help for reset
+```
+
+### demos run
+```
+Run demo scenarios. Omit the scenario number to run all scenarios in sequence.
+
+Available scenarios:
+  healthcare: 1-4
+    1 - Authorized Agent Submits a FHIR PA Request
+    2 - Gold Card Auto-Approval
+    3 - SLA Breach and OHA Reporting
+    4 - Bad Actor PHI Exfiltration Blocked
+  gov: 1
+    1 - CUI Exfiltration Attempt Blocked
+  finance: 1
+    1 - Unauthorized Trade Blocked
+
+Usage:
+  g8e demos run <org> [scenario] [flags]
+
+Flags:
+  -h, --help   help for run
+```
 
 ## mcp
 ```
@@ -594,13 +954,15 @@ Usage:
   g8e mcp [command]
 
 Available Commands:
-  agent       Wrap agentic coding tools with g8e zero-trust gateway
+  stdio       Run MCP stdio server with native tools only
   gov         Proxy stdio MCP requests to the gateway HTTP endpoint
   show        Print MCP client configuration for the Gateway
-  stdio       Run MCP stdio server with native tools only
+  agent       Wrap agentic coding tools with g8e zero-trust gateway
 
 Flags:
   -h, --help   help for mcp
+
+Use "g8e mcp [command] --help" for more information about a command.
 ```
 
 ### mcp stdio
@@ -623,6 +985,17 @@ Usage:
 
 Flags:
   -h, --help   help for gov
+```
+
+### mcp show
+```
+Print MCP client configuration for the Gateway. Displays configurations side-by-side for g8e.local (mTLS), IP Address (mTLS), Plain HTTP, and Stdio Transport.
+
+Usage:
+  g8e mcp show [flags]
+
+Flags:
+  -h, --help   help for show
 ```
 
 ### mcp agent
@@ -656,12 +1029,12 @@ Flags:
 
 1. Start the gateway:
    ```bash
-   ./g8e gw start
+   ./g8e gateway start
    ```
 
 2. Authenticate your CLI:
    ```bash
-   ./g8e auth login
+   ./g8e gateway cli auth login
    ```
 
 3. Run Claude Code with g8e governance:
@@ -689,6 +1062,6 @@ When a tool requires L3 approval, g8e will:
 For tools that don't support the agent wrapper, use the MCP config commands:
 
 ```bash
-./g8e gw mcp-config       # mTLS with g8e.local
-./g8e gw mcp-config-http  # Plain HTTP (localhost only)
+./g8e mcp show    # Print all MCP client configurations
+./g8e mcp gov     # Run as MCP stdio proxy to Gateway
 ```

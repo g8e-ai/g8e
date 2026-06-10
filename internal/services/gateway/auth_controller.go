@@ -1649,8 +1649,41 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 		c.logger.Info("[CLI_ENROLLMENT] Updated bootstrap user with OS user information", "user_id", bootstrapUser.ID)
 	}
 
-	// Sign the CLI CSR
+	// Create operator slot associated with this CLI enrollment
+	operatorID := uuid.NewString()
+	operatorSessionID := uuid.NewString()
 	cliSessionID := uuid.NewString()
+	orgID := bootstrapUser.ID
+	now := time.Now().UTC()
+
+	operator := &models.OperatorDocumentGo{
+		ID:                operatorID,
+		UserID:            bootstrapUser.ID,
+		OrganizationID:    orgID,
+		Component:         constants.ComponentNameG8EO,
+		Name:              "cli-" + bootstrapUser.ID[:8],
+		Status:            constants.OperatorStatusActive,
+		OperatorSessionID: operatorSessionID,
+		OperatorType:      constants.OperatorTypeSystem,
+		SystemFingerprint: req.SystemFingerprint,
+		Claimed:           true,
+		ClaimedAt:         &now,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	opBytes, err := json.Marshal(operator)
+	if err != nil {
+		c.logger.Error("Failed to marshal operator document during CLI enrollment", "error", err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to create operator record")
+		return
+	}
+	if err := c.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
+		c.logger.Error("Failed to persist operator document during CLI enrollment", "error", err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to persist operator record")
+		return
+	}
+
+	// Sign the CLI CSR
 	cliCertPEM, cliCertChainPEM, err := c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", bootstrapUser.ID, cliSessionID, "")
 	if err != nil {
 		c.logger.Error("Failed to sign CLI enrollment CSR", "error", err, "user_id", bootstrapUser.ID)
@@ -1662,10 +1695,10 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 	cliCertFingerprint := calculateFingerprintFromPEM(cliCertPEM)
 	cliCertSerial := calculateSerialFromPEM(cliCertPEM)
 
-	// Persist CLI session only (no operator session for CLI-only enrollment)
+	// Persist CLI session linked to operator session
 	err = c.cliSessionSvc.PersistCLISession(
 		cliSessionID,
-		"",
+		operatorSessionID,
 		bootstrapUser.ID,
 		req.SystemFingerprint,
 		cliCertFingerprint,
@@ -1678,6 +1711,20 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Persist operator session
+	err = c.operatorSessionSvc.PersistOperatorSession(
+		operatorSessionID,
+		bootstrapUser.ID,
+		orgID,
+		operatorID,
+		string(constants.HeartbeatTypeBootstrap),
+	)
+	if err != nil {
+		c.logger.Error("Failed to persist operator session during CLI enrollment", "error", err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to persist operator session")
+		return
+	}
+
 	// Fetch trust bundle
 	hubBundle, err := c.pki.GatewayTrustBundle()
 	if err != nil {
@@ -1687,12 +1734,14 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 
 	c.logger.Info("[CLI_ENROLLMENT] CLI enrolled successfully", "user_id", bootstrapUser.ID, "cli_session_id_prefix", cliSessionID[:8])
 	c.responder.JSON(w, http.StatusCreated, models.CLIEnrollmentResponse{
-		Success:        true,
-		CLISessionID:   cliSessionID,
-		CLICert:        cliCertPEM,
-		CLICertChain:   cliCertChainPEM,
-		HubTrustBundle: string(hubBundle),
-		UserID:         bootstrapUser.ID,
+		Success:           true,
+		CLISessionID:      cliSessionID,
+		CLICert:           cliCertPEM,
+		CLICertChain:      cliCertChainPEM,
+		HubTrustBundle:    string(hubBundle),
+		UserID:            bootstrapUser.ID,
+		OperatorSessionID: operatorSessionID,
+		OperatorID:        operatorID,
 	})
 }
 

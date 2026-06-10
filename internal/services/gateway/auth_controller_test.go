@@ -1039,9 +1039,8 @@ func TestHandleCLIEnrollment(t *testing.T) {
 		assert.NotEmpty(t, resp["cli_session_id"])
 		assert.NotEmpty(t, resp["user_id"])
 		assert.NotEmpty(t, resp["hub_trust_bundle"])
-		// Verify operator_session_id is NOT returned (CLI-only enrollment)
-		_, hasOperatorSessionID := resp["operator_session_id"]
-		assert.False(t, hasOperatorSessionID, "operator_session_id should not be returned for CLI-only enrollment")
+		assert.NotEmpty(t, resp["operator_session_id"])
+		assert.NotEmpty(t, resp["operator_id"])
 	})
 
 	t.Run("Failure - Non-loopback request rejected", func(t *testing.T) {

@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-06-01
-Version: v1.0.5
+Last Updated: 2026-06-10
+Version: v1.0.11
 
 ---
 
@@ -41,11 +41,15 @@ This produces the `g8e` g8e Node in the repository root and platform-specific bi
 
 The Makefile provides several build targets:
 
-- `make build` — Builds the g8e Node for all platforms (linux, windows, darwin).
+- `make build` — Builds the g8e Node for the current platform.
+- `make build-all` — Builds the g8e Node for all platforms (linux, windows, darwin).
 - `make build-linux` — Builds g8e Node for Linux (amd64, arm64, 386).
 - `make build-windows` — Builds g8e Node for Windows (amd64, arm64).
 - `make build-darwin` — Builds g8e Node for Darwin (amd64, arm64).
 - `make build-compressed` — Builds g8e Node for all platforms with UPX compression.
+- `make build-linux-compressed` — Builds g8e Node for Linux with UPX compression.
+- `make build-windows-compressed` — Builds g8e Node for Windows with UPX compression.
+- `make build-darwin-compressed` — Builds g8e Node for Darwin with UPX compression.
 - `make clean` — Removes compiled g8e Nodes and test artifacts.
 
 ### Cross-Compilation
@@ -94,17 +98,22 @@ To start the gateway, use the CLI gateway command:
 ### Gateway Mode Flags
 
 - `--posture <mode>` — g8e Gateway posture: doctrine (L1 enforced, L2/L3 audited, default), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)
-- `--http-port <port>` — Plain HTTP port for bootstrap and MCP routes (default: 8080)
-- `--https-port <port>` — HTTPS port for mTLS API and public surface (default: 8443)
+- `--http-port <port>` — Plain HTTP port for bootstrap and MCP routes (default: from constants.Ports.OperatorHttp, 8080)
+- `--https-port <port>` — HTTPS port for mTLS API and public surface (default: from constants.Ports.OperatorHttps, 8443)
 - `--data-dir <dir>` — Data directory for SQLite database (default: .g8e/data in working directory)
 - `--pki-dir <dir>` — Directory for TLS certificates (default: .g8e/pki)
 - `--secrets-dir <dir>` — Directory for platform secrets (default: .g8e/secrets)
+- `--vault-dir <dir>` — Directory for vault data (default: .g8e/vault)
+- `--vault-key <path>` — Path to vault private key (default: .g8e/secrets/vault.key)
+- `--vault-require-unlock` — Require vault to be unlocked at startup (fail if vault cannot be unlocked)
 - `--passkey-rp-id <id>` — RP ID for passkey operations (default: localhost)
 - `--passkey-rp-name <name>` — RP Name for passkey operations (default: g8e)
-- `--rate-limit-rps <rps>` — Gateway requests per second limit (default: 0, disabled)
-- `--rate-limit-burst <burst>` — Gateway rate limit burst size (default: 10)
+- `--rate-limit-rps <rps>` — Gateway requests per second limit (set to 0 to disable, default: 0)
+- `--rate-limit-burst <burst>` — Gateway rate limit burst size (default: 0)
+- `--log <level>` — Log level: info, error, debug (default: info)
 - `--cert-mode <mode>` — Certificate mode: full (all hostnames/IPs), localhost (only localhost)
 - `--network-identity-file <path>` — Path to JSON file containing pre-detected network identity
+- `-f, --follow` — Follow log output after starting (like tail -f)
 
 ---
 
@@ -130,7 +139,7 @@ The gateway must maintain canonical platform state:
 
 - **Document Store**: JSON document CRUD on a Collection/ID pattern with query support.
 - **KV Store**: TTL-aware ephemeral state with pattern scanning and cursor-based iteration.
-- **Blob Store**:Node Node Binary persistence for attachments and large objects.
+- **Blob Store**: Binary persistence for attachments and large objects.
 - **State Root Provider**: Compute and serve a deterministic Merkle state root across all authoritative data.
 - **Nonce Manager**: Implement sliding-window replay protection for governance transactions.
 
