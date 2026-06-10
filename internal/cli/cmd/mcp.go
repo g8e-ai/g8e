@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
+	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -765,14 +766,14 @@ func agentRunCmd() *cobra.Command {
 
 LAUNCH AN AGENT (one command does everything):
 
-  g8e mcp agent run claude       Start Claude with g8e as its governed MCP provider.
-                                  Uses 'mcp gov' if the gateway is running (L1-L5),
-                                  or 'mcp stdio' otherwise (L1 native tools).
-                                  All MCP tool calls are routed exclusively through
-                                  g8e — no other MCP servers are reachable.
+  g8e mcp agent run claude       Start the g8e gateway (if not already running),
+                                  then launch Claude with g8e as its sole MCP
+                                  provider. All tool calls pass through full
+                                  L1-L5 governance — no other MCP servers are
+                                  reachable.
 
   Extra args are forwarded to the agent:
-    g8e mcp agent run claude -p "fix the failing tests"
+    g8e mcp agent run claude -- -p "fix the failing tests"
 
 WRAP AN EXTERNAL MCP SERVER (governance reverse proxy):
 
@@ -882,49 +883,92 @@ func (d *subprocessMCPProxy) forward(req JSONRPCRequest) (JSONRPCResponse, error
 	return resp, nil
 }
 
-// gatewayAvailable returns true if the local g8e gateway is reachable.
-func gatewayAvailable() bool {
+// ensureGatewayRunning starts the g8e gateway if it is not already running and
+// waits until it is healthy. After this returns without error, mcp gov can be used.
+func ensureGatewayRunning() error {
 	cfg, err := config.Load("")
 	if err != nil {
-		return false
+		return fmt.Errorf("load config: %w", err)
 	}
-	client, err := createMCPClient(cfg)
+
+	pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 	if err != nil {
-		return false
+		return fmt.Errorf("create process manager: %w", err)
 	}
-	client.Timeout = 2 * time.Second
-	gatewayURL := fmt.Sprintf("https://g8e.local:%d/api/v1/health", constants.Ports.OperatorHttps)
-	resp, err := client.Get(gatewayURL)
+
+	running, pid, err := pm.OperatorStatus()
 	if err != nil {
-		return false
+		return fmt.Errorf("check gateway status: %w", err)
 	}
-	resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
+	if running {
+		fmt.Fprintf(os.Stderr, "[g8e] Gateway already running (PID %d)\n", pid)
+		return nil
+	}
+
+	fmt.Fprintf(os.Stderr, "[g8e] Starting gateway...\n")
+	if err := pm.StartOperator(
+		"doctrine",
+		0, 0,
+		"", "", "", "", "",
+		false,
+		"", "",
+		0, 0,
+		"info",
+		"localhost",
+		nil,
+	); err != nil {
+		return fmt.Errorf("start gateway: %w", err)
+	}
+
+	// Poll plain HTTP until the gateway accepts connections.
+	// mTLS certs may not exist yet, so we cannot use createMCPClient here.
+	healthURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/health", constants.Ports.OperatorHttp)
+	plainClient := &http.Client{Timeout: 2 * time.Second}
+	const (
+		maxAttempts  = 30
+		pollInterval = 500 * time.Millisecond
+	)
+	for i := 0; i < maxAttempts; i++ {
+		resp, err := plainClient.Get(healthURL) //nolint:gosec,noctx
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				break
+			}
+		}
+		if i == maxAttempts-1 {
+			return fmt.Errorf("gateway did not become healthy after %v", time.Duration(maxAttempts)*pollInterval)
+		}
+		time.Sleep(pollInterval)
+	}
+
+	// Bootstrap CLI mTLS credentials (idempotent — no-op if already done).
+	if err := auth.BootstrapCLIWithoutPasskey(cfg); err != nil {
+		return fmt.Errorf("bootstrap CLI auth: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "[g8e] Gateway ready (L1-L5 governance active)\n")
+	return nil
 }
 
-// launchAgentWithGovernance launches a supported AI agent with g8e configured as its
-// sole MCP provider. All MCP tool calls from the agent pass through g8e governance.
-//
-// If the g8e gateway is running, uses 'mcp gov' for full L1-L5 governance.
-// Otherwise falls back to 'mcp stdio' for L1 inline governance with native tools.
+// launchAgentWithGovernance starts the g8e gateway if needed, then launches a
+// supported AI agent with g8e configured as its sole MCP provider. All MCP tool
+// calls are routed exclusively through g8e for full L1-L5 governance.
 func launchAgentWithGovernance(agentID string, extraArgs []string) error {
+	if err := ensureGatewayRunning(); err != nil {
+		return fmt.Errorf("ensure gateway: %w", err)
+	}
+
 	binaryPath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("resolve g8e binary path: %w", err)
-	}
-
-	mcpArgs := []string{"mcp", "stdio"}
-	modeLabel := "stdio (L1 native tools)"
-	if gatewayAvailable() {
-		mcpArgs = []string{"mcp", "gov"}
-		modeLabel = "gov (L1-L5 full governance via gateway)"
 	}
 
 	configJSON, err := json.Marshal(map[string]interface{}{
 		"mcpServers": map[string]interface{}{
 			"g8e": map[string]interface{}{
 				"command": binaryPath,
-				"args":    mcpArgs,
+				"args":    []string{"mcp", "gov"},
 			},
 		},
 	})
@@ -953,7 +997,7 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "[g8e] Launching %s with governance mode: %s\n", agentID, modeLabel)
+	fmt.Fprintf(os.Stderr, "[g8e] Launching %s with L1-L5 governance via gateway\n", agentID)
 
 	agentCmd := exec.Command(agentBin, append(launchArgs, extraArgs...)...) //nolint:gosec
 	agentCmd.Stdin = os.Stdin
