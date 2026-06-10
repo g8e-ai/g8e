@@ -430,6 +430,7 @@ func TestL4Warden_AllActionTypesFromSSOT(t *testing.T) {
 			}
 			if verified == nil {
 				t.Fatalf("verified transaction is nil for action type %s", actionType)
+				return
 			}
 			if verified.ActionType != actionType {
 				t.Fatalf("action type mismatch: expected %s, got %s", actionType, verified.ActionType)
@@ -489,6 +490,7 @@ func TestL4Warden_AppPolicyStore_L3Bypass_ReadOnly(t *testing.T) {
 			}
 			if verified == nil {
 				t.Fatalf("verified transaction is nil for read-only action %s", actionType)
+				return
 			}
 			if !verified.L3Valid {
 				t.Errorf("expected L3Valid=true for read-only action %s with app policy bypass", actionType)

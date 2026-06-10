@@ -33,6 +33,7 @@ func TestNewGatewayConfig(t *testing.T) {
 	}
 	if config == nil {
 		t.Fatal("NewGatewayConfig returned nil")
+		return
 	}
 
 	if len(config.MCPServers) != 1 {
