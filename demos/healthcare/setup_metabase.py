@@ -199,7 +199,7 @@ def main():
     if questions_exist(session_token):
         print("Compliance questions already exist. Nothing to do.")
         print("Dashboard: http://localhost:3001")
-        print(f"Login: {ADMIN_EMAIL} / {ADMIN_PASSWORD}")
+        print(f"Login: {ADMIN_EMAIL} (use the configured MB_ADMIN_PASSWORD)")
         return
 
     db_id = find_database(session_token)

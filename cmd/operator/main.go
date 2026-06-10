@@ -956,7 +956,7 @@ func probeGatewayTLS(logger *slog.Logger, endpoint string, trustStore *certs.Tru
 	logger.Info("[TLS-DEBUG] dialing gateway (InsecureSkipVerify=true to capture chain)", "addr", addr)
 
 	tlsCfg := &tls.Config{
-		InsecureSkipVerify: true, //nolint:gosec // intentional: debug-only cert chain capture
+		InsecureSkipVerify: true, //nolint:gosec // intentional: debug-only cert chain capture // lgtm[go/disabled-certificate-check]
 		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 			logger.Info("[TLS-DEBUG] gateway presented cert chain", "chain_len", len(rawCerts))
 			for i, derBytes := range rawCerts {

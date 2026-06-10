@@ -311,7 +311,7 @@ func (t *OperatorDeployTool) transferBinaryViaSCP(client *sshlib.Client, localPa
 	defer sftpClient.Close()
 
 	// Open local file
-	srcFile, err := os.Open(localPath)
+	srcFile, err := os.Open(filepath.Clean(localPath))
 	if err != nil {
 		return fmt.Errorf("open local file: %w", err)
 	}
