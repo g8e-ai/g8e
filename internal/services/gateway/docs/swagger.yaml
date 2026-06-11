@@ -8,6 +8,23 @@ definitions:
     x-enum-varnames:
     - GatewayModeGateway
     - GatewayModeStatusOK
+  gateway.AppEnrollResponse:
+    properties:
+      app_cert:
+        type: string
+      app_id:
+        type: string
+      cert_chain:
+        type: string
+      error:
+        type: string
+      expires_at:
+        type: string
+      success:
+        type: boolean
+      trust_bundle:
+        type: string
+    type: object
   models.HealthResponse:
     properties:
       governance_ready:
@@ -287,6 +304,21 @@ paths:
       summary: Get blob
       tags:
       - data
+  /api/v1/pki/apps/enroll:
+    post:
+      consumes:
+      - application/json
+      description: Enrolls an external app via PKI endpoint (identity-only enrollment)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/gateway.AppEnrollResponse'
+      summary: PKI app enrollment
+      tags:
+      - pki
   /api/v1/pki/certificates/revoke:
     post:
       consumes:

@@ -384,6 +384,29 @@
                 }
             }
         },
+        "/api/v1/pki/apps/enroll": {
+            "post": {
+                "description": "Enrolls an external app via PKI endpoint (identity-only enrollment)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pki"
+                ],
+                "summary": "PKI app enrollment",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/gateway.AppEnrollResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/pki/certificates/revoke": {
             "post": {
                 "description": "Revokes a certificate by serial number (internal mTLS endpoint)",
@@ -594,6 +617,32 @@
                 "GatewayModeGateway",
                 "GatewayModeStatusOK"
             ]
+        },
+        "gateway.AppEnrollResponse": {
+            "type": "object",
+            "properties": {
+                "app_cert": {
+                    "type": "string"
+                },
+                "app_id": {
+                    "type": "string"
+                },
+                "cert_chain": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "trust_bundle": {
+                    "type": "string"
+                }
+            }
         },
         "models.HealthResponse": {
             "type": "object",

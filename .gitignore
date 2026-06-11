@@ -133,3 +133,11 @@ protocol/proto/docs/reference/api/
 # --- Deployment ---
 .dockerignore
 /site
+
+# --- Claude Code ---
+.claude/
+.claude/*
+
+# --- GEMINI ---
+GEMINI.md
+
