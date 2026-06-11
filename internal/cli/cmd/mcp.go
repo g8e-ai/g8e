@@ -855,6 +855,7 @@ func getSupportedAgents() []agentInfo {
 		{"tabby", "Tabby AI autocomplete"},
 		{"ollama", "Ollama local LLM runner"},
 		{"gemini", "Google Gemini CLI"},
+		{"goose", "Goose AI coding assistant"},
 		{"generic", "Generic MCP-compatible agent"},
 	}
 }
@@ -1154,6 +1155,19 @@ func writeAgentConfig(agentID, binaryPath string) (string, func(), error) {
 			}
 		}, nil
 
+	case "goose":
+		// Goose stores MCP config in ~/.goose/config.json or ~/.config/goose/config.json
+		configDir := filepath.Join(homeDir, ".goose")
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return "", nil, fmt.Errorf("create goose config dir: %w", err)
+		}
+		configPath := filepath.Join(configDir, "config.json")
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
+			return "", nil, fmt.Errorf("write goose config.json: %w", err)
+		}
+		return configPath, nil, nil
+
 	default:
 		// For agents that use CLI flags or temp files
 		tmpFile, err := os.CreateTemp("", "g8e-mcp-*.json")
@@ -1279,7 +1293,7 @@ func agentLaunchArgs(agentID, mcpConfigPath string) ([]string, error) {
 		return []string{
 			"--config", mcpConfigPath,
 		}, nil
-	case "cursor", "devin", "aider":
+	case "cursor", "devin", "aider", "goose":
 		// These agents read from their standard config file locations
 		// No CLI args needed - config is written by writeAgentConfig
 		return []string{}, nil

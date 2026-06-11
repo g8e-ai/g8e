@@ -28,6 +28,11 @@ v1.0.12 closes the MCP agent audit trail gap (agents were executing governed too
 * **L3 Posture Enforcement** — Added posture-aware L3 auto-approval in gateway mode for doctrine and consensus postures, preventing WebAuthn prompts for local MCP agents.
 * **Audit Store Session Auto-Creation** — `RecordEvent` in `internal/services/storage/audit_store.go` now auto-creates session rows to prevent FK race conditions and silent event drops.
 * **Rate Limiting in Gateway Mode** — Disabled rate limiting (RPS=0, Burst=0) in gateway mode since gateway is local-only.
+* **Storage Service Disable Removal** — Removed `Enabled` field and `IsEnabled()` method from all storage services (audit_store, replay_store, execution_vault, token_store, suspended_transaction_store). Storage services are now always initialized and fail-closed, ensuring audit trails cannot be disabled.
+
+### Removed
+
+* **Storage Service Disable Capability** — Removed the ability to disable storage services. Previously, constructors would return `(nil, nil)` when `Enabled = false`, causing downstream failures with unclear errors. All storage services now require proper initialization and fail-closed on missing dependencies.
 
 ### Fixed
 

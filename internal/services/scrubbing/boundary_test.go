@@ -52,7 +52,6 @@ func TestNewScrubbingService(t *testing.T) {
 		t.Parallel()
 		service := NewScrubbingService(nil, logger, nil)
 		require.NotNil(t, service)
-		assert.True(t, service.config.Enabled)
 		assert.True(t, service.config.StrictMode)
 		assert.NotEmpty(t, service.scrubbers)
 	})
@@ -60,13 +59,11 @@ func TestNewScrubbingService(t *testing.T) {
 	t.Run("with custom config", func(t *testing.T) {
 		t.Parallel()
 		config := &Config{
-			Enabled:         true,
 			StrictMode:      false,
 			MaxOutputLength: 1024,
 		}
 		service := NewScrubbingService(config, logger, nil)
 		require.NotNil(t, service)
-		assert.True(t, service.config.Enabled)
 		assert.False(t, service.config.StrictMode)
 		assert.Equal(t, 1024, service.config.MaxOutputLength)
 	})
@@ -675,7 +672,6 @@ func TestScrubbingService_TokenPersistence(t *testing.T) {
 	// Create TokenStore
 	storageConfig := &storage.TokenStoreConfig{
 		DBPath:        filepath.Join(tempDir, "test_tokens.db"),
-		Enabled:       true,
 		RetentionDays: 30,
 	}
 	tokenStore, err := storage.NewTokenStoreService(storageConfig, logger, testVault)
@@ -685,7 +681,6 @@ func TestScrubbingService_TokenPersistence(t *testing.T) {
 
 	// Create ScrubbingService with persistence
 	config := &Config{
-		Enabled:            true,
 		StrictMode:         false,
 		RequirePersistence: true,
 	}
@@ -719,7 +714,6 @@ func TestScrubbingService_TokenPersistence_FailClosed(t *testing.T) {
 
 	// Create ScrubbingService with persistence required but no TokenStore
 	config := &Config{
-		Enabled:            true,
 		StrictMode:         false,
 		RequirePersistence: true,
 	}
@@ -752,7 +746,6 @@ func TestScrubbingService_TokenPersistence_TTL(t *testing.T) {
 	// Create TokenStore
 	storageConfig := &storage.TokenStoreConfig{
 		DBPath:        filepath.Join(tempDir, "test_ttl.db"),
-		Enabled:       true,
 		RetentionDays: 30,
 	}
 	tokenStore, err := storage.NewTokenStoreService(storageConfig, logger, testVault)
@@ -762,7 +755,6 @@ func TestScrubbingService_TokenPersistence_TTL(t *testing.T) {
 
 	// Create ScrubbingService with persistence
 	config := &Config{
-		Enabled:            true,
 		StrictMode:         false,
 		RequirePersistence: true,
 	}

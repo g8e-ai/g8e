@@ -33,7 +33,6 @@ func setupTestReplayStore(t *testing.T) *SQLReplayStore {
 
 	config := &ReplayStoreConfig{
 		DBPath:  dbPath,
-		Enabled: true,
 	}
 
 	logger := testutil.NewTestLogger()
@@ -202,19 +201,6 @@ func TestReplayStore_Prune(t *testing.T) {
 	assert.True(t, isReplay, "nonce should still be a replay after prune (not old enough)")
 }
 
-func TestReplayStore_NewStore_Disabled(t *testing.T) {
-	t.Parallel()
-
-	config := &ReplayStoreConfig{
-		Enabled: false,
-	}
-
-	logger := testutil.NewTestLogger()
-	rs, err := NewSQLReplayStore(config, logger)
-	require.NoError(t, err)
-	assert.Nil(t, rs, "store should be nil when disabled")
-}
-
 func TestReplayStore_NewStore_NilConfig(t *testing.T) {
 	t.Parallel()
 
@@ -223,7 +209,6 @@ func TestReplayStore_NewStore_NilConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, rs)
 	assert.NotNil(t, rs.config)
-	assert.True(t, rs.config.Enabled)
 }
 
 func TestReplayStore_Close_NilStore(t *testing.T) {

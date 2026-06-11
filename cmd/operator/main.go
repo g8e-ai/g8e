@@ -1421,11 +1421,11 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	// Get the GatewayDBService's AuditStore for full audit storage
 	// This ensures ActionReceipts are persisted in the receipts table
 	var auditStore *storage.SQLAuditStore
-	if svc.GetDB() != nil && svc.GetDB().AuditStore != nil && svc.GetDB().AuditStore.IsEnabled() {
+	if svc.GetDB() != nil && svc.GetDB().AuditStore != nil {
 		auditStore = svc.GetDB().AuditStore
 		logger.Info("Gateway AuditStore enabled for full audit storage")
 	} else {
-		logger.Warn("Gateway AuditStore not available or disabled - ActionReceipts will not be stored in audit store")
+		logger.Warn("Gateway AuditStore not available - ActionReceipts will not be stored in audit store")
 	}
 
 	psConfig := pubsub.CommandServiceConfig{

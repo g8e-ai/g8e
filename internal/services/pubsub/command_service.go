@@ -203,7 +203,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 		result.Stderr = cs.scrubbing.ScrubText(result.Stderr)
 	}
 
-	if cs.auditStore != nil && cs.auditStore.IsEnabled() {
+	if cs.auditStore != nil {
 		event := &storage.Event{
 			OperatorSessionID:   msg.OperatorSessionID,
 			Timestamp:           time.Now().UTC(),

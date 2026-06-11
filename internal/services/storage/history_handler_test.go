@@ -56,7 +56,6 @@ func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *SQLAuditStore, *va
 		MaxDBSizeMB:          100,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 60,
-		Enabled:              true,
 		EncryptionVault:      testVault,
 	}
 	auditStore, err := NewSQLAuditStore(auditStoreConfig, logger)
@@ -146,20 +145,6 @@ func TestHistoryHandler_FetchHistoryInvalidRequest(t *testing.T) {
 
 	assert.False(t, response.Success)
 	assert.Contains(t, response.Error, "operator_session_id is required")
-}
-
-// TestHistoryHandler_IsEnabled verifies that IsEnabled returns true
-// for a properly initialized HistoryHandler and false for nil handlers.
-func TestHistoryHandler_IsEnabled(t *testing.T) {
-	t.Parallel()
-	hh, _, testVault, _ := setupTestHistoryHandler(t)
-	defer testVault.Close()
-
-	assert.True(t, hh.IsEnabled())
-
-	// Test with nil handler
-	var nilHandler *HistoryHandler
-	assert.False(t, nilHandler.IsEnabled())
 }
 
 // TestHistoryHandler_FetchHistoryWithFileMutations verifies that file mutation
@@ -542,23 +527,6 @@ func TestHistoryHandler_GetFileAtCommit(t *testing.T) {
 	} else {
 		assert.Equal(t, "Initial", content)
 	}
-}
-
-// TestHistoryHandler_NilHandler verifies that IsEnabled returns false
-// for a nil HistoryHandler (fail-closed behavior).
-func TestHistoryHandler_NilHandler(t *testing.T) {
-	t.Parallel()
-	var hh *HistoryHandler
-	assert.False(t, hh.IsEnabled())
-}
-
-// TestHistoryHandler_NilAuditStore verifies that IsEnabled returns false
-// when the HistoryHandler is created with a nil audit store (fail-closed behavior).
-func TestHistoryHandler_NilAuditStore(t *testing.T) {
-	t.Parallel()
-	logger := testutil.NewTestLogger()
-	hh := NewHistoryHandler(nil, nil, logger)
-	assert.False(t, hh.IsEnabled())
 }
 
 // TestHistoryHandler_AllEventTypes verifies that the HistoryHandler correctly

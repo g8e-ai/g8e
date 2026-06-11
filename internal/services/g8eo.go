@@ -167,7 +167,6 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	executionVaultConfig.DBPath = filepath.Join(dataDir, "execution_vault.db")
 	executionVaultConfig.MaxDBSizeMB = vs.config.ExecutionVaultMaxSizeMB
 	executionVaultConfig.RetentionDays = vs.config.ExecutionVaultRetentionDays
-	executionVaultConfig.Enabled = true
 	vs.executionVault, err = storage.NewExecutionVaultService(executionVaultConfig, vs.logger, encryptionVault)
 	if err != nil {
 		return fmt.Errorf("failed to initialize execution vault: %w", err)
@@ -177,7 +176,6 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// Initialize TokenStoreService for Sentinel token persistence
 	tokenStoreConfig := storage.DefaultTokenStoreConfig()
 	tokenStoreConfig.DBPath = filepath.Join(dataDir, "token_store.db")
-	tokenStoreConfig.Enabled = true
 	vs.tokenStore, err = storage.NewTokenStoreService(tokenStoreConfig, vs.logger, encryptionVault)
 	if err != nil {
 		return fmt.Errorf("failed to initialize token store: %w", err)
@@ -187,7 +185,6 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// Initialize SuspendedTransactionService for L3 approval workflow
 	suspendedTxConfig := storage.DefaultSuspendedTransactionConfig()
 	suspendedTxConfig.DBPath = filepath.Join(dataDir, "suspended_transactions.db")
-	suspendedTxConfig.Enabled = true
 	vs.suspendedTxStore, err = storage.NewSuspendedTransactionService(suspendedTxConfig, vs.logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize suspended transaction store: %w", err)
@@ -210,7 +207,6 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	auditStoreConfig := storage.DefaultAuditStoreConfig()
 	auditStoreConfig.DataDir = filepath.Join(vs.config.WorkDir, ".g8e/data")
 	auditStoreConfig.EncryptionVault = encryptionVault
-	auditStoreConfig.Enabled = true
 	vs.auditStore, err = storage.NewSQLAuditStore(auditStoreConfig, vs.logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize audit store: %w", err)
@@ -229,7 +225,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		}
 	}
 
-	if vs.auditStore != nil && vs.auditStore.IsEnabled() && gitPath != "" {
+	if vs.auditStore != nil && gitPath != "" {
 		ledgerConfig := &storage.LedgerConfig{
 			BaseDir:         filepath.Join(vs.config.WorkDir, ".g8e/data/ledger"),
 			GitPath:         gitPath,
@@ -243,7 +239,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		vs.logger.Info("Ledger initialized")
 		vs.historyHandler = storage.NewHistoryHandler(vs.auditStore, vs.ledger, vs.logger)
 		vs.logger.Info("History Handler initialized (FETCH_HISTORY ready)")
-	} else if vs.auditStore != nil && vs.auditStore.IsEnabled() {
+	} else if vs.auditStore != nil {
 		vs.logger.Warn("Ledger disabled - audit store active without git-backed file versioning")
 		vs.historyHandler = storage.NewHistoryHandler(vs.auditStore, nil, vs.logger)
 		vs.logger.Info("History Handler initialized (FETCH_HISTORY ready, file history unavailable)")

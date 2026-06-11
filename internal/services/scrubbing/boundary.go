@@ -156,7 +156,7 @@ func NewScrubbingService(config *Config, logger *slog.Logger, tokenStore interfa
 	s.initializeScrubbers()
 
 	// Load persisted tokens if storage is available
-	if s.tokenStore != nil && s.tokenStore.IsEnabled() {
+	if s.tokenStore != nil {
 		s.loadPersistedTokens()
 	}
 
@@ -842,7 +842,7 @@ func (s *ScrubbingService) RehydrateText(input string) string {
 	}
 
 	s.tokenMu.RLock()
-	if len(s.tokenMap) == 0 && (s.tokenStore == nil || !s.tokenStore.IsEnabled()) {
+	if len(s.tokenMap) == 0 && s.tokenStore == nil {
 		s.tokenMu.RUnlock()
 		return input
 	}
@@ -855,7 +855,7 @@ func (s *ScrubbingService) RehydrateText(input string) string {
 	s.tokenMu.RUnlock()
 
 	// If TokenStore is available, check for any remaining tokens not in memory
-	if s.tokenStore != nil && s.tokenStore.IsEnabled() {
+	if s.tokenStore != nil {
 		// Find all {{UEI_N}} patterns in the result
 		tokenPattern := regexp.MustCompile(`\{\{UEI_\d+\}\}`)
 		matches := tokenPattern.FindAllString(result, -1)
@@ -939,7 +939,7 @@ func (s *ScrubbingService) GetTokenForValue(value string) string {
 	}
 
 	// Fail-closed: if persistence is required but unavailable, reject the operation
-	if s.config.RequirePersistence && (s.tokenStore == nil || !s.tokenStore.IsEnabled()) {
+	if s.config.RequirePersistence && s.tokenStore == nil {
 		s.logger.Error("Token persistence required but TokenStore unavailable - failing closed to prevent data loss")
 		return ""
 	}
@@ -957,7 +957,7 @@ func (s *ScrubbingService) GetTokenForValue(value string) string {
 	s.reverseMap[value] = token
 
 	// Persist to storage if available (24 hour TTL)
-	if s.tokenStore != nil && s.tokenStore.IsEnabled() {
+	if s.tokenStore != nil {
 		const tokenTTLSeconds = 24 * 60 * 60
 		key := fmt.Sprintf("sentinel_token_%s", token)
 		if err := s.tokenStore.KVSet(context.Background(), key, value, tokenTTLSeconds); err != nil {
@@ -980,7 +980,7 @@ func (s *ScrubbingService) IsEnabled() bool {
 
 // loadPersistedTokens loads tokens from TokenStore on startup
 func (s *ScrubbingService) loadPersistedTokens() {
-	if s.tokenStore == nil || !s.tokenStore.IsEnabled() {
+	if s.tokenStore == nil {
 		s.logger.Warn("TokenStore not available for token persistence")
 		return
 	}

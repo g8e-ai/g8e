@@ -243,6 +243,18 @@ func TestAgentCmd(t *testing.T) {
 		assert.Contains(t, output, "g8e Gateway MCP Configurations")
 	})
 
+	t.Run("agent show generates gateway configs for goose", func(t *testing.T) {
+		cmd := agentShowCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"goose"})
+		err := cmd.Execute()
+		assert.NoError(t, err)
+		output := buf.String()
+		assert.Contains(t, output, "g8e Gateway MCP Configurations")
+	})
+
 	t.Run("agent show returns error for unknown agent", func(t *testing.T) {
 		cmd := agentShowCmd()
 		var buf bytes.Buffer

@@ -46,7 +46,6 @@ func setupTestTokenStore(t *testing.T) (*TokenStoreService, *vault.Vault, string
 		MaxDBSizeMB:          100,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 60,
-		Enabled:              true,
 	}
 
 	ts, err := NewTokenStoreService(config, logger, testVault)
@@ -72,7 +71,6 @@ func TestDefaultTokenStoreConfig(t *testing.T) {
 	assert.Equal(t, int64(512), config.MaxDBSizeMB)
 	assert.Equal(t, 30, config.RetentionDays)
 	assert.Equal(t, 60, config.PruneIntervalMinutes)
-	assert.True(t, config.Enabled)
 }
 
 // TestNewTokenStoreService_NilConfig verifies that the constructor
@@ -96,41 +94,15 @@ func TestNewTokenStoreService_NilConfig(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ts)
 	defer ts.Close()
-
-	assert.True(t, ts.IsEnabled())
-}
-
-// TestNewTokenStoreService_Disabled verifies that the constructor
-// returns nil when the service is disabled in config.
-func TestNewTokenStoreService_Disabled(t *testing.T) {
-	t.Parallel()
-	tempDir := t.TempDir()
-	logger := testutil.NewTestLogger()
-
-	_, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	vaultDir := filepath.Join(tempDir, "vault")
-	testVault := createTestVault(t, vaultDir, privKey)
-	defer testVault.Close()
-
-	config := &TokenStoreConfig{
-		DBPath:  filepath.Join(tempDir, "token_store.db"),
-		Enabled: false,
-	}
-
-	ts, err := NewTokenStoreService(config, logger, testVault)
-	require.NoError(t, err)
-	assert.Nil(t, ts, "TokenStoreService should be nil when disabled")
 }
 
 // TestNewTokenStoreService_NilVault verifies that the constructor
-// fails with an error when vault is nil and service is enabled.
+// fails with an error when vault is nil.
 func TestNewTokenStoreService_NilVault(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	config := DefaultTokenStoreConfig()
-	config.Enabled = true
 
 	ts, err := NewTokenStoreService(config, logger, nil)
 	assert.Error(t, err)
@@ -158,8 +130,7 @@ func TestNewTokenStoreService_DatabaseInitFailure(t *testing.T) {
 	defer os.Remove(tempFile.Name())
 
 	config := &TokenStoreConfig{
-		DBPath:  filepath.Join(tempFile.Name(), "db", "token_store.db"),
-		Enabled: true,
+		DBPath: filepath.Join(tempFile.Name(), "db", "token_store.db"),
 	}
 
 	ts, err := NewTokenStoreService(config, logger, testVault)
@@ -443,21 +414,6 @@ func TestTokenStoreService_NilService(t *testing.T) {
 
 	err = ts.KVDelete("key")
 	assert.Error(t, err, "KVDelete should error on nil service")
-
-	assert.False(t, ts.IsEnabled())
-}
-
-// TestTokenStoreService_IsEnabled verifies that IsEnabled returns
-// true for properly initialized service and false for nil.
-func TestTokenStoreService_IsEnabled(t *testing.T) {
-	t.Parallel()
-	ts, testVault, _ := setupTestTokenStore(t)
-	defer testVault.Close()
-
-	assert.True(t, ts.IsEnabled())
-
-	var nilTS *TokenStoreService
-	assert.False(t, nilTS.IsEnabled())
 }
 
 // TestTokenStoreService_Wait verifies that Wait blocks until
@@ -484,14 +440,8 @@ func TestTokenStoreService_Close(t *testing.T) {
 	ts, testVault, _ := setupTestTokenStore(t)
 	defer testVault.Close()
 
-	assert.True(t, ts.IsEnabled())
-
 	err := ts.Close()
 	require.NoError(t, err)
-
-	// After close, the service should still be considered enabled (has db reference)
-	// but operations will fail due to closed database
-	assert.True(t, ts.IsEnabled())
 }
 
 // TestTokenStoreService_CloseNil verifies that Close handles

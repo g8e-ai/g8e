@@ -33,9 +33,8 @@ func TestVaultRequirement_ExecutionVaultService(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	config := DefaultExecutionVaultConfig()
-	config.Enabled = true
 
-	// Test that service fails to initialize with nil vault when enabled
+	// Test that service fails to initialize with nil vault
 	evs, err := NewExecutionVaultService(config, logger, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "encryption vault is required")
@@ -49,9 +48,8 @@ func TestVaultRequirement_TokenStoreService(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	config := DefaultTokenStoreConfig()
-	config.Enabled = true
 
-	// Test that service fails to initialize with nil vault when enabled
+	// Test that service fails to initialize with nil vault
 	tss, err := NewTokenStoreService(config, logger, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "encryption vault is required")
@@ -65,9 +63,8 @@ func TestVaultRequirement_SQLAuditStore(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	config := DefaultAuditStoreConfig()
-	config.Enabled = true
 
-	// Test that service fails to initialize with nil EncryptionVault when enabled
+	// Test that service fails to initialize with nil EncryptionVault
 	ass, err := NewSQLAuditStore(config, logger)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "EncryptionVault is required")

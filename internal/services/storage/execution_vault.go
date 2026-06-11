@@ -34,7 +34,6 @@ type ExecutionVaultConfig struct {
 	MaxDBSizeMB          int64
 	RetentionDays        int
 	PruneIntervalMinutes int
-	Enabled              bool
 }
 
 // DefaultExecutionVaultConfig returns the default configuration.
@@ -44,7 +43,6 @@ func DefaultExecutionVaultConfig() *ExecutionVaultConfig {
 		MaxDBSizeMB:          1024,
 		RetentionDays:        30,
 		PruneIntervalMinutes: 60,
-		Enabled:              true,
 	}
 }
 
@@ -67,11 +65,6 @@ var _ interfaces.ExecutionVault = (*ExecutionVaultService)(nil)
 func NewExecutionVaultService(config *ExecutionVaultConfig, logger *slog.Logger, v *vault.Vault) (*ExecutionVaultService, error) {
 	if config == nil {
 		config = DefaultExecutionVaultConfig()
-	}
-
-	if !config.Enabled {
-		logger.Info("Execution vault is disabled")
-		return nil, nil
 	}
 
 	if v == nil {
@@ -654,16 +647,6 @@ func (ev *ExecutionVaultService) Close() error {
 	}
 
 	return nil
-}
-
-// IsEnabled returns whether the execution vault is enabled.
-func (ev *ExecutionVaultService) IsEnabled() bool {
-	return ev != nil && ev.db != nil
-}
-
-// IsEncryptionEnabled returns whether content encryption is enabled
-func (ev *ExecutionVaultService) IsEncryptionEnabled() bool {
-	return ev != nil && ev.vault != nil && ev.vault.IsUnlocked()
 }
 
 // encryptContent encrypts content using the encryption vault

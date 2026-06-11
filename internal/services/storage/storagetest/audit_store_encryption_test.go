@@ -53,7 +53,6 @@ func TestSQLAuditStore_WithEncryption(t *testing.T) {
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
-		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		EncryptionVault:           encVault,
@@ -62,9 +61,6 @@ func TestSQLAuditStore_WithEncryption(t *testing.T) {
 	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer avs.Close()
-
-	// Verify encryption is enabled
-	assert.True(t, avs.IsEncryptionEnabled())
 
 	// Create session
 	err = avs.CreateSession("encrypted-session-1", "operator", "Encrypted Test", "test-user")
@@ -117,7 +113,6 @@ func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
-		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		EncryptionVault:           vault1,
@@ -154,7 +149,6 @@ func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
-		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		EncryptionVault:           nil, // No vault = service fails to initialize
@@ -182,7 +176,6 @@ func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
-		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		EncryptionVault:           vault3,
@@ -219,7 +212,6 @@ func TestSQLAuditStore_EncryptionWithRekey(t *testing.T) {
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
-		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		EncryptionVault:           vaultSvc,
@@ -266,7 +258,6 @@ func TestSQLAuditStore_EncryptionWithRekey(t *testing.T) {
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
-		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		EncryptionVault:           vault2,
@@ -301,7 +292,6 @@ func TestSQLAuditStore_MixedEncryptedUnencrypted(t *testing.T) {
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
-		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		EncryptionVault:           encVault,

@@ -58,7 +58,6 @@ type TestSQLAuditStoreConfig struct {
 	MaxDBSizeMB               int64
 	RetentionDays             int
 	PruneIntervalMinutes      int
-	Enabled                   bool
 	OutputTruncationThreshold int
 	HeadTailSize              int
 	// EncryptionVault is the required vault.Vault for encrypting sensitive content fields.
@@ -78,7 +77,6 @@ func DefaultTestSQLAuditStoreConfig() *TestSQLAuditStoreConfig {
 		MaxDBSizeMB:               2048,
 		RetentionDays:             90,
 		PruneIntervalMinutes:      60,
-		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 	}
@@ -106,11 +104,6 @@ type TestSQLAuditStore struct {
 func NewTestSQLAuditStore(config *TestSQLAuditStoreConfig, logger *slog.Logger) (*TestSQLAuditStore, error) {
 	if config == nil {
 		config = DefaultTestSQLAuditStoreConfig()
-	}
-
-	if !config.Enabled {
-		logger.Info("Audit vault is disabled")
-		return nil, nil
 	}
 
 	if config.EncryptionVault == nil {
@@ -504,9 +497,8 @@ func (avs *TestSQLAuditStore) RecordEvents(events []*storage.Event) error {
 			stdout, stdoutTruncated := avs.truncateOutput(event.CommandStdout)
 			stderr, stderrTruncated := avs.truncateOutput(event.CommandStderr)
 
-			encrypted := avs.IsEncryptionEnabled()
 			encryptedFlag := 0
-			if encrypted {
+			if avs.encryptionVault.IsUnlocked() {
 				encryptedFlag = 1
 			}
 
@@ -648,8 +640,6 @@ func (avs *TestSQLAuditStore) RecordEvent(event *storage.Event) (int64, error) {
 		stdout, stdoutTruncated := avs.truncateOutput(event.CommandStdout)
 		stderr, stderrTruncated := avs.truncateOutput(event.CommandStderr)
 
-		encrypted := avs.IsEncryptionEnabled()
-
 		contentTextBytes, err := avs.encryptContent(event.ContentText)
 		if err != nil {
 			return fmt.Errorf("failed to encrypt content_text: %w", err)
@@ -674,7 +664,7 @@ func (avs *TestSQLAuditStore) RecordEvent(event *storage.Event) (int64, error) {
 		`
 
 		encryptedFlag := 0
-		if encrypted {
+		if avs.encryptionVault.IsUnlocked() {
 			encryptedFlag = 1
 		}
 
@@ -706,7 +696,7 @@ func (avs *TestSQLAuditStore) RecordEvent(event *storage.Event) (int64, error) {
 			"operator_session_id", event.OperatorSessionID,
 			"stdout_truncated", stdoutTruncated,
 			"stderr_truncated", stderrTruncated,
-			"encrypted", encrypted)
+			"encrypted", encryptedFlag)
 
 		return nil
 	})
@@ -1005,7 +995,7 @@ func (avs *TestSQLAuditStore) GetEvents(operatorSessionID string, limit, offset 
 	for _, row := range rows {
 		row.event.Timestamp, _ = sqliteutil.ParseTimestamp(row.timestampStr)
 
-		if row.encryptedFlag == 1 && avs.IsEncryptionEnabled() {
+		if row.encryptedFlag == 1 && avs.encryptionVault.IsUnlocked() {
 			if len(row.contentTextBytes) > 0 {
 				decrypted, err := avs.decryptContent(row.contentTextBytes)
 				if err != nil {
@@ -1256,11 +1246,6 @@ func (avs *TestSQLAuditStore) Close() error {
 	return closeErr
 }
 
-// IsEnabled returns whether the audit vault is enabled
-func (avs *TestSQLAuditStore) IsEnabled() bool {
-	return avs != nil && avs.db != nil
-}
-
 // GetDataDir returns the audit vault data directory
 func (avs *TestSQLAuditStore) GetDataDir() string {
 	if avs == nil {
@@ -1277,19 +1262,13 @@ func (avs *TestSQLAuditStore) GetLedgerPath() string {
 	return avs.ledgerPath
 }
 
-// IsEncryptionEnabled returns whether content encryption is enabled.
-// Vault is required, so only checks if unlocked.
-func (avs *TestSQLAuditStore) IsEncryptionEnabled() bool {
-	return avs.encryptionVault.IsUnlocked()
-}
-
 // encryptContent encrypts content. Vault is required and must be unlocked.
 func (avs *TestSQLAuditStore) encryptContent(content string) ([]byte, error) {
 	if content == "" {
 		return nil, nil
 	}
 
-	if !avs.IsEncryptionEnabled() {
+	if !avs.encryptionVault.IsUnlocked() {
 		return nil, fmt.Errorf("vault is locked, cannot encrypt content")
 	}
 
@@ -1307,7 +1286,7 @@ func (avs *TestSQLAuditStore) decryptContent(data []byte) (string, error) {
 		return "", nil
 	}
 
-	if !avs.IsEncryptionEnabled() {
+	if !avs.encryptionVault.IsUnlocked() {
 		return "", fmt.Errorf("vault is locked, cannot decrypt content")
 	}
 

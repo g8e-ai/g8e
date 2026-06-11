@@ -43,7 +43,6 @@ func TestAuditVaultConfig_Default(t *testing.T) {
 	assert.Equal(t, 90, config.RetentionDays)
 	assert.Equal(t, 102400, config.OutputTruncationThreshold)
 	assert.Equal(t, 51200, config.HeadTailSize)
-	assert.True(t, config.Enabled)
 }
 
 func TestSQLAuditStore_Bootstrap(t *testing.T) {
@@ -66,7 +65,6 @@ func TestSQLAuditStore_Bootstrap(t *testing.T) {
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
-		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		GitPath:                   gitPath,
@@ -89,54 +87,7 @@ func TestSQLAuditStore_Bootstrap(t *testing.T) {
 	// Verify git was initialized
 	assert.DirExists(t, filepath.Join(tempDir, "ledger", ".git"))
 
-	// Verify service is enabled
-	assert.True(t, avs.IsEnabled())
 	assert.Equal(t, tempDir, avs.GetDataDir())
-}
-
-func TestSQLAuditStore_Disabled(t *testing.T) {
-	t.Parallel()
-	config := &TestSQLAuditStoreConfig{
-		Enabled: false,
-	}
-
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
-	require.NoError(t, err)
-	assert.Nil(t, avs)
-}
-
-func TestSQLAuditStore_IsEnabled(t *testing.T) {
-	t.Parallel()
-	tempDir := t.TempDir()
-	vaultDir := filepath.Join(tempDir, "vault")
-
-	// Create test vault
-	_, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
-
-	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
-		DBPath:                    "test.db",
-		LedgerDir:                 "ledger",
-		MaxDBSizeMB:               100,
-		RetentionDays:             7,
-		PruneIntervalMinutes:      60,
-		Enabled:                   true,
-		OutputTruncationThreshold: 102400,
-		HeadTailSize:              51200,
-		EncryptionVault:           testVault,
-	}
-
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
-	require.NoError(t, err)
-	defer avs.Close()
-
-	assert.True(t, avs.IsEnabled())
-
-	// Nil service
-	var nilService *TestSQLAuditStore
-	assert.False(t, nilService.IsEnabled())
 }
 
 func TestSQLAuditStore_GetDataDir(t *testing.T) {
@@ -156,7 +107,6 @@ func TestSQLAuditStore_GetDataDir(t *testing.T) {
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
-		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		EncryptionVault:           testVault,
@@ -190,7 +140,6 @@ func TestSQLAuditStore_GetLedgerPath(t *testing.T) {
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
-		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		EncryptionVault:           testVault,
@@ -249,7 +198,6 @@ func TestSQLAuditStore_GetEncryptionVault(t *testing.T) {
 	config1 := &TestSQLAuditStoreConfig{
 		DataDir: tempDir,
 		DBPath:  "test1.db",
-		Enabled: true,
 	}
 	avs1, err := NewTestSQLAuditStore(config1, logger)
 	require.Error(t, err)
@@ -267,7 +215,6 @@ func TestSQLAuditStore_GetEncryptionVault(t *testing.T) {
 	config2 := &TestSQLAuditStoreConfig{
 		DataDir:         tempDir,
 		DBPath:          "test2.db",
-		Enabled:         true,
 		EncryptionVault: v,
 	}
 	avs2, err := NewTestSQLAuditStore(config2, logger)
@@ -297,7 +244,6 @@ func TestSQLAuditStore_CloseIdempotent(t *testing.T) {
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
-		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		EncryptionVault:           testVault,
@@ -331,7 +277,6 @@ func TestSQLAuditStore_WALMode(t *testing.T) {
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
-		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		EncryptionVault:           testVault,

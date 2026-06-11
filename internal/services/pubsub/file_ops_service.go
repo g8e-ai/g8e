@@ -155,7 +155,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 		})
 	}
 
-	if fs.auditStore != nil && fs.auditStore.IsEnabled() && operation != "read" {
+	if fs.auditStore != nil && operation != "read" {
 		event := &storage.Event{
 			OperatorSessionID:   fs.config.OperatorSessionId,
 			Timestamp:           time.Now().UTC(),

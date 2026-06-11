@@ -61,7 +61,6 @@ func setupTestExecutionVault(t *testing.T) (*ExecutionVaultService, string) {
 		MaxDBSizeMB:          1024,
 		RetentionDays:        30,
 		PruneIntervalMinutes: 60,
-		Enabled:              true,
 	}
 
 	ev, err := NewExecutionVaultService(config, logger, testVault)
@@ -86,7 +85,6 @@ func TestExecutionVault_DefaultExecutionVaultConfig(t *testing.T) {
 	assert.Equal(t, int64(1024), config.MaxDBSizeMB)
 	assert.Equal(t, 30, config.RetentionDays)
 	assert.Equal(t, 60, config.PruneIntervalMinutes)
-	assert.True(t, config.Enabled)
 }
 
 func TestExecutionVault_NewExecutionVaultService_WithNilConfig(t *testing.T) {
@@ -119,43 +117,10 @@ func TestExecutionVault_NewExecutionVaultService_WithNilConfig(t *testing.T) {
 	ev.Close()
 }
 
-func TestExecutionVault_NewExecutionVaultService_Disabled(t *testing.T) {
-	t.Parallel()
-
-	tempDir := t.TempDir()
-	vaultDir := filepath.Join(tempDir, "vault")
-
-	_, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
-
-	vHeader, _, err := vault.NewVaultHeader(privKey)
-	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
-
-	testVault, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: vaultDir,
-		Logger:  testutil.NewTestLogger(),
-	})
-	require.NoError(t, err)
-	require.NoError(t, testVault.Unlock(privKey))
-	t.Cleanup(func() { testVault.Close() })
-
-	config := &ExecutionVaultConfig{
-		Enabled: false,
-	}
-
-	ev, err := NewExecutionVaultService(config, testutil.NewTestLogger(), testVault)
-	require.NoError(t, err)
-	assert.Nil(t, ev)
-}
-
 func TestExecutionVault_NewExecutionVaultService_NilVault(t *testing.T) {
 	t.Parallel()
 
-	config := &ExecutionVaultConfig{
-		Enabled: true,
-	}
+	config := &ExecutionVaultConfig{}
 
 	ev, err := NewExecutionVaultService(config, testutil.NewTestLogger(), nil)
 	require.Error(t, err)
@@ -597,34 +562,6 @@ func TestExecutionVault_GetFileDiffsBySession_NilService(t *testing.T) {
 	assert.Contains(t, err.Error(), "disabled")
 }
 
-func TestExecutionVault_IsEnabled(t *testing.T) {
-	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
-
-	assert.True(t, ev.IsEnabled())
-}
-
-func TestExecutionVault_IsEnabled_NilService(t *testing.T) {
-	t.Parallel()
-
-	var ev *ExecutionVaultService
-	assert.False(t, ev.IsEnabled())
-}
-
-func TestExecutionVault_IsEncryptionEnabled(t *testing.T) {
-	t.Parallel()
-	ev, _ := setupTestExecutionVault(t)
-
-	assert.True(t, ev.IsEncryptionEnabled())
-}
-
-func TestExecutionVault_IsEncryptionEnabled_NilService(t *testing.T) {
-	t.Parallel()
-
-	var ev *ExecutionVaultService
-	assert.False(t, ev.IsEncryptionEnabled())
-}
-
 func TestExecutionVault_Close(t *testing.T) {
 	t.Parallel()
 	ev, _ := setupTestExecutionVault(t)
@@ -633,8 +570,6 @@ func TestExecutionVault_Close(t *testing.T) {
 	require.NoError(t, err)
 
 	// Close should succeed and not panic
-	// IsEnabled checks if service is configured, not if it's open
-	assert.True(t, ev.IsEnabled())
 }
 
 func TestExecutionVault_Close_NilService(t *testing.T) {

@@ -752,7 +752,7 @@ func (rs *PubSubCommandService) handleMcpCallRequestSync(ctx context.Context, ms
 		summary = summary[:4096]
 	}
 
-	if rs.audit != nil && rs.audit.auditStore != nil && rs.audit.auditStore.IsEnabled() {
+	if rs.audit != nil && rs.audit.auditStore != nil {
 		event := &storage.Event{
 			OperatorSessionID: msg.OperatorSessionID, // Use envelope identity (app ID for agent runs)
 			Timestamp:         time.Now().UTC(),

@@ -50,10 +50,6 @@ func NewAuditService(cfg *config.Config, logger *slog.Logger, auditStore *storag
 func (as *AuditService) HandleUserMsgRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording user message (via Protobuf)")
 
-	if !as.auditStore.IsEnabled() {
-		as.logger.Info("Audit store not enabled, skipping user message recording")
-		return nil
-	}
 
 	var protoMsg operatorv1.AuditMsgRequested
 	if err := proto.Unmarshal(msg.Payload, &protoMsg); err != nil {
@@ -86,10 +82,6 @@ func (as *AuditService) HandleUserMsgRequest(ctx context.Context, msg *PubSubCom
 func (as *AuditService) HandleAIMsgRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording AI message (via Protobuf)")
 
-	if !as.auditStore.IsEnabled() {
-		as.logger.Info("Audit store not enabled, skipping AI message recording")
-		return nil
-	}
 
 	var protoMsg operatorv1.AuditMsgRequested
 	if err := proto.Unmarshal(msg.Payload, &protoMsg); err != nil {
@@ -122,10 +114,6 @@ func (as *AuditService) HandleAIMsgRequest(ctx context.Context, msg *PubSubComma
 func (as *AuditService) HandleDirectCmdRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording direct terminal command (via Protobuf)")
 
-	if !as.auditStore.IsEnabled() {
-		as.logger.Info("Audit store not enabled, skipping direct command recording")
-		return nil
-	}
 
 	var protoCmd operatorv1.DirectCommandAuditRequested
 	if err := proto.Unmarshal(msg.Payload, &protoCmd); err != nil {
@@ -158,10 +146,6 @@ func (as *AuditService) HandleDirectCmdRequest(ctx context.Context, msg *PubSubC
 func (as *AuditService) HandleDirectCmdResultRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording direct terminal command result (via Protobuf)")
 
-	if !as.auditStore.IsEnabled() {
-		as.logger.Info("Audit store not enabled, skipping direct command result recording")
-		return nil
-	}
 
 	var protoResult operatorv1.DirectCommandResultAuditRequested
 	if err := proto.Unmarshal(msg.Payload, &protoResult); err != nil {
