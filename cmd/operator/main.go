@@ -85,6 +85,30 @@ var (
 	platform  string = string(constants.SystemHealthUnknown)
 )
 
+// gatewayFieldAuditLogger implements mcp.AuditLogger using the SQLAuditStore so that
+// read_field tool calls produce audit records even though they bypass the full
+// governance pipeline (they resolve field values locally without downstream dispatch).
+type gatewayFieldAuditLogger struct {
+	store  *storage.SQLAuditStore
+	logger *slog.Logger
+}
+
+func (l *gatewayFieldAuditLogger) LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value interface{}) error {
+	event := &storage.Event{
+		OperatorSessionID: operatorSessionID,
+		Timestamp:         time.Now().UTC(),
+		Type:              constants.EventOperatorFieldReadRequested,
+		ContentText:       fmt.Sprintf("%s/%s.%s", collection, documentID, fieldPath),
+		CommandStdout:     fmt.Sprintf("%v", value),
+	}
+	if _, err := l.store.RecordEvent(event); err != nil {
+		l.logger.Warn("Failed to record field read in audit store", "error", err,
+			"session", operatorSessionID, "collection", collection, "field", fieldPath)
+		return err
+	}
+	return nil
+}
+
 // parseCertPEM parses a PEM-encoded certificate file and returns the x509 certificate.
 func parseCertPEM(certFile string) (*x509.Certificate, error) {
 	certPEM, err := os.ReadFile(certFile)
@@ -1444,6 +1468,9 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	// gateway only needs the Gateway processor + signing identity here.
 	if mcpSvc != nil {
 		mcpSvc.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, cfg.Gateway.MCPDownstreamURL)
+		if auditStore != nil {
+			mcpSvc.SetAuditLogger(&gatewayFieldAuditLogger{store: auditStore, logger: logger})
+		}
 	}
 
 	go func() {

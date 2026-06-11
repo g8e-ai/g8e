@@ -828,7 +828,7 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 
 		// Create a request with app identity
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/app/"+appID+"/test.txt", nil)
-		req = req.WithContext(context.WithValue(req.Context(), appIDKey, appID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyAppID, appID))
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, userID))
 
 		// App should be able to write to its own namespace

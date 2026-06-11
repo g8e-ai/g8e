@@ -379,8 +379,11 @@ func (ass *SQLAuditStore) requireExistingSessionTx(tx *sql.Tx, event *Event) err
 
 // RecordEvents records multiple events in a single database transaction.
 func (ass *SQLAuditStore) RecordEvents(events []*Event) error {
-	if ass == nil || ass.db == nil || len(events) == 0 {
+	if ass == nil || len(events) == 0 {
 		return nil
+	}
+	if ass.db == nil {
+		return fmt.Errorf("audit store: database not initialized")
 	}
 
 	ass.muWrites.Add(1)
@@ -458,8 +461,11 @@ func (ass *SQLAuditStore) RecordEvents(events []*Event) error {
 // RecordEvent records an event in the audit log
 // Content fields are encrypted if an encryption vault is configured and unlocked
 func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
-	if ass == nil || ass.db == nil {
+	if ass == nil {
 		return 0, nil
+	}
+	if ass.db == nil {
+		return 0, fmt.Errorf("audit store: database not initialized")
 	}
 
 	ass.muWrites.Add(1)
@@ -552,8 +558,11 @@ func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
 // RecordActionReceipt records a signed ActionReceipt in the audit store.
 // This is the authoritative transaction-native audit record.
 func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord) error {
-	if ass == nil || ass.db == nil {
+	if ass == nil {
 		return nil
+	}
+	if ass.db == nil {
+		return fmt.Errorf("audit store: database not initialized")
 	}
 
 	ass.muWrites.Add(1)
@@ -1091,14 +1100,17 @@ func (ass *SQLAuditStore) IsEncryptionEnabled() bool {
 	return ass != nil && ass.encryptionVault != nil && ass.encryptionVault.IsUnlocked()
 }
 
-// encryptContent encrypts content using the encryption vault
+// encryptContent encrypts content using the encryption vault.
+// When the vault is locked, content is stored as plaintext so that audit records
+// are never blocked by vault state. The encrypted column will be 0 in that case.
 func (ass *SQLAuditStore) encryptContent(content string) ([]byte, error) {
 	if content == "" {
 		return nil, nil
 	}
 
 	if !ass.encryptionVault.IsUnlocked() {
-		return nil, fmt.Errorf("vault is locked, cannot encrypt content")
+		ass.logger.Warn("Vault is locked; storing audit content as plaintext")
+		return []byte(content), nil
 	}
 
 	encrypted, err := ass.encryptionVault.Encrypt([]byte(content))

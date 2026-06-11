@@ -460,14 +460,6 @@ func TestHandleToolsCall(t *testing.T) {
 	})
 }
 
-func TestMcpStdioProxyCmd(t *testing.T) {
-	t.Run("gov command exists", func(t *testing.T) {
-		cmd := mcpStdioProxyCmd()
-		assert.NotNil(t, cmd)
-		assert.Contains(t, cmd.Use, "gov")
-		assert.Contains(t, cmd.Short, "Proxy stdio MCP requests")
-	})
-}
 
 func TestIsL3ApprovalResponse(t *testing.T) {
 	t.Run("detects L3 approval response", func(t *testing.T) {

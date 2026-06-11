@@ -22,6 +22,8 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
@@ -150,8 +152,28 @@ func testScenarioCmd() *cobra.Command {
 		Long:  `Run scenario-specific E2E tests with the 'e2e' build tag. These tests require a running g8e gateway and authenticated CLI session.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 3 (Scenario) tests...")
-			fmt.Println("Note: This requires the gateway to be running and authenticated.")
-			fmt.Println("Run './g8e gw start' and './g8e auth login' first.")
+			
+			// Check if gateway is running
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+			
+			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+			if err != nil {
+				return fmt.Errorf("failed to create process manager: %w", err)
+			}
+			
+			running, _, err := pm.OperatorStatus()
+			if err != nil {
+				return fmt.Errorf("failed to check Operator status: %w", err)
+			}
+			
+			if !running {
+				fmt.Println("Error: Gateway is not running.")
+				fmt.Println("Run './g8e gw start' first (it automatically bootstraps authentication).")
+				return fmt.Errorf("gateway not running")
+			}
 
 			testRace := ""
 			if runtime.GOOS != "windows" {

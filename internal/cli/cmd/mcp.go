@@ -41,7 +41,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// G8E environment variables injected by 'agent run' and consumed by 'mcp gov'.
+// G8E environment variables injected by 'agent run' and consumed by 'mcp stdio'.
 // Using explicit strings rather than constants so the env-var contract is visible here.
 const (
 	envG8ECLISessionID      = "G8E_CLI_SESSION_ID"
@@ -73,7 +73,6 @@ func mcpCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		mcpStdioCmd(),
-		mcpStdioProxyCmd(),
 		agentCmd(),
 	)
 
@@ -121,74 +120,25 @@ type CallToolRequest struct {
 	Arguments json.RawMessage `json:"arguments,omitempty"`
 }
 
-// ─── stdio: native tools, no gateway required ───────────────────────────────
+// ─── stdio: governed proxy (the only supported mode) ────────────────────────
 
 func mcpStdioCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "stdio",
-		Short: "Run MCP stdio server with native tools only (no gateway required)",
-		Long:  `Serve all native g8e tools over the MCP stdio transport without requiring a running gateway. Suitable for local use or when the agent only needs native diagnostic tools.`,
+		Short: "Run MCP stdio server with full L1-L5 governance (proxies to gateway)",
+		Long: `Run as an MCP stdio server that proxies all requests to the running gateway over
+mTLS with a bound CLI session. Every tool call passes through the L1-L5 governance
+pipeline. HTTP is never used for proxy traffic — it is reserved for CA bundle
+discovery and health checks only.
+
+This command is launched automatically by 'g8e mcp agent run'. When invoked
+directly the CLI session is loaded from disk (bootstrapping enrollment if needed).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMCPStdio(cmd, args)
+			return runMCPStdioProxy(cmd, args)
 		},
 	}
 }
 
-func runMCPStdio(_ *cobra.Command, _ []string) error {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	logger.Info("g8e MCP stdio server starting (native tools mode)")
-
-	nativeToolHandler, err := mcp.NewNativeToolHandler(logger)
-	if err != nil {
-		return fmt.Errorf("initialize native tool handler: %w", err)
-	}
-
-	scanner := bufio.NewScanner(os.Stdin)
-	encoder := json.NewEncoder(os.Stdout)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
-		}
-
-		var req JSONRPCRequest
-		if err := json.Unmarshal([]byte(line), &req); err != nil {
-			logger.Error("Failed to parse JSON-RPC request", "error", err)
-			sendError(encoder, nil, -32700, "parse error")
-			continue
-		}
-
-		// MCP notifications (no id) must not receive a response.
-		if req.ID == nil && req.Method != "" {
-			logger.Debug("Dropping MCP notification", "method", req.Method)
-			continue
-		}
-
-		logger.Info("Received MCP request", "method", req.Method, "id", req.ID)
-
-		switch req.Method {
-		case "initialize":
-			handleInitialize(encoder, req.ID)
-		case "tools/list":
-			handleToolsList(encoder, req.ID, nativeToolHandler)
-		case "tools/call":
-			handleToolsCall(encoder, req.ID, req.Params, nativeToolHandler)
-		case "ping":
-			sendSuccess(encoder, req.ID, struct{}{})
-		default:
-			sendError(encoder, req.ID, -32601, fmt.Sprintf("method not found: %s", req.Method))
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		logger.Error("Error reading stdin", "error", err)
-		return err
-	}
-
-	logger.Info("g8e MCP stdio server shutting down")
-	return nil
-}
 
 func handleInitialize(encoder *json.Encoder, id interface{}) {
 	response := JSONRPCResponse{
@@ -366,23 +316,6 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
-}
-
-func mcpStdioProxyCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "gov",
-		Short: "Proxy stdio MCP requests to the gateway with full L1-L5 governance",
-		Long: `Run as an MCP stdio server that proxies all requests to the running gateway over
-mTLS with a bound CLI session. Every tool call passes through the L1-L5 governance
-pipeline. HTTP is never used for proxy traffic — it is reserved for CA bundle
-discovery and health checks only.
-
-This command is launched automatically by 'g8e mcp agent run'. When invoked
-directly the CLI session is loaded from disk (bootstrapping enrollment if needed).`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMCPStdioProxy(cmd, args)
-		},
-	}
 }
 
 func runMCPStdioProxy(_ *cobra.Command, _ []string) error {
@@ -1109,7 +1042,7 @@ func writeAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		"mcpServers": map[string]interface{}{
 			"g8e": map[string]interface{}{
 				"command": binaryPath,
-				"args":    []string{"mcp", "gov"},
+				"args":    []string{"mcp", "stdio"},
 			},
 		},
 	})
@@ -1159,7 +1092,7 @@ func writeAgentConfig(agentID, binaryPath string) (string, func(), error) {
 			return "", nil, fmt.Errorf(".aider.conf.yml already exists in current directory - please back it up before running g8e")
 		}
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
-		configYAML := fmt.Sprintf("mcp-server:\n  - name: g8e\n    command: %s\n    args:\n      - mcp\n      - gov\n", binaryPath)
+		configYAML := fmt.Sprintf("mcp-server:\n  - name: g8e\n    command: %s\n    args:\n      - mcp\n      - stdio\n", binaryPath)
 		if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
 			return "", nil, fmt.Errorf("write aider .aider.conf.yml: %w", err)
 		}
@@ -1186,8 +1119,8 @@ func writeAgentConfig(agentID, binaryPath string) (string, func(), error) {
 }
 
 // launchAgentWithGovernance starts the gateway if needed, performs CLI auth,
-// then launches the requested agent with 'g8e mcp gov' as its sole MCP server.
-// The authenticated CLI session is propagated to the gov subprocess via G8E_*
+// then launches the requested agent with 'g8e mcp stdio' as its sole MCP server.
+// The authenticated CLI session is propagated to the stdio subprocess via G8E_*
 // environment variables so it never needs to re-read credentials from disk.
 func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	if err := ensureGatewayRunning(); err != nil {
@@ -1241,9 +1174,9 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	agentCmd.Stdin = os.Stdin
 	agentCmd.Stdout = os.Stdout
 	agentCmd.Stderr = os.Stderr
-	setSysProcAttr(agentCmd)
+	// Don't set process group for interactive agents - it breaks terminal handling
 
-	// Propagate the authenticated CLI session to the 'g8e mcp gov' subprocess
+	// Propagate the authenticated CLI session to the 'g8e mcp stdio' subprocess
 	// that the agent will spawn. The subprocess reads these env vars at startup
 	// and stores the session in memory — no disk reads per request.
 	gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps)
@@ -1267,7 +1200,7 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 // nativeToolsToDisable are Claude/Codex built-in tools that bypass MCP governance.
 // Disabling them forces all I/O through g8e's MCP tools so every action is audited.
 var nativeToolsToDisable = []string{
-	"Bash", "Read", "Write", "Edit", "WebSearch", "WebFetch",
+	"Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch",
 }
 
 // agentLaunchArgs returns the argv to pass to the agent binary for a governed session.

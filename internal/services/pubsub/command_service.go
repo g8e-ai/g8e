@@ -205,7 +205,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 
 	if cs.auditStore != nil && cs.auditStore.IsEnabled() {
 		event := &storage.Event{
-			OperatorSessionID:   cs.config.OperatorSessionId,
+			OperatorSessionID:   msg.OperatorSessionID,
 			Timestamp:           time.Now().UTC(),
 			Type:                constants.Event.Operator.Audit.Command,
 			ContentText:         justification,

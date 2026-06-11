@@ -368,54 +368,98 @@ func auditSummaryCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "summary",
-		Short: "Aggregate audit events by action type",
+		Short: "Aggregate audit events and receipts by type",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dbPath := filepath.Join(constants.Paths.Infra.DataDir, "g8e.db")
 			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-				return fmt.Errorf("audit vault database not found at %s", dbPath)
+				return fmt.Errorf("audit database not found at %s", dbPath)
 			}
 
-			query := "SELECT type, COUNT(*) as count FROM events"
+			// Query events table
+			eventsQuery := "SELECT type, COUNT(*) as count FROM events"
 			if operatorSessionID != "" {
-				query += " WHERE operator_session_id = ?"
+				eventsQuery += " WHERE operator_session_id = ?"
 			}
-			query += " GROUP BY type"
+			eventsQuery += " GROUP BY type"
 
-			var rows *sql.Rows
+			var eventsRows *sql.Rows
 			var err error
 			if operatorSessionID != "" {
-				rows, err = sqlDBQuery(dbPath, query, operatorSessionID)
+				eventsRows, err = sqlDBQuery(dbPath, eventsQuery, operatorSessionID)
 			} else {
-				rows, err = sqlDBQuery(dbPath, query)
+				eventsRows, err = sqlDBQuery(dbPath, eventsQuery)
 			}
 			if err != nil {
 				return fmt.Errorf("failed to query audit events: %w", err)
 			}
-			defer rows.Close()
+			defer eventsRows.Close()
 
-			summary := make(map[string]int)
-			total := 0
-			for rows.Next() {
+			eventSummary := make(map[string]int)
+			eventTotal := 0
+			for eventsRows.Next() {
 				var eventType string
 				var count int
-				if err := rows.Scan(&eventType, &count); err != nil {
-					return fmt.Errorf("failed to scan row: %w", err)
+				if err := eventsRows.Scan(&eventType, &count); err != nil {
+					return fmt.Errorf("failed to scan event row: %w", err)
 				}
-				summary[eventType] = count
-				total += count
+				eventSummary[eventType] = count
+				eventTotal += count
 			}
 
-			if total == 0 {
-				cmd.Println("No audit events found in audit vault")
+			// Query receipts table (MCP/A2A governed transactions)
+			receiptsQuery := "SELECT action_type, status, COUNT(*) as count FROM receipts"
+			if operatorSessionID != "" {
+				receiptsQuery += " WHERE operator_session_id = ?"
+			}
+			receiptsQuery += " GROUP BY action_type, status"
+
+			var receiptsRows *sql.Rows
+			if operatorSessionID != "" {
+				receiptsRows, err = sqlDBQuery(dbPath, receiptsQuery, operatorSessionID)
+			} else {
+				receiptsRows, err = sqlDBQuery(dbPath, receiptsQuery)
+			}
+			if err != nil {
+				return fmt.Errorf("failed to query receipts: %w", err)
+			}
+			defer receiptsRows.Close()
+
+			type receiptKey struct{ action, status string }
+			receiptSummary := make(map[receiptKey]int)
+			receiptTotal := 0
+			for receiptsRows.Next() {
+				var actionType, status string
+				var count int
+				if err := receiptsRows.Scan(&actionType, &status, &count); err != nil {
+					return fmt.Errorf("failed to scan receipt row: %w", err)
+				}
+				receiptSummary[receiptKey{actionType, status}] = count
+				receiptTotal += count
+			}
+
+			if eventTotal == 0 && receiptTotal == 0 {
+				cmd.Println("No audit records found")
 				return nil
 			}
 
-			cmd.Println("Audit Event Summary")
+			cmd.Println("Audit Summary")
 			cmd.Println(strings.Repeat("=", 110))
-			for eventType, count := range summary {
-				cmd.Printf("  %s: %d\n", eventType, count)
+
+			if eventTotal > 0 {
+				cmd.Printf("\nEvents (%d total):\n", eventTotal)
+				for eventType, count := range eventSummary {
+					cmd.Printf("  %-50s %d\n", eventType, count)
+				}
 			}
-			cmd.Printf("\nTotal events: %d\n", total)
+
+			if receiptTotal > 0 {
+				cmd.Printf("\nGoverned Receipts (%d total):\n", receiptTotal)
+				for k, count := range receiptSummary {
+					cmd.Printf("  %-40s %-12s %d\n", k.action, k.status, count)
+				}
+			}
+
+			cmd.Printf("\nTotal records: %d\n", eventTotal+receiptTotal)
 
 			return nil
 		},
