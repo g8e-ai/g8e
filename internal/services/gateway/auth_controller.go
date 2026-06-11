@@ -29,6 +29,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
@@ -50,11 +51,12 @@ type AuthController struct {
 	webSessionSvc      *WebSessionService
 	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
+	suspendedStore     interfaces.SuspendedTransactionStore
 	mcp                *mcp.GatewayService
 	responder          *response.Writer
 }
 
-func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, mcp *mcp.GatewayService, responder *response.Writer) *AuthController {
+func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, suspendedStore interfaces.SuspendedTransactionStore, mcp *mcp.GatewayService, responder *response.Writer) *AuthController {
 	return &AuthController{
 		cfg:                cfg,
 		logger:             logger,
@@ -67,6 +69,7 @@ func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBS
 		webSessionSvc:      webSessionSvc,
 		cliSessionSvc:      cliSessionSvc,
 		operatorSessionSvc: operatorSessionSvc,
+		suspendedStore:     suspendedStore,
 		mcp:                mcp,
 		responder:          responder,
 	}
@@ -612,7 +615,7 @@ func (c *AuthController) handleCLIApproval(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Persist the approval with signature before resuming
-	if err := c.db.ApproveSuspendedTransaction(r.Context(), txHash, userID, req.CliSignature, req.MtlsCertFingerprint); err != nil {
+	if err := c.suspendedStore.ApproveSuspendedTransaction(r.Context(), txHash, userID, req.CliSignature, req.MtlsCertFingerprint); err != nil {
 		c.logger.Error("Failed to approve transaction", "error", err, "txHash", txHash, "userID", userID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to approve transaction")
 		return
@@ -840,8 +843,8 @@ func (c *AuthController) handleListSuspendedTransactions(w http.ResponseWriter, 
 		queryUserID = userID
 	}
 
-	// Get suspended transactions from the gateway DB service
-	transactions, err := c.db.ListSuspendedTransactions(r.Context(), queryUserID)
+	// Get suspended transactions from the suspended transaction store
+	transactions, err := c.suspendedStore.ListSuspendedTransactions(r.Context(), queryUserID)
 	if err != nil {
 		c.logger.Error("Failed to list suspended transactions", "error", err, "userID", queryUserID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to list suspended transactions")

@@ -25,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
+	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
@@ -51,6 +52,7 @@ type TestInfrastructure struct {
 	WebSessionSvc      *WebSessionService
 	Reg                *RegistrationService
 	Passkey            *PasskeyService
+	SuspendedStore     *storage.SuspendedTransactionService
 	DBDir              string
 	PKIDir             string
 	SecretsDir         string
@@ -151,6 +153,17 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
+	// Initialize suspended transaction service for tests
+	suspendedTxConfig := &storage.SuspendedTransactionConfig{
+		DBPath:               filepath.Join(dbDir, "suspended_transactions.db"),
+		MaxDBSizeMB:          256,
+		RetentionDays:        7,
+		PruneIntervalMinutes: 30,
+	}
+	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, logger)
+	require.NoError(t, err)
+	t.Cleanup(func() { suspendedTxService.Close() })
+
 	return &TestInfrastructure{
 		Cfg:                cfg,
 		Logger:             logger,
@@ -167,6 +180,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 		WebSessionSvc:      webSessionSvc,
 		Reg:                reg,
 		Passkey:            passkey,
+		SuspendedStore:     suspendedTxService,
 		DBDir:              dbDir,
 		PKIDir:             pkiDir,
 		SecretsDir:         secretsDir,

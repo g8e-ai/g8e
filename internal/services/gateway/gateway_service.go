@@ -29,6 +29,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -39,6 +40,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/network"
+	"github.com/g8e-ai/g8e/internal/services/storage"
 )
 
 // GatewayModeService is the top-level orchestrator for gateway mode (operator).
@@ -59,6 +61,7 @@ type GatewayModeService struct {
 	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
 	webSessionSvc      *WebSessionService
+	suspendedTxService *storage.SuspendedTransactionService
 	mcpGateway         *mcp.GatewayService
 	responder          *response.Writer
 	server             *http.Server
@@ -140,10 +143,22 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		return nil, fmt.Errorf("failed to initialize passkey service: %w", err)
 	}
 
+	// Initialize suspended transaction service for gateway mode
+	suspendedTxConfig := &storage.SuspendedTransactionConfig{
+		DBPath:               filepath.Join(cfg.Gateway.DataDir, "suspended_transactions.db"),
+		MaxDBSizeMB:          256,
+		RetentionDays:        7,
+		PruneIntervalMinutes: 30,
+	}
+	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize suspended transaction service: %w", err)
+	}
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       res,
-		SuspendedStore:  db,
+		SuspendedStore:  suspendedTxService,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
 		Posture:         string(cfg.Gateway.Posture),
 	})
@@ -164,6 +179,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		cliSessionSvc:      cliSessionSvc,
 		operatorSessionSvc: operatorSessionSvc,
 		webSessionSvc:      webSessionSvc,
+		suspendedTxService: suspendedTxService,
 		extraIPs:           extraIPs,
 		mcpGateway:         mcpGateway,
 		responder:          res,
@@ -286,10 +302,22 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 	// Passkey service initialization is optional; ignore errors for test configuration
 	passkey, _ := NewPasskeyService(db, logger, passkeyCfg) //nolint:errcheck
 
+	// Initialize suspended transaction service for gateway mode (test configuration)
+	suspendedTxConfig := &storage.SuspendedTransactionConfig{
+		DBPath:               filepath.Join(cfg.Gateway.DataDir, "suspended_transactions.db"),
+		MaxDBSizeMB:          256,
+		RetentionDays:        7,
+		PruneIntervalMinutes: 30,
+	}
+	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize suspended transaction service: %w", err)
+	}
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       res,
-		SuspendedStore:  db,
+		SuspendedStore:  suspendedTxService,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
 		Posture:         string(cfg.Gateway.Posture),
 	})
@@ -310,6 +338,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 		cliSessionSvc:      cliSessionSvc,
 		operatorSessionSvc: operatorSessionSvc,
 		webSessionSvc:      webSessionSvc,
+		suspendedTxService: suspendedTxService,
 		extraIPs:           nil, // Test configuration does not use extra IPs
 		mcpGateway:         mcpGateway,
 		responder:          res,
@@ -358,6 +387,7 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 		Responder:          ls.responder,
 		MCPGateway:         ls.mcpGateway,
 		AppEnrollment:      appEnrollment,
+		SuspendedStore:     ls.suspendedTxService,
 		IsReady:            ls.IsReady,
 		IsGovernanceReady:  ls.IsGovernanceReady,
 	})

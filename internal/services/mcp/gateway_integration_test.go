@@ -944,3 +944,119 @@ func (p *realL3EnvelopeProcessor) ProcessEnvelope(ctx context.Context, payload [
 
 	return receipt, nil
 }
+
+// TestReadFieldGovernanceIntegration verifies that read_field tool calls
+// go through the full governance pipeline (L4 Warden + L5 Actuator) and
+// generate a signed ActionReceipt, fixing the governance bypass issue.
+func TestReadFieldGovernanceIntegration(t *testing.T) {
+	t.Parallel()
+
+	processorCalled := false
+	var receivedEnvelope *commonv1.GovernanceEnvelope
+
+	processor := &fakeEnvelopeProcessor{
+		receipt: &operatorv1.ActionReceipt{
+			TransactionId: "tx-1",
+			Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			ResultSummary: "field value",
+		},
+	}
+
+	// Wrap to capture envelope
+	wrappedProcessor := &envelopeCaptureProcessor{
+		delegate: processor,
+		capture: func(env *commonv1.GovernanceEnvelope) {
+			processorCalled = true
+			receivedEnvelope = env
+		},
+	}
+
+	registry, _ := NewFieldPathRegistry(slog.Default())
+	db := &fakeDBService{}
+	validator := &fakeSessionValidator{valid: true}
+	audit := &fakeAuditLogger{}
+
+	g := &GatewayService{
+		logger:            slog.Default(),
+		envProc:           wrappedProcessor,
+		fieldPathRegistry: registry,
+		dbService:         db,
+		sessionValidator:  validator,
+		auditLogger:       audit,
+		maxPayloadBytes:   10 * 1024 * 1024,
+		posture:           "doctrine",
+	}
+
+	// Execute a read_field request through the gateway
+	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_field","arguments":{"collection":"investigations","document_id":"doc1","field_path":"status","operator_session_id":"sess1"}}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+
+	g.HandleToolsCall(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	require.Nil(t, resp.Error)
+
+	// Verify the envelope processor was called (governance pipeline executed)
+	require.True(t, processorCalled, "Envelope processor should have been called for read_field")
+	require.NotNil(t, receivedEnvelope)
+
+	// Verify the envelope has the correct action type
+	require.Equal(t, "MCP_CALL", receivedEnvelope.ActionType)
+
+	// Verify nonce is present (replay protection)
+	require.NotEmpty(t, receivedEnvelope.Nonce)
+
+	// Verify GatewaySigned is set
+	require.NotNil(t, receivedEnvelope.Governance)
+	require.True(t, receivedEnvelope.Governance.GatewaySigned)
+}
+
+// TestNativeToolSingleAudit verifies that native tool calls produce exactly one
+// audit record (the L5 signed receipt), not double-auditing with a raw event.
+// This test verifies the removal of the double-audit block from DispatchToDownstream.
+func TestNativeToolSingleAudit(t *testing.T) {
+	t.Parallel()
+
+	processor := &fakeEnvelopeProcessor{
+		receipt: &operatorv1.ActionReceipt{
+			TransactionId: "tx-1",
+			Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			ResultSummary: "native tool executed",
+		},
+	}
+
+	registry, _ := NewFieldPathRegistry(slog.Default())
+	nativeHandler, _ := NewNativeToolHandler(slog.Default())
+
+	g := &GatewayService{
+		logger:            slog.Default(),
+		envProc:           processor,
+		fieldPathRegistry: registry,
+		nativeToolHandler: nativeHandler,
+		// auditStore left nil - if double-audit code existed, this would cause a nil pointer panic
+		maxPayloadBytes:   10 * 1024 * 1024,
+		posture:           "doctrine",
+	}
+
+	// Execute a native tool call through the gateway
+	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"db_discover_topology","arguments":{}}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+
+	g.HandleToolsCall(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	require.Nil(t, resp.Error)
+
+	// If the double-audit block still existed in DispatchToDownstream,
+	// this would panic with nil pointer dereference on g.auditStore
+}

@@ -73,7 +73,7 @@ func TestMCPOriginGuard(t *testing.T) {
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          infra.Logger,
 		Responder:       infra.Responder,
-		SuspendedStore:  infra.DB,
+		SuspendedStore:  infra.SuspendedStore,
 		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
 		Posture:         string(infra.Cfg.Gateway.Posture),
 	})
@@ -162,7 +162,7 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          infra.Logger,
 		Responder:       infra.Responder,
-		SuspendedStore:  infra.DB,
+		SuspendedStore:  infra.SuspendedStore,
 		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
 		Posture:         string(infra.Cfg.Gateway.Posture),
 	})
@@ -196,7 +196,7 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          infra.Logger,
 		Responder:       infra.Responder,
-		SuspendedStore:  infra.DB,
+		SuspendedStore:  infra.SuspendedStore,
 		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
 		Posture:         string(infra.Cfg.Gateway.Posture),
 	})

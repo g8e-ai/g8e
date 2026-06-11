@@ -34,6 +34,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
+	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -78,10 +79,24 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	webSessionSvc := NewWebSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+
+	// Initialize suspended transaction service for tests
+	suspendedTxConfig := &storage.SuspendedTransactionConfig{
+		DBPath:               filepath.Join(dbDir, "suspended_transactions.db"),
+		MaxDBSizeMB:          256,
+		RetentionDays:        7,
+		PruneIntervalMinutes: 30,
+	}
+	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, logger)
+	if err != nil {
+		t.Fatalf("failed to create suspended transaction service: %v", err)
+	}
+	t.Cleanup(func() { suspendedTxService.Close() })
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       resp,
-		SuspendedStore:  db,
+		SuspendedStore:  suspendedTxService,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
 		Posture:         string(cfg.Gateway.Posture),
 	})
@@ -89,7 +104,7 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
 
-	authController := newAuthController(cfg, logger, db, auth, passkey, userSvc, reg, pki, webSessionSvc, cliSessionSvc, operatorSessionSvc, mcpGateway, resp)
+	authController := newAuthController(cfg, logger, db, auth, passkey, userSvc, reg, pki, webSessionSvc, cliSessionSvc, operatorSessionSvc, suspendedTxService, mcpGateway, resp)
 	return authController, cfg
 }
 
@@ -844,7 +859,7 @@ func TestHandleApprovalChallenge(t *testing.T) {
 		user2, err := c.userSvc.CreateUser()
 		require.NoError(t, err)
 
-		// Create a suspended transaction for user1 via DB
+		// Create a suspended transaction for user1 via suspended store
 		txHash := "txhash123"
 		suspendedTx := &models.SuspendedTransaction{
 			TransactionHash: txHash,
@@ -853,7 +868,7 @@ func TestHandleApprovalChallenge(t *testing.T) {
 			ToolArguments:   []byte("{}"),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
+		c.suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/"+txHash+"/challenge", nil)
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user2.ID))
@@ -912,7 +927,7 @@ func TestHandleApprovalVerify(t *testing.T) {
 			ToolArguments:   []byte("{}"),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
+		c.suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash+"/verify", strings.NewReader("{invalid}"))
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
@@ -961,7 +976,7 @@ func TestHandleCLIApproval(t *testing.T) {
 			ToolArguments:   []byte("{}"),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
+		c.suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		body := map[string]string{
 			"mtls_cert_fingerprint": "fp123",
@@ -992,7 +1007,7 @@ func TestHandleCLIApproval(t *testing.T) {
 			ToolArguments:   []byte("{}"),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
+		c.suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		body := map[string]string{
 			"cli_signature": "sig123",
@@ -1203,7 +1218,7 @@ func TestHandleApprovalPage(t *testing.T) {
 			ToolArguments:   []byte(`{"arg":"value"}`),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
+		c.suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/approve/"+txHash, nil)
 		rr := httptest.NewRecorder()

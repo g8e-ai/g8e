@@ -166,8 +166,8 @@ func TestStateRootCaching(t *testing.T) {
 	assert.Equal(t, root1, root2, "Cached root must match")
 
 	// Verify cache is being used by checking internal state
-	assert.Equal(t, root1, db.cachedStateRoot, "Internal cache should be set")
-	assert.Equal(t, version1, db.cachedStateVersion, "Internal version should match")
+	assert.Equal(t, root1, db.stateRootSvc.cachedStateRoot, "Internal cache should be set")
+	assert.Equal(t, version1, db.stateRootSvc.cachedStateVersion, "Internal version should match")
 
 	// Make a change
 	err = db.DocSet("cache_test", "doc1", json.RawMessage(`{"data":1}`))
@@ -185,8 +185,8 @@ func TestStateRootCaching(t *testing.T) {
 	assert.NotEqual(t, root1, root3, "Root must change after data change")
 
 	// Cache should be updated
-	assert.Equal(t, root3, db.cachedStateRoot, "Cache should be updated")
-	assert.Equal(t, version2, db.cachedStateVersion, "Cache version should be updated")
+	assert.Equal(t, root3, db.stateRootSvc.cachedStateRoot, "Cache should be updated")
+	assert.Equal(t, version2, db.stateRootSvc.cachedStateVersion, "Cache version should be updated")
 }
 
 func BenchmarkStateRootCalculation(b *testing.B) {

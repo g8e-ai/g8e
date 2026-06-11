@@ -637,11 +637,6 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 		return nil, errors.New("tool name required")
 	}
 
-	// Handle read_field tool locally (JIT field resolution)
-	if callParams.Name == "read_field" {
-		return g.handleReadField(ctx, callParams.Arguments)
-	}
-
 	argumentsJSON := "{}"
 	if len(callParams.Arguments) > 0 {
 		var probe interface{}
@@ -1513,6 +1508,31 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 // Native tools are executed locally so every call — native or downstream — passes through
 // the full L1-L5 governance pipeline and produces a signed receipt.
 func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName string, toolArgs json.RawMessage, operatorSessionID string) (string, error) {
+	// Handle read_field tool locally (JIT field resolution)
+	if toolName == "read_field" {
+		result, err := g.handleReadField(ctx, toolArgs)
+		if err != nil {
+			return "", fmt.Errorf("read_field execution failed: %w", err)
+		}
+		// Extract text content for summary
+		callResult, ok := result.(CallToolResult)
+		if !ok {
+			return "", fmt.Errorf("read_field returned unexpected type: %T", result)
+		}
+		var sb strings.Builder
+		for _, c := range callResult.Content {
+			if c.Type == "text" {
+				sb.WriteString(c.Text)
+				sb.WriteString("\n")
+			}
+		}
+		summary := strings.TrimRight(sb.String(), "\n")
+		if summary == "" {
+			summary = "completed"
+		}
+		return summary, nil
+	}
+
 	if g.isNativeTool(toolName) && g.nativeToolHandler != nil {
 		result, err := g.nativeToolHandler.HandleTool(ctx, toolName, toolArgs)
 		if err != nil {
@@ -1528,21 +1548,6 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 		summary := strings.TrimRight(sb.String(), "\n")
 		if summary == "" {
 			summary = "completed"
-		}
-
-		// Audit native tool execution
-		if g.auditStore != nil {
-			event := &storage.Event{
-				OperatorSessionID: operatorSessionID,
-				Timestamp:         time.Now().UTC(),
-				Type:              constants.Event.Operator.Audit.McpCall,
-				ContentText:       toolName,
-				CommandRaw:        string(toolArgs),
-				CommandStdout:     summary,
-			}
-			if _, err := g.auditStore.RecordEvent(event); err != nil {
-				g.logger.Warn("Failed to record native tool call event in audit store", "error", err, "tool", toolName)
-			}
 		}
 
 		return summary, nil

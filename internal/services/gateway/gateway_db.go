@@ -23,15 +23,12 @@ package gateway
 import (
 	"context"
 	"crypto/ed25519"
-	"crypto/sha256"
 	"database/sql"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"hash"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -40,7 +37,6 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
@@ -69,11 +65,22 @@ func GatewaySchema() string {
 //
 // This service is used in both gateway mode (full database service) and outbound mode
 // (state root calculation only).
+//
+// The service delegates domain logic to extracted single-responsibility services.
+// These delegation wrappers maintain backward compatibility while allowing
+// gradual migration to direct service usage.
 type CanonicalDBService struct {
 	db         *sqliteutil.DB
 	logger     *slog.Logger
 	AuditStore *storage.SQLAuditStore
 	vault      *vault.Vault
+
+	// Extracted services - initialized in OpenCanonicalDBService
+	docStore        *DocumentStoreService
+	appPolicyStore  *AppPolicyStoreService
+	signerStore     *SignerStoreService
+	stateRootSvc    *StateRootService
+	replayStore     *ReplayStoreService
 
 	// Shutdown tracking
 	mu      sync.Mutex
@@ -172,6 +179,13 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 		running:    true,
 	}
 
+	// Initialize extracted services with the same db connection
+	svc.docStore = NewDocumentStoreService(db, logger)
+	svc.appPolicyStore = NewAppPolicyStoreService(db, logger)
+	svc.signerStore = NewSignerStoreService(db, logger)
+	svc.stateRootSvc = NewStateRootService(db, logger)
+	svc.replayStore = NewReplayStoreService(db, logger)
+
 	if testMode {
 		if err := svc.initTestSchema(secretsDir); err != nil {
 			db.Close()
@@ -247,7 +261,7 @@ func (s *CanonicalDBService) initStateRoot() error {
 		return err
 	}
 	if count == 0 {
-		root, err := s.calculateStateRoot()
+		root, err := s.stateRootSvc.CalculateStateRoot()
 		if err != nil {
 			return err
 		}
@@ -262,213 +276,27 @@ func (s *CanonicalDBService) initStateRoot() error {
 }
 
 // GetCurrentStateRoot returns the current state merkle root.
-// Uses caching based on state_version to avoid full table scans when state hasn't changed.
+// Delegates to StateRootService.
 func (s *CanonicalDBService) GetCurrentStateRoot() (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Get current state version
-	var currentVersion int64
-	err := s.db.QueryRowWithRetry("SELECT version FROM state_version WHERE id = 1").Scan(&currentVersion)
-	if err != nil {
-		// Fallback to full calculation if version table is unavailable
-		return s.calculateStateRootUncached()
-	}
-
-	// If version hasn't changed, return cached root
-	if currentVersion == s.cachedStateVersion && s.cachedStateRoot != "" {
-		return s.cachedStateRoot, nil
-	}
-
-	// Version changed or cache is empty, recalculate
-	root, err := s.calculateStateRoot()
-	if err != nil {
-		return "", err
-	}
-
-	// Update cache
-	s.cachedStateRoot = root
-	s.cachedStateVersion = currentVersion
-
-	// Persist to state_root table
-	_, err = s.db.ExecWithRetry(
-		`INSERT INTO state_root (id, root, updated_at)
-		 VALUES (1, ?, ?)
-		 ON CONFLICT(id) DO UPDATE SET root = excluded.root, updated_at = excluded.updated_at`,
-		root,
-		sqliteutil.FormatTimestamp(time.Now().UTC()),
-	)
-	if err != nil {
-		return "", err
-	}
-	return root, nil
-}
-
-// calculateStateRootUncached performs a full state root calculation without caching.
-// Used as a fallback when state_version tracking is unavailable.
-func (s *CanonicalDBService) calculateStateRootUncached() (string, error) {
-	root, err := s.calculateStateRoot()
-	if err != nil {
-		return "", err
-	}
-	_, err = s.db.ExecWithRetry(
-		`INSERT INTO state_root (id, root, updated_at)
-		 VALUES (1, ?, ?)
-		 ON CONFLICT(id) DO UPDATE SET root = excluded.root, updated_at = excluded.updated_at`,
-		root,
-		sqliteutil.FormatTimestamp(time.Now().UTC()),
-	)
-	if err != nil {
-		return "", err
-	}
-	return root, nil
-}
-
-func (s *CanonicalDBService) calculateStateRoot() (string, error) {
-	h := sha256.New()
-
-	// 1. Documents (Authoritative)
-	// Exclude metadata-only timestamps (created_at, updated_at) to ensure
-	// the state root only changes when the content actually changes.
-	if err := s.hashTableToStream(h, "SELECT collection, id, data FROM documents ORDER BY collection, id", nil, func(r *sql.Rows) error {
-		var collection, id, data string
-		if err := r.Scan(&collection, &id, &data); err != nil {
-			return err
-		}
-		return writeRowToHash(h, "documents", collection, id, data)
-	}); err != nil {
-		s.logger.Error("Failed to query documents for state root calculation", "error", err)
-		return "", err
-	}
-
-	now := sqliteutil.NowTimestamp()
-
-	// 2. KV Store (Authoritative)
-	// Filter for active entries only. Exclude created_at.
-	// expires_at IS included because it affects the active state of the entry.
-	if err := s.hashTableToStream(h, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", []interface{}{now}, func(r *sql.Rows) error {
-		var key, value, expiresAt string
-		if err := r.Scan(&key, &value, &expiresAt); err != nil {
-			return err
-		}
-		return writeRowToHash(h, "kv_store", key, value, expiresAt)
-	}); err != nil {
-		s.logger.Error("Failed to query kv_store for state root calculation", "error", err)
-		return "", err
-	}
-
-	// 3. Blobs (Authoritative)
-	// Filter for active entries only. Exclude created_at.
-	// data is included (as hex for determinism).
-	if err := s.hashTableToStream(h, "SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE expires_at IS NULL OR expires_at > ? ORDER BY namespace, id", []interface{}{now}, func(r *sql.Rows) error {
-		var namespace, id, contentType, dataHex, expiresAt string
-		var size int64
-		if err := r.Scan(&namespace, &id, &size, &contentType, &dataHex, &expiresAt); err != nil {
-			return err
-		}
-		return writeRowToHash(h, "blobs", namespace, id, size, contentType, dataHex, expiresAt)
-	}); err != nil {
-		s.logger.Error("Failed to query blobs for state root calculation", "error", err)
-		return "", err
-	}
-
-	// 4. Nonces and SSE events are EXCLUDED (volatile/metadata)
-
-	sum := h.Sum(nil)
-	return hex.EncodeToString(sum), nil
-}
-
-// hashTableToStream executes a query and streams each row to the hash writer.
-// This avoids materializing all rows in memory, which is critical for large databases.
-func (s *CanonicalDBService) hashTableToStream(h hash.Hash, query string, args []interface{}, scan func(*sql.Rows) error) error {
-	rows, err := s.db.QueryWithRetry(query, args...)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		if err := scan(rows); err != nil {
-			return err
-		}
-	}
-	return rows.Err()
-}
-
-// writeRowToHash writes a row's values to the hash in a deterministic format.
-// The format matches the previous JSON structure for compatibility:
-// {"table":"table_name","values":[v1,v2,...]}
-func writeRowToHash(h hash.Hash, table string, values ...interface{}) error {
-	// Write deterministic JSON-like format directly to hash
-	// This avoids allocating intermediate JSON strings
-	h.Write([]byte(`{"table":"`))
-	h.Write([]byte(table))
-	h.Write([]byte(`","values":[`))
-
-	for i, v := range values {
-		if i > 0 {
-			h.Write([]byte(","))
-		}
-		switch val := v.(type) {
-		case string:
-			h.Write([]byte(`"`))
-			h.Write([]byte(val))
-			h.Write([]byte(`"`))
-		case int64:
-			fmt.Fprintf(h, "%d", val)
-		default:
-			return fmt.Errorf("unsupported type %T for state root hashing", v)
-		}
-	}
-
-	h.Write([]byte("]}\n"))
-	return nil
+	return s.stateRootSvc.GetCurrentStateRoot()
 }
 
 // ReserveNonce atomically reserves a nonce for early replay protection.
-// Returns true if the nonce was already reserved/used (replay detected).
-// If not used, it reserves the nonce and returns false.
+// Delegates to ReplayStoreService.
 func (s *CanonicalDBService) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
-	// 1. Check if exists
-	var existing string
-	err := s.db.QueryRowWithRetry("SELECT nonce FROM nonces WHERE nonce = ?", nonce).Scan(&existing)
-	if err == nil {
-		return true, nil // Replay detected
-	}
-	if err != sql.ErrNoRows {
-		return false, err
-	}
-
-	// 2. Not used, insert as reserved
-	expStr := sqliteutil.FormatTimestamp(expiresAt)
-	_, err = s.db.ExecWithRetry("INSERT INTO nonces (nonce, expires_at, status) VALUES (?, ?, 'reserved')", nonce, expStr)
-	if err != nil {
-		// Concurrent insert might fail with constraint violation - that's a replay
-		if errors.Is(err, constants.ErrDatabaseReplay) || sqliteutil.IsUniqueConstraintError(err) {
-			return true, nil
-		}
-		return false, err
-	}
-
-	return false, nil
+	return s.replayStore.ReserveNonce(nonce, expiresAt)
 }
 
 // FinalizeNonce marks a reserved nonce as fully consumed.
+// Delegates to ReplayStoreService.
 func (s *CanonicalDBService) FinalizeNonce(nonce string) error {
-	_, err := s.db.ExecWithRetry("UPDATE nonces SET status = 'used' WHERE nonce = ? AND status = 'reserved'", nonce)
-	if err != nil {
-		return fmt.Errorf("failed to finalize nonce: %w", err)
-	}
-	return nil
+	return s.replayStore.FinalizeNonce(nonce)
 }
 
 // ReleaseNonce removes a reservation for a failed transaction.
+// Delegates to ReplayStoreService.
 func (s *CanonicalDBService) ReleaseNonce(nonce string) error {
-	_, err := s.db.ExecWithRetry("DELETE FROM nonces WHERE nonce = ? AND status = 'reserved'", nonce)
-	if err != nil {
-		return fmt.Errorf("failed to release nonce: %w", err)
-	}
-	return nil
+	return s.replayStore.ReleaseNonce(nonce)
 }
 
 // RunMaintenance periodically removes expired entries.
@@ -489,8 +317,6 @@ func (s *CanonicalDBService) RunMaintenance(ctx context.Context) {
 			_, _ = s.db.ExecWithRetry("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
 			// Nonces
 			_, _ = s.db.ExecWithRetry("DELETE FROM nonces WHERE expires_at < ?", now)
-			// Suspended transactions
-			_, _ = s.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE expires_at < ?", now)
 		}
 	}
 }
@@ -672,463 +498,90 @@ func (s *CanonicalDBService) Wait() {
 }
 
 // =============================================================================
-// Document Store - collection/id based CRUD
+// Document Store - collection/id based CRUD (delegates to DocumentStoreService)
 // =============================================================================
 
 // DocGet retrieves a document by collection and id.
-// Returns a typed Document with native time.Time timestamps, or nil if not found.
+// Delegates to DocumentStoreService.
 func (s *CanonicalDBService) DocGet(collection, id string) (*models.Document, error) {
-	var dataJSON string
-	var createdAtStr, updatedAtStr string
-	err := s.db.QueryRowWithRetry(
-		"SELECT data, created_at, updated_at FROM documents WHERE collection = ? AND id = ?",
-		collection, id,
-	).Scan(&dataJSON, &createdAtStr, &updatedAtStr)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr)
+	return s.docStore.DocGet(collection, id)
 }
 
-// DocCreate creates a document only if it does not already exist. data must be valid JSON.
-// Timestamps are managed by the service - created_at is set once on insert.
+// DocCreate creates a document only if it does not already exist.
+// Delegates to DocumentStoreService.
 func (s *CanonicalDBService) DocCreate(collection, id string, data json.RawMessage) error {
-	var userDoc map[string]json.RawMessage
-	if err := json.Unmarshal(data, &userDoc); err != nil {
-		return fmt.Errorf("failed to unmarshal document: %w", err)
-	}
-	if userDoc == nil {
-		userDoc = make(map[string]json.RawMessage)
-	}
-	delete(userDoc, "id")
-	delete(userDoc, "created_at")
-	delete(userDoc, "updated_at")
-
-	dataJSON, err := json.Marshal(userDoc)
-	if err != nil {
-		return fmt.Errorf("failed to marshal document: %w", err)
-	}
-
-	now := time.Now().UTC()
-	nowStr := sqliteutil.FormatTimestamp(now)
-
-	_, err = s.db.ExecWithRetry(
-		`INSERT INTO documents (collection, id, data, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?)`,
-		collection, id, string(dataJSON), nowStr, nowStr,
-	)
-	if err != nil && sqliteutil.IsUniqueConstraintError(err) {
-		return constants.ErrAlreadyExists
-	}
-	return err
+	return s.docStore.DocCreate(collection, id, data)
 }
 
-// DocSet creates or replaces a document. data must be valid JSON.
-// Timestamps are managed by the service - created_at is set once on insert and
-// never overwritten. updated_at is refreshed on every upsert.
+// DocSet creates or replaces a document.
+// Delegates to DocumentStoreService.
 func (s *CanonicalDBService) DocSet(collection, id string, data json.RawMessage) error {
-	return s.DocSetWithTimestamps(collection, id, data, time.Time{}, time.Time{})
+	return s.docStore.DocSet(collection, id, data)
 }
 
 // DocSetWithTimestamps creates or replaces a document with custom timestamps.
-// This is a test-only hook for setting specific created_at/updated_at values.
-// For production use, call DocSet instead which auto-manages timestamps.
-// Zero-valued timestamps are replaced with time.Now().UTC().
+// Delegates to DocumentStoreService.
 func (s *CanonicalDBService) DocSetWithTimestamps(collection, id string, data json.RawMessage, createdAt, updatedAt time.Time) error {
-	var userDoc map[string]json.RawMessage
-	if err := json.Unmarshal(data, &userDoc); err != nil {
-		return fmt.Errorf("failed to unmarshal document: %w", err)
-	}
-	if userDoc == nil {
-		userDoc = make(map[string]json.RawMessage)
-	}
-	delete(userDoc, "id")
-	delete(userDoc, "created_at")
-	delete(userDoc, "updated_at")
-
-	dataJSON, err := json.Marshal(userDoc)
-	if err != nil {
-		return fmt.Errorf("failed to marshal document: %w", err)
-	}
-
-	now := time.Now().UTC()
-	createdAtStr := sqliteutil.FormatTimestamp(now)
-	updatedAtStr := sqliteutil.FormatTimestamp(now)
-
-	if !createdAt.IsZero() {
-		createdAtStr = sqliteutil.FormatTimestamp(createdAt)
-	}
-	if !updatedAt.IsZero() {
-		updatedAtStr = sqliteutil.FormatTimestamp(updatedAt)
-	}
-
-	_, err = s.db.ExecWithRetry(
-		`INSERT INTO documents (collection, id, data, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?)
-		 ON CONFLICT(collection, id) DO UPDATE SET
-		   data = excluded.data,
-		   updated_at = excluded.updated_at`,
-		collection, id, string(dataJSON), createdAtStr, updatedAtStr,
-	)
-	return err
+	return s.docStore.DocSetWithTimestamps(collection, id, data, createdAt, updatedAt)
 }
 
-// DocUpdate merges fields into an existing document. fields must be valid JSON.
-// Returns the updated Document with native time.Time timestamps.
+// DocUpdate merges fields into an existing document.
+// Delegates to DocumentStoreService.
 func (s *CanonicalDBService) DocUpdate(collection, id string, fields json.RawMessage) (*models.Document, error) {
-	var existingJSON string
-	var createdAtStr, updatedAtStr string
-	err := s.db.QueryRowWithRetry(
-		"SELECT data, created_at, updated_at FROM documents WHERE collection = ? AND id = ?",
-		collection, id,
-	).Scan(&existingJSON, &createdAtStr, &updatedAtStr)
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("%w: %s/%s", constants.ErrNotFound, collection, id)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	var doc map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(existingJSON), &doc); err != nil {
-		return nil, err
-	}
-
-	var incoming map[string]json.RawMessage
-	if err := json.Unmarshal(fields, &incoming); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal fields: %w", err)
-	}
-
-	for k, v := range incoming {
-		if k == "id" || k == "created_at" || k == "updated_at" {
-			continue
-		}
-		if string(v) == "null" {
-			delete(doc, k)
-		} else {
-			doc[k] = v
-		}
-	}
-
-	dataJSON, err := json.Marshal(doc)
-	if err != nil {
-		return nil, err
-	}
-
-	now := time.Now().UTC()
-	nowStr := sqliteutil.FormatTimestamp(now)
-
-	_, err = s.db.ExecWithRetry(
-		"UPDATE documents SET data = ?, updated_at = ? WHERE collection = ? AND id = ?",
-		string(dataJSON), nowStr, collection, id,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return scanDocument(collection, id, string(dataJSON), createdAtStr, nowStr)
+	return s.docStore.DocUpdate(collection, id, fields)
 }
 
-// DocDelete removes a document. Returns (true, nil) if deleted, (false, nil) if not found.
+// DocDelete removes a document.
+// Delegates to DocumentStoreService.
 func (s *CanonicalDBService) DocDelete(collection, id string) (bool, error) {
-	result, err := s.db.ExecWithRetry(
-		"DELETE FROM documents WHERE collection = ? AND id = ?",
-		collection, id,
-	)
-	if err != nil {
-		return false, err
-	}
-	n, err := result.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	return n > 0, nil
+	return s.docStore.DocDelete(collection, id)
 }
 
 // DocDeleteNamespace removes all documents in a collection.
-// Returns the count of deleted documents.
+// Delegates to DocumentStoreService.
 func (s *CanonicalDBService) DocDeleteNamespace(collection string) (int64, error) {
-	result, err := s.db.ExecWithRetry("DELETE FROM documents WHERE collection = ?", collection)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
+	return s.docStore.DocDeleteNamespace(collection)
 }
 
 // GetField extracts a single field value from a document using dot notation.
-// This is used for JIT field resolution with governed access controls.
+// Delegates to DocumentStoreService.
 func (s *CanonicalDBService) GetField(collection, id, fieldPath string) (interface{}, error) {
-	var dataJSON string
-	err := s.db.QueryRowWithRetry(
-		"SELECT data FROM documents WHERE collection = ? AND id = ?",
-		collection, id,
-	).Scan(&dataJSON)
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("document not found: %s/%s", collection, id)
-	}
+	// DocumentStoreService returns json.RawMessage, but CanonicalDBService returns interface{}
+	// for backward compatibility. Convert here.
+	result, err := s.docStore.GetField(collection, id, fieldPath)
 	if err != nil {
 		return nil, err
 	}
 
-	// Use SQL json_extract for efficient field extraction
-	// This is safer than manual JSON parsing and leverages SQLite's JSON1 extension
-	var fieldValue string
-	query := "SELECT json_extract(data, ?) FROM documents WHERE collection = ? AND id = ?"
-
-	// Convert dot notation to JSON path (e.g., "metadata.tags" -> "$.metadata.tags")
-	jsonPath := "$." + fieldPath
-
-	err = s.db.QueryRowWithRetry(query, jsonPath, collection, id).Scan(&fieldValue)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract field %s: %w", fieldPath, err)
+	// SQLite's json_extract returns SQL literals (true, false, null) as raw strings.
+	// Convert these to proper JSON before unmarshaling.
+	resultStr := string(result)
+	switch resultStr {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	case "null":
+		return nil, nil
 	}
 
-	// Parse the extracted value back into a Go type
-	var result interface{}
-	if err := json.Unmarshal([]byte(fieldValue), &result); err != nil {
-		// If it's a simple string, return it directly
-		return fieldValue, nil
+	// Try to unmarshal to a Go type
+	var unmarshaled interface{}
+	if err := json.Unmarshal(result, &unmarshaled); err != nil {
+		// If unmarshaling fails, return the raw string (matches original behavior)
+		return resultStr, nil
 	}
-
-	return result, nil
+	return unmarshaled, nil
 }
 
 // DocQuery returns documents matching field conditions.
-// Supported ops: ==, !=, <, >, <=, >=. orderBy is "field" or "field DESC". limit 0 means no limit.
+// Delegates to DocumentStoreService.
 func (s *CanonicalDBService) DocQuery(collection string, filters []models.DocFilter, orderBy string, limit int) ([]*models.Document, error) {
-	var query strings.Builder
-	query.WriteString("SELECT id, data, created_at, updated_at FROM documents WHERE collection = ?")
-	args := []interface{}{collection}
-
-	for _, f := range filters {
-		if f.Field == "" || f.Op == "" {
-			continue
-		}
-
-		var sqlOp string
-		switch f.Op {
-		case "==", "=":
-			sqlOp = "="
-		case "!=", "<", ">", "<=", ">=":
-			sqlOp = f.Op
-		default:
-			continue
-		}
-
-		if err := sqliteutil.ValidateIdentifier(f.Field); err != nil {
-			return nil, fmt.Errorf("invalid filter field: %w", err)
-		}
-
-		// Use parameter for path and literals for operators to satisfy CodeQL.
-		query.WriteString(" AND json_extract(data, ?) ")
-		switch sqlOp {
-		case "==", "=":
-			query.WriteString("=")
-		case "!=":
-			query.WriteString("!=")
-		case "<":
-			query.WriteString("<")
-		case ">":
-			query.WriteString(">")
-		case "<=":
-			query.WriteString("<=")
-		case ">=":
-			query.WriteString(">=")
-		}
-		query.WriteString(" ?")
-
-		var nativeVal interface{}
-		if err := json.Unmarshal(f.Value, &nativeVal); err != nil {
-			return nil, fmt.Errorf("invalid filter value: %w", err)
-		}
-		args = append(args, "$."+f.Field, nativeVal)
-	}
-
-	if orderBy != "" {
-		parts := strings.Fields(orderBy)
-		orderField := parts[0]
-		dir := "ASC"
-		if len(parts) > 1 && strings.EqualFold(parts[1], "DESC") {
-			dir = "DESC"
-		}
-
-		if err := sqliteutil.ValidateIdentifier(orderField); err != nil {
-			return nil, fmt.Errorf("invalid orderBy field: %w", err)
-		}
-
-		// Identifier is validated, dir is whitelisted to ASC/DESC.
-		// Use validated hardcoded branch to satisfy CodeQL sql-injection rule.
-		query.WriteString(" ORDER BY json_extract(data, ?)")
-		if dir == "DESC" {
-			query.WriteString(" DESC")
-		} else {
-			query.WriteString(" ASC")
-		}
-		args = append(args, "$."+orderField)
-	}
-
-	if limit > 0 {
-		query.WriteString(" LIMIT ?")
-		args = append(args, limit)
-	}
-
-	type docRow struct {
-		docID        string
-		dataJSON     string
-		createdAtStr string
-		updatedAtStr string
-	}
-
-	rows, err := sqliteutil.MaterializeRows(s.db, query.String(), args, func(r *sql.Rows) (docRow, error) {
-		var row docRow
-		if err := r.Scan(&row.docID, &row.dataJSON, &row.createdAtStr, &row.updatedAtStr); err != nil {
-			return docRow{}, err
-		}
-		return row, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	results := make([]*models.Document, 0, len(rows))
-	for _, row := range rows {
-		doc, err := scanDocument(collection, row.docID, row.dataJSON, row.createdAtStr, row.updatedAtStr)
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, doc)
-	}
-	return results, nil
+	return s.docStore.DocQuery(collection, filters, orderBy, limit)
 }
 
 // scanDocument parses a raw SQLite row into a typed Document.
 // This is the single point where TEXT timestamps are converted to time.Time.
-// GetTrustedSigner retrieves an L2 signer public key from the database.
-// Implements governance.SignerStore.
-func (s *CanonicalDBService) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
-	doc, err := s.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get trusted signer %s: %w", keyID, err)
-	}
-	if doc == nil {
-		return nil, nil
-	}
-
-	data, err := json.Marshal(doc.Data)
-	if err != nil {
-		return nil, err
-	}
-
-	var signer models.TrustedSigner
-	if err := json.Unmarshal(data, &signer); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal trusted signer: %w", err)
-	}
-
-	if !signer.Enabled {
-		return nil, nil
-	}
-
-	pubBytes, err := hex.DecodeString(signer.PublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode public key hex: %w", err)
-	}
-
-	if len(pubBytes) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("invalid public key size: %d", len(pubBytes))
-	}
-
-	return ed25519.PublicKey(pubBytes), nil
-}
-
-// AddTrustedSigner adds or updates a trusted L2 signer in the database.
-func (s *CanonicalDBService) AddTrustedSigner(signer models.TrustedSigner) error {
-	if signer.ID == "" {
-		return fmt.Errorf("signer ID is required")
-	}
-	if signer.PublicKey == "" {
-		return fmt.Errorf("signer public key is required")
-	}
-
-	if signer.AddedAt.IsZero() {
-		signer.AddedAt = time.Now().UTC()
-	}
-
-	data, err := json.Marshal(signer)
-	if err != nil {
-		return err
-	}
-
-	return s.DocSet(marshaler.CollectionName(constants.CollectionTrustedSigners), signer.ID, data)
-}
-
-// ListTrustedSigners returns all trusted L2 signers in the database.
-func (s *CanonicalDBService) ListTrustedSigners() ([]models.TrustedSigner, error) {
-	docs, err := s.DocQuery(marshaler.CollectionName(constants.CollectionTrustedSigners), nil, "id", 0)
-	if err != nil {
-		return nil, err
-	}
-
-	results := make([]models.TrustedSigner, 0, len(docs))
-	for _, doc := range docs {
-		data, err := json.Marshal(doc.Data)
-		if err != nil {
-			continue
-		}
-		var signer models.TrustedSigner
-		if err := json.Unmarshal(data, &signer); err != nil {
-			continue
-		}
-		// id is not in the data map usually, so we set it from doc.ID
-		signer.ID = doc.ID
-		results = append(results, signer)
-	}
-	return results, nil
-}
-
-// DeleteTrustedSigner removes a trusted L2 signer from the database.
-func (s *CanonicalDBService) DeleteTrustedSigner(keyID string) (bool, error) {
-	return s.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
-}
-
-// HasTrustedSigners returns true if at least one trusted L2 signer is provisioned in the database.
-func (s *CanonicalDBService) HasTrustedSigners() (bool, error) {
-	filters := []models.DocFilter{
-		{Field: "enabled", Op: "==", Value: json.RawMessage("true")},
-	}
-	docs, err := s.DocQuery(marshaler.CollectionName(constants.CollectionTrustedSigners), filters, "", 1)
-	if err != nil {
-		return false, err
-	}
-	return len(docs) > 0, nil
-}
-
-// GetAppPolicy retrieves an AppPolicy by app_id from the database.
-// Implements governance.AppPolicyStore.
-func (s *CanonicalDBService) GetAppPolicy(appID string) (*models.AppPolicy, error) {
-	doc, err := s.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get app policy %s: %w", appID, err)
-	}
-	if doc == nil {
-		return nil, nil
-	}
-
-	data, err := json.Marshal(doc.Data)
-	if err != nil {
-		return nil, err
-	}
-
-	var policy models.AppPolicy
-	if err := json.Unmarshal(data, &policy); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal app policy: %w", err)
-	}
-
-	return &policy, nil
-}
-
 func scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr string) (*models.Document, error) {
 	createdAt, err := sqliteutil.ParseTimestamp(createdAtStr)
 	if err != nil {
@@ -1154,6 +607,50 @@ func scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr string) (
 		CreatedAt:  createdAt,
 		UpdatedAt:  updatedAt,
 	}, nil
+}
+
+// =============================================================================
+// Signer Store - trusted L2 signer management (delegates to SignerStoreService)
+// =============================================================================
+
+// GetTrustedSigner retrieves an L2 signer public key from the database.
+// Delegates to SignerStoreService.
+func (s *CanonicalDBService) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
+	return s.signerStore.GetTrustedSigner(keyID)
+}
+
+// AddTrustedSigner adds or updates a trusted L2 signer in the database.
+// Delegates to SignerStoreService.
+func (s *CanonicalDBService) AddTrustedSigner(signer models.TrustedSigner) error {
+	return s.signerStore.AddTrustedSigner(signer)
+}
+
+// ListTrustedSigners returns all trusted L2 signers in the database.
+// Delegates to SignerStoreService.
+func (s *CanonicalDBService) ListTrustedSigners() ([]models.TrustedSigner, error) {
+	return s.signerStore.ListTrustedSigners()
+}
+
+// DeleteTrustedSigner removes a trusted L2 signer from the database.
+// Delegates to SignerStoreService.
+func (s *CanonicalDBService) DeleteTrustedSigner(keyID string) (bool, error) {
+	return s.signerStore.DeleteTrustedSigner(keyID)
+}
+
+// HasTrustedSigners returns true if at least one trusted L2 signer is provisioned.
+// Delegates to SignerStoreService.
+func (s *CanonicalDBService) HasTrustedSigners() (bool, error) {
+	return s.signerStore.HasTrustedSigners()
+}
+
+// =============================================================================
+// App Policy Store - app policy retrieval (delegates to AppPolicyStoreService)
+// =============================================================================
+
+// GetAppPolicy retrieves an AppPolicy by app_id from the database.
+// Delegates to AppPolicyStoreService.
+func (s *CanonicalDBService) GetAppPolicy(appID string) (*models.AppPolicy, error) {
+	return s.appPolicyStore.GetAppPolicy(appID)
 }
 
 // =============================================================================
@@ -1545,215 +1042,6 @@ func (s *CanonicalDBService) BlobDeleteNamespace(namespace string) (int64, error
 	result, err := s.db.ExecWithRetry("DELETE FROM blobs WHERE namespace = ?", namespace)
 	if err != nil {
 		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-// =============================================================================
-// Suspended Transactions - L3 approval queue
-// =============================================================================
-
-// StoreSuspendedTransaction stores a transaction awaiting L3 approval.
-func (s *CanonicalDBService) StoreSuspendedTransaction(ctx context.Context, tx *models.SuspendedTransaction) error {
-	now := sqliteutil.FormatTimestamp(tx.CreatedAt)
-	expires := sqliteutil.FormatTimestamp(tx.ExpiresAt)
-
-	var toolArgsStr string
-	if tx.ToolArguments != nil {
-		toolArgsStr = string(tx.ToolArguments)
-	}
-
-	var approvedAtStr *string
-	if tx.ApprovedAt != nil {
-		ts := sqliteutil.FormatTimestamp(*tx.ApprovedAt)
-		approvedAtStr = &ts
-	}
-
-	_, err := s.db.ExecWithRetry(
-		`INSERT INTO suspended_transactions 
-		 (transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT(transaction_hash) DO UPDATE SET
-		   envelope = excluded.envelope,
-		   expires_at = excluded.expires_at,
-		   approved = excluded.approved,
-		   approved_at = excluded.approved_at,
-		   approved_by = excluded.approved_by,
-		   approval_signature = excluded.approval_signature,
-		   expected_cert_fingerprint = excluded.expected_cert_fingerprint`,
-		tx.TransactionHash, string(tx.Envelope), now, expires, tx.ToolName, toolArgsStr, tx.UserID, tx.OperatorID,
-		tx.Approved, approvedAtStr, tx.ApprovedBy, tx.ApprovalSignature, tx.ExpectedCertFingerprint,
-	)
-	if err != nil {
-		return fmt.Errorf("gateway_db: store suspended transaction: %w", err)
-	}
-	return nil
-}
-
-// GetSuspendedTransaction retrieves a suspended transaction by hash.
-// Returns (nil, false, nil) if not found or expired.
-func (s *CanonicalDBService) GetSuspendedTransaction(ctx context.Context, txHash string) (*models.SuspendedTransaction, bool, error) {
-	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID, approvedBy, approvalSignature, expectedCertFingerprint string
-	var approved int
-	var approvedAtStr sql.NullString
-	err := s.db.QueryRowWithRetry(
-		"SELECT envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint FROM suspended_transactions WHERE transaction_hash = ? AND expires_at > ?",
-		txHash, sqliteutil.NowTimestamp(),
-	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID, &approved, &approvedAtStr, &approvedBy, &approvalSignature, &expectedCertFingerprint)
-	if err != nil {
-		return nil, false, fmt.Errorf("gateway_db: get suspended transaction: %w", err)
-	}
-
-	createdAt, err := sqliteutil.ParseTimestamp(createdAtStr)
-	if err != nil {
-		return nil, false, fmt.Errorf("gateway_db: parse created_at: %w", err)
-	}
-	expiresAt, err := sqliteutil.ParseTimestamp(expiresAtStr)
-	if err != nil {
-		return nil, false, fmt.Errorf("gateway_db: parse expires_at: %w", err)
-	}
-
-	var toolArgs json.RawMessage
-	if toolArgsStr != "" {
-		toolArgs = json.RawMessage(toolArgsStr)
-	}
-
-	var approvedAt *time.Time
-	if approvedAtStr.Valid {
-		ts, err := sqliteutil.ParseTimestamp(approvedAtStr.String)
-		if err != nil {
-			return nil, false, fmt.Errorf("gateway_db: parse approved_at: %w", err)
-		}
-		approvedAt = &ts
-	}
-
-	return &models.SuspendedTransaction{
-		TransactionHash:         txHash,
-		Envelope:                json.RawMessage(envelopeStr),
-		CreatedAt:               createdAt,
-		ExpiresAt:               expiresAt,
-		ToolName:                toolName,
-		ToolArguments:           toolArgs,
-		UserID:                  userID,
-		OperatorID:              operatorID,
-		Approved:                approved == 1,
-		ApprovedAt:              approvedAt,
-		ApprovedBy:              approvedBy,
-		ApprovalSignature:       approvalSignature,
-		ExpectedCertFingerprint: expectedCertFingerprint,
-	}, true, nil
-}
-
-// ListSuspendedTransactions retrieves all non-expired suspended transactions.
-// Optionally filters by user_id if provided.
-func (s *CanonicalDBService) ListSuspendedTransactions(ctx context.Context, userID string) ([]*models.SuspendedTransaction, error) {
-	var query string
-	var args []interface{}
-
-	if userID != "" {
-		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC"
-		args = []interface{}{userID, sqliteutil.NowTimestamp()}
-	} else {
-		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC"
-		args = []interface{}{sqliteutil.NowTimestamp()}
-	}
-
-	type suspendedTxRow struct {
-		txHash       string
-		envelopeStr  string
-		createdAtStr string
-		expiresAtStr string
-		toolName     string
-		toolArgsStr  string
-		userID       string
-		operatorID   string
-	}
-
-	rows, err := sqliteutil.MaterializeRows(s.db, query, args, func(r *sql.Rows) (suspendedTxRow, error) {
-		var row suspendedTxRow
-		if err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID); err != nil {
-			return suspendedTxRow{}, err
-		}
-		return row, nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("gateway_db: list suspended transactions: %w", err)
-	}
-
-	transactions := make([]*models.SuspendedTransaction, 0, len(rows))
-	for _, row := range rows {
-		createdAt, err := sqliteutil.ParseTimestamp(row.createdAtStr)
-		if err != nil {
-			continue
-		}
-		expiresAt, err := sqliteutil.ParseTimestamp(row.expiresAtStr)
-		if err != nil {
-			continue
-		}
-
-		var toolArgs json.RawMessage
-		if row.toolArgsStr != "" {
-			toolArgs = json.RawMessage(row.toolArgsStr)
-		}
-
-		transactions = append(transactions, &models.SuspendedTransaction{
-			TransactionHash: row.txHash,
-			Envelope:        json.RawMessage(row.envelopeStr),
-			CreatedAt:       createdAt,
-			ExpiresAt:       expiresAt,
-			ToolName:        row.toolName,
-			ToolArguments:   toolArgs,
-			UserID:          row.userID,
-			OperatorID:      row.operatorID,
-		})
-	}
-
-	return transactions, nil
-}
-
-// ApproveSuspendedTransaction marks a suspended transaction as approved with cryptographic signature.
-// This is called by the CLI approval command when a human approves a transaction.
-func (s *CanonicalDBService) ApproveSuspendedTransaction(ctx context.Context, txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error {
-	now := time.Now().UTC()
-	nowStr := sqliteutil.FormatTimestamp(now)
-
-	result, err := s.db.ExecWithRetry(
-		`UPDATE suspended_transactions 
-		 SET approved = 1, approved_at = ?, approved_by = ?, approval_signature = ?, expected_cert_fingerprint = ?
-		 WHERE transaction_hash = ? AND expires_at > ?`,
-		nowStr, approvedBy, approvalSignature, expectedCertFingerprint, txHash, sqliteutil.NowTimestamp(),
-	)
-	if err != nil {
-		return fmt.Errorf("gateway_db: approve suspended transaction: %w", err)
-	}
-
-	// Check if any row was actually updated
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("gateway_db: approve suspended transaction: failed to get rows affected: %w", err)
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("gateway_db: approve suspended transaction: transaction not found or expired")
-	}
-
-	return nil
-}
-
-// DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.
-func (s *CanonicalDBService) DeleteSuspendedTransaction(ctx context.Context, txHash string) error {
-	_, err := s.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE transaction_hash = ?", txHash)
-	if err != nil {
-		return fmt.Errorf("gateway_db: delete suspended transaction: %w", err)
-	}
-	return nil
-}
-
-// CleanupExpiredSuspendedTransactions removes expired suspended transactions.
-// Returns the count of deleted transactions.
-func (s *CanonicalDBService) CleanupExpiredSuspendedTransactions(ctx context.Context) (int64, error) {
-	result, err := s.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE expires_at < ?", sqliteutil.NowTimestamp())
-	if err != nil {
-		return 0, fmt.Errorf("gateway_db: cleanup expired suspended transactions: %w", err)
 	}
 	return result.RowsAffected()
 }

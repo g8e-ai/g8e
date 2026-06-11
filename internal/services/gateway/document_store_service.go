@@ -151,7 +151,7 @@ func (s *DocumentStoreService) DocUpdate(collection, id string, fields json.RawM
 		collection, id,
 	).Scan(&existingJSON, &createdAtStr, &updatedAtStr)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("DocumentStoreService: document not found: %s/%s", collection, id)
+		return nil, constants.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -233,7 +233,7 @@ func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (json.
 		collection, id,
 	).Scan(&dataJSON)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("DocumentStoreService: document not found: %s/%s", collection, id)
+		return nil, constants.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -252,13 +252,11 @@ func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (json.
 		return nil, fmt.Errorf("DocumentStoreService: extract field %s: %w", fieldPath, err)
 	}
 
-	// Parse the extracted value back into a Go type
-	var result json.RawMessage
-	if err := json.Unmarshal([]byte(fieldValue), &result); err != nil {
-		return nil, fmt.Errorf("DocumentStoreService: unmarshal field value: %w", err)
-	}
-
-	return result, nil
+	// Return the raw string as json.RawMessage.
+	// SQLite's json_extract returns SQL literals (true, false, null) as raw strings,
+	// not JSON strings. The delegation wrapper in CanonicalDBService handles the
+	// conversion from SQL literals to Go types.
+	return json.RawMessage(fieldValue), nil
 }
 
 // DocQuery returns documents matching field conditions.
@@ -305,7 +303,11 @@ func (s *DocumentStoreService) DocQuery(collection string, filters []models.DocF
 		}
 		query.WriteString(" ?")
 
-		args = append(args, "$."+f.Field, string(f.Value))
+		var nativeVal interface{}
+		if err := json.Unmarshal(f.Value, &nativeVal); err != nil {
+			return nil, fmt.Errorf("DocumentStoreService: invalid filter value: %w", err)
+		}
+		args = append(args, "$."+f.Field, nativeVal)
 	}
 
 	if orderBy != "" {
