@@ -55,9 +55,9 @@ type PubSubCommandMessage struct {
 	Timestamp         time.Time           `json:"timestamp"`
 }
 
-// PubSubCommandService manages the Operator pub/sub connection and dispatches inbound
+// OperatorPubSubService manages the Operator pub/sub connection and dispatches inbound
 // Operator commands to the appropriate first-class service handler.
-type PubSubCommandService struct {
+type OperatorPubSubService struct {
 	client  PubSubClient
 	config  *config.Config
 	logger  *slog.Logger
@@ -92,7 +92,7 @@ type PubSubCommandService struct {
 	mcpGateway *mcp.GatewayService
 }
 
-// CommandServiceConfig holds all dependencies for PubSubCommandService.
+// CommandServiceConfig holds all dependencies for OperatorPubSubService.
 type CommandServiceConfig struct {
 	Config            *config.Config
 	Logger            *slog.Logger
@@ -123,8 +123,8 @@ type CommandServiceConfig struct {
 	MCPGateway *mcp.GatewayService
 }
 
-// NewPubSubCommandService creates the dispatcher and all first-class sub-services using the provided config.
-func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, error) {
+// NewOperatorPubSubService creates the dispatcher and all first-class sub-services using the provided config.
+func NewOperatorPubSubService(c CommandServiceConfig) (*OperatorPubSubService, error) {
 	client := c.PubSubClient
 	if client == nil && c.Config.PubSubURL != "" {
 		var err error
@@ -138,7 +138,7 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 	serviceCtx, cancel := context.WithCancel(context.Background())
 
-	rs := &PubSubCommandService{
+	rs := &OperatorPubSubService{
 		client:             client,
 		config:             c.Config,
 		logger:             c.Logger,
@@ -210,7 +210,7 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	return rs, nil
 }
 
-func (rs *PubSubCommandService) initializeGovernance(c CommandServiceConfig, serviceCtx context.Context) {
+func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, serviceCtx context.Context) {
 	// Initialize L2Consensus with L1Doctrine for threat detection and private key for L2 signing
 	// L1Doctrine is the canonical L1 (Technical Bedrock) validator - it replaces Sentinel's threat detection
 	l1Doctrine := governance.NewL1Doctrine()
@@ -231,7 +231,7 @@ func (rs *PubSubCommandService) initializeGovernance(c CommandServiceConfig, ser
 		L3Notary:          c.L3Notary,
 		StateRootProvider: c.StateRootProvider,
 		Ctx:               serviceCtx,
-		ExecutionHandler:  rs, // PubSubCommandService implements ExecutionHandler
+		ExecutionHandler:  rs, // OperatorPubSubService implements ExecutionHandler
 		Scrubbing:         c.Scrubbing,
 		SigningKey:        c.ActuatorSigningKey,
 		KeyID:             c.ActuatorKeyID,
@@ -288,7 +288,7 @@ func (rs *PubSubCommandService) initializeGovernance(c CommandServiceConfig, ser
 	}
 }
 
-func (rs *PubSubCommandService) buildHandlers() {
+func (rs *OperatorPubSubService) buildHandlers() {
 	rs.handlers = map[constants.EventType]func(context.Context, *PubSubCommandMessage){
 		constants.Event.Operator.HeartbeatRequested:         rs.heartbeat.HandleRequest,
 		constants.Event.Operator.Command.Requested:          rs.commands.HandleExecutionRequest,
@@ -329,7 +329,7 @@ func (rs *PubSubCommandService) buildHandlers() {
 	}
 }
 
-func (rs *PubSubCommandService) Start(ctx context.Context) error {
+func (rs *OperatorPubSubService) Start(ctx context.Context) error {
 	rs.mu.Lock()
 	defer rs.mu.Unlock()
 
@@ -368,7 +368,7 @@ func (rs *PubSubCommandService) Start(ctx context.Context) error {
 	return nil
 }
 
-func (rs *PubSubCommandService) Stop() error {
+func (rs *OperatorPubSubService) Stop() error {
 	rs.mu.Lock()
 	defer rs.mu.Unlock()
 
@@ -404,7 +404,7 @@ func (rs *PubSubCommandService) Stop() error {
 	return nil
 }
 
-func (rs *PubSubCommandService) listenForCommands(channelName string) {
+func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 	const maxReconnectAttempts = 3
 
 	reconnectDelay := rs.reconnectBaseDelay
@@ -499,12 +499,12 @@ func (rs *PubSubCommandService) listenForCommands(channelName string) {
 }
 
 // HandleCommandData processes a typed command message from the Gateway transport.
-func (rs *PubSubCommandService) HandleCommandData(msg *PubSubCommandMessage) {
+func (rs *OperatorPubSubService) HandleCommandData(msg *PubSubCommandMessage) {
 	rs.logger.Info("Processing request (via Gateway)")
 	rs.dispatchCommand(msg)
 }
 
-func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
+func (rs *OperatorPubSubService) handleCommandPayload(payload []byte) {
 	rs.logger.Info("Received message from g8e",
 		"operator_session_id", rs.config.OperatorSessionId,
 		"payload_size", len(payload))
@@ -542,7 +542,7 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 // receive cryptographic evidence of the attempt. A nil receipt is only
 // returned when verification fails before execution begins, in which case the
 // returned error wraps the corresponding governance.ErrXxx sentinel.
-func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error) {
+func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error) {
 	if len(payload) == 0 {
 		return nil, errors.New("empty payload")
 	}
@@ -588,7 +588,7 @@ func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []b
 }
 
 // handleGovernanceEnvelope processes a GovernanceEnvelope using the TransactionVerifier, Consensus and Actuator services.
-func (rs *PubSubCommandService) handleGovernanceEnvelope(env *govpkg.GovernanceEnvelope) {
+func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.GovernanceEnvelope) {
 	var verified *governance.VerifiedTransaction
 
 	// Strict transaction verification (P0: fail-closed gate before any dispatch)
@@ -654,21 +654,21 @@ func (rs *PubSubCommandService) handleGovernanceEnvelope(env *govpkg.GovernanceE
 }
 
 // Actuator returns the current L5 actuator.
-func (rs *PubSubCommandService) Actuator() *governance.L5Actuator {
+func (rs *OperatorPubSubService) Actuator() *governance.L5Actuator {
 	return rs.actuator
 }
 
 // SetActuator sets the L5 actuator (used for testing).
-func (rs *PubSubCommandService) SetActuator(a *governance.L5Actuator) {
+func (rs *OperatorPubSubService) SetActuator(a *governance.L5Actuator) {
 	rs.actuator = a
 }
 
 // SetL4Warden sets the L4 warden (used for testing).
-func (rs *PubSubCommandService) SetL4Warden(w *governance.L4Warden) {
+func (rs *OperatorPubSubService) SetL4Warden(w *governance.L4Warden) {
 	rs.l4warden = w
 }
 
-func (rs *PubSubCommandService) dispatchCommand(cmdMsg *PubSubCommandMessage) {
+func (rs *OperatorPubSubService) dispatchCommand(cmdMsg *PubSubCommandMessage) {
 	handler, ok := rs.handlers[cmdMsg.EventType]
 	if !ok {
 		rs.logger.Warn("Unknown request type", "event_type", cmdMsg.EventType)
@@ -679,7 +679,7 @@ func (rs *PubSubCommandService) dispatchCommand(cmdMsg *PubSubCommandMessage) {
 
 // ExecuteVerifiedTransaction implements governance.ExecutionHandler.
 // This is called by Actuator to execute verified transactions, making Actuator the execution boundary.
-func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
 	handler, ok := rs.handlers[eventType]
 	if !ok {
 		rs.logger.Error("No handler registered for event type", "event_type", string(eventType))
@@ -716,7 +716,7 @@ func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, 
 // it decodes the typed payload, dispatches to the configured downstream MCP
 // server via the gateway, and returns the textual result so the Actuator can
 // stamp it into the signed ActionReceipt.
-func (rs *PubSubCommandService) handleMcpCallRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+func (rs *OperatorPubSubService) handleMcpCallRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	if rs.mcpGateway == nil {
 		return "", errors.New("MCP gateway not configured - cannot dispatch downstream call")
 	}
@@ -773,7 +773,7 @@ func (rs *PubSubCommandService) handleMcpCallRequestSync(ctx context.Context, ms
 // it decodes the typed payload, dispatches to the configured downstream A2A
 // server via the gateway, and returns the textual result so the Actuator can
 // stamp it into the signed ActionReceipt.
-func (rs *PubSubCommandService) handleA2aCallRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+func (rs *OperatorPubSubService) handleA2aCallRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	if rs.mcpGateway == nil {
 		return "", errors.New("A2A gateway not configured - cannot dispatch downstream call")
 	}
@@ -811,7 +811,7 @@ func (rs *PubSubCommandService) handleA2aCallRequestSync(ctx context.Context, ms
 	return summary, nil
 }
 
-func (rs *PubSubCommandService) handleAppInvestigationCreatedSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+func (rs *OperatorPubSubService) handleAppInvestigationCreatedSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	rs.logger.Info("App investigation creation request received", "investigation_id", msg.ID)
 
 	if rs.actuator == nil || rs.actuator.ConsoleAuditStore == nil {
@@ -829,7 +829,7 @@ func (rs *PubSubCommandService) handleAppInvestigationCreatedSync(ctx context.Co
 	return "investigation created", nil
 }
 
-func (rs *PubSubCommandService) handleShutdownRequest(msg *PubSubCommandMessage) {
+func (rs *OperatorPubSubService) handleShutdownRequest(msg *PubSubCommandMessage) {
 	rs.logger.Info("Shutdown command received")
 
 	req, err := unmarshalPayload(msg.EventType, msg.Payload)
@@ -852,11 +852,11 @@ func (rs *PubSubCommandService) handleShutdownRequest(msg *PubSubCommandMessage)
 	rs.ShutdownChan <- reason
 }
 
-func (rs *PubSubCommandService) handleEvalAnswerRequest(ctx context.Context, msg *PubSubCommandMessage) {
+func (rs *OperatorPubSubService) handleEvalAnswerRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	_, _ = rs.handleEvalAnswerRequestSync(ctx, msg)
 }
 
-func (rs *PubSubCommandService) handleEvalAnswerRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+func (rs *OperatorPubSubService) handleEvalAnswerRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	rs.logger.Info("Eval answer request received")
 
 	req, err := unmarshalPayload(msg.EventType, msg.Payload)
@@ -887,13 +887,13 @@ func (rs *PubSubCommandService) handleEvalAnswerRequestSync(ctx context.Context,
 }
 
 // SendAutomaticHeartbeat publishes an automatic heartbeat immediately.
-func (rs *PubSubCommandService) SendAutomaticHeartbeat() {
+func (rs *OperatorPubSubService) SendAutomaticHeartbeat() {
 	rs.heartbeat.SendAutomatic()
 }
 
 // logBlockedTransaction records a blocked/rejected transaction using the ActionReceiptRecord schema.
 // This ensures consistency with accepted/failed Actuator receipts - all transaction outcomes use the same canonical schema.
-func (rs *PubSubCommandService) logBlockedTransaction(env *govpkg.GovernanceEnvelope, rejectionReason error) {
+func (rs *OperatorPubSubService) logBlockedTransaction(env *govpkg.GovernanceEnvelope, rejectionReason error) {
 	if rs.audit == nil || rs.audit.auditStore == nil {
 		return
 	}

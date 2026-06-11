@@ -154,12 +154,12 @@ func setupA2AGatewayTest(t *testing.T, testName string, downstreamHandler http.H
 	mcpGateway := ls.GetHTTPHandler().GetMCPGateway()
 	require.NotNil(t, mcpGateway)
 
-	cmdSvc, err := pubsub.NewPubSubCommandService(pubsub.CommandServiceConfig{
+	cmdSvc, err := pubsub.NewOperatorPubSubService(pubsub.CommandServiceConfig{
 		Config:             cfg,
 		Logger:             testutil.NewTestLogger(),
 		Execution:          execSvc,
 		FileEdit:           fileSvc,
-		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
+		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetGatewayWebSocketHandler()),
 		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,

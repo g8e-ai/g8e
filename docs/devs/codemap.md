@@ -10,7 +10,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   └── gateway.CanonicalDBService (for keystore DB access) [SHARED]
 ├── execution.ExecutionService
 ├── execution.FileEditService
-├── pubsub.PubSubCommandService
+├── pubsub.OperatorPubSubService
 │   ├── pubsub.HeartbeatService
 │   ├── pubsub.CommandService
 │   │   └── execution.ExecutionService
@@ -66,7 +66,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── storage.SQLAuditStore
 │   ├── vault.Vault
 │   └── keystore (embedded in schema)
-├── gateway.PubSubBroker
+├── gateway.GatewayWebSocketHandler
 ├── gateway.AuthService
 │   ├── gateway.CanonicalDBService [SHARED]
 │   ├── gateway.PKIAuthority
@@ -116,7 +116,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.HTTPHandler
 │   ├── gateway.CanonicalDBService [SHARED]
-│   ├── gateway.PubSubBroker
+│   ├── gateway.GatewayWebSocketHandler
 │   ├── gateway.AuthService
 │   ├── gateway.PKIAuthority
 │   ├── gateway.CLISessionService
@@ -178,10 +178,10 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - `governance.outboundL3Notary` implements: `governance.L3Notary` (used in outbound mode).
 
 ### Transport & Protocol Layer
-- `pubsub.PubSubCommandService` is the dispatcher for outbound mode (WebSocket pub/sub).
+- `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).
 - `mcp.GatewayService` handles MCP/A2A protocol translation and downstream dispatch (shared between modes).
 - `gateway.HTTPHandler` builds the HTTP/WebSocket surface for gateway mode.
-- `gateway.PubSubBroker` is the in-process pub/sub broker for gateway mode.
+- `gateway.GatewayWebSocketHandler` is the in-process pub/sub broker for gateway mode.
 
 ## Critical Data Flows
 

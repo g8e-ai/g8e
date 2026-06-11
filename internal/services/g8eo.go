@@ -45,7 +45,7 @@ type G8eoService struct {
 	secretManager    *gateway.SecretManager
 	execution        *execution.ExecutionService
 	fileEdit         *execution.FileEditService
-	pubSubCommands   *pubsub.PubSubCommandService
+	pubSubCommands   *pubsub.OperatorPubSubService
 	pubSubResults    *pubsub.PubSubResultsService
 	executionVault   *storage.ExecutionVaultService
 	tokenStore       *storage.TokenStoreService
@@ -302,7 +302,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	scrubbingConfig := scrubbing.DefaultConfig()
 	scrubbingService := scrubbing.NewScrubbingService(scrubbingConfig, vs.logger, vs.tokenStore)
 
-	// PubSubCommandService Construction
+	// OperatorPubSubService Construction
 	psConfig := pubsub.CommandServiceConfig{
 		Config:              vs.config,
 		Logger:              vs.logger,
@@ -326,7 +326,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		L3Notary:            cliL3Notary,
 	}
 
-	vs.pubSubCommands, err = pubsub.NewPubSubCommandService(psConfig)
+	vs.pubSubCommands, err = pubsub.NewOperatorPubSubService(psConfig)
 	if err != nil {
 		return fmt.Errorf("failed to initialize command service: %w", err)
 	}

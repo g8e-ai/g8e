@@ -48,7 +48,7 @@ type HTTPHandlerDependencies struct {
 	Cfg                *config.Config
 	Logger             *slog.Logger
 	DB                 *CanonicalDBService
-	Pubsub             *PubSubBroker
+	Pubsub             *GatewayWebSocketHandler
 	Auth               *AuthService
 	PKI                *PKIAuthority
 	CLISessionSvc      *CLISessionService
@@ -74,7 +74,7 @@ type HTTPHandler struct {
 	cfg                *config.Config
 	logger             *slog.Logger
 	db                 *CanonicalDBService
-	pubsub             *PubSubBroker
+	pubsub             *GatewayWebSocketHandler
 	auth               *AuthService
 	pki                *PKIAuthority
 	cliSessionSvc      *CLISessionService
@@ -655,7 +655,7 @@ func (h *HTTPHandler) GetPasskeyService() *PasskeyService {
 	return h.passkey
 }
 
-func (h *HTTPHandler) GetPubSubBroker() *PubSubBroker {
+func (h *HTTPHandler) GetGatewayWebSocketHandler() *GatewayWebSocketHandler {
 	return h.pubsub
 }
 

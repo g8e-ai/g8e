@@ -65,7 +65,7 @@ type SuspendedTransactionStore interface {
 // implementation is used in both contexts (truly polymorphic).
 //
 // In gateway mode, it is created by GatewayModeService as field mcpGateway.
-// In outbound mode, it is used by PubSubCommandService as field mcpGateway.
+// In outbound mode, it is used by OperatorPubSubService as field mcpGateway.
 type GatewayService struct {
 	logger            *slog.Logger
 	responder         *response.Writer

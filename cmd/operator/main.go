@@ -1412,7 +1412,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	}
 
 	// Loopback Pub/Sub for in-process command dispatch
-	loopbackClient := pubsub.NewInProcessPubSubClient(svc.GetHTTPHandler().GetPubSubBroker())
+	loopbackClient := pubsub.NewInProcessPubSubClient(svc.GetHTTPHandler().GetGatewayWebSocketHandler())
 
 	// Resolve the MCP gateway up-front so the pubsub command service can
 	// reach it for Actuator egress dispatch on verified MCP_CALL transactions.
@@ -1452,7 +1452,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		MCPGateway:          mcpSvc,
 	}
 
-	cmdSvc, err := pubsub.NewPubSubCommandService(psConfig)
+	cmdSvc, err := pubsub.NewOperatorPubSubService(psConfig)
 	if err != nil {
 		logger.Error("Failed to initialize in-process command service", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitCodeFromError(err))

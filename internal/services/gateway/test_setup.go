@@ -39,7 +39,7 @@ type TestInfrastructure struct {
 	Cfg                *config.Config
 	Logger             *slog.Logger
 	DB                 *CanonicalDBService
-	Pubsub             *PubSubBroker
+	Pubsub             *GatewayWebSocketHandler
 	SecretMgr          *SecretManager
 	PKI                *PKIAuthority
 	UserSvc            *UserService
@@ -101,7 +101,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	pubsub := NewPubSubBroker(logger)
+	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
 	var sm *SecretManager

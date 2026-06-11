@@ -661,12 +661,12 @@ func TestHTTPHandler_GetPasskeyService(t *testing.T) {
 	assert.NotNil(t, passkey, "GetPasskeyService should return non-nil service")
 }
 
-func TestHTTPHandler_GetPubSubBroker(t *testing.T) {
+func TestHTTPHandler_GetGatewayWebSocketHandler(t *testing.T) {
 	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
-	pubsub := h.GetPubSubBroker()
-	assert.NotNil(t, pubsub, "GetPubSubBroker should return non-nil service")
+	pubsub := h.GetGatewayWebSocketHandler()
+	assert.NotNil(t, pubsub, "GetGatewayWebSocketHandler should return non-nil service")
 }
 
 func TestHTTPHandler_handleLandingPage(t *testing.T) {

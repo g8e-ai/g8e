@@ -41,7 +41,7 @@ func TestNewGatewayModeService(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
-		pubsub := NewPubSubBroker(logger)
+		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
 
 		cfg.Gateway.PKIDir = tempDir(t)
@@ -70,7 +70,7 @@ func TestGatewayModeService_StateManagement(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	pubsub := NewPubSubBroker(logger)
+	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
@@ -129,7 +129,7 @@ func TestNewGatewayModeServiceFromComponents(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	pubsub := NewPubSubBroker(logger)
+	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
 	cfg.Gateway.PKIDir = pkiDir

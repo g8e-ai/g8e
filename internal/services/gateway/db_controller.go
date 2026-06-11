@@ -38,12 +38,12 @@ type DBController struct {
 	logger    *slog.Logger
 	db        *CanonicalDBService
 	auth      *AuthService
-	pubsub    *PubSubBroker
+	pubsub    *GatewayWebSocketHandler
 	userSvc   *UserService
 	responder *response.Writer
 }
 
-func newDBController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, pubsub *PubSubBroker, userSvc *UserService, responder *response.Writer) *DBController {
+func newDBController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, pubsub *GatewayWebSocketHandler, userSvc *UserService, responder *response.Writer) *DBController {
 	return &DBController{
 		cfg:       cfg,
 		logger:    logger,

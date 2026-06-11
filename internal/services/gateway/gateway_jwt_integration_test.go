@@ -124,7 +124,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	os.RemoveAll(secretsDir)
 	os.MkdirAll(secretsDir, 0755)
 
-	pubsub := NewPubSubBroker(logger)
+	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
 	backend, err := keystore.NewTestBackend()
@@ -281,7 +281,7 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 	os.RemoveAll(secretsDir)
 	os.MkdirAll(secretsDir, 0755)
 
-	pubsub := NewPubSubBroker(logger)
+	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
 	backend, err := keystore.NewTestBackend()
@@ -452,7 +452,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	os.RemoveAll(secretsDir)
 	os.MkdirAll(secretsDir, 0755)
 
-	pubsub := NewPubSubBroker(logger)
+	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
 	backend, err := keystore.NewTestBackend()

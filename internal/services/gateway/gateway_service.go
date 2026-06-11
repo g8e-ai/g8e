@@ -50,7 +50,7 @@ type GatewayModeService struct {
 	logger *slog.Logger
 
 	db                 *CanonicalDBService
-	pubsub             *PubSubBroker
+	pubsub             *GatewayWebSocketHandler
 	auth               *AuthService
 	pki                *PKIAuthority
 	reg                *RegistrationService
@@ -80,7 +80,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
-	pubsub := NewPubSubBroker(logger)
+	pubsub := NewGatewayWebSocketHandler(logger)
 	sm, err := NewSecretManager(db.db, cfg.Gateway.SecretsDir, logger)
 	if err != nil {
 		return nil, fmt.Errorf("initialize secret manager: %w", err)
@@ -266,7 +266,7 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 
 // newGatewayModeServiceFromComponents assembles a GatewayModeService from pre-built components.
 // Used in tests where the DB and pub/sub broker are constructed independently.
-func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, pubsub *PubSubBroker) (*GatewayModeService, error) {
+func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, pubsub *GatewayWebSocketHandler) (*GatewayModeService, error) {
 	sm, _ := NewSecretManager(db.db, cfg.Gateway.SecretsDir, logger)
 	pki := newPKIAuthority(cfg.Gateway.DataDir, cfg.Gateway.PKIDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
@@ -523,7 +523,7 @@ type GovernanceDeps struct {
 }
 
 // GetGovernanceDeps returns the governance dependencies for transaction verification.
-// This enables the in-process PubSubCommandService to perform fail-closed verification.
+// This enables the in-process OperatorPubSubService to perform fail-closed verification.
 // The L3 notary is a composite that handles both WebAuthn (web sessions) and mTLS (CLI sessions).
 func (ls *GatewayModeService) GetGovernanceDeps() *GovernanceDeps {
 	// Create composite L3 notary that handles both web and CLI sessions
