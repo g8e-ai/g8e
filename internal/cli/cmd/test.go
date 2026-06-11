@@ -32,8 +32,8 @@ import (
 func testCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test",
-		Short: "Run test suites (unit, integration, e2e, scenario, emulator, chaos)",
-		Long:  `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway. Emulator runs scenarios against a real Gateway/Operator. Chaos generates governance events for testing.`,
+		Short: "Run test suites (unit, integration, e2e, scenario, lint, emulator, chaos)",
+		Long:  `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway. Lint runs static analysis. Emulator runs scenarios against a real Gateway/Operator. Chaos generates governance events for testing.`,
 	}
 
 	cmd.AddCommand(
@@ -41,6 +41,7 @@ func testCmd() *cobra.Command {
 		testIntegrationCmd(),
 		testE2ECmd(),
 		testScenarioCmd(),
+		testLintCmd(),
 		emulatorCmd(),
 		chaosCmd(),
 		testSummaryCmd(),
@@ -189,6 +190,42 @@ func testScenarioCmd() *cobra.Command {
 			}
 
 			fmt.Println("Scenario tests completed successfully.")
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+func testLintCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "lint",
+		Short: "Run linting and quality checks",
+		Long:  `Run golangci-lint with modern Go 1.26.3 best practices. This includes staticcheck, govet, and additional linters for bug prevention, security, and code quality.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Running linting and quality checks...")
+
+			// Check if golangci-lint is installed
+			if _, err := exec.LookPath("golangci-lint"); err != nil {
+				fmt.Println("golangci-lint not found. Installing...")
+				installCmd := exec.Command("go", "install", "github.com/golangci/golangci-lint/cmd/golangci-lint@v2.12.2")
+				installCmd.Stdout = os.Stdout
+				installCmd.Stderr = os.Stderr
+				if err := installCmd.Run(); err != nil {
+					return fmt.Errorf("failed to install golangci-lint: %w", err)
+				}
+			}
+
+			// Run golangci-lint
+			lintCmd := exec.Command("golangci-lint", "run")
+			lintCmd.Stdout = os.Stdout
+			lintCmd.Stderr = os.Stderr
+
+			if err := lintCmd.Run(); err != nil {
+				return fmt.Errorf("linting failed: %w", err)
+			}
+
+			fmt.Println("Linting completed successfully.")
 			return nil
 		},
 	}

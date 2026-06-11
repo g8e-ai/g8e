@@ -1,32 +1,107 @@
 version: "2"
 run:
   allow-parallel-runners: true
+  timeout: 5m
+  tests: true
+  build-tags:
+    - integration
 linters:
   default: none
   enable:
-    - bodyclose
-    - errcheck
+    # Core Go checks (from official Go analysis framework)
     - govet
     - ineffassign
-    - misspell
     - staticcheck
-    - unconvert
     - unused
+    - errcheck
+    
+    # Style & Complexity (relaxed for gradual compliance)
+    # - gocritic  # Disabled for gradual compliance (237 issues)
+    # - goconst  # Disabled for gradual compliance (192 issues)
+    - gocyclo
+    - misspell
+    - unconvert
+    # - unparam  # Disabled for gradual compliance (27 issues)
+    # - whitespace  # Disabled for gradual compliance (1 issue)
+    
+    # Bug Prevention
+    - bodyclose
+    # - contextcheck  # Disabled for gradual compliance (9 issues)
+    # - copyloopvar  # Disabled for gradual compliance (14 issues)
+    # - errorlint  # Disabled for gradual compliance (43 issues)
+    # - nilerr  # Disabled for gradual compliance (16 issues)
+    # - rowserrcheck  # Disabled for gradual compliance (9 issues)
+    # - sqlclosecheck  # Disabled for gradual compliance (2 issues)
+    
+    # Security
+    - gosec
+    
+    # Test Helpers (relaxed for gradual compliance)
+    # - testifylint  # Disabled for gradual compliance (397 issues)
+    # - thelper  # Disabled for gradual compliance (62 issues)
+    # - paralleltest  # Disabled for gradual compliance (1490 issues)
+    
+    # Performance
+    # - prealloc  # Disabled for gradual compliance (6 issues)
   settings:
     gocritic:
       disabled-checks:
         - appendCombine
+        - commentedOutCode
+        - emptyStringTest
+        - equalFold
+        - ifElseChain
+        - importShadow
+        - newDeref
+        - paramTypeCombine
+        - ptrToRefParam
+        - rangeValCopy
+        - sloppyReassign
+        - switchTrue
+        - typeAssertChain
+        - underef
+        - unlambda
+        - unnecessaryBlock
+        - weakCond
       enabled-tags:
         - diagnostic
         - performance
+        - experimental
+        - style
+        - opinionated
     gosec:
       excludes:
         - G104
+        - G101
+        - G204
+        - G306
+        - G402
+        - G703
+        - G107
+        - G115
+        - G102
+        - G123
+        - G702
+        - G706
     govet:
       disable:
         - fieldalignment
         - shadow
       enable-all: true
+    gocyclo:
+      min-complexity: 60
+    goconst:
+      min-len: 5
+      min-occurrences: 5
+    testifylint:
+      enable-all: false
+      enabled:
+        - error-is
+        - error-nil
+        - float-compare
+        - go-require
+        - require-error
+        - suite-extra-assert-call
   exclusions:
     generated: lax
     presets:
@@ -54,6 +129,15 @@ linters:
           - gosec
         path: internal/services/vault/vault_crypto\.go
         text: G115
+      - linters:
+          - unparam
+        path: _test\.go
+      - linters:
+          - whitespace
+        path: _test\.go
+      - linters:
+          - goconst
+        path: _test\.go
     paths:
       - third_party$
       - builtin$
@@ -65,6 +149,7 @@ issues:
 formatters:
   enable:
     - gofmt
+    - goimports
   exclusions:
     generated: lax
     paths:
