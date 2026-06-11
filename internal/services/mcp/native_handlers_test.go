@@ -1096,7 +1096,7 @@ func TestNativeTools(t *testing.T) {
 		"git_ops",
 		"cloud_metadata",
 		"k8s_inspect",
-		"shell_execute",
+		"run_shell_command",
 		"net_ssh_known_hosts",
 		"operator_deploy",
 	}

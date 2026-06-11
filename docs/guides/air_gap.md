@@ -18,7 +18,7 @@ In an air-gapped configuration, the platform restricts all outbound communicatio
 
 - **No Telemetry**: The platform disables all outbound telemetry, usage statistics, and error reporting.
 - **Local Assets**: All user interface assets, fonts, icons, and libraries are served locally by platform services.
-- **Local Persistence**: All platform state, including session records, configuration settings, and cryptographic keys, resides in local SQLite databases managed by the g8e Gateway. Database paths are defined in `internal/constants/paths.go`, including the main database at `.g8e/data/g8e.db`, local state at `.g8e/local_state.db`, and audit vault at `.g8e/data/audit_vault.db`.
+- **Local Persistence**: All platform state, including session records, configuration settings, and cryptographic keys, resides in local SQLite databases managed by the g8e Gateway. Database paths are defined in `internal/constants/paths.go`, including the main database at `.g8e/data/g8e.db`, local state at `.g8e/local_state.db`, and audit vault at `.g8e/audit_vault.db`.
 
 ---
 
@@ -39,7 +39,7 @@ Surfaces with conflicting TLS client-authentication requirements do not share a 
 
 ### Core Functional Capabilities
 
-- **State Persistence**: All system state is stored locally within SQLite databases as defined in `internal/constants/paths.go`, including the main database (`.g8e/data/g8e.db`), local state (`.g8e/local_state.db`), and audit vault (`.g8e/data/audit_vault.db`).
+- **State Persistence**: All system state is stored locally within SQLite databases as defined in `internal/constants/paths.go`, including the main database (`.g8e/data/g8e.db`), local state (`.g8e/local_state.db`), and audit vault (`.g8e/audit_vault.db`).
 - **Local Public Key Infrastructure (PKI)**: The gateway generates a local Certificate Authority (CA) using ECDSA P-384 keys to issue and rotate TLS certificates for local services.
 - **Secret Storage**: An internal encrypted vault stores local credentials and access tokens, removing any requirement for external key managers.
 - **Event Brokerage**: A local websocket pub/sub server manages communication between the gateway and connected clients.
@@ -98,7 +98,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 2. **Package Runtime Configurations**: Archive the build artifacts and the protocol schemas:
    - The compiled `bin/g8e` g8e Node.
    - The protocol configuration files under the `protocol/` directory.
-3. **Optional Container Build**: For containerized deployments, build the operator image using `Dockerfile.operator` and configure services via `docker-compose.yml`.
+3. **Optional Container Build**: For containerized deployments, use the demo configurations in `demos/healthcare`, `demos/gov`, or `demos/finance` as reference. Note that the root `docker-compose.yml` references a `Dockerfile.operator` that is not included in the repository.
 
 ### 2. Implementation on the Air-Gapped Target Host
 

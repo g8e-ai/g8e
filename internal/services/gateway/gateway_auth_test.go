@@ -14,6 +14,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -1176,5 +1177,61 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 		middleware.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusForbidden, rr.Code)
 		assert.Contains(t, rr.Body.String(), "external apps cannot access privileged endpoints")
+	})
+
+	t.Run("auth middleware extracts operator session info from headers", func(t *testing.T) {
+		t.Parallel()
+		opID := "op-audit-123"
+		opSessionID := "opsess-audit-456"
+		cliSessionID := "cli-sess-audit-789"
+		userID := "user-audit-abc"
+
+		// Mock CLI session in DB
+		cliDoc := &models.CLISession{
+			ID:                cliSessionID,
+			UserID:            userID,
+			ExpiresAt:         time.Now().Add(1 * time.Hour),
+		}
+		cliBytes, _ := json.Marshal(cliDoc)
+		require.NoError(t, db.DocSet("cli_sessions", cliSessionID, cliBytes))
+
+		// Mock user in DB
+		userDoc := &models.User{
+			ID:     userID,
+			Status: constants.UserStatusActive,
+		}
+		userBytes, _ := json.Marshal(userDoc)
+		require.NoError(t, db.DocSet("users", userID, userBytes))
+
+		wid := protocol.NewWorkloadIdentity()
+		cliURI, _ := wid.CLISPIFFEURL(userID, cliSessionID)
+
+		var capturedCtx context.Context
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedCtx = r.Context()
+			w.WriteHeader(http.StatusOK)
+		})
+
+		middleware := auth.Middleware(handler)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/mcp/tools/call", nil)
+		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
+		req.Header.Set(constants.HeaderOperatorID, opID)
+		req.Header.Set(constants.HeaderOperatorSessionID, opSessionID)
+		req.TLS = &tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{
+				{URIs: []*url.URL{cliURI}},
+			},
+		}
+		rr := httptest.NewRecorder()
+
+		middleware.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		require.NotNil(t, capturedCtx)
+
+		// Verify identity info in context
+		assert.Equal(t, userID, capturedCtx.Value(constants.ContextKeyUserID))
+		assert.Equal(t, opID, capturedCtx.Value(constants.ContextKeyOperatorID))
+		assert.Equal(t, opSessionID, capturedCtx.Value(constants.ContextKeyOperatorSessionID))
 	})
 }

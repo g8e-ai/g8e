@@ -438,8 +438,8 @@ type NetHTTPProbeResult struct {
 	Error      string            `json:"error,omitempty"`
 }
 
-// ShellExecuteRequest is the params for the "shell_execute" tool.
-type ShellExecuteRequest struct {
+// RunShellCommandRequest is the params for the "run_shell_command" tool.
+type RunShellCommandRequest struct {
 	Command    string   `json:"command"`
 	Args       []string `json:"args,omitempty"`
 	Timeout    int      `json:"timeout,omitempty"`
@@ -447,8 +447,8 @@ type ShellExecuteRequest struct {
 	Hostnames  []string `json:"hostnames,omitempty"`
 }
 
-// ShellExecuteResult is the result for the "shell_execute" tool.
-type ShellExecuteResult struct {
+// RunShellCommandResult is the result for the "run_shell_command" tool.
+type RunShellCommandResult struct {
 	ExitCode int    `json:"exit_code"`
 	Stdout   string `json:"stdout"`
 	Stderr   string `json:"stderr"`

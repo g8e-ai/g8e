@@ -281,6 +281,9 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 
 	mux.HandleFunc(constants.APIPaths.AuditReceipts, h.dbController.handleAuditReceipts)
 	mux.HandleFunc(constants.APIPaths.AuditReceiptsExport, h.dbController.handleAuditReceiptsExport)
+	mux.HandleFunc(constants.APIPaths.AuditEvents, h.dbController.handleAuditEvents)
+	mux.HandleFunc(constants.APIPaths.AuditSummary, h.dbController.handleAuditSummary)
+	mux.HandleFunc(constants.APIPaths.AuditReport, h.dbController.handleAuditReport)
 
 	// Internal SSE event bridge (used by g8e-compatible agentic ensembles to publish typed events
 	// for browser/CLI subscribers to consume). Producers are authenticated by

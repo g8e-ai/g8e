@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
@@ -383,7 +384,7 @@ func TestHandleAuthPasskeysRegisterChallenge(t *testing.T) {
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/challenge", bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleAuthPasskeysRegisterChallenge(rr, req)
@@ -404,7 +405,7 @@ func TestHandleAuthPasskeysRegisterChallenge(t *testing.T) {
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/challenge", bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleAuthPasskeysRegisterChallenge(rr, req)
@@ -553,7 +554,7 @@ func TestHandleAuthPasskeysAuthenticateChallenge(t *testing.T) {
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/challenge", bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleAuthPasskeysAuthenticateChallenge(rr, req)
@@ -573,7 +574,7 @@ func TestHandleAuthPasskeysAuthenticateChallenge(t *testing.T) {
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/challenge", bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleAuthPasskeysAuthenticateChallenge(rr, req)
@@ -633,7 +634,7 @@ func TestHandleAuthPasskeysAuthenticateVerify(t *testing.T) {
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/verify", bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleAuthPasskeysAuthenticateVerify(rr, req)
@@ -654,7 +655,7 @@ func TestHandleAuthPasskeysAuthenticateVerify(t *testing.T) {
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/authenticate/verify", bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleAuthPasskeysAuthenticateVerify(rr, req)
@@ -792,7 +793,7 @@ func TestHandleApprovalAction(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/nonexistent-tx", nil)
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleApprovalAction(rr, req)
@@ -810,7 +811,7 @@ func TestHandleApprovalChallenge(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/txhash123/challenge", nil)
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleApprovalChallenge(rr, req, "txhash123", user.ID)
@@ -825,7 +826,7 @@ func TestHandleApprovalChallenge(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/nonexistent/challenge", nil)
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleApprovalChallenge(rr, req, "nonexistent", user.ID)
@@ -854,7 +855,7 @@ func TestHandleApprovalChallenge(t *testing.T) {
 		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/"+txHash+"/challenge", nil)
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user2.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user2.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleApprovalChallenge(rr, req, txHash, user2.ID)
@@ -872,7 +873,7 @@ func TestHandleApprovalVerify(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/txhash123/verify", nil)
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleApprovalVerify(rr, req, "txhash123", user.ID)
@@ -887,7 +888,7 @@ func TestHandleApprovalVerify(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/nonexistent/verify", strings.NewReader("{}"))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleApprovalVerify(rr, req, "nonexistent", user.ID)
@@ -913,7 +914,7 @@ func TestHandleApprovalVerify(t *testing.T) {
 		c.db.StoreSuspendedTransaction(context.Background(), suspendedTx)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash+"/verify", strings.NewReader("{invalid}"))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleApprovalVerify(rr, req, txHash, user.ID)
@@ -936,7 +937,7 @@ func TestHandleCLIApproval(t *testing.T) {
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/nonexistent", bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleCLIApproval(rr, req, "nonexistent", user.ID)
@@ -967,7 +968,7 @@ func TestHandleCLIApproval(t *testing.T) {
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash, bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleCLIApproval(rr, req, txHash, user.ID)
@@ -998,7 +999,7 @@ func TestHandleCLIApproval(t *testing.T) {
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash, bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleCLIApproval(rr, req, txHash, user.ID)
@@ -1247,7 +1248,7 @@ func TestHandleListSuspendedTransactions(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals", nil)
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleListSuspendedTransactions(rr, req)
@@ -1273,7 +1274,7 @@ func TestHandleListSuspendedTransactions(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals?user_id="+user.ID, nil)
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleListSuspendedTransactions(rr, req)
@@ -1313,7 +1314,7 @@ func TestHandleUserMe(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleUserMe(rr, req)
@@ -1330,7 +1331,7 @@ func TestHandleUserMe(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, "nonexistent-user"))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "nonexistent-user"))
 		rr := httptest.NewRecorder()
 
 		c.handleUserMe(rr, req)
@@ -1360,7 +1361,7 @@ func TestHandleWebSession(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/websession", nil)
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		req.AddCookie(&http.Cookie{Name: "g8e_session", Value: "test-session-id"})
 		rr := httptest.NewRecorder()
 
@@ -1382,7 +1383,7 @@ func TestHandleWebSession(t *testing.T) {
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/websession", nil)
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, user.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
 		c.handleWebSession(rr, req)

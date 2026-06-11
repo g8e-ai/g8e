@@ -135,9 +135,11 @@ protocol/proto/docs/reference/api/
 /site
 
 # --- Claude Code ---
+CLAUDE.md
 .claude/
 .claude/*
 
 # --- GEMINI ---
 GEMINI.md
-
+.gemini/
+.gemini/*

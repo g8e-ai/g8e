@@ -68,7 +68,7 @@ func (c *AdminController) handleAppPolicySigner(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	userID, ok := r.Context().Value(userIDKey).(string)
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok || userID == "" {
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -145,7 +145,7 @@ func (c *AdminController) handleRevokeApp(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	userID, ok := r.Context().Value(userIDKey).(string)
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok || userID == "" {
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return

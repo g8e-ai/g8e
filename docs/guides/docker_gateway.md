@@ -24,19 +24,23 @@ docker run -d \
 
 ### Using Docker Compose
 
-The root `docker-compose.yml` configures the g8e Operator service. For complete Gateway and Operator deployments, refer to the demo configurations in `demos/`.
+The root `docker-compose.yml` references a `Dockerfile.operator` that does not exist in the repository. For working Gateway and Operator deployments, use the demo configurations in `demos/`.
+
+The healthcare demo uses a bind-mount approach where the `g8e` binary is mounted from the repository root:
 
 ```bash
 # Example: Start the healthcare demo with gateway and operator
 cd demos/healthcare
-docker-compose up -d
+docker compose up -d
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Stop the services
-docker-compose down
+docker compose down
 ```
+
+The gov and finance demos attempt to build images using `Dockerfile` for the gateway and reference a non-existent `Dockerfile.operator` for the operator. These configurations require the missing Dockerfile.operator to function correctly.
 
 ## Configuration
 
@@ -66,7 +70,7 @@ command: ["/g8e", "gw", "start", "--http-port", "3000", "--https-port", "3443"]
 
 ### Volume Mounts
 
-The Dockerfile uses the following volumes:
+The Dockerfile does not define volumes. Volumes are specified at runtime via Docker run flags or docker-compose.yml:
 
 - **`/root/.g8e`**: Runtime state directory (certificates, database, configuration, vault)
 - **`/protocol/constants`**: Protocol constants copied during build (doctrine files, API paths, agents)
@@ -81,7 +85,7 @@ The container includes a health check that queries the `/api/v1/health` endpoint
 docker inspect --format='{{.State.Health.Status}}' g8e-gateway
 ```
 
-The health check uses wget to verify the gateway HTTP endpoint is responsive.
+The health check uses wget to verify the gateway HTTP endpoint is responsive. Note that some demo configurations use `/healthz` instead of `/api/v1/health`.
 
 ## Architecture
 
@@ -96,7 +100,7 @@ The resulting image contains:
 - Exposed ports 8080 (HTTP) and 8443 (HTTPS)
 - A health check on `/api/v1/health`
 
-The same binary operates in gateway mode or operator mode depending on the command arguments.
+The same binary operates in gateway mode or operator mode depending on the command arguments. The binary is built from `cmd/operator` and supports both modes through CLI flags.
 
 ## Troubleshooting
 
@@ -107,7 +111,7 @@ The same binary operates in gateway mode or operator mode depending on the comma
 docker logs g8e-gateway
 
 # Docker Compose
-docker-compose logs -f g8e-gateway
+docker compose logs -f g8e-gateway
 ```
 
 ### Check Gateway Status
@@ -143,14 +147,14 @@ docker stop g8e-gateway
 docker rm g8e-gateway
 
 # Docker Compose
-docker-compose down
+docker compose down
 ```
 
 ### Rebuild After Code Changes
 
 ```bash
-docker-compose build --no-cache
-docker-compose up -d
+docker compose build --no-cache
+docker compose up -d
 ```
 
 ## Production Considerations

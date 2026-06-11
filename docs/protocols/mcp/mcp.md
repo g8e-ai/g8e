@@ -4,7 +4,7 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-06-10
+Last Updated: 2026-06-11
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -151,31 +151,42 @@ g8e provides two stdio MCP transport modes. Choose based on your deployment requ
 
 ### MCP Client Configuration
 
-The g8e Gateway provides two MCP endpoints for client connections:
+The g8e Gateway provides configuration commands for different agent integrations. Use the `g8e mcp agent show` command to display configuration options for specific AI coding tools.
 
-#### mTLS Endpoint (Recommended for Production)
+#### Configuration Display
 
-To configure an MCP client to connect to the g8e Gateway with mTLS authentication, use the provided CLI command:
-
-```bash
-./g8e gw mcp-config
-```
-
-This command outputs a JSON configuration with the correct gateway URL and certificate paths.
-
-#### Plain HTTP Endpoint (Development/Testing)
-
-For development and testing scenarios, the gateway also provides a plain HTTP endpoint (port 8080) that does not require mTLS credentials. This endpoint has rate limiting and may have different security policies.
-
-Run the CLI command to generate the configuration:
+To view MCP client configurations for a specific agent:
 
 ```bash
-./g8e gw mcp-config-http
+g8e mcp agent show <agent>
 ```
 
-This outputs a JSON configuration with the correct gateway URL.
+Replace `<agent>` with one of the supported agents:
+- `claude` - Anthropic Claude Desktop / Claude Code
+- `codex` - OpenAI Codex AI coding assistant
+- `cursor` - Cursor AI IDE
+- `devin` - Devin AI IDE (formerly Windsurf)
+- `vscode` - Visual Studio Code with MCP extension
+- `continue` - Continue.dev AI coding assistant
+- `aider` - Aider AI pair programmer
+- `codeium` - Codeium AI assistant
+- `tabby` - Tabby AI autocomplete
+- `ollama` - Ollama local LLM runner
+- `generic` - Generic MCP-compatible agent
 
-**Security Note**: The plain HTTP endpoint is intended for development and testing only. Use the mTLS endpoint (port 8443) for production workloads to ensure proper authentication and security.
+To list all supported agents:
+
+```bash
+g8e mcp agent list
+```
+
+The `show` command displays three configuration modes:
+
+**g8e.local (mTLS)**: Production environments with DNS configured. Requires DNS or `/etc/hosts` entry for `g8e.local` resolution. Suitable for Cursor, Devin, VS Code MCP clients.
+
+**IP Address (mTLS)**: Environments without DNS or for direct IP access. Uses external interface IP without DNS setup. Suitable for Cursor, Devin, VS Code MCP clients.
+
+**Stdio Transport**: Direct native tool access without gateway. Requires g8e binary in PATH or full path in config. Suitable for Claude Code, Cursor, Devin, VS Code MCP clients.
 
 #### Claude Code & Codex Custom Connector Registration
 
@@ -210,7 +221,7 @@ The unified `/mcp` endpoint supports:
 For local development without running the gateway, g8e can run as a stdio MCP server exposing all native tools:
 
 ```bash
-claude mcp add g8e-stdio g8e mcp
+claude mcp add g8e-stdio g8e mcp stdio
 ```
 
 This runs g8e in stdio mode with no additional flags required. All 29 native tools are available including system diagnostics, database operations, network tools, and shell execution with governance safety features.
@@ -238,7 +249,7 @@ MCP clients connect to the gateway via:
 
 ### Tool Invocation
 
-Invoke MCP tools via JSON-RPC POST to `/api/v1/mcp/tools/call` or `/api/v1/mcp/tools/call/sse` for streaming. The SSE endpoint provides server-sent events for real-time streaming responses.
+Invoke MCP tools via JSON-RPC POST to the unified `/mcp` endpoint or via `/api/v1/mcp/tools/call` for direct tool invocation. The `/api/v1/mcp/tools/call/sse` endpoint provides server-sent events for real-time streaming responses.
 
 ```json
 {
@@ -467,6 +478,9 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 | Port constants | `internal/constants/ports.go` |
 | Action type constants | `internal/constants/action_types.go` |
 | Protobuf schemas | `protocol/proto/g8e/operator/v1/operator.proto` |
+| MCP config generation | `internal/services/mcp/config.go` |
+| CLI MCP commands | `internal/cli/cmd/mcp.go` (mcpCmd, agentCmd, mcpStdioCmd) |
+| Gateway lifecycle commands | `internal/cli/cmd/gateway.go` (gatewayCmd) |
 
 ---
 

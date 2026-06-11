@@ -14,7 +14,6 @@
 package cmd
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -26,10 +25,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/emulator/report"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/spf13/cobra"
-	_ "modernc.org/sqlite"
 )
 
 func auditCmd() *cobra.Command {
@@ -224,7 +221,6 @@ func auditExportCmd() *cobra.Command {
 func auditReportCmd() *cobra.Command {
 	var operatorSessionID string
 	var outDir string
-	var jsonOnly bool
 
 	cmd := &cobra.Command{
 		Use:   "report",
@@ -252,8 +248,8 @@ func auditReportCmd() *cobra.Command {
 				operatorSessionID = creds.OperatorSessionID
 			}
 
-			// Fetch receipts
-			path := constants.APIPaths.AuditReceipts
+			// Fetch comprehensive report from Gateway
+			path := constants.APIPaths.AuditReport
 			if operatorSessionID != "" {
 				path += "?operator_session_id=" + operatorSessionID
 			}
@@ -263,40 +259,37 @@ func auditReportCmd() *cobra.Command {
 				return err
 			}
 
-			var receiptsResp models.AuditReceiptsResponse
-			if err := json.Unmarshal(resp, &receiptsResp); err != nil {
+			var reportResp struct {
+				Success bool `json:"success"`
+				Report  struct {
+					GeneratedAt       string `json:"generated_at"`
+					OperatorSessionID string `json:"operator_session_id"`
+					Events            []interface{} `json:"events"`
+					EventsCount       int    `json:"events_count"`
+					Receipts          []interface{} `json:"receipts"`
+					ReceiptsCount     int    `json:"receipts_count"`
+					TotalRecords      int    `json:"total_records"`
+				} `json:"report"`
+			}
+			if err := json.Unmarshal(resp, &reportResp); err != nil {
 				return fmt.Errorf("failed to parse response: %w", err)
 			}
 
-			// Build report - skip Receipts conversion since report.Write handles empty Receipts gracefully
-			// The plan notes that Results will be nil/empty for non-emulator runs
-			rep := report.Report{
-				GeneratedAt:       time.Now(),
-				Gateway:           cfg.OperatorPublicURL(),
-				OperatorSessionID: operatorSessionID,
-				Results:           nil, // Empty for non-emulator runs
-				Receipts:          nil, // Skip conversion - report.Write handles empty Receipts
+			// Write report to file
+			if err := os.MkdirAll(outDir, 0755); err != nil {
+				return fmt.Errorf("failed to create output directory: %w", err)
 			}
 
-			// Write report
-			jsonPath, mdPath, err := report.Write(outDir, rep)
-			if err != nil {
-				return fmt.Errorf("failed to write report: %w", err)
+			jsonPath := filepath.Join(outDir, "compliance-report.json")
+			if err := os.WriteFile(jsonPath, resp, 0644); err != nil {
+				return fmt.Errorf("failed to write JSON report: %w", err)
 			}
 
 			cmd.Println("Compliance report written:")
 			cmd.Printf("  JSON:     %s\n", jsonPath)
-			if !jsonOnly {
-				cmd.Printf("  Markdown: %s\n", mdPath)
-			}
-			cmd.Printf("  Receipts: %d signed records (see 'g8e audit receipts' for details)\n", len(receiptsResp.Receipts))
-
-			// Remove markdown if json-only
-			if jsonOnly {
-				if err := os.Remove(mdPath); err != nil {
-					return fmt.Errorf("failed to remove markdown file: %w", err)
-				}
-			}
+			cmd.Printf("  Events:   %d\n", reportResp.Report.EventsCount)
+			cmd.Printf("  Receipts: %d\n", reportResp.Report.ReceiptsCount)
+			cmd.Printf("  Total:    %d records\n", reportResp.Report.TotalRecords)
 
 			return nil
 		},
@@ -304,7 +297,6 @@ func auditReportCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Operator session ID")
 	cmd.Flags().StringVar(&outDir, "out", "./reports", "Output directory")
-	cmd.Flags().BoolVar(&jsonOnly, "json-only", false, "Skip Markdown, emit JSON only")
 
 	return cmd
 }
@@ -316,7 +308,7 @@ func auditEventsCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "events",
-		Short: "Query raw audit events from the local SQLite vault",
+		Short: "Query raw audit events from the Gateway audit store",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
@@ -328,18 +320,32 @@ func auditEventsCmd() *cobra.Command {
 				return err
 			}
 
+			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
-				return fmt.Errorf("--session is required for events query")
+				creds, err := auth.LoadCredentials(cfg)
+				if err != nil {
+					return fmt.Errorf("failed to load credentials: %w", err)
+				}
+				if creds == nil {
+					return fmt.Errorf("not authenticated; run 'g8e auth login' first")
+				}
+				operatorSessionID = creds.OperatorSessionID
 			}
 
-			query := QueryRequestWithLimit{
-				Filters: []QueryFilter{
-					{Field: "operator_session_id", Op: "==", Value: operatorSessionID},
-				},
-				Limit: limit,
+			// Validate limit
+			if limit < 1 || limit > 10000 {
+				return fmt.Errorf("limit must be between 1 and 10000")
 			}
 
-			resp, err := client.Post("/db/audit_events/_query", query)
+			// Build query path
+			path := constants.APIPaths.AuditEvents
+			query := "?limit=" + fmt.Sprintf("%d", limit)
+			if operatorSessionID != "" {
+				query += "&operator_session_id=" + operatorSessionID
+			}
+			path += query
+
+			resp, err := client.Get(path)
 			if err != nil {
 				return err
 			}
@@ -349,14 +355,64 @@ func auditEventsCmd() *cobra.Command {
 				return nil
 			}
 
-			cmd.Printf("Audit events for session %s:\n", operatorSessionID)
-			cmd.Println(string(resp))
+			var eventsResp struct {
+				Success bool   `json:"success"`
+				Events  []struct {
+					ID                int64  `json:"id"`
+					OperatorSessionID string `json:"operator_session_id"`
+					Timestamp         string `json:"timestamp"`
+					Type              string `json:"type"`
+					CommandRaw        string `json:"command_raw"`
+					CommandExitCode   *int   `json:"command_exit_code"`
+				} `json:"events"`
+				Count int `json:"count"`
+			}
+			if err := json.Unmarshal(resp, &eventsResp); err != nil {
+				return fmt.Errorf("failed to parse response: %w", err)
+			}
+
+			if len(eventsResp.Events) == 0 {
+				cmd.Println("No audit events found")
+				return nil
+			}
+
+			sessionDisplay := operatorSessionID
+			if sessionDisplay == "" {
+				sessionDisplay = "(all)"
+			}
+			cmd.Printf("Audit events for session %s:\n", sessionDisplay)
+			cmd.Println(strings.Repeat("=", 110))
+			cmd.Printf("%-8s %-20s %-30s %-10s %s\n", "ID", "TIMESTAMP", "TYPE", "EXIT CODE", "COMMAND")
+			cmd.Println(strings.Repeat("-", 110))
+
+			for _, e := range eventsResp.Events {
+				timestamp := e.Timestamp
+				if len(timestamp) > 19 {
+					timestamp = timestamp[:19]
+				}
+				eventType := e.Type
+				if len(eventType) > 28 {
+					eventType = eventType[:28] + "…"
+				}
+				command := e.CommandRaw
+				if len(command) > 35 {
+					command = command[:35] + "…"
+				}
+				exitCode := "-"
+				if e.CommandExitCode != nil {
+					exitCode = fmt.Sprintf("%d", *e.CommandExitCode)
+				}
+				cmd.Printf("%-8d %-20s %-30s %-10s %s\n", e.ID, timestamp, eventType, exitCode, command)
+			}
+
+			cmd.Println(strings.Repeat("-", 110))
+			cmd.Printf("Total: %d events\n", eventsResp.Count)
 
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Operator session ID (required)")
+	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Filter by operator session ID (shows all if omitted)")
 	cmd.Flags().IntVar(&limit, "limit", 100, "Max rows")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Raw JSON output")
 
@@ -370,74 +426,52 @@ func auditSummaryCmd() *cobra.Command {
 		Use:   "summary",
 		Short: "Aggregate audit events and receipts by type",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			dbPath := filepath.Join(constants.Paths.Infra.DataDir, "g8e.db")
-			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-				return fmt.Errorf("audit database not found at %s", dbPath)
-			}
-
-			// Query events table
-			eventsQuery := "SELECT type, COUNT(*) as count FROM events"
-			if operatorSessionID != "" {
-				eventsQuery += " WHERE operator_session_id = ?"
-			}
-			eventsQuery += " GROUP BY type"
-
-			var eventsRows *sql.Rows
-			var err error
-			if operatorSessionID != "" {
-				eventsRows, err = sqlDBQuery(dbPath, eventsQuery, operatorSessionID)
-			} else {
-				eventsRows, err = sqlDBQuery(dbPath, eventsQuery)
-			}
+			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to query audit events: %w", err)
-			}
-			defer eventsRows.Close()
-
-			eventSummary := make(map[string]int)
-			eventTotal := 0
-			for eventsRows.Next() {
-				var eventType string
-				var count int
-				if err := eventsRows.Scan(&eventType, &count); err != nil {
-					return fmt.Errorf("failed to scan event row: %w", err)
-				}
-				eventSummary[eventType] = count
-				eventTotal += count
+				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			// Query receipts table (MCP/A2A governed transactions)
-			receiptsQuery := "SELECT action_type, status, COUNT(*) as count FROM receipts"
-			if operatorSessionID != "" {
-				receiptsQuery += " WHERE operator_session_id = ?"
-			}
-			receiptsQuery += " GROUP BY action_type, status"
-
-			var receiptsRows *sql.Rows
-			if operatorSessionID != "" {
-				receiptsRows, err = sqlDBQuery(dbPath, receiptsQuery, operatorSessionID)
-			} else {
-				receiptsRows, err = sqlDBQuery(dbPath, receiptsQuery)
-			}
+			client, err := api.NewClient(cfg)
 			if err != nil {
-				return fmt.Errorf("failed to query receipts: %w", err)
+				return err
 			}
-			defer receiptsRows.Close()
 
-			type receiptKey struct{ action, status string }
-			receiptSummary := make(map[receiptKey]int)
-			receiptTotal := 0
-			for receiptsRows.Next() {
-				var actionType, status string
-				var count int
-				if err := receiptsRows.Scan(&actionType, &status, &count); err != nil {
-					return fmt.Errorf("failed to scan receipt row: %w", err)
+			// Auto-discover session ID if not provided
+			if operatorSessionID == "" {
+				creds, err := auth.LoadCredentials(cfg)
+				if err != nil {
+					return fmt.Errorf("failed to load credentials: %w", err)
 				}
-				receiptSummary[receiptKey{actionType, status}] = count
-				receiptTotal += count
+				if creds == nil {
+					return fmt.Errorf("not authenticated; run 'g8e auth login' first")
+				}
+				operatorSessionID = creds.OperatorSessionID
 			}
 
-			if eventTotal == 0 && receiptTotal == 0 {
+			// Build query path
+			path := constants.APIPaths.AuditSummary
+			if operatorSessionID != "" {
+				path += "?operator_session_id=" + operatorSessionID
+			}
+
+			resp, err := client.Get(path)
+			if err != nil {
+				return err
+			}
+
+			var summaryResp struct {
+				Success         bool              `json:"success"`
+				EventsSummary   map[string]int    `json:"events_summary"`
+				EventsTotal     int               `json:"events_total"`
+				ReceiptsSummary map[string]int    `json:"receipts_summary"`
+				ReceiptsTotal   int               `json:"receipts_total"`
+				TotalRecords    int               `json:"total_records"`
+			}
+			if err := json.Unmarshal(resp, &summaryResp); err != nil {
+				return fmt.Errorf("failed to parse response: %w", err)
+			}
+
+			if summaryResp.TotalRecords == 0 {
 				cmd.Println("No audit records found")
 				return nil
 			}
@@ -445,21 +479,21 @@ func auditSummaryCmd() *cobra.Command {
 			cmd.Println("Audit Summary")
 			cmd.Println(strings.Repeat("=", 110))
 
-			if eventTotal > 0 {
-				cmd.Printf("\nEvents (%d total):\n", eventTotal)
-				for eventType, count := range eventSummary {
+			if summaryResp.EventsTotal > 0 {
+				cmd.Printf("\nEvents (%d total):\n", summaryResp.EventsTotal)
+				for eventType, count := range summaryResp.EventsSummary {
 					cmd.Printf("  %-50s %d\n", eventType, count)
 				}
 			}
 
-			if receiptTotal > 0 {
-				cmd.Printf("\nGoverned Receipts (%d total):\n", receiptTotal)
-				for k, count := range receiptSummary {
-					cmd.Printf("  %-40s %-12s %d\n", k.action, k.status, count)
+			if summaryResp.ReceiptsTotal > 0 {
+				cmd.Printf("\nGoverned Receipts (%d total):\n", summaryResp.ReceiptsTotal)
+				for keyStr, count := range summaryResp.ReceiptsSummary {
+					cmd.Printf("  %-40s %d\n", keyStr, count)
 				}
 			}
 
-			cmd.Printf("\nTotal records: %d\n", eventTotal+receiptTotal)
+			cmd.Printf("\nTotal records: %d\n", summaryResp.TotalRecords)
 
 			return nil
 		},

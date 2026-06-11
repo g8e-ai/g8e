@@ -358,6 +358,126 @@ func (c *DBController) handleAuditReceiptsExport(w http.ResponseWriter, r *http.
 	}
 }
 
+func (c *DBController) handleAuditEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	operatorSessionID := r.URL.Query().Get("operator_session_id")
+	limitStr := r.URL.Query().Get("limit")
+	offsetStr := r.URL.Query().Get("offset")
+
+	limit := 100
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil {
+			limit = l
+		}
+	}
+	offset := 0
+	if offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil {
+			offset = o
+		}
+	}
+
+	events, err := c.db.AuditStore.GetEvents(operatorSessionID, limit, offset)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"events":  events,
+		"count":   len(events),
+	})
+}
+
+const maxAuditQueryLimit = 10000
+
+func (c *DBController) handleAuditSummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	operatorSessionID := r.URL.Query().Get("operator_session_id")
+
+	// Query events summary
+	events, err := c.db.AuditStore.GetEvents(operatorSessionID, maxAuditQueryLimit, 0)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	eventSummary := make(map[string]int)
+	for _, event := range events {
+		eventSummary[string(event.Type)]++
+	}
+
+	// Query receipts summary
+	receipts, err := c.db.AuditStore.ListActionReceipts(operatorSessionID, maxAuditQueryLimit, 0)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	receiptSummary := make(map[string]int)
+	for _, receipt := range receipts {
+		key := string(receipt.ActionType) + ":" + receipt.Status.String()
+		receiptSummary[key]++
+	}
+
+	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
+		"success":         true,
+		"events_summary":  eventSummary,
+		"events_total":    len(events),
+		"receipts_summary": receiptSummary,
+		"receipts_total":  len(receipts),
+		"total_records":   len(events) + len(receipts),
+	})
+}
+
+func (c *DBController) handleAuditReport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	operatorSessionID := r.URL.Query().Get("operator_session_id")
+
+	// Fetch events
+	events, err := c.db.AuditStore.GetEvents(operatorSessionID, maxAuditQueryLimit, 0)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Fetch receipts
+	receipts, err := c.db.AuditStore.ListActionReceipts(operatorSessionID, maxAuditQueryLimit, 0)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Build comprehensive report
+	report := map[string]interface{}{
+		"generated_at":       time.Now().Format(time.RFC3339),
+		"operator_session_id": operatorSessionID,
+		"events":            events,
+		"events_count":      len(events),
+		"receipts":          receipts,
+		"receipts_count":    len(receipts),
+		"total_records":     len(events) + len(receipts),
+	}
+
+	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"report":  report,
+	})
+}
+
 func (c *DBController) handleGovernanceSigners(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -647,7 +767,7 @@ func blobNamespaceAllowed(namespace string) bool {
 // extractCallerIdentity extracts the caller's identity from the request context.
 // Returns user_id, app_id, operator_session_id, cli_session_id.
 func (c *DBController) extractCallerIdentity(r *http.Request) (string, string, string, string) {
-	userID, ok := r.Context().Value(userIDKey).(string)
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok {
 		userID = ""
 	}

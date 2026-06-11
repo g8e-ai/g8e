@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -249,8 +250,12 @@ func buildProxySession(cfg *config.Config) (*cliProxySession, error) {
 	certFile := envOr(envG8EClientCert, cfg.CLICertFile())
 	keyFile := envOr(envG8EClientKey, cfg.CLIKeyFile())
 	caFile := envOr(envG8ECABundle, cfg.TrustBundlePath())
-	gatewayURL := envOr(envG8EGatewayURL,
-		fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps))
+
+	// Try g8e.local first, fall back to IP if not set in env
+	gatewayURL := os.Getenv(envG8EGatewayURL)
+	if gatewayURL == "" {
+		gatewayURL = fmt.Sprintf("https://%s:%d/mcp", constants.GatewayInternalHostname, constants.Ports.OperatorHttps)
+	}
 
 	// Prefer app identity when present (for agent runs)
 	appCert := os.Getenv(envG8EAppCert)
@@ -295,10 +300,11 @@ func buildProxySession(cfg *config.Config) (*cliProxySession, error) {
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      caPool,
 		MinVersion:   tls.VersionTLS13,
-		ServerName:   "g8e.local",
+		ServerName:   constants.GatewayInternalHostname,
 	}
 
-	return &cliProxySession{
+	// Try to connect with the current gatewayURL
+	session := &cliProxySession{
 		client: &http.Client{
 			Transport: &http.Transport{TLSClientConfig: tlsCfg},
 			Timeout:   30 * time.Second,
@@ -308,7 +314,28 @@ func buildProxySession(cfg *config.Config) (*cliProxySession, error) {
 		userID:            userID,
 		operatorID:        operatorID,
 		operatorSessionID: operatorSessionID,
-	}, nil
+	}
+
+	// Test the connection - if it fails due to DNS, fall back to IP
+	if !strings.Contains(gatewayURL, constants.GatewayInternalHostname) {
+		// Already using IP or custom URL, return as-is
+		return session, nil
+	}
+
+	// Try to resolve g8e.local via DNS
+	_, err = net.LookupHost(constants.GatewayInternalHostname)
+	if err == nil {
+		// g8e.local resolves, use it
+		return session, nil
+	}
+
+	// DNS failed, fall back to IP
+	externalIP := config.GetExternalInterfaceIP()
+	gatewayURL = fmt.Sprintf("https://%s:%d/mcp", externalIP, constants.Ports.OperatorHttps)
+	session.gatewayURL = gatewayURL
+	slog.Info("g8e.local DNS resolution failed, falling back to direct IP", "ip", externalIP)
+
+	return session, nil
 }
 
 func envOr(key, fallback string) string {
@@ -494,7 +521,7 @@ func createMCPClient(cfg *config.Config) (*http.Client, error) {
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      caCertPool,
 		MinVersion:   tls.VersionTLS13,
-		ServerName:   "g8e.local",
+		ServerName:   constants.GatewayInternalHostname,
 	}
 
 	return &http.Client{
@@ -630,10 +657,10 @@ func printMCPConfigLocal(cmd *cobra.Command) error {
 	}
 
 	externalIP := config.GetExternalInterfaceIP()
-	cmd.Printf("# Add this entry to /etc/hosts to enable g8e.local resolution:\n")
-	cmd.Printf("%s g8e.local\n\n", externalIP)
+	cmd.Printf("# Add this entry to /etc/hosts to enable %s resolution:\n", constants.GatewayInternalHostname)
+	cmd.Printf("%s %s\n\n", externalIP, constants.GatewayInternalHostname)
 
-	gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps)
+	gatewayURL := fmt.Sprintf("https://%s:%d/mcp", constants.GatewayInternalHostname, constants.Ports.OperatorHttps)
 
 	actualCertPath := filepath.ToSlash(cfg.CLICertFile())
 	actualKeyPath := filepath.ToSlash(cfg.CLIKeyFile())
@@ -666,7 +693,9 @@ func printMCPConfigIP(cmd *cobra.Command) error {
 	actualKeyPath := filepath.ToSlash(cfg.CLIKeyFile())
 	actualCAPath := filepath.ToSlash(cfg.TrustBundlePath())
 
-	mcpConfig, err := mcp.NewGatewayConfigWithHostname(gatewayURL, actualCertPath, actualKeyPath, actualCAPath, externalIP)
+	// Use constants.GatewayInternalHostname for hostname verification even when connecting via IP
+	// The certificate has constants.GatewayInternalHostname in its SAN, so verification will succeed
+	mcpConfig, err := mcp.NewGatewayConfigWithHostname(gatewayURL, actualCertPath, actualKeyPath, actualCAPath, constants.GatewayInternalHostname)
 	if err != nil {
 		return fmt.Errorf("failed to create MCP config: %w", err)
 	}
@@ -818,6 +847,7 @@ func getSupportedAgents() []agentInfo {
 		{"codeium", "Codeium AI assistant"},
 		{"tabby", "Tabby AI autocomplete"},
 		{"ollama", "Ollama local LLM runner"},
+		{"gemini", "Google Gemini CLI"},
 		{"generic", "Generic MCP-compatible agent"},
 	}
 }
@@ -1098,6 +1128,25 @@ func writeAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		}
 		return configPath, nil, nil
 
+	case "gemini":
+		// Gemini uses `gemini mcp add` to register MCP servers
+		fmt.Fprintf(os.Stderr, "[g8e] Adding g8e MCP server to gemini configuration\n")
+		addCmd := exec.Command("gemini", "mcp", "add", "g8e", binaryPath, "mcp", "stdio")
+		addCmd.Stdout = os.Stderr
+		addCmd.Stderr = os.Stderr
+		if err := addCmd.Run(); err != nil {
+			return "", nil, fmt.Errorf("failed to add g8e MCP server to gemini: %w", err)
+		}
+		// Return empty path since gemini doesn't use a config file
+		return "", func() {
+			removeCmd := exec.Command("gemini", "mcp", "remove", "g8e")
+			removeCmd.Stdout = os.Stderr
+			removeCmd.Stderr = os.Stderr
+			if err := removeCmd.Run(); err != nil {
+				slog.Warn("Failed to remove g8e MCP server from gemini", "error", err)
+			}
+		}, nil
+
 	default:
 		// For agents that use CLI flags or temp files
 		tmpFile, err := os.CreateTemp("", "g8e-mcp-*.json")
@@ -1179,7 +1228,8 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	// Propagate the authenticated CLI session to the 'g8e mcp stdio' subprocess
 	// that the agent will spawn. The subprocess reads these env vars at startup
 	// and stores the session in memory — no disk reads per request.
-	gatewayURL := fmt.Sprintf("https://g8e.local:%d/mcp", constants.Ports.OperatorHttps)
+	// The stdio proxy will automatically fall back to IP if g8e.local DNS fails.
+	gatewayURL := fmt.Sprintf("https://%s:%d/mcp", constants.GatewayInternalHostname, constants.Ports.OperatorHttps)
 	agentCmd.Env = append(os.Environ(),
 		envG8ECLISessionID+"="+creds.CLISessionID,
 		envG8EUserID+"="+creds.UserID,
@@ -1234,6 +1284,9 @@ func agentLaunchArgs(agentID, mcpConfigPath string) ([]string, error) {
 		return nil, fmt.Errorf("Tabby requires manual MCP configuration via its settings.\n\nRun 'g8e mcp agent show tabby' to see the required configuration,\nthen add it to your Tabby MCP settings.")
 	case "ollama":
 		return nil, fmt.Errorf("Ollama requires manual MCP configuration via third-party clients.\n\nRun 'g8e mcp agent show ollama' to see the required configuration,\nthen use it with an MCP-compatible Ollama client.")
+	case "gemini":
+		// Gemini uses `gemini mcp add` to register servers, no config file needed
+		return []string{}, nil
 	default:
 		return nil, fmt.Errorf("auto-launch not yet supported for %q\n\nTo configure manually:\n  g8e mcp agent show %s", agentID, agentID)
 	}

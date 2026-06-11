@@ -5,7 +5,7 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-06-10
+Last Updated: 2026-06-11
 Version: v1.0.11
 
 ---
@@ -41,7 +41,7 @@ Everything else — Go compiler, OpenSSL, Git — runs inside the container. No 
 | Go | 1.26+ — required to build from source |
 | Git | Any recent version — required for the audit vault's Git-backed ledger |
 | OpenSSL | Any recent version — required for PKI operations at runtime |
-| Python | 3.14+ — optional, required only for agent ensemble scripts |
+| Python | 3.11+ — optional, required only for demo environments and protocol library development |
 
 ---
 
@@ -221,7 +221,7 @@ After the gateway is running (locally or in Docker), authenticate the CLI to boo
 To connect an operator on a remote host to the gateway:
 
 ```bash
-./g8e security pki enroll -e <gateway-ip>
+./g8e gw security pki enroll -e <gateway-ip>
 ```
 
 See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for full enrollment steps.
@@ -230,15 +230,12 @@ See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for full enr
 
 The root `docker-compose.yml` configures a Dockerized g8e Operator that dials out to a gateway running on the host machine (or a remote IP). This is useful for testing the operator in an isolated container while the gateway runs locally.
 
-Edit the gateway endpoint in `docker-compose.yml`:
+Note: The root `docker-compose.yml` references `Dockerfile.operator` which is not included in the repository. For working Gateway and Operator deployments, use the demo configurations in `demos/healthcare`, `demos/gov`, or `demos/finance`.
 
-```yaml
-command: ["-e", "<gateway-ip>"]
-```
-
-Then start the operator container:
+To use the demo configurations as reference:
 
 ```bash
+cd demos/healthcare
 docker compose up -d
 ```
 
@@ -260,7 +257,13 @@ Each demo spins up a full isolated stack via Docker Compose:
 - **Target system** — mock EHR/trading/classified-doc API on `net_secure`
 - **Observability** — log aggregator and audit viewer on `net_mgmt`
 
-The `g8e` binary at the repository root is bind-mounted into every container. No per-demo image rebuilds are needed when the binary changes.
+The `g8e` binary should be copied to `demos/bin/g8e` before running demos. Build the binary first with `make build`, then copy it to the demos directory:
+
+```bash
+cp g8e demos/bin/g8e
+```
+
+The binary is then bind-mounted into every container. No per-demo image rebuilds are needed when the binary changes.
 
 ### Prerequisites for demos
 
@@ -336,9 +339,9 @@ After the gateway is running and the CLI is authenticated:
 
 ```bash
 ./g8e gw status           # Gateway health and endpoint info
-./g8e data operators      # List enrolled operators
-./g8e data users          # List users
-./g8e data audit list     # Inspect the audit vault
+./g8e gw data operators   # List enrolled operators
+./g8e gw data users       # List users
+./g8e gw data audit list  # Inspect the audit vault
 ./g8e --help              # Full command reference
 ```
 

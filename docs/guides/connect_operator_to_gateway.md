@@ -5,7 +5,7 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-06-10
+Last Updated: 2026-06-11
 Version: v1.0.11
 
 ---
@@ -58,7 +58,7 @@ The gateway provides CLI commands to deploy and manage operators on remote hosts
 ./g8e operator deploy --hosts <host1,host2> --background
 ```
 
-This command copies the operator binary to remote hosts via SSH and optionally starts it in the background. Requires `./g8e auth login` first.
+This command copies the operator binary to remote hosts via SSH and optionally starts it in the background. Requires `./g8e auth login` first. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
 
 **Stream operator binary to remote hosts:**
 
@@ -66,7 +66,7 @@ This command copies the operator binary to remote hosts via SSH and optionally s
 ./g8e operator stream --hosts <host1,host2>
 ```
 
-This command streams the operator binary via SSH and executes it directly on remote hosts without copying. Useful for quick deployments or air-gapped scenarios.
+This command streams the operator binary via SSH and executes it directly on remote hosts without copying. Useful for quick deployments or air-gapped scenarios. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
 
 **Copy operator binary locally:**
 
@@ -80,6 +80,8 @@ This command streams the operator binary via SSH and executes it directly on rem
 ./g8e operator scp <user@host:path>
 ```
 
+This command uses scp to copy the operator binary to a remote host. Supports common scp flags including `-P` for SSH port, `-i` for identity file, `-p` to preserve attributes, `-v` for verbose output, and `-C` for compression. Use `--prompt` to interactively configure options.
+
 #### 3. CSR-Based Enrollment
 
 On the remote host, generate a CSR and enroll with the g8e Gateway:
@@ -90,17 +92,17 @@ On the remote host, generate a CSR and enroll with the g8e Gateway:
 
 The endpoint is the g8e Gateway IP address. The HTTP port (8080) is appended automatically. This command generates g8e Operator and CLI CSRs, submits them to the g8e Gateway, and saves the signed certificates to the PKI directory.
 
-#### 4. Start the g8e Gateway
+#### 4. Start the g8e Operator
 
-On the remote host, start the g8e Gateway with the enrolled certificates:
+On the remote host, start the g8e Operator with the enrolled certificates:
 
 ```bash
 ./g8e gw start
 ```
 
-The g8e Gateway will:
+The g8e Operator will:
 - Load the mTLS certificates from the PKI directory
-- Establish the control plane on port 8443 (HTTPS) and bootstrap on port 8080 (HTTP)
+- Connect to the Gateway control plane on port 8443 (HTTPS) and bootstrap on port 8080 (HTTP)
 - Initialize the local in-process Pub/Sub broker
 - Initialize the SQLite-backed audit vault with Git ledger
 - Execute mutations through the L1/L2/L3/L4/L5 verification pipeline
@@ -111,7 +113,7 @@ The g8e Gateway will:
 
 ### g8e Gateway Endpoint
 
-The g8e Gateway endpoint is configured via the `--endpoint` flag during CSR enrollment. The g8e Gateway itself does not require an endpoint flag at startup, as it binds to the configured ports.
+The g8e Gateway endpoint is configured via the `-e` or `--endpoint` flag during CSR enrollment. The g8e Gateway itself does not require an endpoint flag at startup, as it binds to the configured ports.
 
 ### PKI Directory
 
@@ -121,7 +123,7 @@ Specify the PKI directory via the `--pki-dir` flag when starting the g8e Gateway
 ./g8e gw start --pki-dir /etc/g8e/pki
 ```
 
-This defaults to `.g8e/pki` in the current working directory. The PKI directory contains the root CA, intermediate CA, g8e Gateway service certificates, and trust bundles.
+This defaults to `.g8e/pki` in the current working directory. The PKI directory contains the root CA, intermediate CA, g8e Operator service certificates, and trust bundles.
 
 ---
 
@@ -135,7 +137,7 @@ Check status:
 
 This reports:
 - Gateway process status and PID
-- Gateway endpoint URLs (Operator Bootstrap on HTTPS, Public API on HTTPS, MCP HTTP)
+- Gateway endpoint URLs (Operator Bootstrap on HTTPS, Public API on HTTPS, MCP HTTP on port 8080)
 - Gateway running state (RUNNING or STOPPED)
 
 ---
@@ -167,10 +169,10 @@ curl -X POST http://localhost:8080/api/v1/mcp/tools/call \
 **View MCP client configuration matrix:**
 
 ```bash
-./g8e mcp show
+./g8e mcp agent show <agent>
 ```
 
-This displays configurations side-by-side for different transport modes (stdio, HTTP, HTTPS).
+Replace `<agent>` with a supported agent (claude, cursor, devin, vscode, continue, aider, codeium, tabby, ollama, generic). This displays configurations side-by-side for different transport modes (stdio, HTTP, HTTPS).
 
 ### Direct Envelope Submission
 
@@ -195,7 +197,7 @@ The envelope must include `transaction_hash`, `nonce`, `expires_at`, and `state_
 View Gateway logs:
 
 ```bash
-./g8e gw logs --follow
+./g8e gw logs -f
 ```
 
 ### Restart
@@ -281,7 +283,7 @@ Verify the Gateway is not already running:
 Check Gateway logs for startup errors:
 
 ```bash
-./g8e gw logs --follow
+./g8e gw logs -f
 ```
 
 Verify PKI directory exists and contains valid certificates:
@@ -328,13 +330,13 @@ ls -la .g8e/data/ledger/
 Check Gateway logs for audit vault write errors:
 
 ```bash
-./g8e gw logs --follow
+./g8e gw logs -f
 ```
 
 Verify write permissions on the data directory:
 
 ```bash
-./g8e gw security validate
+./g8e gw security validate --pki-dir .g8e/pki --secrets-dir .g8e/secrets
 ```
 
 ### Authentication Failures

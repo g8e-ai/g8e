@@ -33,16 +33,6 @@ import (
 	"github.com/g8e-ai/g8e/protocol"
 )
 
-// contextKey is a custom type for context keys to avoid collisions.
-type contextKey string
-
-const (
-	userIDKey         contextKey = "user_id"
-	appIDKey          contextKey = "app_id"
-	tenantIDKey       contextKey = "tenant_id"
-	bindingPersonaKey contextKey = "binding_persona"
-)
-
 // PublicRouteRegistry defines routes that bypass authentication.
 // Exact paths are matched precisely. Prefixes allow any path under the prefix.
 // This centralized registry eliminates fragile HasPrefix duplication.
@@ -386,8 +376,11 @@ func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request,
 			}
 		}
 
-		// Stamp context with user_id
-		ctx := context.WithValue(r.Context(), userIDKey, op.UserID)
+		// Stamp context with user_id and operator session info
+		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, op.UserID)
+		ctx = context.WithValue(ctx, constants.ContextKeyTenantID, op.OrganizationID)
+		ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, op.ID)
+		ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, operatorSessionID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 		return true
 	}
@@ -464,8 +457,14 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			s.responder.Error(w, http.StatusForbidden, "mTLS identity mismatch")
 			return true
 		}
-		// Stamp context with user_id
-		ctx := context.WithValue(r.Context(), userIDKey, cliSession.UserID)
+		// Stamp context with user_id and optional operator session info (for MCP proxying)
+		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, cliSession.UserID)
+		if opID := r.Header.Get(constants.HeaderOperatorID); opID != "" {
+			ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, opID)
+		}
+		if opSessionID := r.Header.Get(constants.HeaderOperatorSessionID); opSessionID != "" {
+			ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, opSessionID)
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 		return true
 	}
@@ -689,7 +688,7 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *CanonicalDBService) 
 		}
 
 		// Stamp context with user_id
-		ctx := context.WithValue(r.Context(), userIDKey, webSession.UserID)
+		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, webSession.UserID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -780,7 +779,7 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Stamp context with identity and persona
-		ctx := context.WithValue(r.Context(), userIDKey, user.ID)
+		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, user.ID)
 		ctx = context.WithValue(ctx, constants.ContextKeyTenantID, tenantID)
 		ctx = context.WithValue(ctx, constants.ContextKeyBindingPersona, bindingPersona)
 
