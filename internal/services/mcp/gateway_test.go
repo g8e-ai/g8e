@@ -1853,7 +1853,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 
 		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
 
-		result, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{"arg":"val"}`))
+		result, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{"arg":"val"}`), "test-session-id")
 		require.NoError(t, err)
 		require.Contains(t, result, "tool output")
 	})
@@ -1862,7 +1862,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 		t.Parallel()
 		g := newTestGatewayService(t, withDownstreamURL(""))
 
-		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`))
+		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`), "test-session-id")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "no downstream MCP server configured")
 	})
@@ -1876,7 +1876,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 			g.recordFailure()
 		}
 
-		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`))
+		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`), "test-session-id")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "circuit open")
 	})
@@ -1885,7 +1885,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 		t.Parallel()
 		g := newTestGatewayService(t, withDownstreamURL("http://localhost:9999"), withCircuitBreaker(5, 1*time.Minute))
 
-		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`))
+		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`), "test-session-id")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to call downstream MCP server")
 	})
@@ -1899,7 +1899,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 
 		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
 
-		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`))
+		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`), "test-session-id")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "status 500")
 	})
@@ -1915,7 +1915,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 
 		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
 
-		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`))
+		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`), "test-session-id")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "MCP error")
 	})

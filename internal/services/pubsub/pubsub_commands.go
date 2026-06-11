@@ -743,27 +743,13 @@ func (rs *OperatorPubSubService) handleMcpCallRequestSync(ctx context.Context, m
 		"tool", mcpReq.ToolName,
 		"transaction_id", msg.ID)
 
-	summary, err := rs.mcpGateway.DispatchToDownstream(ctx, mcpReq.ToolName, args)
+	summary, err := rs.mcpGateway.DispatchToDownstream(ctx, mcpReq.ToolName, args, msg.OperatorSessionID)
 	if err != nil {
 		return "", fmt.Errorf("downstream MCP dispatch failed: %w", err)
 	}
 	// Bound the receipt summary to avoid unbounded growth on chatty tools.
 	if len(summary) > 4096 {
 		summary = summary[:4096]
-	}
-
-	if rs.audit != nil && rs.audit.auditStore != nil {
-		event := &storage.Event{
-			OperatorSessionID: msg.OperatorSessionID, // Use envelope identity (app ID for agent runs)
-			Timestamp:         time.Now().UTC(),
-			Type:              constants.Event.Operator.Audit.McpCall,
-			ContentText:       mcpReq.ToolName,
-			CommandRaw:        string(args),
-			CommandStdout:     summary,
-		}
-		if _, err := rs.audit.auditStore.RecordEvent(event); err != nil {
-			rs.logger.Warn("Failed to record MCP call event in audit store", string(constants.ConnectionStateError), err)
-		}
 	}
 
 	return summary, nil

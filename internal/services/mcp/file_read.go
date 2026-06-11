@@ -108,15 +108,34 @@ func (t *FileReadTool) Execute(ctx context.Context, args json.RawMessage) (CallT
 		"/etc/passwd",
 		"/etc/gshadow",
 		"/etc/sudoers",
-		".ssh/id_rsa",
-		".ssh/id_ed25519",
-		".ssh/id_ecdsa",
+	}
+	for _, dangerous := range dangerousPaths {
+		if absPath == dangerous {
+			result := FileReadResult{
+				Path:  absPath,
+				Error: "access denied: sensitive file",
+			}
+			resultJSON, _ := json.Marshal(result)
+			return CallToolResult{
+				Content: []TextContent{
+					{
+						Type: "text",
+						Text: string(resultJSON),
+					},
+				},
+			}, nil
+		}
+	}
+
+	// Check for SSH private key files by filename only
+	dangerousBasenames := []string{
 		"id_rsa",
 		"id_ed25519",
 		"id_ecdsa",
 	}
-	for _, dangerous := range dangerousPaths {
-		if strings.Contains(absPath, dangerous) {
+	basename := filepath.Base(absPath)
+	for _, dangerous := range dangerousBasenames {
+		if basename == dangerous {
 			result := FileReadResult{
 				Path:  absPath,
 				Error: "access denied: sensitive file",

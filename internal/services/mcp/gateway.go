@@ -39,6 +39,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -83,6 +84,7 @@ type GatewayService struct {
 	}
 	sessionValidator  SessionValidator
 	auditLogger       AuditLogger
+	auditStore        *storage.SQLAuditStore
 	nativeToolHandler *NativeToolHandler
 	posture           string // Gateway posture: doctrine, consensus, or notary
 
@@ -1510,7 +1512,7 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 // This implements the Actuator Egress phase for MCP protocol translation.
 // Native tools are executed locally so every call — native or downstream — passes through
 // the full L1-L5 governance pipeline and produces a signed receipt.
-func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName string, toolArgs json.RawMessage) (string, error) {
+func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName string, toolArgs json.RawMessage, operatorSessionID string) (string, error) {
 	if g.isNativeTool(toolName) && g.nativeToolHandler != nil {
 		result, err := g.nativeToolHandler.HandleTool(ctx, toolName, toolArgs)
 		if err != nil {
@@ -1527,6 +1529,22 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 		if summary == "" {
 			summary = "completed"
 		}
+
+		// Audit native tool execution
+		if g.auditStore != nil {
+			event := &storage.Event{
+				OperatorSessionID: operatorSessionID,
+				Timestamp:         time.Now().UTC(),
+				Type:              constants.Event.Operator.Audit.McpCall,
+				ContentText:       toolName,
+				CommandRaw:        string(toolArgs),
+				CommandStdout:     summary,
+			}
+			if _, err := g.auditStore.RecordEvent(event); err != nil {
+				g.logger.Warn("Failed to record native tool call event in audit store", "error", err, "tool", toolName)
+			}
+		}
+
 		return summary, nil
 	}
 
@@ -1600,6 +1618,21 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	resultSummary := summary.String()
 	if resultSummary == "" {
 		resultSummary = "completed"
+	}
+
+	// Audit downstream MCP call execution
+	if g.auditStore != nil {
+		event := &storage.Event{
+			OperatorSessionID: operatorSessionID,
+			Timestamp:         time.Now().UTC(),
+			Type:              constants.Event.Operator.Audit.McpCall,
+			ContentText:       toolName,
+			CommandRaw:        string(toolArgs),
+			CommandStdout:     resultSummary,
+		}
+		if _, err := g.auditStore.RecordEvent(event); err != nil {
+			g.logger.Warn("Failed to record downstream MCP call event in audit store", "error", err, "tool", toolName)
+		}
 	}
 
 	return resultSummary, nil
