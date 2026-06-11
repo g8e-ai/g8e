@@ -50,10 +50,10 @@ func TestNativeToolHandler_HandleTool(t *testing.T) {
 		}
 	})
 
-	t.Run("all 29 tools registered", func(t *testing.T) {
+	t.Run("all 30 tools registered", func(t *testing.T) {
 		tools := handler.ListTools()
-		if len(tools) != 29 {
-			t.Errorf("expected 29 registered tools, got %d", len(tools))
+		if len(tools) != 30 {
+			t.Errorf("expected 30 registered tools, got %d", len(tools))
 		}
 
 		expectedTools := []string{
@@ -83,7 +83,8 @@ func TestNativeToolHandler_HandleTool(t *testing.T) {
 			"git_ops",
 			"cloud_metadata",
 			"k8s_inspect",
-			"shell_execute",
+			"read_file",
+			"run_shell_command",
 			"net_ssh_known_hosts",
 			"operator_deploy",
 		}
@@ -1065,8 +1066,8 @@ func TestNativeTools(t *testing.T) {
 	require.NoError(t, err)
 	nativeTools := handler.ListTools()
 
-	if len(nativeTools) != 29 {
-		t.Errorf("expected 29 native tools, got %d", len(nativeTools))
+	if len(nativeTools) != 30 {
+		t.Errorf("expected 30 native tools, got %d", len(nativeTools))
 	}
 
 	expectedTools := []string{
@@ -1096,6 +1097,7 @@ func TestNativeTools(t *testing.T) {
 		"git_ops",
 		"cloud_metadata",
 		"k8s_inspect",
+		"read_file",
 		"run_shell_command",
 		"net_ssh_known_hosts",
 		"operator_deploy",

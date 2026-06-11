@@ -15,7 +15,7 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/governance"
@@ -120,7 +121,10 @@ type auditAttributionCaptureProcessor struct {
 
 func (e *auditAttributionCaptureProcessor) ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error) {
 	var envelope commonv1.GovernanceEnvelope
-	if err := json.Unmarshal(payload, &envelope); err == nil {
+	if err := protojson.Unmarshal(payload, &envelope); err != nil {
+		// Log the error for debugging
+		fmt.Printf("DEBUG: Failed to unmarshal envelope: %v\nPayload: %s\n", err, string(payload))
+	} else {
 		e.lastEnvelope = &envelope
 	}
 	return e.delegate.ProcessEnvelope(ctx, payload)

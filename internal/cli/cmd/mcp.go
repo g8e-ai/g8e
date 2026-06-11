@@ -240,6 +240,7 @@ type cliProxySession struct {
 	userID            string
 	operatorID        string
 	operatorSessionID string
+	isAppMode         bool
 }
 
 // buildProxySession constructs a cliProxySession. It first reads session
@@ -260,7 +261,8 @@ func buildProxySession(cfg *config.Config) (*cliProxySession, error) {
 	// Prefer app identity when present (for agent runs)
 	appCert := os.Getenv(envG8EAppCert)
 	appKey := os.Getenv(envG8EAppKey)
-	if appCert != "" && appKey != "" {
+	isAppMode := appCert != "" && appKey != ""
+	if isAppMode {
 		certFile = appCert
 		keyFile = appKey
 	}
@@ -270,8 +272,8 @@ func buildProxySession(cfg *config.Config) (*cliProxySession, error) {
 	operatorID := os.Getenv(envG8EOperatorID)
 	operatorSessionID := os.Getenv(envG8EOperatorSessionID)
 
-	// Fall back to stored credentials when env vars are not present.
-	if cliSessionID == "" || userID == "" {
+	// Fall back to stored credentials when env vars are not present and not in app mode.
+	if !isAppMode && (cliSessionID == "" || userID == "") {
 		if err := auth.BootstrapCLIWithoutPasskey(cfg); err != nil {
 			return nil, fmt.Errorf("CLI auth failed: %w", err)
 		}
@@ -314,6 +316,7 @@ func buildProxySession(cfg *config.Config) (*cliProxySession, error) {
 		userID:            userID,
 		operatorID:        operatorID,
 		operatorSessionID: operatorSessionID,
+		isAppMode:         isAppMode,
 	}
 
 	// Test the connection - if it fails due to DNS, fall back to IP
@@ -419,8 +422,8 @@ func runMCPStdioProxy(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-// proxySessionToGateway posts a JSON-RPC request to the gateway over mTLS,
-// attaching the bound CLI session headers on every call.
+// proxySessionToGateway posts a JSON-RPC request to the gateway over mTLS.
+// In CLI mode, it attaches CLI session headers. In app mode, it relies purely on mTLS cert.
 func proxySessionToGateway(session *cliProxySession, req JSONRPCRequest) (JSONRPCResponse, error) {
 	reqBody, err := json.Marshal(req)
 	if err != nil {
@@ -432,10 +435,14 @@ func proxySessionToGateway(session *cliProxySession, req JSONRPCRequest) (JSONRP
 		return JSONRPCResponse{}, err
 	}
 	httpReq.Header.Set(constants.HeaderContentType, "application/json")
-	httpReq.Header.Set(constants.HeaderCLISessionID, session.cliSessionID)
-	httpReq.Header.Set(constants.HeaderUserID, session.userID)
-	httpReq.Header.Set(constants.HeaderOperatorID, session.operatorID)
-	httpReq.Header.Set(constants.HeaderOperatorSessionID, session.operatorSessionID)
+
+	// Only send CLI session headers in CLI mode. App mode uses pure mTLS cert auth.
+	if !session.isAppMode {
+		httpReq.Header.Set(constants.HeaderCLISessionID, session.cliSessionID)
+		httpReq.Header.Set(constants.HeaderUserID, session.userID)
+		httpReq.Header.Set(constants.HeaderOperatorID, session.operatorID)
+		httpReq.Header.Set(constants.HeaderOperatorSessionID, session.operatorSessionID)
+	}
 
 	httpResp, err := session.client.Do(httpReq)
 	if err != nil {

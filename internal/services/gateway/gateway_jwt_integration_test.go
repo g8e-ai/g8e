@@ -173,6 +173,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		Responder:       resp,
 		SuspendedStore:  db,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
@@ -328,6 +329,7 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 		Responder:       resp,
 		SuspendedStore:  db,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
@@ -498,6 +500,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 		Responder:       resp,
 		SuspendedStore:  db,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)

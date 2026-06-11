@@ -26,7 +26,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/protocol"
 )
 
 // AppEnrollmentService handles external app enrollment.
@@ -97,8 +96,6 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 		return &AppEnrollResponse{Success: false, Error: "app_name must contain only alphanumeric characters, hyphens, and underscores"}, nil
 	}
 
-	appID := s.generateAppID(sanitizedName)
-
 	// Validate CSR format
 	block, _ := pem.Decode([]byte(req.CSR))
 	if block == nil || block.Type != "CERTIFICATE REQUEST" {
@@ -116,17 +113,31 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 	}
 
 	// Sign the CSR with the Operator intermediate CA
-	// Use appID as the operatorID parameter for AppSPIFFEID generation
-	certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, "app", req.OrganizationID, appID, "", "", "")
+	// Pass the app name (not the full SPIFFE ID) - SignCSR will generate the SPIFFE ID
+	certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, "app", req.OrganizationID, sanitizedName, "", "", "")
 	if err != nil {
-		s.logger.Error("Failed to sign app CSR", "app_id", appID, "error", err)
+		s.logger.Error("Failed to sign app CSR", "app_name", sanitizedName, "error", err)
 		return &AppEnrollResponse{Success: false, Error: "failed to sign certificate"}, nil
 	}
+
+	// Extract the actual appID from the signed certificate's URI SAN
+	certBlock, _ := pem.Decode([]byte(certPEM))
+	if certBlock == nil {
+		return &AppEnrollResponse{Success: false, Error: "failed to parse issued certificate"}, nil
+	}
+	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
+	if err != nil {
+		return &AppEnrollResponse{Success: false, Error: fmt.Sprintf("failed to parse issued certificate: %v", err)}, nil
+	}
+	if len(parsedCert.URIs) == 0 {
+		return &AppEnrollResponse{Success: false, Error: "issued certificate has no URI SAN"}, nil
+	}
+	appID := parsedCert.URIs[0].String()
 
 	// Persist default AppPolicy for the enrolled app
 	// This is required for handleAppAuth to accept the app certificate
 	policy := models.AppPolicy{
-		AppID:              appID,   // full SPIFFE ID string
+		AppID:              appID,   // full SPIFFE ID string from certificate
 		AllowedCollections: nil,    // not used for /mcp
 		RateLimitRPS:       0,      // 0 = unlimited (enforceAppPolicy skips when 0)
 		MaxPayloadBytes:    0,      // 0 = no extra cap (gateway maxPayloadBytes still applies)
@@ -152,16 +163,6 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 		trustBundle = []byte{}
 	}
 
-	// Calculate expiry time from certificate
-	certBlock, _ := pem.Decode([]byte(certPEM))
-	if certBlock == nil {
-		return &AppEnrollResponse{Success: false, Error: "failed to parse issued certificate"}, nil
-	}
-	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
-	if err != nil {
-		return &AppEnrollResponse{Success: false, Error: fmt.Sprintf("failed to parse issued certificate: %v", err)}, nil
-	}
-
 	s.logger.Info("[APP_ENROLLMENT] External app enrolled (identity only)",
 		"app_id", appID,
 		"app_name", sanitizedName,
@@ -177,18 +178,6 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 		// L2SignerID is deliberately omitted as enrollment is identity-only by default.
 		// App policies and signers must be explicitly configured by an admin.
 	}, nil
-}
-
-// generateAppID generates a SPIFFE ID for the app.
-func (s *AppEnrollmentService) generateAppID(appName string) string {
-	wid := protocol.NewWorkloadIdentity()
-	appURL, err := wid.AppSPIFFEURL(appName)
-	if err != nil {
-		s.logger.Error("Failed to generate App SPIFFE URL", "app_name", appName, "error", err)
-		// Fallback to a simple ID format if SPIFFE URL generation fails
-		return fmt.Sprintf("spiffe://g8e.ai/app/%s", appName)
-	}
-	return appURL.String()
 }
 
 // isValidAppName validates that the app name contains only allowed characters.

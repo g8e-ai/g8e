@@ -145,6 +145,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		Responder:       res,
 		SuspendedStore:  db,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize MCP gateway: %w", err)
@@ -290,6 +291,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 		Responder:       res,
 		SuspendedStore:  db,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize MCP gateway: %w", err)

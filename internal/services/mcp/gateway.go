@@ -84,6 +84,7 @@ type GatewayService struct {
 	sessionValidator  SessionValidator
 	auditLogger       AuditLogger
 	nativeToolHandler *NativeToolHandler
+	posture           string // Gateway posture: doctrine, consensus, or notary
 
 	// Circuit breaker state
 	mu               sync.RWMutex
@@ -112,6 +113,7 @@ type Dependencies struct {
 	Responder       *response.Writer
 	SuspendedStore  SuspendedTransactionStore
 	MaxPayloadBytes int64
+	Posture         string // Gateway posture: doctrine, consensus, or notary
 }
 
 func NewGatewayService(deps Dependencies) (*GatewayService, error) {
@@ -132,6 +134,7 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 		suspendedStore:    deps.SuspendedStore,
 		fieldPathRegistry: fieldPathRegistry,
 		nativeToolHandler: nativeToolHandler,
+		posture:           deps.Posture,
 		maxFailures:       5,
 		cooldownDuration:  1 * time.Minute,
 		maxPayloadBytes:   deps.MaxPayloadBytes,
@@ -1192,6 +1195,18 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		Governance: &commonv1.GovernanceMetadata{
 			GatewaySigned: true,
 		},
+	}
+
+	// In doctrine and consensus postures, L3 is audited not enforced, so we auto-approve
+	// to avoid WebAuthn prompts for local MCP agents. In notary posture, L3 is strictly
+	// enforced and requires human authorization.
+	if g.posture == "doctrine" || g.posture == "consensus" {
+		if env.Governance == nil {
+			env.Governance = &commonv1.GovernanceMetadata{}
+		}
+		env.Governance.L3 = &commonv1.L3Metadata{
+			AutoApproved: true,
+		}
 	}
 
 	// Enrich from context if present

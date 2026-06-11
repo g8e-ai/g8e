@@ -75,6 +75,7 @@ func TestMCPOriginGuard(t *testing.T) {
 		Responder:       infra.Responder,
 		SuspendedStore:  infra.DB,
 		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(infra.Cfg.Gateway.Posture),
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
@@ -163,6 +164,7 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 		Responder:       infra.Responder,
 		SuspendedStore:  infra.DB,
 		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(infra.Cfg.Gateway.Posture),
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
@@ -196,6 +198,7 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 		Responder:       infra.Responder,
 		SuspendedStore:  infra.DB,
 		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(infra.Cfg.Gateway.Posture),
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
 
