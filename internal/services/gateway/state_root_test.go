@@ -32,11 +32,11 @@ func TestStateRootSemantics(t *testing.T) {
 	db := newTestDB(t)
 
 	// 1. Initial state root must be deterministic
-	root1, err := db.GetCurrentStateRoot()
+	root1, err := db.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 	require.NotEmpty(t, root1)
 
-	root1Again, err := db.GetCurrentStateRoot()
+	root1Again, err := db.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 	assert.Equal(t, root1, root1Again, "State root must be deterministic for identical state")
 
@@ -49,7 +49,7 @@ func TestStateRootSemantics(t *testing.T) {
 	// 2. Document content change alters root
 	err = db.DocStore.DocSet("test", "d1", json.RawMessage(`{"val":1}`))
 	require.NoError(t, err)
-	root2, err := db.GetCurrentStateRoot()
+	root2, err := db.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 	assert.NotEqual(t, root1, root2, "Content change must alter state root")
 
@@ -64,43 +64,43 @@ func TestStateRootSemantics(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	err = db.DocStore.DocSet("test", "d1", json.RawMessage(`{"val":1}`))
 	require.NoError(t, err)
-	root3, err := db.GetCurrentStateRoot()
+	root3, err := db.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 	assert.Equal(t, root2, root3, "Metadata-only change (updated_at) must NOT alter state root")
 
 	// 4. KV change alters root
-	err = db.KVSet("k1", "v1", 0)
+	err = db.KVStore.KVSet("k1", "v1", 0)
 	require.NoError(t, err)
-	root4, err := db.GetCurrentStateRoot()
+	root4, err := db.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 	assert.NotEqual(t, root3, root4, "KV change must alter state root")
 
 	// 5. Blob change alters root
-	err = db.BlobPut("ns", "b1", []byte("data"), "text/plain", 0)
+	err = db.BlobStore.BlobPut("ns", "b1", []byte("data"), "text/plain", 0)
 	require.NoError(t, err)
-	root5, err := db.GetCurrentStateRoot()
+	root5, err := db.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 	assert.NotEqual(t, root4, root5, "Blob change must alter state root")
 
 	// 6. Nonce insert does NOT alter root
-	replayed, err := db.ReserveNonce("nonce1", time.Now().Add(time.Hour))
+	replayed, err := db.ReplayStore.ReserveNonce("nonce1", time.Now().Add(time.Hour))
 	require.NoError(t, err)
 	assert.False(t, replayed)
-	root6, err := db.GetCurrentStateRoot()
+	root6, err := db.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 	assert.Equal(t, root5, root6, "Nonce insert must NOT alter state root")
 
 	// 7. SSE event insert does NOT alter root
-	err = db.SSEEventsAppend(SSERoute{WebSessionID: "session1"}, "type1", "payload1", "")
+	err = db.SSEStore.SSEEventsAppend(SSERoute{WebSessionID: "session1"}, "type1", "payload1", "")
 	require.NoError(t, err)
-	root7, err := db.GetCurrentStateRoot()
+	root7, err := db.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 	assert.Equal(t, root6, root7, "SSE event insert must NOT alter state root")
 
 	// 8. Expired KV is excluded from root
-	err = db.KVSet("exp1", "val", 1) // 1 second TTL
+	err = db.KVStore.KVSet("exp1", "val", 1) // 1 second TTL
 	require.NoError(t, err)
-	rootWithExp, err := db.GetCurrentStateRoot()
+	rootWithExp, err := db.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 	assert.NotEqual(t, root7, rootWithExp)
 
@@ -108,7 +108,7 @@ func TestStateRootSemantics(t *testing.T) {
 	_, err = db.db.Exec("DELETE FROM kv_store WHERE key = 'exp1'")
 	require.NoError(t, err)
 
-	rootAfterExp, err := db.GetCurrentStateRoot()
+	rootAfterExp, err := db.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 	assert.Equal(t, root7, rootAfterExp, "Expired KV must be excluded from state root calculation")
 }
@@ -131,18 +131,18 @@ func TestStateRootDeterministicOrder(t *testing.T) {
 
 	// Insert in one order into db1
 	require.NoError(t, db1.DocStore.DocSet("test", "a", json.RawMessage(`{"v":1}`)))
-	require.NoError(t, db1.DocSet("test", "b", json.RawMessage(`{"v":2}`)))
-	require.NoError(t, db1.KVSet("k1", "v1", 0))
-	require.NoError(t, db1.KVSet("k2", "v2", 0))
-	root1, err := db1.GetCurrentStateRoot()
+	require.NoError(t, db1.DocStore.DocSet("test", "b", json.RawMessage(`{"v":2}`)))
+	require.NoError(t, db1.KVStore.KVSet("k1", "v1", 0))
+	require.NoError(t, db1.KVStore.KVSet("k2", "v2", 0))
+	root1, err := db1.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 
 	// Insert in different order into db2
-	require.NoError(t, db2.KVSet("k2", "v2", 0))
+	require.NoError(t, db2.KVStore.KVSet("k2", "v2", 0))
 	require.NoError(t, db2.DocStore.DocSet("test", "b", json.RawMessage(`{"v":2}`)))
-	require.NoError(t, db2.KVSet("k1", "v1", 0))
-	require.NoError(t, db2.DocSet("test", "a", json.RawMessage(`{"v":1}`)))
-	root2, err := db2.GetCurrentStateRoot()
+	require.NoError(t, db2.KVStore.KVSet("k1", "v1", 0))
+	require.NoError(t, db2.DocStore.DocSet("test", "a", json.RawMessage(`{"v":1}`)))
+	root2, err := db2.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 
 	assert.Equal(t, root1, root2, "State root must be deterministic regardless of insertion order")
@@ -153,7 +153,7 @@ func TestStateRootCaching(t *testing.T) {
 	db := newTestDB(t)
 
 	// Get initial root and version
-	root1, err := db.GetCurrentStateRoot()
+	root1, err := db.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 
 	var version1 int64
@@ -161,16 +161,16 @@ func TestStateRootCaching(t *testing.T) {
 	require.NoError(t, err)
 
 	// Call again without changes - should use cache
-	root2, err := db.GetCurrentStateRoot()
+	root2, err := db.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 	assert.Equal(t, root1, root2, "Cached root must match")
 
 	// Verify cache is being used by checking internal state
-	assert.Equal(t, root1, db.stateRootSvc.cachedStateRoot, "Internal cache should be set")
-	assert.Equal(t, version1, db.stateRootSvc.cachedStateVersion, "Internal version should match")
+	assert.Equal(t, root1, db.StateRootSvc.cachedStateRoot, "Internal cache should be set")
+	assert.Equal(t, version1, db.StateRootSvc.cachedStateVersion, "Internal version should match")
 
 	// Make a change
-	err = db.DocSet("cache_test", "doc1", json.RawMessage(`{"data":1}`))
+	err = db.DocStore.DocSet("cache_test", "doc1", json.RawMessage(`{"data":1}`))
 	require.NoError(t, err)
 
 	// Version should have incremented
@@ -180,13 +180,13 @@ func TestStateRootCaching(t *testing.T) {
 	assert.Greater(t, version2, version1, "Version must increment on change")
 
 	// Get new root - should recalculate
-	root3, err := db.GetCurrentStateRoot()
+	root3, err := db.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 	assert.NotEqual(t, root1, root3, "Root must change after data change")
 
 	// Cache should be updated
-	assert.Equal(t, root3, db.stateRootSvc.cachedStateRoot, "Cache should be updated")
-	assert.Equal(t, version2, db.stateRootSvc.cachedStateVersion, "Cache version should be updated")
+	assert.Equal(t, root3, db.StateRootSvc.cachedStateRoot, "Cache should be updated")
+	assert.Equal(t, version2, db.StateRootSvc.cachedStateVersion, "Cache version should be updated")
 }
 
 func BenchmarkStateRootCalculation(b *testing.B) {
@@ -199,14 +199,14 @@ func BenchmarkStateRootCalculation(b *testing.B) {
 	// Populate with realistic data
 	for i := 0; i < 100; i++ {
 		docData := fmt.Sprintf(`{"field1":"value%d","field2":%d}`, i, i*2)
-		require.NoError(b, db.DocSet("benchmark", fmt.Sprintf("doc%d", i), json.RawMessage(docData)))
-		require.NoError(b, db.KVSet(fmt.Sprintf("key%d", i), fmt.Sprintf("val%d", i), 0))
-		require.NoError(b, db.BlobPut("ns", fmt.Sprintf("blob%d", i), []byte(fmt.Sprintf("data%d", i)), "text/plain", 0))
+		require.NoError(b, db.DocStore.DocSet("benchmark", fmt.Sprintf("doc%d", i), json.RawMessage(docData)))
+		require.NoError(b, db.KVStore.KVSet(fmt.Sprintf("key%d", i), fmt.Sprintf("val%d", i), 0))
+		require.NoError(b, db.BlobStore.BlobPut("ns", fmt.Sprintf("blob%d", i), []byte(fmt.Sprintf("data%d", i)), "text/plain", 0))
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := db.GetCurrentStateRoot()
+		_, err := db.StateRootSvc.GetCurrentStateRoot()
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -223,14 +223,14 @@ func BenchmarkStateRootLargeDataset(b *testing.B) {
 	// Populate with larger dataset to test scalability
 	for i := 0; i < 1000; i++ {
 		docData := fmt.Sprintf(`{"field1":"value%d","field2":%d,"field3":"%s"}`, i, i*2, strings.Repeat("x", 100))
-		require.NoError(b, db.DocSet("benchmark", fmt.Sprintf("doc%d", i), json.RawMessage(docData)))
-		require.NoError(b, db.KVSet(fmt.Sprintf("key%d", i), fmt.Sprintf("val%d", i), 0))
-		require.NoError(b, db.BlobPut("ns", fmt.Sprintf("blob%d", i), []byte(strings.Repeat("y", 500)), "text/plain", 0))
+		require.NoError(b, db.DocStore.DocSet("benchmark", fmt.Sprintf("doc%d", i), json.RawMessage(docData)))
+		require.NoError(b, db.KVStore.KVSet(fmt.Sprintf("key%d", i), fmt.Sprintf("val%d", i), 0))
+		require.NoError(b, db.BlobStore.BlobPut("ns", fmt.Sprintf("blob%d", i), []byte(strings.Repeat("y", 500)), "text/plain", 0))
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := db.GetCurrentStateRoot()
+		_, err := db.StateRootSvc.GetCurrentStateRoot()
 		if err != nil {
 			b.Fatal(err)
 		}

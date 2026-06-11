@@ -141,7 +141,7 @@ func TestBootstrapFlow(t *testing.T) {
 		{Field: "target", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", bootstrapUserID))},
 		{Field: "action", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", models.AdminAuditActionRetireLocalOwner))},
 	}
-	results, err := h.db.DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
+	results, err := h.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
 	require.NoError(t, err)
 	require.Len(t, results, 1, "Expected exactly one audit entry for bootstrap retirement")
 

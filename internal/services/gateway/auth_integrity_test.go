@@ -53,7 +53,7 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(disabledUser)
 	require.NoError(t, err)
-	err = db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
+	err = db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
 	require.NoError(t, err)
 
 	// Create a CLISession linked to the disabled user
@@ -68,7 +68,7 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	}
 	cliSessionBytes, err := json.Marshal(cliSession)
 	require.NoError(t, err)
-	err = db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes)
+	err = db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes)
 	require.NoError(t, err)
 
 	// Verify that the user is marked as disabled
@@ -79,7 +79,7 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	assert.Equal(t, constants.UserStatusDisabled, user.Status)
 
 	// Verify that CLISession exists and is linked to the disabled user
-	cliDoc, err := db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+	cliDoc, err := db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	require.NoError(t, err)
 	assert.NotNil(t, cliDoc)
 
@@ -119,7 +119,7 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(activeUser)
 	require.NoError(t, err)
-	err = db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
+	err = db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
 	require.NoError(t, err)
 
 	// Verify that the user is marked as active

@@ -44,13 +44,13 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	bootstrapUser, err := adminController.userSvc.CreateBootstrapUser()
 	require.NoError(t, err)
 	require.NotNil(t, bootstrapUser)
-	t.Cleanup(func() { adminController.db.DocDelete("users", bootstrapUser.ID) })
+	t.Cleanup(func() { adminController.db.DocStore.DocDelete("users", bootstrapUser.ID) })
 
 	// Create a non-bootstrap user for testing
 	regularUser, err := adminController.userSvc.CreateUser()
 	require.NoError(t, err)
 	require.NotNil(t, regularUser)
-	t.Cleanup(func() { adminController.db.DocDelete("users", regularUser.ID) })
+	t.Cleanup(func() { adminController.db.DocStore.DocDelete("users", regularUser.ID) })
 
 	// Create an app policy document for testing
 	now := time.Now()
@@ -67,9 +67,9 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	}
 	policyDoc, err := json.Marshal(appPolicy)
 	require.NoError(t, err)
-	err = adminController.db.DocSet("app_policies", "test-app-id", policyDoc)
+	err = adminController.db.DocStore.DocSet("app_policies", "test-app-id", policyDoc)
 	require.NoError(t, err)
-	t.Cleanup(func() { adminController.db.DocDelete("app_policies", "test-app-id") })
+	t.Cleanup(func() { adminController.db.DocStore.DocDelete("app_policies", "test-app-id") })
 
 	// Generate a valid Ed25519 public key for testing
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -192,7 +192,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, rr.Code)
 
 		// Verify the signer was added to the database
-		signerDoc, err := adminController.db.DocGet("trusted_signers", "test-app-id")
+		signerDoc, err := adminController.db.DocStore.DocGet("trusted_signers", "test-app-id")
 		require.NoError(t, err)
 		require.NotNil(t, signerDoc)
 		assert.Equal(t, "test-app-id", signerDoc.ID)

@@ -22,9 +22,7 @@ package gateway
 
 import (
 	"context"
-	"crypto/ed25519"
 	_ "embed"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -36,7 +34,6 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -74,14 +71,14 @@ type CanonicalDBService struct {
 	vault      *vault.Vault
 
 	// Extracted services - initialized in OpenCanonicalDBService
-	DocStore        *DocumentStoreService
-	AppPolicyStore  *AppPolicyStoreService
-	SignerStore     *SignerStoreService
-	StateRootSvc    *StateRootService
-	ReplayStore     *ReplayStoreService
-	KVStore         *KVStoreService
-	SSEStore        *SSEEventService
-	BlobStore       *BlobStoreService
+	DocStore       *DocumentStoreService
+	AppPolicyStore *AppPolicyStoreService
+	SignerStore    *SignerStoreService
+	StateRootSvc   *StateRootService
+	ReplayStore    *ReplayStoreService
+	KVStore        *KVStoreService
+	SSEStore       *SSEEventService
+	BlobStore      *BlobStoreService
 
 	// Shutdown tracking
 	mu      sync.Mutex
@@ -279,8 +276,7 @@ func (s *CanonicalDBService) initStateRoot() error {
 	return nil
 }
 
-
-// RunMaintenance periodically removes expired entries.
+// RunMaintenance periodically removes expired entries by delegating to extracted services.
 func (s *CanonicalDBService) RunMaintenance(ctx context.Context) {
 	defer s.wg.Done()
 	ticker := time.NewTicker(30 * time.Second)
@@ -291,13 +287,15 @@ func (s *CanonicalDBService) RunMaintenance(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			now := sqliteutil.NowTimestamp()
-			// KV store
-			_, _ = s.db.ExecWithRetry("DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
-			// Blobs
-			_, _ = s.db.ExecWithRetry("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
-			// Nonces
-			_, _ = s.db.ExecWithRetry("DELETE FROM nonces WHERE expires_at < ?", now)
+			if err := s.KVStore.RunMaintenance(); err != nil {
+				s.logger.Warn("KV store maintenance error", "error", err)
+			}
+			if err := s.BlobStore.RunMaintenance(); err != nil {
+				s.logger.Warn("Blob store maintenance error", "error", err)
+			}
+			if err := s.ReplayStore.CleanupExpiredNonces(); err != nil {
+				s.logger.Warn("Replay store maintenance error", "error", err)
+			}
 		}
 	}
 }
@@ -477,26 +475,3 @@ func (s *CanonicalDBService) Close() error {
 func (s *CanonicalDBService) Wait() {
 	s.wg.Wait()
 }
-
-
-
-
-
-
-// RunTTLCleanup periodically removes expired KV entries and expired blobs.
-func (s *CanonicalDBService) RunTTLCleanup(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			now := sqliteutil.NowTimestamp()
-			_, _ = s.db.ExecWithRetry("DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
-			_, _ = s.db.ExecWithRetry("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
-		}
-	}
-}
-

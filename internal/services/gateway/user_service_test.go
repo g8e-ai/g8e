@@ -140,7 +140,7 @@ func TestUserService_Disable(t *testing.T) {
 		filters := []models.DocFilter{
 			{Field: "target", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", user.ID))},
 		}
-		results, err := db.DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
+		results, err := db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
 		require.NoError(t, err)
 		require.Len(t, results, 1)
 

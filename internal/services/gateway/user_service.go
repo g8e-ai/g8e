@@ -32,8 +32,9 @@ import (
 // UserService handles user management in the Operator Gateway.
 // This replaces client's UserService as the authoritative user source.
 type UserService struct {
-	db     *CanonicalDBService
-	logger *slog.Logger
+	db      *CanonicalDBService
+	logger  *slog.Logger
+	authSvc *AuthService // Optional: for cache invalidation on user changes
 }
 
 // NewUserService creates a new UserService.
@@ -42,6 +43,12 @@ func NewUserService(db *CanonicalDBService, logger *slog.Logger) *UserService {
 		db:     db,
 		logger: logger,
 	}
+}
+
+// SetAuthService sets the auth service for cache invalidation.
+// This is optional; if nil, cache invalidation is skipped.
+func (s *UserService) SetAuthService(authSvc *AuthService) {
+	s.authSvc = authSvc
 }
 
 // CreateUser creates a new active user with a generated ID.
@@ -201,6 +208,11 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 
 	if err := s.updateUserStatus(userID, constants.UserStatusDisabled); err != nil {
 		return fmt.Errorf("failed to disable user %s: %w", userID, err)
+	}
+
+	// Invalidate auth cache for this user
+	if s.authSvc != nil {
+		s.authSvc.InvalidateUserCache(userID)
 	}
 
 	if err := s.appendAdminAudit(models.AdminAuditEntry{
@@ -394,6 +406,11 @@ func (s *UserService) DeleteUser(userID string) error {
 	}
 	if !deleted {
 		return fmt.Errorf("user not found: %s", userID)
+	}
+
+	// Invalidate auth cache for this user
+	if s.authSvc != nil {
+		s.authSvc.InvalidateUserCache(userID)
 	}
 
 	s.logger.Info("[USER-SERVICE] User deleted", "user_id", userID)

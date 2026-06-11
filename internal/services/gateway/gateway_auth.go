@@ -132,6 +132,12 @@ func (e *AuthError) Is(target error) bool {
 	return ok
 }
 
+// cacheEntry represents a cached value with expiration time.
+type cacheEntry struct {
+	value      interface{}
+	expiresAt  time.Time
+}
+
 // AuthService handles authentication for the Gateway service.
 type AuthService struct {
 	db         *CanonicalDBService
@@ -152,6 +158,10 @@ type AuthService struct {
 	// Rate limiting state for app policies
 	muLimiters sync.Mutex
 	limiters   map[string]*rate.Limiter
+
+	// Auth caching (5-minute TTL)
+	userCache    sync.Map // userID -> *cacheEntry[*models.User]
+	sessionCache sync.Map // sessionID -> *cacheEntry[*models.Document]
 }
 
 // NewAuthService creates a new AuthService.
@@ -171,6 +181,82 @@ func NewAuthService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logg
 		jwtAudience:  jwtAudience,
 		publicRoutes: NewPublicRouteRegistry(jwksEnabled),
 		limiters:     make(map[string]*rate.Limiter),
+	}
+}
+
+// getCachedUser retrieves a user from cache if valid.
+func (s *AuthService) getCachedUser(userID string) *models.User {
+	if userID == "" {
+		return nil
+	}
+	entry, ok := s.userCache.Load(userID)
+	if !ok {
+		return nil
+	}
+	ce := entry.(*cacheEntry)
+	if time.Now().After(ce.expiresAt) {
+		s.userCache.Delete(userID)
+		return nil
+	}
+	return ce.value.(*models.User)
+}
+
+// cacheUser stores a user in cache with 5-minute TTL.
+func (s *AuthService) cacheUser(userID string, user *models.User) {
+	if userID == "" || user == nil {
+		return
+	}
+	s.userCache.Store(userID, &cacheEntry{
+		value:     user,
+		expiresAt: time.Now().Add(5 * time.Minute),
+	})
+}
+
+// invalidateUserCache removes a user from cache.
+func (s *AuthService) invalidateUserCache(userID string) {
+	if userID != "" {
+		s.userCache.Delete(userID)
+	}
+}
+
+// InvalidateUserCache is a public method for explicit cache invalidation.
+// Call this after user status changes (disable, delete, etc.) to ensure cache consistency.
+func (s *AuthService) InvalidateUserCache(userID string) {
+	s.invalidateUserCache(userID)
+}
+
+// getCachedSession retrieves a session document from cache if valid.
+func (s *AuthService) getCachedSession(sessionID string) *models.Document {
+	if sessionID == "" {
+		return nil
+	}
+	entry, ok := s.sessionCache.Load(sessionID)
+	if !ok {
+		return nil
+	}
+	ce := entry.(*cacheEntry)
+	if time.Now().After(ce.expiresAt) {
+		s.sessionCache.Delete(sessionID)
+		return nil
+	}
+	return ce.value.(*models.Document)
+}
+
+// cacheSession stores a session document in cache with 5-minute TTL.
+func (s *AuthService) cacheSession(sessionID string, doc *models.Document) {
+	if sessionID == "" || doc == nil {
+		return
+	}
+	s.sessionCache.Store(sessionID, &cacheEntry{
+		value:     doc,
+		expiresAt: time.Now().Add(5 * time.Minute),
+	})
+}
+
+// invalidateSessionCache removes a session from cache.
+func (s *AuthService) invalidateSessionCache(sessionID string) {
+	if sessionID != "" {
+		s.sessionCache.Delete(sessionID)
 	}
 }
 
@@ -230,9 +316,17 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	// This is the single chokepoint that makes retirement real - without it,
 	// a stale CLI cert can still talk to the Gateway.
 	if s.userSvc != nil && op.UserID != "" {
-		user, err := s.userSvc.GetByID(op.UserID)
-		if err != nil {
-			return nil, fmt.Errorf("auth: load user %s: %w", op.UserID, err)
+		// Try cache first
+		user := s.getCachedUser(op.UserID)
+		if user == nil {
+			var err error
+			user, err = s.userSvc.GetByID(op.UserID)
+			if err != nil {
+				return nil, fmt.Errorf("auth: load user %s: %w", op.UserID, err)
+			}
+			if user != nil {
+				s.cacheUser(op.UserID, user)
+			}
 		}
 		if user != nil && !user.IsActive() {
 			// Return structured error for disabled users
@@ -432,11 +526,19 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 		}
 
 		if s.userSvc != nil && cliSession.UserID != "" {
-			user, err := s.userSvc.GetByID(cliSession.UserID)
-			if err != nil {
-				s.logger.Error("auth: load user for CLI session", "user_id", cliSession.UserID, string(constants.ConnectionStateError), fmt.Errorf("auth: load user %s for CLI session: %w", cliSession.UserID, err))
-				s.responder.Error(w, http.StatusInternalServerError, "identity validation failed")
-				return true
+			// Try cache first
+			user := s.getCachedUser(cliSession.UserID)
+			if user == nil {
+				var err error
+				user, err = s.userSvc.GetByID(cliSession.UserID)
+				if err != nil {
+					s.logger.Error("auth: load user for CLI session", "user_id", cliSession.UserID, string(constants.ConnectionStateError), fmt.Errorf("auth: load user %s for CLI session: %w", cliSession.UserID, err))
+					s.responder.Error(w, http.StatusInternalServerError, "identity validation failed")
+					return true
+				}
+				if user != nil {
+					s.cacheUser(cliSession.UserID, user)
+				}
 			}
 			if user != nil && !user.IsActive() {
 				s.logger.Warn("auth: CLI session identity disabled", "user_id", cliSession.UserID)
@@ -675,11 +777,19 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *CanonicalDBService) 
 
 		// Check if the user is active (plan §4.6)
 		if s.userSvc != nil {
-			user, err := s.userSvc.GetByID(webSession.UserID)
-			if err != nil {
-				s.logger.Error("auth: load user for web session", "user_id", webSession.UserID, string(constants.ConnectionStateError), fmt.Errorf("auth: load user %s for web session: %w", webSession.UserID, err))
-				s.responder.Error(w, http.StatusUnauthorized, "user validation failed")
-				return
+			// Try cache first
+			user := s.getCachedUser(webSession.UserID)
+			if user == nil {
+				var err error
+				user, err = s.userSvc.GetByID(webSession.UserID)
+				if err != nil {
+					s.logger.Error("auth: load user for web session", "user_id", webSession.UserID, string(constants.ConnectionStateError), fmt.Errorf("auth: load user %s for web session: %w", webSession.UserID, err))
+					s.responder.Error(w, http.StatusUnauthorized, "user validation failed")
+					return
+				}
+				if user != nil {
+					s.cacheUser(webSession.UserID, user)
+				}
 			}
 			if user != nil && !user.IsActive() {
 				s.responder.Error(w, http.StatusUnauthorized, "identity disabled")
@@ -733,11 +843,19 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// JIT User Provisioning: get or create user by subject
-		user, err := s.userSvc.GetBySub(jwt.Claims.Sub)
-		if err != nil {
-			s.logger.Error("auth: JIT user lookup failed", "sub", jwt.Claims.Sub, string(constants.ConnectionStateError), fmt.Errorf("auth: lookup user by sub %s: %w", jwt.Claims.Sub, err))
-			s.responder.Error(w, http.StatusInternalServerError, "user lookup failed")
-			return
+		// Try cache first
+		user := s.getCachedUser(jwt.Claims.Sub)
+		if user == nil {
+			var err error
+			user, err = s.userSvc.GetBySub(jwt.Claims.Sub)
+			if err != nil {
+				s.logger.Error("auth: JIT user lookup failed", "sub", jwt.Claims.Sub, string(constants.ConnectionStateError), fmt.Errorf("auth: lookup user by sub %s: %w", jwt.Claims.Sub, err))
+				s.responder.Error(w, http.StatusInternalServerError, "user lookup failed")
+				return
+			}
+			if user != nil {
+				s.cacheUser(jwt.Claims.Sub, user)
+			}
 		}
 		if user == nil {
 			// User doesn't exist, check for an active invitation
@@ -758,6 +876,8 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 				s.responder.Error(w, http.StatusInternalServerError, "user creation failed")
 				return
 			}
+			// Cache the newly created user
+			s.cacheUser(jwt.Claims.Sub, user)
 		}
 
 		if !user.IsActive() {

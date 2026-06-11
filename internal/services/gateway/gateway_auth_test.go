@@ -123,7 +123,7 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSetWithTimestamps("operators", "op-456", opBytes, oldTime, oldTime))
+	require.NoError(t, db.DocStore.DocSetWithTimestamps("operators", "op-456", opBytes, oldTime, oldTime))
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	assert.Error(t, err)
@@ -161,7 +161,7 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("operators", "op-789", opBytes))
+	require.NoError(t, db.DocStore.DocSet("operators", "op-789", opBytes))
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	assert.Error(t, err)
@@ -339,7 +339,7 @@ func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
 	appID := "spiffe://g8e.local/app/test-app-no-policy"
 
 	// Try to get AppPolicy for this app - should return nil (deny-by-default)
-	policy, err := db.GetAppPolicy(appID)
+	policy, err := db.AppPolicyStore.GetAppPolicy(appID)
 	require.NoError(t, err)
 	assert.Nil(t, policy, "App without policy should have nil policy (deny-by-default)")
 }
@@ -626,7 +626,7 @@ func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("operators", "op-terminated", opBytes))
+	require.NoError(t, db.DocStore.DocSet("operators", "op-terminated", opBytes))
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	assert.Error(t, err)
@@ -955,7 +955,7 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("operators", "op-auth-test", opBytes))
+	require.NoError(t, db.DocStore.DocSet("operators", "op-auth-test", opBytes))
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

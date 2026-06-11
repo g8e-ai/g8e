@@ -112,6 +112,8 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 	}
 
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, jwksProvider, cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
+	// Wire up auth service to user service for cache invalidation
+	userSvc.SetAuthService(auth)
 	cliSessionSvc := NewCLISessionService(db, logger)
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
 	webSessionSvc := NewWebSessionService(db, logger)
@@ -289,6 +291,8 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 	personaSvc := NewPersonaService(db, logger)
 	res := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, nil, "", "", "")
+	// Wire up auth service to user service for cache invalidation
+	userSvc.SetAuthService(auth)
 	cliSessionSvc := NewCLISessionService(db, logger)
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
 	webSessionSvc := NewWebSessionService(db, logger)
@@ -563,7 +567,7 @@ func (ls *GatewayModeService) GetGovernanceDeps() *GovernanceDeps {
 	return &GovernanceDeps{
 		ReplayStore:       ls.db.ReplayStore,
 		StateRootProvider: ls.db.StateRootSvc,
-		TransactionAudit:  ls.db.AuditStore,
+		TransactionAudit:  ls.db.DocStore,
 		L3Notary:          compositeL3,
 		SignerStore:       ls.db.SignerStore,
 		AppPolicyStore:    ls.db.AppPolicyStore,

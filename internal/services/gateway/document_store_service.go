@@ -226,37 +226,32 @@ func (s *DocumentStoreService) DocDeleteNamespace(collection string) (int64, err
 
 // GetField extracts a single field value from a document using dot notation.
 // This is used for JIT field resolution with governed access controls.
-func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (json.RawMessage, error) {
-	var dataJSON string
-	err := s.db.QueryRowWithRetry(
-		"SELECT data FROM documents WHERE collection = ? AND id = ?",
-		collection, id,
-	).Scan(&dataJSON)
+func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (interface{}, error) {
+	// Use json_quote(json_extract(...)) so SQLite re-encodes the extracted value as
+	// valid JSON regardless of its native type (TEXT, INTEGER, REAL, NULL).
+	// json_extract alone returns SQL TEXT without quotes for JSON strings, which is
+	// not valid JSON. json_quote wraps strings in quotes and leaves numbers/booleans as-is.
+	query := "SELECT json_quote(json_extract(data, ?)) FROM documents WHERE collection = ? AND id = ?"
+	jsonPath := "$." + fieldPath
+
+	var encoded *string
+	err := s.db.QueryRowWithRetry(query, jsonPath, collection, id).Scan(&encoded)
 	if err == sql.ErrNoRows {
 		return nil, constants.ErrNotFound
 	}
 	if err != nil {
-		return nil, err
-	}
-
-	// Use SQL json_extract for efficient field extraction
-	// This is safer than manual JSON parsing and leverages SQLite's JSON1 extension
-	var fieldValue string
-	query := "SELECT json_extract(data, ?) FROM documents WHERE collection = ? AND id = ?"
-
-	// Convert dot notation to JSON path (e.g., "metadata.tags" -> "$.metadata.tags")
-	jsonPath := "$." + fieldPath
-
-	err = s.db.QueryRowWithRetry(query, jsonPath, collection, id).Scan(&fieldValue)
-	if err != nil {
 		return nil, fmt.Errorf("DocumentStoreService: extract field %s: %w", fieldPath, err)
 	}
+	if encoded == nil {
+		return nil, constants.ErrNotFound
+	}
 
-	// Return the raw string as json.RawMessage.
-	// SQLite's json_extract returns SQL literals (true, false, null) as raw strings,
-	// not JSON strings. The delegation wrapper in CanonicalDBService handles the
-	// conversion from SQL literals to Go types.
-	return json.RawMessage(fieldValue), nil
+	var out interface{}
+	if err := json.Unmarshal([]byte(*encoded), &out); err != nil {
+		return nil, fmt.Errorf("DocumentStoreService: decode field %s: %w", fieldPath, err)
+	}
+
+	return out, nil
 }
 
 // DocQuery returns documents matching field conditions.

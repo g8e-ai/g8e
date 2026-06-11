@@ -14,7 +14,6 @@
 package gateway
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -97,17 +96,17 @@ func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 	// Append some SSE events
 	route := SSERoute{WebSessionID: "test-session"}
 	for i := 0; i < 5; i++ {
-		err := db.SSEEventsAppend(route, fmt.Sprintf("event-type-%d", i), fmt.Sprintf(`{"data":"%d"}`, i), "test-producer")
+		err := db.SSEStore.SSEEventsAppend(route, fmt.Sprintf("event-type-%d", i), fmt.Sprintf(`{"data":"%d"}`, i), "test-producer")
 		require.NoError(t, err)
 	}
 
 	// List all events since ID 0 with limit 100
-	rows, err := db.SSEEventsListAllSince(0, 100)
+	rows, err := db.SSEStore.SSEEventsListAllSince(0, 100)
 	require.NoError(t, err)
 	assert.Len(t, rows, 5, "Should return all 5 events")
 
 	// List events since ID 3 with limit 100
-	rows, err = db.SSEEventsListAllSince(3, 100)
+	rows, err = db.SSEStore.SSEEventsListAllSince(3, 100)
 	require.NoError(t, err)
 	assert.Len(t, rows, 2, "Should return 2 events after ID 3")
 }
@@ -711,7 +710,7 @@ func TestSSEEventsCount_EmptyTable(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	count, err := db.SSEEventsCount()
+	count, err := db.SSEStore.SSEEventsCount()
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), count)
 }
@@ -720,11 +719,11 @@ func TestSSEEventsAppendAndCount(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"hello"}`, ""))
-	require.NoError(t, db.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"world"}`, ""))
-	require.NoError(t, db.SSEEventsAppend(SSERoute{CLISessionID: "sess-2"}, "DONE", `{}`, ""))
+	require.NoError(t, db.SSEStore.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"hello"}`, ""))
+	require.NoError(t, db.SSEStore.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"world"}`, ""))
+	require.NoError(t, db.SSEStore.SSEEventsAppend(SSERoute{CLISessionID: "sess-2"}, "DONE", `{}`, ""))
 
-	count, err := db.SSEEventsCount()
+	count, err := db.SSEStore.SSEEventsCount()
 	require.NoError(t, err)
 	assert.Equal(t, int64(3), count)
 }
@@ -733,14 +732,14 @@ func TestSSEEventsWipe_DeletesAllRows(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"a"}`, ""))
-	require.NoError(t, db.SSEEventsAppend(SSERoute{CLISessionID: "sess-2"}, "DONE", `{}`, ""))
+	require.NoError(t, db.SSEStore.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"a"}`, ""))
+	require.NoError(t, db.SSEStore.SSEEventsAppend(SSERoute{CLISessionID: "sess-2"}, "DONE", `{}`, ""))
 
-	deleted, err := db.SSEEventsWipe()
+	deleted, err := db.SSEStore.SSEEventsWipe()
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), deleted)
 
-	count, err := db.SSEEventsCount()
+	count, err := db.SSEStore.SSEEventsCount()
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), count)
 }
@@ -749,16 +748,16 @@ func TestSSEEventsWipe_EmptyTableReturnsZero(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	deleted, err := db.SSEEventsWipe()
+	deleted, err := db.SSEStore.SSEEventsWipe()
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), deleted)
 }
 
 // ---------------------------------------------------------------------------
-// RunTTLCleanup
+// Service Maintenance
 // ---------------------------------------------------------------------------
 
-func TestRunTTLCleanup_RemovesExpiredKVEntries(t *testing.T) {
+func TestKVStoreService_RunMaintenance(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
@@ -771,28 +770,37 @@ func TestRunTTLCleanup_RemovesExpiredKVEntries(t *testing.T) {
 		return !found
 	}, 2*time.Second, 100*time.Millisecond, "ttl:expire should expire")
 
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		db.RunTTLCleanup(ctx)
-	}()
-	t.Cleanup(func() {
-		cancel()
-		<-done
-	})
-
-	assert.Eventually(t, func() bool {
-		_, err := db.KVStore.KVKeys("ttl:*")
-		if err != nil {
-			return false
-		}
-		_, found := db.KVStore.KVGet("ttl:expire")
-		return !found
-	}, 5*time.Second, 100*time.Millisecond)
+	// Run maintenance
+	require.NoError(t, db.KVStore.RunMaintenance())
 
 	_, kept := db.KVStore.KVGet("ttl:keep")
 	assert.True(t, kept, "non-expired key must survive cleanup")
+
+	_, expired := db.KVStore.KVGet("ttl:expire")
+	assert.False(t, expired, "expired key should be removed by maintenance")
+}
+
+func TestBlobStoreService_RunMaintenance(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	require.NoError(t, db.BlobStore.BlobPut("ns", "keep", []byte("data"), "text/plain", 0))
+	require.NoError(t, db.BlobStore.BlobPut("ns", "expire", []byte("data"), "text/plain", 1))
+
+	// Wait for expiry with polling
+	require.Eventually(t, func() bool {
+		_, _, found := db.BlobStore.BlobGet("ns", "expire")
+		return !found
+	}, 2*time.Second, 100*time.Millisecond, "expire blob should expire")
+
+	// Run maintenance
+	require.NoError(t, db.BlobStore.RunMaintenance())
+
+	_, _, kept := db.BlobStore.BlobGet("ns", "keep")
+	assert.True(t, kept, "non-expired blob must survive cleanup")
+
+	_, _, expired := db.BlobStore.BlobGet("ns", "expire")
+	assert.False(t, expired, "expired blob should be removed by maintenance")
 }
 
 func TestHasTrustedSigners(t *testing.T) {
@@ -1000,7 +1008,7 @@ func TestFinalizeNonce(t *testing.T) {
 	require.NoError(t, err)
 
 	// Finalize the nonce
-	err = db.FinalizeNonce("test123")
+	err = db.ReplayStore.FinalizeNonce("test123")
 	require.NoError(t, err)
 
 	// Verify nonce was updated
@@ -1015,7 +1023,7 @@ func TestFinalizeNonce_NonExistent(t *testing.T) {
 	db := newTestDB(t)
 
 	// Finalize non-existent nonce should not error
-	err := db.FinalizeNonce("nonexistent")
+	err := db.ReplayStore.FinalizeNonce("nonexistent")
 	require.NoError(t, err)
 }
 
@@ -1029,7 +1037,7 @@ func TestReleaseNonce(t *testing.T) {
 	require.NoError(t, err)
 
 	// Release the nonce
-	err = db.ReleaseNonce("test456")
+	err = db.ReplayStore.ReleaseNonce("test456")
 	require.NoError(t, err)
 
 	// Verify nonce was deleted
@@ -1044,7 +1052,7 @@ func TestReleaseNonce_NonExistent(t *testing.T) {
 	db := newTestDB(t)
 
 	// Release non-existent nonce should not error
-	err := db.ReleaseNonce("nonexistent")
+	err := db.ReplayStore.ReleaseNonce("nonexistent")
 	require.NoError(t, err)
 }
 
@@ -1054,16 +1062,16 @@ func TestBlobDelete(t *testing.T) {
 
 	// Create a blob
 	blobData := []byte("test blob data")
-	err := db.BlobPut("test_namespace", "blob1", blobData, "application/octet-stream", 0)
+	err := db.BlobStore.BlobPut("test_namespace", "blob1", blobData, "application/octet-stream", 0)
 	require.NoError(t, err)
 
 	// Delete the blob
-	deleted, err := db.BlobDelete("test_namespace", "blob1")
+	deleted, err := db.BlobStore.BlobDelete("test_namespace", "blob1")
 	require.NoError(t, err)
 	assert.True(t, deleted)
 
 	// Verify blob was deleted
-	_, _, found := db.BlobGet("test_namespace", "blob1")
+	_, _, found := db.BlobStore.BlobGet("test_namespace", "blob1")
 	assert.False(t, found)
 }
 
@@ -1072,7 +1080,7 @@ func TestBlobDelete_NonExistent(t *testing.T) {
 	db := newTestDB(t)
 
 	// Delete non-existent blob
-	deleted, err := db.BlobDelete("test_namespace", "nonexistent")
+	deleted, err := db.BlobStore.BlobDelete("test_namespace", "nonexistent")
 	require.NoError(t, err)
 	assert.False(t, deleted)
 }

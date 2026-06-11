@@ -538,10 +538,18 @@ func TestReadFieldIntegration(t *testing.T) {
 	fieldPathRegistry, err := NewFieldPathRegistry(logger)
 	require.NoError(t, err, "Failed to initialize field path registry")
 
+	envProc := &fakeEnvelopeProcessor{
+		receipt: &operatorv1.ActionReceipt{
+			TransactionId: "readfield-tx-1",
+			Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			ResultSummary: "read_field result",
+		},
+	}
+
 	g := &GatewayService{
 		logger:            logger,
 		responder:         response.NewWriter(logger),
-		envProc:           nil, // read_field doesn't use envelope processor
+		envProc:           envProc,
 		signingKey:        privKey,
 		keyID:             "readfield-test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
@@ -552,7 +560,11 @@ func TestReadFieldIntegration(t *testing.T) {
 		auditLogger:       auditLogger,
 	}
 
-	t.Run("successful field read", func(t *testing.T) {
+	// Verify read_field flows through the governance pipeline (envProc).
+	// handleReadField is called inside DispatchToDownstream, inside the real pipeline.
+	// With a fake processor, the receipt summary is what's returned — field value
+	// extraction and audit logging happen inside the pipeline, not before it.
+	t.Run("routes through pipeline", func(t *testing.T) {
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_field","arguments":{"collection":"investigations","document_id":"investigation-123","field_path":"status","operator_session_id":"valid-session-123"}}}`
 		req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/call", strings.NewReader(reqBody))
 		w := httptest.NewRecorder()
@@ -567,9 +579,63 @@ func TestReadFieldIntegration(t *testing.T) {
 		var result CallToolResult
 		err = json.Unmarshal(resp.Result, &result)
 		require.NoError(t, err)
-		require.Contains(t, result.Content[0].Text, "active")
+		// Response is the fake processor's receipt summary — confirms read_field
+		// went through ProcessEnvelope rather than bypassing the pipeline.
+		require.Equal(t, envProc.receipt.ResultSummary, result.Content[0].Text)
+	})
+}
 
-		// Verify audit log was written
+// TestHandleReadField tests handleReadField directly: session validation, forbidden
+// pattern detection, and successful reads. These validations run inside the pipeline
+// (DispatchToDownstream), so they cannot be tested via callTool with a fake processor.
+func TestHandleReadField(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	fieldPathRegistry, err := NewFieldPathRegistry(logger)
+	require.NoError(t, err)
+
+	dbService := &integrationTestDBService{
+		data: map[string]map[string]interface{}{
+			"investigations": {
+				"investigation-123": map[string]interface{}{
+					"status":               "active",
+					"suspect_ip_addresses": []string{"192.168.1.1"},
+				},
+				"investigation-456": map[string]interface{}{
+					"suspect_ip_addresses": "192.168.1.1 password=secret123",
+				},
+			},
+		},
+	}
+
+	sessionValidator := &integrationTestSessionValidator{
+		validSessions: map[string]bool{"valid-session-123": true},
+	}
+
+	auditLogger := &integrationTestAuditLogger{logs: []auditLogEntry{}}
+
+	g := &GatewayService{
+		logger:            logger,
+		fieldPathRegistry: fieldPathRegistry,
+		dbService:         dbService,
+		sessionValidator:  sessionValidator,
+		auditLogger:       auditLogger,
+	}
+
+	t.Run("successful read", func(t *testing.T) {
+		args, _ := json.Marshal(map[string]string{
+			"collection":          "investigations",
+			"document_id":         "investigation-123",
+			"field_path":          "status",
+			"operator_session_id": "valid-session-123",
+		})
+		result, err := g.handleReadField(context.Background(), args)
+		require.NoError(t, err)
+		r, ok := result.(CallToolResult)
+		require.True(t, ok)
+		require.Contains(t, r.Content[0].Text, "active")
+
 		require.Len(t, auditLogger.logs, 1)
 		require.Equal(t, "investigations", auditLogger.logs[0].collection)
 		require.Equal(t, "investigation-123", auditLogger.logs[0].documentID)
@@ -577,37 +643,27 @@ func TestReadFieldIntegration(t *testing.T) {
 	})
 
 	t.Run("invalid session", func(t *testing.T) {
-		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_field","arguments":{"collection":"investigations","document_id":"investigation-123","field_path":"status","operator_session_id":"invalid-session"}}}`
-		req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/call", strings.NewReader(reqBody))
-		w := httptest.NewRecorder()
-
-		g.HandleToolsCall(w, req)
-
-		var resp JSONRPCResponse
-		err := json.Unmarshal(w.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		require.NotNil(t, resp.Error)
-		require.Contains(t, resp.Error.Message, "operator session is invalid or expired")
+		args, _ := json.Marshal(map[string]string{
+			"collection":          "investigations",
+			"document_id":         "investigation-123",
+			"field_path":          "status",
+			"operator_session_id": "invalid-session",
+		})
+		_, err := g.handleReadField(context.Background(), args)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "operator session is invalid or expired")
 	})
 
 	t.Run("forbidden pattern in field value", func(t *testing.T) {
-		// Add an investigation with a forbidden pattern in an allowed field
-		dbService.data["investigations"]["investigation-456"] = map[string]interface{}{
-			"status":               "active",
-			"suspect_ip_addresses": "192.168.1.1 password=secret123",
-		}
-
-		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_field","arguments":{"collection":"investigations","document_id":"investigation-456","field_path":"suspect_ip_addresses","operator_session_id":"valid-session-123"}}}`
-		req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/call", strings.NewReader(reqBody))
-		w := httptest.NewRecorder()
-
-		g.HandleToolsCall(w, req)
-
-		var resp JSONRPCResponse
-		err := json.Unmarshal(w.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		require.NotNil(t, resp.Error)
-		require.Contains(t, resp.Error.Message, "forbidden pattern")
+		args, _ := json.Marshal(map[string]string{
+			"collection":          "investigations",
+			"document_id":         "investigation-456",
+			"field_path":          "suspect_ip_addresses",
+			"operator_session_id": "valid-session-123",
+		})
+		_, err := g.handleReadField(context.Background(), args)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "forbidden pattern")
 	})
 }
 

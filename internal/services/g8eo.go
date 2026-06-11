@@ -273,7 +273,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Create governance dependencies for transaction verification
 	// Use CanonicalDBService for canonical state root calculation (same schema as gateway mode)
-	stateRootProvider := vs.gatewayDB
+	stateRootProvider := vs.gatewayDB.StateRootSvc
 	transactionAudit := &auditStoreTransactionStore{store: vs.auditStore}
 	// L3Notary for outbound mode: CLI-based approval via suspended transactions
 	// Mutations requiring L3 are suspended and must be approved via CLI command
@@ -319,7 +319,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		StateRootProvider:   stateRootProvider,
 		TransactionAudit:    transactionAudit,
 		SignerStore:         signerStore,
-		AppPolicyStore:      vs.gatewayDB,
+		AppPolicyStore:      vs.gatewayDB.AppPolicyStore,
 		ActuatorSigningKey:  actuatorPriv,
 		ActuatorKeyID:       actuatorKeyID,
 		ConsensusSigningKey: consensusPriv,
