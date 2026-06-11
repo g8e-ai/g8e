@@ -91,7 +91,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
    ```bash
    make build
    ```
-   Or for compressed release bundles:
+   Or for compressed release bundles (isolated testing only; warning: triggers false-positive virus detections):
    ```bash
    make build-compressed
    ```

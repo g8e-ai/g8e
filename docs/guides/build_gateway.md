@@ -46,11 +46,15 @@ The Makefile provides several build targets:
 - `make build-linux` — Builds g8e Node for Linux (amd64, arm64, 386).
 - `make build-windows` — Builds g8e Node for Windows (amd64, arm64).
 - `make build-darwin` — Builds g8e Node for Darwin (amd64, arm64).
-- `make build-compressed` — Builds g8e Node for all platforms with UPX compression.
-- `make build-linux-compressed` — Builds g8e Node for Linux with UPX compression.
-- `make build-windows-compressed` — Builds g8e Node for Windows with UPX compression.
-- `make build-darwin-compressed` — Builds g8e Node for Darwin with UPX compression.
 - `make clean` — Removes compiled g8e Nodes and test artifacts.
+
+### Advanced: Compression
+*Warning: UPX compression is highly discouraged as it triggers false-positive virus detections (e.g., Windows Defender/Trojan:Win32/Wacatac.C!ml).*
+
+- `make build-compressed` — Builds g8e Node for all platforms with UPX compression (for isolated testing only).
+- `make build-linux-compressed` — Builds g8e Node for Linux with UPX compression (for isolated testing only).
+- `make build-windows-compressed` — Builds g8e Node for Windows with UPX compression (for isolated testing only).
+- `make build-darwin-compressed` — Builds g8e Node for Darwin with UPX compression (for isolated testing only).
 
 ### Build in Docker (no local Go required)
 

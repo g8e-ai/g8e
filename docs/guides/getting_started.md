@@ -77,7 +77,13 @@ Additional build targets:
 | `make build-linux` | Linux: amd64, arm64, 386 |
 | `make build-darwin` | macOS: amd64, arm64 |
 | `make build-windows` | Windows: amd64, arm64 |
-| `make build-compressed` | All platforms with UPX compression |
+
+### Advanced: Compression
+*Warning: UPX compression is highly discouraged as it triggers false-positive virus detections (e.g., Windows Defender/Trojan:Win32/Wacatac.C!ml).*
+
+| Target | Description |
+|---|---|
+| `make build-compressed` | All platforms with UPX compression (for isolated testing only) |
 
 For cross-compilation:
 
