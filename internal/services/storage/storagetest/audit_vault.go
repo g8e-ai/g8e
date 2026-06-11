@@ -724,6 +724,14 @@ func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRe
 	avs.muWrites.Add(1)
 	defer avs.muWrites.Done()
 
+	// Auto-create session row for FK satisfaction (matches production behavior)
+	if record.OperatorSessionID != "" {
+		_, _ = avs.db.ExecWithRetry(
+			`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, 'operator', ?, ?)`,
+			record.OperatorSessionID, record.OperatorSessionID, record.OperatorID,
+		)
+	}
+
 	query := `
 	INSERT INTO receipts (
 		transaction_id, transaction_hash, operator_id, operator_session_id,

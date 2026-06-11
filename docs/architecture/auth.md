@@ -57,7 +57,7 @@ The platform implements a deterministic 5-layer governance sequence. Every mutat
 L1 is the foundational layer that executes deterministic security rules.
 - **Forbidden Patterns**: Uses Protobuf field options (`forbidden_patterns`) to reject strings matching dangerous patterns.
 - **MITRE Threat Detection**: Analyzes payloads against MITRE ATT&CK patterns for reverse shells, privilege escalation, credential access, and other threats.
-- **Input Validation Framework**: Comprehensive validation system (`internal/services/mcp/validation.go`) with fail-closed security principles for MCP tool inputs, including SQL query validation, URL validation to prevent SSRF attacks, and protocol validation to prevent path traversal.
+- **Critical System File Protection**: Blocks modifications to critical system paths defined in `CriticalSystemPaths` and `CriticalSystemDirs`.
 - **Hard Gates**: Rejects transactions immediately upon violation; cannot be bypassed by L2 or L3.
 
 ### Layer 2: Consensus (L2Consensus)
@@ -73,7 +73,8 @@ L2 provides multi-agent cryptographic verification of intent.
 
 L3 ensures explicit human authorization for mutations.
 - **Suspension**: The g8e Gateway (g8eg) suspends transactions requiring L3 approval, storing them in the `suspended_transactions` pool.
-- **Out-of-Band (OOB) Approval**: The user approves via CLI command (`g8e approve <tx_hash>`) with a cryptographic Ed25519 signature over the transaction hash, or via WebAuthn for web sessions.
+- **Out-of-Band (OOB) Approval**: The user approves via CLI command (`g8e approve <tx_hash>`) with a cryptographic Ed25519 signature over the transaction hash, or via WebAuthn passkey for web sessions.
+- **Passkey Service**: The `PasskeyService` handles L3 proof brokerage for WebAuthn operations, moving L3 authorization into the gateway as the sovereign authority.
 - **L3Proof**: A successful approval generates an `L3Proof` containing the cryptographic signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
 
 ### Layer 4: Warden (L4Warden)
@@ -126,7 +127,7 @@ The platform enforces mandatory encryption for all sensitive data at rest. See [
 
 All storage services require an unlocked vault at initialization:
 - **SQLAuditStore**: Encrypts audit records, governance envelopes, audit trail, and compliance records
-- **ExecutionVaultService**: Encrypts execution results and command outputs
+- **ExecutionVaultService**: Encrypts execution results (stdout, stderr) and file diffs
 - **TokenStoreService**: Encrypts authentication tokens and session data
 
 ### Encryption Guarantees

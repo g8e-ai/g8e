@@ -100,6 +100,20 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ├── gateway.AppEnrollmentService
 │   ├── gateway.CanonicalDBService [SHARED]
 │   └── gateway.PKIAuthority
+├── gateway.SignerStoreService
+│   ├── gateway.DocumentStoreService
+│   └── sqliteutil.DB
+├── gateway.AppPolicyStoreService
+│   ├── gateway.DocumentStoreService
+│   └── sqliteutil.DB
+├── gateway.ReplayStoreService
+│   └── sqliteutil.DB
+├── gateway.DocumentStoreService
+│   └── sqliteutil.DB
+├── gateway.StateRootService
+│   └── sqliteutil.DB
+├── gateway.InvitationService
+│   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.HTTPHandler
 │   ├── gateway.CanonicalDBService [SHARED]
 │   ├── gateway.PubSubBroker
@@ -128,6 +142,12 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 
 ### Data Handling Convergence
 - **`gateway.CanonicalDBService`** is the canonical SQLite root for gateway mode; it embeds `storage.SQLAuditStore` and `vault.Vault`. In outbound mode, it is used only for state root calculation and provides the shared vault instance.
+- **`gateway.DocumentStoreService`** provides collection/ID-based document CRUD operations for gateway mode (delegates to CanonicalDBService).
+- **`gateway.StateRootService`** provides state merkle root calculation with caching for gateway mode (delegates to CanonicalDBService).
+- **`gateway.SignerStoreService`** provides trusted signer CRUD operations for gateway mode (implements governance.SignerStore).
+- **`gateway.AppPolicyStoreService`** provides app policy retrieval for gateway mode (implements governance.AppPolicyStore).
+- **`gateway.ReplayStoreService`** provides nonce replay protection for gateway mode (implements governance.ReplayStore).
+- **`gateway.InvitationService`** handles user invitations for gateway mode.
 - **`storage.ExecutionVaultService`** is the execution log and file diff storage for outbound mode.
 - **`storage.TokenStoreService`** is the Sentinel token persistence store for outbound mode.
 - **`storage.SuspendedTransactionService`** is the L3 approval workflow store for outbound mode.
@@ -148,6 +168,10 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 
 ### Shared Interface Implementations
 - `gateway.CanonicalDBService` implements: `governance.ReplayStore`, `governance.StateRootProvider`, `governance.TransactionAuditStore`, `governance.SignerStore`, `governance.AppPolicyStore`, `governance.SuspendedTransactionStore`.
+- `gateway.SignerStoreService` implements: `governance.SignerStore` (gateway mode dedicated implementation).
+- `gateway.AppPolicyStoreService` implements: `governance.AppPolicyStore` (gateway mode dedicated implementation).
+- `gateway.ReplayStoreService` implements: `governance.ReplayStore` (gateway mode dedicated implementation).
+- `gateway.StateRootService` implements: `governance.StateRootProvider` (gateway mode dedicated implementation).
 - `storage.TokenStoreService` implements: `interfaces.TokenStore`.
 - `storage.SuspendedTransactionService` implements: `governance.SuspendedTransactionStore`.
 - `governance.FilesystemSignerStore` implements: `governance.SignerStore` (used in outbound mode).

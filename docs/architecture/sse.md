@@ -85,11 +85,12 @@ Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be set.
 ```
 
 **Behavior**:
-1. Validates mTLS peer certificate for app workload identity
+1. Validates mTLS peer certificate for app workload identity (SPIFFE ID with `/app/` prefix, excluding `g8eo` and `g8eg`)
 2. Validates route (exactly one routing target set)
-3. Appends event to `sse_events` table with auto-increment ID
-4. Publishes event to Pub/Sub channel for real-time fan-out
-5. Returns success confirmation
+3. Enforces producer-to-target ownership (app identity must be associated with the target session)
+4. Appends event to `sse_events` table with auto-increment ID and producer_id
+5. Publishes event to Pub/Sub channel for real-time fan-out
+6. Returns success confirmation
 
 ---
 
@@ -155,7 +156,7 @@ data: {"type":"...","data":{...}}
 2. Flushes historical events since `since_id` in SSE format
 3. Subscribes to Pub/Sub channel for real-time events
 4. Streams new events as they arrive
-5. Sends keepalive comments every 30 seconds
+5. Sends keepalive comments every 30 seconds (SSE comment format `: heartbeat\n\n`)
 
 ---
 
@@ -169,10 +170,14 @@ The SSE system is generic and supports any event type. Defined audit event types
 - `g8e.v1.operator.audit.direct.command.recorded` - Direct command audit log
 - `g8e.v1.operator.audit.direct.command.result.recorded` - Direct command result audit log
 - `g8e.v1.operator.audit.user.recorded` - User action audit log
+- `g8e.v1.operator.audit.mcp.call.recorded` - MCP call audit log
 
 ### Platform Events
 - `g8e.v1.platform.sse.connection.established` - SSE connection established
+- `g8e.v1.platform.sse.connection.opened` - SSE connection opened
 - `g8e.v1.platform.sse.connection.closed` - SSE connection closed
+- `g8e.v1.platform.sse.connection.failed` - SSE connection failed
+- `g8e.v1.platform.sse.connection.error` - SSE connection error
 - `g8e.v1.platform.sse.keepalive.sent` - SSE keepalive sent
 
 See `protocol/constants/events.json` for the complete event type catalog.
@@ -285,9 +290,10 @@ POST /api/v1/sse/push
 ## Implementation Details
 
 ### Core Files
-- `internal/services/gateway/gateway_http.go` - HTTP handlers for SSE endpoints
-- `internal/services/gateway/gateway_db.go` - Database operations (`SSEEventsAppend`, `SSEEventsListSince`)
-- `internal/services/gateway/gateway_pubsub.go` - Pub/Sub integration for real-time fan-out
+- `internal/services/gateway/gateway_http.go` - HTTP handlers for SSE endpoints (`handleInternalSSEPush`, `handleInternalSSEEvents`, `handleInternalSSEStream`)
+- `internal/services/gateway/gateway_db.go` - Database operations (`SSEEventsAppend`, `SSEEventsListSince`, `SSEEventsWipe`, `SSEEventsCount`)
+- `internal/services/gateway/gateway_pubsub.go` - Pub/Sub integration for real-time fan-out (`RegisterHandler`, `Publish`)
+- `internal/services/gateway/db_controller.go` - Admin endpoints for SSE event management (`handleSSEEvents`)
 - `internal/constants/api_paths.go` - API path constants
 - `internal/constants/events.go` - Event type constants
 
@@ -296,7 +302,8 @@ SSE event inserts are deliberately excluded from state root calculation. This al
 
 ### Pruning
 The `sse_events` table can be pruned via:
-- `DELETE /api/v1/data/_sse_events` - Admin wipe endpoint
+- `DELETE /api/v1/data/_sse_events` - Admin wipe endpoint (requires mTLS)
+- `GET /api/v1/data/_sse_events/count` - Admin count endpoint (requires mTLS)
 - Direct database operations (not recommended in production)
 
 Consider implementing time-based retention policies for production deployments.
@@ -309,8 +316,7 @@ Consider implementing time-based retention policies for production deployments.
 2. **Error Handling**: Implement retry logic for failed push operations
 3. **Reconnection**: Clients should support automatic reconnection with `Last-Event-ID` header
 4. **Event Size**: Keep payloads under 1MB to avoid performance issues
-5. **Rate Limiting**: The gateway applies rate limiting to SSE endpoints (configurable via `Gateway.RateLimitRPS`)
-6. **Monitoring**: Monitor `sse_events` table size and growth rate
+5. **Monitoring**: Monitor `sse_events` table size and growth rate
 
 ---
 
