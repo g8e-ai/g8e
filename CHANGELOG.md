@@ -29,6 +29,7 @@ v1.0.12 closes the MCP agent audit trail gap (agents were executing governed too
 * **Audit Store Session Auto-Creation** — `RecordEvent` in `internal/services/storage/audit_store.go` now auto-creates session rows to prevent FK race conditions and silent event drops.
 * **Rate Limiting in Gateway Mode** — Disabled rate limiting (RPS=0, Burst=0) in gateway mode since gateway is local-only.
 * **Storage Service Disable Removal** — Removed `Enabled` field and `IsEnabled()` method from all storage services (audit_store, replay_store, execution_vault, token_store, suspended_transaction_store). Storage services are now always initialized and fail-closed, ensuring audit trails cannot be disabled.
+* **Posture Validation** — Added validation in `NewGatewayService` to ensure the posture parameter is one of the valid values (doctrine, consensus, notary), providing early fail-closed validation at service construction.
 
 ### Removed
 

@@ -15,7 +15,6 @@ package platform
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"io"
 	"net"
