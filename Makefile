@@ -538,11 +538,11 @@ swagger-generate:
 	@echo "Generating Swagger/OpenAPI documentation..."
 	@if command -v swag &> /dev/null || [ -f "$$(go env GOPATH)/bin/swag" ]; then \
 		SWAG_CMD=$$(command -v swag 2>/dev/null || echo "$$(go env GOPATH)/bin/swag"); \
-		$$SWAG_CMD init --dir cmd/operator,internal/services/gateway --output internal/services/gateway/docs --parseDependency --parseInternal; \
+		$$SWAG_CMD init --dir cmd/operator,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --parseInternal; \
 	else \
 		echo "swag not found, installing via go install..."; \
 		go install github.com/swaggo/swag/cmd/swag@latest; \
-		$$(go env GOPATH)/bin/swag init --dir cmd/operator,internal/services/gateway --output internal/services/gateway/docs --parseDependency --parseInternal; \
+		$$(go env GOPATH)/bin/swag init --dir cmd/operator,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --parseInternal; \
 	fi
 	@echo "Swagger documentation generated successfully."
 
