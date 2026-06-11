@@ -262,13 +262,13 @@ func auditReportCmd() *cobra.Command {
 			var reportResp struct {
 				Success bool `json:"success"`
 				Report  struct {
-					GeneratedAt       string `json:"generated_at"`
-					OperatorSessionID string `json:"operator_session_id"`
+					GeneratedAt       string        `json:"generated_at"`
+					OperatorSessionID string        `json:"operator_session_id"`
 					Events            []interface{} `json:"events"`
-					EventsCount       int    `json:"events_count"`
+					EventsCount       int           `json:"events_count"`
 					Receipts          []interface{} `json:"receipts"`
-					ReceiptsCount     int    `json:"receipts_count"`
-					TotalRecords      int    `json:"total_records"`
+					ReceiptsCount     int           `json:"receipts_count"`
+					TotalRecords      int           `json:"total_records"`
 				} `json:"report"`
 			}
 			if err := json.Unmarshal(resp, &reportResp); err != nil {
@@ -356,7 +356,7 @@ func auditEventsCmd() *cobra.Command {
 			}
 
 			var eventsResp struct {
-				Success bool   `json:"success"`
+				Success bool `json:"success"`
 				Events  []struct {
 					ID                int64  `json:"id"`
 					OperatorSessionID string `json:"operator_session_id"`
@@ -460,12 +460,12 @@ func auditSummaryCmd() *cobra.Command {
 			}
 
 			var summaryResp struct {
-				Success         bool              `json:"success"`
-				EventsSummary   map[string]int    `json:"events_summary"`
-				EventsTotal     int               `json:"events_total"`
-				ReceiptsSummary map[string]int    `json:"receipts_summary"`
-				ReceiptsTotal   int               `json:"receipts_total"`
-				TotalRecords    int               `json:"total_records"`
+				Success         bool           `json:"success"`
+				EventsSummary   map[string]int `json:"events_summary"`
+				EventsTotal     int            `json:"events_total"`
+				ReceiptsSummary map[string]int `json:"receipts_summary"`
+				ReceiptsTotal   int            `json:"receipts_total"`
+				TotalRecords    int            `json:"total_records"`
 			}
 			if err := json.Unmarshal(resp, &summaryResp); err != nil {
 				return fmt.Errorf("failed to parse response: %w", err)

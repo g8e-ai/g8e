@@ -27,7 +27,7 @@ func TestCommandRequestPayload(t *testing.T) {
 			Command:        "ls",
 			ExecutionID:    "req-123",
 			Justification:  "list files",
-			SentinelMode:   "strict",
+			VaultMode:      "strict",
 			TimeoutSeconds: 30,
 		}
 
@@ -58,7 +58,7 @@ func TestFileEditRequestPayload(t *testing.T) {
 			FilePath:        filepath.Join(tmpDir, "test.txt"),
 			Operation:       "write",
 			ExecutionID:     "req-123",
-			SentinelMode:    "strict",
+			VaultMode:       "strict",
 			Justification:   "testing",
 			Content:         "test content",
 			OldContent:      "old",
@@ -115,8 +115,8 @@ func TestFsGrepRequestPayload(t *testing.T) {
 func TestFetchLogsRequestPayload(t *testing.T) {
 	t.Run("creates valid logs request", func(t *testing.T) {
 		req := &FetchLogsRequestPayload{
-			ExecutionID:  "req-123",
-			SentinelMode: "strict",
+			ExecutionID: "req-123",
+			VaultMode:   "strict",
 		}
 
 		assert.Equal(t, "req-123", req.ExecutionID)

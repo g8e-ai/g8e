@@ -37,7 +37,7 @@ func TestPayloadToExecutionRequest(t *testing.T) {
 			ExecutionId:    "exec-1",
 			Justification:  "test",
 			Intent:         "list files",
-			SentinelMode:   "raw",
+			VaultMode:      "raw",
 			TimeoutSeconds: 30,
 		}
 		payload, _ := proto.Marshal(req)
@@ -59,7 +59,7 @@ func TestPayloadToExecutionRequest(t *testing.T) {
 		assert.Equal(t, "ls -la", execReq.Command)
 		assert.Equal(t, "test", execReq.Justification)
 		assert.Equal(t, "list files", execReq.Intent)
-		assert.Equal(t, "raw", execReq.SentinelMode)
+		assert.Equal(t, "raw", execReq.VaultMode)
 		assert.Equal(t, 30, execReq.TimeoutSeconds)
 	})
 

@@ -84,6 +84,7 @@ type initializeParams struct {
 // JSON-RPC 2.0 request via POST and dispatches by method, reusing the same
 // governed execution paths as the per-method REST handlers. GET is used for
 // SSE streaming support.
+//
 //	@Summary		MCP endpoint
 //	@Description	Unified MCP JSON-RPC endpoint for AI IDE integration
 //	@Tags			mcp

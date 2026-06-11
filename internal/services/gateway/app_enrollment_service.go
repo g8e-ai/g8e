@@ -137,11 +137,11 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 	// Persist default AppPolicy for the enrolled app
 	// This is required for handleAppAuth to accept the app certificate
 	policy := models.AppPolicy{
-		AppID:              appID,   // full SPIFFE ID string from certificate
-		AllowedCollections: nil,    // not used for /mcp
-		RateLimitRPS:       0,      // 0 = unlimited (enforceAppPolicy skips when 0)
-		MaxPayloadBytes:    0,      // 0 = no extra cap (gateway maxPayloadBytes still applies)
-		RequireL3Approval:  false,  // agent runs must not block on WebAuthn
+		AppID:              appID, // full SPIFFE ID string from certificate
+		AllowedCollections: nil,   // not used for /mcp
+		RateLimitRPS:       0,     // 0 = unlimited (enforceAppPolicy skips when 0)
+		MaxPayloadBytes:    0,     // 0 = no extra cap (gateway maxPayloadBytes still applies)
+		RequireL3Approval:  false, // agent runs must not block on WebAuthn
 		CreatedAt:          time.Now().UTC(),
 		UpdatedAt:          time.Now().UTC(),
 	}

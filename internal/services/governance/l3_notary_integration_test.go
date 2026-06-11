@@ -36,8 +36,7 @@ func TestOutboundL3Notary_VerifyL3Proof_NoApproval(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
 	config := &storage.SuspendedTransactionConfig{
-		DBPath:  filepath.Join(tmpDir, "test.db"),
-		Enabled: true,
+		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
 
 	store, err := storage.NewSuspendedTransactionService(config, logger)
@@ -77,8 +76,7 @@ func TestOutboundL3Notary_VerifyL3Proof_ExpiredApproval(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
 	config := &storage.SuspendedTransactionConfig{
-		DBPath:  filepath.Join(tmpDir, "test.db"),
-		Enabled: true,
+		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
 
 	store, err := storage.NewSuspendedTransactionService(config, logger)
@@ -122,8 +120,7 @@ func TestOutboundL3Notary_VerifyL3Proof_MissingSignature(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
 	config := &storage.SuspendedTransactionConfig{
-		DBPath:  filepath.Join(tmpDir, "test.db"),
-		Enabled: true,
+		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
 
 	store, err := storage.NewSuspendedTransactionService(config, logger)
@@ -167,8 +164,7 @@ func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureEncoding(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
 	config := &storage.SuspendedTransactionConfig{
-		DBPath:  filepath.Join(tmpDir, "test.db"),
-		Enabled: true,
+		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
 
 	store, err := storage.NewSuspendedTransactionService(config, logger)
@@ -212,8 +208,7 @@ func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureLength(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
 	config := &storage.SuspendedTransactionConfig{
-		DBPath:  filepath.Join(tmpDir, "test.db"),
-		Enabled: true,
+		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
 
 	store, err := storage.NewSuspendedTransactionService(config, logger)
@@ -258,8 +253,7 @@ func TestOutboundL3Notary_VerifyL3Proof_SignatureMismatch(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
 	config := &storage.SuspendedTransactionConfig{
-		DBPath:  filepath.Join(tmpDir, "test.db"),
-		Enabled: true,
+		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
 
 	store, err := storage.NewSuspendedTransactionService(config, logger)
@@ -307,8 +301,7 @@ func TestOutboundL3Notary_VerifyL3Proof_FingerprintMismatch(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
 	config := &storage.SuspendedTransactionConfig{
-		DBPath:  filepath.Join(tmpDir, "test.db"),
-		Enabled: true,
+		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
 
 	store, err := storage.NewSuspendedTransactionService(config, logger)
@@ -358,8 +351,7 @@ func TestOutboundL3Notary_VerifyL3Proof_ValidProof(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
 	config := &storage.SuspendedTransactionConfig{
-		DBPath:  filepath.Join(tmpDir, "test.db"),
-		Enabled: true,
+		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
 
 	store, err := storage.NewSuspendedTransactionService(config, logger)
@@ -408,8 +400,7 @@ func TestOutboundL3Notary_VerifyL3Proof_TransactionNotFound(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
 	config := &storage.SuspendedTransactionConfig{
-		DBPath:  filepath.Join(tmpDir, "test.db"),
-		Enabled: true,
+		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
 
 	store, err := storage.NewSuspendedTransactionService(config, logger)
@@ -435,8 +426,7 @@ func TestOutboundL3Notary_VerifyL3Proof_UserIDMismatch(t *testing.T) {
 	logger := slog.Default()
 	tmpDir := t.TempDir()
 	config := &storage.SuspendedTransactionConfig{
-		DBPath:  filepath.Join(tmpDir, "test.db"),
-		Enabled: true,
+		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
 
 	store, err := storage.NewSuspendedTransactionService(config, logger)
@@ -480,8 +470,7 @@ func TestOutboundL3Notary_VerifyL3Proof_NoFingerprintCheckWhenNotSet(t *testing.
 	logger := slog.Default()
 	tmpDir := t.TempDir()
 	config := &storage.SuspendedTransactionConfig{
-		DBPath:  filepath.Join(tmpDir, "test.db"),
-		Enabled: true,
+		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
 
 	store, err := storage.NewSuspendedTransactionService(config, logger)

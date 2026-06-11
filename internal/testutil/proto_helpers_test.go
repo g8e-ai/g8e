@@ -72,7 +72,7 @@ func TestMustBuildCommandRequestedPayload(t *testing.T) {
 	require.Equal(t, "ls -la", cmd.Command)
 	require.Equal(t, "exec-123", cmd.ExecutionId)
 	require.Equal(t, "test justification", cmd.Justification)
-	require.Equal(t, "strict", cmd.SentinelMode)
+	require.Equal(t, "strict", cmd.VaultMode)
 	require.Equal(t, int32(30), cmd.TimeoutSeconds)
 }
 
@@ -94,7 +94,7 @@ func TestMustUnmarshalPayload(t *testing.T) {
 		Command:        "test",
 		ExecutionId:    "exec-789",
 		Justification:  "test",
-		SentinelMode:   "strict",
+		VaultMode:      "strict",
 		TimeoutSeconds: 30,
 	}
 	payload, err := proto.Marshal(testCmd)

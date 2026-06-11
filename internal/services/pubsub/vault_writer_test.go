@@ -27,7 +27,7 @@ import (
 )
 
 // mockExecutionVault is a simple mock for testing VaultWriter
-type mockExecutionVault struct {}
+type mockExecutionVault struct{}
 
 func (m *mockExecutionVault) StoreExecution(ctx context.Context, record *models.ExecutionRecord) error {
 	return nil

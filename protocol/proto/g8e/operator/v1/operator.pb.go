@@ -262,7 +262,7 @@ type CommandRequested struct {
 	// Justification for running this command (High-level Sage request)
 	Justification string `protobuf:"bytes,3,opt,name=justification,proto3" json:"justification,omitempty"`
 	// Vault scrubbing mode for output storage
-	SentinelMode string `protobuf:"bytes,4,opt,name=sentinel_mode,json=sentinelMode,proto3" json:"sentinel_mode,omitempty"`
+	VaultMode string `protobuf:"bytes,4,opt,name=vault_mode,json=vaultMode,proto3" json:"vault_mode,omitempty"`
 	// Execution timeout override in seconds
 	TimeoutSeconds int32 `protobuf:"varint,5,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
 	// Intent: The high-level goal (The "Why")
@@ -326,9 +326,9 @@ func (x *CommandRequested) GetJustification() string {
 	return ""
 }
 
-func (x *CommandRequested) GetSentinelMode() string {
+func (x *CommandRequested) GetVaultMode() string {
 	if x != nil {
-		return x.SentinelMode
+		return x.VaultMode
 	}
 	return ""
 }
@@ -421,7 +421,7 @@ type FileEditRequested struct {
 	PatchContent    string                 `protobuf:"bytes,12,opt,name=patch_content,json=patchContent,proto3" json:"patch_content,omitempty"`
 	CreateBackup    bool                   `protobuf:"varint,13,opt,name=create_backup,json=createBackup,proto3" json:"create_backup,omitempty"`
 	CreateIfMissing bool                   `protobuf:"varint,14,opt,name=create_if_missing,json=createIfMissing,proto3" json:"create_if_missing,omitempty"`
-	SentinelMode    string                 `protobuf:"bytes,15,opt,name=sentinel_mode,json=sentinelMode,proto3" json:"sentinel_mode,omitempty"`
+	VaultMode       string                 `protobuf:"bytes,15,opt,name=vault_mode,json=vaultMode,proto3" json:"vault_mode,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -554,9 +554,9 @@ func (x *FileEditRequested) GetCreateIfMissing() bool {
 	return false
 }
 
-func (x *FileEditRequested) GetSentinelMode() string {
+func (x *FileEditRequested) GetVaultMode() string {
 	if x != nil {
-		return x.SentinelMode
+		return x.VaultMode
 	}
 	return ""
 }
@@ -567,7 +567,7 @@ type FsListRequested struct {
 	ExecutionId   string                 `protobuf:"bytes,2,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
 	MaxDepth      int32                  `protobuf:"varint,3,opt,name=max_depth,json=maxDepth,proto3" json:"max_depth,omitempty"`
 	MaxEntries    int32                  `protobuf:"varint,4,opt,name=max_entries,json=maxEntries,proto3" json:"max_entries,omitempty"`
-	SentinelMode  string                 `protobuf:"bytes,5,opt,name=sentinel_mode,json=sentinelMode,proto3" json:"sentinel_mode,omitempty"`
+	VaultMode     string                 `protobuf:"bytes,5,opt,name=vault_mode,json=vaultMode,proto3" json:"vault_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -630,9 +630,9 @@ func (x *FsListRequested) GetMaxEntries() int32 {
 	return 0
 }
 
-func (x *FsListRequested) GetSentinelMode() string {
+func (x *FsListRequested) GetVaultMode() string {
 	if x != nil {
-		return x.SentinelMode
+		return x.VaultMode
 	}
 	return ""
 }
@@ -642,7 +642,7 @@ type FsReadRequested struct {
 	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
 	ExecutionId   string                 `protobuf:"bytes,2,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
 	MaxSize       int32                  `protobuf:"varint,3,opt,name=max_size,json=maxSize,proto3" json:"max_size,omitempty"`
-	SentinelMode  string                 `protobuf:"bytes,4,opt,name=sentinel_mode,json=sentinelMode,proto3" json:"sentinel_mode,omitempty"`
+	VaultMode     string                 `protobuf:"bytes,4,opt,name=vault_mode,json=vaultMode,proto3" json:"vault_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -698,9 +698,9 @@ func (x *FsReadRequested) GetMaxSize() int32 {
 	return 0
 }
 
-func (x *FsReadRequested) GetSentinelMode() string {
+func (x *FsReadRequested) GetVaultMode() string {
 	if x != nil {
-		return x.SentinelMode
+		return x.VaultMode
 	}
 	return ""
 }
@@ -748,7 +748,7 @@ type FsGrepRequested struct {
 	Pattern       string                 `protobuf:"bytes,3,opt,name=pattern,proto3" json:"pattern,omitempty"`
 	Includes      []string               `protobuf:"bytes,4,rep,name=includes,proto3" json:"includes,omitempty"`
 	MaxMatches    int32                  `protobuf:"varint,5,opt,name=max_matches,json=maxMatches,proto3" json:"max_matches,omitempty"`
-	SentinelMode  string                 `protobuf:"bytes,6,opt,name=sentinel_mode,json=sentinelMode,proto3" json:"sentinel_mode,omitempty"`
+	VaultMode     string                 `protobuf:"bytes,6,opt,name=vault_mode,json=vaultMode,proto3" json:"vault_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -818,9 +818,9 @@ func (x *FsGrepRequested) GetMaxMatches() int32 {
 	return 0
 }
 
-func (x *FsGrepRequested) GetSentinelMode() string {
+func (x *FsGrepRequested) GetVaultMode() string {
 	if x != nil {
-		return x.SentinelMode
+		return x.VaultMode
 	}
 	return ""
 }
@@ -896,7 +896,7 @@ func (x *CheckPortRequested) GetProtocol() string {
 type FetchLogsRequested struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ExecutionId   string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
-	SentinelMode  string                 `protobuf:"bytes,2,opt,name=sentinel_mode,json=sentinelMode,proto3" json:"sentinel_mode,omitempty"`
+	VaultMode     string                 `protobuf:"bytes,2,opt,name=vault_mode,json=vaultMode,proto3" json:"vault_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -938,9 +938,9 @@ func (x *FetchLogsRequested) GetExecutionId() string {
 	return ""
 }
 
-func (x *FetchLogsRequested) GetSentinelMode() string {
+func (x *FetchLogsRequested) GetVaultMode() string {
 	if x != nil {
-		return x.SentinelMode
+		return x.VaultMode
 	}
 	return ""
 }
@@ -4791,7 +4791,7 @@ type FetchLogsResult struct {
 	StdoutSize    int32                  `protobuf:"varint,7,opt,name=stdout_size,json=stdoutSize,proto3" json:"stdout_size,omitempty"`
 	StderrSize    int32                  `protobuf:"varint,8,opt,name=stderr_size,json=stderrSize,proto3" json:"stderr_size,omitempty"`
 	Timestamp     string                 `protobuf:"bytes,9,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	SentinelMode  string                 `protobuf:"bytes,10,opt,name=sentinel_mode,json=sentinelMode,proto3" json:"sentinel_mode,omitempty"`
+	VaultMode     string                 `protobuf:"bytes,10,opt,name=vault_mode,json=vaultMode,proto3" json:"vault_mode,omitempty"`
 	Error         string                 `protobuf:"bytes,11,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -4890,9 +4890,9 @@ func (x *FetchLogsResult) GetTimestamp() string {
 	return ""
 }
 
-func (x *FetchLogsResult) GetSentinelMode() string {
+func (x *FetchLogsResult) GetVaultMode() string {
 	if x != nil {
-		return x.SentinelMode
+		return x.VaultMode
 	}
 	return ""
 }
@@ -8395,12 +8395,13 @@ var File_g8e_operator_v1_operator_proto protoreflect.FileDescriptor
 
 const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\n" +
-	"\x1eg8e/operator/v1/operator.proto\x12\x0fg8e.operator.v1\x1a\x1ag8e/common/v1/common.proto\"\xcc\x03\n" +
+	"\x1eg8e/operator/v1/operator.proto\x12\x0fg8e.operator.v1\x1a\x1ag8e/common/v1/common.proto\"\xc6\x03\n" +
 	"\x10CommandRequested\x12F\n" +
 	"\acommand\x18\x01 \x01(\tB,\x8a\xb5\x18((^|\\s)sudo(\\s|$),(^|\\s)su(\\s|$),rm -rf /R\acommand\x12!\n" +
 	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12$\n" +
-	"\rjustification\x18\x03 \x01(\tR\rjustification\x12#\n" +
-	"\rsentinel_mode\x18\x04 \x01(\tR\fsentinelMode\x12'\n" +
+	"\rjustification\x18\x03 \x01(\tR\rjustification\x12\x1d\n" +
+	"\n" +
+	"vault_mode\x18\x04 \x01(\tR\tvaultMode\x12'\n" +
 	"\x0ftimeout_seconds\x18\x05 \x01(\x05R\x0etimeoutSeconds\x12\x16\n" +
 	"\x06intent\x18\x06 \x01(\tR\x06intent\x12T\n" +
 	"\venvironment\x18\a \x03(\v22.g8e.operator.v1.CommandRequested.EnvironmentEntryR\venvironment\x12+\n" +
@@ -8409,7 +8410,7 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\";\n" +
 	"\x16CommandCancelRequested\x12!\n" +
-	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\"\x98\x04\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\"\x92\x04\n" +
 	"\x11FileEditRequested\x12\x1b\n" +
 	"\tfile_path\x18\x01 \x01(\tR\bfilePath\x12\x1c\n" +
 	"\toperation\x18\x02 \x01(\tR\toperation\x12!\n" +
@@ -8428,37 +8429,42 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\bend_line\x18\v \x01(\x05R\aendLine\x12#\n" +
 	"\rpatch_content\x18\f \x01(\tR\fpatchContent\x12#\n" +
 	"\rcreate_backup\x18\r \x01(\bR\fcreateBackup\x12*\n" +
-	"\x11create_if_missing\x18\x0e \x01(\bR\x0fcreateIfMissing\x12#\n" +
-	"\rsentinel_mode\x18\x0f \x01(\tR\fsentinelMode\"\xc5\x01\n" +
+	"\x11create_if_missing\x18\x0e \x01(\bR\x0fcreateIfMissing\x12\x1d\n" +
+	"\n" +
+	"vault_mode\x18\x0f \x01(\tR\tvaultMode\"\xbf\x01\n" +
 	"\x0fFsListRequested\x12,\n" +
 	"\x04path\x18\x01 \x01(\tB\x18\x8a\xb5\x18\x14/mnt/pnfs/private/.*R\x04path\x12!\n" +
 	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12\x1b\n" +
 	"\tmax_depth\x18\x03 \x01(\x05R\bmaxDepth\x12\x1f\n" +
 	"\vmax_entries\x18\x04 \x01(\x05R\n" +
-	"maxEntries\x12#\n" +
-	"\rsentinel_mode\x18\x05 \x01(\tR\fsentinelMode\"\xa2\x01\n" +
+	"maxEntries\x12\x1d\n" +
+	"\n" +
+	"vault_mode\x18\x05 \x01(\tR\tvaultMode\"\x9c\x01\n" +
 	"\x0fFsReadRequested\x12,\n" +
 	"\x04path\x18\x01 \x01(\tB\x18\x8a\xb5\x18\x14/mnt/pnfs/private/.*R\x04path\x12!\n" +
 	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12\x19\n" +
-	"\bmax_size\x18\x03 \x01(\x05R\amaxSize\x12#\n" +
-	"\rsentinel_mode\x18\x04 \x01(\tR\fsentinelMode\"\x14\n" +
-	"\x12HeartbeatRequested\"\xc4\x01\n" +
+	"\bmax_size\x18\x03 \x01(\x05R\amaxSize\x12\x1d\n" +
+	"\n" +
+	"vault_mode\x18\x04 \x01(\tR\tvaultMode\"\x14\n" +
+	"\x12HeartbeatRequested\"\xbe\x01\n" +
 	"\x0fFsGrepRequested\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12!\n" +
 	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12\x18\n" +
 	"\apattern\x18\x03 \x01(\tR\apattern\x12\x1a\n" +
 	"\bincludes\x18\x04 \x03(\tR\bincludes\x12\x1f\n" +
 	"\vmax_matches\x18\x05 \x01(\x05R\n" +
-	"maxMatches\x12#\n" +
-	"\rsentinel_mode\x18\x06 \x01(\tR\fsentinelMode\"{\n" +
+	"maxMatches\x12\x1d\n" +
+	"\n" +
+	"vault_mode\x18\x06 \x01(\tR\tvaultMode\"{\n" +
 	"\x12CheckPortRequested\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\x05R\x04port\x12\x12\n" +
 	"\x04host\x18\x03 \x01(\tR\x04host\x12\x1a\n" +
-	"\bprotocol\x18\x04 \x01(\tR\bprotocol\"\\\n" +
+	"\bprotocol\x18\x04 \x01(\tR\bprotocol\"V\n" +
 	"\x12FetchLogsRequested\x12!\n" +
-	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12#\n" +
-	"\rsentinel_mode\x18\x02 \x01(\tR\fsentinelMode\"\xf9\x01\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x1d\n" +
+	"\n" +
+	"vault_mode\x18\x02 \x01(\tR\tvaultMode\"\xf9\x01\n" +
 	"\x15FetchHistoryRequested\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12.\n" +
 	"\x13operator_session_id\x18\x02 \x01(\tR\x11operatorSessionId\x12\x14\n" +
@@ -8787,7 +8793,7 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\aresults\x18\x03 \x03(\v2\x1f.g8e.operator.v1.PortCheckEntryR\aresults\x12#\n" +
 	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\x12\x1d\n" +
 	"\n" +
-	"error_type\x18\x05 \x01(\tR\terrorType\"\xdb\x02\n" +
+	"error_type\x18\x05 \x01(\tR\terrorType\"\xd5\x02\n" +
 	"\x0fFetchLogsResult\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x1f\n" +
@@ -8801,9 +8807,10 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"stdoutSize\x12\x1f\n" +
 	"\vstderr_size\x18\b \x01(\x05R\n" +
 	"stderrSize\x12\x1c\n" +
-	"\ttimestamp\x18\t \x01(\tR\ttimestamp\x12#\n" +
-	"\rsentinel_mode\x18\n" +
-	" \x01(\tR\fsentinelMode\x12\x14\n" +
+	"\ttimestamp\x18\t \x01(\tR\ttimestamp\x12\x1d\n" +
+	"\n" +
+	"vault_mode\x18\n" +
+	" \x01(\tR\tvaultMode\x12\x14\n" +
 	"\x05error\x18\v \x01(\tR\x05error\"{\n" +
 	"\x0fAuditWebSession\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +

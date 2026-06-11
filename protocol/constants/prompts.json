@@ -56,9 +56,9 @@
       "_go_const": "PromptSectionSafety",
       "value": "safety"
     },
-    "SectionSentinelMode": {
-      "_go_const": "PromptSectionSentinelMode",
-      "value": "sentinel_mode"
+    "SectionVaultMode": {
+      "_go_const": "PromptSectionVaultMode",
+      "value": "vault_mode"
     },
     "SectionSystemContext": {
       "_go_const": "PromptSectionSystemContext",

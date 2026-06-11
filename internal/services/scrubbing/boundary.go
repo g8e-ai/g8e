@@ -93,7 +93,7 @@ type CommandResult struct {
 // ScrubbedResult is the sanitized output safe for transmission to cloud AI
 type ScrubbedResult struct {
 	// Status is the high-level outcome: success, failure, error, timeout
-	Status constants.SentinelStatus `json:"status"`
+	Status constants.CommandExitStatus `json:"status"`
 
 	// ExitCode is preserved as it contains no sensitive data
 	ExitCode int `json:"exit_code"`
@@ -586,31 +586,31 @@ func (s *ScrubbingService) scrubKeyName(key string) string {
 }
 
 // determineStatus maps exit code to a status category
-func (s *ScrubbingService) determineStatus(exitCode int) constants.SentinelStatus {
+func (s *ScrubbingService) determineStatus(exitCode int) constants.CommandExitStatus {
 	switch exitCode {
 	case 0:
-		return constants.SentinelStatusSuccess
+		return constants.CommandExitStatusSuccess
 	case 1:
-		return constants.SentinelStatusFailure
+		return constants.CommandExitStatusFailure
 	case 2:
-		return constants.SentinelStatusMisuse
+		return constants.CommandExitStatusMisuse
 	case 126:
-		return constants.SentinelStatusNotExecutable
+		return constants.CommandExitStatusNotExecutable
 	case 127:
-		return constants.SentinelStatusNotFound
+		return constants.CommandExitStatusNotFound
 	case 128:
-		return constants.SentinelStatusInvalidExit
+		return constants.CommandExitStatusInvalidExit
 	case 130:
-		return constants.SentinelStatusInterrupted
+		return constants.CommandExitStatusInterrupted
 	case 137:
-		return constants.SentinelStatusKilled
+		return constants.CommandExitStatusKilled
 	case 143:
-		return constants.SentinelStatusTerminated
+		return constants.CommandExitStatusTerminated
 	default:
 		if exitCode > 128 {
-			return constants.SentinelStatus(fmt.Sprintf("signal_%d", exitCode-128))
+			return constants.CommandExitStatus(fmt.Sprintf("signal_%d", exitCode-128))
 		}
-		return constants.SentinelStatusError
+		return constants.CommandExitStatusError
 	}
 }
 
@@ -627,7 +627,7 @@ func (s *ScrubbingService) categorizeError(stderr string, exitCode int) string {
 	case strings.Contains(stderrLower, "permission denied"):
 		return "permission_denied"
 	case strings.Contains(stderrLower, "not found") || strings.Contains(stderrLower, "no such file"):
-		return string(constants.SentinelStatusNotFound)
+		return string(constants.CommandExitStatusNotFound)
 	case strings.Contains(stderrLower, "timeout") || strings.Contains(stderrLower, "timed out"):
 		return "timeout"
 	case strings.Contains(stderrLower, "connection refused"):
@@ -877,7 +877,7 @@ func (s *ScrubbingService) RehydrateText(input string) string {
 			}
 
 			// Try to load from TokenStore
-			key := fmt.Sprintf("sentinel_token_%s", token)
+			key := fmt.Sprintf("uei_token_%s", token)
 			value, err := s.tokenStore.KVGet(context.Background(), key)
 			if err == nil {
 				// Add to in-memory cache for future use (requires write lock)
@@ -959,7 +959,7 @@ func (s *ScrubbingService) GetTokenForValue(value string) string {
 	// Persist to storage if available (24 hour TTL)
 	if s.tokenStore != nil {
 		const tokenTTLSeconds = 24 * 60 * 60
-		key := fmt.Sprintf("sentinel_token_%s", token)
+		key := fmt.Sprintf("uei_token_%s", token)
 		if err := s.tokenStore.KVSet(context.Background(), key, value, tokenTTLSeconds); err != nil {
 			s.logger.Error("Failed to persist token to local store - failing closed", "token", token, "error", err)
 			// Rollback the in-memory token since persistence failed
@@ -985,7 +985,7 @@ func (s *ScrubbingService) loadPersistedTokens() {
 		return
 	}
 
-	tokens, err := s.tokenStore.KVScanPrefix(context.Background(), "sentinel_token_")
+	tokens, err := s.tokenStore.KVScanPrefix(context.Background(), "uei_token_")
 	if err != nil {
 		s.logger.Error("Failed to load persisted tokens from TokenStore", "error", err)
 		return
@@ -997,8 +997,8 @@ func (s *ScrubbingService) loadPersistedTokens() {
 	loadedCount := 0
 	maxSequence := 0
 	for key, value := range tokens {
-		// Extract token from key format: sentinel_token_{{UEI_N}}
-		token := strings.TrimPrefix(key, "sentinel_token_")
+		// Extract token from key format: uei_token_{{UEI_N}}
+		token := strings.TrimPrefix(key, "uei_token_")
 		if token == key {
 			s.logger.Warn("Invalid token key format", "key", key)
 			continue

@@ -286,17 +286,17 @@ func TestScrubbingService_DetermineStatus(t *testing.T) {
 
 	tests := []struct {
 		exitCode int
-		expected constants.SentinelStatus
+		expected constants.CommandExitStatus
 	}{
-		{0, constants.SentinelStatusSuccess},
-		{1, constants.SentinelStatusFailure},
-		{2, constants.SentinelStatusMisuse},
-		{126, constants.SentinelStatusNotExecutable},
-		{127, constants.SentinelStatusNotFound},
-		{130, constants.SentinelStatusInterrupted},
-		{137, constants.SentinelStatusKilled},
-		{143, constants.SentinelStatusTerminated},
-		{139, constants.SentinelStatus("signal_11")}, // SIGSEGV
+		{0, constants.CommandExitStatusSuccess},
+		{1, constants.CommandExitStatusFailure},
+		{2, constants.CommandExitStatusMisuse},
+		{126, constants.CommandExitStatusNotExecutable},
+		{127, constants.CommandExitStatusNotFound},
+		{130, constants.CommandExitStatusInterrupted},
+		{137, constants.CommandExitStatusKilled},
+		{143, constants.CommandExitStatusTerminated},
+		{139, constants.CommandExitStatus("signal_11")}, // SIGSEGV
 	}
 
 	for _, tt := range tests {
@@ -354,7 +354,7 @@ func TestScrubbingService_ScrubCommandResult(t *testing.T) {
 
 		scrubbed := service.ScrubCommandResult(result)
 
-		assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
+		assert.Equal(t, constants.CommandExitStatusSuccess, scrubbed.Status)
 		assert.Equal(t, 0, scrubbed.ExitCode)
 		assert.Equal(t, int64(150), scrubbed.DurationMs)
 		assert.Greater(t, scrubbed.OutputLines, 0)
@@ -375,7 +375,7 @@ func TestScrubbingService_ScrubCommandResult(t *testing.T) {
 
 		scrubbed := service.ScrubCommandResult(result)
 
-		assert.Equal(t, constants.SentinelStatusFailure, scrubbed.Status)
+		assert.Equal(t, constants.CommandExitStatusFailure, scrubbed.Status)
 		assert.Equal(t, 1, scrubbed.ExitCode)
 		assert.Equal(t, "permission_denied", scrubbed.ErrorType)
 	})
@@ -392,7 +392,7 @@ func TestScrubbingService_ScrubCommandResult(t *testing.T) {
 
 		scrubbed := service.ScrubCommandResult(result)
 
-		assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
+		assert.Equal(t, constants.CommandExitStatusSuccess, scrubbed.Status)
 		assert.NotEmpty(t, scrubbed.Warnings)
 		assert.Contains(t, scrubbed.Warnings, "deprecation_warning")
 		assert.Contains(t, scrubbed.Warnings, "security_warning")
@@ -697,7 +697,7 @@ func TestScrubbingService_TokenPersistence(t *testing.T) {
 	assert.Equal(t, sensitiveValue, rehydrated)
 
 	// Verify token is persisted in TokenStore
-	key := fmt.Sprintf("sentinel_token_%s", token)
+	key := fmt.Sprintf("uei_token_%s", token)
 	storedValue, err := tokenStore.KVGet(context.Background(), key)
 	require.NoError(t, err)
 	assert.Equal(t, sensitiveValue, storedValue)

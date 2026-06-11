@@ -430,12 +430,12 @@ func (c *DBController) handleAuditSummary(w http.ResponseWriter, r *http.Request
 	}
 
 	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
-		"success":         true,
-		"events_summary":  eventSummary,
-		"events_total":    len(events),
+		"success":          true,
+		"events_summary":   eventSummary,
+		"events_total":     len(events),
 		"receipts_summary": receiptSummary,
-		"receipts_total":  len(receipts),
-		"total_records":   len(events) + len(receipts),
+		"receipts_total":   len(receipts),
+		"total_records":    len(events) + len(receipts),
 	})
 }
 
@@ -463,13 +463,13 @@ func (c *DBController) handleAuditReport(w http.ResponseWriter, r *http.Request)
 
 	// Build comprehensive report
 	report := map[string]interface{}{
-		"generated_at":       time.Now().Format(time.RFC3339),
+		"generated_at":        time.Now().Format(time.RFC3339),
 		"operator_session_id": operatorSessionID,
-		"events":            events,
-		"events_count":      len(events),
-		"receipts":          receipts,
-		"receipts_count":    len(receipts),
-		"total_records":     len(events) + len(receipts),
+		"events":              events,
+		"events_count":        len(events),
+		"receipts":            receipts,
+		"receipts_count":      len(receipts),
+		"total_records":       len(events) + len(receipts),
 	}
 
 	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
@@ -831,12 +831,12 @@ func (c *DBController) verifyBlobOwnership(r *http.Request, namespace string) er
 	return fmt.Errorf("unauthorized: unknown identity type")
 }
 
-//	@Summary		Get blob
-//	@Description	Retrieves a blob from the data store
-//	@Tags			data
-//	@Produce		application/octet-stream
-//	@Success		200	{file}	file
-//	@Router			/api/v1/data/blobs/{namespace}/{id} [get]
+// @Summary		Get blob
+// @Description	Retrieves a blob from the data store
+// @Tags			data
+// @Produce		application/octet-stream
+// @Success		200	{file}	file
+// @Router			/api/v1/data/blobs/{namespace}/{id} [get]
 func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.DataBlobsPrefix)
 	if path == "" {

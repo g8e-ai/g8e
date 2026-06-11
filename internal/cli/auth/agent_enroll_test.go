@@ -61,7 +61,7 @@ func generateTestCertificateWithSPIFFE(t *testing.T, agentName string, notAfter 
 		ExtKeyUsage: []x509.ExtKeyUsage{
 			x509.ExtKeyUsageClientAuth,
 		},
-		URIs:              []*url.URL{uri},
+		URIs:                  []*url.URL{uri},
 		BasicConstraintsValid: true,
 	}
 
@@ -295,7 +295,7 @@ func TestEnrollAgentApp_NoURISAN(t *testing.T) {
 	// Create a cert without URI SAN (using a different generator)
 	csr, privKey, err := GenerateCSR(agentName)
 	require.NoError(t, err)
-	
+
 	// Parse the CSR to get the public key
 	block, _ := pem.Decode([]byte(csr))
 	require.NotNil(t, block)
@@ -312,7 +312,7 @@ func TestEnrollAgentApp_NoURISAN(t *testing.T) {
 			CommonName: agentName,
 		},
 		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(30*24*time.Hour),
+		NotAfter:              time.Now().Add(30 * 24 * time.Hour),
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,

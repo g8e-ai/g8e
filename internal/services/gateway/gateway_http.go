@@ -659,13 +659,13 @@ func (h *HTTPHandler) GetPubSubBroker() *PubSubBroker {
 	return h.pubsub
 }
 
-//	@Summary		Landing page
-//	@Description	Returns the public landing page for the gateway
-//	@Tags			public
-//	@Accept			html
-//	@Produce		html
-//	@Success		200	{string}	string
-//	@Router			/ [get]
+// @Summary		Landing page
+// @Description	Returns the public landing page for the gateway
+// @Tags			public
+// @Accept			html
+// @Produce		html
+// @Success		200	{string}	string
+// @Router			/ [get]
 func (h *HTTPHandler) handleLandingPage(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -728,13 +728,13 @@ func (h *HTTPHandler) handleLandingPage(w http.ResponseWriter, r *http.Request) 
 `, html.EscapeString(host))
 }
 
-//	@Summary		Health check
-//	@Description	Returns the current health status of the gateway
-//	@Tags			health
-//	@Accept			json
-//	@Produce		json
-//	@Success		200	{object}	models.HealthResponse
-//	@Router			/health [get]
+// @Summary		Health check
+// @Description	Returns the current health status of the gateway
+// @Tags			health
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	models.HealthResponse
+// @Router			/health [get]
 func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if h.isReady != nil && !h.isReady() {
 		h.responder.Error(w, http.StatusServiceUnavailable, "service initializing")
@@ -774,13 +774,13 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-//	@Summary		Bootstrap health check
-//	@Description	Returns the current health status during bootstrap (no state root check)
-//	@Tags			health
-//	@Accept			json
-//	@Produce		json
-//	@Success		200	{object}	models.HealthResponse
-//	@Router			/health/bootstrap [get]
+// @Summary		Bootstrap health check
+// @Description	Returns the current health status during bootstrap (no state root check)
+// @Tags			health
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	models.HealthResponse
+// @Router			/health/bootstrap [get]
 func (h *HTTPHandler) handleBootstrapHealth(w http.ResponseWriter, r *http.Request) {
 	if h.isReady != nil && !h.isReady() {
 		h.responder.Error(w, http.StatusServiceUnavailable, "service initializing")

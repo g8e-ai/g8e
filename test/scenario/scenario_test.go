@@ -99,7 +99,7 @@ func setupTestContext(t *testing.T) *TestContext {
 			os.Remove(cliCfg.CLIKeyFile())
 		}
 	}
-	
+
 	if err := auth.BootstrapCLIWithoutPasskey(cliCfg); err != nil {
 		t.Fatalf("failed to bootstrap CLI auth: %v", err)
 	}
@@ -107,7 +107,7 @@ func setupTestContext(t *testing.T) *TestContext {
 	// Ensure gateway is running and governance is ready before proceeding
 	healthURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/health", constants.Ports.OperatorHttp)
 	t.Logf("Waiting for gateway to be governance-ready at %s...", healthURL)
-	
+
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		resp, err := http.Get(healthURL)
@@ -117,13 +117,13 @@ func setupTestContext(t *testing.T) *TestContext {
 			continue
 		}
 		defer resp.Body.Close()
-		
+
 		if resp.StatusCode != http.StatusOK {
 			t.Logf("Gateway returned status %d, retrying...", resp.StatusCode)
 			time.Sleep(500 * time.Millisecond)
 			continue
 		}
-		
+
 		var health struct {
 			Status          string `json:"status"`
 			GovernanceReady bool   `json:"governance_ready"`
@@ -133,16 +133,16 @@ func setupTestContext(t *testing.T) *TestContext {
 			time.Sleep(500 * time.Millisecond)
 			continue
 		}
-		
+
 		if health.GovernanceReady {
 			t.Logf("Gateway is governance-ready")
 			break
 		}
-		
+
 		t.Logf("Gateway not governance-ready yet, retrying...")
 		time.Sleep(500 * time.Millisecond)
 	}
-	
+
 	if time.Now().After(deadline) {
 		t.Fatal("gateway did not become governance-ready within timeout - run './g8e gw start' first")
 	}

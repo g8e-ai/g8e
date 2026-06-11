@@ -87,7 +87,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 	filePath := protoEdit.FilePath
 	operation := protoEdit.Operation
 
-	vaultMode := constants.VaultMode(protoEdit.SentinelMode)
+	vaultMode := constants.VaultMode(protoEdit.VaultMode)
 	if vaultMode == "" {
 		vaultMode = constants.VaultModeRaw
 	}
@@ -95,7 +95,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 	fs.logger.Info("File edit requested (via Protobuf)",
 		"file_path", filePath,
 		"operation", operation,
-		"sentinel_mode", vaultMode)
+		"vault_mode", vaultMode)
 
 	editReq, err := payloadToFileEditRequest(msg)
 	if err != nil {
@@ -278,7 +278,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 		path = "."
 	}
 
-	vaultMode := constants.VaultMode(protoList.SentinelMode)
+	vaultMode := constants.VaultMode(protoList.VaultMode)
 	if vaultMode == "" {
 		vaultMode = constants.VaultModeRaw
 	}
@@ -410,7 +410,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 		path = "."
 	}
 
-	vaultMode := constants.VaultMode(protoGrep.SentinelMode)
+	vaultMode := constants.VaultMode(protoGrep.VaultMode)
 	if vaultMode == "" {
 		vaultMode = constants.VaultModeRaw
 	}
@@ -544,7 +544,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg *PubSubCo
 		maxSize = defaultMaxReadSize
 	}
 
-	vaultMode := constants.VaultMode(protoRead.SentinelMode)
+	vaultMode := constants.VaultMode(protoRead.VaultMode)
 	if vaultMode == "" {
 		vaultMode = constants.VaultModeRaw
 	}

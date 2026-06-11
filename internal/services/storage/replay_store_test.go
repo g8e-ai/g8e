@@ -32,7 +32,7 @@ func setupTestReplayStore(t *testing.T) *SQLReplayStore {
 	dbPath := filepath.Join(tempDir, "test_replay_store.db")
 
 	config := &ReplayStoreConfig{
-		DBPath:  dbPath,
+		DBPath: dbPath,
 	}
 
 	logger := testutil.NewTestLogger()

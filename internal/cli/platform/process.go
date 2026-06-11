@@ -15,6 +15,7 @@ package platform
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -460,12 +461,23 @@ func TailLog(logPath string, follow bool) error {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
+	// Track parent PID to detect if parent has died
+	parentPID := os.Getppid()
+
 	for {
 		select {
 		case <-sigChan:
 			// Exit gracefully on interrupt signal
 			return nil
 		case <-ticker.C:
+			// Check if parent process is still alive
+			// If parent died (PID changed to 1 or process doesn't exist), exit
+			currentParentPID := os.Getppid()
+			if currentParentPID != parentPID {
+				// Parent died, we were orphaned and adopted by init (PID 1)
+				return nil
+			}
+
 			line, err := reader.ReadString('\n')
 			if err != nil {
 				if err == io.EOF {

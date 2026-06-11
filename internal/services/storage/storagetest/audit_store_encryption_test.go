@@ -353,7 +353,6 @@ func TestAuditVaultPrune(t *testing.T) {
 	config := &TestSQLAuditStoreConfig{
 		DataDir:         tempDir,
 		DBPath:          "prune_test.db",
-		Enabled:         true,
 		RetentionDays:   7,
 		EncryptionVault: testVault,
 	}

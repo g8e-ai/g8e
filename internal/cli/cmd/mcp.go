@@ -140,7 +140,6 @@ directly the CLI session is loaded from disk (bootstrapping enrollment if needed
 	}
 }
 
-
 func handleInitialize(encoder *json.Encoder, id interface{}) {
 	response := JSONRPCResponse{
 		JSONRPC: "2.0",
@@ -560,48 +559,6 @@ func proxyToGateway(client *http.Client, gatewayURL string, req JSONRPCRequest) 
 	var resp JSONRPCResponse
 	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
 		return JSONRPCResponse{}, err
-	}
-	return resp, nil
-}
-
-func proxyToGatewayWithRetry(client *http.Client, gatewayURL string, req JSONRPCRequest, logger *slog.Logger) (JSONRPCResponse, error) {
-	resp, err := proxyToGateway(client, gatewayURL, req)
-	if err != nil {
-		return resp, err
-	}
-
-	if !isL3ApprovalResponse(resp) {
-		return resp, nil
-	}
-
-	approvalURL := extractApprovalURL(resp)
-	if logger != nil {
-		logger.Info("L3 approval required, waiting for user to authorize...", "url", approvalURL)
-	}
-
-	if err := platform.OpenBrowser(approvalURL); err != nil {
-		if logger != nil {
-			logger.Warn("Failed to auto-open browser", "error", err)
-		}
-		fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
-	}
-
-	for i := 0; i < l3ApprovalMaxIterations; i++ {
-		time.Sleep(l3ApprovalPollInterval)
-		retryResp, err := proxyToGateway(client, gatewayURL, req)
-		if err != nil {
-			continue
-		}
-		if !isL3ApprovalResponse(retryResp) {
-			if logger != nil {
-				logger.Info("L3 approval completed, proceeding with execution")
-			}
-			return retryResp, nil
-		}
-	}
-
-	if logger != nil {
-		logger.Warn("L3 approval timeout, returning original response")
 	}
 	return resp, nil
 }
@@ -1298,18 +1255,18 @@ func agentLaunchArgs(agentID, mcpConfigPath string) ([]string, error) {
 		// No CLI args needed - config is written by writeAgentConfig
 		return []string{}, nil
 	case "vscode":
-		return nil, fmt.Errorf("VS Code requires manual MCP configuration via the MCP extension settings.\n\nRun 'g8e mcp agent show vscode' to see the required configuration JSON,\nthen add it to your VS Code MCP settings.")
+		return nil, fmt.Errorf("VS Code requires manual MCP configuration via the MCP extension settings. Run 'g8e mcp agent show vscode' to see the required configuration JSON, then add it to your VS Code MCP settings")
 	case "codeium":
-		return nil, fmt.Errorf("Codeium requires manual MCP configuration via its settings.\n\nRun 'g8e mcp agent show codeium' to see the required configuration,\nthen add it to your Codeium MCP settings.")
+		return nil, fmt.Errorf("codeium requires manual MCP configuration via its settings. Run 'g8e mcp agent show codeium' to see the required configuration, then add it to your codeium MCP settings")
 	case "tabby":
-		return nil, fmt.Errorf("Tabby requires manual MCP configuration via its settings.\n\nRun 'g8e mcp agent show tabby' to see the required configuration,\nthen add it to your Tabby MCP settings.")
+		return nil, fmt.Errorf("tabby requires manual MCP configuration via its settings. Run 'g8e mcp agent show tabby' to see the required configuration, then add it to your tabby MCP settings")
 	case "ollama":
-		return nil, fmt.Errorf("Ollama requires manual MCP configuration via third-party clients.\n\nRun 'g8e mcp agent show ollama' to see the required configuration,\nthen use it with an MCP-compatible Ollama client.")
+		return nil, fmt.Errorf("ollama requires manual MCP configuration via third-party clients. Run 'g8e mcp agent show ollama' to see the required configuration, then use it with an MCP-compatible ollama client")
 	case "gemini":
 		// Gemini uses `gemini mcp add` to register servers, no config file needed
 		return []string{}, nil
 	default:
-		return nil, fmt.Errorf("auto-launch not yet supported for %q\n\nTo configure manually:\n  g8e mcp agent show %s", agentID, agentID)
+		return nil, fmt.Errorf("auto-launch not yet supported for %q. To configure manually: g8e mcp agent show %s", agentID, agentID)
 	}
 }
 

@@ -254,10 +254,10 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 
 	// 5. Build typed transaction payload
 	cmdReq := &operatorv1.CommandRequested{
-		Command:      "echo hello BYO",
-		ExecutionId:  "exec-1",
-		Intent:       "verify BYO client flow",
-		SentinelMode: "audit",
+		Command:     "echo hello BYO",
+		ExecutionId: "exec-1",
+		Intent:      "verify BYO client flow",
+		VaultMode:   "audit",
 	}
 	cmdPayload, _ := proto.Marshal(cmdReq)
 

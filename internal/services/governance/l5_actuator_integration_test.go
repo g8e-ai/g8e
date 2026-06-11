@@ -58,7 +58,6 @@ func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
 		DBPath:          "test.db",
 		MaxDBSizeMB:     100,
 		RetentionDays:   1,
-		Enabled:         true,
 		EncryptionVault: testVault,
 	}
 

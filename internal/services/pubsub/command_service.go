@@ -105,7 +105,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 		justification = "No justification provided"
 	}
 
-	vaultMode := constants.VaultMode(protoCmd.SentinelMode)
+	vaultMode := constants.VaultMode(protoCmd.VaultMode)
 	if vaultMode == "" {
 		vaultMode = constants.VaultModeRaw
 	}
@@ -113,7 +113,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 	cs.logger.Info("Command execution requested",
 		string(constants.ApprovalTypeCommand), command,
 		"justification", justification,
-		"sentinel_mode", vaultMode)
+		"vault_mode", vaultMode)
 
 	execReq, err := payloadToExecutionRequest(msg)
 	if err != nil {
@@ -398,6 +398,6 @@ func payloadToExecutionRequest(msg *PubSubCommandMessage) (*models.ExecutionRequ
 		RequestedBy:     "g8e-system",
 		Justification:   protoCmd.Justification,
 		Intent:          protoCmd.Intent,
-		SentinelMode:    protoCmd.SentinelMode,
+		VaultMode:       protoCmd.VaultMode,
 	}, nil
 }

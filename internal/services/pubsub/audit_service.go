@@ -50,7 +50,6 @@ func NewAuditService(cfg *config.Config, logger *slog.Logger, auditStore *storag
 func (as *AuditService) HandleUserMsgRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording user message (via Protobuf)")
 
-
 	var protoMsg operatorv1.AuditMsgRequested
 	if err := proto.Unmarshal(msg.Payload, &protoMsg); err != nil {
 		return fmt.Errorf("audit service: failed to decode user msg payload as protobuf AuditMsgRequested: %w", err)
@@ -81,7 +80,6 @@ func (as *AuditService) HandleUserMsgRequest(ctx context.Context, msg *PubSubCom
 // HandleAIMsgRequest records an inbound AI message to the audit store.
 func (as *AuditService) HandleAIMsgRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording AI message (via Protobuf)")
-
 
 	var protoMsg operatorv1.AuditMsgRequested
 	if err := proto.Unmarshal(msg.Payload, &protoMsg); err != nil {
@@ -114,7 +112,6 @@ func (as *AuditService) HandleAIMsgRequest(ctx context.Context, msg *PubSubComma
 func (as *AuditService) HandleDirectCmdRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording direct terminal command (via Protobuf)")
 
-
 	var protoCmd operatorv1.DirectCommandAuditRequested
 	if err := proto.Unmarshal(msg.Payload, &protoCmd); err != nil {
 		return fmt.Errorf("audit service: failed to decode direct cmd payload as protobuf DirectCommandAuditRequested: %w", err)
@@ -145,7 +142,6 @@ func (as *AuditService) HandleDirectCmdRequest(ctx context.Context, msg *PubSubC
 // HandleDirectCmdResultRequest records an inbound direct terminal command result to the audit store.
 func (as *AuditService) HandleDirectCmdResultRequest(ctx context.Context, msg *PubSubCommandMessage) error {
 	as.logger.Info("LFAA: Recording direct terminal command result (via Protobuf)")
-
 
 	var protoResult operatorv1.DirectCommandResultAuditRequested
 	if err := proto.Unmarshal(msg.Payload, &protoResult); err != nil {

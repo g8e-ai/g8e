@@ -472,7 +472,6 @@ func TestHandleToolsCall(t *testing.T) {
 	})
 }
 
-
 func TestIsL3ApprovalResponse(t *testing.T) {
 	t.Run("detects L3 approval response", func(t *testing.T) {
 		resp := JSONRPCResponse{

@@ -173,11 +173,11 @@ func TestSQLAuditStore_RecordActionReceipt_Upsert(t *testing.T) {
 	require.NotNil(t, persisted)
 
 	assert.Equal(t, "tx-upsert-123", persisted.TransactionID)
-	assert.Equal(t, "hash-initial", persisted.TransactionHash) // NOT updated by UPSERT
+	assert.Equal(t, "hash-initial", persisted.TransactionHash)                               // NOT updated by UPSERT
 	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, persisted.Status) // Updated
-	assert.Equal(t, "completed", persisted.ResultSummary) // Updated
-	assert.Equal(t, "root-after-updated", persisted.StateRootAfter) // Updated
-	assert.Equal(t, "signature-updated", persisted.Signature) // Updated
+	assert.Equal(t, "completed", persisted.ResultSummary)                                    // Updated
+	assert.Equal(t, "root-after-updated", persisted.StateRootAfter)                          // Updated
+	assert.Equal(t, "signature-updated", persisted.Signature)                                // Updated
 }
 
 func TestSQLAuditStore_GetActionReceipt_NotFound(t *testing.T) {
