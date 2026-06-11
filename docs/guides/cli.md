@@ -939,8 +939,7 @@ Usage:
   g8e mcp [command]
 
 Available Commands:
-  stdio       Run MCP stdio server with native tools only
-  gov         Proxy stdio MCP requests to the gateway HTTP endpoint
+  stdio       Run MCP stdio server with full L1-L5 governance (proxies to gateway)
   agent       Agent integration commands for popular AI coding tools
 
 Flags:

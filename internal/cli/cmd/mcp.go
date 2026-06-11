@@ -227,7 +227,7 @@ func sendSuccess(encoder *json.Encoder, id interface{}, result interface{}) {
 	}
 }
 
-// ─── gov: governed proxy, full mTLS + CLI session to gateway ────────────────
+// ─── stdio: governed proxy, full mTLS + CLI session to gateway ────────────────
 
 // cliProxySession holds the in-memory CLI session established at startup. All
 // gateway requests are driven through this single authenticated session for the

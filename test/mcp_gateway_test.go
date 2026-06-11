@@ -32,363 +32,51 @@ Practical Coverage:
 
 import (
 	"bytes"
-	"context"
-	"crypto/ecdsa"
-	"crypto/ed25519"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/execution"
-	"github.com/g8e-ai/g8e/internal/services/gateway"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
-	"github.com/g8e-ai/g8e/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/internal/services/scrubbing"
-	"github.com/g8e-ai/g8e/internal/testutil"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	"github.com/g8e-ai/g8e/test/fixtures"
 )
-
-type gatewayRejectingL3Notary struct{}
-
-func (gatewayRejectingL3Notary) VerifyL3Proof(_ context.Context, _ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
-	return false, nil
-}
 
 func mustMarshal(v interface{}) json.RawMessage {
 	b, err := json.Marshal(v)
 	if err != nil {
-		// This is a test helper - panic is acceptable for test setup failures
-		// but we should still use t.Fatalf in test context. For now, keep panic
-		// as this is a fixture generation helper used outside test functions.
 		panic(fmt.Sprintf("failed to marshal: %v", err))
 	}
 	return b
 }
 
-// waitForReady polls the HTTP health endpoint until the server accepts connections.
-// Uses HTTP port instead of HTTPS to avoid mTLS certificate requirements.
-func waitForReady(t *testing.T, ls *gateway.GatewayModeService) {
-	t.Helper()
-	client := &http.Client{Timeout: 2 * time.Second}
-	require.Eventually(t, func() bool {
-		httpURL := fmt.Sprintf("http://localhost:%d", ls.GetHTTPPort())
-		resp, err := client.Get(httpURL + constants.APIPaths.Health)
-		if err != nil {
-			return false
-		}
-		defer resp.Body.Close()
-		return resp.StatusCode == http.StatusOK
-	}, 10*time.Second, 100*time.Millisecond, "HTTP server did not become ready")
-}
-
 func TestMCPGateway_EndToEnd(t *testing.T) {
-	// Initialize paths relative to test directory
-	if err := constants.InitPathsWithBase("../../"); err != nil {
-		t.Fatalf("failed to initialize paths: %v", err)
-	}
-
-	// Create unique subdirectory for this test run
-	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), t.Name())
-	dataDir := filepath.Join(constants.Paths.Infra.TestVaultDir, testRunID)
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("failed to create test run directory: %v", err)
-	}
-	t.Logf("Test vault created at: %s", dataDir)
-
-	secretsDir := t.TempDir()
-	pkiDir := filepath.Join(dataDir, "pki")
-
-	// 1. Setup Mock Downstream MCP Server
-	downstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			Method string `json:"method"`
-		}
-		json.NewDecoder(r.Body).Decode(&req)
-
-		w.Header().Set("Content-Type", "application/json")
-		switch req.Method {
-		case "tools/list":
-			resp := mcp.JSONRPCResponse{
-				JSONRPC: "2.0",
-				ID:      1,
-				Result:  mustMarshal(mcp.ToolsListResult{Tools: []mcp.Tool{{Name: "echo", Description: "echoes input"}}}),
-			}
-			json.NewEncoder(w).Encode(resp)
-		case "tools/call":
-			resp := mcp.JSONRPCResponse{
-				JSONRPC: "2.0",
-				ID:      1,
-				Result:  mustMarshal(mcp.CallToolResult{Content: []mcp.TextContent{{Type: "text", Text: "mcp says hello"}}}),
-			}
-			json.NewEncoder(w).Encode(resp)
-		case "resources/list":
-			resp := mcp.JSONRPCResponse{
-				JSONRPC: "2.0",
-				ID:      1,
-				Result:  mustMarshal(mcp.ListResourcesResult{Resources: []mcp.Resource{{URI: "file:///test.txt", Name: "test.txt"}}}),
-			}
-			json.NewEncoder(w).Encode(resp)
-		case "prompts/list":
-			resp := mcp.JSONRPCResponse{
-				JSONRPC: "2.0",
-				ID:      1,
-				Result:  mustMarshal(mcp.ListPromptsResult{Prompts: []mcp.Prompt{{Name: "test-prompt", Description: "A test prompt"}}}),
-			}
-			json.NewEncoder(w).Encode(resp)
-		}
-	}))
-	defer downstreamServer.Close()
-
-	// 2. Setup Operator with MCP configuration
-	cfg, err := config.LoadGateway(config.GatewayOptions{
-		DataDir:           dataDir,
-		PKIDir:            pkiDir,
-		SecretsDir:        secretsDir,
-		PasskeyRpID:       "localhost",
-		PasskeyRpName:     "g8e",
+	// Create gateway fixture with default mock downstream server
+	fixture := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
+		TestName:         t.Name(),
 		AllowTestPortZero: true,
-		Posture:           config.PostureNotary, // Enforce L3 verification
 	})
-	require.NoError(t, err)
-	cfg.Gateway.MCPDownstreamURL = downstreamServer.URL
+	defer fixture.Cleanup()
 
-	ls, err := gateway.NewGatewayModeService(cfg, testutil.NewTestLogger())
-	require.NoError(t, err)
+	// Wait for gateway to be ready
+	fixture.WaitForReady(t)
 
-	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
-	fileSvc := execution.NewFileEditService(cfg, testutil.NewTestLogger())
-	govDeps := ls.GetGovernanceDeps()
-	sm, err := ls.GetSecretManager()
-	require.NoError(t, err)
-	ActuatorPriv, ActuatorKeyID, err := sm.GetActuatorKey()
-	require.NoError(t, err)
+	// Enroll client identity
+	identity := fixtures.EnrollClientIdentity(t, fixture, "mcp-user", "mcp-org", "mcp-fingerprint", "mcp-host")
 
-	// Add Actuator key to SignerStore so Implicit L2 signatures from the gateway are trusted
-	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
-	err = ls.GetDB().AddTrustedSigner(models.TrustedSigner{
-		ID:        ActuatorKeyID,
-		PublicKey: hex.EncodeToString(ActuatorPub),
-		AddedAt:   time.Now().UTC(),
-		Enabled:   true,
-	})
-	require.NoError(t, err)
-
-	mcpGateway := ls.GetHTTPHandler().GetMCPGateway()
-	require.NotNil(t, mcpGateway)
-
-	cmdSvc, err := pubsub.NewOperatorPubSubService(pubsub.CommandServiceConfig{
-		Config:             cfg,
-		Logger:             testutil.NewTestLogger(),
-		Execution:          execSvc,
-		FileEdit:           fileSvc,
-		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetGatewayWebSocketHandler()),
-		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
-		ReplayStore:        govDeps.ReplayStore,
-		StateRootProvider:  govDeps.StateRootProvider,
-		TransactionAudit:   govDeps.TransactionAudit,
-		SignerStore:        govDeps.SignerStore,
-		L3Notary:           gatewayRejectingL3Notary{},
-		ActuatorSigningKey: ActuatorPriv,
-		ActuatorKeyID:      ActuatorKeyID,
-		MCPGateway:         mcpGateway,
-	})
-	require.NoError(t, err)
-	ls.SetEnvelopeProcessor(cmdSvc)
-
-	// Set MCP gateway dependencies for governance processing
-	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamServer.URL)
-
-	// Seed platform_settings required for health check
-	ls.GetDB().DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go ls.Start(ctx)
-
-	// Wait for the gateway service to be ready
-	require.Eventually(t, func() bool { return ls.IsReady() }, 10*time.Second, 100*time.Millisecond)
-
-	waitForReady(t, ls)
-
-	// 3. Setup client identity via CSR enrollment
-	userID := "mcp-user"
-	organizationID := "mcp-org"
-
-	// Create user with a dummy passkey so VerifyL3Proof passes
-	user := models.User{
-		ID:     userID,
-		Status: constants.UserStatusActive,
-		PasskeyCredentials: []models.PasskeyCredential{
-			{
-				ID:              []byte("fake-id"),
-				PublicKey:       []byte("fake-pubkey"),
-				AttestationType: "none",
-				Authenticator: models.Authenticator{
-					AAGUID:    []byte("AAAAAAAAAAAAAAAAAAAAAA=="),
-					SignCount: 0,
-				},
-				CreatedAtUnixMs: time.Now().UnixMilli(),
-			},
-		},
-	}
-	userBytes, err := json.Marshal(user)
-	require.NoError(t, err)
-	ls.GetDB().DocSet(string(constants.CollectionUsers), userID, userBytes)
-
-	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	csrTmpl := &x509.CertificateRequest{
-		Subject: pkix.Name{
-			CommonName:   userID,
-			Organization: []string{organizationID},
-		},
-	}
-	csrDER, err := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
-	require.NoError(t, err)
-	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
-
-	// Generate CLI CSR for distinct SPIFFE identity (required by PKI cleanup Phase 3)
-	cliPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	cliCSRTmpl := &x509.CertificateRequest{
-		Subject: pkix.Name{
-			CommonName:   userID + "-cli",
-			Organization: []string{organizationID},
-		},
-	}
-	cliCSRDER, err := x509.CreateCertificateRequest(rand.Reader, cliCSRTmpl, cliPriv)
-	require.NoError(t, err)
-	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRDER})
-
-	// Create a temporary client cert for initial enrollment (using Operator CA)
-	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + Operator only
-	operatorCAPEM := testutil.ReadOperatorCA(t, pkiDir)
-	operatorBlock, _ := pem.Decode(operatorCAPEM)
-	operatorCert, err := x509.ParseCertificate(operatorBlock.Bytes)
-	require.NoError(t, err)
-	operatorKeyDER, err := sm.GetCAPrivateKey("operator")
-	require.NoError(t, err)
-	operatorKey, err := x509.ParseECPrivateKey(operatorKeyDER)
-	require.NoError(t, err)
-
-	spiffeURI, err := url.Parse(fmt.Sprintf("spiffe://g8e.local/cli/%s/cli-session-123", userID))
-	require.NoError(t, err)
-	tempCertTemplate := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		Subject:               csrTmpl.Subject,
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(24 * time.Hour),
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-		URIs:                  []*url.URL{spiffeURI},
-	}
-	tempCertDER, err := x509.CreateCertificate(rand.Reader, tempCertTemplate, operatorCert, priv.Public(), operatorKey)
-	require.NoError(t, err)
-	tempCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tempCertDER})
-
-	// Create mTLS client with temporary cert
-	privBytes, err := x509.MarshalECPrivateKey(priv)
-	require.NoError(t, err)
-	tempCert, err := tls.X509KeyPair(tempCertPEM, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
-	require.NoError(t, err)
-
-	rootPEM := testutil.ReadRootCA(t, pkiDir)
-	operatorPEM := testutil.ReadOperatorCA(t, pkiDir)
-	rootPool := x509.NewCertPool()
-	rootPool.AppendCertsFromPEM(rootPEM)
-	rootPool.AppendCertsFromPEM(operatorPEM)
-
-	enrollClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs:      rootPool,
-				Certificates: []tls.Certificate{tempCert},
-			},
-		},
-	}
-
-	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
-	regReq := models.OperatorRegistrationRequest{
-		CSR:               string(csrPEM),
-		CLICSR:            string(cliCSRPEM),
-		SystemFingerprint: "mcp-fingerprint",
-		Hostname:          "mcp-host",
-	}
-	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.PKIDevicesEnroll, bytes.NewReader(regBody))
-	hResp, err := enrollClient.Do(hReq)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusCreated, hResp.StatusCode)
-	var regResp models.OperatorRegistrationResponse
-	json.NewDecoder(hResp.Body).Decode(&regResp)
-	hResp.Body.Close()
-
-	// Create mTLS client with enrolled certificate (use the private key we already have)
-	enrolledCert, err := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
-	require.NoError(t, err)
-	mtlsClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs:      rootPool,
-				Certificates: []tls.Certificate{enrolledCert},
-			},
-		},
-	}
-
-	// Wait for operator session to be persisted in database
-	require.Eventually(t, func() bool {
-		op, err := ls.GetDB().DocGet(string(constants.CollectionOperators), regResp.OperatorID)
-		if err != nil || op == nil {
-			return false
-		}
-		var opDoc models.OperatorDocumentGo
-		opBytes, err := json.Marshal(op.ForWire())
-		if err != nil {
-			return false
-		}
-		if err := json.Unmarshal(opBytes, &opDoc); err != nil {
-			return false
-		}
-		t.Logf("Operator doc: ID=%s, SessionID=%s, Status=%s, OrgID=%s", opDoc.ID, opDoc.OperatorSessionID, opDoc.Status, opDoc.OrganizationID)
-		return opDoc.OperatorSessionID == regResp.OperatorSessionID && opDoc.Status == constants.OperatorStatusActive
-	}, 5*time.Second, 100*time.Millisecond, "Operator session not persisted")
-
-	// Debug: Check the enrolled certificate's SPIFFE URI
-	certBlock, _ := pem.Decode([]byte(regResp.OperatorCert))
-	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
-	require.NoError(t, err)
-	t.Logf("Enrolled certificate URIs: %v", parsedCert.URIs)
+	// Create mTLS client with enrolled identity
+	mtlsClient := fixtures.CreateMTLSClient(t, fixture, identity)
 
 	// Set public base URL for approval links
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
-	mcpGateway.SetPublicBaseURL(publicURL)
+	publicURL := fmt.Sprintf("https://localhost:%d", fixture.Service.GetHTTPSPort())
+	fixture.SetPublicBaseURL(publicURL)
 
 	// MCP routes are available on HTTPS port with mTLS
-	mcpURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
+	mcpURL := fmt.Sprintf("https://localhost:%d", fixture.Service.GetHTTPSPort())
 
 	// 4. Test MCP tools/list
 	t.Run("tools/list", func(t *testing.T) {
@@ -402,8 +90,9 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		}
 		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
 		require.NoError(t, err)
-		// Gateway merges native tools (29) with downstream tools (1 echo)
-		require.Len(t, mcpResp.Result.Tools, 30)
+		// Gateway merges native tools with downstream tools (1 echo)
+		// Count is dynamic based on native tool registry
+		require.GreaterOrEqual(t, len(mcpResp.Result.Tools), 30)
 		// Verify downstream tool is present
 		hasEcho := false
 		for _, tool := range mcpResp.Result.Tools {
@@ -487,279 +176,28 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 }
 
 func TestMCPGateway_PayloadVariations(t *testing.T) {
-	// Initialize paths relative to test directory
-	if err := constants.InitPathsWithBase("../../"); err != nil {
-		t.Fatalf("failed to initialize paths: %v", err)
-	}
-
-	// Create unique subdirectory for this test run
-	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), t.Name())
-	dataDir := filepath.Join(constants.Paths.Infra.TestVaultDir, testRunID)
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("failed to create test run directory: %v", err)
-	}
-	t.Logf("Test vault created at: %s", dataDir)
-
-	secretsDir := t.TempDir()
-	pkiDir := filepath.Join(dataDir, "pki")
-
-	// 1. Setup Mock Downstream MCP Server
-	downstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			Jsonrpc string `json:"jsonrpc"`
-			Method  string `json:"method"`
-		}
-		json.NewDecoder(r.Body).Decode(&req)
-
-		w.Header().Set("Content-Type", "application/json")
-		switch req.Method {
-		case "tools/list":
-			resp := mcp.JSONRPCResponse{
-				JSONRPC: "2.0",
-				ID:      1,
-				Result: mustMarshal(mcp.ToolsListResult{Tools: []mcp.Tool{
-					{Name: "nested_tool", Description: "nested tool"},
-					{Name: "unicode_tool", Description: "unicode tool"},
-					{Name: "large_tool", Description: "large tool"},
-				}}),
-			}
-			json.NewEncoder(w).Encode(resp)
-		case "tools/call":
-			resp := mcp.JSONRPCResponse{
-				JSONRPC: "2.0",
-				ID:      1,
-				Result:  mustMarshal(mcp.CallToolResult{Content: []mcp.TextContent{{Type: "text", Text: "mcp says hello"}}}),
-			}
-			json.NewEncoder(w).Encode(resp)
-		}
-	}))
-	defer downstreamServer.Close()
-
-	cfg, err := config.LoadGateway(config.GatewayOptions{
-		DataDir:           dataDir,
-		PKIDir:            pkiDir,
-		SecretsDir:        secretsDir,
-		PasskeyRpID:       "localhost",
-		PasskeyRpName:     "g8e",
+	// Create gateway fixture with default mock downstream server
+	fixture := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
+		TestName:         t.Name(),
 		AllowTestPortZero: true,
-		Posture:           config.PostureNotary, // Enforce L3 verification
 	})
-	require.NoError(t, err)
-	cfg.Gateway.MCPDownstreamURL = downstreamServer.URL
+	defer fixture.Cleanup()
 
-	ls, err := gateway.NewGatewayModeService(cfg, testutil.NewTestLogger())
-	require.NoError(t, err)
+	// Wait for gateway to be ready
+	fixture.WaitForReady(t)
 
-	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
-	fileSvc := execution.NewFileEditService(cfg, testutil.NewTestLogger())
-	govDeps := ls.GetGovernanceDeps()
-	sm, err := ls.GetSecretManager()
-	require.NoError(t, err)
-	ActuatorPriv, ActuatorKeyID, err := sm.GetActuatorKey()
-	require.NoError(t, err)
+	// Enroll client identity
+	identity := fixtures.EnrollClientIdentity(t, fixture, "payload-user", "payload-org", "payload-fingerprint", "payload-host")
 
-	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
-	err = ls.GetDB().AddTrustedSigner(models.TrustedSigner{
-		ID:        ActuatorKeyID,
-		PublicKey: hex.EncodeToString(ActuatorPub),
-		AddedAt:   time.Now().UTC(),
-		Enabled:   true,
-	})
-	require.NoError(t, err)
-
-	mcpGateway := ls.GetHTTPHandler().GetMCPGateway()
-	require.NotNil(t, mcpGateway)
-
-	cmdSvc, err := pubsub.NewOperatorPubSubService(pubsub.CommandServiceConfig{
-		Config:             cfg,
-		Logger:             testutil.NewTestLogger(),
-		Execution:          execSvc,
-		FileEdit:           fileSvc,
-		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetGatewayWebSocketHandler()),
-		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
-		ReplayStore:        govDeps.ReplayStore,
-		StateRootProvider:  govDeps.StateRootProvider,
-		TransactionAudit:   govDeps.TransactionAudit,
-		SignerStore:        govDeps.SignerStore,
-		L3Notary:           gatewayRejectingL3Notary{},
-		ActuatorSigningKey: ActuatorPriv,
-		ActuatorKeyID:      ActuatorKeyID,
-		MCPGateway:         mcpGateway,
-	})
-	require.NoError(t, err)
-	ls.SetEnvelopeProcessor(cmdSvc)
-
-	// Set MCP gateway dependencies for governance processing
-	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamServer.URL)
-
-	// Seed platform_settings required for health check
-	ls.GetDB().DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go ls.Start(ctx)
-
-	// Wait for the gateway service to be ready
-	require.Eventually(t, func() bool { return ls.IsReady() }, 10*time.Second, 100*time.Millisecond)
-
-	waitForReady(t, ls)
-
-	userID := "payload-user"
-	organizationID := "payload-org"
-
-	user := models.User{
-		ID:     userID,
-		Status: constants.UserStatusActive,
-		PasskeyCredentials: []models.PasskeyCredential{
-			{
-				ID:              []byte("fake-id"),
-				PublicKey:       []byte("fake-pubkey"),
-				AttestationType: "none",
-				Authenticator: models.Authenticator{
-					AAGUID:    []byte("AAAAAAAAAAAAAAAAAAAAAA=="),
-					SignCount: 0,
-				},
-				CreatedAtUnixMs: time.Now().UnixMilli(),
-			},
-		},
-	}
-	userBytes, err := json.Marshal(user)
-	require.NoError(t, err)
-	ls.GetDB().DocSet(string(constants.CollectionUsers), userID, userBytes)
-
-	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	csrTmpl := &x509.CertificateRequest{
-		Subject: pkix.Name{
-			CommonName:   userID,
-			Organization: []string{organizationID},
-		},
-	}
-	csrDER, err := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
-	require.NoError(t, err)
-	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
-
-	// Generate CLI CSR for distinct SPIFFE identity (required by PKI cleanup Phase 3)
-	cliPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	cliCSRTmpl := &x509.CertificateRequest{
-		Subject: pkix.Name{
-			CommonName:   userID + "-cli",
-			Organization: []string{organizationID},
-		},
-	}
-	cliCSRDER, err := x509.CreateCertificateRequest(rand.Reader, cliCSRTmpl, cliPriv)
-	require.NoError(t, err)
-	cliCSRPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCSRDER})
-
-	// Create a temporary client cert for initial enrollment (using Operator CA)
-	// After PKI cleanup Phase 7, ClientCAs pool was trimmed to root + Operator only
-	operatorCAPEM := testutil.ReadOperatorCA(t, pkiDir)
-	operatorBlock, _ := pem.Decode(operatorCAPEM)
-	operatorCert, err := x509.ParseCertificate(operatorBlock.Bytes)
-	require.NoError(t, err)
-	operatorKeyDER, err := sm.GetCAPrivateKey("operator")
-	require.NoError(t, err)
-	operatorKey, err := x509.ParseECPrivateKey(operatorKeyDER)
-	require.NoError(t, err)
-
-	spiffeURI, err := url.Parse(fmt.Sprintf("spiffe://g8e.local/cli/%s/cli-session-123", userID))
-	require.NoError(t, err)
-	tempCertTemplate := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		Subject:               csrTmpl.Subject,
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(24 * time.Hour),
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-		URIs:                  []*url.URL{spiffeURI},
-	}
-	tempCertDER, err := x509.CreateCertificate(rand.Reader, tempCertTemplate, operatorCert, priv.Public(), operatorKey)
-	require.NoError(t, err)
-	tempCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tempCertDER})
-
-	// Create mTLS client with temporary cert
-	privBytes, err := x509.MarshalECPrivateKey(priv)
-	require.NoError(t, err)
-	tempCert, err := tls.X509KeyPair(tempCertPEM, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
-	require.NoError(t, err)
-
-	rootPEM := testutil.ReadRootCA(t, pkiDir)
-	operatorPEM := testutil.ReadOperatorCA(t, pkiDir)
-	rootPool := x509.NewCertPool()
-	rootPool.AppendCertsFromPEM(rootPEM)
-	rootPool.AppendCertsFromPEM(operatorPEM)
-
-	enrollClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs:      rootPool,
-				Certificates: []tls.Certificate{tempCert},
-			},
-		},
-	}
-
-	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
-	regReq := models.OperatorRegistrationRequest{
-		CSR:               string(csrPEM),
-		CLICSR:            string(cliCSRPEM),
-		SystemFingerprint: "payload-fingerprint",
-		Hostname:          "payload-host",
-	}
-	regBody, _ := json.Marshal(regReq)
-	hReq, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.PKIDevicesEnroll, bytes.NewReader(regBody))
-	hResp, err := enrollClient.Do(hReq)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusCreated, hResp.StatusCode)
-	var regResp models.OperatorRegistrationResponse
-	json.NewDecoder(hResp.Body).Decode(&regResp)
-	hResp.Body.Close()
-
-	// Create mTLS client with enrolled certificate (use the private key we already have)
-	enrolledCert, err := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}))
-	require.NoError(t, err)
-	mtlsClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs:      rootPool,
-				Certificates: []tls.Certificate{enrolledCert},
-			},
-		},
-	}
-
-	// Wait for operator session to be persisted in database
-	require.Eventually(t, func() bool {
-		op, err := ls.GetDB().DocGet(string(constants.CollectionOperators), regResp.OperatorID)
-		if err != nil || op == nil {
-			return false
-		}
-		var opDoc models.OperatorDocumentGo
-		opBytes, err := json.Marshal(op.ForWire())
-		if err != nil {
-			return false
-		}
-		if err := json.Unmarshal(opBytes, &opDoc); err != nil {
-			return false
-		}
-		t.Logf("Operator doc: ID=%s, SessionID=%s, Status=%s, OrgID=%s", opDoc.ID, opDoc.OperatorSessionID, opDoc.Status, opDoc.OrganizationID)
-		return opDoc.OperatorSessionID == regResp.OperatorSessionID && opDoc.Status == constants.OperatorStatusActive
-	}, 5*time.Second, 100*time.Millisecond, "Operator session not persisted")
-
-	// Debug: Check the enrolled certificate's SPIFFE URI
-	certBlock, _ := pem.Decode([]byte(regResp.OperatorCert))
-	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
-	require.NoError(t, err)
-	t.Logf("Enrolled certificate URIs: %v", parsedCert.URIs)
+	// Create mTLS client with enrolled identity
+	mtlsClient := fixtures.CreateMTLSClient(t, fixture, identity)
 
 	// Set public base URL for approval links
-	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
-	mcpGateway.SetPublicBaseURL(publicURL)
+	publicURL := fmt.Sprintf("https://localhost:%d", fixture.Service.GetHTTPSPort())
+	fixture.SetPublicBaseURL(publicURL)
 
 	// MCP routes are available on HTTPS port with mTLS
-	mcpURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
+	mcpURL := fmt.Sprintf("https://localhost:%d", fixture.Service.GetHTTPSPort())
 
 	t.Run("nested object arguments", func(t *testing.T) {
 		callReq := mcp.JSONRPCRequest{
