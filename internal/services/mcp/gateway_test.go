@@ -77,9 +77,39 @@ func (f *fakeSuspendedStore) GetSuspendedTransaction(_ context.Context, txHash s
 	return tx, ok, nil
 }
 
+func (f *fakeSuspendedStore) ListSuspendedTransactions(_ context.Context, userID string) ([]*models.SuspendedTransaction, error) {
+	var result []*models.SuspendedTransaction
+	for _, tx := range f.txs {
+		if userID == "" || tx.UserID == userID {
+			result = append(result, tx)
+		}
+	}
+	return result, nil
+}
+
+func (f *fakeSuspendedStore) ApproveSuspendedTransaction(_ context.Context, txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error {
+	if tx, ok := f.txs[txHash]; ok {
+		tx.ApprovedBy = approvedBy
+		tx.ApprovalSignature = approvalSignature
+		tx.ExpectedCertFingerprint = expectedCertFingerprint
+	}
+	return nil
+}
+
 func (f *fakeSuspendedStore) DeleteSuspendedTransaction(_ context.Context, txHash string) error {
 	delete(f.txs, txHash)
 	return nil
+}
+
+func (f *fakeSuspendedStore) CleanupExpiredSuspendedTransactions(_ context.Context) (int64, error) {
+	var count int64
+	for hash, tx := range f.txs {
+		if tx.ExpiresAt.Before(time.Now()) {
+			delete(f.txs, hash)
+			count++
+		}
+	}
+	return count, nil
 }
 
 func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {
@@ -1647,7 +1677,7 @@ func withEnvProc(proc governance.EnvelopeProcessor) testGatewayOption {
 }
 
 // withSuspendedStore sets a custom suspended store for the test GatewayService
-func withSuspendedStore(store SuspendedTransactionStore) testGatewayOption {
+func withSuspendedStore(store interfaces.SuspendedTransactionStore) testGatewayOption {
 	return func(g *GatewayService) {
 		g.suspendedStore = store
 	}

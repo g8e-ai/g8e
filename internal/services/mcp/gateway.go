@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/governance"
@@ -54,13 +55,6 @@ type StateRootProvider interface {
 	GetCurrentStateRoot() (string, error)
 }
 
-// SuspendedTransactionStore defines the interface for persistent storage of suspended transactions.
-type SuspendedTransactionStore interface {
-	StoreSuspendedTransaction(ctx context.Context, tx *models.SuspendedTransaction) error
-	GetSuspendedTransaction(ctx context.Context, txHash string) (*models.SuspendedTransaction, bool, error)
-	DeleteSuspendedTransaction(ctx context.Context, txHash string) error
-}
-
 // GatewayService handles MCP/A2A protocol translation and downstream dispatch.
 // This service is shared across both gateway mode and outbound mode - the same
 // implementation is used in both contexts (truly polymorphic).
@@ -77,7 +71,7 @@ type GatewayService struct {
 	downstreamURL     string
 	a2aDownstreamURL  string
 	publicBaseURL     string
-	suspendedStore    SuspendedTransactionStore
+	suspendedStore    interfaces.SuspendedTransactionStore
 	fieldPathRegistry *FieldPathRegistry
 	dbService         interface {
 		GetField(collection, id, fieldPath string) (interface{}, error)
@@ -113,7 +107,7 @@ type AuditLogger interface {
 type Dependencies struct {
 	Logger          *slog.Logger
 	Responder       *response.Writer
-	SuspendedStore  SuspendedTransactionStore
+	SuspendedStore  interfaces.SuspendedTransactionStore
 	MaxPayloadBytes int64
 	Posture         string // Gateway posture: doctrine, consensus, or notary
 }

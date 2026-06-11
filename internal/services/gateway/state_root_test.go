@@ -47,7 +47,7 @@ func TestStateRootSemantics(t *testing.T) {
 	require.NoError(t, err)
 
 	// 2. Document content change alters root
-	err = db.DocSet("test", "d1", json.RawMessage(`{"val":1}`))
+	err = db.DocStore.DocSet("test", "d1", json.RawMessage(`{"val":1}`))
 	require.NoError(t, err)
 	root2, err := db.GetCurrentStateRoot()
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestStateRootSemantics(t *testing.T) {
 	// 3. Document metadata change (updated_at) does NOT alter root
 	// Small delay to ensure updated_at timestamp changes
 	time.Sleep(10 * time.Millisecond)
-	err = db.DocSet("test", "d1", json.RawMessage(`{"val":1}`))
+	err = db.DocStore.DocSet("test", "d1", json.RawMessage(`{"val":1}`))
 	require.NoError(t, err)
 	root3, err := db.GetCurrentStateRoot()
 	require.NoError(t, err)
@@ -130,7 +130,7 @@ func TestStateRootDeterministicOrder(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert in one order into db1
-	require.NoError(t, db1.DocSet("test", "a", json.RawMessage(`{"v":1}`)))
+	require.NoError(t, db1.DocStore.DocSet("test", "a", json.RawMessage(`{"v":1}`)))
 	require.NoError(t, db1.DocSet("test", "b", json.RawMessage(`{"v":2}`)))
 	require.NoError(t, db1.KVSet("k1", "v1", 0))
 	require.NoError(t, db1.KVSet("k2", "v2", 0))
@@ -139,7 +139,7 @@ func TestStateRootDeterministicOrder(t *testing.T) {
 
 	// Insert in different order into db2
 	require.NoError(t, db2.KVSet("k2", "v2", 0))
-	require.NoError(t, db2.DocSet("test", "b", json.RawMessage(`{"v":2}`)))
+	require.NoError(t, db2.DocStore.DocSet("test", "b", json.RawMessage(`{"v":2}`)))
 	require.NoError(t, db2.KVSet("k1", "v1", 0))
 	require.NoError(t, db2.DocSet("test", "a", json.RawMessage(`{"v":1}`)))
 	root2, err := db2.GetCurrentStateRoot()

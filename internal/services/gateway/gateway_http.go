@@ -743,7 +743,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
+	doc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
 	if err != nil {
 		h.logger.Error("Health check failed to query platform_settings", string(constants.ConnectionStateError), err)
 		h.responder.Error(w, http.StatusServiceUnavailable, "platform_settings not ready")
@@ -755,7 +755,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	root, err := h.db.GetCurrentStateRoot()
+	root, err := h.db.StateRootSvc.GetCurrentStateRoot()
 	if err != nil {
 		h.logger.Error("Health check failed to get state root", string(constants.ConnectionStateError), err)
 		h.responder.Error(w, http.StatusServiceUnavailable, "state root calculation failed")
@@ -888,7 +888,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		inner.Type = string(constants.SystemHealthUnknown)
 	}
 
-	if err := h.db.SSEEventsAppend(route, inner.Type, string(body), appID); err != nil {
+	if err := h.db.SSEStore.SSEEventsAppend(route, inner.Type, string(body), appID); err != nil {
 		h.logger.Error("SSE push: failed to append event", string(constants.ConnectionStateError), err, "type", inner.Type)
 		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -898,7 +898,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	// The app identity extracted from the peer certificate must be associated with the target.
 	if route.WebSessionID != "" {
 		webBindKey := sessionWebBindKey(route.WebSessionID)
-		raw, ok := h.db.KVGet(webBindKey)
+		raw, ok := h.db.KVStore.KVGet(webBindKey)
 		if !ok {
 			h.logger.Warn("SSE push: target web session has no bound operators", "web_session_id", route.WebSessionID, "app_id", appID)
 			h.responder.Error(w, http.StatusForbidden, "target session not found or not bound")
@@ -914,7 +914,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		// Check if any bound Operator session is associated with this appID
 		authorized := false
 		for _, opSessID := range operatorSessionIDs {
-			opDoc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), opSessID)
+			opDoc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), opSessID)
 			if err != nil || opDoc == nil {
 				continue
 			}
@@ -939,7 +939,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	} else if route.CLISessionID != "" {
-		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
+		doc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil || doc == nil {
 			h.logger.Warn("SSE push: target CLI session not found", "cli_session_id", route.CLISessionID, "app_id", appID)
 			h.responder.Error(w, http.StatusForbidden, "target session not found")
@@ -959,7 +959,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		}
 
 		// Verify app owns the Operator session bound to this CLI session
-		opDoc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), cliSess.OperatorSessionID)
+		opDoc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), cliSess.OperatorSessionID)
 		if err != nil || opDoc == nil {
 			h.logger.Warn("SSE push: Operator session for CLI session not found", "operator_session_id", cliSess.OperatorSessionID, "cli_session_id", route.CLISessionID)
 			h.responder.Error(w, http.StatusForbidden, "operator session not found")
@@ -978,7 +978,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		filters := []models.DocFilter{
 			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", route.UserID))},
 		}
-		docs, err := h.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 100)
+		docs, err := h.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 100)
 		if err != nil || len(docs) == 0 {
 			h.logger.Warn("SSE push: user has no operators", "user_id", route.UserID, "app_id", appID)
 			h.responder.Error(w, http.StatusForbidden, "unauthorized for target user")
@@ -1056,7 +1056,7 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	switch {
 	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
 		// Verify operator_session_id is bound to this cli_session_id.
-		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
+		doc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil {
 			h.logger.Error("Failed to fetch CLI session", string(constants.ConnectionStateError), err, "cli_session_id", route.CLISessionID)
 			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
@@ -1085,7 +1085,7 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
 		// Verify operator_session_id is bound to this web_session_id.
 		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
-		boundWebSessionID, ok := h.db.KVGet(operatorBindKey)
+		boundWebSessionID, ok := h.db.KVStore.KVGet(operatorBindKey)
 		if !ok || boundWebSessionID != route.WebSessionID {
 			h.responder.Error(w, http.StatusForbidden, "operator session does not own this web session")
 			return
@@ -1106,7 +1106,7 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	rows, err := h.db.SSEEventsListSince(route, sinceID, limit)
+	rows, err := h.db.SSEStore.SSEEventsListSince(route, sinceID, limit)
 	if err != nil {
 		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -1145,7 +1145,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	var channel string
 	switch {
 	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
-		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
+		doc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil || doc == nil {
 			h.responder.Error(w, http.StatusForbidden, "not authorized for this cli session")
 			return
@@ -1167,7 +1167,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 		channel = "sse:cli:" + route.CLISessionID
 	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
 		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
-		boundWebSessionID, ok := h.db.KVGet(operatorBindKey)
+		boundWebSessionID, ok := h.db.KVStore.KVGet(operatorBindKey)
 		if !ok || boundWebSessionID != route.WebSessionID {
 			h.responder.Error(w, http.StatusForbidden, "not authorized for this web session")
 			return
@@ -1217,7 +1217,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 
 	// 4. Replay from DB if sinceID is provided
 	if sinceID > 0 {
-		rows, err := h.db.SSEEventsListSince(route, sinceID, 1000)
+		rows, err := h.db.SSEStore.SSEEventsListSince(route, sinceID, 1000)
 		if err == nil {
 			for _, row := range rows {
 				fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", row.ID, row.EventType, row.Payload)

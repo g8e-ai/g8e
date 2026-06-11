@@ -82,7 +82,7 @@ func (s *RegistrationService) ListOperatorSlots(userID string) ([]models.Operato
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 		{Field: "is_slot", Op: "==", Value: json.RawMessage("true")},
 	}
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "slot_number", 0)
+	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "slot_number", 0)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		return fmt.Errorf("user_id is required")
 	}
 
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
+	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch operator: %w", err)
 	}
@@ -143,7 +143,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 	if err != nil {
 		return fmt.Errorf("failed to marshal update: %w", err)
 	}
-	if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, updateBytes); err != nil {
+	if _, err := s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, updateBytes); err != nil {
 		return fmt.Errorf("failed to update Operator status: %w", err)
 	}
 
@@ -188,7 +188,7 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 		{Field: "system_fingerprint", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sanitizedFingerprint))},
 	}
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
+	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err == nil && len(docs) > 0 {
 		operator, _ = s.toOperatorDoc(docs[0])
 	}
@@ -199,7 +199,7 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 			{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorStatusOffline))},
 		}
-		docs, err = s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
+		docs, err = s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 		if err == nil && len(docs) > 0 {
 			operator, _ = s.toOperatorDoc(docs[0])
 		}
@@ -336,7 +336,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal update: %w", err)
 	}
-	_, updateErr := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operator.ID, updateBytes)
+	_, updateErr := s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operator.ID, updateBytes)
 	if updateErr != nil {
 		return nil, fmt.Errorf("failed to update Operator status: %w", updateErr)
 	}
@@ -415,7 +415,7 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 	filters := []models.DocFilter{
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 	}
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 0)
+	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 0)
 	if err == nil {
 		slotNumber = len(docs) + 1
 	}
@@ -438,7 +438,7 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal operator: %w", err)
 	}
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), id, b); err != nil {
+	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), id, b); err != nil {
 		return nil, fmt.Errorf("failed to set operator: %w", err)
 	}
 
@@ -462,7 +462,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 	var lastErr error
 
 	for _, opID := range req.OperatorIDs {
-		doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), opID)
+		doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), opID)
 		if err != nil {
 			failed = append(failed, opID)
 			lastErr = err
@@ -492,7 +492,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 
 		// 1. Update KV binding
 		// sessionBindOperators(operatorSessionId) -> webSessionId
-		if err := s.db.KVSet(sessionOperatorBindKey(op.OperatorSessionID), req.WebSessionID, 0); err != nil {
+		if err := s.db.KVStore.KVSet(sessionOperatorBindKey(op.OperatorSessionID), req.WebSessionID, 0); err != nil {
 			failed = append(failed, opID)
 			lastErr = err
 			continue
@@ -501,7 +501,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 		// sessionWebBind(webSessionId) -> operatorSessionId (SET)
 		// We use a JSON array for the SET since our KV store is simple
 		webBindKey := sessionWebBindKey(req.WebSessionID)
-		raw, kvFound := s.db.KVGet(webBindKey)
+		raw, kvFound := s.db.KVStore.KVGet(webBindKey)
 		var sessionIDs []string
 		if kvFound {
 			if err := json.Unmarshal([]byte(raw), &sessionIDs); err != nil {
@@ -523,7 +523,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				lastErr = fmt.Errorf("failed to marshal session IDs: %w", err)
 				continue
 			}
-			if err := s.db.KVSet(webBindKey, string(body), 0); err != nil {
+			if err := s.db.KVStore.KVSet(webBindKey, string(body), 0); err != nil {
 				failed = append(failed, opID)
 				lastErr = fmt.Errorf("failed to set KV binding: %w", err)
 				continue
@@ -532,7 +532,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 
 		// 2. Update durability document
 		docID := req.WebSessionID
-		existingDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
+		existingDoc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
 		if err != nil {
 			failed = append(failed, opID)
 			lastErr = fmt.Errorf("failed to get bound sessions document: %w", err)
@@ -555,7 +555,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				lastErr = fmt.Errorf("failed to marshal bound sessions document: %w", err)
 				continue
 			}
-			if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body); err != nil {
+			if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body); err != nil {
 				failed = append(failed, opID)
 				lastErr = fmt.Errorf("failed to set bound sessions document: %w", err)
 				continue
@@ -592,7 +592,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 					lastErr = fmt.Errorf("failed to marshal updated bound sessions document: %w", err)
 					continue
 				}
-				if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body); err != nil {
+				if _, err := s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body); err != nil {
 					failed = append(failed, opID)
 					lastErr = fmt.Errorf("failed to update bound sessions document: %w", err)
 					continue
@@ -601,7 +601,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 		}
 
 		// 3. Update Operator document itself (for UI)
-		if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(fmt.Sprintf(`{"bound_web_session_id": %q}`, req.WebSessionID))); err != nil {
+		if _, err := s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(fmt.Sprintf(`{"bound_web_session_id": %q}`, req.WebSessionID))); err != nil {
 			s.logger.Warn("[REGISTRATION] Failed to update operator bound session", "error", err, "operator_id", opID)
 		}
 
@@ -635,7 +635,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 	var lastErr error
 
 	for _, opID := range req.OperatorIDs {
-		doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), opID)
+		doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), opID)
 		if err != nil {
 			failed = append(failed, opID)
 			lastErr = err
@@ -660,12 +660,12 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 
 		// 1. Update KV binding
 		if op.OperatorSessionID != "" {
-			if err := s.db.KVDelete(sessionOperatorBindKey(op.OperatorSessionID)); err != nil {
+			if err := s.db.KVStore.KVDelete(sessionOperatorBindKey(op.OperatorSessionID)); err != nil {
 				s.logger.Warn("[REGISTRATION] Failed to delete operator session binding", "error", err, "operator_session_id", op.OperatorSessionID)
 			}
 
 			webBindKey := sessionWebBindKey(req.WebSessionID)
-			raw, kvFound := s.db.KVGet(webBindKey)
+			raw, kvFound := s.db.KVStore.KVGet(webBindKey)
 			if kvFound {
 				var sessionIDs []string
 				if err := json.Unmarshal([]byte(raw), &sessionIDs); err != nil {
@@ -679,7 +679,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 					}
 				}
 				if len(newSessionIDs) == 0 {
-					if err := s.db.KVDelete(webBindKey); err != nil {
+					if err := s.db.KVStore.KVDelete(webBindKey); err != nil {
 						s.logger.Warn("[REGISTRATION] Failed to delete web session binding", "error", err)
 					}
 				} else {
@@ -688,7 +688,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 						s.logger.Warn("[REGISTRATION] Failed to marshal session IDs", "error", err)
 						continue
 					}
-					if err := s.db.KVSet(webBindKey, string(body), 0); err != nil {
+					if err := s.db.KVStore.KVSet(webBindKey, string(body), 0); err != nil {
 						s.logger.Warn("[REGISTRATION] Failed to set session IDs", "error", err)
 					}
 				}
@@ -697,7 +697,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 
 		// 2. Update durability document
 		docID := req.WebSessionID
-		existingDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
+		existingDoc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
 		if err != nil {
 			s.logger.Warn("[REGISTRATION] Failed to get bound sessions document", "error", err)
 			continue
@@ -733,13 +733,13 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 				s.logger.Warn("[REGISTRATION] Failed to marshal updated bound sessions document", "error", err)
 				continue
 			}
-			if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body); err != nil {
+			if _, err := s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body); err != nil {
 				s.logger.Warn("[REGISTRATION] Failed to update bound sessions document", "error", err)
 			}
 		}
 
 		// 3. Update Operator document itself
-		if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(`{"bound_web_session_id": ""}`)); err != nil {
+		if _, err := s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(`{"bound_web_session_id": ""}`)); err != nil {
 			s.logger.Warn("[REGISTRATION] Failed to update operator bound session", "error", err, "operator_id", opID)
 		}
 
@@ -771,7 +771,7 @@ func (s *RegistrationService) SetTargetContext(req models.SetTargetContextReques
 	// For now, "target context" is just making sure the Operator is bound to the Operator session.
 	// In the future, this might set a specific "active" flag in the Operator session state.
 
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), req.OperatorID)
+	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), req.OperatorID)
 	if err != nil {
 		return nil, err
 	}

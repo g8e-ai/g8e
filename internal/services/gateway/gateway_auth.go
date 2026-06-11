@@ -187,7 +187,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 		{Field: "operator_session_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", operatorSessionID))},
 	}
 
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
+	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err != nil {
 		return nil, fmt.Errorf("auth: query operator session: %w", err)
 	}
@@ -400,7 +400,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 		wid := protocol.NewWorkloadIdentity()
 		cert := r.TLS.PeerCertificates[0]
 
-		cliDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		cliDoc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		if err != nil {
 			s.logger.Error("auth: load CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), fmt.Errorf("auth: load CLI session %s: %w", cliSessionID, err))
 			s.responder.Error(w, http.StatusInternalServerError, "failed to load session")
@@ -480,7 +480,7 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 			uriStr := uri.String()
 			if strings.HasPrefix(uriStr, "spiffe://"+protocol.TrustDomain+"/app/") {
 				appID := uriStr
-				doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+				doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
 				if err != nil || doc == nil {
 					s.logger.Warn("auth: app policy not found", "app_id", appID, string(constants.ConnectionStateError), fmt.Errorf("auth: load app policy %s: %w", appID, err))
 					s.responder.Error(w, http.StatusForbidden, "app policy not found")
@@ -598,7 +598,7 @@ func (s *AuthService) cliCertBoundToOperator(certURIs []*url.URL, cliSessionID, 
 	if !uriMatch {
 		return false, nil
 	}
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	if err != nil {
 		return false, fmt.Errorf("auth: load CLI session %s for cert binding: %w", cliSessionID, err)
 	}
@@ -643,7 +643,7 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *CanonicalDBService) 
 		}
 
 		// Validate web session
-		doc, err := db.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
+		doc, err := db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
 		if err != nil {
 			s.logger.Error("auth: load web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("auth: load web session %s: %w", webSessionID, err))
 			s.responder.Error(w, http.StatusUnauthorized, "web session validation failed")

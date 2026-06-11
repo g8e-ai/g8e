@@ -65,7 +65,7 @@ func (s *InvitationService) CreateInvitation(organizationID, sub, createdBy stri
 		return nil, fmt.Errorf("invitation_service: create_invitation: failed to marshal invitation: %w", err)
 	}
 
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionInvitations), invitation.ID, data); err != nil {
+	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionInvitations), invitation.ID, data); err != nil {
 		return nil, fmt.Errorf("invitation_service: create_invitation: failed to save invitation: %w", err)
 	}
 
@@ -84,7 +84,7 @@ func (s *InvitationService) FindActiveInvitationBySub(sub string) (*models.Invit
 		{Field: "is_consumed", Op: "==", Value: json.RawMessage("false")},
 	}
 
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionInvitations), filters, "", 1)
+	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionInvitations), filters, "", 1)
 	if err != nil {
 		return nil, fmt.Errorf("invitation_service: find_active_invitation: failed to query invitations: %w", err)
 	}
@@ -126,7 +126,7 @@ func (s *InvitationService) ConsumeInvitation(id string) error {
 		return fmt.Errorf("invitation_service: consume_invitation: failed to marshal updates: %w", err)
 	}
 
-	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionInvitations), id, updateBytes)
+	_, err = s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionInvitations), id, updateBytes)
 	if err != nil {
 		return fmt.Errorf("invitation_service: consume_invitation: failed to update invitation: %w", err)
 	}

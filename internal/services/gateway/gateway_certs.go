@@ -460,7 +460,7 @@ func (pki *PKIAuthority) RevokeCertificate(serial string, reason string) error {
 		return fmt.Errorf("pki: marshal revocation document: %w", err)
 	}
 
-	return pki.db.DocSet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial, body)
+	return pki.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial, body)
 }
 
 // GenerateCRL creates a standard X.509 Certificate Revocation List (CRL) signed by the Operator intermediate CA.
@@ -477,7 +477,7 @@ func (pki *PKIAuthority) GenerateCRL() (crlDER []byte, err error) {
 		return nil, fmt.Errorf("pki: operator CA not loaded - call InitializePKI first")
 	}
 
-	docs, err := pki.db.DocQuery(marshaler.CollectionName(constants.CollectionRevokedCertificates), nil, "revoked_at", 0)
+	docs, err := pki.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionRevokedCertificates), nil, "revoked_at", 0)
 	if err != nil {
 		return nil, fmt.Errorf("pki: query revoked certificates: %w", err)
 	}
@@ -537,7 +537,7 @@ func (pki *PKIAuthority) IsRevoked(serial string) (bool, error) {
 		return false, fmt.Errorf("pki: database not available")
 	}
 
-	doc, err := pki.db.DocGet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial)
+	doc, err := pki.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial)
 	if err != nil {
 		return false, fmt.Errorf("pki: get revoked certificate: %w", err)
 	}

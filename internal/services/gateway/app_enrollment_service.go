@@ -150,7 +150,7 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 		s.logger.Error("Failed to marshal app policy", "app_id", appID, "error", err)
 		return &AppEnrollResponse{Success: false, Error: "failed to marshal app policy"}, nil
 	}
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, data); err != nil {
+	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, data); err != nil {
 		s.logger.Error("Failed to persist app policy", "app_id", appID, "error", err)
 		return &AppEnrollResponse{Success: false, Error: "failed to persist app policy"}, nil
 	}

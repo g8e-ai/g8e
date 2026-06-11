@@ -935,7 +935,7 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 	cookie, err := r.Cookie("g8e_session")
 	if err == nil {
 		// Best effort delete web session from DB
-		if _, err := c.db.DocDelete(marshaler.CollectionName(constants.CollectionWebSessions), cookie.Value); err != nil {
+		if _, err := c.db.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionWebSessions), cookie.Value); err != nil {
 			c.logger.Warn("Failed to delete web session during logout", "error", err, "sessionID", cookie.Value)
 		}
 	}
@@ -1528,7 +1528,7 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 			c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 			return
 		}
-		if err := c.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
+		if err := c.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
 			c.logger.Error("Failed to persist Operator document", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 			return
@@ -1691,7 +1691,7 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 			c.responder.Error(w, http.StatusInternalServerError, "failed to update user")
 			return
 		}
-		if err := c.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), bootstrapUser.ID, userData); err != nil {
+		if err := c.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), bootstrapUser.ID, userData); err != nil {
 			c.logger.Error("Failed to update bootstrap user with OS user info", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to update user")
 			return
@@ -1727,7 +1727,7 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 		c.responder.Error(w, http.StatusInternalServerError, "failed to create operator record")
 		return
 	}
-	if err := c.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
+	if err := c.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
 		c.logger.Error("Failed to persist operator document during CLI enrollment", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to persist operator record")
 		return
@@ -1937,7 +1937,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 		c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 		return
 	}
-	if err := c.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
+	if err := c.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
 		c.logger.Error("Failed to persist Operator document", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 		return

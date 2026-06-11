@@ -84,7 +84,7 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("operators", "op-123", opBytes))
+	require.NoError(t, db.DocStore.DocSet("operators", "op-123", opBytes))
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	assert.Error(t, err)
@@ -108,7 +108,7 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("users", userID, userBytes))
+	require.NoError(t, db.DocStore.DocSet("users", userID, userBytes))
 
 	// Create an Operator session with old timestamp using the test hook
 	operatorSessionID := "expired-session"
@@ -147,7 +147,7 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("users", userID, userBytes))
+	require.NoError(t, db.DocStore.DocSet("users", userID, userBytes))
 
 	// Create an Operator session linked to the inactive user
 	operatorSessionID := "session-with-inactive-user"
@@ -565,7 +565,7 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("users", userID, userBytes))
+	require.NoError(t, db.DocStore.DocSet("users", userID, userBytes))
 
 	// Create an Operator session
 	operatorSessionID := "op-session-123"
@@ -580,7 +580,7 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("operators", "op-123", opBytes))
+	require.NoError(t, db.DocStore.DocSet("operators", "op-123", opBytes))
 
 	// Test ValidateOperatorSession directly (the core validation logic)
 	op, err := auth.ValidateOperatorSession(operatorSessionID)
@@ -645,7 +645,7 @@ func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("users", userID, userBytes))
+	require.NoError(t, db.DocStore.DocSet("users", userID, userBytes))
 
 	// Create a CLI session
 	cliSessionID := "cli-session-123"
@@ -658,10 +658,10 @@ func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("cli_sessions", cliSessionID, cliBytes))
+	require.NoError(t, db.DocStore.DocSet("cli_sessions", cliSessionID, cliBytes))
 
 	// Test CLI session retrieval and validation
-	cliDocResult, err := db.DocGet("cli_sessions", cliSessionID)
+	cliDocResult, err := db.DocStore.DocGet("cli_sessions", cliSessionID)
 	assert.NoError(t, err)
 	assert.NotNil(t, cliDocResult)
 
@@ -678,7 +678,7 @@ func TestAuthService_HandleCLIAuth_SessionNotFound(t *testing.T) {
 	db := newTestDB(t)
 
 	// Test with non-existent CLI session
-	cliDoc, err := db.DocGet("cli_sessions", "nonexistent-cli-session")
+	cliDoc, err := db.DocStore.DocGet("cli_sessions", "nonexistent-cli-session")
 	assert.NoError(t, err)
 	assert.Nil(t, cliDoc)
 }
@@ -698,10 +698,10 @@ func TestAuthService_HandleCLIAuth_SessionExpired(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("cli_sessions", cliSessionID, cliBytes))
+	require.NoError(t, db.DocStore.DocSet("cli_sessions", cliSessionID, cliBytes))
 
 	// Verify the session is stored with expired timestamp
-	cliDocResult, err := db.DocGet("cli_sessions", cliSessionID)
+	cliDocResult, err := db.DocStore.DocGet("cli_sessions", cliSessionID)
 	assert.NoError(t, err)
 	assert.NotNil(t, cliDocResult)
 
@@ -726,7 +726,7 @@ func TestAuthService_HandleCLIAuth_UserInactive(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("users", userID, userBytes))
+	require.NoError(t, db.DocStore.DocSet("users", userID, userBytes))
 
 	// Verify user is inactive
 	user, err := userSvc.GetByID(userID)
@@ -843,10 +843,10 @@ func TestAuthService_CliCertBoundToOperator_Success(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("cli_sessions", cliSessionID, cliBytes))
+	require.NoError(t, db.DocStore.DocSet("cli_sessions", cliSessionID, cliBytes))
 
 	// Test that CLI session can be retrieved and has correct operator_session_id
-	cliDocResult, err := db.DocGet("cli_sessions", cliSessionID)
+	cliDocResult, err := db.DocStore.DocGet("cli_sessions", cliSessionID)
 	assert.NoError(t, err)
 	assert.NotNil(t, cliDocResult)
 
@@ -882,7 +882,7 @@ func TestAuthService_CliCertBoundToOperator_SessionMismatch(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("cli_sessions", cliSessionID, cliBytes))
+	require.NoError(t, db.DocStore.DocSet("cli_sessions", cliSessionID, cliBytes))
 
 	bound, err := auth.cliCertBoundToOperator(nil, cliSessionID, userID, operatorSessionID)
 	require.NoError(t, err)
@@ -913,7 +913,7 @@ func TestAuthService_CliCertBoundToOperator_SessionExpired(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("cli_sessions", cliSessionID, cliBytes))
+	require.NoError(t, db.DocStore.DocSet("cli_sessions", cliSessionID, cliBytes))
 
 	bound, err := auth.cliCertBoundToOperator(nil, cliSessionID, userID, operatorSessionID)
 	require.NoError(t, err)
@@ -939,7 +939,7 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("users", userID, userBytes))
+	require.NoError(t, db.DocStore.DocSet("users", userID, userBytes))
 
 	// Create an Operator session
 	operatorSessionID := "op-session-auth-test"
@@ -1024,7 +1024,7 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("users", userID, userBytes))
+	require.NoError(t, db.DocStore.DocSet("users", userID, userBytes))
 
 	// Create a CLI session
 	cliSessionID := "cli-session-auth-test"
@@ -1039,7 +1039,7 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("cli_sessions", cliSessionID, cliBytes))
+	require.NoError(t, db.DocStore.DocSet("cli_sessions", cliSessionID, cliBytes))
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1113,7 +1113,7 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 	}
 	policyBytes, err := json.Marshal(policyDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("app_policies", appID, policyBytes))
+	require.NoError(t, db.DocStore.DocSet("app_policies", appID, policyBytes))
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1193,7 +1193,7 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 			ExpiresAt: time.Now().Add(1 * time.Hour),
 		}
 		cliBytes, _ := json.Marshal(cliDoc)
-		require.NoError(t, db.DocSet("cli_sessions", cliSessionID, cliBytes))
+		require.NoError(t, db.DocStore.DocSet("cli_sessions", cliSessionID, cliBytes))
 
 		// Mock user in DB
 		userDoc := &models.User{
@@ -1201,7 +1201,7 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 			Status: constants.UserStatusActive,
 		}
 		userBytes, _ := json.Marshal(userDoc)
-		require.NoError(t, db.DocSet("users", userID, userBytes))
+		require.NoError(t, db.DocStore.DocSet("users", userID, userBytes))
 
 		wid := protocol.NewWorkloadIdentity()
 		cliURI, _ := wid.CLISPIFFEURL(userID, cliSessionID)

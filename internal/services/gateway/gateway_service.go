@@ -532,7 +532,7 @@ func (ls *GatewayModeService) IsGovernanceReady() bool {
 	if ls.cfg.Gateway.Posture == config.PostureDoctrine || ls.cfg.Gateway.Posture == "" {
 		return true
 	}
-	ready, err := ls.db.HasTrustedSigners()
+	ready, err := ls.db.SignerStore.HasTrustedSigners()
 	if err != nil {
 		ls.logger.Error("Failed to check if governance is ready", string(constants.ConnectionStateError), err)
 		return false
@@ -561,12 +561,12 @@ func (ls *GatewayModeService) GetGovernanceDeps() *GovernanceDeps {
 	compositeL3 := NewCompositeL3Verifier(ls.passkey, cliL3, ls.logger)
 
 	return &GovernanceDeps{
-		ReplayStore:       ls.db,
-		StateRootProvider: ls.db,
-		TransactionAudit:  ls.db,
+		ReplayStore:       ls.db.ReplayStore,
+		StateRootProvider: ls.db.StateRootSvc,
+		TransactionAudit:  ls.db.AuditStore,
 		L3Notary:          compositeL3,
-		SignerStore:       ls.db,
-		AppPolicyStore:    ls.db,
+		SignerStore:       ls.db.SignerStore,
+		AppPolicyStore:    ls.db.AppPolicyStore,
 	}
 }
 
@@ -785,7 +785,7 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 		return
 	}
 
-	if _, err := ls.db.DocUpdate("operators", env.OperatorID, update); err != nil {
+	if _, err := ls.db.DocStore.DocUpdate("operators", env.OperatorID, update); err != nil {
 		ls.logger.Warn("heartbeat: failed to update operator document", "operator_id", env.OperatorID, "error", err)
 		return
 	}

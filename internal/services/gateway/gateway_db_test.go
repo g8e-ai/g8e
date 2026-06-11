@@ -130,10 +130,10 @@ func TestDocSetAndGet(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	err := db.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "role": "admin"}))
+	err := db.DocStore.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "role": "admin"}))
 	require.NoError(t, err)
 
-	doc, err := db.DocGet("users", "u1")
+	doc, err := db.DocStore.DocGet("users", "u1")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	assert.Equal(t, "alice", docField(t, doc, "name"))
@@ -147,7 +147,7 @@ func TestDocGetNotFound(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	doc, err := db.DocGet("users", "nonexistent")
+	doc, err := db.DocStore.DocGet("users", "nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, doc)
 }
@@ -156,10 +156,10 @@ func TestDocUpdate(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	err := db.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "role": "user"}))
+	err := db.DocStore.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "role": "user"}))
 	require.NoError(t, err)
 
-	updated, err := db.DocUpdate("users", "u1", mustDocJSON(t, map[string]string{"role": "admin"}))
+	updated, err := db.DocStore.DocUpdate("users", "u1", mustDocJSON(t, map[string]string{"role": "admin"}))
 	require.NoError(t, err)
 	assert.Equal(t, "admin", docField(t, updated, "role"))
 	assert.Equal(t, "alice", docField(t, updated, "name"))
@@ -169,7 +169,7 @@ func TestDocUpdateNotFound(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	_, err := db.DocUpdate("users", "nonexistent", mustDocJSON(t, map[string]string{"role": "admin"}))
+	_, err := db.DocStore.DocUpdate("users", "nonexistent", mustDocJSON(t, map[string]string{"role": "admin"}))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -178,10 +178,10 @@ func TestDocUpdateDeleteField(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	err := db.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "temp": "remove_me"}))
+	err := db.DocStore.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "temp": "remove_me"}))
 	require.NoError(t, err)
 
-	updated, err := db.DocUpdate("users", "u1", mustDocJSON(t, map[string]json.RawMessage{"temp": nil}))
+	updated, err := db.DocStore.DocUpdate("users", "u1", mustDocJSON(t, map[string]json.RawMessage{"temp": nil}))
 	require.NoError(t, err)
 	_, hasTmp := updated.Data["temp"]
 	assert.False(t, hasTmp)
@@ -191,14 +191,14 @@ func TestDocDelete(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	err := db.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice"}))
+	err := db.DocStore.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice"}))
 	require.NoError(t, err)
 
-	deleted, err := db.DocDelete("users", "u1")
+	deleted, err := db.DocStore.DocDelete("users", "u1")
 	require.NoError(t, err)
 	assert.True(t, deleted)
 
-	doc, err := db.DocGet("users", "u1")
+	doc, err := db.DocStore.DocGet("users", "u1")
 	require.NoError(t, err)
 	assert.Nil(t, doc)
 }
@@ -207,7 +207,7 @@ func TestDocDeleteNotFound(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	deleted, err := db.DocDelete("users", "non-existent-id")
+	deleted, err := db.DocStore.DocDelete("users", "non-existent-id")
 	require.NoError(t, err)
 	assert.False(t, deleted)
 }
@@ -216,15 +216,15 @@ func TestDocQuery(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.DocSet("operators", "op1", mustDocJSON(t, map[string]string{"status": "active", "name": "op-a"})))
-	require.NoError(t, db.DocSet("operators", "op2", mustDocJSON(t, map[string]string{"status": "offline", "name": "op-b"})))
-	require.NoError(t, db.DocSet("operators", "op3", mustDocJSON(t, map[string]string{"status": "active", "name": "op-c"})))
+	require.NoError(t, db.DocStore.DocSet("operators", "op1", mustDocJSON(t, map[string]string{"status": "active", "name": "op-a"})))
+	require.NoError(t, db.DocStore.DocSet("operators", "op2", mustDocJSON(t, map[string]string{"status": "offline", "name": "op-b"})))
+	require.NoError(t, db.DocStore.DocSet("operators", "op3", mustDocJSON(t, map[string]string{"status": "active", "name": "op-c"})))
 
 	filters := []models.DocFilter{
 		{Field: "status", Op: "==", Value: json.RawMessage(`"active"`)},
 	}
 
-	results, err := db.DocQuery("operators", filters, "", 0)
+	results, err := db.DocStore.DocQuery("operators", filters, "", 0)
 	require.NoError(t, err)
 	assert.Len(t, results, 2)
 }
@@ -233,11 +233,11 @@ func TestDocQueryWithOrderAndLimit(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.DocSet("items", "a", mustDocJSON(t, map[string]int{"priority": 3})))
-	require.NoError(t, db.DocSet("items", "b", mustDocJSON(t, map[string]int{"priority": 1})))
-	require.NoError(t, db.DocSet("items", "c", mustDocJSON(t, map[string]int{"priority": 2})))
+	require.NoError(t, db.DocStore.DocSet("items", "a", mustDocJSON(t, map[string]int{"priority": 3})))
+	require.NoError(t, db.DocStore.DocSet("items", "b", mustDocJSON(t, map[string]int{"priority": 1})))
+	require.NoError(t, db.DocStore.DocSet("items", "c", mustDocJSON(t, map[string]int{"priority": 2})))
 
-	results, err := db.DocQuery("items", nil, "priority DESC", 2)
+	results, err := db.DocStore.DocQuery("items", nil, "priority DESC", 2)
 	require.NoError(t, err)
 	assert.Len(t, results, 2)
 }
@@ -246,7 +246,7 @@ func TestDocQueryEmptyCollection(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	results, err := db.DocQuery("empty_collection", nil, "", 0)
+	results, err := db.DocStore.DocQuery("empty_collection", nil, "", 0)
 	require.NoError(t, err)
 	assert.Empty(t, results)
 }
@@ -255,13 +255,13 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.DocSet("things", "t1", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"foo"`), "count": json.RawMessage(`5`)})))
-	require.NoError(t, db.DocSet("things", "t2", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"bar"`), "count": json.RawMessage(`10`)})))
-	require.NoError(t, db.DocSet("things", "t3", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"foo"`), "count": json.RawMessage(`20`)})))
+	require.NoError(t, db.DocStore.DocSet("things", "t1", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"foo"`), "count": json.RawMessage(`5`)})))
+	require.NoError(t, db.DocStore.DocSet("things", "t2", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"bar"`), "count": json.RawMessage(`10`)})))
+	require.NoError(t, db.DocStore.DocSet("things", "t3", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"foo"`), "count": json.RawMessage(`20`)})))
 
 	t.Run("string equality", func(t *testing.T) {
 		t.Parallel()
-		results, err := db.DocQuery("things", []models.DocFilter{
+		results, err := db.DocStore.DocQuery("things", []models.DocFilter{
 			{Field: "label", Op: "==", Value: json.RawMessage(`"foo"`)},
 		}, "", 0)
 		require.NoError(t, err)
@@ -270,7 +270,7 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 
 	t.Run("numeric greater-than", func(t *testing.T) {
 		t.Parallel()
-		results, err := db.DocQuery("things", []models.DocFilter{
+		results, err := db.DocStore.DocQuery("things", []models.DocFilter{
 			{Field: "count", Op: ">", Value: json.RawMessage(`7`)},
 		}, "", 0)
 		require.NoError(t, err)
@@ -279,7 +279,7 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 
 	t.Run("numeric equality", func(t *testing.T) {
 		t.Parallel()
-		results, err := db.DocQuery("things", []models.DocFilter{
+		results, err := db.DocStore.DocQuery("things", []models.DocFilter{
 			{Field: "count", Op: "==", Value: json.RawMessage(`10`)},
 		}, "", 0)
 		require.NoError(t, err)
@@ -295,10 +295,10 @@ func TestKVSetAndGet(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	err := db.KVSet("session:abc", `{"user":"alice"}`, 0)
+	err := db.KVStore.KVSet("session:abc", `{"user":"alice"}`, 0)
 	require.NoError(t, err)
 
-	val, found := db.KVGet("session:abc")
+	val, found := db.KVStore.KVGet("session:abc")
 	require.True(t, found)
 	assert.Equal(t, `{"user":"alice"}`, val)
 }
@@ -307,7 +307,7 @@ func TestKVGetNotFound(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	_, found := db.KVGet("nonexistent")
+	_, found := db.KVStore.KVGet("nonexistent")
 	assert.False(t, found)
 }
 
@@ -315,16 +315,16 @@ func TestKVSetWithTTL(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	err := db.KVSet("temp:key", "value", 1)
+	err := db.KVStore.KVSet("temp:key", "value", 1)
 	require.NoError(t, err)
 
-	val, found := db.KVGet("temp:key")
+	val, found := db.KVStore.KVGet("temp:key")
 	assert.True(t, found)
 	assert.Equal(t, "value", val)
 
 	// Wait for expiry with polling
 	require.Eventually(t, func() bool {
-		_, found := db.KVGet("temp:key")
+		_, found := db.KVStore.KVGet("temp:key")
 		return !found
 	}, 2*time.Second, 100*time.Millisecond, "temp key should expire")
 }
@@ -333,10 +333,10 @@ func TestKVDelete(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("key1", "val1", 0))
-	require.NoError(t, db.KVDelete("key1"))
+	require.NoError(t, db.KVStore.KVSet("key1", "val1", 0))
+	require.NoError(t, db.KVStore.KVDelete("key1"))
 
-	_, found := db.KVGet("key1")
+	_, found := db.KVStore.KVGet("key1")
 	assert.False(t, found)
 }
 
@@ -344,15 +344,15 @@ func TestKVDeletePattern(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("cache:user:1", "a", 0))
-	require.NoError(t, db.KVSet("cache:user:2", "b", 0))
-	require.NoError(t, db.KVSet("cache:config:1", "c", 0))
+	require.NoError(t, db.KVStore.KVSet("cache:user:1", "a", 0))
+	require.NoError(t, db.KVStore.KVSet("cache:user:2", "b", 0))
+	require.NoError(t, db.KVStore.KVSet("cache:config:1", "c", 0))
 
-	count, err := db.KVDeletePattern("cache:user:*")
+	count, err := db.KVStore.KVDeletePattern("cache:user:*")
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), count)
 
-	_, found := db.KVGet("cache:config:1")
+	_, found := db.KVStore.KVGet("cache:config:1")
 	assert.True(t, found)
 }
 
@@ -360,11 +360,11 @@ func TestKVKeys(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("session:a", "1", 0))
-	require.NoError(t, db.KVSet("session:b", "2", 0))
-	require.NoError(t, db.KVSet("other:c", "3", 0))
+	require.NoError(t, db.KVStore.KVSet("session:a", "1", 0))
+	require.NoError(t, db.KVStore.KVSet("session:b", "2", 0))
+	require.NoError(t, db.KVStore.KVSet("other:c", "3", 0))
 
-	keys, err := db.KVKeys("session:*")
+	keys, err := db.KVStore.KVKeys("session:*")
 	require.NoError(t, err)
 	assert.Len(t, keys, 2)
 }
@@ -374,43 +374,43 @@ func TestKVKeys_SpecialCharacters(t *testing.T) {
 	db := newTestDB(t)
 
 	// Keys with dots - SQL GLOB treats dots as literal characters
-	require.NoError(t, db.KVSet("cache.doc", "1", 0))
-	require.NoError(t, db.KVSet("cache.doc.backup", "2", 0))
-	require.NoError(t, db.KVSet("cache:txt", "3", 0))
+	require.NoError(t, db.KVStore.KVSet("cache.doc", "1", 0))
+	require.NoError(t, db.KVStore.KVSet("cache.doc.backup", "2", 0))
+	require.NoError(t, db.KVStore.KVSet("cache:txt", "3", 0))
 
 	// Pattern with literal dot should match exactly
-	keys, err := db.KVKeys("cache.doc")
+	keys, err := db.KVStore.KVKeys("cache.doc")
 	require.NoError(t, err)
 	assert.Len(t, keys, 1)
 	assert.Equal(t, "cache.doc", keys[0])
 
 	// Pattern with wildcard after dot should match both
-	keys, err = db.KVKeys("cache.doc*")
+	keys, err = db.KVStore.KVKeys("cache.doc*")
 	require.NoError(t, err)
 	assert.Len(t, keys, 2)
 
 	// Keys with brackets - SQL GLOB treats brackets as character class delimiters
 	// To match literal brackets, we can use a pattern that matches the prefix
-	require.NoError(t, db.KVSet("array.0", "4", 0))
-	require.NoError(t, db.KVSet("array.1", "5", 0))
+	require.NoError(t, db.KVStore.KVSet("array.0", "4", 0))
+	require.NoError(t, db.KVStore.KVSet("array.1", "5", 0))
 
-	keys, err = db.KVKeys("array.*")
+	keys, err = db.KVStore.KVKeys("array.*")
 	require.NoError(t, err)
 	assert.Len(t, keys, 2)
 
 	// Keys with plus signs - SQL GLOB treats plus as literal
-	require.NoError(t, db.KVSet("user+id", "6", 0))
-	require.NoError(t, db.KVSet("user+name", "7", 0))
+	require.NoError(t, db.KVStore.KVSet("user+id", "6", 0))
+	require.NoError(t, db.KVStore.KVSet("user+name", "7", 0))
 
-	keys, err = db.KVKeys("user+*")
+	keys, err = db.KVStore.KVKeys("user+*")
 	require.NoError(t, err)
 	assert.Len(t, keys, 2)
 
 	// Keys with dollar signs - SQL GLOB treats dollar as literal
-	require.NoError(t, db.KVSet("$var1", "8", 0))
-	require.NoError(t, db.KVSet("$var2", "9", 0))
+	require.NoError(t, db.KVStore.KVSet("$var1", "8", 0))
+	require.NoError(t, db.KVStore.KVSet("$var2", "9", 0))
 
-	keys, err = db.KVKeys("$var*")
+	keys, err = db.KVStore.KVKeys("$var*")
 	require.NoError(t, err)
 	assert.Len(t, keys, 2)
 }
@@ -419,36 +419,36 @@ func TestKVExists(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("exists:key", "val", 0))
-	assert.True(t, db.KVExists("exists:key"))
-	assert.False(t, db.KVExists("missing:key"))
+	require.NoError(t, db.KVStore.KVSet("exists:key", "val", 0))
+	assert.True(t, db.KVStore.KVExists("exists:key"))
+	assert.False(t, db.KVStore.KVExists("missing:key"))
 }
 
 func TestKVTTL(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("ttl:key", "val", 60))
-	ttl := db.KVTTL("ttl:key")
+	require.NoError(t, db.KVStore.KVSet("ttl:key", "val", 60))
+	ttl := db.KVStore.KVTTL("ttl:key")
 	assert.True(t, ttl > 50 && ttl <= 60)
 
-	assert.Equal(t, -2, db.KVTTL("nonexistent"))
+	assert.Equal(t, -2, db.KVStore.KVTTL("nonexistent"))
 }
 
 func TestKVExpire(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("exp:key", "val", 0))
-	assert.Equal(t, -1, db.KVTTL("exp:key"))
+	require.NoError(t, db.KVStore.KVSet("exp:key", "val", 0))
+	assert.Equal(t, -1, db.KVStore.KVTTL("exp:key"))
 
-	ok := db.KVExpire("exp:key", 30)
+	ok := db.KVStore.KVExpire("exp:key", 30)
 	assert.True(t, ok)
 
-	ttl := db.KVTTL("exp:key")
+	ttl := db.KVStore.KVTTL("exp:key")
 	assert.True(t, ttl > 0 && ttl <= 30)
 
-	ok = db.KVExpire("nonexistent", 30)
+	ok = db.KVStore.KVExpire("nonexistent", 30)
 	assert.False(t, ok)
 }
 
@@ -463,7 +463,7 @@ func TestSchemaIdempotent(t *testing.T) {
 
 	db1, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
 	require.NoError(t, err)
-	require.NoError(t, db1.DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
+	require.NoError(t, db1.DocStore.DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
 	// Re-open same database - schema init should not fail or lose data
@@ -471,7 +471,7 @@ func TestSchemaIdempotent(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db2.Close() })
 
-	doc, err := db2.DocGet("test", "1")
+	doc, err := db2.DocStore.DocGet("test", "1")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	assert.Equal(t, "first", docField(t, doc, "val"))
@@ -503,9 +503,9 @@ func TestDocSet_UpsertReplacesDataAndUpdatesTimestamp(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice"})))
+	require.NoError(t, db.DocStore.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice"})))
 
-	doc1, err := db.DocGet("users", "u1")
+	doc1, err := db.DocStore.DocGet("users", "u1")
 	require.NoError(t, err)
 	createdAt1 := doc1.CreatedAt
 	updatedAt1 := doc1.UpdatedAt
@@ -513,9 +513,9 @@ func TestDocSet_UpsertReplacesDataAndUpdatesTimestamp(t *testing.T) {
 	// Small delay to ensure timestamp changes
 	time.Sleep(10 * time.Millisecond)
 
-	require.NoError(t, db.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "admin"})))
+	require.NoError(t, db.DocStore.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "admin"})))
 
-	doc2, err := db.DocGet("users", "u1")
+	doc2, err := db.DocStore.DocGet("users", "u1")
 	require.NoError(t, err)
 
 	assert.Equal(t, "admin", docField(t, doc2, "name"))
@@ -531,16 +531,16 @@ func TestDocUpdate_PreservesCreatedAt(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.DocSet("things", "t1", mustDocJSON(t, map[string]string{"x": "original"})))
+	require.NoError(t, db.DocStore.DocSet("things", "t1", mustDocJSON(t, map[string]string{"x": "original"})))
 
-	doc1, err := db.DocGet("things", "t1")
+	doc1, err := db.DocStore.DocGet("things", "t1")
 	require.NoError(t, err)
 	createdAt := doc1.CreatedAt
 
 	// Small delay to ensure timestamp changes
 	time.Sleep(10 * time.Millisecond)
 
-	doc2, err := db.DocUpdate("things", "t1", mustDocJSON(t, map[string]string{"x": "updated"}))
+	doc2, err := db.DocStore.DocUpdate("things", "t1", mustDocJSON(t, map[string]string{"x": "updated"}))
 	require.NoError(t, err)
 
 	assert.True(t, doc2.CreatedAt.Equal(createdAt), "created_at must not change on update")
@@ -555,9 +555,9 @@ func TestDocQuery_InvalidFilterFieldReturnsError(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.DocSet("items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
+	require.NoError(t, db.DocStore.DocSet("items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
 
-	_, err := db.DocQuery("items", []models.DocFilter{
+	_, err := db.DocStore.DocQuery("items", []models.DocFilter{
 		{Field: "name; DROP TABLE documents--", Op: "==", Value: json.RawMessage(`"x"`)},
 	}, "", 0)
 	require.Error(t, err)
@@ -568,9 +568,9 @@ func TestDocQuery_InvalidOrderByFieldReturnsError(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.DocSet("items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
+	require.NoError(t, db.DocStore.DocSet("items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
 
-	_, err := db.DocQuery("items", nil, "name; DROP TABLE documents--", 0)
+	_, err := db.DocStore.DocQuery("items", nil, "name; DROP TABLE documents--", 0)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid orderBy field")
 }
@@ -579,10 +579,10 @@ func TestDocQuery_UnknownOpIsSkipped(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.DocSet("items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
-	require.NoError(t, db.DocSet("items", "i2", mustDocJSON(t, map[string]string{"name": "y"})))
+	require.NoError(t, db.DocStore.DocSet("items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
+	require.NoError(t, db.DocStore.DocSet("items", "i2", mustDocJSON(t, map[string]string{"name": "y"})))
 
-	results, err := db.DocQuery("items", []models.DocFilter{
+	results, err := db.DocStore.DocQuery("items", []models.DocFilter{
 		{Field: "name", Op: "LIKE", Value: json.RawMessage(`"x"`)},
 	}, "", 0)
 	require.NoError(t, err)
@@ -597,10 +597,10 @@ func TestKVSet_OverwriteReplacesValue(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("key1", "first", 0))
-	require.NoError(t, db.KVSet("key1", "second", 0))
+	require.NoError(t, db.KVStore.KVSet("key1", "first", 0))
+	require.NoError(t, db.KVStore.KVSet("key1", "second", 0))
 
-	val, found := db.KVGet("key1")
+	val, found := db.KVStore.KVGet("key1")
 	require.True(t, found)
 	assert.Equal(t, "second", val)
 }
@@ -613,8 +613,8 @@ func TestKVTTL_NoExpiry(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("persistent", "val", 0))
-	assert.Equal(t, -1, db.KVTTL("persistent"))
+	require.NoError(t, db.KVStore.KVSet("persistent", "val", 0))
+	assert.Equal(t, -1, db.KVStore.KVTTL("persistent"))
 }
 
 // ---------------------------------------------------------------------------
@@ -625,12 +625,12 @@ func TestKVScan_BasicScan(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("scan:a", "1", 0))
-	require.NoError(t, db.KVSet("scan:b", "2", 0))
-	require.NoError(t, db.KVSet("scan:c", "3", 0))
-	require.NoError(t, db.KVSet("other:d", "4", 0))
+	require.NoError(t, db.KVStore.KVSet("scan:a", "1", 0))
+	require.NoError(t, db.KVStore.KVSet("scan:b", "2", 0))
+	require.NoError(t, db.KVStore.KVSet("scan:c", "3", 0))
+	require.NoError(t, db.KVStore.KVSet("other:d", "4", 0))
 
-	next, keys, err := db.KVScan("scan:*", 0, 10)
+	next, keys, err := db.KVStore.KVScan("scan:*", 0, 10)
 	require.NoError(t, err)
 	assert.Equal(t, 0, next, "no next page when all results fit")
 	assert.Len(t, keys, 3)
@@ -641,20 +641,20 @@ func TestKVScan_Pagination(t *testing.T) {
 	db := newTestDB(t)
 
 	for i := 0; i < 5; i++ {
-		require.NoError(t, db.KVSet(fmt.Sprintf("page:%d", i), "v", 0))
+		require.NoError(t, db.KVStore.KVSet(fmt.Sprintf("page:%d", i), "v", 0))
 	}
 
-	next1, page1, err := db.KVScan("page:*", 0, 2)
+	next1, page1, err := db.KVStore.KVScan("page:*", 0, 2)
 	require.NoError(t, err)
 	assert.Len(t, page1, 2)
 	assert.Equal(t, 2, next1, "next cursor must be 2 after first page")
 
-	next2, page2, err := db.KVScan("page:*", next1, 2)
+	next2, page2, err := db.KVStore.KVScan("page:*", next1, 2)
 	require.NoError(t, err)
 	assert.Len(t, page2, 2)
 	assert.Equal(t, 4, next2)
 
-	next3, page3, err := db.KVScan("page:*", next2, 2)
+	next3, page3, err := db.KVStore.KVScan("page:*", next2, 2)
 	require.NoError(t, err)
 	assert.Len(t, page3, 1)
 	assert.Equal(t, 0, next3, "next cursor must be 0 on last page")
@@ -664,7 +664,7 @@ func TestKVScan_EmptyResult(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	next, keys, err := db.KVScan("nothing:*", 0, 10)
+	next, keys, err := db.KVStore.KVScan("nothing:*", 0, 10)
 	require.NoError(t, err)
 	assert.Equal(t, 0, next)
 	assert.Empty(t, keys)
@@ -675,10 +675,10 @@ func TestKVScan_DefaultCountApplied(t *testing.T) {
 	db := newTestDB(t)
 
 	for i := 0; i < 5; i++ {
-		require.NoError(t, db.KVSet(fmt.Sprintf("dc:%d", i), "v", 0))
+		require.NoError(t, db.KVStore.KVSet(fmt.Sprintf("dc:%d", i), "v", 0))
 	}
 
-	_, keys, err := db.KVScan("dc:*", 0, 0)
+	_, keys, err := db.KVStore.KVScan("dc:*", 0, 0)
 	require.NoError(t, err)
 	assert.Len(t, keys, 5, "count=0 must default to 100 and return all 5 keys")
 }
@@ -687,12 +687,12 @@ func TestKVScan_ExcludesExpiredKeys(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("live:key", "val", 0))
-	require.NoError(t, db.KVSet("exp:key", "val", 1))
+	require.NoError(t, db.KVStore.KVSet("live:key", "val", 0))
+	require.NoError(t, db.KVStore.KVSet("exp:key", "val", 1))
 
 	// Wait for expiry with polling
 	require.Eventually(t, func() bool {
-		_, keys, err := db.KVScan("*", 0, 100)
+		_, keys, err := db.KVStore.KVScan("*", 0, 100)
 		require.NoError(t, err)
 		for _, k := range keys {
 			if k == "exp:key" {
@@ -762,12 +762,12 @@ func TestRunTTLCleanup_RemovesExpiredKVEntries(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	require.NoError(t, db.KVSet("ttl:keep", "val", 0))
-	require.NoError(t, db.KVSet("ttl:expire", "val", 1))
+	require.NoError(t, db.KVStore.KVSet("ttl:keep", "val", 0))
+	require.NoError(t, db.KVStore.KVSet("ttl:expire", "val", 1))
 
 	// Wait for expiry with polling
 	require.Eventually(t, func() bool {
-		_, found := db.KVGet("ttl:expire")
+		_, found := db.KVStore.KVGet("ttl:expire")
 		return !found
 	}, 2*time.Second, 100*time.Millisecond, "ttl:expire should expire")
 
@@ -783,15 +783,15 @@ func TestRunTTLCleanup_RemovesExpiredKVEntries(t *testing.T) {
 	})
 
 	assert.Eventually(t, func() bool {
-		_, err := db.KVKeys("ttl:*")
+		_, err := db.KVStore.KVKeys("ttl:*")
 		if err != nil {
 			return false
 		}
-		_, found := db.KVGet("ttl:expire")
+		_, found := db.KVStore.KVGet("ttl:expire")
 		return !found
 	}, 5*time.Second, 100*time.Millisecond)
 
-	_, kept := db.KVGet("ttl:keep")
+	_, kept := db.KVStore.KVGet("ttl:keep")
 	assert.True(t, kept, "non-expired key must survive cleanup")
 }
 
@@ -800,7 +800,7 @@ func TestHasTrustedSigners(t *testing.T) {
 	db := newTestDB(t)
 
 	// Initially no signers
-	has, err := db.HasTrustedSigners()
+	has, err := db.SignerStore.HasTrustedSigners()
 	require.NoError(t, err)
 	assert.False(t, has)
 
@@ -813,10 +813,10 @@ func TestHasTrustedSigners(t *testing.T) {
 	}
 	signerBytes, err := json.Marshal(signer)
 	require.NoError(t, err)
-	err = db.DocSet("trusted_signers", "test-signer-1", signerBytes)
+	err = db.DocStore.DocSet("trusted_signers", "test-signer-1", signerBytes)
 	require.NoError(t, err)
 
-	has, err = db.HasTrustedSigners()
+	has, err = db.SignerStore.HasTrustedSigners()
 	require.NoError(t, err)
 	assert.True(t, has)
 
@@ -829,20 +829,20 @@ func TestHasTrustedSigners(t *testing.T) {
 	}
 	disabledSignerBytes, err := json.Marshal(disabledSigner)
 	require.NoError(t, err)
-	err = db.DocSet("trusted_signers", "test-signer-2", disabledSignerBytes)
+	err = db.DocStore.DocSet("trusted_signers", "test-signer-2", disabledSignerBytes)
 	require.NoError(t, err)
 
 	// Should still have signers (enabled one exists)
-	has, err = db.HasTrustedSigners()
+	has, err = db.SignerStore.HasTrustedSigners()
 	require.NoError(t, err)
 	assert.True(t, has)
 
 	// Delete the enabled signer
-	_, err = db.DocDelete("trusted_signers", "test-signer-1")
+	_, err = db.DocStore.DocDelete("trusted_signers", "test-signer-1")
 	require.NoError(t, err)
 
 	// Now only disabled signer exists - should return false
-	has, err = db.HasTrustedSigners()
+	has, err = db.SignerStore.HasTrustedSigners()
 	require.NoError(t, err)
 	assert.False(t, has)
 }
@@ -851,7 +851,7 @@ func TestHasTrustedSigners_EmptyCollection(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	has, err := db.HasTrustedSigners()
+	has, err := db.SignerStore.HasTrustedSigners()
 	require.NoError(t, err)
 	assert.False(t, has)
 }
@@ -868,23 +868,23 @@ func TestGetField(t *testing.T) {
 	}
 	docBytes, err := json.Marshal(doc)
 	require.NoError(t, err)
-	err = db.DocSet("test_collection", "doc1", docBytes)
+	err = db.DocStore.DocSet("test_collection", "doc1", docBytes)
 	require.NoError(t, err)
 
 	// Get existing field
-	field, err := db.GetField("test_collection", "doc1", "name")
+	field, err := db.DocStore.GetField("test_collection", "doc1", "name")
 	require.NoError(t, err)
 	require.NotNil(t, field)
 	assert.Equal(t, "test-doc", field)
 
 	// Get another field
-	field, err = db.GetField("test_collection", "doc1", "value")
+	field, err = db.DocStore.GetField("test_collection", "doc1", "value")
 	require.NoError(t, err)
 	require.NotNil(t, field)
 	assert.Equal(t, float64(42), field) // JSON numbers are unmarshaled as float64
 
 	// Get field from non-existent document
-	field, err = db.GetField("test_collection", "nonexistent-doc", "name")
+	field, err = db.DocStore.GetField("test_collection", "nonexistent-doc", "name")
 	require.Error(t, err)
 	assert.Nil(t, field)
 }
@@ -898,7 +898,7 @@ func TestDocDeleteNamespace(t *testing.T) {
 		doc := map[string]string{"id": fmt.Sprintf("doc%d", i)}
 		docBytes, err := json.Marshal(doc)
 		require.NoError(t, err)
-		err = db.DocSet("test_namespace", fmt.Sprintf("doc%d", i), docBytes)
+		err = db.DocStore.DocSet("test_namespace", fmt.Sprintf("doc%d", i), docBytes)
 		require.NoError(t, err)
 	}
 
@@ -907,27 +907,27 @@ func TestDocDeleteNamespace(t *testing.T) {
 		doc := map[string]string{"id": fmt.Sprintf("other%d", i)}
 		docBytes, err := json.Marshal(doc)
 		require.NoError(t, err)
-		err = db.DocSet("other_namespace", fmt.Sprintf("other%d", i), docBytes)
+		err = db.DocStore.DocSet("other_namespace", fmt.Sprintf("other%d", i), docBytes)
 		require.NoError(t, err)
 	}
 
 	// Delete namespace
-	deleted, err := db.DocDeleteNamespace("test_namespace")
+	deleted, err := db.DocStore.DocDeleteNamespace("test_namespace")
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), deleted)
 
 	// Verify documents are deleted
-	doc, err := db.DocGet("test_namespace", "doc0")
+	doc, err := db.DocStore.DocGet("test_namespace", "doc0")
 	require.NoError(t, err)
 	assert.Nil(t, doc)
 
 	// Verify other namespace is untouched
-	doc, err = db.DocGet("other_namespace", "other0")
+	doc, err = db.DocStore.DocGet("other_namespace", "other0")
 	require.NoError(t, err)
 	assert.NotNil(t, doc)
 
 	// Delete non-existent namespace
-	deleted, err = db.DocDeleteNamespace("nonexistent_namespace")
+	deleted, err = db.DocStore.DocDeleteNamespace("nonexistent_namespace")
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), deleted)
 }
@@ -936,7 +936,7 @@ func TestDocDeleteNamespace_Empty(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
 
-	deleted, err := db.DocDeleteNamespace("empty_namespace")
+	deleted, err := db.DocStore.DocDeleteNamespace("empty_namespace")
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), deleted)
 }
@@ -949,17 +949,17 @@ func TestDocCreate(t *testing.T) {
 	doc := map[string]string{"name": "test-doc"}
 	docBytes, err := json.Marshal(doc)
 	require.NoError(t, err)
-	err = db.DocCreate("test_collection", "doc1", docBytes)
+	err = db.DocStore.DocCreate("test_collection", "doc1", docBytes)
 	require.NoError(t, err)
 
 	// Verify document was created
-	retrievedDoc, err := db.DocGet("test_collection", "doc1")
+	retrievedDoc, err := db.DocStore.DocGet("test_collection", "doc1")
 	require.NoError(t, err)
 	require.NotNil(t, retrievedDoc)
 	assert.Equal(t, "doc1", retrievedDoc.ID)
 
 	// Attempt to create duplicate - should fail
-	err = db.DocCreate("test_collection", "doc1", docBytes)
+	err = db.DocStore.DocCreate("test_collection", "doc1", docBytes)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "already exists")
 }
@@ -977,11 +977,11 @@ func TestDocCreate_WithSystemFields(t *testing.T) {
 	}
 	docBytes, err := json.Marshal(doc)
 	require.NoError(t, err)
-	err = db.DocCreate("test_collection", "doc1", docBytes)
+	err = db.DocStore.DocCreate("test_collection", "doc1", docBytes)
 	require.NoError(t, err)
 
 	// Verify system fields were stripped
-	retrievedDoc, err := db.DocGet("test_collection", "doc1")
+	retrievedDoc, err := db.DocStore.DocGet("test_collection", "doc1")
 	require.NoError(t, err)
 	require.NotNil(t, retrievedDoc)
 	assert.Equal(t, "doc1", retrievedDoc.ID)

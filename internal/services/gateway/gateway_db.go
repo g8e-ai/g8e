@@ -23,7 +23,6 @@ package gateway
 import (
 	"context"
 	"crypto/ed25519"
-	"database/sql"
 	_ "embed"
 	"encoding/json"
 	"encoding/pem"
@@ -67,8 +66,7 @@ func GatewaySchema() string {
 // (state root calculation only).
 //
 // The service delegates domain logic to extracted single-responsibility services.
-// These delegation wrappers maintain backward compatibility while allowing
-// gradual migration to direct service usage.
+// Callers should use the extracted service fields directly (e.g., db.DocStore.DocGet()).
 type CanonicalDBService struct {
 	db         *sqliteutil.DB
 	logger     *slog.Logger
@@ -76,11 +74,14 @@ type CanonicalDBService struct {
 	vault      *vault.Vault
 
 	// Extracted services - initialized in OpenCanonicalDBService
-	docStore        *DocumentStoreService
-	appPolicyStore  *AppPolicyStoreService
-	signerStore     *SignerStoreService
-	stateRootSvc    *StateRootService
-	replayStore     *ReplayStoreService
+	DocStore        *DocumentStoreService
+	AppPolicyStore  *AppPolicyStoreService
+	SignerStore     *SignerStoreService
+	StateRootSvc    *StateRootService
+	ReplayStore     *ReplayStoreService
+	KVStore         *KVStoreService
+	SSEStore        *SSEEventService
+	BlobStore       *BlobStoreService
 
 	// Shutdown tracking
 	mu      sync.Mutex
@@ -180,11 +181,14 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 	}
 
 	// Initialize extracted services with the same db connection
-	svc.docStore = NewDocumentStoreService(db, logger)
-	svc.appPolicyStore = NewAppPolicyStoreService(db, logger)
-	svc.signerStore = NewSignerStoreService(db, logger)
-	svc.stateRootSvc = NewStateRootService(db, logger)
-	svc.replayStore = NewReplayStoreService(db, logger)
+	svc.DocStore = NewDocumentStoreService(db, logger)
+	svc.AppPolicyStore = NewAppPolicyStoreService(db, logger)
+	svc.SignerStore = NewSignerStoreService(db, logger)
+	svc.StateRootSvc = NewStateRootService(db, logger)
+	svc.ReplayStore = NewReplayStoreService(db, logger)
+	svc.KVStore = NewKVStoreService(db, logger)
+	svc.SSEStore = NewSSEEventService(db, logger)
+	svc.BlobStore = NewBlobStoreService(db, logger)
 
 	if testMode {
 		if err := svc.initTestSchema(secretsDir); err != nil {
@@ -261,7 +265,7 @@ func (s *CanonicalDBService) initStateRoot() error {
 		return err
 	}
 	if count == 0 {
-		root, err := s.stateRootSvc.CalculateStateRoot()
+		root, err := s.StateRootSvc.CalculateStateRoot()
 		if err != nil {
 			return err
 		}
@@ -275,29 +279,6 @@ func (s *CanonicalDBService) initStateRoot() error {
 	return nil
 }
 
-// GetCurrentStateRoot returns the current state merkle root.
-// Delegates to StateRootService.
-func (s *CanonicalDBService) GetCurrentStateRoot() (string, error) {
-	return s.stateRootSvc.GetCurrentStateRoot()
-}
-
-// ReserveNonce atomically reserves a nonce for early replay protection.
-// Delegates to ReplayStoreService.
-func (s *CanonicalDBService) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
-	return s.replayStore.ReserveNonce(nonce, expiresAt)
-}
-
-// FinalizeNonce marks a reserved nonce as fully consumed.
-// Delegates to ReplayStoreService.
-func (s *CanonicalDBService) FinalizeNonce(nonce string) error {
-	return s.replayStore.FinalizeNonce(nonce)
-}
-
-// ReleaseNonce removes a reservation for a failed transaction.
-// Delegates to ReplayStoreService.
-func (s *CanonicalDBService) ReleaseNonce(nonce string) error {
-	return s.replayStore.ReleaseNonce(nonce)
-}
 
 // RunMaintenance periodically removes expired entries.
 func (s *CanonicalDBService) RunMaintenance(ctx context.Context) {
@@ -497,436 +478,10 @@ func (s *CanonicalDBService) Wait() {
 	s.wg.Wait()
 }
 
-// =============================================================================
-// Document Store - collection/id based CRUD (delegates to DocumentStoreService)
-// =============================================================================
 
-// DocGet retrieves a document by collection and id.
-// Delegates to DocumentStoreService.
-func (s *CanonicalDBService) DocGet(collection, id string) (*models.Document, error) {
-	return s.docStore.DocGet(collection, id)
-}
 
-// DocCreate creates a document only if it does not already exist.
-// Delegates to DocumentStoreService.
-func (s *CanonicalDBService) DocCreate(collection, id string, data json.RawMessage) error {
-	return s.docStore.DocCreate(collection, id, data)
-}
 
-// DocSet creates or replaces a document.
-// Delegates to DocumentStoreService.
-func (s *CanonicalDBService) DocSet(collection, id string, data json.RawMessage) error {
-	return s.docStore.DocSet(collection, id, data)
-}
 
-// DocSetWithTimestamps creates or replaces a document with custom timestamps.
-// Delegates to DocumentStoreService.
-func (s *CanonicalDBService) DocSetWithTimestamps(collection, id string, data json.RawMessage, createdAt, updatedAt time.Time) error {
-	return s.docStore.DocSetWithTimestamps(collection, id, data, createdAt, updatedAt)
-}
-
-// DocUpdate merges fields into an existing document.
-// Delegates to DocumentStoreService.
-func (s *CanonicalDBService) DocUpdate(collection, id string, fields json.RawMessage) (*models.Document, error) {
-	return s.docStore.DocUpdate(collection, id, fields)
-}
-
-// DocDelete removes a document.
-// Delegates to DocumentStoreService.
-func (s *CanonicalDBService) DocDelete(collection, id string) (bool, error) {
-	return s.docStore.DocDelete(collection, id)
-}
-
-// DocDeleteNamespace removes all documents in a collection.
-// Delegates to DocumentStoreService.
-func (s *CanonicalDBService) DocDeleteNamespace(collection string) (int64, error) {
-	return s.docStore.DocDeleteNamespace(collection)
-}
-
-// GetField extracts a single field value from a document using dot notation.
-// Delegates to DocumentStoreService.
-func (s *CanonicalDBService) GetField(collection, id, fieldPath string) (interface{}, error) {
-	// DocumentStoreService returns json.RawMessage, but CanonicalDBService returns interface{}
-	// for backward compatibility. Convert here.
-	result, err := s.docStore.GetField(collection, id, fieldPath)
-	if err != nil {
-		return nil, err
-	}
-
-	// SQLite's json_extract returns SQL literals (true, false, null) as raw strings.
-	// Convert these to proper JSON before unmarshaling.
-	resultStr := string(result)
-	switch resultStr {
-	case "true":
-		return true, nil
-	case "false":
-		return false, nil
-	case "null":
-		return nil, nil
-	}
-
-	// Try to unmarshal to a Go type
-	var unmarshaled interface{}
-	if err := json.Unmarshal(result, &unmarshaled); err != nil {
-		// If unmarshaling fails, return the raw string (matches original behavior)
-		return resultStr, nil
-	}
-	return unmarshaled, nil
-}
-
-// DocQuery returns documents matching field conditions.
-// Delegates to DocumentStoreService.
-func (s *CanonicalDBService) DocQuery(collection string, filters []models.DocFilter, orderBy string, limit int) ([]*models.Document, error) {
-	return s.docStore.DocQuery(collection, filters, orderBy, limit)
-}
-
-// scanDocument parses a raw SQLite row into a typed Document.
-// This is the single point where TEXT timestamps are converted to time.Time.
-func scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr string) (*models.Document, error) {
-	createdAt, err := sqliteutil.ParseTimestamp(createdAtStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid created_at for document %s/%s: %w", collection, id, err)
-	}
-	updatedAt, err := sqliteutil.ParseTimestamp(updatedAtStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid updated_at for document %s/%s: %w", collection, id, err)
-	}
-
-	var data map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(dataJSON), &data); err != nil {
-		return nil, fmt.Errorf("invalid data JSON for document %s/%s: %w", collection, id, err)
-	}
-	if data == nil {
-		data = make(map[string]json.RawMessage)
-	}
-
-	return &models.Document{
-		ID:         id,
-		Collection: collection,
-		Data:       data,
-		CreatedAt:  createdAt,
-		UpdatedAt:  updatedAt,
-	}, nil
-}
-
-// =============================================================================
-// Signer Store - trusted L2 signer management (delegates to SignerStoreService)
-// =============================================================================
-
-// GetTrustedSigner retrieves an L2 signer public key from the database.
-// Delegates to SignerStoreService.
-func (s *CanonicalDBService) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
-	return s.signerStore.GetTrustedSigner(keyID)
-}
-
-// AddTrustedSigner adds or updates a trusted L2 signer in the database.
-// Delegates to SignerStoreService.
-func (s *CanonicalDBService) AddTrustedSigner(signer models.TrustedSigner) error {
-	return s.signerStore.AddTrustedSigner(signer)
-}
-
-// ListTrustedSigners returns all trusted L2 signers in the database.
-// Delegates to SignerStoreService.
-func (s *CanonicalDBService) ListTrustedSigners() ([]models.TrustedSigner, error) {
-	return s.signerStore.ListTrustedSigners()
-}
-
-// DeleteTrustedSigner removes a trusted L2 signer from the database.
-// Delegates to SignerStoreService.
-func (s *CanonicalDBService) DeleteTrustedSigner(keyID string) (bool, error) {
-	return s.signerStore.DeleteTrustedSigner(keyID)
-}
-
-// HasTrustedSigners returns true if at least one trusted L2 signer is provisioned.
-// Delegates to SignerStoreService.
-func (s *CanonicalDBService) HasTrustedSigners() (bool, error) {
-	return s.signerStore.HasTrustedSigners()
-}
-
-// =============================================================================
-// App Policy Store - app policy retrieval (delegates to AppPolicyStoreService)
-// =============================================================================
-
-// GetAppPolicy retrieves an AppPolicy by app_id from the database.
-// Delegates to AppPolicyStoreService.
-func (s *CanonicalDBService) GetAppPolicy(appID string) (*models.AppPolicy, error) {
-	return s.appPolicyStore.GetAppPolicy(appID)
-}
-
-// =============================================================================
-// KV Store with TTL
-// =============================================================================
-
-// KVGet retrieves a value by key. Returns ("", false) if not found or expired.
-func (s *CanonicalDBService) KVGet(key string) (string, bool) {
-	// Use a single query that filters out expired keys, avoiding the need
-	// for a separate lazy-delete goroutine (which risked deadlocks).
-	// Expired entries are cleaned up by RunTTLCleanup instead.
-	var value string
-	err := s.db.QueryRowWithRetry(
-		"SELECT value FROM kv_store WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)",
-		key, sqliteutil.NowTimestamp(),
-	).Scan(&value)
-	if err != nil {
-		return "", false
-	}
-	return value, true
-}
-
-// KVSet stores a key/value pair. ttlSeconds <= 0 means no expiration.
-func (s *CanonicalDBService) KVSet(key, value string, ttlSeconds int) error {
-	now := sqliteutil.NowTimestamp()
-	var expiresAt *string
-	if ttlSeconds > 0 {
-		exp := sqliteutil.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
-		expiresAt = &exp
-	}
-
-	_, err := s.db.ExecWithRetry(
-		`INSERT INTO kv_store (key, value, created_at, expires_at)
-		 VALUES (?, ?, ?, ?)
-		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at`,
-		key, value, now, expiresAt,
-	)
-	return err
-}
-
-// KVDelete removes a key.
-func (s *CanonicalDBService) KVDelete(key string) error {
-	_, err := s.db.ExecWithRetry("DELETE FROM kv_store WHERE key = ?", key)
-	return err
-}
-
-// KVDeletePattern removes all keys matching a glob pattern (uses SQL GLOB).
-func (s *CanonicalDBService) KVDeletePattern(pattern string) (int64, error) {
-	result, err := s.db.ExecWithRetry("DELETE FROM kv_store WHERE key GLOB ?", pattern)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-// KVKeys returns all keys matching a glob pattern.
-func (s *CanonicalDBService) KVKeys(pattern string) ([]string, error) {
-	keys, err := sqliteutil.MaterializeRows(s.db,
-		"SELECT key FROM kv_store WHERE key GLOB ? AND (expires_at IS NULL OR expires_at > ?)",
-		[]interface{}{pattern, sqliteutil.NowTimestamp()},
-		func(r *sql.Rows) (string, error) {
-			var k string
-			if err := r.Scan(&k); err != nil {
-				return "", err
-			}
-			return k, nil
-		})
-	if err != nil {
-		return nil, err
-	}
-	return keys, nil
-}
-
-// KVScan returns keys matching a glob pattern using cursor-based pagination.
-// cursor is a row offset (0 = start). count is the page size (default 100).
-// Returns (nextCursor, keys, error). nextCursor == 0 means scan is complete.
-func (s *CanonicalDBService) KVScan(pattern string, cursor, count int) (int, []string, error) {
-	if count <= 0 {
-		count = 100
-	}
-	// Fetch count+1 to detect whether a next page exists
-	keys, err := sqliteutil.MaterializeRows(s.db,
-		"SELECT key FROM kv_store WHERE key GLOB ? AND (expires_at IS NULL OR expires_at > ?) ORDER BY key LIMIT ? OFFSET ?",
-		[]interface{}{pattern, sqliteutil.NowTimestamp(), count + 1, cursor},
-		func(r *sql.Rows) (string, error) {
-			var k string
-			if err := r.Scan(&k); err != nil {
-				return "", err
-			}
-			return k, nil
-		})
-	if err != nil {
-		return 0, nil, err
-	}
-
-	if len(keys) > count {
-		return cursor + count, keys[:count], nil
-	}
-	return 0, keys, nil
-}
-
-// KVExists checks if a key exists and is not expired.
-func (s *CanonicalDBService) KVExists(key string) bool {
-	_, found := s.KVGet(key)
-	return found
-}
-
-// KVTTL returns the remaining TTL in seconds for a key. -1 if no expiry, -2 if not found.
-func (s *CanonicalDBService) KVTTL(key string) int {
-	var expiresAt sql.NullString
-	err := s.db.QueryRowWithRetry(
-		"SELECT expires_at FROM kv_store WHERE key = ?", key,
-	).Scan(&expiresAt)
-	if err != nil {
-		return -2
-	}
-	if !expiresAt.Valid {
-		return -1
-	}
-	exp, err := time.Parse(time.RFC3339Nano, expiresAt.String)
-	if err != nil {
-		return -2
-	}
-	remaining := int(time.Until(exp).Seconds())
-	if remaining < 0 {
-		return -2
-	}
-	return remaining
-}
-
-// KVExpire sets a TTL on an existing key. Returns false if key not found.
-func (s *CanonicalDBService) KVExpire(key string, ttlSeconds int) bool {
-	exp := sqliteutil.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
-	result, err := s.db.ExecWithRetry(
-		"UPDATE kv_store SET expires_at = ? WHERE key = ?", exp, key,
-	)
-	if err != nil {
-		return false
-	}
-	n, _ := result.RowsAffected()
-	return n > 0
-}
-
-// SSERoute is the routing target for an SSE event row. Exactly one of the
-// three id fields MUST be non-empty. The Gateway refuses to talk about a
-// bare session id - every routing key is tagged at the type level so a
-// web_session_id can never be mis-delivered as a cli_session_id (or vice
-// versa) and a user_id (background fan-out) can never be mistaken for a
-// per-session id.
-type SSERoute struct {
-	WebSessionID string
-	CLISessionID string
-	UserID       string
-}
-
-// validate ensures exactly one routing id is set.
-func (r SSERoute) validate() error {
-	n := 0
-	if r.WebSessionID != "" {
-		n++
-	}
-	if r.CLISessionID != "" {
-		n++
-	}
-	if r.UserID != "" {
-		n++
-	}
-	switch n {
-	case 0:
-		return fmt.Errorf("sse route requires exactly one of web_session_id, cli_session_id, user_id")
-	case 1:
-		return nil
-	default:
-		return fmt.Errorf("sse route is mutually-exclusive: set exactly one of web_session_id, cli_session_id, user_id")
-	}
-}
-
-// SSEEventsAppend inserts a row into the sse_events table. The route MUST set
-// exactly one of WebSessionID, CLISessionID, UserID. The producer_id is the
-// app identity (SPIFFE ID) that produced the event for attribution.
-func (s *CanonicalDBService) SSEEventsAppend(route SSERoute, eventType, payload, producerID string) error {
-	if err := route.validate(); err != nil {
-		return err
-	}
-	now := sqliteutil.NowTimestamp()
-	_, err := s.db.ExecWithRetry(
-		"INSERT INTO sse_events (web_session_id, cli_session_id, user_id, event_type, payload, producer_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		nullIfEmpty(route.WebSessionID), nullIfEmpty(route.CLISessionID), nullIfEmpty(route.UserID), eventType, payload, nullIfEmpty(producerID), now,
-	)
-	return err
-}
-
-// nullIfEmpty returns sql.NullString{Valid: false} for empty strings so the
-// CHECK constraint on sse_events sees a NULL rather than an empty string.
-func nullIfEmpty(s string) interface{} {
-	if s == "" {
-		return nil
-	}
-	return s
-}
-
-// SSEEventsWipe deletes all rows from the sse_events table. Returns the number of rows deleted.
-func (s *CanonicalDBService) SSEEventsWipe() (int64, error) {
-	result, err := s.db.ExecWithRetry("DELETE FROM sse_events")
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-// SSEEventsCount returns the total number of rows in the sse_events table.
-func (s *CanonicalDBService) SSEEventsCount() (int64, error) {
-	var count int64
-	err := s.db.QueryRowWithRetry("SELECT COUNT(*) FROM sse_events").Scan(&count)
-	return count, err
-}
-
-// SSEEventsListSince returns up to `limit` events with id > sinceID, ordered by
-// id ascending. The route MUST set exactly one of WebSessionID, CLISessionID,
-// UserID. SSEEventsListAllSince is the admin-only "all routes" variant.
-func (s *CanonicalDBService) SSEEventsListSince(route SSERoute, sinceID int64, limit int) ([]models.SSEEventRow, error) {
-	if err := route.validate(); err != nil {
-		return nil, err
-	}
-	if limit <= 0 || limit > 1000 {
-		limit = 200
-	}
-	var query string
-	var args []interface{}
-	switch {
-	case route.WebSessionID != "":
-		query = "SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE web_session_id = ? AND id > ? ORDER BY id ASC LIMIT ?"
-		args = []interface{}{route.WebSessionID, sinceID, limit}
-	case route.CLISessionID != "":
-		query = "SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE cli_session_id = ? AND id > ? ORDER BY id ASC LIMIT ?"
-		args = []interface{}{route.CLISessionID, sinceID, limit}
-	default:
-		query = "SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT ?"
-		args = []interface{}{route.UserID, sinceID, limit}
-	}
-
-	return sqliteutil.MaterializeRows(s.db, query, args, func(r *sql.Rows) (models.SSEEventRow, error) {
-		var row models.SSEEventRow
-		var web, cli, user sql.NullString
-		if err := r.Scan(&row.ID, &web, &cli, &user, &row.EventType, &row.Payload, &row.CreatedAt); err != nil {
-			return models.SSEEventRow{}, err
-		}
-		row.WebSessionID = web.String
-		row.CLISessionID = cli.String
-		row.UserID = user.String
-		return row, nil
-	})
-}
-
-// SSEEventsListAllSince is an admin/debug helper that returns events across
-// every routing target with id > sinceID. Production paths MUST use
-// SSEEventsListSince with a typed route.
-func (s *CanonicalDBService) SSEEventsListAllSince(sinceID int64, limit int) ([]models.SSEEventRow, error) {
-	if limit <= 0 || limit > 1000 {
-		limit = 200
-	}
-	return sqliteutil.MaterializeRows(s.db,
-		"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE id > ? ORDER BY id ASC LIMIT ?",
-		[]interface{}{sinceID, limit},
-		func(r *sql.Rows) (models.SSEEventRow, error) {
-			var row models.SSEEventRow
-			var web, cli, user sql.NullString
-			if err := r.Scan(&row.ID, &web, &cli, &user, &row.EventType, &row.Payload, &row.CreatedAt); err != nil {
-				return models.SSEEventRow{}, err
-			}
-			row.WebSessionID = web.String
-			row.CLISessionID = cli.String
-			row.UserID = user.String
-			return row, nil
-		})
-}
 
 // RunTTLCleanup periodically removes expired KV entries and expired blobs.
 func (s *CanonicalDBService) RunTTLCleanup(ctx context.Context) {
@@ -945,103 +500,3 @@ func (s *CanonicalDBService) RunTTLCleanup(ctx context.Context) {
 	}
 }
 
-// =============================================================================
-// Blob Store - raw binary storage keyed by namespace + id
-// =============================================================================
-
-// BlobRecord is the metadata returned for a stored blob (data excluded).
-type BlobRecord struct {
-	ID          string
-	Namespace   string
-	Size        int64
-	ContentType string
-	CreatedAt   time.Time
-}
-
-// BlobPut stores raw bytes under namespace/id. ttlSeconds == 0 means no expiration.
-// Negative ttlSeconds means the blob is immediately expired (will never be returned by BlobGet).
-// An existing blob at the same namespace/id is replaced.
-func (s *CanonicalDBService) BlobPut(namespace, id string, data []byte, contentType string, ttlSeconds int) error {
-	now := sqliteutil.NowTimestamp()
-	var expiresAt *string
-	if ttlSeconds > 0 {
-		exp := sqliteutil.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
-		expiresAt = &exp
-	} else if ttlSeconds < 0 {
-		exp := sqliteutil.FormatTimestamp(time.Now().Add(-1 * time.Second))
-		expiresAt = &exp
-	}
-
-	_, err := s.db.ExecWithRetry(
-		`INSERT INTO blobs (namespace, id, size, content_type, data, created_at, expires_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT(namespace, id) DO UPDATE SET
-		   size         = excluded.size,
-		   content_type = excluded.content_type,
-		   data         = excluded.data,
-		   expires_at   = excluded.expires_at`,
-		namespace, id, int64(len(data)), contentType, data, now, expiresAt,
-	)
-	return err
-}
-
-// BlobGet retrieves the raw bytes and content type for a blob.
-// Returns (nil, "", false) if not found or expired.
-func (s *CanonicalDBService) BlobGet(namespace, id string) ([]byte, string, bool) {
-	var data []byte
-	var contentType string
-	err := s.db.QueryRowWithRetry(
-		"SELECT data, content_type FROM blobs WHERE namespace = ? AND id = ? AND (expires_at IS NULL OR expires_at > ?)",
-		namespace, id, sqliteutil.NowTimestamp(),
-	).Scan(&data, &contentType)
-	if err != nil {
-		return nil, "", false
-	}
-	return data, contentType, true
-}
-
-// BlobMeta retrieves metadata for a blob without loading the data.
-// Returns (nil, false) if not found or expired.
-func (s *CanonicalDBService) BlobMeta(namespace, id string) (*BlobRecord, bool) {
-	var rec BlobRecord
-	var createdAtStr string
-	err := s.db.QueryRowWithRetry(
-		"SELECT id, namespace, size, content_type, created_at FROM blobs WHERE namespace = ? AND id = ? AND (expires_at IS NULL OR expires_at > ?)",
-		namespace, id, sqliteutil.NowTimestamp(),
-	).Scan(&rec.ID, &rec.Namespace, &rec.Size, &rec.ContentType, &createdAtStr)
-	if err != nil {
-		return nil, false
-	}
-	t, err := sqliteutil.ParseTimestamp(createdAtStr)
-	if err != nil {
-		return nil, false
-	}
-	rec.CreatedAt = t
-	return &rec, true
-}
-
-// BlobDelete removes a single blob. Returns (true, nil) if deleted, (false, nil) if not found.
-func (s *CanonicalDBService) BlobDelete(namespace, id string) (bool, error) {
-	result, err := s.db.ExecWithRetry(
-		"DELETE FROM blobs WHERE namespace = ? AND id = ?",
-		namespace, id,
-	)
-	if err != nil {
-		return false, err
-	}
-	n, err := result.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	return n > 0, nil
-}
-
-// BlobDeleteNamespace removes all blobs under a namespace.
-// Returns the count of deleted blobs.
-func (s *CanonicalDBService) BlobDeleteNamespace(namespace string) (int64, error) {
-	result, err := s.db.ExecWithRetry("DELETE FROM blobs WHERE namespace = ?", namespace)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}

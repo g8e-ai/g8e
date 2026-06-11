@@ -366,3 +366,28 @@ func (s *DocumentStoreService) DocQuery(collection string, filters []models.DocF
 	}
 	return results, nil
 }
+
+// scanDocument converts raw database row data into a typed Document with native time.Time timestamps.
+func scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr string) (*models.Document, error) {
+	createdAt, err := sqliteutil.ParseTimestamp(createdAtStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse created_at: %w", err)
+	}
+	updatedAt, err := sqliteutil.ParseTimestamp(updatedAtStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse updated_at: %w", err)
+	}
+
+	var data map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(dataJSON), &data); err != nil {
+		return nil, fmt.Errorf("unmarshal document data: %w", err)
+	}
+
+	return &models.Document{
+		Collection: collection,
+		ID:         id,
+		Data:       data,
+		CreatedAt:  createdAt,
+		UpdatedAt:  updatedAt,
+	}, nil
+}

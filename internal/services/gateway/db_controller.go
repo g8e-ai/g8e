@@ -63,7 +63,7 @@ func (c *DBController) readBody(r *http.Request) ([]byte, error) {
 func (c *DBController) handleDataSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		doc, err := c.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
+		doc, err := c.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -85,9 +85,9 @@ func (c *DBController) handleDataSettings(w http.ResponseWriter, r *http.Request
 		}
 		var err2 error
 		if r.Method == http.MethodPut {
-			err2 = c.db.DocSet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
+			err2 = c.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
 		} else {
-			_, err2 = c.db.DocUpdate(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
+			_, err2 = c.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
 		}
 		if err2 != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err2.Error())
@@ -130,7 +130,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		doc, err := c.db.DocGet(collection, id)
+		doc, err := c.db.DocStore.DocGet(collection, id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -155,7 +155,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
-		if err := c.db.DocSet(collection, id, json.RawMessage(body)); err != nil {
+		if err := c.db.DocStore.DocSet(collection, id, json.RawMessage(body)); err != nil {
 			if errors.Is(err, constants.ErrDatabaseLocked) {
 				c.responder.Error(w, http.StatusServiceUnavailable, "database is locked")
 			} else {
@@ -179,7 +179,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
-		doc, err := c.db.DocUpdate(collection, id, json.RawMessage(body))
+		doc, err := c.db.DocStore.DocUpdate(collection, id, json.RawMessage(body))
 		if err != nil {
 			if errors.Is(err, constants.ErrNotFound) {
 				c.responder.Error(w, http.StatusNotFound, err.Error())
@@ -199,7 +199,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
-		deleted, err := c.db.DocDelete(collection, id)
+		deleted, err := c.db.DocStore.DocDelete(collection, id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -230,7 +230,7 @@ func (c *DBController) handleDBQuery(w http.ResponseWriter, r *http.Request, col
 		}
 	}
 
-	docs, err := c.db.DocQuery(collection, req.Filters, req.OrderBy, req.Limit)
+	docs, err := c.db.DocStore.DocQuery(collection, req.Filters, req.OrderBy, req.Limit)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -244,7 +244,7 @@ func (c *DBController) handleDBQuery(w http.ResponseWriter, r *http.Request, col
 
 func (c *DBController) handleSSEEvents(w http.ResponseWriter, r *http.Request, id string) {
 	if id == "count" && r.Method == http.MethodGet {
-		count, err := c.db.SSEEventsCount()
+		count, err := c.db.SSEStore.SSEEventsCount()
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -254,7 +254,7 @@ func (c *DBController) handleSSEEvents(w http.ResponseWriter, r *http.Request, i
 	}
 
 	if id == "" && r.Method == http.MethodDelete {
-		deleted, err := c.db.SSEEventsWipe()
+		deleted, err := c.db.SSEStore.SSEEventsWipe()
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -481,7 +481,7 @@ func (c *DBController) handleAuditReport(w http.ResponseWriter, r *http.Request)
 func (c *DBController) handleGovernanceSigners(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		signers, err := c.db.ListTrustedSigners()
+		signers, err := c.db.SignerStore.ListTrustedSigners()
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -506,7 +506,7 @@ func (c *DBController) handleGovernanceSigners(w http.ResponseWriter, r *http.Re
 			c.responder.Error(w, http.StatusBadRequest, "id and public_key_hex required")
 			return
 		}
-		if err := c.db.AddTrustedSigner(signer); err != nil {
+		if err := c.db.SignerStore.AddTrustedSigner(signer); err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -526,7 +526,7 @@ func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http
 
 	switch r.Method {
 	case http.MethodGet:
-		pubKey, err := c.db.GetTrustedSigner(id)
+		pubKey, err := c.db.SignerStore.GetTrustedSigner(id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -535,7 +535,7 @@ func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http
 			c.responder.Error(w, http.StatusNotFound, "signer not found")
 			return
 		}
-		doc, err := c.db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), id)
+		doc, err := c.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -547,7 +547,7 @@ func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http
 		c.responder.JSON(w, http.StatusOK, doc.ForWire())
 
 	case http.MethodDelete:
-		deleted, err := c.db.DeleteTrustedSigner(id)
+		deleted, err := c.db.SignerStore.DeleteTrustedSigner(id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -585,7 +585,7 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 
 	if strings.HasSuffix(path, "/_ttl") {
 		key := strings.TrimSuffix(path, "/_ttl")
-		ttl := c.db.KVTTL(key)
+		ttl := c.db.KVStore.KVTTL(key)
 		c.responder.JSON(w, http.StatusOK, models.KVTTLResponse{TTL: ttl})
 		return
 	}
@@ -605,7 +605,7 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusBadRequest, "ttl required and must be > 0")
 			return
 		}
-		ok := c.db.KVExpire(key, req.TTL)
+		ok := c.db.KVStore.KVExpire(key, req.TTL)
 		if !ok {
 			c.responder.Error(w, http.StatusNotFound, "key not found")
 			return
@@ -618,7 +618,7 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		value, ok := c.db.KVGet(key)
+		value, ok := c.db.KVStore.KVGet(key)
 		if !ok {
 			c.responder.Error(w, http.StatusNotFound, "key not found")
 			return
@@ -636,14 +636,14 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
-		if err := c.db.KVSet(key, req.Value, req.TTL); err != nil {
+		if err := c.db.KVStore.KVSet(key, req.Value, req.TTL); err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	case http.MethodDelete:
-		if err := c.db.KVDelete(key); err != nil {
+		if err := c.db.KVStore.KVDelete(key); err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -670,7 +670,7 @@ func (c *DBController) handleKVKeys(w http.ResponseWriter, r *http.Request) {
 	if req.Pattern == "" {
 		req.Pattern = "*"
 	}
-	keys, err := c.db.KVKeys(req.Pattern)
+	keys, err := c.db.KVStore.KVKeys(req.Pattern)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -700,7 +700,7 @@ func (c *DBController) handleKVScan(w http.ResponseWriter, r *http.Request) {
 	if req.Count <= 0 {
 		req.Count = 100
 	}
-	nextCursor, keys, err := c.db.KVScan(req.Pattern, req.Cursor, req.Count)
+	nextCursor, keys, err := c.db.KVStore.KVScan(req.Pattern, req.Cursor, req.Count)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -726,7 +726,7 @@ func (c *DBController) handleKVDeletePattern(w http.ResponseWriter, r *http.Requ
 		c.responder.Error(w, http.StatusBadRequest, "pattern required")
 		return
 	}
-	count, err := c.db.KVDeletePattern(req.Pattern)
+	count, err := c.db.KVStore.KVDeletePattern(req.Pattern)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -867,7 +867,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusForbidden, err.Error())
 			return
 		}
-		count, err := c.db.BlobDeleteNamespace(namespace)
+		count, err := c.db.BlobStore.BlobDeleteNamespace(namespace)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -892,7 +892,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		rec, ok := c.db.BlobMeta(namespace, blobID)
+		rec, ok := c.db.BlobStore.BlobMeta(namespace, blobID)
 		if !ok {
 			c.responder.Error(w, http.StatusNotFound, "blob not found")
 			return
@@ -952,7 +952,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := c.db.BlobPut(namespace, blobID, body, contentType, ttl); err != nil {
+		if err := c.db.BlobStore.BlobPut(namespace, blobID, body, contentType, ttl); err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -960,7 +960,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	case http.MethodGet:
-		data, contentType, ok := c.db.BlobGet(namespace, blobID)
+		data, contentType, ok := c.db.BlobStore.BlobGet(namespace, blobID)
 		if !ok {
 			c.responder.Error(w, http.StatusNotFound, "blob not found")
 			return
@@ -1005,7 +1005,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		deleted, err := c.db.BlobDelete(namespace, blobID)
+		deleted, err := c.db.BlobStore.BlobDelete(namespace, blobID)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return

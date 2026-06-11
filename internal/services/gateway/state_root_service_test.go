@@ -57,7 +57,7 @@ func TestStateRootService_InvalidateCache(t *testing.T) {
 
 	// Add a document to change state
 	docData := mustDocJSON(t, map[string]interface{}{"key": "value"})
-	err = db.DocSet("test", "doc1", docData)
+	err = db.DocStore.DocSet("test", "doc1", docData)
 	require.NoError(t, err)
 
 	// Get state root after invalidation - should recalculate
@@ -77,7 +77,7 @@ func TestStateRootService_StateChangeDetection(t *testing.T) {
 
 	// Add a document
 	docData := mustDocJSON(t, map[string]interface{}{"key": "value"})
-	err = db.DocSet("test", "doc1", docData)
+	err = db.DocStore.DocSet("test", "doc1", docData)
 	require.NoError(t, err)
 
 	// Get state root after change - should be different

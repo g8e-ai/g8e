@@ -370,7 +370,7 @@ func TestHandleAuthPasskeysRegisterChallenge(t *testing.T) {
 		user.PasskeyCredentials = []models.PasskeyCredential{{ID: []byte("existing-cred")}}
 		updatedUser, err := json.Marshal(user)
 		require.NoError(t, err)
-		c.db.DocSet("users", user.ID, updatedUser)
+		c.db.DocStore.DocSet("users", user.ID, updatedUser)
 
 		body := map[string]string{
 			"user_id":   user.ID,
@@ -479,7 +479,7 @@ func TestHandleAuthPasskeysRegisterVerify(t *testing.T) {
 		user.PasskeyCredentials = []models.PasskeyCredential{{ID: []byte("existing-cred")}}
 		updatedUser, err := json.Marshal(user)
 		require.NoError(t, err)
-		c.db.DocSet("users", user.ID, updatedUser)
+		c.db.DocStore.DocSet("users", user.ID, updatedUser)
 
 		body := map[string]string{
 			"user_id": user.ID,
