@@ -36,6 +36,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
+	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -105,6 +106,20 @@ func generateSignedJWT(t *testing.T, privKey *rsa.PrivateKey, claims map[string]
 	return signingString + "." + sigB64
 }
 
+func setupSuspendedTxService(t *testing.T, dbDir string) *storage.SuspendedTransactionService {
+	t.Helper()
+	suspendedTxConfig := &storage.SuspendedTransactionConfig{
+		DBPath:               filepath.Join(dbDir, "suspended_transactions.db"),
+		MaxDBSizeMB:          256,
+		RetentionDays:        7,
+		PruneIntervalMinutes: 30,
+	}
+	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, testutil.NewTestLogger())
+	require.NoError(t, err)
+	t.Cleanup(func() { suspendedTxService.Close() })
+	return suspendedTxService
+}
+
 func TestGateway_JWTIntegration(t *testing.T) {
 	privKey, idpServer := setupTestIdP(t)
 
@@ -168,10 +183,12 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
+	suspendedTxService := setupSuspendedTxService(t, dbDir)
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       resp,
-		SuspendedStore:  db,
+		SuspendedStore:  suspendedTxService,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
 		Posture:         string(cfg.Gateway.Posture),
 	})
@@ -324,10 +341,12 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
+	suspendedTxService := setupSuspendedTxService(t, dbDir)
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       resp,
-		SuspendedStore:  db,
+		SuspendedStore:  suspendedTxService,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
 		Posture:         string(cfg.Gateway.Posture),
 	})
@@ -495,10 +514,12 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
+	suspendedTxService := setupSuspendedTxService(t, dbDir)
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       resp,
-		SuspendedStore:  db,
+		SuspendedStore:  suspendedTxService,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
 		Posture:         string(cfg.Gateway.Posture),
 	})

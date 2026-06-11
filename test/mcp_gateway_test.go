@@ -32,17 +32,40 @@ Practical Coverage:
 
 import (
 	"bytes"
+	"context"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/execution"
+	"github.com/g8e-ai/g8e/internal/services/gateway"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
+	"github.com/g8e-ai/g8e/internal/services/pubsub"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
+	"github.com/g8e-ai/g8e/internal/testutil"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"github.com/g8e-ai/g8e/test/fixtures"
 )
 
@@ -57,7 +80,7 @@ func mustMarshal(v interface{}) json.RawMessage {
 func TestMCPGateway_EndToEnd(t *testing.T) {
 	// Create gateway fixture with default mock downstream server
 	fixture := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:         t.Name(),
+		TestName:          t.Name(),
 		AllowTestPortZero: true,
 	})
 	defer fixture.Cleanup()
@@ -178,7 +201,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 func TestMCPGateway_PayloadVariations(t *testing.T) {
 	// Create gateway fixture with default mock downstream server
 	fixture := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:         t.Name(),
+		TestName:          t.Name(),
 		AllowTestPortZero: true,
 	})
 	defer fixture.Cleanup()
@@ -412,7 +435,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	require.NoError(t, err)
 
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
-	err = ls.GetDB().AddTrustedSigner(models.TrustedSigner{
+	err = ls.GetDB().SignerStore.AddTrustedSigner(models.TrustedSigner{
 		ID:        ActuatorKeyID,
 		PublicKey: hex.EncodeToString(ActuatorPub),
 		AddedAt:   time.Now().UTC(),
@@ -446,7 +469,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, "")
 
 	// Seed platform_settings required for health check
-	ls.GetDB().DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
+	ls.GetDB().DocStore.DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -478,7 +501,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(user)
 	require.NoError(t, err)
-	ls.GetDB().DocSet(string(constants.CollectionUsers), userID, userBytes)
+	ls.GetDB().DocStore.DocSet(string(constants.CollectionUsers), userID, userBytes)
 
 	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -585,7 +608,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 
 	// Wait for operator session to be persisted in database
 	require.Eventually(t, func() bool {
-		op, err := ls.GetDB().DocGet(string(constants.CollectionOperators), regResp.OperatorID)
+		op, err := ls.GetDB().DocStore.DocGet(string(constants.CollectionOperators), regResp.OperatorID)
 		if err != nil || op == nil {
 			return false
 		}
@@ -726,4 +749,16 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 	})
+}
+
+// gatewayRejectingL3Notary is a test implementation that always rejects L3 proofs.
+type gatewayRejectingL3Notary struct{}
+
+func (gatewayRejectingL3Notary) VerifyL3Proof(_ context.Context, _ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
+	return false, nil
+}
+
+// waitForReady waits for the gateway service to be ready.
+func waitForReady(t *testing.T, ls *gateway.GatewayModeService) {
+	require.Eventually(t, func() bool { return ls.IsReady() }, 10*time.Second, 100*time.Millisecond)
 }

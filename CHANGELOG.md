@@ -11,43 +11,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Overview
 
-v1.0.12 closes the MCP agent audit trail gap (agents were executing governed tool calls with zero audit record), ships first-time scenario test coverage of the governance envelope path, and fixes two correctness bugs in the governance layer discovered while building that test coverage. This release also adds native file reading capabilities for MCP agents and improves tool naming compatibility with popular AI agents.
-
-### Added
-
-* **File Read Tool** — New `read_file` native tool for MCP agents to read files without respecting `.gitignore` patterns, enabling agents to access plan files and configuration documentation (`internal/services/mcp/file_read.go`).
-* **Audit Attribution Test Coverage** — New `internal/services/mcp/audit_attribution_test.go` verifies operator_session_id propagation from context to governance envelope for proper audit trail attribution.
-* **Scenario Test Coverage** — First-time scenario test coverage of the governance envelope path with real mTLS client, state-root binding, and receipt persistence assertions (`test/scenario/scenario_test.go`).
-* **Test Scenario CLI Command** — New `./g8e test scenario` subcommand for running Tier 3 integration tests with gateway auto-start hint (`internal/cli/cmd/test.go`).
-
-### Changed
-
-* **Shell Command Tool Renamed** — Renamed `ShellExecuteTool` to `RunShellCommandTool` for compatibility with AI agents that expect the `run_shell_command` tool name. All functions, types, and test references updated accordingly.
-* **Gateway Configuration Defaults** — `LoadGateway` now sets `MaxConcurrentTasks: 25, MaxMemoryMB: 2048` to prevent unbuffered channel blocking in execution service.
-* **Identity Binding Check** — Extracted `MatchesCLISessionOnly` check outside the `OperatorID != ""` guard in `governance_envelope.go` to properly handle CLI session auth patterns.
-* **L3 Posture Enforcement** — Added posture-aware L3 auto-approval in gateway mode for doctrine and consensus postures, preventing WebAuthn prompts for local MCP agents.
-* **Audit Store Session Auto-Creation** — `RecordEvent` in `internal/services/storage/audit_store.go` now auto-creates session rows to prevent FK race conditions and silent event drops.
-* **Rate Limiting in Gateway Mode** — Disabled rate limiting (RPS=0, Burst=0) in gateway mode since gateway is local-only.
-* **Storage Service Disable Removal** — Removed `Enabled` field and `IsEnabled()` method from all storage services (audit_store, replay_store, execution_vault, token_store, suspended_transaction_store). Storage services are now always initialized and fail-closed, ensuring audit trails cannot be disabled.
-* **Posture Validation** — Added validation in `NewGatewayService` to ensure the posture parameter is one of the valid values (doctrine, consensus, notary), providing early fail-closed validation at service construction.
-* **Architecture Consolidation** — Centralized `EnvelopeProcessor` interface in `internal/services/governance/types.go`, removing duplicate definitions from `gateway.go` and `gateway_http.go`. This eliminates unnecessary architectural abstraction while maintaining testability through the centralized interface. All test files updated to use `governance.EnvelopeProcessor`.
-
-### Removed
-
-* **Storage Service Disable Capability** — Removed the ability to disable storage services. Previously, constructors would return `(nil, nil)` when `Enabled = false`, causing downstream failures with unclear errors. All storage services now require proper initialization and fail-closed on missing dependencies.
-
-### Fixed
-
-* **MCP Agent Tool Access** — Fixed Blocker 0: Added `read_file` native tool and renamed `shell_execute` to `run_shell_command` to resolve agent tool compatibility issues.
-* **Scenario Test Timeout** — Fixed Blocker 1: Resolved `TestScenarios` 30s timeout caused by zero-value `MaxConcurrentTasks` creating unbuffered channels.
-* **Concurrency Replay Detection** — Fixed Blocker 2: Corrected identity binding check to properly handle CLI session auth patterns, fixing double 403 rejections.
-* **Receipt Nil Return** — Fixed Blocker 3: Verified operator_session_id propagation from HTTP context to governance envelope for proper audit attribution.
-* **L3 Posture for CLI Sessions** — Fixed Blocker 6: Added posture-aware L3 auto-approval so CLI sessions auto-approve without WebAuthn prompts in doctrine/consensus postures.
+v1.0.12 is a foundational refactoring release focused on security fixes, architectural cleanup, and performance improvements. This release fixes a critical governance bypass in the `read_field` tool, completes the CanonicalDBService service extraction to eliminate delegation wrappers, consolidates duplicate interface definitions, adds auth caching for performance, and updates documentation to reflect the new architecture.
 
 ### Security
 
-* **Audit Trail Completeness** — MCP agent tool calls now generate audit events with proper operator/session ID attribution, closing the audit trail gap.
-* **Identity Binding Validation** — Improved identity binding verification to prevent session hopping and ensure proper SPIFFE ID validation.
+* **Fixed `read_field` Governance Bypass** — The `read_field` tool previously bypassed L4 Warden replay-protection and L5 Actuator signed receipt generation by handling execution before the full governance pipeline. Now routes through `processGatewayTransaction()` and `ProcessEnvelope()` like all other tools, ensuring replay protection applies and signed receipts are generated for all reads.
+* **Removed Double-Auditing for Native Tools** — Native tools were producing two audit records (a raw `auditStore.RecordEvent` plus the L5 signed receipt). Removed the raw event so native tools produce exactly one canonical audit record per call (the L5 receipt).
+
+### Architecture
+
+* **Completed CanonicalDBService Service Extraction** — Reduced `gateway_db.go` from 1759 lines to 478 lines (lifecycle-only code). All domain logic extracted to dedicated service files with no delegation wrappers:
+  - `DocumentStoreService` — Document CRUD operations (implements `TransactionAuditStore`)
+  - `AppPolicyStoreService` — App policy retrieval (implements `AppPolicyStore`)
+  - `SignerStoreService` — Trusted signer CRUD (implements `SignerStore`)
+  - `StateRootService` — State merkle root calculation with caching (implements `StateRootProvider`)
+  - `ReplayStoreService` — Nonce replay protection (implements `ReplayStore`)
+  - `KVStoreService` — TTL-aware ephemeral state with GLOB pattern scanning
+  - `SSEEventService` — Server-Sent Events fan-out
+  - `BlobStoreService` — Binary persistence for attachments and certificate material
+* **Consolidated SuspendedTransactionStore Interface** — Removed duplicate `SuspendedTransactionStore` interface definition from `mcp/gateway.go`. Both gateway and outbound modes now use the canonical `interfaces.SuspendedTransactionStore` from the `interfaces` package.
+* **Migrated Gateway Mode to `storage.SuspendedTransactionService`** — Gateway mode now uses `storage.SuspendedTransactionService` for L3 approval workflow, consistent with outbound mode. `auth_controller.go` holds the `SuspendedTransactionStore` interface reference instead of coupling to the concrete `CanonicalDBService` type.
+* **Delegated Maintenance Loop** — `CanonicalDBService.RunMaintenance` now delegates to extracted services (`KVStore.RunMaintenance()`, `BlobStore.RunMaintenance()`, `ReplayStore.CleanupExpiredNonces()`) instead of direct SQL operations.
+
+### Performance
+
+* **Auth Caching** — Added `sync.Map`-based cache to `AuthService` for user lookups with 5-minute TTL. Wrapped user lookups in `ValidateOperatorSession`, `handleCLIAuth`, `WebSessionAuth`, and `JWTAuthMiddleware`. Added cache invalidation hooks in `UserService.Disable` and `UserService.DeleteUser`. Benchmark results: ~40-116ns operations (far below 5ms target).
+
+### Code Quality
+
+* **Removed Unused Code** — Removed unused `sessionCache` field and related methods from `AuthService` (only user cache is used). Removed unused `cachedStateRoot` and `cachedStateVersion` fields from `CanonicalDBService` (state root caching moved to `StateRootService`).
+* **Fixed Lint Issues** — Fixed all `golangci-lint` issues including error return value checks for `json.NewEncoder.Encode` calls and formatting issues across modified files.
+
+### Testing
+
+* **Integration Test Updates** — Updated all integration tests to use extracted service fields directly instead of removed delegation wrapper methods. Fixed test infrastructure to use `storage.SuspendedTransactionService` instead of fake implementations.
+* **Governance Pipeline Verification** — Verified that all tools (native, `read_field`, and downstream) pass through the full L1-L5 governance pipeline with proper replay protection and signed receipt generation.
+
+### Documentation
+
+* **Updated `docs/architecture/gateway.md`** — Added entries for all 8 extracted services (DocumentStore, AppPolicyStore, SignerStore, StateRoot, ReplayStore, KVStore, SSEEvent, BlobStore) and SuspendedTransactionStore to the Implementation Reference table.
+* **Updated `docs/devs/codemap.md`** — Updated GatewayModeService dependency tree to reflect extracted service architecture with no delegation wrappers. Updated Data Handling Convergence section to document direct field access pattern. Updated Shared Interface Implementations to remove CanonicalDBService (no longer implements interfaces). Updated Critical Data Flows to reflect consistent use of `storage.SuspendedTransactionService` in both modes.
 
 ---
 

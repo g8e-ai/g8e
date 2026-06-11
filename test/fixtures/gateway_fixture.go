@@ -70,9 +70,9 @@ type GatewayFixture struct {
 
 // GatewayFixtureOptions configures the gateway fixture.
 type GatewayFixtureOptions struct {
-	TestName         string
-	Posture          config.GatewayPosture
-	DownstreamURL    string // If empty, creates a mock server
+	TestName          string
+	Posture           config.GatewayPosture
+	DownstreamURL     string // If empty, creates a mock server
 	AllowTestPortZero bool
 }
 
@@ -115,7 +115,10 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 			var req struct {
 				Method string `json:"method"`
 			}
-			json.NewDecoder(r.Body).Decode(&req)
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 
 			w.Header().Set("Content-Type", "application/json")
 			switch req.Method {
@@ -125,28 +128,36 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 					ID:      1,
 					Result:  mustMarshal(mcp.ToolsListResult{Tools: []mcp.Tool{{Name: "echo", Description: "echoes input"}}}),
 				}
-				json.NewEncoder(w).Encode(resp)
+				if err := json.NewEncoder(w).Encode(resp); err != nil {
+					t.Logf("Failed to encode response: %v", err)
+				}
 			case "tools/call":
 				resp := mcp.JSONRPCResponse{
 					JSONRPC: "2.0",
 					ID:      1,
 					Result:  mustMarshal(mcp.CallToolResult{Content: []mcp.TextContent{{Type: "text", Text: "mcp says hello"}}}),
 				}
-				json.NewEncoder(w).Encode(resp)
+				if err := json.NewEncoder(w).Encode(resp); err != nil {
+					t.Logf("Failed to encode response: %v", err)
+				}
 			case "resources/list":
 				resp := mcp.JSONRPCResponse{
 					JSONRPC: "2.0",
 					ID:      1,
 					Result:  mustMarshal(mcp.ListResourcesResult{Resources: []mcp.Resource{{URI: "file:///test.txt", Name: "test.txt"}}}),
 				}
-				json.NewEncoder(w).Encode(resp)
+				if err := json.NewEncoder(w).Encode(resp); err != nil {
+					t.Logf("Failed to encode response: %v", err)
+				}
 			case "prompts/list":
 				resp := mcp.JSONRPCResponse{
 					JSONRPC: "2.0",
 					ID:      1,
 					Result:  mustMarshal(mcp.ListPromptsResult{Prompts: []mcp.Prompt{{Name: "test-prompt", Description: "A test prompt"}}}),
 				}
-				json.NewEncoder(w).Encode(resp)
+				if err := json.NewEncoder(w).Encode(resp); err != nil {
+					t.Logf("Failed to encode response: %v", err)
+				}
 			}
 		}))
 		downstreamURL = downstreamServer.URL
@@ -185,7 +196,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 
 	// Add Actuator key to SignerStore so Implicit L2 signatures from the gateway are trusted
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
-	err = ls.GetDB().AddTrustedSigner(models.TrustedSigner{
+	err = ls.GetDB().SignerStore.AddTrustedSigner(models.TrustedSigner{
 		ID:        ActuatorKeyID,
 		PublicKey: hex.EncodeToString(ActuatorPub),
 		AddedAt:   time.Now().UTC(),
@@ -219,11 +230,16 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamURL)
 
 	// Seed platform_settings required for health check
-	ls.GetDB().DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
+	err = ls.GetDB().DocStore.DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
+	require.NoError(t, err)
 
 	// Start the gateway service
 	ctx, cancel := context.WithCancel(context.Background())
-	go ls.Start(ctx)
+	go func() {
+		if err := ls.Start(ctx); err != nil {
+			t.Logf("gateway start error: %v", err)
+		}
+	}()
 
 	// Wait for the gateway service to be ready
 	require.Eventually(t, func() bool { return ls.IsReady() }, 10*time.Second, 100*time.Millisecond)
@@ -290,13 +306,13 @@ func mustMarshal(v interface{}) json.RawMessage {
 
 // ClientIdentity represents an enrolled client with certificates.
 type ClientIdentity struct {
-	UserID        string
-	OrganizationID string
-	PrivateKey    []byte
-	Certificate   []byte
-	CLIPrivateKey []byte
-	CLICertificate string
-	OperatorID    string
+	UserID            string
+	OrganizationID    string
+	PrivateKey        []byte
+	Certificate       []byte
+	CLIPrivateKey     []byte
+	CLICertificate    string
+	OperatorID        string
 	OperatorSessionID string
 }
 
@@ -325,7 +341,8 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 	}
 	userBytes, err := json.Marshal(user)
 	require.NoError(t, err)
-	f.Service.GetDB().DocSet(string(constants.CollectionUsers), userID, userBytes)
+	err = f.Service.GetDB().DocStore.DocSet(string(constants.CollectionUsers), userID, userBytes)
+	require.NoError(t, err)
 
 	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -416,12 +433,14 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, hResp.StatusCode)
 	var regResp models.OperatorRegistrationResponse
-	json.NewDecoder(hResp.Body).Decode(&regResp)
+	if err := json.NewDecoder(hResp.Body).Decode(&regResp); err != nil {
+		t.Fatalf("failed to decode registration response: %v", err)
+	}
 	hResp.Body.Close()
 
 	// Wait for operator session to be persisted in database
 	require.Eventually(t, func() bool {
-		op, err := f.Service.GetDB().DocGet(string(constants.CollectionOperators), regResp.OperatorID)
+		op, err := f.Service.GetDB().DocStore.DocGet(string(constants.CollectionOperators), regResp.OperatorID)
 		if err != nil || op == nil {
 			return false
 		}
@@ -438,13 +457,13 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 	}, 5*time.Second, 100*time.Millisecond, "Operator session not persisted")
 
 	return &ClientIdentity{
-		UserID:           userID,
-		OrganizationID:   organizationID,
-		PrivateKey:      privBytes,
-		Certificate:     []byte(regResp.OperatorCert),
-		CLIPrivateKey:    privBytes,
-		CLICertificate:  regResp.OperatorCert,
-		OperatorID:      regResp.OperatorID,
+		UserID:            userID,
+		OrganizationID:    organizationID,
+		PrivateKey:        privBytes,
+		Certificate:       []byte(regResp.OperatorCert),
+		CLIPrivateKey:     privBytes,
+		CLICertificate:    regResp.OperatorCert,
+		OperatorID:        regResp.OperatorID,
 		OperatorSessionID: regResp.OperatorSessionID,
 	}
 }

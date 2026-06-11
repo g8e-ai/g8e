@@ -61,11 +61,21 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
     └── storage.TokenStoreService
 
 GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
-├── gateway.CanonicalDBService [SHARED]
+├── gateway.CanonicalDBService [SHARED] (lifecycle only: Open, Close, Wait, GetDB, GetVault, schema/migrations, maintenance loop)
 │   ├── sqliteutil.DB
 │   ├── storage.SQLAuditStore
 │   ├── vault.Vault
+│   ├── gateway.DocumentStoreService (extracted field)
+│   ├── gateway.AppPolicyStoreService (extracted field)
+│   ├── gateway.SignerStoreService (extracted field)
+│   ├── gateway.StateRootService (extracted field)
+│   ├── gateway.ReplayStoreService (extracted field)
+│   ├── gateway.KVStoreService (extracted field)
+│   ├── gateway.SSEEventService (extracted field)
+│   ├── gateway.BlobStoreService (extracted field)
 │   └── keystore (embedded in schema)
+├── storage.SuspendedTransactionService (for L3 approval workflow)
+│   └── sqliteutil.DB
 ├── gateway.GatewayWebSocketHandler
 ├── gateway.AuthService
 │   ├── gateway.CanonicalDBService [SHARED]
@@ -100,17 +110,21 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ├── gateway.AppEnrollmentService
 │   ├── gateway.CanonicalDBService [SHARED]
 │   └── gateway.PKIAuthority
-├── gateway.SignerStoreService
-│   ├── gateway.DocumentStoreService
+├── gateway.SignerStoreService (implements governance.SignerStore)
 │   └── sqliteutil.DB
-├── gateway.AppPolicyStoreService
-│   ├── gateway.DocumentStoreService
+├── gateway.AppPolicyStoreService (implements governance.AppPolicyStore)
 │   └── sqliteutil.DB
-├── gateway.ReplayStoreService
+├── gateway.ReplayStoreService (implements governance.ReplayStore)
 │   └── sqliteutil.DB
-├── gateway.DocumentStoreService
+├── gateway.DocumentStoreService (implements governance.TransactionAuditStore)
 │   └── sqliteutil.DB
-├── gateway.StateRootService
+├── gateway.StateRootService (implements governance.StateRootProvider)
+│   └── sqliteutil.DB
+├── gateway.KVStoreService (TTL-aware ephemeral state)
+│   └── sqliteutil.DB
+├── gateway.SSEEventService (Server-Sent Events)
+│   └── sqliteutil.DB
+├── gateway.BlobStoreService (Binary persistence)
 │   └── sqliteutil.DB
 ├── gateway.InvitationService
 │   └── gateway.CanonicalDBService [SHARED]
@@ -130,7 +144,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   └── response.Writer
 ├── mcp.GatewayService [SHARED]
 │   ├── response.Writer
-│   └── gateway.CanonicalDBService (as SuspendedTransactionStore) [SHARED]
+│   └── storage.SuspendedTransactionService (as interfaces.SuspendedTransactionStore) [SHARED]
 └── response.Writer
 ```
 
@@ -141,16 +155,19 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **Shared services**: `mcp.GatewayService` (used in both modes for MCP/A2A protocol handling), `CanonicalDBService` (used in both modes for state root calculation - full service in gateway mode, state root calculation only in outbound mode)
 
 ### Data Handling Convergence
-- **`gateway.CanonicalDBService`** is the canonical SQLite root for gateway mode; it embeds `storage.SQLAuditStore` and `vault.Vault`. In outbound mode, it is used only for state root calculation and provides the shared vault instance.
-- **`gateway.DocumentStoreService`** provides collection/ID-based document CRUD operations for gateway mode (delegates to CanonicalDBService).
-- **`gateway.StateRootService`** provides state merkle root calculation with caching for gateway mode (delegates to CanonicalDBService).
-- **`gateway.SignerStoreService`** provides trusted signer CRUD operations for gateway mode (implements governance.SignerStore).
-- **`gateway.AppPolicyStoreService`** provides app policy retrieval for gateway mode (implements governance.AppPolicyStore).
-- **`gateway.ReplayStoreService`** provides nonce replay protection for gateway mode (implements governance.ReplayStore).
+- **`gateway.CanonicalDBService`** is the canonical SQLite root for gateway mode; it now contains only lifecycle code (Open, Close, Wait, GetDB, GetVault, schema/migrations, maintenance loop). All domain logic has been extracted to dedicated service fields. In outbound mode, it is used only for state root calculation and provides the shared vault instance.
+- **`gateway.DocumentStoreService`** provides collection/ID-based document CRUD operations for gateway mode (implements governance.TransactionAuditStore). Callers access it directly via the `DocStore` field on CanonicalDBService - no delegation wrappers.
+- **`gateway.StateRootService`** provides state merkle root calculation with caching for gateway mode (implements governance.StateRootProvider). Callers access it directly via the `StateRootSvc` field on CanonicalDBService - no delegation wrappers.
+- **`gateway.SignerStoreService`** provides trusted signer CRUD operations for gateway mode (implements governance.SignerStore). Callers access it directly via the `SignerStore` field on CanonicalDBService - no delegation wrappers.
+- **`gateway.AppPolicyStoreService`** provides app policy retrieval for gateway mode (implements governance.AppPolicyStore). Callers access it directly via the `AppPolicyStore` field on CanonicalDBService - no delegation wrappers.
+- **`gateway.ReplayStoreService`** provides nonce replay protection for gateway mode (implements governance.ReplayStore). Callers access it directly via the `ReplayStore` field on CanonicalDBService - no delegation wrappers.
+- **`gateway.KVStoreService`** provides TTL-aware ephemeral state with GLOB pattern scanning for gateway mode. Callers access it directly via the `KVStore` field on CanonicalDBService - no delegation wrappers.
+- **`gateway.SSEEventService`** provides Server-Sent Events fan-out for gateway mode. Callers access it directly via the `SSEStore` field on CanonicalDBService - no delegation wrappers.
+- **`gateway.BlobStoreService`** provides binary persistence for attachments and certificate material for gateway mode. Callers access it directly via the `BlobStore` field on CanonicalDBService - no delegation wrappers.
+- **`storage.SuspendedTransactionService`** is the L3 approval workflow store used consistently in both gateway and outbound modes (implements interfaces.SuspendedTransactionStore).
 - **`gateway.InvitationService`** handles user invitations for gateway mode.
 - **`storage.ExecutionVaultService`** is the execution log and file diff storage for outbound mode.
 - **`storage.TokenStoreService`** is the Sentinel token persistence store for outbound mode.
-- **`storage.SuspendedTransactionService`** is the L3 approval workflow store for outbound mode.
 - **`storage.SQLAuditStore`** is shared by both modes and provides the SQL-based audit storage foundation.
 - **`vault.Vault`** is shared across all storage services in outbound mode (reused from CanonicalDBService).
 
@@ -167,13 +184,13 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **L5**: `governance.L5Actuator` (execution boundary, receipt signing)
 
 ### Shared Interface Implementations
-- `gateway.CanonicalDBService` implements: `governance.ReplayStore`, `governance.StateRootProvider`, `governance.TransactionAuditStore`, `governance.SignerStore`, `governance.AppPolicyStore`, `governance.SuspendedTransactionStore`.
 - `gateway.SignerStoreService` implements: `governance.SignerStore` (gateway mode dedicated implementation).
 - `gateway.AppPolicyStoreService` implements: `governance.AppPolicyStore` (gateway mode dedicated implementation).
 - `gateway.ReplayStoreService` implements: `governance.ReplayStore` (gateway mode dedicated implementation).
 - `gateway.StateRootService` implements: `governance.StateRootProvider` (gateway mode dedicated implementation).
+- `gateway.DocumentStoreService` implements: `governance.TransactionAuditStore` (gateway mode dedicated implementation).
 - `storage.TokenStoreService` implements: `interfaces.TokenStore`.
-- `storage.SuspendedTransactionService` implements: `governance.SuspendedTransactionStore`.
+- `storage.SuspendedTransactionService` implements: `interfaces.SuspendedTransactionStore` (used in both gateway and outbound modes).
 - `governance.FilesystemSignerStore` implements: `governance.SignerStore` (used in outbound mode).
 - `governance.outboundL3Notary` implements: `governance.L3Notary` (used in outbound mode).
 
@@ -190,7 +207,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 | Command execution results | `ExecutionService` → `CommandService` → `PubSubResultsService` → Pub/Sub channel |
 | Audit events | `CommandService` / `FileOpsService` → `SQLAuditStore` → SQLite |
 | File mutations | `FileEditService` → `GitLedgerService` → git commit |
-| Suspended transactions | `L4Warden` → `SuspendedTransactionService` (outbound) or `CanonicalDBService` (gateway) |
+| Suspended transactions | `L4Warden` → `storage.SuspendedTransactionService` (consistent in both gateway and outbound modes) |
 | Action receipts | `L5Actuator` → `SQLAuditStore` (receipts table) + signed return |
 
 ## Test Infrastructure (Not Production)

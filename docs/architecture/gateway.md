@@ -289,7 +289,16 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 |---|---|
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | Gateway mode entry | `internal/services/gateway/gateway_service.go:543` (`GatewayModeService.Start`) |
-| Coordination Store | `internal/services/gateway/gateway_db.go` |
+| Coordination Store (lifecycle) | `internal/services/gateway/gateway_db.go` |
+| Document Store | `internal/services/gateway/document_store_service.go` |
+| App Policy Store | `internal/services/gateway/app_policy_store_service.go` |
+| Signer Store | `internal/services/gateway/signer_store_service.go` |
+| State Root Service | `internal/services/gateway/state_root_service.go` |
+| Replay Store | `internal/services/gateway/replay_store_service.go` |
+| KV Store | `internal/services/gateway/kv_store_service.go` |
+| SSE Event Store | `internal/services/gateway/sse_event_service.go` |
+| Blob Store | `internal/services/gateway/blob_store_service.go` |
+| Suspended Transaction Store | `internal/services/storage/suspended_transaction_service.go` |
 | Pub/Sub broker | `internal/services/gateway/gateway_pubsub.go` |
 | L1 Doctrine | `internal/services/governance/l1_doctrine.go` |
 | L2 Consensus | `internal/services/governance/l2_consensus.go` |

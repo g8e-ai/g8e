@@ -86,10 +86,6 @@ type CanonicalDBService struct {
 	wg      sync.WaitGroup
 	ctx     context.Context
 	cancel  context.CancelFunc
-
-	// State root caching to avoid full table scans
-	cachedStateRoot    string
-	cachedStateVersion int64
 }
 
 // OpenCanonicalDBService opens (or creates) the unified SQLite database.

@@ -1095,8 +1095,8 @@ func TestNativeToolSingleAudit(t *testing.T) {
 		fieldPathRegistry: registry,
 		nativeToolHandler: nativeHandler,
 		// auditStore left nil - if double-audit code existed, this would cause a nil pointer panic
-		maxPayloadBytes:   10 * 1024 * 1024,
-		posture:           "doctrine",
+		maxPayloadBytes: 10 * 1024 * 1024,
+		posture:         "doctrine",
 	}
 
 	// Execute a native tool call through the gateway

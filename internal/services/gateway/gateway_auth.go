@@ -134,8 +134,8 @@ func (e *AuthError) Is(target error) bool {
 
 // cacheEntry represents a cached value with expiration time.
 type cacheEntry struct {
-	value      interface{}
-	expiresAt  time.Time
+	value     interface{}
+	expiresAt time.Time
 }
 
 // AuthService handles authentication for the Gateway service.
@@ -160,8 +160,7 @@ type AuthService struct {
 	limiters   map[string]*rate.Limiter
 
 	// Auth caching (5-minute TTL)
-	userCache    sync.Map // userID -> *cacheEntry[*models.User]
-	sessionCache sync.Map // sessionID -> *cacheEntry[*models.Document]
+	userCache sync.Map // userID -> *cacheEntry[*models.User]
 }
 
 // NewAuthService creates a new AuthService.
@@ -223,41 +222,6 @@ func (s *AuthService) invalidateUserCache(userID string) {
 // Call this after user status changes (disable, delete, etc.) to ensure cache consistency.
 func (s *AuthService) InvalidateUserCache(userID string) {
 	s.invalidateUserCache(userID)
-}
-
-// getCachedSession retrieves a session document from cache if valid.
-func (s *AuthService) getCachedSession(sessionID string) *models.Document {
-	if sessionID == "" {
-		return nil
-	}
-	entry, ok := s.sessionCache.Load(sessionID)
-	if !ok {
-		return nil
-	}
-	ce := entry.(*cacheEntry)
-	if time.Now().After(ce.expiresAt) {
-		s.sessionCache.Delete(sessionID)
-		return nil
-	}
-	return ce.value.(*models.Document)
-}
-
-// cacheSession stores a session document in cache with 5-minute TTL.
-func (s *AuthService) cacheSession(sessionID string, doc *models.Document) {
-	if sessionID == "" || doc == nil {
-		return
-	}
-	s.sessionCache.Store(sessionID, &cacheEntry{
-		value:     doc,
-		expiresAt: time.Now().Add(5 * time.Minute),
-	})
-}
-
-// invalidateSessionCache removes a session from cache.
-func (s *AuthService) invalidateSessionCache(sessionID string) {
-	if sessionID != "" {
-		s.sessionCache.Delete(sessionID)
-	}
 }
 
 // ValidateOperatorSession checks if a session ID is valid and returns the Operator document.

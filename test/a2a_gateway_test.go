@@ -143,7 +143,7 @@ func setupA2AGatewayTest(t *testing.T, testName string, downstreamHandler http.H
 	require.NoError(t, err)
 
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
-	err = ls.GetDB().AddTrustedSigner(models.TrustedSigner{
+	err = ls.GetDB().SignerStore.AddTrustedSigner(models.TrustedSigner{
 		ID:        ActuatorKeyID,
 		PublicKey: hex.EncodeToString(ActuatorPub),
 		AddedAt:   time.Now().UTC(),
@@ -177,7 +177,7 @@ func setupA2AGatewayTest(t *testing.T, testName string, downstreamHandler http.H
 	mcpGateway.SetA2ADependencies(downstreamServer.URL)
 
 	// Seed platform_settings required for health check
-	ls.GetDB().DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
+	ls.GetDB().DocStore.DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go ls.Start(ctx)
@@ -238,7 +238,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(user)
 	require.NoError(t, err)
-	ctx.ls.GetDB().DocSet(string(constants.CollectionUsers), userID, userBytes)
+	ctx.ls.GetDB().DocStore.DocSet(string(constants.CollectionUsers), userID, userBytes)
 
 	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -431,7 +431,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(user)
 	require.NoError(t, err)
-	ctx.ls.GetDB().DocSet(string(constants.CollectionUsers), userID, userBytes)
+	ctx.ls.GetDB().DocStore.DocSet(string(constants.CollectionUsers), userID, userBytes)
 
 	// Generate CSR for client certificate using P-256
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -778,7 +778,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(user)
 	require.NoError(t, err)
-	ctx.ls.GetDB().DocSet(string(constants.CollectionUsers), userID, userBytes)
+	ctx.ls.GetDB().DocStore.DocSet(string(constants.CollectionUsers), userID, userBytes)
 
 	// Generate CSR for client certificate using P-256
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
