@@ -111,6 +111,10 @@ type CommandServiceConfig struct {
 	TransactionAudit  governance.TransactionAuditStore
 	SignerStore       governance.SignerStore
 	AppPolicyStore    governance.AppPolicyStore
+	// FieldReader backs the MCP gateway's read_field operation. Distinct from
+	// TransactionAudit so the read capability is not smuggled through the
+	// audit-store interface (which only exposes DocSet).
+	FieldReader mcp.FieldReader
 
 	// Actuator configuration
 	ActuatorSigningKey ed25519.PrivateKey
@@ -271,6 +275,26 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, se
 	if rs.mcpGateway != nil {
 		rs.mcpGateway.SetDependencies(rs, c.StateRootProvider, c.ActuatorSigningKey, c.ActuatorKeyID, c.Config.Gateway.MCPDownstreamURL)
 		rs.mcpGateway.SetA2ADependencies(c.Config.Gateway.A2ADownstreamURL)
+		
+		// Set public base URL for L3 approval links
+		publicBaseURL := c.Config.Gateway.PublicBaseURL
+		if publicBaseURL == "" {
+			publicBaseURL = fmt.Sprintf("https://localhost:%d", c.Config.Gateway.HTTPSPort)
+		}
+		rs.mcpGateway.SetPublicBaseURL(publicBaseURL)
+		
+		// Set audit logger for field read operations
+		if c.AuditStore != nil {
+			rs.mcpGateway.SetAuditLogger(&pubsubAuditLogger{store: c.AuditStore, logger: c.Logger})
+		}
+		
+		// Set DB service for read_field operations
+		if c.FieldReader != nil {
+			rs.mcpGateway.SetDBService(c.FieldReader)
+		}
+		
+		// Set session validator for L3 authorization
+		rs.mcpGateway.SetSessionValidator(rs)
 	}
 
 	var signerStoreType, l4wardenType string
@@ -875,6 +899,38 @@ func (rs *OperatorPubSubService) handleEvalAnswerRequestSync(ctx context.Context
 // SendAutomaticHeartbeat publishes an automatic heartbeat immediately.
 func (rs *OperatorPubSubService) SendAutomaticHeartbeat() {
 	rs.heartbeat.SendAutomatic()
+}
+
+// pubsubAuditLogger implements mcp.AuditLogger using the SQLAuditStore so that
+// read_field tool calls produce audit records in operator mode.
+type pubsubAuditLogger struct {
+	store  *storage.SQLAuditStore
+	logger *slog.Logger
+}
+
+func (l *pubsubAuditLogger) LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value interface{}) error {
+	event := &storage.Event{
+		OperatorSessionID: operatorSessionID,
+		Timestamp:         time.Now().UTC(),
+		Type:              constants.EventOperatorFieldReadRequested,
+		ContentText:       fmt.Sprintf("%s/%s.%s", collection, documentID, fieldPath),
+		CommandStdout:     fmt.Sprintf("%v", value),
+	}
+	if _, err := l.store.RecordEvent(event); err != nil {
+		l.logger.Warn("Failed to record field read in audit store", "error", err,
+			"session", operatorSessionID, "collection", collection, "field", fieldPath)
+		return err
+	}
+	return nil
+}
+
+// ValidateSession implements mcp.SessionValidator for operator mode.
+// In operator mode, session validation is handled by the L3Notary during
+// envelope verification, so this is a no-op that always returns true.
+func (rs *OperatorPubSubService) ValidateSession(operatorSessionID string) (bool, error) {
+	// Operator mode validates sessions via L3Notary during envelope verification
+	// This is a placeholder for the SessionValidator interface
+	return true, nil
 }
 
 // logBlockedTransaction records a blocked/rejected transaction using the ActionReceiptRecord schema.

@@ -1443,6 +1443,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		ReplayStore:         govDeps.ReplayStore,
 		StateRootProvider:   govDeps.StateRootProvider,
 		TransactionAudit:    govDeps.TransactionAudit,
+		FieldReader:         govDeps.FieldReader,
 		SignerStore:         govDeps.SignerStore,
 		AppPolicyStore:      govDeps.AppPolicyStore,
 		L3Notary:            govDeps.L3Notary,

@@ -186,11 +186,12 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:          logger,
-		Responder:       resp,
-		SuspendedStore:  suspendedTxService,
-		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
-		Posture:         string(cfg.Gateway.Posture),
+		Logger:           logger,
+		Responder:        resp,
+		SuspendedStore:   suspendedTxService,
+		ScrubbingService: nil,
+		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
+		Posture:          string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
@@ -344,11 +345,12 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:          logger,
-		Responder:       resp,
-		SuspendedStore:  suspendedTxService,
-		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
-		Posture:         string(cfg.Gateway.Posture),
+		Logger:           logger,
+		Responder:        resp,
+		SuspendedStore:   suspendedTxService,
+		ScrubbingService: nil,
+		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
+		Posture:          string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
@@ -517,11 +519,12 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:          logger,
-		Responder:       resp,
-		SuspendedStore:  suspendedTxService,
-		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
-		Posture:         string(cfg.Gateway.Posture),
+		Logger:           logger,
+		Responder:        resp,
+		SuspendedStore:   suspendedTxService,
+		ScrubbingService: nil,
+		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
+		Posture:          string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)

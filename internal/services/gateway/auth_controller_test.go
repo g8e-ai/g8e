@@ -94,11 +94,12 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	t.Cleanup(func() { suspendedTxService.Close() })
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:          logger,
-		Responder:       resp,
-		SuspendedStore:  suspendedTxService,
-		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
-		Posture:         string(cfg.Gateway.Posture),
+		Logger:           logger,
+		Responder:        resp,
+		SuspendedStore:   suspendedTxService,
+		ScrubbingService: nil,
+		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
+		Posture:          string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)

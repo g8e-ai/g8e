@@ -164,6 +164,7 @@ func setupA2AGatewayTest(t *testing.T, testName string, downstreamHandler http.H
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
+		FieldReader:        govDeps.FieldReader,
 		SignerStore:        govDeps.SignerStore,
 		L3Notary:           a2aGatewayRejectingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,

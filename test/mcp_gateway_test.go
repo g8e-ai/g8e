@@ -456,6 +456,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
+		FieldReader:        govDeps.FieldReader,
 		SignerStore:        govDeps.SignerStore,
 		L3Notary:           gatewayRejectingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,

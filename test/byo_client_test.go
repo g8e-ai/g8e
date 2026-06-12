@@ -104,6 +104,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
+		FieldReader:        govDeps.FieldReader,
 		SignerStore:        govDeps.SignerStore,
 		L3Notary:           nil, // L3 verified via mTLS certificate fingerprint in CLIL3Notary
 		ActuatorSigningKey: ActuatorPriv,

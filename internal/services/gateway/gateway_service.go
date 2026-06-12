@@ -40,6 +40,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/network"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 )
 
@@ -157,12 +158,17 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		return nil, fmt.Errorf("failed to initialize suspended transaction service: %w", err)
 	}
 
+	// Initialize ScrubbingService for data scrubbing (enabled by default)
+	scrubbingConfig := scrubbing.DefaultConfig()
+	scrubbingService := scrubbing.NewScrubbingService(scrubbingConfig, logger, nil)
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:          logger,
-		Responder:       res,
-		SuspendedStore:  suspendedTxService,
-		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
-		Posture:         string(cfg.Gateway.Posture),
+		Logger:           logger,
+		Responder:        res,
+		SuspendedStore:   suspendedTxService,
+		ScrubbingService: scrubbingService,
+		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
+		Posture:          string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize MCP gateway: %w", err)
@@ -318,12 +324,17 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 		return nil, fmt.Errorf("failed to initialize suspended transaction service: %w", err)
 	}
 
+	// Initialize ScrubbingService for data scrubbing (enabled by default)
+	scrubbingConfig := scrubbing.DefaultConfig()
+	scrubbingService := scrubbing.NewScrubbingService(scrubbingConfig, logger, nil)
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:          logger,
-		Responder:       res,
-		SuspendedStore:  suspendedTxService,
-		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
-		Posture:         string(cfg.Gateway.Posture),
+		Logger:           logger,
+		Responder:        res,
+		SuspendedStore:   suspendedTxService,
+		ScrubbingService: scrubbingService,
+		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
+		Posture:          string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize MCP gateway: %w", err)
@@ -373,7 +384,10 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 	appEnrollment := NewAppEnrollmentService(db, pki, logger)
 
 	ls.mcpGateway.SetA2ADependencies(cfg.Gateway.A2ADownstreamURL)
-	publicBaseURL := fmt.Sprintf("https://localhost:%d", cfg.Gateway.HTTPSPort)
+	publicBaseURL := cfg.Gateway.PublicBaseURL
+	if publicBaseURL == "" {
+		publicBaseURL = fmt.Sprintf("https://localhost:%d", cfg.Gateway.HTTPSPort)
+	}
 	ls.mcpGateway.SetPublicBaseURL(publicBaseURL)
 	handler, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:                cfg,
@@ -554,6 +568,10 @@ type GovernanceDeps struct {
 	L3Notary          governance.L3Notary
 	SignerStore       governance.SignerStore
 	AppPolicyStore    governance.AppPolicyStore
+	// FieldReader backs the MCP gateway's read_field operation. It is the same
+	// document store that satisfies TransactionAudit, but exposed with its
+	// field-read capability rather than only the audit DocSet method.
+	FieldReader mcp.FieldReader
 }
 
 // GetGovernanceDeps returns the governance dependencies for transaction verification.
@@ -571,6 +589,7 @@ func (ls *GatewayModeService) GetGovernanceDeps() *GovernanceDeps {
 		L3Notary:          compositeL3,
 		SignerStore:       ls.db.SignerStore,
 		AppPolicyStore:    ls.db.AppPolicyStore,
+		FieldReader:       ls.db.DocStore,
 	}
 }
 

@@ -71,11 +71,12 @@ func TestMCPOriginGuard(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:          infra.Logger,
-		Responder:       infra.Responder,
-		SuspendedStore:  infra.SuspendedStore,
-		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
-		Posture:         string(infra.Cfg.Gateway.Posture),
+		Logger:           infra.Logger,
+		Responder:        infra.Responder,
+		SuspendedStore:   infra.SuspendedStore,
+		ScrubbingService: nil,
+		MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
+		Posture:          string(infra.Cfg.Gateway.Posture),
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
@@ -160,11 +161,12 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	infra := setupTestInfrastructure(t, false)
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:          infra.Logger,
-		Responder:       infra.Responder,
-		SuspendedStore:  infra.SuspendedStore,
-		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
-		Posture:         string(infra.Cfg.Gateway.Posture),
+		Logger:           infra.Logger,
+		Responder:        infra.Responder,
+		SuspendedStore:   infra.SuspendedStore,
+		ScrubbingService: nil,
+		MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
+		Posture:          string(infra.Cfg.Gateway.Posture),
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
@@ -194,11 +196,12 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 	infra := setupTestInfrastructure(t, true)
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:          infra.Logger,
-		Responder:       infra.Responder,
-		SuspendedStore:  infra.SuspendedStore,
-		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
-		Posture:         string(infra.Cfg.Gateway.Posture),
+		Logger:           infra.Logger,
+		Responder:        infra.Responder,
+		SuspendedStore:   infra.SuspendedStore,
+		ScrubbingService: nil,
+		MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
+		Posture:          string(infra.Cfg.Gateway.Posture),
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
 

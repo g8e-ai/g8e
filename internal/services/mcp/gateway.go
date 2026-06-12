@@ -40,6 +40,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -73,13 +74,12 @@ type GatewayService struct {
 	publicBaseURL     string
 	suspendedStore    interfaces.SuspendedTransactionStore
 	fieldPathRegistry *FieldPathRegistry
-	dbService         interface {
-		GetField(collection, id, fieldPath string) (interface{}, error)
-	}
+	dbService         FieldReader
 	sessionValidator  SessionValidator
 	auditLogger       AuditLogger
 	auditStore        *storage.SQLAuditStore
 	nativeToolHandler *NativeToolHandler
+	scrubbingService  *scrubbing.ScrubbingService
 	posture           string // Gateway posture: doctrine, consensus, or notary
 
 	// Circuit breaker state
@@ -91,6 +91,13 @@ type GatewayService struct {
 	maxFailures      int
 
 	maxPayloadBytes int64
+}
+
+// FieldReader provides read access to individual document fields, backing the
+// MCP gateway's read_field operation. It is implemented by the gateway's
+// document store (DocumentStoreService).
+type FieldReader interface {
+	GetField(collection, id, fieldPath string) (interface{}, error)
 }
 
 // SessionValidator validates Operator sessions for L3 authorization
@@ -105,11 +112,12 @@ type AuditLogger interface {
 
 // Dependencies groups all dependencies for NewGatewayService to reduce constructor bloat.
 type Dependencies struct {
-	Logger          *slog.Logger
-	Responder       *response.Writer
-	SuspendedStore  interfaces.SuspendedTransactionStore
-	MaxPayloadBytes int64
-	Posture         string // Gateway posture: doctrine, consensus, or notary
+	Logger           *slog.Logger
+	Responder        *response.Writer
+	SuspendedStore   interfaces.SuspendedTransactionStore
+	ScrubbingService *scrubbing.ScrubbingService
+	MaxPayloadBytes  int64
+	Posture          string // Gateway posture: doctrine, consensus, or notary
 }
 
 func NewGatewayService(deps Dependencies) (*GatewayService, error) {
@@ -140,6 +148,7 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 		suspendedStore:    deps.SuspendedStore,
 		fieldPathRegistry: fieldPathRegistry,
 		nativeToolHandler: nativeToolHandler,
+		scrubbingService:  deps.ScrubbingService,
 		posture:           deps.Posture,
 		maxFailures:       5,
 		cooldownDuration:  1 * time.Minute,
@@ -186,9 +195,7 @@ func (g *GatewayService) SetPublicBaseURL(baseURL string) {
 	g.publicBaseURL = baseURL
 }
 
-func (g *GatewayService) SetDBService(dbService interface {
-	GetField(collection, id, fieldPath string) (interface{}, error)
-}) {
+func (g *GatewayService) SetDBService(dbService FieldReader) {
 	g.dbService = dbService
 }
 
@@ -1542,6 +1549,11 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 		summary := strings.TrimRight(sb.String(), "\n")
 		if summary == "" {
 			summary = "completed"
+		}
+
+		// Scrub native tool output to prevent sensitive data leakage
+		if g.scrubbingService != nil {
+			summary = g.scrubbingService.ScrubText(summary)
 		}
 
 		return summary, nil
