@@ -101,7 +101,7 @@ func resolveStartConfig(
 
 // detectIdentityResult holds the result of network identity detection.
 type detectIdentityResult struct {
-	Identity       *network.Identity
+	Identity       *network.NetworkIdentity
 	CertMode       string
 	IdentityData   []byte
 	ShouldFallback bool
