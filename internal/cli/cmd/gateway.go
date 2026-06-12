@@ -26,6 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/network"
 	"github.com/spf13/cobra"
 )
@@ -35,6 +36,110 @@ func getBinaryName() string {
 		return "./g8e.exe"
 	}
 	return "./g8e"
+}
+
+// startConfig holds resolved configuration for starting the gateway.
+type startConfig struct {
+	VaultDir           string
+	VaultKeyPath       string
+	VaultRequireUnlock bool
+	Posture            string
+	HTTPPort           int
+	HTTPSPort          int
+	DataDir            string
+	PKIDir             string
+	SecretsDir         string
+	PasskeyRpID        string
+	PasskeyRpName      string
+	RateLimitRPS       float64
+	RateLimitBurst     int
+	LogLevel           string
+	CertIdentityMode   string
+	IdentityData       []byte
+}
+
+// resolveStartConfig resolves environment variable overrides and defaults for gateway start.
+func resolveStartConfig(
+	posture string,
+	httpPort, httpsPort int,
+	dataDir, pkiDir, secretsDir, vaultDir, vaultKeyPath string,
+	vaultRequireUnlock bool,
+	passkeyRpID, passkeyRpName string,
+	rateLimitRPS float64,
+	rateLimitBurst int,
+	logLevel, certIdentityMode string,
+) startConfig {
+	// Environment variables override CLI flags
+	if vaultDir == "" {
+		vaultDir = os.Getenv("G8E_VAULT_DIR")
+	}
+	if vaultKeyPath == "" {
+		vaultKeyPath = os.Getenv("G8E_VAULT_KEY")
+	}
+	if !vaultRequireUnlock {
+		vaultRequireUnlock = os.Getenv("G8E_VAULT_REQUIRE_UNLOCK") == "true"
+	}
+
+	return startConfig{
+		VaultDir:           vaultDir,
+		VaultKeyPath:       vaultKeyPath,
+		VaultRequireUnlock: vaultRequireUnlock,
+		Posture:            posture,
+		HTTPPort:           httpPort,
+		HTTPSPort:          httpsPort,
+		DataDir:            dataDir,
+		PKIDir:             pkiDir,
+		SecretsDir:         secretsDir,
+		PasskeyRpID:        passkeyRpID,
+		PasskeyRpName:      passkeyRpName,
+		RateLimitRPS:       rateLimitRPS,
+		RateLimitBurst:     rateLimitBurst,
+		LogLevel:           logLevel,
+		CertIdentityMode:   certIdentityMode,
+	}
+}
+
+// detectIdentityResult holds the result of network identity detection.
+type detectIdentityResult struct {
+	Identity       *network.Identity
+	CertMode       string
+	IdentityData   []byte
+	ShouldFallback bool
+}
+
+// detectIdentity performs network identity detection and returns the result.
+func detectIdentity(ctx context.Context, logger *slog.Logger, certIdentityMode string) detectIdentityResult {
+	netDetector := network.NewDetector(logger)
+	netIdentity, err := netDetector.DetectAll(ctx)
+	if err != nil {
+		return detectIdentityResult{
+			CertMode:       "localhost",
+			ShouldFallback: true,
+		}
+	}
+
+	// Default to full identity mode if not specified via flag
+	if certIdentityMode == "" {
+		certIdentityMode = "full"
+	}
+
+	// Serialize network identity to pass to subprocess
+	var identityData []byte
+	if certIdentityMode == "full" && netIdentity != nil {
+		identityData, err = json.Marshal(netIdentity)
+		if err != nil {
+			return detectIdentityResult{
+				CertMode:       "localhost",
+				ShouldFallback: true,
+			}
+		}
+	}
+
+	return detectIdentityResult{
+		Identity:     netIdentity,
+		CertMode:     certIdentityMode,
+		IdentityData: identityData,
+	}
 }
 
 func gatewayCmd() *cobra.Command {
@@ -83,17 +188,6 @@ func gatewayStartCmd() *cobra.Command {
 		Use:   string(constants.ThinkingActionTypeStart),
 		Short: "Start the g8e Gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Environment variables override CLI flags
-			if vaultDir == "" {
-				vaultDir = os.Getenv("G8E_VAULT_DIR")
-			}
-			if vaultKeyPath == "" {
-				vaultKeyPath = os.Getenv("G8E_VAULT_KEY")
-			}
-			if !vaultRequireUnlock {
-				vaultRequireUnlock = os.Getenv("G8E_VAULT_REQUIRE_UNLOCK") == "true"
-			}
-
 			cfg, err := config.Load("")
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
@@ -113,47 +207,8 @@ func gatewayStartCmd() *cobra.Command {
 				return nil
 			}
 
-			// Detect and display network identity before prompting
-			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			netDetector := network.NewDetector(logger)
-			netIdentity, err := netDetector.DetectAll(context.Background())
-			if err != nil {
-				cmd.Printf("Warning: Failed to detect network identity: %v\n", err)
-				cmd.Println("Falling back to localhost-only mode")
-				certIdentityMode = "localhost"
-			} else {
-				cmd.Println(netIdentity.FormatForDisplay())
-				cmd.Println()
-			}
-
-			// Default to full identity mode if not specified via flag
-			if certIdentityMode == "" {
-				certIdentityMode = "full"
-			}
-
-			// Serialize network identity to pass to subprocess
-			var identityData []byte
-			if certIdentityMode == "full" && netIdentity != nil {
-				identityData, err = json.Marshal(netIdentity)
-				if err != nil {
-					return fmt.Errorf("failed to marshal network identity: %w", err)
-				}
-			}
-
-			cmd.Println("[g8e] Starting g8e Gateway service...")
-			var postureDesc string
-			switch posture {
-			case "doctrine":
-				postureDesc = "doctrine (L1 enforced, L2/L3 audited)"
-			case "consensus":
-				postureDesc = "consensus (L1/L2 enforced, L3 audited)"
-			case "notary":
-				postureDesc = "notary (L1/L2/L3 strictly enforced)"
-			default:
-				postureDesc = posture
-			}
-			cmd.Printf("[g8e] Gateway posture: %s\n", postureDesc)
-			if err := pm.StartOperator(
+			// Resolve configuration from flags and environment variables
+			startCfg := resolveStartConfig(
 				posture,
 				httpPort,
 				httpsPort,
@@ -169,8 +224,45 @@ func gatewayStartCmd() *cobra.Command {
 				rateLimitBurst,
 				logLevel,
 				certIdentityMode,
-				identityData,
-			); err != nil {
+			)
+
+			// Detect and display network identity before prompting
+			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			identityResult := detectIdentity(context.Background(), logger, startCfg.CertIdentityMode)
+
+			if identityResult.ShouldFallback {
+				cmd.Printf("Warning: Failed to detect network identity\n")
+				cmd.Println("Falling back to localhost-only mode")
+			} else {
+				cmd.Println(identityResult.Identity.FormatForDisplay())
+				cmd.Println()
+			}
+
+			cmd.Println("[g8e] Starting g8e Gateway service...")
+			// Validate posture at CLI edge for clean error messages
+			postureObj, err := governance.ParseGovernancePosture(startCfg.Posture)
+			if err != nil {
+				return fmt.Errorf("invalid posture: %w", err)
+			}
+			cmd.Printf("[g8e] Gateway posture: %s\n", postureObj.Description())
+			if err := pm.StartOperator(platform.OperatorStartOptions{
+				Posture:             startCfg.Posture,
+				HTTPPort:            startCfg.HTTPPort,
+				HTTPSPort:           startCfg.HTTPSPort,
+				DataDir:             startCfg.DataDir,
+				PKIDir:              startCfg.PKIDir,
+				SecretsDir:          startCfg.SecretsDir,
+				VaultDir:            startCfg.VaultDir,
+				VaultKeyPath:        startCfg.VaultKeyPath,
+				VaultRequireUnlock:  startCfg.VaultRequireUnlock,
+				PasskeyRpID:         startCfg.PasskeyRpID,
+				PasskeyRpName:       startCfg.PasskeyRpName,
+				RateLimitRPS:        startCfg.RateLimitRPS,
+				RateLimitBurst:      startCfg.RateLimitBurst,
+				LogLevel:            startCfg.LogLevel,
+				CertIdentityMode:   identityResult.CertMode,
+				IdentityData:        identityResult.IdentityData,
+			}); err != nil {
 				return err
 			}
 
@@ -381,29 +473,33 @@ func gatewayRestartCmd() *cobra.Command {
 			}
 
 			cmd.Println("Starting g8e Gateway...")
-			if err := pm.StartOperator(
-				"doctrine",
-				cfg.OperatorHTTPSPort(),
-				constants.Ports.OperatorHttps,
-				"",
-				"",
-				"",
-				"",
-				"",
-				false,
-				"",
-				"",
-				0,
-				0,
-				"info",
-				"",
-				nil,
-			); err != nil {
+			// TODO: Persist posture in CLI config and read it here instead of hardcoding "doctrine"
+			// This is a latent bug: operators running consensus/notary are silently downgraded on restart
+			cmd.Println("[g8e] Warning: Restarting with default 'doctrine' posture. If you were running consensus or notary, use 'gw start --posture <posture>' to restore your configuration.")
+			if err := pm.StartOperator(platform.OperatorStartOptions{
+				Posture:             "doctrine",
+				HTTPPort:            cfg.OperatorHTTPSPort(),
+				HTTPSPort:           constants.Ports.OperatorHttps,
+				DataDir:             "",
+				PKIDir:              "",
+				SecretsDir:          "",
+				VaultDir:            "",
+				VaultKeyPath:        "",
+				VaultRequireUnlock:  false,
+				PasskeyRpID:         "",
+				PasskeyRpName:       "",
+				RateLimitRPS:        0,
+				RateLimitBurst:      0,
+				LogLevel:            "info",
+				CertIdentityMode:   "",
+				IdentityData:        nil,
+			}); err != nil {
 				return err
 			}
 
 			cmd.Println("g8e Gateway restarted successfully")
-			cmd.Printf("Governance mode: doctrine (L1 enforced, L2/L3 audited)\n")
+			postureObj, _ := governance.ParseGovernancePosture("doctrine")
+			cmd.Printf("Governance mode: %s\n", postureObj.Description())
 			cmd.Printf("\nNext step: Run '%s auth login' to authenticate\n", getBinaryName())
 			return nil
 		},

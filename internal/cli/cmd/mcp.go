@@ -64,6 +64,12 @@ var (
 	l3ApprovalTotalTimeout  = 5 * time.Minute
 )
 
+// nativeToolsToDisable are Claude/Codex built-in tools that bypass MCP governance.
+// Disabling them forces all I/O through g8e's MCP tools so every action is audited.
+var nativeToolsToDisable = []string{
+	"Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch",
+}
+
 // mcpCmd is the parent command for MCP stdio operations.
 func mcpCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -462,6 +468,11 @@ func proxySessionToGateway(session *cliProxySession, req JSONRPCRequest) (JSONRP
 }
 
 func proxySessionToGatewayWithRetry(session *cliProxySession, req JSONRPCRequest, logger *slog.Logger) (JSONRPCResponse, error) {
+	return proxySessionToGatewayWithRetryContext(context.Background(), session, req, logger)
+}
+
+// proxySessionToGatewayWithRetryContext performs L3 approval polling with context support.
+func proxySessionToGatewayWithRetryContext(ctx context.Context, session *cliProxySession, req JSONRPCRequest, logger *slog.Logger) (JSONRPCResponse, error) {
 	resp, err := proxySessionToGateway(session, req)
 	if err != nil {
 		return resp, err
@@ -483,18 +494,27 @@ func proxySessionToGatewayWithRetry(session *cliProxySession, req JSONRPCRequest
 		fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
 	}
 
-	for i := 0; i < l3ApprovalMaxIterations; i++ {
-		time.Sleep(l3ApprovalPollInterval)
+	ticker := time.NewTicker(l3ApprovalPollInterval)
+	defer ticker.Stop()
 
-		retryResp, err := proxySessionToGateway(session, req)
-		if err != nil {
-			continue
-		}
-		if !isL3ApprovalResponse(retryResp) {
+	for i := 0; i < l3ApprovalMaxIterations; i++ {
+		select {
+		case <-ctx.Done():
 			if logger != nil {
-				logger.Info("L3 approval completed, proceeding with execution")
+				logger.Warn("L3 approval polling cancelled by context")
 			}
-			return retryResp, nil
+			return resp, ctx.Err()
+		case <-ticker.C:
+			retryResp, err := proxySessionToGateway(session, req)
+			if err != nil {
+				continue
+			}
+			if !isL3ApprovalResponse(retryResp) {
+				if logger != nil {
+					logger.Info("L3 approval completed, proceeding with execution")
+				}
+				return retryResp, nil
+			}
 		}
 	}
 
@@ -981,17 +1001,24 @@ func ensureGatewayRunning() error {
 		fmt.Fprintf(os.Stderr, "[g8e] Gateway already running (PID %d)\n", pid)
 	} else {
 		fmt.Fprintf(os.Stderr, "[g8e] Starting gateway...\n")
-		if err := pm.StartOperator(
-			"doctrine",
-			0, 0,
-			"", "", "", "", "",
-			false,
-			"", "",
-			0, 0,
-			"info",
-			"localhost",
-			nil,
-		); err != nil {
+		if err := pm.StartOperator(platform.OperatorStartOptions{
+			Posture:             "doctrine",
+			HTTPPort:            0,
+			HTTPSPort:           0,
+			DataDir:             "",
+			PKIDir:              "",
+			SecretsDir:          "",
+			VaultDir:            "",
+			VaultKeyPath:        "",
+			VaultRequireUnlock:  false,
+			PasskeyRpID:         "",
+			PasskeyRpName:       "",
+			RateLimitRPS:        0,
+			RateLimitBurst:      0,
+			LogLevel:            "info",
+			CertIdentityMode:   "localhost",
+			IdentityData:        nil,
+		}); err != nil {
 			return fmt.Errorf("start gateway: %w", err)
 		}
 
@@ -1051,11 +1078,6 @@ type geminiSettings struct {
 // writeAgentConfig writes the appropriate MCP config file for the agent.
 // Returns the path to the config file and a cleanup function (if any).
 func writeAgentConfig(agentID, binaryPath string) (string, func(), error) {
-	// Define native tools to exclude to force governance
-	nativeToolsToExclude := []string{
-		"Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch",
-	}
-
 	config := agentMCPConfig{
 		MCPServers: map[string]agentMCPServer{
 			"g8e": {
@@ -1063,7 +1085,7 @@ func writeAgentConfig(agentID, binaryPath string) (string, func(), error) {
 				Args:    []string{"mcp", "stdio"},
 			},
 		},
-		ExcludeTools: nativeToolsToExclude,
+		ExcludeTools: nativeToolsToDisable,
 	}
 	configJSON, err := json.Marshal(config)
 	if err != nil {
@@ -1158,9 +1180,7 @@ func writeAgentConfig(agentID, binaryPath string) (string, func(), error) {
 
 		// Exclude native tools to force governance through g8e MCP
 		// This forces the agent to use only g8e's governed tools
-		settings.ExcludeTools = []string{
-			"Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch",
-		}
+		settings.ExcludeTools = nativeToolsToDisable
 
 		configJSON, err := json.MarshalIndent(settings, "", "  ")
 		if err != nil {
@@ -1377,12 +1397,6 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	)
 
 	return agentCmd.Run()
-}
-
-// nativeToolsToDisable are Claude/Codex built-in tools that bypass MCP governance.
-// Disabling them forces all I/O through g8e's MCP tools so every action is audited.
-var nativeToolsToDisable = []string{
-	"Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch",
 }
 
 // agentLaunchArgs returns the argv to pass to the agent binary for a governed session.

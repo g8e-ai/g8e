@@ -38,6 +38,27 @@ const (
 	maxPortAttempts     = 100
 )
 
+// OperatorStartOptions holds configuration for starting the operator process.
+// This replaces the 17 positional parameters previously used by StartOperator.
+type OperatorStartOptions struct {
+	Posture             string
+	HTTPPort            int
+	HTTPSPort           int
+	DataDir             string
+	PKIDir              string
+	SecretsDir          string
+	VaultDir            string
+	VaultKeyPath        string
+	VaultRequireUnlock  bool
+	PasskeyRpID         string
+	PasskeyRpName       string
+	RateLimitRPS        float64
+	RateLimitBurst      int
+	LogLevel            string
+	CertIdentityMode    string
+	IdentityData        []byte
+}
+
 type ProcessManager struct {
 	projectRoot string
 	runtimeDir  string
@@ -184,30 +205,30 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 	return "./g8e", nil
 }
 
-func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int, dataDir, pkiDir, secretsDir, vaultDir, vaultKeyPath string, vaultRequireUnlock bool, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode string, identityData []byte) error {
+func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 	if err := pm.ensureDirectories(); err != nil {
 		return err
 	}
 
 	// Use provided values or defaults
-	effectiveHTTPPort := httpPort
-	effectiveHTTPSPort := httpsPort
-	effectiveDataDir := dataDir
-	effectivePKIDir := pkiDir
-	effectiveSecretsDir := secretsDir
-	effectiveVaultDir := vaultDir
-	effectiveVaultKeyPath := vaultKeyPath
-	effectivePasskeyRpID := passkeyRpID
-	effectivePasskeyRpName := passkeyRpName
+	effectiveHTTPPort := opts.HTTPPort
+	effectiveHTTPSPort := opts.HTTPSPort
+	effectiveDataDir := opts.DataDir
+	effectivePKIDir := opts.PKIDir
+	effectiveSecretsDir := opts.SecretsDir
+	effectiveVaultDir := opts.VaultDir
+	effectiveVaultKeyPath := opts.VaultKeyPath
+	effectivePasskeyRpID := opts.PasskeyRpID
+	effectivePasskeyRpName := opts.PasskeyRpName
 
 	// Normalize 127.0.0.1 to localhost for passkey RP ID
 	// WebAuthn requires RP ID to be a valid domain, not an IP address
 	if effectivePasskeyRpID == "127.0.0.1" {
 		effectivePasskeyRpID = "localhost"
 	}
-	effectiveRateLimitRPS := rateLimitRPS
-	effectiveRateLimitBurst := rateLimitBurst
-	effectiveLogLevel := logLevel
+	effectiveRateLimitRPS := opts.RateLimitRPS
+	effectiveRateLimitBurst := opts.RateLimitBurst
+	effectiveLogLevel := opts.LogLevel
 
 	// Use defaults if not provided
 	if effectiveHTTPPort == 0 {
@@ -256,7 +277,7 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int,
 	}
 
 	args := []string{
-		"--" + posture,
+		"--" + opts.Posture,
 		"--working-dir", pm.projectRoot,
 		"--data-dir", effectiveDataDir,
 		"--pki-dir", effectivePKIDir,
@@ -272,12 +293,12 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int,
 	if effectiveVaultKeyPath != "" {
 		args = append(args, "--vault-key", effectiveVaultKeyPath)
 	}
-	if vaultRequireUnlock {
+	if opts.VaultRequireUnlock {
 		args = append(args, "--vault-require-unlock")
 	}
 
-	if certIdentityMode != "" {
-		args = append(args, "--cert-mode", certIdentityMode)
+	if opts.CertIdentityMode != "" {
+		args = append(args, "--cert-mode", opts.CertIdentityMode)
 	}
 
 	if effectivePasskeyRpID != "" {
@@ -293,7 +314,7 @@ func (pm *ProcessManager) StartOperator(posture string, httpPort, httpsPort int,
 		args = append(args, "--rate-limit-burst", strconv.Itoa(effectiveRateLimitBurst))
 	}
 
-	identityArgs, err := pm.networkIdentityArgs(identityData)
+	identityArgs, err := pm.networkIdentityArgs(opts.IdentityData)
 	if err != nil {
 		return err
 	}
