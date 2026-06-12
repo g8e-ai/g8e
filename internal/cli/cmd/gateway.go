@@ -411,8 +411,8 @@ func gatewayStatusCmd() *cobra.Command {
 					cmd.Println("State: RUNNING (HTTP check)")
 					cmd.Printf("\nEndpoints:\n")
 					cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
-					cmd.Printf("  Public API:         https://localhost:%d (Public browser/BYO bootstrap)\n", constants.Ports.OperatorHttps)
-					cmd.Printf("  MCP HTTP:           http://localhost:%d (Plain HTTP for MCP calls)\n", constants.Ports.OperatorHttp)
+					cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+					cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", constants.LocalhostHTTPURL(constants.Ports.OperatorHttp))
 					return nil
 				}
 			}
@@ -432,8 +432,8 @@ func gatewayStatusCmd() *cobra.Command {
 				cmd.Printf("State: RUNNING (PID: %d)\n", pid)
 				cmd.Printf("\nEndpoints:\n")
 				cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
-				cmd.Printf("  Public API:         https://localhost:%d (Public browser/BYO bootstrap)\n", constants.Ports.OperatorHttps)
-				cmd.Printf("  MCP HTTP:           http://localhost:%d (Plain HTTP for MCP calls)\n", constants.Ports.OperatorHttp)
+				cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+				cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", constants.LocalhostHTTPURL(constants.Ports.OperatorHttp))
 			} else {
 				cmd.Println("State: STOPPED")
 			}

@@ -79,7 +79,7 @@ func TestUniversalGateway_RealMCPFlow(t *testing.T) {
 	EnsureGatewayReady(t, cliCfg)
 
 	cliSessionID := readLiveCreds(t, cliCfg.CredentialsFile())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(cliCfg.OperatorHTTPSPort())
 
 	setAuth := func(req *http.Request) {
 		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
@@ -192,7 +192,7 @@ func TestUniversalGateway_RealA2AFlow(t *testing.T) {
 	EnsureGatewayReady(t, cliCfg)
 
 	cliSessionID := readLiveCreds(t, cliCfg.CredentialsFile())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(cliCfg.OperatorHTTPSPort())
 
 	setAuth := func(req *http.Request) {
 		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
@@ -240,7 +240,7 @@ func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 	EnsureGatewayReady(t, cliCfg)
 
 	cliSessionID := readLiveCreds(t, cliCfg.CredentialsFile())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(cliCfg.OperatorHTTPSPort())
 
 	setAuth := func(req *http.Request) {
 		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
@@ -295,7 +295,7 @@ func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 	EnsureGatewayReady(t, cliCfg)
 
 	cliSessionID := readLiveCreds(t, cliCfg.CredentialsFile())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(cliCfg.OperatorHTTPSPort())
 
 	setAuth := func(req *http.Request) {
 		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
@@ -401,7 +401,7 @@ func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 	EnsureGatewayReady(t, cliCfg)
 
 	cliSessionID := readLiveCreds(t, cliCfg.CredentialsFile())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(cliCfg.OperatorHTTPSPort())
 
 	setAuth := func(req *http.Request) {
 		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
@@ -455,7 +455,7 @@ func TestUniversalGateway_RealDownstreamIntegration(t *testing.T) {
 	EnsureGatewayReady(t, cliCfg)
 
 	cliSessionID := readLiveCreds(t, cliCfg.CredentialsFile())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(cliCfg.OperatorHTTPSPort())
 
 	setAuth := func(req *http.Request) {
 		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
@@ -514,7 +514,7 @@ func TestUniversalGateway_CanonicalJSONWireFormat(t *testing.T) {
 	EnsureGatewayReady(t, cliCfg)
 
 	cliSessionID := readLiveCreds(t, cliCfg.CredentialsFile())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(cliCfg.OperatorHTTPSPort())
 
 	setAuth := func(req *http.Request) {
 		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)

@@ -276,7 +276,7 @@ func (f *GatewayFixture) WaitForReady(t *testing.T) {
 	t.Helper()
 	client := &http.Client{Timeout: 2 * time.Second}
 	require.Eventually(t, func() bool {
-		httpURL := fmt.Sprintf("http://localhost:%d", f.Service.GetHTTPPort())
+		httpURL := constants.LocalhostHTTPURL(f.Service.GetHTTPPort())
 		resp, err := client.Get(httpURL + constants.APIPaths.Health)
 		if err != nil {
 			return false
@@ -422,7 +422,7 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", f.Service.GetHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),

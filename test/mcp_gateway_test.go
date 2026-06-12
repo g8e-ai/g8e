@@ -95,11 +95,11 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	mtlsClient := fixtures.CreateMTLSClient(t, fixture, identity)
 
 	// Set public base URL for approval links
-	publicURL := fmt.Sprintf("https://localhost:%d", fixture.Service.GetHTTPSPort())
+	publicURL := constants.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
 	fixture.SetPublicBaseURL(publicURL)
 
 	// MCP routes are available on HTTPS port with mTLS
-	mcpURL := fmt.Sprintf("https://localhost:%d", fixture.Service.GetHTTPSPort())
+	mcpURL := constants.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
 
 	// 4. Test MCP tools/list
 	t.Run("tools/list", func(t *testing.T) {
@@ -216,11 +216,11 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	mtlsClient := fixtures.CreateMTLSClient(t, fixture, identity)
 
 	// Set public base URL for approval links
-	publicURL := fmt.Sprintf("https://localhost:%d", fixture.Service.GetHTTPSPort())
+	publicURL := constants.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
 	fixture.SetPublicBaseURL(publicURL)
 
 	// MCP routes are available on HTTPS port with mTLS
-	mcpURL := fmt.Sprintf("https://localhost:%d", fixture.Service.GetHTTPSPort())
+	mcpURL := constants.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
 
 	t.Run("nested object arguments", func(t *testing.T) {
 		callReq := mcp.JSONRPCRequest{
@@ -579,7 +579,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -632,7 +632,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	t.Logf("Enrolled certificate URIs: %v", parsedCert.URIs)
 
 	// MCP routes are available on HTTPS port with mTLS
-	mcpURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
+	mcpURL := constants.LocalhostHTTPSURL(ls.GetHTTPSPort())
 
 	t.Run("invalid JSON-RPC version", func(t *testing.T) {
 		callReq := mcp.JSONRPCRequest{

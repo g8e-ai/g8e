@@ -81,7 +81,7 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 		signingKey:        privKey,
 		keyID:             "byo-test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		publicBaseURL:     fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps),
+		publicBaseURL:     constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
 		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
 	}
 
@@ -275,7 +275,7 @@ func TestBYOClientA2AEndToEndProof(t *testing.T) {
 		signingKey:        privKey,
 		keyID:             "a2a-test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		publicBaseURL:     fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps),
+		publicBaseURL:     constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
 		maxPayloadBytes:   10 * 1024 * 1024,
 	}
 

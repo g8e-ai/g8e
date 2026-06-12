@@ -318,7 +318,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(ctx.ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -353,7 +353,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}
 
 	// Set public base URL for approval links
-	publicURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
+	publicURL := constants.LocalhostHTTPSURL(ctx.ls.GetHTTPSPort())
 	ctx.mcpGateway.SetPublicBaseURL(publicURL)
 
 	// Test A2A Call (Suspends for L3, then Resume)
@@ -511,7 +511,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(ctx.ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -540,7 +540,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		},
 	}
 
-	publicURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
+	publicURL := constants.LocalhostHTTPSURL(ctx.ls.GetHTTPSPort())
 	ctx.mcpGateway.SetPublicBaseURL(publicURL)
 
 	authHeader := func(req *http.Request) {
@@ -858,7 +858,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(ctx.ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -887,7 +887,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 		},
 	}
 
-	publicURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
+	publicURL := constants.LocalhostHTTPSURL(ctx.ls.GetHTTPSPort())
 	ctx.mcpGateway.SetPublicBaseURL(publicURL)
 
 	authHeader := func(req *http.Request) {

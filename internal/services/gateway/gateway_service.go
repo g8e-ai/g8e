@@ -386,7 +386,7 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 	ls.mcpGateway.SetA2ADependencies(cfg.Gateway.A2ADownstreamURL)
 	publicBaseURL := cfg.Gateway.PublicBaseURL
 	if publicBaseURL == "" {
-		publicBaseURL = fmt.Sprintf("https://localhost:%d", cfg.Gateway.HTTPSPort)
+		publicBaseURL = constants.LocalhostHTTPSURL(cfg.Gateway.HTTPSPort)
 	}
 	ls.mcpGateway.SetPublicBaseURL(publicBaseURL)
 	handler, err := newHTTPHandler(HTTPHandlerDependencies{

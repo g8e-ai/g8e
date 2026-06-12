@@ -271,22 +271,22 @@ func (c *Config) OperatorHTTPSPort() int {
 
 func (c *Config) OperatorHTTPURL() string {
 	if c.TestPortOverride != 0 {
-		return fmt.Sprintf("https://localhost:%d", c.TestPortOverride)
+		return constants.LocalhostHTTPSURL(c.TestPortOverride)
 	}
-	return fmt.Sprintf("https://localhost:%d", c.OperatorHTTPSPort())
+	return constants.LocalhostHTTPSURL(c.OperatorHTTPSPort())
 }
 
 // OperatorPublicURL returns the HTTPS port (constants.Ports.OperatorHttps) for mTLS API and public surface
 func (c *Config) OperatorPublicURL() string {
-	return fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	return constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 }
 
 // OperatorDiscoveryURL returns the HTTP port (constants.Ports.OperatorHttp) for CA download and bootstrap routes
 func (c *Config) OperatorDiscoveryURL() string {
 	if c.TestPortOverride != 0 {
-		return fmt.Sprintf("http://localhost:%d", c.TestPortOverride)
+		return constants.LocalhostHTTPURL(c.TestPortOverride)
 	}
-	return fmt.Sprintf("http://localhost:%d", constants.Ports.OperatorHttp)
+	return constants.LocalhostHTTPURL(constants.Ports.OperatorHttp)
 }
 
 // OperatorBootstrapURL is deprecated; use OperatorPublicURL for CSR-based enrollment
