@@ -1125,6 +1125,78 @@ func writeAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		}
 		return configPath, nil, nil
 
+	case "vscode":
+		// VS Code uses ~/.vscode/mcp.json or ~/.config/Code/User/mcp.json
+		configDir := filepath.Join(homeDir, ".vscode")
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return "", nil, fmt.Errorf("create vscode config dir: %w", err)
+		}
+		configPath := filepath.Join(configDir, "mcp.json")
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
+			return "", nil, fmt.Errorf("write vscode mcp.json: %w", err)
+		}
+		return configPath, nil, nil
+
+	case "codeium":
+		// Codeium uses ~/.codeium/mcp.json
+		configDir := filepath.Join(homeDir, ".codeium")
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return "", nil, fmt.Errorf("create codeium config dir: %w", err)
+		}
+		configPath := filepath.Join(configDir, "mcp.json")
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
+			return "", nil, fmt.Errorf("write codeium mcp.json: %w", err)
+		}
+		return configPath, nil, nil
+
+	case "tabby":
+		// Tabby uses ~/.tabby/mcp.json
+		configDir := filepath.Join(homeDir, ".tabby")
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return "", nil, fmt.Errorf("create tabby config dir: %w", err)
+		}
+		configPath := filepath.Join(configDir, "mcp.json")
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
+			return "", nil, fmt.Errorf("write tabby mcp.json: %w", err)
+		}
+		return configPath, nil, nil
+
+	case "continue", "cn":
+		// Continue uses ~/.continue/config.json
+		configDir := filepath.Join(homeDir, ".continue")
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return "", nil, fmt.Errorf("create continue config dir: %w", err)
+		}
+		configPath := filepath.Join(configDir, "config.json")
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
+			return "", nil, fmt.Errorf("write continue config.json: %w", err)
+		}
+		return configPath, nil, nil
+
+	case "ollama":
+		// Ollama doesn't use a local config file - it's typically configured via CLI args
+		// or third-party MCP clients. Return a temp file for reference.
+		tmpFile, err := os.CreateTemp("", "g8e-mcp-ollama-*.json")
+		if err != nil {
+			return "", nil, fmt.Errorf("create temp MCP config for ollama: %w", err)
+		}
+		if _, err := tmpFile.Write(configJSON); err != nil {
+			tmpFile.Close()
+			return "", nil, fmt.Errorf("write MCP config for ollama: %w", err)
+		}
+		tmpFile.Close()
+		tmpPath := tmpFile.Name()
+		fmt.Fprintf(os.Stderr, "[g8e] Ollama requires manual MCP configuration. Reference config at: %s\n", tmpPath)
+		return tmpPath, func() {
+			if err := os.Remove(tmpPath); err != nil {
+				slog.Warn("Failed to cleanup temp MCP config file", "path", tmpPath, "error", err)
+			}
+		}, nil
+
 	default:
 		// For agents that use CLI flags or temp files
 		tmpFile, err := os.CreateTemp("", "g8e-mcp-*.json")
@@ -1232,6 +1304,8 @@ var nativeToolsToDisable = []string{
 }
 
 // agentLaunchArgs returns the argv to pass to the agent binary for a governed session.
+// Governance is enforced by making g8e the only MCP server in the agent's config.
+// For agents that support native tool disabling via CLI flags, those are added here.
 func agentLaunchArgs(agentID, mcpConfigPath string) ([]string, error) {
 	switch strings.ToLower(agentID) {
 	case "claude", "codex":
@@ -1244,26 +1318,51 @@ func agentLaunchArgs(agentID, mcpConfigPath string) ([]string, error) {
 			"--strict-mcp-config",
 			"--disallowed-tools", strings.Join(nativeToolsToDisable, ","),
 		}, nil
+	case "cursor":
+		// Cursor reads from ~/.cursor/mcp.json written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		// Cursor does not support CLI flags to disable native tools
+		return []string{}, nil
+	case "devin":
+		// Devin reads from ~/.codeium/windsurf/mcp_config.json written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		// Devin does not support CLI flags to disable native tools
+		return []string{}, nil
 	case "continue", "cn":
-		// Continue CLI uses --config to specify a config file
-		// We'll create a temporary config with MCP server configuration
-		return []string{
-			"--config", mcpConfigPath,
-		}, nil
-	case "cursor", "devin", "aider", "goose":
-		// These agents read from their standard config file locations
-		// No CLI args needed - config is written by writeAgentConfig
+		// Continue reads from ~/.continue/config.json written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		// Continue does not support CLI flags to disable native tools
+		return []string{}, nil
+	case "aider":
+		// Aider reads from .aider.conf.yml in current directory written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		return []string{}, nil
+	case "goose":
+		// Goose reads from ~/.goose/config.json written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
 		return []string{}, nil
 	case "vscode":
-		return nil, fmt.Errorf("VS Code requires manual MCP configuration via the MCP extension settings. Run 'g8e mcp agent show vscode' to see the required configuration JSON, then add it to your VS Code MCP settings")
+		// VS Code reads from ~/.vscode/mcp.json written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		// VS Code does not support CLI flags to disable native tools
+		return []string{}, nil
 	case "codeium":
-		return nil, fmt.Errorf("codeium requires manual MCP configuration via its settings. Run 'g8e mcp agent show codeium' to see the required configuration, then add it to your codeium MCP settings")
+		// Codeium reads from ~/.codeium/mcp.json written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		// Codeium does not support CLI flags to disable native tools
+		return []string{}, nil
 	case "tabby":
-		return nil, fmt.Errorf("tabby requires manual MCP configuration via its settings. Run 'g8e mcp agent show tabby' to see the required configuration, then add it to your tabby MCP settings")
+		// Tabby reads from ~/.tabby/mcp.json written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		// Tabby does not support CLI flags to disable native tools
+		return []string{}, nil
 	case "ollama":
+		// Ollama requires manual MCP configuration via third-party clients
+		// Return error to guide user to manual setup
 		return nil, fmt.Errorf("ollama requires manual MCP configuration via third-party clients. Run 'g8e mcp agent show ollama' to see the required configuration, then use it with an MCP-compatible ollama client")
 	case "gemini":
 		// Gemini uses `gemini mcp add` to register servers, no config file needed
+		// Governance enforced by g8e being the only MCP server
 		return []string{}, nil
 	default:
 		return nil, fmt.Errorf("auto-launch not yet supported for %q. To configure manually: g8e mcp agent show %s", agentID, agentID)
