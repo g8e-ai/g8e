@@ -218,7 +218,10 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	signerName := "test-signer"
 	signerPub, signerPriv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
-	err = ls.GetDB().AddTrustedSigner(models.TrustedSigner{
+
+	// Access SignerStoreService directly
+	signerStore := gateway.NewSignerStoreService(ls.GetDB().GetDB(), testutil.NewTestLogger())
+	err = signerStore.AddTrustedSigner(models.TrustedSigner{
 		ID:        signerName,
 		PublicKey: hex.EncodeToString(signerPub),
 		AddedAt:   time.Now().UTC(),

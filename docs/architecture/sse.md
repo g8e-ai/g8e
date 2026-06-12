@@ -87,10 +87,9 @@ Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be set.
 **Behavior**:
 1. Validates mTLS peer certificate for app workload identity (SPIFFE ID with `/app/` prefix, excluding `g8eo` and `g8eg`)
 2. Validates route (exactly one routing target set)
-3. Enforces producer-to-target ownership (app identity must be associated with the target session)
-4. Appends event to `sse_events` table with auto-increment ID and producer_id
-5. Publishes event to Pub/Sub channel for real-time fan-out
-6. Returns success confirmation
+3. Appends event to `sse_events` table with auto-increment ID and producer_id
+4. Publishes event to Pub/Sub channel for real-time fan-out (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`)
+5. Returns success confirmation
 
 ---
 
@@ -153,9 +152,9 @@ data: {"type":"...","data":{...}}
 
 **Behavior**:
 1. Validates Operator session authorization for requested route
-2. Flushes historical events since `since_id` in SSE format
-3. Subscribes to Pub/Sub channel for real-time events
-4. Streams new events as they arrive
+2. Subscribes to Pub/Sub channel for real-time events (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`)
+3. Flushes historical events since `since_id` in SSE format
+4. Streams new events as they arrive from Pub/Sub
 5. Sends keepalive comments every 30 seconds (SSE comment format `: heartbeat\n\n`)
 
 ---
@@ -170,7 +169,6 @@ The SSE system is generic and supports any event type. Defined audit event types
 - `g8e.v1.operator.audit.direct.command.recorded` - Direct command audit log
 - `g8e.v1.operator.audit.direct.command.result.recorded` - Direct command result audit log
 - `g8e.v1.operator.audit.user.recorded` - User action audit log
-- `g8e.v1.operator.audit.mcp.call.recorded` - MCP call audit log
 
 ### Platform Events
 - `g8e.v1.platform.sse.connection.established` - SSE connection established
@@ -202,7 +200,7 @@ CREATE TABLE sse_events (
 ```
 
 **Constraints**:
-- Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be non-null
+- Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be non-null (enforced by CHECK constraint)
 - `producer_id` is the SPIFFE ID of the app workload that produced the event
 - Events are immutable once written (append-only)
 
@@ -217,6 +215,7 @@ CREATE TABLE sse_events (
 - Certificate must have SPIFFE URI SAN with `/app/` prefix
 - Gateway identities (`g8eo`, `g8eg`) are explicitly blocked from pushing
 - Producer identity is recorded in `producer_id` for attribution
+- No producer-to-target ownership enforcement is performed at the push endpoint
 
 ### Consumer Authorization
 - Only authenticated Operator sessions can consume events
@@ -229,7 +228,7 @@ CREATE TABLE sse_events (
 ### Transport Security
 - All SSE endpoints require mTLS (HTTPS port 8443)
 - Not available on HTTP bootstrap port (8080)
-- Pub/Sub channels are scoped to routing targets
+- Pub/Sub channels are scoped to routing targets (format: `sse:cli:<id>`, `sse:web:<id>`, `sse:user:<id>`)
 
 ---
 
@@ -291,14 +290,14 @@ POST /api/v1/sse/push
 
 ### Core Files
 - `internal/services/gateway/gateway_http.go` - HTTP handlers for SSE endpoints (`handleInternalSSEPush`, `handleInternalSSEEvents`, `handleInternalSSEStream`)
-- `internal/services/gateway/gateway_db.go` - Database operations (`SSEEventsAppend`, `SSEEventsListSince`, `SSEEventsWipe`, `SSEEventsCount`)
+- `internal/services/gateway/sse_event_service.go` - SSE event storage and retrieval service (`SSEEventsAppend`, `SSEEventsListSince`, `SSEEventsWipe`, `SSEEventsCount`)
 - `internal/services/gateway/gateway_pubsub.go` - Pub/Sub integration for real-time fan-out (`RegisterHandler`, `Publish`)
 - `internal/services/gateway/db_controller.go` - Admin endpoints for SSE event management (`handleSSEEvents`)
 - `internal/constants/api_paths.go` - API path constants
-- `internal/constants/events.go` - Event type constants
+- `protocol/constants/events.json` - Event type catalog
 
 ### State Root Impact
-SSE event inserts are deliberately excluded from state root calculation. This allows high-frequency event streaming without triggering governance consensus rounds. Events are considered ephemeral telemetry, not governance state.
+SSE event inserts are deliberately excluded from state root calculation. The `sse_events` table has no triggers to increment `state_version`, allowing high-frequency event streaming without triggering governance consensus rounds. Events are considered ephemeral telemetry, not governance state.
 
 ### Pruning
 The `sse_events` table can be pruned via:

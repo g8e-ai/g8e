@@ -2,324 +2,416 @@
 
 ## Overview
 
-The g8e storage architecture provides a comprehensive, multi-layered persistence system designed for security, auditability, and governance. The storage layer is split into specialized services, each handling a specific aspect of the system's data needs:
+The g8e storage layer is split into discrete services, each responsible for a specific persistence concern. All services reside under `../../internal/services/storage/`.
 
 - **Audit Store**: Append-only audit logging with encryption at rest
-- **Ledger**: Git-backed version control for file modifications
-- **Execution Vault**: Command execution results and file diffs
-- **Token Store**: Key-value storage for Sentinel token persistence
+- **Ledger**: git-backed version control for file modifications, session-isolated
+- **Execution Vault**: Compressed and encrypted storage for command execution results and file diffs
+- **Token Store**: Key-value storage for Sentinel token persistence with TTL support
 - **Replay Store**: Nonce-based replay protection
-- **Suspended Transaction Store**: L3 approval workflow transactions
-- **Commitment Ledger**: Commitment attestations with chain integrity
-- **History Handler**: Unified history retrieval combining audit and ledger
+- **Suspended Transaction Store**: L3 approval workflow transaction persistence
+- **Commitment Ledger**: Commitment attestations with chain integrity verification
+- **History Handler**: Unified history retrieval combining audit store and ledger
 
-All storage services share common patterns:
-- SQLite-based with `sqliteutil.DB` wrapper for retry logic
+Shared implementation patterns across the services:
+
+- SQLite-based with `sqliteutil.DB` wrapper providing retry logic, transactions, and incremental vacuum
 - Encryption at rest via `vault.Vault` (AES-256-GCM) where applicable
-- Automatic pruning based on retention policies and size limits
-- Background cleanup via `sqliteutil.Pruner`
-- Thread-safe operations with proper synchronization
+- Background cleanup via `sqliteutil.Pruner` for most services
+- Thread-safe operations
+
+---
 
 ## Core Services
 
-### Audit Store (`audit_store.go`)
+### Audit Store (`../../internal/services/storage/audit_store.go`)
 
-The `SQLAuditStore` provides append-only audit logging for all system events. It is the authoritative source of truth for operator sessions, events, file mutations, and action receipts.
+`SQLAuditStore` provides append-only audit logging for all system events. It is the authoritative record of operator sessions, events, file mutations, and signed action receipts.
 
 **Schema Tables:**
-- `sessions`: Operator/app session metadata (id, title, session_type, created_at, user_identity)
-- `events`: Audit events with encrypted content (content_text, command_stdout, command_stderr, encrypted flag)
+
+- `sessions`: Operator and app session metadata (`id`, `title`, `session_type`, `created_at`, `user_identity`)
+- `events`: Audit events with optionally encrypted content (`content_text`, `command_stdout`, `command_stderr`, `encrypted` flag)
 - `file_mutation_log`: File operation records linked to events
 - `receipts`: Signed action receipts for transaction-native audit records
 
 **Key Features:**
-- **Encryption at rest**: `content_text`, `command_stdout`, and `command_stderr` are encrypted using the vault
-- **Output truncation**: Large outputs are truncated using head/tail strategy (configurable thresholds)
-- **Session validation**: Events must reference existing sessions (auto-created for app sessions)
-- **Batch recording**: `RecordEvents` supports atomic batch inserts
-- **Retention pruning**: Automatic cleanup of old events, file mutations, and receipts
-- **Action receipts**: Transaction-native audit records with cryptographic signatures
+
+- **Encryption at rest**: `content_text`, `command_stdout`, and `command_stderr` are encrypted using the vault when it is unlocked. When the vault is locked, content is stored as plaintext so audit records are never blocked by vault state (fail-open for audit continuity).
+- **Output truncation**: Large outputs are truncated using a head/tail strategy; thresholds are configurable.
+- **Session validation**: Events must reference a pre-existing session row. App sessions are auto-created on first write to satisfy the foreign key constraint.
+- **Batch recording**: `RecordEvents` performs atomic batch inserts within a single transaction.
+- **Retention pruning**: Background `sqliteutil.Pruner` deletes old events, file mutations, and receipts, then removes orphaned sessions.
+- **Action receipts**: Signed `ActionReceiptRecord` entries stored with upsert semantics on `transaction_id`.
 
 **Configuration:**
+
 ```go
 type AuditStoreConfig struct {
-    DataDir                   string  // Base directory for data
-    DBPath                    string  // Database filename
-    MaxDBSizeMB               int64   // Maximum database size
-    RetentionDays             int     // Data retention period
-    PruneIntervalMinutes      int     // Pruning interval
-    Enabled                   bool    // Enable/disable audit store
-    OutputTruncationThreshold int     // Threshold for output truncation
-    HeadTailSize              int     // Size of head/tail for truncation
-    EncryptionVault           *vault.Vault  // Required for encryption
+    DataDir                   string
+    DBPath                    string
+    MaxDBSizeMB               int64
+    RetentionDays             int
+    PruneIntervalMinutes      int
+    OutputTruncationThreshold int
+    HeadTailSize              int
+    EncryptionVault           *vault.Vault // required
 }
 ```
 
+`EncryptionVault` is required; `NewSQLAuditStore` returns an error if it is nil.
+
+Default values (`DefaultAuditStoreConfig`): `DataDir: ".g8e/data"`, `DBPath: "g8e.db"`, `MaxDBSizeMB: 2048`, `RetentionDays: 90`, `PruneIntervalMinutes: 60`, `OutputTruncationThreshold: 102400`, `HeadTailSize: 51200`.
+
 **Key Methods:**
-- `CreateSession(id, sessionType, title, userIdentity)`: Create a new session
-- `GetOperatorSession(id)`: Retrieve a session by ID
-- `RecordEvent(event)`: Record a single event with encryption
-- `RecordEvents(events)`: Batch record multiple events atomically
-- `RecordActionReceipt(record)`: Record a signed action receipt
-- `GetEvents(sessionID, limit, offset)`: Retrieve events for a session with decryption
-- `RecordFileMutation(mutation)`: Record a file mutation linked to an event
-- `GetFileMutations(eventID)`: Retrieve file mutations for an event
-- `GetActionReceipt(transactionID)`: Retrieve a single action receipt
-- `ListActionReceipts(sessionID, limit, offset)`: List action receipts with pagination
-- `ListActionReceiptsSince(since, limit)`: List action receipts newer than a timestamp
 
-### Ledger (`ledger.go`)
+- `CreateSession(id, sessionType, title, userIdentity)`: Create a new session row.
+- `GetOperatorSession(id)`: Retrieve a session by ID.
+- `RecordEvent(event)`: Record a single event; returns the new event ID.
+- `RecordEvents(events)`: Batch-record multiple events atomically.
+- `RecordActionReceipt(record)`: Upsert a signed action receipt.
+- `GetEvents(sessionID, limit, offset)`: Retrieve events for a session with decryption applied.
+- `RecordFileMutation(mutation)`: Record a file mutation linked to an event.
+- `GetFileMutations(eventID)`: Retrieve file mutations for an event.
+- `GetActionReceipt(transactionID)`: Retrieve a single action receipt.
+- `ListActionReceipts(sessionID, limit, offset)`: List action receipts with optional session filter and pagination.
+- `ListActionReceiptsSince(since, limit)`: List action receipts newer than a timestamp.
+- `Wait()`: Block until all in-flight writes complete.
+- `Close()`: Stop the pruner and close the database. Idempotent.
 
-The `GitLedgerService` provides git-backed version control for all file modifications. It maintains a complete history of file changes with cryptographic integrity.
+---
+
+### Ledger (`../../internal/services/storage/ledger.go`)
+
+`GitLedgerService` provides git-backed version control for file modifications. Each operator session has its own isolated git repository. The go-git library is used directly; no git binary is invoked.
 
 **Key Features:**
-- **Two-phase commit**: File operations use a two-phase pattern (begin operation, complete operation)
-- **Session isolation**: Each operator session has its own git repository under `sessions/{sessionID}/`
-- **Encryption at rest**: Files are encrypted when vault is unlocked (stored with `.enc` extension)
-- **Streaming for unencrypted files**: Large files are streamed to prevent OOM
-- **Size limits for encrypted files**: 100MB safety limit for encrypted file copies
-- **Diff generation**: Full diff content and statistics between commits
-- **File restoration**: Restore files to any previous commit state
-- **Cross-platform path handling**: Normalizes paths for Windows/Linux compatibility
-- **Native go-git implementation**: Uses go-git library for git operations (not git binary)
+
+- **Session isolation**: Each operator session maintains its own git repository under `{BaseDir}/sessions/{sessionID}/`. An empty session ID falls back to `{BaseDir}/files`.
+- **Two-phase commit**: File operations snapshot state before and after the mutation to produce diff content and statistics.
+- **Encryption at rest**: When the vault is unlocked, file copies are encrypted and stored with an `.enc` extension. The 100 MB size limit applies to encrypted copies. Unencrypted files are streamed to prevent OOM.
+- **Diff generation**: `calculateDiffContent` and `calculateDiffStat` use go-git's `Patch` API between two commit hashes.
+- **File restoration**: `RestoreFileFromCommit` decrypts and restores a file from any prior commit.
+- **Path normalization**: `normalizeToGitPath` removes Windows drive letters and converts backslashes so paths are consistent across platforms.
+- **State merkle root**: `GetStateMerkleRoot` returns the HEAD commit hash of the global `files` ledger as a BFT-verifiable snapshot.
+
+**Configuration:**
+
+```go
+type LedgerConfig struct {
+    BaseDir         string       // base directory for all session ledgers
+    GitPath         string       // non-empty string enables git operations
+    EncryptionVault *vault.Vault // required
+}
+```
+
+`EncryptionVault` is required; `NewGitLedgerService` returns an error if it is nil. Git operations are only performed when `GitPath` is non-empty (`gitReady()` check).
 
 **Two-Phase Commit Pattern:**
+
 ```go
-// Write operation
+// Write
 result, err := ledger.LedgerFileWrite(sessionID, filePath)
-// ... perform file write ...
+// ... perform host file write ...
 err = ledger.CompleteMirrorWrite(result, sessionID)
 
-// Delete operation
+// Delete
 result, err := ledger.MirrorFileDelete(sessionID, filePath)
-// ... perform file deletion ...
+// ... perform host file deletion ...
 err = ledger.CompleteMirrorDelete(result, sessionID)
 
-// Create operation
+// Create
 result, err := ledger.MirrorFileCreate(sessionID, filePath)
-// ... perform file creation ...
+// ... perform host file creation ...
 err = ledger.CompleteMirrorCreate(result, sessionID)
 ```
 
 **Key Methods:**
-- `GetSessionLedgerPath(sessionID)`: Get or create session-specific git repository
-- `LedgerFileWrite(sessionID, filePath)`: Begin two-phase write operation
-- `CompleteMirrorWrite(result, sessionID)`: Complete write operation
-- `MirrorFileDelete(sessionID, filePath)`: Begin two-phase delete operation
-- `CompleteMirrorDelete(result, sessionID)`: Complete delete operation
-- `MirrorFileCreate(sessionID, filePath)`: Begin two-phase create operation
-- `CompleteMirrorCreate(result, sessionID)`: Complete create operation
-- `GetFileHistory(filePath, limit, sessionID)`: Retrieve git history for a file
-- `GetFileAtCommit(filePath, commitHash, sessionID)`: Get file content at specific commit
-- `RestoreFileFromCommit(filePath, commitHash, sessionID)`: Restore file to previous state
-- `GetStateMerkleRoot()`: Get current git commit hash as state merkle root
-- `GetDiffContent(hashBefore, hashAfter, sessionID)`: Get full diff between commits
-- `GetDiffStat(hashBefore, hashAfter, sessionID)`: Get diff statistics
 
-**Path Normalization:**
-The ledger uses `normalizeToGitPath` to convert file paths to git-relative paths with forward slashes, handling Windows drive letters and backslashes for cross-platform compatibility.
+- `GetSessionLedgerPath(sessionID)`: Return or initialize the session-specific git repository path.
+- `LedgerFileWrite(sessionID, filePath)`: Begin two-phase write; snapshots pre-mutation state.
+- `CompleteMirrorWrite(result, sessionID)`: Copy post-mutation file into ledger and commit.
+- `MirrorFileDelete(sessionID, filePath)`: Begin two-phase delete; snapshots pre-deletion state.
+- `CompleteMirrorDelete(result, sessionID)`: Remove mirror file from ledger and commit.
+- `MirrorFileCreate(sessionID, filePath)`: Begin two-phase create; snapshots pre-creation state.
+- `CompleteMirrorCreate(result, sessionID)`: Copy created file into ledger and commit.
+- `GetFileHistory(filePath, limit, sessionID)`: Return git commit history entries for a file.
+- `GetFileAtCommit(filePath, commitHash, sessionID)`: Retrieve and decrypt file content at a specific commit. Requires unlocked vault.
+- `RestoreFileFromCommit(filePath, commitHash, sessionID)`: Decrypt and write a file back to its on-disk path from a prior commit.
+- `GetStateMerkleRoot()`: Return the HEAD commit hash of the global files ledger.
+- `GetDiffContent(hashBefore, hashAfter, sessionID)`: Return the full patch string between two commits.
+- `GetDiffStat(hashBefore, hashAfter, sessionID)`: Return a summary stat string between two commits.
 
-### Execution Vault (`execution_vault.go`)
+---
 
-The `ExecutionVaultService` provides SQLite storage for command execution results and file diffs. This is the execution vault - all data encrypted at rest when configured.
+### Execution Vault (`../../internal/services/storage/execution_vault.go`)
+
+`ExecutionVaultService` stores command execution results and file diffs. All content is encrypted then compressed before being written to SQLite. The vault must be unlocked for any write or read; the service is fail-closed.
 
 **Schema Tables:**
-- `execution_log`: Command execution records (id, timestamp_utc, command, exit_code, duration_ms, stdout_compressed, stderr_compressed, stdout_hash, stderr_hash, stdout_size, stderr_size, user_id, case_id, task_id, investigation_id, operator_id)
-- `file_diff_log`: File diff records (id, timestamp_utc, file_path, operation, ledger_hash_before, ledger_hash_after, diff_stat, diff_compressed, diff_hash, diff_size, operator_session_id, user_id, case_id, operator_id)
+
+- `execution_log`: Command execution records (`id`, `timestamp_utc`, `command`, `exit_code`, `duration_ms`, `stdout_compressed`, `stderr_compressed`, `stdout_hash`, `stderr_hash`, `stdout_size`, `stderr_size`, `user_id`, `case_id`, `task_id`, `investigation_id`, `operator_id`)
+- `file_diff_log`: File diff records (`id`, `timestamp_utc`, `file_path`, `operation`, `ledger_hash_before`, `ledger_hash_after`, `diff_stat`, `diff_compressed`, `diff_hash`, `diff_size`, `operator_session_id`, `user_id`, `case_id`, `operator_id`)
 
 **Key Features:**
-- **Compression**: stdout, stderr, and diffs are compressed before storage
-- **Encryption at rest**: Compressed data is encrypted using the vault
-- **Hash verification**: Content hashes stored for integrity verification
-- **Size tracking**: Tracks original and compressed sizes
-- **Case/task/investigation linking**: Supports investigation workflow metadata
-- **Retention pruning**: Automatic cleanup based on retention and size limits
+
+- **Encryption then compression**: Content is encrypted with the vault, then compressed via `sqliteutil.Compress` before storage.
+- **Hash verification**: Content hashes are stored alongside compressed blobs for integrity checks.
+- **Case/task/investigation linking**: Execution records carry workflow metadata fields.
+- **Retention pruning**: Background `sqliteutil.Pruner` deletes records older than the retention threshold and prunes the oldest 10% of rows when the database exceeds the size limit.
+- **Fail-closed**: `encryptContent` returns an error if the vault is locked; no plaintext fallback.
 
 **Configuration:**
+
 ```go
 type ExecutionVaultConfig struct {
-    DBPath               string  // Database path
-    MaxDBSizeMB          int64   // Maximum database size
-    RetentionDays        int     // Data retention period
-    PruneIntervalMinutes int     // Pruning interval
-    Enabled              bool    // Enable/disable execution vault
+    DBPath               string
+    MaxDBSizeMB          int64
+    RetentionDays        int
+    PruneIntervalMinutes int
 }
-// EncryptionVault is required (passed to constructor)
 ```
 
+`vault.Vault` is passed as a constructor argument and is required. `NewExecutionVaultService` returns an error if it is nil.
+
+Default values (`DefaultExecutionVaultConfig`): `DBPath: ".g8e/execution_vault.db"`, `MaxDBSizeMB: 1024`, `RetentionDays: 30`, `PruneIntervalMinutes: 60`.
+
 **Key Methods:**
-- `StoreExecution(ctx, record)`: Store command execution result with encryption/compression
-- `GetExecution(ctx, executionID)`: Retrieve execution with decryption/decompression
-- `StoreFileDiff(ctx, record)`: Store file diff with encryption/compression
-- `GetFileDiff(ctx, diffID)`: Retrieve file diff with decryption/decompression
-- `GetFileDiffsBySession(ctx, sessionID, limit)`: Retrieve all diffs for a session
 
-### Token Store (`token_store.go`)
+- `StoreExecution(ctx, record)`: Encrypt and compress execution output, then insert into `execution_log`.
+- `GetExecution(ctx, executionID)`: Retrieve, decompress, and decrypt an execution record.
+- `StoreFileDiff(ctx, record)`: Encrypt and compress diff content, then insert into `file_diff_log`.
+- `GetFileDiff(ctx, diffID)`: Retrieve, decompress, and decrypt a file diff record.
+- `GetFileDiffsBySession(ctx, sessionID, limit)`: Retrieve all diff metadata (without compressed blob) for a session.
+- `Wait()`: Block until all in-flight writes complete.
+- `Close()`: Stop the pruner and close the database.
 
-The `TokenStoreService` provides key-value storage for Sentinel token persistence with TTL support. This service implements the `TokenStore` interface.
+`ExecutionVaultService` implements `interfaces.ExecutionVault`.
+
+---
+
+### Token Store (`../../internal/services/storage/token_store.go`)
+
+`TokenStoreService` provides key-value persistence for Sentinel tokens. All values are encrypted at rest; the vault must be unlocked for all read and write operations.
 
 **Schema Tables:**
-- `kv`: Key-value pairs with optional expiration (key, value, expires_at)
+
+- `kv`: Key-value pairs with optional expiration (`key`, `value`, `expires_at`)
 
 **Key Features:**
-- **TTL support**: Keys can have time-to-live expiration
-- **Encryption at rest**: Values are encrypted using the vault
-- **Prefix scanning**: Support for prefix-based key queries
-- **Automatic cleanup**: Expired keys are pruned automatically
-- **Size-based pruning**: Oldest keys pruned when size limit exceeded
+
+- **TTL support**: Keys may be set with a `ttlSeconds` value; expiry is stored as a timestamp and checked on read.
+- **Encryption at rest**: All values are encrypted with AES-256-GCM before storage. The vault must be unlocked; `KVSet` returns an error if it is locked.
+- **Prefix scanning**: `KVScanPrefix` retrieves all non-expired keys matching a prefix, decrypting each value.
+- **Automatic expiry pruning**: The background pruner deletes expired keys, then prunes the oldest 10% when the database exceeds the size limit.
 
 **Configuration:**
+
 ```go
 type TokenStoreConfig struct {
-    DBPath               string  // Database path
-    MaxDBSizeMB          int64   // Maximum database size
-    RetentionDays        int     // Data retention period
-    PruneIntervalMinutes int     // Pruning interval
-    Enabled              bool    // Enable/disable token store
+    DBPath               string
+    MaxDBSizeMB          int64
+    RetentionDays        int
+    PruneIntervalMinutes int
 }
-// EncryptionVault is required (passed to constructor)
 ```
 
-**Key Methods:**
-- `KVSet(ctx, key, value, ttlSeconds)`: Set key-value pair with optional TTL
-- `KVGet(ctx, key)`: Retrieve value by key (honors TTL)
-- `KVScanPrefix(ctx, prefix)`: Retrieve all key-value pairs with given prefix
-- `KVDelete(key)`: Delete a key-value pair
+`vault.Vault` is passed as a constructor argument and is required.
 
-### Replay Store (`replay_store.go`)
+Default values (`DefaultTokenStoreConfig`): `DBPath: ".g8e/token_store.db"`, `MaxDBSizeMB: 512`, `RetentionDays: 30`, `PruneIntervalMinutes: 60`.
 
-The `SQLReplayStore` provides nonce-based replay protection using SQLite. It ensures that nonces cannot be reused within their validity window.
+**Key Methods (from `interfaces.TokenStore`):**
 
-**Schema Tables:**
-- `nonce_usage`: Nonce lifecycle tracking (nonce, reserved_at, used_at, expires_at, status)
+- `KVSet(ctx, key, value, ttlSeconds)`: Encrypt and upsert a key-value pair with optional TTL.
+- `KVGet(ctx, key)`: Retrieve and decrypt a value, honoring TTL.
+- `KVScanPrefix(ctx, prefix)`: Retrieve and decrypt all non-expired key-value pairs matching a prefix.
 
-**Key Features:**
-- **Atomic replay detection**: Uses SQLite UNIQUE constraint for atomic detection
-- **Nonce lifecycle**: Reserve → Finalize or Release
-- **Fail-closed design**: Any error during cleanup or reservation returns an error
-- **Automatic cleanup**: Expired nonces are cleaned up on each reservation
-- **Stale reservation cleanup**: Removes reservations that were never finalized
-- **No encryption required**: Nonce data does not contain sensitive content
+Additional method on `TokenStoreService`:
 
-**Nonce Lifecycle:**
-1. `ReserveNonce(nonce, expiresAt)`: Atomically reserve a nonce (returns true if replay detected)
-2. `FinalizeNonce(nonce)`: Mark a reserved nonce as fully consumed
-3. `ReleaseNonce(nonce)`: Remove reservation for a failed transaction
+- `KVDelete(key)`: Delete a key-value pair.
 
-**Key Methods:**
-- `ReserveNonce(nonce, expiresAt)`: Reserve nonce for replay protection
-- `FinalizeNonce(nonce)`: Mark nonce as used
-- `ReleaseNonce(nonce)`: Release nonce reservation
-- `CleanupStaleReserved(maxReservedDuration)`: Clean up stale reservations
-- `Prune(retentionDays)`: Remove old nonce records
+`TokenStoreService` implements `interfaces.TokenStore`.
 
-### Suspended Transaction Store (`suspended_transaction_store.go`)
+---
 
-The `SuspendedTransactionService` provides storage for L3 approval workflow transactions. It stores transactions awaiting human approval.
+### Replay Store (`../../internal/services/storage/replay_store.go`)
+
+`SQLReplayStore` provides nonce-based replay protection. It uses SQLite's UNIQUE constraint on the `nonce` column for atomic replay detection.
 
 **Schema Tables:**
-- `suspended_transactions`: Approval workflow transactions (transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint)
+
+- `nonce_usage`: Nonce lifecycle tracking (`nonce`, `reserved_at`, `used_at`, `expires_at`, `status`)
 
 **Key Features:**
-- **Envelope storage**: Stores full governance envelope for approval
-- **Approval tracking**: Tracks approval status, approver identity, and signature
-- **Expiration**: Transactions have expiration times
-- **Certificate fingerprinting**: Expected cert fingerprint for approval validation
-- **Automatic cleanup**: Expired transactions are pruned automatically
-- **User filtering**: Can list transactions filtered by user
+
+- **Atomic replay detection**: The `INSERT` on `nonce_usage` relies on the UNIQUE constraint to detect duplicates without a separate read-then-write race.
+- **Nonce lifecycle**: Reserve, then either Finalize (mark as `used`) or Release (delete reservation on transaction failure).
+- **Fail-closed design**: `ReserveNonce` fails closed on any SQLite error during cleanup or insertion.
+- **Automatic expiry cleanup**: `cleanupExpiredNonces` runs on each `ReserveNonce` call.
+- **Stale reservation cleanup**: `CleanupStaleReserved` removes reservations older than a configurable duration that were never finalized, for example after a crash.
+- **No encryption required**: Nonce data does not contain sensitive content.
 
 **Configuration:**
+
 ```go
-type SuspendedTransactionConfig struct {
-    DBPath               string  // Database path
-    MaxDBSizeMB          int64   // Maximum database size
-    RetentionDays        int     // Data retention period
-    PruneIntervalMinutes int     // Pruning interval
-    Enabled              bool    // Enable/disable suspended transaction store
+type ReplayStoreConfig struct {
+    DBPath string
 }
 ```
 
+Default value (`DefaultReplayStoreConfig`): `DBPath: ".g8e/replay_store.db"`.
+
+No background pruner is started; callers invoke `Prune` and `CleanupStaleReserved` directly.
+
 **Key Methods:**
-- `StoreSuspendedTransaction(ctx, tx)`: Store transaction awaiting approval
-- `GetSuspendedTransaction(ctx, txHash)`: Retrieve suspended transaction (returns false if expired)
-- `ListSuspendedTransactions(ctx, userID)`: List non-expired transactions (optionally filtered by user)
-- `ApproveSuspendedTransaction(ctx, txHash, approvedBy, signature, certFingerprint)`: Mark transaction as approved
-- `DeleteSuspendedTransaction(ctx, txHash)`: Remove transaction after approval/rejection
-- `CleanupExpiredSuspendedTransactions(ctx)`: Remove expired transactions
 
-### Commitment Ledger (`commitment_ledger.go`)
+- `ReserveNonce(nonce, expiresAt)`: Atomically reserve a nonce. Returns `true` if replay is detected.
+- `FinalizeNonce(nonce)`: Transition a reserved nonce to `used` status.
+- `ReleaseNonce(nonce)`: Delete a reserved nonce on transaction failure.
+- `CleanupStaleReserved(maxReservedDuration)`: Remove stale reservations older than the given duration.
+- `Prune(retentionDays)`: Delete used nonce records older than the retention period.
+- `Close()`: Close the database connection.
 
-The `CommitmentLedger` provides SQLite-backed storage for commitment attestations. It stores raw JSON attestations with atomic append operations to guarantee chain integrity under concurrent writes.
+---
+
+### Suspended Transaction Store (`../../internal/services/storage/suspended_transaction_store.go`)
+
+`SuspendedTransactionService` stores governance transactions awaiting L3 human approval.
 
 **Schema Tables:**
-- `commitment_ledger`: Commitment attestations (transaction_id, transaction_hash, prior_commitment_hash, state_root_at_commit, l2_signature_digest, Actuator_intent_signature_digest, human_signature_digest, action_type, target_resource, committed_at_unix_ms, auditor_key_id, signature, hash, attestation_json)
+
+- `suspended_transactions`: Approval workflow records (`transaction_hash`, `envelope`, `created_at`, `expires_at`, `tool_name`, `tool_arguments`, `user_id`, `operator_id`, `approved`, `approved_at`, `approved_by`, `approval_signature`, `expected_cert_fingerprint`)
 
 **Key Features:**
-- **Chain integrity**: Verifies prior_commitment_hash matches current latest commitment
-- **Atomic append**: Transactional insertion prevents concurrent attestations from chaining to same prior_hash
-- **JSON storage**: Stores raw JSON attestation while extracting structured fields
-- **Signature tracking**: Stores all signature digests and auditor signature
+
+- **Envelope storage**: The full governance envelope is stored as text for replay after approval.
+- **Approval tracking**: Records approval status, approver identity, cryptographic signature, and expected certificate fingerprint.
+- **Expiration**: Transactions carry an `expires_at` timestamp; `GetSuspendedTransaction` and `ListSuspendedTransactions` filter out expired records.
+- **User filtering**: `ListSuspendedTransactions` optionally filters by `user_id`.
+- **Automatic cleanup**: The background pruner and `CleanupExpiredSuspendedTransactions` remove expired records.
+- **No encryption required**: Governance envelope data is not encrypted at rest.
+
+**Configuration:**
+
+```go
+type SuspendedTransactionConfig struct {
+    DBPath               string
+    MaxDBSizeMB          int64
+    RetentionDays        int
+    PruneIntervalMinutes int
+}
+```
+
+Default values (`DefaultSuspendedTransactionConfig`): `DBPath: ".g8e/suspended_transactions.db"`, `MaxDBSizeMB: 256`, `RetentionDays: 7`, `PruneIntervalMinutes: 30`.
 
 **Key Methods:**
-- `GetLatestCommitmentJSON()`: Retrieve most recent commitment as raw JSON (returns nil if empty)
-- `AppendCommitmentJSON(attestationJSON, priorHash, hash)`: Atomically append new commitment with chain verification
 
-### History Handler (`history_handler.go`)
+- `StoreSuspendedTransaction(ctx, tx)`: Upsert a transaction awaiting approval.
+- `GetSuspendedTransaction(ctx, txHash)`: Retrieve a transaction by hash. Returns `(nil, false, nil)` if not found or expired.
+- `ListSuspendedTransactions(ctx, userID)`: List non-expired transactions, optionally filtered by user.
+- `ApproveSuspendedTransaction(ctx, txHash, approvedBy, approvalSignature, certFingerprint)`: Mark a transaction as approved.
+- `DeleteSuspendedTransaction(ctx, txHash)`: Remove a transaction after approval or rejection.
+- `CleanupExpiredSuspendedTransactions(ctx)`: Delete expired records; returns the count deleted and any error.
+- `Wait()`: Block until all in-flight writes complete.
+- `Close()`: Stop the pruner and close the database.
 
-The `HistoryHandler` combines the audit store and ledger to provide unified history retrieval functionality. It handles protobuf-based requests for history operations.
+`SuspendedTransactionService` implements `interfaces.SuspendedTransactionStore`.
+
+---
+
+### Commitment Ledger (`../../internal/services/storage/commitment_ledger.go`)
+
+`CommitmentLedger` stores commitment attestations as raw JSON with atomic append operations that enforce chain integrity. It is constructed with an externally provided `sqliteutil.DB`; the `commitment_ledger` table must be created by the caller before use.
+
+**Schema Table (`commitment_ledger`):**
+
+Columns: `transaction_id`, `transaction_hash`, `prior_commitment_hash`, `state_root_at_commit`, `l2_signature_digest`, `Actuator_intent_signature_digest`, `human_signature_digest`, `action_type`, `target_resource`, `committed_at_unix_ms`, `auditor_key_id`, `signature`, `hash`, `attestation_json`.
 
 **Key Features:**
-- **Protobuf interface**: Handles protobuf-encoded requests/responses
-- **Unified history**: Combines audit events with file mutations
-- **File history**: Retrieves git history for specific files
-- **File restoration**: Restores files to previous commit states
-- **Session context**: All operations scoped to operator sessions
+
+- **Chain integrity**: `AppendCommitmentJSON` runs inside a transaction, reads the current latest `hash`, and verifies it matches the supplied `priorHash` before inserting.
+- **Atomic append**: The transactional check-then-insert prevents two concurrent attestations from chaining to the same `prior_hash`.
+- **JSON storage**: The raw attestation JSON is stored in `attestation_json`; structured fields are extracted into individual columns at insert time.
+- **Signature tracking**: All signature digests and the auditor signature are stored as discrete columns.
+- **No encryption required**: Attestation JSON is treated as public audit data.
+
+**Constructor:**
+
+```go
+func NewCommitmentLedger(db *sqliteutil.DB, logger *slog.Logger) *CommitmentLedger
+```
 
 **Key Methods:**
-- `HandleFetchHistory(requestJSON)`: Fetch audit events for a session with file mutations
-- `HandleFetchFileHistory(requestJSON)`: Fetch git history for a specific file
-- `HandleRestoreFile(requestJSON)`: Restore a file to a previous commit state
-- `GetFileAtCommit(filePath, commitHash, sessionID)`: Get file content at specific commit
-- `IsEnabled()`: Check if history handler is enabled
+
+- `GetLatestCommitmentJSON()`: Return the most recent attestation as raw JSON, ordered by `committed_at_unix_ms`. Returns `(nil, nil)` when the ledger is empty.
+- `AppendCommitmentJSON(attestationJSON, priorHash, hash)`: Atomically append a new commitment with chain verification.
+
+---
+
+### History Handler (`../../internal/services/storage/history_handler.go`)
+
+`HistoryHandler` is a thin coordinator that combines `SQLAuditStore` and `GitLedgerService` to serve protobuf-encoded history requests.
+
+**Key Features:**
+
+- **Protobuf interface**: All request and response types are protobuf messages from `protocol/proto/g8e/operator/v1`.
+- **Unified event history**: `HandleFetchHistory` fetches audit events and attaches file mutations for `FileEdit.Completed` events.
+- **File history**: `HandleFetchFileHistory` delegates to the ledger's `GetFileHistory`.
+- **File restoration**: `HandleRestoreFile` delegates to the ledger's `RestoreFileFromCommit`.
+- **Session context**: All operations are scoped to an `operator_session_id`.
+
+**Constructor:**
+
+```go
+func NewHistoryHandler(auditStore *SQLAuditStore, ledger *GitLedgerService, logger *slog.Logger) *HistoryHandler
+```
+
+**Key Methods:**
+
+- `HandleFetchHistory(requestBytes)`: Unmarshal a `FetchHistoryRequested` protobuf, retrieve events with file mutations, return a `FetchHistoryResult`.
+- `HandleFetchFileHistory(requestBytes)`: Unmarshal a `FetchFileHistoryRequested` protobuf, retrieve git history, return a `FetchFileHistoryResult`.
+- `HandleRestoreFile(requestBytes)`: Unmarshal a `RestoreFileRequested` protobuf, restore the file, return a `RestoreFileResult`.
+- `GetFileAtCommit(filePath, commitHash, sessionID)`: Delegate to the ledger's `GetFileAtCommit`.
+
+---
 
 ## Common Patterns
 
 ### Encryption at Rest
 
-All storage services that handle sensitive data use the `vault.Vault` for encryption at rest:
+Services requiring encryption use `vault.Vault` (AES-256-GCM):
 
 ```go
-// Encryption
-encrypted, err := vault.Encrypt([]byte(content))
-
-// Decryption
-decrypted, err := vault.Decrypt(encryptedData)
+encrypted, err := v.Encrypt([]byte(plaintext))
+decrypted, err := v.Decrypt(ciphertext)
 ```
 
-Services that require encryption:
-- Audit Store: content_text, command_stdout, command_stderr (EncryptionVault required in config)
-- Ledger: File content (when vault is unlocked, EncryptionVault required in config)
-- Execution Vault: stdout, stderr, file diffs (EncryptionVault passed to constructor)
-- Token Store: All values (EncryptionVault passed to constructor)
-- Replay Store: No encryption required (nonce data is not sensitive)
-- Suspended Transaction Store: No encryption required (envelope contains governance data)
-- Commitment Ledger: No encryption required (attestation JSON is public)
+Behavior when the vault is locked varies by service:
+
+- **Audit Store**: Stores plaintext and sets `encrypted = 0`. Audit continuity takes precedence over encryption (fail-open).
+- **Execution Vault**: Returns an error if the vault is locked. No plaintext fallback (fail-closed).
+- **Token Store**: Returns an error if the vault is locked on `KVSet` or `KVGet`. No plaintext fallback (fail-closed).
+- **Ledger**: `GetFileAtCommit` and `RestoreFileFromCommit` return an error if the vault is locked.
+- **Replay Store**: No encryption required.
+- **Suspended Transaction Store**: No encryption required.
+- **Commitment Ledger**: No encryption required.
 
 ### SQLite Utilities
 
-All SQLite-based stores use the `sqliteutil.DB` wrapper which provides:
-- Retry logic for transient failures
-- Transaction support with `ExecInTxWithRetry`
-- Row materialization with `MaterializeRows`
-- Timestamp formatting/parsing
-- Compression/decompression utilities
-- Hash computation
-- Database size monitoring
-- Incremental vacuum for space reclamation
+All SQLite-backed services use `sqliteutil.DB`, which provides:
+
+- Retry logic via `ExecWithRetry` and `QueryRowWithRetry`
+- Transactional execution via `ExecInTxWithRetry`
+- Row materialization via `MaterializeRows`
+- Timestamp formatting and parsing
+- Compression via `Compress` and `Decompress`
+- Content hashing via `HashBytes`
+- Database size monitoring via `GetSizeBytes`
+- Incremental vacuum via `RunIncrementalVacuum`
 
 ### Pruning
 
-Most storage services use `sqliteutil.Pruner` for background cleanup:
+Most services start a `sqliteutil.Pruner` in their constructor:
 
 ```go
 pruner := sqliteutil.NewPruner(db, logger, interval, pruneFunc)
@@ -327,100 +419,64 @@ pruner.Start()
 ```
 
 Prune functions typically:
-1. Delete records older than retention period
-2. Delete records when database size exceeds limit
-3. Run incremental vacuum to reclaim space
 
-### Configuration
+1. Delete records older than the retention cutoff.
+2. Delete the oldest 10% of records when the database exceeds the configured size limit.
+3. Run incremental vacuum to reclaim space without a full database lock.
 
-All storage services follow a similar configuration pattern:
+`SQLReplayStore` does not start a background pruner; callers invoke `Prune` and `CleanupStaleReserved` directly.
 
-```go
-type Config struct {
-    DBPath               string  // Database path
-    MaxDBSizeMB          int64   // Maximum database size
-    RetentionDays        int     // Data retention period
-    PruneIntervalMinutes int     // Pruning interval
-    Enabled              bool    // Enable/disable service
-    // ... service-specific fields
-}
-```
-
-Default configurations are provided via `Default*Config()` functions.
+---
 
 ## Testing
 
-Test implementations are provided in the `storagetest` subdirectory:
+The `storagetest` subdirectory (`../../internal/services/storage/storagetest/`) contains test-only implementations:
 
-- `audit_vault.go`: Test-only monolithic audit service with Git ledger integration
-- `helpers.go`: Test helper functions
-- Various test files: E2E tests, encryption tests, event tests, mutation tests, receipt tests, session tests
+- `audit_vault.go`: `TestSQLAuditStore`, a monolithic test implementation that integrates audit storage with a git ledger in a single struct. It includes an additional `chaos_events` table and `RecordChaosEvent`/`RecordChaosEvents` methods not present in production code.
+- `helpers.go`: `createTestVault` helper for initializing an unlocked `vault.Vault` in tests.
 
-The test implementations are separate from production code to avoid import cycles and provide flexible testing scenarios.
+These implementations are kept separate from production code to avoid import cycles.
 
-## Security Considerations
+---
 
-1. **Encryption at Rest**: Sensitive data is encrypted at rest using AES-256-GCM via the vault where applicable (Audit Store, Ledger, Execution Vault, Token Store)
-2. **Fail-Closed Design**: Replay store fails closed on any error during nonce operations
-3. **Chain Integrity**: Commitment ledger verifies prior_hash to prevent chain forks
-4. **Session Validation**: Audit events must reference existing sessions
-5. **Path Traversal Protection**: Ledger normalizes paths to prevent directory traversal
-6. **Size Limits**: Encrypted file copies have size limits to prevent OOM
-7. **Atomic Operations**: Replay detection uses UNIQUE constraints for atomicity
-8. **Streaming**: Large unencrypted files are streamed to prevent memory exhaustion
-9. **Vault Requirements**: Audit Store and Ledger require EncryptionVault in config; Execution Vault and Token Store require vault passed to constructor
+## Security Properties
 
-## Performance Considerations
+1. **Encryption at rest**: Sensitive fields are encrypted at rest using AES-256-GCM. The Audit Store uses fail-open semantics to ensure continuity; the Execution Vault and Token Store use fail-closed semantics.
+2. **Fail-closed replay protection**: `SQLReplayStore.ReserveNonce` returns an error on any SQLite failure, preventing replay protection from being silently bypassed.
+3. **Commitment chain integrity**: `CommitmentLedger` verifies `prior_commitment_hash` inside a transaction to prevent chain forks under concurrent writes.
+4. **Session validation**: Audit events must reference an existing session row. Foreign key constraints are enforced at the schema level.
+5. **Path traversal protection**: `GitLedgerService.normalizeToGitPath` strips drive letters and leading separators before constructing ledger-relative paths.
+6. **Size limits for encrypted copies**: The ledger enforces a 100 MB cap on encrypted file copies to prevent OOM during the full-read required by AES-GCM.
+7. **Streaming for unencrypted copies**: The ledger streams unencrypted file copies using `io.Copy` to prevent OOM.
+8. **Atomic nonce reservation**: The UNIQUE constraint on `nonce_usage.nonce` provides atomicity without application-level locking.
 
-1. **Batch Operations**: Audit store supports batch event recording for efficiency
-2. **Compression**: Execution vault compresses data before encryption
-3. **Streaming**: Ledger streams unencrypted files to prevent OOM
-4. **Incremental Vacuum**: Pruning runs incremental vacuum to reclaim space without full database lock
-5. **Indexing**: All tables have appropriate indexes for query performance
-6. **Two-Phase Commit**: Ledger uses two-phase commit to minimize lock duration
-7. **Background Pruning**: Cleanup runs in background to avoid blocking operations
+---
 
 ## Data Flow
 
 ### File Mutation Flow
 
-1. **Begin Operation**: Ledger begins two-phase commit (snapshots pre-mutation state)
-2. **File Operation**: Operator performs file write/delete/create
-3. **Complete Operation**: Ledger completes commit (snapshots post-mutation state, generates diff)
-4. **Record Event**: Audit store records event with encrypted content
-5. **Record Mutation**: Audit store records file mutation linked to event
-6. **Store Diff**: Execution vault stores compressed/encrypted diff
+1. Ledger begins two-phase commit, snapshots pre-mutation state, returns `LedgerResult` with `LedgerHashBefore`.
+2. Operator performs the file write, delete, or create on the host filesystem.
+3. Ledger completes the commit, copies the post-mutation file, commits to git, records `LedgerHashAfter`, `DiffStat`, and `DiffContent` in the result.
+4. Audit store records the event with encrypted content.
+5. Audit store records the file mutation linked to the event.
+6. Execution vault stores the compressed and encrypted diff.
 
 ### Transaction Flow
 
-1. **Reserve Nonce**: Replay store reserves nonce for replay protection
-2. **Execute Transaction**: Governance layer executes transaction
-3. **Store Execution**: Execution vault stores execution result
-4. **Record Receipt**: Audit store records action receipt
-5. **Finalize Nonce**: Replay store marks nonce as used
-6. **Append Commitment**: Commitment ledger appends attestation
+1. Replay store reserves the nonce atomically.
+2. Governance layer executes the transaction.
+3. Execution vault stores the execution result.
+4. Audit store records the action receipt.
+5. Replay store finalizes the nonce.
+6. Commitment ledger appends the attestation.
 
-### Approval Flow
+### Approval Flow (L3)
 
-1. **Suspend Transaction**: Suspended transaction store stores transaction awaiting approval
-2. **List Pending**: CLI lists pending transactions for user
-3. **Approve Transaction**: User approves transaction with signature
-4. **Update Status**: Suspended transaction store marks as approved
-5. **Execute Transaction**: Governance layer executes approved transaction
-6. **Cleanup**: Transaction is removed from suspended store
-
-## Migration and Upgrades
-
-The storage layer uses SQLite which provides:
-- Schema initialization via `CREATE TABLE IF NOT EXISTS` statements
-- Backward compatibility through careful schema evolution
-- Transactional schema changes
-- Easy backup and restore
-
-Schema changes should:
-1. Use `CREATE TABLE IF NOT EXISTS` for new tables
-2. Use `ALTER TABLE` for additive changes
-3. Avoid destructive changes (DROP COLUMN, etc.)
-4. Provide migration paths for existing data
-
-Note: The storage layer does not currently use a formal migration system. Schema changes are applied via initialization statements in each service's schema constant.
+1. Suspended transaction store persists the transaction awaiting human approval.
+2. CLI lists pending transactions for the user.
+3. User approves with a cryptographic signature.
+4. Suspended transaction store marks the record as approved.
+5. Governance layer executes the approved transaction.
+6. Suspended transaction store deletes the record after execution.

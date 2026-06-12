@@ -55,46 +55,50 @@ The platform implements a deterministic 5-layer governance sequence. Every mutat
 *Implementation: `internal/services/governance/l1_doctrine.go:50`*
 
 L1 is the foundational layer that executes deterministic security rules.
-- **Forbidden Patterns**: Uses Protobuf field options (`forbidden_patterns`) to reject strings matching dangerous patterns.
-- **MITRE Threat Detection**: Analyzes payloads against MITRE ATT&CK patterns for reverse shells, privilege escalation, credential access, and other threats.
-- **Critical System File Protection**: Blocks modifications to critical system paths defined in `CriticalSystemPaths` and `CriticalSystemDirs`.
+- **Forbidden Patterns**: Uses Protobuf field options (`forbidden_patterns`) to reject strings matching dangerous regex patterns on typed payload fields.
+- **MITRE Threat Detection**: Analyzes payloads against MITRE ATT&CK patterns across 16 threat categories, including reverse shells, privilege escalation, credential access, data destruction, defense evasion, and cryptominer deployment. Analysis applies to `CommandRequested`, `McpCallRequested`, `A2ACallRequested`, and `FileEditRequested` payloads. MCP and A2A argument JSON is traversed recursively up to a depth of 50 levels.
+- **Critical System File Protection**: Blocks modifications to critical system paths defined in `CriticalSystemPaths` and critical directories defined in `CriticalSystemDirs`.
 - **Hard Gates**: Rejects transactions immediately upon violation; cannot be bypassed by L2 or L3.
 
 ### Layer 2: Consensus (L2Consensus)
 *Implementation: `internal/services/governance/l2_consensus.go:45`*
 
-L2 provides multi-agent cryptographic verification of intent.
-- **Ed25519 Signatures**: Verifies Ed25519 signatures over the `transaction_hash|decision` format.
-- **Trusted Signers**: Requires signatures from trusted agents listed in the `SignerStore`.
-- **Posture-Aware Enforcement**: Enforces signature requirements based on the configured `GovernancePosture`.
+L2 provides multi-agent cryptographic attestation of payload safety.
+- **Payload Hash Verification**: Verifies that `envelope.Id` matches the computed message hash before signing, ensuring the envelope has not been tampered with in transit.
+- **MITRE Safety Evaluation**: Runs L1Doctrine threat detection on extracted command data and intent fields to produce a binary safety decision.
+- **Ed25519 Decision Signing**: Signs the string `{message_id}|{decision}` using the node's Ed25519 private key and writes the hex-encoded signature to `GovernanceMetadata.L2.consensus_signature` along with the signer's key ID and agent ID.
+- **Fail-Closed on Missing Doctrine**: If the L1Doctrine reference is absent, L2 evaluates all payloads as unsafe and refuses to sign.
 
 ### Layer 3: Notary (L3Notary)
 *Implementation: `internal/services/governance/l3_notary.go:32`*
 
 L3 ensures explicit human authorization for mutations.
-- **Suspension**: The g8e Gateway (g8eg) suspends transactions requiring L3 approval, storing them in the `suspended_transactions` pool.
+- **Suspension**: The g8e Gateway suspends transactions requiring L3 approval, storing them in the `suspended_transactions` pool.
 - **Out-of-Band (OOB) Approval**: The user approves via CLI command (`g8e approve <tx_hash>`) with a cryptographic Ed25519 signature over the transaction hash, or via WebAuthn passkey for web sessions.
-- **Passkey Service**: The `PasskeyService` handles L3 proof brokerage for WebAuthn operations, moving L3 authorization into the gateway as the sovereign authority.
-- **L3Proof**: A successful approval generates an `L3Proof` containing the cryptographic signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
+- **Approval Window**: CLI-based approvals are valid for 30 minutes from the time of approval. Transactions not dispatched within that window are rejected and must be re-approved.
+- **Cryptographic Binding**: The CLI proof requires a hex-encoded Ed25519 signature of exactly 64 bytes (`cli_signature`) and, when configured, an mTLS certificate fingerprint (`mtls_cert_fingerprint`) that must match the fingerprint recorded at suspension time.
+- **Passkey Service**: The `PasskeyService` in `internal/services/gateway/passkey_service.go` handles L3 proof brokerage for WebAuthn operations, moving L3 authorization into the gateway as the sovereign authority.
+- **L3Proof**: A successful approval generates an `L3Proof` (defined in `protocol/proto/g8e/common/v1/common.proto:52-62`) containing the cryptographic signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
 
 ### Layer 4: Warden (L4Warden)
 *Implementation: `internal/services/governance/l4_warden.go:372`*
 
-The Warden is the final fail-closed gate before execution. It verifies:
-1. **In-Flight Tracking**: Prevents concurrent processing of transactions with the same nonce.
-2. **Nonce Reservation**: Early durable replay protection via `ReplayStore.ReserveNonce`.
-3. **Stateless Validation**: Structural integrity, payload decoding, L1Doctrine compliance, and hash verification.
-4. **Stateful Validation**: State root consistency check via `StateRootProvider`.
-5. **Posture Validation**: L2 and L3 enforcement based on the configured `GovernancePosture` (Doctrine, Consensus, or Notary).
+The Warden is the final fail-closed gate before execution. It verifies in the following order:
+1. **In-Flight Tracking**: Prevents concurrent processing of transactions with the same nonce via an in-memory `sync.Map` guard.
+2. **Nonce Reservation**: Early durable replay protection via `ReplayStore.ReserveNonce`, committed to SQLite before any expensive cryptographic checks.
+3. **Stateless Validation**: Structural integrity checks, action type recognition, typed payload decoding, L1Doctrine compliance, and transaction hash verification (both `id` and `transaction_hash` must equal the computed hash).
+4. **Stateful Validation**: State Merkle root consistency check via `StateRootProvider`; rejects the envelope if the provided `state_merkle_root` does not match the current root.
+5. **Posture Validation**: L2 and L3 enforcement based on the configured `GovernancePosture` (Doctrine, Consensus, or Notary). L2 signature verification resolves the signer's Ed25519 public key from `SignerStore` by `key_id` and verifies the signature over `{transaction_hash}|{decision}`. L3 proof verification delegates to the configured `L3Notary` implementation.
 
 ### Layer 5: Actuator (L5Actuator)
 *Implementation: `internal/services/governance/l5_actuator.go:76`*
 
 The Actuator represents the execution boundary and final audit commitment.
-- **Egress Dispatch**: Dispatches the verified payload to downstream executors (Shell, MCP, A2A).
+- **Fail-Closed Pre-Execution**: Receipt signing and initial audit logging must both succeed before the execution handler is invoked. If either fails, the transaction is aborted.
 - **Sensitive Data Rehydration**: Rehydrates scrubbed placeholders (such as `{{UEI_1}}`) with original sensitive data just before execution via `RehydratePayload`.
-- **Action Receipts**: Issues a signed `ActionReceipt` providing immutable proof of the outcome.
-- **Commitment**: Records the transaction in the `SQLAuditStore` and chains it to the ledger.
+- **Egress Dispatch**: Dispatches the verified payload to downstream executors (Shell, MCP, A2A) via `ExecutionHandler.ExecuteVerifiedTransaction`.
+- **Action Receipts**: Issues a signed `ActionReceipt` using the Actuator's own Ed25519 key over a canonical JSON serialization of the receipt fields, providing immutable proof of the execution outcome.
+- **Commitment**: Records the transaction in the `SQLAuditStore` and, where configured, in the console audit store.
 
 ---
 
@@ -144,6 +148,8 @@ Vault operations are managed via CLI commands:
 - `./g8e vault unlock`: Unlock vault with key
 - `./g8e vault rekey`: Rotate vault keys
 - `./g8e vault status`: Check vault status
+- `./g8e vault export`: Export the vault key in hex format
+- `./g8e vault import`: Import a vault key from hex string or stdin
 - `./g8e vault reset`: Destroy vault (destructive)
 
 ### Configuration

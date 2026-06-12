@@ -136,10 +136,17 @@ The gateway implements a comprehensive input validation system in `internal/serv
 - **SQL Query Validation**: Rejects empty queries, trailing semicolons to prevent statement chaining
 - **URL Validation**: Parses and validates URLs, restricting to http/https schemes, rejecting localhost and loopback addresses, and blocking private IP ranges to prevent SSRF attacks
 - **Protocol Validation**: Validates protocol strings for filesystem operations to prevent path traversal
+- **Git Path Validation**: Validates repository paths and references to prevent path traversal and command injection
+- **Kubernetes Validation**: Validates resource names and namespaces against K8s naming conventions
+- **Cloud Metadata Validation**: Validates cloud metadata operation types
+- **File Path Validation**: Validates file paths to prevent directory traversal and null byte injection
+- **SSH Path Validation**: Validates SSH config and known hosts paths
+- **Hostname Validation**: Validates hostnames to prevent shell injection
+- **Operator Validation**: Validates operator binary paths and arguments to prevent command injection
 
 ### Native Tool Ecosystem
 
-The gateway provides a comprehensive set of native tools covering database operations, filesystem analysis, network diagnostics, process management, and system monitoring:
+The gateway provides a comprehensive set of native tools covering database operations, filesystem analysis, network diagnostics, process management, and system monitoring. All tools are registered in `internal/services/mcp/native_tool_registry.go`.
 
 **Database Tools**:
 - `db_discover_topology`: Database schema discovery
@@ -149,19 +156,49 @@ The gateway provides a comprehensive set of native tools covering database opera
 
 **Filesystem Tools**:
 - `fs_disk_profile`: Disk usage and filesystem profiling
+- `fs_disk_usage`: Disk usage analysis
+- `fs_file_checksum`: File integrity verification via checksum
+- `file_read`: Read file contents with validation
 - `log_stream_filter`: Log stream filtering and analysis
 
 **Network Tools**:
 - `net_endpoint_ping`: Network endpoint reachability testing
 - `net_http_probe`: HTTP endpoint probing with SSRF protection
 - `net_socket_audit`: Socket state auditing with protocol validation
+- `net_dns_resolve`: DNS resolution and query
+- `net_ssh_known_hosts`: SSH known hosts management
+- `tls_cert_inspect`: TLS certificate inspection and validation
 
 **Process Tools**:
 - `proc_metric_top`: Process resource metrics and top-like analysis
 - `proc_signal_safe`: Safe process signal handling
+- `proc_tree`: Process tree visualization and analysis
 
 **System Tools**:
 - `sys_oom_detect`: Out-of-memory detection and analysis
+- `sys_info`: System information gathering
+- `sys_env_vars`: Environment variable inspection
+- `sys_service_status`: System service status checking
+- `sys_container_status`: Container status monitoring
+- `sys_time_clock`: System time and clock information
+
+**Configuration Tools**:
+- `config_diff_mask`: Configuration diffing with sensitive data masking
+
+**Cloud Tools**:
+- `cloud_metadata`: Cloud provider metadata retrieval
+
+**Kubernetes Tools**:
+- `k8s_inspect`: Kubernetes resource inspection
+
+**Git Tools**:
+- `git_ops`: Git repository operations
+
+**Operator Tools**:
+- `operator_deploy`: Operator deployment and management
+
+**Execution Tools**:
+- `run_shell_command`: Safe shell command execution
 
 ---
 
@@ -243,14 +280,14 @@ When a standard AI client (such as Claude, Codex, or Cursor) requests a mutation
 The g8e Gateway (g8eg) provides JWT authentication and Just-In-Time (JIT) user provisioning flows that fully isolate the downstream g8e Operator (g8eo) from Identity Providers (IdP). The g8e Gateway (g8eg) acts as the authentication brain, while the g8e Operator (g8eo) receives a pre-validated, enriched payload via the pub/sub pipe.
 
 ### 4-Step JWT Flow
-The JWT authentication logic is implemented in `internal/services/gateway/gateway_auth.go:663`.
+The JWT authentication logic is implemented in `internal/services/gateway/gateway_auth.go` via the `JWTAuthMiddleware` function.
 
 **Step 1: Inbound HTTP Handshake & JWT Verification**
 The g8e Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS or static public keys, validates `exp` and `iss` claims, and extracts identity claims (`sub`, `tenant_id`, `roles`).
 
 **Step 2: Edge Validation & JIT Account Management**
 Following successful token validation, the g8e Gateway (g8eg) ensures the user exists locally and maps their roles:
-- **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID) via `userSvc.GetOrCreateBySub`. If the user does not exist, dynamically creates their user account record with default active status.
+- **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID) via `userSvc.GetBySub`. If the user does not exist, checks for an active invitation via `userSvc.FindActiveInvitationBySub` and creates the user account via `userSvc.CreateUserFromInvitation`.
 - **Persona Mapping**: Loads declarative Persona manifests (e.g., YAML definitions representing `security-analyst`, `admin`). Evaluates the JWT `roles` against these manifests via `personaSvc.MapRolesToPersona` to determine the active `binding_persona`.
 - **Context Injection**: Stores the resolved `binding_persona` and `tenant_id` into the request context.
 
@@ -311,6 +348,7 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | Collections registry | `internal/constants/collections.go` |
 | MCP unified endpoint | `internal/services/mcp/mcp_endpoint.go` |
 | Native tool registry | `internal/services/mcp/registry.go` |
+| Native tool registration | `internal/services/mcp/native_tool_registry.go` |
 | Input validation | `internal/services/mcp/validation.go` |
 | Database schema | `internal/services/gateway/db/schema.sql` |
 | Native handlers | `internal/services/mcp/native_handlers.go` |
@@ -341,7 +379,7 @@ The g8e Gateway provides zero-config ingress for agentic CLI coding tools (Claud
 
 The agent integration is implemented in `internal/cli/cmd/mcp.go` with the following subcommands:
 
-**`g8e mcp agent list`**: Lists all supported agent binaries that g8e supports for MCP integration, including Claude, Codex, Cursor, Devin, VS Code, Continue, Aider, Codeium, Tabby, Ollama, and generic MCP-compatible agents.
+**`g8e mcp agent list`**: Lists all supported agent binaries that g8e supports for MCP integration, including Claude, Codex, Cursor, Devin, VS Code, Continue, Aider, Codeium, Tabby, Ollama, Gemini, Goose, and generic MCP-compatible agents.
 
 **`g8e mcp agent show <agent>`**: Prints MCP client configuration for connecting to the g8e Gateway from local coding tools. Displays three configuration matrices:
 - g8e.local (mTLS): For production environments with DNS configured
